@@ -923,7 +923,8 @@ import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize } from './effects/_shared';  // v6.346：getPendingPrize 最後一個使用點已移除
 // v5.246：effects.ts 內部 reg 用 (烏栗 / 衝浪手 / 鐵斑葉ex 等)
 import { tryPromptPromoteActive } from './effects/_shared';
-import { damageCounterCount } from './effects/_shared'; // v5.785 指示物個數中央
+import { damageCounterCount } from './effects/_shared'; // v5.785 指示物個數中央（⭐v6.399 起是全站唯一一份）
+export { damageCounterCount };   // ⭐v6.399 re-export：UI（+page.svelte）與卡檔都從這裡拿，不要自己再除一次 10
 import { buildEvolvedInstance } from './effects/_shared'; // v5.796 中央進化體建構(保留 base iid)
 import { revealTopCardsLog } from './effects/_shared'; // v6.078 「翻到正面」公開揭示中央 log
 import { getAbilityFn, hasAbilityFn } from './effects/_shared'; // v5.872 特性查詢中央(by-name+by-index)
@@ -3462,7 +3463,7 @@ regPost('胡地|奇異駭入', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = s.players[dIdx];
   const allOppPokes = [opp.active, ...opp.bench].filter((c): c is CardInstance => !!c);
-  const totalCounters = allOppPokes.reduce((n, pk) => n + Math.floor((pk.damage ?? 0) / 10), 0);
+  const totalCounters = allOppPokes.reduce((n, pk) => n + damageCounterCount(pk), 0);
   if (totalCounters === 0) {
     return addLog(s, '奇異駭入：對手場上無傷害指示物可移動', aIdx);
   }
@@ -3490,7 +3491,7 @@ RESOLVERS.set('abra-hack-remove', (st, idx, iids, _params, pool) => {
   const removeOf = new Map<string, number>();
   let removedTotal = 0;
   for (const pk of allPokes) {
-    const have = Math.floor((pk.damage ?? 0) / 10);
+    const have = damageCounterCount(pk);
     const rem = Math.min(want.get(pk.iid) ?? 0, have);
     if (rem > 0) { removeOf.set(pk.iid, rem); removedTotal += rem; }
   }
@@ -6310,23 +6311,24 @@ regR('screwdig-discard-fight-e', (state, aIdx, selectedIids, _params, pool) => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** 取得 state 某 side 某 inst 的 damage counter 數（每 10 點 = 1 counter） */
-function counterCount(dmg: number): number { return Math.floor(dmg / 10); }
+// ⭐v6.399：本檔原本的 local counterCount(dmg) 已刪除 —— 「指示物個數」的唯一一份判準是
+//   _shared.ts 的 damageCounterCount(inst)（見該處檔頭）。
 
 /** 計算自己攻擊方 active 身上的 counter 數 */
 function selfActiveCounters(state: GameState, aIdx: 0 | 1): number {
-  return counterCount(state.players[aIdx].active?.damage ?? 0);
+  return damageCounterCount(state.players[aIdx].active);
 }
 /** 計算對手 active 身上的 counter 數 */
 function oppActiveCounters(state: GameState, aIdx: 0 | 1): number {
   const dIdx = (1 - aIdx) as 0 | 1;
-  return counterCount(state.players[dIdx].active?.damage ?? 0);
+  return damageCounterCount(state.players[dIdx].active);
 }
 /** 計算對手全場（active + bench）所有 counter 和 */
 function oppAllCounters(state: GameState, aIdx: 0 | 1): number {
   const dIdx = (1 - aIdx) as 0 | 1;
   const p = state.players[dIdx];
-  let sum = counterCount(p.active?.damage ?? 0);
-  for (const b of p.bench) if (b) sum += counterCount(b.damage);
+  let sum = damageCounterCount(p.active);
+  for (const b of p.bench) if (b) sum += damageCounterCount(b);
   return sum;
 }
 /** 計算自己場上符合 filterFn 的寶可夢數（active + bench） */
@@ -6378,77 +6380,19 @@ regPre('尖牙籠|覆蓋', (state, aIdx, _pool) => {
 
 // ── B. 對手戰鬥寶可夢 damage counter × k（6 張） ──────────────────────────
 
-// 冰鬼護｜傷害律動 — 20× opp counter
-regPre('冰鬼護|傷害律動', (state, aIdx, _pool) => {
-  const n = oppActiveCounters(state, aIdx);
-  return { state, damage: n * 20 };
-});
-
-// 蘋裹龍｜酸味噴吐 — 20× opp counter
-regPre('蘋裹龍|酸味噴吐', (state, aIdx, _pool) => {
-  const n = oppActiveCounters(state, aIdx);
-  return { state, damage: n * 20 };
-});
-
-// 麒麟奇｜精神傷害 — 20 + 10× opp counter
-regPre('麒麟奇|精神傷害', (state, aIdx, _pool) => {
-  const n = oppActiveCounters(state, aIdx);
-  return { state, damage: 20 + n * 10 };
-});
-
-// 太陽伊布｜精神傷害 — 30 + 10× opp counter
-regPre('太陽伊布|精神傷害', (state, aIdx, _pool) => {
-  const n = oppActiveCounters(state, aIdx);
-  const damage = 30 + n * 10;
-  // v3.03：breakdown 拆「指示物 N×10 + 30(基礎)」
-  if (n > 0) {
-    return {
-      state,
-      damage,
-      breakdown: [
-        { value: n * 10, label: `指示物 ${n}×10` },
-        { value: 30, label: '基礎' },
-      ],
-    };
-  }
-  return { state, damage };
-});
-
-// 月月熊 赫月｜瘋狂啃咬 — 100 + 30× opp counter
-// v3.03：拆 breakdown — 「30×N(指示物 ×30)」+「100(基礎)」，UI 看得出乘法分量
-regPre('月月熊 赫月|瘋狂啃咬', (state, aIdx, _pool) => {
-  const n = oppActiveCounters(state, aIdx);
-  const damage = 100 + n * 30;
-  if (n > 0) {
-    return {
-      state,
-      damage,
-      breakdown: [
-        { value: n * 30, label: `指示物 ${n}×30` },
-        { value: 100, label: '基礎' },
-      ],
-    };
-  }
-  return { state, damage };
-});
-
-// 猛惡菇｜爆毆 — 50 + 50× opp counter
-regPre('猛惡菇|爆毆', (state, aIdx, _pool) => {
-  const n = oppActiveCounters(state, aIdx);
-  const damage = 50 + n * 50;
-  // v3.03：breakdown 拆「指示物 N×50 + 50(基礎)」
-  if (n > 0) {
-    return {
-      state,
-      damage,
-      breakdown: [
-        { value: n * 50, label: `指示物 ${n}×50` },
-        { value: 50, label: '基礎' },
-      ],
-    };
-  }
-  return { state, damage };
-});
+// ⭐⭐v6.399 收斂（Rule 38）：以下六張的卡面都是「（增加／造成）對手的戰鬥寶可夢身上
+//   放置的傷害指示物的數量×N點傷害。」，收斂前是六份 inline。一律改走中央
+//   oppCountersMultiplyPre —— **行為逐位元不變**：
+//   ・原本都不寫 log ⇒ 一律傳 { log: false }（對戰紀錄逐字不變）
+//   ・原本有 breakdown 的三張傳 { splitBreakdown: true }（形狀與標籤文字完全相同）
+regPre('冰鬼護|傷害律動', oppCountersMultiplyPre(0, 20, '傷害律動', { log: false }));
+regPre('蘋裹龍|酸味噴吐', oppCountersMultiplyPre(0, 20, '酸味噴吐', { log: false }));
+regPre('麒麟奇|精神傷害', oppCountersMultiplyPre(20, 10, '精神傷害', { log: false }));
+// ⚠ 太陽伊布｜精神傷害 這個印刷是 **G 標**（SV8a #12363，不在標準賽範圍）——
+//   站長指示 G 標不處理，這裡只是把寫法併過來，數字與 breakdown 完全沒動。
+regPre('太陽伊布|精神傷害', oppCountersMultiplyPre(30, 10, '精神傷害', { log: false, splitBreakdown: true }));
+regPre('月月熊 赫月|瘋狂啃咬', oppCountersMultiplyPre(100, 30, '瘋狂啃咬', { log: false, splitBreakdown: true }));
+regPre('猛惡菇|爆毆', oppCountersMultiplyPre(50, 50, '爆毆', { log: false, splitBreakdown: true }));
 
 // ── C. 自己場上寶可夢計數（3 張） ──────────────────────────────────────────
 
@@ -6486,11 +6430,9 @@ regPre('索羅亞克|幻影劫持', (state, aIdx, pool) => {
   return { state, damage: n * 60 };
 });
 
-// 亞克諾姆｜意志強念 — 10 + 對手全場 counter 總和 × 10
-regPre('亞克諾姆|意志強念', (state, aIdx, _pool) => {
-  const n = oppAllCounters(state, aIdx);
-  return { state, damage: 10 + n * 10 };
-});
+// 亞克諾姆｜意志強念 — 卡面「增加對手的**所有**寶可夢身上放置的傷害指示物的數量×10點傷害。」
+// ⭐v6.399：同一支中央 helper 的 scope:'all'（行為逐位元不變，原本也不寫 log）。
+regPre('亞克諾姆|意志強念', oppCountersMultiplyPre(10, 10, '意志強念', { log: false, scope: 'all' }));
 
 // 水晶燈火靈｜意志統治者 — 對手手牌張數 × 30
 regPre('水晶燈火靈|意志統治者', (state, aIdx, _pool) => {
@@ -9497,7 +9439,7 @@ regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
     const dIdx = (1 - actorIdx) as 0 | 1;
     const d = s.players[dIdx];
     const tgt = d.active?.iid === selectedIids[0] ? d.active : d.bench.find(c => c.iid === selectedIids[0]);
-    const n = counterCount(tgt?.damage ?? 0);
+    const n = damageCounterCount(tgt);
     dmg = n * perCounter;
     s = addLog(s, `${label}：目標身上 ${n} 個傷害指示物 × ${perCounter} → ${dmg} 點傷害`, actorIdx);
   }
@@ -13113,7 +13055,7 @@ regPre('火箭隊的尼多力諾|角裂', defHasCountersBonusPre(60, 60, '角裂
 // N的萊希拉姆｜強力激怒 — 自身傷害指示物數 × 20（damage / 10 = 指示物數）
 regPre('N的萊希拉姆|強力激怒', (state, aIdx, _pool) => {
   const att = state.players[aIdx].active;
-  const counters = att ? Math.floor(att.damage / 10) : 0;
+  const counters = damageCounterCount(att);
   const dmg = counters * 20;
   const s = addLog(state, `強力激怒：自身傷害指示物 ${counters} × 20 → ${dmg}`, aIdx);
   return { state: s, damage: dmg };
@@ -15559,7 +15501,7 @@ regPre('竹蘭的花岩怪|激怒咒詛', (state, aIdx, pool, _action) => {
     const card = pool.get(b.cardId);
     if (card?.name.includes('竹蘭的')) {
       // 以 10 為單位計數（傷害指示物每顆 10 HP）
-      totalMarkers += Math.floor(b.damage / 10);
+      totalMarkers += damageCounterCount(b);
     }
   }
   const damage = totalMarkers * 10;
@@ -19708,7 +19650,7 @@ regPost('布里卡隆|圍困', defCantRetreatNextPost());
 // 超級火炎獅ex｜大爆炸之火：290 - 自身傷害指示物數量×10。
 // v3.03：breakdown 顯示「290(基礎) - 自身指示物 N×10」（如有自殘）
 regPre('超級火炎獅ex|大爆炸之火', (state, aIdx, _pool) => {
-  const counters = Math.floor((state.players[aIdx].active?.damage ?? 0) / 10);
+  const counters = damageCounterCount(state.players[aIdx].active);
   const damage = Math.max(0, 290 - counters * 10);
   if (counters > 0) {
     // 自損部分用負值 + 加法表達（注意：此處先在 breakdown 裡轉成「基礎」單一項已減過，
@@ -20586,6 +20528,54 @@ export interface MultiplyPreOpts {
   breakdownLabel?: (n: number) => string;
   /** 預設 true（寫一行 log）。false = 完全不寫 log。 */
   log?: boolean;
+}
+
+/**
+ * ⭐⭐⭐ v6.399：「對手的寶可夢身上放置的傷害指示物的數量×N」的**唯一**中央 helper（Rule 38）。
+ *
+ * 【為什麼要有這一支】收斂前這條卡面（static/cards 逐字查證，H/I/J 共 11 招）站上有**四種寫法**：
+ *   ・effects.ts 六個 inline regPre（冰鬼護｜傷害律動、蘋裹龍｜酸味噴吐、麒麟奇｜精神傷害、
+ *     太陽伊布｜精神傷害[G 標]、月月熊 赫月｜瘋狂啃咬、猛惡菇｜爆毆、亞克諾姆｜意志強念）
+ *   ・v2490 的 local factory oppActiveDamageCountPre（脫殼忍者｜傷害律動）
+ *   ・v2620 的 local factory oppActiveCounterCountPre（伽勒爾 堵攔熊｜傷疤嚎叫、鬃岩狼人｜抓擊獠牙）
+ *   ・v2740 的 inline（閃電鳥｜追擊伏特）／v2346 的 inline（朽木妖｜超頻傷痛）
+ * 兩個 local factory 還各自把「指示物數 ＝ Math.floor(damage / 10)」**就地再寫了一次** ——
+ * 中央明明已經有 counterCount()。判準散三份，日後有人改其中一份就會靜默分歧。
+ *
+ * ⚠ 單位是「**傷害指示物的數量**」＝ Math.floor(damage / 10)，不是傷害值本身。
+ *   朽木妖｜超頻傷痛 原本寫的是「傷害值總和」——在站上恆等價（傷害一律 10 的倍數），
+ *   但那是**巧合而不是判準**，一併收斂（守衛 A5 用零回歸斷言釘住等價）。
+ */
+export interface OppCountersPreOpts {
+  /** 預設 true（寫一行 log）。false = 完全不寫 log（收斂既有不寫 log 的卡時用，對戰紀錄逐字不變）。 */
+  log?: boolean;
+  /** true = n>0 時回「指示物 N×per」＋「基礎」兩段 breakdown（沿用既有三張卡的形狀）。 */
+  splitBreakdown?: boolean;
+  /** 'active'（預設，卡面「對手的戰鬥寶可夢」）｜'all'（卡面「對手的所有寶可夢」）。 */
+  scope?: 'active' | 'all';
+}
+export function oppCountersMultiplyPre(
+  base: number, per: number, label: string, opts: OppCountersPreOpts = {},
+): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const n = opts.scope === 'all' ? oppAllCounters(state, aIdx) : oppActiveCounters(state, aIdx);
+    const dmg = base + per * n;
+    const where = opts.scope === 'all' ? '對手全場' : '對手戰鬥場';
+    const s = opts.log === false
+      ? state
+      : addLog(state, `${label}：${where}傷害指示物 ${n} 個 × ${per} → ${dmg}`, aIdx);
+    if (opts.splitBreakdown && n > 0) {
+      return {
+        state: s,
+        damage: dmg,
+        breakdown: [
+          { value: n * per, label: `指示物 ${n}×${per}` },
+          { value: base, label: '基礎' },
+        ],
+      };
+    }
+    return { state: s, damage: dmg };
+  };
 }
 
 /**

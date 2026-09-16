@@ -3,6 +3,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
+import { damageCounterCount } from '../_shared'; // ⭐v6.399 指示物個數：全站唯一一份判準
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE, openDeckTopRevealOptionalDiscard,
   getOwnBenchLimit, energyMatchesType,
 } from '../_shared';
@@ -402,7 +403,7 @@ regPre('龐岩怪|復仇加農炮', (state, aIdx, pool) => {
   for (const b of player.bench) {
     const card = pool.get(b.cardId);
     if (card?.pokemonType === 'Fighting') {
-      counters += Math.floor((b.damage ?? 0) / 10);
+      counters += damageCounterCount(b);
     }
   }
   const dmg = counters * 20;

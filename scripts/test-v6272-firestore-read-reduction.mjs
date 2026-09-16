@@ -805,6 +805,15 @@ const PREV_ALLOWED = [
   // ⭐v6.398：刪掉檔內零呼叫點的 selfReturnNTypeEnergyToHandPost 死碼（判準非 host-aware，
   //   留著只會被日後新卡照抄）。純刪除，沒有任何 Firestore／玩家端讀取變化。
   'src/lib/game/effects/cards/v2610_i_wave11_misc4.ts',
+  // ⭐v6.399：「傷害指示物個數」的 16 份判準收成一份（全部改走 _shared 的 damageCounterCount）＋
+  //   「對手傷害指示物 × N」12 招改走中央 oppCountersMultiplyPre。純收斂，沒有任何 Firestore／讀取變化。
+  'src/lib/game/effects/cards/maroon_dragon_deck.ts',
+  'src/lib/game/effects/cards/six_decks.ts',
+  'src/lib/game/effects/cards/v2490_i_wave3a_conditional.ts',
+  'src/lib/game/effects/cards/v2620_i_wave12_misc5.ts',
+  'src/lib/game/effects/cards/v2630_i_wave13_misc6.ts',
+  'src/lib/game/effects/cards/v2999_g3_wave1.ts',
+  'src/lib/game/effects/cards/v3700_audit_orphans.ts',
   'src/lib/game/effects/cards/v2650_i_wave15_misc8.ts',
   'src/lib/game/effects/cards/v2660_i_wave16_misc9.ts',
   'src/lib/game/effects/cards/v2740_h_wave1_simple.ts',

@@ -68,7 +68,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   // ⭐⭐⭐v6.337 借招（複製他人招式）中央管線 —— 候選枚舉與規則層共用同一份，
   //   且提供「借到的招式本身也是借招卡」時要不要再開一段 picker 的判準。
   import { copyAttackCandidates, isCopyAttackKey, COPY_ATTACK_MAX_DEPTH, type CopyChoice } from '$lib/game/copy-attack';
-  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, effectivePreDiscardMin, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType, preDiscardEnergyEligible, OPTIN_NO_PAYMENT } from '$lib/game/effects'; // v5.992 若希望 opt-in sentinel / ⭐v6.349 preDiscardEnergyEligible
+  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, effectivePreDiscardMin, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType, preDiscardEnergyEligible, OPTIN_NO_PAYMENT, damageCounterCount } from '$lib/game/effects'; // v5.992 若希望 opt-in sentinel / ⭐v6.349 preDiscardEnergyEligible
   import { JAMMING_TOWER_STADIUMS } from '$lib/game/effects/cards/stadiums';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
@@ -9616,7 +9616,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (pendingSelection.params?.abraRemove && game) {
       const src = game.players[pendingSelection.sourcePlayerIdx];
       const pk = src.active?.iid === iid ? src.active : src.bench.find(b => b.iid === iid);
-      const haveCounters = Math.floor((pk?.damage ?? 0) / 10);
+      const haveCounters = damageCounterCount(pk);
       if ((selectionCounts[iid] ?? 0) >= haveCounters) return;
     }
     selectionCounts = { ...selectionCounts, [iid]: (selectionCounts[iid] ?? 0) + 1 };

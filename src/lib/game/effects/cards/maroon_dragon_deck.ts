@@ -21,6 +21,7 @@
 import type { GameState, PlayerState, CardInstance } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
 import { deckWithCardsToBottom } from '../_shared'; // v6.124 「重洗放回牌庫下方」中央管線
+import { damageCounterCount } from '../_shared'; // ⭐v6.399 指示物個數：全站唯一一份判準
 import {
   reg, regR, regG, regA,
   BENCH_PLACE_TRIGGERS,
@@ -181,7 +182,7 @@ regR('adrenal-brain-src', (st, idx, iids, params, pool) => {
   const p = st.players[idx];
   const source = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
   if (!source) return st;
-  const maxCounters = Math.min(Math.floor(source.damage / 10), 3);
+  const maxCounters = Math.min(damageCounterCount(source), 3);
   if (maxCounters <= 0) {
     return addLog(st, '腎上腺腦力：來源傷害不足（無 counter 可搬）', idx);
   }

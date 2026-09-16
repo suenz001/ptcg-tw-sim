@@ -285,7 +285,7 @@ regR('ambush-snipe-by-counters', (state, aIdx, selectedIids, _params, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const tgt = state.players[dIdx].bench.find(b => selectedIids.includes(b.iid));
   if (!tgt) return addLog(state, '暗算：目標無效', aIdx);
-  const counters = Math.floor((tgt.damage ?? 0) / 10);
+  const counters = damageCounterCount(tgt);
   const dmg = counters * 20;
   return dealAttackDamageToTarget(state, aIdx, tgt.iid, dmg, pool, { kind: 'attack-damage', label: `暗算（${counters} 個指示物）` });
 });

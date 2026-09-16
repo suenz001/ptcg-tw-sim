@@ -29,6 +29,7 @@ import type { AttackPreFn, AttackPostFn } from '../_shared';
 // v5.177：補 import (v5.176 hotfix wave3a-snipe-bench resolver 用此 helper 但漏 import)
 import { canApplyEffectToTarget } from '../../defense';
 import { flipCoinsWithLog, countAttachedEnergyAsUnits, countEnergyTypeHostAware, prizesConditionPre } from '../../effects';
+import { oppCountersMultiplyPre } from '../../effects'; // ⭐v6.399 收斂：對手傷害指示物 × N（中央唯一一份）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: A 擲 N 次硬幣，正面數 × K 傷害（damage='Nx30+' 等）
@@ -90,16 +91,9 @@ function oppActiveEnergyCountPre(
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: E 對手戰鬥場傷害指示物數 × K
 // ══════════════════════════════════════════════════════════════════════════════
-function oppActiveDamageCountPre(perCounter: number, label: string): AttackPreFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const def = state.players[dIdx].active;
-    const counters = def ? Math.floor((def.damage ?? 0) / 10) : 0;
-    const dmg = counters * perCounter;
-    const s = addLog(state, `${label}：對手戰鬥場 ${counters} 個傷害指示物 → ${counters}×${perCounter} = ${dmg}`, aIdx);
-    return { state: s, damage: dmg };
-  };
-}
+// ⭐v6.399：本檔原本的 oppActiveDamageCountPre 整支刪除 —— 它把「指示物數 =
+//   Math.floor(damage / 10)」就地又寫了一次（中央已有 counterCount），而且與 v2620 的
+//   oppActiveCounterCountPre 是同一條卡面的兩份實作。改走中央 oppCountersMultiplyPre。
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: F 狙擊單隻對手備戰 N（攻方需挑 1 隻 bench；簡化：用 opp-bench-choose）
@@ -349,7 +343,7 @@ regPre('巨鍛匠|大橫掃', oppActiveEnergyCountPre(240, 60, 'sub', '大橫掃
 // 5. E 對手戰鬥場傷害指示物 ×K（1 張）
 // ══════════════════════════════════════════════════════════════════════════════
 // 脫殼忍者|傷害律動 20× — 對手身上指示物 ×20
-regPre('脫殼忍者|傷害律動', oppActiveDamageCountPre(20, '傷害律動'));
+regPre('脫殼忍者|傷害律動', oppCountersMultiplyPre(0, 20, '傷害律動'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 6. F 狙擊單隻對手備戰（5 張）

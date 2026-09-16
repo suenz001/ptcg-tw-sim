@@ -10,6 +10,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
+import { damageCounterCount } from '../_shared'; // ⭐v6.399 指示物個數：全站唯一一份判準
 import {
   regPre, regPost,
   addLog, updatePlayer,
@@ -82,7 +83,7 @@ regPre('派帕的獒教父ex|幹勁衝撞', (state, aIdx, _pool) => {
   const a = state.players[aIdx].active;
   const cond = !!a && (a.damage ?? 0) === 0;
   const dmg = 30 + (cond ? 120 : 0);
-  const s = addLog(state, `幹勁衝撞：自身${cond ? '無指示物 +120' : `有 ${Math.floor((a?.damage ?? 0) / 10)} 個指示物，不增傷`} = ${dmg}`, aIdx);
+  const s = addLog(state, `幹勁衝撞：自身${cond ? '無指示物 +120' : `有 ${damageCounterCount(a)} 個指示物，不增傷`} = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
 

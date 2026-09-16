@@ -39,6 +39,7 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
+import { damageCounterCount } from '../_shared'; // ⭐v6.399 指示物個數：全站唯一一份判準
 import { isAbilityHolderEffective } from './v3001_g3_wave3';
 // >>> v6375-as-of-declaration-import
 // ⭐v6.375 站長裁定 A-1／A-3：field-wide 減傷的「宣告當時」判準一律走中央述詞
@@ -413,7 +414,7 @@ export function registerV2999G3W1Passives(): void {
   //   ⚠ holderInst 未傳入時 fail-closed 回 0（不多打），中央 dispatch 一定會傳。
   PASSIVE_ATTACK_BONUS.set('憤怒穴', (_att, _def, _state, _aIdx, _pool, holderInst) => {
     if (!holderInst) return 0;
-    const counters = Math.floor((holderInst.damage ?? 0) / 10);
+    const counters = damageCounterCount(holderInst);
     return counters >= 2 ? 120 : 0;
   });
 

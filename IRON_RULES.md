@@ -1736,3 +1736,30 @@ picker 端（`+page.svelte` 的 `getDiscardableEnergies`）自 v6.349 起已經�
 `engine.ts` 的 `SPECIAL_ENERGY_TYPES`（cost 支付用）與 `energyTypeUnitsHostAware`（篩選／計數用）
 是**同一批特殊能量規則的兩份表**：前者 21 種特殊能量收了 16 種，後者只 inline 了 6 種。
 v6.398 只補了「夜光能量」（不補的話 engine 兩處收斂後會退化）。要動 cost 支付路徑風險高，另版處理。
+
+---
+
+## Rule 53（v6.399）：站長跑 bat 會 `git reset --hard origin/main` —— 未 commit 的改動會**全部消失**
+
+### 事故（v6.399 開工兩小時後）
+v6.398 push 完、我通知站長跑 `update-tournament.bat` / `update-admin-full.bat`，
+同時**接著開工 v6.399**（依站長「連續作業」的指示）。站長跑了 bat 之後，
+我在 v6.399 已經套好的三批 patch（新中央 helper ＋ 12 個註冊點 ＋ 兩個 local factory 刪除）
+**整批消失**，四個卡檔的 mtime 全部回到 v6.398 的 commit 時間。
+
+`git reflog` 是唯一的證據：
+```
+65440341 HEAD@{0}: reset: moving to origin/main      ← bat 幹的
+65440341 HEAD@{1}: commit: v6.398 …
+```
+⚠ 我當下第一個念頭是「我的 patch 腳本沒寫檔」——**錯**。腳本每一步都報 OK 而且真的寫了，
+是**之後**被 reset 掉的。**工作樹莫名回到 HEAD 時，第一件事是看 `git reflog`，不是懷疑自己的腳本。**
+
+### 紀律
+1. **通知站長跑 bat 之前，先把當下的工作 commit 起來**（本地 commit 就夠，push 與否另議）。
+   要嘛 v6.N 已經 commit 完才通知，要嘛下一版先不要動工作樹。
+2. **每一版的改動一律寫成可重跑的 patch 腳本**（`__m6a/vNNN_patchN.mjs`，精確字串 ＋ 命中數必須 === 1），
+   不要用互動式編輯。這次能在五分鐘內原樣重建，就是因為三批 patch 都還在 `__m6a/`（untracked，reset 不會動它）。
+3. `git reset --hard` 之後**重跑 patch 腳本前先確認 HEAD 對**（`git rev-parse HEAD`），
+   否則錨點會對到別的版本。
+4. ⚠ 同一個理由：**`__m6a/` 底下的東西不要 commit 進 repo**，它是我的工作區暫存（reset 免疫）。

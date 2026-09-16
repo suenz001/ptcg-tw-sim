@@ -47,6 +47,7 @@
 
 import { recruitNamedToBenchPost } from '../../effects'; // v6.069 收斂：牌庫指名放備戰
 import { hostHasEnergyType } from '../../effects'; // ⭐v6.398「身上附有【X】能量卡」中央 host-aware 述詞
+import { damageCounterCount } from '../_shared'; // ⭐v6.399 指示物個數：全站唯一一份判準
 import { registerBugPanicAttack } from '../../effects'; // v6.078 蟲蟲恐慌中央 helper
 import {
   reg,
@@ -358,7 +359,7 @@ regPre('莫魯貝可ex|空腹轟炸', selfCountersMultiplyPre(40, 40, '空腹轟
 //   卡面：「若這隻寶可夢身上的傷害指示物有 2 個以上，則此招式傷害 +90。此招式的傷害不計算弱點。」
 regPre('古玉魚|嫉妒漩渦', (state, aIdx) => {
   const att = state.players[aIdx].active;
-  const counters = att ? Math.floor((att.damage ?? 0) / 10) : 0;
+  const counters = damageCounterCount(att);
   const bonus = counters >= 2 ? 90 : 0;
   const dmg = 20 + bonus;
   return {

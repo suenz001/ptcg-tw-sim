@@ -3,6 +3,8 @@ import type { CardInstance, GameState } from '../../types';
 import { addLog, drawCards, healResolver, regPost, regPre, regR, updatePlayer, withPending, countAttachedEnergyAsUnits } from '../_shared';
 import { hasStatusInAnySlot } from '../_shared'; // v5.834 跨三槽狀態讀取
 import { flipCoinsWithLog, flipCoinsUntilTails, applyStatusToSelfActive , defHasCountersBonusPre } from '../../effects';
+import { oppCountersMultiplyPre } from '../../effects'; // ⭐v6.399 收斂：對手傷害指示物 × N（中央唯一一份）
+import { damageCounterCount } from '../_shared'; // ⭐v6.399 指示物個數：全站唯一一份判準
 import { computeActiveRetreatCostFor } from '../../engine'; // v5.711 有效撤退費(整隻咬)
 
 function allPokemon(state: GameState, idx: 0 | 1): CardInstance[] {
@@ -14,9 +16,7 @@ function cardName(pool: Map<string, Card>, inst: CardInstance | null | undefined
   return inst ? (pool.get(inst.cardId)?.name ?? '') : '';
 }
 
-function damageCounters(inst: CardInstance | null | undefined): number {
-  return Math.floor((inst?.damage ?? 0) / 10);
-}
+// ⭐v6.399：本檔原本的 local damageCounters 已刪除（與 _shared 的 damageCounterCount 同一判準）。
 
 function flipUntilTails(state: GameState, aIdx: 0 | 1, label: string): { state: GameState; heads: number } {
   // v6.234：收斂到中央 flipCoinsUntilTails，沿用本檔原本的 20 次上限（行為不變）。
@@ -41,7 +41,7 @@ regPre('拉達|逆襲門牙', (state, aIdx, pool) => {
   // v5.678：卡面「所有『小拉達』」採 NameContains（含「火箭隊的小拉達」等同名家族；Wilson 裁定 + 洛托呼喚先例）
   const dmg = state.players[aIdx].bench
     .filter((b) => cardName(pool, b).includes('小拉達'))
-    .reduce((sum, b) => sum + damageCounters(b) * 40, 0);
+    .reduce((sum, b) => sum + damageCounterCount(b) * 40, 0);
   return { state, damage: dmg };
 });
 
@@ -63,12 +63,11 @@ regPre('尖牙籠|整隻咬', (state, aIdx, pool) => {
   return { state, damage: hasNoRetreatCost ? 160 : 80 };
 });
 
-// 朽木妖｜超頻傷痛：60 + 對手所有寶可夢傷害指示物總數 ×10（即現有 damage 總和）。
-regPre('朽木妖|超頻傷痛', (state, aIdx) => {
-  const dIdx = 1 - aIdx as 0 | 1;
-  const extra = allPokemon(state, dIdx).reduce((sum, p) => sum + (p.damage ?? 0), 0);
-  return { state, damage: 60 + extra };
-});
+// 朽木妖｜超頻傷痛：卡面「增加對手的所有寶可夢身上放置的傷害指示物的數量×10點傷害。」
+// ⭐v6.399 收斂：原本算的是「傷害值總和」——站上傷害恆為 10 的倍數，所以與「指示物數×10」
+//   **恆等價**，但那是巧合不是判準。改走中央 oppCountersMultiplyPre 的 scope:'all'。
+//   ⚠ 原本不寫 log ⇒ 傳 { log: false }，對戰紀錄逐字不變。
+regPre('朽木妖|超頻傷痛', oppCountersMultiplyPre(60, 10, '超頻傷痛', { log: false, scope: 'all' }));
 
 // 南瓜怪人ex｜恐怖輪舞：30 + 自己受傷備戰寶可夢數 ×50。
 regPre('南瓜怪人ex|恐怖輪舞', (state, aIdx) => {

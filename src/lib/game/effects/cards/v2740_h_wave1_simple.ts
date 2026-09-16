@@ -33,6 +33,7 @@ import {
 } from '../../effects';
 import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
 import { selfCountersMultiplyPre } from '../../effects'; // ⭐v6.388a 收斂：自身傷害指示物 × N（v6.349 中央）
+import { oppCountersMultiplyPre } from '../../effects'; // ⭐v6.399 收斂：對手傷害指示物 × N（中央唯一一份）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper（大多複製自 I 標 wave 14）
@@ -278,12 +279,8 @@ regPre('故勒頓ex|復仇懲處', selfCountersMultiplyPre(20, 10, '復仇懲處
 // ══════════════════════════════════════════════════════════════════════════════
 // 13. 對手戰鬥指示物 ×10（1 張）— 閃電鳥|追擊伏特
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('閃電鳥|追擊伏特', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const counters = Math.floor((state.players[dIdx].active?.damage ?? 0) / 10);
-  const dmg = 20 + counters * 10;
-  return { state: addLog(state, `追擊伏特：對手指示物 ${counters} → 20+${counters}×10 = ${dmg}`, aIdx), damage: dmg };
-});
+// ⭐v6.399 收斂：原本這裡 inline 又寫了一次 Math.floor(damage / 10)。
+regPre('閃電鳥|追擊伏特', oppCountersMultiplyPre(20, 10, '追擊伏特'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 14. 對手 ex 條件 +N（3 張）

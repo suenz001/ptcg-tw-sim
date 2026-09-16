@@ -2441,9 +2441,15 @@ export function buildEvolvedInstance(
 }
 
 /**
- * v5.785：寶可夢身上「傷害指示物的個數」= damage / 10（PTCG 傷害一律 10 的倍數）。
- *   卡面「傷害指示物為 N 個 / 放置有 N 個」是精確個數判定，務必用 === N（非 >= N×10）。
- *   收斂死亡終局 / 藍柱石等「剛好 N 個」條件；「N 個以上」型仍用 >= 比較(各自 helper)。
+ * ⭐⭐⭐ 寶可夢身上「傷害指示物的個數」= damage / 10 —— **全站唯一一份**（Rule 38）。
+ *
+ * v5.785 建立；⭐v6.399 起是**唯一**出口：在那之前全站有 **16 份**同一個判準
+ * （effects.ts 的 local counterCount、v2346 的 local damageCounters，加上 13 處
+ * 就地寫的 Math.floor((x.damage ?? 0) / 10)）——同一件事散 16 份，改其中一份就靜默分歧。
+ * 守衛 test-v6399 的 C3 會掃全站，再出現第二份就翻紅。
+ *
+ * ⚠ 卡面「傷害指示物**為** N 個／放置**有** N 個」是**精確**個數判定，務必 === N（非 >= N×10）；
+ *   「N 個**以上**」型仍用 >= 比較（各自 helper）。
  */
 export function damageCounterCount(inst: CardInstance | null | undefined): number {
   return Math.floor((inst?.damage ?? 0) / 10);

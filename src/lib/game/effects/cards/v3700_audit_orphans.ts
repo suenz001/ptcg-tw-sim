@@ -28,6 +28,7 @@
 import { regPre, regPost, addLog, updatePlayer, withPending, faceAttackDamage } from '../_shared';
 import { getOwnBenchLimit } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
+import { damageCounterCount } from '../_shared'; // ⭐v6.399 指示物個數：全站唯一一份判準
 import type { PlayerState } from '../../types';
 import {
   statusPost, coinHeadsMultiplyPre, selfHitPost, flipCoinsWithLog, flipCoinsUntilTails, snipeOneOppBenchPost,
@@ -191,7 +192,7 @@ regPre('瑪力露麗|摔打', coinHeadsMultiplyPre(2, 100, '摔打'));
 // 卡面「傷害指示物的數量」= damage / 10（每個指示物 = 10 HP）
 regPre('小拉達|咬傷口', (state, aIdx, _pool) => {
   const def = state.players[(1 - aIdx) as 0 | 1].active;
-  const counters = Math.floor((def?.damage ?? 0) / 10);
+  const counters = damageCounterCount(def);
   const bonus = counters * 10;
   const total = 20 + bonus;
   return {

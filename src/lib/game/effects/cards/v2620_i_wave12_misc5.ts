@@ -7,6 +7,7 @@
 import type { CardInstance, PlayerState } from '../../types';
 import { statusPost, discardOppActiveEnergyPost, countOneEnergy, flipCoinsWithLog, flipCoinsUntilTails, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware } from '../../effects'; // v5.797 中央施狀態(gate 免疫)
 import { defNextAtkReducePost, selfDmgReducePost } from '../../effects'; // v5.803 中央減攻(免疫gate) + v6.001 自身防護
+import { oppCountersMultiplyPre } from '../../effects'; // ⭐v6.399 收斂：對手傷害指示物 × N（中央唯一一份）
 import { computeActiveRetreatCostFor } from '../../engine';  // v5.690 有效撤退費
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, countAttachedEnergyAsUnits,
   getOwnBenchLimit,
@@ -115,16 +116,7 @@ function oppActiveEnergyCountPre(base: number, perEnergy: number, label: string)
   };
 }
 
-function oppActiveCounterCountPre(base: number, perCounter: number, label: string): AttackPreFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const def = state.players[dIdx].active;
-    const counters = def ? Math.floor((def.damage ?? 0) / 10) : 0;
-    const dmg = base + counters * perCounter;
-    const s = addLog(state, `${label}：對手戰鬥場指示物 ${counters} 個 → ${base} + ${counters}×${perCounter} = ${dmg}`, aIdx);
-    return { state: s, damage: dmg };
-  };
-}
+// ⭐v6.399：本檔原本的 oppActiveCounterCountPre 整支刪除（同上，判準有三份）。
 
 // v3.22：改用 nextOwnAttackPenalty（attacker-side debuff）。
 // v5.803：本地 defNextAtkReducePost 移除，改用 effects.ts 中央版(含免疫 gate)。
@@ -198,8 +190,8 @@ regPre('大宇怪|精神強念', oppActiveEnergyCountPre(80, 30, '精神強念')
 // ══════════════════════════════════════════════════════════════════════════════
 // 9. 對手戰鬥場指示物 ×K（2 張）
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('伽勒爾 堵攔熊|傷疤嚎叫', oppActiveCounterCountPre(0, 70, '傷疤嚎叫'));
-regPre('鬃岩狼人|抓擊獠牙', oppActiveCounterCountPre(40, 40, '抓擊獠牙'));
+regPre('伽勒爾 堵攔熊|傷疤嚎叫', oppCountersMultiplyPre(0, 70, '傷疤嚎叫'));
+regPre('鬃岩狼人|抓擊獠牙', oppCountersMultiplyPre(40, 40, '抓擊獠牙'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 10. 上對手回合得獎賞 ×60（1 張）— 夠讚狗|算帳
