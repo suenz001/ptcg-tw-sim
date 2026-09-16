@@ -1622,3 +1622,37 @@ flex item 的 `min-height:auto` ＝ min-content ⇒ 原本不會被 flex 壓縮�
   所以 11 個情境全綠，min-height 的回歸一條都沒守到）。
 ⚠ 本版的做法：`scripts/test-v6390-scroll-list.mjs` 的 B12c／B13c 各釘住一條覆寫的 `min-height`，
   並由 `scripts/mutcheck-v6390-scroll-list.mjs` 的 M11／M12 證明它們真的會紅。
+
+## Rule 50（v6.395）：只要玩家端有改動，就**一定**要 bump 版本號
+
+站長 2026-09-16 逐字裁示：
+> 你要更新版本號，我才知道你有更新內容阿，首頁的 changelog 可以不用說明，但版本號要變更阿
+
+⚠⚠ **「行為零變化」不是不 bump 的理由。**
+v6.393（印刷閘重構）與 v6.394（tsc 型別清理 55 → 0）兩版都動了 `src/`，
+我判斷「玩家看不出差別」所以刻意不 bump。站長跑完兩支 bat 之後看到首頁還是 v6.391，
+第一個念頭是「是不是沒更新成功」——他驗收部署的方式**就是看首頁版本號**。
+
+### 判準
+只要 `src/` 或 `static/` 有任何改動會進到玩家端 bundle，就必須 bump。
+不論那個改動是重構、型別註記、非空斷言、註解，還是純資料。
+
+### 為什麼
+① 站長靠首頁版本號判斷「有沒有更新成功」。不 bump 的版次對他而言＝看不出來。
+② `oracle-admin/verify-deploy.bat` 的判準是「線上版本號 ＝ 本機版本號」——
+   不 bump 等於那一版**沒有任何可驗收的指標**，只能靠 curl 線上 bundle 抓字串比對，
+   那不是站長該做的事。
+③ 「守衛沒紅」不等於「流程沒問題」：`test-v6387` 的 A4 只要求三者**一致**，
+   三者一起不動它照樣綠 —— 那是守衛角度的正確，不是站長角度的正確。
+
+### bump 的四件事
+1. `src/lib/version.ts`
+2. `oracle-admin/admin.html` 的 `SITE_VERSION_HINT`
+3. `static/changelog.html` **第一則**的 `<span class="ver-badge">vX.XXX</span>`
+4. changelog 三步搬運（`changelog.html` ／ `changelog-bodies.html` ／ `changelog-archive.html`）
+   ⚠ 上一版**已經上正式站**時必須**新增一則**；
+     只有「上一版尚未上正式站」才可以走 `test-v6264` F0b 的「改寫不搬運」
+     （先例：v6.314／v6.315／v6.317／v6.390／v6.391）。
+
+⚠ changelog 那一則若對玩家沒有實質意義，就誠實寫短的
+（例：「**內部品質工程**（無玩法變化）」）——**不可以因為寫不出賣點就不 bump**。
