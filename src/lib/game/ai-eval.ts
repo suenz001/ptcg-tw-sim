@@ -109,10 +109,14 @@ export function simulateAttack(
     const before = state.players[oppIdx].active;
     if (!before) return DEAD;
     return withIsolatedRandom(() => {
-      const after = applyAction(
-        // ⚠ 這裡**不傳** actorIdx：現查全站沒有任何一處讀 action.actorIdx，
-        //   applyAction 的行動方一律是 state.currentPlayerIdx。傳了只會讓人誤以為可以指定。
-        shuffleHiddenZonesForSim(cloneState(state)), { type: 'ATTACK', attackIndex }, pool);
+      // ⚠⚠ 引擎的行動方一律讀 `state.activePlayerIndex`（handlePlaying 的第一行），
+      //   action 物件裡**沒有**任何欄位可以指定 —— 所以呼叫端傳進來的 actorIdx
+      //   必須落到假想盤面上，這個參數才名副其實（estimateIfPromoted 早就這樣做了）。
+      //   目前兩個呼叫點傳的都等於盤面上的 activePlayerIndex，這一行是等價的；
+      //   但少了它，日後有人想模擬「對手下回合能對我做什麼」就會靜默模擬錯人。
+      const sim = shuffleHiddenZonesForSim(cloneState(state));
+      sim.activePlayerIndex = actorIdx;
+      const after = applyAction(sim, { type: 'ATTACK', attackIndex }, pool);
       if (!after || after === state) return DEAD;
       const now = after.players[oppIdx].active;
       // 擊倒判定用 iid：被擊倒後戰鬥位會變空或換上別隻，兩種都算擊倒
@@ -269,10 +273,14 @@ function evaluateAttackOnce(
     const beforeSelfDmg = beforeSelf?.damage ?? 0;
 
     return withIsolatedRandom(() => {
-      const after = applyAction(
-        // ⚠ 這裡**不傳** actorIdx：現查全站沒有任何一處讀 action.actorIdx，
-        //   applyAction 的行動方一律是 state.currentPlayerIdx。傳了只會讓人誤以為可以指定。
-        shuffleHiddenZonesForSim(cloneState(state)), { type: 'ATTACK', attackIndex }, pool);
+      // ⚠⚠ 引擎的行動方一律讀 `state.activePlayerIndex`（handlePlaying 的第一行），
+      //   action 物件裡**沒有**任何欄位可以指定 —— 所以呼叫端傳進來的 actorIdx
+      //   必須落到假想盤面上，這個參數才名副其實（estimateIfPromoted 早就這樣做了）。
+      //   目前兩個呼叫點傳的都等於盤面上的 activePlayerIndex，這一行是等價的；
+      //   但少了它，日後有人想模擬「對手下回合能對我做什麼」就會靜默模擬錯人。
+      const sim = shuffleHiddenZonesForSim(cloneState(state));
+      sim.activePlayerIndex = actorIdx;
+      const after = applyAction(sim, { type: 'ATTACK', attackIndex }, pool);
       if (!after || after === state) return DEAD_EVAL;
 
       const gameWon = after.phase === 'game-over' && after.winner === actorIdx;

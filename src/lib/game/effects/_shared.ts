@@ -2081,9 +2081,10 @@ export function healOneOwnPokemonPending(
   return withPending(s, {
     type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
-    validIids: ownIids,
     effectKey,
-    params: { healAmount: amount },
+    // ⚠⚠ validIids **必須寫在 params 裡**：engine 的中央消毒閘讀的是 `pending.params?.validIids`，
+    //   寫在 pending 頂層那一行從來不會被讀到（v6.396 修）。
+    params: { healAmount: amount, validIids: ownIids },
   });
 }
 

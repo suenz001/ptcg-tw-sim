@@ -237,17 +237,24 @@ console.log('\n【D】「將自己的 1 隻寶可夢恢復 N HP」四張卡 — 
     const pend = r1.pendingSelection;
     chk(`D1 ${label}：開 heal-target picker`, pend?.type === 'heal-target', JSON.stringify(pend?.type));
     const own = new Set([hurt.iid, ...r1.players[0].bench.map((b) => b.iid)]);
-    chk(`D1b ⭐${label}：picker 帶 validIids，且內容＝自己場上全部（不含對手）`,
-      Array.isArray(pend?.validIids) && pend.validIids.length === own.size
-      && pend.validIids.every((x) => own.has(x)),
-      JSON.stringify(pend?.validIids));
+    // ⚠ v6.396：白名單搬到 **params** 裡了 —— engine 的中央消毒閘讀的是 `pending.params?.validIids`，
+    //   寫在 pending 頂層的那一行從來不會被讀到（舊寫法）。這一條跟著改讀 params。
+    //   同一個判準另有 scripts/test-v6396-validiids-and-actoridx.mjs 的 A1／A2 在行為端釘住；
+    //   這裡保留的價值是「四張卡逐張都驗過」。
+    const vi = pend?.params?.validIids;
+    chk(`D1b ⭐${label}：picker 帶 params.validIids，且內容＝自己場上全部（不含對手）`,
+      Array.isArray(vi) && vi.length === own.size && vi.every((x) => own.has(x)),
+      JSON.stringify(vi));
     chk(`D1c ${label}：log 逐字未變`,
       (r1.log ?? []).some((l) => String(l?.message ?? l?.text ?? l)
         === `${label}：選擇 1 隻自己的寶可夢恢復 ${amount} HP`),
       JSON.stringify((r1.log ?? []).slice(-2)));
     // ⭐ 送**對手**的 iid 進去必須被擋下。
-    //   ⚠ 誠實標註：實測 validIids 不是唯一擋它的閘（把對手 iid 塞進 validIids，這一條仍綠）
-    //     ⇒ 這條守的是「送別人的 iid 不會回血」這個**行為**；validIids 本身由 D1b 釘住。
+    //   ⚠ 誠實標註：把對手 iid 塞進 validIids，這一條仍然會綠 —— 因為 healResolver 自己還會
+    //     再驗一次目標歸屬。⇒ 這條守的是「送別人的 iid 不會回血」這個**行為**；
+    //     白名單本身由 D1b（內容）與 test-v6396 的 A2（閘真的會濾）釘住。
+    //     （v6.396 之前這段註解寫「validIids 不是唯一擋它的閘」，真正的原因是那時候它
+    //      寫在 pending 頂層、根本不是閘。）
     const bad = act(r1, { type: 'RESOLVE_SELECTION', selectedIids: [oppIid], actorIdx: 0 });
     chk(`D2 ⭐⭐${label}：送對手的 iid → 被擋下（不解析、pending 留著、沒有人回血）`,
       !!bad.pendingSelection && A0(bad)?.damage === (opts.damage ?? 60)
