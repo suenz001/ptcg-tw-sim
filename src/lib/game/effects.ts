@@ -6355,16 +6355,12 @@ export function countOppPokemon(state: GameState, aIdx: 0 | 1, pool: Map<string,
 // ── A. 自己身上 damage counter × k（6 張） ─────────────────────────────────
 
 // 醜醜魚｜抓狂 — 10× counter
-regPre('醜醜魚|抓狂', (state, aIdx, _pool) => {
-  const n = selfActiveCounters(state, aIdx);
-  return { state, damage: n * 10 };
-});
+//   ⭐v6.397 收斂到中央（Rule 38）。⚠ 這一張原本沒有 log ⇒ `{ log: false }` 保持逐位元不變。
+regPre('醜醜魚|抓狂', selfCountersMultiplyPre(0, 10, '抓狂', { log: false }));
 
 // 厄鬼椪 火灶面具ex｜憤怒之窯 — 20× counter
-regPre('厄鬼椪 火灶面具ex|憤怒之窯', (state, aIdx, _pool) => {
-  const n = selfActiveCounters(state, aIdx);
-  return { state, damage: n * 20 };
-});
+//   ⭐v6.397 收斂到中央（Rule 38）。⚠ 原本沒有 log ⇒ `{ log: false }` 保持逐位元不變。
+regPre('厄鬼椪 火灶面具ex|憤怒之窯', selfCountersMultiplyPre(0, 20, '憤怒之窯', { log: false }));
 
 // 鋁鋼龍｜激怒之錘 — 80 + 10× counter
 regPre('鋁鋼龍|激怒之錘', selfCountersMultiplyPre(80, 10, '激怒之錘'));   // ⭐v6.388a 收斂

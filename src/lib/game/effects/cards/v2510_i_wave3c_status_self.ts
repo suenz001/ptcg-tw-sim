@@ -87,13 +87,9 @@ regPre('派帕的獒教父ex|幹勁衝撞', (state, aIdx, _pool) => {
 });
 
 // 鐵炮魚|抓狂 10× — 自身指示物 ×10
-regPre('鐵炮魚|抓狂', (state, aIdx, _pool) => {
-  const a = state.players[aIdx].active;
-  const counters = a ? Math.floor((a.damage ?? 0) / 10) : 0;
-  const dmg = counters * 10;
-  const s = addLog(state, `抓狂：自身 ${counters} 個指示物 → ${counters}×10 = ${dmg}`, aIdx);
-  return { state: s, damage: dmg };
-});
+//   ⭐v6.397 收斂到中央 selfCountersMultiplyPre（Rule 38）。傷害完全相同；
+//   戰鬥記錄改用中央格式「抓狂：自身傷害指示物 N 個 × 10 → dmg」（原本站上三種寫法有兩種措辭）。
+regPre('鐵炮魚|抓狂', selfCountersMultiplyPre(0, 10, '抓狂'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 4. D 自殘類（1 張）

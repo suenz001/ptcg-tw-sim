@@ -25,6 +25,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9：多行錨點一律先正規化行尾
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));   // Rule 46
 const S = join(ROOT, '.x-396-s.js'), E = join(ROOT, '.x-396-e.ts'), O = join(ROOT, '.x-396-o.mjs');
@@ -134,7 +135,9 @@ T('A3 ⭐⭐⭐ 反證：同一份白名單寫在**頂層**時，備戰 iid 會�
     + ' —— 若這一條也被濾掉，代表 A2 的綠可能來自別的機制');
 });
 T('A4 ⭐ 型別層：PendingSelection **不得**有 validIids 欄位（有的話頂層寫法就不會被 tsc 抓到）', () => {
-  const t = readFileSync(join(ROOT, 'src/lib/game/types.ts'), 'utf8');
+  // ⚠ 工作樹是 CRLF、git blob 是 LF ⇒ 多行錨點（這裡的 '\n}'）必須先 normEol，
+  //   否則本機切不出區塊（test-v6377 C-9 在掃這件事）。
+  const t = normEol(readFileSync(join(ROOT, 'src/lib/game/types.ts'), 'utf8'));
   const i = t.indexOf('export interface PendingSelection {');
   assert.ok(i > 0, '找不到 PendingSelection');
   const block = t.slice(i, t.indexOf('\n}', i));

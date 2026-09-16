@@ -37,6 +37,7 @@ import { coinHeadsDiscardOppEnergyPost } from '../../effects'; // ⭐v6.388a 擲
 // v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
 import { oppReturnChosenConcealedToDeckPost } from '../../effects';
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
+import { selfCountersMultiplyPre } from '../../effects'; // ⭐v6.397 收斂：自身傷害指示物 × N（v6.349 中央）
 import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -189,11 +190,9 @@ regPre('火箭隊的雙彈瓦斯|一併爆炸', (state, aIdx, pool) => {
 });
 
 // 石居蟹｜抓狂 10× — 自身傷害指示物 ×10
-regPre('石居蟹|抓狂', (state, aIdx, _pool) => {
-  const counters = Math.floor((state.players[aIdx].active?.damage ?? 0) / 10);
-  const dmg = counters * 10;
-  return { state: addLog(state, `抓狂：自身指示物 ${counters} 個 → ${counters}×10 = ${dmg}`, aIdx), damage: dmg };
-});
+//   ⭐v6.397 收斂到中央 selfCountersMultiplyPre（Rule 38）。傷害完全相同；
+//   戰鬥記錄改用中央格式（與鐵炮魚／醜醜魚同一支，措辭不再各寫各的）。
+regPre('石居蟹|抓狂', selfCountersMultiplyPre(0, 10, '抓狂'));
 
 // 堅果啞鈴｜強力鞭打 — 對手 1 隻寶可夢，受到自身能量數 ×20（不計弱抗）
 regPre('堅果啞鈴|強力鞭打', (s) => ({ state: s, damage: 0, skipWeakRes: true }));

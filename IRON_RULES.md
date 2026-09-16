@@ -1656,3 +1656,40 @@ v6.393（印刷閘重構）與 v6.394（tsc 型別清理 55 → 0）兩版都動
 
 ⚠ changelog 那一則若對玩家沒有實質意義，就誠實寫短的
 （例：「**內部品質工程**（無玩法變化）」）——**不可以因為寫不出賣點就不 bump**。
+
+## Rule 51（v6.397）：跑全套測試之前，先把這一版的新檔 `git add` 進 index
+
+站內有數支守衛掃的是「**git 追蹤集**」而不是工作目錄：
+  ・`test-v6377` 行尾中性錨點掃描（`scripts/` 下**有追蹤**的 .mjs）
+  ・`test-v6380` script imports 宣告
+  ・`test-v6130` static/music
+
+新增的守衛檔在 commit 之前是 untracked ⇒ 這些掃描**掃不到它**
+⇒ 本機全套全綠，CI（checkout 之後每個檔都是追蹤檔）卻紅。
+
+v6.396 就是這樣踩的：本機 729 支全綠、push 之後 CI 紅在
+`scripts/test-v6396-validiids-and-actoridx.mjs:140  t.indexOf("\n}")`
+（多行錨點沒有先 normEol —— 工作樹是 CRLF、blob 是 LF）。
+
+### 紀律
+**跑全套之前先 `git add` 新檔**（不必 commit，`git add` 就足以讓 `git ls-files` 看到）。
+
+⚠⚠ **一定要明列檔名，絕對不可以用 `git add -A` 或 `git add .`**。
+  這個 repo 的工作樹裡長期躺著幾百個未追蹤的雜物（`scripts/tmp*.mjs` 暫存檔、
+  `*.backup`、影片與音樂素材、logo 草稿、tournament-dumps…）。
+  v6.397 我用了 `git add -A -- scripts/ src/ static/`，一口氣把 **68 個檔**（含一個 5.7MB 的 mp3
+  與 `ai.ts.backup`）加進 index —— 幸好 commit 前檢查了 `git diff --cached --stat` 才發現。
+  ⇒ 加完**一律**用 `git diff --cached --stat` 逐行看過再 commit。
+
+### 「本機綠、CI 紅」目前已知的三種型態
+1. **正對照靠未追蹤的廢棄檔撐著**（v6.392 ⇒ v6.393a 修）——
+   判準去讀實體檔案，而唯一命中的那個檔只存在於站長的工作樹。
+   ⇒ 正對照一律餵**人造字串**給同一個偵測器，不碰任何實體檔案。
+2. **前置狀態只有本機有**（v6.394 ⇒ v6.394a 修）——
+   `tsconfig.json` 的 extends 目標是 `svelte-kit sync` 產物，而 CI 的 `npm test`
+   跑在 `npm run build` **之前**。⇒ 守衛自己把前置狀態補齊，並加哨兵確認補成功。
+3. **新檔在 commit 前不在追蹤集裡**（v6.396 ⇒ 本條）——
+   ⇒ 跑全套前先 `git add`。
+
+⚠ 三種的共同教訓：**判準不可以依賴「只有本機才有的狀態」**
+（未追蹤的檔、build／sync 產物、尚未進 index 的新檔）。
