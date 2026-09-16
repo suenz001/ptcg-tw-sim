@@ -1354,13 +1354,9 @@ function _applyBenchAbilityReduce(
     }
     const hasFrost = asOfDeclarationHolderIids(state, defenderIdx, '凍原堡壘', _liveFrostIids).length > 0;
     if (hasFrost) {
-      const hasWaterE = victim.energyAttached.some(e => {
-        const ec = pool.get(e.cardId);
-        if (!ec || ec.supertype !== 'Energy') return false;
-        if (ec.subtype === 'Basic' && (ec.pokemonType === 'Water' || /【水】/.test(ec.name))) return true;
-        if (ec.pokemonType === 'Water') return true;
-        return false;
-      });
+      // ⭐v6.398 收斂（Rule 38）：原本這裡與 engine.ts 主管線各寫一份「附有【水】能量卡」判準，
+      //   兩份都不是 host-aware（漏新衝天附於【2階進化】=全屬性、稜鏡附於【基礎】=全屬性）⇒ 都改走中央。
+      const hasWaterE = hostHasEnergyType(victim, 'Water', pool);
       if (hasWaterE) {
         const before = dmg;
         dmg = Math.max(0, dmg - 50);
@@ -10173,6 +10169,48 @@ export function preDiscardEnergyEligible(
   return true;
 }
 
+/**
+ * ⭐⭐⭐ v6.398 中央出口：「這隻寶可夢**身上附加的【X】能量卡**」的唯一述詞（單位＝**張**）。
+ *
+ * 【為什麼要有這一支】站長 v6.398 回報：超級噴火龍Xex｜烈獄狂火X（卡面「將自己的場上寶可夢
+ * 身上附加的任意數量的【火】能量卡丟棄，造成其**張數**×90點傷害」）**丟不掉新衝天能量**。
+ * 追下去發現 picker 端（+page.svelte 的 getDiscardableEnergies）自 v6.349 起已經走
+ * host-aware 的 preDiscardEnergyEligible → energyProvidesType，但**手寫的 regPre**（不走
+ * registerSelfDiscardMultiply 這條 factory 的卡）各自留著一份
+ * 「pokemonType === 'X' 或卡名含【X】」的舊判準 ⇒ 玩家在 picker 勾得到、引擎卻不認：
+ * 勾了新衝天 ⇒ 丟 0 張、傷害 0。
+ *
+ * ⚠⚠ 單位是「**卡**」不是「能量的個數」（站長 v6.398 裁示，同型：火箭隊的超夢ex｜擦除球
+ *   「將…能量**卡**丟棄，增加其**張數**×60」）：新衝天能量附於【2階進化】雖然視為提供 **2 個**
+ *   所有屬性的能量，但它終究只是 **1 張卡** ⇒ 只算 1 張、只加 1 倍。
+ *   ⇒ 本述詞回傳的是**卡的清單**，呼叫端一律取其長度；要算「能量的**數量**」請改用
+ *     countEnergyTypeHostAware / totalEnergyUnits（那是另一個維度，別混用）。
+ *
+ * ⚠ 篩選一律 host-aware：同一張新衝天能量附在【2階進化】身上算【火】，附在【基礎】身上
+ *   只算【無】⇒ 沒有 host 就答不出來（稜鏡、燃火、火箭隊、古舊同理）。
+ */
+export function hostEnergyCardsOfType(
+  host: CardInstance | null | undefined,
+  type: EnergyType,
+  pool: Map<string, Card>,
+): CardInstance[] {
+  if (!host) return [];
+  return host.energyAttached.filter(e => energyProvidesType(host, e, type, pool));
+}
+
+/**
+ * ⭐⭐⭐ v6.398：「這隻寶可夢身上**附有**【X】能量卡」的唯一述詞。
+ * ⚠ 必須呼叫 hostEnergyCardsOfType（Rule 38：同一判準只能有一份）——
+ *   不可以在這裡再寫一次 some(...)，否則突變只改得到其中一邊。
+ */
+export function hostHasEnergyType(
+  host: CardInstance | null | undefined,
+  type: EnergyType,
+  pool: Map<string, Card>,
+): boolean {
+  return hostEnergyCardsOfType(host, type, pool).length > 0;
+}
+
 // v6.063：export 供 M6 批次4 卡檔復用（原為 local，行為完全未變）
 export function registerSelfDiscardMultiply(
   key: string,
@@ -12127,21 +12165,28 @@ function fieldDiscardMultiplyPre(
     // 列出場上（含備戰）所有符合條件的能量
     type Loc = { host: 'active' | number; energy: CardInstance };
     const eligible: Loc[] = [];
-    const matches = (e: CardInstance): boolean => {
-      const c = pool.get(e.cardId);
-      if (!c || c.supertype !== 'Energy') return false;
-      if (typeFilter === 'all') return true;
-      if (typeFilter === 'basic') return c.subtype === 'Basic';
-      return energyMatchesType(c, typeFilter as EnergyType); // v5.450：基本能量 pokemonType 為 null，須用名稱-aware 比對
+    // ⭐v6.398 收斂：與 picker 端（+page.svelte 的 getDiscardableEnergies）**共用同一支述詞**
+    //   preDiscardEnergyEligible（host-aware）。原本這裡是非 host-aware 的 energyMatchesType，
+    //   且 registerFieldDiscardMultiply 的 spec 根本沒把 filter 傳給 picker ⇒ 兩端都不一致
+    //   （來悲粗茶｜傾瀉茶：picker 列出全部能量，勾了非【草】的丟不掉；猛雷鼓ex｜極降駕同理）。
+    //   ⚠ host 必須是那張能量**當下附著的寶可夢**，不是出招者 ⇒ 由呼叫端傳入。
+    //   ⚠ typeFilter==='all' 時中央述詞一律回 true（維持既有「附加區非能量卡也被全部丟棄」語意），
+    //     所以這裡仍要自己擋掉非能量卡 —— 那一層與屬性判準正交，不是第二份判準。
+    const matches = (host: CardInstance, e: CardInstance): boolean => {
+      if (pool.get(e.cardId)?.supertype !== 'Energy') return false;
+      return preDiscardEnergyEligible(host, e, pool, {
+        basicOnly: typeFilter === 'basic',
+        type: (typeFilter === 'all' || typeFilter === 'basic') ? null : (typeFilter as EnergyType),
+      });
     };
     if (player.active) {
       for (const e of player.active.energyAttached) {
-        if (matches(e)) eligible.push({ host: 'active', energy: e });
+        if (matches(player.active, e)) eligible.push({ host: 'active', energy: e });
       }
     }
     player.bench.forEach((b, i) => {
       for (const e of b.energyAttached) {
-        if (matches(e)) eligible.push({ host: i, energy: e });
+        if (matches(b, e)) eligible.push({ host: i, energy: e });
       }
     });
 
@@ -12203,6 +12248,10 @@ function registerFieldDiscardMultiply(
     scope: 'any-own',
     baseDamage,
     damagePerEnergy: per,
+    // ⭐v6.398：picker 也要吃同一組 filter（原本完全沒傳 ⇒ 玩家看得到非【草】/非基本的能量，
+    //   勾了卻被 regPre 濾掉：丟 0 張、傷害 0）。對齊 registerSelfDiscardMultiply 的寫法。
+    energyTypeFilter: (typeFilter === 'all' || typeFilter === 'basic') ? undefined : typeFilter,
+    basicEnergyOnly: typeFilter === 'basic' ? true : undefined,
   });
   regPre(key, fieldDiscardMultiplyPre(baseDamage, per, max, typeFilter, label));
 }
@@ -17469,15 +17518,9 @@ export const PASSIVE_COIN_AVOID = new Map<string, (
   // 變隱龍(H) | 躲藏高手 — 無條件擲幣
   ['躲藏高手', () => true],
   // 吉雉雞(H) | 腎上腺費洛蒙 — 附惡能量時擲幣
-  ['腎上腺費洛蒙', (inst, _card, pool) => {
-    return inst.energyAttached.some(e => {
-      const ec = pool.get(e.cardId);
-      if (!ec || ec.supertype !== 'Energy') return false;
-      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Darkness' || /【惡】/.test(ec.name))) return true;
-      if (ec.pokemonType === 'Darkness') return true;
-      return false;
-    });
-  }],
+  // ⭐v6.398：卡面「若這隻寶可夢身上附有【惡】能量卡」⇒ 走中央 host-aware 述詞
+  //   （原本 inline 一份，漏古舊能量／稜鏡附於【基礎】／火箭隊能量 —— 這些都視為提供【惡】）。
+  ['腎上腺費洛蒙', (inst, _card, pool) => hostHasEnergyType(inst, 'Darkness', pool)],
 ]);
 
 /** 被招式 KO 時對攻擊者放指示物 */

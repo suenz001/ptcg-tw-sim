@@ -1314,22 +1314,10 @@ export function getEffectiveHP(
   //   搬到這裡 → UI 顯示與 KO 判定一致。
   //   稜鏡能量 on Basic → 視為全屬性能量（含 Darkness）也算數（Leon v2.120 要求）。
   if (card.name === '夠讚狗' && hpAbilityEffective(inst, card, '腎上腺力量')) {
-    const hostIsEvolution = !!card.evolvesFrom || card.stage === 'Stage1' || card.stage === 'Stage2';
-    const hasDark = inst.energyAttached.some(e => {
-      const ec = pool.get(e.cardId);
-      if (!ec || ec.supertype !== 'Energy') return false;
-      // 基本【惡】能量
-      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Darkness' || /【惡】/.test(ec.name))) return true;
-      // 特殊能量本身屬性含 Darkness
-      if (ec.pokemonType === 'Darkness') return true;
-      // 稜鏡能量 on Basic host → 視為全屬性（含 Darkness）
-      if (ec.name === '稜鏡能量' && !hostIsEvolution) return true;
-      // 古舊 / 夜光能量 → 單張全屬性
-      if (ec.name === '古舊能量' || ec.name === '夜光能量') return true;
-      // 火箭隊能量 → 提供【超】【惡】
-      if (ec.name === '火箭隊能量') return true;
-      return false;
-    });
+    // ⭐v6.398 收斂（Rule 38）：原本這裡 inline 重寫了一份「身上附有【惡】能量卡」判準
+    //   （基本【惡】/pokemonType/稜鏡 on Basic/古舊/夜光/火箭隊 六條），與中央 host-aware
+    //   述詞 energyProvidesType 各一份 ⇒ 新特殊能量只會被加進其中一邊。改走中央單一出口。
+    const hasDark = inst.energyAttached.some(e => energyProvidesType(inst, e, 'Darkness', pool));
     if (hasDark) hp += 100;
   }
   // v2.355 怪顎龍｜暴龍根性 — 身上附有特殊能量卡時最大 HP +150
@@ -1498,6 +1486,13 @@ export function energyTypeUnitsHostAware(host: { cardId: string }, e: { cardId: 
   if (ec.name === '稜鏡能量') return !hostIsEvolution ? 1 : (type === 'Colorless' ? 1 : 0);
   if (ec.name === '燃火能量') return type === 'Colorless' ? (hostIsEvolution ? 3 : 1) : 0;
   if (ec.name === '古舊能量') return 1; // 全屬性 ACE SPEC
+  // ⭐v6.398：夜光能量（G 標，卡面「視為提供1個所有屬性的能量」）。收錄理由：engine 內原本有
+  //   兩處 inline 屬性判準（夠讚狗｜腎上腺力量、冰雪巨龍｜凍原堡壘）各自把夜光列為全屬性，
+  //   v6.398 把它們收斂到本函式 —— 若本表不收，改走中央就會讓那兩張卡對夜光**退化**。
+  //   ⚠ 卡面第二段「若身上附有這張卡以外的特殊能量卡，則視為提供1個【無】能量」本函式看不到
+  //     host 的 energyAttached（簽名只有 cardId）⇒ 維持與 v6.398 之前 engine 兩處 inline 完全相同的
+  //     行為（不做該降級），不在本版擴大範圍；G 標不在標準賽，之後要做再連同 SPECIAL_ENERGY_TYPES 一起收。
+  if (ec.name === '夜光能量') return 1;
   if (ec.name === '火箭隊能量') return (type === 'Psychic' || type === 'Darkness') ? 2 : 0;
   return isEnergyOfType(ec, type) ? 1 : 0;
 }
@@ -9112,17 +9107,9 @@ export function applyDefenderReductionsBlockA(
       const hasFrozenFortress = defAll2.some(c =>
         pool.get(c.cardId)?.name === '冰雪巨龍' && hasEffectiveAbilityByInst(state, dIdx, c, pool, '凍原堡壘'));
       if (hasFrozenFortress && defender.active) {
-        const hasWater = defender.active.energyAttached.some(e => {
-          const ec = pool.get(e.cardId);
-          if (!ec || ec.supertype !== 'Energy') return false;
-          // 基本【水】能量
-          if (ec.subtype === 'Basic' && (ec.pokemonType === 'Water' || /【水】/.test(ec.name ?? ''))) return true;
-          // 特殊能量本身屬性含 Water
-          if (ec.pokemonType === 'Water') return true;
-          // 古舊能量 / 夜光能量 → 全屬性
-          if (ec.name === '古舊能量' || ec.name === '夜光能量') return true;
-          return false;
-        });
+        // ⭐v6.398 收斂（Rule 38）：原本 inline 一份「附有【水】能量卡」判準（漏新衝天 on Stage2、
+        //   漏稜鏡 on 基礎），且 effects.ts 的備戰路徑另有一份 ⇒ 兩份都改走中央 energyProvidesType。
+        const hasWater = defender.active.energyAttached.some(e => energyProvidesType(defender.active!, e, 'Water', pool));
         if (hasWater) {
           baseDamage = Math.max(0, baseDamage - 50);
           workingState = addLog(workingState,

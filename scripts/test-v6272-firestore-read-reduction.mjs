@@ -802,6 +802,9 @@ const PREV_ALLOWED = [
   'src/lib/game/effects/cards/v2346_j_mark_batch.ts',
   'src/lib/game/effects/cards/v2510_i_wave3c_status_self.ts',
   'src/lib/game/effects/cards/v2560_i_wave6_complex.ts',
+  // ⭐v6.398：刪掉檔內零呼叫點的 selfReturnNTypeEnergyToHandPost 死碼（判準非 host-aware，
+  //   留著只會被日後新卡照抄）。純刪除，沒有任何 Firestore／玩家端讀取變化。
+  'src/lib/game/effects/cards/v2610_i_wave11_misc4.ts',
   'src/lib/game/effects/cards/v2650_i_wave15_misc8.ts',
   'src/lib/game/effects/cards/v2660_i_wave16_misc9.ts',
   'src/lib/game/effects/cards/v2740_h_wave1_simple.ts',

@@ -34,6 +34,7 @@ import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect, energyProvidesType, countAttachedEnergyAsUnits, returnSelfActiveEnergyPost, discardOppActiveEnergyPost } from '../../effects';
 import { coinHeadsDiscardOppEnergyPost } from '../../effects'; // ⭐v6.388a 擲 N 次 → 棄對手 N 個能量（中央）
+import { hostEnergyCardsOfType } from '../../effects'; // ⭐v6.398「身上附加的【X】能量卡」中央 host-aware 述詞
 // v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
 import { oppReturnChosenConcealedToDeckPost } from '../../effects';
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
@@ -231,30 +232,25 @@ regR('wave16-hit-any-opp', (state, aIdx, iids, params, pool) => {
 // 3. 棄能量類（3 張）
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 電蜘蛛｜放電 — 棄全雷能量, ×50
-// v4.72: 基本【雷】能量 JSON 沒 pokemonType 欄位（同 v4.71 issue），改用 name fallback
-//   isLightning = pokemonType === 'Lightning' OR card.name 含「【雷】」
-function _isLightningEnergy(card: { pokemonType?: string; name?: string } | undefined): boolean {
-  if (!card) return false;
-  if (card.pokemonType === 'Lightning') return true;
-  return !!(card.name && card.name.includes('【雷】'));
-}
+// 電蜘蛛｜放電 — 卡面「將這隻寶可夢身上附加的【雷】能量卡全部丟棄，造成其張數×50點傷害。」
+// ⭐v6.398 收斂（Rule 38）：原本本檔 local 的 _isLightningEnergy（pokemonType==='Lightning'
+//   或卡名含【雷】）不是 host-aware ⇒ 看不到古舊能量（視為 1 個所有屬性）、稜鏡能量附於【基礎】
+//   等「視為提供【雷】」的特殊能量 —— 玩家身上有古舊能量時傷害整整少 50。改走中央述詞。
+// ⚠ 單位是「**卡**」（其**張數**×50）⇒ 一律取清單長度，不可換成能量的個數。
 regPre('電蜘蛛|放電', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
   if (!a) return { state, damage: 0 };
-  let lightning = 0;
-  for (const e of a.energyAttached) {
-    if (_isLightningEnergy(pool.get(e.cardId))) lightning++;
-  }
+  const lightning = hostEnergyCardsOfType(a, 'Lightning', pool).length;
   const dmg = lightning * 50;
-  return { state: addLog(state, `放電：自身雷能量 ${lightning} 個 → ×50 = ${dmg}`, aIdx), damage: dmg };
+  return { state: addLog(state, `放電：自身【雷】能量卡 ${lightning} 張 → ×50 = ${dmg}`, aIdx), damage: dmg };
 });
 regPost('電蜘蛛|放電', (state, aIdx, pool) => {
-  // 棄全雷能量
+  // 棄全雷能量（與上面 regPre 共用同一支中央述詞 ⇒ 丟的張數與算傷害的張數不可能漂移）
   return updatePlayer(state, aIdx, p => {
     if (!p.active) return p;
-    const lightning = p.active.energyAttached.filter(e => _isLightningEnergy(pool.get(e.cardId)));
-    const remaining = p.active.energyAttached.filter(e => !_isLightningEnergy(pool.get(e.cardId)));
+    const lightningIids = new Set(hostEnergyCardsOfType(p.active, 'Lightning', pool).map(e => e.iid));
+    const lightning = p.active.energyAttached.filter(e => lightningIids.has(e.iid));
+    const remaining = p.active.energyAttached.filter(e => !lightningIids.has(e.iid));
     return { ...p, active: { ...p.active, energyAttached: remaining }, discard: [...p.discard, ...lightning] };
   });
 });

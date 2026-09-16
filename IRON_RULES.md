@@ -1693,3 +1693,46 @@ v6.396 就是這樣踩的：本機 729 支全綠、push 之後 CI 紅在
 
 ⚠ 三種的共同教訓：**判準不可以依賴「只有本機才有的狀態」**
 （未追蹤的檔、build／sync 產物、尚未進 index 的新檔）。
+
+---
+
+## Rule 52（v6.398）：「寶可夢**身上附加的【X】能量卡**」一律走中央 host-aware 述詞
+
+### 病灶
+站長回報：超級噴火龍Xex｜烈獄狂火X **丟不掉新衝天能量**。
+卡面：「將自己的場上寶可夢身上附加的任意數量的【火】能量卡丟棄，造成其張數×90點傷害。」
+新衝天能量：「若附於【2階進化】寶可夢身上，則視為提供2個所有屬性的能量。」
+超級噴火龍Xex 本身就是 Stage2 ⇒ 它身上的新衝天**就是一張【火】能量卡**。
+
+根因不是漏了一張卡，是**同一個判準散成很多份**：
+picker 端（`+page.svelte` 的 `getDiscardableEnergies`）自 v6.349 起已經走 host-aware 的
+`preDiscardEnergyEligible`，但**手寫的 regPre**（不走 `registerSelfDiscardMultiply` factory 的卡）
+各自留著一份「`pokemonType === 'X'` 或卡名含【X】」⇒ 玩家勾得到、引擎不認：丟 0 張、傷害 0。
+全站 audit 一次抓到同型八處（烈獄狂火X／傾瀉茶／極降駕／放電／凍原堡壘×2／腎上腺力量／
+腎上腺費洛蒙／火焰軍團），其中 `registerFieldDiscardMultiply` 連 picker 的 spec 都沒傳 filter。
+
+### 規則
+1. **場上附加**的能量要判屬性 ⇒ 一律 `energyProvidesType` 系（v6.398 起用中央
+   `hostEnergyCardsOfType` / `hostHasEnergyType`，底層仍是 `energyProvidesType`）。
+   ⚠ 禁 `pokemonType === 'X'`、禁 `卡名.includes('【X】')`、禁 `isEnergyOfType`、禁 `energyMatchesType`。
+2. **牌庫／手牌／棄牌區**的能量卡沒有 host ⇒ `energyMatchesType` 這類 naive 判準才是對的，不要改。
+3. 卡面寫「**基本**【X】能量」⇒ 基本能量沒有 host-aware 問題，naive 判準正確。
+4. **單位維度分開看**（站長 v6.398 裁示）：
+   ・卡面寫「能量**卡**」「其**張數**」⇒ 算**張**（新衝天只算 1 張，即使它視為提供 2 個能量）。
+     同型：火箭隊的超夢ex｜擦除球「將…能量卡丟棄，增加其張數×60」。
+   ・卡面寫「能量的**數量**／**個數**」⇒ 算 host-aware 的**單位數**（走 `countEnergyTypeHostAware`
+     ／`totalEnergyUnits`；新衝天 on Stage2 = 2、燃火 on 進化 = 3、火箭隊 = 2、繁茂基本草 = 2）。
+   ⚠ 這兩個維度**不可以混用**。判斷方法只有一個：回去讀卡面那一句寫的是「卡／張」還是「數量／個」。
+5. 新增「丟能量」型招式時，picker 的 `ATTACK_PRE_DISCARD_CHOICE` spec 與 regPre 的 eligible
+   **必須是同一組條件**。兩端不一致的症狀是「玩家勾得到、丟不掉、傷害對不上」。
+
+### 守衛
+`scripts/test-v6398-host-aware-energy-card.mjs`（行為端 A 組為主防線 ＋ C1 全站靜態掃描）。
+⚠ C1 的三個豁免（走中央／卡面寫「基本」／按卡名精確比對）是**視窗級**的啟發式，
+有已知盲點（同一視窗裡 basic 與非 basic 混寫時後者會跟著被放行，見該檔註解）。
+**C1 綠 ≠ 全站沒有第二份判準**，主防線永遠是行為端。
+
+### 順帶記下的兩份表（尚未收斂，列為後續版本的待辦）
+`engine.ts` 的 `SPECIAL_ENERGY_TYPES`（cost 支付用）與 `energyTypeUnitsHostAware`（篩選／計數用）
+是**同一批特殊能量規則的兩份表**：前者 21 種特殊能量收了 16 種，後者只 inline 了 6 種。
+v6.398 只補了「夜光能量」（不補的話 engine 兩處收斂後會退化）。要動 cost 支付路徑風險高，另版處理。

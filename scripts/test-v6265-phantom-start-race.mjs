@@ -18,6 +18,7 @@
 //   ・只捕捉 assert.AssertionError（其他例外一律炸出來）。
 // Run: node scripts/test-v6265-phantom-start-race.mjs
 import { stripV6394Engine } from './lib/engine-strip-v6394.mjs';
+import { stripV6398Engine } from './lib/engine-strip-v6398.mjs';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1184,7 +1185,10 @@ await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等�
         //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6394.mjs —— test-v6375 的 F0b 也 import 同一份
         //     （Rule 38：同一個判準不可以抄兩份）。它 fail-closed：錨點對不上會直接 throw。
         const s5 = stripV6394Engine(s4); ok(s5 !== s4, 'v6.394 的還原器過期（型別清理那幾處的字面對不上）');
-        return s5;
+        // ⭐v6.398：「身上附加的【X】能量卡」收斂到中央 host-aware 述詞，對 engine.ts 的 3 組合法改動。
+        //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6398.mjs —— test-v6375 的 F0b 也 import 同一份。
+        const s6 = stripV6398Engine(s5); ok(s6 !== s5, 'v6.398 的還原器過期（host-aware 收斂那三處的字面對不上）');
+        return s6;
       })() : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }
@@ -1212,7 +1216,10 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
         //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6394.mjs —— test-v6375 的 F0b 也 import 同一份
         //     （Rule 38：同一個判準不可以抄兩份）。它 fail-closed：錨點對不上會直接 throw。
         const s5 = stripV6394Engine(s4); ok(s5 !== s4, 'v6.394 的還原器過期（型別清理那幾處的字面對不上）');
-        return s5;
+        // ⭐v6.398：「身上附加的【X】能量卡」收斂到中央 host-aware 述詞，對 engine.ts 的 3 組合法改動。
+        //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6398.mjs —— test-v6375 的 F0b 也 import 同一份。
+        const s6 = stripV6398Engine(s5); ok(s6 !== s5, 'v6.398 的還原器過期（host-aware 收斂那三處的字面對不上）');
+        return s6;
       })() : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }

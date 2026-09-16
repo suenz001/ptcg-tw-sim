@@ -72,39 +72,10 @@ function coinFlipPlusMultiPre(base: number, coinCount: number, perHead: number, 
   };
 }
 
-// helper: 自身棄 N 個指定屬性能量回手
-function selfReturnNTypeEnergyToHandPost(
-  n: number,
-  energyType: 'Grass'|'Fire'|'Water'|'Lightning'|'Psychic'|'Fighting'|'Darkness'|'Metal'|'any',
-  label: string,
-): AttackPostFn {
-  return (state, aIdx, pool) => {
-    const a = state.players[aIdx].active;
-    if (!a || a.energyAttached.length === 0) return state;
-    let returnedCount = 0;
-    const newEnergies: CardInstance[] = [];
-    const returned: CardInstance[] = [];
-    for (let i = a.energyAttached.length - 1; i >= 0; i--) {
-      const e = a.energyAttached[i];
-      const card = pool.get(e.cardId);
-      if (returnedCount < n && (energyType === 'any' || energyMatchesType(card, energyType))) {
-        returned.unshift(e);
-        returnedCount++;
-      } else {
-        newEnergies.unshift(e);
-      }
-    }
-    if (returned.length === 0) return addLog(state, `${label}：無對應能量可回手`, aIdx);
-    return updatePlayer(
-      addLog(state, `${label}：將 ${returned.length} 張能量從自身放回手牌`, aIdx),
-      aIdx, p => ({
-        ...p,
-        active: p.active ? { ...p.active, energyAttached: newEnergies } : null,
-        hand: [...p.hand, ...returned],
-      }),
-    );
-  };
-}
+// ⭐v6.398：原本這裡有一支 selfReturnNTypeEnergyToHandPost（自身棄 N 個指定屬性能量回手）——
+//   **全站零呼叫點的死碼**，而且它的屬性判準是非 host-aware 的 energyMatchesType
+//   （看不到古舊／稜鏡／新衝天等「視為提供【X】」的特殊能量）。留著只會被日後新卡照抄，
+//   ⇒ 整支刪除。真的要做「自身能量回手」請走中央 returnSelfActiveEnergyPost（它已是 host-aware）。
 
 // helper: 對手所有備戰各受到 N
 // v5.434：改走中央 dealAttackDamageToTarget 補免疫 guard（太晶/化隱/中立中心擋；對戰圓形對「傷害」不擋）。

@@ -25,6 +25,7 @@ import {
   updatePlayer,
   withPending, rejectAbilityUse } from '../_shared';
 import { isMegaExCard } from '../../selection-filter'; // v6.210：Mega ex 判定收斂中央述詞（leaf，Check O 安全）
+import { hostEnergyCardsOfType } from '../../effects'; // ⭐v6.398「身上附加的【X】能量卡」中央 host-aware 述詞
 
 function cardName(pool: Map<string, Card>, inst: CardInstance | null | undefined): string {
   return inst ? (pool.get(inst.cardId)?.name ?? '?') : '?';
@@ -33,12 +34,6 @@ function cardName(pool: Map<string, Card>, inst: CardInstance | null | undefined
 function isBasicEnergyOf(card: Card | undefined, type: string, label: string): boolean {
   return !!card && card.supertype === 'Energy' && card.subtype === 'Basic'
     && (card.pokemonType === type || card.name.includes(label));
-}
-
-function providesFireEnergy(card: Card | undefined): boolean {
-  // Basic【火】 and future Fire-providing special-energy names are accepted by text/name.
-  return !!card && card.supertype === 'Energy'
-    && (card.pokemonType === 'Fire' || card.name.includes('【火】'));
 }
 
 function isEvolutionPokemon(card: Card | undefined): boolean {
@@ -220,11 +215,18 @@ ATTACK_PRE_DISCARD_CHOICE.set('超級噴火龍Xex|烈獄狂火X', {
 regPre('超級噴火龍Xex|烈獄狂火X', (state, aIdx, pool, action) => {
   const p = state.players[aIdx];
   const chosen = action?.discardedEnergyIids;
+  // ⭐⭐v6.398（站長回報）：原本用本檔 local 的 providesFireEnergy（pokemonType==='Fire' 或
+  //   卡名含【火】）⇒ **新衝天能量丟不掉**。卡面「將自己的場上寶可夢身上附加的任意數量的
+  //   【火】能量卡丟棄，造成其張數×90點傷害」——新衝天能量附於【2階進化】（超級噴火龍Xex
+  //   本身就是 Stage2）視為提供 2 個**所有屬性**的能量 ⇒ 它就是一張【火】能量卡，必須能丟。
+  //   ⚠ 但傷害的單位是「**卡**」（其**張數**×90），不是能量的個數 ⇒ 新衝天只算 **1 張**、+90
+  //     （同型：火箭隊的超夢ex｜擦除球「將…能量卡丟棄，增加其張數×60」）。
+  //     下方 discardedCount 取的正是 discard.length（張），維持不變。
+  //   ⚠ 必須 host-aware：同一張新衝天附在備戰的【基礎】寶可夢身上只視為【無】⇒ 不算【火】，
+  //     所以述詞要逐一寶可夢傳入它自己的 host（不可用出招者當 host）。
   const eligibleIds = new Set<string>();
   for (const pk of selfField(p)) {
-    for (const e of pk.energyAttached) {
-      if (providesFireEnergy(pool.get(e.cardId))) eligibleIds.add(e.iid);
-    }
+    for (const e of hostEnergyCardsOfType(pk, 'Fire', pool)) eligibleIds.add(e.iid);
   }
   const toDiscardIds = new Set(
     chosen && chosen.length > 0

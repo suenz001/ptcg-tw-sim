@@ -46,6 +46,7 @@
  */
 
 import { recruitNamedToBenchPost } from '../../effects'; // v6.069 收斂：牌庫指名放備戰
+import { hostHasEnergyType } from '../../effects'; // ⭐v6.398「身上附有【X】能量卡」中央 host-aware 述詞
 import { registerBugPanicAttack } from '../../effects'; // v6.078 蟲蟲恐慌中央 helper
 import {
   reg,
@@ -256,20 +257,16 @@ regPost('超級龍頭地鼠ex|挖垮', millOppDeckTopPost(2, '挖掘崩塌'));
 
 // ── helper：自方備戰中「附有火能量的寶可夢數」────────────────────────
 // v4.950：原 helper 算「附任何能量」是早期 JSON 翻譯誤譯 — 正確應限定火能量。
-//   providesFireEnergy 判定：基本【火】能量 OR 名稱含「【火】」的特殊能量
-//   （pattern 同 m2_dragon_charizard_batch.ts:36）。
-function providesFireEnergy(card: import('$lib/cards/types').Card | undefined): boolean {
-  return !!card && card.supertype === 'Energy'
-    && (card.pokemonType === 'Fire' || card.name.includes('【火】'));
-}
+// ⭐v6.398 收斂（Rule 38）：原本本檔 local 再寫一份「pokemonType==='Fire' 或卡名含【火】」
+//   （與 m2_dragon_charizard_batch.ts 那份是同一個判準的兩份拷貝）—— 兩份都不是 host-aware，
+//   看不到古舊能量／稜鏡附於【基礎】／新衝天附於【2階進化】這些「視為提供【火】」的特殊能量。
+//   改走中央 hostHasEnergyType（底層是 energyProvidesType，全站唯一一份）。
 function countSelfBenchWithFireEnergy(
   state: import('../../types').GameState,
   aIdx: 0 | 1,
   pool: Map<string, import('$lib/cards/types').Card>,
 ): number {
-  return state.players[aIdx].bench.filter(b =>
-    b.energyAttached.some(e => providesFireEnergy(pool.get(e.cardId)))
-  ).length;
+  return state.players[aIdx].bench.filter(b => hostHasEnergyType(b, 'Fire', pool)).length;
 }
 
 // ── helper：自方備戰中卡名含某子字串的寶可夢數 ───────────────────────

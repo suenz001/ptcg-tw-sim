@@ -30,6 +30,7 @@
 //
 // ⛔ 本守衛不寫任何東西進 src/；合成盤面只在記憶體裡。
 import { stripV6394Engine } from './lib/engine-strip-v6394.mjs';
+import { stripV6398Engine } from './lib/engine-strip-v6398.mjs';
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, mkdtempSync, cpSync, rmSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -683,6 +684,8 @@ if (!hasBaseCommit(ROOT, BASE)) {
       // ⭐v6.394：型別清理（站長裁示 ④）對 engine.ts 的 8 組合法改動 ——
       //   還原內容與 test-v6265 F4c **共用同一份** scripts/lib/engine-strip-v6394.mjs（Rule 38）。
       t = stripV6394Engine(t);
+    // ⭐v6.398：host-aware 能量卡述詞收斂對 engine.ts 的 3 組合法改動（與 test-v6265 F4c 共用同一份）
+    t = stripV6398Engine(t);
       return t;
     };
     const _engHeadLf = engSrc.replace(/\r\n/g, '\n');
