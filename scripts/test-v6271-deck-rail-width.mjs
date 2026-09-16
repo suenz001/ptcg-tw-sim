@@ -53,6 +53,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { styleEndIndex } from './lib/svelte-style-block.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SRC = readFileSync(join(ROOT, 'src/routes/decks/+page.svelte'), 'utf8');
@@ -76,7 +77,7 @@ function stripCssComments(css) {
 }
 function styleBlock(src) {
   const m = /^<style>/m.exec(src);
-  const j = src.lastIndexOf('</style>');
+  const j = styleEndIndex(src);
   return (m && j > m.index) ? src.slice(m.index + 7, j) : '';
 }
 function splitMedia(css) {

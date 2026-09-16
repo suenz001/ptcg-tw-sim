@@ -27,6 +27,7 @@ import { hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
 import { markupSections } from './lib/strip-markup-sections.mjs';   // ⭐v6.320 中央 helper（護欄①～⑨）
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { styleEndIndex, styleTagIndex } from './lib/svelte-style-block.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_PAGE = join(ROOT, 'src/routes/friends/+page.svelte');
@@ -73,7 +74,7 @@ const stripHtmlCmt = (s) => s.replace(/<!--[\s\S]*?-->/g, '');
 const stripAllCmt = (s) => stripCssCmt(stripHtmlCmt(s)).replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
 /** 取 .svelte 檔最後一段 <style>…</style> 的內容。 */
 const styleOf = (s) => {
-  const a = s.lastIndexOf('<style'), b = s.lastIndexOf('</style>');
+  const a = styleTagIndex(s), b = styleEndIndex(s);
   assert.ok(a > 0 && b > a, '抽不到 <style> 區');
   return s.slice(s.indexOf('>', a) + 1, b);
 };

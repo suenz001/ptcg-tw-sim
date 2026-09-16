@@ -28,6 +28,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
+import { styleTagIndex } from './lib/svelte-style-block.mjs';
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -75,9 +76,8 @@ function balanced(src, openIdx) {
 
 /** 抽 <style> 區（最後一段）。 */
 function styleBlock(src) {
-  const i = src.lastIndexOf('<style');
-  assert.ok(i >= 0, '找不到 <style> 區 —— 抽取器瞎了');
-  return src.slice(src.indexOf('>', i) + 1, src.lastIndexOf('</style>'));
+  // ⭐v6.392：抽取＋fail-closed 都在中央 helper 裡（找不到／切歪會 throw，比原本的 assert 更嚴格）。
+  return cssOf(src);
 }
 
 /** 從 CSS 抽出某個選擇器（完全相符）的宣告字串，回傳陣列（可能多條）。 */

@@ -1595,7 +1595,13 @@ v6.390 在 `src/routes/game/+page.svelte` 的 CSS 註解裡寫了一次樣式標
   這個 repo 有大量守衛是用字串位置定位的。要在註解裡提到樣式區塊，就寫「樣式區塊」四個字。
 ⚠ 同理適用 `</` + `style`、`<` + `script`、`</` + `script`。
 ⚠ 守衛：`scripts/test-v6390-scroll-list.mjs` 的【G】段（G1 ＋ G1b 正對照）。
-⚠ 更根本的修法（把那 7 支的區塊抽取收斂到中央 helper）尚未做 —— 列為待辦，不是本版範圍。
+⚠ **v6.392 已收斂**（站長裁示）：判準現在只有一份 —— `scripts/lib/svelte-style-block.mjs`。
+  現查當時全 repo 有 **21 個檔案／29 個呼叫點**各自寫 `lastIndexOf(開頭字面)`，
+  全部改走 `styleTagIndex` / `styleEndIndex` / `styleBlockOf` / `cssOf` / `markupBeforeStyle`。
+  中央 helper 是 **fail-closed** 的：找不到、切歪（區塊內出現第二個結束標籤）、
+  或開頭標籤落在註解裡（就是本條 Rule），一律 throw，不回傳可疑值。
+⚠ 守衛：`scripts/test-v6392-style-block-central.mjs`（A1 禁自寫、B6/B7 是 fail-closed 的正對照），
+  突變測試 `scripts/mutcheck-v6392-style-block.mjs`。
 
 ## Rule 49（v6.391）：把多條規則收斂成一條群組規則時，**新加的每一個屬性**都要回頭對既有覆寫點名
 

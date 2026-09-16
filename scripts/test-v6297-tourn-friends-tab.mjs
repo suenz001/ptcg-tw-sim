@@ -38,6 +38,7 @@ import { createHash } from 'node:crypto';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.311 行級剝註解（含護欄）
 import { sectionInner, markupSections, GAME_INLINE_STYLE, allowResidualFor } from './lib/strip-markup-sections.mjs';     // ⭐v6.317 中央 helper；v6.318 單趟行級狀態機；v6.319 BOM／同行註解／殘留護欄
+import { styleBlockOf } from './lib/svelte-style-block.mjs';
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -207,7 +208,7 @@ await T('B5 ⭐⭐ 匿名玩家看不到整列分頁：分頁列整段落在 `{#
 console.log('\n【C】框架安全：分頁列 CSS 一行都沒改（本版採方案 2＝短標籤）');
 const CSS_KEYS = ['  .tourn-tabs {', '  .tourn-tab {', '  .tourn-tab:hover {', '  .tourn-tab.active {'];
 function cssRules(src) {
-  const style = src.slice(src.lastIndexOf('<style'));
+  const style = styleBlockOf(src);
   return CSS_KEYS.map((k) => {
     const i = style.indexOf(k);
     assert.ok(i >= 0, '抽不到 CSS 規則：' + k);

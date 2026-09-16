@@ -23,6 +23,7 @@ import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { styleEndIndex, styleTagIndex } from './lib/svelte-style-block.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PAGE = join(ROOT, 'src/routes/game/+page.svelte');
@@ -31,10 +32,10 @@ const PAGE = join(ROOT, 'src/routes/game/+page.svelte');
 
 /** 抽出 .svelte 檔最後一段 <style> 的內容。 */
 export function extractStyle(src) {
-  const i = src.lastIndexOf('<style');
+  const i = styleTagIndex(src);
   assert.ok(i >= 0, '找不到 <style> 區 —— 求解器瞎了');
   const start = src.indexOf('>', i) + 1;
-  const end = src.lastIndexOf('</style>');
+  const end = styleEndIndex(src);
   assert.ok(end > start, '<style> 區抓錯範圍 —— 求解器瞎了');
   return src.slice(start, end);
 }

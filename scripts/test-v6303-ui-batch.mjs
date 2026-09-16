@@ -32,6 +32,7 @@ import { execFileSync } from 'node:child_process';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { revertV6384, revertV6381 as _rv6381 } from './lib/tourn-revert-v6384.mjs';
+import { styleBlockOf } from './lib/svelte-style-block.mjs';
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
 
 const esbuild = await import('esbuild');
@@ -151,7 +152,7 @@ await T('B3 ⭐⭐ 既有分頁鈕**只有文字改變**：把 BASE 那顆按鈕
 });
 const CSS_KEYS = ['  .tourn-tabs {', '  .tourn-tab {', '  .tourn-tab:hover {', '  .tourn-tab.active {'];
 function cssLine(src, key) {
-  const style = src.slice(src.lastIndexOf('<style'));
+  const style = styleBlockOf(src);
   const i = style.indexOf(key);
   assert.ok(i >= 0, '抽不到 CSS 規則：' + key);
   return style.slice(i, style.indexOf('\n', i));
@@ -201,7 +202,7 @@ await T('C1 ⭐⭐ 四種狀態實跑：報名中未報名＝綠條、報到中�
   }
 });
 function cssBlock(src, sel) {
-  const style = src.slice(src.lastIndexOf('<style'));
+  const style = styleBlockOf(src);
   const i = style.indexOf('\n  ' + sel + ' {');
   assert.ok(i >= 0, '抽不到 CSS 規則：' + sel);
   const j = style.indexOf('}', i);
@@ -226,7 +227,7 @@ await T('C3 ⭐⭐ .tourn-event 本體規則與 BASE **逐字相同**（色條�
 });
 await T('C4 ⭐ 色票是**從既有 CSS 挑的**，不是憑空發明：#6ab87a 與 #ffd35a 在 BASE 的樣式表裡本來就有（且各自出現在指定的既有規則上）', () => {
   if (!hasHistory) { shallowSkip('v6303 C4 色票溯源到 BASE', '沒有歷史就證明不了「既有」'); skipped.push('C4（淺複製）'); return; }
-  const baseStyle = BGAME.slice(BGAME.lastIndexOf('<style'));
+  const baseStyle = styleBlockOf(BGAME);
   for (const c of ['#6ab87a', '#ffd35a']) assert.ok(baseStyle.includes(c), '色票 ' + c + ' 在 BASE 樣式表裡不存在 ⇒ 是憑空發明的');
   assert.ok(cssLine(BGAME, '  .tourn-tab.active {').includes('#6ab87a'), '#6ab87a 的出處（.tourn-tab.active 的邊框色）對不上');
   assert.ok(baseStyle.includes('.tcmsg.tcsys { color: #ffd35a; }'), '#ffd35a 的出處（系統播報的強調金）對不上');
@@ -371,7 +372,7 @@ await T('E3 賽事卡的 {@const _evOpen} / {@const _evLock} 仍然接在 tEvOpe
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【F】卡牌資料庫左右箭頭＝牌組編輯器那一套');
 function ruleBlock(src, sel) {
-  const style = src.slice(src.lastIndexOf('<style'));
+  const style = styleBlockOf(src);
   const i = style.indexOf('\n  ' + sel + ' {');
   assert.ok(i >= 0, '抽不到 CSS 規則：' + sel + '（' + (src === CARDS ? 'cards' : src === DECKS ? 'decks' : 'base') + '）');
   const j = style.indexOf('\n  }', i);
@@ -400,7 +401,7 @@ await T('F2 ⭐⭐ 正對照：BASE 的 .modal-nav 與 .pv-nav **不相同**（�
 });
 await T('F3 ⭐⭐ 手機版（max-width:600px）那三條也一致：尺寸與位置兩邊逐字相同 ⇒ 箭頭不會位移', () => {
   const grab = (src, pre) => {
-    const style = src.slice(src.lastIndexOf('<style'));
+    const style = styleBlockOf(src);
     const out = {};
     for (const k of [pre + '-prev {', pre + '-next {', pre + ' {']) {
       const idx = [...style.matchAll(new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'))].map((m) => m.index);

@@ -37,6 +37,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { cssOf, styleTagIndex } from './lib/svelte-style-block.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_GAME = join(ROOT, 'src/routes/game/+page.svelte');
@@ -422,17 +423,17 @@ await T('E1 ⭐⭐ 四個 snippet（eventCard／bracketBlock／myMatchBox／myBy
   }
 });
 await T('E2 ⭐⭐ 整段 <style> 與 BASE **逐位元相同**（版面重構不得靠改 CSS 達成）', () => {
-  const cssOf = (s) => {
-    const i = s.lastIndexOf('<style');
-    assert.ok(i > 0, '抽不到 <style>');
-    const out = s.slice(s.indexOf('>', i) + 1, s.lastIndexOf('</style>'));
-    assert.ok(out.length > 50000, '<style> 抽取器壞了（長度 ' + out.length + '）');
+  // ⭐v6.392：原本這裡的區域變數叫 cssOf，會 shadow 掉頂層 import ⇒ 改名，
+  //   抽取交給中央 helper，只留下本條原有的長度哨兵。
+  const cssOfChecked = (s) => {
+    const out = cssOf(s);
+    assert.ok(out.length > 50000, '樣式區塊抽取器壞了（長度 ' + out.length + '）');
     return out;
   };
-  const now = cssOf(GAME);
+  const now = cssOfChecked(GAME);
   console.log('   <style> sha256 ＝ ' + sha(now) + '　長度 ' + now.length);
   if (!hasHistory) { shallowSkip('v6304 E2 <style> THIS vs BASE', '長度下限斷言仍在'); return; }
-  assert.strictEqual(sha(cssOf(TGAME)), sha(cssOf(BGAME)), 'v6.304 改到了 <style>');
+  assert.strictEqual(sha(cssOfChecked(TGAME)), sha(cssOfChecked(BGAME)), 'v6.304 改到了樣式區塊');
 });
 await T('E3 ⭐ 進場鈕保底區塊與報名中賽事迴圈逐字未動', () => {
   assert.ok(GAME.includes('{#if tMyMatch && !tBrackets.some((b) => b.event?._id === tMyMatch.eventId)}'), '保底條件被改了');
@@ -598,7 +599,7 @@ if (hasHistory) {
   });
   await T('H12 突變：v6.304 若改了 <style> 一個字 ⇒ E2 必紅（v6.316）', () => {
     const g = mutate(TGAME, '  .rotate-prompt{ display:none; }', '  .rotate-prompt{ display:block; }');
-    const cssOf2 = (x) => x.slice(x.indexOf('>', x.lastIndexOf('<style')) + 1, x.lastIndexOf('</style>'));
+    const cssOf2 = (x) => cssOf(x);
     assert.notStrictEqual(sha(cssOf2(g)), sha(cssOf2(BGAME)), '<style> 突變沒被抓到');
   });
 } else {

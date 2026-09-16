@@ -47,6 +47,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { styleEndIndex } from './lib/svelte-style-block.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DECKS = readFileSync(join(ROOT, 'src/routes/decks/+page.svelte'), 'utf8');
@@ -78,7 +79,7 @@ function styleBlock(src) {
   //   而抓錯的結果是「CSS 只剩幾百字元 ⇒ 每一條斷言都找不到東西 ⇒ 假訊號」。
   //   ⇒ 一律鎖「行首的 <style>」，並用最後一個 </style> 收尾。
   const m = /^<style>/m.exec(src);
-  const j = src.lastIndexOf('</style>');
+  const j = styleEndIndex(src);
   return (m && j > m.index) ? src.slice(m.index + 7, j) : '';
 }
 /** 把所有 @media 區塊切出來（回傳 {cond, body, at} 陣列），並回傳「拿掉全部 @media 之後」的 CSS。 */

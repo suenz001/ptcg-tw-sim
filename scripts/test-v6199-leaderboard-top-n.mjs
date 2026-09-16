@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import assert from 'node:assert/strict';
 import { transformSync } from 'esbuild';
+import { styleTagIndex } from './lib/svelte-style-block.mjs';
 
 const ROOT = process.env.V6199_ROOT || join(dirname(fileURLToPath(import.meta.url)), '..');
 const readOr = (p) => { try { return readFileSync(join(ROOT, p), 'utf8'); } catch { return ''; } };
@@ -256,7 +257,7 @@ await TA('2h ⭐核心⑤（行為端）：tLeaderboardLoad 帶 limit=上限，�
 
 // ── 3) ⭐核心③ 版面：box-model 求值器（先自我驗證，再算實際 px） ─────────────
 const CSS = (() => {
-  const i = PAGE.lastIndexOf('<style');
+  const i = styleTagIndex(PAGE);
   if (i < 0) return '';
   const j = PAGE.indexOf('>', i);
   return stripComments(PAGE.slice(j + 1));

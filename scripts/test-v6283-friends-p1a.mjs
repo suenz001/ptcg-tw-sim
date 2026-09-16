@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { createHash } from 'node:crypto';
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
+import { styleBlockOf } from './lib/svelte-style-block.mjs';
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -397,7 +398,7 @@ await T('C4 ⭐⭐⭐ 匿名玩家看不到分頁列，而且 lobbyTab 被 $deri
   assert.ok(/<div class="lobby-tabs" role="tablist"/.test(GAME), '分頁列容器缺 role="tablist"');
 });
 await T('C5 .auth-user 的 CSS 逐字未動（新增節點只靠既有 flex-wrap 折行，沒有新 CSS）', () => {
-  const css = GAME.slice(GAME.lastIndexOf('<style'));
+  const css = styleBlockOf(GAME);
   const want = '  .auth-user {\n    display: flex;\n    align-items: center;\n    gap: 0.5rem;\n    flex-wrap: wrap;\n  }\n';
   assert.ok(css.includes(want), '.auth-user 的 CSS 變了');
   assert.strictEqual((css.match(/friend/gi) || []).length, 0, 'style 區出現 friend（本版不該加任何 CSS）');

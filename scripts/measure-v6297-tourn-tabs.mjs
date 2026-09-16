@@ -20,6 +20,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { cssOf, styleTagIndex } from './lib/svelte-style-block.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PAGE = process.argv[2] || join(ROOT, 'src/routes/game/+page.svelte');
@@ -27,8 +28,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
 const src = readFileSync(PAGE, 'utf8');
-const sStart = src.lastIndexOf('<style');
-const css = src.slice(src.indexOf('>', sStart) + 1, src.lastIndexOf('</style>')).replace(/:global\(([^)]*)\)/g, '$1');
+const css = cssOf(src).replace(/:global\(([^)]*)\)/g, '$1');
 
 /** 前 3 顆分頁鈕的文字**從出貨碼實抽**（不是手抄），避免 fixture 與出貨碼漂移。 */
 function shippedTabTexts() {

@@ -1,3 +1,4 @@
+import { styleEndIndex, styleTagIndex } from './svelte-style-block.mjs';
 // ⭐ v6.285 中央 fixture：`src/routes/game/+page.svelte` 的 zoom modal 家族（棄牌區／設定／獎賞卡檢視／卡牌放大）
 //   給「量測腳本」（Playwright，沙盒）與「守衛」（CI；有 Playwright 才跑 DOM 段）共用同一份 markup 與 CSS 抽取，
 //   兩邊量到的東西才是同一個東西。
@@ -13,8 +14,8 @@ export const VIEWPORTS = [
 ];
 
 export function extractCss(svelte) {
-  const sStart = svelte.lastIndexOf('<style');
-  const sEnd = svelte.lastIndexOf('</style>');
+  const sStart = styleTagIndex(svelte);
+  const sEnd = styleEndIndex(svelte);
   if (sStart < 0 || sEnd < sStart) throw new Error('找不到 <style> 區');
   return svelte.slice(svelte.indexOf('>', sStart) + 1, sEnd).replace(/:global\(([^)]*)\)/g, '$1');
 }

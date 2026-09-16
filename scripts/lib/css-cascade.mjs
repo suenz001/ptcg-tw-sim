@@ -1,3 +1,4 @@
+import { cssOf as centralCssOf, styleTagIndex as centralStyleTagIndex } from './svelte-style-block.mjs';
 /**
  * scripts/lib/css-cascade.mjs —— 極小的 CSS 串接（cascade）模擬器
  *
@@ -171,23 +172,14 @@ export function cascadeEffective(rules, prop, ctx, onUnsupported) {
 
 /**
  * 取 Svelte 檔案的樣式區塊內容（含起點位移）。
- * ⚠⚠ 一定要用 **lastIndexOf**（v6.391 審查者 🔴-2）：game/+page.svelte 的 `<svelte:head>` 裡
- *   有一段 `{@html '…'}` 注入樣式，那個字面排在真標籤**之前**。用 indexOf 會從那裡開始切
- *   ⇒ 中間 4,900 行的 markup／JS 被當成 CSS 餵進 parser（實測多出 3,668 條垃圾規則），
- *   而且不會報錯。repo 裡其他 7 支守衛用的都是 lastIndexOf —— 這裡跟它們對齊。
- * ⚠ fail-closed：切出來的內容若看起來像 markup，回 null 讓呼叫端炸掉。
+ * ⭐v6.392：切區塊的判準已經收斂到 scripts/lib/svelte-style-block.mjs（全 repo 21 份複本併成一份）。
+ *   本函式只負責換算成 { css, offset } 這個本檔要的形狀，**不自己找標籤**。
+ * ⚠ 找不到／切歪時中央 helper 會 throw ⇒ 這裡回 null，維持呼叫端既有的「F0 紅」語意。
  */
 export function styleBlockOf(src) {
-  const a = src.lastIndexOf('<' + 'style');
-  if (a < 0) return null;
-  const b = src.indexOf('>', a);
-  const e = src.lastIndexOf('</' + 'style>');
-  if (b < 0 || e < 0 || e <= b) return null;
-  const css = src.slice(b + 1, e);
-  // ⚠ fail-closed：正確切出來的區塊裡**不可能**再出現一個結束標籤（e 已經是最後一個）。
-  //   出現了就代表起點取到了更前面的假標籤（例如 `{@html '…'}` 注入的那一段）。
-  //   ⚠ 不可以拿 `<div` 或 `{#if` 當判準 —— CSS 註解裡本來就寫得到那些字
-  //     （現查：本 repo 的 .tourn-nt 註解就有 `{#if tError}<p class="warn">`）。
-  if (css.includes('</' + 'style>')) return null;
-  return { css, offset: b + 1 };
+  try {
+    const css = centralCssOf(src);
+    const a = centralStyleTagIndex(src);
+    return { css, offset: String(src).indexOf('>', a) + 1 };
+  } catch { return null; }
 }

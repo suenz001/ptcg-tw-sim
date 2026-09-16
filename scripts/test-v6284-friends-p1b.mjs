@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { createHash } from 'node:crypto';
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
+import { styleBlockOf } from './lib/svelte-style-block.mjs';
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -296,7 +297,7 @@ function assertTargetTable(game) {
 }
 await T('C4 ⭐ friendsBattleTarget 推導實跑：正式賽 mr_ 前綴 → matchId；測試房／只剩前綴／觀戰／本機／沒房號 ⇒ null；休閒 ⇒ roomCode', () => assertTargetTable(GAME));
 await T('C5 style 區零 friend（v6.296 的分頁列 CSS 一律 lobby- 前綴）；.auth-user 的 CSS 逐字未動；.auth-user 仍三份；⭐ 分頁列 CSS 在且只碰 .lobby-tab*', () => {
-  const css = GAME.slice(GAME.lastIndexOf('<style'));
+  const css = styleBlockOf(GAME);
   assert.strictEqual((css.match(/friend/gi) || []).length, 0, 'style 區出現 friend');
   // v6.296：分頁列確實有自己的 CSS，但只准碰 .lobby-tab／.lobby-tabs／.lobby-tab-panel（不得改到既有 selector）
   const newRules = css.split('\n').filter((l) => /\.lobby-tab/.test(l));
@@ -306,7 +307,7 @@ await T('C5 style 區零 friend（v6.296 的分頁列 CSS 一律 lobby- 前綴�
   assert.strictEqual((GAME.match(/class="auth-user"/g) || []).length, 3, '.auth-user 份數變了');
 });
 await T('C6 三種桌機對戰版面共用同一份勝負 modal：CSS 內所有含 gameover-modal 的規則都沒有 tablet-layout／tabletop／fable／classic；modal 是 fixed＋max-height＋overflow-y:auto', () => {
-  const css = GAME.slice(GAME.lastIndexOf('<style'));
+  const css = styleBlockOf(GAME);
   const lines = css.split('\n').filter((l) => l.includes('gameover-modal'));
   assert.ok(lines.length >= 8, '含 gameover-modal 的 CSS 行只有 ' + lines.length + ' 行 —— 掃描器壞了？');
   for (const l of lines) assert.ok(!/tablet-layout|tabletop|fable|classic/.test(l), '勝負 modal 有版面專屬 selector：' + l.trim());

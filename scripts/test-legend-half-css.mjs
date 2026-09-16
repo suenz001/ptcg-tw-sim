@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { styleBlockOf } from './lib/svelte-style-block.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 let pass=0,fail=0; const chk=(t,c,extra='')=>{ if(c){pass++;} else {fail++;console.log('  ❌',t,extra);} };
 
@@ -14,7 +15,7 @@ for (const f of ['src/routes/game/+page.svelte','src/routes/game/MobilePortraitB
   chk(`${f} 有掛 legend-half class`, hasHalfClass);
   if (!hasHalfClass) continue;
   // 取 <style> 區塊
-  const style = src.slice(src.lastIndexOf('<style'));
+  const style = styleBlockOf(src);
   const rules = style.split('}').filter(r => /legend-half-[lr]/.test(r));
   chk(`${f} <style> 內有 legend-half 規則`, rules.length > 0, String(rules.length));
   const joined = rules.join(' ');

@@ -14,6 +14,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+import { markupBeforeStyle, styleBlockOf } from './lib/svelte-style-block.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const MPB = process.env.MPB_FILE || join(ROOT, 'src/routes/game/MobilePortraitBattle.svelte');
@@ -192,7 +193,7 @@ const V6185_FIXTURE = `
 
 // ── ② 真檔求值：兩階段尺寸必須一致 ───────────────────────────────
 const src = readFileSync(MPB, 'utf8');
-const style = src.slice(src.lastIndexOf('<style'));
+const style = styleBlockOf(src);
 let setupBox = null, playBox = null;
 try {
   setupBox = evalActiveCardFace(style, 'setup');
@@ -223,7 +224,7 @@ if (setupBox && playBox) {
 
 // ── ④ 家族守衛：同一 class 同時用在 <button> 與非 button 且有幾何宣告者，必須明寫 box-sizing ──
 {
-  const markup = src.slice(0, src.lastIndexOf('<style'));
+  const markup = markupBeforeStyle(src);
   const cssNoCmt = stripCssComments(style);
   const tagsOf = new Map();
   for (const m of markup.matchAll(/<(div|span|button|section|footer|header|label|a)\b([^>]*)>/g)) {

@@ -26,6 +26,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
+import { styleBlockOf } from './lib/svelte-style-block.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GAME = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
@@ -278,7 +279,7 @@ function assertSettings(src) {
   const after = sec.slice(i);
   assert.ok(after.indexOf('{/if}') > 0 && after.indexOf('{/if}') < after.indexOf('<div class="setting-hint">'), '{#if !isSmallScreen} 沒有在 setting-hint 之前收尾');
   // 零新 CSS：style 區沒有任何 force-mobile 相關 selector
-  const css = src.slice(src.lastIndexOf('<style'));
+  const css = styleBlockOf(src);
   assert.strictEqual((css.match(/force-mobile|isSmallScreen|forceMobileBattleUI/g) || []).length, 0, 'style 區出現本版識別字（本版零新 CSS）');
   // 只用既有 class
   const classes = new Set([...row.matchAll(/class="([^"]+)"/g)].flatMap((m) => m[1].split(/\s+/)));

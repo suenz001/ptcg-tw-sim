@@ -23,6 +23,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { cssOf, styleTagIndex } from './lib/svelte-style-block.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_GAME = join(ROOT, 'src/routes/game/+page.svelte');
@@ -32,8 +33,7 @@ const { chromium } = require_(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const rd = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 /** 抽出 <style> 區段（最後一個），並把 :global(X) 攤平成 X，好灌進靜態 fixture。 */
 function styleOf(src) {
-  const s = src.lastIndexOf('<style');
-  const out = src.slice(src.indexOf('>', s) + 1, src.lastIndexOf('</style>')).replace(/:global\(([^)]*)\)/g, '$1');
+  const out = cssOf(src).replace(/:global\(([^)]*)\)/g, '$1');
   if (out.length < 50000) throw new Error('抽不到 <style>（只有 ' + out.length + ' 字元）');
   return out;
 }

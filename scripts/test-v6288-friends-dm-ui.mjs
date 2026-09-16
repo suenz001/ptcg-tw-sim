@@ -33,6 +33,7 @@ import {
   buildFriends, makeFakeDb, asUser,
 } from './lib/friends-harness-v6282.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
+import { styleBlockOf } from './lib/svelte-style-block.mjs';
 
 const esbuild = await import('esbuild');
 const { compile: svelteCompile } = await import('svelte/compiler');
@@ -582,7 +583,7 @@ await T('E1 DmPanel 與 /friends 頁零 {@html}；DmPanel 的每個 each 用 (m.
 });
 await T('E2 ⭐⭐ 手機／桌機是 JS 分支：DmPanel.svelte **零 @media**、.desktop／.mobile 兩條規則都在且 .dm-panel 是 fixed；/friends 頁用 Math.min(innerWidth, innerHeight) <= N 且 N 與 game/+page.svelte 的 isPortraitMobile 相同；mobile prop 接 isMobile；resize 有掛有拆', () => {
   assert.strictEqual((stripComments(PANEL).match(/@media/g) || []).length, 0, 'DmPanel.svelte 出現 @media（禁用 @media 當手機開關）');
-  const css = PANEL.slice(PANEL.lastIndexOf('<style'));
+  const css = styleBlockOf(PANEL);
   assert.ok(/\.dm-panel\s*\{[^}]*position:\s*fixed/.test(css), '.dm-panel 不是 fixed（會擠到既有版面）');
   assert.ok(/\.dm-panel\.desktop\s*\{/.test(css) && /\.dm-panel\.mobile\s*\{[^}]*inset:\s*0/.test(css), '缺 .desktop／.mobile(inset:0) 兩條分支');
   assert.ok(/class="dm-panel \{mobile \? 'mobile' : 'desktop'\}"/.test(PANEL), '面板 class 沒依 mobile prop 切分支');
@@ -595,7 +596,7 @@ await T('E2 ⭐⭐ 手機／桌機是 JS 分支：DmPanel.svelte **零 @media**�
   assert.strictEqual(m[1], g[1], '手機門檻與對戰頁不一致：' + m[1] + ' vs ' + g[1]);
   assert.ok(/<DmPanel [^>]*mobile=\{isMobile\}/.test(PAGE), 'DmPanel 沒接 mobile={isMobile}');
   assert.ok(/window\.addEventListener\('resize', onResize\)/.test(PAGE) && /window\.removeEventListener\('resize', onResize\)/.test(PAGE), 'resize 監聽沒掛／沒拆');
-  const pageCss = PAGE.slice(PAGE.lastIndexOf('<style'));
+  const pageCss = styleBlockOf(PAGE);
   const medias = pageCss.match(/@media[^{]*\{([\s\S]*?)\n  \}/g) || [];
   assert.ok(medias.length >= 1, '/friends 頁既有的 @media（padding）抽不到 —— 掃描器壞了？');
   for (const blk of medias) assert.ok(!/dm-|DmPanel/.test(blk), '/friends 頁的 @media 碰到私聊面板：' + blk.slice(0, 100));

@@ -27,6 +27,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
+import { cssOf, styleTagIndex } from './lib/svelte-style-block.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_GAME = join(ROOT, 'src/routes/game/+page.svelte');
@@ -38,8 +39,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const rd = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 /** 抽出 <style> 區段（最後一個），並把 :global(X) 攤平成 X，好灌進靜態 fixture。 */
 function styleOf(src) {
-  const s = src.lastIndexOf('<style');
-  return src.slice(src.indexOf('>', s) + 1, src.lastIndexOf('</style>')).replace(/:global\(([^)]*)\)/g, '$1');
+  return cssOf(src).replace(/:global\(([^)]*)\)/g, '$1');
 }
 function baseBlob(path) {
   try {
