@@ -84,12 +84,18 @@ console.log('\n【A】⭐⭐ 唯一來源：scripts/ 底下沒有人自己找樣
   }
   chk('A1 ⭐⭐⭐ 沒有任何 script 自己找樣式標籤（一律走 ' + LIB + '）',
     hits.length === 0, JSON.stringify(hits));
-  // ★ 正對照：白名單裡的那幾支**確實**有那個字面（否則 A1 是「掃不到東西所以綠」）
-  const allowHave = [...ALLOW].filter((rel) => {
-    try { const s = readFileSync(join(ROOT, rel), 'utf8'); return BAD.some((re) => re.test(s)); } catch { return false; }
-  });
-  chk('A1b ★ 正對照：白名單裡至少有一支真的含那個字面（證明偵測器會命中）',
-    allowHave.length >= 1, JSON.stringify(allowHave));
+  // ★★ v6.393a：正對照**不可以依賴任何實體檔案**。
+  //   原版是去讀白名單裡的檔案看有沒有字面 —— 而白名單兩支 mutcheck 其實是用字串相加組出
+  //   舊寫法的、並沒有完整字面，於是本機唯一命中的是那支「只存在於站長工作樹」的未追蹤檔。
+  //   結果：本機全綠、CI 紅在 A1b :: []（v6.392／v6.393 兩版的 deploy job 都因此被 skipped）。
+  //   改成餵一段人造字串給**同一組偵測器**：本機與 CI 判準完全一致，而且比原版更強
+  //   （原版只證明「有某個檔含字面」，證不出偵測器對「正確寫法」不會誤命中）。
+  const PROBE_BAD = "  const i = src.lastIndexOf('" + OPEN + "');";
+  const PROBE_OK = "  const i = styleTagIndex(src, '某某檔');";
+  chk('A1b ★ 正對照：偵測器對「自己找標籤」的舊寫法必定命中（不靠任何實體檔案）',
+    BAD.some((re) => re.test(PROBE_BAD)), PROBE_BAD);
+  chk('A1c ★ 反對照：偵測器對「走中央 helper」的正確寫法不得命中（擋住恆真式）',
+    !BAD.some((re) => re.test(PROBE_OK)), PROBE_OK);
 
   const users = files.filter((p) => readFileSync(p, 'utf8').includes("svelte-style-block.mjs"));
   chk('A2 ⭐ 至少 18 個檔案改用中央 helper（v6.392 現查 21 個）', users.length >= 18, String(users.length));
