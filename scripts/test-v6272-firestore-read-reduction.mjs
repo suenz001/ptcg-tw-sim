@@ -800,6 +800,10 @@ const PREV_ALLOWED = [
   //   ⚠ engine.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 仍然零改動。
   'src/lib/ui-limits.ts',
   'src/lib/version.ts',
+  // ⭐v6.393：修一個**既有的** Rule 48 違規 —— friends/+page.svelte 的 CSS 註解裡寫了樣式標籤的
+  //   開頭字面，而且排在真標籤之後 ⇒ 所有用 lastIndexOf 取樣式區塊的守衛對這個檔一直是切歪的。
+  //   （v6.392 的中央 helper 加了 fail-closed 之後才變成看得見的錯誤。）**只改註解文字，行為零改動。**
+  'src/routes/friends/+page.svelte',
   'src/routes/game/+page.svelte',
   'static/card-set-map.json',
   'static/cards/M-P-J.json',

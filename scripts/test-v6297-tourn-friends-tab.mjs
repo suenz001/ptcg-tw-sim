@@ -586,11 +586,35 @@ await T('G1 ⭐⭐ `/friends` 這條獨立路由與 DmPanel.svelte **逐位元�
   };
   structural();
   if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6297 G1 /friends 與 DmPanel 逐位元比對', '上面的結構斷言不需要歷史，仍在守'); skipped.push('G1 逐位元（淺複製）'); return; }
+  // ⭐⭐ v6.393：BASE 之後對這兩個檔做過的**合法**改動清單。
+  //   ⚠⚠ 這不是放寬 —— 套用清單後**仍然**要求 sha256 完全相符，其他任何一個位元不同照樣紅。
+  //     （Rule 40：判準往上移，不放寬。不可以把這裡降級成「只做結構斷言」。）
+  //   ⚠ 每一條都要寫版本號與理由；錨點必須在 BASE 裡**恰好命中 1 次**，0 次或多次都紅（fail-closed）。
+  //   ⚠ 這裡用字串相加組出樣式標籤字面，**不可以**直接寫出來 —— 見 IRON_RULES Rule 48／
+  //     test-v6392 A1（scripts 自己寫出字面會讓「禁自寫」守衛翻紅）。
+  const OPEN_STYLE = '<' + 'style' + '>';
+  const BASE_MIGRATIONS = {
+    'src/routes/friends/+page.svelte': [
+      // v6.393 step0：修掉一個**既有的** Rule 48 違規 —— CSS 註解裡出現樣式標籤的開頭字面，
+      //   會讓 21 支守衛的 lastIndexOf 把「樣式區塊起點」推到註解那一行（切歪），
+      //   症狀是一整批守衛同時報「抽不到 CSS 規則」。這裡把字面改寫成中文敘述。
+      ['FriendsPanel.svelte 的 ' + OPEN_STYLE + ' 最上面', 'FriendsPanel.svelte 的樣式區塊最上面'],
+    ],
+  };
   for (const [p, rel] of [[P_FRPAGE, 'src/routes/friends/+page.svelte'], [P_DMPANEL, 'src/routes/friends/DmPanel.svelte']]) {
     const b = readBaseBlob(ROOT, BASE_SHA, rel);
     assert.ok(b.ok, '讀不到 BASE 的 ' + rel);
+    let baseText = b.out.replace(/\r\n/g, '\n');
+    for (const [from, to] of (BASE_MIGRATIONS[rel] || [])) {
+      const hits = baseText.split(from).length - 1;
+      assert.strictEqual(hits, 1,
+        '⚠ BASE_MIGRATIONS 的錨點在 ' + rel + ' 的 BASE 裡命中 ' + hits + ' 次（必須恰好 1 次）：' + from);
+      baseText = baseText.split(from).join(to);
+    }
     assert.strictEqual(createHash('sha256').update(rd(p), 'utf8').digest('hex'),
-      createHash('sha256').update(b.out.replace(/\r\n/g, '\n'), 'utf8').digest('hex'), '⚠⚠ ' + rel + ' 被動到了（本版不該動它）');
+      createHash('sha256').update(baseText, 'utf8').digest('hex'),
+      '⚠⚠ ' + rel + ' 被動到了（本版不該動它）。如果這是刻意且必要的改動，' +
+      '請在 G1 的 BASE_MIGRATIONS 裡補一條（附版本號與理由），不要把逐位元比對降級成結構斷言。');
   }
 });
 await T('G2 新增的區塊零 {@html}；錦標賽好友分頁區間零 {#each}（沒有新的無 key 清單）；共用元件仍零 {@html}', () => {

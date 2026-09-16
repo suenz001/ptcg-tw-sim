@@ -116,7 +116,7 @@
 {/snippet}
 
 <style>
-  /* ⚠ 色碼一律不寫在這裡：--fr-* 的單一來源在 $lib/friends/FriendsPanel.svelte 的 <style> 最上面
+  /* ⚠ 色碼一律不寫在這裡：--fr-* 的單一來源在 $lib/friends/FriendsPanel.svelte 的樣式區塊最上面
      （守衛 test-v6293 B1／B2 逐條比對錦標賽的同一條規則）。本檔只留版面。 */
   main {
     max-width: 760px;

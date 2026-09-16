@@ -10,7 +10,7 @@
 
 import type { Card, EnergyType } from '$lib/cards/types';
 import { ENERGY_LABEL } from '$lib/cards/energy'; // v5.801 屬性→CJK 標籤(丟對手【X】能量 log)
-import { hasOakEye } from './effects/_shared'; // v5.789 監視之眼 gate
+import { hasOakEye, faceAttackDamage } from './effects/_shared'; // v5.789 監視之眼 gate
 import { withAttackDamageTaken } from './effects/_shared'; // ⭐v6.256「受到的招式的傷害」唯一中央寫入點
 import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂（【無】被招式傷害KO 獎賞-1）
 import { markDamageCounterMovedFrom } from './effects/_shared'; // v5.947 移動指示物非治療
@@ -10210,6 +10210,11 @@ export function registerSelfDiscardMultiply(
   }
   regPre(key, (state, aIdx, pool, action) => {
     const player = state.players[aIdx];
+    // ⭐⭐⭐v6.393（站長裁示）：ATTACK_PRE 的 key 沒有印刷維度 ⇒ 傷害一律讀**出招那張卡自己的卡面**，
+    //   參數 baseDamage 降級成 fallback（借招／卡面不是純數字／讀不到卡時才用）。
+    //   前科見 _shared.ts 的 faceAttackDamage 檔頭：皮卡丘ex｜打雷 SVM 220 vs M6a 200。
+    //   ⚠ 只有「純數字」卡面會覆蓋 ⇒ per>0 的倍率型招式（baseDamage=0）完全不受影響。
+    const faceBase = faceAttackDamage(state, aIdx, pool, label, baseDamage);
     if (!player.active) return { state, damage: baseDamage };
     const all = player.active.energyAttached;
     // ⭐v6.349 收斂：與 picker 端（+page.svelte getDiscardableEnergies）**共用同一支述詞**。
@@ -10249,7 +10254,7 @@ export function registerSelfDiscardMultiply(
       active: p.active ? { ...p.active, energyAttached: remaining } : null,
       discard: [...p.discard, ...discarded],
     }));
-    const dmg = baseDamage + per * discarded.length;
+    const dmg = faceBase + per * discarded.length;
     s = addLog(s, `${label}：丟棄 ${discarded.length} 個能量 → ${dmg}`, aIdx);
     return { state: s, damage: dmg };
   });
