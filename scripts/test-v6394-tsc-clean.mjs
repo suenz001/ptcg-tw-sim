@@ -41,6 +41,21 @@ console.log('【A】⭐⭐⭐ 行為層：tsc --noEmit 必須零錯誤');
 const TSC = join(ROOT, 'node_modules/typescript/bin/tsc');
 chk('A0 ★ 哨兵：找得到 typescript 編譯器（否則整節是空轉）', existsSync(TSC), TSC);
 
+// ⚠⚠ 根 tsconfig.json 的 `extends` 指向 `.svelte-kit/tsconfig.json`，那是 svelte-kit sync 產生的。
+//   CI 的 workflow 是 `npm test` 跑在 `npm run build` **之前** ⇒ 那個檔還不存在，tsc 會報
+//   TS5083，然後**退回「掃當前目錄所有檔」**的模式，把 repo 根目錄的暫存檔也一起編
+//   （實際紅在 write_v2306.cjs 的 TS1160）—— 那不是我們要守的東西。
+//   sync 是冪等的，本機也照跑，讓本機與 CI 的前提一致。
+const SK = join(ROOT, 'node_modules/@sveltejs/kit/svelte-kit.js');
+let syncErr = '';
+try {
+  execFileSync(process.execPath, [SK, 'sync'], { cwd: ROOT, stdio: 'pipe', timeout: 300000 });
+} catch (e) {
+  syncErr = String((e.stderr && e.stderr.toString()) || (e && e.message) || e).slice(0, 200);
+}
+chk('A0b ★ 哨兵：svelte-kit sync 之後 .svelte-kit/tsconfig.json 必須存在（tsconfig 的 extends 目標）',
+  existsSync(join(ROOT, '.svelte-kit/tsconfig.json')), syncErr || '(sync 沒報錯，但檔案仍不存在)');
+
 let tscOut = '';
 let tscThrew = false;
 try {
