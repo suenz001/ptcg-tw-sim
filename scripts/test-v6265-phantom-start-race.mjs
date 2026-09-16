@@ -17,6 +17,7 @@
 //   ・每一條否定型都配正對照；
 //   ・只捕捉 assert.AssertionError（其他例外一律炸出來）。
 // Run: node scripts/test-v6265-phantom-start-race.mjs
+import { stripV6394Engine } from './lib/engine-strip-v6394.mjs';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1179,7 +1180,11 @@ await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等�
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s4 = stripV6385Engine(s3); ok(s4 !== s3, 'v6.385b 的還原器過期（大師工藝那一段的字面對不上）');
-        return s4;
+        // ⭐v6.394：型別清理（站長裁示 ④）對 engine.ts 的 8 組合法改動。
+        //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6394.mjs —— test-v6375 的 F0b 也 import 同一份
+        //     （Rule 38：同一個判準不可以抄兩份）。它 fail-closed：錨點對不上會直接 throw。
+        const s5 = stripV6394Engine(s4); ok(s5 !== s4, 'v6.394 的還原器過期（型別清理那幾處的字面對不上）');
+        return s5;
       })() : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }
@@ -1203,7 +1208,11 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s4 = stripV6385Engine(s3); ok(s4 !== s3, 'v6.385b 的還原器過期（大師工藝那一段的字面對不上）');
-        return s4;
+        // ⭐v6.394：型別清理（站長裁示 ④）對 engine.ts 的 8 組合法改動。
+        //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6394.mjs —— test-v6375 的 F0b 也 import 同一份
+        //     （Rule 38：同一個判準不可以抄兩份）。它 fail-closed：錨點對不上會直接 throw。
+        const s5 = stripV6394Engine(s4); ok(s5 !== s4, 'v6.394 的還原器過期（型別清理那幾處的字面對不上）');
+        return s5;
       })() : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }

@@ -918,7 +918,9 @@ export async function checkAndAcceptRestart(roomCode: string, pool: Map<string, 
       const p1 = data.seats[0];
       const p2 = data.seats[1];
       if (!p1.deckEntries || !p2.deckEntries) return false;
-      const prefs: ['random'|'first'|'second', 'random'|'first'|'second'] = [
+      // ⚠ 'opponent'（先後手交給對手決定）本來就是 seats.firstChoicePreference 的合法值，
+      //   createGame 的 firstChoicePreferences 也收它 —— 這裡的型別註記漏寫，runtime 一直都對。
+      const prefs: ['random'|'first'|'second'|'opponent', 'random'|'first'|'second'|'opponent'] = [
         p1.firstChoicePreference ?? 'random',
         p2.firstChoicePreference ?? 'random',
       ];

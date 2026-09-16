@@ -14,8 +14,9 @@
  *   evaluator 時會形成循環，屆時把 isBasicPokemonCard/isRulePokemon/isBasicEnergyOfType/getBasicEnergyType
  *   下沉搬進本檔、engine 改 re-export（Check O 純度）。批1 先不動 engine。
  */
-import type { Card, CardInstance } from './types';
-import type { EnergyType } from '$lib/cards/types';
+import type { CardInstance } from './types';
+// ⚠ Card 定義在 $lib/cards/types（不是 ./types）—— engine.ts 也是從那裡 import。
+import type { Card, EnergyType } from '$lib/cards/types';
 import { RULE_BOX_SUBTYPES } from './types';
 
 // ─── 卡片述詞 helper（v6.018 批5：從 engine.ts 下沉；engine 改 re-export，解 engine↔selection-filter 循環）───
@@ -89,9 +90,17 @@ export function isBasicEnergyOfType(ec: Card | undefined, type: EnergyType): boo
  * （prizesForKO 給 3 張獎賞、飯匙蛇｜激動力量、AI 的 _isMegaEx 都是同一條）。
  * ⚠ 與 isPokemonExCard 不同：那是「寶可夢【ex】」（含非 Mega 的一般 ex）。
  */
+// ⚠⚠ 回傳型別**刻意**是 boolean，不要改成型別述詞（`c is Card`）——
+//   對 `Card | undefined` 的參數，述詞會讓 else 分支被窄成 undefined；呼叫端若在此之前
+//   已經排除過 undefined，else 分支就變成 never（ai.ts 的 scoreFightTarget 當場編不過）。
+//   TS 4.4 起的「別名條件窄化」讓 `const x = isMegaExCard(c)` 也躲不掉。
+//   呼叫端請用 `isMegaExCard(c) && c?.pokemonType === …`（為真時 c 必非 undefined，逐值等價）。
 export function isMegaExCard(c: Card | undefined): boolean {
   if (!c) return false;
-  if (c.supertype !== 'Pokemon' && c.supertype !== 'Pokémon') return false;
+  // ⚠ 這裡曾經多判一次帶重音的 'Pokémon'。v6.394 現查 static/cards 48 個檔 5511 張卡，
+  //   supertype 只有 'Pokemon'／'Trainer'／'Energy'／undefined，一張帶重音的都沒有 ⇒ 是死比較。
+  //   資料哪天變了由 test-v6394 的守衛接手（它去掃 static/cards，不是掃這裡）。
+  if (c.supertype !== 'Pokemon') return false;
   return c.subtype === 'ex' && c.name.startsWith('超級');
 }
 

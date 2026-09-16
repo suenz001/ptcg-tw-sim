@@ -437,7 +437,9 @@ export async function subscribePush(api: (path: string, body?: unknown) => Promi
       try { await sub.unsubscribe(); } catch { /* 退訂失敗仍嘗試重訂 */ }
       sub = null;
     }
-    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    // ⚠ TS 5.7 起 Uint8Array 帶了 ArrayBufferLike 泛型，與 DOM 的 BufferSource 不再自動相容
+    //   （理論上可能是 SharedArrayBuffer）。urlBase64ToUint8Array 產出的一定是一般 ArrayBuffer。
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key as BufferSource });
     stage = 'server-reject';
     await api('/push/subscribe', { subscription: sub.toJSON() });
     let host = '';

@@ -1208,7 +1208,8 @@ export function getEffectiveHP(
       if (p.bench.some(b => b.iid === i.iid)) { oIdx = k; loc = 'bench'; break; }
     }
     if (oIdx < 0) return true;
-    return isAbilityHolderEffective(state, i, c, oIdx, abName, loc, pool);
+    // ⚠ 上一行已經 `if (oIdx < 0) return true;` ⇒ 這裡只可能是 0 或 1（TS 對 `< 0` 不會自動窄化 literal union）。
+    return isAbilityHolderEffective(state, i, c, oIdx as 0 | 1, abName, loc, pool);
   };
   // 阻礙之塔（Stadium）會讓道具 HP 加成失效；若未傳 state 則忽略此檢查
   const jammed = state ? isToolsJammed(state, pool) : false;
@@ -3636,7 +3637,9 @@ function handlePlaying(
       }
       newState = {
         ...newState,
-        pendingSelection: _picked,
+        // ⚠ 全站 pendingSelection 的「清除」寫法是 undefined（其餘 4 處都是），只有這裡塞 null。
+        //   兩者對 `if (state.pendingSelection)` 等價，但序列化時 null 會被上傳、undefined 不會 ⇒ 統一。
+        pendingSelection: _picked ?? undefined,
         pendingChainQueue: _q.length > 0 ? _q : undefined,
       };
     }
@@ -6405,7 +6408,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         }
       }
 
-      const updatedActive = { ...defenderState.active, damage: newDamage };
+      // ⚠⚠ defenderState.active 的型別是 `CardInstance | null`。spread 一個可能是 null 的值，
+      //   會讓 TS 把展開後的**每一個欄位**都變成 optional —— 這一行曾經是 10 條 tsc 錯誤的單一源頭。
+      //   前提本來就成立：上面 6400 已經拿 defenderState.active 去跑 getAllAttachedTools。
+      const updatedActive: CardInstance = { ...defenderState.active!, damage: newDamage };
       // v3.0 獵斑魚｜潛者捕捉 — 自方場上有此卡 + 被 KO 的是【水】寶可夢 → 身上「基本【水】能量」回手。
       //   注意：只攔基本水能量，特殊能量仍走棄牌堆。
       let waterEnergyToHand: CardInstance[] = [];
@@ -8919,7 +8925,7 @@ export function applyDefenderReductionsBlockA(
     //   鐵荊棘ex｜初始化（消規則寶可夢）、海兔獸｜黏著束縛（消備戰2階）打不到。
     //   沿用中央 isAbilityHolderEffective（與隔壁 盾之守護 shieldFossilGuardReduce 同一份閘）。
     if (baseDamage > 0
-        && defender.active.fossilOnField
+        && defender.active!.fossilOnField
         && defenderCard.name === '陳舊的顎之化石'
         && defenderCard.abilities?.some(a => a.name === '威嚇之顎')
         // ⭐ v6.208：位置限制（卡面「只要這隻寶可夢在戰鬥場上」）走中央宣告 —— 與 火炎獅｜威嚇之牙
@@ -8938,8 +8944,8 @@ export function applyDefenderReductionsBlockA(
     // 由對手上個回合 ATTACK_POST 設於 takeExtraDamageNextTurn → 本回合開始前 promote 為 ThisTurn。
     // 不消耗旗標，本回合結束時在 END_TURN 統一清除。
     // 位置：weakness 後（語意上是 defender-side 的「本回合受傷 +N」debuff，不是 attacker's bonus）。
-    if (baseDamage > 0 && defender.active.takeExtraDamageThisTurn) {
-      const extra = defender.active.takeExtraDamageThisTurn;
+    if (baseDamage > 0 && defender.active!.takeExtraDamageThisTurn) {
+      const extra = defender.active!.takeExtraDamageThisTurn;
       baseDamage += extra;
       workingState = addLog(workingState, `${defenderCard.name} 受到 +${extra} 傷害（上回合招式遺留效果）`, dIdx);
       formula.push({ sign: '+', value: extra, label: '上回合遺留' });
@@ -9150,7 +9156,7 @@ export function applyDefenderReductionsBlockA(
     //          + TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY（神聖護符）
     let defenseReduceToolToDiscard: CardInstance | null = null;
     if (!toolsJammed && !skipDefEffects) {
-      const defenderCardForTool = pool.get(defender.active.cardId);
+      const defenderCardForTool = pool.get(defender.active!.cardId);
       // v3.20 多重轉接：iterate 所有道具（toolAttached + extraTools）
       for (const t of getAllAttachedTools(defender.active)) {
         const defTool = pool.get(t.cardId);
@@ -9980,7 +9986,7 @@ const HAND_ACTIVATE_GATES: Record<string, (s: GameState, idx: 0 | 1, pool: Map<s
     const field = [...(me.active ? [me.active] : []), ...me.bench];
     return field.some(inst => {
       const c = pool.get(inst.cardId);
-      return isMegaExCard(c) && c.pokemonType === 'Colorless';
+      return isMegaExCard(c) && c?.pokemonType === 'Colorless';
     });
   },
 };
@@ -11387,7 +11393,7 @@ export function getUsableAbilities(
         const allFs = [...(player.active ? [player.active] : []), ...player.bench];
         const hasGrassMega = allFs.some(c => {
           const cc = pool.get(c.cardId);
-          return isMegaExCard(cc) && cc.pokemonType === 'Grass';
+          return isMegaExCard(cc) && cc?.pokemonType === 'Grass';
         });
         if (!hasGrassMega) return;
       }

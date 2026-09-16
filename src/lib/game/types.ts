@@ -641,6 +641,16 @@ export const RULE_BOX_SUBTYPES = new Set<string>([
 // ── 待選擇狀態（訓練家/招式效果需要玩家做決定時）──────────────────────────
 
 export interface PendingSelection {
+  /**
+   * ⚠⚠ **注意：中央消毒閘讀的不是這個頂層欄位，而是 `params.validIids`**（engine 的
+   * sanitizeSelectedIids／v6.174 的交集閘都只看 params）。目前全站唯一把它寫在頂層的是
+   * `effects/_shared.ts` 的 healOneOwnPokemonPending（heal-target，4 張卡共用）——
+   * 那一處的合法目標「自己場上全部」剛好與 selection-candidates 的兜底一致，所以玩家端
+   * 看不出差別，但**那條白名單並沒有真的接上中央閘**。
+   * v6.394 先把型別補成誠實的樣子（原本是型別在說謊）；要不要把它改接 `params.validIids`
+   * 是行為改動，留給站長裁示。
+   */
+  validIids?: string[];
   /** 選擇類型 */
   type: 'deck-search' | 'bench-choose' | 'hand-discard' | 'heal-target'
       | 'opp-bench-choose'  // 選對手備戰寶可夢（老大的指令、頂尖捕捉器）

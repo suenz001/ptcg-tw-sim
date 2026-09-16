@@ -1942,7 +1942,8 @@ regR('exeggcute-precoition-evolve', (state, aIdx, iids, _params, pool) => {
     active: evolved,
     deck: shuffle(p.deck.filter((_, i) => i !== evoIdx)),
   }));
-  return addLog(s, `早熟進化：${evoCard.name} 進化於戰鬥場的蛋蛋，並重洗牌庫`, aIdx);
+  // ⚠ evoCard 必非 undefined：上面的 canEvolveOnto(evoCard?.evolvesFrom, '蛋蛋') 在 undefined 時回 false ⇒ 已提早 return。
+  return addLog(s, `早熟進化：${evoCard!.name} 進化於戰鬥場的蛋蛋，並重洗牌庫`, aIdx);
 });
 
 // 電螢蟲|急速信號 — 先攻第一回 + 從牌庫挑 ≤2 基礎放備戰
@@ -2279,7 +2280,9 @@ regPost('死神棺|冥府之律', (state, aIdx, pool) => {
         const _riverIsBench = c.iid !== p.active?.iid;
         const guard = canApplyEffectToTarget(s, aIdx, c, card, 'attack-effect', pool, { isBench: _riverIsBench });
         if (guard.blocked) {
-          s = addLog(s, `冥府之律：${card.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
+          // ⚠ 原本寫 `card.name ?? '?'` —— 既然有 `?? '?'` 就表示 card 可能不存在，
+          //   但少了一個 `?`，真的是 undefined 時這一行會丟 TypeError。補成 `card?.name`。
+          s = addLog(s, `冥府之律：${card?.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
           return c;
         }
       }

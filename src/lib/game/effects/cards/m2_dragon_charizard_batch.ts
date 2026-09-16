@@ -55,7 +55,7 @@ function selfField(p: PlayerState): CardInstance[] {
 function hasOwnFireMegaEx(st: GameState, idx: 0 | 1, pool: Map<string, Card>): boolean {
   return selfField(st.players[idx]).some(inst => {
     const c = pool.get(inst.cardId);
-    return isMegaExCard(c) && c.pokemonType === 'Fire';
+    return isMegaExCard(c) && c?.pokemonType === 'Fire';
   });
 }
 

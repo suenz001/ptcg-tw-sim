@@ -100,6 +100,9 @@ import assert from 'node:assert';
 import { createHash } from 'node:crypto';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from ${JSON.stringify(libDir + 'base-blob.mjs')};
 import { eolFind, normEol } from ${JSON.stringify(libDir + 'eol-agnostic.mjs')};
+// ⚠ v6.394：engine.ts 的還原器收斂到 lib（test-v6265 F4c 與 test-v6375 F0b 共用同一份）
+//   ⇒ 探針的模組層相依也要提供它，否則 F4c 會紅在「stripV6394Engine is not defined」。
+import { stripV6394Engine } from ${JSON.stringify(libDir + 'engine-strip-v6394.mjs')};
 const ROOT = ${JSON.stringify(ROOT)};
 ${consts.map(([k, v]) => `const ${k} = ${JSON.stringify(v)};`).join('\n')}
 const __reads = [];

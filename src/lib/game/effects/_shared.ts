@@ -168,7 +168,10 @@ export const ATTACK_POST = new Map<string, AttackPostFn>();
  *   (扮晶晶酒 v3.873 早已傳，現一併收斂到此中央 helper。)
  */
 export function copyAttackPostDispatch(
-  state: GameState, aIdx: 0 | 1, pool: Map<string, Card>, action?: GameAction,
+  state: GameState, aIdx: 0 | 1, pool: Map<string, Card>,
+  // ⚠ 收窄成 ATTACK：它要往下傳給 AttackPostFn，而那個型別的第 4 參數本來就是
+  //   `Extract<GameAction, { type: 'ATTACK' }>`。兩個呼叫點都在 AttackPostFn 內部，本來就拿著 ATTACK。
+  action?: Extract<GameAction, { type: 'ATTACK' }>,
 ): GameState {
   // ⭐ v6.337：改成**逐層回放**（原本是單一 pendingCopyAttackKey）。
   //   借招鏈時 PRE 由外而內 push，POST 這裡 shift 一層、呼叫那一層的 POST；
@@ -2781,8 +2784,10 @@ export function tryPromptPromoteActive(
   const actCard = pool.get(actInst.cardId);
   if (!actCard) return state;
   // v5.908：active 無特性也要往下跑 bench-watcher(潔淨支援 holder 在備戰、上場的超級拉帝亞斯ex 本身無特性)。
-  for (let i = 0; i < (actCard.abilities?.length ?? 0); i++) {
-    const ab = actCard.abilities[i];
+  // ⚠ 迴圈上限已經用 `abilities?.length ?? 0` 防過 undefined，取值處要跟著走同一份判準。
+  const _abs = actCard.abilities ?? [];
+  for (let i = 0; i < _abs.length; i++) {
+    const ab = _abs[i];
     if (!ON_PROMOTE_TO_ACTIVE_ABILITIES.has(ab.name)) continue;
     const abilityKey = `${actCard.name}|${i}`;
     if (!hasAbilityFn(actCard.name, ab.name, i)) continue;

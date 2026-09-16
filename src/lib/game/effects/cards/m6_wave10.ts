@@ -12,6 +12,8 @@
 
 import { reg, regG, regR, addLog, updatePlayer, withPending, shuffle,
          clearActiveEffects, tryPromptPromoteActive } from '../_shared';
+import type { GameState } from '../../types';
+import type { Card } from '$lib/cards/types';
 
 // ── 1. 美味飯糰（Item）────────────────────────────────────────────────────
 // 卡面：將自己的戰鬥寶可夢恢復「30」HP。
@@ -48,7 +50,7 @@ reg('冒險提燈', (st, idx) => withPending(
     filter: 'Energy:Fire', minCount: 0, maxCount: 1,
     effectKey: 'm6-lantern-step1-fire',
   }));
-function lanternTake(st, idx, iids, pool, label) {
+function lanternTake(st: GameState, idx: 0 | 1, iids: string[], pool: Map<string, Card>, label: string): GameState {
   if (iids.length === 0) return addLog(st, `冒險提燈：未選擇${label}`, idx);
   const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
   if (chosen.length === 0) return addLog(st, `冒險提燈：未選擇${label}`, idx);

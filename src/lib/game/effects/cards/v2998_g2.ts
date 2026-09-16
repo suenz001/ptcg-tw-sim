@@ -690,7 +690,8 @@ regR('farfetchd-on-spot-tool-attach', (st, idx, iids, params, pool) => {
     return updatePlayer(s, idx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
   }
   const tName = pool.get(host.cardId)?.name ?? '?';
-  const s = addLog(st, `臨場背負：將「${toolCard.name}」附給 ${tName}（並重洗牌庫）`, idx);
+  // ⚠ toolCard 必非 undefined：上面 evaluateSelectionFilter(card=undefined) 回 null（!== true）⇒ 已提早 return。
+  const s = addLog(st, `臨場背負：將「${toolCard!.name}」附給 ${tName}（並重洗牌庫）`, idx);
   return updatePlayer(s, idx, pl => ({
     ...pl,
     deck: shuffle(pl.deck.filter(c => c.iid !== toolInst.iid)),

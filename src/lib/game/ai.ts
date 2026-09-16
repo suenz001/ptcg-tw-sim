@@ -767,7 +767,10 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       const _usefulness = (inst: CardInstance): number => {
         const card = pool.get(inst.cardId);
         if (!card || card.supertype !== 'Pokemon') return 1;  // 非寶可夢中性
-        if (isBasicPokemonCard(card)) return 3;               // 基礎一定放得了
+        // ⚠ isBasicPokemonCard 是型別述詞（card is Card）。card 在上一行已排除 undefined，
+        //   直接寫 if 會讓 else 分支被窄成 never，下一行的 card.evolvesFrom 就編不過。
+        //   Boolean() 把述詞降級成單純的 boolean，切斷窄化；回傳值完全相同。
+        if (Boolean(isBasicPokemonCard(card))) return 3;       // 基礎一定放得了
         if (card.evolvesFrom && _fieldHandNames.has(card.evolvesFrom)) return 2;  // 上一階在場/手 → 可進化
         return 0;                                             // 無上一階 → 抓了也用不到
       };

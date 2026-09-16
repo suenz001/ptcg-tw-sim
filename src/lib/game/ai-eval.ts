@@ -110,7 +110,9 @@ export function simulateAttack(
     if (!before) return DEAD;
     return withIsolatedRandom(() => {
       const after = applyAction(
-        shuffleHiddenZonesForSim(cloneState(state)), { type: 'ATTACK', attackIndex, actorIdx }, pool);
+        // ⚠ 這裡**不傳** actorIdx：現查全站沒有任何一處讀 action.actorIdx，
+        //   applyAction 的行動方一律是 state.currentPlayerIdx。傳了只會讓人誤以為可以指定。
+        shuffleHiddenZonesForSim(cloneState(state)), { type: 'ATTACK', attackIndex }, pool);
       if (!after || after === state) return DEAD;
       const now = after.players[oppIdx].active;
       // 擊倒判定用 iid：被擊倒後戰鬥位會變空或換上別隻，兩種都算擊倒
@@ -268,7 +270,9 @@ function evaluateAttackOnce(
 
     return withIsolatedRandom(() => {
       const after = applyAction(
-        shuffleHiddenZonesForSim(cloneState(state)), { type: 'ATTACK', attackIndex, actorIdx }, pool);
+        // ⚠ 這裡**不傳** actorIdx：現查全站沒有任何一處讀 action.actorIdx，
+        //   applyAction 的行動方一律是 state.currentPlayerIdx。傳了只會讓人誤以為可以指定。
+        shuffleHiddenZonesForSim(cloneState(state)), { type: 'ATTACK', attackIndex }, pool);
       if (!after || after === state) return DEAD_EVAL;
 
       const gameWon = after.phase === 'game-over' && after.winner === actorIdx;

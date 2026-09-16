@@ -757,6 +757,24 @@ const PREV_SHA = 'af36811389c5a546e9da86ddbc2f35487a0aadfa';   // v6.387（v6.38
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
+  // ⭐⭐v6.394：tsc 型別清理（站長裁示 ④）—— 55 條型別錯誤清成 0。
+  //   ⚠ 這一版動到的玩家端檔案**特別多**，但每一處都是型別層：補型別註記／補型別述詞／
+  //     非空斷言／移除現查過的死比較／把半成品的 CardInstance 改走中央的 toBareCard。
+  //     行為零改動的根據寫在各處的行內註解與 commit 訊息裡；
+  //     engine.ts 的 8 組改動另由 scripts/lib/engine-strip-v6394.mjs 逐字釘住。
+  'src/lib/game/ai-eval.ts',
+  'src/lib/game/ai.ts',
+  'src/lib/game/effects/_shared.ts',
+  'src/lib/game/effects/cards/m2_dragon_charizard_batch.ts',
+  'src/lib/game/effects/cards/m6_wave10.ts',
+  'src/lib/game/effects/cards/v2750_h_wave2_full.ts',
+  'src/lib/game/effects/cards/v2998_g2.ts',
+  'src/lib/game/engine.ts',
+  'src/lib/game/room-oracle.ts',
+  'src/lib/game/room.ts',
+  'src/lib/game/selection-filter.ts',
+  'src/lib/game/types.ts',
+  'src/lib/notify.ts',
   // ⭐v6.388：MF 卡包上線（資料層 ＋ 招式實裝批次1）。
   //   ・effects.ts：coinHeadsSelfImmuneNextPost 加 export、ABILITY_RETREAT_MOD 收斂
   //     森林秘道／夜之秘道共用判準、載入 mf_wave1
@@ -813,7 +831,7 @@ const PREV_ALLOWED = [
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
-T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
+T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + [...PREV_ALLOWED].sort().join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }
   // ⚠⚠ v6.378 C-7：舊寫法是「對**工作樹位元組**算 blob sha1，再跟 BASE tree 的 sha 比」。
   //   站長的 Windows 是 core.autocrlf=true ⇒ 工作樹每一個 text 檔都是 CRLF、sha 全部對不上
@@ -833,7 +851,10 @@ T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一
   if (untracked.length) {
     console.log('     ⚠ src/static 底下有 ' + untracked.length + ' 個未追蹤檔（不在任何 commit 裡 ⇒ 不會被部署）：' + untracked.join(', '));
   }
-  assert.deepStrictEqual(diff.sort(), PREV_ALLOWED, '玩家端被動到了：' + diff.join(', '));
+  // ⚠ v6.394：右邊也排序。左邊排序、右邊不排序時，新檔必須被插在「字典序的正確位置」才會綠，
+  //   而這個陣列裡夾著每一版的說明註解 —— 維護者很自然會把新的一批加在自己那段註解底下。
+  //   這不是放寬：deepStrictEqual 仍然少一個就紅、多一個也紅，只是不再要求手動維持字典序。
+  assert.deepStrictEqual(diff.sort(), [...PREV_ALLOWED].sort(), '玩家端被動到了：' + diff.join(', '));
 });
 T('版本一致：version.ts = admin.html SITE_VERSION_HINT', () => {
   const V = /VERSION = '([\d.]+)'/.exec(VERTS)[1];

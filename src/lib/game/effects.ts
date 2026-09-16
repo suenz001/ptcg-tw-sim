@@ -191,7 +191,9 @@ export function isTrainerPendingImplementation(
  */
 export function isPokemonExCard(card: Card | undefined): boolean {
   if (!card) return false;
-  if (card.supertype !== 'Pokemon' && card.supertype !== 'Pokémon') return false;
+  // ⚠ 帶重音的 'Pokémon' 是死比較（v6.394 現查 static/cards 5511 張卡，一張都沒有）。
+  //   由 test-v6394 的守衛去盯資料，不在這裡多留一條永遠不成立的判斷。
+  if (card.supertype !== 'Pokemon') return false;
   if (card.subtype === 'ex') return true;
   return card.name.endsWith('ex') || card.name.endsWith('EX');
 }
@@ -423,7 +425,9 @@ export function getEffectiveWeaknessType(
 ): { type: string | undefined; disabled: boolean } {
   let t = defenderCard?.weakness?.type;
   if (defenderCard?.pokemonType === 'Dragon' && hasFairyZoneField(state, actorIdx, pool)) t = 'Psychic';
-  if (defenderActive?.weaknessOverrideTypeThisTurn) t = defenderActive.weaknessOverrideTypeThisTurn;
+  // ⚠ types.ts 把這個欄位宣告成 string（來源是 weaknessOverrideTypeNextTurn，engine 8203 搬過來的）。
+  //   它裝的就是屬性名，這裡就地斷言即可 —— 改 types.ts 會牽動 engine 的兩個賦值點，不值得。
+  if (defenderActive?.weaknessOverrideTypeThisTurn) t = defenderActive.weaknessOverrideTypeThisTurn as typeof t;
   return { type: t, disabled: !!defenderActive?.weaknessDisabledThisTurn };
 }
 
@@ -9077,7 +9081,9 @@ export function applyAttackerActiveDamageBonuses(
     for (const t of getAllAttachedTools(aInst)) {
       const atkTool = pool.get(t.cardId); if (!atkTool) continue;
       const fn = TOOL_ATTACK_BONUS.get(atkTool.name); if (!fn) continue;
-      const b = fn(aCard, aInst, dCard, dInst);
+      // ⚠ dCard 來自 pool.get(dInst.cardId)，9023 已確認 dInst 存在 ⇒ 場上的卡必在 pool 裡。
+      //   這裡只補型別；**不可以**改成 `if (!dCard) continue;`，那會改變行為（原本 undefined 也照樣呼叫 fn）。
+      const b = fn(aCard, aInst, dCard!, dInst);
       if (b > 0) {
         d += b;
         s = addLog(s, `🔧 ${atkTool.name}：${aCard.name} 招式傷害 +${b}（${d - b} → ${d}）`, aIdx);
@@ -10004,7 +10010,9 @@ export function oppPokemonImmuneToAttackEffect(
   //   ⚠若未來有「放置傷害指示物」的效果想做免疫判定，**不要**用本述詞（會 fail-open），
   //   請直接呼叫 canApplyEffectToTarget 並傳 counterPlacement:true。
   const g = canApplyEffectToTarget(state, aIdx, inst, pool.get(inst.cardId), 'attack-effect', pool, { isBench: dp.active?.iid !== iid, counterPlacement: false });
-  return { blocked: g.blocked, reason: g.reason ?? '', name: pool.get(inst.cardId)?.name ?? '?' };
+  // ⚠ DefenseCheckResult 是 union：`reason` 只存在於 blocked:true 那一支。
+  //   `g.blocked ? g.reason : ''` 與原本的 `g.reason ?? ''` 逐值等價（未擋下時原本就是 undefined ?? ''）。
+  return { blocked: g.blocked, reason: g.blocked ? g.reason : '', name: pool.get(inst.cardId)?.name ?? '?' };
 }
 
 /**
@@ -10786,7 +10794,9 @@ regR('return-self-energy-pick-to-hand', (st, idx, _iids, params, _pool) => {
   let s = updatePlayer(st, idx, p => ({
     ...p,
     active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => !set.has(e.iid)) } : null,
-    hand: [...p.hand, ...moved.map(e => ({ cardId: e.cardId, iid: e.iid }))],
+    // ⚠ 原本手刻 `{cardId, iid}`，缺了 CardInstance 必填的 damage／energyAttached（半成品 instance）。
+    //   改走中央的 toBareCard —— 它就是「離場一律裸化」的單一來源（Rule 38）。
+    hand: [...p.hand, ...moved.map(toBareCard)],
   }));
   return addLog(s, `${label}：將 ${moved.length} 個能量放回手牌`, idx);
 });
@@ -20289,7 +20299,8 @@ export function registerDirectEvolveAwaken(
       active: evolved,
       deck: shuffle(p.deck.filter((_, i) => i !== evoIdx)),
     }));
-    return addLog(s, `${label}：${evoCard.name} 進化於戰鬥場的「${baseN}」，並重洗牌庫`, aIdx);
+    // ⚠ evoCard 必非 undefined：上面的 canEvolveOnto(evoCard?.evolvesFrom, baseN) 在 undefined 時回 false ⇒ 已提早 return。
+    return addLog(s, `${label}：${evoCard!.name} 進化於戰鬥場的「${baseN}」，並重洗牌庫`, aIdx);
   });
 }
 
