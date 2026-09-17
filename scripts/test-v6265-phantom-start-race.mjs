@@ -20,6 +20,7 @@
 import { stripV6394Engine } from './lib/engine-strip-v6394.mjs';
 import { stripV6398Engine } from './lib/engine-strip-v6398.mjs';
 import { stripV6400Engine } from './lib/engine-strip-v6400.mjs';
+import { stripV6401Engine } from './lib/engine-strip-v6401.mjs';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1186,12 +1187,17 @@ await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等�
         //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6394.mjs —— test-v6375 的 F0b 也 import 同一份
         //     （Rule 38：同一個判準不可以抄兩份）。它 fail-closed：錨點對不上會直接 throw。
         const s5 = stripV6394Engine(s4); ok(s5 !== s4, 'v6.394 的還原器過期（型別清理那幾處的字面對不上）');
-        // ⭐v6.398：「身上附加的【X】能量卡」收斂到中央 host-aware 述詞，對 engine.ts 的 3 組合法改動。
-        //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6398.mjs —— test-v6375 的 F0b 也 import 同一份。
-        const s6 = stripV6398Engine(s5); ok(s6 !== s5, 'v6.398 的還原器過期（host-aware 收斂那三處的字面對不上）');
+        // ⭐⭐ v6.398／v6.400／v6.401 **動到同一段**（energyTypeUnitsHostAware 與它周邊的能量判準）
+        //   ⇒ 剝除必須**由新到舊**：先把 v6.401 剝回 v6.400 的樣子，再剝回 v6.399，最後才輪到 v6.398。
+        //   順序寫反的話後面那一支會找不到自己的錨點而 throw（v6.401 當場踩到）。
+        // ⭐v6.401：五份判準收斂成中央 energyUnitsOnHost，對 engine.ts 的 8 組合法改動。
+        const s6 = stripV6401Engine(s5); ok(s6 !== s5, 'v6.401 的還原器過期（能量單位收斂那八處的字面對不上）');
         // ⭐v6.400：特殊能量「視為提供什麼」的五份判準往一致方向收，對 engine.ts 的 2 組合法改動。
         const s7 = stripV6400Engine(s6); ok(s7 !== s6, 'v6.400 的還原器過期（特殊能量表那兩處的字面對不上）');
-        return s7;
+        // ⭐v6.398：「身上附加的【X】能量卡」收斂到中央 host-aware 述詞，對 engine.ts 的 3 組合法改動。
+        //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6398.mjs —— test-v6375 的 F0b 也 import 同一份。
+        const s8 = stripV6398Engine(s7); ok(s8 !== s7, 'v6.398 的還原器過期（host-aware 收斂那三處的字面對不上）');
+        return s8;
       })() : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }
@@ -1219,12 +1225,17 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
         //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6394.mjs —— test-v6375 的 F0b 也 import 同一份
         //     （Rule 38：同一個判準不可以抄兩份）。它 fail-closed：錨點對不上會直接 throw。
         const s5 = stripV6394Engine(s4); ok(s5 !== s4, 'v6.394 的還原器過期（型別清理那幾處的字面對不上）');
-        // ⭐v6.398：「身上附加的【X】能量卡」收斂到中央 host-aware 述詞，對 engine.ts 的 3 組合法改動。
-        //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6398.mjs —— test-v6375 的 F0b 也 import 同一份。
-        const s6 = stripV6398Engine(s5); ok(s6 !== s5, 'v6.398 的還原器過期（host-aware 收斂那三處的字面對不上）');
+        // ⭐⭐ v6.398／v6.400／v6.401 **動到同一段**（energyTypeUnitsHostAware 與它周邊的能量判準）
+        //   ⇒ 剝除必須**由新到舊**：先把 v6.401 剝回 v6.400 的樣子，再剝回 v6.399，最後才輪到 v6.398。
+        //   順序寫反的話後面那一支會找不到自己的錨點而 throw（v6.401 當場踩到）。
+        // ⭐v6.401：五份判準收斂成中央 energyUnitsOnHost，對 engine.ts 的 8 組合法改動。
+        const s6 = stripV6401Engine(s5); ok(s6 !== s5, 'v6.401 的還原器過期（能量單位收斂那八處的字面對不上）');
         // ⭐v6.400：特殊能量「視為提供什麼」的五份判準往一致方向收，對 engine.ts 的 2 組合法改動。
         const s7 = stripV6400Engine(s6); ok(s7 !== s6, 'v6.400 的還原器過期（特殊能量表那兩處的字面對不上）');
-        return s7;
+        // ⭐v6.398：「身上附加的【X】能量卡」收斂到中央 host-aware 述詞，對 engine.ts 的 3 組合法改動。
+        //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6398.mjs —— test-v6375 的 F0b 也 import 同一份。
+        const s8 = stripV6398Engine(s7); ok(s8 !== s7, 'v6.398 的還原器過期（host-aware 收斂那三處的字面對不上）');
+        return s8;
       })() : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }

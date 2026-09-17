@@ -75,28 +75,19 @@ const mkHost = (h, e) => ({ iid: 'h' + (++nn), cardId: h.id, damage: 0, energyAt
  * ⚠⚠ 白名單＝**已知的、尚未裁示的**分歧。每一條都必須寫清楚：卡面怎麼寫、哪一份看起來是對的、
  *   為什麼現在還沒有玩家可見影響。新的分歧一律翻紅（不准默默加進來）。
  */
-const KNOWN_CD_DIFF = [
-  {
-    name: '火箭隊能量',
-    types: ['Psychic', 'Darkness'],
-    countEnergy: 1, hostAware: 2,
-    why: '卡面「只要這張卡附於寶可夢身上，視為提供2個【超】【惡】2種屬性的能量。」'
-      + ' ⇒ 看起來 hostAware 的 2 才對（付費端也認 2：afford([Psychic,Psychic]) 為真）。'
-      + ' countEnergy 走 getEnergyProvided 把 [Psychic,Darkness] 各 +1 ⇒ 只算 1。'
-      + ' ⚠ 目前零影響：countEnergy 的全部呼叫點都只判「>= 1」（腎上腺腦力／腎上腺力量等存在性判斷）'
-      + ' 或只數【草】（巨型花束）。**待站長裁示後再收斂**。',
-  },
-  {
-    name: '夜光能量',
-    types: TYPES.filter((t) => t !== 'Colorless'),
-    countEnergy: 0, hostAware: 1,
-    why: 'G 標（不在標準賽範圍，站長指示不處理）。卡面「視為提供1個所有屬性的能量。'
-      + ' 若附有這張卡的寶可夢身上附有這張卡以外的特殊能量卡，則視為提供1個【無】能量。」'
-      + ' hostAware 在 v6.398 收了第一段（因為 engine 內另外兩處 inline 判準本來就把它當全屬性，'
-      + ' 不收會讓那兩張卡退化）；SPECIAL_ENERGY_TYPES 沒有它 ⇒ 付費端只當【無】。'
-      + ' 第二段的降級條件**兩份都沒有實作**。**G 標，暫不處理**。',
-  },
-];
+/**
+ * ⚠⚠ 白名單＝**已知的、尚未裁示的**分歧。新的分歧一律翻紅（不准默默加進來）。
+ *
+ * ⭐v6.401 起這裡是**空的**：站長裁示後，engine 的五份判準已經全部委派給中央
+ *   energyUnitsOnHost（見 test-v6401），所以 ① countEnergy 與 ④ energyTypeUnitsHostAware
+ *   不可能再有分歧。原本列管的兩條都已消除：
+ *     ・火箭隊能量（① 算 1、④ 算 2）⇒ 照卡面「視為提供2個【超】【惡】2種屬性的能量」統一成 2。
+ *     ・夜光能量（G 標；④ 全屬性、①⑤ 只當【無】）⇒ 照卡面第一段統一成全屬性
+ *       （第二段「身上有其他特殊能量時降級成【無】」仍未實作，見 energyUnitsOnHost 的註解）。
+ *   ⚠ 空白名單不是安慰劑：A1 仍然逐格比對 870 格，任何一格不一致就紅；
+ *     A1b 的死條目檢查在清單為空時自動通過（它守的是「白名單不得留著已修好的條目」）。
+ */
+const KNOWN_CD_DIFF = [];
 function isKnownDiff(name, type, c, d) {
   return KNOWN_CD_DIFF.some((k) => k.name === name && k.types.includes(type)
     && k.countEnergy === c && k.hostAware === d);
@@ -178,7 +169,7 @@ T('B1 ⭐⭐ 有色 cost：付得出來 ⟺ 該屬性的單位數 >= 需求數�
   const bad = [];
   for (const h of hosts) {
     for (const e of energies) {
-      if (e.name === '夜光能量') continue;   // G 標，兩份判準本來就不一致（白名單已列管）
+      // ⭐v6.401：夜光能量以前要在這裡跳過（兩份判準不一致），收斂後不必了。
       const inst = mkE(e.id);
       const host = mkHost(h, inst);
       for (const t of TYPES) {

@@ -1476,33 +1476,13 @@ export function isEnergyOfType(ec: Card | undefined, type: EnergyType): boolean 
  *   稜鏡(Basic=全屬性/進化=僅Colorless)/新衝天(Stage2=全屬性)/燃火/古舊(全屬性)/火箭隊。
  */
 export function energyTypeUnitsHostAware(host: { cardId: string }, e: { cardId: string }, type: EnergyType, pool: Map<string, Card>): number {
-  const ec = pool.get(e.cardId);
-  if (!ec || ec.supertype !== 'Energy') return 0;
-  const hostCard = pool.get(host.cardId);
-  const hostStage = hostCard?.stage ?? hostCard?.subtype;
-  const hostIsEvolution = hostStage === 'Stage1' || hostStage === 'Stage2' || !!hostCard?.evolvesFrom;
-  const hostIsStage2 = hostStage === 'Stage2';
-  if (ec.name === '新衝天能量') return hostIsStage2 ? 2 : (type === 'Colorless' ? 1 : 0);
-  if (ec.name === '稜鏡能量') return !hostIsEvolution ? 1 : (type === 'Colorless' ? 1 : 0);
-  if (ec.name === '燃火能量') return type === 'Colorless' ? (hostIsEvolution ? 3 : 1) : 0;
-  if (ec.name === '古舊能量') return 1; // 全屬性 ACE SPEC
-  // ⭐v6.398：夜光能量（G 標，卡面「視為提供1個所有屬性的能量」）。收錄理由：engine 內原本有
-  //   兩處 inline 屬性判準（夠讚狗｜腎上腺力量、冰雪巨龍｜凍原堡壘）各自把夜光列為全屬性，
-  //   v6.398 把它們收斂到本函式 —— 若本表不收，改走中央就會讓那兩張卡對夜光**退化**。
-  //   ⚠ 卡面第二段「若身上附有這張卡以外的特殊能量卡，則視為提供1個【無】能量」本函式看不到
-  //     host 的 energyAttached（簽名只有 cardId）⇒ 維持與 v6.398 之前 engine 兩處 inline 完全相同的
-  //     行為（不做該降級），不在本版擴大範圍；G 標不在標準賽，之後要做再連同 SPECIAL_ENERGY_TYPES 一起收。
-  if (ec.name === '夜光能量') return 1;
-  if (ec.name === '火箭隊能量') return (type === 'Psychic' || type === 'Darkness') ? 2 : 0;
-  // ⭐v6.400：一般能量（基本能量 ＋ 非 host-dependent 的特殊能量）一律問**成本端那一份表**
-  //   getEnergyProvided，不要再自己用 isEnergyOfType 判一次。
-  //   修掉的漏判：扣殺／回力鏢／富裕／薄霧（H/I 標）與噴射／反轉／治療（G 標）這 7 張
-  //   卡面都是「視為提供1個【無】能量」，但卡名裡沒有「【無】」兩個字 ⇒ isEnergyOfType 回 false
-  //   ⇒ 本函式對它們的【無】一律答 0，而 countEnergy 與 canAffordAttack 都答 1。
-  //   ⚠ 目前 H/I/J 沒有任何卡面在篩「附加的【無】能量卡」⇒ 這是把兩份判準對齊，
-  //     玩家可見行為零變化（守衛 test-v6400 逐格比對釘住）。
-  return getEnergyProvided(e.cardId, pool).includes(type) ? 1 : 0;
+  // ⭐v6.401：整段改委派給中央 energyUnitsOnHost（收斂前這裡 inline 了六張特殊能量）。
+  //   「視為提供幾個某屬性」＝ 單位清單裡有幾個單位的 types 含該屬性。
+  let n = 0;
+  for (const u of energyUnitsOnHost(e, host, pool)) if (u.types.includes(type)) n++;
+  return n;
 }
+
 /** v5.702：「這張附加能量當下是否視為提供某屬性」host-aware 述詞（選/移/丟「【X】能量」一律走此，禁 isEnergyOfType）。 */
 export function energyProvidesType(host: { cardId: string }, e: { cardId: string }, type: EnergyType, pool: Map<string, Card>): boolean {
   return energyTypeUnitsHostAware(host, e, type, pool) > 0;
@@ -1533,6 +1513,9 @@ export function hasBloomAbilityOnField(
  * 未列表的特殊能量依然依舊 fallback 為 1 個 Colorless。
  * 這裡只處理「屬性」——特殊能量的其他效果（例如硬岩的免疫效果）走 effects.ts / engine 層邏輯。
  */
+/** ⭐v6.401：全屬性清單 —— 收斂前 countEnergy 與 canAffordAttack 各自有一份 local ALL_TYPES。 */
+const ALL_ENERGY_TYPES: EnergyType[] = ['Grass', 'Fire', 'Water', 'Lightning', 'Psychic', 'Fighting', 'Darkness', 'Metal', 'Dragon', 'Colorless'];
+
 const SPECIAL_ENERGY_TYPES: Record<string, EnergyType[]> = {
   '硬岩【鬥】能量': ['Fighting'],
   '富裕能量': ['Colorless'],     // ACE SPEC — 視為 1【無】能量（附加時抽 4 走 effects）
@@ -1612,34 +1595,14 @@ export function countEnergy(
   pokemon: CardInstance,
   pool: Map<string, Card>
 ): Map<EnergyType, number> {
-  const hostCard = pool.get(pokemon.cardId);
-  const hostStage = hostCard?.stage ?? hostCard?.subtype;
-  const hostIsEvolution = hostStage === 'Stage1' || hostStage === 'Stage2' || !!hostCard?.evolvesFrom;
-  const hostIsStage2 = hostStage === 'Stage2';
-  const ALL_TYPES: EnergyType[] = ['Grass', 'Fire', 'Water', 'Lightning', 'Psychic', 'Fighting', 'Darkness', 'Metal', 'Dragon', 'Colorless'];
-
+  // ⭐v6.401：整段改委派給中央 energyUnitsOnHost（收斂前這裡 inline 了稜鏡／新衝天／燃火三張，
+  //   其餘走 getEnergyProvided）。⚠ 火箭隊能量因此由「【超】【惡】各 1」變成「各 2」——
+  //   卡面「視為提供2個【超】【惡】2種屬性的能量」，付費端與篩選端本來就算 2（站長 v6.401 裁示）。
   const map = new Map<EnergyType, number>();
-  const add = (types: EnergyType[]) => {
-    for (const t of types) map.set(t, (map.get(t) ?? 0) + 1);
-  };
   for (const e of pokemon.energyAttached) {
-    const ec = pool.get(e.cardId);
-    if (ec?.name === '稜鏡能量') {
-      add(hostIsEvolution ? ['Colorless'] : ALL_TYPES);
-      continue;
+    for (const u of energyUnitsOnHost(e, pokemon, pool)) {
+      for (const ty of u.types) map.set(ty, (map.get(ty) ?? 0) + 1);
     }
-    if (ec?.name === '新衝天能量') {
-      if (hostIsStage2) { add(ALL_TYPES); add(ALL_TYPES); }
-      else              { add(['Colorless']); }
-      continue;
-    }
-    if (ec?.name === '燃火能量') {
-      // 燃火能量 on 進化 = 3 個【無】；否則 1 個【無】
-      if (hostIsEvolution) { add(['Colorless']); add(['Colorless']); add(['Colorless']); }
-      else                 { add(['Colorless']); }
-      continue;
-    }
-    add(getEnergyProvided(e.cardId, pool));
   }
   return map;
 }
@@ -1657,36 +1620,72 @@ export function countEnergy(
  */
 export type EnergyUnit = { types: EnergyType[] };
 
-export function getEnergyUnits(cardId: string, pool: Map<string, Card>): EnergyUnit[] {
-  const c = pool.get(cardId);
+/** ⭐⭐⭐ v6.401：一張能量卡「附在這個 host 身上視為提供哪些能量單位」的**唯一**來源。
+ *
+ * 【為什麼要有這一支】v6.400 的守衛把分歧列管之後，站長裁示「把付招式費用那條核心路徑
+ * 也一起收斂」。在此之前，同一件事在 engine 裡**分散五處各寫一次**：
+ *   ① countEnergy（稜鏡／新衝天／燃火 inline ＋ getEnergyProvided）
+ *   ② getEnergyUnits（火箭隊／古舊 inline ＋ SPECIAL_ENERGY_TYPES 表）
+ *   ③ totalEnergyUnits（燃火／新衝天／繁茂 inline）
+ *   ④ energyTypeUnitsHostAware（六張 inline）
+ *   ⑤ canAffordAttack（燃火／稜鏡／新衝天／繁茂 inline ＋ getEnergyUnits）
+ * 五份彼此有真實分歧（火箭隊 ① 算 1 而 ④⑤ 算 2；「是不是進化」的判準 ⑤ 少了 evolvesFrom…）。
+ * v6.401 起五處**全部委派給這一支**，Rule 38 的債一次清掉。
+ *
+ * ⚠ host 可以是 null（② getEnergyUnits 的簽名只有 cardId，拿不到 host）。
+ *   這時稜鏡／新衝天／燃火一律走**保守分支**（等同收斂前 SPECIAL_ENERGY_TYPES 給的「1 個【無】」）
+ *   —— 行為與收斂前逐格相同，**不要**改成「當作非進化」。
+ * ⚠ 「host 是不是進化」統一用「stage/subtype 是 Stage1／Stage2 **或** 有 evolvesFrom」。
+ *   ⑤ canAffordAttack 原本少了 evolvesFrom 那一項（①④ 都有）——
+ *   live 卡池裡「有 evolvesFrom 但 stage 不是 Stage1/Stage2」的只有 4 張，全是 E／F 標與無標，
+ *   **H/I/J 一張都沒有** ⇒ 統一判準對標準賽零影響（守衛 F2 釘住這個事實）。
+ * ⚠ opts.bloom（大竺葵｜繁茂：自己場上的**基本【草】**能量各視為 2 個）是 state-dependent，
+ *   由呼叫端算好再傳進來 —— 本函式只看「能量卡 ＋ host」。
+ */
+export function energyUnitsOnHost(
+  e: { cardId: string },
+  host: { cardId: string } | null | undefined,
+  pool: Map<string, Card>,
+  opts?: { bloom?: boolean },
+): EnergyUnit[] {
+  const c = pool.get(e.cardId);
   if (!c || c.supertype !== 'Energy') return [];
-  if (c.subtype === 'Basic') {
-    let t: EnergyType | undefined;
-    if (c.pokemonType) t = c.pokemonType;
-    else {
-      const m = c.name.match(/【(.+?)】/);
-      if (m) t = ZH_ENERGY_TYPE[m[1]];
-    }
-    return t ? [{ types: [t] }] : [];
+  const hostCard = host ? pool.get(host.cardId) : null;
+  const hasHost = !!hostCard;
+  const hostStage = hostCard?.stage ?? hostCard?.subtype;
+  const hostIsEvolution = hostStage === 'Stage1' || hostStage === 'Stage2' || !!hostCard?.evolvesFrom;
+  const hostIsStage2 = hostStage === 'Stage2';
+  const ALL = (): EnergyUnit => ({ types: [...ALL_ENERGY_TYPES] });
+  const C = (): EnergyUnit => ({ types: ['Colorless'] });
+
+  // ⭐ 大竺葵｜繁茂：基本【草】能量視為 2 個【草】（bloom 是否成立由呼叫端判斷）
+  if (opts?.bloom && isBasicEnergyOfType(c, 'Grass')) {
+    return [{ types: ['Grass'] }, { types: ['Grass'] }];
   }
-  // 特殊能量多單位 / 多屬性顯式處理
-  if (c.name === '火箭隊能量') {
-    // 2 個單位，各可當作【超】或【惡】
-    return [
-      { types: ['Psychic', 'Darkness'] },
-      { types: ['Psychic', 'Darkness'] },
-    ];
-  }
-  // v2.103 古舊能量（ACE SPEC）— 單一 unit，types 含全屬性，可付任何 cost slot
-  if (c.name === '古舊能量') {
-    return [{ types: SPECIAL_ENERGY_TYPES['古舊能量'] }];
-  }
-  // 一般特殊能量：依 SPECIAL_ENERGY_TYPES 每個 type 拆成 1 個單純單位
-  if (SPECIAL_ENERGY_TYPES[c.name]) {
-    return SPECIAL_ENERGY_TYPES[c.name].map((t) => ({ types: [t] }));
-  }
-  // fallback：1 個 Colorless 單位
-  return [{ types: ['Colorless'] }];
+  // ── host-dependent 三張（卡面明寫「若附於…則…」）─────────────────────
+  //   稜鏡能量：「若附於【基礎】寶可夢身上，則視為提供1個所有屬性的能量。」
+  if (c.name === '稜鏡能量') return (hasHost && !hostIsEvolution) ? [ALL()] : [C()];
+  //   新衝天能量：「若附於【2階進化】寶可夢身上，則視為提供2個所有屬性的能量。」
+  if (c.name === '新衝天能量') return (hasHost && hostIsStage2) ? [ALL(), ALL()] : [C()];
+  //   燃火能量：「若附於進化寶可夢身上，則視為提供3個【無】能量。」
+  if (c.name === '燃火能量') return (hasHost && hostIsEvolution) ? [C(), C(), C()] : [C()];
+  // ── 與 host 無關、但表達不進 SPECIAL_ENERGY_TYPES 的三張 ────────────────
+  //   古舊能量（ACE SPEC）：「視為提供1個所有屬性的能量。」
+  if (c.name === '古舊能量') return [ALL()];
+  //   夜光能量（G 標）：「視為提供1個所有屬性的能量。」
+  //   ⚠ 卡面第二段「若身上附有這張卡以外的特殊能量卡，則視為提供1個【無】能量」**未實作**
+  //     （本函式只看單張能量＋host，看不到身上其他能量）。G 標不在標準賽範圍，先照第一段。
+  if (c.name === '夜光能量') return [ALL()];
+  //   火箭隊能量：「視為提供2個【超】【惡】2種屬性的能量。」＝ 2 個單位、每個可當超或惡
+  if (c.name === '火箭隊能量') return [{ types: ['Psychic', 'Darkness'] }, { types: ['Psychic', 'Darkness'] }];
+  // ── 其餘（基本能量 ＋ 一般特殊能量）：問成本端那一份表 ─────────────────
+  return getEnergyProvided(e.cardId, pool).map((ty) => ({ types: [ty] }));
+}
+
+export function getEnergyUnits(cardId: string, pool: Map<string, Card>): EnergyUnit[] {
+  // ⭐v6.401：整段改委派給中央 energyUnitsOnHost（host 傳 null ⇒ 稜鏡／新衝天／燃火
+  //   走保守分支，與收斂前的 SPECIAL_ENERGY_TYPES 給的「1 個【無】」逐格相同）。
+  return energyUnitsOnHost({ cardId }, null, pool);
 }
 
 /**
@@ -1711,30 +1710,13 @@ export function totalEnergyUnits(
   //   原 getEnergyUnits 簽名只有 cardId 沒 host 資訊 → 燃火能量走 fallback 1 unit，
   //   撤退用此函式時沒考慮倍率（玩家回報撤退用燃火能量只算 1 個）。
   //   修法：caller 傳 hostInst（如 attacker.active），inline 判斷進化倍率。
-  const hostCard = hostInst ? pool.get(hostInst.cardId) : null;
-  const hostIsEvolution = !!(hostCard && (hostCard.evolvesFrom
-    || hostCard.stage === 'Stage1' || hostCard.stage === 'Stage2'
-    || hostCard.subtype === 'Stage1' || hostCard.subtype === 'Stage2'));
+  // ⭐v6.401：整段改委派給中央 energyUnitsOnHost（收斂前這裡 inline 了繁茂／燃火／新衝天，
+  //   其餘走 getEnergyUnits）。單位數 ＝ 單位清單的長度。
+  //   ⚠ 保留「找不到卡的保底 1 unit」：energyUnitsOnHost 對非能量卡回 []，而撤退時
+  //     附加區出現非能量卡（資料異常）不該讓玩家卡死。
   let n = 0;
   for (const e of attached) {
-    const ec = pool.get(e.cardId);
-    if (hasBloom && isBasicEnergyOfType(ec, 'Grass')) {
-      n += 2;
-      continue;
-    }
-    // v5.125 燃火能量倍率
-    if (ec?.name === '燃火能量') {
-      n += hostIsEvolution ? 3 : 1;
-      continue;
-    }
-    // v5.145 新衝天能量倍率 — 卡面「若附於 2 階進化寶可夢，視為提供 2 個所有屬性能量」
-    //   原 SPECIAL_ENERGY_TYPES 只算 1 unit，沒考慮 host stage → 撤退時 Stage2 新衝天只算 1
-    if (ec?.name === '新衝天能量') {
-      const hostIsStage2 = !!(hostCard && (hostCard.stage === 'Stage2' || hostCard.subtype === 'Stage2'));
-      n += hostIsStage2 ? 2 : 1;
-      continue;
-    }
-    const units = getEnergyUnits(e.cardId, pool);
+    const units = energyUnitsOnHost(e, hostInst, pool, { bloom: hasBloom });
     n += units.length === 0 ? 1 : units.length;
   }
   return n;
@@ -1925,54 +1907,16 @@ export function canAffordAttack(
   // v2.108 修：原 check 用 `pokemonType === 'Grass'`，但基本能量的 pokemonType 欄位通常空，
   //   屬性從卡名【草】推。改用 isBasicEnergyOfType 共用 helper。
   const hasBloom = hasBloomAbilityOnField(state, attackerIdx, pool);
-  // v2.103 燃火能量：若附於進化寶可夢身上，視為 3 個【無】能量；否則 1 個【無】能量
-  const pokeCard = pool.get(pokemon.cardId);
-  const pokeStage = pokeCard?.stage ?? pokeCard?.subtype;
-  const isEvolution = pokeStage === 'Stage1' || pokeStage === 'Stage2';
+  // ⭐v6.401：原本這裡有 pokeCard / pokeStage / isEvolution / ALL_TYPES / isStage2 五個 local，
+  //   全部只服務下面那段「收集能量單位」的 inline 判斷。那段已改為委派中央 energyUnitsOnHost
+  //   （它自己算 host 的階段），這五個就沒有人用了 ⇒ 整段刪除。
 
-  // v2.113 稜鏡/新衝天能量的「任意屬性」types — 當附於對應 stage 時所有顏色可付
-  const ALL_TYPES: EnergyType[] = ['Grass', 'Fire', 'Water', 'Lightning', 'Psychic', 'Fighting', 'Darkness', 'Metal', 'Dragon', 'Colorless'];
-  // v3.31 revert v3.30：嚴格依 JSON stage 判定。超級進化寶可夢 ex 的 stage 由 JSON 決定：
-  //   - stage='Stage2'（超級噴火龍Xex / 超級妙蛙花ex 等）→ 真 2 階，新衝天 給 2 任意屬性
-  //   - stage='Stage1'（超級寶石海星ex / 超級呆殼獸ex 等）→ 1 階，新衝天 只給 1 Colorless
-  //   - stage='Basic'（超級阿勃梭魯ex 等）→ Basic，新衝天 只給 1 Colorless
-  const isStage2 = pokeStage === 'Stage2';
-
-  // 收集所有附加能量的「單位」
+  // ⭐v6.401：整段改委派給中央 energyUnitsOnHost（收斂前這裡 inline 了燃火／稜鏡／新衝天／繁茂）。
+  //   ⚠ 「是不是進化」的判準也因此統一（原本這裡少了 evolvesFrom 那一項）——
+  //     live 卡池裡會受影響的只有 4 張 E／F 標與無標卡，H/I/J 一張都沒有。
   const units: EnergyUnit[] = [];
   for (const e of pokemon.energyAttached) {
-    const ec = pool.get(e.cardId);
-    // 燃火能量特殊處理：進化寶可夢 → 3 個無屬性 units
-    if (ec?.name === '燃火能量') {
-      if (isEvolution) {
-        units.push({ types: ['Colorless'] }, { types: ['Colorless'] }, { types: ['Colorless'] });
-      } else {
-        units.push({ types: ['Colorless'] });
-      }
-      continue;
-    }
-    // v2.113 稜鏡能量（v2.120 修：原版邏輯寫反）卡面：
-    //   「若附於【基礎】寶可夢身上，則視為提供 1 個所有屬性的能量」→ Basic → 全屬性
-    //   否則只視為 1 個【無】。
-    if (ec?.name === '稜鏡能量') {
-      units.push({ types: isEvolution ? ['Colorless'] : ALL_TYPES });
-      continue;
-    }
-    // v2.113 新衝天能量（ACE SPEC）：【2 階進化】寶 → 2 個任意屬性 units；否則 1 個【無】
-    if (ec?.name === '新衝天能量') {
-      if (isStage2) {
-        units.push({ types: ALL_TYPES }, { types: ALL_TYPES });
-      } else {
-        units.push({ types: ['Colorless'] });
-      }
-      continue;
-    }
-    // 大竺葵繁茂：基本【草】能量視為 2 個【草】units（僅在攻擊方有大竺葵時）
-    if (hasBloom && isBasicEnergyOfType(ec, 'Grass')) {
-      units.push({ types: ['Grass'] }, { types: ['Grass'] });
-      continue;
-    }
-    units.push(...getEnergyUnits(e.cardId, pool));
+    units.push(...energyUnitsOnHost(e, pokemon, pool, { bloom: hasBloom }));
   }
 
   // v3.9995：把主匹配包進 inner helper，讓璀璨結晶可外層 loop 嘗試 N 種扣法
