@@ -670,9 +670,12 @@ export function discardIllegalRocketEnergy(
  *        **禁止**再讀 holderCard.pokemonType（那是印刷屬性，狠辣椒ex 在場上是【草】＋【火】）。
  *        必填 ⇒ TS 會逼新的呼叫端回去讀卡面，不會靜默 fail-open。
  *   2. SPECIAL_ENERGY_RETREAT_MOD — holder 撤退成本修正（同 TOOL_RETREAT_MOD shape）。
- *      fn(holderCard, holderInst) => { reduceBy?, zero? }。
+ *      fn(holderCard, holderInst, ctx) => { reduceBy?, zero? }。
+ *      ⭐ v6402-special-energy-ctx：ctx **必填**，理由同 1. —— 「附有這張卡的【X】寶可夢」
+ *        一律問 ctx.effectiveTypes，禁止再讀 holderCard.pokemonType。
  *   3. SPECIAL_ENERGY_STATUS_IMMUNE — holder 對哪些特殊狀態免疫（被施加時忽略）。
- *      fn(holderCard) => Set<SpecialCondition>。空 Set 即不免疫。
+ *      fn(holderCard, ctx) => Set<SpecialCondition>。空 Set 即不免疫。
+ *      ⭐ v6.402：ctx **必填**，理由同上。
  *   4. SPECIAL_ENERGY_ON_DAMAGED — holder 在戰鬥場受到招式傷害時觸發（state mutate）。
  *      同 TOOL_ON_DAMAGED shape：fn(state, dIdx, aIdx, damage, pool) => state。
  *
@@ -690,9 +693,11 @@ export type SpecialEnergyHolderCtx = {
 };
 export const SPECIAL_ENERGY_HP_BONUS = new Map<string, (holder: Card, ctx: SpecialEnergyHolderCtx) => number>();
 export const SPECIAL_ENERGY_RETREAT_MOD = new Map<string, (
-  holder: Card, inst: CardInstance,
+  holder: Card, inst: CardInstance, ctx: SpecialEnergyHolderCtx,
 ) => { reduceBy?: number; zero?: boolean }>();
-export const SPECIAL_ENERGY_STATUS_IMMUNE = new Map<string, (holder: Card) => Set<SpecialCondition>>();
+export const SPECIAL_ENERGY_STATUS_IMMUNE = new Map<string, (
+  holder: Card, ctx: SpecialEnergyHolderCtx,
+) => Set<SpecialCondition>>();
 export const SPECIAL_ENERGY_ON_DAMAGED = new Map<string, (
   state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, damage: number, pool: Map<string, Card>,
 ) => GameState>();

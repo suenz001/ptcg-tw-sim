@@ -104,6 +104,48 @@ export function isMegaExCard(c: Card | undefined): boolean {
   return c.subtype === 'ex' && c.name.startsWith('超級');
 }
 
+// >>> v6402-mega-ex-holder-central
+/**
+ * ⭐⭐⭐ v6.402：「**對手的「超級進化寶可夢【ex】」**打我，而**我自己不是**「超級進化寶可夢【ex】」」
+ * 的唯一判準。
+ *
+ * 卡面逐字（static/cards 台灣官方 rulesText）：
+ *   訂製背心：「附有這張卡的寶可夢（「超級進化寶可夢【ex】除外」）受到對手的
+ *              「超級進化寶可夢【ex】」招式的傷害「-60」點。」
+ *   豪邁炸彈：「附有這張卡的寶可夢（「超級進化寶可夢【ex】」除外）在戰鬥場受到對手的
+ *              「超級進化寶可夢【ex】」「240」以上的招式的傷害時，…」
+ *
+ * 收斂前這個兩層判準寫了**三份**（訂製背心、豪邁炸彈 TOOL_ON_DAMAGED、engine 的 KO 路徑）
+ * ⇒ 針對其中一份的守衛必然是安慰劑（Rule 38／安慰劑型態 11）。
+ *
+ * ⚠ 放在本檔（leaf）而不是 tools.ts：effects.ts → tools.ts 是既有的**反向 edge**，
+ *   往那裡新增 symbol 會被 anti-pattern-lint [O] 擋下（module-init 循環 TDZ 風險）。
+ */
+export function megaExAttackerAndNonMegaHolder(
+  attackerCard: Card | undefined,
+  holderCard: Card | undefined,
+): boolean {
+  if (!isMegaExCard(attackerCard)) return false;
+  if (isMegaExCard(holderCard)) return false;   // 卡面「超級進化寶可夢【ex】除外」
+  return true;
+}
+
+/** v6.402 豪邁炸彈的傷害門檻（卡面「240」以上 ＝ >= 240）。 */
+export const LUXURY_BOMB_DAMAGE_THRESHOLD = 240;
+
+/**
+ * ⭐⭐⭐ v6.402 豪邁炸彈的唯一 gate（非 KO 的 TOOL_ON_DAMAGED 與 engine 的 KO 路徑共用）。
+ * ⚠ 「阻礙之塔（道具失效）」不在這裡判 —— 兩個呼叫端各自都已經在 !toolsJammed 之內。
+ */
+export function luxuryBombGateOk(
+  baseDamage: number,
+  attackerCard: Card | undefined,
+  holderCard: Card | undefined,
+): boolean {
+  if (baseDamage < LUXURY_BOMB_DAMAGE_THRESHOLD) return false;
+  return megaExAttackerAndNonMegaHolder(attackerCard, holderCard);
+}
+// <<< v6402-mega-ex-holder-central
 export function getBasicEnergyType(ec: Card | undefined): EnergyType | null {
   if (!ec || ec.supertype !== 'Energy' || ec.subtype !== 'Basic') return null;
   if (ec.pokemonType) return ec.pokemonType as EnergyType;

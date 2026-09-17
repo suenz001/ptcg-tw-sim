@@ -67,6 +67,15 @@ import {
   getAttackerEffectiveTypes,
   getEffectivePokemonTypes,   // v6.206 中央「場上有效屬性」述詞
   hasEffectivePokemonType,    // v6.207 同上（單一屬性版）
+  // >>> v6402-engine-imports
+  fieldPokemonHasType,            // ⭐v6.402 場上屬性比對唯一入口（呼叫端免自己 pool.get）
+  punkHelmetReflectDamageFor,     // ⭐v6.402 龐克頭盔唯一判準
+  toolDefenseByTypeApplies,       // ⭐v6.402 屬性條件型防禦道具唯一判準
+  luxuryBombGateOk,               // ⭐v6.402 豪邁炸彈唯一 gate
+  fieldOwnerIdxOf,                // ⭐v6.402 inst 在誰的場上（唯一一份推導）
+  fieldSlotOf,                    // ⭐v6.402 inst 在誰的場上＋哪個位置（同上，含 loc）
+  specialEnergyHolderCtx,         // ⭐v6.402 特殊能量 holder gate 脈絡的唯一建構點
+  // <<< v6402-engine-imports
   applyBenchPlaceSideEffects,
   getKyuremElectroplasmaEffectiveCost,
   getOctopusTentacleEffectiveCost,
@@ -1145,19 +1154,12 @@ export function getEffectiveHP(
   // ⭐ v6.206：特殊能量的「附於【X】寶可夢」gate 要問**有效**屬性（狠辣椒ex 在場上是【草】＋【火】）。
   //   ⇒ 先把場上脈絡算好，化石分支與一般分支共用同一份 ctx。
   //   state 缺席（少數 UI 路徑）⇒ ownerIdx undefined ⇒ 中央述詞回印刷屬性＝維持舊行為。
-  const _v6206OwnerIdx = ((): 0 | 1 | undefined => {
-    if (!state) return undefined;
-    for (let k = 0 as 0 | 1; k <= 1; k = (k + 1) as 0 | 1) {
-      const p = state.players[k];
-      if (p?.active && p.active.iid === inst.iid) return k;
-      if (p?.bench?.some(b => b.iid === inst.iid)) return k;
-    }
-    return undefined;
-  })();
-  const _v6206EnergyCtx = {
-    state, ownerIdx: _v6206OwnerIdx, inst, pool,
-    effectiveTypes: getEffectivePokemonTypes(state, _v6206OwnerIdx, inst, card, pool),
-  };
+  // >>> v6402-hp-ctx-central
+  // ⭐v6.402：owner 推導與 ctx 組裝原本在這裡 inline 各寫一份 ⇒ 收斂到中央
+  //   fieldOwnerIdxOf／specialEnergyHolderCtx（全站唯一一份，Rule 38）。
+  const _v6206OwnerIdx = fieldOwnerIdxOf(state, inst);
+  const _v6206EnergyCtx = specialEnergyHolderCtx(state, _v6206OwnerIdx, inst, pool);
+  // <<< v6402-hp-ctx-central
   // ⭐⭐ v6.112（玩家回報「英雄斗篷附在化石上沒作用」，Wilson 裁定：依現行卡面，加成生效）
   //   舊寫法是 `if (inst.fossilOnField) return 60;`（v2.187「化石不吃任何 Tool/能量/Stadium 加減」）。
   //   **那條限制我們自己加的，現行卡面與官方規則都沒有**：
@@ -1200,16 +1202,13 @@ export function getEffectiveHP(
   //   束縛壓制時不套用其最大HP加成。state 缺席(部分UI/可用性路徑)→無法判壓制,預設有效(維持現行,避免回歸)。
   const hpAbilityEffective = (i: CardInstance, c: Card, abName: string): boolean => {
     if (!state) return true;
-    let oIdx: 0 | 1 | -1 = -1;
-    let loc: 'active' | 'bench' = 'bench';
-    for (let k = 0 as 0 | 1; k <= 1; k = (k + 1) as 0 | 1) {
-      const p = state.players[k];
-      if (p.active && p.active.iid === i.iid) { oIdx = k; loc = 'active'; break; }
-      if (p.bench.some(b => b.iid === i.iid)) { oIdx = k; loc = 'bench'; break; }
-    }
-    if (oIdx < 0) return true;
-    // ⚠ 上一行已經 `if (oIdx < 0) return true;` ⇒ 這裡只可能是 0 或 1（TS 對 `< 0` 不會自動窄化 literal union）。
-    return isAbilityHolderEffective(state, i, c, oIdx as 0 | 1, abName, loc, pool);
+    // >>> v6402-hp-ability-slot-central
+    // ⭐v6.402：owner ＋ 位置的推導收斂到中央 fieldSlotOf（收斂前這裡是第三份 inline 迴圈）。
+    //   找不到（不在任一方場上）⇒ 沿用舊行為 return true，一個字都沒放寬。
+    const _slot = fieldSlotOf(state, i);
+    if (!_slot) return true;
+    return isAbilityHolderEffective(state, i, c, _slot.ownerIdx, abName, _slot.loc, pool);
+    // <<< v6402-hp-ability-slot-central
   };
   // 阻礙之塔（Stadium）會讓道具 HP 加成失效；若未傳 state 則忽略此檢查
   const jammed = state ? isToolsJammed(state, pool) : false;
@@ -3649,7 +3648,10 @@ function handlePlaying(
       const _rbCard = _rbInst ? pool.get(_rbInst.cardId) : undefined;
       const _rbHasBadge = !!_rbInst && getAllAttachedTools(_rbInst).some(t => pool.get(t.cardId)?.name === '重試徽章');
       if (_rbInst && _rbHasBadge && !newState.players[actorIdx].retryBadgeUsedThisTurn) {
-        if (_rbCard?.pokemonType !== 'Colorless') {
+        // >>> v6402-retry-badge-resolver
+        // ⭐v6.402「附有這張卡的【無】寶可夢」＝場上**有效**屬性（中央述詞）。
+        if (!fieldPokemonHasType(newState, actorIdx, _rbInst, pool, 'Colorless')) {
+        // <<< v6402-retry-badge-resolver
           newState = addLog(newState, `🎒 重試徽章：附在 ${_rbCard?.name ?? '?'}（非【無】屬性）→ 本次效果不觸發 (卡面僅對【無】屬性寶可夢生效)`, actorIdx);
         } else {
           const _rbFlips = newState._machineGunLastFlips ?? [];
@@ -5519,7 +5521,10 @@ function handlePlaying(
     // 條件：attacker.active 是【火】寶可夢 + 身上有燃料【火】能量。
     // 實作：snapshot 開打前 attacker.active 上所有「燃料【火】能量」iids；
     //       attack 結束後若這些 iid 出現在 attacker.discard，撈回 attacker.hand。
-    const fuelFireSnapshotIids: string[] = attackerCard?.pokemonType === 'Fire'
+    // >>> v6402-fuel-fire-holder
+    // ⭐v6.402「附有這張卡的【火】寶可夢」＝場上**有效**屬性（中央述詞）。
+    const fuelFireSnapshotIids: string[] = fieldPokemonHasType(state, aIdx, attacker.active, pool, 'Fire')
+    // <<< v6402-fuel-fire-holder
       ? attacker.active.energyAttached
           .filter(e => pool.get(e.cardId)?.name === '燃料【火】能量')
           .map(e => e.iid)
@@ -5771,7 +5776,10 @@ function handlePlaying(
     //     改 per-card stacking — 卡面「附有這張卡的」雖無「每張」字樣，但 PTCG 規則
     //     歷史對「同類加成型特殊能量」一律 per-card 累計（如銀色鋼能量 +10/張）。
     //   v5.022 順帶 rename '閃電能量' → '伏特【雷】能量'（卡面排版對齊規律）
-    if (baseDamage > 0 && attackerCard.pokemonType === 'Lightning') {
+    // >>> v6402-volt-lightning-engine
+    // ⭐v6.402「附有這張卡的【雷】寶可夢」＝場上**有效**屬性（中央述詞）。
+    if (baseDamage > 0 && fieldPokemonHasType(workingState, aIdx, attacker.active, pool, 'Lightning')) {
+    // <<< v6402-volt-lightning-engine
       const lightningSECount = attacker.active.energyAttached.filter(e => pool.get(e.cardId)?.name === '伏特【雷】能量').length;
       if (lightningSECount > 0) {
         const bonus = 20 * lightningSECount;
@@ -6224,16 +6232,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
 
     // 龐克頭盔：防守方出場的【惡】寶可夢附有龐克頭盔時，攻擊者受到 40 傷害反擊。
     // 注意：僅計算反彈量，實際套用在下方「防守方狀態提交後」，避免被 defPlayers 覆蓋掉。
-    let punkReflectDamage = 0;
-    {
-      const defenderStatePre = defPlayers[dIdx];
-      const defToolCardPre = defenderStatePre.active?.toolAttached
-        ? pool.get(defenderStatePre.active.toolAttached.cardId) : null;
-      const defActiveCardPre = defenderStatePre.active ? pool.get(defenderStatePre.active.cardId) : null;
-      if (!toolsJammed && baseDamage > 0 && defToolCardPre?.name === '龐克頭盔' && defActiveCardPre?.pokemonType === 'Darkness') {
-        punkReflectDamage = 40;
-      }
-    }
+    // >>> v6402-punk-helmet-engine
+    // ⭐v6.402：觸發判準收斂到中央 punkHelmetReflectDamageFor（與 effects 狙擊／多目標管線同一份）。
+    let punkReflectDamage = punkHelmetReflectDamageFor(
+      workingState, dIdx, defPlayers[dIdx].active, pool,
+      { toolsJammed, damageDealt: baseDamage },
+    );
+    // <<< v6402-punk-helmet-engine
 
     // v5.775 Phase 2:把 KO+反擊結算包成 resolveKnockouts 閉包（呼叫點不變、行為等價；為日後「改順序」鋪路）。
     //   wouldBeKO/preventedKO 提到外層（下方 postFn 區仍引用），其餘區域變數由閉包捕捉，免逐一傳參。
@@ -6626,12 +6631,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       //   上方 TOOL_ON_KO 迴圈不含它 → holder 被 240+ 一擊 KO 時漏觸發（最常見情況）。
       //   holder 已 KO（道具隨 KO 寶可夢進棄牌），此處只需對攻擊方放 12 個指示物（+120）。
       //   gate 與 TOOL_ON_DAMAGED.豪邁炸彈 一致：baseDamage≥240 + 攻擊方為超級進化ex + holder 非超級進化ex。
-      if (!toolsJammed && baseDamage >= 240 && onKOToolNames.some(c => c.name === '豪邁炸彈')) {
+      // >>> v6402-luxury-bomb-engine
+      // ⭐v6.402：gate 收斂到中央 luxuryBombGateOk（與 TOOL_ON_DAMAGED.豪邁炸彈 同一份）。
+      // <<< v6402-luxury-bomb-engine
+      if (!toolsJammed && onKOToolNames.some(c => c.name === '豪邁炸彈')) {
         const lbAtk = newState.players[aIdx].active;
         const lbAtkCard = lbAtk ? pool.get(lbAtk.cardId) : null;
-        const lbAtkIsMega = isMegaExCard(lbAtkCard ?? undefined);
-        const lbDefIsMega = isMegaExCard(defenderCard ?? undefined);
-        if (lbAtk && lbAtkIsMega && !lbDefIsMega) {
+        if (lbAtk && luxuryBombGateOk(baseDamage, lbAtkCard ?? undefined, defenderCard ?? undefined)) {
           const lbPlayers = [...newState.players] as [PlayerState, PlayerState];
           const lbAtkP = { ...lbPlayers[aIdx] };
           if (lbAtkP.active) {
@@ -7165,7 +7171,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     ) {
       const atkInst = newState.players[aIdx].active!;
       const atkCard = pool.get(atkInst.cardId);
-      const isColorless = atkCard?.pokemonType === 'Colorless';
+      // >>> v6402-retry-badge-attack-end
+      // ⭐v6.402「附有這張卡的【無】寶可夢」＝場上**有效**屬性（中央述詞）。
+      const isColorless = fieldPokemonHasType(newState, aIdx, atkInst, pool, 'Colorless');
+      // <<< v6402-retry-badge-attack-end
       const hasRetryBadge = getAllAttachedTools(atkInst).some(t => pool.get(t.cardId)?.name === '重試徽章');
       // v5.265：玩家提示 — 重試徽章可附在任何寶可夢身上, 但效果僅對【無】屬性寶可夢生效.
       //   若 holder 不是【無】, 寫 log 告知玩家此次未觸發 (避免誤以為附加無效).
@@ -9109,15 +9118,14 @@ export function applyDefenderReductionsBlockA(
         const defTool = pool.get(t.cardId);
         if (!defTool) continue;
         const defense = TOOL_DEFENSE_REDUCE_BY_TYPE.get(defTool.name);
-        // ⭐ v6.207：攻擊方屬性與 holder 屬性都改走中央有效屬性述詞（與 effects.ts 備戰管線同步）。
+        // >>> v6402-tool-defense-by-type-engine
+        // ⭐v6.402：觸發判準（攻擊方屬性 ＋ holder 屬性）收斂到中央 toolDefenseByTypeApplies，
+        //   與 effects.ts 備戰／狙擊管線共用**同一份**（v6.207 時是兩份逐字重複 ⇒ Rule 38）。
+        // <<< v6402-tool-defense-by-type-engine
         if (defense && baseDamage > 0
-            && getEffectivePokemonTypes(workingState, aIdx, attacker.active, attackerCard, pool)
-                 .some(t => defense.types.includes(t as EnergyType))) {
-          const _holderTypes = defense.holderTypes;
-          const holderOk = !_holderTypes
-            || getEffectivePokemonTypes(workingState, dIdx, defender.active, defenderCardForTool, pool)
-                 .some(t => _holderTypes.includes(t as EnergyType));
-          if (holderOk) {
+            && toolDefenseByTypeApplies(workingState, defense, aIdx, attacker.active, attackerCard,
+                                        dIdx, defender.active, defenderCardForTool, pool)) {
+          {
             // v5.899：補 addLog + formula.push,揭示屬性防禦道具(渾厚鱗片/福祿果等)的減傷,
             //   否則傷害公式漏此項 → 玩家看到「100(基礎)+30(猛攻手鐲)=80」誤以為數學錯(缺 -50)。
             //   比照下方 TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY(神聖護符 v5.252)。
@@ -9754,12 +9762,12 @@ export function getEffectiveAttacks(
   //   - 識別自方：透過 inst 屬於 active 或 bench 來判斷 ownerIdx；用 active.iid / bench.iid 比對。
   //   - cost 沿用各自卡面定義；canAffordAttack 對 base.attacks 也成立（傳入此 inst.energyAttached）。
   //   - 重名招式不去重（卡面允許「使用進化前持有的所有招式」）。
-  let ownerIdx: 0 | 1 | undefined;
-  if (state.players[0].active?.iid === inst.iid || state.players[0].bench.some(b => b.iid === inst.iid)) {
-    ownerIdx = 0;
-  } else if (state.players[1].active?.iid === inst.iid || state.players[1].bench.some(b => b.iid === inst.iid)) {
-    ownerIdx = 1;
-  }
+  // >>> v6402-dive-memory-owner-central
+  // ⭐v6.402：這是 engine 裡「inst 在誰的場上」的**第三份** inline 推導
+  //   （另兩份在 getEffectiveHP，已收）。語義與中央 fieldOwnerIdxOf 完全相同
+  //   （每一方先 active 後 bench、player0 優先、找不到回 undefined）⇒ 一併收斂（Rule 38）。
+  const ownerIdx = fieldOwnerIdxOf(state, inst);
+  // <<< v6402-dive-memory-owner-central
   if (ownerIdx != null) {
     if (hasArchaeoglobinDiveMemory(state, ownerIdx, pool)) {
       const lowerAttacks = getAttacksFromEvolvedFromStack(inst, pool);
@@ -10489,12 +10497,18 @@ export function computeActiveRetreatCostFor(
   if (stadiumNameCR === '樂園度假地' && card?.name === '可達鴨') reduce += 1;
   // SPECIAL_ENERGY_RETREAT_MOD（磁鐵【鋼】能量）
   if (card) {
+    // >>> v6402-retreat-mod-ctx
+    // ⭐v6.402：磁鐵【鋼】能量的 holder gate 改問場上有效屬性（中央 ctx）。
+    //   ⚠ ctx 在**迴圈外**算一次 —— 它與「是哪一張能量」無關，放進迴圈會讓每張能量
+    //     重跑一次全場特性掃描（審查 Y5）。
+    const _v6402RetreatCtx = specialEnergyHolderCtx(state, playerIdx, player.active, pool);
+    // <<< v6402-retreat-mod-ctx
     for (const e of player.active.energyAttached) {
       const ec = pool.get(e.cardId);
       if (!ec) continue;
       const fn = SPECIAL_ENERGY_RETREAT_MOD.get(ec.name);
       if (!fn) continue;
-      const r = fn(card, player.active);
+      const r = fn(card, player.active, _v6402RetreatCtx);
       if (r.zero) freeRetreat = true;
       else if (r.reduceBy) reduce += r.reduceBy;
     }

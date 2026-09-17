@@ -20,6 +20,7 @@
 import { stripV6394Engine } from './lib/engine-strip-v6394.mjs';
 import { stripV6398Engine } from './lib/engine-strip-v6398.mjs';
 import { stripV6400Engine } from './lib/engine-strip-v6400.mjs';
+import { stripV6402Engine } from './lib/engine-strip-v6402.mjs';
 import { stripV6401Engine } from './lib/engine-strip-v6401.mjs';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -1183,10 +1184,15 @@ await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等�
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s4 = stripV6385Engine(s3); ok(s4 !== s3, 'v6.385b 的還原器過期（大師工藝那一段的字面對不上）');
+        // ⭐⭐ Rule 54（由新到舊）：v6.402 動到了 **v6.394 型別清理過的那一段**
+        //   （getEffectiveHP 內 hpAbilityEffective 的 owner＋位置推導）⇒ 它必須排在 v6.394 **之前**，
+        //   否則 v6.394 的第 1 組錨點會命中 0 次而 throw（v6.402 當場踩到）。
+        // ⭐v6.402：判準收斂（龐克頭盔／豪邁炸彈／屬性條件型防禦道具／holder 屬性）對 engine.ts 的 11 組合法改動。
+        const s4b = stripV6402Engine(s4); ok(s4b !== s4, 'v6.402 的還原器過期（判準收斂那十一處的字面對不上）');
         // ⭐v6.394：型別清理（站長裁示 ④）對 engine.ts 的 8 組合法改動。
         //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6394.mjs —— test-v6375 的 F0b 也 import 同一份
         //     （Rule 38：同一個判準不可以抄兩份）。它 fail-closed：錨點對不上會直接 throw。
-        const s5 = stripV6394Engine(s4); ok(s5 !== s4, 'v6.394 的還原器過期（型別清理那幾處的字面對不上）');
+        const s5 = stripV6394Engine(s4b); ok(s5 !== s4b, 'v6.394 的還原器過期（型別清理那幾處的字面對不上）');
         // ⭐⭐ v6.398／v6.400／v6.401 **動到同一段**（energyTypeUnitsHostAware 與它周邊的能量判準）
         //   ⇒ 剝除必須**由新到舊**：先把 v6.401 剝回 v6.400 的樣子，再剝回 v6.399，最後才輪到 v6.398。
         //   順序寫反的話後面那一支會找不到自己的錨點而 throw（v6.401 當場踩到）。
@@ -1221,10 +1227,15 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s4 = stripV6385Engine(s3); ok(s4 !== s3, 'v6.385b 的還原器過期（大師工藝那一段的字面對不上）');
+        // ⭐⭐ Rule 54（由新到舊）：v6.402 動到了 **v6.394 型別清理過的那一段**
+        //   （getEffectiveHP 內 hpAbilityEffective 的 owner＋位置推導）⇒ 它必須排在 v6.394 **之前**，
+        //   否則 v6.394 的第 1 組錨點會命中 0 次而 throw（v6.402 當場踩到）。
+        // ⭐v6.402：判準收斂（龐克頭盔／豪邁炸彈／屬性條件型防禦道具／holder 屬性）對 engine.ts 的 11 組合法改動。
+        const s4b = stripV6402Engine(s4); ok(s4b !== s4, 'v6.402 的還原器過期（判準收斂那十一處的字面對不上）');
         // ⭐v6.394：型別清理（站長裁示 ④）對 engine.ts 的 8 組合法改動。
         //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6394.mjs —— test-v6375 的 F0b 也 import 同一份
         //     （Rule 38：同一個判準不可以抄兩份）。它 fail-closed：錨點對不上會直接 throw。
-        const s5 = stripV6394Engine(s4); ok(s5 !== s4, 'v6.394 的還原器過期（型別清理那幾處的字面對不上）');
+        const s5 = stripV6394Engine(s4b); ok(s5 !== s4b, 'v6.394 的還原器過期（型別清理那幾處的字面對不上）');
         // ⭐⭐ v6.398／v6.400／v6.401 **動到同一段**（energyTypeUnitsHostAware 與它周邊的能量判準）
         //   ⇒ 剝除必須**由新到舊**：先把 v6.401 剝回 v6.400 的樣子，再剝回 v6.399，最後才輪到 v6.398。
         //   順序寫反的話後面那一支會找不到自己的錨點而 throw（v6.401 當場踩到）。

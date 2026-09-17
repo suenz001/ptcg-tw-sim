@@ -1362,7 +1362,7 @@ reg('暗黑鈴', (st, idx, pool) => {
       s = addLog(s, `暗黑鈴：${name}｜憨憨臉：免疫【混亂】`, idx);
       continue;
     }
-    const immune = checkSpecialEnergyStatusImmune(player.active, 'confused', pool);
+    const immune = checkSpecialEnergyStatusImmune(player.active, 'confused', pool, s);  // ⭐v6.402 state 必填
     if (immune.immune) {
       s = addLog(s, `暗黑鈴：${name}｜${immune.energyName}：免疫【混亂】`, idx);
       continue;

@@ -25,7 +25,7 @@
  */
 
 import type { Card, EnergyType } from '$lib/cards/types';
-import { isMegaExCard } from '../../selection-filter'; // v6.072 訂製背心：Mega ex 中央述詞（leaf）
+import { megaExAttackerAndNonMegaHolder, luxuryBombGateOk } from '../../selection-filter'; // ⭐v6.402 超級進化ex 打非超級進化ex 的唯一判準（下沉 leaf，避免 effects→tools 反向 edge）；本檔不再自己呼叫 isMegaExCard
 import type { GameState, CardInstance } from '../../types';
 import type { EffectFn } from '../_shared';
 import {
@@ -183,8 +183,10 @@ TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY.set('神聖護符', (attackerCard) => {
 //   ⚠ 兩個條件都要：攻擊方是 Mega ex **且** 持有者自己**不是** Mega ex。
 //   ⚠ 卡面沒寫「丟棄這張卡」→ 觸發後不丟。
 TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD.set('訂製背心', (attackerCard, holderCard) => {
-  if (!isMegaExCard(attackerCard)) return 0;
-  if (isMegaExCard(holderCard)) return 0;   // 卡面「超級進化寶可夢【ex】除外」
+  // >>> v6402-custom-vest-central
+  // ⭐v6.402：判準收斂到中央 megaExAttackerAndNonMegaHolder（與豪邁炸彈兩條路徑同一份）。
+  if (!megaExAttackerAndNonMegaHolder(attackerCard, holderCard)) return 0;
+  // <<< v6402-custom-vest-central
   return 60;
 });
 
@@ -507,19 +509,16 @@ registerToolOnDamagedAndKO('奢華炸彈', (state, dIdx, aIdx, _dmg, _pool, _atk
 //   3. 防守方非 超級進化ex（卡面「超級進化ex 除外」）
 // 注意：iterate getAllAttachedTools 找特定的「豪邁炸彈」instance 並丟棄（單張 fire；多張不疊加）
 TOOL_ON_DAMAGED.set('豪邁炸彈', (state, dIdx, aIdx, baseDamage, pool) => {
-  // Gate 1: 傷害門檻
-  if (baseDamage < 240) return state;
   const dPlayer = state.players[dIdx];
   const aPlayer = state.players[aIdx];
   if (!dPlayer.active || !aPlayer.active) return state;
-  // Gate 2: 攻擊方為 超級進化ex
+  // >>> v6402-luxury-bomb-tool
+  // ⭐v6.402：三個 gate（240 門檻／攻擊方 Mega ex／holder 非 Mega ex）收斂到中央
+  //   luxuryBombGateOk，與 engine 的 KO 路徑共用**同一份**（Rule 38）。
   const aCard = pool.get(aPlayer.active.cardId);
-  const isAttackerMegaEx = isMegaExCard(aCard);
-  if (!isAttackerMegaEx) return state;
-  // Gate 3: 防守方非 超級進化ex
   const dCard = pool.get(dPlayer.active.cardId);
-  const isDefenderMegaEx = isMegaExCard(dCard);
-  if (isDefenderMegaEx) return state;
+  if (!luxuryBombGateOk(baseDamage, aCard, dCard)) return state;
+  // <<< v6402-luxury-bomb-tool
   // 找出 defender 身上對應的「豪邁炸彈」instance（含 toolAttached + extraTools）
   const allTools: CardInstance[] = [];
   if (dPlayer.active.toolAttached) allTools.push(dPlayer.active.toolAttached);

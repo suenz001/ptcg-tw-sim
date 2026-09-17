@@ -232,6 +232,11 @@ console.log('── HEAD-FAIL（BASE ' + BASE_SHA.slice(0, 8) + '）──');
 //     不會靜默失效。
 const CHANGED = [
   'src/lib/game/effects.ts',
+  // ⭐v6.402：defense.ts 也要換回 BASE —— 它 import effects.ts 的 export，
+  //   而 v6.402 在 effects.ts 新增了 fieldPokemonHasType（defense.ts 的暗影【惡】能量在用）。
+  //   BASE 的 effects.ts 沒有那個符號 ⇒ 不換 defense.ts 的話 esbuild 直接 build failed，
+  //   守衛會紅在 harness 而不是判準（與 v6.343 的卡檔問題同型，只是這個檔在 effects 子樹外）。
+  'src/lib/game/defense.ts',
   'src/lib/game/effects/cards/abra_mawile_deck.ts',
   'src/lib/game/effects/cards/draw_supporters.ts',
   'src/lib/game/effects/cards/v2353_j_mark_batch.ts',

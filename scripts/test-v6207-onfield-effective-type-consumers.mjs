@@ -739,8 +739,10 @@ const FROZEN_PRINTED_READS = {
   ],
   'src/lib/game/effects/cards/energy_cards.ts': [
     "return cc?.supertype === 'Pokemon' && !cc.evolvesFrom && cc.pokemonType === 'Psychic';", // 卡面「從自己的**牌庫**選擇…」⇒ 印刷屬性
-    "if (holder.pokemonType === 'Metal') return { zero: true };",                 // 磁鐵【鋼】能量：hook 只收 Card，需加必填 ctx ⇒ 延後
-    "if (holder.pokemonType !== 'Water') return new Set<SpecialCondition>();",    // 泡沫水【水】能量：同上
+    // ⭐ v6.402：原本這裡還有磁鐵【鋼】能量與泡沫【水】能量兩條（當時註明「hook 只收 Card，
+    //   需加必填 ctx ⇒ 延後」）。v6.402 已把 SPECIAL_ENERGY_RETREAT_MOD／SPECIAL_ENERGY_STATUS_IMMUNE
+    //   的簽名補上**必填** SpecialEnergyHolderCtx，兩張卡改讀 ctx.effectiveTypes
+    //   ⇒ 從凍結清單刪除（清單過期，不是新技術債）。
   ],
   'src/lib/game/effects/cards/v158_energy_chain.ts': [
     "const t = (c.pokemonType as SingleType | undefined) ?? nameToType(c.name);", // **能量卡**的屬性，不是寶可夢
@@ -763,10 +765,14 @@ T('8b.〔凍結清單〕本輪碰過的 9 個檔，剩下的印刷屬性讀取�
   }
   assert.equal(bad.length,0,'印刷屬性讀取清單變了（新增＝新技術債，刪除＝清單過期）：\n      '+bad.join('\n      '));
   // 下限：清單不得整個空掉（掃描器壞了會長這樣）
-  assert.ok(Object.values(FROZEN_PRINTED_READS).flat().length>=10,'凍結清單只剩 '+
+  // 下限：清單不得整個空掉（掃描器壞了會長這樣）。
+  //   ⭐ v6.402：由 10 調為 8 —— 本版把 energy_cards.ts 的兩條技術債真的清掉了，
+   //   清單縮短是成果不是故障；判準（逐字相等）一個字都沒放寬。
+  assert.ok(Object.values(FROZEN_PRINTED_READS).flat().length>=8,'凍結清單只剩 '+
     Object.values(FROZEN_PRINTED_READS).flat().length+' 條 —— 掃描器壞了？');
-  // 正對照：readsOf 真的抓得到（拿一個已知一定有的檔驗）
-  assert.ok(readsOf('src/lib/game/effects/cards/energy_cards.ts').length>=3,'readsOf 抓不到東西');
+  // 正對照：readsOf 真的抓得到（拿一個已知一定有**多條**的檔驗；
+  //   ⭐ v6.402 從 energy_cards.ts 換成 items_misc.ts —— 前者現在只剩 1 條）
+  assert.ok(readsOf('src/lib/game/effects/cards/items_misc.ts').length>=5,'readsOf 抓不到東西');
 });
 T('8c. 每個改過的檔都真的 import 了中央述詞（漏 import＝runtime 炸彈，tsc -p 可能假綠）',()=>{
   const NEED={'src/lib/game/effects/cards/v168_supporters.ts':'hasEffectivePokemonType',

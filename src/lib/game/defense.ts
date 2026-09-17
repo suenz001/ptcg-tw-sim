@@ -85,6 +85,9 @@ import {
   // v4.975: resolveActiveAttackGuard 內部需要這兩個 helper
   wouldNeutralCenterBlock,
   isRulePokemon,
+  // >>> v6402-defense-import
+  fieldPokemonHasType,   // ⭐v6.402 場上屬性比對唯一入口（暗影【惡】能量 holder 判定）
+  // <<< v6402-defense-import
 } from './effects';
 
 /** v4.5 統一 defense 入口的回傳型別 */
@@ -344,7 +347,11 @@ export function canApplyEffectToTarget(
   //     v5.022：rename '暗影惡能量' → '暗影【惡】能量'（卡面排版對齊既有特殊能量規律）
   //     檢測：iterate target.energyAttached → pool 查名稱 === '暗影【惡】能量'
   //     注意：caller 必須傳 options.isBench === true 才會觸發（active 時不觸發）。
-  if (kind === 'attack-damage' && options?.isBench === true && targetCard?.pokemonType === 'Darkness') {
+  // >>> v6402-shadow-dark-holder
+  // ⭐v6.402「附有這張卡的【惡】寶可夢」＝場上**有效**屬性（中央述詞）。
+  if (kind === 'attack-damage' && options?.isBench === true
+      && fieldPokemonHasType(state, undefined, target, pool, 'Darkness')) {
+  // <<< v6402-shadow-dark-holder
     const hasShadowDark = target.energyAttached.some(e => {
       const ec = pool.get(e.cardId);
       return ec?.name === '暗影【惡】能量';

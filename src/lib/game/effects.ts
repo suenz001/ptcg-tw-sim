@@ -33,6 +33,12 @@ import { isStage2ByEvoVariant } from './stage2-index';
 
 import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec } from './effects/_shared';
 import { isBasicPokemonCard, isBasicPokemonOnField, getBasicEnergyType, isBasicEnergyOfType, isMegaExCard } from './selection-filter'; // v6.069 getBasicEnergyType：基本能量 pokemonType 恒 null，禁直讀（v6.008）
+// >>> v6402-luxury-bomb-import
+// ⭐v6.402：超級進化ex 判準放在 leaf（selection-filter）而不是 tools.ts —— effects→tools 是既有反向 edge，
+//   往那裡新增 symbol 會被 anti-pattern-lint [O] 擋（module-init 循環 TDZ）。本檔只轉發給 engine。
+import { megaExAttackerAndNonMegaHolder, LUXURY_BOMB_DAMAGE_THRESHOLD, luxuryBombGateOk } from './selection-filter';
+export { megaExAttackerAndNonMegaHolder, LUXURY_BOMB_DAMAGE_THRESHOLD, luxuryBombGateOk };
+// <<< v6402-luxury-bomb-import
 import { placedBenchInstance } from './effects/_shared'; // v5.745 放場裸化+justPlaced中央
 import { mandatoryTargetCount } from './effects/_shared'; // ⭐v6.305 卡面寫死目標隻數 → 強制選滿
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
@@ -89,6 +95,9 @@ export { BENCH_PLACE_TRIGGERS };
 export { SPECIAL_ENERGY_ATTACH, SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD, SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED, OPP_ENERGY_ATTACH_PASSIVE , fireOnHandEnergyAttached };
 export type { ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec };
 export type { OptInPaySpec } from './effects/_shared'; // v5.992
+// >>> v6402-holder-ctx-type-import
+import type { SpecialEnergyHolderCtx } from './effects/_shared';  // ⭐v6.402 特殊能量 holder gate 的場上脈絡
+// <<< v6402-holder-ctx-type-import
 export { OPTIN_NO_PAYMENT, OPTIN_SENTINELS }; // v5.992
 
 // ── 道具（Pokemon Tool）模組 — v2.09 從本檔抽離 ────────────────────────────
@@ -560,8 +569,12 @@ export function weaknessMultiplier(
  * ⚠ 三張卡的 dual 都**包含**自己的印刷屬性（鬥+超⊃鬥、草+火⊃火、鬥+鋼⊃鋼）
  *   ⇒ 本述詞相對印刷屬性是**純新增**，沒有任何寶可夢會因此「失去」原本的屬性。
  * ⚠ 缺場上脈絡（state / ownerIdx / inst 任一缺席）⇒ 回印刷屬性＝維持舊行為，不會更糟。
- * ⚠ **本述詞不處理「化石在場上是【無】屬性」**（rulesText 那句）—— 現行消費點都不需要，
- *   而且加進來會直接改變 逆境保險／森林行進 對化石的判定 ⇒ 列給站長裁定，本版不動。
+ * ⚠⚠ **v6.208 起本述詞已經處理「化石在場上是【無】屬性」**（站長裁定）——
+ *   `getAttackerEffectiveTypes` 開頭的 `if (attackerActive?.fossilOnField) return ['Colorless'];`。
+ *   （這一段原本寫「本述詞不處理…列給站長裁定，本版不動」，是 v6.206 當時的狀態，
+ *    v6.208 做完之後沒有跟著改 ⇒ v6.402 的獨立審查抓到它在說謊，已改成誠實版。）
+ *   ⇒ 任何「印刷屬性 vs 有效屬性」的差分掃描，**輸入集一定要含化石**（`fossilOnField: true`），
+ *     否則【無】那一格永遠掃不出差異＝空真（v6.402 守衛 E2 第一版就踩到）。
  */
 export function getEffectivePokemonTypes(
   state: GameState | undefined,
@@ -594,6 +607,150 @@ export function hasEffectivePokemonType(
 ): boolean {
   return getEffectivePokemonTypes(state, ownerIdx, inst, card, pool).includes(type);
 }
+
+// >>> v6402-field-type-central
+/**
+ * ⭐⭐⭐ v6.402 中央述詞：「**場上**的這隻寶可夢，此刻是不是【type】屬性」。
+ *
+ * 與 hasEffectivePokemonType 的差別只有一個：**不必由呼叫端自己 pool.get 卡片**。
+ * 全站「場上寶可夢屬性比對」一律走這一支 ⇒ 判準只有一份（IRON_RULES Rule 38）。
+ *
+ * ⚠ 這一支**只服務場上**（戰鬥場／備戰）。牌庫／手牌／棄牌區的卡沒有 host 脈絡，
+ *   雙重屬性／二重核心／化石在場上是【無】全都不成立 ⇒ 那些地方**直讀印刷屬性才對**，
+ *   不可以改走這一支（同 Rule 52 的「有 host／沒有 host」兩個維度）。
+ */
+// >>> v6402-field-owner-idx
+/**
+ * ⭐v6.402：這個 CardInstance 此刻在**誰的場上**（戰鬥場或備戰）。
+ * 給「拿得到 inst 卻不確定 owner」的呼叫端用（招式效果免疫閘、備戰免疫…），
+ * 免得呼叫端各自猜一個 idx —— 猜錯會讓特性消除閘查到另一邊的場面。
+ * ⚠ 找不到（已離場／在手牌棄牌區）回 undefined ⇒ 下游退回印刷屬性＝維持舊行為。
+ */
+/**
+ * ⭐v6.402：這個 CardInstance 在**誰的場上、哪個位置**（戰鬥場／備戰）。
+ * 收斂前 engine.ts 有**三份** inline 推導各寫一次（getEffectiveHP 的 owner 推導、
+ * hpAbilityEffective 的 owner＋location 推導、getEffectiveAttacks 的 if/else 版）⇒ 全站只留這一支（Rule 38）。
+ * ⚠ 找不到（已離場／在手牌棄牌區）回 null ⇒ 呼叫端一律「維持舊行為」，不得 fail-open 成別的判斷。
+ */
+export function fieldSlotOf(
+  state: GameState | undefined,
+  inst: CardInstance | null | undefined,
+): { ownerIdx: 0 | 1; loc: 'active' | 'bench' } | null {
+  if (!state || !inst) return null;
+  for (const i of [0, 1] as const) {
+    const p = state.players[i];
+    if (p?.active?.iid === inst.iid) return { ownerIdx: i, loc: 'active' };
+    if (p?.bench?.some((b) => b.iid === inst.iid)) return { ownerIdx: i, loc: 'bench' };
+  }
+  return null;
+}
+
+export function fieldOwnerIdxOf(
+  state: GameState | undefined,
+  inst: CardInstance | null | undefined,
+): 0 | 1 | undefined {
+  return fieldSlotOf(state, inst)?.ownerIdx;
+}
+// <<< v6402-field-owner-idx
+
+export function fieldPokemonHasType(
+  state: GameState | undefined,
+  /** 不確定時傳 undefined ⇒ 由 fieldOwnerIdxOf 從 state 推（v6.402）。 */
+  ownerIdx: 0 | 1 | undefined,
+  inst: CardInstance | null | undefined,
+  pool: Map<string, Card>,
+  type: string,
+): boolean {
+  if (!inst) return false;
+  const idx = ownerIdx ?? fieldOwnerIdxOf(state, inst);
+  return hasEffectivePokemonType(state, idx, inst, pool.get(inst.cardId), pool, type);
+}
+
+// >>> v6402-special-energy-ctx
+/**
+ * ⭐⭐⭐ v6.402：特殊能量 holder gate 的場上脈絡（SpecialEnergyHolderCtx）的**唯一**建構點。
+ * v6.206 只有 SPECIAL_ENERGY_HP_BONUS 吃 ctx，而且 ctx 是在 engine.getEffectiveHP 內
+ * inline 組的；本版 RETREAT_MOD／STATUS_IMMUNE 也改吃 ctx ⇒ 組 ctx 的地方收成這一支。
+ */
+export function specialEnergyHolderCtx(
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
+  inst: CardInstance,
+  pool: Map<string, Card>,
+): SpecialEnergyHolderCtx {
+  const idx = ownerIdx ?? fieldOwnerIdxOf(state, inst);
+  return {
+    state, ownerIdx: idx, inst, pool,
+    effectiveTypes: getEffectivePokemonTypes(state, idx, inst, pool.get(inst.cardId), pool),
+  };
+}
+// <<< v6402-special-energy-ctx
+
+/** v6.402 龐克頭盔的反擊量（卡面「放置4個傷害指示物」＝ 40 點）。 */
+export const PUNK_HELMET_REFLECT_DAMAGE = 40;
+
+/**
+ * ⭐⭐⭐ v6.402 龐克頭盔（PokemonTool）的**唯一**觸發判準。
+ *
+ * 卡面逐字（static/cards 台灣官方，rulesText）：
+ *   「附有這張卡的【惡】寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，
+ *     在使用招式的寶可夢身上放置4個傷害指示物。」
+ *
+ * 收斂前有兩份：engine.ts 主管線（攻擊前預算 punkReflectDamage）與
+ * effects.ts fireDefenderOnDamaged（狙擊／多目標管線），兩份各寫各的
+ * ⇒ 針對其中一份的守衛必然是安慰劑（Rule 38／安慰劑型態 11）。
+ *
+ * ⚠ 收斂順手修掉兩份**都有**的兩個漏洞（在 H/I/J 目前都不可達，但不可留）：
+ *   1. 只看 toolAttached ⇒ 洛托姆ex｜多重轉接的第 2 張道具在 extraTools 會被漏看
+ *      （v5.835 通則：找 host 身上的道具一律 getAllAttachedTools）。
+ *   2. 直讀 card.pokemonType ⇒ 改走場上**有效**屬性（雙重屬性／二重核心／化石【無】）。
+ * ⚠ 「在戰鬥場」＝呼叫端傳進來的 defActive 必須是 players[dIdx].active（兩個呼叫端都是）。
+ * ⚠ 「受到…傷害時」＝**實際**受到傷害 ⇒ damageDealt > 0；被擋到 0 就不反擊。
+ */
+export function punkHelmetReflectDamageFor(
+  state: GameState,
+  dIdx: 0 | 1,
+  defActive: CardInstance | null | undefined,
+  pool: Map<string, Card>,
+  opts: { toolsJammed: boolean; damageDealt: number },
+): number {
+  if (opts.toolsJammed) return 0;
+  if (!(opts.damageDealt > 0)) return 0;
+  if (!defActive) return 0;
+  if (!getAllAttachedTools(defActive).some((t) => pool.get(t.cardId)?.name === '龐克頭盔')) return 0;
+  if (!fieldPokemonHasType(state, dIdx, defActive, pool, 'Darkness')) return 0;
+  return PUNK_HELMET_REFLECT_DAMAGE;
+}
+
+/**
+ * ⭐⭐⭐ v6.402 TOOL_DEFENSE_REDUCE_BY_TYPE（屬性條件型防禦道具）的**唯一**觸發判準。
+ *
+ * 收斂前有兩份逐字幾乎相同的實作：engine.ts 主管線（戰鬥場）與
+ * effects.ts 的備戰／狙擊管線 ⇒ Rule 38。
+ *
+ * 兩層判準，都走場上**有效**屬性（v6.207 時是在兩份各自接上，本版把「兩份」變「一份」）：
+ *   ① 攻擊方屬性 ∈ defense.types（果實類「受到對手的【X】寶可夢招式的傷害-N」）
+ *   ② holder 屬性 ∈ defense.holderTypes（渾厚鱗片「附有這張卡的【龍】寶可夢」；未宣告＝不限）
+ */
+export function toolDefenseByTypeApplies(
+  state: GameState,
+  defense: { types: readonly EnergyType[]; holderTypes?: readonly EnergyType[] },
+  attackerIdx: 0 | 1,
+  attackerInst: CardInstance | null | undefined,
+  attackerCard: Card | undefined,
+  holderIdx: 0 | 1,
+  holderInst: CardInstance | null | undefined,
+  holderCard: Card | undefined,
+  pool: Map<string, Card>,
+): boolean {
+  const atkTypes = getEffectivePokemonTypes(state, attackerIdx, attackerInst, attackerCard, pool);
+  if (!atkTypes.some((t) => defense.types.includes(t as EnergyType))) return false;
+  const ht = defense.holderTypes;
+  if (!ht) return true;
+  return getEffectivePokemonTypes(state, holderIdx, holderInst, holderCard, pool)
+    .some((t) => ht.includes(t as EnergyType));
+}
+// <<< v6402-field-type-central
 
 /**
  * v5.562 收斂：攻擊方戰鬥位的「有效屬性清單」(弱點/抵抗比對用)。
@@ -1415,21 +1572,17 @@ function _applyBenchAbilityReduce(
         const defTool = pool.get(t.cardId);
         if (!defTool) continue;
         const defense = TOOL_DEFENSE_REDUCE_BY_TYPE.get(defTool.name);
-        // ⭐ v6.207：「受到對手的【超】寶可夢招式的傷害」＝攻擊方**有效**屬性（小碎鑽等雙屬性）；
-        //   holderTypes（渾厚鱗片「附有這張卡的【龍】寶可夢」）同樣是場上有效屬性。走中央述詞。
+        // >>> v6402-tool-defense-by-type-bench
+        // ⭐v6.402：觸發判準（攻擊方屬性 ＋ holder 屬性）收斂到中央 toolDefenseByTypeApplies，
+        //   與 engine 主管線共用**同一份**（v6.207 時是兩份逐字重複的實作 ⇒ Rule 38）。
         if (defense && dmg > 0
-            && getEffectivePokemonTypes(state, attackerIdx, _atkInst, _atkCardT, pool)
-                 .some(t => defense.types.includes(t as EnergyType))) {
-          const _holderTypes = defense.holderTypes;
-          const holderOk = !_holderTypes
-            || getEffectivePokemonTypes(state, defenderIdx, victim, victimCard, pool)
-                 .some(t => _holderTypes.includes(t as EnergyType));
-          if (holderOk) {
-            const _b = dmg; dmg = Math.max(0, dmg - defense.amount);
-            if (_b > dmg) logs.push(`${defTool.name} -${_b - dmg}`);
-            if (defense.discardOnTrigger) toolToDiscard = t;
-          }
+            && toolDefenseByTypeApplies(state, defense, attackerIdx, _atkInst, _atkCardT,
+                                        defenderIdx, victim, victimCard, pool)) {
+          const _b = dmg; dmg = Math.max(0, dmg - defense.amount);
+          if (_b > dmg) logs.push(`${defTool.name} -${_b - dmg}`);
+          if (defense.discardOnTrigger) toolToDiscard = t;
         }
+        // <<< v6402-tool-defense-by-type-bench
         const abilFn = TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY.get(defTool.name);
         // v6.049：卡面「受到對手的**擁有特性的**寶可夢招式的傷害-30」→ 特性被消除就不該減。
         //   ⚠這是狙擊/備戰路徑，與 engine 主管線是兩份獨立實作，兩邊都要判（漏一邊就會漂移）。
@@ -2990,7 +3143,11 @@ export function canApplyAttackEffectToTarget(
     if (!effectSourceBlocks(name, source)) continue;
     if (rule.kind === 'energy-on-target') {
       // 目標身上附有此名稱的能量；若有 requireType，目標屬性必須相符
-      if (rule.requireType && targetCard?.pokemonType !== rule.requireType) continue;
+      // >>> v6402-immunity-require-type
+      // ⭐v6.402 硬岩【鬥】能量「附有這張卡的【鬥】寶可夢」＝場上**有效**屬性（中央述詞）。
+      //   target 可能是任一邊的場上寶可夢 ⇒ owner 交給 fieldOwnerIdxOf 推，不在此猜。
+      if (rule.requireType && !fieldPokemonHasType(state, undefined, target, pool, rule.requireType)) continue;
+      // <<< v6402-immunity-require-type
       if (target.energyAttached.some(e => pool.get(e.cardId)?.name === name)) {
         return { blocked: true, reason: `${name} 免疫招式效果` };
       }
@@ -3046,23 +3203,29 @@ export function canApplyAttackEffectToTarget(
  * v2.175 — Special Energy 狀態免疫判定
  * holder 身上若附有 STATUS_IMMUNE 命中該狀態的特殊能量，回傳 immune（與卡名）。
  */
+// >>> v6402-status-immune-ctx
+// ⭐v6.402：state **必填** —— 泡沫【水】能量的「附有這張卡的【水】寶可夢」要問場上有效屬性，
+//   缺 state 就只能退回印刷屬性 ⇒ 乾脆由 TS 逼每個呼叫端把 state 傳進來。
 export function checkSpecialEnergyStatusImmune(
   inst: CardInstance,
   status: SpecialCondition,
   pool: Map<string, Card>,
+  state: GameState,
 ): { immune: true; energyName: string } | { immune: false } {
   const holderCard = pool.get(inst.cardId);
   if (!holderCard) return { immune: false };
+  const ctx = specialEnergyHolderCtx(state, undefined, inst, pool);
   for (const e of inst.energyAttached) {
     const ec = pool.get(e.cardId);
     if (!ec) continue;
     const fn = SPECIAL_ENERGY_STATUS_IMMUNE.get(ec.name);
     if (!fn) continue;
-    const set = fn(holderCard);
+    const set = fn(holderCard, ctx);
     if (set.has(status)) return { immune: true, energyName: ec.name };
   }
   return { immune: false };
 }
+// <<< v6402-status-immune-ctx
 
 /** 祭典會場：身上附有能量卡的寶可夢不會陷入特殊狀態。 */
 export function isFestivalVenueStatusProtected(
@@ -3149,12 +3312,17 @@ export function clearSpecialEnergyProtectedStatuses(
     const holderCard = pool.get(inst.cardId);
     if (!holderCard) return inst;
     const immuneSet = new Set<SpecialCondition>();
+    // >>> v6402-clear-status-ctx
+    // ⭐v6.402：ctx 在**迴圈外**算一次（與「是哪一張能量」無關；放進迴圈會讓每張能量
+    //   重跑一次全場特性掃描 —— 審查 Y5）。
+    const _v6402ClearCtx = specialEnergyHolderCtx(state, idx, inst, pool);
+    // <<< v6402-clear-status-ctx
     for (const e of inst.energyAttached) {
       const ec = pool.get(e.cardId);
       if (!ec) continue;
       const fn = SPECIAL_ENERGY_STATUS_IMMUNE.get(ec.name);
       if (!fn) continue;
-      for (const s of fn(holderCard)) immuneSet.add(s);
+      for (const s of fn(holderCard, _v6402ClearCtx)) immuneSet.add(s);
     }
     if (immuneSet.size === 0) return inst;
     let result = inst;
@@ -3285,7 +3453,7 @@ export function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused'
       }
     }
     // v2.175：泡沫【水】能量 — 對指定狀態免疫
-    const immune = checkSpecialEnergyStatusImmune(def.active, status, pool);
+    const immune = checkSpecialEnergyStatusImmune(def.active, status, pool, state);  // ⭐v6.402 state 必填
     if (immune.immune) {
       const statusLabelImmune: Record<string, string> = {
         poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
@@ -3364,7 +3532,7 @@ export function applyStatusToOppActive(
     }
   }
   // 4. 泡沫【水】等特殊能量狀態免疫
-  const seImmune = checkSpecialEnergyStatusImmune(def.active, status, pool);
+  const seImmune = checkSpecialEnergyStatusImmune(def.active, status, pool, state);  // ⭐v6.402b
   if (seImmune.immune) {
     return addLog(state, `${prefix}${defName}｜${seImmune.energyName}：免疫【${statusLabel[status]}】`, srcIdx);
   }
@@ -3409,7 +3577,7 @@ export function applyStatusToSelfActive(
     return addLog(state, `${prefix}${myName}｜不眠：免疫【睡眠】`, idx);
   }
   // 泡沫【水】等特殊能量狀態免疫
-  const seImmune = checkSpecialEnergyStatusImmune(me.active, status, pool);
+  const seImmune = checkSpecialEnergyStatusImmune(me.active, status, pool, state);  // ⭐v6.402
   if (seImmune.immune) {
     return addLog(state, `${prefix}${myName}｜${seImmune.energyName}：免疫【${statusLabel[status]}】`, idx);
   }
@@ -8748,16 +8916,18 @@ export function fireDefenderOnDamaged(
     }
   }
   // 6. 龐克頭盔反射（戰鬥場【惡】+40，阻礙之塔失效）
-  if (!toolsJammed) {
-    const da = s.players[dIdx].active;
-    const daTool = da?.toolAttached ? pool.get(da.toolAttached.cardId) : null;
-    const daCard = da ? pool.get(da.cardId) : null;
-    if (daTool?.name === '龐克頭盔' && daCard?.pokemonType === 'Darkness' && s.players[aIdx].active) {
+  // >>> v6402-punk-helmet-effects
+  // ⭐v6.402：觸發判準收斂到中央 punkHelmetReflectDamageFor（與 engine 主管線同一份）。
+  {
+    const _punkDmg = punkHelmetReflectDamageFor(s, dIdx, s.players[dIdx].active, pool,
+      { toolsJammed, damageDealt: baseDamage });
+    if (_punkDmg > 0 && s.players[aIdx].active) {
       const refPlayers = [...s.players] as [PlayerState, PlayerState];
-      refPlayers[aIdx] = { ...refPlayers[aIdx], active: { ...refPlayers[aIdx].active!, damage: refPlayers[aIdx].active!.damage + 40 } };
-      s = addLog({ ...s, players: refPlayers }, `🔧 龐克頭盔：${atkCard0?.name ?? '攻擊方'} 受到 40 傷害反擊！`, null);
+      refPlayers[aIdx] = { ...refPlayers[aIdx], active: { ...refPlayers[aIdx].active!, damage: refPlayers[aIdx].active!.damage + _punkDmg } };
+      s = addLog({ ...s, players: refPlayers }, `🔧 龐克頭盔：${atkCard0?.name ?? '攻擊方'} 受到 ${_punkDmg} 傷害反擊！`, null);
     }
   }
+  // <<< v6402-punk-helmet-effects
   // 反傷反殺攻擊方（含 game-over）
   const retaliatedAtk = s.players[aIdx].active;
   if (retaliatedAtk && retaliatedAtk.damage > atkDamageBefore) {
@@ -9002,7 +9172,10 @@ export function applyAttackerActiveDamageBonuses(
     formula.push({ sign: '+', value: 80, label: '格拉吉歐的決戰' });
   }
   // ── 伏特【雷】能量（【雷】屬性附加者 +20/張）─────────────────────────────
-  if (aCard.pokemonType === 'Lightning') {
+  // >>> v6402-volt-lightning-effects
+  // ⭐v6.402「附有這張卡的【雷】寶可夢」＝場上**有效**屬性（與 engine 主管線同一支述詞）。
+  if (fieldPokemonHasType(s, aIdx, aInst, pool, 'Lightning')) {
+  // <<< v6402-volt-lightning-effects
     const n = aInst.energyAttached.filter(e => pool.get(e.cardId)?.name === '伏特【雷】能量').length;
     if (n > 0) {
       const b = 20 * n; d += b;
@@ -12699,7 +12872,7 @@ export function selfStatusPost(status: SpecialCondition): AttackPostFn {
     // v5.017：補 SPECIAL_ENERGY_STATUS_IMMUNE 免疫 check（泡沫【水】能量 等）
     //   玩家回報：吼鯨王ex（水）附 泡沫【水】能量 後使用「摔落」自身睡眠，
     //   仍進入睡眠狀態 — 因 selfStatusPost 漏檢查（statusPost 對對手有，selfStatusPost 沒有）。
-    const immune = checkSpecialEnergyStatusImmune(att.active, status, pool);
+    const immune = checkSpecialEnergyStatusImmune(att.active, status, pool, state);  // ⭐v6.402
     if (immune.immune) {
       return addLog(state, `${attName}｜${immune.energyName}：免疫【${statusLabelMap[status]}】`, aIdx);
     }

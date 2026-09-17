@@ -225,7 +225,15 @@ console.log('\nC) 中央述詞的消費端覆蓋（B 段是否定型，沒有這
   //   改成**棘輪**（貼著實測值，只准升不准降）；日後合理增減請連同這兩個數字一起改，
   //   逼人回來說明「為什麼中央述詞的消費點變少了」。
   ck(`C1 ★棘輪：isBasicEnergyOfType 呼叫點 ≥100（實測 ${cBE}）`, cBE >= 100, '只有 ' + cBE);
-  ck(`C2 ★棘輪：isMegaExCard 呼叫點 ≥30（實測 ${cME}）`, cME >= 30, '只有 ' + cME);
+  // ⭐v6.402：由 30 降為 27 —— **四個呼叫點是被收斂掉的，不是退化**：
+  //   豪邁炸彈的 TOOL_ON_DAMAGED（2 處）與 engine 的 KO 路徑（2 處）原本各自
+  //   `isMegaExCard(攻擊方)` ＋ `isMegaExCard(holder)` 判一次，v6.402 起三個呼叫端
+  //   （再加訂製背心）全部走中央 megaExAttackerAndNonMegaHolder ⇒ 判準從三份變一份。
+  //   ⚠ 為了不讓棘輪因此鬆掉，下面 C2b 補一條新棘輪盯著那個中央述詞的消費點。
+  ck(`C2 ★棘輪：isMegaExCard 呼叫點 ≥27（實測 ${cME}）`, cME >= 27, '只有 ' + cME);
+  const cMEH = count(/\bmegaExAttackerAndNonMegaHolder\s*\(/g);
+  ck(`C2b ★棘輪（v6.402 新增）：megaExAttackerAndNonMegaHolder 呼叫點 ≥3（實測 ${cMEH}）`,
+    cMEH >= 3, '只有 ' + cMEH + '（定義 1 ＋ 訂製背心 1 ＋ luxuryBombGateOk 1）');
   // ⚠ 第二輪審查：C3 原本掃**整個檔**有沒有 `/【(.+?)】/` ⇒ 把 isBasicEnergyOfType 的
   //   fallback 拿掉後，getBasicEnergyType 裡同樣的正則仍讓它綠（安慰劑）。改成只看函式本體。
   const sf = FILES.find(([r]) => r === 'src/lib/game/selection-filter.ts')?.[1] ?? '';

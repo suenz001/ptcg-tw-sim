@@ -829,6 +829,24 @@ const PREV_ALLOWED = [
   //   ・changelog.html：第一則改寫（v6.388 尚未上正式站 ⇒ 走 test-v6264 F0b，不搬運）
   //   ⚠ engine.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 仍然零改動。
   'src/lib/ui-limits.ts',
+  // ⭐⭐v6.402：「同一個判準只能有一份」＋「場上寶可夢屬性一律問有效屬性」的收斂。
+  //   ・effects.ts：新增 fieldSlotOf／fieldOwnerIdxOf／fieldPokemonHasType／specialEnergyHolderCtx／
+  //     punkHelmetReflectDamageFor／toolDefenseByTypeApplies 六支中央述詞；龐克頭盔與
+  //     TOOL_DEFENSE_REDUCE_BY_TYPE 的備戰管線改走中央；硬岩【鬥】／伏特【雷】改問有效屬性；
+  //     checkSpecialEnergyStatusImmune 的 state 改必填。
+  //   ・engine.ts：龐克頭盔／豪邁炸彈 KO 路徑／TOOL_DEFENSE_REDUCE_BY_TYPE／伏特【雷】／燃料【火】／
+  //     重試徽章 ×2／getEffectiveHP 的 owner 推導與 ctx 組裝／撤退費 hook 的 ctx —— 共 11 組，
+  //     另由 scripts/lib/engine-strip-v6402.mjs 逐字釘住。
+  //   ・tools.ts：新增 megaExAttackerAndNonMegaHolder／luxuryBombGateOk，訂製背心與豪邁炸彈共用。
+  //   ・energy_cards.ts：磁鐵【鋼】／泡沫【水】的 holder gate 改讀 ctx.effectiveTypes。
+  //   ・_shared.ts：兩個特殊能量 hook 的簽名補上**必填** SpecialEnergyHolderCtx。
+  //   ・defense.ts：暗影【惡】能量的 holder 屬性改走中央述詞。
+  //   ・m5_preview.ts：checkSpecialEnergyStatusImmune 呼叫端補傳 state。
+  //   ⚠ 玩家可見行為**零變化**：會改變有效屬性的三張卡（狠辣椒ex／小碎鑽／鐵轍跡）的印刷屬性
+  //     本來就已經命中各自的條件，化石沒有招式 ⇒ test-v6402 的 E2 逐格差分證明差異為 0。
+  'src/lib/game/defense.ts',
+  'src/lib/game/effects/cards/energy_cards.ts',
+  'src/lib/game/effects/cards/tools.ts',
   'src/lib/version.ts',
   // ⭐v6.393：修一個**既有的** Rule 48 違規 —— friends/+page.svelte 的 CSS 註解裡寫了樣式標籤的
   //   開頭字面，而且排在真標籤之後 ⇒ 所有用 lastIndexOf 取樣式區塊的守衛對這個檔一直是切歪的。

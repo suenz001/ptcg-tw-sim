@@ -1802,3 +1802,82 @@ v6.401 的全套跑出 1 支紅：`test-v6276` 的 F1（300 場大歸檔連打�
 ### 順帶記下的 pair 合併陷阱
 把「替換前半」與「刪除尾巴」兩組 pair 合併成一組時，**被刪掉那段前後的空行會算進去**。
 合併後務必用第 3 點的整鏈驗證確認逐字相同，不要只看「有沒有 throw」。
+
+### ⭐ v6.402 的實戰更新：衝突的**不一定是相鄰版本**
+v6.402 動到 `getEffectiveHP` 裡 `hpAbilityEffective` 的 owner＋位置推導，而那一段正是
+**v6.394**（型別清理）的第 1 組錨點 —— 中間隔了 v6.398／v6.400／v6.401 三版。
+插在 v6.401 前面還不夠，必須一路排到 `stripV6394Engine` **之前**。
+
+⇒ 新增還原器時，不要只看「上一版」：拿新的 pairs 逐一去搜**整條鏈上每一支還原器的錨點**，
+凡是被本版改到的，本版就得排在它前面。（最省事的做法仍是第 3 點的整鏈逐字驗證 ——
+順序錯了它會直接 throw 並指名是哪一支。）
+
+---
+
+## Rule 55（v6.402）：「**場上**寶可夢的屬性」一律問中央有效屬性述詞
+
+### 病灶
+v6.206～v6.208 建了 `getEffectivePokemonTypes`／`hasEffectivePokemonType`（雙重屬性、二重核心、
+化石在場上是【無】），但只接了少數消費點；全站仍有數十處直讀 `card.pokemonType`。
+v6.402 清掉「附有這張卡的【X】寶可夢」這一整族（龐克頭盔／渾厚鱗片／重試徽章／
+硬岩【鬥】／伏特【雷】／燃料【火】／泡沫【水】／磁鐵【鋼】／暗影【惡】）。
+
+### 規則（兩個維度，不可混用 —— 與 Rule 52 同型）
+1. **場上**（戰鬥場／備戰）的寶可夢屬性 ⇒ 走中央 `fieldPokemonHasType(state, ownerIdx, inst, pool, type)`
+   或 `getEffectivePokemonTypes`。`ownerIdx` 不確定時傳 `undefined`，由 `fieldOwnerIdxOf` 從 state 推，
+   **不要自己猜一個 idx**（猜錯會讓特性消除閘查到另一邊的場面）。
+2. **不在場上**的卡（牌庫／手牌／棄牌區、牌庫搜尋 filter）沒有 host 脈絡 ⇒ **直讀印刷屬性才對**，
+   不可以改走中央述詞。
+3. hook 的簽名拿不到 state 時，**加必填參數**逼呼叫端回去讀卡面（v6.206 的 `SpecialEnergyHolderCtx`
+   模式；v6.402 把 `SPECIAL_ENERGY_RETREAT_MOD`／`SPECIAL_ENERGY_STATUS_IMMUNE` 也改成必填 ctx）。
+   **不要**加選填參數 —— 那會靜默 fail-open，日後新呼叫端不傳就退回印刷屬性，而且不會有人發現。
+
+### 「零行為變化」怎麼證明（本版用的方法，之後照抄）
+會改變有效屬性的來源目前只有四個：狠辣椒ex（印刷【火】→【草】【火】）、
+小碎鑽（印刷【鬥】→【鬥】【超】）、鐵轍跡（印刷【鋼】→【鬥】【鋼】，需要 G 標的「驅勁能量 未來」）、
+化石在場上是【無】。⇒ 守衛 `test-v6402` 的 E2 拿**本版接上的每一個屬性條件 × 全卡池**逐格跑，
+斷言差異為 0；E2b 用【超】當正對照，證明「零差異」不是因為接的其實還是印刷屬性（假綠）。
+⚠ A2 另外把那三張卡的**印刷屬性**與「驅勁能量 未來 不在 H/I/J」逐字釘住 ——
+卡池一變動，這個「零差異」的結論就要重新評估，守衛會當場翻紅。
+
+### 同時清掉的三份重複判準（Rule 38）
+・龐克頭盔：engine 主管線 ＋ effects 狙擊管線 → `punkHelmetReflectDamageFor`
+・「超級進化ex 打非超級進化ex」：訂製背心 ＋ 豪邁炸彈 TOOL_ON_DAMAGED ＋ engine KO 路徑
+  → `megaExAttackerAndNonMegaHolder`／`luxuryBombGateOk`
+・`TOOL_DEFENSE_REDUCE_BY_TYPE` 的觸發判準：engine ＋ effects → `toolDefenseByTypeApplies`
+・「inst 在誰的場上、哪個位置」：engine 內兩份 inline 迴圈 → `fieldSlotOf`
+
+⚠ 守衛寫法的教訓（安慰劑型態 12 的新實例）：驗「兩處共用同一份判準」時，
+**不要**寫成 `A(x) > 0 === central(x)` —— 兩邊都走同一支函式，把那支改壞了兩邊會一起變、斷言恆真。
+要先釘死**具體值**（訂製背心 60／0／0），再附帶驗一致性。
+
+### ⚠⚠ 差分掃描的輸入集：**「唯一會差的那一類」被排除掉 ＝ 空真**（v6.402 獨立審查抓到）
+
+v6.402 的 E2 這樣寫：
+```js
+for (const [id, c] of pool) {
+  if (!HIJ(c) || c.supertype !== 'Pokemon') continue;   // ← 化石是 Trainer，整類被跳掉
+```
+而【無】那一格**唯一**會出現「印刷 ≠ 有效」的就是化石（`fossilOnField → ['Colorless']`）。
+⇒ 守衛宣稱「8 個條件一格都不差」，但它的輸入集剛好排除了唯一會差的那一類：
+**把要守的東西改壞，這一條不會紅**（安慰劑型態 4 的變體）。
+
+⇒ 通則：寫「零差異」型的差分守衛時，先問「**哪一類輸入會讓兩邊不同**」，
+再確認那一類**確實在輸入集裡**，並把預期差異**明列**出來（`deepStrictEqual(diffs, want)`），
+不要寫成 `deepStrictEqual(diffs, [])` —— 前者會在「差異變多、變少、換人」時都翻紅，後者只擋得住「變多」。
+
+### ⚠ 「不可達」要釘在守衛裡，不要只寫在 commit 訊息
+
+v6.402 說「化石雖然變成【無】，但重試徽章讀不到它」——這個結論靠兩個**卡池事實**：
+① 化石 `attacks` 全部是空的 ② H/I/J 沒有「擲硬幣＋自身與備戰互換」的招式。
+兩條都寫成守衛斷言（E2c），卡池一變就翻紅。**只寫在 commit 訊息裡的不可達，等於沒寫。**
+
+### ⚠ 新增跨檔相依時，去看「誰會把那個檔換回 BASE」
+
+v6.402 讓 `defense.ts` import `effects.ts` 的**新** export，結果 `test-v6334`／`v6337`／`v6338`
+三支守衛的 HEAD-FAIL 直接 esbuild「No matching export」爆掉 —— 它們把「effects 子樹」換回 BASE，
+而 `defense.ts` 在子樹**外**、也不在 CHANGED 逐檔清單裡 ⇒ BASE 的 effects.ts 配 HEAD 的 defense.ts。
+
+這是同一支守衛上的**第三次**同型事故（v6.343 卡檔、v6.347 engine.ts、v6.402 defense.ts）。
+⇒ 通則：**BASE 樹必須全部都是 BASE，半新半舊一定爆。** 新增「A import B 的新 symbol」時，
+`git grep` 一下有沒有守衛會單獨把 B 換回 BASE；有的話，A 也要進那支守衛的 CHANGED。

@@ -102,10 +102,14 @@ SPECIAL_ENERGY_HP_BONUS.set('增強【草】能量', (_holder, ctx) => {
 // ── 磁鐵【鋼】能量（Special Energy） ──────────────────────────────────────────
 // 卡面：提供 1 個【鋼】能量。附於【鋼】寶可夢時，撤退所需能量為 0。
 // Hook：SPECIAL_ENERGY_RETREAT_MOD（engine RETREAT 計費前覆蓋）。
-SPECIAL_ENERGY_RETREAT_MOD.set('磁鐵【鋼】能量', (holder) => {
-  if (holder.pokemonType === 'Metal') return { zero: true };
+// >>> v6402-magnet-metal-holder
+// ⭐v6.402「附有這張卡的【鋼】寶可夢」＝場上**有效**屬性（ctx.effectiveTypes 由中央
+//   getEffectivePokemonTypes 算好傳進來，含雙重屬性／二重核心與特性消除閘）。
+SPECIAL_ENERGY_RETREAT_MOD.set('磁鐵【鋼】能量', (_holder, _inst, ctx) => {
+  if (ctx.effectiveTypes.includes('Metal')) return { zero: true };
   return {};
 });
+// <<< v6402-magnet-metal-holder
 
 // ── 扣殺能量（Special Energy） ────────────────────────────────────────────────
 // 卡面：提供 1 個【無】能量。只要這張卡附於戰鬥場的寶可夢身上，
@@ -129,8 +133,11 @@ SPECIAL_ENERGY_ON_DAMAGED.set('扣殺能量', (state, dIdx, aIdx, _damage, _pool
 //   玩家回報「附泡沫後仍被睡眠 / 混亂 / 麻痺」是這個 bug 的直接結果。
 // 註：卡面後半「將受到的特殊狀態全部恢復」(on-attach 全清) 仍待實裝，
 //   要在 ATTACH_ENERGY handler 後加 clearSpecialEnergyProtectedStatuses helper（v4.996+）。
-SPECIAL_ENERGY_STATUS_IMMUNE.set('泡沫【水】能量', (holder) => {
-  if (holder.pokemonType !== 'Water') return new Set<SpecialCondition>();
+// >>> v6402-bubble-water-holder
+// ⭐v6.402「附有這張卡的【水】寶可夢」＝場上**有效**屬性（同上）。
+SPECIAL_ENERGY_STATUS_IMMUNE.set('泡沫【水】能量', (_holder, ctx) => {
+  if (!ctx.effectiveTypes.includes('Water')) return new Set<SpecialCondition>();
   return new Set<SpecialCondition>(['poisoned', 'burned', 'asleep', 'confused', 'paralyzed']);
 });
+// <<< v6402-bubble-water-holder
 

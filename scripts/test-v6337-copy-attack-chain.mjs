@@ -301,6 +301,11 @@ const CHANGED = [
   'src/lib/game/engine.ts',
   'src/lib/game/types.ts',
   'src/lib/game/actions.ts',
+  // ⭐v6.402：defense.ts 也要換回 BASE —— 它 import effects.ts 的 export，
+  //   而 v6.402 在 effects.ts 新增了 fieldPokemonHasType（defense.ts 的暗影【惡】能量在用）。
+  //   BASE 的 effects.ts 沒有那個符號 ⇒ 不換 defense.ts 就會 esbuild「No matching export」。
+  //   與上面 v6.347 的說明同型，只是這個檔在 effects 子樹外。
+  'src/lib/game/defense.ts',
   'src/lib/game/effects.ts',
   'src/lib/game/effects/_shared.ts',
   'src/lib/game/effects/cards/slowking_lucario_deck.ts',
