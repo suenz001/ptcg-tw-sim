@@ -523,7 +523,9 @@ regPre('打擊鬼|上升劈打', (state, aIdx, pool) => {
   const da = state.players[dIdx].active;
   if (!da) return { state, damage: 0 };
   const card = pool.get(da.cardId);
-  const isEx = isPokemonExCard(card);   // ⭐v6.403 收斂（原 subtype?.includes('ex') 比 === 更寬）
+  // ⭐v6.403 收斂：卡面「若對手的戰鬥寶可夢不是「寶可夢【ex】」，則這個招式失敗。」
+  //   ⚠ 原本手刻的是 subtype 的 includes 寫法，比嚴格等於更寬。
+  const isEx = isPokemonExCard(card);
   if (!isEx) {
     return { state: addLog(state, '上升劈打：對手戰鬥場非 ex → 招式失敗', aIdx), damage: 0 };
   }

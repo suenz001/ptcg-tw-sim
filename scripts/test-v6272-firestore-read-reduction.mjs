@@ -763,6 +763,11 @@ const PREV_ALLOWED = [
   'src/lib/game/effects/cards/abra_mawile_deck.ts',
   'src/lib/game/effects/cards/v168_supporters.ts',
   'src/lib/game/effects/cards/v2590_i_wave9_misc3.ts',
+  // ⭐v6.404：修 v6.403 的退化（共用的 isExCard 被 6 個卡面不同的呼叫點共用）＋
+  //   把「擁有規則的寶可夢」剩下的三份手刻收斂（呆呆王｜耀閃挑戰 ×2、沐淨）。
+  'src/lib/game/copy-attack.ts',
+  // ⚠ m5_preview.ts 已在 v6.394 那一批裡（PREV_ALLOWED 不可以有重複條目，deepStrictEqual 會紅）。
+  'src/lib/game/effects/cards/slowking_lucario_deck.ts',
   // ⭐⭐v6.394：tsc 型別清理（站長裁示 ④）—— 55 條型別錯誤清成 0。
   //   ⚠ 這一版動到的玩家端檔案**特別多**，但每一處都是型別層：補型別註記／補型別述詞／
   //     非空斷言／移除現查過的死比較／把半成品的 CardInstance 改走中央的 toBareCard。

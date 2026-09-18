@@ -934,7 +934,10 @@ export function resolveBenchGuard(
     // ⭐v6.373 站長裁定 A-3：改走全站唯一的「宣告當時」述詞（原 live || snapshot 過寬）。
     if (isEffectiveAsOfDeclaration(state, defenderIdx, '花之帷幔',
       hasFlowerVeil(state, defenderIdx, pool), state._attackTimeOppFlowerVeil === true)
-      && !isExCard(targetCard)) {
+      // ⭐⭐⭐v6.404：卡面逐字「自己的所有備戰寶可夢（「擁有規則的寶可夢」除外）不會受到
+      //   對手的招式的傷害。」⇒ isRulePokemon，**不是**「寶可夢【ex】」。
+      //   v6.403 把共用的 isExCard 整支換成 isPokemonExCard 時把這裡一起改錯了。
+      && !isRulePokemon(targetCard)) {
       return { blocked: true, reason: '謝米 花之帷幔 效果' };
     }
     if (targetCard?.tags?.includes('太晶')) {
@@ -1662,7 +1665,8 @@ function hitBenchAll(
       // ⭐v6.373 站長裁定 A-3：改走全站唯一的「宣告當時」述詞（原 live || snapshot 過寬）。
       && isEffectiveAsOfDeclaration(state, targetIdx, '花之帷幔',
         hasFlowerVeil(state, targetIdx, pool), state._attackTimeOppFlowerVeil === true)
-      && !isExCard(card)
+      // ⭐v6.404：同 P1，卡面是「擁有規則的寶可夢」除外（這一行上面三行的既有註解本來就寫對了）。
+      && !isRulePokemon(card)
     ) {
       teraImmunNames.push(`${card?.name ?? '?'}（謝米 花之帷幔）`);
       newBench.push(c);
@@ -7524,20 +7528,29 @@ regPost('葉伊布ex|苔紋瑪瑙', healAllOwnPost(100, true, '苔紋瑪瑙'));
 // 均為 regPre 判斷條件，若符合則 base + bonus，否則 base。
 // ══════════════════════════════════════════════════════════════════════════════
 
-// ⭐⭐⭐v6.403 判準修正：本 helper 的消費端是**卡面只寫「寶可夢【ex】」**的招式 ——
-//   水伊布ex｜重磅驟雨「對手的所有「寶可夢【ex】」各受到60點傷害。」
-//   超夢ex｜光子彈「對手的所有「寶可夢【ex】」各受到50點傷害。」
-//   v3.67 誤接成 isRulePokemon（含 V/VSTAR/GX）⇒ 語義比卡面**寬**，方向錯。
-//   H/I/J 內兩者等價（739＝739，v6.403 現查）⇒ 本版零行為變更，但判準對齊卡面。
-// 注意：「是不是 ex」用本函式（boolean）；「KO 取幾張獎賞」用 prizesForKOLocal（含 Mega ex = 3 張）。
-function isExCard(c: Card | undefined): boolean {
-  return isPokemonExCard(c);
-}
+// >>> v6404-isexcard-removed
+// ⭐⭐⭐v6.404：原本這裡有一支共用的 `isExCard`，被 6 個呼叫點共用 ——
+//   但那 6 張卡的**卡面不是同一句**（v6.404 逐字查證 static/cards）：
+//     ・謝米｜花之帷幔 ×2      →「擁有規則的寶可夢」除外   ⇒ isRulePokemon
+//     ・謝米｜精刺奇襲          →「寶可夢【ex】・【V】」    ⇒ isRuleBoxExOrV
+//     ・爆焰龜獸｜灼燒盡        →「寶可夢【ex】」           ⇒ isPokemonExCard
+//     ・古劍豹｜上升利刃        →「寶可夢【ex】」           ⇒ isPokemonExCard
+//     ・密勒頓ex｜強子電光      →「寶可夢【ex】」           ⇒ isPokemonExCard
+//   v3.67 把它接成 isRulePokemon、v6.403 又整支接成 isPokemonExCard —— 兩次都是
+//   「把一個共用 helper 當成只有一句卡面」。**共用 resolver 的粒度天生解不了這件事**
+//   （ptcg-card-audit skill：「effectKey 白名單的粒度天生解不了共用 resolver」），
+//   所以正解是把它**拆掉**，讓每個呼叫端被迫回去讀自己的卡面。
+//   ⚠ 不要因為「看起來很像」就再造一支共用的 isExCard 回來。
+// <<< v6404-isexcard-removed
 /** 與 engine.prizesForKO 同邏輯（避開 import cycle），統一給 effects.ts 內 KO 流程用。 */
 // v5.172：加 export 給 m5_preview.ts 的深淵之瞳手動 KO 模式使用
 export function prizesForKOLocal(c: Card | undefined): number {
   if (!c) return 1;
-  if (!isExCard(c)) return 1;
+  // ⭐v6.404：直呼中央述詞（原本繞 isExCard，那支已拆）。
+  //   ⚠ 已知限制：官方規則裡【V】／VSTAR 被擊倒也是 2 張獎賞，但本函式與 engine.prizesForKO
+  //     都只認「寶可夢【ex】」⇒ 兩份**一致地**給 1 張。V 系不在 H/I/J（標準賽不可達），
+  //     日後若 V 回鍋，這兩支要一起改成「規則盒 ⇒ 2」，不可以只改一支。
+  if (!isPokemonExCard(c)) return 1;
   // 超級進化寶可夢 ex（Mega ex）取 3 張獎賞（與 engine.prizesForKO 同步）
   if (isMegaExCard(c)) return 3;
   return 2;
@@ -8071,7 +8084,9 @@ regPost('謝米|精刺奇襲', (state, aIdx, pool) => {
   const defender = state.players[dIdx];
   const exBench = defender.bench.filter(c => {
     const card = pool.get(c.cardId);
-    return isExCard(card);
+    // ⭐⭐⭐v6.404：卡面逐字「對手的備戰區的1隻「寶可夢【ex】・【V】」受到60點傷害。」
+    //   ⇒ isRuleBoxExOrV。v6.403 誤縮成 isPokemonExCard ⇒ 對 V 系不再成立（相對 v6.402 退化）。
+    return isRuleBoxExOrV(card);
   });
   if (exBench.length === 0) {
     return addLog(state, '精刺奇襲：對手備戰區沒有 ex/V 寶可夢', aIdx);
@@ -11637,7 +11652,7 @@ regPost('爆焰龜獸|灼燒盡', (state, aIdx, pool) => {
     if (_g.blocked) return addLog(state, `灼燒盡：${pool.get(def.cardId)?.name ?? '?'}｜${_g.reason}（不丟能量）`, aIdx);
   }
   const defCard = pool.get(def.cardId);
-  if (!defCard || !isExCard(defCard)) {
+  if (!defCard || !isPokemonExCard(defCard)) {   // ⭐v6.404 卡面「選擇1個對手的戰鬥場的「寶可夢【ex】」…」
     return addLog(state, '灼燒盡：對手戰鬥寶可夢非 ex，無效果', aIdx);
   }
   if (def.energyAttached.length === 0) {
@@ -19816,7 +19831,7 @@ regPre('耿鬼|意志劫持', (state, aIdx, _pool) => {
 regPre('古劍豹|上升利刃', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defCard = state.players[dIdx].active ? pool.get(state.players[dIdx].active!.cardId) : undefined;
-  return { state, damage: 80 + (isExCard(defCard) ? 80 : 0) };
+  return { state, damage: 80 + (isPokemonExCard(defCard) ? 80 : 0) };   // ⭐v6.404 卡面「寶可夢【ex】」
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -19830,7 +19845,7 @@ regPre('雷丘|快速攻擊', coinPlusPre(20, 50, '快速攻擊'));
 regPre('密勒頓ex|強子電光', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defCard = state.players[dIdx].active ? pool.get(state.players[dIdx].active!.cardId) : undefined;
-  return { state, damage: 120 + (isExCard(defCard) ? 120 : 0) };
+  return { state, damage: 120 + (isPokemonExCard(defCard) ? 120 : 0) };   // ⭐v6.404 卡面「寶可夢【ex】」
 });
 
 // 布里卡隆｜圍困：160；下個對手回合，受到招式的寶可夢無法撤退。

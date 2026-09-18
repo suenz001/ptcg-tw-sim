@@ -149,8 +149,12 @@ console.log('\n=== C 組：行為端（卡面 → 實際判定）===');
   eq(brace?.(gengarJ, dummyInst, gengarJ), 0, 'C5b 猛攻手鐲：holder 是「擁有規則的寶可夢」⇒ 卡面除外條款 ⇒ 0');
   eq(brace?.(salandit, dummyInst, arceus), 0, 'C5c ⭐猛攻手鐲：目標是 VSTAR（不是「寶可夢【ex】」）⇒ 0（BASE 給 30）');
   eq(brace?.(arceus, dummyInst, gengarJ), 0, 'C5d 猛攻手鐲：holder 是 VSTAR（擁有規則）⇒ 0（這一半**維持** isRulePokemon）');
-  ok(brace?.(salandit, dummyInst, arceus) !== brace?.(arceus, dummyInst, gengarJ) === false,
-    'C5e ★兩半判準不同的證據：holder 用「擁有規則」、目標用「寶可夢【ex】」');
+  // ⭐v6.404：原本寫成 `a !== b === false`（＝ a === b），與訊息說的「兩半不同」相反，
+  //   而且 C5c／C5d 已各自釘死 a、b ⇒ 那一條是 100% 冗餘。改成真的在測「兩半判準不同」：
+  //   同一個 holder（非規則）下，目標換成 VSTAR 與換成耿鬼ex **必須給出不同答案**
+  //   —— 目標那一半若被改成「擁有規則」，兩者就會一樣。
+  ok(brace?.(salandit, dummyInst, arceus) !== brace?.(salandit, dummyInst, gengarJ),
+    'C5e ★目標那一半確實是「寶可夢【ex】」：VSTAR 與耿鬼ex 給出不同答案');
   // C6 尾甲（奇麒麟ex）：卡面「【基礎】寶可夢的『寶可夢【ex】』」
   const tail = IMM.get('尾甲');
   const rayquazaEX = byId(20061);   // 烈空坐EX：stage=Basic、name 結尾 EX、subtype=Basic
@@ -171,27 +175,56 @@ console.log('\n=== D 組：判準不得再散寫（靜態 lint，配正對照）
   })(join(ROOT, 'src'));
   ok(files.length > 150, `D0 掃描器下限：掃到 ${files.length} 個檔（< 150 就是掃描器壞了）`);
   // 白名單：三個述詞自己的定義，與「不是 ex 判準」的用途
+  // ⚠ 白名單＝「這一處不是 ex 判準，或它就是中央述詞自己的定義」。每加一條都要寫理由。
   const WL = new Map([
-    ['src/lib/game/selection-filter.ts', 3],   // isPokemonExCard 1 + isMegaExCard 1 + 註解外的其餘 0（見下方精確斷言）
+    // 三個述詞的**唯一**定義都在這裡：isPokemonExCard 的 subtype==='ex' 1 處、
+    // isMegaExCard 的 1 處、isRulePokemon 內的 RULE_BOX_SUBTYPES.has 2 處。
+    ['src/lib/game/selection-filter.ts', 4],
     ['src/lib/game/effects/cards/m2_dragon_charizard_batch.ts', 1],  // isEvolutionPokemon：進化階級判準，不是 ex 判準
     ['src/lib/game/effects.ts', 1],            // 桃歹郎ex 的**卡名**比對（卡面「「桃歹郎ex」除外」）
+    ['src/lib/game/effects/cards/v3001_g3_wave3.ts', 2],  // 特性 gate：判 holder 自己是不是規則盒，非卡面 ex 判準
   ]);
+  // ⭐⭐v6.404：原本只掃 `subtype === 'ex'` —— 獨立審查指出否定式 `subtype !== 'ex'` 完全不在
+  //   掃描範圍，所以 ai.ts／+page.svelte 裡兩份「水蓮的照顧」的舊抄本帶著舊語義留下來，
+  //   守衛照樣全綠（安慰劑型態 10：掃字面沒掃語義）。本版把否定式、`subtype?.includes('ex')`
+  //   與 `RULE_BOX_SUBTYPES.has(`（「擁有規則的寶可夢」的手刻版，比中央述詞窄）一起納入。
+  const PATS = [
+    [/subtype\s*===\s*'ex'/g, "subtype === 'ex'"],
+    [/subtype\s*!==\s*'ex'/g, "subtype !== 'ex'"],
+    [/subtype\??\.includes\(\s*'ex'\s*\)/g, "subtype?.includes('ex')"],
+    [/RULE_BOX_SUBTYPES\.has\(/g, 'RULE_BOX_SUBTYPES.has('],
+  ];
   let offenders = [];
   let total = 0;
   for (const p of files) {
     const rel = p.slice(ROOT.length).replace(/\\/g, '/').replace(/^\//, '');
     const src = stripCommentsBlankChecked(readFileSync(p, 'utf8')).replace(/[​-‍﻿]/g, '');
-    const n = (src.match(/subtype\s*===\s*'ex'/g) ?? []).length;
+    let n = 0;
+    const detail = [];
+    for (const [re, lab] of PATS) {
+      re.lastIndex = 0;
+      const k = (src.match(re) ?? []).length;
+      n += k;
+      if (k) detail.push(`${lab}×${k}`);
+    }
     total += n;
     const allow = WL.get(rel) ?? 0;
-    if (n > allow) offenders.push(`${rel}（${n} 處，白名單 ${allow}）`);
+    if (n > allow) offenders.push(`${rel}（${n} 處：${detail.join('、')}，白名單 ${allow}）`);
   }
-  ok(total >= 4, `D1a 下限：全站 subtype === 'ex' 的字面還有 ${total} 處（都在白名單內；0 表示掃描器壞了）`);
-  eq(offenders.join(' / '), '', 'D1b 白名單以外不得再出現 subtype === \'ex\' 的散寫（請改走中央述詞）');
+  ok(total >= 6, `D1a 下限：全站四種手刻樣式合計還有 ${total} 處（都在白名單內；0 表示掃描器壞了）`);
+  eq(offenders.join(' / '), '',
+    'D1b 白名單以外不得再出現 ex／規則盒判準的手刻散寫（subtype ===／!==／?.includes／RULE_BOX_SUBTYPES.has）——請改走中央述詞');
   // ⭐正對照：判準抓得到一個真的違規樣本
-  const bad = "if (card.subtype === 'ex') return true;";
-  ok((stripCommentsBlankChecked(bad).match(/subtype\s*===\s*'ex'/g) ?? []).length === 1,
-    'D2 ★正對照：lint 對一段真的違規程式碼確實抓得到（不是空真）');
+  for (const [sample, re, lab] of [
+    ["if (card.subtype === 'ex') return true;", /subtype\s*===\s*'ex'/g, "subtype === 'ex'"],
+    ["if (card.subtype !== 'ex') return true;", /subtype\s*!==\s*'ex'/g, "subtype !== 'ex'"],
+    ["if (c.subtype?.includes('ex')) return true;", /subtype\??\.includes\(\s*'ex'\s*\)/g, "subtype?.includes('ex')"],
+    ['if (RULE_BOX_SUBTYPES.has(c.subtype)) return true;', /RULE_BOX_SUBTYPES\.has\(/g, 'RULE_BOX_SUBTYPES.has('],
+  ]) {
+    re.lastIndex = 0;
+    ok((stripCommentsBlankChecked(sample).match(re) ?? []).length === 1,
+      `D2 ★正對照：lint 抓得到「${lab}」這種違規樣式（不是空真）`);
+  }
   // ⭐註解裡的同樣字面不可以讓 lint 誤判（型態 6）
   const commented = "// if (card.subtype === 'ex') return true;\nconst x = 1;";
   ok((stripCommentsBlankChecked(commented).match(/subtype\s*===\s*'ex'/g) ?? []).length === 0,
@@ -274,6 +307,188 @@ console.log('\n=== F 組：selection filter 與水蓮的照顧（判準只有一
     'F7 ⭐⭐盤面只有 VSTAR 在棄牌區 ⇒ gate 必須擋（否則卡打得出去但 picker 沒候選 ＝ pendingStuckEmpty）');
   eq(!!g?.(mk([salandit]), 0, pool), true, 'F8 盤面有非規則寶可夢 ⇒ gate 放行（零回歸）');
   eq(!!g?.(mk([]), 0, pool), false, 'F9 棄牌區空 ⇒ gate 擋');
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+console.log('\n=== G 組：每個消費端走的是「哪一句卡面」的述詞（簽章法，v6.404 新增）===');
+// ⭐⭐⭐ 為什麼這一組是本守衛的主力：
+//   v6.403 的守衛只釘了 10 個消費端，而本版動到約 47 處 ⇒ 獨立審查設計的 8 個突變
+//   （把 isExCard 整支 revert、把 defIsExPre 的 alsoV 預設翻面、把 snipeAllOppExPost 的
+//   兩個分支對調…）**全部存活**。那是典型的「覆蓋率不足＝安慰劑」。
+//
+// 做法：挑 4 張 fixture，讓三個述詞的回答形成**兩兩不同的簽章**：
+//                       耿鬼ex  阿爾宙斯VSTAR  蒼響V  顫弦蠑螈
+//   isPokemonExCard       1          0           0       0     ← 'ex'
+//   isRuleBoxExOrV        1          1           1       0     ← 'exv'
+//   isRulePokemon         1          1           0       0     ← 'rule'
+//   ⇒ 任何一個消費端只要被換成另一個述詞，它的簽章就會變 ⇒ 一定被抓到。
+// ⚠ 三張分歧卡都不在 H/I/J（標準賽不可達）—— 這是**刻意**的：本版主張「H/I/J 零行為變更」，
+//   所以能區分三個述詞的探針一定落在 H/I/J 之外。這一組守的是「判準有沒有對到卡面」。
+{
+  const FX = [byId(19988), byId(20071), byId(20068), byName('顫弦蠑螈')];
+  const FXN = ['耿鬼ex', '阿爾宙斯VSTAR', '蒼響V', '顫弦蠑螈'];
+  ok(FX.every(Boolean), 'G0 四張 fixture 都在');
+  const SIG = { ex: '1,0,0,0', exv: '1,1,1,0', rule: '1,1,0,0' };
+  // 先證明三個簽章真的兩兩不同（否則整組是空真）
+  eq(FX.map((c) => (isEx(c) ? 1 : 0)).join(','), SIG.ex, 'G1a isPokemonExCard 的簽章');
+  eq(FX.map((c) => (isExV(c) ? 1 : 0)).join(','), SIG.exv, 'G1b isRuleBoxExOrV 的簽章');
+  eq(FX.map((c) => (isRule(c) ? 1 : 0)).join(','), SIG.rule, 'G1c isRulePokemon 的簽章');
+  ok(new Set(Object.values(SIG)).size === 3, 'G1d ★三個簽章兩兩不同（否則這一整組是空真）');
+
+  const sig = (fn) => FX.map((c) => (fn(c) ? 1 : 0)).join(',');
+  /** 斷言某個消費端的簽章 === 卡面對應述詞的簽章 */
+  const probe = (label, want, fn) => {
+    let got;
+    try { got = sig(fn); } catch (e) { got = 'ERR:' + e.message.slice(0, 60); }
+    ok(got === SIG[want],
+      `G ${label} 走「${want}」的判準（簽章 ${got}${got === SIG[want] ? '' : ' ≠ ' + SIG[want]}；欄位＝${FXN.join('/')}）`);
+  };
+
+  // ── ① PASSIVE_IMMUNITY（攻擊方是這張卡時擋不擋）──────────────────────────
+  const IMM = MAP(EFF, 'PASSIVE_IMMUNITY');
+  probe('仙子伊布｜神秘守護〔卡面「寶可夢【ex】」〕', 'ex', (c) => !!IMM.get('神秘守護')?.(c, 100, undefined, 0, undefined));
+  probe('岩殿居蟹｜神秘石居〔卡面「寶可夢【ex】」〕', 'ex', (c) => !!IMM.get('神秘石居')?.(c, 100, undefined, 0, undefined));
+  probe('堅盾劍怪｜神秘之盾〔卡面「寶可夢【ex】・【V】」〕', 'exv', (c) => !!IMM.get('神秘之盾')?.(c, 100, undefined, 0, undefined));
+
+  // ── ② PASSIVE_PREVENT_PRIZE（脫殼忍者｜脆弱蛻殼）────────────────────────
+  const PP = MAP(EFF, 'PASSIVE_PREVENT_PRIZE');
+  ok(PP.size > 0, 'G2 PASSIVE_PREVENT_PRIZE 抓得到（v6.403 的行為矩陣曾寫錯 export 名 ⇒ 這一族全盲）');
+  probe('脫殼忍者｜脆弱蛻殼〔卡面「寶可夢【ex】」〕', 'ex', (c) => !!PP.get('脆弱蛻殼')?.(c));
+
+  // ── ③ TOOL_ATTACK_BONUS ───────────────────────────────────────────────────
+  const TA = MAP(EFF, 'TOOL_ATTACK_BONUS');
+  const di = { energyAttached: [] };
+  probe('極限腰帶〔目標＝卡面「寶可夢【ex】」〕', 'ex', (c) => (TA.get('極限腰帶')?.({ name: 'X' }, di, c) ?? 0) > 0);
+  probe('電氣球〔目標＝卡面「寶可夢【ex】」〕', 'ex', (c) => (TA.get('電氣球')?.({ name: '皮卡丘ex' }, di, c) ?? 0) > 0);
+  probe('猛攻手鐲｜目標半〔卡面「寶可夢【ex】」〕', 'ex',
+    (c) => (TA.get('猛攻手鐲')?.(byName('顫弦蠑螈'), di, c) ?? 0) > 0);
+  probe('猛攻手鐲｜holder 除外半〔卡面「擁有規則的寶可夢」〕', 'rule',
+    (c) => (TA.get('猛攻手鐲')?.(c, di, byId(19988)) ?? 0) === 0);
+
+  // ── ④ ATTACK_PRE：把 fixture 放進對手戰鬥場，看傷害有沒有加成 ─────────────
+  const PRE = MAP(EFF, 'ATTACK_PRE');
+  let sn = 0;
+  const si = (cid, x = {}) => ({ iid: 'g' + (++sn), cardId: String(cid), damage: 0, energyAttached: [], ...x });
+  const st = (oppCard, myCardId, extra = {}) => {
+    const s0 = M.createGame({ name: 'A', entries: [{ cardId: '19988', count: 1 }] },
+                            { name: 'B', entries: [{ cardId: '19988', count: 1 }] }, pool);
+    return { ...s0, phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, isFirstTurn: false,
+      setupDone: [true, true], pendingSelection: null, activeStadium: null, pendingPrizes: [0, 0],
+      players: [
+        { ...s0.players[0], active: si(myCardId), bench: [], hand: [], deck: [si('19988')], discard: [],
+          prizes: Array.from({ length: 6 }, () => si('19988')) },
+        { ...s0.players[1], active: si(oppCard.id), bench: [], hand: [], deck: [si('19988')], discard: [],
+          prizes: Array.from({ length: 6 }, () => si('19988')) }],
+      ...extra };
+  };
+  const preDmg = (key, myCardId, c, extra) => {
+    const fn = PRE.get(key);
+    if (!fn) return null;
+    return fn(st(c, myCardId, extra), 0, pool)?.damage ?? null;
+  };
+  const preBonus = (key, myCardId, base) => (c) => (preDmg(key, myCardId, c) ?? base) > base;
+  // defIsExPre 家族（12 個呼叫端，卡面分兩句）
+  probe('火焰鳥｜鬥志之翼〔卡面「寶可夢【ex】」〕', 'ex', preBonus('火焰鳥|鬥志之翼', byName('火焰鳥')?.id, 20));
+  probe('眷戀雲｜上升之心〔卡面「寶可夢【ex】」〕', 'ex', preBonus('眷戀雲|上升之心', byName('眷戀雲')?.id, 100));
+  probe('無極汰那｜汰那爆破〔卡面「寶可夢【ex】」〕', 'ex', preBonus('無極汰那|汰那爆破', byName('無極汰那')?.id, 10));
+  probe('泥偶巨人｜鬥志之拳〔卡面「寶可夢【ex】・【V】」〕', 'exv', preBonus('泥偶巨人|鬥志之拳', byName('泥偶巨人')?.id, 120));
+  probe('舞天鵝｜鬥志之翼〔卡面「寶可夢【ex】・【V】」〕', 'exv', preBonus('舞天鵝|鬥志之翼', byName('舞天鵝')?.id, 20));
+  probe('電蜘蛛ex｜衝天之線〔卡面「寶可夢【ex】・【V】」〕', 'exv', preBonus('電蜘蛛ex|衝天之線', byName('電蜘蛛ex')?.id, 110));
+  // oppExBonusPre 家族（3 個呼叫端，卡面分兩句）
+  probe('鐵臂膀｜超合金之手〔卡面「寶可夢【ex】・【V】」〕', 'exv', preBonus('鐵臂膀|超合金之手', byName('鐵臂膀')?.id, 80));
+  probe('摔角鷹人｜上升衝撞〔卡面「寶可夢【ex】」〕', 'ex', preBonus('摔角鷹人|上升衝撞', byName('摔角鷹人')?.id, 10));
+  probe('哲爾尼亞斯ex｜上升角擊〔卡面「寶可夢【ex】」〕', 'ex', preBonus('哲爾尼亞斯ex|上升角擊', byName('哲爾尼亞斯ex')?.id, 120));
+  // v6.403 誤接、v6.404 修回的那幾支（原本共用 isExCard）
+  probe('古劍豹｜上升利刃〔卡面「寶可夢【ex】」〕', 'ex', preBonus('古劍豹|上升利刃', byName('古劍豹')?.id, 80));
+  probe('密勒頓ex｜強子電光〔卡面「寶可夢【ex】」〕', 'ex', preBonus('密勒頓ex|強子電光', byName('密勒頓ex')?.id, 120));
+  probe('魔幻假面喵｜上升綻放〔卡面「寶可夢【ex】」〕', 'ex', preBonus('魔幻假面喵|上升綻放', byName('魔幻假面喵')?.id, 90));
+  probe('打擊鬼｜上升劈打〔卡面「寶可夢【ex】」〕', 'ex',
+    (c) => (preDmg('打擊鬼|上升劈打', byName('打擊鬼')?.id, c) ?? 0) > 0);
+  // 計數型（對手場上有幾隻）
+  probe('索羅亞克｜幻影劫持〔卡面「寶可夢【ex】・【V】」〕', 'exv',
+    (c) => (preDmg('索羅亞克|幻影劫持', byName('索羅亞克')?.id, c) ?? 0) > 0);
+  probe('土龍節節ex｜逆境之尾〔卡面「寶可夢【ex】」〕', 'ex',
+    (c) => (preDmg('土龍節節ex|逆境之尾', byName('土龍節節ex')?.id, c) ?? 0) > 0);
+
+  // ── ⑤ 謝米（v6.404 修回的兩句卡面）───────────────────────────────────────
+  const benchGuard = F(EFF, 'resolveBenchGuard');
+  probe('謝米｜花之帷幔〔卡面「擁有規則的寶可夢」除外〕', 'rule', (c) => {
+    // 「被擋住」＝ 非規則寶可夢 ⇒ 取反才是「是規則寶可夢」的簽章。
+    // ⚠ 花之帷幔走 isEffectiveAsOfDeclaration（v6.373 站長裁定 A-3「宣告當時」）
+    //   ⇒ 這裡把 attack-time 快照直接設成 true，讓探針只測「目標是不是規則寶可夢」這一件事。
+    const shaymin = byName('謝米');
+    const s = st(byId(19988), byId(19988).id);
+    const s2 = { ...s, _attackTimeOppFlowerVeil: true,
+      players: [s.players[0], { ...s.players[1], active: si(shaymin.id), bench: [si(c.id)] }] };
+    // 簽名：resolveBenchGuard(state, pool, actorIdx, targetCard, kind, { targetInst })
+    const r = benchGuard(s2, pool, 0, c, 'attack-damage', { targetInst: s2.players[1].bench[0] });
+    return !(r && r.blocked === true);
+  });
+  const POST = MAP(EFF, 'ATTACK_POST');
+  probe('謝米｜精刺奇襲〔卡面「寶可夢【ex】・【V】」〕', 'exv', (c) => {
+    const shaymin = byName('謝米');
+    const s = st(byId(19988), shaymin.id);
+    const s2 = { ...s, players: [s.players[0], { ...s.players[1], bench: [si(c.id)] }] };
+    const out = POST.get('謝米|精刺奇襲')?.(s2, 0, pool);
+    const logs = (out?.log ?? []).map((l) => String(l?.message ?? l)).join('\n');
+    return !/沒有|無 ex/.test(logs.split('\n').slice(-1)[0] ?? '');
+  });
+
+  // ── ⑥ snipeAllOppExPost 的兩個分支（審查的 N2 突變：兩分支對調）───────────
+  const snipeHit = (key, attackerName) => (c) => {
+    const s = st(byId(19988), byName(attackerName)?.id);
+    const s2 = { ...s, players: [s.players[0], { ...s.players[1], bench: [si(c.id)] }] };
+    const out = POST.get(key)?.(s2, 0, pool);
+    const b = out?.players?.[1]?.bench?.[0];
+    return (b?.damage ?? 0) > 0;
+  };
+  probe('水伊布ex｜重磅驟雨〔卡面「寶可夢【ex】」〕', 'ex', snipeHit('水伊布ex|重磅驟雨', '水伊布ex'));
+  probe('沙漠蜻蜓ex｜橄欖石音波〔卡面「寶可夢【ex】・【V】」〕', 'exv', snipeHit('沙漠蜻蜓ex|橄欖石音波', '沙漠蜻蜓ex'));
+  probe('超夢ex｜光子彈〔卡面「寶可夢【ex】」〕', 'ex', snipeHit('超夢ex|光子彈', '超夢ex'));
+  probe('捷拉奧拉｜閃電急襲〔卡面「寶可夢【ex】」〕', 'ex', (c) => {
+    const s = st(byId(19988), byName('捷拉奧拉')?.id);
+    const s2 = { ...s, players: [s.players[0], { ...s.players[1], bench: [si(c.id)] }] };
+    const out = POST.get('捷拉奧拉|閃電急襲')?.(s2, 0, pool);
+    return !!out?.pendingSelection;
+  });
+
+  // ── ⑦ 請假王ex｜懶怠個性 與 中立中心（兩支 export 的述詞）─────────────────
+  const lazy = F(EFF, 'isLazyTraitBlockingAttack');
+  probe('請假王ex｜懶怠個性〔卡面「寶可夢【ex】・【V】」〕', 'exv', (c) => {
+    const kanpan = byName('請假王ex');
+    const s = st(c, kanpan.id);
+    return lazy(s.players[0].active, s, pool) === false;   // 對手場上有 ex/V ⇒ 不封鎖
+  });
+  const ncb = F(EFF, 'wouldNeutralCenterBlock');
+  const NC = byName('中立中心');
+  const ncState = () => ({ ...st(byId(19988), byId(19988).id), activeStadium: si(NC.id) });
+  ok(!!NC, 'G5 fixture 中立中心在');
+  probe('中立中心｜attacker 半〔卡面「寶可夢【ex】・【V】」〕', 'exv',
+    (c) => ncb(ncState(), pool, c, byName('顫弦蠑螈')) === true);
+  probe('中立中心｜defender 半〔卡面「擁有規則的寶可夢」除外〕', 'rule',
+    (c) => ncb(ncState(), pool, byId(19988), c) === false);
+
+  // ── ⑧ 獎賞張數三份（必須逐張同答；審查指出 BASE 就已經不一致）──────────────
+  {
+    const pk = all.filter((x) => x.supertype === 'Pokemon');
+    const bad = pk.filter((x) => {
+      const a = M.prizesForKO(x), b = EFF.koPrizeCount(x), d = EFF.prizesForKOLocal?.(x);
+      return !(a === b && b === d);
+    });
+    eq(bad.map((x) => `${x.name}[${x.__set}#${x.id}]`).join(','), '',
+      'G3 ⭐⭐獎賞張數的三份實作（engine.prizesForKO／effects.koPrizeCount／prizesForKOLocal）全池逐張同答');
+    ok(pk.length > 4000, `G3b 下限：逐張比對了 ${pk.length} 張 Pokemon`);
+  }
+
+  // ── ⑨ isExCard 不得復活（v6.403 的教訓：共用 helper 的粒度天生解不了多句卡面）──
+  {
+    const efSrc = stripCommentsBlankChecked(readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8'));
+    eq((efSrc.match(/function\s+isExCard\s*\(/g) ?? []).length, 0,
+      'G4 ⭐effects.ts 不得再有共用的 isExCard（v6.404 已拆；它被 6 個呼叫點共用而卡面分三句）');
+    ok(efSrc.includes('isRuleBoxExOrV(card)') || efSrc.includes('isRuleBoxExOrV(c)'),
+      'G4b 精刺奇襲那一類已改走 isRuleBoxExOrV');
+  }
 }
 
 console.log(`\n=== v6.403 ex 判準收斂守衛：PASS ${pass} / FAIL ${fail} ===`);

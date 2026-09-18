@@ -11,7 +11,7 @@ import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
 // ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
 import { copyAttackCandidates, pickCopiedAttack } from '../../copy-attack';
 import type { Card } from '$lib/cards/types';
-import { RULE_BOX_SUBTYPES } from '../../types';
+import { isRulePokemon } from '../../selection-filter';   // ⭐v6.404 卡面「擁有規則的寶可夢」中央述詞（leaf）
 import {
   reg, regR, regG, regPre, regPost, regA,
   ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE,
@@ -71,7 +71,10 @@ regPre('呆呆王|耀閃挑戰', (state, aIdx, pool, action) => {
     };
   }
   // Step 3: 擁有規則的寶可夢 → 不能取其招式
-  if (RULE_BOX_SUBTYPES.has(topCard.subtype)) {
+  // ⭐v6.404：改走中央 isRulePokemon。手刻的 RULE_BOX_SUBTYPES.has(subtype) 比中央述詞**窄**
+  //   （少了 tags／rulesText 含「擁有規則」／卡名結尾 ex 三條）⇒ 全池有 3 張舊 EX 卡判不到。
+  //   ⚠ 同一句卡面在 copy-attack.ts 還有第二份（v6.404 一併收）。
+  if (isRulePokemon(topCard)) {
     return {
       state: addLog(s, `耀閃挑戰：「${topName}」是「擁有規則的寶可夢」，不能取其招式，招式效果失敗`, aIdx),
       damage: 0,

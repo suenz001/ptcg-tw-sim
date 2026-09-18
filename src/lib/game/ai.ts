@@ -1037,7 +1037,10 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           return false;
         }
         if (f === 'PokemonNonExOrBasicEnergy') {
-          if (card.supertype === 'Pokemon' && card.subtype !== 'ex') return true;
+          // ⭐v6.404：水蓮的照顧的卡面是「擁有規則的寶可夢」除外（不是「ex」除外）。
+          //   這一段在 isKnownSelectionFilter 之後已經是死碼，但留著舊判準＝同一件事三份
+          //   （中央＋這裡＋UI），Rule 38 不允許。
+          if (card.supertype === 'Pokemon' && !isRulePokemon(card)) return true;
           if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
           return false;
         }

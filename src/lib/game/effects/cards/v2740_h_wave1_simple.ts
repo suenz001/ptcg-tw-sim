@@ -294,7 +294,7 @@ function oppExBonusPre(base: number, bonus: number, label: string, alsoMatchV: b
     if (!da) return { state, damage: base };
     const card = pool.get(da.cardId);
     // ⭐v6.403 收斂：alsoMatchV 正好對應兩種卡面措辭（三個呼叫端逐字查證）——
-    //   鐵臂膀｜超合金之手「若對手的戰鬥寶可夢為「寶可夢【ex】・【V】」」 ⇒ alsoMatchV=true  ⇒ isRulePokemon
+    //   鐵臂膀｜超合金之手「若對手的戰鬥寶可夢為「寶可夢【ex】・【V】」」 ⇒ alsoMatchV=true  ⇒ isRuleBoxExOrV
     //   摔角鷹人｜上升衝撞／哲爾尼亞斯ex｜上升角擊「…為「寶可夢【ex】」」 ⇒ alsoMatchV=false ⇒ isPokemonExCard
     const isEx = alsoMatchV ? isRuleBoxExOrV(card) : isPokemonExCard(card);
     if (isEx) {

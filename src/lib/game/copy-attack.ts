@@ -27,7 +27,7 @@
  *   （長期記憶：循環 import 下模組層級 `const` 會 TDZ）。
  */
 
-import { RULE_BOX_SUBTYPES } from './types';
+import { isRulePokemon } from './selection-filter';   // ⭐v6.404 卡面「擁有規則的寶可夢」中央述詞（leaf）
 import type { GameState, CardInstance } from './types';
 import type { Card } from '$lib/cards/types';
 
@@ -176,8 +176,10 @@ function ownersFor(
       if (!top) return [];
       const c = pool.get(top.cardId);
       if (!c || c.supertype !== 'Pokemon') return [];
-      // ⚠ 卡面「（『擁有規則的寶可夢』除外）」—— 判準走中央的 RULE_BOX_SUBTYPES（Rule 38：不另抄一份）
-      if (RULE_BOX_SUBTYPES.has(String(c.subtype))) return [];
+      // ⚠ 卡面「（『擁有規則的寶可夢』除外）」——
+      //   ⭐v6.404：改走中央述詞 isRulePokemon。原本這裡與 slowking_lucario_deck.ts 的
+      //   耀閃挑戰**同一句卡面寫了兩份**，而且兩份都比中央述詞窄（Rule 38）。
+      if (isRulePokemon(c)) return [];
       return [top];
     }
 

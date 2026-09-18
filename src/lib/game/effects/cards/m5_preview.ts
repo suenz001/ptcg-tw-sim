@@ -108,7 +108,7 @@ import {
 import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
 import { selfCountersMultiplyPre } from '../../effects'; // ⭐v6.388a 收斂：自身傷害指示物 × N（v6.349 中央）
 import { totalEnergyUnits, computeActiveRetreatCostFor, isFossilItemCard } from '../../engine'; // v5.862：host-aware 能量單位數／v6.209 化石中央述詞
-import { RULE_BOX_SUBTYPES } from '../../types';
+import { isRulePokemon } from '../../selection-filter';   // ⭐v6.404 卡面「擁有規則的寶可夢」中央述詞（leaf）
 import type { CardInstance, GameState, PlayerState } from '../../types';  // v5.203 hotfix: type-only import（v5.326 補 PlayerState）
 import type { Card } from '$lib/cards/types';  // v5.204 hotfix: Card 從 cards/types 而非 game/types
 import { canApplyEffectToTarget } from '../../defense';
@@ -1279,7 +1279,8 @@ function mokujouCandidates(st: GameState, idx: 0 | 1, pool: Map<string, Card>): 
   return st.players[idx].hand.filter(c => {
     const card = pool.get(c.cardId);
     if (!card || card.supertype !== 'Pokemon') return false;
-    if (RULE_BOX_SUBTYPES.has(card.subtype ?? '')) return false;
+    // ⭐v6.404：改走中央 isRulePokemon（手刻版比它窄，見 R1）。
+    if (isRulePokemon(card)) return false;
     return true;
   });
 }

@@ -4447,8 +4447,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
             return false;
           }
           if (f === 'PokemonNonExOrBasicEnergy') {
-            // 水蓮的照顧：寶可夢（不含道具 subtype=Other 與規則盒 subtype=ex）+ 基本能量
-            if (card.supertype === 'Pokemon' && card.subtype !== 'ex') return true;
+            // ⭐v6.404 水蓮的照顧：卡面是「擁有規則的寶可夢」除外（不是「ex」除外）。
+            //   與 selection-filter 的中央定義同一份判準（Rule 38）。
+            if (card.supertype === 'Pokemon' && !isRulePokemon(card)) return true;
             if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
             return false;
           }

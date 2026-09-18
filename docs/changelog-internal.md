@@ -1,5 +1,88 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.404 ⭐⭐⭐ 獨立審查抓到 v6.403 的退化：共用 helper 的粒度天生解不了多句卡面
+
+BASE `f236b6ea00d6f67fab252cf0493d73af7a4c5020`（v6.403）。
+⚠ 本版**動了 `src/`** ⇒ 部署要跑 **`update-tournament.bat`（先）＋ `update-admin-full.bat`（後）**。
+
+### 【零】🔴 v6.403 的退化：`isExCard` 有 6 個呼叫點，卡面分屬三句
+
+v6.403 看到 `effects.ts` 裡這支共用 helper 上面的註解寫「消費端是重磅驟雨／光子彈」，
+就把整支換成 `isPokemonExCard`。**那段註解本身就是錯的**——重磅驟雨／光子彈根本不走它
+（它們走 `snipeAllOppExPost`）。實際 6 個呼叫點逐一對卡面：
+
+| 呼叫點 | 卡面逐字 | 正確述詞 | v6.403 誤接 |
+|---|---|---|---|
+| 謝米｜花之帷幔（resolveBenchGuard） | 「備戰寶可夢（**「擁有規則的寶可夢」除外**）不會受到對手的招式的傷害」 | `isRulePokemon` | ❌ ex |
+| 謝米｜花之帷幔（hitBenchAll） | 同上 | `isRulePokemon` | ❌ ex |
+| 謝米｜精刺奇襲 | 「對手的備戰區的1隻**「寶可夢【ex】・【V】」**受到60點傷害」 | `isRuleBoxExOrV` | ❌ ex |
+| 爆焰龜獸｜灼燒盡 | 「選擇1個對手的戰鬥場的**「寶可夢【ex】」**…」 | `isPokemonExCard` | ✅ |
+| 古劍豹｜上升利刃 | 「…為**「寶可夢【ex】」**，則增加80點傷害」 | `isPokemonExCard` | ✅ |
+| 密勒頓ex｜強子電光 | 「…為**「寶可夢【ex】」**，則增加120點傷害」 | `isPokemonExCard` | ✅ |
+
+精刺奇襲那一處**相對 v6.402 是退化**（v6.402 走 `isRulePokemon`，對 V 系成立）。
+
+⭐ **修法是把共用 helper 拆掉**，不是換成另一個述詞 ——
+「effectKey 白名單的粒度天生解不了共用 resolver」（ptcg-card-audit skill）。
+v3.67 接成 `isRulePokemon`、v6.403 接成 `isPokemonExCard`，**兩次都是同一個錯誤形狀**。
+守衛 G4 釘住「effects.ts 不得再有共用的 isExCard」。
+
+### 【一】🔴 守衛覆蓋率不足＝安慰劑（審查設計 8 個突變，8/8 全部存活）
+
+v6.403 的守衛只釘了 10 個消費端，而本版動到約 47 處。審查的 8 個突變
+（把 `isExCard` 整支 revert、`defIsExPre` 的 `alsoV` 預設翻面、`snipeAllOppExPost`
+兩分支對調、烏栗／懶怠個性／幻影劫持／中立中心改成只認 ex…）**全部存活**。
+
+本版新增 **G 組：簽章法**。挑 4 張 fixture 讓三個述詞的回答兩兩不同：
+
+```
+                    耿鬼ex  阿爾宙斯VSTAR  蒼響V  顫弦蠑螈
+isPokemonExCard       1          0           0       0    ← 'ex'
+isRuleBoxExOrV        1          1           1       0    ← 'exv'
+isRulePokemon         1          1           0       0    ← 'rule'
+```
+
+任何消費端只要被換成另一個述詞，簽章就會變 ⇒ 一定被抓到。
+G 組一次釘住 **30 個消費端**（三個 PASSIVE_IMMUNITY、脆弱蛻殼、三個道具、
+`defIsExPre` 6 張、`oppExBonusPre` 3 張、`isExCard` 原本那 6 張、兩個計數型、
+謝米 2 處、`snipeAllOppExPost` 3 張、閃電急襲、懶怠個性、中立中心 2 半），
+加上 G3「獎賞張數三份全池逐張同答」與 G4「isExCard 不得復活」。
+
+守衛 **129 PASS / 0 FAIL**；`__m6a/mutcheck404.mjs` 的 15 個突變（含審查存活的 8 個）
+**15/15 全殺**，每一個都紅在預期條目。
+
+### 【二】🔴 D 組 lint 只掃 `===`，否定式完全沒掃
+
+審查指出 `ai.ts:1040` 與 `+page.svelte:4451` 還留著「水蓮的照顧」的舊抄本
+（`subtype !== 'ex'`）。它們在 `isKnownSelectionFilter` 之後是死碼、不是 live bug，
+但**同一判準三份**正是本版要消滅的形狀。本版：
+
+- 兩份舊抄本收斂到 `!isRulePokemon`
+- D 組 lint 擴充成四種樣式：`subtype ===`／`!==`／`subtype?.includes('ex')`／
+  `RULE_BOX_SUBTYPES.has(`，每一種都配正對照
+- 白名單由 3（有一格空額）收緊到實際值，並逐條寫理由
+
+⚠ 實作時踩到：中央 `stripCommentsBlankChecked` **只剝整行註解，不剝行尾註解**
+⇒ 自己在行尾註解裡寫違規字面會假紅（安慰劑型態 6 的反面）。已把那段註解改寫。
+
+### 【三】🟡 其餘審查項目
+
+- 「擁有規則的寶可夢」還有三份手刻 `RULE_BOX_SUBTYPES.has(...)`（比中央述詞窄，
+  少了 tags／rulesText／卡名結尾 ex 三條）：呆呆王｜耀閃挑戰**同一句卡面兩份**
+  （`slowking_lucario_deck.ts` 與 `copy-attack.ts`）與沐淨 ⇒ 全部收斂到 `isRulePokemon`。
+- `C5e` 原本寫成 `a !== b === false`（＝ `a === b`），訊息卻寫「兩半判準不同」，
+  而且 C5c／C5d 已各自釘死 a、b ⇒ 100% 冗餘。改成真的在測「目標那一半是 ex」。
+- `__m6a/matrix403.mjs` 的 `PZ` 讀了兩個不存在的 export ⇒ 恆為 null 且從未被引用
+  ⇒ 脆弱蛻殼整族對矩陣全盲。改成 `PASSIVE_PREVENT_PRIZE` 並補上那一欄（矩陣 23→24 欄）。
+- `prizesForKOLocal` 對 V 系的已知限制寫成註解（官方規則 V/VSTAR 是 2 張，
+  但本函式與 `engine.prizesForKO` 一致地給 1；V 系不在 H/I/J）。
+
+### 【四】行為矩陣（v6.402 → v6.404）
+
+24 欄 × 全 live 卡池 5225 張逐格 diff：**8 張差異，全部不在 H/I/J**
+（霓虹魚V ×2〔F〕・蒼響V〔D〕・夢幻VMAX〔E〕・烈空坐EX／蓋諾賽克特EX／M沙奈朵EX〔無標〕・
+阿爾宙斯VSTAR〔F〕）⇒ 標準賽零行為變更。
+
 ## v6.403 ⭐⭐⭐「寶可夢【ex】」判準收斂：把 v3.67 的一刀切還原成三個述詞
 
 BASE `4bb90b95ee397a4fe8d12245595eb9c60ea307ab`（v6.402）。
