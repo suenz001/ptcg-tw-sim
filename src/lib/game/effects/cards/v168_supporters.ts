@@ -23,6 +23,7 @@ import {
 } from '../_shared';
 // v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
 import { hasEffectivePokemonType } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
+import { isPokemonExCard } from '../../selection-filter';  // ⭐v6.403 卡面「寶可夢【ex】」中央述詞（leaf）
 import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferred_wave_b';
 void _v3060IsImmuneOppTrainer;
 // v3.08 對手 supporter 免疫綜合 helper（含廣域堡壘）
@@ -73,7 +74,7 @@ reg('千里', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const oppActive = st.players[dIdx].active;
   const oppCard = oppActive ? pool.get(oppActive.cardId) : null;
-  const isEx = oppCard?.subtype === 'ex';
+  const isEx = isPokemonExCard(oppCard ?? undefined);   // ⭐v6.403 收斂（G 標卡，H/I/J 不可達）
   const draw = isEx ? 4 : 2;
   st = addLog(st, `千里：抽 ${draw} 張${isEx ? '（對手戰鬥場為 ex）' : ''}`, idx);
   return drawCards(st, idx, draw);

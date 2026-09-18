@@ -38,6 +38,7 @@ import {
 } from '../_shared';
 // v3.66：規則寶可夢統一判定 helper
 import { isRulePokemon, computeRetreatCostForKOedActive } from '../../engine';  // v6.136 沉重接力棒判有效撤退費
+import { isPokemonExCard } from '../../selection-filter';  // ⭐v6.403 中央述詞直接取自 leaf
 import { applyStatusToOppActive, getEffectivePokemonTypes } from '../../effects';  // v6.206 中央有效屬性述詞
 import { getEffectiveWeaknessType } from '../../effects';  // v6.207 與傷害引擎共用的「當下實際弱點」述詞
 // v5.070：沉重接力棒分配能量改用 startEnergyChain — UI 顯示能量類型 + 同屬性 +/- counter
@@ -128,8 +129,9 @@ TOOL_HP_BONUS.set('竹蘭的力量負重', (card) => card.name.includes('竹蘭�
 
 // ── 攻擊加成（我方帶此道具 → 打出時 +N）────────────────────────────────────
 TOOL_ATTACK_BONUS.set('極限腰帶', (_a, _ai, defCard) => {
-  // v3.67：改用 isRulePokemon helper（涵蓋 V/VMAX/VSTAR 與未來新規則類型）
-  return isRulePokemon(defCard) ? 50 : 0;
+  // ⭐v6.403：卡面逐字「附有這張卡的寶可夢使用的招式，對對手的戰鬥場的「寶可夢【ex】」
+  //   造成的傷害「+50」點。」⇒ 是「寶可夢【ex】」不是「擁有規則的寶可夢」。
+  return isPokemonExCard(defCard) ? 50 : 0;
 });
 // v4.4991 fix：中毒實際存 secondaryStatus（status 只在純中毒、無行動狀態時為 'poisoned'）
 TOOL_ATTACK_BONUS.set('鎖鏈糬', (_a, atkInst) => (atkInst.status === 'poisoned' || atkInst.secondaryStatus === 'poisoned' || atkInst.tertiaryStatus === 'poisoned') ? 40 : 0);
@@ -137,17 +139,19 @@ TOOL_ATTACK_BONUS.set('驅勁能量 未來', () => 20);
 // v2.133 電氣球：附有的「皮卡丘ex」對對手戰鬥場的「寶可夢ex」+50
 TOOL_ATTACK_BONUS.set('電氣球', (attCard, _ai, defCard) => {
   if (attCard.name !== '皮卡丘ex') return 0;
-  // v3.67：改用 isRulePokemon helper
-  return isRulePokemon(defCard) ? 50 : 0;
+  // ⭐v6.403：卡面「附有這張卡的「皮卡丘【ex】」使用的招式，對對手的戰鬥場的
+  //   「寶可夢【ex】」造成的傷害「+50」點。」
+  return isPokemonExCard(defCard) ? 50 : 0;
 });
 // ── 猛攻手鐲（Tool）— 對對手戰鬥場 ex +30 ───────────────────────────────────
 //   卡面: 「附有這張卡的寶可夢（『擁有規則的寶可夢』除外）」
 //   v5.256: 補 holder gate — attackerCard 是 rule pokemon (ex/V/VMAX 等) 時不生效.
 TOOL_ATTACK_BONUS.set('猛攻手鐲', (attackerCard, _ai, defCard) => {
-  // v5.256：holder 是擁有規則的寶可夢 → 不該生效 (卡面除外條款)
-  if (isRulePokemon(attackerCard)) return 0;
-  // v3.67：改用 isRulePokemon helper
-  return isRulePokemon(defCard) ? 30 : 0;
+  // ⭐v6.403：卡面逐字「附有這張卡的寶可夢（「擁有規則的寶可夢」除外）使用的招式，
+  //   對對手的戰鬥場的「寶可夢【ex】」造成的傷害「+30」點。」
+  //   ⇒ 一句卡面裡**兩半各是不同的述詞**，收斂前兩半都寫 isRulePokemon。
+  if (isRulePokemon(attackerCard)) return 0;      // holder：「擁有規則的寶可夢」除外
+  return isPokemonExCard(defCard) ? 30 : 0;       // 目標：「寶可夢【ex】」
 });
 // v2.170 活力頭帶：使用招式 +10 傷害
 TOOL_ATTACK_BONUS.set('活力頭帶', () => 10);

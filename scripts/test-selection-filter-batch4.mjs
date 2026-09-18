@@ -35,7 +35,14 @@ const GOLDEN_HD={
 const GOLDEN_DS={
   'PokemonOrEnergy':      c=>c.supertype===P||c.supertype===En,
   'PokemonOrBasicEnergy': c=>c.supertype===P||(c.supertype===En&&c.subtype==='Basic'),
-  'PokemonNonExOrBasicEnergy': c=>(c.supertype===P&&c.subtype!=='ex')||(c.supertype===En&&c.subtype==='Basic'),
+  // ⭐v6.403：水蓮的照顧的卡面逐字是「寶可夢卡（「擁有規則的寶可夢」除外）」，不是「ex」除外。
+  //   golden **刻意獨立展開** isRulePokemon（不呼叫中央函式），否則這條斷言會恆真。
+  'PokemonNonExOrBasicEnergy': c=>(c.supertype===P&&!((c.tags??[]).includes('規則盒')
+      ||(c.tags??[]).some(t=>['ex','EX','V','VMAX','VSTAR','GX','MegaEvolution'].includes(t))
+      ||(c.subtype&&['ex','EX','V','VMAX','VSTAR','GX','MegaEvolution'].includes(c.subtype))
+      ||(c.rulesText??'').includes('擁有規則')
+      ||c.name.endsWith('ex')||c.name.endsWith('EX')))
+    ||(c.supertype===En&&c.subtype==='Basic'),
   'WaterPokemonOrBasicWaterEnergy': c=>(c.supertype===P&&c.pokemonType==='Water')||(c.supertype===En&&c.subtype==='Basic'&&(c.pokemonType==='Water'||c.name.includes('【水】'))),
   'FightingPokemonOrBasicFightingEnergy': c=>(c.supertype===P&&c.pokemonType==='Fighting')||(c.supertype===En&&c.subtype==='Basic'&&c.name.includes('【鬥】')),
   'BasicEnergy':          c=>c.supertype===En&&c.subtype==='Basic',

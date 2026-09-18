@@ -33,6 +33,7 @@ import { stripV6394Engine } from './lib/engine-strip-v6394.mjs';
 import { stripV6398Engine } from './lib/engine-strip-v6398.mjs';
 import { stripV6400Engine } from './lib/engine-strip-v6400.mjs';
 import { stripV6402Engine } from './lib/engine-strip-v6402.mjs';
+import { stripV6403Engine } from './lib/engine-strip-v6403.mjs';   // ⭐v6.403 ex 判準收斂（12 組）
 import { stripV6401Engine } from './lib/engine-strip-v6401.mjs';
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, mkdtempSync, cpSync, rmSync, statSync } from 'node:fs';
@@ -686,6 +687,9 @@ if (!hasBaseCommit(ROOT, BASE)) {
       );
       // ⭐⭐ Rule 54（由新到舊）：v6.402 動到了 v6.394 型別清理過的那一段
       //   ⇒ stripV6402Engine 必須排在 stripV6394Engine **之前**。
+      // ⭐v6.403：ex 判準收斂對 engine.ts 的 12 組合法改動（與 test-v6265 F4c 共用同一份）。
+      //   Rule 54 由新到舊 ⇒ 排在 stripV6402Engine 之前。
+      t = stripV6403Engine(t);
       // ⭐v6.402：判準收斂對 engine.ts 的 11 組合法改動（與 test-v6265 F4c 共用同一份）
       t = stripV6402Engine(t);
       // ⭐v6.394：型別清理（站長裁示 ④）對 engine.ts 的 8 組合法改動 ——

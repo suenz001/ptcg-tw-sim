@@ -66,6 +66,29 @@ export function isBasicPokemonOnField(
   if (inst?.fossilOnField) return true;
   return card?.stage === 'Basic';
 }
+/**
+ * ⭐⭐⭐ v6.070 建立於 effects.ts；v6.403 下沉到本檔（leaf）。
+ * 卡面「寶可夢【ex】」的**唯一**中央判定述詞。
+ *
+ * ⚠ 為什麼一定要在這個 leaf 檔：`DECK_SEARCH_PREDICATES` 的 'ex' 也要走同一份判準，
+ *   而 selection-filter.ts 不能 import effects.ts（循環）。留在 effects.ts 的話
+ *   FILTERS 只能就地再抄一次 ＝ 判準兩份（Rule 38／安慰劑型態 11）。
+ *
+ * 全站 live H/I/J 實測（v6.403 現查 Pokemon 4079 張）：
+ *   subtype==='ex' ＝ 卡名結尾 ex ＝ isRulePokemon ＝ 739 張，兩兩 0 不一致。
+ *   兩個條件都認，避免日後某一邊的資料缺漏造成靜默漏判。
+ * ⚠ 這不等於 isRulePokemon（後者還包含 V/VSTAR/VMAX 等 rule box）。
+ *   卡面只寫「寶可夢【ex】」時用本述詞；寫「寶可夢【ex】・【V】」時用 isRulePokemon。
+ */
+export function isPokemonExCard(card: Card | undefined): boolean {
+  if (!card) return false;
+  // ⚠ 帶重音的 'Pokémon' 是死比較（v6.394 現查 static/cards 5511 張卡，一張都沒有）。
+  //   由 test-v6394 的守衛去盯資料，不在這裡多留一條永遠不成立的判斷。
+  if (card.supertype !== 'Pokemon') return false;
+  if (card.subtype === 'ex') return true;
+  return card.name.endsWith('ex') || card.name.endsWith('EX');
+}
+
 export function isRulePokemon(card: Card | undefined): boolean {
   if (!card) return false;
   if (card.supertype !== 'Pokemon') return false;
@@ -76,6 +99,29 @@ export function isRulePokemon(card: Card | undefined): boolean {
   if (card.rulesText?.includes('擁有規則')) return true;
   if (card.name.endsWith('ex') || card.name.endsWith('EX')) return true;
   return false;
+}
+/**
+ * ⭐⭐⭐ v6.403：卡面「寶可夢【ex】・【V】」的**唯一**中央述詞。
+ *
+ * ＝ isRulePokemon ∪「卡名結尾 V／VMAX／VSTAR」。
+ *
+ * ⚠ 後面那一項**不是冗餘**：live 卡池有 4 張舊 V 卡（蒼響V〔D〕／夢幻VMAX〔E〕／
+ *   霓虹魚V〔F〕×2）的資料裡 subtype 是 Basic／Other、tags 空、rulesText 空
+ *   ⇒ isRulePokemon 判不到它們。這 4 張**全部不在 H/I/J**（標準賽不可達），
+ *   本述詞把它們一併收進來，與收斂前 engine／effects 各自手刻的 or 鏈逐字等價。
+ *
+ * ⚠ 為什麼要跟 isRulePokemon 分開：卡面「擁有規則的寶可夢」（水蓮的照顧／猛攻手鐲 holder／
+ *   格拉吉歐的決戰／謝米｜花之帷幔／豪華斗篷…）與「寶可夢【ex】・【V】」是**兩句不同的卡面**，
+ *   雖然在 H/I/J 現況等價，混用會讓後面的人看不出判準是哪一句話來的。
+ *
+ * 【三個述詞的分工】卡面怎麼寫就用哪一個，不可互換：
+ *   ・isPokemonExCard ← 「寶可夢【ex】」       ・isRuleBoxExOrV ← 「寶可夢【ex】・【V】」
+ *   ・isRulePokemon   ← 「擁有規則的寶可夢」
+ */
+export function isRuleBoxExOrV(card: Card | undefined): boolean {
+  if (isRulePokemon(card)) return true;
+  if (!card || card.supertype !== 'Pokemon') return false;
+  return card.name.endsWith('V') || card.name.endsWith('VMAX') || card.name.endsWith('VSTAR');
 }
 export function isBasicEnergyOfType(ec: Card | undefined, type: EnergyType): boolean {
   if (!ec || ec.supertype !== 'Energy' || ec.subtype !== 'Basic') return false;
@@ -180,7 +226,7 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
   'Stage2':       (c) => c.supertype === 'Pokemon' && (c.stage ?? c.subtype) === 'Stage2',
   'PsychicBasic': (c) => c.supertype === 'Pokemon' && !c.evolvesFrom && c.pokemonType === 'Psychic',
   'Resistance:Fighting': (c) => c.supertype === 'Pokemon' && c.resistance?.type === 'Fighting',
-  'ex':           (c) => c.supertype === 'Pokemon' && c.subtype === 'ex',
+  'ex':           (c) => isPokemonExCard(c),   // ⭐v6.403 收斂：卡面「寶可夢【ex】」唯一判準
   'MegaEx':       (c) => isMegaExCard(c),
   'TeraPokemon':  (c) => c.supertype === 'Pokemon' && !!c.tags?.includes('太晶'),
   'ColorlessPokeHP100': (c) => c.supertype === 'Pokemon' && c.pokemonType === 'Colorless' && (c.hp ?? 999) <= 100,
@@ -300,7 +346,10 @@ const HAND_DISCARD_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterC
 const DISCARD_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCtx) => boolean> = {
   'PokemonOrEnergy':      (c) => c.supertype === 'Pokemon' || c.supertype === 'Energy',
   'PokemonOrBasicEnergy': (c) => c.supertype === 'Pokemon' || (c.supertype === 'Energy' && c.subtype === 'Basic'),
-  'PokemonNonExOrBasicEnergy': (c) => (c.supertype === 'Pokemon' && c.subtype !== 'ex') || (c.supertype === 'Energy' && c.subtype === 'Basic'),
+  // ⭐⭐⭐v6.403 判準修正：水蓮的照顧卡面逐字「從自己的棄牌區選擇寶可夢卡（「擁有規則的寶可夢」
+  //   除外）與基本能量卡合計最多3張」⇒ 除外集合是**擁有規則的寶可夢**（ex/V/VSTAR/…），
+  //   不是只有 ex。H/I/J 現況兩者等價（739＝739，v6.403 現查）⇒ 本版零行為變更，但判準對齊卡面。
+  'PokemonNonExOrBasicEnergy': (c) => (c.supertype === 'Pokemon' && !isRulePokemon(c)) || (c.supertype === 'Energy' && c.subtype === 'Basic'),
   'WaterPokemonOrBasicWaterEnergy': (c) => {
     if (c.supertype === 'Pokemon' && c.pokemonType === 'Water') return true;
     if (isBasicEnergyOfType(c, 'Water')) return true;

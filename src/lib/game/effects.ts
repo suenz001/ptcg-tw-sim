@@ -20,7 +20,6 @@ import { dispatchCopiedAttack } from './effects/_shared'; // ⭐v6.337 借招轉
 import { copyAttackCandidates, pickCopiedAttack } from './copy-attack';
 
 import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction, SpecialCondition, FieldWideRetalHolderSnapshot } from './types';
-import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirror 需要
 // ⭐v6.213 2 階判定的 per-pool 索引（leaf，只 import type ⇒ 不可能循環）
 import { isStage2ByEvoVariant } from './stage2-index';
 
@@ -32,7 +31,7 @@ import { isStage2ByEvoVariant } from './stage2-index';
 // effects.ts 仍保留所有尚未被搬遷的卡牌 reg 呼叫。
 
 import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec } from './effects/_shared';
-import { isBasicPokemonCard, isBasicPokemonOnField, getBasicEnergyType, isBasicEnergyOfType, isMegaExCard } from './selection-filter'; // v6.069 getBasicEnergyType：基本能量 pokemonType 恒 null，禁直讀（v6.008）
+import { isBasicPokemonCard, isBasicPokemonOnField, getBasicEnergyType, isBasicEnergyOfType, isMegaExCard, isPokemonExCard, isRulePokemon, isRuleBoxExOrV } from './selection-filter'; // v6.069 getBasicEnergyType：基本能量 pokemonType 恒 null，禁直讀（v6.008）
 // >>> v6402-luxury-bomb-import
 // ⭐v6.402：超級進化ex 判準放在 leaf（selection-filter）而不是 tools.ts —— effects→tools 是既有反向 edge，
 //   往那裡新增 symbol 會被 anti-pattern-lint [O] 擋（module-init 循環 TDZ）。本檔只轉發給 engine。
@@ -185,39 +184,27 @@ export function isTrainerPendingImplementation(
  * 所有 snipe-*、cursed-bomb、bench-hit-N、damage-distribute、全體指示物 resolver
  * 在處理備戰目標前先呼叫這個 helper；true → 跳過放置並記 log。
  */
+// >>> v6403-ex-criteria-central
 /**
- * v3.67 本地 isRulePokemon mirror — effects.ts 不能 import engine.ts（circular），
- *   但兩處讀同一個 source of truth（types.ts 的 RULE_BOX_SUBTYPES set），
- *   所以行為跟 engine.ts 的 isRulePokemon 等價。
- *   新規則寶可夢類型上線時，只需更新 types.ts 的 set，兩處自動同步。
+ * ⭐⭐⭐ v6.403：isPokemonExCard／isRulePokemon 的**定義**已下沉到
+ *   `selection-filter.ts`（純 leaf），本檔只 re-export 給既有呼叫端。
+ *
+ * ⚠⚠ 為什麼要搬：v3.67~v6.402 期間 `isRulePokemon` 在 effects.ts 與 selection-filter.ts
+ *   各有**一份逐字相同**的定義（只差大括號）。同一判準兩份 ＝ 任何針對其中一份的守衛
+ *   都是安慰劑（IRON_RULES Rule 38／安慰劑型態 11：突變只改得到一份，另一份把行為撐住）。
+ *   而 selection-filter.ts 是 leaf（不能 import effects.ts），所以只能往 leaf 收，
+ *   不能反過來讓 leaf 去 import effects。
+ *   同理 `isPokemonExCard` 原本留在 effects.ts（非 leaf）⇒ selection-filter 的
+ *   FILTERS 'ex' 取不到它，只能就地再抄一次判準 —— 也是 Rule 38 的違反。
+ *
+ * ⚠ 這兩個述詞**語義不同**，不可互換：
+ *   ・isPokemonExCard  ← 卡面寫「寶可夢【ex】」
+ *                        （影藏／空手道王的演練／閃電急襲／上升劈打／AZ的平和／獎賞張數…）
+ *   ・isRulePokemon    ← 卡面寫「擁有規則的寶可夢」或「寶可夢【ex】・【V】」
+ *                        （水蓮的照顧／烏栗／幻影劫持／請假王ex 懶怠個性／中立中心…）
  */
-/**
- * v6.070：卡面「寶可夢【ex】」的中央判定述詞。
- * 全站 live H/I/J 實測 subtype==='ex' 與「卡名結尾 ex」100% 一致（兩個方向各 0 例外），
- * 兩個條件都認，避免日後某一邊的資料缺漏造成靜默漏判。
- * ⚠ 這不等於 isRulePokemon（後者還包含 V/VSTAR/VMAX 等 rule box）。
- *   卡面只寫「寶可夢【ex】」時用本述詞；寫「寶可夢【ex】・【V】」時用 isRulePokemon 家族。
- */
-export function isPokemonExCard(card: Card | undefined): boolean {
-  if (!card) return false;
-  // ⚠ 帶重音的 'Pokémon' 是死比較（v6.394 現查 static/cards 5511 張卡，一張都沒有）。
-  //   由 test-v6394 的守衛去盯資料，不在這裡多留一條永遠不成立的判斷。
-  if (card.supertype !== 'Pokemon') return false;
-  if (card.subtype === 'ex') return true;
-  return card.name.endsWith('ex') || card.name.endsWith('EX');
-}
-
-export function isRulePokemon(card: Card | undefined): boolean {
-  if (!card) return false;
-  if (card.supertype !== 'Pokemon') return false;
-  const tags = card.tags ?? [];
-  if (tags.includes('規則盒')) return true;
-  for (const t of tags) if (RULE_BOX_SUBTYPES.has(t)) return true;
-  if (card.subtype && RULE_BOX_SUBTYPES.has(card.subtype)) return true;
-  if (card.rulesText?.includes('擁有規則')) return true;
-  if (card.name.endsWith('ex') || card.name.endsWith('EX')) return true;
-  return false;
-}
+export { isPokemonExCard, isRulePokemon, isRuleBoxExOrV };
+// <<< v6403-ex-criteria-central
 
 /**
  * v3.67 中立中心（Neutral Center）stadium set。
@@ -246,8 +233,10 @@ export function wouldNeutralCenterBlock(
 ): boolean {
   if (!isNeutralCenterActive(state, pool)) return false;
   if (!attackerCard || !defenderCard) return false;
-  if (!isRulePokemon(attackerCard)) return false;  // attacker 必須是規則寶可夢（ex/V）
-  if (isRulePokemon(defenderCard)) return false;   // defender 必須是非規則
+  // ⭐v6.403 兩半各自對齊卡面：「雙方的所有寶可夢（「擁有規則的寶可夢」除外），不會受到
+  //   對手的「寶可夢【ex】・【V】」招式的傷害。」⇒ attacker 問 ex・V，defender 問擁有規則。
+  if (!isRuleBoxExOrV(attackerCard)) return false;  // attacker：卡面「寶可夢【ex】・【V】」
+  if (isRulePokemon(defenderCard)) return false;    // defender：卡面「擁有規則的寶可夢」除外
   return true;
 }
 
@@ -1156,7 +1145,8 @@ import { getSupporterEffectSource } from './supporter-effect-source';
 
 /** 計算 KO 獎賞張數（與 engine.prizesForKO 對齊；inline 以免 effects→engine 反向依賴） */
 export function koPrizeCount(card: Card): number {
-  const isEx = card.name.endsWith('ex') || card.name.endsWith('EX');
+  // ⭐v6.403：官方規則（PTCG RULES/PTCG_RULES.md）寫的是「寶可夢ex」⇒ 走中央 isPokemonExCard。
+  const isEx = isPokemonExCard(card);
   if (isMegaExCard(card)) return 3; // Mega ex
   return isEx ? 2 : 1;
 }
@@ -1224,7 +1214,7 @@ export function koPrizesAdjusted(
     // 影藏（超級耿鬼ex）：惡寶可夢被【ex】攻擊方招式傷害 KO → -1
     // v5.768：影藏持有者須「處於有效狀態」(§17.42.B) — 收斂中央 hasEffectiveKageHide
     //   （原只查特性名，漏 isAbilityHolderEffective → 鐵荊棘ex｜初始化消除超級耿鬼ex特性時仍誤 -1）。
-    const isExAttacker = !!atkCard && (atkCard.name.endsWith('ex') || atkCard.name.endsWith('EX'));
+    const isExAttacker = isPokemonExCard(atkCard);   // ⭐v6.403 卡面「寶可夢【ex】」唯一判準
     // v6.077 M6 傳說的山頂 —【無】寶可夢被對手招式傷害 KO → 獎賞 −1。與影藏同型、可疊加。
     //   ⭐ 接在本中央函式＝一次涵蓋註解自述的 18+ 條 KO 路徑（狙擊／指示物／手動 KO…）。
     //   ⚠ 已在 koByAttackDamage gate 內 → 效果KO／checkup KO 自動不觸發，符合卡面。
@@ -3133,7 +3123,7 @@ export function canApplyAttackEffectToTarget(
   if (target.immuneToExAttackThisTurn && effectSourceBlocks('immuneToExAttackThisTurn', source)) {
     const atkActiveIm = state.players[atkIdx].active;
     const atkCardIm = atkActiveIm ? pool.get(atkActiveIm.cardId) : undefined;
-    if (atkCardIm && isRulePokemon(atkCardIm)) {
+    if (isPokemonExCard(atkCardIm)) {   // ⭐v6.403 卡面「不會受到對手的「寶可夢【ex】」招式的傷害與效果的影響」
       return { blocked: true, reason: '免疫【ex】招式的傷害與效果（阿塞蘿拉的惡作劇）' };
     }
   }
@@ -4930,7 +4920,11 @@ export type ImmunityCheck = (
 ) => boolean | { immune: boolean; newState: GameState };
 export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
   // 奇麒麟ex 尾甲 — 免疫 Basic ex 招式
-  ['尾甲', (att) => att.subtype === 'ex' && !att.evolvesFrom],
+  // ⭐v6.403：卡面逐字「這隻寶可夢不會受到對手的【基礎】寶可夢的「寶可夢【ex】」招式的傷害。」
+  //   ex 那一半收斂到中央述詞；【基礎】那一半**刻意逐字不動**（`!evolvesFrom`）——
+  //   這裡拿得到的只有 Card 不是 instance，換成 isBasicPokemonOnField 需要 inst，
+  //   換成 isBasicPokemonCard 會多排除 subtype==='Other'／Stage1／Stage2 ⇒ 不是零行為變更。
+  ['尾甲', (att) => isPokemonExCard(att) && !att.evolvesFrom],
   // 厄鬼椪 礎石面具ex 礎石之勢 — 免疫有特性的寶可夢招式
   // v6.049：同上 —— 攻擊方特性被消除時就不是「擁有特性的寶可夢」，礎石之勢不該免疫
   ['礎石之勢', (att, _baseDamage, state, aIdx, pool) =>
@@ -4938,8 +4932,8 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
   // 暴噬龜 鐵壁硬殼 — 免疫 ≥200 傷害
   ['鐵壁硬殼', (_att, baseDamage) => baseDamage >= 200],
   // 堅盾劍怪 神秘之盾 — 免疫 ex/V 招式
-  // v3.67：改用 isRulePokemon helper（涵蓋 ex/V/VMAX/VSTAR/GX 與未來新規則類型）
-  ['神秘之盾', (att) => isRulePokemon(att)],
+  // ⭐v6.403：卡面「這隻寶可夢不會受到對手的「寶可夢【ex】・【V】」招式的傷害。」（G 標）
+  ['神秘之盾', (att) => isRuleBoxExOrV(att)],
   // v2.250 奇諾栗鼠ex 順滑大衣 — 受招式傷害時擲硬幣，正面則不受該傷害
   // v2.253 改用 flipCoinsWithLog（log 含「— 正面/反面」明確格式 → UI queue 觸發動畫）
   ['順滑大衣', (_att, _baseDmg, state, aIdx, _pool, defenderName) => {
@@ -4962,8 +4956,10 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
   //   暫不處理；如未來發現 bug 再加 PASSIVE_FULL_PROTECTION 類 set。
   ['璀璨鱗片', (att) => (att.tags ?? []).includes('太晶')],
   // v2.992 仙子伊布(H) | 神秘守護 — 不受對手 ex 招式的傷害
-  // v3.67：改用 isRulePokemon helper
-  ['神秘守護', (att) => isRulePokemon(att)],
+  // ⭐v6.403：卡面「這隻寶可夢不會受到對手的「寶可夢【ex】」招式的傷害。」
+  //   ⚠ 與 岩殿居蟹｜神秘石居 是**一模一樣的一句卡面**，收斂前兩張卡卻用了不同述詞
+  //     （石居走 isPokemonExCard、守護走 isRulePokemon）—— 散寫法本身就是 bug 的形狀。
+  ['神秘守護', (att) => isPokemonExCard(att)],
 ]);
 
 // v5.367：條件式完全免疫特性（神秘石居 / 神秘守護 / 璀璨鱗片 / 尾甲 / 全能硬殼 等「不受對手某類
@@ -5926,7 +5922,7 @@ reg('反擊捕捉器', (st, idx, pool) => {
 //   實作：兩段 picker（棄牌→場上,皆用 validIids 限定只能選厄鬼椪ex）；互換=場上 instance 保留 iid
 //   與全部附加物只換 cardId（新底牌上場）,換下的裸底牌進棄牌（重用被選棄牌卡已釋出的 iid）。
 const _isOgerponEx = (c: Card | undefined): boolean =>
-  !!c && c.supertype === 'Pokemon' && c.subtype === 'ex' && c.name.includes('厄鬼椪');
+  isPokemonExCard(c) && !!c && c.name.includes('厄鬼椪');   // ⭐v6.403 收斂
 regG('鬼之假面', (st, idx, pool) => {
   const me = st.players[idx];
   const inDiscard = me.discard.some(c => _isOgerponEx(pool.get(c.cardId)));
@@ -6594,7 +6590,10 @@ regPre('投擲猴|聯合投擲', (state, aIdx, pool) => {
 
 // 索羅亞克｜幻影劫持 — 對手場上 ex 數 × 60
 regPre('索羅亞克|幻影劫持', (state, aIdx, pool) => {
-  const n = countOppPokemon(state, aIdx, pool, c => c.subtype === 'ex');
+  // ⭐⭐⭐v6.403 判準修正：卡面逐字「造成對手的場上的「寶可夢【ex】・【V】」的數量×60點傷害。」
+  //   舊碼只判 subtype==='ex' ⇒ 【V】漏判。H/I/J 內【V】已不可達（0 張）⇒ 本版零行為變更，
+  //   但判準對齊卡面，日後若 V 回鍋不會靜默算錯。
+  const n = countOppPokemon(state, aIdx, pool, c => isRuleBoxExOrV(c));
   return { state, damage: n * 60 };
 });
 
@@ -7525,13 +7524,14 @@ regPost('葉伊布ex|苔紋瑪瑙', healAllOwnPost(100, true, '苔紋瑪瑙'));
 // 均為 regPre 判斷條件，若符合則 base + bonus，否則 base。
 // ══════════════════════════════════════════════════════════════════════════════
 
-// v2.238 釐清（不再簡化）：name 結尾比對加 subtype 雙重判定。
-//   - 普通 ex / 超級 ex：subtype === 'ex'（資料庫 621 張）
-//   - V/VMAX/VSTAR/GX（標準環境已淘汰；未來新規則類型也涵蓋）
-// 注意：「是不是 ex」用本函式（boolean）；「KO 取幾張獎賞」應用 prizesForKOLocal（含 Mega ex = 3 張）。
-// v3.67：改用 isRulePokemon helper（同步未來新規則寶可夢類型）
+// ⭐⭐⭐v6.403 判準修正：本 helper 的消費端是**卡面只寫「寶可夢【ex】」**的招式 ——
+//   水伊布ex｜重磅驟雨「對手的所有「寶可夢【ex】」各受到60點傷害。」
+//   超夢ex｜光子彈「對手的所有「寶可夢【ex】」各受到50點傷害。」
+//   v3.67 誤接成 isRulePokemon（含 V/VSTAR/GX）⇒ 語義比卡面**寬**，方向錯。
+//   H/I/J 內兩者等價（739＝739，v6.403 現查）⇒ 本版零行為變更，但判準對齊卡面。
+// 注意：「是不是 ex」用本函式（boolean）；「KO 取幾張獎賞」用 prizesForKOLocal（含 Mega ex = 3 張）。
 function isExCard(c: Card | undefined): boolean {
-  return isRulePokemon(c);
+  return isPokemonExCard(c);
 }
 /** 與 engine.prizesForKO 同邏輯（避開 import cycle），統一給 effects.ts 內 KO 流程用。 */
 // v5.172：加 export 給 m5_preview.ts 的深淵之瞳手動 KO 模式使用
@@ -7555,25 +7555,37 @@ regPre('波盪水ex|宣洩吼嘯', (state, aIdx, _pool) => {
 
 // 若對手戰鬥寶可夢為 ex/V → +N（多張）
 // v6.061：export 供 M6 批次2 卡檔復用（原為 local，行為完全未變）
-export function defIsExPre(base: number, bonus: number, label: string): AttackPreFn {
+/**
+ * ⭐v6.403：本 helper 被 12 張卡共用，而它們的**卡面不是同一句**（逐字查證 static/cards）：
+ *   ・「寶可夢【ex】」      → 火焰鳥｜鬥志之翼、眷戀雲｜上升之心、皮卡丘｜鬥志雷霆、
+ *                             無極汰那｜汰那爆破               ⇒ alsoV = false（預設）
+ *   ・「寶可夢【ex】・【V】」→ 泥偶巨人｜鬥志之拳、舞天鵝｜鬥志之翼、電蜘蛛ex｜衝天之線、
+ *                             火伊布／水伊布／雷伊布｜鬥志系列、蒼炎刃鬼｜鬥士的巨劍（G 標）
+ *                                                              ⇒ alsoV = true
+ * ⚠ 收斂前整支只認一種判準 ＝ 把兩句不同的卡面壓成同一句（共用 resolver 的粒度問題，
+ *   見 ptcg-card-audit skill「effectKey 白名單的粒度天生解不了共用 resolver」）。
+ *   H/I/J 現況兩者等價 ⇒ 本版零行為變更，但呼叫端從此被迫回去讀卡面。
+ */
+export function defIsExPre(base: number, bonus: number, label: string, alsoV: boolean = false): AttackPreFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx].active;
     const card = def ? pool.get(def.cardId) : undefined;
-    if (isExCard(card)) {
+    if (alsoV ? isRuleBoxExOrV(card) : isPokemonExCard(card)) {
       return { state: addLog(state, `${label}：對手為 ex/V → +${bonus}`, aIdx), damage: base + bonus };
     }
     return { state, damage: base };
   };
 }
-regPre('泥偶巨人|鬥志之拳', defIsExPre(120, 120, '鬥志之拳'));
-regPre('舞天鵝|鬥志之翼', defIsExPre(20, 90, '鬥志之翼'));
-regPre('電蜘蛛ex|衝天之線', defIsExPre(110, 110, '衝天之線'));
-regPre('火伊布|鬥志猛火', defIsExPre(90, 90, '鬥志猛火'));
-regPre('水伊布|鬥志潮旋', defIsExPre(90, 90, '鬥志潮旋'));
-regPre('雷伊布|鬥志雷霆', defIsExPre(90, 90, '鬥志雷霆'));
-regPre('蒼炎刃鬼|鬥士的巨劍', defIsExPre(100, 100, '鬥士的巨劍'));
-regPre('無極汰那|汰那爆破', defIsExPre(10, 80, '汰那爆破'));
+// ⭐v6.403 第 4 個參數 alsoV：卡面寫「寶可夢【ex】・【V】」的傳 true，只寫「寶可夢【ex】」的不傳。
+regPre('泥偶巨人|鬥志之拳', defIsExPre(120, 120, '鬥志之拳', true));
+regPre('舞天鵝|鬥志之翼', defIsExPre(20, 90, '鬥志之翼', true));
+regPre('電蜘蛛ex|衝天之線', defIsExPre(110, 110, '衝天之線', true));
+regPre('火伊布|鬥志猛火', defIsExPre(90, 90, '鬥志猛火', true));
+regPre('水伊布|鬥志潮旋', defIsExPre(90, 90, '鬥志潮旋', true));
+regPre('雷伊布|鬥志雷霆', defIsExPre(90, 90, '鬥志雷霆', true));
+regPre('蒼炎刃鬼|鬥士的巨劍', defIsExPre(100, 100, '鬥士的巨劍', true));
+regPre('無極汰那|汰那爆破', defIsExPre(10, 80, '汰那爆破'));   // 卡面只寫「寶可夢【ex】」
 
 // 若對手戰鬥寶可夢為進化寶可夢 → +N
 // v6.061：export 供 M6 批次2 卡檔復用（原為 local，行為完全未變）
@@ -9227,15 +9239,15 @@ export function applyAttackerActiveDamageBonuses(
     }
   }
   // ── 空手道王的演練（本回合對對手戰鬥位 ex +40）────────────────────────
-  if (attacker.karateKingBonusThisTurn && dCard?.subtype === 'ex') {
+  if (attacker.karateKingBonusThisTurn && dCard && isPokemonExCard(dCard)) {   // ⭐v6.403 收斂
     d += 40;
     s = addLog(s, `「空手道王的演練」啟動：對 ${dCard.name}（ex）+40`, aIdx);
     formula.push({ sign: '+', value: 40, label: '空手道王演練' });
   }
   // ── 烏栗（本回合對對手戰鬥位 ex/V +30）──────────────────────────────────
   if (attacker.unrudaBonusThisTurn && dCard) {
-    const isExV = dCard.subtype === 'ex' || dCard.name.endsWith('ex') || dCard.name.endsWith('EX')
-      || dCard.name.endsWith('V') || dCard.name.endsWith('VMAX') || dCard.name.endsWith('VSTAR');
+    // ⭐v6.403 收斂：卡面「…對對手的戰鬥場的「寶可夢【ex】・【V】」造成的傷害「+30」點。」
+    const isExV = isRuleBoxExOrV(dCard);
     if (isExV) {
       d += 30;
       s = addLog(s, `「烏栗」啟動：對 ${dCard.name}（ex/V）+30`, aIdx);
@@ -9582,7 +9594,7 @@ export function snipeOneOppBenchPost(amount: number, label: string, exOnly: bool
     // v5.996：exOnly 限「寶可夢【ex】」。⚠opp-bench-choose picker（UI/AI）只認 params.validIids，
     //   會忽略 pending 的 filter 欄 → 必須用 validIids 過濾，否則 exOnly 形同虛設（可打非 ex）。
     const validIids = exOnly
-      ? bench.filter(b => _pool.get(b.cardId)?.subtype === 'ex').map(b => b.iid)
+      ? bench.filter(b => isPokemonExCard(_pool.get(b.cardId))).map(b => b.iid)   // ⭐v6.403 收斂
       : bench.map(b => b.iid);
     if (validIids.length === 0) {
       return addLog(state, `${label}：對手備戰區沒有可選目標${exOnly ? '（限【ex】寶可夢）' : ''}`, aIdx);
@@ -13422,9 +13434,12 @@ function snipeAllOppExPost(dmg: number, filterType: 'ex' | 'ex-or-v', label: str
     const targetIids = all.filter(c => {
       const card = pool.get(c.cardId);
       if (!card) return false;
-      if (isExCard(card)) return true;
-      if (filterType === 'ex-or-v' && (card.name.endsWith('V') || card.name.endsWith('VMAX'))) return true;
-      return false;
+      // ⭐v6.403：'ex' → 卡面「寶可夢【ex】」（重磅驟雨／光子彈）；
+      //   'ex-or-v' → 卡面「寶可夢【ex】・【V】」（橄欖石音波）。兩者各自走中央述詞。
+      //   ⚠ 原手刻分支漏了 VSTAR（只認 V／VMAX 的卡名結尾）⇒ 阿爾宙斯VSTAR〔F 標〕被漏打。
+      //     F 標不在 H/I/J，本修正對標準賽零影響。
+      if (filterType === 'ex-or-v') return isRuleBoxExOrV(card);
+      return isPokemonExCard(card);
     }).map(c => c.iid);
     if (targetIids.length === 0) return addLog(state, `${label}：對手場上無 ex 寶可夢`, aIdx);
     let s = addLog(state, `${label}：對手 ${targetIids.length} 隻 ex 寶可夢各 ${dmg} 傷害`, aIdx);
@@ -15414,7 +15429,10 @@ regG('水蓮的照顧', (st, idx, pool) => {
   return st.players[idx].discard.some(c => {
     const card = pool.get(c.cardId);
     if (!card) return false;
-    if (card.supertype === 'Pokemon' && card.subtype !== 'ex') return true;
+    // ⭐⭐⭐v6.403 判準修正：卡面是「擁有規則的寶可夢」除外，不是「ex」除外。
+    //   ⚠ 這道 gate 必須與 selection-filter 的 'PokemonNonExOrBasicEnergy' **同一份判準**，
+    //     否則會出現「gate 放行但 picker 沒有候選」的 pendingStuckEmpty（安慰劑線索①）。
+    if (card.supertype === 'Pokemon' && !isRulePokemon(card)) return true;
     if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
     return false;
   });
@@ -17484,12 +17502,9 @@ export function isLazyTraitBlockingAttack(
   const hasExV = oppAll.some(inst => {
     const c = pool.get(inst.cardId);
     if (!c) return false;
-    return c.subtype === 'ex'
-      || c.name.endsWith('ex')
-      || c.name.endsWith('EX')
-      || c.name.endsWith('V')
-      || c.name.endsWith('VMAX')
-      || c.name.endsWith('VSTAR');
+    // ⭐v6.403 收斂：卡面「若對手的場上沒有「寶可夢【ex】・【V】」，則這隻寶可夢無法使用招式。」
+    //   （原本手刻的 6 條 or 就是 isRuleBoxExOrV 的展開，收斂後判準只有一份）。
+    return isRuleBoxExOrV(c);
   });
   return !hasExV; // 沒有 ex/V → block attack
 }
@@ -18061,8 +18076,9 @@ export const PASSIVE_PREVENT_PRIZE = new Map<string, (
   attackerCard: Card,
 ) => boolean>([
   // 脫殼忍者(I) | 脆弱蛻殼 — 被 ex 攻擊者 KO 時對手 0 獎賞
-  // v3.67：改用 isRulePokemon helper
-  ['脆弱蛻殼', (att) => isRulePokemon(att)],
+  // ⭐v6.403：卡面「這隻寶可夢就算受到對手的「寶可夢【ex】」招式的傷害而【昏厥】，
+  //   對手也無法獲得獎賞卡。」
+  ['脆弱蛻殼', (att) => isPokemonExCard(att)],
 ]);
 
 /** 攻擊方持有此特性 → 攻擊時自動帶這些 buff */

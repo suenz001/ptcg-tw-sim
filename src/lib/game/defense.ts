@@ -85,6 +85,7 @@ import {
   // v4.975: resolveActiveAttackGuard 內部需要這兩個 helper
   wouldNeutralCenterBlock,
   isRulePokemon,
+  isPokemonExCard,   // ⭐v6.403 卡面「寶可夢【ex】」（阿塞蘿拉的惡作劇／防護代碼）
   // >>> v6402-defense-import
   fieldPokemonHasType,   // ⭐v6.402 場上屬性比對唯一入口（暗影【惡】能量 holder 判定）
   // <<< v6402-defense-import
@@ -302,7 +303,7 @@ export function canApplyEffectToTarget(
     if (target.immuneToExAttackThisTurn) {
       const atkActive = state.players[actorIdx].active;
       const atkCard = atkActive ? pool.get(atkActive.cardId) : undefined;
-      if (atkCard && isRulePokemon(atkCard)) {
+      if (isPokemonExCard(atkCard)) {   // ⭐v6.403 卡面「寶可夢【ex】」
         return { blocked: true, reason: '免疫【ex】招式的傷害與效果（阿塞蘿拉的惡作劇）' };
       }
     }
@@ -321,7 +322,7 @@ export function canApplyEffectToTarget(
     const _atkCardPT = _atkInstPT ? pool.get(_atkInstPT.cardId) : undefined;
     if (_atkCardPT) {
       // 防護代碼 — 任意 ex（不限 tag）
-      if (target.immuneToExAttackTagThisTurn && isRulePokemon(_atkCardPT)) {
+      if (target.immuneToExAttackTagThisTurn && isPokemonExCard(_atkCardPT)) {   // ⭐v6.403
         return { blocked: true, reason: '防護代碼免疫【ex】寶可夢招式傷害' };
       }
       // 塗層攻擊/閃光射線 — 【基礎】寶可夢招式傷害（皇冠蛋白石【無】除外）
@@ -503,7 +504,7 @@ export function resolveActiveAttackGuard(
 
   // 1. 防護代碼（密勒頓）— 卡面「寶可夢【ex】招式」=任意 ex（不限 tag；v5.828 修）；
   //    flag 只設在受保護的「未來」寶可夢身上，故只需判 attacker 是規則寶可夢(ex)。
-  if (defender.immuneToExAttackTagThisTurn && isRulePokemon(attackerCard)) {
+  if (defender.immuneToExAttackTagThisTurn && isPokemonExCard(attackerCard)) {   // ⭐v6.403
     return { blocked: true, reason: '防護代碼免疫【ex】寶可夢招式傷害' };
   }
 
@@ -518,7 +519,7 @@ export function resolveActiveAttackGuard(
   }
 
   // 3. 阿塞蘿拉的惡作劇 — 不受 ex 招式（卡面同時涵蓋傷害+效果；本 helper 只負責傷害部分）
-  if (defender.immuneToExAttackThisTurn && isRulePokemon(attackerCard)) {
+  if (defender.immuneToExAttackThisTurn && isPokemonExCard(attackerCard)) {   // ⭐v6.403
     return { blocked: true, reason: '阿塞蘿拉的惡作劇免疫 ex 招式傷害' };
   }
 

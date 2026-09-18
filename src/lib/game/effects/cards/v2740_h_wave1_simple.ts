@@ -32,6 +32,7 @@ import {
   ownFieldCountMultiplyPre,   // ⭐v6.388 收斂到中央
 } from '../../effects';
 import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
+import { isPokemonExCard, isRuleBoxExOrV } from '../../selection-filter'; // ⭐v6.403 卡面「寶可夢【ex】」／「寶可夢【ex】・【V】」中央述詞（leaf，無循環）
 import { selfCountersMultiplyPre } from '../../effects'; // ⭐v6.388a 收斂：自身傷害指示物 × N（v6.349 中央）
 import { oppCountersMultiplyPre } from '../../effects'; // ⭐v6.399 收斂：對手傷害指示物 × N（中央唯一一份）
 
@@ -285,15 +286,18 @@ regPre('閃電鳥|追擊伏特', oppCountersMultiplyPre(20, 10, '追擊伏特'))
 // ══════════════════════════════════════════════════════════════════════════════
 // 14. 對手 ex 條件 +N（3 張）
 // ══════════════════════════════════════════════════════════════════════════════
+// ⭐v6.403：兩個述詞都由 leaf selection-filter 提供（無循環）。
 function oppExBonusPre(base: number, bonus: number, label: string, alsoMatchV: boolean = false): AttackPreFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const da = state.players[dIdx].active;
     if (!da) return { state, damage: base };
     const card = pool.get(da.cardId);
-    const isEx = card?.subtype?.includes('ex') || card?.name?.endsWith('ex');
-    const isV = alsoMatchV && (card?.name?.endsWith('V') || card?.name?.includes('VMAX') || card?.name?.endsWith('VSTAR'));
-    if (isEx || isV) {
+    // ⭐v6.403 收斂：alsoMatchV 正好對應兩種卡面措辭（三個呼叫端逐字查證）——
+    //   鐵臂膀｜超合金之手「若對手的戰鬥寶可夢為「寶可夢【ex】・【V】」」 ⇒ alsoMatchV=true  ⇒ isRulePokemon
+    //   摔角鷹人｜上升衝撞／哲爾尼亞斯ex｜上升角擊「…為「寶可夢【ex】」」 ⇒ alsoMatchV=false ⇒ isPokemonExCard
+    const isEx = alsoMatchV ? isRuleBoxExOrV(card) : isPokemonExCard(card);
+    if (isEx) {
       return { state: addLog(state, `${label}：對手 ex/V → ${base}+${bonus} = ${base+bonus}`, aIdx), damage: base + bonus };
     }
     return { state: addLog(state, `${label}：對手非 ex → ${base}`, aIdx), damage: base };

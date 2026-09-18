@@ -757,6 +757,12 @@ const PREV_SHA = 'af36811389c5a546e9da86ddbc2f35487a0aadfa';   // v6.387（v6.38
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
+  // ⭐v6.403：「寶可夢【ex】」／「寶可夢【ex】・【V】」／「擁有規則的寶可夢」三個判準依卡面逐字分開。
+  //   三個述詞的定義全部下沉到 leaf selection-filter.ts，各呼叫端改走中央；
+  //   全 live 卡池 5225 張逐格比對，H/I/J 零行為變更（__m6a/matrix403.mjs）。
+  'src/lib/game/effects/cards/abra_mawile_deck.ts',
+  'src/lib/game/effects/cards/v168_supporters.ts',
+  'src/lib/game/effects/cards/v2590_i_wave9_misc3.ts',
   // ⭐⭐v6.394：tsc 型別清理（站長裁示 ④）—— 55 條型別錯誤清成 0。
   //   ⚠ 這一版動到的玩家端檔案**特別多**，但每一處都是型別層：補型別註記／補型別述詞／
   //     非空斷言／移除現查過的死比較／把半成品的 CardInstance 改走中央的 toBareCard。

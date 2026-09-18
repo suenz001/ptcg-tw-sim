@@ -22,6 +22,7 @@ import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
 import { isBasicPokemonCard } from '../../engine';  // v5.270: 毒電嬰呼朋引伴 pre-scan basic
+import { isPokemonExCard } from '../../selection-filter';  // ⭐v6.403 中央述詞直接取自 leaf
 import type { Card } from '$lib/cards/types';
 import { regPre, regPost, regA, reg, regR, regG, addLog, addPrivateLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle, getOwnBenchLimit,
   fireOnHandEnergyAttached, // v5.539 從手牌附能後觸發對手附能被動
@@ -1030,7 +1031,7 @@ regR('az-peace-swap', (state, aIdx, selectedIids, _params, pool) => {
   p.active = { ...oldBench, movedToActiveThisTurn: true };
   // 若戰鬥 → 備戰（swapped out）為 ex，回 80
   const movedOutCard = pool.get(oldActive.cardId);
-  if (movedOutCard?.subtype === 'ex') {
+  if (movedOutCard && isPokemonExCard(movedOutCard)) {   // ⭐v6.403 收斂：卡面「寶可夢【ex】」
     p.bench = p.bench.map((b, i) => i === bIdx ? { ...b, damage: Math.max(0, b.damage - 80) } : b);
     state = addLog(state, `AZ的平和：${movedOutCard.name} 換入備戰，回復 80 HP`, aIdx);
   }

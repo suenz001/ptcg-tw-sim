@@ -21,6 +21,7 @@ import { stripV6394Engine } from './lib/engine-strip-v6394.mjs';
 import { stripV6398Engine } from './lib/engine-strip-v6398.mjs';
 import { stripV6400Engine } from './lib/engine-strip-v6400.mjs';
 import { stripV6402Engine } from './lib/engine-strip-v6402.mjs';
+import { stripV6403Engine } from './lib/engine-strip-v6403.mjs';   // ⭐v6.403 ex 判準收斂（12 組）
 import { stripV6401Engine } from './lib/engine-strip-v6401.mjs';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -1188,7 +1189,9 @@ await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等�
         //   （getEffectiveHP 內 hpAbilityEffective 的 owner＋位置推導）⇒ 它必須排在 v6.394 **之前**，
         //   否則 v6.394 的第 1 組錨點會命中 0 次而 throw（v6.402 當場踩到）。
         // ⭐v6.402：判準收斂（龐克頭盔／豪邁炸彈／屬性條件型防禦道具／holder 屬性）對 engine.ts 的 11 組合法改動。
-        const s4b = stripV6402Engine(s4); ok(s4b !== s4, 'v6.402 的還原器過期（判準收斂那十一處的字面對不上）');
+        // ⭐v6.403：ex 判準收斂對 engine.ts 的 12 組合法改動。Rule 54 由新到舊 ⇒ 排在 v6.402 之前。
+        const s4a3 = stripV6403Engine(s4); ok(s4a3 !== s4, 'v6.403 的還原器過期（ex 判準收斂那十二處的字面對不上）');
+        const s4b = stripV6402Engine(s4a3); ok(s4b !== s4a3, 'v6.402 的還原器過期（判準收斂那十一處的字面對不上）');
         // ⭐v6.394：型別清理（站長裁示 ④）對 engine.ts 的 8 組合法改動。
         //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6394.mjs —— test-v6375 的 F0b 也 import 同一份
         //     （Rule 38：同一個判準不可以抄兩份）。它 fail-closed：錨點對不上會直接 throw。
@@ -1231,7 +1234,9 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
         //   （getEffectiveHP 內 hpAbilityEffective 的 owner＋位置推導）⇒ 它必須排在 v6.394 **之前**，
         //   否則 v6.394 的第 1 組錨點會命中 0 次而 throw（v6.402 當場踩到）。
         // ⭐v6.402：判準收斂（龐克頭盔／豪邁炸彈／屬性條件型防禦道具／holder 屬性）對 engine.ts 的 11 組合法改動。
-        const s4b = stripV6402Engine(s4); ok(s4b !== s4, 'v6.402 的還原器過期（判準收斂那十一處的字面對不上）');
+        // ⭐v6.403：ex 判準收斂對 engine.ts 的 12 組合法改動。Rule 54 由新到舊 ⇒ 排在 v6.402 之前。
+        const s4a3 = stripV6403Engine(s4); ok(s4a3 !== s4, 'v6.403 的還原器過期（ex 判準收斂那十二處的字面對不上）');
+        const s4b = stripV6402Engine(s4a3); ok(s4b !== s4a3, 'v6.402 的還原器過期（判準收斂那十一處的字面對不上）');
         // ⭐v6.394：型別清理（站長裁示 ④）對 engine.ts 的 8 組合法改動。
         //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6394.mjs —— test-v6375 的 F0b 也 import 同一份
         //     （Rule 38：同一個判準不可以抄兩份）。它 fail-closed：錨點對不上會直接 throw。

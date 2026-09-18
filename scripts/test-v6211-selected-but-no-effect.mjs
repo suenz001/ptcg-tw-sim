@@ -177,9 +177,22 @@ function scanSubtypeLiterals(srcs) {
   return { bad, n };
 }
 const SRC = walkSrc('src').map((rel) => [rel, readFileSync(join(ROOT, rel), 'utf8')]);
-T('⭐ 掃描器下限：至少掃到 880 處 subtype/supertype 比對（實測 900+；掃不到＝安慰劑）', () => {
+// ⭐v6.403：下限由 880 調到 850 —— 本版把 `subtype === 'ex'` 等散寫收斂到三個中央述詞，
+//   掃到的字面處數從 900+ 掉到 863。⚠ 這是**收斂**造成的下降，不是掃描器壞掉：
+//   Rule 40 的紀律是「判準往上移不放寬」⇒ 下面**同時新增一條棘輪**，把被移走的那部分
+//   保護接回來（中央述詞的呼叫點數），否則單純調低下限就是放寬。
+T('⭐ 掃描器下限：至少掃到 850 處 subtype/supertype 比對（v6.403 實測 863；掃不到＝安慰劑）', () => {
   const { n } = scanSubtypeLiterals(SRC);
-  ok(n >= 880, `只掃到 ${n} 處`);
+  ok(n >= 850, `只掃到 ${n} 處`);
+});
+T('⭐v6.403 棘輪：中央 ex 述詞的呼叫點 ≥ 44（字面被收斂掉多少，就要在中央述詞這邊長回來）', () => {
+  let n = 0;
+  for (const [, raw] of SRC) {
+    const src = stripComments(raw);
+    n += (src.match(/\b(isPokemonExCard|isRuleBoxExOrV)\s*\(/g) ?? []).length;
+  }
+  ok(n >= 44, `中央 ex 述詞呼叫點只有 ${n} 處（v6.403 實測 50）——` +
+    '判準被改回散寫了？請改走 selection-filter 的 isPokemonExCard／isRuleBoxExOrV。');
 });
 T('⭐ 正對照：合成一段含 `.subtype === \'Tool\'` 的原始碼，必須被抓到', () => {
   const { bad } = scanSubtypeLiterals([['probe.ts', "export const f=(c)=>c.subtype === 'Tool';\n"]]);

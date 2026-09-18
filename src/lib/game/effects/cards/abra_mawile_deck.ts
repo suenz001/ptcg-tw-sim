@@ -36,7 +36,8 @@ import {
   canApplyAttackEffectToTarget, koTargetByAttackEffect,
 } from '../../effects';
 import { hasEffectivePokemonType } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
-import { isBasicEnergyOfType, isRulePokemon, getEffectiveHP } from '../../engine';
+import { isBasicEnergyOfType, getEffectiveHP } from '../../engine';
+import { isPokemonExCard } from '../../selection-filter';   // ⭐v6.403 中央述詞直接取自 leaf
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
 import { addPendingPrize } from '../_shared';
 import { toBareCard, getAllAttachedTools } from '../_shared'; // v5.740 離場裸化收斂
@@ -99,8 +100,8 @@ regPost('土龍弟弟|交替', selfSwapPost('交替'));
 
 // ── 土龍節節ex｜逆境之尾 — 對手場上每隻寶可夢ex × 60 ────────────────────────
 regPre('土龍節節ex|逆境之尾', (state, aIdx, pool) => {
-  // v3.67：改用 isRulePokemon helper
-  const n = countOppPokemon(state, aIdx, pool, c => isRulePokemon(c));
+  // ⭐v6.403：卡面逐字「造成對手的場上的「寶可夢【ex】」的數量×60點傷害。」⇒ 不是「擁有規則」。
+  const n = countOppPokemon(state, aIdx, pool, c => isPokemonExCard(c));
   return {
     state: addLog(state, `逆境之尾：對手寶可夢ex ${n} 隻 → ${n * 60} 傷害`, aIdx),
     damage: n * 60,

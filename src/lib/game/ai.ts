@@ -25,7 +25,7 @@ import { findMainAttackers } from './ai-roles';
 // v6.202：「這隻場上寶可夢的這個特性此刻是否生效」中央述詞（v6.196 建立於 defense.ts）。
 //   ai.ts 已經 import engine（engine 也 import defense）⇒ 不是新的相依方向、無循環風險。
 import { hasEffectiveAbilityByInst } from './defense';
-import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard } from './selection-filter'; // v6.013/6.016 P1-1:deck-search/hand-discard/discard-search filter 中央求值器
+import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemonExCard } from './selection-filter'; // v6.013/6.016 P1-1:deck-search/hand-discard/discard-search filter 中央求值器
 // v6.038 批次4b：AI 打法表（離線由高勝率對局整理出的策略表）。載入與適用判定都在 ai-playbook.ts，
 //   這裡只做**同步查詢**——getAIAction 是同步的，不能在決策路徑做 fetch。
 //   ⚠沒有表時所有查詢一律回 0/false，決策與接線前**完全等價**（有守衛以自對局逐步比對證明）。
@@ -646,7 +646,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (f === 'Pokemon')         return card.supertype === 'Pokemon';
         if (f === 'Energy')          return card.supertype === 'Energy';
         if (f === 'BasicEnergy')     return card.supertype === 'Energy' && card.subtype === 'Basic';
-        if (f === 'ex')              return card.supertype === 'Pokemon' && card.subtype === 'ex';
+        if (f === 'ex')              return isPokemonExCard(card);   // ⭐v6.403 與中央 FILTERS 同一份判準
         if (f === 'MegaEx')          return isMegaExCard(card);
         if (f === 'TeraPokemon')     return card.supertype === 'Pokemon' && !!card.tags?.includes('太晶');
         if (f === 'Item')            return card.supertype === 'Trainer' && card.subtype === 'Item';

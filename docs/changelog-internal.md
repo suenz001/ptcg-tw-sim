@@ -1,5 +1,119 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.403 ⭐⭐⭐「寶可夢【ex】」判準收斂：把 v3.67 的一刀切還原成三個述詞
+
+BASE `4bb90b95ee397a4fe8d12245595eb9c60ea307ab`（v6.402）。
+⚠ 本版**動了 `src/`** ⇒ 部署要跑 **`update-tournament.bat`（先）＋ `update-admin-full.bat`（後）**。
+
+### 【零】起因：站長回報的兩個 bug 都**不是 bug**，但 audit 挖到真技術債
+
+1. **耿鬼ex｜死亡宣告 ＋ 超級耿鬼ex｜影藏「不會同時發動」**
+   → harness 逐組實跑（`__m6a/v403_repro2.mjs`）：攻擊方是【ex】時兩個特性 20/20 都發動，
+     獎賞 2−1＝1 張。站長截圖的攻擊方「顫弦蠑螈」（M2 #14427，Stage1，**不是 ex**）
+     ⇒ 影藏卡面要求「對手的『寶可夢【ex】』招式」，不成立 ⇒ 只有死亡宣告發動、獎賞 2 張。
+     log 與站長截圖逐字相同。
+
+2. **超級路卡利歐ex｜波動突刺 擊倒耿鬼ex，死亡宣告沒發動**
+   → 多變因矩陣實跑（`__m6a/v403_repro4.mjs`：引力山岳／延後傷害 picker／KO 時道具 picker／
+     MongoDB JSON round-trip 交叉）：**J 標耿鬼ex（M6a #19988，HP280）四種組合全部發動**；
+     **H 標耿鬼ex（MC #16916 等，HP310，特性是「侵蝕詛咒」不是「死亡宣告」）**跑出來的 log
+     與站長截圖**逐字同型**。死亡宣告只要入列成功，擲幣正反面都會留 log ⇒ 連反面那行都沒有
+     ＝ 那隻耿鬼ex 的特性根本不是死亡宣告。已請站長確認玩家牌組裡放的是哪一張印刷。
+
+### 【一】真技術債：v3.67 把所有 ex 判準一刀切成 `isRulePokemon`
+
+`static/cards` 台灣官方卡面在 H/I/J 其實寫著**三句不同的話**：
+
+| 卡面 | 卡名數 | 代表卡 |
+|---|---|---|
+| 「寶可夢【ex】」 | 35 | 仙子伊布｜神秘守護、岩殿居蟹｜神秘石居、極限腰帶、電氣球、猛攻手鐲（目標半）、空手道王的演練、阿塞蘿拉的惡作劇、密勒頓｜防護代碼、脫殼忍者｜脆弱蛻殼、勒克貓｜鬥志戰吼、伊布ex｜虹色DNA、捷拉奧拉｜閃電急襲、打擊鬼｜上升劈打、AZ的平和、土龍節節ex｜逆境之尾、水伊布ex｜重磅驟雨、超夢ex｜光子彈、獎賞張數 |
+| 「寶可夢【ex】・【V】」 | 10 | 烏栗、請假王ex｜懶怠個性、索羅亞克｜幻影劫持、中立中心（attacker 半）、電蜘蛛ex｜衝天之線、泥偶巨人｜鬥志之拳、舞天鵝｜鬥志之翼、沙漠蜻蜓ex｜橄欖石音波、鐵臂膀｜超合金之手、堅盾劍怪｜神秘之盾（G） |
+| 「擁有規則的寶可夢」 | 9 | 水蓮的照顧、猛攻手鐲（holder 半）、格拉吉歐的決戰、謝米｜花之帷幔、豪華斗篷、中立中心（defender 半）、寶可平板、沐淨、鐵荊棘ex |
+
+v3.67 一刀切之後，**同一句卡面在站內有兩種實作**：岩殿居蟹｜神秘石居走 `isPokemonExCard`、
+仙子伊布｜神秘守護走 `isRulePokemon` —— 卡面一字不差。
+而且 `isRulePokemon` 在 `effects.ts:210` 與 `selection-filter.ts:69` **各有一份逐字相同的定義**
+（只差大括號）⇒ 針對其中一份的守衛必然是安慰劑（Rule 38／安慰劑型態 11）。
+
+### 【二】收斂後的三個述詞（定義全部在 leaf `selection-filter.ts`）
+
+```ts
+isPokemonExCard(card)   // 「寶可夢【ex】」      supertype==='Pokemon' && (subtype==='ex' || 卡名結尾 ex/EX)
+isRuleBoxExOrV(card)    // 「寶可夢【ex】・【V】」 isRulePokemon ∪ 卡名結尾 V/VMAX/VSTAR
+isRulePokemon(card)     // 「擁有規則的寶可夢」   tags/subtype ∈ RULE_BOX_SUBTYPES ∪ rulesText 含「擁有規則」∪ 卡名結尾 ex/EX
+```
+
+⚠ `isPokemonExCard` 原本在 `effects.ts`（非 leaf）⇒ `selection-filter.ts` 的 FILTERS `'ex'`
+取不到它，只能就地再抄一次判準 —— 也是 Rule 38 的違反。本版把它下沉到 leaf，
+`effects.ts` 改 re-export，`engine.ts` 也 re-export（既有呼叫端的 import 來源不必改）。
+
+⚠ `isRuleBoxExOrV` 的「卡名結尾 V/VMAX/VSTAR」**不是冗餘**：live 卡池有 4 張舊 V 卡
+（蒼響V〔D〕／夢幻VMAX〔E〕／霓虹魚V〔F〕×2）的資料裡 `subtype` 是 `Basic`/`Other`、
+`tags` 空、`rulesText` 空 ⇒ `isRulePokemon` 判不到。它們全部不在 H/I/J。
+
+### 【三】逐處對照（63 + 9 個 EDIT，全部有卡面逐字依據）
+
+腳本：`__m6a/apply403.mjs`（29）／`apply403b.mjs`（34）／`apply403c.mjs`（5）／
+`apply403d.mjs`（strip 鏈 5）／`apply403e.mjs`（9），全部 idempotent（重跑會 SKIP）。
+
+三個**方向錯**的（判準比卡面寬／窄）：
+- `索羅亞克｜幻影劫持` 卡面「寶可夢【ex】・【V】」，原本只判 `subtype === 'ex'` ⇒ 漏【V】
+- `水蓮的照顧` 卡面「『擁有規則的寶可夢』除外」，原本用 `subtype !== 'ex'`（gate 與 picker 兩處）
+- `effects.ts` 的 `isExCard` 接成 `isRulePokemon`，但消費端是**卡面只寫「寶可夢【ex】」**的
+  水伊布ex｜重磅驟雨、超夢ex｜光子彈、魔幻假面喵｜上升綻放、瑪俐的扒手貓／酷豹、爆炸頭水牛ex
+
+兩個**共用 helper 粒度**問題（一支 helper 被兩句不同卡面共用）：
+- `defIsExPre` 12 個呼叫端裡 7 個是「ex・V」、5 個是「ex」⇒ 加第 4 個參數 `alsoV`
+- `oppExBonusPre` 的 `alsoMatchV` 正好對應兩句卡面 ⇒ 分別接 `isRuleBoxExOrV` / `isPokemonExCard`
+- `snipeAllOppExPost` 的 `'ex-or-v'` 分支原本手刻 `endsWith('V')||endsWith('VMAX')` ⇒ **漏 VSTAR**
+
+一個**一句卡面兩半不同述詞**：
+- `猛攻手鐲`：holder「擁有規則的寶可夢」除外用 `isRulePokemon`、目標「寶可夢【ex】」用
+  `isPokemonExCard` —— 收斂前兩半都寫 `isRulePokemon`
+- `中立中心`：attacker 半用 `isRuleBoxExOrV`、defender 半用 `isRulePokemon`
+
+### 【四】行為矩陣逐格證明「H/I/J 零行為變更」
+
+`__m6a/matrix403.mjs`：對 **全 live 卡池 5225 張**輸出 23 欄矩陣（三個述詞、四個獎賞函式、
+四個 PASSIVE_IMMUNITY predicate、三個 TOOL_ATTACK_BONUS、猛攻手鐲 holder gate、四個 filter），
+BASE 與 HEAD 各跑一次逐行 diff：
+
+```
+差異 8 張 / 5225 張，全部不在 H/I/J：
+  霓虹魚V ×2〔F〕・蒼響V〔D〕・夢幻VMAX〔E〕  → 神秘之盾現在擋得到（卡面 ex・V）
+  烈空坐EX・蓋諾賽克特EX・M沙奈朵EX〔無標〕   → 尾甲／filter 'ex'／水蓮的照顧的判定修正
+  阿爾宙斯VSTAR〔F〕                          → 極限腰帶／電氣球／猛攻手鐲不再誤加傷
+```
+
+⚠ 阿爾宙斯VSTAR 的 `prizesForKOLocal` 由 2 變 1 ——
+`engine.prizesForKO`（實際生效的那份）**本來就給 1**，本版把兩份統一成 engine 的答案。
+官方規則 VSTAR 是 2 張，但 VSTAR 不在 H/I/J，留待 V 系若回鍋再處理。
+
+### 【五】守衛
+
+`scripts/test-v6403-ex-criteria-convergence.mjs`：**83 PASS / 0 FAIL**，六組
+（A 結構／B 述詞語義／C 行為端／D 靜態 lint／E 卡池事實／F selection filter 與 gate-picker 一致）。
+
+- **HEAD-FAIL**：整支放到 BASE 上跑 ⇒ **30 條紅**，六組全中（其中 13 條是真的行為／結構差異，
+  不是「symbol 不存在」那種弱紅）。缺席的 symbol 一律用哨兵 `F()` 包起來（Rule 41），
+  每一條各自誠實翻紅。
+- **突變測試** `__m6a/mutcheck403.mjs`：**12/12 全殺**，而且每一個都**紅在預期的那一條**
+  （只認守衛自己回報的 `FAIL`，工具鏈壞掉不算抓到 —— 安慰劑型態 2）。
+- **正對照**：A3／D2／D3／D5 各餵一個真違規樣本，確認判準不是空真（型態 4）。
+- **下限斷言**：D0（掃到 209 個檔）、D1a（白名單內還有 7 處字面）、E0／E1／E6～E8。
+- **E4 逐張明列**那 4 張分岔卡，E5 再斷言它們一張都不在 H/I/J。
+
+`scripts/lib/engine-strip-v6403.mjs`（13 組）由 `__m6a/gen_strip403.py` **自動產生並驗證**
+「套用全部 pair 後逐字等於 BASE」——不是手打的，不會漏 hunk。已接上三處 strip 鏈
+（test-v6265 F4c/F4d、test-v6375 F0b、test-v6371 探針），Rule 54 排在 `stripV6402Engine` **之前**。
+
+### 【六】其他
+
+- `test-v6264` 的 `BASE_SHA` 前移到 `4bb90b95`（v6.402）。
+- `tsc --noEmit`：**0 錯**，TS2304 = 0。`anti-pattern-lint`：無違規。
+- 免疫測試網三支（damage-immunity-matrix 25／attack-effect-immunity-matrix 19／selection-ui 36）全綠。
+
+
 ## v6.389a ⭐⭐⭐ Opus 5 複審 v6.389：我加的那條 CSS 是**死規則**，守衛守的是一條死碼
 
 BASE `d602232d0c8b78cbd05fe9f0b4da96930030afe4`（v6.389）。

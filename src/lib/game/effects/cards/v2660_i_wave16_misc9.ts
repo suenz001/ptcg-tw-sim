@@ -29,7 +29,7 @@ import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from '../
 import { mandatoryTargetCount } from '../_shared'; // ⭐v6.305 卡面寫死目標隻數 → 強制選滿
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
-import { isBasicPokemonOnField } from '../../selection-filter'; // v6.250 場上【基礎】中央述詞（leaf，無循環）
+import { isBasicPokemonOnField, isPokemonExCard } from '../../selection-filter'; // v6.250 場上【基礎】中央述詞（leaf，無循環）／⭐v6.403 卡面「寶可夢【ex】」
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect, energyProvidesType, countAttachedEnergyAsUnits, returnSelfActiveEnergyPost, discardOppActiveEnergyPost } from '../../effects';
@@ -523,7 +523,7 @@ regPre('打擊鬼|上升劈打', (state, aIdx, pool) => {
   const da = state.players[dIdx].active;
   if (!da) return { state, damage: 0 };
   const card = pool.get(da.cardId);
-  const isEx = card?.subtype?.includes('ex') || card?.name?.endsWith('ex');
+  const isEx = isPokemonExCard(card);   // ⭐v6.403 收斂（原 subtype?.includes('ex') 比 === 更寬）
   if (!isEx) {
     return { state: addLog(state, '上升劈打：對手戰鬥場非 ex → 招式失敗', aIdx), damage: 0 };
   }

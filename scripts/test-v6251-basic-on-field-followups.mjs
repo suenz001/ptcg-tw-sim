@@ -360,7 +360,9 @@ const ALLOW_A = [
   ['/src/lib/game/stage2-index.ts', "if (!c || c.supertype !== 'Pokemon' || !c.evolvesFrom) continue;", '進化鏈索引'],
   ['/src/lib/game/stage2-index.ts', "if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;", '進化鏈索引'],
   // ── 場上視角，但已逐條查證對化石**無行為差異**（不改，避免無謂改動）─────────
-  ['/src/lib/game/effects.ts', "['尾甲', (att) => att.subtype === 'ex' && !att.evolvesFrom],", '奇麒麟ex｜尾甲的主詞是**攻擊方**；化石沒有招式、subtype 也不是 ex ⇒ 恆不成立'],
+  // ⭐v6.403：ex 那一半收斂到中央 isPokemonExCard，【基礎】那一半**逐字不動**（理由同下：
+  //   這個 predicate 只拿得到 Card 拿不到 instance，換 isBasicPokemonOnField 需要 inst）。
+  ['/src/lib/game/effects.ts', "['尾甲', (att) => isPokemonExCard(att) && !att.evolvesFrom],", '奇麒麟ex｜尾甲的主詞是**攻擊方**；化石沒有招式、也不是「寶可夢【ex】」⇒ 恆不成立'],
   ['/src/lib/game/effects/cards/v2999_g3_wave1.ts', "const isBasic = !victimCard.evolvesFrom && victimCard.stage !== 'Stage1' && victimCard.stage !== 'Stage2';", '爆炸頭水牛｜捲牆：卡住化石的是「【無】屬性」那半（化石 pokemonType=null），屬 v6.206/6.208 的屬性維度待辦，本輪不動'],
   ['/src/lib/game/effects/cards/tools.ts', "TOOL_HP_BONUS.set('勇氣護符', (card) => !card.evolvesFrom ? 50 : 0);", '勇氣護符是 **G 標**，不在維護範圍（v6.112 已載明）'],
 ];

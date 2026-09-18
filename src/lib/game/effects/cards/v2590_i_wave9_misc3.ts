@@ -20,6 +20,7 @@
 import type { CardInstance, PlayerState } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { isRulePokemon } from '../../engine';
+import { isPokemonExCard } from '../../selection-filter';   // ⭐v6.403 中央述詞直接取自 leaf
 import {
   regPre, regPost,
   addLog, updatePlayer, withPending,
@@ -153,9 +154,11 @@ function drawToFull6Post(label: string): AttackPostFn {
 // ══════════════════════════════════════════════════════════════════════════════
 // A. 對手戰鬥場 ex 條件 +N (5 張)
 // ══════════════════════════════════════════════════════════════════════════════
-// v3.67：改用 isRulePokemon helper（涵蓋未來新規則寶可夢類型）
+// ⭐v6.403：四個消費端的卡面逐字都是「若對手的戰鬥寶可夢為「寶可夢【ex】」，則增加N點傷害。」
+//   （魔幻假面喵｜上升綻放／瑪俐的扒手貓｜鋒利爪／瑪俐的酷豹｜鋒利利爪／爆炸頭水牛ex｜黃金破壞）
+//   ⇒ 不是「擁有規則的寶可夢」。v3.67 一刀切改成 isRulePokemon 是方向錯的。
 const isExCard = (c: { subtype?: string; name?: string; supertype?: string; tags?: string[]; rulesText?: string } | undefined): boolean => {
-  return isRulePokemon(c as Card | undefined);
+  return isPokemonExCard(c as Card | undefined);
 };
 regPre('魔幻假面喵|上升綻放', defConditionPre(90, 90, isExCard, 'ex 寶可夢', '上升綻放'));
 regPre('瑪俐的扒手貓|鋒利爪', defConditionPre(20, 40, isExCard, 'ex 寶可夢', '鋒利爪'));

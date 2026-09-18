@@ -19,10 +19,10 @@ import type {
   PlayerState, PendingSelection, LogEntry, TurnPhase, GamePhase, ActionRecord, TurnActionLog} from './types';
 import { RULE_BOX_SUBTYPES } from './types';
 // v6.018 批5：4 卡片述詞 helper + ZH_ENERGY_TYPE 下沉 selection-filter.ts（解循環）；engine re-export 給既有 importer
-import { isBasicPokemonCard, isBasicPokemonOnField, isRulePokemon, isBasicEnergyOfType, getBasicEnergyType, isMegaExCard, ZH_ENERGY_TYPE, evaluateSelectionFilter, isKnownSelectionFilter, sanitizeSelectionSet } from './selection-filter';
+import { isBasicPokemonCard, isBasicPokemonOnField, isRulePokemon, isPokemonExCard, isRuleBoxExOrV, isBasicEnergyOfType, getBasicEnergyType, isMegaExCard, ZH_ENERGY_TYPE, evaluateSelectionFilter, isKnownSelectionFilter, sanitizeSelectionSet } from './selection-filter';
 // v6.176：場上目標型 picker 的候選述詞（UI 與中央消毒閘共用同一份，見 selection-candidates.ts）
 import { fieldPickerBaseIids, FIELD_TARGET_PICKER_TYPES } from './selection-candidates';
-export { isBasicPokemonCard, isBasicPokemonOnField, isRulePokemon, isBasicEnergyOfType, getBasicEnergyType };
+export { isBasicPokemonCard, isBasicPokemonOnField, isRulePokemon, isPokemonExCard, isRuleBoxExOrV, isBasicEnergyOfType, getBasicEnergyType };
 import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
   PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
@@ -1053,7 +1053,7 @@ export function canEvolveFromHandOnto(
   if (canEvolveOnto(evoCard.evolvesFrom, baseCard.name)) return true;
   // 虹色DNA 例外（伊布ex SV8a 126 / 12304 / 12305）
   if (evoCard.evolvesFrom !== '伊布') return false;
-  if (evoCard.subtype !== 'ex') return false;
+  if (!isPokemonExCard(evoCard)) return false;   // ⭐v6.403 收斂：卡面「寶可夢【ex】」
   return hasEffectiveAbilityByInst(state, ownerIdx, baseInst, pool, '虹色DNA');
 }
 // v3.01 Group 3 Wave 3 helpers — 對手不能使出 X / 對手特性消除 / 寶可夢檢查 / 撤退觸發 / 進化觸發
@@ -1970,7 +1970,7 @@ export function canAffordAttack(
 
 /** 判斷一張 ex 卡（name 含 'ex' 後綴）對應獎賞卡數 */
 export function prizesForKO(card: Card): number {
-  const isEx = card.name.endsWith('ex') || card.name.endsWith('EX');
+  const isEx = isPokemonExCard(card);   // ⭐v6.403 收斂（官方規則寫的是「寶可夢ex」）
   // 超級進化寶可夢ex（Mega ex）：中央述詞 isMegaExCard（subtype==='ex' 且卡名以「超級」開頭）→ 3 張獎賞
   // 例：超級噴火龍Xex / 超級妙蛙花ex / 超級拉帝亞斯ex
   if (isMegaExCard(card)) return 3;
@@ -3883,7 +3883,7 @@ function handlePlaying(
     //   與【SV6 040/101】也拿到鬥志戰吼（站長回報的 bug）。
     const _oppActiveEarly = state.players[1 - aIdx as 0 | 1]?.active;
     const _oppActiveCardEarly = _oppActiveEarly ? pool.get(_oppActiveEarly.cardId) : undefined;
-    const _oppIsExEarly = _oppActiveCardEarly?.subtype === 'ex' || (_oppActiveCardEarly?.name?.endsWith('ex') ?? false);
+    const _oppIsExEarly = isPokemonExCard(_oppActiveCardEarly);   // ⭐v6.403 收斂
     const _evoBypass = getEvolveTimingBypass(state, aIdx, basePoke, baseCard, isActive, _oppIsExEarly, pool);
     const hasPushEvolveAbility = _evoBypass.push;
     const hasShellinkBypassFirst = _evoBypass.shellink;
@@ -5870,19 +5870,15 @@ function handlePlaying(
     }
 
     // v2.113 空手道王的演練 — 本回合自己寶可夢招式對對手戰鬥場 ex +40
-    if (baseDamage > 0 && attacker.karateKingBonusThisTurn && defenderCard?.subtype === 'ex') {
+    if (baseDamage > 0 && attacker.karateKingBonusThisTurn && isPokemonExCard(defenderCard ?? undefined)) {   // ⭐v6.403 收斂
       baseDamage += 40;
       workingState = addLog(workingState, `「空手道王的演練」啟動：對 ${defenderCard.name}（ex）+40`, aIdx);
       formula.push({ sign: '+', value: 40, label: '空手道王演練' });
     }
     // v2.139 烏栗效果 2 — 本回合自方寶可夢招式對對手戰鬥場 ex/V +30
     if (baseDamage > 0 && attacker.unrudaBonusThisTurn && defenderCard) {
-      const isExV = defenderCard.subtype === 'ex'
-        || defenderCard.name.endsWith('ex')
-        || defenderCard.name.endsWith('EX')
-        || defenderCard.name.endsWith('V')
-        || defenderCard.name.endsWith('VMAX')
-        || defenderCard.name.endsWith('VSTAR');
+      // ⭐v6.403 收斂：卡面「對對手的戰鬥場的「寶可夢【ex】・【V】」造成的傷害「+30」點。」
+      const isExV = isRuleBoxExOrV(defenderCard);
       if (isExV) {
         baseDamage += 30;
         workingState = addLog(workingState, `「烏栗」啟動：對 ${defenderCard.name}（ex/V）+30`, aIdx);
@@ -5913,12 +5909,12 @@ function handlePlaying(
     }
     // v2.78 密勒頓｜防護代碼 — 若 defender 有 immuneToExAttackTagThisTurn，
     //   且 attacker 是 ex + 帶有對應 tag，傷害變 0
-    // v3.67：改用 isRulePokemon helper（涵蓋未來新規則寶可夢類型）
+    // ⭐v6.403：卡面「寶可夢【ex】」⇒ isPokemonExCard（v3.67 曾一刀切成 isRulePokemon）。
     // v5.124：打爆類「不計算 defender 身上附加效果」應 bypass — 加 !skipDefEffects gate
     // v5.828：卡面「寶可夢【ex】招式」= 任意 ex（不限 tag）。舊實作誤要求 attacker.tags.includes('未來')
     //   → 對一般 ex（無「未來」tag）完全不擋，防護代碼幾乎失效。flag 只設在受保護的「未來」寶可夢身上，
     //   故此處只需判 attacker 是規則寶可夢(ex)。
-    if (!skipDefEffects && baseDamage > 0 && defender.active.immuneToExAttackTagThisTurn && isRulePokemon(attackerCard)) {
+    if (!skipDefEffects && baseDamage > 0 && defender.active.immuneToExAttackTagThisTurn && isPokemonExCard(attackerCard)) {   // ⭐v6.403
       workingState = addLog(workingState, `${defenderCard.name}：[防護代碼]免疫【ex】寶可夢招式傷害（${baseDamage} → 0）`, dIdx);
       baseDamage = 0;
     }
@@ -5970,8 +5966,8 @@ function handlePlaying(
     // 卡面同時涵蓋 PDF §C-16「不會受到招式的傷害」+ §C-17「不會受到招式的效果的影響」兩者。
     // 故下方同時把 baseDamage 清 0（C-16）並設 skipDefEffects（C-17）— 是故意的耦合，不是 bug。
     // 若未來新加只擋傷害不擋效果（純 C-16）或反之的卡，請拆成兩個獨立旗標。
-    // v3.67：改用 isRulePokemon helper（涵蓋未來新規則寶可夢類型）
-    const attackerIsEx = isRulePokemon(attackerCard);
+    // ⭐v6.403：卡面「…不會受到對手的「寶可夢【ex】」招式的傷害與效果的影響。」
+    const attackerIsEx = isPokemonExCard(attackerCard);
     // v5.124：加 !skipDefEffects gate（打爆類 bypass）
     if (!skipDefEffects && baseDamage > 0
         && defender.active.immuneToExAttackThisTurn
@@ -6196,7 +6192,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     // 被動特性：影藏（超級耿鬼ex）— 惡寶可夢被 ex 擊倒時，獎賞卡 -1
     let prizeAdjust = 0;
     if (baseDamage > 0 && newDamage >= defenderHP) {
-      const isExAttacker = attackerCard.name.endsWith('ex') || attackerCard.name.endsWith('EX');
+      const isExAttacker = isPokemonExCard(attackerCard);   // ⭐v6.403 卡面「寶可夢【ex】」唯一判準
       const isDefenderDark = defenderCard.pokemonType === 'Darkness';
       // v5.768：影藏持有者須「處於有效狀態」(§17.42.B) — 收斂中央 hasEffectiveKageHide
       //   （原只查特性名存在，漏 isAbilityHolderEffective → 鐵荊棘ex｜初始化消除超級耿鬼ex特性時仍誤 -1）。
@@ -6935,7 +6931,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     const postNuetralImmune = defActiveForPost?.immuneToAttackEffectsThisTurn ?? false;
     const postAllImmune = defActiveForPost?.immuneToAllAttackThisTurn ?? false;
     const postExImmune = (defActiveForPost?.immuneToExAttackThisTurn ?? false)
-                          && isRulePokemon(attackerCard);
+                          && isPokemonExCard(attackerCard);   // ⭐v6.403 與主管線同一份
     // v5.333：per-turn 免疫旗標不再整段跳過 POST（會誤殺 self/備戰snipe/對手手牌牌庫/競技場 等
     //   「目標非我方戰鬥位」的效果）。改由 canApplyEffectToTarget per-target guard 精準擋「指向免疫
     //   active」的效果（defense.ts 1b-2 + 各 defender 效果 POST helper 走 guard）。
@@ -10199,7 +10195,7 @@ export function getEvolvableTargets(
   // 鬥志戰吼 UI 鏡射（同 EVOLVE handler 邏輯）：base 是勒克貓 + 對手戰鬥場是 ex → bypass
   const oppActiveUI = state.players[1 - state.activePlayerIndex as 0 | 1]?.active;
   const oppActiveCardUI = oppActiveUI ? pool.get(oppActiveUI.cardId) : undefined;
-  const oppIsExUI = oppActiveCardUI?.subtype === 'ex' || (oppActiveCardUI?.name?.endsWith('ex') ?? false);
+  const oppIsExUI = isPokemonExCard(oppActiveCardUI);   // ⭐v6.403 收斂（與 EVOLVE handler 同一份）
   for (const fp of fieldPokemon) {
     const fpCard = pool.get(fp.cardId);
     if (!fpCard) continue;

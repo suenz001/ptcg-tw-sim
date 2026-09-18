@@ -28,7 +28,10 @@ const GOLDEN={
   'Stage2': c=>c.supertype===P&&(c.stage??c.subtype)==='Stage2',
   'PsychicBasic': c=>c.supertype===P&&!c.evolvesFrom&&c.pokemonType==='Psychic',
   'Resistance:Fighting': c=>c.supertype===P&&c.resistance?.type==='Fighting',
-  'ex': c=>c.supertype===P&&c.subtype==='ex',
+  // ⭐v6.403：UI canonical（+page.svelte 的 f==='ex'）已改走中央述詞「寶可夢【ex】」＝
+  //   subtype==='ex' 或卡名結尾 ex/EX。golden 這裡**刻意獨立展開**（不呼叫中央函式），
+  //   否則兩邊變成同一份實作 ⇒ 這條斷言恆真（安慰劑型態 11）。
+  'ex': c=>c.supertype===P&&(c.subtype==='ex'||c.name.endsWith('ex')||c.name.endsWith('EX')),
   'MegaEx': c=>c.supertype===P&&c.subtype==='ex'&&c.name.startsWith('超級'),
   'TeraPokemon': c=>c.supertype===P&&!!c.tags?.includes('太晶'),
   'ColorlessPokeHP100': c=>c.supertype===P&&c.pokemonType==='Colorless'&&(c.hp??999)<=100,

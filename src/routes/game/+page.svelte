@@ -53,7 +53,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
     getHandCardOps, handCardDragKind, handCardDraggable, handOpForDropTarget,
     type HandCardOp, type HandDragKind, type HandDropTarget,
   } from '$lib/game/hand-card-ops';
-  import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard,
+  import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemonExCard,
            isBasicEnergyOfType as isBasicEnergyOfTypeCentral } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
   import { resolveRoomUpdate, shouldAttemptStartGame, shouldResetStartGrace, decideBoardAdopt, decideStuckSelfHeal, isStaleFinishedGame,
@@ -4182,7 +4182,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             }
             return !pickedTypes.has(myType);
           }
-          if (f === 'ex')         return card.supertype === 'Pokemon' && card.subtype === 'ex';
+          if (f === 'ex')         return isPokemonExCard(card);   // ⭐v6.403 與中央 FILTERS 同一份判準
           if (f === 'MegaEx')     return isMegaExCard(card);
           if (f === 'TeraPokemon') return card.supertype === 'Pokemon' && !!card.tags?.includes('太晶');
           if (f === 'Item')       return card.supertype === 'Trainer' && card.subtype === 'Item';
