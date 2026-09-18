@@ -149,22 +149,37 @@ const HAT      = byName('超級烈空坐帽子');
     const st=mk({ active:a, bench:[b,c], hand:[], deck });
     const r=fn(st,0,pool);
     const ps=r.pendingSelection;
-    chk('德爾塔之禮：為第 1 隻開 picker', ps?.effectKey==='m6-delta-gift-step', ps?.effectKey);
-    chk('德爾塔之禮：hostIids 含 extraTools 的那隻（2 隻）',
-        (ps?.params?.hostIids??[]).length===2, JSON.stringify(ps?.params?.hostIids));
-    const valid=new Set(ps?.params?.validIids ?? []);
-    chk('德爾塔之禮：候選只有基本能量', valid.has(deck[0].iid)&&valid.has(deck[1].iid)&&!valid.has(deck[2].iid));
+    // ⭐v6.405 站長轉述玩家建議：流程由「照固定順序逐隻問能量」改成
+    //   「先選要附給哪一隻 → 再選能量」。守衛的**意圖**沒變（每隻附帽子的各拿 1 張、
+    //   候選只有基本能量、沒附帽子的不拿），只是第一個觀測點從能量 picker 變成寶可夢 picker
+    //   （IRON_RULES Rule 40：判準沒被破壞，是觀測點被本版蓋住 ⇒ 合法更新，不是放寬）。
+    chk('德爾塔之禮：第一步是「選要附給哪隻」', ps?.effectKey==='m6-delta-gift-pick-host', ps?.effectKey);
+    chk('德爾塔之禮：用既有的 bench-choose＋includeActive（不新增 picker 型別）',
+        ps?.type==='bench-choose' && ps?.params?.includeActive===true, ps?.type);
+    chk('德爾塔之禮：候選含 extraTools 的那隻（2 隻）',
+        (ps?.params?.validIids??[]).length===2, JSON.stringify(ps?.params?.validIids));
+    chk('德爾塔之禮：卡面「所有…各1張」是強制 ⇒ 選寶可夢不可跳過', ps?.minCount===1, String(ps?.minCount));
+    const rzH=RESOLVERS.get('m6-delta-gift-pick-host');
     const rz=RESOLVERS.get('m6-delta-gift-step');
-    if (typeof rz==='function') {
+    if (typeof rz==='function' && typeof rzH==='function') {
       // ⚠ 直接呼叫 resolver 時要自己清掉 pendingSelection —— 正式流程由 engine 的
       //   RESOLVE_SELECTION 清除；不清的話下一步 withPending 會被既有 pending 卡住（假 FAIL）。
       const clr=(s)=>({...s, pendingSelection:null});
-      const r2=rz(clr(r),0,[deck[0].iid],ps.params,pool);
-      chk('德爾塔之禮：第 1 隻拿到能量', (r2.players[0].active?.energyAttached??[]).some(e=>e.iid===deck[0].iid));
-      chk('德爾塔之禮：接著為第 2 隻開 picker', r2.pendingSelection?.effectKey==='m6-delta-gift-step',
-          r2.pendingSelection?.effectKey);
+      // ⭐ 玩家**先選備戰那隻**（舊流程做不到，一定是戰鬥場先）
+      const rH=rzH(clr(r),0,[b.iid],ps.params,pool);
+      const psE=rH.pendingSelection;
+      chk('德爾塔之禮：選完寶可夢才問能量', psE?.effectKey==='m6-delta-gift-step', psE?.effectKey);
+      chk('德爾塔之禮：要附的是玩家選的那一隻', psE?.params?.hostIid===b.iid, String(psE?.params?.hostIid));
+      const valid=new Set(psE?.params?.validIids ?? []);
+      chk('德爾塔之禮：候選只有基本能量', valid.has(deck[0].iid)&&valid.has(deck[1].iid)&&!valid.has(deck[2].iid));
+      const r2=rz(clr(rH),0,[deck[0].iid],psE.params,pool);
+      chk('德爾塔之禮：玩家選的那一隻（備戰）拿到能量',
+          (r2.players[0].bench[0]?.energyAttached??[]).some(e=>e.iid===deck[0].iid));
+      chk('德爾塔之禮：只剩 1 隻 ⇒ 不再問「選哪隻」，直接問能量',
+          r2.pendingSelection?.effectKey==='m6-delta-gift-step', r2.pendingSelection?.effectKey);
       const r3=rz(clr(r2),0,[deck[1].iid],r2.pendingSelection.params,pool);
-      chk('德爾塔之禮：第 2 隻拿到能量', (r3.players[0].bench[0]?.energyAttached??[]).some(e=>e.iid===deck[1].iid));
+      chk('德爾塔之禮：剩下的那一隻（戰鬥場）也拿到能量',
+          (r3.players[0].active?.energyAttached??[]).some(e=>e.iid===deck[1].iid));
       chk('德爾塔之禮：沒附帽子的那隻沒拿到', (r3.players[0].bench[1]?.energyAttached??[]).length===0);
       chk('德爾塔之禮：全部處理完 → 收掉 picker', !r3.pendingSelection);
     } else chk('德爾塔之禮：有 resolver', false);

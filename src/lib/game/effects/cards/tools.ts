@@ -959,46 +959,115 @@ function hostsWithTool(state: GameState, idx: 0 | 1, pool: Map<string, Card>, to
   });
 }
 
-/** 逐隻附 1 張基本能量的 chain step（i = 目前處理到第幾隻） */
-function deltaGiftStep(state: GameState, idx: 0 | 1, pool: Map<string, Card>, hostIids: string[], i: number): GameState {
+/**
+ * ⭐⭐⭐v6.405 站長轉述玩家建議：「先顯示選擇要填給哪隻，再選擇能量」。
+ *
+ * 【為什麼要改】v6.081 的實作是把 host 依「戰鬥場 → 備戰」的**固定順序**逐隻問，
+ *   玩家只能一路按下去：
+ *     ・順序不能改 ⇒ 按太快很容易附到不想附的那一隻（玩家回報）
+ *     ・牌庫的基本能量**少於**場上帽子數時，等於系統幫玩家決定「先給戰鬥場」——
+ *       卡面只寫「附給所有…各1張」，沒有規定順序，這個預設是實作強加的。
+ *
+ * 【改法】每一輪先讓玩家選「這一次要附給哪一隻」，再選能量。
+ *   ⚠ 卡面「**所有**身上附有「超級烈空坐帽子」的寶可夢**各1張**」是**強制全部**，
+ *     玩家決定的只是**順序** ⇒ 選寶可夢那一步 minCount=1（不可跳過）；
+ *     能量那一步維持 minCount=0（牌庫搜尋的 fail-to-find，官方判準②，v6.081 既有行為不動）。
+ *   ⚠ 只剩 1 隻時**不問**（沒有選擇餘地，多一次點擊只是噪音）。
+ *   ⚠ 用既有的 `bench-choose` + `params.includeActive`（v3.813 起支援選 active），
+ *     **不新增 picker 型別**——UI／AI／engine 消毒閘三端都已經認得這一型。
+ */
+/** 還在場上、且還沒輪到的 host。順序保持傳入順序（只做過濾，不重排）。 */
+function deltaGiftAlive(state: GameState, idx: 0 | 1, remainingIids: string[]): string[] {
   const p = state.players[idx];
-  if (i >= hostIids.length) {
-    return updatePlayer(addLog(state, '德爾塔之禮：重洗牌庫', idx), idx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
-  }
-  const hostIid = hostIids[i];
-  const host = [...(p.active ? [p.active] : []), ...p.bench].find(c => c.iid === hostIid);
-  if (!host) return deltaGiftStep(state, idx, pool, hostIids, i + 1);   // 已離場 → 跳過
-  const hostName = pool.get(host.cardId)?.name ?? '?';
-  const basicIids = p.deck
+  const onField = [...(p.active ? [p.active] : []), ...p.bench];
+  return remainingIids.filter(iid => onField.some(c => c.iid === iid));
+}
+/** 牌庫裡的基本**能量**卡 iid（候選來源；空陣列 ⇒ 這個招式再也附不出東西）。
+ * ⚠ 名稱刻意不含 `Basic` —— test-v6251 的 lint B 會把「名稱含 Basic 的本地述詞」
+ *   當成手刻的【基礎】**寶可夢**判準擋下來。這裡講的是「基本能量卡」，是另一件事。 */
+function deltaGiftEnergyCandidates(state: GameState, idx: 0 | 1, pool: Map<string, Card>): string[] {
+  return state.players[idx].deck
     .filter(c => { const cc = pool.get(c.cardId); return cc?.supertype === 'Energy' && cc.subtype === 'Basic'; })
     .map(c => c.iid);
-  if (basicIids.length === 0) {
-    return deltaGiftStep(addLog(state, `德爾塔之禮：牌庫已無基本能量（${hostName} 沒拿到）`, idx),
-      idx, pool, hostIids, i + 1);
-  }
+}
+/** 卡面最後一句「並且重洗牌庫」—— 三個結束分支共用這一份（Rule 38）。 */
+function deltaGiftFinish(state: GameState, idx: 0 | 1): GameState {
+  return updatePlayer(addLog(state, '德爾塔之禮：重洗牌庫', idx), idx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+}
+/** 第二步：為指定的那一隻，從牌庫選 1 張基本能量。 */
+function deltaGiftEnergyPicker(
+  state: GameState, idx: 0 | 1, pool: Map<string, Card>,
+  remainingIids: string[], hostIid: string, basicIids: string[],
+): GameState {
+  const p = state.players[idx];
+  const host = [...(p.active ? [p.active] : []), ...p.bench].find(c => c.iid === hostIid);
+  const hostName = host ? (pool.get(host.cardId)?.name ?? '?') : '?';
   return withPending(addLog(state, `德爾塔之禮：從牌庫選 1 張基本能量附於 ${hostName}`, idx), {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'BasicEnergy',
     minCount: 0, maxCount: 1,
     effectKey: 'm6-delta-gift-step',
-    params: { validIids: basicIids, hostIids, i, hostIid },
+    params: { validIids: basicIids, remainingIids, hostIid,
+      titleOverride: `德爾塔之禮：選 1 張基本能量附於 ${hostName}` },
   });
 }
+/** 第一步：還有兩隻以上時，先讓玩家選這一次要附給哪一隻。 */
+function deltaGiftStep(
+  state: GameState, idx: 0 | 1, pool: Map<string, Card>, remainingIids: string[],
+): GameState {
+  const alive = deltaGiftAlive(state, idx, remainingIids);
+  if (alive.length === 0) return deltaGiftFinish(state, idx);
+  const basicIids = deltaGiftEnergyCandidates(state, idx, pool);
+  if (basicIids.length === 0) {
+    return deltaGiftFinish(
+      addLog(state, `德爾塔之禮：牌庫已無基本能量（還有 ${alive.length} 隻沒拿到）`, idx), idx);
+  }
+  // ⭐ 只剩 1 隻 ⇒ 沒有選擇餘地，直接問能量（少一次點擊）
+  if (alive.length === 1) return deltaGiftEnergyPicker(state, idx, pool, alive, alive[0], basicIids);
+  return withPending(
+    addLog(state, `德爾塔之禮：選擇這次要附能量的寶可夢（還有 ${alive.length} 隻、牌庫剩 ${basicIids.length} 張基本能量）`, idx),
+    {
+      type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'm6-delta-gift-pick-host',
+      params: { validIids: alive, includeActive: true, remainingIids: alive,
+        titleOverride: '德爾塔之禮：選擇要附 1 張基本能量的寶可夢' },
+    });
+}
+
+/**
+ * ⭐v6.405 第一步的 resolver：玩家選好「這次附給誰」。
+ * ⚠ fail-safe：payload 對不上任何合法 host 時**不重問**（會變成無進展、踩到 engine 的
+ *   RESOLVE_REJECT_STREAK 保護），改為退回「照原順序取第一隻」——一定有進展，不可能軟鎖。
+ */
+regR('m6-delta-gift-pick-host', (state, idx, iids, params, pool) => {
+  const remaining = (params?.remainingIids as string[]) ?? [];
+  const alive = deltaGiftAlive(state, idx, remaining);
+  if (alive.length === 0) return deltaGiftFinish(state, idx);
+  const basicIids = deltaGiftEnergyCandidates(state, idx, pool);
+  if (basicIids.length === 0) {
+    return deltaGiftFinish(
+      addLog(state, `德爾塔之禮：牌庫已無基本能量（還有 ${alive.length} 隻沒拿到）`, idx), idx);
+  }
+  const hostIid = iids.find(x => alive.includes(x)) ?? alive[0];
+  return deltaGiftEnergyPicker(state, idx, pool, alive, hostIid, basicIids);
+});
 
 regPost('超級烈空坐帽子|德爾塔之禮', (state, aIdx, pool) => {
   const hosts = hostsWithTool(state, aIdx, pool, '超級烈空坐帽子');
   if (hosts.length === 0) {
-    return updatePlayer(addLog(state, '德爾塔之禮：場上沒有附有「超級烈空坐帽子」的寶可夢', aIdx),
-      aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+    return deltaGiftFinish(
+      addLog(state, '德爾塔之禮：場上沒有附有「超級烈空坐帽子」的寶可夢', aIdx), aIdx);
   }
   return deltaGiftStep(
     addLog(state, `德爾塔之禮：${hosts.length} 隻寶可夢各附 1 張基本能量`, aIdx),
-    aIdx, pool, hosts.map(h => h.iid), 0);
+    aIdx, pool, hosts.map(h => h.iid));
 });
 
 regR('m6-delta-gift-step', (state, idx, iids, params, pool) => {
-  const hostIids = (params?.hostIids as string[]) ?? [];
-  const i = Number(params?.i ?? 0);
+  // ⭐v6.405：params 由 `hostIids + i`（固定順序的索引）改成 `remainingIids`（還沒輪到的那些）
+  //   —— 順序改由玩家每一輪自己決定，所以「第幾隻」這個概念不存在了。
+  const remaining = (params?.remainingIids as string[]) ?? [];
   const hostIid = params?.hostIid as string | undefined;
   const p = state.players[idx];
   // ⚠ 自驗：只認「還在牌庫內 ∧ 是基本能量」的 iid，且最多 1 張（卡面「各 1 張」）
@@ -1021,7 +1090,9 @@ regR('m6-delta-gift-step', (state, idx, iids, params, pool) => {
       };
     });
   }
-  return deltaGiftStep(s, idx, pool, hostIids, i + 1);
+  // ⚠ 不論玩家有沒有真的選到能量（minCount=0 ⇒ 可以宣告找不到），這一隻都算處理過了，
+  //   必須從 remaining 移除 —— 否則會無限重問同一隻。
+  return deltaGiftStep(s, idx, pool, remaining.filter(x => x !== hostIid));
 });
 
 TOOL_END_TURN_DISCARD.add('招式學習器 螢石');
