@@ -22,7 +22,7 @@
 //          那一塊**必須仍然畫得出來**（＝孤兒分支），而且空狀態分支逐字未動。
 //   【E】框架安全（靜態）：四個 snippet（eventCard／bracketBlock／myMatchBox／myByeBox）、
 //        報名中賽事迴圈、進場鈕保底區塊、整段 <style> 都與 BASE 逐字相同。
-//   【F】版面量測（playwright；沒有瀏覽器就 SHALLOW-SKIP）：scripts/measure-v6304-tourn-group.mjs。
+//   【F】版面量測（playwright；沒有瀏覽器就 ENV-SKIP，CI 上會翻紅）：scripts/measure-v6304-tourn-group.mjs。
 //   【G】test chain ／版本一致（不 pin 死版本號）／本檔不得整檔 sha256 鎖。
 //   【H】突變：每一個都必須紅在**預期那一條**。
 //
@@ -37,6 +37,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { envSkip } from './lib/env-skip.mjs';   // 「缺瀏覽器」不是淺複製，標記要分開（CI 上會 throw）
 import { cssOf } from './lib/svelte-style-block.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -465,11 +466,13 @@ await T('E4 ⭐ v6.304 **只**動了模板的 each 位置與新增兩個 $derive
 
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【F】版面量測（playwright）');
-await T('F1 三尺寸量測 ＋ 三塊左右邊界對齊（沒有瀏覽器就 SHALLOW-SKIP）', () => {
+await T('F1 三尺寸量測 ＋ 三塊左右邊界對齊（沒有瀏覽器就 ENV-SKIP；CI 上會翻紅）', () => {
   assert.ok(existsSync(P_MEASURE), 'scripts/measure-v6304-tourn-group.mjs 必須存在');
   let pw = null;
   try { pw = require_.resolve(process.env.PLAYWRIGHT_MODULE || 'playwright'); } catch { pw = null; }
-  if (!pw) { shallowSkip('v6304 F1 三尺寸版面量測', '這台機器沒有 playwright；量測腳本仍在 repo 內，可手動跑'); return; }
+  // ⚠ 這裡原本借用 shallowSkip() —— 但「缺瀏覽器」不是淺複製。兩者混在同一個標記裡，
+  //   就沒辦法對任何一種下硬判準（平行 runner 想把 SHALLOW-SKIP 釘成 0，卻發現本機恆有 2 次）。
+  if (!pw) { envSkip('v6304 F1 三尺寸版面量測', '這台機器沒有 playwright；量測腳本仍在 repo 內，可手動跑'); return; }
   const out = execFileSync(process.execPath, [P_MEASURE], { cwd: ROOT, maxBuffer: 1 << 26 }).toString('utf8');
   console.log(out.split('\n').slice(-3).join('\n'));
   assert.ok(/全部符合/.test(out), '量測不通過：\n' + out.slice(-1500));

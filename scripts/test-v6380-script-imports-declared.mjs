@@ -31,6 +31,7 @@ import { builtinModules } from 'node:module';
 import * as acorn from 'acorn';
 import * as walk from 'acorn-walk';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { filterNotIgnored } from './lib/tracked-scope.mjs';   // 母體判準的單一真相（Rule 38）
 import { normEol } from './lib/eol-agnostic.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -84,6 +85,12 @@ function collectImports(src, label) {
   return { specs, parsed: true };
 }
 
+// ⭐ 母體 = 「git 沒有忽略的檔」，判準集中在 scripts/lib/tracked-scope.mjs（Rule 38）。
+//   為什麼不用檔名樣式（例如 /^(tmp|_|\.)/）濾：那會連站長手寫的 `_repro_*.mjs` 一起漏掉，
+//   而那些檔一旦被 `git add -A` 就會進版控，正是最需要被掃的。
+//   為什麼要濾：守衛的 esbuild 暫存殘檔（已在 .gitignore 列管）會污染母體 ——
+//   實測 scripts/.v6380-positive-control.mjs 這個上一輪中斷留下的檔，
+//   曾讓本守衛的 B1/B2/D2 三條翻紅（純粹由殘檔造成的假紅）。
 function listFiles(dir) {
   const out = [];
   const stack = [dir];
@@ -95,7 +102,7 @@ function listFiles(dir) {
       if (/\.(mjs|js|cjs)$/.test(e.name)) out.push(p);
     }
   }
-  return out.sort();
+  return filterNotIgnored(ROOT, out.sort());
 }
 
 /**
@@ -141,6 +148,29 @@ chk('★★ A1b 掃出來的 bare 套件種類 >= 4（掃描器真的有在解�
   '種類=' + USED.size + ' → ' + [...USED.keys()].join(', '));
 chk('★★ A1c 每一支 scripts/ 檔案都解析得動（acorn 不該有解析不了的）', PARSE_FAILED.length === 0,
   '解析失敗：' + PARSE_FAILED.slice(0, 10).join(', '));
+
+// ⭐ 母體本身的正／反對照 ＋ 下限斷言
+//   （下面的 A2／A3 驗的是**掃描器的解析能力**——它們直呼 scanBarePackages、不經過母體。
+//     母體換判準之後，母體自己也需要一組對照，否則「濾掉太多」會是靜默的假綠。）
+{
+  chk('★★ A1d ⭐ 母體下限：scripts/ 掃到的 .mjs/.js/.cjs >= 700（濾過頭會在這裡爆）',
+    FILES.length >= 700, '母體=' + FILES.length);
+
+  const probeAbs = join(ROOT, 'scripts', '_v6380-scope-probe.mjs');   // 底線開頭：**不被** .gitignore 忽略
+  const ignAbs = join(ROOT, 'scripts', '.v6380-scope-ignored.mjs');   // 點開頭：**會被** .gitignore 忽略
+  try {
+    writeFileSync(probeAbs, 'export const x = 1;\n');
+    writeFileSync(ignAbs, 'export const y = 2;\n');
+    const again = listFiles(join(ROOT, 'scripts'));
+    chk('★★★ A1e 母體正對照：未被 gitignore 忽略的新檔**必須**進母體（濾太多會被這條抓到）',
+      again.includes(probeAbs), '母體裡找不到 _v6380-scope-probe.mjs');
+    chk('★★★ A1f 母體反對照：被 gitignore 忽略的殘檔**不得**進母體（濾太少會被這條抓到）',
+      !again.includes(ignAbs), '母體裡混進了 .v6380-scope-ignored.mjs');
+  } finally {
+    try { unlinkSync(probeAbs); } catch { /* noop */ }
+    try { unlinkSync(ignAbs); } catch { /* noop */ }
+  }
+}
 
 // 正對照：塞一支真的含未宣告 import 的暫存檔進 scripts/ ⇒ 掃描器必須抓到
 {

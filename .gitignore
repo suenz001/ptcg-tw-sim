@@ -82,3 +82,8 @@ __m6a/
 
 # 平行 runner 的沙盒報表（放在沙盒根旁邊，正常不會進 repo，保險起見列管）
 /__rt/
+
+# 建置中繼與工作產物（都不進版控；實測未追蹤檔裡這三類佔 316/609）
+.svelte-kit-staging/
+tournament-dumps/
+__*/

@@ -1934,3 +1934,52 @@ tsc 只報「參數個數不符」，完全看不出招式已經沒有註冊。
 2. **明列「切掉的那一段應該含有什麼、不應該含有什麼」**
    —— 例如「不得含 `regPost(` / `regPre(` / `reg(`」，否則就是把註冊點吃掉了。
 3. 改完用 `git cat-file -p <BASE>:<path>` 取 BASE 做一次 diff，**逐行看被刪的是不是只有預期的那些**。
+
+---
+
+## Rule 58（2026-09-19）：本機驗全套用 `scripts/run-tests.mjs`，**不要**再分批跑 `npm test`
+
+### 為什麼
+`npm test` 那條鏈已經 36,619 字元、738 步。**Windows cmd.exe 的單行上限是 8191 字元**，
+所以在站長的本機上它根本起不來（實測錯誤碼 -4064，一步都沒執行）。
+過去的做法是「一批 8~14 支分批跑」——那不只慢（序列 38.3 分），還有一個更糟的性質：
+**分批的邊界是人選的**，漏掉哪幾支不會有任何東西告訴你。
+
+### 怎麼用
+```
+node scripts/run-tests.mjs                      平行跑（預設 6 workers，實測 12.5 分）
+node scripts/run-tests.mjs --workers 1          序列基準（38.3 分）
+node scripts/run-tests.mjs --baseline <json>    跑完逐支比對基準
+node scripts/run-tests.mjs --list               只印清單與分類
+node scripts/run-tests.mjs --clean-residue      清主樹殘檔（預設 dry-run，--apply 才動）
+```
+
+### 不可以動的三件事
+1. **清單只能從 `package.json` 的 `scripts.test` 解析**，不可以自己 `readdirSync('scripts')`
+   —— 鏈上有 738 步而 `scripts/` 有 884 個 .mjs，自己列目錄會跑到沒上鏈的孤兒、也會漏掉
+   刻意重複的步驟。解析判準在 `scripts/lib/chain-parse.mjs`，只有那一份（Rule 38），
+   `test-runner-and-chain-hygiene` 的 C1/C2 在守它。
+2. **沙盒的 repo 一定要在磁碟機代號的子目錄**（`P:\repo`，不是 `P:\`）。
+   `dirname('P:\src')` 回 `'P:\'`（磁碟機根一定帶尾斜線），而主樹的 `dirname` 不帶
+   ⇒ 全 chain 有 23 支用 `slice(ROOT.length)`、4 支用 `ROOT.length + 1`，
+   放在代號根會把 `src` 切成 `rc`（實測 test-v6368 就是這樣炸的）。
+3. **`snapLevel` 必須在 `isFile()` 之前擋掉 SKIP_DIRS**。git worktree 裡的 `.git` 是**檔案**，
+   一旦進了快照，回復邏輯會把它當「不在清單的新增檔」刪掉，整個沙盒的 git 就廢了。
+
+### 三種 skip 標記不可以混用
+| 標記 | 意思 | 來源 |
+|---|---|---|
+| `SHALLOW-SKIP` | 拿不到 git 歷史 | `scripts/lib/base-blob.mjs` |
+| `PLATFORM-SKIP` | 作業系統做不到 | test-v6263 ④ |
+| `ENV-SKIP` | 執行環境缺東西（**CI 上會 throw**） | `scripts/lib/env-skip.mjs` |
+
+⚠ test-v6304 曾借用 `shallowSkip()` 來報「這台機器沒有 playwright」，害
+「SHALLOW-SKIP 必須為 0」這個硬判準釘不住（本機恆有 2 次）。分開之後本機 SHALLOW-SKIP 回到 0。
+**新增 skip 路徑時先問：這三種哪一種？都不是就再開一種，不要挪用。**
+
+### 全站掃描型守衛的母體
+一律問 `scripts/lib/tracked-scope.mjs` 的 `filterNotIgnored()`（＝「git 有沒有忽略它」），
+**不要用檔名樣式濾**。樣式濾會漏掉站長手寫的 `_repro_*.mjs`，而那些檔一旦被
+`git add -A` 就會進版控，正是最需要被掃的。
+⚠ 母體換判準時要同時補**下限斷言**與**正反對照**（未忽略的新檔必進母體、已忽略的殘檔不得進），
+否則「濾過頭」是靜默的假綠。

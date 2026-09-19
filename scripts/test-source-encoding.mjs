@@ -13,6 +13,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { filterNotIgnored } from './lib/tracked-scope.mjs';   // 母體判準的單一真相（Rule 38）
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const EXT = new Set(['.ts', '.js', '.mjs', '.cjs', '.svelte', '.json', '.html', '.css', '.md']);
 const SKIP_DIR = new Set(['node_modules', '.git', '.svelte-kit', 'build', 'dist', 'coverage']);
@@ -33,6 +34,24 @@ for (const sub of ['scripts', 'static']) {
       }
     })(join(ROOT, sub));
   } catch { /* 目錄不存在就跳過 */ }
+}
+
+// ⭐ 母體 = 「git 沒有忽略的檔」。
+//   為什麼要濾：守衛的 esbuild 暫存殘檔（.gitignore 已列管）會混進 src/scripts/static 的
+//   遞迴掃描，讓這支守衛掃到一堆與產品無關的檔；而殘檔若剛好是壞的 UTF-8，就是假紅。
+//   為什麼不用檔名樣式濾：站長手寫的 `_repro_*.mjs` 沒有被 gitignore 忽略、會進版控，
+//   本來就該掃。判準與「會不會進版控」對齊，這件事只寫一份（scripts/lib/tracked-scope.mjs）。
+const RAW_COUNT = files.length;
+{
+  const kept = filterNotIgnored(ROOT, files);
+  files.length = 0;
+  files.push(...kept);
+}
+// ⭐ 母體下限：濾過頭會在這裡爆，而不是靜默變成「掃了 0 個檔也印 ✅」（空真）
+if (files.length < 900) {
+  console.log(`原始碼編碼/完整性：❌ 母體只剩 ${files.length} 檔（濾前 ${RAW_COUNT}）——`
+    + ' 預期 >= 900。母體判準（scripts/lib/tracked-scope.mjs）可能濾過頭了。');
+  process.exit(1);
 }
 
 let pass = 0, fail = 0;
@@ -57,4 +76,5 @@ if (bad.length) {
   console.log('   （v6.072：tools.ts 就是這樣掉了整段 Tool TRAINER_GUARD 自動登記）。');
   process.exit(1);
 }
-console.log(`原始碼編碼/完整性：✅ ${files.length} 檔全部是合法完整的 UTF-8（無截斷／損毀）`);
+console.log(`原始碼編碼/完整性：✅ ${files.length} 檔全部是合法完整的 UTF-8（無截斷／損毀）`
+  + `（掃描前 ${RAW_COUNT} 檔，扣掉 ${RAW_COUNT - files.length} 個被 .gitignore 列管的殘檔）`);

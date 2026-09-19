@@ -75,6 +75,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import os from 'node:os';
 import { parseChain as parseChainCentral } from './lib/chain-parse.mjs';
+import { filterNotIgnored } from './lib/tracked-scope.mjs';   // 殘檔清理的第四道條件
 
 // Rule 46：ROOT 一律用 fileURLToPath，禁 process.cwd()
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -110,6 +111,8 @@ const OPT = {
   //   （因為序列基準也有 restore）。用 `--workers 1 --no-restore` 照 chain 原序跑一次，
   //   再跟有 restore 的基準比，才能說「runner 全綠 ⇒ npm test 全綠」而不只是
   //   「⇒ 每一支單獨跑都綠」。這兩句差一個量詞。
+  cleanResidue: argFlag('--clean-residue'),   // 清主樹的守衛殘檔（預設 dry-run）
+  apply: argFlag('--apply'),                  // 與 --clean-residue 併用才會真的搬移
   noRestore: argFlag('--no-restore'),
   keep: argFlag('--keep'),           // 跑完不拆沙盒（除錯用）
   noSubst: argFlag('--no-subst'),    // 不用磁碟機代號（Linux 或除錯）
@@ -128,6 +131,78 @@ const log = (...a) => console.log(...a);
 const now = () => Date.now();
 const fmtS = (ms) => (ms / 1000).toFixed(1) + 's';
 const fmtM = (ms) => (ms / 60000).toFixed(1) + '分';
+
+// ════════════════════════════════════════════════════════════════════════════
+// 【0.5】--clean-residue：清掉主樹的守衛殘檔
+// ────────────────────────────────────────────────────────────────────────────
+// ⚠⚠ **絕不使用裸的 `git clean -X`**：那會把 .env、憑證檔、node_modules、.svelte-kit
+//   等一切被忽略的東西都列進去——一個手滑就是災難。這裡用四道各自獨立的條件收斂，
+//   缺任何一道都不動那個檔：
+//     ① 位置：只看 repo 根一層與 scripts/ 一層（117 條碰撞暫存路徑全在這兩層）
+//     ② 形狀：basename 以 '.' 開頭，或符合 tmp<亂碼>.mjs
+//     ③ 副檔名白名單：.ts/.js/.mjs/.cjs/.txt（守衛的 esbuild 產物就這幾種）
+//     ④ **git 確實忽略它**（問 scripts/lib/tracked-scope.mjs，不抄第二份 .gitignore 規則）
+//   再加 mtime > 10 分鐘（還在跑的守衛正在用的檔不碰）。
+//   預設 **dry-run**，要加 --apply 才會動；而且不是刪除，是搬到 <repo>-trash/<日期>/，
+//   保留相對路徑（站長裁定：驗收完成後他自己決定何時真的刪）。
+// ⚠ EPERM／檔案被占用一律跳過並列報，不中斷。
+const RESIDUE_EXT = /\.(ts|js|mjs|cjs|txt)$/i;
+const RESIDUE_MIN_AGE_MS = 10 * 60 * 1000;
+function cleanResidue() {
+  const cands = [];
+  for (const rel of ['', 'scripts']) {
+    const dir = rel ? join(ROOT, rel) : ROOT;
+    let ents;
+    try { ents = readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of ents) {
+      if (!e.isFile()) continue;
+      const isDot = e.name.startsWith('.');
+      const isTmp = /^tmp[a-z0-9_]{4,}\.mjs$/i.test(e.name);
+      if (!isDot && !isTmp) continue;               // ②
+      if (!RESIDUE_EXT.test(e.name)) continue;      // ③
+      cands.push(rel ? rel + '/' + e.name : e.name);
+    }
+  }
+  if (!cands.length) { log('沒有符合殘檔形狀的候選。'); return 0; }
+
+  // ④ 只留 git 確實忽略的（未被忽略 ⇒ 可能是有意義的檔，絕不碰）
+  const abs = cands.map((r) => join(ROOT, r.replace(/\//g, IS_WIN ? '\\' : '/')));
+  const notIgnored = new Set(filterNotIgnored(ROOT, abs));
+  const now = Date.now();
+  const pick = [];
+  const skipped = [];
+  for (let i = 0; i < cands.length; i++) {
+    if (notIgnored.has(abs[i])) { skipped.push([cands[i], 'git 沒有忽略它 ⇒ 不碰']); continue; }
+    const st = statOf(abs[i]);
+    if (!st) { skipped.push([cands[i], '讀不到']); continue; }
+    if (now - st.mtimeMs < RESIDUE_MIN_AGE_MS) { skipped.push([cands[i], '10 分鐘內動過 ⇒ 可能正在用']); continue; }
+    pick.push([cands[i], abs[i], st.size]);
+  }
+  const mb = (pick.reduce((n, x) => n + x[2], 0) / 1048576).toFixed(1);
+  log(`候選 ${cands.length} 個 → 符合全部四道條件 ${pick.length} 個（${mb} MB）；跳過 ${skipped.length} 個`);
+  for (const [f, why] of skipped.slice(0, 10)) log(`  跳過 ${f} —— ${why}`);
+  if (!OPT.apply) {
+    log('\n（dry-run。要真的搬移請加 --apply）');
+    for (const [f] of pick.slice(0, 20)) log('  會搬走 ' + f);
+    if (pick.length > 20) log(`  …還有 ${pick.length - 20} 個`);
+    return 0;
+  }
+  const dest = join(ROOT + '-trash', new Date().toISOString().slice(0, 10) + '-runner');
+  let moved = 0;
+  const failed = [];
+  for (const [rel, src] of pick) {
+    const dst = join(dest, rel.replace(/\//g, IS_WIN ? '\\' : '/'));
+    try {
+      ensureDir(dirname(dst));
+      copyFileSync(src, dst);
+      rmSync(src, { force: true });
+      moved++;
+    } catch (e) { failed.push([rel, String(e && e.code || e)]); }
+  }
+  log(`搬走 ${moved} 個 → ${dest}`);
+  for (const [f, c] of failed) log(`  ⚠ 搬不動 ${f}（${c}）—— 跳過，不中斷`);
+  return 0;
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // 【1】清單：唯一真相是 package.json 的 scripts.test
@@ -693,13 +768,25 @@ function runOne(script, slot, durMap) {
         //   也就是說 `shallowSkip()` 這個機制**被挪用來報告「缺瀏覽器」**，語意不只是淺複製。
         //   主樹與沙盒都是 2 次（我逐一實跑比對過）⇒ 那是既有狀態，不是沙盒或爭用造成的。
         //   ⇒ 正確的判準是「**與序列基準逐支一致**」：既有的 skip 照舊，爭用**新增**的才翻紅。
-        const shallowSkips = (out.match(/SHALLOW-SKIP/g) || []).length;
+        // 三種 skip 標記各自計數、各自比對。它們代表三件不同的事：
+        //   SHALLOW-SKIP   拿不到 git 歷史（lib/base-blob.mjs）
+        //   PLATFORM-SKIP  作業系統做不到（test-v6263 ④：Windows 套不上無副檔名的 PATH shim）
+        //   ENV-SKIP       執行環境缺東西（lib/env-skip.mjs；CI 上會 throw）
+        // ⚠ 混在一個計數裡就沒辦法對任何一種下判準——test-v6304 曾借用 shallowSkip() 來報
+        //   「沒有 playwright」，害 SHALLOW-SKIP 在本機恆有 2 次而釘不住。分開之後
+        //   （v6304 F1 已改用 envSkip）本機的 SHALLOW-SKIP 實測回到 0。
+        const skipMarks = {
+          shallow: (out.match(/SHALLOW-SKIP/g) || []).length,
+          platform: (out.match(/PLATFORM-SKIP/g) || []).length,
+          env: (out.match(/ENV-SKIP/g) || []).length,
+        };
+        const shallowSkips = skipMarks.shallow;
         const leak = diffSandbox(sbBefore, snapSandbox(slot.sb));
         const esc = diffEscape(escBefore, snapEscape(slot));
         const restored = restoreSandbox(slot, leak);
         r = {
           script, ms, exitCode: timedOut ? 'TIMEOUT' : code, pass, fail, timedOut,
-          outLines: fp.lines, outFp: fp.sha, numFp: fp.num, shallowSkips,
+          outLines: fp.lines, outFp: fp.sha, numFp: fp.num, shallowSkips, skipMarks,
           timeoutMs, sandbox: slot.name, drive: slot.letter || null,
           leak, restored, escape: esc.hard, escapeAllowed: esc.allowed,
           tail: (code !== 0 || timedOut) ? out.slice(-2500) : '',
@@ -952,6 +1039,8 @@ function finish(ctx) {
   const escaped = results.filter((r) => r.escape.length);
   const leaked = results.filter((r) => r.leak.length);
   const shallow = results.filter((r) => (r.shallowSkips || 0) > 0);
+  const marked = results.filter((r) => r.skipMarks
+    && ((r.skipMarks.shallow || 0) + (r.skipMarks.platform || 0) + (r.skipMarks.env || 0)) > 0);
   // --only 是除錯子集，其餘幾百支當然「沒跑到」，那不是缺陷（D12 的另一半）
   const missing = OPT.only.length ? [] : chain.uniq.filter((s) => !byScript.has(s));
 
@@ -971,11 +1060,16 @@ function finish(ctx) {
         if (!b) { diffs.push({ script: r.script, why: '基準沒有這一支' }); continue; }
         // ⭐ 不只比 exit code —— 也比 PASS/FAIL 條數。
         //   假綠的典型形狀是「支數還是綠、斷言數少跑了一整段」。
-        if (b.exitCode !== r.exitCode || b.pass !== r.pass || b.fail !== r.fail
-            || (b.shallowSkips || 0) !== (r.shallowSkips || 0)) {
+        const bm = b.skipMarks || { shallow: b.shallowSkips || 0, platform: 0, env: 0 };
+        const rm = r.skipMarks || { shallow: r.shallowSkips || 0, platform: 0, env: 0 };
+        const markStr = (m) => `sh${m.shallow || 0}/pf${m.platform || 0}/env${m.env || 0}`;
+        const marksDiffer = (bm.shallow || 0) !== (rm.shallow || 0)
+                         || (bm.platform || 0) !== (rm.platform || 0)
+                         || (bm.env || 0) !== (rm.env || 0);
+        if (b.exitCode !== r.exitCode || b.pass !== r.pass || b.fail !== r.fail || marksDiffer) {
           diffs.push({ script: r.script,
-            why: `基準 exit=${b.exitCode} P${b.pass}/F${b.fail} skip${b.shallowSkips || 0}`
-               + ` ／ 本次 exit=${r.exitCode} P${r.pass}/F${r.fail} skip${r.shallowSkips || 0}` });
+            why: `基準 exit=${b.exitCode} P${b.pass}/F${b.fail} ${markStr(bm)}`
+               + ` ／ 本次 exit=${r.exitCode} P${r.pass}/F${r.fail} ${markStr(rm)}` });
         }
         // ⚠ 兩個偵測器要**各自獨立**判斷，不可以用 else-if 串起來：
         //   骨架差異會把計數向量差異整個遮住（實測 43 支軟差異裡，12 支骨架差異
@@ -1016,7 +1110,8 @@ function finish(ctx) {
     },
     results: results.map((r) => ({
       script: r.script, ms: r.ms, exitCode: r.exitCode, pass: r.pass, fail: r.fail,
-      outLines: r.outLines, outFp: r.outFp, numFp: r.numFp, shallowSkips: r.shallowSkips,
+      outLines: r.outLines, outFp: r.outFp, numFp: r.numFp,
+      shallowSkips: r.shallowSkips, skipMarks: r.skipMarks,
       timedOut: r.timedOut, timeoutMs: r.timeoutMs, sandbox: r.sandbox, drive: r.drive,
       phase: r.phase, heavy: !!r.heavy, queuedAtMs: r.queuedAtMs,
       leak: r.leak, restored: r.restored, escape: r.escape, escapeAllowed: r.escapeAllowed,
@@ -1039,8 +1134,11 @@ function finish(ctx) {
   log(`escape（沙盒外寫入，硬判準）: ${escaped.length}`);
   log(`主樹差異（硬判準）: ${mainDiff.hard.length}   已授權例外: ${mainDiff.allowed.length}`);
   log(`leak（沙盒殘檔，列報不擋）: ${leaked.length}`);
-  log(`SHALLOW-SKIP: ${shallow.length} 支／共 ${shallow.reduce((n, r) => n + r.shallowSkips, 0)} 次` +
-      `（判準是「與基準逐支一致」，不是「為 0」—— 見 runOne 的註解）`);
+  {
+    const tot = (k) => marked.reduce((n, r) => n + (r.skipMarks[k] || 0), 0);
+    log(`skip 標記（三種各自逐支與基準比對）: SHALLOW=${tot('shallow')} 次／`
+      + `PLATFORM=${tot('platform')} 次／ENV=${tot('env')} 次，共 ${marked.length} 支`);
+  }
   if (missing.length) log(`⚠ 沒跑到: ${missing.length}`);
   if (cmp) {
     log(`與基準逐支比對：硬差異 ${cmp.diffs.length} 支／輸出指紋軟差異 ${cmp.soft.length} 支`
@@ -1085,9 +1183,12 @@ function finish(ctx) {
   }
   log(`\n報表：${OPT.report}`);
 
-  if (shallow.length) {
-    log('\n【SHALLOW-SKIP 明細（與基準比對才是判準；無基準時僅列報）】');
-    for (const r of shallow.slice(0, 20)) log(`  ${basename(r.script)} × ${r.shallowSkips}`);
+  if (marked.length) {
+    log('\n【skip 標記明細（與基準比對才是判準；無基準時僅列報）】');
+    for (const r of marked.slice(0, 20)) {
+      const m = r.skipMarks;
+      log(`  ${basename(r.script)}  sh${m.shallow || 0}/pf${m.platform || 0}/env${m.env || 0}`);
+    }
   }
   const bad = failed.length + escaped.length + mainDiff.hard.length + missing.length +
               (statusChanged ? 1 : 0) + (cmp ? cmp.diffs.length : 0);
@@ -1096,6 +1197,10 @@ function finish(ctx) {
 
 // ════════════════════════════════════════════════════════════════════════════
 try {
+  if (OPT.cleanResidue) {
+    tornDown = true;   // 這條路徑不建沙盒，也不要去動 subst
+    process.exit(cleanResidue());
+  }
   if (OPT.teardownOnly) {
     for (const L of OPT.drives) { try { substDel(L); } catch {} }
     log('subst 全部釋放：' + OPT.drives.join(', '));
