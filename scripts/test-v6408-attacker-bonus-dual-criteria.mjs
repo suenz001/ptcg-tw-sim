@@ -366,6 +366,29 @@ await T('E3 ⭐⭐⭐ 干擾命中判定的旗標不得被「復活」（潑沙�
     '⚠⚠ attackFailureFlipCountThisTurn 被復活了（下一個自己的回合還要再擲一次硬幣）');
 });
 
+await T('E4 ⭐⭐ _attackerActiveBonusDone 真的有被設（否則同一次攻擊會被重複套一遍）', () => {
+  // ⚠ 這個旗標是「engine 主管線已經套過加成」的唯一訊號；中央 helper（dealAttackDamageToTarget
+  //   那條延後／狙擊路徑）靠它早退。收斂之後設定端只剩**一處**（中央 helper 尾端），
+  //   而它沒有任何行為守衛 —— 目前卡池裡沒有「主傷害 > 0 又在 POST 再打一次戰鬥位」的卡，
+  //   所以行為端測不出來 ⇒ 這裡用**直呼兩次**把契約釘住（v6.408 獨立審查 🟡4）。
+  const st = mkState({ atkCard: P_L.card, atkEnergy: [VOLT, VOLT, BL] });
+  const r1 = central(st, 0, P_L.dmg, pool);
+  assert.strictEqual(r1.formula.length, 1, `第一次應該套到伏特一項，實際 ${j(r1.formula)}`);
+  assert.strictEqual(r1.state._attackerActiveBonusDone, true, '⚠⚠ 套完加成之後沒有設 _attackerActiveBonusDone');
+  const r2 = central(r1.state, 0, P_L.dmg, pool);
+  assert.deepStrictEqual(r2.formula, [], `第二次必須完全早退，實際 ${j(r2.formula)}`);
+  assert.strictEqual(r2.damage, P_L.dmg, `第二次不該再加傷：${r2.damage}`);
+});
+await T('E5 ⭐ 反安慰劑：E4 不是恆真（旗標為 false 時第二次會再套一次）', () => {
+  const st = mkState({ atkCard: P_L.card, atkEnergy: [VOLT, VOLT, BL] });
+  const r1 = central(st, 0, P_L.dmg, pool);
+  const cleared = { ...r1.state };
+  delete cleared._attackerActiveBonusDone;
+  const r2 = central(cleared, 0, P_L.dmg, pool);
+  assert.strictEqual(r2.formula.length, 1,
+    '⚠ 把旗標拿掉之後第二次竟然還是早退 ⇒ E4 守的不是旗標（可能是別的早退條件）');
+});
+
 console.log('\n【G】⭐⭐⭐ 零行為改變：「減項 ≥ 基礎傷害」時後面的加項一律不套（逐字保留 BASE 的行為）');
 // ⚠⚠ engine 的 inline 版**每一段**都有 `baseDamage > 0` 的閘；中央 helper 原本只在入口檢查一次。
 //   收斂時若不補逐段閘，「招致削傷 ≥ 基礎」的盤面會無聲從「0」變成「繼續加」。

@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'af36811389c5a546e9da86ddbc2f35487a0aadfa';   // v6.387（v6.388 的上一版）
+const PREV_SHA = 'a00e830aac7572a43cfba16a494d3c921a026b1d';   // v6.408（v6.408a 的上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,139 +757,14 @@ const PREV_SHA = 'af36811389c5a546e9da86ddbc2f35487a0aadfa';   // v6.387（v6.38
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⭐v6.403：「寶可夢【ex】」／「寶可夢【ex】・【V】」／「擁有規則的寶可夢」三個判準依卡面逐字分開。
-  //   三個述詞的定義全部下沉到 leaf selection-filter.ts，各呼叫端改走中央；
-  //   全 live 卡池 5225 張逐格比對，H/I/J 零行為變更（__m6a/matrix403.mjs）。
-  'src/lib/game/effects/cards/abra_mawile_deck.ts',
-  'src/lib/game/effects/cards/v168_supporters.ts',
-  'src/lib/game/effects/cards/v2590_i_wave9_misc3.ts',
-  // ⭐v6.404：修 v6.403 的退化（共用的 isExCard 被 6 個卡面不同的呼叫點共用）＋
-  //   把「擁有規則的寶可夢」剩下的三份手刻收斂（呆呆王｜耀閃挑戰 ×2、沐淨）。
-  'src/lib/game/copy-attack.ts',
-  // ⚠ m5_preview.ts 已在 v6.394 那一批裡（PREV_ALLOWED 不可以有重複條目，deepStrictEqual 會紅）。
-  'src/lib/game/effects/cards/slowking_lucario_deck.ts',
-  // ⭐⭐v6.394：tsc 型別清理（站長裁示 ④）—— 55 條型別錯誤清成 0。
-  //   ⚠ 這一版動到的玩家端檔案**特別多**，但每一處都是型別層：補型別註記／補型別述詞／
-  //     非空斷言／移除現查過的死比較／把半成品的 CardInstance 改走中央的 toBareCard。
-  //     行為零改動的根據寫在各處的行內註解與 commit 訊息裡；
-  //     engine.ts 的 8 組改動另由 scripts/lib/engine-strip-v6394.mjs 逐字釘住。
-  'src/lib/game/ai-eval.ts',
-  'src/lib/game/ai.ts',
-  'src/lib/game/effects/_shared.ts',
-  'src/lib/game/effects/cards/m2_dragon_charizard_batch.ts',
-  'src/lib/game/effects/cards/m6_wave10.ts',
-  'src/lib/game/effects/cards/v2750_h_wave2_full.ts',
-  'src/lib/game/effects/cards/v2998_g2.ts',
-  'src/lib/game/engine.ts',
-  'src/lib/game/room-oracle.ts',
-  'src/lib/game/room.ts',
-  'src/lib/game/selection-filter.ts',
-  'src/lib/game/types.ts',
-  'src/lib/notify.ts',
-  // ⭐v6.388：MF 卡包上線（資料層 ＋ 招式實裝批次1）。
-  //   ・effects.ts：coinHeadsSelfImmuneNextPost 加 export、ABILITY_RETREAT_MOD 收斂
-  //     森林秘道／夜之秘道共用判準、載入 mf_wave1
-  //   ・mf_wave1.ts：新檔（10 招，全部復用既有中央 helper）
-  //   ・static/cards/MF.json：新檔（49 張）；index.json ＋ card-set-map.json：各加 MF
-  //   ・首頁 changelog 三步搬運（三檔）＋ version.ts
-  //   ⚠ engine.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 零改動。
-  // ⭐v6.388a（Fable 5 複審 R1／R2 收斂）：再多動 6 個卡檔，全部是**把本地重複判準改指中央**，
-  //   沒有新增任何第二份判準：
-  //   ・selfCountersBonusPre（v6.388 新造，與 v6.349 的 selfCountersMultiplyPre 重複）已刪，
-  //     8 個同措辭 key 全部改指 selfCountersMultiplyPre
-  //   ・defHasCountersBonusPre 再收斂 5 張既有卡
-  //   ・焚焰蚣｜緊束粉碎、毛崖蟹｜喀嚓鉗 的擲幣外殼收斂到 coinHeadsDiscardOppEnergyPost
-  //   ⚠ engine.ts 仍然零改動。
-  'src/lib/game/effects.ts',
-  'src/lib/game/effects/cards/m5_preview.ts',
-  'src/lib/game/effects/cards/m6_wave2.ts',
-  'src/lib/game/effects/cards/mf_wave1.ts',
-  'src/lib/game/effects/cards/mf_wave2.ts',
-  // ⭐v6.391 M-P 特典卡（J 標）32 張進卡庫 ＋ 招式實裝批次 1（11 招，全部指既有中央 helper）：
-  //   ・mp_j_wave1.ts：新檔（8 招）；另外 3 招「丟 1 個自身能量」進 effects.ts 的 SELF_DISCARD_UNITS_BATCH
-  //   ・static/cards/M-P-J.json：103 → 135 張；index.json 的 count／supertypeCounts 跟著重算
-  //   ⚠ engine.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 仍然零改動。
-  'src/lib/game/effects/cards/mp_j_wave1.ts',
-  'src/lib/game/effects/cards/v2346_j_mark_batch.ts',
-  'src/lib/game/effects/cards/v2510_i_wave3c_status_self.ts',
-  'src/lib/game/effects/cards/v2560_i_wave6_complex.ts',
-  // ⭐v6.398：刪掉檔內零呼叫點的 selfReturnNTypeEnergyToHandPost 死碼（判準非 host-aware，
-  //   留著只會被日後新卡照抄）。純刪除，沒有任何 Firestore／玩家端讀取變化。
-  'src/lib/game/effects/cards/v2610_i_wave11_misc4.ts',
-  // ⭐v6.399：「傷害指示物個數」的 16 份判準收成一份（全部改走 _shared 的 damageCounterCount）＋
-  //   「對手傷害指示物 × N」12 招改走中央 oppCountersMultiplyPre。純收斂，沒有任何 Firestore／讀取變化。
-  'src/lib/game/effects/cards/maroon_dragon_deck.ts',
-  'src/lib/game/effects/cards/six_decks.ts',
-  'src/lib/game/effects/cards/v2490_i_wave3a_conditional.ts',
-  'src/lib/game/effects/cards/v2620_i_wave12_misc5.ts',
-  'src/lib/game/effects/cards/v2630_i_wave13_misc6.ts',
-  'src/lib/game/effects/cards/v2999_g3_wave1.ts',
-  'src/lib/game/effects/cards/v3700_audit_orphans.ts',
-  'src/lib/game/effects/cards/v2650_i_wave15_misc8.ts',
-  'src/lib/game/effects/cards/v2660_i_wave16_misc9.ts',
-  'src/lib/game/effects/cards/v2740_h_wave1_simple.ts',
-  'src/lib/game/effects/cards/v2760_h_wave3_complex.ts',
-  // ⭐v6.389 招式清單溢出（玩家回報：夢幻ex｜記憶螺旋 後面的招式按不下去）：
-  //   ・ui-limits.ts：新檔，ATTACK_LIST_INLINE_MAX 的單一來源
-  //   ・+page.svelte：招式數 > 上限時收成一顆按鈕 ＋ 走既有的 .selection-modal picker
-  //     ＋ .scroll-list 中央 utility ＋ .atk-overflow 的 Fable 槽位
-  //   ⚠ engine.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 仍然零改動。
-  // ⭐v6.390 可捲清單收斂到中央 utility（站長交辦「順手收斂」）＋ 版本號補 bump：
-  //   ・+page.svelte：7 個清單 class 併進同一條群組規則，各自只留 --scroll-list-max
-  //   ・version.ts 6.388 → 6.390（v6.389／v6.389a 當時沒 bump）
-  //   ・changelog.html：第一則改寫（v6.388 尚未上正式站 ⇒ 走 test-v6264 F0b，不搬運）
-  //   ⚠ engine.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 仍然零改動。
-  'src/lib/ui-limits.ts',
-  // ⭐⭐v6.402：「同一個判準只能有一份」＋「場上寶可夢屬性一律問有效屬性」的收斂。
-  //   ・effects.ts：新增 fieldSlotOf／fieldOwnerIdxOf／fieldPokemonHasType／specialEnergyHolderCtx／
-  //     punkHelmetReflectDamageFor／toolDefenseByTypeApplies 六支中央述詞；龐克頭盔與
-  //     TOOL_DEFENSE_REDUCE_BY_TYPE 的備戰管線改走中央；硬岩【鬥】／伏特【雷】改問有效屬性；
-  //     checkSpecialEnergyStatusImmune 的 state 改必填。
-  //   ・engine.ts：龐克頭盔／豪邁炸彈 KO 路徑／TOOL_DEFENSE_REDUCE_BY_TYPE／伏特【雷】／燃料【火】／
-  //     重試徽章 ×2／getEffectiveHP 的 owner 推導與 ctx 組裝／撤退費 hook 的 ctx —— 共 11 組，
-  //     另由 scripts/lib/engine-strip-v6402.mjs 逐字釘住。
-  //   ・tools.ts：新增 megaExAttackerAndNonMegaHolder／luxuryBombGateOk，訂製背心與豪邁炸彈共用。
-  //   ・energy_cards.ts：磁鐵【鋼】／泡沫【水】的 holder gate 改讀 ctx.effectiveTypes。
-  //   ・_shared.ts：兩個特殊能量 hook 的簽名補上**必填** SpecialEnergyHolderCtx。
-  //   ・defense.ts：暗影【惡】能量的 holder 屬性改走中央述詞。
-  //   ・m5_preview.ts：checkSpecialEnergyStatusImmune 呼叫端補傳 state。
-  //   ⚠ 玩家可見行為**零變化**：會改變有效屬性的三張卡（狠辣椒ex／小碎鑽／鐵轍跡）的印刷屬性
-  //     本來就已經命中各自的條件，化石沒有招式 ⇒ test-v6402 的 E2 逐格差分證明差異為 0。
-  'src/lib/game/defense.ts',
-  'src/lib/game/effects/cards/energy_cards.ts',
-  'src/lib/game/effects/cards/tools.ts',
-  'src/lib/version.ts',
-  // ⭐v6.393：修一個**既有的** Rule 48 違規 —— friends/+page.svelte 的 CSS 註解裡寫了樣式標籤的
-  //   開頭字面，而且排在真標籤之後 ⇒ 所有用 lastIndexOf 取樣式區塊的守衛對這個檔一直是切歪的。
-  //   （v6.392 的中央 helper 加了 fail-closed 之後才變成看得見的錯誤。）**只改註解文字，行為零改動。**
-  'src/routes/friends/+page.svelte',
-  // ⭐⭐v6.406：好友列版面收斂 —— 四個區的按鈕群包進 `.acts` wrapper（折斷點只剩一個），
-  //   並把**私聊／解除好友／封鎖三顆**收進「更多」；房名那一行移到 if／else 鏈外面。
-  //   375×812 實測（**含私聊**，與線上相同的掛載參數）：
-  //     列高 110,110,115,86,110,86,48 → 101,101,77,77,101,77,48，每列按鈕行數全 2 → 全 1；
-  //     1366×768 完全不變。展開「更多」前後列高也完全相同。
-  //   ⚠ 這一版**修掉了一個線上已經存在的破版**（v6.405 的「錦標賽對戰中」那一列，
-  //     「封鎖」會掉到第三行靠左）—— 因為 Playwright 中央閘預設 off，本機全套一直 SKIP 掉那一段，
-  //     CI（Linux 字型較窄）又剛好不會觸發 ⇒ 從來沒被任何一次綠燈覆蓋到。
-  // ⚠ PREV_SHA 已經從 v6.387 累積到本版（19 版）。本版是玩家可見版，不適合順手重置；
-  //   下一個**純工具版**應該把 PREV_SHA 前移到那一版的 commit、清單重置（已記在 docs/changelog-internal.md）。
-  'src/lib/friends/FriendsPanel.svelte',
-  // ⭐⭐⭐v6.407：自身能量的「付出」延後到**造成傷害之後**（玩家回報：
-  //   超級雷電獸ex｜狂暴噴射打 330，身上的伏特【雷】能量沒有 +20）。
-  //   官方裁定：招式結算是三段 —— 傷害 → 招式效果（含付出）→ 受傷時特性／道具。
-  //   實測：行為端探針掃全部 1380 支 ATTACK_PRE，**43 支** 在 PRE 就移除自身能量 → 修後 0 支。
-  //   改動集中在中央管線：effects.ts 的 registerSelfDiscardMultiply／resolveOptInPayment／
-  //   fieldDiscardMultiplyPre 三支共用 helper 改成登記，另四支獨立實作跟著改；
-  //   engine.ts 在「傷害造成後」與「ATTACK_POST 之後」各 flush 一次（三個 v6407- 哨兵區塊）。
-  'src/lib/game/effects/cards/v155_attacks.ts',
-  'src/routes/game/+page.svelte',
-  'static/card-set-map.json',
-  'static/cards/M-P-J.json',
-  'static/cards/MF.json',
-  'static/cards/index.json',
-  'static/changelog-archive.html',
-  'static/changelog-bodies.html',
-  'static/changelog.html',
+  // ⚠⚠ v6.408a **前移重置**：PREV_SHA 從 v6.387 前移到 v6.408（a00e830a）。
+  //   這份清單原本從 v6.387 一路累積了 20 多版、50 多個檔案 —— 累積到最後，
+  //   「這一版動了什麼」的宣告會被淹沒在歷史裡，等於失去守護力（誰也看不出哪幾個是本版的）。
+  //   ⭐ 規矩：**每個純工具版（src/ 與 static/ 零改動）都應該順手把 PREV_SHA 前移、清單清空**，
+  //     下一個動玩家端的版本再從零重新列。
+  //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）——
+  //     驗法：`git branch -a --contains a00e830a` 要印得出 main。
+  //   ⚠ 本版（v6.408a）是純工具版：只動 scripts/ 與 docs/ ⇒ 這份清單是**空的**。
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + [...PREV_ALLOWED].sort().join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }

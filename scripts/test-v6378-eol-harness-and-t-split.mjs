@@ -201,8 +201,17 @@ console.log('\n【C】⭐ 修完之後它們**真的還在守**（把它們守�
       const mAllow = /const PREV_ALLOWED = \[[\s\S]*?\];/.exec(v72);
       if (!mAllow) {
         chk('★★★ C4 test-v6272：預期差異清單清空 ⇒ 必紅', false, '抓不到 PREV_ALLOWED 區塊（寫法改了？）');
-      } else if (mAllow[0].replace(/\s+/g, '') === 'constPREV_ALLOWED=[];') {
-        chk('★★★ C4 test-v6272：預期差異清單清空 ⇒ 必紅', false, 'PREV_ALLOWED 本來就是空的 ⇒ 這個突變不成立');
+      } else if (mAllow[0].split('\n').filter((l) => !l.trim().startsWith('//')).join('').replace(/\s+/g, '')
+                 === 'constPREV_ALLOWED=[];') {
+        // ⭐⭐v6.408a（IRON_RULES Rule 40：意圖沒被破壞，只是突變手段失效了）——
+        //   純工具版會把 PREV_SHA 前移、清單清空（見 test-v6272 裡那段註解）⇒「清空」這個突變
+        //   在清單本來就空的時候是 no-op，test-v6272 照樣綠，本條就會誤報成「守衛壞了」。
+        //   ⚠ 判斷「實質為空」必須**先剝掉註解**：前移那一版在清單裡留了六行說明，
+        //     不剝的話 `replace(/\s+/g,'')` 永遠不等於 'constPREV_ALLOWED=[];'（v6.408a 當場踩到）。
+        //   ⇒ 換一個**等價**的突變：塞一個不存在的條目。deepStrictEqual 是雙向的，
+        //     少列一個紅、多列一個也紅 ⇒ 同樣證明「git diff 真的有在比」。
+        mutMustRed('★★★ C4 test-v6272：預期差異清單塞一個假條目 ⇒ 必紅（證明 git diff 真的有在比，不是恆真）',
+          V72, mAllow[0], "const PREV_ALLOWED = ['src/lib/__v6408a_not_a_real_file__.ts'];", 'prev');
       } else {
         mutMustRed('★★★ C4 test-v6272：預期差異清單清空 ⇒ 必紅（證明 git diff 真的有在比，不是恆真）',
           V72, mAllow[0], 'const PREV_ALLOWED = [];', 'prev');
