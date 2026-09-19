@@ -1,9 +1,156 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.407 ⭐⭐⭐ 招式結算三段順序：自身能量的「付出」延後到造成傷害之後（中央管線）
+
+BASE `4f5474345449f4ced2d9f14512add27f6593c022`（v6.406）。
+⚠ 本版**動了 `src/lib/game/**`**（引擎與卡效）⇒ 部署要跑 **`update-tournament.bat`（先）
+＋ `redeploy-oracle.bat`（後）**（IRON_RULES Rule 43）。
+跑完用 `oracle-admin\verify-deploy.bat` 驗收。
+
+### 【零】起因
+
+玩家回報：超級雷電獸ex｜狂暴噴射，選擇把自己身上的能量丟棄打 330，
+但身上附的「伏特【雷】能量」沒有加到傷害（應該 330 + 20×N）。
+
+站長同時給了官方 Q&A（asia.pokemon-card.com 規則搜尋「伏特【雷】能量」）：
+
+> Q 使用身上附有 3 張「伏特【雷】能量」卡的閃電鳥的招式「十萬伏特」時，使用了招式的
+> 閃電鳥身上附加的能量卡會被全數丟棄，那麼會因「伏特【雷】能量」卡的效果而「＋60」點傷害嗎？
+> A 會「＋60」點。**這個情況下，會在造成招式傷害後，才丟棄閃電鳥身上附加的能量卡。**
+
+站長指示：做整體 audit、用**一勞永逸的收斂式中央管線**修，只處理 H／I／J 標。
+
+### 【一】官方的順序是**三段**，不是兩段
+
+    ① 傷害計算與造成  →  ② 招式效果（含付出自身能量）  →  ③ 受傷時的特性／道具
+
+| 段界 | 依據 |
+|---|---|
+| ①→② | 上面的伏特【雷】能量 Q&A ＋ `PTCG RULES/PTCG_RULES.md` §17.46.D（粉碎箭 vs 凍原堡壘：「在因招式『粉碎箭』的效果丟棄…能量之前，就會先計算招式的傷害」） |
+| ②→③ | §17.46.A（螺旋關節 vs 甲殼刺：能量已被放回手牌 ⇒ 甲殼刺選不到）、§17.46.D（夾尾巴逃跑）、§17.22.A（幸運頭盔 vs 脅迫獠牙） |
+
+⚠⚠ 我一開始把它想成兩段，被 Fable 5.1 翻案一次：
+「自丟能量之後，爆焰龜獸的甲殼刺撲空」**不是 bug，是官方正確行為**——
+因為②在③之前，能量在③發動時已經不在了。這一條後來成了守衛【C】的反向對照。
+
+⚠⚠ Fable 5.1 翻案二：退化點是 **v6.367**（站長裁定六-9）不是 v5.992。
+在 Linux 沙盒 checkout `912e9bf5`（v6.366）實測得 390，v6.367 之後才變 330。
+
+### 【二】中央管線（`effects.ts`）
+
+新增兩支中央 helper ＋ 一個 transient 欄位 `state._attackEnergyPayment`：
+
+```ts
+queueAttackEnergyPayment(state, aIdx, picked, verb, label)   // 只「登記」，不動場面
+flushAttackEnergyPayment(state, pool)                        // 真正執行，並在這裡才印 log
+```
+
+- `verb` 三種：`discard` / `return-to-hand` / `return-to-deck`。
+- 登記時**不印 log**；`flush` 時才印 ⇒ **log 的順序本身就是證據**（守衛【D】）。
+- `flush` 遍歷 active + bench 找 iid，**找不到就安靜跳過**（能量可能已被別的效果移走），
+  結束時把欄位清掉（transient，不可以跟著房間狀態同步出去）。
+
+改走中央管線的呼叫點：`registerSelfDiscardMultiply`、`resolveOptInPayment`、
+`fieldDiscardMultiplyPre`、厄鬼椪｜極限火焰、超級蒂安希ex｜花冠射線、
+`m2_dragon_charizard_batch.ts`、`v155_attacks.ts`。
+
+### 【三】`engine.ts` 的兩次 flush（都用 `// >>> v6407-…` 哨兵框住）
+
+1. `v6407-flush-attack-energy-payment`：在傷害 `addLog` 之後、龐克頭盔之前。
+   ⚠ 後面補一行 `defPlayers[aIdx] = newState.players[aIdx];` —— 否則後續步驟會拿
+   **stale 的 players** 反寫回去，把剛丟掉的能量「復活」。
+2. `v6407-flush-after-post`：在 `postFn(...)` 之後再 flush 一次。
+   ⚠ 這一條是實測才發現的：`resolveOptInPayment` 也被 **ATTACK_POST** 呼叫（災難衝擊），
+   第一次 flush 早於 POST ⇒ 登記的付出永遠不會執行。
+
+配套 `scripts/lib/engine-strip-v6407.mjs`（Rule 54，剝除鏈由新到舊），
+已接線到 test-v6265（兩處）、test-v6375、test-v6371。
+
+### 【四】守衛 `scripts/test-v6407-attack-energy-payment-order.mjs`（18 條）
+
+| 段 | 內容 |
+|---|---|
+| 【A】 | HEAD-FAIL 錨點（Rule 41 哨兵：中央 helper 缺席時誠實翻紅，不整支 throw） |
+| 【B】 | 主判準：B1 330／B2 一張伏特 350／B3 三張伏特 **390**（官方 Q&A 那一題）／B4 付出真的執行／B5 AI 路徑／**B6 ATTACK_POST 路徑（災難衝擊 250）＋ transient 不外洩**／**B7 備戰身上的能量（極降駕 210）**／**B8 registerSelfDiscardMultiply 帶 payload（強力伏特 210）** |
+| 【C】 | 反向對照：C1 正對照（甲殼刺必須有動靜，否則 C2 是空真）／C2 自丟後撲空 |
+| 【D】 | log 時序：「造成 N 點傷害」必須早於「將 M 張能量丟棄」 |
+| 【E】 | 範圍：逐支呼叫 ATTACK_PRE **兩趟**（不給 payload／給滿 payload），攻擊方能量數不得減少（下限自檢 ≥ 1300 支、趟數 ≥ 掃到支數×2） |
+| 【F】 | 不付出的路徑沒被連累：F1 選「否」260／F2 身上 0 能量 opt-in 仍 +130 |
+| 【G】 | 突變測試三條（flush 不執行／no-op／iid 找不到） |
+
+**HEAD-FAIL 實測（BASE 樹）：6 PASS / 9 FAIL** —— 紅的是 A1、B2、B3、B5、D1、E1、G1、G2、G3，
+其中 B3 正好重現玩家回報的 330。修後 **15 PASS / 0 FAIL**。
+
+探針（`__m6a/`，Rule 53）：
+- `probe407.mjs`：在 PRE 就移除自身能量的招式 **43 支 → 0 支**
+- `probe407b.mjs`：傷害差 80 組全部 +80（排除 15 支擲幣招式）
+- `repro407.mjs` 3/3、`repro407c.mjs`（甲殼刺反向對照）3/3
+
+### 【四・一】⭐⭐ 獨立審查（Fable 5.1）抓到的四個洞 —— 全部已補
+
+站長要求每次改版都要請 Fable 5 獨立審查。這一輪審查的價值很高：**🔴 = 0，但開了 6 個 🟡，
+其中四個是真的洞**，而且全部是「出貨碼的關鍵行沒有任何行為端斷言」——
+用突變證明：把那幾行改壞，原本的 15 條守衛**全部照樣綠**。
+
+| # | 洞 | 突變證明 | 補法 |
+|---|---|---|---|
+| 1 | engine 的**第二次 flush**（POST 之後）沒有守衛 | 拿掉它 ⇒ 15 條全綠，但災難衝擊的能量**永遠不丟**，而且 `_attackEnergyPayment` **洩漏到回傳 state**（`room.ts` 用 JSON 深拷貝同步 ⇒ 會寫進 Firestore／錦標賽 MongoDB） | 新增 **B6**（完整 applyAction 跑災難衝擊，斷言 250／身上剩 1／棄牌 2／`!('_attackEnergyPayment' in state)`） |
+| 2 | flush 的「**備戰也找**」分支沒有守衛 | 刪掉那一行 ⇒ 15 條全綠，但猛雷鼓ex｜極降駕的備戰能量不會被丟（傷害照給 ⇒ 白打） | 新增 **B7**（戰鬥場 1 張＋備戰 2 張，斷言 210／備戰能量歸零／棄牌 3） |
+| 3 | `registerSelfDiscardMultiply` 的「**玩家有給 payload**」分支沒有守衛 | 那個分支退回舊碼 ⇒ 15 條全綠，但雷丘｜強力伏特 190（應 210）—— **與玩家回報同型的 bug** | 新增 **B8**（雷丘｜強力伏特 帶 payload，斷言 210） |
+| 4 | **漏掉一個呼叫點**：厄鬼椪 水井面具ex｜激流水泵 仍在 PRE 當場把能量搬進牌庫 | 它只在「玩家真的勾了 3 個能量」時才走到那一段 ⇒ **只跑無 payload 的 E1 對它永遠是綠的** | 出貨碼改走 `queueAttackEnergyPayment(..., 'return-to-deck', ...)`；**E1 改成跑兩趟**（無 payload／滿 payload）並加「趟數 ≥ 支數×2」的自檢 |
+
+⭐⭐ 第 4 條順便推翻了我自己的宣稱：「43 支 → 0 支」**只在不給 payload 的情境成立**。
+補正後（含 payload）是 **44 支 → 0 支**。玩家 changelog 已一併改成 44 支。
+
+⚠ 激流水泵的 POST（對手備戰受 120）仍在 `p.deck` 裡找 `chosenIids` —— engine 的第一次 flush
+在「傷害之後、POST 之前」，所以 POST 執行時能量已經在牌庫裡，找得到、行為不變。
+探針 `__m6a/probe407d-hydro-pump.mjs` 實測：log 順序為
+「選了 3 個能量」→「造成 200 點傷害」→「將 3 張能量放回牌庫並重洗」→「選擇 1 隻對手備戰寶可夢」，
+牌庫 2→5、棄牌區 0、transient 不外洩、備戰 picker 正常開啟。
+
+**四個突變我自己重跑過一次（Rule：審查者的結論一律自行查證）**：
+M1（拿掉第二次 flush）⇒ B6 紅；M4（拿掉備戰搜尋）⇒ B7 紅；
+M6（payload 分支退回舊碼）⇒ B8 紅 **＋ E1 紅**；M7（激流水泵退回舊碼）⇒ E1 紅
+（訊息精準指出「厄鬼椪 水井面具ex|激流水泵（4→0，帶 payload）」）。每次突變後都以 md5 驗證還原。
+
+審查另外開的兩個 🟡 我採納為文案修正：`registerSelfDiscardMultiply` 的 PRE log
+原本也寫「丟棄 N 個能量」，與 flush 印的「將 N 張能量丟棄」重複 ⇒ PRE 改印「選了 N 個能量」。
+
+### 【五】踩到的坑
+
+1. ⚠⚠ **`test-v6264` 的 `BASE_SHA` 我填了一顆不存在的 sha**（`4f5474346d9e…`，
+   前 8 碼對、後面是幻覺）。它有 `hasBaseCommit()` 保護 ⇒ **靜默 shallowSkip、全綠**，
+   正是安慰劑型態 9 的變體。已改成真正的 `4f5474345449…` 並實測 35 PASS。
+   ⭐ **教訓：pin sha 的守衛，填完當場用 `git cat-file -t` 驗一次。**
+2. ⚠⚠ 我用 python 切片改守衛時 `j` 算錯，把**整個檔頭重複附加**在【F2】之後
+   （496 行、語法錯誤）。第一次修復的斷言又挑錯錨點（重複區塊裡也有【G】段）。
+   ⭐ 這正是 **Rule 57**（切片前先斷言切掉的內容）—— 我自己引用了卻違反。
+   最後的修法：head/drop/tail 三段各自斷言（條數 12/12/3、標題集合是子集、
+   head 的 F2 是新版而 drop 的是舊版）才動刀。
+3. ⚠ 既有守衛 4 支（test-self-discard-energy-picker、test-optin-pay-what-you-can、
+   test-borrow-binary-choice、test-m6-wave12）因為觀測點被本版蓋住而翻紅 ⇒ 依 **Rule 40**
+   加 flush 哨兵上移到意圖級，**沒有放寬判準**。
+4. ⚠ 沙盒環境：`git read-tree HEAD` 沒做 ⇒ `git ls-files` 回 0 ⇒
+   `lint-eol-anchors` 等三支掃描器「掃到 0 支」翻紅（假紅）。
+   而 `static/` 忘了同步 ⇒ test-v6264 的【F】走成「本版未動 changelog」分支（**假綠**）。
+   ⭐ **教訓：沙盒建好之後要先確認「掃描器掃得到東西」與「工作樹真的是本版」。**
+
+### 【六】已知缺口（列管，不在本版硬修）
+
+0. （已修，列此備查）厄鬼椪 水井面具ex｜激流水泵 —— 見【四・一】第 4 條。
+1. 超級盔甲鳥ex｜音波拆裂、雙尾怪手｜雙尾、超級噴火龍Yex｜炎獄狂爆Y、烏鴉頭頭｜狙擊羽毛
+   的**主傷害在 POST**，flush 仍早於它們的主傷害。四支都不是【雷】屬性 ⇒ 伏特影響為 0。
+2. 伏特加成在 `effects.ts` 與 `engine.ts` 有**兩份**（靠 `_attackerActiveBonusDone` guard）
+   ⇒ 判準兩份＝安慰劑型態 11 的溫床。要先加等價守衛再收斂，另開一版。
+3. `test-v6272` 的 `PREV_SHA` 已從 v6.387 累積 20 版 ⇒ 下一個純工具版應前移重置。
+4. v6.406 的 320×568 錦標賽列仍參差（差 6px），已知故意不處理。
+5. Playwright 過渡期收尾（`PW_DEFAULT_MODE` 'off'→'auto'、刪 yml 兩行 env、刪獨立 step）。
+
 ## v6.406 ⭐ 好友列版面收斂：按鈕群 wrapper ＋「更多」二層選單
 
 BASE `80a3bab86cd2566eb9db6c670f84985a1a5e103d`（v6.405）。
-⚠ 本版**動了 `src/`**（玩家端前端）⇒ 部署要跑 **`redeploy-oracle.bat`**。
+⚠ 本版**動了 `src/`**（玩家端前端）⇒ 部署要跑 **`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**（IRON_RULES Rule 43；錦標賽伺服器也帶著一份前端）。
+（⚠ 這一行原本只寫了 `redeploy-oracle.bat`，是漏寫；v6.407 補正。）
 
 ### 【零】起因與站長裁示
 

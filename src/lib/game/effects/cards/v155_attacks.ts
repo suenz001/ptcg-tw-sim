@@ -52,7 +52,7 @@ import {
   hasBloomOnField,
   discardOppActiveEnergyPost,
 } from '../../effects';
-import { resolveOptInPayment } from '../../effects'; // v5.992 若希望 opt-in 中央管線
+import { resolveOptInPayment, queueAttackEnergyPayment } from '../../effects'; // v5.992 若希望 opt-in 中央管線；⭐v6.407 自身能量付出登記
 import { countEnergy } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
 
@@ -566,14 +566,16 @@ regPre('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, pool, action) => {
   if (totalUnits < required) {
     return { state: addLog(state, '激流水泵：能量挑選異常 → 100', aIdx), damage: 100 };
   }
-  const s2 = updatePlayerInline(state, aIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, energyAttached: remaining } : p.active,
-    deck: shuffle([...p.deck, ...discarded]),
-  }));
+  // ⭐⭐⭐v6.407 補正（獨立審查抓到的漏網之魚）：這裡原本在 PRE 就把能量搬進牌庫，
+  //   ＝「付出」跑在「造成傷害」之前，與官方三段順序相反。改成只**登記**。
+  //   ⚠ POST（備戰打擊）仍在 `p.deck` 裡找 chosenIids —— engine 的第一次 flush 在
+  //     「傷害之後、POST 之前」，所以 POST 執行時能量已經在牌庫裡，找得到、行為不變。
+  //   ⚠ `remaining` 刻意不再使用：能量要留在身上讓傷害管線讀得到（與 registerSelfDiscardMultiply 同理）。
+  void remaining;
+  const s2 = queueAttackEnergyPayment(state, aIdx, discarded, 'return-to-deck', '激流水泵');
   return {
-    // v4.4993：卡面是「放回牌庫」非「丟棄」，log 字眼「棄」改「放」避免誤導
-    state: addLog(s2, `激流水泵：放 ${required} 個能量回自身牌庫並重洗 → 戰鬥位 100 + 對手備戰 1 隻受 120`, aIdx),
+    // ⚠ 「放回牌庫並重洗」那一行由 flush 在傷害之後才印（順序即證據），這裡只講選擇與傷害
+    state: addLog(s2, `激流水泵：選了 ${required} 個能量 → 戰鬥位 100 + 對手備戰 1 隻受 120`, aIdx),
     damage: 100,
   };
 });
@@ -616,16 +618,16 @@ regPre('超級盔甲鳥ex|音波拆裂', (state, aIdx) => {
     return { state: addLog(state, '音波拆裂：自身無能量', aIdx), damage: 0 };
   }
   const energies = att.energyAttached;
-  const s = updatePlayerInline(state, aIdx, p => {
-    if (!p.active) return p;
-    return {
-      ...p,
-      active: { ...p.active, energyAttached: [] },
-      deck: shuffle([...p.deck, ...energies]),
-    };
-  });
+  // ⭐⭐⭐v6.407：只登記（見 effects.ts queueAttackEnergyPayment 檔頭）。
+  // ⚠⚠ **已知缺口**（列管，不在本版硬修）：這一支的主傷害 220 在 **regPost** 才造成
+  //   （對手 1 隻寶可夢，玩家選戰鬥場／備戰），而 engine 的 flush 在 PRE 之後、POST 之前
+  //   ⇒ 對這一支而言「付出」仍然早於它的主傷害。
+  //   但：(a) 超級盔甲鳥ex 是【鋼】屬性，伏特【雷】能量的加成本來就不適用；
+  //       (b) 改成登記**沒有讓行為退化**（原本也是 PRE 就回牌庫）。
+  //   同型的還有 雙尾怪手｜雙尾、超級噴火龍Yex｜炎獅狂爆Y、烏鴉頭頭｜狙擊羽毛（都不是【雷】）。
+  const s = queueAttackEnergyPayment(state, aIdx, energies, 'return-to-deck', '音波拆裂');
   return {
-    state: addLog(s, `音波拆裂：自身 ${energies.length} 個能量回牌庫並重洗`, aIdx),
+    state: addLog(s, `音波拆裂：自身 ${energies.length} 個能量將回牌庫並重洗`, aIdx),
     damage: 0,
   };
 });

@@ -11,12 +11,18 @@ process.on('exit',()=>{for(const p of[S,E,O]){try{unlinkSync(p)}catch{}}});
 writeFileSync(S,'export const base="";');
 writeFileSync(E,"export { applyAction, createGame } from './src/lib/game/engine';\n"
               +"export { ATTACK_PRE, ATTACK_PRE_DISCARD_CHOICE } from './src/lib/game/effects/_shared';\n"
+              +"export { flushAttackEnergyPayment } from './src/lib/game/effects';\n"   // ⭐v6.407 付出已延後到傷害之後
               +"import './src/lib/game/effects';");
 await build({entryPoints:[E],outfile:O,bundle:true,format:'esm',platform:'node',target:'node20',
   alias:{'$lib':join(ROOT,'src/lib'),'$app/paths':S},logLevel:'error'});
 const M = await import(pathToFileURL(O).href);
 const ATTACK_PRE = M.ATTACK_PRE ?? new Map();
 const SPECS = M.ATTACK_PRE_DISCARD_CHOICE ?? new Map();   // HEAD-FAIL 安全
+// ⭐⭐⭐v6.407：自身能量的「付出」已從 ATTACK_PRE 延後到 engine 的「傷害造成後」
+//   （官方三段順序：傷害 → 招式效果 → 受傷時特性／道具；依據伏特【雷】能量 Q&A 與 §17.46.D）
+//   ⇒ 直呼 PRE 的守衛要自己補跑 flush 才看得到能量進棄牌區。
+// ⚠ 哨兵：舊版沒這支 helper（PRE 就直接丟）⇒ 回原 state，新舊兩版斷言都成立。
+const _flush = (typeof M.flushAttackEnergyPayment === 'function') ? M.flushAttackEnergyPayment : ((st) => st);
 
 const dir=join(ROOT,'static/cards');
 const live=new Set(JSON.parse(readFileSync(join(dir,'index.json'),'utf8')).map(e=>e.code));
@@ -54,7 +60,8 @@ const logText=(l)=>String(l?.message ?? l?.text ?? l);
   if (typeof fn==='function') {
     const r=fn(st,0,pool,{ discardedEnergyIids:[e1.iid,e2.iid] });
     chk('電壓錘 選 2 張基本 → 120', r.damage===120, String(r.damage));
-    chk('電壓錘 丟掉的 2 張進棄牌', r.state.players[0].discard.length===2, String(r.state.players[0].discard.length));
+    const _rFlushed = _flush(r.state, pool);   // ⭐v6.407 跑完付出才看得到棄牌區
+    chk('電壓錘 丟掉的 2 張進棄牌', _rFlushed.players[0].discard.length===2, String(_rFlushed.players[0].discard.length));
     // ⭐ 否定對照：特殊能量的 iid 不該被計入 / 不該被丟
     const r2=fn(st,0,pool,{ discardedEnergyIids:[e3.iid] });
     chk('否定對照：特殊能量不算基本能量 → 0 傷', r2.damage===0, String(r2.damage));

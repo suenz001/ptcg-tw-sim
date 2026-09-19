@@ -874,6 +874,14 @@ const PREV_ALLOWED = [
   // ⚠ PREV_SHA 已經從 v6.387 累積到本版（19 版）。本版是玩家可見版，不適合順手重置；
   //   下一個**純工具版**應該把 PREV_SHA 前移到那一版的 commit、清單重置（已記在 docs/changelog-internal.md）。
   'src/lib/friends/FriendsPanel.svelte',
+  // ⭐⭐⭐v6.407：自身能量的「付出」延後到**造成傷害之後**（玩家回報：
+  //   超級雷電獸ex｜狂暴噴射打 330，身上的伏特【雷】能量沒有 +20）。
+  //   官方裁定：招式結算是三段 —— 傷害 → 招式效果（含付出）→ 受傷時特性／道具。
+  //   實測：行為端探針掃全部 1380 支 ATTACK_PRE，**43 支** 在 PRE 就移除自身能量 → 修後 0 支。
+  //   改動集中在中央管線：effects.ts 的 registerSelfDiscardMultiply／resolveOptInPayment／
+  //   fieldDiscardMultiplyPre 三支共用 helper 改成登記，另四支獨立實作跟著改；
+  //   engine.ts 在「傷害造成後」與「ATTACK_POST 之後」各 flush 一次（三個 v6407- 哨兵區塊）。
+  'src/lib/game/effects/cards/v155_attacks.ts',
   'src/routes/game/+page.svelte',
   'static/card-set-map.json',
   'static/cards/M-P-J.json',

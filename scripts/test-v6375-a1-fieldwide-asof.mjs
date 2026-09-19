@@ -34,6 +34,7 @@ import { stripV6398Engine } from './lib/engine-strip-v6398.mjs';
 import { stripV6400Engine } from './lib/engine-strip-v6400.mjs';
 import { stripV6402Engine } from './lib/engine-strip-v6402.mjs';
 import { stripV6403Engine } from './lib/engine-strip-v6403.mjs';   // ⭐v6.403 ex 判準收斂（12 組）
+import { stripV6407Engine } from './lib/engine-strip-v6407.mjs';   // ⭐v6.407 自身能量付出延後（3 組）
 import { stripV6401Engine } from './lib/engine-strip-v6401.mjs';
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, mkdtempSync, cpSync, rmSync, statSync } from 'node:fs';
@@ -689,6 +690,8 @@ if (!hasBaseCommit(ROOT, BASE)) {
       //   ⇒ stripV6402Engine 必須排在 stripV6394Engine **之前**。
       // ⭐v6.403：ex 判準收斂對 engine.ts 的 12 組合法改動（與 test-v6265 F4c 共用同一份）。
       //   Rule 54 由新到舊 ⇒ 排在 stripV6402Engine 之前。
+      // ⭐v6.407：自身能量付出延後（與 test-v6265 F4c 共用同一份）。Rule 54 由新到舊 ⇒ 排最前。
+      t = stripV6407Engine(t);
       t = stripV6403Engine(t);
       // ⭐v6.402：判準收斂對 engine.ts 的 11 組合法改動（與 test-v6265 F4c 共用同一份）
       t = stripV6402Engine(t);

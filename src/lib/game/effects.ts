@@ -2060,13 +2060,11 @@ regPre('超級蒂安希ex|花冠射線', (state, aIdx, _pool, action) => {
     remaining = energies.slice(0, energies.length - discardCount);
   }
 
-  let s = updatePlayer(state, aIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, energyAttached: remaining } : null,
-    discard: [...p.discard, ...discarded],
-  }));
+  // ⭐⭐⭐v6.407：只登記（同 registerSelfDiscardMultiply）。傷害讀 `discarded.length` 不變。
+  void remaining;
+  let s = queueAttackEnergyPayment(state, aIdx, discarded, 'discard', '花冠射線');
   const dmg = discarded.length * 120;
-  s = addLog(s, `花冠射線：丟棄 ${discarded.length} 個能量，造成 ${dmg} 傷害`, aIdx);
+  s = addLog(s, `花冠射線：選了 ${discarded.length} 個能量，造成 ${dmg} 傷害`, aIdx);
   return { state: s, damage: dmg };
 });
 
@@ -10354,6 +10352,115 @@ export function hostHasEnergyType(
 }
 
 // v6.063：export 供 M6 批次4 卡檔復用（原為 local，行為完全未變）
+// ═════════════════════════════════════════════════════════════════════════════
+// ⭐⭐⭐ v6.407 自身能量「付出」的中央管線（登記 → engine 單點執行）
+//
+// 【問題】玩家回報：超級雷電獸ex｜狂暴噴射打 330，身上的伏特【雷】能量沒有 +20。
+//   根因：付出（丟能量）寫在 ATTACK_PRE 裡，而伏特加成是傷害計算時讀
+//   `attacker.active.energyAttached` 算的 ⇒ 那時能量已經不在身上。
+//
+// 【官方裁定】招式結算是**三段**，不是兩段：
+//   ① 傷害計算與造成 → ② 招式效果（含丟自己的能量）→ ③ 受傷時的特性／道具
+//   ・①→②：`PTCG RULES/PTCG_RULES.md` §17.46.D（粉碎箭 vs 凍原堡壘）：
+//     「在因招式「粉碎箭」的效果丟棄…能量之前，就會先計算招式的傷害」
+//     ＋伏特【雷】能量的官方 Q&A（閃電鳥｜十萬伏特：丟光能量仍然 +60，
+//     「會在造成招式傷害後，才丟棄…能量卡」）
+//   ・②→③：§17.46.A（螺旋關節 vs 甲殼刺：能量已放回手牌 ⇒ 甲殼刺選不到）、
+//     §17.46.D（夾尾巴逃跑 vs 甲殼刺）、§17.22.A（幸運頭盔 vs 脅迫獸牙）
+//   ⇒ 甲殼刺／手持循環扇在招式自丟能量後「撲空」是**正確行為**，不是 bug。
+//
+// 【收斂】PRE 只**登記**要付出什麼（不動狀態），engine 在「傷害造成後、
+//   龐克頭盔反擊與 KO 結算之前」單點 flush。這樣：
+//   ・傷害管線（伏特加成、弱點、防守減傷）讀到的是**能量還在身上**的盤面 ⇒ 符合①
+//   ・甲殼刺／受傷道具看到的是**已經付出完**的盤面 ⇒ 符合③
+//   ・ATTACK_POST 看到的狀態與以前完全相同（都是已付出）⇒ 現有 POST 不受影響
+//
+// ⚠⚠ 退化點是 **v6.367**（站長裁定六-9）不是 v5.992：v5.992 把付出搬到 PRE 時，
+//   傷害管線讀的還是 PRE **之前**的 attacker 快照 ⇒ 加成意外正確；
+//   v6.367 把「PRE 造成的差異疊回快照」之後才暴露出來（實測 v6.366：390；v6.406：330）。
+//   ⚠ v6.367 本身是對的（卡面寫「在造成傷害前…」的效果要生效），**不要去動它**；
+//     要改的是「付出根本不該在 PRE 執行」。
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** v6.407 付出方式（與 `OptInPaySpec.verb` 同一組）。 */
+export type AttackEnergyPayVerb = 'discard' | 'return-to-hand' | 'return-to-deck';
+
+/**
+ * ⭐⭐⭐ v6.407：**登記**一筆自身能量付出（不動狀態）。
+ *
+ * 呼叫端只要把原本「從 active 移除 ＋ 推進 discard／hand／deck」的那幾行換成這一行。
+ * 傷害算式**一律不動**：站內這一類招式的傷害都是讀「選擇集合」（picked/discarded 的長度），
+ * 不是讀「狀態差值」，所以延後執行不會拿走算傷害所需的資訊。
+ *
+ * ⚠ 同一次 ATTACK 可以登記多筆（排隊）；aIdx 不同時以**最後一筆**為準並重置，
+ *   因為一次招式只會有一個攻擊方（借招也是同一個 aIdx）。
+ */
+export function queueAttackEnergyPayment(
+  state: GameState,
+  aIdx: 0 | 1,
+  picked: readonly CardInstance[],
+  verb: AttackEnergyPayVerb,
+  label: string,
+): GameState {
+  if (picked.length === 0) return state;
+  const prev = state._attackEnergyPayment;
+  const items = (prev && prev.aIdx === aIdx) ? prev.items : [];
+  return {
+    ...state,
+    _attackEnergyPayment: {
+      aIdx,
+      items: [...items, { iids: picked.map(e => e.iid), verb, label }],
+    },
+  };
+}
+
+/**
+ * ⭐⭐⭐ v6.407：**執行**所有登記的付出，並把欄位清掉。由 engine 在傷害造成後呼叫。
+ *
+ * ⚠ 找不到的 iid（攻擊方已經不在戰鬥場、或能量被別的效果先拿走）**安靜跳過**：
+ *   那不是錯誤，是「要付的東西已經不在了」—— 官方對這種情形的一貫裁定是「選不到就算了」。
+ * ⚠ log 刻意在這裡才印（不是登記時）—— **log 的順序本身就是時序證據**：
+ *   「造成 N 點傷害」必須在「將 M 張能量丟棄」之前，守衛直接斷言這個順序。
+ */
+export function flushAttackEnergyPayment(state: GameState, pool: Map<string, Card>): GameState {
+  const q = state._attackEnergyPayment;
+  if (!q || q.items.length === 0) {
+    if (!q) return state;
+    const { _attackEnergyPayment: _drop, ...rest } = state;
+    return rest as GameState;
+  }
+  const aIdx = q.aIdx;
+  let s: GameState = state;
+  for (const item of q.items) {
+    const want = new Set(item.iids);
+    // ⚠ iid 要在**戰鬥場與備戰都找**：有一類招式（猛雷鼓ex｜極降駕、來悲粗茶｜傾瀉茶）
+    //   卡面是「自己**場上**的能量」，不只是這隻寶可夢身上。iid 全域唯一，直接比就行。
+    const cur = s.players[aIdx];
+    const paid: CardInstance[] = [];
+    if (cur.active) for (const e of cur.active.energyAttached) if (want.has(e.iid)) paid.push(e);
+    for (const b of cur.bench) for (const e of b.energyAttached) if (want.has(e.iid)) paid.push(e);
+    if (paid.length === 0) continue;                     // 要付的東西已經不在了 ⇒ 安靜跳過
+    const paidSet = new Set(paid.map(e => e.iid));
+    s = updatePlayer(s, aIdx, p => {
+      const np = {
+        ...p,
+        active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => !paidSet.has(e.iid)) } : null,
+        bench: p.bench.map(b => (b.energyAttached.some(e => paidSet.has(e.iid))
+          ? { ...b, energyAttached: b.energyAttached.filter(e => !paidSet.has(e.iid)) }
+          : b)),
+      };
+      if (item.verb === 'return-to-hand') return { ...np, hand: [...np.hand, ...paid] };
+      if (item.verb === 'return-to-deck') return { ...np, deck: shuffle([...np.deck, ...paid]) };
+      return { ...np, discard: [...np.discard, ...paid] };
+    });
+    const verbTxt = item.verb === 'return-to-hand' ? '放回手牌'
+      : item.verb === 'return-to-deck' ? '放回牌庫並重洗' : '丟棄';
+    s = addLog(s, `${item.label}：將 ${paid.length} 張能量${verbTxt}（${joinCardNames(paid, pool)}）`, aIdx);
+  }
+  const { _attackEnergyPayment: _done, ...rest } = s;
+  return rest as GameState;
+}
+
 export function registerSelfDiscardMultiply(
   key: string,
   label: string,
@@ -10433,13 +10540,17 @@ export function registerSelfDiscardMultiply(
       discarded = all.filter(e => setIds.has(e.iid));
       remaining = all.filter(e => !setIds.has(e.iid));
     }
-    let s = updatePlayer(state, aIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, energyAttached: remaining } : null,
-      discard: [...p.discard, ...discarded],
-    }));
+    // ⭐⭐⭐v6.407：只**登記**，不動狀態 —— engine 會在「傷害造成後」才真的丟。
+    //   官方裁定與整套理由寫在 queueAttackEnergyPayment 的檔頭。
+    //   ⚠ `remaining` 刻意**不再使用**：能量還在身上，傷害管線（伏特【雷】能量加成等）
+    //     就是要讀到這些能量。傷害算式讀的是 `discarded.length`（**選擇集合**），
+    //     不是狀態差值 ⇒ 延後執行不會改變任何一張卡的傷害。
+    void remaining;
+    let s = queueAttackEnergyPayment(state, aIdx, discarded, 'discard', label);
     const dmg = faceBase + per * discarded.length;
-    s = addLog(s, `${label}：丟棄 ${discarded.length} 個能量 → ${dmg}`, aIdx);
+    // ⚠v6.407：這裡只是「選了幾張」；真正的「丟棄」由 flush 在傷害之後印，
+    //   兩行都寫「丟棄」會讓玩家以為丟了兩次。
+    s = addLog(s, `${label}：選了 ${discarded.length} 個能量 → ${dmg}`, aIdx);
     return { state: s, damage: dmg };
   });
 }
@@ -12360,18 +12471,13 @@ function fieldDiscardMultiplyPre(
     }
 
     const discardList = selected.map(s => s.energy);
-    let s2 = updatePlayer(state, aIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => !activeRm.has(e.iid)) } : null,
-      bench: p.bench.map((b, i) => {
-        const rm = benchRm.get(i);
-        if (!rm || rm.size === 0) return b;
-        return { ...b, energyAttached: b.energyAttached.filter(e => !rm.has(e.iid)) };
-      }),
-      discard: [...p.discard, ...discardList],
-    }));
+    // ⭐⭐⭐v6.407：只登記，engine 在傷害造成後才真的丟（理由見 queueAttackEnergyPayment 檔頭）。
+    //   ⚠ `activeRm`／`benchRm` 刻意不再使用：flush 會自己用 iid 在戰鬥場＋備戰找。
+    //   ⚠ 傷害讀的是 `selected.length`（選擇集合），不是狀態差值 ⇒ 延後不改變傷害。
+    void activeRm; void benchRm;
+    let s2 = queueAttackEnergyPayment(state, aIdx, discardList, 'discard', label);
     const dmg = baseDamage + per * selected.length;
-    s2 = addLog(s2, `${label}：丟棄 ${selected.length} 個能量 → ${dmg}`, aIdx);
+    s2 = addLog(s2, `${label}：選了 ${selected.length} 個能量 → ${dmg}`, aIdx);
     return { state: s2, damage: dmg };
   };
 }
@@ -12462,11 +12568,10 @@ regPre('厄鬼椪 火灶面具ex|極限火焰', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att) return { state, damage: 280 };
   let s = addLog(state, `極限火焰：對手為進化寶可夢 → +140（丟自身 ${att.energyAttached.length} 張能量）`, aIdx);
-  s = updatePlayer(s, aIdx, p => {
-    if (!p.active) return p;
-    const ens = p.active.energyAttached;
-    return { ...p, active: { ...p.active, energyAttached: [] }, discard: [...p.discard, ...ens] };
-  });
+  // ⭐⭐⭐v6.407：只登記，engine 在傷害造成後才真的丟。
+  //   ⚠ 這一支是**條件分支**（只有對手是進化寶可夢時才丟）⇒ 行為端探針預設盤面拓不到，
+    //   是逆著「哪些地方直接動 energyAttached」一支一支看出來的。
+  s = queueAttackEnergyPayment(s, aIdx, att.energyAttached, 'discard', '極限火焰');
   return { state: s, damage: 280 };
 });
 
@@ -17181,17 +17286,11 @@ export function resolveOptInPayment(
     if (!explicitSet.has(e.iid)) { picked.push(e); units += unitOf(e); }
   }
   if (picked.length === 0) return { state, optedIn: true, paidCount: 0, paymentBlocked: false };
-  const rmSet = new Set(picked.map(e => e.iid));
   const verb = pay.verb ?? 'discard';
-  let s = updatePlayer(state, aIdx, p => {
-    if (!p.active) return p;
-    const np = { ...p, active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => !rmSet.has(e.iid)) } };
-    if (verb === 'return-to-hand') return { ...np, hand: [...np.hand, ...picked] };
-    if (verb === 'return-to-deck') return { ...np, deck: shuffle([...np.deck, ...picked]) };
-    return { ...np, discard: [...np.discard, ...picked] };
-  });
-  const verbTxt = verb === 'return-to-hand' ? '放回手牌' : verb === 'return-to-deck' ? '放回牌庫並重洗' : '丟棄';
-  s = addLog(s, `${label}：將 ${picked.length} 張能量${verbTxt}（${joinCardNames(picked, pool)}）`, aIdx);
+  // ⭐⭐⭐v6.407：只**登記**，不動狀態（理由見 queueAttackEnergyPayment 檔頭）。
+  //   log 也搬到 flush 才印 ⇒ **log 的順序本身就是時序證據**（「造成 N 點傷害」在前）。
+  //   ⚠ `paidCount` 仍然是 `picked.length`：呼叫端的加傷算式完全不變。
+  const s = queueAttackEnergyPayment(state, aIdx, picked, verb, label);
   return { state: s, optedIn: true, paidCount: picked.length, paymentBlocked: false };
 }
 

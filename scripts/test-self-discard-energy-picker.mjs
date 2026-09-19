@@ -9,9 +9,13 @@ const ROOT=fileURLToPath(new URL('..',import.meta.url));
 const S=join(ROOT,'.sd-s.js'),E=join(ROOT,'.sd-e.ts'),O=join(ROOT,'.sd-o.mjs');
 process.on('exit',()=>{for(const p of [S,E,O]){try{unlinkSync(p);}catch{}}});
 writeFileSync(S,'export const base="";');
-writeFileSync(E,"export { ATTACK_PRE } from './src/lib/game/effects/_shared';\nimport './src/lib/game/effects';");
+writeFileSync(E,"export { ATTACK_PRE } from './src/lib/game/effects/_shared';\n// ⭐v6.407：付出已經延後到「傷害造成後」⇒ 要看到結果必須再跑一次 flush。\nexport { flushAttackEnergyPayment } from './src/lib/game/effects';\nimport './src/lib/game/effects';");
 await build({entryPoints:[E],outfile:O,bundle:true,format:'esm',platform:'node',target:'node20',alias:{'$lib':join(ROOT,'src/lib'),'$app/paths':S},logLevel:'error'});
-const { ATTACK_PRE }=await import(pathToFileURL(O).href);
+const _M=await import(pathToFileURL(O).href);
+const { ATTACK_PRE }=_M;
+// ⚠ 哨兵：舊版（v6.406 以前）沒有這支 helper，那時 PRE 就直接丟了 ⇒ 回原 state 即可，
+//   這樣這支守衛在新舊兩版都量得到「玩家選哪幾個就丟哪幾個」這個**意圖**。
+const _flush=(typeof _M.flushAttackEnergyPayment==='function')?_M.flushAttackEnergyPayment:((st)=>st);
 const dir=join(ROOT,'static/cards');
 const live=new Set(JSON.parse(readFileSync(join(dir,'index.json'),'utf8')).map(e=>e.code));
 const pool=new Map(); const byName=new Map(); let basicE=null;
@@ -29,7 +33,11 @@ function remainAfter(cardName, eIids, pick){
 function run(key, cardName, eIids, pick){
   const {state}=mk(cardName,eIids);
   const r=ATTACK_PRE.get(key)(state,0,pool,{discardedEnergyIids:pick});
-  const rem=(r.state||state).players[0].active.energyAttached.map(e=>e.iid).sort();
+  // ⭐⭐⭐v6.407：付出在 PRE 只會被**登記**，engine 在「傷害造成後」才執行。
+  //   官方裁定：伏特【雷】能量 Q&A（丟光能量仍然 +60）＋§17.46.D（先算傷害再丟）。
+  //   這支守衛要守的意圖（選哪幾個就丟哪幾個、不是自動取末端）**沒有被破壞** ——
+  //   只是觀測點往後移了一步（IRON_RULES Rule 40）⇒ 跑完 flush 再讀。
+  const rem=_flush((r.state||state),pool).players[0].active.energyAttached.map(e=>e.iid).sort();
   return {rem, dmg:r.damage};
 }
 T('★羽毛強襲:選 e1,e2 丟 → 留 e3(非末端;主傷害150)', () => {

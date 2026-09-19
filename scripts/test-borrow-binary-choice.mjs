@@ -10,9 +10,13 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.stub-bb.js'); writeFileSync(S, 'export const base="";export const assets="";');
 const E = join(ROOT, '.ent-bb.ts'); const O = join(ROOT, '.ent-bb.mjs');
 process.on('exit', () => { for (const p of [S, E, O]) { try { unlinkSync(p); } catch {} } });
-writeFileSync(E, `export { ATTACK_PRE } from './src/lib/game/effects';\nimport './src/lib/game/effects';`);
+writeFileSync(E, `export { ATTACK_PRE, flushAttackEnergyPayment } from './src/lib/game/effects';\nimport './src/lib/game/effects';`);
 await build({ entryPoints:[E], outfile:O, bundle:true, format:'esm', platform:'node', target:'node20', alias:{ '$lib':join(ROOT,'src/lib'), '$app/paths':S }, logLevel:'error' });
-const { ATTACK_PRE } = await import(pathToFileURL(O).href);
+const _M = await import(pathToFileURL(O).href);
+const { ATTACK_PRE } = _M;
+// ⭐⭐⭐v6.407：「付出」已延後到 engine 的「傷害造成後」（官方三段順序）⇒ 直呼 PRE 的守衛要自己補 flush。
+// ⚠ 哨兵：舊版沒有這支 helper ⇒ 回原 state，新舊兩版的斷言都成立。
+const _flush = (typeof _M.flushAttackEnergyPayment === 'function') ? _M.flushAttackEnergyPayment : ((st) => st);
 const dir = join(ROOT, 'static/cards');
 const live = new Set(JSON.parse(readFileSync(join(dir,'index.json'),'utf8')).map(e=>e.code));
 const pool = new Map();
@@ -45,8 +49,8 @@ T('選希望+呆呆王有1鋼(discardedEnergyIids=[鋼iid])→丟鋼+150=300', (
   const {state, metagrossIid} = mkState([metalE]);
   const out = fn(state, 0, pool, { type:'ATTACK', attackIndex:0, copyAttackChoice:{pokeIid:metagrossIid, attackIndex:1}, discardedEnergyIids:[metalE.iid] });
   assert.equal(out.damage, 300, `選是+鋼應 300,實 ${out.damage}`);
-  // 呆呆王身上鋼能量應被丟
-  const slow = out.state.players[0].active;
+  // 呆呆王身上鋼能量應被丟（⭐v6.407：要跑完 flush 才看得到）
+  const slow = _flush(out.state, pool).players[0].active;
   assert.equal(slow.energyAttached.length, 0, '呆呆王鋼能量應被丟棄');
 });
 T('AI/fallback(無 discardedEnergyIids)→預設希望 sentinel +150=300', () => {

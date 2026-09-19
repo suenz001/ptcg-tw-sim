@@ -31,6 +31,9 @@ import {
   PASSIVE_DAMAGE_REDUCE_BY_ATTACKER, PASSIVE_COIN_AVOID, PASSIVE_KO_RETALIATION, PASSIVE_ON_KO,
   koVictimAbilityPrizeAdjust,  // ⭐v6.259 被 KO 者自身特性的獎賞張數修正（願增猿ex｜鬆口氣）
   PASSIVE_ON_DAMAGED, PASSIVE_PREVENT_PRIZE, PASSIVE_ATTACKER_BUFF,
+  // >>> v6407-engine-imports
+  flushAttackEnergyPayment,                   // ⭐⭐⭐v6.407 自身能量付出：登記後的單點執行
+  // <<< v6407-engine-imports
   // >>> v6347-engine-imports
   countEnergyTypeBloomAware,                  // ⭐v6.347 一長再長：「6個以上【草】能量」host-aware 個數
   countEnergyTypeHostAware,                   // ⭐v6.385b 大師工藝：【鬥】能量**個數**（同一支中央述詞）
@@ -6226,6 +6229,21 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       aIdx
     );
 
+    // >>> v6407-flush-attack-energy-payment
+    // ⭐⭐⭐v6.407：自身能量的「付出」在這裡才真的執行。
+    //   位置就是官方三段順序的第二段：
+    //     ① 傷害計算與造成（上面那一行 addLog 已經做完）
+    //     ② **招式效果（含丟自己的能量）** ← 這裡
+    //     ③ 受傷時的特性／道具（龐克頭盔反擊、甲殼刺、手持循環扇…）
+    //   早於龐克頭盔預算與 resolveKnockouts ⇒ 甲殼刺／手持循環扇看到的是「已付出」的盤面，
+    //   它們「撲空」正是官方要的（§17.46.A 螺旋關節、§17.46.D 夾尾巴逃跑）。
+    //   ⚠ 沒有登記時這一行是 no-op（連欄位都沒建）⇒ 不影響任何其他招式。
+    newState = flushAttackEnergyPayment(newState, pool);
+    // ⚠⚠ defPlayers 是上面抳走的快照，下方有四處把它**整份**寫回 newState.players；
+    //   不同步的話，那四處會把攻擊方反寫回「還沒付出」的樣子（v6.368 那類 stale players 洞）。
+    defPlayers[aIdx] = newState.players[aIdx];
+    // <<< v6407-flush-attack-energy-payment
+
     // 龐克頭盔：防守方出場的【惡】寶可夢附有龐克頭盔時，攻擊者受到 40 傷害反擊。
     // 注意：僅計算反彈量，實際套用在下方「防守方狀態提交後」，避免被 defPlayers 覆蓋掉。
     // >>> v6402-punk-helmet-engine
@@ -6955,6 +6973,14 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       // v2.156：把 action 也傳給 POST，讓「PRE/POST 共享 chosenIids」的 option 招式
       // （如 激流水泵）能在 POST 階段判斷玩家是否棄了能量
       newState = postFn(newState, aIdx, pool, action);
+      // >>> v6407-flush-after-post
+      // ⭐⭐⭐v6.407：POST **也會**登記自身能量付出（超級麻麻鰻魚王ex｜災難衝擊
+      //   就是在 ATTACK_POST 裡呼叫 resolveOptInPayment）。上面那一次 flush 早於 POST，
+      //   所以這裡要**再跑一次**，否則 POST 登記的付出永遠不會執行（能量不見丟）。
+      //   ⚠ flush 對「沒有登記」的 state 是 no-op ⇒ 對其他招式完全無影響。
+      //   ⚠ POST 本身已經在傷害之後，所以這一次 flush 不會破壞官方的三段順序。
+      newState = flushAttackEnergyPayment(newState, pool);
+      // <<< v6407-flush-after-post
     }
     // v5.344（v5.343 一般化）：集中修「對招式效果免疫的防守 active（薄霧能量 / 硬岩【鬥】能量 /
     //   皇帝之勢 / 抵抗之幕 / 純樸 / 阿塞蘿拉 / 對戰圓形 / 球形盾牌 / 藏隱 / 化石 等，皆由 unified

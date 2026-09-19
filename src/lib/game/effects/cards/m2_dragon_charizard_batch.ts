@@ -25,7 +25,7 @@ import {
   updatePlayer,
   withPending, rejectAbilityUse } from '../_shared';
 import { isMegaExCard } from '../../selection-filter'; // v6.210：Mega ex 判定收斂中央述詞（leaf，Check O 安全）
-import { hostEnergyCardsOfType } from '../../effects'; // ⭐v6.398「身上附加的【X】能量卡」中央 host-aware 述詞
+import { hostEnergyCardsOfType, queueAttackEnergyPayment } from '../../effects'; // ⭐v6.398「身上附加的【X】能量卡」中央 host-aware 述詞；⭐v6.407 自身能量付出登記
 
 function cardName(pool: Map<string, Card>, inst: CardInstance | null | undefined): string {
   return inst ? (pool.get(inst.cardId)?.name ?? '?') : '?';
@@ -108,16 +108,10 @@ regPre('超級快龍ex|龍之滑翔', (state, aIdx, _pool, action) => {
     : all.slice(-2).map(e => e.iid); // AI/headless fallback：丟最後 2 個自身能量
   if (selected.length > 0) {
     const chosenSet = new Set(selected);
-    s = updatePlayer(state, aIdx, pl => {
-      if (!pl.active) return pl;
-      const discarded = pl.active.energyAttached.filter(e => chosenSet.has(e.iid));
-      return {
-        ...pl,
-        active: { ...pl.active, energyAttached: pl.active.energyAttached.filter(e => !chosenSet.has(e.iid)) },
-        discard: [...pl.discard, ...discarded],
-      };
-    });
-    s = addLog(s, `龍之滑翔：丟棄 ${Math.min(2, selected.length)} 個自身能量`, aIdx);
+    // ⭐⭐⭐v6.407：只登記，engine 在傷害造成後才真的丟（見 effects.ts queueAttackEnergyPayment 檔頭）。
+    const discarded = (p.active?.energyAttached ?? []).filter(e => chosenSet.has(e.iid));
+    s = queueAttackEnergyPayment(state, aIdx, discarded, 'discard', '龍之滑翔');
+    s = addLog(s, `龍之滑翔：選了 ${Math.min(2, selected.length)} 個自身能量`, aIdx);
   }
   return { state: s, damage: 330 };
 });

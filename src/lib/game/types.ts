@@ -765,6 +765,33 @@ export interface GameState {
    *  防止中央 helper dealAttackDamageToTarget 對戰鬥位重複套。ATTACK 起點 reset。 */
   _attackerActiveBonusDone?: boolean;
   /**
+   * ⭐⭐⭐ v6.407：本次招式「已經決定、但還沒有執行」的**自身能量付出**。
+   *
+   * 為什麼要這個欄位（官方裁定）：招式結算是**三段**——
+   *   ① 傷害計算與造成 → ② 招式效果（含丟自己的能量）→ ③ 受傷時的特性／道具。
+   *   依據：`PTCG RULES/PTCG_RULES.md` §17.46.D（粉碎箭 vs 凍原堡壘：
+   *   「在因招式的效果丟棄能量之前，就會先計算招式的傷害」）、
+   *   以及伏特【雷】能量的官方 Q&A（閃電鳥｜十萬伏特丟光能量仍然 +60：
+   *   「會在造成招式傷害後，才丟棄…能量卡」）。
+   *
+   * ⚠ 這是 **transient**：只活在同一次 ATTACK 的 applyAction 裡，engine flush 完就刪掉，
+   *   不會跟著房間同步出去。
+   * ⚠ `items` 是**物件陣列**（物件內才是字串陣列）—— Firestore 禁的是「陣列直接包陣列」，
+   *   這個形狀合法；但反正它不會被寫出去。
+   */
+  _attackEnergyPayment?: {
+    /** 付出的是哪一側（攻擊方）。 */
+    aIdx: 0 | 1;
+    items: Array<{
+      /** 要付出的能量 iid（在攻擊方戰鬥場寶可夢身上）。 */
+      iids: string[];
+      /** 付出方式：丟棄／放回手牌／放回牌庫（放回牌庫要重洗）。 */
+      verb: 'discard' | 'return-to-hand' | 'return-to-deck';
+      /** log 用的招式名。 */
+      label: string;
+    }>;
+  };
+  /**
    * v5.165 重試徽章 — 動態次數擲幣招式（機關槍合擊等）每次擲完把結果陣列
    * 暫存於此（如 ['正面','正面','反面']），供 ATTACK 末端 retry-badge modal
    * 顯示擲幣明細給玩家。Setter: 對應 regPre；Resetter: ATTACK 開頭 clear。
