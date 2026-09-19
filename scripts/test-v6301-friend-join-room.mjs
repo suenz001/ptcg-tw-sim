@@ -763,7 +763,16 @@ await T('F6 ⭐⭐⭐ 反安慰劑：把三顆搬回常駐層／把房名搬回�
   const m1 = mutate(FRP, '<span class="acts acts-more">', '<span class="acts acts-more-DISABLED">');
   const b1 = v6406Structure(m1);
   assert.ok(b1.some((x) => x.includes('找不到')), '把 acts-more 拿掉之後 F5 竟然沒紅：' + JSON.stringify(b1));
-  const m2 = mutate(FRP, '{/if}\r\n                <!-- ⚠⚠ uid', '{/if}XX\r\n                <!-- ⚠⚠ uid');
+  // ⚠⚠⚠ 錨點**絕對不可以寫死 `\r\n`**：站長的 Windows 是 core.autocrlf=true（工作樹 CRLF），
+  //   而 CI 的 checkout 是 **LF** ⇒ 寫死 CRLF 的錨點在 CI 上永遠找不到，
+  //   mutate() 的 assert 會 throw，這一條在本機全綠、一上 CI 就紅（v6.406 第一次 push 就是這樣紅的）。
+  //   ⇒ 改用 indexOf／lastIndexOf 定位，完全不碰到行尾。
+  const iRoom = FRP.indexOf('{#if _rs?.room}<span class="fr-room">');
+  assert.ok(iRoom > 0, 'F6 錨點：找不到房名那一行（掃描器過期）');
+  const iIf = FRP.lastIndexOf('{/if}', iRoom);
+  assert.ok(iIf > 0, 'F6 錨點：房名那一行前面找不到 {/if}（掃描器過期）');
+  const m2 = FRP.slice(0, iIf) + '{/if}XX' + FRP.slice(iIf + 5);
+  assert.notStrictEqual(m2, FRP, 'F6 的第二個突變沒有真的改到東西');
   const b2 = v6406Structure(m2);
   assert.ok(b2.some((x) => x.includes('鏈的外面')), '把房名那一行弄回分支裡之後 F5 竟然沒紅：' + JSON.stringify(b2));
 });

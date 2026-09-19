@@ -94,6 +94,25 @@ BASE `80a3bab86cd2566eb9db6c670f84985a1a5e103d`（v6.405）。
 - ⚠ 即使如此，chromium-headless-shell 在高 viewport 下仍會在頁首留一顆鬼影按鈕；
   DOM 實測只有一顆（`解除封鎖@276,917`）。**看截圖判版面時要知道這件事。**
 
+### 【五・一】第一次 push（87aab438）CI 紅了 —— 守衛的錨點寫死了 CRLF
+
+本機全套 739/739 綠，一上 CI（build）就紅：`F6 反安慰劑 :: 突變錨點不存在：{/if}`。
+
+根因：站長的 Windows 是 `core.autocrlf=true`（工作樹 CRLF），**CI 的 checkout 是 LF**。
+F6 的第二個突變寫成 `mutate(FRP, '{/if}\r\n                <!-- uid…', …)`
+⇒ 在 LF 的檔案裡永遠找不到，`mutate()` 的 assert 直接 throw。
+
+修法：改用 `indexOf`／`lastIndexOf` 定位（完全不碰行尾），並加一條
+`assert.notStrictEqual(m2, FRP)` 確認突變真的改到東西。
+
+驗證方式（以後要照這個做）：在 Linux VM 開沙盒（`git archive HEAD | tar -x` ＋ alternates 的 `.git`
+＋下載對應版本的 linux esbuild binary），**把守衛轉成 LF 再跑**，就能在本機重現 CI。
+⚠ 沙盒裡 `test-v6272` 的⑩會**假紅**（`git archive` 展開後全部是 untracked，
+`git diff --name-only <BASE>` 會把整個 src/static 算成不同）—— 那是沙盒 artifact，不是真紅。
+
+⭐⭐ 通則：**守衛裡的文字錨點絕對不可以包含 `\r\n` 或 `\n`**。
+要定位跨行的結構，用 `indexOf`／`lastIndexOf`、`\s*` 的 regex，或中央的 `normEol`。
+
 ### 【六】待辦
 
 ⚠ `test-v6272` 的 `PREV_SHA` 已經從 v6.387 累積到本版（19 版）。
