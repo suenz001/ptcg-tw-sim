@@ -28,6 +28,7 @@ import { markupSections } from './lib/strip-markup-sections.mjs';   // ⭐v6.320
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { styleEndIndex, styleTagIndex } from './lib/svelte-style-block.mjs';
+import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_PAGE = join(ROOT, 'src/routes/friends/+page.svelte');
@@ -338,12 +339,12 @@ const contrast = (a, b) => { const [x, y] = [lum(rgb(a)), lum(rgb(b))].sort((p, 
 const hex2rgb = (h) => 'rgb(' + [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(', ') + ')';
 
 let chromium = null;
-try { chromium = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright').chromium; } catch { chromium = null; }
+chromium = pwChromium('v6.293 【D】主題色 DOM 量測');
 if (!chromium) {
   skipped.push('【D】DOM 量測（沒有 playwright 模組）');
   console.log('  ⚠⚠ SKIP 【D】：這台機器沒有 Playwright ⇒ DOM 量測沒有跑（沙盒證據見 docs/changelog-internal.md v6.293）');
 } else {
-  const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || 'chromium-headless-shell', args: ['--no-sandbox'] });
+  const browser = await pwLaunchWith(chromium, 'v6.293 【D】主題色 DOM 量測');
   try {
     const probe = async (pg, html) => {
       await pg.setContent(html, { waitUntil: 'load' });

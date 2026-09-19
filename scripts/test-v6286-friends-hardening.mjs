@@ -28,6 +28,7 @@ import {
 } from './lib/friends-harness-v6282.mjs';
 import { extractCss, settingsMarkup, zoomModalFixtures, VIEWPORTS, pageHtml } from './lib/zoom-modal-fixture.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
+import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_SRV = join(ROOT, 'oracle-admin/server_admin_patch.js');
@@ -431,13 +432,13 @@ await T('6a 靜態：dock 規則存在於三個 @media（桌機／手機直式�
   }
 });
 let chromium = null;
-try { chromium = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright').chromium; } catch { chromium = null; }
+chromium = pwChromium('v6.286 【6】設定 modal ✕ 的 DOM 量測');
 const VP7 = VIEWPORTS.concat([{ w: 812, h: 375, mobile: true }, { w: 667, h: 375, mobile: true }]);   // 五種既有 ＋ 兩種手機橫式（審查者指出橫式 modal 蓋滿 overlay）
 if (!chromium) {
   skipped.push('【6】DOM 量測（沒有 playwright 模組）');
   console.log('  ⚠⚠ SKIP 【6-DOM】：這台機器沒有 Playwright，DOM 量測沒有跑（核心由 6a 的 CSS 級聯守；沙盒證據見 docs/changelog-internal.md v6.286）');
 } else {
-  const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || 'chromium-headless-shell', args: ['--no-sandbox'] });
+  const browser = await pwLaunchWith(chromium, 'v6.286 【6】設定 modal ✕ 的 DOM 量測');
   try {
     const R = (o) => [o.x, o.y, o.w, o.h].map((v) => +v.toFixed(1)).join(',');
     const mkH = settingsMarkup(GAME), mkB = markupWithoutDock(mkH), cssB = cssWithoutDock(CSS);

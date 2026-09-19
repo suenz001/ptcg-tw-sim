@@ -31,6 +31,7 @@ import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs'; 
 import { pruneIfs, normalizeMarkup } from './lib/svelte-if-prune.mjs';
 import { sectionInner, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';   // ⭐v6.317 抽 script；v6.318 單趟行級狀態機；v6.319 殘留護欄（game 的 {@html '<style>'} 是唯一宣告的例外）
 import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.318 腳本內文剝註解走行級 helper（本檔的 stripCmt 是區塊正則，會吃掉 game 腳本 :208 起 177 行）
+import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -268,7 +269,7 @@ await T('D4 ⭐⭐ 切分頁**不動 onlineStep**（房間列表訂閱／輪詢�
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【E】行為端：把共用元件真的掛起來（playwright）');
 let chromium = null;
-try { chromium = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright').chromium; } catch { chromium = null; }
+chromium = pwChromium('v6.296 【E】共用元件掛載行為');
 if (!chromium) {
   skipped.push('【E】行為端 DOM 掛載（沒有 playwright 模組）');
   console.log('  ⚠⚠ SKIP 【E】：這台機器沒有 Playwright ⇒ 掛載行為沒有跑（【C】的求值斷言仍在守）');
@@ -303,7 +304,7 @@ if (!chromium) {
       blocked: [{ fid: 'f4', status: 'blocked', nick: '壞人', alias: null, uid: null, uids: [], requestedByMe: true, blockedByMe: true, via: null, at: 4 }],
       limit: 100, truncated: false,
     };
-    const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || 'chromium-headless-shell', args: ['--no-sandbox'] });
+    const browser = await pwLaunchWith(chromium, 'v6.296 【E】共用元件掛載行為');
     try {
       const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
       const pg = await ctx.newPage();

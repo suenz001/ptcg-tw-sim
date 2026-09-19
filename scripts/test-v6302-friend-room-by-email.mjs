@@ -35,6 +35,7 @@ import {
   buildFriends, asUser, findEmails,
 } from './lib/friends-harness-v6282.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
+import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PATCH = readPatch(join(ROOT, 'oracle-admin/server_admin_patch.js'));
@@ -499,7 +500,7 @@ if (API && API.__esModule !== undefined || API) {
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【I1】【J】行為端 DOM（playwright）');
 let chromium = null;
-try { chromium = require_(process.env.PLAYWRIGHT_MODULE || 'playwright').chromium; } catch { chromium = null; }
+chromium = pwChromium('v6.302 【I1】【J】行為端 DOM');
 const LIST_BASE = {
   friendsApi: 1, me: { uid: 'me', nick: '我' },
   friends: [
@@ -560,7 +561,7 @@ if (!chromium || !esbuild) {
     }
   }
   let browser = null;
-  try { browser = pwFatal ? null : await chromium.launch({ channel: process.env.PW_CHANNEL || 'chromium-headless-shell', args: ['--no-sandbox'] }); }
+  try { browser = pwFatal ? null : await pwLaunchWith(chromium, 'v6.302 【I1】【J】行為端 DOM'); }
   catch (e) {
     skipped.push('【I1】【J】行為端 DOM（瀏覽器起不來：' + String(e && e.message).slice(0, 80) + '）');
     console.log('  ⚠⚠ SKIP：瀏覽器起不來 ⇒ DOM 行為沒有跑');

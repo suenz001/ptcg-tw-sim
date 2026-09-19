@@ -26,6 +26,7 @@ import { createRequire } from 'node:module';
 import assert from 'node:assert';
 import { extractCss, settingsMarkup, zoomModalFixtures, VIEWPORTS, pageHtml } from './lib/zoom-modal-fixture.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
+import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -203,13 +204,13 @@ await T('S4 正對照：新規則改成 overflow-y:hidden ⇒ S1 紅；selector 
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【D】DOM 量測（需要 Playwright；CI 沒有 ⇒ 醒目 SKIP）');
 let chromium = null;
-try { chromium = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright').chromium; } catch { chromium = null; }
+chromium = pwChromium('v6.285 【D】DOM 量測');
 if (!chromium) {
   skipped.push('【D】DOM 量測（沒有 playwright 模組）');
   console.log('  ⚠⚠ SKIP 【D】：這台機器沒有 Playwright，DOM 量測沒有跑（核心由【S】的 CSS 級聯求值守；沙盒證據見 scripts/measure-v6285-settings-scroll.mjs）');
 } else {
   let browser = null;
-  try { browser = await chromium.launch({ channel: process.env.PW_CHANNEL || 'chromium-headless-shell', args: ['--no-sandbox'] }); }
+  try { browser = await pwLaunchWith(chromium, 'v6.285 【D】DOM 量測'); }
   catch (e) { skipped.push('【D】DOM 量測（瀏覽器啟動失敗：' + String(e.message).split('\n')[0].slice(0, 80) + '）'); console.log('  ⚠⚠ SKIP 【D】：瀏覽器啟動失敗 —— ' + String(e.message).split('\n')[0].slice(0, 120)); }
   if (browser) {
     try {

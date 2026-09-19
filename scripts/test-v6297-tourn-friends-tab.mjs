@@ -39,6 +39,7 @@ import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.311 行級剝註解（含護欄）
 import { sectionInner, markupSections, GAME_INLINE_STYLE, allowResidualFor } from './lib/strip-markup-sections.mjs';     // ⭐v6.317 中央 helper；v6.318 單趟行級狀態機；v6.319 BOM／同行註解／殘留護欄
 import { styleBlockOf } from './lib/svelte-style-block.mjs';
+import { pwChromium } from './lib/pw.mjs';
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -556,7 +557,7 @@ await T('E6 ⭐⭐ 私聊面板只在有狀態時渲染，且掛在 foot snippet
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【F】版面量測（四種尺寸；沒有瀏覽器就 SKIP）');
 let hasPw = false;
-try { createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright'); hasPw = true; } catch { hasPw = false; }
+hasPw = pwChromium('v6.297 【F】四種尺寸的版面量測') !== null;
 if (!hasPw) {
   skipped.push('【F】四種尺寸的 DOM 量測（沒有 playwright 模組）');
   console.log('  ⚠⚠ SKIP 【F】：這台機器沒有 Playwright ⇒ 版面沒有量（【C】的 CSS 逐字比對仍在守）');

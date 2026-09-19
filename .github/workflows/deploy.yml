@@ -36,21 +36,52 @@ jobs:
       - run: npm ci
       # npm#4828 workaround：npm ci 有時漏裝 rollup 平台 optional binary → vite build 快速 fail。強制補裝。
       - run: npm install @rollup/rollup-linux-x64-gnu @esbuild/linux-x64 --no-save --no-package-lock
+      # ⭐ Playwright 的瀏覽器：只裝 chromium-headless-shell（約 115MB），不是三個完整瀏覽器。
+      #   那 10 支有 PW 段的守衛一律 launch({ channel: 'chromium-headless-shell' })，
+      #   裝完整 chromium 是白費 400MB。
+      #   ⚠ 快取鍵綁 package-lock.json 的雜湊：playwright 升版 ⇒ 瀏覽器 build 號跟著變 ⇒
+      #     鍵自動失效。**不要**把 build 號寫進鍵（那就是 pin 死版本號）。
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: ms-playwright-${{ runner.os }}-
+      - name: Install chromium-headless-shell
+        run: npx playwright install --with-deps chromium-headless-shell
       - name: Anti-pattern lint (反模式靜態檢查)
         run: node scripts/anti-pattern-lint.mjs
       - name: Coverage report (未實裝/靜默失效卡牌, 資訊性非 gating)
         run: node scripts/coverage-unimplemented.mjs
       - name: Run engine regression tests
         env:
-          # ⚠ 過渡期旗標：CI 目前還沒裝瀏覽器（playwright 不在 package.json 的
-          #   devDependencies 裡，npm ci 不會裝它），而 scripts/lib/env-skip.mjs 預設
-          #   「CI ⇒ ENV-SKIP 直接 throw」。先在這裡**明示放行**，讓這件事看得見，
-          #   而不是藏在守衛內部的 catch。
-          # ⭐ 等 CI 裝好 chromium-headless-shell 之後，**把這兩行刪掉** ——
-          #   刪掉的那一刻起，缺瀏覽器就會讓 CI 翻紅，那 10 支有 PW 段的守衛
-          #   （v6285/6286/6293/6296/6297/6301/6302/6303/6304/6306）才算真的在守。
+          # ⚠⚠ 這三行是**同一組**過渡期把手，要刪就三行一起刪（scripts/test-pw-gate.mjs 在守）。
+          #
+          #   `PTCG_PW: 'off'` —— 讓那 10 支有 PW 段的守衛走 ENV-SKIP，主 chain 維持
+          #   「裝 playwright 之前」的行為。理由：2026-09-19 第一次真的把瀏覽器裝起來跑，
+          #   test-v6301 的 375×812 版面量測就紅了（按鈕群最右緣 333.97 vs BASE 356）。
+          #   那些紅燈要逐條判「真退化 vs 環境相依（Rule 40 上移判準）」，
+          #   在判完之前不能讓它們擋住 deploy。
+          #
+          #   `PTCG_ALLOW_ENV_SKIP: '1'` —— 因為上面那行會產生 ENV-SKIP，
+          #   而 scripts/lib/env-skip.mjs 預設「CI ⇒ ENV-SKIP 直接 throw」。
+          #
+          # ⭐ 修完那些版面判準之後要做的三件事（三者必須一起）：
+          #   ① 刪掉這兩行 env
+          #   ② scripts/lib/pw.mjs 的 PW_DEFAULT_MODE 從 'off' 改成 'auto'
+          #   ③ 刪掉下面那個 continue-on-error 的獨立 step
+          PTCG_PW: 'off'
           PTCG_ALLOW_ENV_SKIP: '1'
         run: npm test
+      # ⭐ 過渡期的獨立 step：把那 10 支**真的**跑一遍，結果攤開來看，但不擋 deploy。
+      #   ⚠ 這裡**刻意不設** PTCG_ALLOW_ENV_SKIP ⇒ 萬一瀏覽器沒裝成功，
+      #     env-skip.mjs 會 throw ⇒ 這個 step 翻紅（被 continue-on-error 承接），
+      #     而不是靜默 SKIP 之後假裝有在守。
+      - name: Playwright guards (過渡期，不擋 deploy)
+        continue-on-error: true
+        env:
+          PTCG_PW: 'strict'
+        run: node scripts/run-pw-guards.mjs
       - name: Build SvelteKit app
         run: npm run build
         env:

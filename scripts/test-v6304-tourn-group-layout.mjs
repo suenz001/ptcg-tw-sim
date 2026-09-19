@@ -39,6 +39,7 @@ import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { envSkip } from './lib/env-skip.mjs';   // 「缺瀏覽器」不是淺複製，標記要分開（CI 上會 throw）
 import { cssOf } from './lib/svelte-style-block.mjs';
+import { pwChromium } from './lib/pw.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_GAME = join(ROOT, 'src/routes/game/+page.svelte');
@@ -469,7 +470,7 @@ console.log('\n【F】版面量測（playwright）');
 await T('F1 三尺寸量測 ＋ 三塊左右邊界對齊（沒有瀏覽器就 ENV-SKIP；CI 上會翻紅）', () => {
   assert.ok(existsSync(P_MEASURE), 'scripts/measure-v6304-tourn-group.mjs 必須存在');
   let pw = null;
-  try { pw = require_.resolve(process.env.PLAYWRIGHT_MODULE || 'playwright'); } catch { pw = null; }
+  pw = pwChromium('v6304 F1 三尺寸版面量測');
   // ⚠ 這裡原本借用 shallowSkip() —— 但「缺瀏覽器」不是淺複製。兩者混在同一個標記裡，
   //   就沒辦法對任何一種下硬判準（平行 runner 想把 SHALLOW-SKIP 釘成 0，卻發現本機恆有 2 次）。
   if (!pw) { envSkip('v6304 F1 三尺寸版面量測', '這台機器沒有 playwright；量測腳本仍在 repo 內，可手動跑'); return; }

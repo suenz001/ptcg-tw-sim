@@ -2177,3 +2177,73 @@ M7：把測試檔案的內容換掉，證明「真的讀得到內容」不是「
 **任何「降級／跳過」的分支，都要問它涵蓋的失敗原因是不是只有一種。**
 只要不只一種，就得分流；分不出來的話（例如 exit code 全一樣），先去把分辨的依據接回來，
 而不是把整叢失敗原因合併成一個樂觀的結論。
+
+---
+
+## Rule 61（2026-09-19）：Playwright 的中央閘、過渡期三把手，與「skip 標記」的計數
+
+### 一、10 支守衛的 PW 段，從實裝那天起**沒有在 CI 上執行過**
+`playwright` 不在 `package.json` 的 devDependencies ⇒ CI 的 `npm ci` 根本不會裝它
+⇒ v6285／6286／6293／6296／6297／6301／6302／6303／6304／6306 的 PW 段全部走 SKIP。
+而且它們**各寫各的 gate**（四種形狀、十份判準），skip 也各印各的
+⇒ 平行 runner 想對「skip 標記」下硬判準時抓不到它們。
+
+⭐ 收斂到 `scripts/lib/pw.mjs`（Rule 38）。三種模式，由 `PTCG_PW` 控制：
+
+| 模式 | 意思 |
+|---|---|
+| `off`（**目前預設**） | 刻意不跑 PW 段，走 `envSkip` ⇒ 行為與「沒裝 playwright」完全相同 |
+| `auto` | 有就跑；模組或瀏覽器缺一 ⇒ `envSkip`（本機可接受、CI 會 throw） |
+| `strict` | 一定要能跑，缺任何一項都 `envSkip` ⇒ CI 上必然翻紅 |
+
+### ⚠⚠ 二、「模組在」不等於「跑得起來」
+`chromium.executablePath()` **不吃 channel 參數** —— 實測不論傳不傳
+`{channel:'chromium-headless-shell'}`，回的都是**完整 chromium** 的路徑
+（`ms-playwright/chromium-<rev>/chrome-win64/chrome.exe`）。而那 10 支一律
+`launch({ channel: 'chromium-headless-shell' })`，裝的也只有 headless shell
+⇒ 拿 `executablePath()` 存不存在當判準會**永遠判成沒有**。
+而 headless shell 的目錄名帶 build 號（`chromium_headless_shell-1243`），寫死就是
+安慰劑型態 9（pin 死版本號）。
+⇒ **唯一可靠的判準是真的 launch 一次**（`pwLaunch` 把 launch 包進閘裡，
+並把 browser 回傳給呼叫端重用，不會多花一次啟動）。
+
+### 三、過渡期的**三個把手必須一致**（`test-pw-gate` 的 B0 在守）
+2026-09-19 第一次真的把瀏覽器裝起來跑，`test-v6301` 的 375×812 版面量測就紅了
+（按鈕群最右緣 333.97 vs BASE 356）。那些紅燈要逐條判「真退化 vs 環境相依
+（Rule 40 上移判準）」，在判完之前不能讓它們擋住 deploy。所以：
+
+1. `scripts/lib/pw.mjs` 的 `PW_DEFAULT_MODE === 'off'`
+2. `deploy.yml` 主 chain 的 `PTCG_PW: 'off'` ＋ `PTCG_ALLOW_ENV_SKIP: '1'`
+3. `deploy.yml` 的 **continue-on-error 獨立 step** 跑 `scripts/run-pw-guards.mjs`（`PTCG_PW=strict`）
+
+⭐ 收尾時三者**一起改**；改一個忘了另外兩個，B0 立刻翻紅。
+⚠ 那個獨立 step **刻意不設** `PTCG_ALLOW_ENV_SKIP` ⇒ 瀏覽器沒裝成功時 `envSkip` 會 throw
+⇒ step 翻紅（被 continue-on-error 承接），而不是靜默 SKIP 之後假裝有在守。
+
+### ⚠⚠ 四、這支守衛自己踩到的兩個安慰劑（突變測試當場抓出來）
+1. **掃 `deploy.yml` 沒有先剝 `#` 註解**（安慰劑型態 6）——
+   yml 的註解裡就寫著「⭐ 修完之後要刪掉 `PTCG_PW: 'off'`」，於是把**真正那一行**
+   註解掉之後，判準仍然從註解裡讀到它 ⇒ 突變存活。
+   ⭐ **掃設定檔一律先剝該格式的註解**，並配一條「只有註解提到時不得算數」的正對照。
+2. **判準窗口太寬，從隔壁行借字** —— 快取那一條原本寫成
+   「`actions/cache@vN` 之後 300 字內出現 `ms-playwright`」，於是把 `path:` 改壞
+   （指到別的目錄）之後，判準仍然從下一行的 `key: ms-playwright-…` 讀到那個字。
+   ⭐ **要釘哪一行就直接釘那一行**（`/^\s*path:\s*~\/\.cache\/ms-playwright\s*$/m`）。
+
+### ⚠ 五、`skip` 標記的計數只能認**行首的標記行**
+runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起算進去：
+- 守衛的斷言**標題**（`test-v6304` 的 F1 寫著「沒有瀏覽器就 ENV-SKIP；CI 上會翻紅」）
+- `env-skip.mjs` 在 process exit 印的 `⚠⚠⚠ [ENV-SKIP] 本次執行有 N 段…` 總結行
+
+⇒ 本機基準「ENV=5」裡有幾次其實是**文字**，不是 skip。
+⭐ 改成 `^[ \t]*⚠⚠ (SHALLOW-SKIP|PLATFORM-SKIP|ENV-SKIP)\b`，只認實際印出的那個樣式。
+⭐ **通則：凡是「數某個標記出現幾次」的判準，都要釘住它的完整樣式（含行首），
+不能整篇 grep 關鍵字** —— 註解、標題、總結行都會混進來。
+
+### 六、`<代號>:\tmp` 納入每支跑完的回復範圍
+三支硬寫 `/tmp/measure-*.json` 的守衛（v6297／v6303／v6304）在 PW 段真的跑起來之後，
+會往 `<代號>:\tmp` 寫檔（Windows 的 `/tmp/x` 相對於**當前磁碟機**解析 ⇒ cwd 是 `P:\repo`
+就落在 `P:\tmp`）。那是 runner 自己造的、per-worker 的拋棄式目錄，不跨 worker，
+所以不是「污染別人」的 escape；真正的風險只有**同一個沙盒內的順序相依**。
+⇒ `restoreTmp()` 在每支跑完清掉那裡新增的檔，escape 面改列 allowed（列報不擋）。
+實測：修前 escape 3（硬判準紅），修後 escape 0。

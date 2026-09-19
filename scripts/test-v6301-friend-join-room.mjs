@@ -30,6 +30,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_FR = join(ROOT, 'src/lib/friends/friend-rooms.ts');
@@ -251,7 +252,7 @@ if (LIB) {
 // ══════════════════════════════════════════════════════════════════════
 console.log('\n【D】【E】【F】【H】行為端（playwright）');
 let chromium = null;
-try { chromium = require_(process.env.PLAYWRIGHT_MODULE || 'playwright').chromium; } catch { chromium = null; }
+chromium = pwChromium('v6.301 【D】【E】【F】【H】行為端 DOM');
 
 const LIST = {
   friendsApi: 1, me: { uid: 'me', nick: '我' },
@@ -326,7 +327,7 @@ if (!chromium || !esbuild) {
       await T(n, () => { throw new Error('元件打包失敗 ⇒ 行為端無法執行：' + pwFatal); });
     }
   }
-  const browser = pwFatal ? null : await chromium.launch({ channel: process.env.PW_CHANNEL || 'chromium-headless-shell', args: ['--no-sandbox'] });
+  const browser = pwFatal ? null : await pwLaunchWith(chromium, 'v6.301 【D】【E】【F】【H】行為端 DOM');
   try {
     if (!browser) throw new Error('__skip__');
     /** 開一頁、灌假 fetch、載入 bundle。 */

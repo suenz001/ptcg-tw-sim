@@ -681,7 +681,14 @@ function diffEscape(b, a) {
     const name = d.slice(1);
     (V6166_ALLOW.test(name) ? allowed : hard).push('cache/' + name + '|' + d[0]);
   }
-  for (const d of diffSnap(b.tmp, a.tmp)) hard.push('tmp/' + d.slice(1) + '|' + d[0]);
+  // ⚠ `<代號>:\tmp` 是 runner 自己造的、**per-worker** 的拋棄式目錄
+  //   （三支硬寫 `/tmp/measure-*.json` 的守衛 v6297／v6303／v6304 會落在這裡；
+  //    Windows 的 `/tmp/x` 相對於**當前磁碟機**解析 ⇒ cwd 是 `P:\repo` 就落在 `P:\tmp`）。
+  //   它不跨 worker，所以不是「污染別人」的 escape；真正的風險只有**同一個沙盒內的
+  //   順序相依**（前一支留下的 measure json 被後一支讀到）。
+  //   ⇒ restoreSandbox 之後會把這裡新增的檔清掉（見 restoreTmp），所以列報不擋。
+  //   ⚠ 但**仍然要看得見**：一旦有守衛開始往這裡寫大東西或寫了沒清掉，要有人知道。
+  for (const d of diffSnap(b.tmp, a.tmp)) allowed.push('tmp/' + d.slice(1) + '|' + d[0]);
   for (const d of diffSnap(b.phys, a.phys)) hard.push('PHYS-tmp/' + d.slice(1) + '|' + d[0]);
   // os.tmpdir() 是 28 支守衛的 mkdtempSync 目標（隨機唯一名，不會碰撞）⇒ 列報不擋，
   // 但要看得見，因為被 timeout 殺掉時那些垃圾會永遠留著而沒人知道。
@@ -732,6 +739,20 @@ function restoreSandbox(slot, leak) {
     } catch (e) { failed.push(rel + '（補不回來：' + String((e && e.code) || e).slice(0, 20) + '）'); }
   }
   return { fixed, failed };
+}
+
+/**
+ * 把 `<代號>:\tmp` 裡「這一支新增的檔」清掉。
+ * ⚠ 只清 `+`（新增），不動既有檔：那個目錄是 runner 自己 ensureDir 出來的，
+ *   本來就該是空的，但萬一有人先放了東西，不要替他做決定。
+ */
+function restoreTmp(slot, allowed) {
+  if (OPT.noRestore || !slot || !slot.tmpDir) return;
+  for (const a of allowed) {
+    const m = /^tmp\/(.+)\|\+$/.exec(a);
+    if (!m) continue;
+    try { rmSync(join(slot.tmpDir, m[1]), { force: true }); } catch { /* 清不掉下一支會再看到，列報涵蓋 */ }
+  }
 }
 
 const RE_PASS = /^\s*(?:PASS|OK)\b|^\s*[\u2713\u2714]/;
@@ -861,15 +882,26 @@ function runOne(script, slot, durMap) {
         // ⚠ 混在一個計數裡就沒辦法對任何一種下判準——test-v6304 曾借用 shallowSkip() 來報
         //   「沒有 playwright」，害 SHALLOW-SKIP 在本機恆有 2 次而釘不住。分開之後
         //   （v6304 F1 已改用 envSkip）本機的 SHALLOW-SKIP 實測回到 0。
+        // ⚠⚠ 計數必須只認**行首的標記行**（`  ⚠⚠ ENV-SKIP  …`），不可以整篇 grep 字樣：
+        //   實測 test-v6304 的斷言**標題**寫著「沒有瀏覽器就 ENV-SKIP；CI 上會翻紅」，
+        //   整篇 grep 會把那一行也算成一次 ENV-SKIP；env-skip.mjs 在 process exit 印的
+        //   `⚠⚠⚠ [ENV-SKIP] 本次執行有 N 段…` 總結行同樣被重複計。
+        //   ⇒ 那個判準本來就是髒的（本機基準 ENV=5 裡有幾次其實是文字，不是 skip）。
+        //   現在只認 lib/env-skip.mjs、lib/base-blob.mjs、test-v6263 ④ 實際印出的那個樣式。
+        const countMark = (tag) =>
+          (out.match(new RegExp('^[ \\t]*\\u26a0\\u26a0 ' + tag + '\\b', 'gm')) || []).length;
         const skipMarks = {
-          shallow: (out.match(/SHALLOW-SKIP/g) || []).length,
-          platform: (out.match(/PLATFORM-SKIP/g) || []).length,
-          env: (out.match(/ENV-SKIP/g) || []).length,
+          shallow: countMark('SHALLOW-SKIP'),
+          platform: countMark('PLATFORM-SKIP'),
+          env: countMark('ENV-SKIP'),
         };
         const shallowSkips = skipMarks.shallow;
         const leak = diffSandbox(sbBefore, snapSandbox(slot.sb));
         const esc = diffEscape(escBefore, snapEscape(slot));
         const rs = restoreSandbox(slot, leak);
+        // ⭐ 連 `<代號>:\tmp` 一起回復：那裡的殘檔會造成同一個沙盒內的順序相依
+        //   （序列基準與平行版的執行順序不同 ⇒ 兩邊累積的污染不同 ⇒ 判準本身被污染）。
+        restoreTmp(slot, esc.allowed);
         const restored = rs.fixed;
         const restoreFailed = rs.failed;
         r = {

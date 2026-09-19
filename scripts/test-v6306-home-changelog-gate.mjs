@@ -34,6 +34,7 @@ import { createServer } from 'node:http';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
+import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = 'e3233caea4b4f3daab92b49b636bf9e6e0d03846';   // v6.305（HEAD-FAIL 對照；取不到 ⇒ SHALLOW-SKIP，不 fail-open）
@@ -313,7 +314,7 @@ await T('B8 ⭐ 線上實際訊號（S1 解析值）走完整接線的讀取數 
 // ══════════════════════════════════════════════════════════════════════════
 console.log('【N】網路層（playwright：真瀏覽器／真 localStorage／真 reload／真重建 bundle）');
 let hasPw = false, pw = null;
-try { pw = createRequire(import.meta.url)(process.env.PLAYWRIGHT_MODULE || 'playwright'); hasPw = true; } catch { hasPw = false; }
+{ const _c = pwChromium('v6.306 【N】網路層（真瀏覽器）'); pw = _c ? { chromium: _c } : null; hasPw = _c !== null; }
 if (!hasPw) {
   console.log('  ⚠⚠ SKIP【N】：這台機器沒有 Playwright，網路層斷言沒有跑（【B】的 getDoc spy 仍在守；沙盒實跑證據見 docs/changelog-internal.md v6.306）');
   skipped.push('【N】playwright 網路層（沒有 playwright 模組）');
@@ -366,7 +367,7 @@ if (!hasPw) {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const PORT = server.address().port;
   // 沙盒：PLAYWRIGHT_MODULE 指到 playwright-core、PW_EXECUTABLE 指到 headless shell 可執行檔
-  const browser = await pw.chromium.launch(process.env.PW_EXECUTABLE ? { executablePath: process.env.PW_EXECUTABLE } : {});
+  const browser = await pwLaunchWith(pw.chromium, 'v6.306 【N】網路層（真瀏覽器）');
   async function newCtx(fsDoc) {
     const ctx = await browser.newContext();
     const hits = [];
