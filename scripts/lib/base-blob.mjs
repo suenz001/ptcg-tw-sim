@@ -23,29 +23,84 @@ import { dirname, join, sep } from 'node:path';
 const _skipped = [];
 let _hooked = false;
 
-function _git(root, args) {
+/**
+ * git 說「這個物件／路徑不在」的訊息樣式。⚠ **不能用 exit code 分辨** ——
+ * 實測：物件不存在、tree 不是 tree、路徑不存在、**連「不是 git repo」**全部都是 `exit 128`。
+ * 唯一能分辨的是 stderr 的文字。
+ *
+ * ⚠⚠ 這是**白名單**，漏一個樣式就會把預期的失敗誤判成非預期 ⇒ 假紅。
+ *   第一版就漏了最重要的一個：**檔案在磁碟上存在、但 BASE 那顆 commit 沒有**
+ *   （＝本版新增的檔）git 給的是
+ *       fatal: path 'src/lib/game/copy-attack.ts' exists on disk, but not in '<sha>'
+ *   而不是 `Not a valid object name`（後者只在「磁碟上也沒有」時出現）。
+ *   實測跑全套時當場打斷 8 支守衛（v6337／v6384／v6391／v6392／v6267／v6336／v6233／v6273）。
+ *   ⭐ 教訓（安慰劑型態 10 的變形）：**枚舉語義不要枚舉字面** —— 同一件事
+ *     「這個路徑在那顆 commit 上沒有」，git 會依「磁碟上有沒有」給出**兩種**訊息。
+ *   ⭐ 白名單漏列 ⇒ 假紅（吵但安全）；黑名單漏列 ⇒ 假綠（回到本版要修的問題）。
+ *     所以這裡刻意選白名單，並由 test-base-blob-git-errors 的 B4／B4b 把兩種樣式都釘住。
+ */
+const EXPECTED_MISS = new RegExp([
+  'not a valid object name',         // 磁碟上也沒有這個路徑／sha 根本不存在
+  'invalid object name',             // 同上（部分 git 版本的措辭）
+  'exists on disk, but not in',      // ⭐ 檔案在工作樹裡、但那顆 commit 沒有（本版新增的檔）
+  'does not exist in',               // 同上（部分 git 版本的措辭）
+  'not a tree object',
+  'bad object',
+  'unknown revision',
+].join('|'), 'i');
+
+/**
+ * ⚠⚠ 這支原本寫成 `try { … } catch { return { ok:false, out:'' }; }` ——
+ *   **吞掉一切** git 失敗，一律降級成「拿不到歷史」⇒ SHALLOW-SKIP ⇒ 整段不跑但**條數不變**。
+ *   問題是：「物件不在」只是眾多失敗原因裡的一種。git 不在 PATH、這裡不是 git repo、
+ *   index.lock 殘留、權限不足、maxBuffer 爆掉 —— 全部長得一模一樣，而**72 支守衛**
+ *   在用這支 helper。CI 現在已經是 `fetch-depth: 0`（完整 clone）⇒ SHALLOW-SKIP 應該恆為 0，
+ *   這時候任何一次「非預期失敗」被當成淺複製跳過，就是不折不扣的假綠。
+ *   （與 IRON_RULES Rule 59 修掉的 createSandbox 空 catch 是**同一個**安慰劑型態 2，
+ *    規模大一個數量級。）
+ *
+ * ⇒ 現在分流：
+ *   - `missOk` 且 stderr 符合 EXPECTED_MISS ⇒ 回 { ok:false, expected:true }（呼叫端照舊）
+ *   - `soft`   ⇒ 任何失敗都回 { ok:false, expected:false }，不丟（只給純診斷用途）
+ *   - 其餘     ⇒ **throw**，讓它大聲，而且訊息裡帶 git 自己的 stderr
+ *
+ * ⚠ stdio 的 stderr 從 'ignore' 改成 'pipe'：不然連分辨的依據都拿不到。
+ */
+function _git(root, args, opts = {}) {
   try {
     return {
       ok: true,
+      expected: true,
+      err: '',
       out: execFileSync('git', ['-C', root, ...args],
-        { maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] }).toString('utf8'),
+        { maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'pipe'] }).toString('utf8'),
     };
-  } catch { return { ok: false, out: '' }; }
+  } catch (e) {
+    const err = String((e && e.stderr) || '').trim();
+    const status = e && typeof e.status === 'number' ? e.status : null;
+    if (opts.missOk && EXPECTED_MISS.test(err)) return { ok: false, expected: true, err, out: '' };
+    if (opts.soft) return { ok: false, expected: false, err, out: '' };
+    throw new Error(`git ${args.join(' ')}（在 ${root}）失敗，而且**不是**「物件不在」：`
+      + `exit=${status} ${err || String((e && e.message) || e)}`
+      + '\n  ⚠ 這不可以被當成淺複製跳過（那樣 72 支讀歷史的守衛會集體假綠）。'
+      + '\n  ⭐ 常見原因：這裡不是 git repo、git 不在 PATH、.git/**/index.lock 殘留、權限不足。');
+  }
 }
 
 /** 物件庫裡有沒有這顆 commit（淺複製時沒有）。 */
 export function hasBaseCommit(root, sha) {
-  return _git(root, ['cat-file', '-e', sha + '^{commit}']).ok;
+  return _git(root, ['cat-file', '-e', sha + '^{commit}'], { missOk: true }).ok;
 }
 
 /** 讀某顆 commit 底下的檔案內容。回傳 { ok, out }（拿不到時 ok=false，**不丟例外**）。 */
 export function readBaseBlob(root, sha, path) {
-  return _git(root, ['cat-file', '-p', `${sha}:${path}`]);
+  return _git(root, ['cat-file', '-p', `${sha}:${path}`], { missOk: true });
 }
 
 /** 這個 checkout 是不是淺複製（只拿來寫診斷訊息，不當判準）。 */
 export function isShallowCheckout(root) {
-  return _git(root, ['rev-parse', '--is-shallow-repository']).out.trim() === 'true';
+  // 純診斷字串，不當判準 ⇒ 用 soft：壞掉時回 false 而不是讓整支守衛爆掉。
+  return _git(root, ['rev-parse', '--is-shallow-repository'], { soft: true }).out.trim() === 'true';
 }
 
 /**
@@ -111,8 +166,11 @@ export function restoreBaseSubtree(ROOT, BASE_SHA, destSrcDir, prefix) {
   }
 
   // ② 取 BASE 上該子樹的檔案清單
-  const ls = _git(ROOT, ['ls-tree', '-r', '--name-only', BASE_SHA, '--', prefix]);
-  if (!ls.ok) return bad(`git ls-tree 失敗（${prefix} @ ${BASE_SHA.slice(0, 8)}）—— 物件庫可能沒有這顆 commit`);
+  // ⚠ 這裡用 missOk：呼叫端本來就會把 ok:false 變成一條紅（不是靜默跳過），
+  //   而「非預期的 git 失敗」仍然會從 _git 丟出來、帶著 git 自己的 stderr。
+  const ls = _git(ROOT, ['ls-tree', '-r', '--name-only', BASE_SHA, '--', prefix], { missOk: true });
+  if (!ls.ok) return bad(`git ls-tree 失敗（${prefix} @ ${BASE_SHA.slice(0, 8)}）—— 物件庫可能沒有這顆 commit`
+    + (ls.err ? `：${ls.err}` : ''));
   const baseFiles = ls.out.split('\n').map(x => x.trim()).filter(Boolean);
   if (!baseFiles.length) return bad(`BASE(${BASE_SHA.slice(0, 8)}) 上 ${prefix} 一個檔案都沒有（prefix 打錯？）`);
 

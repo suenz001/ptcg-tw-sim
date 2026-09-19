@@ -2083,3 +2083,72 @@ git(['reset', '--mixed', '-q', headSha], sb);   // 移動 HEAD ＋ 重寫 index�
   `throw` 而永遠通過 ⇒ 兩條 probe 不獨立。突變 M9b 專門守這件事。
 - **突變的 anchor 必須恰好出現一次**：不唯一時 `replace` 只改掉第一處 ⇒ 突變只做了一半，
   「紅在預期那一條」成立的原因就不是你以為的那個。mutcheck 現在對每個 anchor 斷言計數。
+
+---
+
+## Rule 60（2026-09-19）：讀歷史 blob 的中央 helper，不可以把「git 壞了」當成「拿不到歷史」
+
+`scripts/lib/base-blob.mjs` 的 `_git()` 原本寫：
+
+```js
+try { … } catch { return { ok: false, out: '' }; }
+```
+
+**吞掉一切** git 失敗，一律降級成「拿不到歷史」⇒ 呼叫端印 `SHALLOW-SKIP` 跳過那一段，
+而 **條數不變、整體綠燈**。問題是「物件不在」只是眾多失敗原因裡的一種：
+git 不在 PATH、這裡不是 git repo、`.git/**/index.lock` 殘留、權限不足、maxBuffer 爆掉，
+全部長得一模一樣。而這支 helper 有 **72 支守衛**在用。
+（與 Rule 59 修掉的 `createSandbox` 空 catch 是**同一個**安慰劑型態 2，規模大一個數量級。）
+
+⚠⚠ CI 自 `fetch-depth: 0` 那一版起已經是完整 clone ⇒ `SHALLOW-SKIP` 應該恆為 0。
+這時候任何一次「非預期失敗」被當成淺複製跳過，就是不折不扣的假綠。
+
+### ⚠⚠ 不能用 exit code 分辨，只能看 stderr 的文字
+實測（git 2.34）：
+
+| 情境 | exit | stderr |
+|---|---|---|
+| `cat-file -e` 物件不存在 | **128** | `fatal: Not a valid object name …` |
+| `cat-file -p sha:不存在的檔` | **128** | `fatal: Not a valid object name …` |
+| `ls-tree` 不是 tree | **128** | `fatal: not a tree object` |
+| **不是 git repo** | **128** | `fatal: not a git repository …` |
+
+全部 128。⇒ 想分流就**必須**把 stderr 接成 `'pipe'`（原本是 `'ignore'`，連依據都拿不到）。
+
+### 正解：三種模式
+- `missOk`：stderr 符合「物件不在」的樣式 ⇒ 回 `{ ok:false, expected:true }`（呼叫端照舊跳過）
+- `soft`：任何失敗都回 `{ ok:false, expected:false }`，不丟 —— **只給純診斷用途**
+  （`isShallowCheckout` 只是拿來寫訊息，不該把整支守衛炸掉）
+- 其餘：**throw**，訊息帶 git 自己的 stderr，讓人診斷得下去
+
+⚠ 反向也要守住：**預期的「物件不在」絕對不可以改成丟** —— 那樣 72 支守衛在淺複製環境下
+會集體爆掉，是另一種災難。守衛 `scripts/test-base-blob-git-errors.mjs` 的 B3/B4 就是在釘這一條。
+
+### ⚠⚠ 白名單漏列一個樣式，當場打斷 8 支守衛（同一版就踩到）
+`EXPECTED_MISS` 第一版只寫了 `Not a valid object name` 那一路，漏掉**最重要的那一個**：
+**檔案在工作樹裡存在、但 BASE 那顆 commit 沒有**（＝本版新增的檔），git 給的是
+
+```
+fatal: path 'src/lib/game/copy-attack.ts' exists on disk, but not in '<sha>'
+```
+
+而不是 `Not a valid object name`（後者只在「磁碟上也沒有」時出現）。
+跑全套時當場打斷 8 支（v6337／v6384／v6391／v6392／v6267／v6336／v6233／v6273）。
+
+⭐ 教訓（安慰劑型態 10 的變形）：**枚舉語義不要枚舉字面** —— 同一件事「這個路徑在那顆
+commit 上沒有」，git 會依「磁碟上有沒有」給出**兩種**訊息。
+⭐ 白名單漏列 ⇒ 假紅（吵但安全）；黑名單漏列 ⇒ 假綠（回到要修的問題）。所以這裡刻意選
+白名單，並由守衛的 B4／B4b **兩種樣式都釘住**，B4c 再正對照「這兩個情境真的走不同訊息」
+（否則 B4b 與 B4 是同一件事，等於白測一次 —— 安慰劑型態 12）。
+
+### 守衛
+`scripts/test-base-blob-git-errors.mjs`（20 PASS / 0 FAIL）：A 組守靜態形狀（逐項正對照），
+B 組**真的開一個 git repo** 驗四件事——正常路徑讀得到內容、預期的不丟、非預期的要丟且訊息
+帶得到 stderr、純診斷的不丟。突變測試 `scripts/mutcheck-base-blob-git-errors.mjs` **9/9 全殺**
+（含 M3c：把 `exists on disk, but not in` 從白名單拿掉 ⇒ B4b 必紅，把這次真的犯過的錯釘住；
+M7：把測試檔案的內容換掉，證明「真的讀得到內容」不是「ok 為真就算過」的恆真）。
+
+### 通則
+**任何「降級／跳過」的分支，都要問它涵蓋的失敗原因是不是只有一種。**
+只要不只一種，就得分流；分不出來的話（例如 exit code 全一樣），先去把分辨的依據接回來，
+而不是把整叢失敗原因合併成一個樂觀的結論。
