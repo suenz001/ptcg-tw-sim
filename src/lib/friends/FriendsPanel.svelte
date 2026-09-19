@@ -102,6 +102,32 @@
   let confirmFid = $state('');       // 等待二次確認的 fid
   let confirmKind = $state<'remove' | 'unblock' | ''>('');
 
+  // ⭐⭐⭐ v6.406「更多操作」：把「私聊」「解除好友」「封鎖」三顆收進一顆「更多」。
+  //   搭配下方的 `.acts` wrapper 一起看：兩者解的是**同一個問題** ——
+  //   v6.301 加了「加入房間／觀戰」之後，線上大廳的好友列一共有**五顆**按鈕
+  //   （加入房間／私聊／備註名／解除好友／封鎖），窄畫面一定放不下。
+  //
+  //   ⚠⚠ 這裡有一個我自己踩過的坑（由審查者指出）：`test-v6301` 的行為端與量測器
+  //   一開始只傳 `rooms`、沒傳 `ondm` ⇒ 量到的是「有房間按鈕但沒有私聊」這個
+  //   **線上根本不存在的組合**（`game/+page.svelte` 那個掛載點兩個都傳）。
+  //   用錯的組合量出來的結論是錯的：只收「解除好友＋封鎖」時，375×812 的列高會變成
+  //   139,101,115,115,139（比 v6.405 的 110,110,115,86,110 **更糟**）。
+  //   ⇒ 連私聊一起收，按鈕群才真的擠得進一行。
+  //
+  //   實測（chromium-headless-shell，Windows 字型，有私聊）：
+  //     375×812：110,110,115,86,110,86,48 → 101,101,77,77,101,77,48，每列按鈕行數全 2 → 全 1
+  //     390×844：110,110,86,86,110,86,48  → 101,101,77,77,101,77,48
+  //     1366×768：72,72,48,48,72,48,48   → 完全相同（桌機零變化）
+  //     320×568：139,148,115,115,139,86,48 → 101,101,115,77,101,77,48（錦標賽那列仍換行，
+  //       差 6px；那一列的按鈕本來就是停用的，而且 320 寬的裝置極少）
+  //
+  //   ⭐ 附帶的好處：解除好友與封鎖都是**不可逆**操作，收在第二層可以減少誤觸。
+  //   ⚠⚠ 刻意**不用 @media 當手機開關** —— 這個檔開頭就寫著「手機上靠 flex-wrap 自然換行，
+  //     不用 @media 當手機開關（手機／桌機分支紀律）」。減少按鈕數是內容層的解法，
+  //     寬螢幕與窄螢幕同一套，沒有斷點要維護。
+  /** 正在展開「更多操作」的 fid（空＝沒有人展開）。 */
+  let moreFid = $state('');
+
   // ── v6.296 備註名（LINE 那種「我自己幫這位好友取的名字」；對方看不到）──
   /** 正在編輯備註名的 fid（空＝沒有人在編輯）。 */
   let aliasFid = $state('');
@@ -194,6 +220,10 @@
     confirmFid = fid; confirmKind = kind; actErr = '';
   }
   function cancelConfirm() { confirmFid = ''; confirmKind = ''; }
+  // ⭐ v6.406「更多操作」的展開／收合。⚠ 一次只展開一列（與 confirmFid／aliasFid 同一個模式）：
+  //   別列的展開狀態會自動收起來，免得整份名單同時長出好幾排。
+  function openMore(fid: string) { moreFid = fid; actErr = ''; }
+  function closeMore() { moreFid = ''; }
 
   async function act(action: FriendsAction, fid: string) {
     if (actBusy) return;
@@ -207,6 +237,10 @@
       onafteract?.(fid);
       cancelConfirm();
       if (aliasFid === fid) cancelAlias();
+      // ⭐ v6.406：同理把「更多」收起來。⚠ 審查者指出的洞：沒收的話，若同一個 fid 日後又回到名單
+      //   （例如解除封鎖 → 重新加好友，若伺服器重用同一把 fid），那一列會**一出現就是展開狀態**，
+      //   加入房間／備註名都看不到。fid 會不會重用是伺服器端的事，這裡**不賭**。
+      if (moreFid === fid) closeMore();
       await load();
     } finally {
       actBusy = '';
@@ -323,19 +357,39 @@
                     <span class="hint alias-hint">只有自己看得到，對方不會知道。最多 {FRIENDS_ALIAS_MAX_LEN} 字。</span>
                   </form>
                   {#if aliasErr}<span class="error alias-err">{aliasErr}</span>{/if}
+                {:else if moreFid === r.fid}
+                  <!-- ⭐⭐⭐ v6.406「更多操作」展開：**沒有自己的版面宣告**，完全沿用 .acts
+                       （class="acts acts-more"）⇒ 與一般狀態完全同一個折行行為。
+                       ⚠ 展開時**取代**原本那排按鈕，不是額外長出來 —— 疊加會讓那一列更擠。
+                       ⚠ 展開期間「加入房間／觀戰」與房名那一行會被藏起來（與 .confirm／.alias 兩個分支一致），
+                         按「收起」就回來；另外 act() 成功之後也會自動收起。 -->
+                  <span class="acts acts-more">
+                    {#if showDm}<button class="small dm-open" disabled={dmActiveFid === r.fid} onclick={() => ondm?.(r)} title="私聊">💬 私聊</button>{/if}
+                    <button class="small" disabled={!!actBusy} onclick={() => askConfirm(r.fid, 'remove')}>解除好友</button>
+                    <button class="small danger" disabled={!!actBusy} onclick={() => act('block', r.fid)}>封鎖</button>
+                    <button class="small" disabled={!!actBusy} onclick={closeMore}>收起</button>
+                  </span>
                 {:else}
                   <!-- ⭐⭐⭐ v6.301「加入房間／觀戰」。四種狀態：等待中的休閒房＝可加入、對戰中的休閒房＝可觀戰、
                        錦標賽對戰中＝停用並明講、其餘（含資料不足）＝停用。
                        ⚠ 點下去走的是大廳**既有**的 handleJoinFromList（加入與觀戰同一條路）。 -->
+                  <!-- ⭐⭐⭐ v6.406 按鈕群 wrapper：讓「暱稱區」與「按鈕群」成為兩個**不可再被拆開的整體**。
+                       詳細理由寫在下方 .acts 的 CSS 註解裡。 -->
+                  <span class="acts">
                   {#if _rs}<button class="small fr-join" disabled={!friendRoomClickable(_rs) || !!joinBlockedMsg} title={friendRoomTitle(_rs)} onclick={() => { if (_rs.room) onjoinroom?.(_rs.room.roomId); }}>{friendRoomLabel(_rs)}</button>{/if}
-                  {#if showDm}<button class="small dm-open" disabled={dmActiveFid === r.fid} onclick={() => ondm?.(r)} title="私聊">💬 私聊</button>{/if}
                   {#if canAlias(r)}<button class="small" disabled={!!actBusy} onclick={() => startAlias(r)} title="幫這位好友取一個只有自己看得到的名字">✏️ 備註名</button>{/if}
-                  <button class="small" disabled={!!actBusy} onclick={() => askConfirm(r.fid, 'remove')}>解除好友</button>
-                  <button class="small danger" disabled={!!actBusy} onclick={() => act('block', r.fid)}>封鎖</button>
-                  <!-- ⚠⚠ uid 來源是未驗證的 playerIdentity ⇒ **一定要把房名＋房主名顯示出來**，
-                       讓玩家自己看得到再決定要不要進去（站長已知並接受這個風險）。 -->
-                  {#if _rs?.room}<span class="fr-room">🎮 {_rs.room.roomName}（房主：{_rs.room.hostName}）</span>{/if}
+                  <!-- ⭐ v6.406 私聊／解除好友／封鎖三顆收進這一顆。為什麼連私聊也收：見下方 .acts 的 CSS 註解。 -->
+                  <button class="small fr-more" disabled={!!actBusy} onclick={() => openMore(r.fid)} title={showDm ? '更多操作（私聊／解除好友／封鎖）' : '更多操作（解除好友／封鎖）'}>更多</button>
+                  </span>
                 {/if}
+                <!-- ⚠⚠ uid 來源是未驗證的 playerIdentity ⇒ **一定要把房名＋房主名顯示出來**，
+                     讓玩家自己看得到再決定要不要進去（站長已知並接受這個風險）。
+                     ⭐⭐ v6.406 移到 if／else 鏈的**外面**（一份模板，所有狀態共用）：
+                     原本它在 `{:else}` 分支裡 ⇒ 一展開「更多」房名那一行就消失，那一列瞬間變矮
+                     （實測 375：101 → 77；1366：72 → 48），下方整份名單跟著跳一下，收起再跳回來。
+                     「更多」是**常駐入口**（玩家會反覆開關），跟一次性的確認／編輯不同。
+                     ⚠ 寫在分支外面而不是在 acts-more 裡再抄一份：同一段模板寫兩份就是 Rule 38 的毛病。 -->
+                {#if _rs?.room}<span class="fr-room">🎮 {_rs.room.roomName}（房主：{_rs.room.hostName}）</span>{/if}
               </li>
             {/each}
           </ul>
@@ -355,9 +409,12 @@
                 {#if r.alias}<span class="orig-nick">原暱稱：{r.nick}</span>{/if}
                 <span class="meta">{viaLabel(r)}{r.at ? '・' + fmtDate(r.at) : ''}</span>
                 <span class="spacer"></span>
-                <button class="small primary" disabled={!!actBusy} onclick={() => act('accept', r.fid)}>接受</button>
-                <button class="small" disabled={!!actBusy} onclick={() => act('reject', r.fid)}>拒絕</button>
-                <button class="small danger" disabled={!!actBusy} onclick={() => act('block', r.fid)}>封鎖</button>
+                <!-- ⭐ v6.406：四個區的按鈕群一律包進 .acts（收斂式：同一個折斷規則，十一種列都一致）。 -->
+                <span class="acts">
+                  <button class="small primary" disabled={!!actBusy} onclick={() => act('accept', r.fid)}>接受</button>
+                  <button class="small" disabled={!!actBusy} onclick={() => act('reject', r.fid)}>拒絕</button>
+                  <button class="small danger" disabled={!!actBusy} onclick={() => act('block', r.fid)}>封鎖</button>
+                </span>
               </li>
             {/each}
           </ul>
@@ -377,7 +434,9 @@
                 {#if r.alias}<span class="orig-nick">原暱稱：{r.nick}</span>{/if}
                 <span class="meta">等待對方確認{r.at ? '・' + fmtDate(r.at) : ''}</span>
                 <span class="spacer"></span>
-                <button class="small" disabled={!!actBusy} onclick={() => act('remove', r.fid)}>取消邀請</button>
+                <span class="acts">
+                  <button class="small" disabled={!!actBusy} onclick={() => act('remove', r.fid)}>取消邀請</button>
+                </span>
               </li>
             {/each}
           </ul>
@@ -402,7 +461,9 @@
                   <button class="small danger" disabled={actBusy === r.fid} onclick={() => act('unblock', r.fid)}>確定解除封鎖</button>
                   <button class="small" disabled={actBusy === r.fid} onclick={cancelConfirm}>取消</button>
                 {:else}
-                  <button class="small" disabled={!!actBusy} onclick={() => askConfirm(r.fid, 'unblock')}>解除封鎖</button>
+                  <span class="acts">
+                    <button class="small" disabled={!!actBusy} onclick={() => askConfirm(r.fid, 'unblock')}>解除封鎖</button>
+                  </span>
                 {/if}
               </li>
             {/each}
@@ -485,6 +546,36 @@
        夾在按鈕中間會在窄畫面把按鈕列拆成兩半，三種尺寸實測都會破版。 */
   .fr-room { flex: 1 1 100%; font-size: .78rem; color: var(--fr-dim); overflow-wrap: anywhere; word-break: break-word; }
   .spacer { flex: 1; }
+  /* ⭐⭐⭐ v6.406 按鈕群 wrapper。
+     為什麼要包：在這之前所有按鈕都是 `.row` 的**直接子元素**，flex-wrap 會從
+     **按鈕中間**任意折斷 ⇒ 同一份名單裡，按鈕文字較寬的那幾列
+     （「錦標賽對戰中」實測 129.69px，比「加入房間」102.48px 寬 27px）折斷點不同，
+     看起來參差不齊。375×812 實測（v6.405，即**目前線上的版本**，有私聊）：
+     第 3 列（錦標賽）列高 115、其餘 86／110，而且那一列的第一行是三顆按鈕靠左（left 19）、
+     其他列的第一行是一顆靠右 —— 直接看就是一團亂。
+     ⇒ 包起來之後，折斷點只剩一個（暱稱區｜按鈕群），每一列必定一致。
+     ⚠⚠ 光包 wrapper **不夠** —— 五顆按鈕（含私聊）共 343.84px，375 寬的可用寬只有 337px，
+       差 7px ⇒ 群內還是會換行，而且因為各列寬度不同而換得不一致（實測 139,101,115,115,139）。
+       所以必須**同時**把私聊一起收進「更多」，讓按鈕群只剩三顆（260.56px）。
+     ⚠ 群內仍然 `flex-wrap: wrap`：320 寬那種極窄裝置放不下時要能在群內換行，
+       用 nowrap 會直接溢出成水平捲軸（比換行更糟）。
+       `justify-content: flex-end` 讓群內換行後仍然靠右。
+     ⚠ `margin-left: auto`：整群被擠到第二行時，.spacer 留在第一行幫不上忙，
+       要靠它把整群推到右邊（與其他列切齊）。兩者不打架：同一行時 .spacer 的 flex-grow
+       先吃掉剩餘空間，auto margin 得 0；不同行時 auto margin 才生效。
+     ⚠ `.fr-room`（房名那一行）刻意留在 wrapper **外面**：它要的是 `flex: 1 1 100%` 整列另起一行、
+       且左緣切齊暱稱；放進群裡會變成群內靠右的一行，test-v6301 H2 的「房名 left ＝暱稱 left」會紅。
+     ⚠ `.confirm`／`.alias-form` 兩個分支沒有包（維持 v6.405 的行為）：它們是一次性的
+       確認／編輯狀態，本來就是整列另起一行，不屬於「常駐按鈕群」。
+     ⚠⚠ gap 必須與 `.row` 的 gap 一致（8px）—— test-v6301 H2 有斷言「按鈕間距＝列的 gap」。 */
+  .acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center; margin-left: auto; }
+  /* ⭐ v6.406 「更多操作」展開列：**完全沿用 .acts 的版面**（class="acts acts-more"）。
+     ⚠ 第一版實作寫成另一份 `flex: 1 1 100%`，結果桌機（1366×768）一展開就多一行
+       （實測列高 48 → 77），而一般狀態不會 ⇒ 版面判準寫了兩份就會從這種地方漏。
+       現在 .acts-more 只剩 hook（給守衛辨識用），一行版面宣告都沒有。
+     ⚠ 「更多」這顆刻意用**中文字**而不是「⋯」(U+22EF)：那個符號的字型度量與中文不同，
+       實測按鈕高度會差 1px（30 vs 31），而 test-v6301 的 H2 有「按鈕等高」與「行數一致」
+       兩條斷言 —— 差 1px 會讓垂直置中後的 top 不同，兩條都被誤判。 */
   .confirm { font-size: .8rem; color: var(--fr-gold); flex: 1 1 100%; }
   /* 備註名編輯列：整列另起一行（flex 100%），手機直式也不會把既有按鈕擠爆。 */
   .alias-form { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; flex: 1 1 100%; }

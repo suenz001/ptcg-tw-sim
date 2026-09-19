@@ -287,11 +287,17 @@ if (!chromium || !esbuild) {
   globalThis.__setBlocked = (m) => { blocked = m; };
   globalThis.__joins = [];
   const onjoin = (id) => { globalThis.__joins.push(id); };
+  // ⚠⚠ v6.406：**三個掛載點都傳 ondm**（game/+page.svelte 兩處、friends/+page.svelte 一處）
+  //   ⇒ 玩家真正看到的好友列一定有「私聊」那一顆。先前這支守衛沒傳 ondm，
+  //   量的是「有房間按鈕、沒有私聊」這個**線上不存在的組合**
+  //   ⇒ 【H】整段的結論都會是錯的（v6.406 第一版只收解除好友＋封鎖，
+  //   量起來很漂亮，實際上 375×812 會變成 139,101,115,115,139 —— 比不改還糟）。
+  const ondm = () => {};
 </script>
 {#if mode === 'with'}
-  <P embedded {rooms} onjoinroom={onjoin} joinBlockedMsg={blocked} />
+  <P embedded {rooms} {ondm} onjoinroom={onjoin} joinBlockedMsg={blocked} />
 {:else}
-  <P embedded />
+  <P embedded {ondm} />
 {/if}
 `;
   writeFileSync(join(dir, 'FriendsPanel.js'), compile(FRP, { generate: 'client', filename: 'FriendsPanel.svelte', runes: true, css: 'injected' }).js.code);
@@ -471,14 +477,17 @@ if (!chromium || !esbuild) {
 
     // ── 【H】三尺寸框架安全 ＋ 新舊元素對齊 ────────────────────────
     const SIZES = [[375, 812], [390, 844], [1366, 768]];
-    const measure = async (w, h, withRooms) => {
+    const measure = async (w, h, withRooms, extraCss) => {
       const c = await browser.newContext({ viewport: { width: w, height: h } });
       const p = await newPage(c);
       if (withRooms) {
         await p.evaluate((rs) => { window.__mount(document.getElementById('app'), {}); window.__setRooms(rs); }, PWROOMS);
       } else {
-        await p.evaluate(() => { window.__mountBare(document.getElementById('app'), { embedded: true }); });
+        // ⚠ BASE 就是「/friends 獨立頁／錦標賽分頁」那兩個掛載點：有 ondm、沒有 rooms。
+        await p.evaluate(() => { window.__mountBare(document.getElementById('app'), { embedded: true, ondm: () => {} }); });
       }
+      // ⭐ extraCss：H5 反安慰劑用 —— 把按鈕撐寬到必然破版，確認判準真的抓得到。
+      if (extraCss) { await p.addStyleTag({ content: extraCss }); await p.waitForTimeout(120); }
       await p.waitForTimeout(300);
       const out = await p.evaluate(() => {
         const R = (e) => { const r = e.getBoundingClientRect(); return { l: +r.left.toFixed(2), r: +r.right.toFixed(2), t: +r.top.toFixed(2), w: +r.width.toFixed(2), h: +r.height.toFixed(2) }; };
@@ -506,6 +515,52 @@ if (!chromium || !esbuild) {
       await c.close();
       return out;
     };
+    /** ⭐⭐⭐ v6.406 上移（IRON_RULES Rule 40）：H4 的版面判準寫在這裡**一份**。
+     *
+     *  為什麼要上移：原本 H2／H4 比的是「NEW 與 BASE 的**差**」，而 BASE 就是同一支元件
+     *  「不傳 rooms」的樣子。v6.406 把「解除好友／封鎖」收進「更多」之後，BASE 的按鈕群
+     *  在窄畫面擠得回第一行（390×844 實測 BASE 列高 86 → 48）。
+     *  ⚠ 準確地說：只有【H4】舊的「高度增量彼此相同」那一條真的紅了
+     *  （375 實測 dh = 54：BASE 擠回一行、NEW 多一行＋房名一行）；
+     *  【H2】的「行數與 BASE 相同」**沒有紅**（我一度誤以為它紅而把它刪掉，
+     *  審查者實測抓出來）—— 那一條已經放回去了，與這份絕對判準**兩條一起守**。
+     *  ⚠ 但它們要守的意圖（v6.301 的新按鈕不可以把版面搞爛）**沒有被破壞**：按鈕群仍然
+     *  切齊右緘、仍然不重疊、仍然沒有水平捲軸；被改變的只是「BASE 剛好也是兩行」這個**運氣**。
+     *  ⇒ 改成**不依賴 BASE 的絕對判準**，而且判得更嚴（不是放水）：
+     *    (a) 按鈕群最多佔 2 行 —— 第三行就是災難；
+     *    (b) **五列的行數必須一致** —— 整份名單不可以參差不齊（原本的相對判準**根本測不到**）；
+     *    (c) 有房名的三列彼此列高相同、沒房名的兩列彼此列高相同；
+     *    (d) 有房名的列只多出「一行房名」的高度（0 < d ≤ 30px）。
+     *  ⚠⚠ 這份判準**只寫這一份**（Rule 38）：H4 的正式斷言與 H5 的反安慰劑都呼叫它。
+     *  若在呼叫端再抄一份，H5 就會恆綠（安慰劑型態 11）。
+     *  @returns {string[]} 違規訊息（空陣列＝通過）
+     */
+    function layoutViolations(m) {
+      const bad = [];
+      const lines = [0, 1, 2, 3, 4].map((i) => new Set(m.allBtns[i].map((b) => b.t)).size);
+      if (Math.max(...lines) > 2) bad.push(`按鈕群佔了 ${Math.max(...lines)} 行（> 2 行＝破版）：${JSON.stringify(lines)}`);
+      if (new Set(lines).size !== 1) bad.push(`五列的按鈕行數不一致（名單會參差不齊）：${JSON.stringify(lines)}`);
+      // ⚠ 哪幾列有房名一律**從 DOM 問**（m.frRooms），不寫死索引：
+      //   fixture 一調排序，寫死的索引會默默量到錯的列（審查者建議 9）。
+      const idxRoom = [0, 1, 2, 3, 4].filter((i) => !!m.frRooms[i]);
+      const idxNoRoom = [0, 1, 2, 3, 4].filter((i) => !m.frRooms[i]);
+      if (idxRoom.length === 0 || idxNoRoom.length === 0) {
+        bad.push(`fixture 壞了：有房名 ${idxRoom.length} 列、沒房名 ${idxNoRoom.length} 列（兩邊都必須 > 0，否則這一段是空真）`);
+        return bad;
+      }
+      const hRoom = idxRoom.map((i) => m.rows[i].h);
+      const hNoRoom = idxNoRoom.map((i) => m.rows[i].h);
+      // ⚠⚠ 這兩句訊息刻意寫成**互不包含的字串**（「有房名那幾列」／「無房名那幾列」）：
+      //   舊寫法是「有房名的列…」與「沒有房名的列…」，後者整個包含前者
+      //   ⇒ H5 用 needle 比對時兩條會互相掩護（審查者第二輪抓到）。
+      if (new Set(hRoom).size !== 1) bad.push('有房名那幾列的列高不一致：' + JSON.stringify(hRoom));
+      if (new Set(hNoRoom).size !== 1) bad.push('無房名那幾列的列高不一致：' + JSON.stringify(hNoRoom));
+      const d = +(hRoom[0] - hNoRoom[0]).toFixed(2);
+      if (!(d > 0 && d <= 30)) bad.push(`房名那一行佔的高度不合理（${d}px）`);
+      return bad;
+    }
+    // ⚠ 哨兵：SIZES 一改（例如把 375 拿掉）H5 會**靜默消失**，整段反安慰劑跟著不見。
+    let h5Ran = 0;
     for (const [w, h] of SIZES) {
       const base = await measure(w, h, false);
       const now = await measure(w, h, true);
@@ -534,7 +589,12 @@ if (!chromium || !esbuild) {
             `第 ${i} 列：按鈕群最右緣 ${maxR(nb)} ≠ BASE ${maxR(bb)}（整條偏移了 —— v6.298 的教訓）`);
           assert.strictEqual(maxR(nb), now.rows[i].r - now.rowPad.r,
             `第 ${i} 列：按鈕群沒有切齊列的內容區右緣（${maxR(nb)} vs ${now.rows[i].r - now.rowPad.r}）`);
-          // 不多佔一行：按鈕列的行數（distinct top）與 BASE 相同
+          // ⭐⭐ 不多佔一行：按鈕列的行數（distinct top）與 BASE 相同。
+          //   ⚠⚠ v6.406 一度把這條刪掉（以為它被本版弄紅了），審查者實測證明**它根本沒紅**，
+          //   而且刪掉之後會產生一個新判準抓不到的盲區：
+          //   「fr-join 過寬 ⇒ **每一列均勻地**多佔一行」—— 這種回歸在 layoutViolations()
+          //   看來是「整齊的兩行」（lines 全 2、d=24）全綠，只有這條會紅。
+          //   ⇒ 兩條一起守：這條守「相對 BASE 不變差」，H4 守「絕對不參差」。
           assert.strictEqual(new Set(nb.map((b) => b.t)).size, new Set(bb.map((b) => b.t)).size,
             `第 ${i} 列：按鈕多佔了一行（BASE ${new Set(bb.map((b) => b.t)).size} 行 → NEW ${new Set(nb.map((b) => b.t)).size} 行）`);
           // 等高＋同一行的相鄰間距一致（＝新按鈕沒有自帶額外 margin）
@@ -567,17 +627,56 @@ if (!chromium || !esbuild) {
           }
         }
       });
-      await T(`H4 ${tag} ⭐⭐ 列高變化一致：同一種狀態的列高相同；有房名的列剛好多一行（≤ 30px），其餘列的高度增量彼此相同`, () => {
-        // 沒有房名資訊的三列（錦標賽／不在房間）：增量必須彼此相同
-        const noRoom = [2, 3].map((i) => dRows[i].dh);
-        assert.strictEqual(new Set(noRoom).size, 1, '沒有房名的那幾列高度增量不一致：' + JSON.stringify(noRoom));
-        const withRoom = [0, 1, 4].map((i) => dRows[i].dh);
-        assert.strictEqual(new Set(withRoom).size, 1, '有房名的那幾列高度增量不一致：' + JSON.stringify(withRoom));
-        assert.ok(withRoom[0] - noRoom[0] <= 30 && withRoom[0] - noRoom[0] >= 0,
-          '房名那一行佔的高度不合理（' + (withRoom[0] - noRoom[0]) + 'px）');
+      await T(`H4 ${tag} ⭐⭐⭐ 版面絕對判準：按鈕群最多 2 行且五列行數一致；同一種狀態的列高相同；有房名的列剛好多一行房名（0 < d ≤ 30px）`, () => {
+        const bad = layoutViolations(now);
+        assert.deepStrictEqual(bad, [], '版面判準違規：' + JSON.stringify(bad));
+        // ⚠ 這一條仍然是相對 BASE，而且**必須**是：「待我確認／已封鎖」兩區根本不該有新按鈕，
+        //   它們的高度在兩種情境下必須**一模一樣**（這次 v6.406 也沒動到那兩區）。
         assert.deepStrictEqual(dRows.slice(5).map((d) => d.dh), [0, 0], '待我確認／已封鎖兩列的高度被改到了');
       });
+      // ⭐⭐⭐ H5 反安慰劑：只在最窄的尺寸做（每個案例多開一個 context 約 1 秒）。
+      //   ⚠⚠ 壓力手段選錯過一次：第一版用 `min-width: 150px` —— 它把**每一列**都均勻地
+      //   擠成兩行，反而變得**整齊**（實測 lines=[2,2,2,2,2]、d=24）⇒ 一條都沒抓到。
+      //   ⭐ skill 的教訓：設計正對照要先問「我這個手段真的會讓被測系統進入那個狀態嗎？」
+      //   ⚠⚠ 而且「只要 bad 非空就算過」也不夠：那只證明了**被觸發的那一條**活著。
+      //   審查者實測：`flex:1 1 100%` 只會觸發 (a)「> 2 行」，把 (b)(c)(d) 整段刪掉也照樣綠。
+      //   ⇒ 下面**每一條判準各自有一個壓力案例**，而且斷言「須抓到含有指定關鍵字的那一條」。
+      //   ⚠⚠ 它們呼叫的是**與 H4 同一個** layoutViolations()（Rule 38）：若把那些判準拿掉，
+      //   H4 會綠、但這裡會立刻紅 ⇒ 判準被拿掉不會無聲無息。
+      if (w === 375) {
+        /** [css, 預期被觸發的判準關鍵字, 說明] */
+        const STRESS = [
+          ['.fr-panel .row button { flex: 1 1 100% !important; }',
+           '> 2 行', '(a) 每顆按鈕各佔一整行 ⇒ 行數必定 ≥ 3'],
+          ['.fr-panel .rows li:nth-child(3) .acts button { min-width: 150px !important; }',
+           '行數不一致', '(b) 只撐寬第 3 列（錦標賽，沒房名）⇒ 只有那一列換行，名單參差不齊'],
+          ['.fr-panel .rows li:nth-child(3) .acts button { min-width: 150px !important; }',
+           '無房名那幾列的列高不一致', '(c2) 同上 ⇒ 無房名那幾列的列高不再相同'],
+          // ⚠⚠ 審查者第二輪抓到的洞：上面那個案例撐的是第 3 列（**沒房名**），
+          //   只觸發得了 c2；把 c1（有房名那幾列）整條刪掉，四個案例照樣全綠。
+          //   ⇒ 再補一個撐寬**有房名**的第 1 列。
+          ['.fr-panel .rows li:nth-child(1) .acts button { min-width: 150px !important; }',
+           '有房名那幾列的列高不一致', '(c1) 只撐寬第 1 列（有房名）⇒ 有房名那幾列的列高不再相同'],
+          ['.fr-panel .fr-room { display: none !important; }',
+           '房名那一行', '(d) 把房名那一行藏掉 ⇒ 有房名與沒房名的列高差變 0'],
+        ];
+        for (const [css, needle, why] of STRESS) {
+          const stressed = await measure(w, h, true, css);
+          h5Ran++;
+          await T(`H5 ${tag} ⭐⭐⭐ 反安慰劑 ${why} ⇒ layoutViolations() 必須抓到「${needle}」`, () => {
+            const bad = layoutViolations(stressed);
+            assert.ok(bad.some((m) => m.includes(needle)),
+              `⚠⚠ 壓力案例下 layoutViolations() 沒有抓到「${needle}」 ⇒ 那一條是安慰劑。`
+              + ` 實際抓到：${JSON.stringify(bad)}；`
+              + JSON.stringify({ lines: [0, 1, 2, 3, 4].map((i) => new Set(stressed.allBtns[i].map((b) => b.t)).size),
+                                 rows: stressed.rows.slice(0, 5).map((r) => r.h) }));
+          });
+        }
+      }
     }
+    await T('H5 哨兵 ⭐⭐ 反安慰劑至少跑過五個壓力案例（SIZES 改掉的話這條會紅）', () => {
+      assert.strictEqual(h5Ran, 5, 'H5 只跑了 ' + h5Ran + ' 個壓力案例（應該 5）—— SIZES 裡沒有 375？');
+    });
   } catch (e) {
     if (String(e && e.message) !== '__skip__') throw e;
   } finally {
@@ -615,6 +714,58 @@ await T('F4 ⭐⭐⭐ 沒有新增任何房間訂閱：`subscribeOpenRooms` 全�
     }
   }
   assert.ok(!/^import /m.test(FR), 'friend-rooms.ts 不該 import 任何東西（守衛才能單獨載入實跑）');
+});
+
+/** ⭐⭐⭐ v6.406 的結構判準寫在這裡**一份**（Rule 38）：F5 的正式斷言與 F6 的正對照都呼叫它。
+ *  守三件事：
+ *    (1) 私聊／解除好友／封鎖三顆**只在**「更多」展開層（.acts-more）；
+ *    (2) 常駐層（第一個 .acts）**只有** 加入房間／備註名／更多；
+ *    (3) 房名那一行在 if／else 鏈的**外面**（否則一展開就消失，列高跳動）。
+ *  ⚠ 這三件是本版的**意圖**：有人把按鈕搬回常駐層（版面就回到 375 破版）或把房名搬回分支裡
+ *    （展開又會跳），行為端的【H】段**量不到**（它不點「更多」）⇒ 需要這一條静態守。
+ *  @returns {string[]} 違規訊息（空＝通過）
+ */
+function v6406Structure(src) {
+  const bad = [];
+  const t = stripCmt(src);
+  const iMore = t.indexOf('<span class="acts acts-more">');
+  if (iMore < 0) { bad.push('找不到「更多」展開層 <span class="acts acts-more">'); return bad; }
+  const more = t.slice(iMore, t.indexOf('</span>', iMore));
+  if (!(more.length > 200 && more.length < 2000)) bad.push(`acts-more 區塊長度 ${more.length} 不合理（anchor 可能失效）`);
+  // ⚠⚠ needle 一律用**動作**不用顯示文字：「解除好友」四個字也出現在 fr-more 的 title 裡
+  //   （「更多操作（私聊／解除好友／封鎖）」）⇒ 常駐層會被誤判成「有解除好友」。
+  for (const [needle, what] of [['dm-open', '私聊'], ["askConfirm(r.fid, 'remove')", '解除好友'], ["act('block'", '封鎖'], ['closeMore', '收起']]) {
+    if (!more.includes(needle)) bad.push(`「更多」展開層裡沒有${what}`);
+  }
+  const iPlain = t.indexOf('<span class="acts">', iMore);
+  if (iPlain < 0) { bad.push('acts-more 之後找不到常駐層 <span class="acts">'); return bad; }
+  const plain = t.slice(iPlain, t.indexOf('</span>', iPlain));
+  if (!(plain.length > 200 && plain.length < 2000)) bad.push(`常駐層區塊長度 ${plain.length} 不合理（anchor 可能失效）`);
+  for (const [needle, what] of [['fr-join', '加入房間'], ['startAlias', '備註名'], ['fr-more', '更多']]) {
+    if (!plain.includes(needle)) bad.push(`常駐層裡沒有${what}`);
+  }
+  for (const [needle, what] of [['dm-open', '私聊'], ["askConfirm(r.fid, 'remove')", '解除好友'], ["act('block'", '封鎖']]) {
+    if (plain.includes(needle)) bad.push(`常駐層裡出現了${what} ⇒ 按鈕又變回四顆以上，375 寬會再度破版`);
+  }
+  // (3) 房名那一行必須緊跟在分支鏈的 `{/if}` 之後（即在鏈的**外面**）。
+  //   舊寫法是 `{#if _rs?.room}…{/if}` 在 `{:else}` 分支**裡面**，那時緊跟在它後面的是 `{/if}`。
+  if (!/\{\/if\}\s*\{#if _rs\?\.room\}<span class="fr-room">/.test(t)) {
+    bad.push('房名那一行不在 if／else 鏈的外面 ⇒ 一展開「更多」它就會消失，那一列會跳一下');
+  }
+  return bad;
+}
+await T('F5 ⭐⭐⭐ v6.406 結構：私聊／解除好友／封鎖只在「更多」展開層；常駐層只有加入房間／備註名／更多；房名那一行在分支鏈外面', () => {
+  const bad = v6406Structure(FRP);
+  assert.deepStrictEqual(bad, [], 'v6.406 結構違規：' + JSON.stringify(bad));
+});
+await T('F6 ⭐⭐⭐ 反安慰劑：把三顆搬回常駐層／把房名搬回分支裡 ⇒ F5 的判準必須各自抓到', () => {
+  // ⚠ 兩個樣本都呼叫**與 F5 同一個** v6406Structure（Rule 38）。
+  const m1 = mutate(FRP, '<span class="acts acts-more">', '<span class="acts acts-more-DISABLED">');
+  const b1 = v6406Structure(m1);
+  assert.ok(b1.some((x) => x.includes('找不到')), '把 acts-more 拿掉之後 F5 竟然沒紅：' + JSON.stringify(b1));
+  const m2 = mutate(FRP, '{/if}\r\n                <!-- ⚠⚠ uid', '{/if}XX\r\n                <!-- ⚠⚠ uid');
+  const b2 = v6406Structure(m2);
+  assert.ok(b2.some((x) => x.includes('鏈的外面')), '把房名那一行弄回分支裡之後 F5 竟然沒紅：' + JSON.stringify(b2));
 });
 
 // ══════════════════════════════════════════════════════════════════════

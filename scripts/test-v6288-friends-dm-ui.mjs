@@ -619,6 +619,9 @@ await T('E3 ⭐ 二次確認文案明講「對話也會一起刪除」且在 rem
   assert.strictEqual(evShow(true, false), true, '有 ondm 且私聊可用時 💬 必須出現');
   assert.strictEqual(evShow(true, true), false, '私聊不可用時 💬 必須藏（沿用 v6.288）');
   assert.strictEqual(evShow(false, false), false, '外面沒給 ondm（例如未接私聊的嵌入用法）時不得出現 💬');
+  // ⚠ v6.406：這顆按鈕已經**搬進「更多」展開層**（.acts-more），不再常駐。
+  //   這條守的意圖是「按鈕受 showDm 控制」，不是「必須常駐」⇒ 意圖沒被破壞，判準不動。
+  //   「它到底在哪一層」由 test-v6301 的 F5／F6 釘住（搬回常駐層會紅）。
   assert.ok(/\{#if showDm\}<button class="small dm-open"/.test(FRP), '💬 按鈕沒依 showDm 藏');
   assert.ok(/dm\.open\(r\.fid, r\.alias \|\| r\.nick\)/.test(PAGE), 'openDm 沒接 session.open（v6.296：標題優先用備註名）');
   const cs = PAGE.slice(PAGE.indexOf('dm = createDmSession({'), PAGE.indexOf('});', PAGE.indexOf('dm = createDmSession({')));

@@ -863,6 +863,17 @@ const PREV_ALLOWED = [
   //   開頭字面，而且排在真標籤之後 ⇒ 所有用 lastIndexOf 取樣式區塊的守衛對這個檔一直是切歪的。
   //   （v6.392 的中央 helper 加了 fail-closed 之後才變成看得見的錯誤。）**只改註解文字，行為零改動。**
   'src/routes/friends/+page.svelte',
+  // ⭐⭐v6.406：好友列版面收斂 —— 四個區的按鈕群包進 `.acts` wrapper（折斷點只剩一個），
+  //   並把**私聊／解除好友／封鎖三顆**收進「更多」；房名那一行移到 if／else 鏈外面。
+  //   375×812 實測（**含私聊**，與線上相同的掛載參數）：
+  //     列高 110,110,115,86,110,86,48 → 101,101,77,77,101,77,48，每列按鈕行數全 2 → 全 1；
+  //     1366×768 完全不變。展開「更多」前後列高也完全相同。
+  //   ⚠ 這一版**修掉了一個線上已經存在的破版**（v6.405 的「錦標賽對戰中」那一列，
+  //     「封鎖」會掉到第三行靠左）—— 因為 Playwright 中央閘預設 off，本機全套一直 SKIP 掉那一段，
+  //     CI（Linux 字型較窄）又剛好不會觸發 ⇒ 從來沒被任何一次綠燈覆蓋到。
+  // ⚠ PREV_SHA 已經從 v6.387 累積到本版（19 版）。本版是玩家可見版，不適合順手重置；
+  //   下一個**純工具版**應該把 PREV_SHA 前移到那一版的 commit、清單重置（已記在 docs/changelog-internal.md）。
+  'src/lib/friends/FriendsPanel.svelte',
   'src/routes/game/+page.svelte',
   'static/card-set-map.json',
   'static/cards/M-P-J.json',
