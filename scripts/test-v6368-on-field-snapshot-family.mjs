@@ -406,11 +406,29 @@ console.log('\n【E】中央性：新機制只有一份，而且接在既有形�
   chk('E4 ⭐⭐per-player 一律 { p1, p2 }，禁止 T[][]（Firestore 禁巢狀陣列；v6.056 事故）',
     /_attackTimeLifeRestraint\?: \{ p1: boolean; p2: boolean \};/.test(types)
     && !/_attackTimeLifeRestraint\?: \[/.test(types));
-  chk('E5 ⭐(丁) 的兩格都改成從 workingState.players 起手，全檔沒有殘留的 stale 寫法',
-    count(eng, 'const _v6368P = [...workingState.players]') === 1
-    && count(eng, 'const _v6368P2 = [...workingState.players]') === 1
-    && count(eng, 'players[aIdx] = { ...players[aIdx], active: newAtk };') === 0,
-    String(count(eng, 'players[aIdx] = { ...players[aIdx], active: newAtk };')));
+  // ⭐⭐v6.408（IRON_RULES Rule 40：意圖沒被破壞，只是觀測點被本版蓋住）——
+  //   v6.408 把「回合加傷／招致削傷」那兩格連同整段 inline 加成一起刪掉，改呼叫
+  //   effects.ts 的中央 helper applyAttackerActiveDamageBonuses（Rule 38 收斂）。
+  //   ⇒ 原本要守的意圖（那兩格不可以用 stale 的 players 起手）現在是**用更強的方式**滿足的。
+  //   ⚠ 不可以放寬成「任意」：第二條分支必須**證明真的收斂了**（engine 確實呼叫中央 helper
+  //     並把攻擊方快照傳進去），否則「把那兩格刪掉但什麼都沒接」也會變綠。
+  //   ⭐ 判準只寫**一份**（Rule 38）：正式斷言與底下兩條反安慰劑呼叫的是同一支 _e5()。
+  const _e5 = (src) =>
+    ((count(src, 'const _v6368P = [...workingState.players]') === 1
+      && count(src, 'const _v6368P2 = [...workingState.players]') === 1)
+     || (count(src, 'applyAttackerActiveDamageBonuses(workingState, aIdx, baseDamage, pool,') === 1
+         && count(src, '{ attackerSnapshot: attacker }') === 1))
+    && count(src, 'players[aIdx] = { ...players[aIdx], active: newAtk };') === 0;
+  chk('E5 ⭐(丁) 的兩格從 workingState.players 起手 **或** 已收斂到中央 helper；全檔沒有殘留的 stale 寫法',
+    _e5(eng),
+    `兩格=${count(eng, 'const _v6368P = [...workingState.players]')}/${count(eng, 'const _v6368P2 = [...workingState.players]')}`
+    + ` 收斂呼叫=${count(eng, 'applyAttackerActiveDamageBonuses(workingState, aIdx, baseDamage, pool,')}`
+    + ` 快照=${count(eng, '{ attackerSnapshot: attacker }')}`
+    + ` stale=${count(eng, 'players[aIdx] = { ...players[aIdx], active: newAtk };')}`);
+  chk('E5b ⭐⭐反安慰劑：把收斂的呼叫換掉（＝那兩格刪了但什麼都沒接）⇒ 判準必須為 false',
+    !_e5(eng.split('applyAttackerActiveDamageBonuses(workingState, aIdx, baseDamage, pool,').join('__v6408mut__(')));
+  chk('E5c ⭐⭐反安慰劑：檔裡留著 stale 寫法 ⇒ 判準必須為 false（兩條分支都救不了）',
+    !_e5(eng + '\n    players[aIdx] = { ...players[aIdx], active: newAtk };\n'));
   chk('E6 ⭐正對照：stale 寫法的字面在樣本裡算得到（E5 不是恆真）',
     count('  players[aIdx] = { ...players[aIdx], active: newAtk };\n', 'players[aIdx] = { ...players[aIdx], active: newAtk };') === 1);
   chk('E7 ⭐v6.351／v6.367 兩份快照對齊原封不動地還在（本版沒有取代它們）',

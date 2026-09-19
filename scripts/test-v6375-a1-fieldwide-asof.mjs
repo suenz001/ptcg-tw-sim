@@ -34,6 +34,7 @@ import { stripV6398Engine } from './lib/engine-strip-v6398.mjs';
 import { stripV6400Engine } from './lib/engine-strip-v6400.mjs';
 import { stripV6402Engine } from './lib/engine-strip-v6402.mjs';
 import { stripV6403Engine } from './lib/engine-strip-v6403.mjs';   // ⭐v6.403 ex 判準收斂（12 組）
+import { stripV6408Engine } from './lib/engine-strip-v6408.mjs';   // ⭐v6.408 攻擊方加成收斂成一份（2 組）
 import { stripV6407Engine } from './lib/engine-strip-v6407.mjs';   // ⭐v6.407 自身能量付出延後（3 組）
 import { stripV6401Engine } from './lib/engine-strip-v6401.mjs';
 import { build } from 'esbuild';
@@ -641,7 +642,11 @@ if (!hasBaseCommit(ROOT, BASE)) {
       }
     };
     const _v6376Strip = (src) => {
-      let t = _v6376StripBlocks(src, 'v6376-');
+      // ⭐⭐ v6.408 必須排在**整條鏈的最前面**（Rule 54 的極端情形）：它刪掉的那一整段
+      //   inline 加成裡，含有 v6.368／v6.402／v6.403／v6.407 的哨兵與字面。晚於它們剝除的話，
+      //   那幾支會在「已經被刪掉的內容」上找不到自己的錨點（命中 0 次）。
+      //   ⇒ 先把 v6.408 換回 v6.407a 的 185 行，後面的剝除器才看得到自己的錨點。
+      let t = _v6376StripBlocks(stripV6408Engine(src), 'v6376-');
       // ⚠ v6.376 把 v6.373 的 clear 區塊從「太古防壁快照清除」旁邊**搬到** sanityKOSweep 之後
       //   （最大 HP 型會被 sanityKOSweep 重算 ⇒ clear 排在它前面等於白救）。上一行已經把
       //   新位置那一塊（v6376- 哨兵）剝掉，這裡要把它**插回原位置**，否則會比 BASE 少一整段。

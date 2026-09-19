@@ -386,12 +386,47 @@ T('L2 全站 `PASSIVE_ATTACK_BONUS.get(` 只出現在 collectPassiveAttackBonuse
   const gateAt = lines.findIndex(l => l.includes('PASSIVE_ATTACK_SELF_SUBJECT.has('));
   assert.ok(gateAt > start && gateAt < end, '主詞閘不在中央 dispatch 內');
 });
-T('L3 三個消費點都呼叫中央 dispatch（少一個就是漏接）', () => {
-  const want = ['src/lib/game/engine.ts', 'src/lib/game/effects.ts', 'src/lib/game/effects/cards/mega_decks.ts'];
-  const got = srcFiles
-    .filter(p => /collectPassiveAttackBonuses\s*\(/.test(stripComments(readFileSync(p, 'utf8'), relative(ROOT, p).replace(/\\/g, '/'))))
-    .map(p => relative(ROOT, p).replace(/\\/g, '/')).sort();
-  assert.deepStrictEqual(got, [...want].sort(), '呼叫端清單不符：' + JSON.stringify(got));
+// ⭐⭐v6.408（IRON_RULES Rule 40：意圖沒被破壞，只是觀測點被本版蓋住）——
+//   v6.408 把 engine 攻擊主管線的整段 inline 加成（含這裡的 collectPassiveAttackBonuses 呼叫）
+//   刪掉，改呼叫 effects.ts 的 applyAttackerActiveDamageBonuses；被動加成由**那一支**去呼叫
+//   中央 dispatch ⇒ engine 不再是消費點。
+//   ⭐ 判準只寫一份（Rule 38）：正式斷言與底下兩條反安慰劑呼叫同一支 _l3()。
+//   ⚠ 不可以放寬成「engine 不在清單裡也沒關係」：那樣「engine 自己抄一份迴圈」也會綠。
+//     所以 engine 必須二擇一：**呼叫中央 dispatch** 或 **把整件事委託給 applyAttackerActiveDamageBonuses**；
+//     而且無論哪一種，全站都不得出現 `PASSIVE_ATTACK_BONUS.get(` 的第二個消費點。
+const _l3 = (srcs) => {
+  const hasDispatch = (rel) => /collectPassiveAttackBonuses\s*\(/.test(srcs[rel] ?? '');
+  const callers = Object.keys(srcs).filter(hasDispatch).sort();
+  const must = ['src/lib/game/effects.ts', 'src/lib/game/effects/cards/mega_decks.ts'];
+  if (!must.every((m) => callers.includes(m))) return { ok: false, why: '固定消費點少了：' + JSON.stringify(callers) };
+  const engineOk = hasDispatch('src/lib/game/engine.ts')
+    || /applyAttackerActiveDamageBonuses\s*\(/.test(srcs['src/lib/game/engine.ts'] ?? '');
+  if (!engineOk) return { ok: false, why: 'engine.ts 既沒呼叫中央 dispatch，也沒委託給 applyAttackerActiveDamageBonuses' };
+  const extra = callers.filter((c) => !must.includes(c) && c !== 'src/lib/game/engine.ts');
+  if (extra.length) return { ok: false, why: '多了沒列管的消費點：' + JSON.stringify(extra) };
+  // 全站唯一的 `.get(` 必須在 effects.ts 的中央 dispatch 裡（L2 已釘住位置）
+  const getters = Object.keys(srcs).filter((rel) => /PASSIVE_ATTACK_BONUS\s*\.\s*get\s*\(/.test(srcs[rel] ?? ''));
+  if (JSON.stringify(getters.sort()) !== JSON.stringify(['src/lib/game/effects.ts'])) {
+    return { ok: false, why: 'PASSIVE_ATTACK_BONUS.get( 不只一處：' + JSON.stringify(getters) };
+  }
+  return { ok: true, why: '' };
+};
+T('L3 每個消費點都走中央 dispatch（engine 可改為委託給 applyAttackerActiveDamageBonuses）', () => {
+  const srcs = {};
+  for (const p of srcFiles) {
+    const rel = relative(ROOT, p).replace(/\\/g, '/');
+    srcs[rel] = stripComments(readFileSync(p, 'utf8'), rel);
+  }
+  const r = _l3(srcs);
+  assert.ok(r.ok, r.why);
+  // ⚠ 反安慰劑：判準要抓得到「engine 既不呼叫也不委託」與「多出第二個 .get( 消費點」
+  const mut1 = { ...srcs, 'src/lib/game/engine.ts': (srcs['src/lib/game/engine.ts'] ?? '')
+    .split('applyAttackerActiveDamageBonuses').join('__mut__')
+    .split('collectPassiveAttackBonuses').join('__mut2__') };
+  assert.ok(!_l3(mut1).ok, '⚠ engine 既不呼叫也不委託時，L3 竟然還是綠的');
+  const mut2 = { ...srcs, 'src/lib/game/effects/cards/tools.ts':
+    (srcs['src/lib/game/effects/cards/tools.ts'] ?? '') + '\nconst x = PASSIVE_ATTACK_BONUS.get(name);\n' };
+  assert.ok(!_l3(mut2).ok, '⚠ 多出第二個 PASSIVE_ATTACK_BONUS.get( 消費點時，L3 竟然還是綠的');
 });
 
 // ══ W. v6.257 lint 白名單的「行為端」證明（不可只有文字理由）═══════════════

@@ -112,6 +112,9 @@ import {
   // >>> v6353-weakness-multiplier-import
   weaknessMultiplier,  // ⭐v6.353 弱點**倍率**中央述詞（甜甜螢｜絕佳費洛蒙 ×3）
   // <<< v6353-weakness-multiplier-import
+  // >>> v6408-attacker-bonus-import
+  applyAttackerActiveDamageBonuses,   // ⭐⭐⭐v6.408 攻擊方加成收斂成一份（原本 engine 這裡還有第二份 inline）
+  // <<< v6408-attacker-bonus-import
 } from './effects';
 import {
   steelixPalaceReduce,
@@ -5709,89 +5712,41 @@ function handlePlaying(
       formula.push({ sign: '=', value: baseDamage, label: '基礎' });
     }
 
-    // 下回合加傷旗標（巨金怪 彗星拳、大電海燕 風力充能 類）—
-    // 由前一個自己回合設下，至本回合起生效 1 次於 base damage 上，weakness 前套用。
-    if (baseDamage > 0 && attacker.active.damageBonusThisTurn) {
-      const dmgBonus = attacker.active.damageBonusThisTurn;
-      baseDamage += dmgBonus;
-      const newAtk = { ...attacker.active };
-      // v5.226：祭典樂舞第一次攻擊不消耗 flag，留給第二次攻擊同樣套用
-      if (!_isFestivalDanceFirstAttack(state, aIdx, pool)) {
-        delete newAtk.damageBonusThisTurn;
-      }
-      // ⭐v6368-pre-stale-players-bonus（v6.367 recon 發現的第二個 stale 洞；站長已授權預先處理）
-      //   原碼寫的是 handlePlaying 開頭那個區域 players 陣列，再**整份**蓋回 workingState
-      //   ⇒ ATTACK_PRE 回傳的新 players（防守方全部 ＋ 攻擊方 player-level）會在這一行被
-      //     反寫回 PRE 之前 —— 6063 行的 const defPlayers = [...workingState.players] 讀到的
-      //     就是這個被反寫過的陣列；v6.351／v6.367 對齊的是 defender／attacker 兩份
-      //     **快照物件**，救不到 workingState.players 本身。
-      //   實測（__m6a/probe368d.mjs）：合成 PRE 在造成傷害前替防守方 +30 傷害並丟 1 張卡、
-      //     招式帶 damageBonusThisTurn=50 ⇒ 最終 damage 60（應為 90）、防守方棄牌 0 張（應為 1 張）。
-      //   ⇒ 改成從 workingState.players 起手（v6.351／v6.367 同一個家族、同一種寫法）。
-      const _v6368P = [...workingState.players] as [PlayerState, PlayerState];
-      _v6368P[aIdx] = { ..._v6368P[aIdx], active: newAtk };
-      players[aIdx] = _v6368P[aIdx];   // 區域快照陣列同步，避免與 workingState 分岔
-      workingState = { ...workingState, players: _v6368P };
-      const atkName = pool.get(newAtk.cardId)?.name ?? '?';
-      workingState = addLog(workingState, `${atkName} 招式傷害 +${dmgBonus}（回合加傷效果）`, aIdx);
-      formula.push({ sign: '+', value: dmgBonus, label: '回合加傷' });
+    // >>> v6408-attacker-bonus-central
+    // ⭐⭐⭐v6.408 收斂：攻擊方的 11 項傷害加成**只剩一份實作**（IRON_RULES Rule 38）。
+    //   原本這裡有一整段 inline（回合加傷／招致削傷／格拉吉歐的決戰／伏特【雷】能量／
+    //   攻擊道具／被動特性／力量蛋白飲／腎上腺力量／化朗鎮／空手道王的演練／烏栗），
+    //   與 effects.ts 的 applyAttackerActiveDamageBonuses() **逐項重複**，靠
+    //   `_attackerActiveBonusDone` 互斥 ⇒ 針對其中一份寫的守衛測不到另一份（安慰劑型態 11）。
+    //   等價性由 v6.407a 的差分守衛 test-v6408-attacker-bonus-dual-criteria 逐項證明過。
+    //
+    // ⚠⚠ 順便修掉一個**真的 bug**（v6.408 查證，探針 __m6a/probe408b.mjs）：
+    //   inline 版的「回合加傷」與「招致削傷」兩段各自 `const newAtk = { ...attacker.active }`
+    //   （同一份**原始快照**）再整份寫回 ⇒ 兩個旗標同時存在時，第二段會把第一段刪掉的
+    //   `damageBonusThisTurn` **又帶回來**，旗標沒被消耗 ⇒ 下次攻擊還會再 +N。
+    //   實測：基礎 50 ＋ 回合加傷 50 ＋ 招致削傷 30 ⇒ 傷害 70（正確），但攻擊後
+    //   `damageBonusThisTurn` 仍是 50（應為 undefined）。中央 helper 逐段從上一段的結果往下走，
+    //   沒有這個問題 ⇒ 收斂即修正。
+    //
+    // ⚠ `attackerSnapshot: attacker`：整條管線讀的是 handlePlaying 開頭抓走的攻擊方**快照**
+    //   （v6.351／v6.367 那一家族），不是 workingState.players[aIdx]。傳它是為了**逐字**保留
+    //   讀取來源，不是因為目前有卡片會用到差異 —— 實測（v6.408 獨立審查）：v6.367 已把 PRE 的
+    //   差異疊回快照，PRE 之前唯一會分岔的欄位是 attackFailureFlipCountThisTurn，而 11 項加成
+    //   都不讀它 ⇒ 目前不傳也不會改變結果。**當防禦性契約留著**：日後只要有一項加成開始讀
+    //   「PRE 之前就被改過的欄位」，沒有它就會無聲分岔。
+    if (baseDamage > 0) {
+      const _v6408 = applyAttackerActiveDamageBonuses(workingState, aIdx, baseDamage, pool,
+        { attackerSnapshot: attacker });
+      baseDamage = _v6408.damage;
+      workingState = _v6408.state;
+      // ⚠ 區域快照陣列同步（v6368 那一家族）。實測本 handler 從這裡到結尾已經不再引用區域
+      //   `players`（整份寫回的是另外重抓的 defPlayers）⇒ 目前是防禦性的一行；留著是因為
+      //   那個家族的洞就是「有人在後面用了沒同步的區域陣列」，少了它下一次新增就會再踩一次。
+      players[aIdx] = workingState.players[aIdx];
+      for (const _t of _v6408.formula) formula.push(_t as FormulaTerm);
+      // ⚠ `_attackerActiveBonusDone` 由中央 helper 自己設（dmg > 0 時），這裡不必再設一次。
     }
-
-    // 攻擊方自身的招式傷害削減旗標（由上回合對手的「吠」/「大聲咆哮」/「叫聲」等效果設置）
-    // v3.22 BUG FIX：原本檢查 damageReduceNextHit 與 defender 端共用同一 field，
-    //   會讓「自己用 selfDmgReducePost 設給自己下次被打 -N」的旗標被誤消耗 — 對手沒攻擊時，
-    //   自己下回合出招就被 attacker-side check 吃掉 → 自己招式 -N（雷電獸 閃光射線 bug）。
-    //   現分為兩個獨立 field：damageReduceNextHit (defender 端，自己被打 -N) /
-    //   nextOwnAttackPenalty (attacker 端，自己出招 -N，由「叫聲/吠/咆哮」設給對手 active)。
-    //   不受 skipDefEffects 影響，弱點計算前套用。
-    if (baseDamage > 0 && attacker.active.nextOwnAttackPenalty) {
-      const penalty = attacker.active.nextOwnAttackPenalty;
-      baseDamage = Math.max(0, baseDamage - penalty);
-      const newAtk = { ...attacker.active };
-      // v5.226：祭典樂舞第一次攻擊不消耗
-      if (!_isFestivalDanceFirstAttack(state, aIdx, pool)) {
-        delete newAtk.nextOwnAttackPenalty;
-      }
-      // ⭐v6368-pre-stale-players-penalty（同上，另一格；理由與實測見上面那一格的註解）
-      const _v6368P2 = [...workingState.players] as [PlayerState, PlayerState];
-      _v6368P2[aIdx] = { ..._v6368P2[aIdx], active: newAtk };
-      players[aIdx] = _v6368P2[aIdx];   // 區域快照陣列同步，避免與 workingState 分岔
-      workingState = { ...workingState, players: _v6368P2 };
-      const atkName2 = pool.get(newAtk.cardId)?.name ?? '?';
-      workingState = addLog(workingState, `${atkName2} 招式傷害 -${penalty}（受招致使傷害削減效果）`, aIdx);
-      formula.push({ sign: '-', value: penalty, label: '招致削傷' });
-    }
-
-    // v4.87 格拉吉歐的決戰（Supporter / M5）— player-level 本回合 +80（非規則寶可夢）
-    //   gate: gladionDuelBonusThisTurn 由 reg() 設定，END_TURN 清除
-    //   本檢查：attacker 為非規則寶可夢 → +80
-    if (baseDamage > 0 && attacker.gladionDuelBonusThisTurn && !isRulePokemon(attackerCard)) {
-      baseDamage += 80;
-      workingState = addLog(workingState,
-        `${attackerCard.name} 招式傷害 +80（格拉吉歐的決戰，非規則寶可夢加成）`, aIdx);
-      formula.push({ sign: '+', value: 80, label: '格拉吉歐的決戰' });
-    }
-
-    // v4.87 伏特【雷】能量（M5 特殊能量）— 附加者為【雷】屬性寶可夢時 +20
-    //   卡面：「附有這張卡的雷屬性寶可夢使用招式對對手戰鬥寶可夢 +20」
-    //   v4.871：加 attacker.pokemonType === 'Lightning' gate（非雷屬性附了不生效）
-    //   v5.022 修正：原本 `.some()` 只算 1 次 +20 — 玩家回報「附 3 顆 閃電【雷】只 +20」
-    //     改 per-card stacking — 卡面「附有這張卡的」雖無「每張」字樣，但 PTCG 規則
-    //     歷史對「同類加成型特殊能量」一律 per-card 累計（如銀色鋼能量 +10/張）。
-    //   v5.022 順帶 rename '閃電能量' → '伏特【雷】能量'（卡面排版對齊規律）
-    // >>> v6402-volt-lightning-engine
-    // ⭐v6.402「附有這張卡的【雷】寶可夢」＝場上**有效**屬性（中央述詞）。
-    if (baseDamage > 0 && fieldPokemonHasType(workingState, aIdx, attacker.active, pool, 'Lightning')) {
-    // <<< v6402-volt-lightning-engine
-      const lightningSECount = attacker.active.energyAttached.filter(e => pool.get(e.cardId)?.name === '伏特【雷】能量').length;
-      if (lightningSECount > 0) {
-        const bonus = 20 * lightningSECount;
-        baseDamage += bonus;
-        workingState = addLog(workingState,
-          `${attackerCard.name} 招式傷害 +${bonus}（伏特【雷】能量 ${lightningSECount} 張 × 20，【雷】屬性）`, aIdx);
-        formula.push({ sign: '+', value: bonus, label: `伏特【雷】能量×${lightningSECount}` });
-      }
-    }
+    // <<< v6408-attacker-bonus-central
 
     // ── v2.97：攻擊方 +N bonus 全部在 weakness 前套用（PTCG 規則） ───────────
     // 先前實作順序錯誤（bonus 於 weakness 後加）導致 Leon 實戰計算不符：
@@ -5802,98 +5757,7 @@ function handlePlaying(
     //   - damageBoostFightingThisTurn（力量蛋白飲）
     // （damageBonusThisTurn 下回合加傷原本就在 weakness 前，位置不動。）
     const defenderCard = getCard(defender.active.cardId, pool);
-
-    // 道具：我方攻擊 +N（極限腰帶 / 鎖鏈糬 / 驅勁能量 未來 / 猛攻手鐲 / 電氣球 / 活力頭帶 / 赫普的講究頭帶）
-    // 阻礙之塔時全部失效。
-    // v2.218 加 log — Leon 回報「極限腰帶 +50 沒生效」，加 log 讓未來能判斷
-    //   是 fn 沒被呼叫、bonus=0、還是 weakness 順序問題。
     const toolsJammed = isToolsJammed(state, pool);
-    if (!toolsJammed && baseDamage > 0) {
-      // v3.20 多重轉接：iterate 所有道具
-      for (const t of getAllAttachedTools(attacker.active)) {
-        const atkTool = pool.get(t.cardId);
-        if (!atkTool) continue;
-        const fn = TOOL_ATTACK_BONUS.get(atkTool.name);
-        if (!fn) continue;
-        const bonus = fn(attackerCard, attacker.active, defenderCard, defender.active);
-        if (bonus > 0) {
-          baseDamage += bonus;
-          workingState = addLog(workingState,
-            `🔧 ${atkTool.name}：${attackerCard.name} 招式傷害 +${bonus}（${baseDamage - bonus} → ${baseDamage}）`,
-            aIdx);
-          formula.push({ sign: '+', value: bonus, label: atkTool.name });
-        }
-      }
-    }
-
-    // Wave 42：被動特性 +N 攻擊傷害（攻擊方場上）— 例如 竹蘭的羅絲雷朵｜輝煌聲援 對「竹蘭的」寶可夢 +30
-    // ⭐ v6.258：原本這裡自己寫一份迴圈（全站共三份）。收斂到中央 dispatch
-    //   collectPassiveAttackBonuses —— 監視塔壓制【無】／特性消除閘／
-    //   PASSIVE_ATTACK_NO_STACK dedup／⭐主詞閘（自指型必須 holder === attacker）
-    //   全部只有一份實作。這裡只負責加總與寫 log／formula。
-    if (baseDamage > 0) {
-      for (const { name, bonus } of collectPassiveAttackBonuses(
-        workingState, attacker, aIdx, attacker.active, attackerCard, defenderCard, pool)) {
-        baseDamage += bonus;
-        workingState = addLog(workingState, `「${name}」啟動：${attackerCard.name} 招式傷害 +${bonus}`, aIdx);
-        formula.push({ sign: '+', value: bonus, label: name });
-      }
-    }
-
-    // Wave 42：玩家級「本回合自己的【鬥】寶可夢招式傷害 +N」（例：力量蛋白飲）
-    // 多次使用會累加（每張 +30）。在 weakness 前套用（PTCG 規則 — v2.97 修正）。
-    if (baseDamage > 0 && attackerCard.pokemonType === 'Fighting' && attacker.damageBoostFightingThisTurn) {
-      const b = attacker.damageBoostFightingThisTurn;
-      baseDamage += b;
-      workingState = addLog(workingState, `「力量蛋白飲」啟動：${attackerCard.name} 招式傷害 +${b}`, aIdx);
-      formula.push({ sign: '+', value: b, label: '力量蛋白飲' });
-    }
-
-    // v2.113 夠讚狗｜腎上腺力量 — 若攻擊方自身（夠讚狗）附有【惡】能量，招式傷害 +100
-    // v2.120：改用 countEnergy（host-aware），稜鏡能量在 Basic host 上也算惡能量
-    if (baseDamage > 0 && attackerCard.name === '夠讚狗' && !!attacker.active && isAbilityHolderEffective(state, attacker.active, attackerCard, aIdx, '腎上腺力量', 'active', pool)) {
-      const hasDark = (countEnergy(attacker.active, pool).get('Darkness') ?? 0) >= 1;
-      if (hasDark) {
-        baseDamage += 100;
-        workingState = addLog(workingState, `「腎上腺力量」啟動：夠讚狗 招式傷害 +100`, aIdx);
-        formula.push({ sign: '+', value: 100, label: '腎上腺力量' });
-      }
-    }
-
-    // v3.76 化朗鎮（Stadium）— 雙方的「赫普的寶可夢」招式對對手戰鬥場 +30
-    //   卡面：「雙方的『赫普的寶可夢』使用的招式，對對手的戰鬥寶可夢造成的傷害『+30』點」
-    //   只在場上有此競技場 + 攻擊方名稱以「赫普的」開頭 + 有基礎傷害時觸發。
-    if (baseDamage > 0 && attackerCard.name.startsWith('赫普的')) {
-      const stadiumNameHelo = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
-      if (stadiumNameHelo === '化朗鎮') {
-        baseDamage += 30;
-        workingState = addLog(workingState, `「化朗鎮」啟動：${attackerCard.name} 招式傷害 +30`, aIdx);
-        formula.push({ sign: '+', value: 30, label: '化朗鎮' });
-      }
-    }
-
-    // v2.113 空手道王的演練 — 本回合自己寶可夢招式對對手戰鬥場 ex +40
-    if (baseDamage > 0 && attacker.karateKingBonusThisTurn && isPokemonExCard(defenderCard ?? undefined)) {   // ⭐v6.403 收斂
-      baseDamage += 40;
-      workingState = addLog(workingState, `「空手道王的演練」啟動：對 ${defenderCard.name}（ex）+40`, aIdx);
-      formula.push({ sign: '+', value: 40, label: '空手道王演練' });
-    }
-    // v2.139 烏栗效果 2 — 本回合自方寶可夢招式對對手戰鬥場 ex/V +30
-    if (baseDamage > 0 && attacker.unrudaBonusThisTurn && defenderCard) {
-      // ⭐v6.403 收斂：卡面「對對手的戰鬥場的「寶可夢【ex】・【V】」造成的傷害「+30」點。」
-      const isExV = isRuleBoxExOrV(defenderCard);
-      if (isExV) {
-        baseDamage += 30;
-        workingState = addLog(workingState, `「烏栗」啟動：對 ${defenderCard.name}（ex/V）+30`, aIdx);
-        formula.push({ sign: '+', value: 30, label: '烏栗' });
-      }
-    }
-
-    // v5.517：標記本次攻擊已於引擎主管線套過「攻擊方加成」→ 中央 helper(dealAttackDamageToTarget)
-    //   對戰鬥位再結算傷害時不重複套(applyAttackerActiveDamageBonuses 的 guard)。
-    //   baseDamage>0 才標記，讓 regPre=0(波動突刺等主傷害走中央 helper)的招式仍由中央 helper 補套。
-    if (baseDamage > 0) workingState = { ...workingState, _attackerActiveBonusDone: true };
-
     // 弱點（×2）— 只對有實際傷害的招式套用。skipWeakRes 旗標跳過此計算。
     // v2.57：莉莉艾的皮皮ex｜妖精領域 — 我方場上有皮皮ex 時，對手【龍】寶可夢的弱點改為【超】。
     // 卡面允許「本無弱點」的龍寶可夢被加上【超】弱點。

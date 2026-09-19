@@ -523,9 +523,24 @@ T('D6 ⭐⭐ 本版接上中央述詞的 6 個 holder 判定，engine／defense 
   assert.deepStrictEqual(bad, [], '這幾處還在讀印刷屬性：\n      ' + bad.join('\n      '));
 });
 T('D7 ⭐⭐ 六處都真的改走中央 fieldPokemonHasType（否定斷言配正向斷言）', () => {
-  assert.ok(count(ENGINE, 'fieldPokemonHasType(') >= 4, 'engine 只有 ' + count(ENGINE, 'fieldPokemonHasType(') + ' 處走中央（預期 ≥4）');
-  assert.ok(count(EFFECTS, 'fieldPokemonHasType(') >= 3, 'effects 只有 ' + count(EFFECTS, 'fieldPokemonHasType(') + ' 處（含定義）');
+  // ⭐⭐v6.408（IRON_RULES Rule 40：意圖沒被破壞，只是觀測點被本版蓋住）——
+  //   v6.408 把 engine 主管線的伏特【雷】能量那一格（本來就已經走中央述詞）連同整段 inline
+  //   加成刪掉，改呼叫 effects.ts 的 applyAttackerActiveDamageBonuses；那一支裡面用的
+  //   仍然是同一支 fieldPokemonHasType ⇒ 六處的**總數沒有少**，只是從 engine 搬到了 effects。
+  //   ⚠ 所以下限改成看**兩檔合計**（搬家不該讓守衛紅），而 D6 的「engine 不得留印刷屬性寫法」
+  //     那一條完全不動 —— 真正的意圖（不得自己讀 pokemonType）由它把關。
+  const eng = count(ENGINE, 'fieldPokemonHasType(');
+  const eff = count(EFFECTS, 'fieldPokemonHasType(');
+  assert.ok(eng + eff >= 7, `engine+effects 合計只有 ${eng}+${eff} 處走中央（預期 ≥7）`);
+  assert.ok(eng >= 3, 'engine 只有 ' + eng + ' 處走中央（預期 ≥3）');
+  assert.ok(eff >= 3, 'effects 只有 ' + eff + ' 處（含定義）');
   assert.strictEqual(count(DEFENSE, 'fieldPokemonHasType('), 1, 'defense.ts 的暗影【惡】能量沒有走中央');
+});
+T('D7b ⭐⭐ 反安慰劑：D7 的合計下限抓得到「真的少一處」', () => {
+  // ⚠ 餵一個「effects 少掉一處」的樣本 —— 下限若寫得太鬆（例如 ≥5）這一條會綠
+  const eng = count(ENGINE, 'fieldPokemonHasType(');
+  const effMinus1 = count(EFFECTS.replace('fieldPokemonHasType(', '__mut__('), 'fieldPokemonHasType(');
+  assert.ok(eng + effMinus1 < 7, `拿掉一處之後合計仍然 ${eng}+${effMinus1} ≥ 7 ⇒ D7 的下限太鬆`);
 });
 T('D8 ⭐ 每個改過的檔都真的 import 了中央述詞（漏 import ＝ runtime 炸彈）', () => {
   assert.ok(/import[\s\S]{0,4000}fieldPokemonHasType[\s\S]{0,4000}from '\.\/effects'/.test(src('src/lib/game/defense.ts')),

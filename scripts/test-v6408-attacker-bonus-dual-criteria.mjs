@@ -8,12 +8,15 @@
 //   ⇒ 任何針對其中一份寫的守衛，都測不到另一份；兩份會無聲分岔。
 //   （v6.202 的 `_isFestivalDanceFirstAttackLocal` 註解就明說過「否則兩份會分岔」。）
 //
-// 【本守衛的定位】這是 v6.409「把 ① 改成呼叫 ②」**收斂前的安全網**：
-//   先用行為端差分證明兩份現在真的等價，收斂才有基準可比。
-//   ⚠⚠ v6.409 收斂之後，這一支的 A~L 會變成恆真式（只剩一份實作，當然一樣）
-//     ⇒ **收斂的那一版必須把本檔改造成「靜態：engine.ts 不得再有第二份」＋
-//        「行為端：11 項的傷害數字逐項釘住」**，不可以原封不動留著當綠燈。
-//     這句話寫在這裡，是為了讓下一版的人看得到。
+// 【本守衛的定位】v6.407a 寫它時是「收斂前的安全網」；**v6.408 已經收斂完成**
+//   （engine 那一份刪掉、改呼叫中央 helper）⇒ 各段現在守的是不同的東西，讀之前先看清楚：
+//     ・【A】【B】的**差分**比對：收斂後不是恆真式 —— 它守的是「engine 真的有接上中央 helper」
+//       （沒接上的話 engine 的 formula 會是空的、直呼中央的不空 ⇒ 紅），但**測不到順序與數值**。
+//     ・【A】【B】的**絕對量**斷言（⑤ 與 B1 的 label 順序）才是收斂後守數值與順序的那一半。
+//     ・【D】只驗比對器自己，收斂後沒有第二份可比 ⇒ 它守的是「比對器不是恆真／恆假」。
+//     ・【E】【G】是行為端：旗標消耗／削傷 ≥ 基礎時的 clamp 行為。
+//     ・【F】守「engine 不得再長出第二份」。
+//   ⚠ 新增加成項時：【C】會逼你補一組【A】，B1 的順序陣列也要跟著改。
 //
 // 【做法】對 11 個加成因子各造一個盤面，兩條路徑各跑一次、比對 formula：
 //   路徑①：完整 `applyAction` ⇒ 從 log 末端的「【…】」公式字串抽出各項
@@ -27,6 +30,9 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+// ⚠ 站長的工作樹是 CRLF、CI checkout 是 LF ⇒ 多行錨點一律先 normEol（v6.377 C-9 的規範）。
+import { normEol } from './lib/eol-agnostic.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.x408-s.js'), E = join(ROOT, '.x408-e.ts'), O = join(ROOT, '.x408-o.mjs');
@@ -117,7 +123,7 @@ const T = (n, f) => {
  * @param baseDmg 招式的基礎傷害（傳給中央 helper）
  * @param want    這一組**必須**出現的 label（子字串比對；防「盤面沒搭起來 ⇒ 兩邊都空 ⇒ 恆等」）
  */
-function diff(mk, ai, baseDmg, want) {
+function diff(mk, ai, baseDmg, want, expectDelta) {
   const out = applyAction(mk(), { type: 'ATTACK', attackIndex: ai }, pool);
   const st = out?.state ?? out;
   const texts = (st?.log || []).map((l) => (typeof l === 'string' ? l : l.message || ''));
@@ -137,6 +143,14 @@ function diff(mk, ai, baseDmg, want) {
   // ④ 中央 helper 的最終傷害 = 基礎 + 各項（證明它不是只回 formula 不算數）
   const expect = c.formula.reduce((a, t) => (t.sign === '+' ? a + t.value : t.sign === '-' ? Math.max(0, a - t.value) : a), baseDmg);
   assert.strictEqual(c.damage, expect, `中央 helper 的 damage 與自己的 formula 對不起來：${c.damage} vs ${expect}`);
+  // ⑤ ⭐⭐ 絕對判準：engine 這一條路徑打出來的傷害，減去基礎，必須等於卡面規定的加成量。
+  //   ⚠ 這一條**不是**差分 —— 它在「兩份收斂成一份」之後仍然在守（差分那時只證明兩邊一致，
+  //     絕對量才證明「一致在正確的數字上」）。釘的是卡面數值（+50／-30…），不是某張卡的基礎
+  //     傷害，所以卡池換印刷不會誤紅。
+  const dm = texts.map((t) => /造成 (\d+) 點傷害/.exec(t)).filter(Boolean).pop();
+  assert.ok(dm, `log 裡找不到「造成 N 點傷害」：\n    ${texts.join('\n    ')}`);
+  assert.strictEqual(Number(dm[1]) - baseDmg, expectDelta,
+    `加成量不對：基礎 ${baseDmg} → 實際 ${dm[1]}（差 ${Number(dm[1]) - baseDmg}），應該差 ${expectDelta}`);
   return eBonus;
 }
 
@@ -163,14 +177,14 @@ console.log('\n【A】11 個加成因子逐一差分（engine inline vs 中央 h
 const P_L = pickPure((c) => c.pokemonType === 'Lightning', costWithin(['Lightning', 'Colorless'], 3));
 assert.ok(P_L, '找不到【雷】屬性的純傷害招式');
 await T(`A1 伏特【雷】能量 ×2（${P_L.card.name}｜${P_L.card.attacks[P_L.ai].name}）`, () => {
-  diff(() => mkState({ atkCard: P_L.card, atkEnergy: [VOLT, VOLT, BL] }), P_L.ai, P_L.dmg, ['伏特【雷】能量']);
+  diff(() => mkState({ atkCard: P_L.card, atkEnergy: [VOLT, VOLT, BL] }), P_L.ai, P_L.dmg, ['伏特【雷】能量'], 40);
 });
 
 // ── A2 攻擊道具（活力頭帶：無條件 +10）────────────────────────────────────
 await T('A2 攻擊道具 TOOL_ATTACK_BONUS（極限腰帶 +50，defender = ex）', () => {
   assert.ok(TANK_EX, '找不到「無弱點無抵抗無特性」的 ex 靶');
   diff(() => mkState({ atkCard: P_L.card, atkEnergy: [BL, BL, BL], atkTool: BELT, defCard: TANK_EX }),
-    P_L.ai, P_L.dmg, ['極限腰帶']);
+    P_L.ai, P_L.dmg, ['極限腰帶'], 50);
 });
 
 // ── A3 被動特性（比克提尼｜勝利聲援：自己【火】進化寶可夢 +10）──────────────
@@ -180,7 +194,7 @@ const BFire = named('基本【火】能量');
 await T(`A3 被動特性 PASSIVE_ATTACK_BONUS（勝利聲援 +10；${P_FIRE_EVO.card.name}）`, () => {
   diff(() => mkState({
     atkCard: P_FIRE_EVO.card, atkEnergy: [BFire, BFire, BFire], benchCards: [VICTINI],
-  }), P_FIRE_EVO.ai, P_FIRE_EVO.dmg, ['勝利聲援']);
+  }), P_FIRE_EVO.ai, P_FIRE_EVO.dmg, ['勝利聲援'], 10);
 });
 
 // ── A4 力量蛋白飲（本回合自己【鬥】寶可夢 +N）──────────────────────────────
@@ -189,7 +203,7 @@ assert.ok(P_F, '找不到【鬥】屬性的純傷害招式');
 await T(`A4 力量蛋白飲（+30；${P_F.card.name}）`, () => {
   diff(() => mkState({
     atkCard: P_F.card, atkEnergy: [BF, BF, BF], playerExtra: { damageBoostFightingThisTurn: 30 },
-  }), P_F.ai, P_F.dmg, ['力量蛋白飲']);
+  }), P_F.ai, P_F.dmg, ['力量蛋白飲'], 30);
 });
 
 // ── A5 夠讚狗｜腎上腺力量（自身附【惡】能量 +100）──────────────────────────
@@ -197,7 +211,7 @@ const HOUND = named('夠讚狗');
 const HOUND_AI = (HOUND.attacks || []).findIndex((a) => isPure(a));
 await T('A5 夠讚狗｜腎上腺力量（+100）', () => {
   assert.ok(HOUND_AI >= 0, '夠讚狗沒有純傷害招式（卡池換印刷了？）');
-  diff(() => mkState({ atkCard: HOUND, atkEnergy: [BF, BF, BD] }), HOUND_AI, Number(HOUND.attacks[HOUND_AI].damage), ['腎上腺力量']);
+  diff(() => mkState({ atkCard: HOUND, atkEnergy: [BF, BF, BD] }), HOUND_AI, Number(HOUND.attacks[HOUND_AI].damage), ['腎上腺力量'], 100);
 });
 
 // ── A6 化朗鎮（赫普的寶可夢 +30）──────────────────────────────────────────
@@ -207,7 +221,7 @@ assert.ok(HELO, '找不到「赫普的…」的純傷害招式');
 await T(`A6 化朗鎮（+30；${HELO.card.name}）`, () => {
   diff(() => mkState({
     atkCard: HELO.card, atkEnergy: [BL, BL, BL], stadium: HUALANG,
-  }), HELO.ai, HELO.dmg, ['化朗鎮']);
+  }), HELO.ai, HELO.dmg, ['化朗鎮'], 30);
 });
 
 // ── A7 空手道王的演練（對對手戰鬥位 ex +40）───────────────────────────────
@@ -215,7 +229,7 @@ await T('A7 空手道王的演練（+40，defender = ex）', () => {
   assert.ok(TANK_EX, '找不到「無弱點無抵抗無特性」的 ex 靶');
   diff(() => mkState({
     atkCard: P_L.card, atkEnergy: [BL, BL, BL], playerExtra: { karateKingBonusThisTurn: true }, defCard: TANK_EX,
-  }), P_L.ai, P_L.dmg, ['空手道王']);
+  }), P_L.ai, P_L.dmg, ['空手道王'], 40);
 });
 
 // ── A8 烏栗（對對手戰鬥位 ex/V +30）───────────────────────────────────────
@@ -223,21 +237,21 @@ await T('A8 烏栗（+30，defender = ex）', () => {
   assert.ok(TANK_EX, '找不到「無弱點無抵抗無特性」的 ex 靶');
   diff(() => mkState({
     atkCard: P_L.card, atkEnergy: [BL, BL, BL], playerExtra: { unrudaBonusThisTurn: true }, defCard: TANK_EX,
-  }), P_L.ai, P_L.dmg, ['烏栗']);
+  }), P_L.ai, P_L.dmg, ['烏栗'], 30);
 });
 
 // ── A9 回合加傷（消耗型：damageBonusThisTurn）──────────────────────────────
 await T('A9 回合加傷（+50，消耗型）', () => {
   diff(() => mkState({
     atkCard: P_L.card, atkEnergy: [BL, BL, BL], atkExtra: { damageBonusThisTurn: 50 },
-  }), P_L.ai, P_L.dmg, ['回合加傷']);
+  }), P_L.ai, P_L.dmg, ['回合加傷'], 50);
 });
 
 // ── A10 招致削傷（消耗型：nextOwnAttackPenalty，唯一的「減」項）──────────────
 await T('A10 招致削傷（-30，消耗型；唯一的減項）', () => {
   const t = diff(() => mkState({
     atkCard: P_L.card, atkEnergy: [BL, BL, BL], atkExtra: { nextOwnAttackPenalty: 30 },
-  }), P_L.ai, P_L.dmg, ['招致削傷']);
+  }), P_L.ai, P_L.dmg, ['招致削傷'], -30);
   assert.ok(t.some((x) => x.sign === '-'), '招致削傷應該是「-」號項（兩邊的 sign 也必須一致）');
 });
 
@@ -248,7 +262,7 @@ await T(`A11 格拉吉歐的決戰（+80，非規則寶可夢；${P_NONRULE?.car
   assert.ok(P_NONRULE, '找不到非規則的【雷】純傷害招式');
   diff(() => mkState({
     atkCard: P_NONRULE.card, atkEnergy: [BL, BL, BL], playerExtra: { gladionDuelBonusThisTurn: true },
-  }), P_NONRULE.ai, P_NONRULE.dmg, ['格拉吉歐']);
+  }), P_NONRULE.ai, P_NONRULE.dmg, ['格拉吉歐'], 80);
 });
 
 console.log('\n【B】疊加（順序也必須一致 —— 兩份的先後排列不同就會在這裡紅）');
@@ -256,20 +270,25 @@ await T('B1 四項同時：回合加傷＋招致削傷＋伏特×2＋極限腰�
   const t = diff(() => mkState({
     atkCard: P_L.card, atkEnergy: [VOLT, VOLT, BL], atkTool: BELT, defCard: TANK_EX,
     atkExtra: { damageBonusThisTurn: 50, nextOwnAttackPenalty: 30 },
-  }), P_L.ai, P_L.dmg, ['回合加傷', '招致削傷', '伏特【雷】能量', '極限腰帶']);
+  }), P_L.ai, P_L.dmg, ['回合加傷', '招致削傷', '伏特【雷】能量', '極限腰帶'], 110);
   assert.strictEqual(t.length, 4, `應該剛好 4 項，實際 ${t.length}：${j(t)}`);
+  // ⭐⭐ 順序本身是行為（見【G】：有減項時，先減後加與先加後減會給出不同的 clamp 結果）。
+  //   收斂之後只剩一份實作 ⇒ 差分測不到順序了，改在這裡**逐字釘住**。
+  assert.deepStrictEqual(t.map((x) => x.label),
+    ['回合加傷', '招致削傷', '伏特【雷】能量×2', '極限腰帶'],
+    '11 項的套用順序被改動了（順序在有減項時會改變結果）');
 });
 
 console.log('\n【C】涵蓋率自檢：中央 helper 加了新的加成項，A 段就必須跟著加一組');
 await T('C1 ⭐⭐ applyAttackerActiveDamageBonuses 裡的 formula.push 數 === A 段的組數', () => {
-  const src = readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8');
+  const src = normEol(readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8'));
   // 結構 anchor：從函式簽章往後找到下一個頂層 `\nexport ` 為止
   const i = src.indexOf('export function applyAttackerActiveDamageBonuses(');
   assert.ok(i > 0, '找不到 applyAttackerActiveDamageBonuses（改名了？anchor 要跟著改）');
   const jEnd = src.indexOf('\nexport ', i + 10);
   assert.ok(jEnd > i, '截不到函式結尾');
   const body = src.slice(i, jEnd);
-  assert.ok(body.length < 8000, `截出來 ${body.length} 字元，anchor 可能失效`);
+  assert.ok(body.length < 14000, `截出來 ${body.length} 字元，anchor 可能失效`);
   // ⚠ 先剝註解再數（註解裡提到 formula.push 會灌水 —— 安慰劑型態 6）
   const clean = body.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
   const pushes = (clean.match(/formula\.push\(/g) || []).length;
@@ -294,6 +313,118 @@ await T('D3 少一項 ⇒ 抓得到', () => {
 await T('D4 ⭐ 相同 ⇒ 必須回 true（負對照：比對器不是恆假）', () => {
   assert.ok(sameFormula([{ sign: '+', value: 10, label: 'X' }], [{ sign: '+', value: 10, label: 'X' }]),
     '⚠ 比對器恆假 ⇒ A 段會全部誤紅');
+});
+
+console.log('\n【E】⭐⭐⭐ v6.408 修掉的真 bug：兩個消耗型旗標同時存在時，回合加傷也必須被消耗');
+// 舊的 inline 版：「回合加傷」與「招致削傷」兩段各自 `const newAtk = { ...attacker.active }`
+//   （同一份**原始快照**）再整份寫回 ⇒ 第二段把第一段刪掉的 damageBonusThisTurn **又帶回來**。
+//   ⇒ 我方用了「彗星拳／風力充能」（下次 +N）而對手用了「吠／咆哮／叫聲」（下次 -N）時，
+//     回合加傷這個旗標**永遠消耗不掉**，之後每一次攻擊都會繼續 +N。
+function attackAndReadFlags(extra, energy = [BL, BL, BL], defCard = TANK) {
+  const out = applyAction(mkState({ atkCard: P_L.card, atkEnergy: energy, atkExtra: extra, defCard }),
+    { type: 'ATTACK', attackIndex: P_L.ai }, pool);
+  const st = out?.state ?? out;
+  const a = st.players[0].active;
+  const texts = (st.log || []).map((l) => (typeof l === 'string' ? l : l.message || ''));
+  const dm = texts.map((t) => /造成 (\d+) 點傷害/.exec(t)).filter(Boolean).pop();
+  return {
+    bonus: a.damageBonusThisTurn, penalty: a.nextOwnAttackPenalty,
+    flip: a.attackFailureFlipCountThisTurn,
+    dmg: dm ? Number(dm[1]) : null, defDamage: st.players[1].active.damage,
+  };
+}
+await T('E1 ⭐ 前提／正對照：只有回合加傷時，攻擊後旗標本來就會被消耗', () => {
+  const r = attackAndReadFlags({ damageBonusThisTurn: 50 });
+  assert.strictEqual(r.dmg, P_L.dmg + 50, `只有回合加傷時傷害不對：${r.dmg}`);
+  assert.strictEqual(r.bonus, undefined, '⚠ 連「只有回合加傷」都沒消耗 ⇒ E2 測不到本版修的那件事');
+});
+await T('E2 ⭐⭐⭐ 兩個旗標同時 ⇒ 回合加傷仍必須被消耗（v6.408 修正；BASE 上這一條必紅）', () => {
+  const r = attackAndReadFlags({ damageBonusThisTurn: 50, nextOwnAttackPenalty: 30 });
+  assert.strictEqual(r.dmg, P_L.dmg + 50 - 30, `兩個旗標同時的傷害不對：${r.dmg}`);
+  assert.strictEqual(r.bonus, undefined,
+    '⚠⚠ 回合加傷沒有被消耗（下次攻擊還會再 +N）⇒ 兩段各自從同一份原始快照複製、後者覆蓋前者');
+  assert.strictEqual(r.penalty, undefined, '招致削傷也必須被消耗');
+});
+
+await T('E3 ⭐⭐⭐ 干擾命中判定的旗標不得被「復活」（潑沙／墨汁噴射；BASE 上這一條必紅）', () => {
+  // ⚠⚠ 這一條才是本版**玩家真的看得到**的修正：
+  //   BASE 的 inline 版在消耗回合加傷／招致削傷時，是把攻擊方**快照**整份寫回 state；
+  //   而 attackFailureFlipCountThisTurn（潑沙／墨汁噴射留下的「下次出招要先擲硬幣」）
+  //   在 ATTACK 開頭就已經被消耗掉了，快照上卻還活著 ⇒ 被寫回去＝**復活**。
+  //   ⚠ 這個旗標 END_TURN **不清**（回合加傷會清）⇒ 下一個自己的回合出招還要再擲一次，
+  //     擲到反面就直接失敗。實測 __m6a/_probe_revive.mjs。
+  // ⚠ 干擾命中判定用的是 Math.random()，沒有注入點 ⇒ 重試到「全部正面、招式成功」為止。
+  //   flipCount = 1 ⇒ 每次 50%，40 次都失敗的機率 < 1e-12（不是靠運氣的確定性）。
+  let r = null;
+  for (let i = 0; i < 40; i++) {
+    const t = attackAndReadFlags({ attackFailureFlipCountThisTurn: 1, damageBonusThisTurn: 50 });
+    if (t.dmg !== null) { r = t; break; }
+  }
+  assert.ok(r, '40 次都沒擲出正面 ⇒ 擲幣或盤面壞了（不是本版的回歸）');
+  assert.strictEqual(r.dmg, P_L.dmg + 50, `傷害不對：${r.dmg}`);
+  assert.strictEqual(r.flip, undefined,
+    '⚠⚠ attackFailureFlipCountThisTurn 被復活了（下一個自己的回合還要再擲一次硬幣）');
+});
+
+console.log('\n【G】⭐⭐⭐ 零行為改變：「減項 ≥ 基礎傷害」時後面的加項一律不套（逐字保留 BASE 的行為）');
+// ⚠⚠ engine 的 inline 版**每一段**都有 `baseDamage > 0` 的閘；中央 helper 原本只在入口檢查一次。
+//   收斂時若不補逐段閘，「招致削傷 ≥ 基礎」的盤面會無聲從「0」變成「繼續加」。
+//   ⚠ 「中途 clamp 到 0 之後不再加」本身是否符合官方規則**尚未裁定**
+//     （PTCG_RULES.md §18.E／§17.2.H 都沒有明文）⇒ 本版只負責「不夾帶未裁定的行為改變」。
+//   ⚠ v6.407a 的差分守衛刻意避開了這個區域（pickPure 的 minDmg = 50），所以當時沒抓到。
+await T('G1 ⭐⭐⭐ 削傷 ≥ 基礎 ⇒ 伏特【雷】能量的加成不套，最終沒有造成傷害', () => {
+  const r = attackAndReadFlags({ nextOwnAttackPenalty: P_L.dmg + 50 }, [VOLT, VOLT, BL]);
+  assert.strictEqual(r.dmg, null, `應該完全沒有造成傷害（沒有「造成 N 點傷害」那一行），實際 ${r.dmg}`);
+  assert.strictEqual(r.defDamage, 0, `對手不該受到傷害，實際 ${r.defDamage}`);
+});
+await T('G2 ⭐⭐ 削傷 ≥ 基礎 ⇒ 道具加成也不套（多一項就會露餡）', () => {
+  const out = applyAction(mkState({
+    atkCard: P_L.card, atkEnergy: [BL, BL, BL], atkTool: BELT, defCard: TANK_EX,
+    atkExtra: { nextOwnAttackPenalty: P_L.dmg + 50 },
+  }), { type: 'ATTACK', attackIndex: P_L.ai }, pool);
+  const st = out?.state ?? out;
+  assert.strictEqual(st.players[1].active.damage, 0, `對手不該受到傷害，實際 ${st.players[1].active.damage}`);
+});
+await T('G3 ⭐ 正對照：削傷 < 基礎 ⇒ 加項照樣套（G1／G2 不是「永遠 0」的恆真式）', () => {
+  const r = attackAndReadFlags({ nextOwnAttackPenalty: 10 }, [VOLT, VOLT, BL]);
+  assert.strictEqual(r.dmg, P_L.dmg - 10 + 40, `削傷 10 ＋ 伏特×2 應該是 ${P_L.dmg - 10 + 40}，實際 ${r.dmg}`);
+});
+
+console.log('\n【F】⭐⭐ 靜態：engine.ts 不得再留著第二份 inline 實作');
+/** 判準只有一份（Rule 38）：F1 的正式斷言與 F2 的正對照呼叫的是同一支。 */
+function inlineBonusHits(engineSrc) {
+  // ⚠ 先剝註解再掃 —— 本版的哨兵註解裡就寫著「伏特【雷】能量／化朗鎮／烏栗」這些字，
+  //   不剝會自己把自己掃成違規（安慰劑型態 6 的反面：假紅）。
+  const clean = engineSrc.replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+  const marks = [
+    "label: '回合加傷'", "label: '招致削傷'", "label: '格拉吉歐的決戰'",
+    '伏特【雷】能量×', 'TOOL_ATTACK_BONUS.get(', 'collectPassiveAttackBonuses(',
+    "label: '力量蛋白飲'", "label: '腎上腺力量'", "label: '化朗鎮'",
+    "label: '空手道王演練'", "label: '烏栗'",
+  ];
+  return marks.filter((m) => clean.includes(m));
+}
+await T('F1 ⭐⭐⭐ 本版的 engine.ts 一個 inline 加成點都不剩', () => {
+  const src = normEol(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'));
+  const hits = inlineBonusHits(src);
+  assert.deepStrictEqual(hits, [],
+    `engine.ts 還留著第二份加成實作：${hits.join('、')}\n    ⇒ 收斂沒做完，兩份判準的問題還在。`);
+});
+await T('F2 ⭐⭐⭐ 正對照／HEAD-FAIL：BASE 的 engine.ts 餵給**同一支判準**必須抓到一整排', () => {
+  // ⚠ 沒有這一條，F1 可能只是「判準抓不到任何東西」（安慰劑型態 4：空集合空真）。
+  const BASE_SHA = '41444a45030d17a2f13bb9bad53c2cc4cd5c5e35';   // v6.407a
+  // ⚠ IRON_RULES Rule 45：BASE_SHA 必須是留在 main 上的那一顆
+  //   （驗法：`git branch -a --contains <sha>` 要印得出 main）。
+  if (!hasBaseCommit(ROOT, BASE_SHA)) {
+    shallowSkip('F2 對 BASE engine.ts 的正對照', 'F1 的結構斷言仍在守（但正對照這一半沒跑到）');
+    return;
+  }
+  const r = readBaseBlob(ROOT, BASE_SHA, 'src/lib/game/engine.ts');
+  assert.ok(r.ok, `讀不到 BASE 的 engine.ts：${r.err || '(無訊息)'}`);
+  const hits = inlineBonusHits(r.out);
+  assert.ok(hits.length >= 10,
+    `BASE 的 engine.ts 只抓到 ${hits.length} 個 inline 加成點（預期 ≥ 10）⇒ 判準壞了，F1 是空真。實際：${hits.join('、')}`);
 });
 
 console.log(`\n=== v6.408 攻擊方加成的兩份判準差分：${pass} PASS, ${fail} FAIL ===`);

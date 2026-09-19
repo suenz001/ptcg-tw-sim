@@ -1,5 +1,139 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.408 ⭐⭐⭐ 攻擊方傷害加成收斂成一份 —— 順便修掉兩個旗標被「復活」的 bug
+
+BASE `41444a45030d17a2f13bb9bad53c2cc4cd5c5e35`（v6.407a）。
+⚠ 本版**動了 `src/lib/game/**`**（engine.ts、effects.ts）⇒ 部署要跑
+**`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**（IRON_RULES Rule 43）。
+跑完用 `oracle-admin\verify-deploy.bat` 驗收。
+
+### 【零】做了什麼
+
+v6.407a 的差分守衛證明「攻擊方 11 項傷害加成」的兩份判準當時等價，本版把 engine 那一份刪掉、
+改呼叫 `effects.ts` 的 `applyAttackerActiveDamageBonuses()`。**engine.ts 少了 185 行、多了 42 行。**
+
+### 【一】⭐⭐⭐ 收斂過程中查證出來的兩個 bug（⚠ 第一版我把它們的嚴重度講反了）
+
+engine 的 inline 版在消耗「回合加傷／招致削傷」旗標時，是把攻擊方**快照**整份寫回 state：
+
+```ts
+const newAtk = { ...attacker.active };   // ⚠ 快照（ATTACK 開頭抓的）
+delete newAtk.damageBonusThisTurn;
+// …整份寫回 workingState.players[aIdx].active
+```
+
+⇒ 只要走到這一段，**所有在它之前才被清掉的旗標都會被帶回來**。兩個受害者：
+
+| 旗標 | END_TURN 會不會清 | 玩家看不看得到 |
+|---|---|---|
+| `damageBonusThisTurn`（回合加傷本身，第二段覆蓋第一段） | **會清**（`engine.ts` 的 END_TURN） | **看不到** —— 同回合不可能再攻擊，下回合開始前就被清掉了 |
+| `attackFailureFlipCountThisTurn`（潑沙／墨汁噴射的「下次出招先擲硬幣」，ATTACK 開頭就已消耗） | ⚠ **不清** | ⭐ **看得到** —— 再下一個自己的回合出招還要再擲一次，擲到反面直接失敗 |
+
+⚠⚠ **我第一版的玩家 changelog 寫「加傷旗標永遠消耗不掉、之後每一次出招都會再加一次」是錯的**
+（獨立審查抓到）。實測 `__m6a/_probe_revive.mjs`：BASE 上攻擊後 `damageBonusThisTurn = 50`，
+但 END_TURN 後是 `undefined`，下一個自己的回合再攻擊仍然只有基礎傷害。
+⇒ 那一項是「狀態不乾淨」，不是玩家可見的傷害差異。玩家 changelog 已改寫成
+**潑沙／墨汁噴射**那一項（真正看得到的那個）。
+
+卡面（`static/cards`）：
+- 潑沙 —— 沙河馬／沙丘娃／噬沙堡爺／穿山王：「在下個對手的回合，受到這個招式的寶可夢使用招式時，
+  對手擲1次硬幣。若為反面，則那個招式失敗。」
+- 墨汁噴射 —— 章魚桶：同型但擲 2 次。
+- 下個自己的回合加傷 —— 戰槌龍ex｜亂暴錘「+150」、大電海燕｜風力充能「+120」。
+- 下次出招削傷 —— 黑魯加｜大聲咆哮「-100」、仙子伊布ex｜魔法魅惑「-100」、
+  超級火炎獅ex｜吠「-50」、布撥／菊草葉｜叫聲「-30」／「-20」。
+
+中央 helper 沒有這個問題：它**只從最新的 `s.players[aIdx].active` 取基底**，不整份寫回快照。
+
+### 【二】⭐⭐⭐ 差點夾帶進去的行為改變：「減項 ≥ 基礎傷害」時後面的加項
+
+engine 的 inline 版**每一段**都有 `baseDamage > 0` 的閘；中央 helper 原本只在入口檢查一次
+`dmg <= 0`。收斂的第一版因此無聲改變了行為：
+
+| 盤面（基礎 50） | BASE v6.407a | 收斂第一版 | 修正後 |
+|---|---|---|---|
+| −100（黑魯加｜大聲咆哮）＋伏特×2 | **0**（沒有造成傷害） | 40 | **0** |
+| −100 ＋極限腰帶（對 ex +50） | 0 | 90 | **0** |
+| −100 ＋格拉吉歐的決戰 +80 | 0 | 120 | **0** |
+| −50（超級火炎獅ex｜吠）＋伏特×2 | 0 | 40 | **0** |
+
+⚠ **這是獨立審查（Fable 5.1）開的 🔴，查證屬實。** 修法：中央 helper 加
+`_perTermGate`（只在有傳 `attackerSnapshot` ＝ engine 主管線時逐段閘），
+延後／狙擊路徑照舊沒有逐段閘 ⇒ **兩條路徑都逐字保留 v6.407 的行為**。
+`_attackerActiveBonusDone` 的設定時機也一併對齊（BASE 用**加成後** `baseDamage > 0` 才設）。
+
+⚠⚠ **「中途 clamp 到 0 之後不再加」本身是否符合官方規則，尚未裁定** ——
+`PTCG RULES/PTCG_RULES.md` §18.E（超級長耳兔ex 受「吠」-50 ⇒ 跳躍扣殺 110）與
+§17.2.H（團珠蛛受「叫聲」後「無法造成招式的傷害」但仍可擲硬幣）都只講到減項本身，
+沒有講「減到 0 之後的加項」。**已列入待站長裁示**（見文末待辦）。
+本版的立場是：收斂不夾帶未裁定的行為改變。
+
+⚠ 為什麼 v6.407a 的差分守衛沒抓到：它的 `pickPure(..., minDmg = 50)` 註解明寫
+「招致削傷 -N 會把小傷害打成 0 ⇒ engine 連公式都不印，挑基礎傷害夠大的招式」
+—— **刻意避開了兩份唯一會分岔的區域，然後宣稱等價**。
+⭐ 教訓：**為了讓測試跑得動而繞過的那個邊界，往往正是唯一會出事的地方。**
+
+### 【三】關鍵設計：`opts.attackerSnapshot`
+
+engine 的整條傷害管線讀的是 `const attacker = { ...players[aIdx] }` 這個**快照**
+（v6.351／v6.367 那一家族），不是 `state.players[aIdx]`。
+
+- **快照只用於「讀」**：`const attacker = opts?.attackerSnapshot ?? state.players[aIdx];`
+- **寫回（消耗旗標）一律以最新的 `s.players[aIdx].active` 為基底**
+- ⚠ 我第一版寫成「把 `state.players[aIdx]` 整格換成快照」，被 `test-v6367` 的 C1 當場抓到：
+  ATTACK_PRE 之前被清掉的旗標在快照上還活著 ⇒ **被復活**（正是【一】那個 bug 的另一面）。
+
+engine 端取回結果後同步 `baseDamage` / `workingState` / `players[aIdx]`。
+
+### 【四】守衛 `scripts/test-v6408-attacker-bonus-dual-criteria.mjs`（17 → **25 條**）
+
+| 段 | 內容 |
+|---|---|
+| 【A】 | 11 個加成因子各一組：差分（兩條路徑逐項比）＋**卡面加成量的絕對值** |
+| 【B】 | 疊加組（恰 4 項，順序也比） |
+| 【C】 | 涵蓋率自檢：中央 helper 的 `formula.push` 數 === A 段組數 |
+| 【D】 | 反安慰劑：比對器自己要抓得到 值不同／順序不同／少一項 |
+| 【E】 | E1 只有回合加傷時本來就會消耗／**E2 兩旗標同時也要消耗**／**E3 潑沙旗標不得復活** |
+| 【G】 | **G1／G2 削傷 ≥ 基礎 ⇒ 加項一律不套（零行為改變）＋ G3 正對照** |
+| 【F】 | 靜態：engine.ts 一個 inline 加成點都不剩＋對 BASE 的正對照（≥ 10 個） |
+
+**HEAD-FAIL 實測**（BASE = v6.407a 的 src）：**22 PASS / 3 FAIL** —— 紅的正好是
+**E2**、**E3**、**F1**；【G】段在 BASE 上也是綠的（＝本版確實零行為改變）。
+
+### 【五】⚠⚠ 剝除器 `scripts/lib/engine-strip-v6408.mjs` 必須排在**整條鏈的最前面**
+
+Rule 54 說「由新到舊」，本版是那條規則的**極端情形**：
+v6.408 刪掉的那 185 行裡含有 **v6.368／v6.402／v6.403／v6.407** 的哨兵與字面。
+照慣例插在 v6.407 前面（但在 v6.368 之後）的話，那幾支會在「已經被刪掉的內容」上找不到錨點。
+⇒ `test-v6265 F4c`（兩處）與 `test-v6375 F0b` 都改成**先** `stripV6408Engine(raw)`。
+
+剝除器由 `__m6a/gen_strip408.py` 產生並當場驗證剝除後逐字等於 BASE。
+
+### 【六】因 Rule 40「觀測點被本版蓋住」而改到意圖級的既有守衛（三支）
+
+| 守衛 | 原判準 | 改法 |
+|---|---|---|
+| `test-v6368` E5 | engine 必須有那兩格 `[...workingState.players]` | 「那兩格存在 **或** 已收斂到中央 helper（且真的有傳快照）」，並新增 **E5b／E5c** 兩條反安慰劑（收斂錨點被換掉、留著 stale 寫法 ⇒ 判準必須 false） |
+| `test-v6258` L3 | 三個消費點都呼叫 `collectPassiveAttackBonuses` | engine 二擇一（呼叫中央 dispatch **或** 委託給 `applyAttackerActiveDamageBonuses`），且全站 `PASSIVE_ATTACK_BONUS.get(` 仍只有一處；判準寫成一支 `_l3()`，內建兩個突變自檢 |
+| `test-v6402` D7 | engine 的 `fieldPokemonHasType(` ≥ 4 處 | 改看 **engine + effects 合計 ≥ 7**（搬家不該讓守衛紅），並新增 **D7b** 下限自檢；真正的意圖由 D6「engine 不得留印刷屬性寫法」把關（那一條完全沒動） |
+
+### 【七】bump 四配套
+
+`src/lib/version.ts` 6.408／`oracle-admin/admin.html` `SITE_VERSION_HINT`／
+`test-v6264` 的 `BASE_SHA` 前移到 `41444a45`／`test-v6272` 的 `PREV_ALLOWED` 不必動。
+changelog 三步搬運：v6.408 進首頁、v6.396 的內文搬進 bodies、v6.303 整則搬進 archive。
+
+### 【八】⭐ 待站長裁示（本版刻意不動）
+
+**「攻擊方的減項把傷害打到 0 之後，後面的加項還算不算？」**
+
+- 現行（BASE 與本版一致）：**不算**。基礎 50、受「大聲咆哮」-100、身上 2 張伏特【雷】能量
+  ⇒ 傷害 **0**。
+- 另一種解讀：所有 +／− 先加總、最後才 clamp ⇒ 50 + 40 − 100 = −10 ⇒ 0（同樣是 0），
+  但 50 + 40 − 50 = **40**（現行是 0）。
+- 官方規則書沒有明文。兩種解讀在「減項 < 基礎＋加項」時會給出不同答案。
+- ⚠ 站長裁定之後再開一版處理；本版已用 **G1／G2／G3** 把現況釘住，不會無聲漂移。
+
 ## v6.407a ⭐⭐ 收斂前的安全網：「攻擊方傷害加成」的兩份判準差分守衛
 
 BASE `732e8f4deccc7b64d79724d6b7aa20a564e7f6f9`（v6.407）。
