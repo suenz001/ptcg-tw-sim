@@ -1983,3 +1983,103 @@ node scripts/run-tests.mjs --clean-residue      清主樹殘檔（預設 dry-run
 `git add -A` 就會進版控，正是最需要被掃的。
 ⚠ 母體換判準時要同時補**下限斷言**與**正反對照**（未忽略的新檔必進母體、已忽略的殘檔不得進），
 否則「濾過頭」是靜默的假綠。
+
+---
+
+## Rule 59（2026-09-19）：**重用**一個 git worktree 沙盒時，HEAD/index 要用 `reset --mixed` 對齊，而且失敗必須大聲
+
+平行 runner 的 `--keep` 會把沙盒留下來重用。重用時要把沙盒拉回主樹的 sha，
+原本寫的是：
+
+```js
+try { git(['checkout', '-q', '--detach', headSha], sb); } catch { /* tree 相同時是 no-op */ }
+```
+
+那句註解**是錯的**。真正的失敗原因是：上一輪的同步步驟已經把主樹位元組
+（含未 commit 的改動與未追蹤檔）複製進沙盒工作樹了 ⇒ checkout 一定會說
+
+```
+error: Your local changes to the following files would be overwritten by checkout
+error: The following untracked working tree files would be overwritten by checkout
+Aborting
+```
+
+而**每一次**都被那個空 catch 吞掉（安慰劑型態 2：無差別 try/catch）
+⇒ 沙盒的 HEAD 與 index 從此**永遠**停在第一次建立時的 sha。
+
+### 為什麼這是真的假綠，不是無害
+站內有守衛讀的是 **index**（`git ls-files`）而不是 HEAD。⚠ 這份清單我第一版寫成「3 支」，
+獨立審查抓到**漏列兩個**，實際是 5 個來源：
+
+| 來源 | 指令 | 守什麼 |
+|---|---|---|
+| `lint-eol-anchors:220` | `ls-files -z scripts` | 掃 `scripts` 全體的 EOL 錨點（母體） |
+| `test-v6130:44,49` | `ls-files` / `--others` | `static/music` 母體 |
+| `test-v6272:890` | `ls-files --others` | `src`/`static` 未追蹤檔 |
+| `test-v6378:124` | `ls-files --others` | `static/music` 殘檔 |
+| `lib/eol-agnostic.mjs:140` | `ls-files --eol` | 經 `committedEolIsLf` 被 **12 支**守衛使用 |
+
+⭐ 所以 `test-sandbox-head-index` 的 **D 組**現在**動態掃一次**與清單雙向比對：
+新來源沒被記下來要紅、清單留了不存在的條目也要紅。**寫在註解裡的清單一定會過期，
+要嘛不寫，要嘛配一個過期偵測。**
+
+⚠ 還有一個反向的後果沒被講到：`ls-files --others --exclude-standard` 在**舊 index** 下
+會把「新版才加入追蹤的檔」誤判成未追蹤 ⇒ 舊寫法除了假綠，也埋著 v6272／v6378 的**假紅**。
+舊 index 裡沒有的新檔案**整批不會被掃到**，而 exit code、PASS/FAIL 條數、雙指紋
+三個判準**全部不變** ⇒ runner 自己的三道驗收（主樹硬差異／輸出指紋／skip 標記）
+一道都看不出來。
+
+實測（2026-09-19，主樹 `4763aae1`、沙盒 w1 停在 `a47ee043`）：
+主樹 index **1421** 檔、沙盒 index **1415** 檔，差的正是最近三版新增的 6 支
+`scripts/*.mjs` ⇒ 它們在重用沙盒裡完全逃過 `lint-eol-anchors`。
+
+### 正解
+```js
+git(['reset', '--mixed', '-q', headSha], sb);   // 移動 HEAD ＋ 重寫 index，不碰工作樹
+```
+`reset --mixed` **完全不動工作樹**（工作樹本來就該由隨後的逐檔複製決定），
+所以不會被髒檔擋下來；**不可以再吞例外**，失敗就 throw。
+並補上與主樹側對稱的後置斷言：`rev-parse HEAD === headSha` 且 `diff --cached --quiet HEAD`。
+
+### 通則（比這個 bug 本身更重要）
+1. **任何 `catch {}` 都要問「它實際上吞掉的是什麼」**，而不是相信旁邊那行註解說的。
+   寫 catch 的時候就去**實際製造一次**那個例外，看看訊息是不是你以為的那個。
+2. **「三道驗收都是綠的」不等於沒問題**：exit code／條數／指紋三個判準對「母體變小了」
+   是完全盲的（安慰劑型態 4 的變形：空真）。凡是會改變**掃描母體**的東西
+   （index、檔案清單、live set），都要有一條**獨立的母體下限／一致性斷言**。
+3. **母體有兩半，兩半都要有後置斷言。** HEAD/index 只是一半，**工作樹是另一半**。
+   `syncSandbox` 原本把「主樹讀不到這個檔」與「沙盒這個檔刪不掉」都靜默 `continue`／
+   空 catch 吞掉 ⇒ 沙盒母體悄悄變小或變大，三道驗收一樣全盲。現在：
+   - 同步時收集 `missing` / `undeleted`，任一非空就 fail-fast；
+   - 同步完跑一條 `git -C sb ls-files --deleted` 必須為空（一個指令釘死「沙盒少了追蹤檔」）；
+   - `restoreSandbox` 的兩個空 catch 改成收集 `failed`，並列為**硬判準**
+     （回復失敗 ⇒ 那個沙盒從此與其他沙盒不同構，「消除順序相依」的保證靜默失效）。
+4. **「大聲」要配一次 retry。** `index.lock` 是暫態的。實測（2026-09-19 本版第一次全套）
+   `.git/worktrees/repo4/index.lock` 是當天 05:36 留下的 **0 位元組殘檔** —— 舊的空 catch
+   把它吞了一整天，沒有人知道 w5 那個沙盒從那時起就沒被對齊過；改成 throw 之後它
+   立刻炸出來（好事），但為一顆殘檔賠掉整輪 13 分鐘太貴 ⇒ 重試一次，兩次都失敗才 throw，
+   而且訊息要指出「去哪裡看」。
+5. 守衛 `scripts/test-sandbox-head-index.mjs`（31 PASS / 0 FAIL）：A 組守靜態形狀，
+   B 組**真的開一個 git repo** 證明「舊寫法必敗、失敗被吞就是假綠」，D 組守清單不過期；
+   突變測試 `scripts/mutcheck-sandbox-head-index.mjs` **17/17 全殺**。
+
+### ⚠⚠ 最值得記的一條：**寫來抓安慰劑的守衛，自己也會是安慰劑**
+獨立審查對這支守衛做了 5 個突變，**4 個存活**，其中兩個特別難堪：
+
+1. `/catch\s*\{\s*\}/` 抓不到 `catch { /* … */ }` —— 因為
+   `stripCommentsBlankChecked` **只空白化整行註解，不剝行內註解**，
+   而那正是 **BASE 的原形**。也就是說「不得空吞例外」這條偵測，
+   對它想抓的那個歷史案例本身是**瞎的**。（`catch (e) { }` 也抓不到。）
+2. 後置斷言的判準只檢查「那兩個 git 指令的字串有沒有出現」，**不檢查 throw 還在不在**
+   ⇒ 把 `if (…)` 改成 `if (false && …)`（最自然的「暫時關掉來 debug 然後忘了打開」）
+   守衛照樣全綠。
+
+⭐ 三條可推廣的做法：
+- **正對照要逐項給**，每個樣本只違反一項。餵「多項全犯」的樣本時，掏空其中任何一項
+  偵測之後它仍會回 `>= 2` 條而照樣綠（安慰劑型態 12 的變形）。
+- **判別式要真的有鑑別力**：`miss.length === 1 && /HEAD/.test(miss[0])` 裡的 `/HEAD/`
+  是裝飾 —— 兩則訊息都含 "HEAD"。改成 `/rev-parse/` 才分辨得出。
+- **窗口型判準要截斷**：第一個 probe 的 400 字窗若不截到下一個指令，會借用第二個斷言的
+  `throw` 而永遠通過 ⇒ 兩條 probe 不獨立。突變 M9b 專門守這件事。
+- **突變的 anchor 必須恰好出現一次**：不唯一時 `replace` 只改掉第一處 ⇒ 突變只做了一半，
+  「紅在預期那一條」成立的原因就不是你以為的那個。mutcheck 現在對每個 anchor 斷言計數。

@@ -96,6 +96,11 @@ const OPT = {
   report: argVal('--report', ''),
   baseline: argVal('--baseline', ''),
   timeoutMul: parseFloat(argVal('--timeout-mul', '3')) || 3,
+  // heavy 的「耗時 top-N」門檻。預設 4 是上線時的值；
+  // ⚠ 把「很久」當成「必須獨占」是啟發式，不是量過的事實——那四支是不是真的 CPU 飽和型
+  //   沒有人驗過。改小可以讓長工彼此並行，但若它們真的吃滿多核，反而會互相拖慢。
+  //   這個參數就是為了**用同一份 HEAD 量兩次**來回答那個問題而存在的。
+  heavyTop: Math.max(0, parseInt(argVal('--heavy-top', '4'), 10)),
   timeoutMinMs: parseInt(argVal('--timeout-min', '120000'), 10) || 120000,
   timeoutMaxMs: parseInt(argVal('--timeout-max', '1800000'), 10) || 1800000,
   list: argFlag('--list'),
@@ -335,6 +340,16 @@ const HEAVY_EXPLICIT = new Set(['scripts/test-v6394-tsc-clean.mjs']);
 // 抓不到），但在 6-way 爭用 + heavy tsc 同時跑的情況下，子行程可能超過**自己寫死的**
 // timeout ⇒ 假紅。實測 chain 上最緊的是 test-v6246（120 秒）。
 const TIGHT_CHILD_TIMEOUT_MS = 300000;
+// ⭐ topN 的預設值 4 是**量到的**，不是猜的（2026-09-19，12 核 /128GB Windows，
+//   同一份工作樹、同一個 HEAD，四輪各跑完整 736 支，全部 exit=0／FAIL 0／escape 0／
+//   主樹硬差異 0／三種 skip 標記逐支一致）：
+//     A  workers 6, heavy-top 4 ： wall 12.87 分（階段一 8.8　階段二 3.8）← 預設
+//     B  workers 6, heavy-top 1 ： wall 13.47 分（階段一 9.3　階段二 3.8）  慢 4.7%
+//     C  workers 8, heavy-top 4 ： wall 12.89 分（階段一 8.5　階段二 3.8）  持平
+//     D  workers 8, heavy-top 1 ： wall 12.97 分（階段一 8.7　階段二 3.8）  持平
+//   ⇒ topN 4→1 **變慢**（重量級的擠進平行池互相搶 CPU）；workers 6→8 階段一只快
+//     0.3 分而 wall 落在雜訊內，卻要多佔兩個磁碟機代號與兩份沙盒 ⇒ 兩個預設都維持原值。
+//   ⚠ 改這兩個預設值要重跑這張表，不要憑感覺調。
 function classifyHeavy(uniq, dur, topN = 4) {
   const rank = uniq.filter((s) => dur.has(s)).sort((a, b) => dur.get(b) - dur.get(a));
   const set = new Set(rank.slice(0, topN));
@@ -366,6 +381,10 @@ function git(args, cwd = ROOT) {
 }
 function gitLines(args, cwd = ROOT) {
   return git(args, cwd).split(/\r?\n/).filter(Boolean);
+}
+/** 同步睡眠（只用在「暫態失敗重試一次」這種地方，不放進熱路徑）。 */
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 // 要同步進沙盒的檔案清單（相對路徑，正斜線）
@@ -455,11 +474,51 @@ function createSandbox(sb, headSha) {
     ensureDir(dirname(sb));
     git(['worktree', 'add', '--detach', sb, headSha]);
   } else {
-    // 已經存在：把它拉回同一個 SHA。
-    // ⚠ 註記：HEAD 有變動時 checkout **會**用 blob 位元組覆寫檔案（autocrlf 生效），
-    //   所以這一步不是 no-op；但隨後的 (b) 會因為 mtime/size 不同把主樹位元組全部蓋回去，
-    //   結果仍然正確。真正決定沙盒內容的是 (b)(c)，不是這一行。
-    try { git(['checkout', '-q', '--detach', headSha], sb); } catch { /* tree 相同時是 no-op */ }
+    // 已經存在：把 HEAD 與 index 拉回同一個 SHA。
+    // 🔴 這裡原本寫
+    //     try { git(['checkout', '-q', '--detach', headSha], sb); } catch { /* tree 相同時是 no-op */ }
+    //   註解說「tree 相同時是 no-op」——**那個判斷是錯的**（安慰劑型態 2：無差別 try/catch）。
+    //   真正的失敗原因是：--keep 留下來的沙盒工作樹裡，上一輪 (b) 已經把主樹位元組
+    //   （含未 commit 的改動與未追蹤檔）複製進去了 ⇒ checkout 會說
+    //     error: Your local changes to the following files would be overwritten by checkout
+    //     error: The following untracked working tree files would be overwritten by checkout
+    //     Aborting
+    //   而**每一次**都被那個空 catch 吞掉 ⇒ 沙盒的 HEAD 與 index 從此停在第一次建立時的 sha。
+    // ⚠⚠ 後果是真的假綠：站內有守衛讀的是 **index**（`git ls-files`）——
+    //   lint-eol-anchors:220（掃 scripts 全體的 EOL 錨點）、test-v6130、test-v6272、
+    //   test-v6378:124、lib/eol-agnostic.mjs:140 的 `ls-files --eol`（經 committedEolIsLf
+    //   被 12 支守衛使用）。⚠ 這份清單由 test-sandbox-head-index 的 D 組做過期偵測。
+    //   舊 index 裡沒有的新檔案**整批不會被掃到**，而 exit code、PASS/FAIL 條數、
+    //   雙指紋三個判準**全部不變** ⇒ 三道驗收都看不出來。
+    //   實測（2026-09-19，主樹 4763aae1、沙盒 w1 停在 a47ee043）：
+    //     主樹 index 1421 檔／沙盒 index 1415 檔，差的正是最近三版新增的 6 支
+    //     scripts/{run-tests,test-runner-and-chain-hygiene,mutcheck-runner-chain-hygiene}.mjs
+    //     與 scripts/lib/{chain-parse,env-skip,tracked-scope}.mjs
+    //     ⇒ 它們在重用沙盒裡完全逃過 lint-eol-anchors。
+    // ⭐ 改用 `reset --mixed`：移動 HEAD ＋ 重寫 index，**完全不碰工作樹**
+    //   （工作樹本來就該由隨後的 (b)(c) 決定），所以不會被髒檔擋下來。
+    // ⚠ 不可以再吞例外：失敗就 throw，讓它大聲。
+    // ⚠ 但 index.lock 是**暫態**的（上一輪被中斷留下的殘檔、防毒短暫鎖住）。
+    //   為了一顆 0 位元組的殘檔炸掉整輪 13 分鐘太貴 ⇒ 重試一次；兩次都失敗才 throw，
+    //   而且訊息要指出「去哪裡看」。
+    //   實測（2026-09-19，本版第一次全套）：.git/worktrees/repo4/index.lock 是一顆
+    //   當天 05:36 留下的 0 位元組殘檔 —— 舊的空 catch 把它吞了一整天，沒有人知道
+    //   w5 這個沙盒從那時起就沒有被對齊過。
+    try {
+      git(['reset', '--mixed', '-q', headSha], sb);
+    } catch (e1) {
+      log(`  ⚠ ${basename(dirname(sb))} 的 reset 失敗，1 秒後重試一次：`
+        + String((e1 && e1.message) || e1).split('\n')[0]);
+      sleepSync(1000);
+      try {
+        git(['reset', '--mixed', '-q', headSha], sb);
+      } catch (e2) {
+        throw new Error(`沙盒 ${sb} 的 HEAD/index 對不齊（重試一次仍失敗）：`
+          + String((e2 && e2.message) || e2)
+          + '\n  ⭐ 若訊息提到 index.lock：先確認沒有 git 行程在跑，'
+          + '再看 .git/worktrees/*/index.lock 有沒有陳年殘檔（0 位元組、mtime 很舊）。');
+      }
+    }
   }
   const nm = join(sb, 'node_modules');
   if (!existsSync(nm)) {
@@ -470,17 +529,37 @@ function createSandbox(sb, headSha) {
       spawnSync('ln', ['-sfn', join(ROOT, 'node_modules'), nm]);
     }
   }
+  // ⭐ 後置斷言（對稱於主樹側的「前置斷言 1：index 必須等於 HEAD」）：
+  //   沙盒的 HEAD 與 index 都必須等於 headSha。少了這一條，上面那個 bug 就是靜默的。
+  //   ⚠ 這裡比的是 index vs HEAD（兩邊都是 blob），與工作樹的 CRLF 無關 ⇒
+  //     autocrlf=true 不會讓它誤紅。
+  const sbHead = git(['rev-parse', 'HEAD'], sb).trim();
+  if (sbHead !== headSha) {
+    throw new Error(`沙盒 ${sb} 的 HEAD=${sbHead.slice(0, 8)} 對不上主樹 ${headSha.slice(0, 8)}`
+      + ' —— 沙盒重用時沒有把 HEAD 拉回來（讀 index/HEAD 的守衛會給出與主樹不同的答案）');
+  }
+  const rIdx = spawnSync('git', ['-C', sb, 'diff', '--cached', '--quiet', 'HEAD'], { encoding: 'utf8' });
+  if (rIdx.status !== 0) {
+    throw new Error(`沙盒 ${sb} 的 index 與 HEAD 不一致 —— 讀 index 的守衛`
+      + '（lint-eol-anchors／test-v6130／test-v6272／test-v6378／eol-agnostic）'
+      + '會在沙盒裡漏掃檔案（假綠）');
+  }
 }
 
 // 把主樹的位元組同步進沙盒；回傳 {copied, deleted}
 function syncSandbox(sb, list) {
   const want = new Set(list.all);
   let copied = 0, deleted = 0;
+  // ⚠ 這兩個清單是本版新增的：原本這兩處都是靜默 `continue` / 空 catch，
+  //   結果是「沙盒的母體悄悄變小（或變大）」而 exit code／條數／雙指紋三道驗收全盲
+  //   —— 與本版修掉的 HEAD/index 漂移是**同一個**安慰劑型態。
+  const missing = [];    // 清單裡有、但主樹讀不到（被鎖住／權限）⇒ 沙盒會少一個檔
+  const undeleted = [];  // 沙盒裡有、清單裡沒有、又刪不掉 ⇒ 沙盒會多一個檔
   for (const rel of list.all) {
     const src = join(ROOT, rel.replace(/\//g, IS_WIN ? '\\' : '/'));
     const dst = join(sb, rel.replace(/\//g, IS_WIN ? '\\' : '/'));
     const ss = statOf(src);
-    if (!ss || !ss.isFile()) continue;
+    if (!ss || !ss.isFile()) { missing.push(rel); continue; }
     const ds = statOf(dst);
     // ⭐ mtime 或 size 任一不同就覆蓋（不是「來源較新才覆蓋」）
     const same = ds && ds.isFile() && ds.size === ss.size &&
@@ -493,9 +572,10 @@ function syncSandbox(sb, list) {
   }
   for (const rel of walkSandbox(sb)) {
     if (want.has(rel)) continue;
-    try { rmSync(join(sb, rel.replace(/\//g, IS_WIN ? '\\' : '/')), { force: true }); deleted++; } catch { /* 略 */ }
+    try { rmSync(join(sb, rel.replace(/\//g, IS_WIN ? '\\' : '/')), { force: true }); deleted++; }
+    catch (e) { undeleted.push(rel + '（' + String((e && e.code) || e).slice(0, 20) + '）'); }
   }
-  return { copied, deleted };
+  return { copied, deleted, missing, undeleted };
 }
 
 // ── subst 磁碟機代號 ────────────────────────────────────────────────────────
@@ -624,28 +704,34 @@ function diffEscape(b, a) {
 //   test-v6368 會留下 .stub-paths.js（19 支守衛共用的那個名字）。
 let SYNC_SET = new Set();
 function restoreSandbox(slot, leak) {
-  if (OPT.noRestore) return 0;
+  if (OPT.noRestore) return { fixed: 0, failed: [] };
+  // ⚠ 回復失敗原本是兩個空 catch ⇒ 沙盒從那一刻起漂移，而「消除順序相依」這個保證
+  //   靜默失效，三道驗收一樣看不出來（與本版主題同型）。現在列報並計入硬判準。
   let fixed = 0;
+  const failed = [];
   for (const d of leak) {
     const op = d[0];
     const rel = d.slice(1);
     const abs = join(slot.sb, rel.replace(/\//g, IS_WIN ? '\\' : '/'));
     if (!SYNC_SET.has(rel)) {
-      if (op === '+' || op === '~') { try { rmSync(abs, { force: true }); fixed++; } catch { /* 略 */ } }
+      if (op === '+' || op === '~') {
+        try { rmSync(abs, { force: true }); fixed++; }
+        catch (e) { failed.push(rel + '（刪不掉：' + String((e && e.code) || e).slice(0, 20) + '）'); }
+      }
       continue;
     }
     // 清單內的檔被動過（或被刪掉）⇒ 從主樹補回來
     const src = join(ROOT, rel.replace(/\//g, IS_WIN ? '\\' : '/'));
     const ss = statOf(src);
-    if (!ss) continue;
+    if (!ss) { failed.push(rel + '（主樹讀不到）'); continue; }
     try {
       ensureDir(dirname(abs));
       copyFileSync(src, abs);
       utimesSync(abs, ss.atime, ss.mtime);
       fixed++;
-    } catch { /* 略 */ }
+    } catch (e) { failed.push(rel + '（補不回來：' + String((e && e.code) || e).slice(0, 20) + '）'); }
   }
-  return fixed;
+  return { fixed, failed };
 }
 
 const RE_PASS = /^\s*(?:PASS|OK)\b|^\s*[\u2713\u2714]/;
@@ -783,12 +869,14 @@ function runOne(script, slot, durMap) {
         const shallowSkips = skipMarks.shallow;
         const leak = diffSandbox(sbBefore, snapSandbox(slot.sb));
         const esc = diffEscape(escBefore, snapEscape(slot));
-        const restored = restoreSandbox(slot, leak);
+        const rs = restoreSandbox(slot, leak);
+        const restored = rs.fixed;
+        const restoreFailed = rs.failed;
         r = {
           script, ms, exitCode: timedOut ? 'TIMEOUT' : code, pass, fail, timedOut,
           outLines: fp.lines, outFp: fp.sha, numFp: fp.num, shallowSkips, skipMarks,
           timeoutMs, sandbox: slot.name, drive: slot.letter || null,
-          leak, restored, escape: esc.hard, escapeAllowed: esc.allowed,
+          leak, restored, restoreFailed, escape: esc.hard, escapeAllowed: esc.allowed,
           tail: (code !== 0 || timedOut) ? out.slice(-2500) : '',
         };
         if (OPT.dumpOut) {
@@ -893,7 +981,7 @@ async function main() {
   const timingSet = new Set(timing);
   const phase1 = [...chain.uniq.filter((s) => !timingSet.has(s))];
   const phase2 = [...chain.uniq.filter((s) => timingSet.has(s))];
-  const heavySet = classifyHeavy(phase1, durMap, 4);
+  const heavySet = classifyHeavy(phase1, durMap, OPT.heavyTop);
   if (OPT.only.length) {
     const keep = (a) => a.filter((x) => OPT.only.some((k) => x.includes(k)));
     phase1.splice(0, phase1.length, ...keep([...phase1]));
@@ -915,7 +1003,8 @@ async function main() {
       (chain.dups.length ? `（重複 ${chain.dups.length}：${chain.dups.map((d) => basename(d)).join(', ')}）` : ''));
   log(`階段一 平行：${phase1.length} 支（歷史合計 ${fmtM(sumMs(phase1))}）  heavy=${heavySet.size}`);
   log(`階段二 序列：${phase2.length} 支 牆鐘斷言守衛（歷史合計 ${fmtM(sumMs(phase2))}）`);
-  log(`  heavy: ${[...heavySet].map((s) => basename(s)).join(', ')}`);
+  log(`  heavy（topN=${OPT.heavyTop} ＋ 明列 ＋ 子行程 timeout 緊的）: `
+    + `${[...heavySet].map((s) => basename(s)).join(', ')}`);
   log('════════════════════════════════════════════════════════════════');
 
   if (OPT.list) {
@@ -956,8 +1045,9 @@ async function main() {
   }
 
   // ⭐ 前置斷言 1：index 必須等於 HEAD。
-  //   站內有 3 支守衛用 `git ls-files`（讀的是 index 不是 HEAD）：lint-eol-anchors、
-  //   test-v6130、test-v6272。而這個站用 Python git plumbing 推版、**不更新 .git/index**
+  //   站內有 5 個來源用 `git ls-files`（讀的是 index 不是 HEAD）：lint-eol-anchors、
+  //   test-v6130、test-v6272、test-v6378、lib/eol-agnostic.mjs（`--eol`，經
+  //   committedEolIsLf 被 12 支守衛使用）。而這個站用 Python git plumbing 推版、**不更新 .git/index**
   //   （test-lib-strip-markup-sections:492 自己記著這件事）⇒ 主樹 index 有可能落後。
   //   沙盒 worktree 的 index 是 `worktree add` 當下寫的（新的）⇒ 兩邊會分岔。
   {
@@ -983,12 +1073,32 @@ async function main() {
     const t = now();
     createSandbox(slot.sb, headSha);
     const r = syncSandbox(slot.sb, list);
+    // ⚠⚠ 母體破洞 fail-fast。本版修的 HEAD/index 漂移，本質是「沙盒的掃描母體 ≠ 主樹的」，
+    //   而 HEAD/index 只是母體的一半 —— **工作樹是另一半**，原本完全沒有斷言。
+    if (r.missing.length) {
+      throw new Error(`${slot.name}：同步清單裡有 ${r.missing.length} 個檔在主樹讀不到`
+        + `（前 5：${r.missing.slice(0, 5).join(', ')}）—— 沙盒會少檔，掃全站的守衛會靜默漏掃。`);
+    }
+    if (r.undeleted.length) {
+      throw new Error(`${slot.name}：沙盒裡有 ${r.undeleted.length} 個不在清單的檔刪不掉`
+        + `（前 5：${r.undeleted.slice(0, 5).join(', ')}）—— 沙盒會多檔，與主樹不同構。`);
+    }
     if (slot.letter && !substList().has(slot.letter)) { ensureDir(slot.sbParent); substAdd(slot.letter, slot.sbParent); }
     // ⚠ <代號>:\tmp 要先建出來。三支硬寫 `/tmp/...` 的守衛（v6297／v6303／v6306）
     //   目前因為這台機器沒裝 playwright 而全部走 SKIP 分支 ⇒ 那條路從未被實際行使
     //   （安慰劑型態 4：空真）。哪天裝了 playwright，沙盒沒有這個目錄就會 ENOENT ⇒
     //   變成**沙盒獨有的假紅**（主樹有 E:\tmp 就會過）。先建好，讓隔離是真的。
     ensureDir(slot.tmpDir);
+    // ⭐ 工作樹側的後置斷言（與 createSandbox 的 HEAD/index 後置斷言成對）：
+    //   同步完之後，沙盒裡**不可以有任何被追蹤卻不存在的檔**。一個指令就把
+    //   「沙盒少了一個追蹤檔」這整類假綠釘死。
+    {
+      const gone = gitLines(['-c', 'core.quotepath=false', 'ls-files', '--deleted'], slot.sb);
+      if (gone.length) {
+        throw new Error(`${slot.name}：沙盒有 ${gone.length} 個被追蹤的檔不存在`
+          + `（前 5：${gone.slice(0, 5).join(', ')}）—— 掃全站的守衛會靜默漏掃。`);
+      }
+    }
     const sk = syncSvelteKit(slot.sb);
     // ⚠⚠ fail-fast，不可以只 log 一行：4 個沙盒成功 2 個失敗 ⇒ 又回到剛修掉的那個
     //   狀態不對稱。而且 test-v6394 的 A0b 哨兵（「sync 之後 tsconfig.json 必須存在」）
@@ -1038,6 +1148,9 @@ function finish(ctx) {
   const failed = results.filter((r) => r.exitCode !== 0);
   const escaped = results.filter((r) => r.escape.length);
   const leaked = results.filter((r) => r.leak.length);
+  // ⭐ 回復失敗是**硬判準**（不是列報）：沙盒從那一刻起漂移，「消除順序相依」這個
+  //   保證靜默失效，而 exit code／條數／雙指紋三道驗收一樣看不出來。
+  const restoreFailed = results.filter((r) => (r.restoreFailed || []).length);
   const shallow = results.filter((r) => (r.shallowSkips || 0) > 0);
   const marked = results.filter((r) => r.skipMarks
     && ((r.skipMarks.shallow || 0) + (r.skipMarks.platform || 0) + (r.skipMarks.env || 0)) > 0);
@@ -1114,7 +1227,8 @@ function finish(ctx) {
       shallowSkips: r.shallowSkips, skipMarks: r.skipMarks,
       timedOut: r.timedOut, timeoutMs: r.timeoutMs, sandbox: r.sandbox, drive: r.drive,
       phase: r.phase, heavy: !!r.heavy, queuedAtMs: r.queuedAtMs,
-      leak: r.leak, restored: r.restored, escape: r.escape, escapeAllowed: r.escapeAllowed,
+      leak: r.leak, restored: r.restored, restoreFailed: r.restoreFailed || [],
+      escape: r.escape, escapeAllowed: r.escapeAllowed,
       tail: r.tail || undefined,
     })),
     mainTree: { hard: mainDiff.hard, allowed: mainDiff.allowed, statusChanged: !!statusChanged },
@@ -1134,6 +1248,7 @@ function finish(ctx) {
   log(`escape（沙盒外寫入，硬判準）: ${escaped.length}`);
   log(`主樹差異（硬判準）: ${mainDiff.hard.length}   已授權例外: ${mainDiff.allowed.length}`);
   log(`leak（沙盒殘檔，列報不擋）: ${leaked.length}`);
+  log(`沙盒回復失敗（硬判準）: ${restoreFailed.length}`);
   {
     const tot = (k) => marked.reduce((n, r) => n + (r.skipMarks[k] || 0), 0);
     log(`skip 標記（三種各自逐支與基準比對）: SHALLOW=${tot('shallow')} 次／`
@@ -1190,7 +1305,14 @@ function finish(ctx) {
       log(`  ${basename(r.script)}  sh${m.shallow || 0}/pf${m.platform || 0}/env${m.env || 0}`);
     }
   }
+  if (restoreFailed.length) {
+    log('\n【沙盒回復失敗】⚠ 從這一支之後，那個沙盒與其他沙盒不再同構：');
+    for (const r of restoreFailed.slice(0, 15)) {
+      log(`  ${basename(r.script)} @${r.sandbox} → ${r.restoreFailed.slice(0, 5).join(' , ')}`);
+    }
+  }
   const bad = failed.length + escaped.length + mainDiff.hard.length + missing.length +
+              restoreFailed.length +
               (statusChanged ? 1 : 0) + (cmp ? cmp.diffs.length : 0);
   return bad === 0 ? 0 : 1;
 }
