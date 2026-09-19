@@ -2115,11 +2115,33 @@ git 不在 PATH、這裡不是 git repo、`.git/**/index.lock` 殘留、權限�
 
 全部 128。⇒ 想分流就**必須**把 stderr 接成 `'pipe'`（原本是 `'ignore'`，連依據都拿不到）。
 
-### 正解：三種模式
-- `missOk`：stderr 符合「物件不在」的樣式 ⇒ 回 `{ ok:false, expected:true }`（呼叫端照舊跳過）
-- `soft`：任何失敗都回 `{ ok:false, expected:false }`，不丟 —— **只給純診斷用途**
-  （`isShallowCheckout` 只是拿來寫訊息，不該把整支守衛炸掉）
-- 其餘：**throw**，訊息帶 git 自己的 stderr，讓人診斷得下去
+### 正解：**三分類**（`classifyGitFailure`，判準只有這一份）
+| 類別 | 判準 | 處理 |
+|---|---|---|
+| `miss` | 明確的「物件／路徑不在」（白名單 `EXPECTED_MISS`） | 靜默回 `ok:false` —— 這就是淺複製要跳過的那件事 |
+| `env` | 明確的「環境壞了」（黑名單 `ENV_BROKEN`、或 `ENOENT`） | **throw**，訊息帶 git 自己的 stderr |
+| `unclear` | 兩邊都對不上（最典型：git 可執行但 exit≠0 而且**沒有任何 stderr**） | 回 `ok:false`（保住「拿不到歷史時條數不變」），但印 `⚠⚠ GIT-UNCLEAR` 並計數 |
+
+⚠ 順序是 **env 優先於 miss**（突變 M3 在守這件事）。
+⚠ `soft` 模式另外存在：任何失敗都回 `ok:false` 不丟 —— **只給純診斷用途**
+（`isShallowCheckout` 只是拿來寫訊息，不該把整支守衛炸掉）。
+
+### ⚠⚠⚠ 為什麼一定要有 `unclear` 這一類（第一版把 CI 弄紅的那個錯）
+第一版只有「miss 就跳過、其餘一律丟」，結果 **本機全套 738/738 全綠、CI 的 `npm test` 紅**。
+原因：`test-v6263-shallow-clone-ci-guards` 的 ④ 會把 `git` 換成 `#!/bin/sh\nexit 1` 的
+**PATH shim**，實跑 5 支守衛並斷言**條數完全相同** —— 而那一段
+**只在 POSIX 跑**（Windows 的 `execFileSync` 套不上無副檔名的 shim ⇒ PLATFORM-SKIP）
+⇒ **在 Windows 本機永遠看不到，CI 才會執行**。
+那個 shim 是「git 可執行但失敗、沒有 stderr」，被歸成 env ⇒ 丟 ⇒ CI 上那 5 支集體爆掉。
+
+⭐ 兩個教訓：
+1. **「git 完全不能用」本來就是「拿不到歷史」的極端情況**，不是環境異常的證據。
+   改一個中央 helper 的**失敗語意**時，要先去看「誰在依賴舊語意」——
+   這裡依賴它的是一條 CI-only 的行為端斷言。
+2. **本機全綠不等於 CI 會綠**：站內有整段守衛是 `PLATFORM-SKIP`（只在 CI 跑）。
+   動到那些段落守的東西時，本機的 738/738 **不構成證據**。
+   驗法：在 Linux 上用同樣的 shim 實跑受影響的守衛，比對 `real` 與 `nogit` 的條數
+   （實測 v6224 12/0 vs 12/0、v6230 15/0 vs 15/0，exit 都是 0）。
 
 ⚠ 反向也要守住：**預期的「物件不在」絕對不可以改成丟** —— 那樣 72 支守衛在淺複製環境下
 會集體爆掉，是另一種災難。守衛 `scripts/test-base-blob-git-errors.mjs` 的 B3/B4 就是在釘這一條。
@@ -2142,10 +2164,13 @@ commit 上沒有」，git 會依「磁碟上有沒有」給出**兩種**訊息�
 （否則 B4b 與 B4 是同一件事，等於白測一次 —— 安慰劑型態 12）。
 
 ### 守衛
-`scripts/test-base-blob-git-errors.mjs`（20 PASS / 0 FAIL）：A 組守靜態形狀（逐項正對照），
+`scripts/test-base-blob-git-errors.mjs`（23 PASS / 0 FAIL）：A 組守靜態形狀（逐項正對照），
+**A2 組是 `classifyGitFailure` 的表格測試**（10 筆，三類都涵蓋，含 PATH shim 那一筆），
 B 組**真的開一個 git repo** 驗四件事——正常路徑讀得到內容、預期的不丟、非預期的要丟且訊息
-帶得到 stderr、純診斷的不丟。突變測試 `scripts/mutcheck-base-blob-git-errors.mjs` **9/9 全殺**
-（含 M3c：把 `exists on disk, but not in` 從白名單拿掉 ⇒ B4b 必紅，把這次真的犯過的錯釘住；
+帶得到 stderr、純診斷的不丟。突變測試 `scripts/mutcheck-base-blob-git-errors.mjs` **11/11 全殺**
+（含 M3c：把 `exists on disk, but not in` 從白名單拿掉 ⇒ B4b 必紅；
+**M3d：把 `unclear` 也歸成 `env` ⇒ A2 必紅**，把「第一版弄紅 CI」的那個錯釘死；
+M3：`EXPECTED_MISS` 放寬 ⇒ 只有 A2 紅而 B5/B6 維持綠，證明「env 優先於 miss」這個順序是有意義的；
 M7：把測試檔案的內容換掉，證明「真的讀得到內容」不是「ok 為真就算過」的恆真）。
 
 ### 通則

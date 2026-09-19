@@ -40,7 +40,7 @@ import assert from 'node:assert';
 import { normEol } from './lib/eol-agnostic.mjs';
 import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';
 import { parseChain } from './lib/chain-parse.mjs';
-import { hasBaseCommit, readBaseBlob, isShallowCheckout } from './lib/base-blob.mjs';
+import { hasBaseCommit, readBaseBlob, isShallowCheckout, classifyGitFailure } from './lib/base-blob.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));   // Rule 46
 let P = 0, F = 0;
@@ -117,6 +117,40 @@ chk('A1c ★ 反對照：正確寫法不得被誤判',
     "  const s = { stdio: ['ignore', 'pipe', 'pipe'] };\n"
     + "  if (opts.missOk) { return { ok: false }; }\n"
     + "  throw new Error('boom');")).length === 0);
+
+console.log('\n【A2】分類判準 classifyGitFailure 的表格測試（判準只有一份，正式路徑也呼叫它）');
+// ⚠⚠ 'unclear' 這一類是**第一版把 CI 弄紅**才補出來的：
+//   test-v6263 的 ④ 會把 git 換成 `#!/bin/sh\nexit 1` 的 PATH shim，實跑 5 支守衛並斷言
+//   **條數完全相同**（那一段只在 POSIX 跑 ⇒ Windows 本機看不到，CI 才會執行）。
+//   那個 shim 是「git 可執行但失敗、**沒有任何 stderr**」—— 第一版把它歸成「非預期 ⇒ 丟」，
+//   於是 CI 上那 5 支集體爆掉（本機 738/738 全綠，CI 的 npm test 紅）。
+//   ⭐「git 完全不能用」本來就是「拿不到歷史」的極端情況，不是環境異常的證據。
+//   （shim 的**行為端**由 test-v6263 ④ 在 CI 上守；這裡守的是分類判準本身。）
+{
+  const T = [
+    ["fatal: Not a valid object name deadbeef^{commit}", undefined, 'miss', '物件不存在'],
+    ["fatal: path 'a/b.ts' exists on disk, but not in 'sha'", undefined, 'miss', '檔案在磁碟有、BASE 沒有'],
+    ["fatal: path 'a/b.ts' does not exist in 'sha'", undefined, 'miss', '另一種措辭'],
+    ['fatal: not a tree object', undefined, 'miss', 'tree 不是 tree'],
+    ['fatal: not a git repository (or any of the parent directories): .git', undefined, 'env', '不是 git repo'],
+    ["fatal: Unable to create '/x/.git/index.lock': File exists.", undefined, 'env', 'index.lock 殘留'],
+    ['fatal: could not open directory: Permission denied', undefined, 'env', '權限'],
+    ['', 'ENOENT', 'env', 'git 不在 PATH'],
+    ['', undefined, 'unclear', '⭐ git 可執行但失敗、沒有 stderr（＝ test-v6263 ④ 的 PATH shim）'],
+    ['something nobody has seen before', undefined, 'unclear', '沒見過的訊息'],
+  ];
+  let bad = [];
+  for (const [err, code, want, why] of T) {
+    const got = classifyGitFailure(err, code);
+    if (got !== want) bad.push(`${why}：期待 ${want}、實得 ${got}`);
+  }
+  chk('A2 ⭐⭐⭐ 三分類（miss／env／unclear）逐項正確', bad.length === 0, bad.join(' ｜ '));
+  chk('A2b ★ 表格本身有涵蓋三類（不是只測一類就宣稱涵蓋）',
+    new Set(T.map((r) => r[2])).size === 3, JSON.stringify([...new Set(T.map((r) => r[2]))]));
+  chk('A2c ★★ 反安慰劑：三類真的會給出不同答案（餵同一個輸入不可能同時是三類）',
+    classifyGitFailure('fatal: not a git repository', undefined) !== classifyGitFailure('', undefined)
+    && classifyGitFailure('', undefined) !== classifyGitFailure('fatal: not a tree object', undefined));
+}
 
 console.log('\n【B】行為端：真的開一個 git repo，驗「預期的不丟、非預期的要丟」');
 {

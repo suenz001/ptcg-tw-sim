@@ -28,29 +28,34 @@ const MUTS = [
   {
     id: 'M1 _git 退回「吞掉一切」的原形（本版修掉的那個 bug 本體）',
     file: LIB,
-    from: String.raw`    if (opts.missOk && EXPECTED_MISS.test(err)) return { ok: false, expected: true, err, out: '' };`,
-    to: String.raw`    return { ok: false, expected: true, err, out: '' };`,
-    // 非預期的失敗不再丟 ⇒ 行為端的 B5/B6 立刻紅（而 A 組是靜態形狀，看不出來 ⇒ 維持綠）
+    from: String.raw`    if (kind === 'env') {`,
+    to: String.raw`    if (false) {`,
+    // 環境壞掉不再丟 ⇒ 行為端的 B5/B6 立刻紅（A 組是靜態形狀、A2 是純函式 ⇒ 都看不出來）
     red: ['B5', 'B5b', 'B6'],
-    green: ['A1', 'B1', 'B2', 'B3', 'B4', 'B7', 'B8'],
+    green: ['A1', 'A2', 'B1', 'B2', 'B3', 'B4', 'B4b', 'B7', 'B8'],
   },
   {
     id: 'M2 把 stderr 接回 ignore（分辨的依據沒了）',
     file: LIB,
     from: String.raw`        { maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'pipe'] }).toString('utf8'),`,
     to: String.raw`        { maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] }).toString('utf8'),`,
-    // 拿不到 stderr ⇒ EXPECTED_MISS 對不上 ⇒ 連「物件不在」都會被丟出來（B3/B4 紅），
-    // 而且錯誤訊息裡沒有 git 的 stderr（B5b 紅）。A1 的靜態形狀也抓得到。
-    red: ['A1', 'B3', 'B4', 'B5b'],
-    green: ['B1', 'B2', 'B7'],
+    // 拿不到 stderr ⇒ 所有失敗都變成 'unclear'：
+    //   「物件不在」不再標成 expected（B4／B4b 紅），
+    //   「不是 git repo」也不再被認出來 ⇒ 不丟（B5／B5b／B6 紅）。
+    //   B3 只看 hasBaseCommit 回 false ⇒ 仍綠（unclear 一樣回 ok:false）。
+    red: ['A1', 'B4', 'B4b', 'B5', 'B5b', 'B6'],
+    green: ['B1', 'B2', 'B3', 'B7', 'B8'],
   },
   {
     id: 'M3 EXPECTED_MISS 放寬成「什麼都算預期」（＝又變回吞掉一切）',
     file: LIB,
     from: String.raw`  'not a valid object name',         // 磁碟上也沒有這個路徑／sha 根本不存在`,
     to: String.raw`  '',   // 空字串 ⇒ 整條 regex 變成「什麼都匹配」`,
-    red: ['B5', 'B5b', 'B6'],
-    green: ['A1', 'B1', 'B2', 'B3', 'B4', 'B4b', 'B7', 'B8'],
+    // ⚠ classifyGitFailure 先看 ENV_BROKEN 再看 EXPECTED_MISS ⇒ 「不是 git repo」仍然會丟
+    //   （B5/B6 維持綠）。真正被打到的是 'unclear' 那兩筆變成 'miss' ⇒ A2 的表格翻紅。
+    //   ⭐ 這一條同時證明「三分類的順序」是有意義的：env 優先於 miss。
+    red: ['A2'],
+    green: ['A1', 'B1', 'B2', 'B3', 'B4', 'B4b', 'B5', 'B5b', 'B6', 'B7', 'B8'],
   },
   {
     id: 'M3c ⭐ 白名單漏列「exists on disk, but not in」（第一版真的犯過、當場打斷 8 支守衛）',
@@ -59,7 +64,7 @@ const MUTS = [
     to: String.raw`  'zzz-removed-by-mutcheck',`,
     // ⚠ 'does not exist in' 也在白名單裡，但那是**另一個** git 版本的措辭；
     //   這台機器的 git 給的是 'exists on disk, but not in' ⇒ 拿掉就會誤判成非預期 ⇒ B4b 紅。
-    red: ['B4b'],
+    red: ['A2', 'B4b'],
     green: ['B3', 'B4', 'B4c', 'B5', 'B6', 'B7', 'B8', 'A1'],
   },
   {
@@ -69,6 +74,24 @@ const MUTS = [
     to: String.raw`  return _git(root, ['rev-parse', '--is-shallow-repository']).out.trim() === 'true';`,
     red: ['B7'],
     green: ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B8', 'A1'],
+  },
+  {
+    id: 'M3d ⭐⭐ 把 unclear 也歸成 env（＝第一版把 CI 弄紅的那個錯）',
+    file: LIB,
+    from: String.raw`  return 'unclear';`,
+    to: String.raw`  return 'env';`,
+    // 「git 可執行但失敗、沒有 stderr」＝ test-v6263 ④ 的 PATH shim。歸成 env ⇒ 丟
+    // ⇒ CI 上那 5 支守衛集體爆掉。A2 的表格把這件事釘死。
+    red: ['A2'],
+    green: ['A2b', 'A1', 'B1', 'B2', 'B3', 'B5', 'B6', 'B7'],
+  },
+  {
+    id: 'M3e 把「不是 git repo」從 ENV_BROKEN 拿掉（環境壞了卻被當成拿不到歷史）',
+    file: LIB,
+    from: String.raw`const ENV_BROKEN = /not a git repository|index\.lock|permission denied|dubious ownership|unable to read|cannot open|no such file or directory/i;`,
+    to: String.raw`const ENV_BROKEN = /index\.lock|permission denied|dubious ownership|unable to read|cannot open/i;`,
+    red: ['A2', 'B5', 'B5b', 'B6'],
+    green: ['A2b', 'B1', 'B2', 'B3', 'B4', 'B4b', 'B7', 'B8'],
   },
   {
     id: 'M4 掏空「catch 直接 return」的偵測',

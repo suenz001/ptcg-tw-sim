@@ -39,6 +39,12 @@ let _hooked = false;
  *   ⭐ 白名單漏列 ⇒ 假紅（吵但安全）；黑名單漏列 ⇒ 假綠（回到本版要修的問題）。
  *     所以這裡刻意選白名單，並由 test-base-blob-git-errors 的 B4／B4b 把兩種樣式都釘住。
  */
+/**
+ * git 說「這個環境壞了」的訊息樣式 —— 這一類**必須**丟出來，不可以被當成「拿不到歷史」。
+ * ⚠ 這是**黑名單**，刻意只列「確定是環境問題」的樣式；分不出來的走下面的 GIT-UNCLEAR。
+ */
+const ENV_BROKEN = /not a git repository|index\.lock|permission denied|dubious ownership|unable to read|cannot open|no such file or directory/i;
+
 const EXPECTED_MISS = new RegExp([
   'not a valid object name',         // 磁碟上也沒有這個路徑／sha 根本不存在
   'invalid object name',             // 同上（部分 git 版本的措辭）
@@ -66,6 +72,51 @@ const EXPECTED_MISS = new RegExp([
  *
  * ⚠ stdio 的 stderr 從 'ignore' 改成 'pipe'：不然連分辨的依據都拿不到。
  */
+/**
+ * 把一次 git 失敗分成三類。**判準只有這一份**（Rule 38）：正式路徑與守衛的表格測試
+ * 都呼叫它，不另外抄一份。
+ *   'miss'    明確的「物件／路徑不在」⇒ 這就是淺複製要跳過的那件事，靜默回 ok:false
+ *   'env'     明確的「環境壞了」⇒ **丟**，不可以被當成拿不到歷史
+ *   'unclear' 分不出來（最典型：git 可執行但 exit≠0 而且**沒有任何 stderr**）
+ *             ⇒ 回 ok:false（維持「拿不到歷史時條數不變」這個保證），但**印一行醒目的
+ *               GIT-UNCLEAR 並計數**，讓它可見而不是靜默。
+ *
+ * ⚠⚠ 為什麼 'unclear' 不能一律丟：`test-v6263-shallow-clone-ci-guards` 的 ④ 會把
+ *   `git` 換成 `#!/bin/sh\nexit 1` 的 PATH shim，實跑 5 支守衛並斷言**條數完全相同**
+ *   （那一段只在 POSIX 跑 ⇒ Windows 本機看不到，CI 才會執行）。那個 shim 是
+ *   「git 可執行但失敗、沒有 stderr」⇒ 一律丟的話，CI 上那 5 支會集體爆掉。
+ *   ⭐ 第一版就是這樣把 CI 弄紅的（本機 738/738 全綠，CI 的 npm test 紅）。
+ *   「git 完全不能用」本來就是「拿不到歷史」的極端情況，不是環境異常的證據。
+ */
+export function classifyGitFailure(err, code) {
+  const e = String(err || '');
+  if (code === 'ENOENT') return 'env';          // git 根本不在 PATH
+  if (ENV_BROKEN.test(e)) return 'env';
+  if (EXPECTED_MISS.test(e)) return 'miss';
+  return 'unclear';
+}
+
+const _unclear = [];
+let _unclearHooked = false;
+/** 分不出來的 git 失敗：大聲印一行並登記，但**不**擋。 */
+function _noteUnclear(root, args, err, status) {
+  const what = `git ${args.join(' ')}（在 ${root}）exit=${status}`
+    + (err ? `：${String(err).split('\n')[0].slice(0, 160)}` : '（沒有任何 stderr）');
+  _unclear.push(what);
+  console.log(`  ⚠⚠ GIT-UNCLEAR  ${what}`);
+  console.log('  ⚠⚠ 分不出是「物件不在」還是「環境壞了」⇒ 當成拿不到歷史處理（條數不變），但列管。');
+  if (!_unclearHooked) {
+    _unclearHooked = true;
+    process.on('exit', () => {
+      if (!_unclear.length) return;
+      console.log(`\n⚠⚠⚠ [GIT-UNCLEAR] 本次執行有 ${_unclear.length} 次分不出原因的 git 失敗：`);
+      for (const u of _unclear) console.log('⚠⚠⚠   - ' + u);
+    });
+  }
+}
+/** 目前為止有幾次分不出原因的 git 失敗（給 meta 守衛用）。 */
+export function gitUnclearCount() { return _unclear.length; }
+
 function _git(root, args, opts = {}) {
   try {
     return {
@@ -78,12 +129,20 @@ function _git(root, args, opts = {}) {
   } catch (e) {
     const err = String((e && e.stderr) || '').trim();
     const status = e && typeof e.status === 'number' ? e.status : null;
-    if (opts.missOk && EXPECTED_MISS.test(err)) return { ok: false, expected: true, err, out: '' };
-    if (opts.soft) return { ok: false, expected: false, err, out: '' };
-    throw new Error(`git ${args.join(' ')}（在 ${root}）失敗，而且**不是**「物件不在」：`
-      + `exit=${status} ${err || String((e && e.message) || e)}`
-      + '\n  ⚠ 這不可以被當成淺複製跳過（那樣 72 支讀歷史的守衛會集體假綠）。'
-      + '\n  ⭐ 常見原因：這裡不是 git repo、git 不在 PATH、.git/**/index.lock 殘留、權限不足。');
+    const kind = classifyGitFailure(err, e && e.code);
+    if (opts.soft) return { ok: false, expected: false, kind, err, out: '' };
+    if (kind === 'env') {
+      throw new Error(`git ${args.join(' ')}（在 ${root}）失敗，而且**不是**「物件不在」：`
+        + `exit=${status} ${err || String((e && e.message) || e)}`
+        + '\n  ⚠ 這不可以被當成淺複製跳過（那樣 72 支讀歷史的守衛會集體假綠）。'
+        + '\n  ⭐ 常見原因：這裡不是 git repo、git 不在 PATH、.git/**/index.lock 殘留、權限不足。');
+    }
+    if (!opts.missOk) {
+      throw new Error(`git ${args.join(' ')}（在 ${root}）失敗：exit=${status} `
+        + (err || String((e && e.message) || e)));
+    }
+    if (kind === 'unclear') _noteUnclear(root, args, err, status);
+    return { ok: false, expected: kind === 'miss', kind, err, out: '' };
   }
 }
 
