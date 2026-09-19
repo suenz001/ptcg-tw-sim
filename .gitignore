@@ -50,3 +50,35 @@ oracle-admin/*firebase*key*.json
 
 # AI 交辦用的臨時腳本與輸出（純本機，不進版控）
 __m6a/
+
+# ════════════════════════════════════════════════════════════════════════════
+# 守衛的 esbuild 暫存產物（repo 根與 scripts/ 下的點開頭檔）
+# ────────────────────────────────────────────────────────────────────────────
+# 為什麼要列管：站內 582 支守衛會往 repo 根寫 `.x-s.js` / `.x-e.ts` / `.x-o.mjs`
+# 這類暫存檔，收尾靠 `process.on('exit', () => unlinkSync(...))`。Windows 不允許
+# 刪除仍被開啟的檔（剛 import() 過的 ESM 模組），那個 unlink 會丟 EPERM 被
+# catch 吞掉；中斷（Ctrl-C／逾時被殺）時更是完全不清。
+# 實測後果：2026-09 曾累積到 405 個（301MB），其中
+#   scripts/.v6380-positive-control.mjs（內容 import 一個不存在的套件）
+# 被 test-v6380 自己的 listFiles() 掃到（它只判副檔名、不濾點開頭）⇒
+# B1/B2/D2 三條翻紅。那是一個純粹由殘檔造成的假紅。
+#
+# ⚠ gitignore **不支援大括號展開**：`.*.{ts,js,mjs}` 是無效語法（會被當字面量），
+#   必須逐行列。
+#   實測殘檔副檔名分布：.mjs 184 / .ts 136 / .js 98 / .txt 2（無 .json）
+# ⚠ 刻意**不**列 `/.*.json`：追蹤集裡有 `.tmp-H-classify.json`，列了會讓
+#   `git check-ignore` 對一個追蹤中的檔回報 ignored，徒增混淆。
+# ════════════════════════════════════════════════════════════════════════════
+/.*.ts
+/.*.js
+/.*.mjs
+/.*.cjs
+/scripts/.*.ts
+/scripts/.*.js
+/scripts/.*.mjs
+/scripts/.*.cjs
+/scripts/.*.txt
+/scripts/tmp*.mjs
+
+# 平行 runner 的沙盒報表（放在沙盒根旁邊，正常不會進 repo，保險起見列管）
+/__rt/
