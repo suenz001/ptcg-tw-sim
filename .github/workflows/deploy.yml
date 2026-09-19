@@ -18,7 +18,17 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 ＝ 完整 clone。
+      # 預設的 fetch-depth: 1（淺複製）會讓「讀歷史 blob」的守衛在 CI 上拿不到 BASE commit，
+      # 於是整段 HEAD-FAIL 斷言被靜默跳過 —— 最惡劣的寫法是 `catch { console.log(); return; }`，
+      # 條數不變、無 SKIP 字樣、整體綠燈，那條斷言在 CI 上從來沒有在守（test-v6263 的調查）。
+      # 現在 scripts/lib/base-blob.mjs 已經把「讀歷史」收斂成單一入口並會印 SHALLOW-SKIP，
+      # 而完整歷史下整條 chain 實測全綠（沙盒共用主樹物件庫＝完整歷史，736/736 全綠），
+      # 所以把它打開，讓那批守衛在 CI 上真的跑。
+      # ⚠ 改這裡要同步改 test-v6263 的 ⑥（它把現況釘住，讓這個改動必須是刻意的）。
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '20'

@@ -17,8 +17,12 @@
 //      v6.224 / v6.230 的**通過條數必須與真環境完全相同**，而且把被守的東西改壞時
 //      **在同一個 shim 下也要紅**。沒有 ③，①② 只是靜態字串比對，擋不住「接線沒接上」。
 //
-// ⚠ 為什麼不直接改 `fetch-depth: 0`：改下去會讓目前被藏起來的紅燈立刻擋住 deploy。
-//   本版先把守衛修對（完整 clone 下全綠），`fetch-depth: 0` 留到下一版。
+// ⚠ 原本的註記是「為什麼不直接改 fetch-depth: 0：改下去會讓目前被藏起來的紅燈立刻擋住
+//   deploy；本版先把守衛修對，留到下一版」。**那一版已經來了**：deploy.yml 的 build job
+//   現在是 `fetch-depth: 0`，⑥ 釘的是這個新現況。
+//   ⇒ 這支守衛的 ①②③ 仍然照舊在守（它們驗的是「拿不到歷史時不可以靜默掏空」，
+//     那件事與 CI 實際上拿不拿得到歷史無關——本機沙盒、別人的 fork、未來又改回淺複製，
+//     都還是要成立）。
 import { readFileSync, writeFileSync, mkdtempSync, chmodSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -277,8 +281,16 @@ console.log('\n⑥ CI 設定：checkout 的 fetch-depth 現況必須與本檔宣
   const co = buildJob.match(/uses:\s*actions\/checkout@v\d+([\s\S]{0,120})/);
   chk('build job 有 actions/checkout', !!co);
   const declaredDepth = /fetch-depth:\s*(\d+)/.exec(co ? co[1] : '');
-  chk('⚠ 現況（v6.263 宣告）：build job 沒有指定 fetch-depth ⇒ 預設 1（淺複製）',
-      !declaredDepth, declaredDepth ? declaredDepth[0] : '');
+  // ⭐ 現況已改（fetch-depth: 0 ＝ 完整 clone）。
+  //   為什麼可以改：v6.263 當時不敢動，是因為「改下去會讓目前被藏起來的紅燈立刻擋住 deploy」。
+  //   現在那個前提沒有了——`scripts/lib/base-blob.mjs` 已把「讀歷史」收斂成單一入口並會印
+  //   SHALLOW-SKIP，而且整條 chain 在**完整歷史**下實測全綠（平行 runner 的沙盒共用主樹
+  //   物件庫＝完整歷史，736/736 全綠，SHALLOW-SKIP 只剩 test-v6304 那 2 次——而那 2 次
+  //   是它**挪用** shallowSkip() 來報告「這台機器沒有 playwright」，與淺複製無關）。
+  //   ⚠ 這一條仍然不是「規定只能是 0」——它一樣是**把現況釘住**，讓任何改動都必須是刻意的
+  //     （改了就要回來改這裡，順便被迫重新確認那批守衛在新設定下是綠的）。
+  chk('⚠ 現況（fetch-depth: 0 ＝ 完整 clone，讓讀歷史的守衛在 CI 上真的跑）',
+      !!declaredDepth && declaredDepth[1] === '0', declaredDepth ? declaredDepth[0] : '（沒有指定 ⇒ 又退回淺複製了）');
   chk('⚠ 現況（v6.263 宣告）：iron-rules-audit 是 continue-on-error ⇒ 不擋 deploy',
       /continue-on-error:\s*true/.test(aud));
   chk('  └ 正對照：deploy.yml 真的有跑完整 npm test（唯一真正的保護）', /run:\s*npm test/.test(dep));
