@@ -69,7 +69,7 @@ export interface FriendRoomHit {
 export type FriendRoomKind =
   | 'join'        // 在等待中的休閒房 ⇒「🚪 加入房間」（可點）
   | 'spectate'    // 在對戰中的休閒房 ⇒「👁 觀戰」（可點）
-  | 'tournament'  // inTournament === true ⇒「🏆 錦標賽對戰中」（停用）
+  | 'tournament'  // inTournament === true ⇒「🏆 錦標賽中」（停用；v6.411 縮字，完整說明在 title）
   | 'none';       // 其餘（含資料不足）⇒ 停用
 
 export interface FriendRoomState {
@@ -234,7 +234,13 @@ export function friendRoomLabel(state: FriendRoomState): string {
   switch (state.kind) {
     case 'join': return '🚪 加入房間';
     case 'spectate': return '👁 觀戰';
-    case 'tournament': return '🏆 錦標賽對戰中';
+    // ⭐⭐⭐v6.411：按鈕字樣從「錦標賽對戰中」縮成「錦標賽中」（站長裁示）。
+    //   理由：320 寬的按鈕群餘裕只剩 4.61px（本機 Linux 實測），而站長的 Windows 字型
+    //   把這顆按鈕拿到 129.69px（Linux 123.98px，差 5.71px）⇒ 那一列會換行、列高變 115
+    //   （其他列 77）。少「對戰」兩個字約省 26px，餘裕拉到 ~31px，字型差異吃不掉。
+    //   ⚠ **資訊沒有減少**：完整說明留在 friendRoomTitle（滑鼠提示），逐字不動。
+    //   ⚠ 這不是 @media 手機開關（檔頭紀律）——寬螢幕與窯螢幕同一個字樣。
+    case 'tournament': return '🏆 錦標賽中';
     default: return '🚪 加入房間';
   }
 }

@@ -152,7 +152,7 @@ if (LIB) {
       [s1, s2, s3, s4].map(LIB.friendRoomClickable), [true, true, false, false],
       '可點性不對（tournament／none 一律不可點）');
     assert.deepStrictEqual(
-      [s1, s2, s3].map(LIB.friendRoomLabel), ['🚪 加入房間', '👁 觀戰', '🏆 錦標賽對戰中']);
+      [s1, s2, s3].map(LIB.friendRoomLabel), ['🚪 加入房間', '👁 觀戰', '🏆 錦標賽中']);
   });
   await T('B2 ⭐⭐⭐ inTournament 是 undefined（舊伺服器）⇒ 當 false，**而且不放行加入**（仍是 none）', () => {
     const idx = LIB.buildFriendRoomIndex(ROOMS);
@@ -379,7 +379,7 @@ if (!chromium || !esbuild) {
       assert.deepStrictEqual(snap.slice(0, 5).map((r) => [r.nick, r.btn, r.disabled]), [
         ['小明', '🚪 加入房間', false],
         ['阿華', '👁 觀戰', false],
-        ['小賽', '🏆 錦標賽對戰中', true],
+        ['小賽', '🏆 錦標賽中', true],
         ['阿宅', '🚪 加入房間', true],
         ['老王', '🚪 加入房間', false],
       ], '四種狀態的顯示／可點性不對：' + JSON.stringify(snap.slice(0, 5)));

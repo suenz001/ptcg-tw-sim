@@ -390,8 +390,20 @@ if (!hasPw) {
     });
     return { ctx, hits };
   }
+  /**
+   * ⭐⭐v6.411：等「網路靜止」再數請求 —— 原本 `page.reload({waitUntil:'load'})` 一回來就
+   * `hits.length` 相減，但那支 Firestore 請求是在 load **之後**才由頁面程式發出的
+   * ⇒ 在慢一點的機器（或 CPU 只有 2 核的沙盒）上會數到 0，N2 的 NET-GEN-BIND 偶發翻紅。
+   * ⚠ 這**不是放寬判準**：斷言仍然是「恰 1 個」「恰 0 個」，只是把「什麼時候算數」
+   *   從「load 完成的瞬間」改成「網路靜止之後」。
+   */
+  const settle = async (page) => {
+    try { await page.waitForLoadState('networkidle', { timeout: 4000 }); } catch { /* 有長連線時會逾時，不影響計數 */ }
+    await page.waitForTimeout(150);
+  };
   async function load(page) {
     await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: 'load' });
+    await settle(page);
     return page.evaluate(() => window.__result);
   }
   try {
@@ -415,10 +427,12 @@ if (!hasPw) {
       const r1 = await load(page);
       const n1 = hits.length;
       await page.reload({ waitUntil: 'load' });
+      await settle(page);
       const r2 = await page.evaluate(() => window.__result);
       const n2 = hits.length - n1;
       await buildPage({ pageSrc: HP, hcSrc: HC, version: '9.999-rebuilt' });
       await page.reload({ waitUntil: 'load' });
+      await settle(page);
       const r3 = await page.evaluate(() => window.__result);
       const n3 = hits.length - n1 - n2;
       const lsAfter = await page.evaluate((k) => localStorage.getItem(k), CACHE_KEY);
@@ -442,9 +456,11 @@ if (!hasPw) {
       await load(page);
       const n1 = hits.length;
       await page.reload({ waitUntil: 'load' });
+      await settle(page);
       const n2 = hits.length - n1;
       changelogServed = withGen(2);
       await page.reload({ waitUntil: 'load' });
+      await settle(page);
       const n3 = hits.length - n1 - n2;
       await ctx.close();
       console.log(`       訊號 1 全新 context：${n1} 個｜reload：${n2} 個｜訊號 2 reload：${n3} 個`);
