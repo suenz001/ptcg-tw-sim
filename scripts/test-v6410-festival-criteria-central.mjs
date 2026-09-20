@@ -492,19 +492,38 @@ function preProbeState(cardObj) {
 let _preTried = 0, _preThrew = 0;
 const _queued = [];          // PRE 有登記付出的
 const _queuedBeforeDamage = []; // 其中 PRE damage===0（付出早於主傷害）
+// ⭐⭐⭐v6.415：補上 v6.410 列管的**掃描缺口**。
+//   v6.410 只用 `fn(state, 0, pool, {})` 跑 PRE ⇒ `action.discardedEnergyIids === undefined`
+//   ⇒ 走 `resolveOptInPayment` 且 `aiDefault:'skip'` 的 opt-in 型招式（時間爆炸／忍者飛旋／
+//   金屬之錘／災難衝擊）**永遠不登記付出**，整族不在 E2 的雷達內。
+//   ⇒ 這裡對**每一支**招式都跑兩次：一次不帶 payload（既有行為），一次帶 opt-in 的
+//   sentinel `'yes-token'`（`OPTIN_SENTINELS` 的成員 ⇒ `optedIn = true`、`explicit = []`
+//   ⇒ helper 會自動補足能量），任一次登記到就算進集合。
+//   ⚠ 這不是放寬：集合只會**變大**，E2 的 deepStrictEqual 只會更容易紅。
+const _ACTIONS = [{}, { discardedEnergyIids: ['yes-token'] }];
+let _optInOnly = 0;   // 只有在 opt-in payload 下才登記到的支數（下限斷言用）
 for (const c of cards) {
   if (c.supertype !== 'Pokemon') continue;
   for (const a of (c.attacks || [])) {
     const fn = ATTACK_PRE.get(`${c.name}|${a.name}`);
     if (!fn) continue;
     _preTried++;
-    let r;
-    try { r = fn(preProbeState(c), 0, pool, {}); } catch { _preThrew++; continue; }
-    const q = r?.state?._attackEnergyPayment;
-    if (!q || !(q.items || []).length) continue;
     const rec = { key: `${c.name}｜${a.name}`, type: c.pokemonType, name: c.name };
+    let anyQueued = false, anyBefore = false, plainQueued = false, threw = 0;
+    for (let k = 0; k < _ACTIONS.length; k++) {
+      let r;
+      try { r = fn(preProbeState(c), 0, pool, _ACTIONS[k]); } catch { threw++; continue; }
+      const q = r?.state?._attackEnergyPayment;
+      if (!q || !(q.items || []).length) continue;
+      anyQueued = true;
+      if (k === 0) plainQueued = true;
+      if (Number(r.damage) === 0) anyBefore = true;
+    }
+    if (threw === _ACTIONS.length) { _preThrew++; continue; }
+    if (!anyQueued) continue;
+    if (!plainQueued) _optInOnly++;
     _queued.push(rec);
-    if (Number(r.damage) === 0) _queuedBeforeDamage.push(rec);
+    if (anyBefore) _queuedBeforeDamage.push(rec);
   }
 }
 const uniq = (arr) => [...new Set(arr)].sort();
@@ -514,12 +533,14 @@ T('E1. 掃描器下限：ATTACK_PRE 真的被跑過、而且真的有招式登�
   assert.ok(_queued.length >= 20, `只有 ${_queued.length} 支登記付出（下限 20／實測 29+）—— 掃描器壞了，或中央管線被繞過`);
   assert.ok(_preThrew < _preTried / 2, `有 ${_preThrew}/${_preTried} 支 PRE throw —— 盤面搭壞了，下面的集合不可信`);
 });
-// ⚠⚠ 【已知的掃描缺口，獨立審查指出】上面的枚舉用 `fn(state, 0, pool, {})` 跑 PRE，
-//   所以 **opt-in 型**（走 resolveOptInPayment 且 aiDefault:'skip'：時間爆炸／忍者飛旋／
-//   金屬之錘／災難衝擊）在探針裡**永遠不登記** ⇒ 不在 E2 的雷達內。
-//   已逐支查証：這幾支的傷害不是在 PRE（>0）就是登記在 POST（災難衝擊，flush 排在傷害之後）
-//   ⇒ **現況無漏**；但日後若出现「opt-in skip ＋ 主傷害在 POST」的新卡，這一段會静默漏掉。
-//   ⚠ 不在本版補：要驅動 opt-in 必須模擬玩家選擇，那是另一条探針路徑；先記在這裡列管。
+// ⭐⭐v6.415：上面那個「opt-in 型永遠不登記」的掃描缺口**已經補上**（見枚舉迴圈的 `_ACTIONS`）。
+//   下面這一條就是它的下限斷言：opt-in 專屬的那一族必須真的被掃到，否則新的探針路徑等於沒接。
+T('E1b. ⭐⭐ opt-in 型（aiDefault:skip）真的被掃到了（v6.410 列管的掃描缺口已補）', () => {
+  assert.ok(_optInOnly >= 1,
+    `沒有任何一支招式是「只有帶 opt-in payload 才登記付出」的（實得 ${_optInOnly}）——\n`
+    + '    要嘛 opt-in 探針路徑壞了（sentinel 改名？），要嘛這一族的卡全部下架了。\n'
+    + '    ⚠ 這一條若恆綠而不紅，E2 對 opt-in 型就是空真（安慰劑型態 4）。');
+});
 T('E2. 「付出早於主傷害」的集合必須 ⊆ 白名單（新卡掉進這一族時翻紅）', () => {
   const WHITELIST = ['超級噴火龍Yex｜炎獄狂爆Y', '超級盔甲鳥ex｜音波拆裂', '烏鴉頭頭｜狙擊羽毛', '雙尾怪手｜雙尾'].sort();
   const got = uniq(_queuedBeforeDamage.map((r) => r.key));

@@ -1,5 +1,80 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.415 ⭐⭐⭐ 傷害免疫判準收斂成一份＋備戰擲幣免疫（玩家可見）
+
+BASE `d2b5b17abd9dc2c2fe8a69b893733095329d08e6`（v6.414）。
+⚠ 本版**動了 `src/lib/game/effects.ts`** ⇒ 部署要跑
+**`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**（IRON_RULES Rule 43）。
+⚠ 本版**沒有動 `engine.ts`** ⇒ 不需要新的 engine-strip。
+
+### 【零】站長裁示
+
+v6.414 收尾時三選題：320px 餘裕採 **(a) 拿掉「💬 私聊」的 emoji**；
+v6.415 範圍選 **hitBenchAll / bench-hit-N 收斂 ＋ v6.410【E】段的 opt-in skip 探針缺口**（兩項全做）。
+
+### 【一】真 bug：擲幣型免疫在**備戰**完全不生效
+
+**卡面逐字**：
+・奇諾栗鼠ex｜順滑大衣：「**這隻寶可夢**受到招式的傷害時，自己擲1次硬幣。若為正面，則這隻寶可夢不會受到那個傷害。」
+・吉雉雞｜腎上腺費洛蒙：「若這隻寶可夢身上附有【惡】能量卡，則…（同上）」
+⇒ 兩張都**沒有**「在戰鬥場」⇒ 備戰也適用。
+
+`dealAttackDamageToTarget` 原本只在 `isActive` 時補 `passiveImmunityDamageBlock` ＋
+`passiveCoinImmunity` ⇒ **備戰目標完全不擲幣**。
+
+**實證（`__probe415`，甲賀忍蛙ex｜分身連打 120，各 40 次）**：
+
+| 盤面 | 修正前 | 修正後 |
+|---|---|---|
+| 奇諾栗鼠ex 在**戰鬥位** | 擲幣 40 次／免疫 21 次 ✅ | 擲幣 40 次／免疫 19 次 ✅ |
+| 奇諾栗鼠ex 在**備戰** | 擲幣 **0** 次／免疫 **0** 次 🔴 | 擲幣 40 次／免疫 18 次 ✅ |
+
+⚠ 同時查證過**沒有**漏的：神秘石居（備戰 ✅）、球形盾牌（✅）、太古防壁（不誤擋 ✅）、
+鐵壁硬殼（卡面「200 以上」，120 不擋 ✅）。
+
+### 【二】收斂：五條路徑一份判準
+
+中央閘 `resolveMultiTargetDamageGuard`（四層：中立中心 → PASSIVE_IMMUNITY →
+canApplyEffectToTarget → 擲幣型免疫）成為**唯一**判準：
+
+| 路徑 | 原本 | 現在 |
+|---|---|---|
+| `dealAttackDamageToTarget`（戰鬥位＋狙擊備戰） | canApplyEffectToTarget ＋ **只有 active** 補兩層 🔴 | 中央閘 |
+| `hitBenchAll` | 中央閘（skipCoin:true）＋ 自己再跑 passive ＋ 自己擲幣 | 中央閘（不再 skipCoin） |
+| `bench-hit-N` | resolveBenchGuard ＋ 自己擲幣（缺第 1／2 層） | 中央閘 |
+| `snipe-60-ex` | resolveBenchGuard ＋ 自己擲幣（缺第 1／2 層） | 中央閘 |
+
+⇒ `passiveCoinImmunity` 全站**只剩一個呼叫點**（定義 1 ＋ 呼叫 1）。
+順手刪除死碼 `manualDamageImmunity`（同樣四層的第二份、全 src 零呼叫端，
+只有 `m5_preview.ts` 的 import 清單掛著名字）—— 與 v6.410 刪
+`canResumeFestivalDanceSecondAttack` 同一個理由。
+
+### 【三】v6.410【E】段的 opt-in skip 探針缺口（列管項，本版補上）
+
+原本枚舉用 `fn(state, 0, pool, {})` 跑 PRE ⇒ `action.discardedEnergyIids === undefined`
+⇒ 走 `resolveOptInPayment` 且 `aiDefault:'skip'` 的招式永遠不登記付出。
+⇒ 改成每支跑兩次，第二次帶 `{ discardedEnergyIids: ['yes-token'] }`（`OPTIN_SENTINELS` 成員）。
+新增 **E1b** 下限斷言（`_optInOnly >= 1`）——沒有它，E2 對 opt-in 型就是空真。
+結果：白名單**沒有變動**（與 v6.410 的逐支查證一致 ⇒ 現況確實無漏）。
+
+### 【四】320 寬餘裕（站長裁示 (a)）
+
+`FriendsPanel.svelte` 的「💬 私聊」→「私聊」。
+實測（Playwright 320×568）：展開列餘裕 **0.02px → 14px**（門檻 12）。
+`test-v6411` 的 **B6 從白名單條目升級成正式判準**，並補 B6b（正對照）與 B6c
+（私聊按鈕字樣不得再加 emoji）。
+
+### 【五】守衛
+
+新增 `scripts/test-v6415-bench-coin-immunity-central.mjs`（16 條）：
+B(9 行為端，含鏡像、兩條負對照、200 次取樣的「不得重複擲幣」)／C(5 Rule 38 靜態)／D(2 反安慰劑)。
+**HEAD-FAIL 實測**：在 BASE（v6.414）上 **6 條紅**（B2／B3／C1／C2／C3／C4）。
+⚠ B4／B5 誠實標記為零回歸（腎上腺費洛蒙走 `PASSIVE_COIN_AVOID`，是另一張表，本版沒動）。
+
+依 Rule 40 調整既有守衛：`test-v6141` 的「hitBenchAll 必須傳 skipCoin」→ 改成
+「不得自己擲幣、且**不得**傳 skipCoin」（更強：傳了就等於 bug 回歸）。
+
+
 ## v6.414 ⭐⭐⭐ 招式限定的下回合加傷／「傷害改為 N」覆寫（玩家可見）
 
 BASE `c4d07e4b0a3db164258cb471e98566e37f23c3be`（v6.413）。

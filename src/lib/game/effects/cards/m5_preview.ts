@@ -98,7 +98,6 @@ import {
   //   prizesForKOLocal v5.172 加 export
   canApplyAttackEffectToTarget,
   prizesForKOLocal,
-  manualDamageImmunity,
   dealSelfDamage,
   dealAttackDamageToTarget,
   koTargetByAttackEffect,

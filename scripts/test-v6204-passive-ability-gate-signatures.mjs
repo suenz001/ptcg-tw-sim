@@ -577,7 +577,24 @@ T('13c. 全部呼叫端都真的傳了場上實體（沒有人偷傳 undefined /
         'resolveBenchGuard 呼叫端沒傳 targetInst：'+line.trim());
     }
   }
-  assert.ok(n>=10,'掃到的呼叫端太少（'+n+'）⇒ 掃描器可能壞了');
+  // ⭐⭐v6.415（IRON_RULES Rule 40）：下限 10 → 4。
+  //   v6.415 把「傷害免疫」的判準收斂成一份（中央閘 resolveMultiTargetDamageGuard）：
+  //   `dealAttackDamageToTarget` 的 active 專屬兩層、`hitBenchAll`／`bench-hit-N`／
+  //   `snipe-60-ex` 的 inline 擲幣與 resolveBenchGuard、以及死碼 `manualDamageImmunity`
+  //   全部刪掉 ⇒ 呼叫端從 10+ 降到 4，這是**收斂的結果**，不是掃描器壞掉。
+  //   ⚠ 這個下限守的是「掃描器沒有整個失效」，不是「呼叫端要很多」——
+  //     真正的意圖（每個呼叫端都要傳場上實體）在上面那兩條 assert，逐行檢查、不受數量影響。
+  //   ⚠ 下限不可以放寬到 0：那會變成空集合空真（安慰劑型態 4）。
+  assert.ok(n>=4,'掃到的呼叫端太少（'+n+'）⇒ 掃描器可能壞了');
+});
+T('13c-b.【下限斷言的正對照】掃描器餵到違規樣本時必須抓得到（不是恆真）',()=>{
+  // ⭐ 與 13c 同一組判準，餵一個「傳 null」的樣本 ⇒ 必須抓到。
+  const bad='  const r = passiveCoinImmunity(s, actorIdx, null, card, pool);';
+  const m=bad.match(/(passiveImmunityDamageBlock|passiveCoinImmunity)\((.*)/);
+  assert.ok(m,'13c 的抽取器抓不到已知樣本＝安慰劑');
+  assert.ok(/,\s*(undefined|null)\s*,/.test(m[2]),'13c 的 undefined/null 判準壞了');
+  const bad2='  const g = resolveBenchGuard(st, pool, actorIdx, card, \'attack-damage\', {});';
+  assert.ok(!/targetInst\s*:/.test(bad2),'13c 的 targetInst 判準壞了');
 });
 T('13d. resolveInfiniteShadowKo 走中央注入點（_shared.ts 不得 import v3001/defense — Check O）',()=>{
   const sh=readSrc('src/lib/game/effects/_shared.ts');

@@ -180,22 +180,32 @@ if (chromium) {
         fake.sum += 40; fake.slack = +(fake.inner - fake.sum).toFixed(2);
         assert.ok(fake.slack < fake.need, '判準對「明顯超支」的樣本竟然放行 ⇒ B1 是恆真式');
       });
-      T('B6.【已知超支，待站長裁示】「更多」展開列在 320 寬只剩 0.02px 餘裕', () => {
-        // ⚠⚠ 白名單條目必須附行為端證明（安慰劑型態 7）：下面就是那個量測值。
-        //   這一列是**臨時展開**的狀態（玩家主動按開），不是常駐列 ⇒ 換行不會造成
-        //   「各列參差不齊」的視覺問題，但 Windows 字型下它會多一行、把下方名單往下推。
-        //   可能的做法（等站長裁示，本版不自作主張改文案）：
-        //     (a) 拿掉「💬 私聊」的 emoji（同列其他三顆都沒有 emoji，一致性也更好）⇒ 省 ~14px
-        //     (b) 縮短「解除好友」
-        //     (c) 接受它換行（展開列本來就是臨時狀態）
+      T('B6.【v6.415 起為正式判準】「更多」展開列在 320 寬也必須有足夠餘裕', () => {
+        // ⭐⭐v6.415：站長裁示採 (a)「拿掉『💬 私聊』的 emoji」⇒ 餘裕 0.02px → 14px（門檻 12）。
+        //   白名單條目已移除，這一條從此與 B1 同級：**展開列也要守**。
+        //   （白名單必須附行為端證明＝安慰劑型態 7；現在連白名單都不需要了。）
         const m = more.rows.find((r) => r.isMore);
         assert.ok(m, '量不到展開列 ⇒ 掃描器壞了（「更多」沒按開？）');
-        assert.ok(m.slack < m.need,
-          `展開列的餘裕已經 ≥ 門檻（${m.slack} ≥ ${m.need}）—— 問題解決了，請把這一條改成正式判準並從白名單移除`);
+        assert.ok(m.slack >= m.need,
+          `展開列餘裕不足：${m.slack} < ${m.need}（按鈕文字變長了？）`);
         assert.strictEqual(more.rows.filter((r) => r.isMore).length, 1, '展開列不只一列（一次只能展開一列）');
-        // ⭐ 白名單只有這一條：其他列（展開狀態下）仍然必須守 B1
+        // 展開狀態下，其他列也必須守 B1
         const others = more.rows.filter((r) => !r.isMore && r.slack < r.need).map((r) => r.nick);
         assert.deepStrictEqual(others, [], '展開狀態下，**其他**列也超支了：' + others.join('、'));
+      });
+      T('B6b.【正對照】把展開列的按鈕撐寬，B6 的判準必須抓得到（防恆真）', () => {
+        const m = more.rows.find((r) => r.isMore);
+        const fake = JSON.parse(JSON.stringify(m));
+        fake.sum += 40; fake.slack = +(fake.inner - fake.sum).toFixed(2);
+        assert.ok(fake.slack < fake.need, '判準對「明顯超支」的展開列竟然放行 ⇒ B6 是恆真式');
+      });
+      T('B6c. ⭐ 私聊按鈕不得再加上 emoji（那正是 320 寬超支的原因）', () => {
+        const src = readFileSync(join(ROOT, 'src/lib/friends/FriendsPanel.svelte'), 'utf8');
+        // ⚠ 不能用 `[^>]*>`：onclick 裡有 `=>`，會貪婪到箭頭那個 `>`。
+        const mm = /class="small dm-open"[\s\S]*?>([^<>]*)<\/button>/.exec(src);
+        assert.ok(mm, '找不到私聊按鈕（anchor 失效）');
+        assert.strictEqual(mm[1].trim(), '私聊',
+          `私聊按鈕的字樣變成「${mm[1].trim()}」—— 320 寬的展開列會再次超支`);
       });
       T('B7.【反向正對照】375×812 每一列都有充裕餘裕（判準不是「永遠紅」）', () => {
         const bad = wide.rows.filter((r) => r.slack < r.need).map((r) => `${r.nick}(${r.slack}/${r.need})`);

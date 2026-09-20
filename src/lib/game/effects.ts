@@ -1707,9 +1707,17 @@ function hitBenchAll(
     //     ・`attackerIdx !== targetIdx` 分流 —— 中央閘是「對手側」語意，自傷 bench
     //       （地震／燃燒熱浪）不可套用，否則自己的備戰會被自己的盾牌擋住。
     //     ・`skipCoin: true` —— 本函式下方已有自己的擲幣段，不能再擲一次。
+    // >>> v6415-hitbenchall-guard-central
+    // ⭐⭐⭐v6.415：免疫判準收斂成**一份** —— 原本這裡是「中央閘（skipCoin:true）
+    //   ＋ 自己再跑一次 passiveImmunityDamageBlock ＋ 自己跑擲幣」三段，
+    //   而中央閘的第 2 層就是 passiveImmunityDamageBlock、第 4 層就是擲幣
+    //   ⇒ **判準兩份**（Rule 38／安慰劑型態 11）。改成整段交給中央閘。
+    //   ⚠ `attackerIdx !== targetIdx` 分流必須保留：中央閘是「對手側」語意，
+    //     自傷 bench（地震／燃燒熱浪）不可套用，否則自己的備戰會被自己的盾牌擋住。
+    //   ⚠ 不再傳 `skipCoin` ⇒ 擲幣由中央閘**唯一**負責（本函式下方不再自己擲）。
     if (attackerIdx !== targetIdx) {
       const gBench = resolveMultiTargetDamageGuard(coinWS, attackerIdx, c, card, pool, {
-        isBench: true, skipCoin: true,
+        isBench: true,
       });
       coinWS = gBench.state;
       if (gBench.blocked) {
@@ -1718,15 +1726,7 @@ function hitBenchAll(
         continue;
       }
     }
-    // v5.367/v5.368：hitBenchAll 走 inline guard（不經 resolveBenchGuard）— 補條件式完全免疫
-    //   (神秘石居等 boolean) + 擲幣型(順滑大衣)。僅對手對我方時生效。
-    if (attackerIdx !== targetIdx) {
-      const pbH = passiveImmunityDamageBlock(coinWS, attackerIdx, c, card, pool);
-      if (pbH.blocked) { teraImmunNames.push(`${card?.name ?? '?'}（${pbH.reason}）`); newBench.push(c); continue; }
-      const coinH = passiveCoinImmunity(coinWS, attackerIdx, c, card, pool);
-      coinWS = coinH.state;
-      if (coinH.immune) { teraImmunNames.push(`${card?.name ?? '?'}（擲幣免疫正面）`); newBench.push(c); continue; }
-    }
+    // <<< v6415-hitbenchall-guard-central
     // v5.293/v5.294 bench 招式傷害套特性減傷 (含厚脂肪等 BY_ATTACKER)
     let perAmt = amount;
     let _btd: CardInstance | null = null;
@@ -1965,22 +1965,22 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
       newBench.push(c);
       continue;
     }
-    // v3.888：resolveBenchGuard 檢查 — 花之帷幔 / 抵抗之幕 / 藏隱 / 球形盾牌 等
-    //   targetIdx !== actorIdx 才檢查（自己自殘類不擋）
+    // >>> v6415-benchhitn-guard-central
+    // ⭐⭐⭐v6.415：免疫判準收斂成**一份**。原本這裡是「resolveBenchGuard ＋ 自己跑擲幣」
+    //   兩段，少了中央閘的第 1 層（中立中心）與第 2 層（條件式完全免疫 PASSIVE_IMMUNITY）
+    //   ⇒ 與另外兩條備戰路徑不一致。改成整段交給中央閘 `resolveMultiTargetDamageGuard`
+    //   （第 3 層內部就是 canApplyEffectToTarget → resolveBenchGuard，原判準完整保留）。
+    //   ⚠ `targetIdx !== actorIdx` 分流保留（自殘類不擋）。
     if (targetIdx !== actorIdx) {
-      const g = resolveBenchGuard(st, pool, actorIdx, card, 'attack-damage', { targetInst: c });
+      const g = resolveMultiTargetDamageGuard(st, actorIdx, c, card, pool, { isBench: true });
+      st = g.state;
       if (g.blocked) {
         guardBlockedLog.push(`${card?.name ?? '?'}：${g.reason}`);
         newBench.push(c);
         continue;
       }
     }
-    // v5.368：順滑大衣等擲幣型免疫 — 備戰也適用，真結算擲幣
-    if (targetIdx !== actorIdx) {
-      const coinBH = passiveCoinImmunity(st, actorIdx, c, card, pool);
-      st = coinBH.state;
-      if (coinBH.immune) { guardBlockedLog.push(`${card?.name ?? '?'}：擲幣免疫（正面）`); newBench.push(c); continue; }
-    }
+    // <<< v6415-benchhitn-guard-central
     // v5.293/v5.294 bench 招式傷害套特性減傷 (含厚脂肪等 BY_ATTACKER)
     let perAmt = amount2;   // ⭐v6.413：已扣過招致削傷的基數
     let _btd2: CardInstance | null = null;
@@ -5269,33 +5269,14 @@ export function resolveMultiTargetDamageGuard(
   return { state: s, blocked: false, reason: '' };
 }
 
-export function manualDamageImmunity(
-  state: GameState,
-  actorIdx: 0 | 1,
-  /** ⭐ v6.204：與 passiveImmunityDamageBlock 同步（本函式目前全 src 零呼叫端）。 */
-  targetInst: CardInstance,
-  targetCard: Card | undefined,
-  pool: Map<string, Card>,
-  isBench: boolean,
-): { blocked: boolean; reason?: string; state: GameState } {
-  let s = state;
-  const atkInst = s.players[actorIdx].active;
-  const atkCard = atkInst ? pool.get(atkInst.cardId) : undefined;
-  if (wouldNeutralCenterBlock(s, pool, atkCard, targetCard)) {
-    return { blocked: true, reason: '中立中心競技場 效果', state: s };
-  }
-  if (isBench) {
-    const g = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-damage', { targetInst });
-    if (g.blocked) return { blocked: true, reason: g.reason, state: s };
-  } else {
-    const pb = passiveImmunityDamageBlock(s, actorIdx, targetInst, targetCard, pool);
-    if (pb.blocked) return { blocked: true, reason: pb.reason, state: s };
-  }
-  const coin = passiveCoinImmunity(s, actorIdx, targetInst, targetCard, pool);
-  s = coin.state;
-  if (coin.immune) return { blocked: true, reason: '擲幣免疫（正面）', state: s };
-  return { blocked: false, state: s };
-}
+// >>> v6415-manual-damage-immunity-removed
+// ⭐v6.415：原本這裡有 `manualDamageImmunity`（v5.368 的「手動結算傷害招式統一 guard」）。
+//   它是中央閘 `resolveMultiTargetDamageGuard` 的**第二份**（同樣四層、同樣的述詞），
+//   但**全 src 零呼叫端**（只有 m5_preview.ts 的 import 清單裡掛著一個名字）。
+//   v6.410 刪 `canResumeFestivalDanceSecondAttack` 的理由在這裡一字不差地成立：
+//   留著只會被日後新卡照抄，變成「看起來有人在用的第二份判準」（Rule 38）。⇒ 整支刪除。
+//   真的要手動結算傷害的免疫判定，請呼叫 `resolveMultiTargetDamageGuard`。
+// <<< v6415-manual-damage-immunity-removed
 
 // ══════════════════════════════════════════════════════════════════════════════
 // v2.277 Wave 3 — 被動特性：撤退成本修正（ABILITY_RETREAT_MOD）
@@ -8160,21 +8141,21 @@ regR('snipe-60-ex', (st, actorIdx, selectedIids, _params, pool) => {
   const target = defender.bench.find(c => c.iid === targetIid);
   if (!target) return st;
   const targetCard = pool.get(target.cardId);
-  // v2.46 精刺奇襲 = 招式【傷害】→ 不受對戰圓形影響；只受花之帷幔擋（備戰 + 非 ex）
-  //   實務上 snipe-60-ex 僅能選對手的 ex/EX，花之帷幔不保護 ex，故通常 pass；
-  //   仍呼叫 resolveBenchGuard 以保持判定一致性。
+  // >>> v6415-snipe60-guard-central
+  // ⭐⭐⭐v6.415：第四條備戰傷害路徑也收斂到中央閘（Rule 38）。
+  //   原本是「resolveBenchGuard ＋ 自己跑擲幣」兩段，少了中央閘的第 1 層（中立中心）
+  //   與第 2 層（條件式完全免疫 PASSIVE_IMMUNITY）。
+  //   v2.46 的既有註解保留：精刺奇襲＝招式【傷害】⇒ 不受對戰圓形影響；只受花之帷幔擋
+  //   （備戰 + 非 ex），而它僅能選對手的 ex/EX ⇒ 實務上通常 pass，仍走中央閘以保持一致。
   {
-    const g = resolveBenchGuard(st, pool, actorIdx, targetCard, 'attack-damage', { targetInst: target });
+    const g = resolveMultiTargetDamageGuard(st, actorIdx, target, targetCard, pool, { isBench: true });
+    st = g.state;
     if (g.blocked) {
       const name = targetCard?.name ?? '?';
       return addLog(st, `精刺奇襲：${name} 因${g.reason}不受傷害`, actorIdx);
     }
   }
-  {
-    const coinS = passiveCoinImmunity(st, actorIdx, target, targetCard, pool);
-    st = coinS.state;
-    if (coinS.immune) return addLog(st, `精刺奇襲：${targetCard?.name ?? '?'} 擲幣免疫（正面）不受傷害`, actorIdx);
-  }
+  // <<< v6415-snipe60-guard-central
   const newDmg = target.damage + 60;
   const targetHP = effectiveHPInline(target, pool, st);  // v5.091
   if (targetHP > 0 && newDmg >= targetHP) {
@@ -9589,25 +9570,41 @@ export function dealAttackDamageToTarget(
   //   ⚠新卡若是「非放指示物」的招式效果（換位/退化/丟道具/bounce），**請勿走本 helper**，
   //     否則會被對戰圓形誤擋；請直接呼叫 canApplyEffectToTarget 並傳 counterPlacement:false。
   //   （kind='attack-damage' 時對戰圓形本來就不擋，此旗標無作用。）
-  // >>> v6412-skip-def-effects-guard
-  const guard = _skipDef
-    ? { blocked: false, reason: '' }
-    : canApplyEffectToTarget(st, actorIdx, target, targetCard, kind, pool, { isBench: !isActive, counterPlacement: true });
-  // <<< v6412-skip-def-effects-guard
+  // >>> v6415-immunity-guard-central
+  // ⭐⭐⭐v6.415：傷害免疫的判準收斂成**一份** —— 中央閘 `resolveMultiTargetDamageGuard`
+  //   （四層：中立中心 → 條件式完全免疫 PASSIVE_IMMUNITY → canApplyEffectToTarget
+  //    → 擲幣型免疫），active 與 bench 兩邊都走它（IRON_RULES Rule 38）。
+  //
+  // 【修掉的真 bug】本函式原本是：guard 只用 `canApplyEffectToTarget`，
+  //   然後**只在 `isActive` 時**補 `passiveImmunityDamageBlock` ＋ `passiveCoinImmunity`
+  //   ⇒ **備戰目標完全不擲幣**。
+  //   奇諾栗鼠ex｜順滑大衣「**這隻寶可夢**受到招式的傷害時，自己擲1次硬幣。若為正面，
+  //   則這隻寶可夢不會受到那個傷害。」與 吉雉雞｜腎上腺費洛蒙（附【惡】能量時）
+  //   卡面都**沒有**「在戰鬥場」⇒ 備戰也適用。
+  //   實測（甲賀忍蛙ex｜分身連打 120，40 次）：
+  //     ・奇諾栗鼠ex 在**戰鬥位** → 擲幣 40 次、免疫 21 次 ✅
+  //     ・奇諾栗鼠ex 在**備戰**   → 擲幣 0 次、免疫 0 次、照吃 120 🔴
+  //   而同樣打備戰的 `hitBenchAll` / `bench-hit-N` 兩條路徑**有**擲幣段
+  //   ⇒ 典型的「判準多份、其中一份漏掉一層」（守衛安慰劑型態 11 的實害版）。
+  //
+  // ⚠ `skipDefEffects`（v6.412 契約）仍然整段跳過。
+  // ⚠ `kind='attack-effect'`（放置傷害指示物）時中央閘自己只走第 3 層 —— 卡面寫的是
+  //   「受到招式的**傷害**時」，放指示物不擲幣。這一點由中央閘的 `isDamage` 判斷，
+  //   本函式不再自己分流。
+  let guard: { blocked: boolean; reason: string };
+  if (_skipDef) {
+    guard = { blocked: false, reason: '' };
+  } else {
+    const _g = resolveMultiTargetDamageGuard(st, actorIdx, target, targetCard, pool, {
+      isBench: !isActive, counterPlacement: true, kind,
+    });
+    st = _g.state;   // ⚠ 擲幣會消耗亂數 ⇒ 必須把 state 接回來
+    guard = { blocked: _g.blocked, reason: _g.reason };
+  }
+  // <<< v6415-immunity-guard-central
   if (guard.blocked) {
     const name = targetCard?.name ?? '?';
     return addLog(st, `${label}：${name} 因${guard.reason}不受傷害`, actorIdx);
-  }
-  // v5.370：active 路徑補 PASSIVE_IMMUNITY（神秘石居/神秘守護/璀璨鱗片/尾甲等 boolean）+ 擲幣型
-  //   （順滑大衣）— canApplyEffectToTarget 的 active 分支不查 PASSIVE_IMMUNITY，狙擊又繞過主管線，
-  //   故戰鬥位的條件免疫會漏（回歸測試矩陣抓到：神秘石居在戰鬥位被 ex 狙擊仍受傷）。
-  //   只在【傷害】語境套（放指示物 attack-effect 不套）。bench 由 canApplyEffectToTarget→resolveBenchGuard 已含。
-  if (!_skipDef && isActive && kind === 'attack-damage') {   // ⭐v6.412 skipDefEffects 跳過
-    const _pb = passiveImmunityDamageBlock(st, actorIdx, target, targetCard, pool);
-    if (_pb.blocked) return addLog(st, `${label}：${targetCard?.name ?? '?'} ${_pb.reason}（免疫此招式傷害）`, actorIdx);
-    const _coin = passiveCoinImmunity(st, actorIdx, target, targetCard, pool);
-    st = _coin.state;
-    if (_coin.immune) return addLog(st, `${label}：${targetCard?.name ?? '?'} 擲幣免疫（正面）不受傷害`, actorIdx);
   }
   // v5.369：戰鬥位（active）的招式【傷害】要套弱點×2 + 抵抗力 + 攻擊方道具加成（猛攻手鐲等）。
   //   備戰位不計弱抗（卡面標準「備戰不計弱抗」）；放傷害指示物(kind='attack-effect',如飛來橫禍)

@@ -364,7 +364,7 @@
                        ⚠ 展開期間「加入房間／觀戰」與房名那一行會被藏起來（與 .confirm／.alias 兩個分支一致），
                          按「收起」就回來；另外 act() 成功之後也會自動收起。 -->
                   <span class="acts acts-more">
-                    {#if showDm}<button class="small dm-open" disabled={dmActiveFid === r.fid} onclick={() => ondm?.(r)} title="私聊">💬 私聊</button>{/if}
+                    {#if showDm}<button class="small dm-open" disabled={dmActiveFid === r.fid} onclick={() => ondm?.(r)} title="私聊">私聊</button>{/if}
                     <button class="small" disabled={!!actBusy} onclick={() => askConfirm(r.fid, 'remove')}>解除好友</button>
                     <button class="small danger" disabled={!!actBusy} onclick={() => act('block', r.fid)}>封鎖</button>
                     <button class="small" disabled={!!actBusy} onclick={closeMore}>收起</button>

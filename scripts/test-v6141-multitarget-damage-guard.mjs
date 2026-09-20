@@ -200,12 +200,23 @@ T('⭐⭐ 中央閘用 attack-damage 語意（用 attack-effect 會誤擋薄霧�
     '中央閘用了 attack-effect —— 會把薄霧能量／對戰圓形／硬岩能量這些「只擋招式效果」的來源算進來（v4.18 正是要修掉這種誤擋）');
 });
 
-T('⭐⭐ 擲幣層必須可跳過，且 hitBenchAll 有傳 skipCoin（否則防守方多擲一次幣）', () => {
+T('⭐⭐ 擲幣只能有一層：hitBenchAll 交給中央閘，且自己不得再擲一次', () => {
+  // ⭐⭐v6.415（IRON_RULES Rule 40）：原本這一條驗的是「hitBenchAll 有傳 skipCoin」，
+  //   理由是「它自己已有擲幣段」。v6.415 把那個 inline 擲幣段**刪掉**、整段交給中央閘
+  //   ⇒ 意圖（防守方不得多擲一次幣）沒有被破壞，但 skipCoin 的必要性沒了。
+  //   觀測點改成**更強**的兩條：①中央閘仍然提供 skipCoin（其他 caller 可能需要）；
+  //   ②hitBenchAll 區塊裡**不得**出現第二個擲幣呼叫；③**不得**傳 skipCoin
+  //   （傳了就等於備戰不擲幣 —— 那正是 v6.415 修掉的真 bug 會回歸的形狀）。
   const i = EFF_C.indexOf('export function resolveMultiTargetDamageGuard');
   ok(/skipCoin/.test(EFF_C.slice(i, i + 2500)), '中央閘沒有 skipCoin 選項');
   const hb = EFF_C.slice(EFF_C.indexOf('function hitBenchAll'), EFF_C.indexOf('function hitBenchAll') + 6000);
   ok(/resolveMultiTargetDamageGuard\(/.test(hb), 'hitBenchAll 沒有接中央閘');
-  ok(/skipCoin:\s*true/.test(hb), 'hitBenchAll 沒傳 skipCoin —— 它自己已有擲幣段，會重複擲幣');
+  ok(!/passiveCoinImmunity\(/.test(hb),
+    'hitBenchAll 又自己擲了一次幣（判準兩份）—— 擲幣只能由中央閘負責');
+  ok(!/passiveImmunityDamageBlock\(/.test(hb),
+    'hitBenchAll 又自己做了一次條件式完全免疫（中央閘第 2 層就是它）');
+  ok(!/skipCoin:\s*true/.test(hb),
+    'hitBenchAll 傳了 skipCoin ⇒ 備戰目標又不擲幣了（v6.415 修的正是這個 bug）');
   ok(/attackerIdx !== targetIdx/.test(hb), 'hitBenchAll 的自傷分流不見了 —— 自己的備戰會被自己的盾牌擋住');
 });
 
