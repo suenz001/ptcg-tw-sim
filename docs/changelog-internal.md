@@ -1,5 +1,89 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.419 ⭐⭐ 「雙方同時取完最後一張獎賞」統一成平手（站長裁定）＋ 終局不再浮出點不動的 picker
+
+BASE `afa88763e23a273739d188ed1a8e179552b98475`（v6.418）。
+⚠ 動了 `engine.ts` ⇒ `scripts/lib/engine-strip-v6419.mjs`（2 組哨兵），接線
+`test-v6265`（兩處）／`test-v6375`／`test-v6371`（Rule 54：本版排最前）。
+⚠ 部署照 Rule 43：**`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**。
+
+### 【一】由來
+
+v6.418 收尾時 fable 5.1 的獨立審查抓到、我自行查證屬實（見 v6.418 段【四】③）：
+
+| 盤面 | v6.417 | v6.418 | 正確 |
+|---|---|---|---|
+| 雙方都**沒有** faceUp（不開 picker） | 平手 | 平手 | 平手 |
+| 雙方都**有** faceUp（開 picker） | `winner=1` | `winner=0` | ❌ 應為平手 |
+
+根因：`takeSpecificPrizes` 取光時**自己寫死** `winner: ownerIdx`，繞過 v6.361 的中央判定；
+對手排在 `pendingChainQueue` 裡的那一筆永遠不會被兌現。
+⇒ 站長裁定：**統一成平手**（與他自己在 v6.361 定的 D-10／D-11 一致），並一併處理終局殘留的 picker。
+
+### 【二】修法（兩組，都在 `engine.ts`，哨兵框住）
+
+**① `v6419-settle-queued-prizes`**（`applyActionImpl` 末端、中央判定**之前**）：
+終局判出來時若佇列裡還有沒兌現的 `take-prize-choose`
+⇒ 用既有的 `liftEndgameForOnKoV6361` 把終局收回 `'playing'`（並留 fail-safe 還原值）
+→ 結清那幾筆（勝負已定，指定哪一張不再有資訊價值 ⇒ 取最前面的 N 張，與
+`PENDING_REFRESH_ON_POP` 的「已經沒有正面朝上的了」分支同一套語意）
+→ 交給 v6.361 中央判定重判 ⇒ 雙方都 0 張 ⇒ 平手。
+⚠ 完全**沒有**新增終局判準：勝負仍然只由 `judgeEndgameV6361` 決定。
+
+**② `v6419-no-pop-after-gameover`**：佇列取出加 `newState.phase === 'playing'` 前置
+⇒ 終局之後不再浮出一個怎麼點都無效的 picker（UI 上是一層被勝負視窗蓋住的暗幕）。
+⚠ 佇列本身刻意保留給 ① 讀。
+
+### 【三】守衛
+
+`scripts/test-v6419-endgame-draw-parity.mjs`（12 條，**BASE 上 6 條紅**）：
+A 段平手一致性（A1 有 picker ⇒ 平手／A2 無 picker 零回歸／A3 兩條路徑同解）、
+B 段**防過度修正**（只有一方取完時仍然正常判勝，含「對手的獎賞被兌現 1 張但仍有剩」）、
+C 段終局後不留 picker（三種終局情境）＋ 進行中仍會浮出（零回歸）、
+D 段靜態接線＋正對照（判準只寫一份 `popHasPhaseGate`）。
+`test-v6418` 的【E】段從「列管現況」改成「兩條路徑必須同解」（E2 改驗平手、新增 E3）。
+
+### 【四】獨立審查（fable 5.1）與其發現 —— **三項結論都已自行查證，兩項當場補修**
+
+#### ① 修法漏了兩個同類入口 ✅ 屬實，**已補**
+
+我第一版只結清 `pendingChainQueue` 裡的那一筆。審查者指出「只有一方有正面朝上的獎賞」時，
+那一筆在 **`pendingSelection`（檯面上）**、不在佇列裡。我自己跑四格矩陣查證（bench 1/1、獎賞 2 vs 1）：
+
+| 誰的獎賞翻正面 | 補修前 | 補修後 |
+|---|---|---|
+| 都沒有（FF） | 平手 ✅ | 平手 |
+| 只有攻擊方（TF） | **GEN 勝**＋終局還掛著攻擊方的 picker ❌ | 平手 |
+| 只有耿鬼方（FT） | **ATK 勝**（耿鬼方的獎賞從未兌現）❌ | 平手 |
+| 雙方都有（TT） | 平手 ✅ | 平手 |
+
+⇒ 結清來源改成 **`pendingSelection` ＋ `pendingChainQueue` 兩處**，並把檯面上那一筆收掉；
+條件也從 `phase === 'game-over'` 擴成 `|| _v6361NeedsVerdict === true`
+（drain 內的 lift 已經把 phase 收回 `'playing'`，只看 phase 會整條路徑跳過 —— 審查者的 (b)）。
+補修後四格全部同解，且終局盤面沒有 `pendingSelection`／`pendingChainQueue` 殘留。
+
+#### ② 兩個守衛洞 ✅ 屬實，**已補**
+
+| 突變 | 補修前 | 補修後 |
+|---|---|---|
+| M3：結清的過濾從 `take-prize-choose` 改成**全部 effectKey** | 全綠（D2 的 `/take-prize-choose/` 掃的是**含註解**的原始碼 ⇒ 安慰劑） | 🔴 E1 |
+| M10：忽略 `remaining`、固定只取 1 張 | 全綠（A～C 段每次剛好只欠 1 張） | 🔴 E2／E4 |
+
+⇒ 新增【E】段（直接構盤面的行為端邊界，5 條）＋ D2 改用**剝註解後**的程式碼切片。
+兩個突變都已自行複驗會紅，並逐位元還原 engine.ts。
+
+#### ③ 「單方取完 ＋ 該方同時沒有寶可夢可上場」仍由獎賞規則單獨決定（**列管，不在本版範圍**）
+
+`judgeEndgameV6361` 只有在**雙方都取完**時才會看 `byPlacement`；單方取完就直接判該方勝，
+即使同一瞬間他也滿足「沒有可上場的寶可夢」（對手的勝利條件）。
+這是 v6.361 中央判定本身的設計，與本版修的「picker 路徑繞過中央判定」是兩件事
+⇒ 列管，等站長裁定要不要一併改成平手。
+
+#### 審查者複驗過而沒有問題的部分（我抽驗其中三項）
+無限迴圈／重入（settle 是直線碼、`takeSpecificPrizes` 不回呼）、錦標賽雙敗機制不受影響、
+`_v6361Lifted*` fail-safe 不會弄髒、`engine-strip-v6419` 剝除後逐字等於 BASE 且對 BASE 大聲紅、
+四處接線順序符合 Rule 54、v6.418 的兩個守衛缺口（test-v6190 B8e／test-v6418 C4）確實補起來了。
+
 ## v6.418 ⭐⭐ 對戰中的獎賞卡檢視（faceUp 閘）＋ 取獎賞 picker 改走排隊
 
 BASE `eb20722dd7fc0b94b5afbbb6d581b3c1a48d408d`（v6.417）。

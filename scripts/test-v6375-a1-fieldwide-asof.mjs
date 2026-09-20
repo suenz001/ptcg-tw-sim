@@ -35,6 +35,7 @@ import { stripV6400Engine } from './lib/engine-strip-v6400.mjs';
 import { stripV6402Engine } from './lib/engine-strip-v6402.mjs';
 import { stripV6403Engine } from './lib/engine-strip-v6403.mjs';   // ⭐v6.403 ex 判準收斂（12 組）
 import { stripV6408Engine } from './lib/engine-strip-v6408.mjs';   // ⭐v6.408 攻擊方加成收斂成一份（2 組）
+import { stripV6419Engine } from './lib/engine-strip-v6419.mjs';   // ⭐v6.419 同時取完⇒平手＋終局不浮 picker（2 組）
 import { stripV6418Engine } from './lib/engine-strip-v6418.mjs';   // ⭐v6.418 取獎賞 picker 排隊 refresher（1 組）
 import { stripV6414Engine } from './lib/engine-strip-v6414.mjs';   // ⭐v6.414 招式限定加傷／覆寫（4 組）
 import { stripV6413Engine } from './lib/engine-strip-v6413.mjs';   // ⭐v6.413 招致削傷本次攻擊快照重置（1 組）
@@ -651,7 +652,7 @@ if (!hasBaseCommit(ROOT, BASE)) {
       //   那幾支會在「已經被刪掉的內容」上找不到自己的錨點（命中 0 次）。
       //   ⇒ 先把 v6.408 換回 v6.407a 的 185 行，後面的剝除器才看得到自己的錨點。
       //   ⭐ Rule 54（由新到舊）：v6.410 排在 v6.408 之前（理由同 test-v6265 F4c）。
-      let t = _v6376StripBlocks(stripV6408Engine(stripV6410Engine(stripV6413Engine(stripV6414Engine(stripV6418Engine(src))))), 'v6376-');
+      let t = _v6376StripBlocks(stripV6408Engine(stripV6410Engine(stripV6413Engine(stripV6414Engine(stripV6418Engine(stripV6419Engine(src)))))), 'v6376-');
       // ⚠ v6.376 把 v6.373 的 clear 區塊從「太古防壁快照清除」旁邊**搬到** sanityKOSweep 之後
       //   （最大 HP 型會被 sanityKOSweep 重算 ⇒ clear 排在它前面等於白救）。上一行已經把
       //   新位置那一塊（v6376- 哨兵）剝掉，這裡要把它**插回原位置**，否則會比 BASE 少一整段。

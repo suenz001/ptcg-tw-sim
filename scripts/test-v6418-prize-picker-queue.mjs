@@ -324,7 +324,10 @@ T('D3.【正對照】D1 的判準抓得到 BASE 的寫法（不是恆真）', ()
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 【E】⚠⚠ 列管（**不是斷言「正確」，是把現況釘住等站長裁定**）
+// 【E】「雙方同時取完最後一張獎賞」的勝負
+//   ⭐ v6.419 站長已裁定：**統一成平手**（不論有沒有開 picker）⇒ 這一段從「列管現況」
+//     改成「兩條路徑必須同解」。細部行為（兌現佇列、終局後不再浮 picker、突變測試）
+//     由 scripts/test-v6419-endgame-draw-parity.mjs 守，這裡只釘住「兩條路徑同解」。
 //   ——「雙方同時取完最後一張獎賞」時，有沒有 picker 會影響勝負。
 //
 // 情境：P0 剩 2 張獎賞、打死耿鬼ex（ex ⇒ 2 張）；死亡宣告正面 ⇒ P0 的破破舵輪昏厥、
@@ -376,15 +379,21 @@ T('E1.【對照】雙方都沒有正面朝上的獎賞（不開 picker）⇒ 中
   assert.ok(st.winner === null || st.winner === undefined,
     `應該平手，實得 winner=${st.winner}（現況變了 ⇒ 這一段的列管描述要重寫）`);
 });
-T('E2. ⚠⚠【列管・待站長裁定】雙方都有正面朝上的獎賞（開 picker）⇒ 現況是「先解的那一方獲勝」', () => {
+T('E2. ⭐⭐⭐【v6.419 站長裁定】雙方都有正面朝上的獎賞（開 picker）⇒ 同樣是**平手**', () => {
   const st = fireEndgame(true);
   assert.ok(st, '40 次都沒擲到正面');
   assert.strictEqual(st.phase, 'game-over', '沒有終局');
-  assert.strictEqual(st.winner, 0,
-    `現況是 winner=0（先解 picker 的 ATK）。實得 ${st.winner}`
-    + ' —— 若這一條紅了，代表有人改了終局判定，請回來確認是不是站長裁定要改成平手');
-  assert.strictEqual(st.players[1].prizes.length, 1,
-    '現況：對手排在佇列裡的那一筆沒有被兌現（獎賞還留著）');
+  assert.ok(st.winner === null || st.winner === undefined,
+    `應該平手，實得 winner=${st.winner} —— 有沒有開 picker 竟然會改變勝負`);
+  assert.strictEqual(st.isDraw, true, '沒有標記平手');
+  assert.strictEqual(st.players[1].prizes.length, 0,
+    '對手排在佇列裡的那一筆沒有被兌現（獎賞還留著）⇒ 中央判定會看到他還沒取完');
+});
+T('E3. ⭐ 兩條路徑同解（有沒有 picker 都不影響勝負）', () => {
+  const a = fireEndgame(false), b = fireEndgame(true);
+  assert.ok(a && b, '前置不成立');
+  assert.strictEqual(a.isDraw, b.isDraw, `無 picker isDraw=${a.isDraw} vs 有 picker isDraw=${b.isDraw}`);
+  assert.strictEqual(a.winner ?? null, b.winner ?? null, `無 picker winner=${a.winner} vs 有 picker winner=${b.winner}`);
 });
 
 console.log(`\n=== v6.418 取獎賞 picker 排隊：${pass} PASS / ${fail} FAIL ===`);

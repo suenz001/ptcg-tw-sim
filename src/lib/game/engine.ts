@@ -3583,7 +3583,15 @@ function handlePlaying(
     //   → pop 一筆設為新 pendingSelection（continue 鏈式 resolve）。
     //   觸發 case：同一 ATTACK 內 TOOL_ON_DAMAGED + ATTACK_POST 各自開 pending，
     //   withPending 將後者排隊；玩家解完前者後接續處理後者。
-    if (!newState.pendingSelection && newState.pendingChainQueue && newState.pendingChainQueue.length > 0) {
+    // >>> v6419-no-pop-after-gameover
+    // ⭐v6.419（站長裁定）：終局之後**不再**把佇列裡的 picker 浮上檯面。
+    //   先前終局後仍會浮出一個怎麼點都無效的 picker（applyActionImpl 開頭就
+    //   `if (state.phase === 'game-over') return state`）⇒ 畫面上是一層點不掉的暗幕
+    //   （被 .gameover-modal 的 z-index 9999 蓋住，只看得到暗幕）。
+    //   ⚠ 佇列本身**刻意保留**：v6419-settle-queued-prizes 會在本次 action 末端
+    //     讀它把未兌現的取獎賞結清，清空的動作由那裡負責。
+    if (newState.phase === 'playing' && !newState.pendingSelection && newState.pendingChainQueue && newState.pendingChainQueue.length > 0) {
+    // <<< v6419-no-pop-after-gameover
       // ⭐ v6.215：排隊中的 picker，其 params（候選清單）是**排隊當下**算好的。
       //   官方序把「受到傷害時」的道具排到招式效果之後，於是招式自己的 resolver 有機會
       //   在道具的 picker 浮上檯面之前動到同一批資源（例：土地雲｜螺旋關節把能量放回手牌
@@ -9568,6 +9576,59 @@ function applyActionImpl(
     next = flushDiverCatchQueue(next, pool);
   }
 
+  // >>> v6419-settle-queued-prizes
+  // ⭐⭐⭐v6.419（站長裁定：「統一成平手」）。
+  //
+  // 【修的是什麼】「雙方**同時**取完最後一張獎賞卡」時，勝負會因為「有沒有開 picker」而不同：
+  //   ・雙方都沒有正面朝上的獎賞（不開 picker，兩邊同步自動取）
+  //       ⇒ 走下面的中央判定 ⇒ **平手**（v6.361 站長裁定 D-10／D-11）。✅
+  //   ・雙方都有正面朝上的獎賞（開 picker）
+  //       ⇒ `takeSpecificPrizes` 取光時自己就寫死 `winner: ownerIdx`、繞過中央判定，
+  //         而對手排在 `pendingChainQueue` 裡的那一筆**永遠不會被兌現**
+  //       ⇒ 變成「先取完的那一方獲勝」。❌（v6.418 之前也錯，只是錯在另一邊）
+  //
+  // 【修法】終局判出來時，若佇列裡還有沒兌現的 `take-prize-choose`：
+  //   ① 用既有的 `liftEndgameForOnKoV6361` 把終局暫時收回 'playing'（並留下 fail-safe 還原值）
+  //   ② 把那幾筆取獎賞結清（勝負已定，指定哪一張不再有任何資訊價值 ⇒ 取最前面的 N 張，
+  //      與 `PENDING_REFRESH_ON_POP` 的「已經沒有正面朝上的了」分支同一套語意）
+  //   ③ 交給下面的中央判定重判 ⇒ 雙方獎賞都歸 0 ⇒ **平手**
+  // ⚠ 只在「已經判出終局」時才會走到 ⇒ 對局進行中的排隊行為（v6.418）完全不受影響。
+  // ⚠ 平手時 `applyEndgameVerdictV6361` 會刪掉 winner、寫 isDraw ⇒ ②裡 takeSpecificPrizes
+  //   順手寫的 winner 會被覆蓋掉，不需要在這裡處理。
+  // ⚠⚠ 要看的是**兩個地方**（審查者實測抓到的洞，我自行查證屬實）：
+  //   ・`pendingChainQueue`：雙方都有正面朝上的獎賞時，第二位的 picker 排在這裡。
+  //   ・`pendingSelection`：**只有一方**有正面朝上的獎賞時，那一方的 picker 在檯面上
+  //     而對手是自動取 ⇒ 沒有排隊、只有檯面上這一筆沒兌現。
+  //     實測（bench 1/1、獎賞 2 vs 1）：只補佇列的話，四種組合會得到三種結果
+  //     FF=平手／TF=GEN 勝／FT=ATK 勝／TT=平手 —— 同一個盤面只差「誰的獎賞翻正面」。
+  // ⚠ 還要涵蓋 `_v6361NeedsVerdict === true`：drain 內的 lift 已經把 phase 收回 'playing'
+  //   （終局判過、正在重判）⇒ 只看 phase 會整條路徑跳過。
+  const _v6419Top = next.pendingSelection;
+  const _v6419Owed = [
+    ...(_v6419Top?.effectKey === 'take-prize-choose' ? [_v6419Top] : []),
+    ...(next.pendingChainQueue ?? []).filter(q => q.effectKey === 'take-prize-choose'),
+  ];
+  if ((next.phase === 'game-over' || next._v6361NeedsVerdict === true) && next.isDraw !== true
+      && _v6419Owed.length > 0) {
+    const _owed = _v6419Owed;
+    let _s = liftEndgameForOnKoV6361(next);
+    const _restQ = (next.pendingChainQueue ?? []).filter(q => q.effectKey !== 'take-prize-choose');
+    _s = {
+      ..._s,
+      pendingChainQueue: _restQ.length > 0 ? _restQ : undefined,
+      // 檯面上那一筆若是取獎賞，已經在下面結清 ⇒ 收掉（否則終局盤面會留一個點不動的視窗）
+      pendingSelection: _v6419Top?.effectKey === 'take-prize-choose' ? undefined : _v6419Top,
+    };
+    for (const _sel of _owed) {
+      const _idx = _sel.actorIdx as 0 | 1;
+      const _pz = _s.players[_idx]?.prizes ?? [];
+      if (_pz.length === 0) continue;
+      const _want = Math.min(Math.max(1, (_sel.params?.remaining as number) ?? 1), _pz.length);
+      _s = takeSpecificPrizes(_s, _idx, _pz.slice(0, _want).map(c => c.iid), pool);
+    }
+    next = _s;
+  }
+  // <<< v6419-settle-queued-prizes
   // >>> v6361-central-endgame-apply
   // ⭐⭐⭐ v6.361 中央終局判定點（站長裁定 D-10／D-11）。位置在 sanityKOSweep
   //   （＝ v6.355 的唯一 drain 點）**之後** ⇒ on-KO 特性一定已經結算完才判勝負。

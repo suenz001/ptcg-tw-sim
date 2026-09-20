@@ -22,6 +22,12 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
+// ⭐v6.419（Rule 40）：本版在 engine.ts 新增了**第二個**合法的「收回終局」呼叫點
+//   （v6419-settle-queued-prizes：終局時先結清佇列裡沒兌現的取獎賞，再交給中央判定重判）。
+//   H9 的意圖是「helper 只有一份、engine 不得自己重寫」，不是「只能呼叫一次」
+//   ⇒ 這裡把本版的哨兵區塊剝掉之後再數，原判準（恰 1 個）**一個字都沒有放寬**。
+import { stripV6419Engine } from './lib/engine-strip-v6419.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.v6361-s.js'), E = join(ROOT, '.v6361-e.ts'), O = join(ROOT, '.v6361-o.mjs');
@@ -371,11 +377,16 @@ console.log('\n【H】結構／中央性（哨兵、單一判定點、v6.355 架
     !EFF.includes("    if (s.phase === 'game-over') break;")
     && EFF.includes('    s = liftEndgameForOnKoV6361(s);'),
     'drain 的順序被退回去了');
+  const ENG_NO419 = stripV6419Engine(normEol(ENG));   // ⭐v6.419 的合法新增先剝掉（見檔頭 import 處的說明）
   chk('H9 ⭐⭐收回終局的 helper 只有一份（effects.ts），engine 只 import 不重寫',
     cnt(EFF, /export function liftEndgameForOnKoV6361\(/g) === 1
     && cnt(ENG, /export function liftEndgameForOnKoV6361\(/g) === 0
-    && cnt(ENG, /liftEndgameForOnKoV6361\(next\)/g) === 1,
-    JSON.stringify([cnt(EFF, /export function liftEndgameForOnKoV6361\(/g), cnt(ENG, /liftEndgameForOnKoV6361\(next\)/g)]));
+    && cnt(ENG_NO419, /liftEndgameForOnKoV6361\(next\)/g) === 1
+    // ⭐ 更強：engine 不得就地組出「收回終局」的盤面（那等於繞過中央 helper 再寫一份）
+    && cnt(ENG, /_v6361NeedsVerdict: true/g) === 0,
+    JSON.stringify([cnt(EFF, /export function liftEndgameForOnKoV6361\(/g), cnt(ENG_NO419, /liftEndgameForOnKoV6361\(next\)/g), cnt(ENG, /_v6361NeedsVerdict: true/g)]));
+  chk('H9b ⭐v6.419 的剝除真的有作用（剝除器過期時這一條會紅，H9 才不會變成恆真）',
+    ENG_NO419 !== normEol(ENG), '剝除後沒有變 ⇒ 哨兵不在了');
   chk('H10 ⭐⭐⭐行為端：三個暫存旗標絕不可以留在回傳盤面上（會被推上 Firestore／Mongo）',
     [run(board({ b0: 1, b1: 0 })), run(board({ b0: 0, b1: 0 })), run(board({ b0: 1, b1: 1, pz0: 2 })),
      run(board({ b0: 1, b1: 1, pz0: 1, pz1: 1 })), run(board({ b0: 1, b1: 1 })),

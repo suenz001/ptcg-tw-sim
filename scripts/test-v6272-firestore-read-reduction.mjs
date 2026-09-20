@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'eb20722dd7fc0b94b5afbbb6d581b3c1a48d408d';   // v6.417（上一版）
+const PREV_SHA = 'afa88763e23a273739d188ed1a8e179552b98475';   // v6.418（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,24 +757,35 @@ const PREV_SHA = 'eb20722dd7fc0b94b5afbbb6d581b3c1a48d408d';   // v6.417（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.418 前移：PREV_SHA 從 v6.417（eb20722d）起算。
+  // ⚠⚠ v6.419 前移：PREV_SHA 從 v6.418（afa88763）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐⭐v6.418：(一) 對戰中也能查看獎賞卡（蓋著的仍然只顯示卡背，唯一防線是
-  //   `_pvcard` 那道 faceUp 閘，由 test-v6190 的 B8／B9 守）——動 game/+page.svelte
-  //   （prizeViewMode／openPrizeView／視窗本體／按鈕／CSS）與 MobilePortraitBattle.svelte
-  //   （兩處 chip 從回放限定改成一律可點）。
-  //   (二) 取獎賞的 picker 改走中央 withPending ⇒ 已有 pending 時排進 pendingChainQueue
-  //   （原本自動取，會剝奪第二位玩家的指定權）——動 effects/_shared.ts（addPendingPrize）
-  //   與 engine.ts（PENDING_REFRESH_ON_POP 登記）。
-  'src/lib/game/effects/_shared.ts',
+  // ⭐⭐v6.419（站長裁定）：「雙方同時取完最後一張獎賞」統一成**平手** ——
+  //   終局判出來時若佇列裡還有沒兌現的 take-prize-choose，先結清再交給 v6.361 中央判定重判；
+  //   並且終局之後不再把佇列裡的 picker 浮上檯面。玩家端只動 engine.ts ＋ version.ts。
   'src/lib/game/engine.ts',
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
-  'src/routes/game/MobilePortraitBattle.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.418）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+//   ⚠⚠ v6.418 前移：PREV_SHA 從 v6.417（eb20722d）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+//   ⭐⭐v6.418：(一) 對戰中也能查看獎賞卡（蓋著的仍然只顯示卡背，唯一防線是
+//   `_pvcard` 那道 faceUp 閘，由 test-v6190 的 B8／B9 守）——動 game/+page.svelte
+//   （prizeViewMode／openPrizeView／視窗本體／按鈕／CSS）與 MobilePortraitBattle.svelte
+//   （兩處 chip 從回放限定改成一律可點）。
+//   (二) 取獎賞的 picker 改走中央 withPending ⇒ 已有 pending 時排進 pendingChainQueue
+//   （原本自動取，會剝奪第二位玩家的指定權）——動 effects/_shared.ts（addPendingPrize）
+//   與 engine.ts（PENDING_REFRESH_ON_POP 登記）。
+//   'src/lib/game/effects/_shared.ts',
+//   'src/lib/game/engine.ts',
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'src/routes/game/MobilePortraitBattle.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + [...PREV_ALLOWED].sort().join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }
   // ⚠⚠ v6.378 C-7：舊寫法是「對**工作樹位元組**算 blob sha1，再跟 BASE tree 的 sha 比」。

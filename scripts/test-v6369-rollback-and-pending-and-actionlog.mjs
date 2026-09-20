@@ -20,6 +20,11 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+// ⭐v6.419（Rule 40）：D5 的意圖是「(乙) v6.369 沒有動 v6.361 的架構」。v6.419 在
+//   engine.ts 新增了第二個合法呼叫點（v6419-settle-queued-prizes，站長裁定）
+//   ⇒ 先把本版的哨兵區塊剝掉再數，原判準（恰 1 個）一個字都沒有放寬。
+import { stripV6419Engine } from './lib/engine-strip-v6419.mjs';
+import { normEol as _normEol419 } from './lib/eol-agnostic.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.v6369-s.js'), E = join(ROOT, '.v6369-e.ts'), O = join(ROOT, '.v6369-o.mjs');
@@ -278,13 +283,18 @@ const runAtk = (st, heads) => act(st, { type: 'ATTACK', attackIndex: atkIdx(ICE,
     && R.phase === 'game-over' && R.winner === 0,
     JSON.stringify([nLog(R, '「死亡宣告」啟動'), !!A0(R), PZ(R, 1), R.phase, R.winner]));
 
-  // B4 ⭐⭐⭐ 反對照：**沒有** on-KO 佇列時，picker 行為必須一個字都不變
+  // B4 ⭐⭐⭐ 反對照：**沒有** on-KO 佇列時，v6.369 的那條路徑（drain／lift）完全不介入
+  //   ⭐v6.419（Rule 40：意圖不變、觀測點被新版蓋住）：本版起「終局時還沒兌現的取獎賞」
+  //     會被結清、picker 收掉（站長裁定：同時取完一律平手、終局不留點不動的視窗）
+  //     ⇒ 原本斷言的「picker 照開、獎賞還沒取（6 張）」變成「picker 已收、獎賞已取（6−1=5）」。
+  //   ⚠ **這一條真正要守的東西沒有鬆**：勝負（winner=0）、攻擊方完好、防守方昏厥
+  //     三件事逐字保留；本版的新行為另外由 test-v6419 的 C1 釘住。
   const C = runAtk(board({ b0: 1, b1: 0, faceUp: true, defPlain: true }));
-  chk('B4 ⭐⭐⭐沒有 on-KO 佇列 ⇒ 走的是完全沒被本版動到的既有路徑：'
-    + 'picker 照開、獎賞照樣還沒取、攻擊方完好、A 獲勝',
+  chk('B4 ⭐⭐⭐沒有 on-KO 佇列 ⇒ v6.369 的路徑不介入：攻擊方完好、防守方昏厥、A 獲勝；'
+    + '（v6.419 起）終局時未兌現的取獎賞被結清、picker 收掉',
     C.phase === 'game-over' && C.winner === 0 && !!A0(C) && D0(C) == null
-    && C.pendingSelection?.effectKey === 'take-prize-choose' && PZ(C, 0) === 6 && QLEN(C) === 0,
-    JSON.stringify([C.phase, C.winner, !!A0(C), C.pendingSelection?.effectKey, PZ(C, 0)]));
+    && !C.pendingSelection && PZ(C, 0) === 5 && QLEN(C) === 0,
+    JSON.stringify([C.phase, C.winner, !!A0(C), C.pendingSelection?.effectKey ?? null, PZ(C, 0), QLEN(C)]));
 
   // B5 ⭐⭐⭐ 反對照：沒有正面朝上獎賞（＝沒有 picker）時，v6.361 原本的路徑照舊
   const N = runAtk(board({ b0: 0, b1: 0, faceUp: false }));
@@ -406,10 +416,12 @@ console.log('\n【D】中央性／結構（補充層，Rule 28：不單獨成立
     cnt(ENG, /drainOnKoAfterPrize\(/g) === 1
     && ENG.includes('  state = drainOnKoAfterPrize(state, pool);'),
     String(cnt(ENG, /drainOnKoAfterPrize\(/g)));
-  chk('D5 ⭐⭐⭐(乙) 收回終局的呼叫點也沒有新增（engine.ts 仍然只有 v6.361 那 1 個）',
-    cnt(ENG, /liftEndgameForOnKoV6361\(next\)/g) === 1
-    && cnt(ENG, /export function liftEndgameForOnKoV6361\(/g) === 0,
-    String(cnt(ENG, /liftEndgameForOnKoV6361\(next\)/g)));
+  const _eng369No419 = stripV6419Engine(_normEol419(ENG));
+  chk('D5 ⭐⭐⭐(乙) 收回終局的呼叫點也沒有新增（剝掉 v6.419 的合法新增後仍只有 v6.361 那 1 個）',
+    cnt(_eng369No419, /liftEndgameForOnKoV6361\(next\)/g) === 1
+    && cnt(ENG, /export function liftEndgameForOnKoV6361\(/g) === 0
+    && _eng369No419 !== _normEol419(ENG),   // 剝除器過期時大聲紅，不讓這一條變恆真
+    String(cnt(_eng369No419, /liftEndgameForOnKoV6361\(next\)/g)));
   chk('D6 ⭐⭐(乙) 放行條件只對「已判出終局 ＋ 有 picker ＋ 佇列非空」成立（不可以改寬）',
     ENG.includes("  const _v6369NeedDrain = next.phase === 'game-over' && state.phase === 'playing'")
     && ENG.includes('    && !!next.pendingSelection && (next._onKoAfterPrize?.length ?? 0) > 0;'),
