@@ -1,5 +1,62 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.417 ⭐ drain 的 key 真的移除（拆地雷）＋「正面朝上獎賞 vs 死亡宣告」列管
+
+BASE `8320c6f0937489b99ec8ae6698573c6d48d9de11`（v6.416）。
+⚠ 只動 `src/lib/game/effects.ts` ＋ changelog ⇒ 部署照 Rule 43：
+**`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**。
+⚠⚠ **行為零改變**（守衛 B3 逐位元釘住）。
+
+### 【零】由來
+
+v6.416 收尾時子代理（fable）提了兩個「次要、順手可修」的項目。
+依站長鐵律**子代理結論一律自行查證**，我逐條查過：
+
+| 項目 | 子代理說法 | 我的查證結果 |
+|---|---|---|
+| ① `drainOnKoAfterPrize` 用 `undefined` 而非 `delete` | 目前不可達，但是地雷 | ✅ **屬實**（見下） |
+| ② 正面朝上獎賞時「獎賞排隊了但沒發」，死亡宣告照樣 drain | 與 v6.355 設計語意不符 | ✅ **現象屬實**，但**是不是 bug 要站長裁定**（見下） |
+
+### 【一】①：drain 的 key 必須整個移除
+
+`buildRoomPatch`（`src/lib/game/oracle-client.ts:999`）的差分判準逐字是：
+```js
+if (!(k2 in ns)) { if (k2 in bs) del.push(p); continue; }
+...
+if (!_dpEq(bs[k2], ns[k2])) set[p] = ns[k2];
+```
+⇒ `{ ...state, _onKoAfterPrize: undefined }` 讓 key **仍然存在** ⇒ 走 `set[p] = undefined`
+⇒ 那個 patch 一旦 `JSON.stringify`，`undefined` 被丟掉 ⇒ **伺服器端的舊佇列永遠刪不掉**。
+
+⚠ **目前不可達（自行查證）**：`oracleUpsertRoomDelta`（`oracle-client.ts:1076`）的
+`next = JSON.parse(JSON.stringify(data))` 會先抹掉 undefined 的 key ⇒ 實際走 `del`、正確。
+⇒ 本版拆的是「只要有人改動推送順序就會引爆」的地雷，與 v6.410 刪死碼、
+v6.415 刪 `manualDamageImmunity` 同一個理由。
+
+### 【二】②：列管，不自己裁定
+
+**實測（守衛 D1／D2／D3）**：攻擊方獎賞區有**正面朝上**的卡時（克雷色利亞｜弦月光芒、
+火箭隊的妨礙機器人翻開的），`addPendingPrize`（`_shared.ts:2205`）只開
+`take-prize-choose` picker 就 `return` —— 獎賞**還沒真的發**（仍是 3 張），
+而 `sanityKOSweep` 開頭的 drain 照樣把死亡宣告結算掉。
+
+⚠⚠ **這是不是 bug，我不自己裁定**：查過 `PTCG RULES/PTCG_RULES.md` §12，官方只寫
+「昏厥 → 丟棄 → 抽獎賞卡 → 補位」，**沒有**明文規定「昏厥時觸發的特性」與「取獎賞」
+誰先。v6.355 的「獎賞結算完才輪到」是我們自己的設計裁定，不是規則事實。
+⇒ 守衛 D 段**只釘住現況**（不斷言正確），等站長裁定後再改。
+
+⭐ 一併記下可能的實質影響（待裁定時評估）：若攻擊方拿完獎賞就獲勝，而 picker 未解
+⇒ 勝負判定會延後；期間死亡宣告可能先讓他昏厥。v6.361 站長裁定 D-10
+（「應該先結算死亡宣告再判勝負」）處理的是**判勝負**的順序，不是**獎賞入手**的順序。
+
+### 【三】守衛
+
+新增 `scripts/test-v6417-drain-key-removal.mjs`（10 條）：
+B(5 行為端，含 **B3「行為零改變」** 與 B4 正對照)／C(2 靜態)／D(3 列管現況)。
+**HEAD-FAIL 實測**：BASE（v6.416）上 **3 條紅**（B1／B2／C1），
+而 B3 與 D 段在兩邊都綠 —— 那正是「行為零改變」與「現況被釘住」的證明。
+
+
 ## v6.416 ⭐⭐ 昏厥特性 gate 診斷 log ＋ client 引擎版本蓋章（玩家可見；行為零改變）
 
 BASE `e129014be6b617974f96bea627c9bb9943c70caa`（v6.415）。

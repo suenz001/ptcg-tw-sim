@@ -18167,7 +18167,22 @@ export function liftEndgameForOnKoV6361(state: GameState): GameState {
 export function drainOnKoAfterPrize(state: GameState, pool: Map<string, Card>): GameState {
   const q = state._onKoAfterPrize;
   if (!q || q.length === 0) return state;
-  let s: GameState = { ...state, _onKoAfterPrize: undefined };
+  // >>> v6417-drain-delete-not-undefined
+  // ⭐⭐v6.417：原本是 `{ ...state, _onKoAfterPrize: undefined }`。
+  //   `undefined` 會讓那個 key **仍然存在**（`'_onKoAfterPrize' in obj === true`），
+  //   而 `buildRoomPatch`（`oracle-client.ts`）的差分判準正是 `if (!(k2 in ns)) … del.push(p)`
+  //   ⇒ 留著 key 就不會走 `del`，會走 `set[p] = undefined`；那個 patch 一旦被
+  //   `JSON.stringify` 送上線，`undefined` 會被整個丟掉 ⇒ **伺服器端的舊佇列永遠刪不掉**。
+  //   ⚠ **目前不可達**（已自行查證）：`oracleUpsertRoomDelta` 的
+  //     `next = JSON.parse(JSON.stringify(data))` 會先把 undefined 的 key 抹掉
+  //     ⇒ 實際走的是 `del`、行為正確。
+  //   ⇒ 所以這不是在修一個現行 bug，是把「只要有人改動推送順序就會引爆」的地雷拆掉
+  //     （與 v6.410 刪死碼、v6.415 刪 manualDamageImmunity 同一個理由）。
+  //   ⚠ 行為逐位元不變：round-trip 之後兩種寫法的結果完全相同（守衛 B3 釘住）。
+  const s0: GameState = { ...state };
+  delete s0._onKoAfterPrize;
+  let s: GameState = s0;
+  // <<< v6417-drain-delete-not-undefined
   for (const e of q) {
     // ⭐v6361-settle-before-verdict 站長裁定 D-10：原本這一行是「已經分出勝負 ⇒ 後面的 on-KO
     //   效果不再結算」（break）——站長把順序**反過來**：「應該先結算死亡宣告再判勝負」。
