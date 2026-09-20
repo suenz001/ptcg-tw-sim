@@ -46,6 +46,7 @@
  */
 
 import { recruitNamedToBenchPost } from '../../effects'; // v6.069 收斂：牌庫指名放備戰
+import { setSelfDamageBonusPendingPost } from '../../effects';   // ⭐v6.414 下回合加傷／覆寫的唯一寫入點
 import { hostHasEnergyType } from '../../effects'; // ⭐v6.398「身上附有【X】能量卡」中央 host-aware 述詞
 import { damageCounterCount } from '../_shared'; // ⭐v6.399 指示物個數：全站唯一一份判準
 import { registerBugPanicAttack } from '../../effects'; // v6.078 蟲蟲恐慌中央 helper
@@ -977,18 +978,9 @@ regPre('超級水晶燈火靈ex|幻影迷宮', (state, aIdx, pool) => {
 //   卡面：「下個自己的回合，這隻寶可夢使用招式對對手戰鬥寶可夢造成的傷害「+150」。」
 //   實裝：在 attacker.active 上設 damageBonusPending=150，
 //   engine 在自己 END_TURN 時 promote 給 damageBonusThisTurn（下個自己回合生效）。
-regPost('戰槌龍ex|亂暴錘', (state, aIdx) => {
-  return updatePlayer(addLog(state, '亂暴錘：下個自己回合自身招式 +150', aIdx), aIdx, p => {
-    if (!p.active) return p;
-    return {
-      ...p,
-      active: {
-        ...p.active,
-        damageBonusPending: (p.active.damageBonusPending ?? 0) + 150,
-      },
-    };
-  });
-});
+// ⭐v6.414：卡面是「這隻寶可夢**使用的招式**…『+150』點」⇒ **通用**（不傳招式名），
+//   寫入點收斂到中央 setSelfDamageBonusPendingPost（Rule 38）。行為零改變。
+regPost('戰槌龍ex|亂暴錘', setSelfDamageBonusPendingPost(150, '亂暴錘'));
 
 // ── B1. 喇叭啄鳥|飛翔 — 已移至 effects.ts coinFlyPre(30) 統一處理（單擲決定成敗+免疫，retry-aware）。
 

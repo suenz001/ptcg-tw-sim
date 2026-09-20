@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'c65786c7b373da3b82fef0b641899d4ef2437091';   // v6.412（上一版）
+const PREV_SHA = 'c4d07e4b0a3db164258cb471e98566e37f23c3be';   // v6.413（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,18 +757,23 @@ const PREV_SHA = 'c65786c7b373da3b82fef0b641899d4ef2437091';   // v6.412（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.413 前移：PREV_SHA 從 v6.412（c65786c7）起算。
+  // ⚠⚠ v6.414 前移：PREV_SHA 從 v6.413（c4d07e4b）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.413：①「招致削傷」（叫聲／吠／大聲咆哮／魔法魅惑／月亮之力…）收斂成一份中央
-  //   helper，並依卡面逐字與官方 §18.E **不限目標位置**（打備戰也要扣）；
-  //   ②「對手所有備戰各受到 N」的兩份同名實作收斂（舊的那一份連**備戰被打死都不會昏厥**）；
-  //   ③ 奧利瓦ex｜油之機關槍 的第五份 inline 傷害管線收進中央 dealAttackDamageToTarget。
-  //   三項都是**玩家看得到的修正**。
+  // ⭐v6.414：「在下個自己的回合…傷害 +N」依卡面分成**招式限定**與**通用**兩種。
+  //   站內先前把 5 張招式限定的卡也寫成通用 ⇒ 下回合用**別的招式**也吃到加傷
+  //   （巨金怪｜彗星拳 +60 外溢到潔淨爆破、路卡利歐ex｜龍捲風猛攻 +100 外溢到波動衝天）。
+  //   步哨鼠｜聚氣的「傷害**改為** 240」也改成真正的覆寫（原本用 +160 逼近）。
+  //   6 個手刻寫入點一起收斂到中央 setter（Rule 38）。這是**玩家看得到的修正**。
   'src/lib/game/effects.ts',
-  'src/lib/game/effects/cards/mega_decks.ts',
-  'src/lib/game/effects/cards/v2490_i_wave3a_conditional.ts',
-  'src/lib/game/effects/cards/v2610_i_wave11_misc4.ts',
+  'src/lib/game/effects/cards/m5_preview.ts',
+  'src/lib/game/effects/cards/v2354_j_mark_batch.ts',
+  'src/lib/game/effects/cards/v2630_i_wave13_misc6.ts',
+  'src/lib/game/effects/cards/v2650_i_wave15_misc8.ts',
+  'src/lib/game/effects/cards/v2670_i_wave17_complex2.ts',
+  'src/lib/game/effects/cards/v2750_h_wave2_full.ts',
+  'src/lib/game/effects/cards/v2998_g2.ts',
   'src/lib/game/engine.ts',
+  'src/lib/game/instance-flags.ts',
   'src/lib/game/types.ts',
   'src/lib/version.ts',
   'static/changelog-archive.html',

@@ -12,6 +12,7 @@ import { mandatoryTargetCount } from '../_shared'; // ⭐v6.305 卡面寫死目�
 import { attachEnergyFromZoneToOwnPokemon } from '../_shared';  // ⭐ v6.174 附能目標解析失敗一律 no-op
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { flipCoinsWithLog, flipCoinsUntilTails, dealAttackDamageToTarget, discardOppActiveEnergyPost, returnSelfActiveEnergyPost } from '../../effects';
+import { setSelfDamageBonusPendingPost } from '../../effects';   // ⭐v6.414 下回合加傷／覆寫的唯一寫入點
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helpers
@@ -496,26 +497,14 @@ regPost('象徵鳥|意念移物', (state, aIdx, _pool) => {
 // 簡化：用 damageBonusNextTurn 旗標（既有 damageBonusThisTurn 為 next-turn promote 機制）
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('美洛耶塔ex|回聲', (s) => ({ state: s, damage: 30 }));
-regPost('美洛耶塔ex|回聲', (state, aIdx, _pool) => {
-  return updatePlayer(
-    addLog(state, '回聲：下回合「回聲」+80', aIdx),
-    aIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, damageBonusPending: 80 } : null,
-    }),
-  );
-});
+// ⭐⭐v6.414：卡面「這隻寶可夢**「回聲」**的傷害『+80』點」⇒ **招式限定**。
+//   先前手刻 `damageBonusPending: 80`（通用）⇒ 下回合用別的招式也會吃到 +80。
+//   收斂到中央 setSelfDamageBonusPendingPost（Rule 38：全站只有那一份寫入點）。
+regPost('美洛耶塔ex|回聲', setSelfDamageBonusPendingPost(80, '回聲', '回聲'));
 
 regPre('桃歹郎|糬猛攻', (s) => ({ state: s, damage: 20 }));
-regPost('桃歹郎|糬猛攻', (state, aIdx, _pool) => {
-  return updatePlayer(
-    addLog(state, '糬猛攻：下回合「糬猛攻」+50', aIdx),
-    aIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, damageBonusPending: 50 } : null,
-    }),
-  );
-});
+// ⭐⭐v6.414：卡面「這隻寶可夢**「糬猛攻」**的傷害『+50』點」⇒ **招式限定**。
+regPost('桃歹郎|糬猛攻', setSelfDamageBonusPendingPost(50, '糬猛攻', '糬猛攻'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 17. 「下個對手回合不受 N 以下招式傷害」(2 張) — v5.886 中央 blockAttackDamageIfLTE*(最終傷害≤N→0,

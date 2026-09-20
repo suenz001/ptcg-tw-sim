@@ -27,6 +27,10 @@ export const CLEAR_ON_EXIT_FLAGS: readonly (keyof CardInstance)[] = [
   'retreatCostIncreaseThisTurn',
   // BUFF 加傷(備戰可持有,禁 scrub)
   'damageBonusThisTurn', 'damageBonusPending', 'deferredPrizeBonusThisTurn',
+  // ⭐v6.414 招式限定的下回合加傷／覆寫（與上面兩個數值欄位**配對存在**）
+  'damageBonusThisTurnAttackName', 'damageBonusPendingAttackName',
+  'damageOverrideThisTurn', 'damageOverridePending',
+  'damageOverrideThisTurnAttackName', 'damageOverridePendingAttackName',
   'deferredPrizeBonusNextTurn',
   // RECEIVE 受傷類免疫/減傷/弱點(禁 scrub)
   'damageReduceNextHit', 'takeExtraDamageThisTurn', 'takeExtraDamageNextTurn',

@@ -1,5 +1,66 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.414 ⭐⭐⭐ 招式限定的下回合加傷／「傷害改為 N」覆寫（玩家可見）
+
+BASE `c4d07e4b0a3db164258cb471e98566e37f23c3be`（v6.413）。
+⚠ 本版**動了 `src/lib/game/engine.ts` 與 `src/lib/game/effects.ts`** ⇒ 部署要跑
+**`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**（IRON_RULES Rule 43）。
+⚠⚠ **這一版會改變對戰結果**（招式限定的加傷不再外溢到別的招式）。
+
+### 【零】站長裁示
+
+v6.412 收尾時三選多題的第三項（v6.413 已做完前兩項）。
+
+### 【一】卡面掃描：兩種寫法
+
+全卡池（H／I／J 標）掃「在下個自己的回合…傷害」共 9 支，**恰好**分成兩類：
+
+| 類型 | 卡面 | 卡 |
+|---|---|---|
+| **招式限定**（5） | 「這隻寶可夢**「某招」**的傷害『+N』點」 | 巨金怪｜彗星拳 +60、路卡利歐ex｜龍捲風猛攻 +100、桃歹郎｜糬猛攻 +50、美洛耶塔ex｜回聲 +80、步哨鼠｜聚氣（「必殺門牙」**改為** 240） |
+| 通用（4） | 「這隻寶可夢**使用的招式**，對對手的戰鬥寶可夢造成的傷害『+N』點」 | 大電海燕｜風力充能 +120、樹枕尾熊｜晚安敲擊 +100、戰槌龍ex｜亂暴錘 +150、頓甲｜接二連三 +120 |
+
+站內先前**全部**寫成通用 `damageBonusPending` ⇒ 招式限定那 5 張的限定條件整個不存在。
+
+### 【二】實證（`__probe414` 與守衛行為端）
+
+| 盤面 | 修正前 | 修正後 |
+|---|---|---|
+| 巨金怪 打完彗星拳 → 下回合「潔淨爆破」 | 260 🔴 | **200** ✅ |
+| 巨金怪 打完彗星拳 → 下回合「彗星拳」 | 120 ✅ | 120 ✅（不變） |
+| 路卡利歐ex 打完龍捲風猛攻 → 下回合「波動衝天」 | 150 🔴 | **50** ✅ |
+| 大電海燕 打完風力充能 → 下回合「強力伏特」 | 220 ✅ | 220 ✅（通用，不變） |
+| 步哨鼠 聚氣 → 必殺門牙，同時另有 +30 回合加傷 | 110 🔴（160 被蓋掉） | **270** ✅ |
+
+⚠ 桃歹郎（I）、美洛耶塔ex（I）、步哨鼠（I）那一版卡**只有一支會造成傷害的招式**
+⇒ 行為端測不到「用別的招式」，由守衛 E 段的登記斷言守住。這一點在守衛註解裡誠實寫明。
+
+### 【三】改法（收斂）
+
+1. `types.ts`：`damageBonusPendingAttackName` / `damageBonusThisTurnAttackName`（與數值欄位**配對**）、
+   `damageOverridePending(AttackName)` / `damageOverrideThisTurn(AttackName)`、
+   `GameState._attackTimeAttackName`（攻擊宣告時的招式名快照）。
+2. `engine.ts`：招式名快照**沿用 `_attackTimeAttackerEnergyUnits` 的同一個設定點**
+   （Rule 38：不另開 ATTACK 起點 hook）＋最終清除；END_TURN promote 配對搬運；
+   END_TURN 清除器涵蓋新四欄（原本只看 `damageBonusThisTurn`，覆寫型會整個漏清）。
+3. `effects.ts`：中央 setter `setSelfDamageBonusPendingPost(amount, label, attackName?)`
+   與 `setSelfDamageOverridePendingPost(amount, label, attackName)` 都 export；
+   消費端加招式名 gate（快照缺席時加傷 fail-open、覆寫 fail-closed —— 加傷有通用版、覆寫沒有）；
+   覆寫段放在**所有加成之前**（卡面是「改為」＝改招式本身的數字，其他加成疊在它之上）。
+4. **6 個手刻寫入點**（v2630×2／v2750／v2354／v2670／m5_preview／v2650）全部改呼叫中央 setter。
+
+### 【四】守衛
+
+新增 `scripts/test-v6414-attack-scoped-bonus.mjs`（20 條）：
+A(2 哨兵)／B(6 行為端，含兩張卡的真 bug 與正對照)／C(4 覆寫)／D(1 通用零回歸)／
+E(4 靜態，含全卡池 5+4 的下限斷言)／F(2 反安慰劑)。
+**HEAD-FAIL 實測**：在 BASE（v6.413）上 **8 條紅**（A1／A2／B2／B4／C2／E1／E2／E3）。
+
+⚠ 本版動了 `engine.ts` ⇒ 新增 `scripts/lib/engine-strip-v6414.mjs`（4 組，由
+`__m6a/gen_strip414.py` 以 difflib 自動產生＋**當場驗證剝除後逐字等於 BASE**），
+接線到 `test-v6265`（兩處）、`test-v6375`、`test-v6371`，**Rule 54 排在 v6.413 之前**。
+
+
 ## v6.413 ⭐⭐⭐ 招致削傷不限目標位置＋全備戰傷害與油之機關槍收斂（玩家可見）
 
 BASE `c65786c7b373da3b82fef0b641899d4ef2437091`（v6.412）。

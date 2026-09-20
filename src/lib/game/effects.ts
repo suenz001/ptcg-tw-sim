@@ -4127,6 +4127,10 @@ function _sageEvolveApply(state: GameState, aIdx: 0 | 1, evoIid: string, targetI
     cantAttackThisTurn: undefined, cantAttackPending: undefined,
     cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
     damageBonusThisTurn: undefined, damageBonusPending: undefined,
+    // ⭐v6.414 配對清除（少清一邊 ⇒ 招式限定殘留到別的寶可夢／別的回合）
+    damageBonusThisTurnAttackName: undefined, damageBonusPendingAttackName: undefined,
+    damageOverrideThisTurn: undefined, damageOverridePending: undefined,
+    damageOverrideThisTurnAttackName: undefined, damageOverridePendingAttackName: undefined,
     damageReduceNextHit: undefined,
     blockedAttackNamesThisTurn: undefined, blockedAttackNamesNextTurn: undefined,
     abilityUsedThisTurn: undefined,
@@ -9318,16 +9322,57 @@ export function applyAttackerActiveDamageBonuses(
   };
   const _toolsJammed = !!state.activeStadium
     && JAMMING_TOWER_STADIUMS.has(pool.get(state.activeStadium.cardId)?.name ?? '');
+  // >>> v6414-attack-scoped-override
+  // ⭐⭐⭐v6.414：「在下個自己的回合，這隻寶可夢『某招』的傷害**改為**『N』點」（步哨鼠｜聚氣）。
+  //   ⚠ 這是**覆寫**不是加傷：改掉的是招式本身的數字，所以放在所有加成之前，
+  //     後面的弱點・抵抗力、道具加傷等照常在它之上計算。
+  //   ⚠ 站內先前用 `damageBonusPending: 160` 逼近（必殺門牙 80 + 160 = 240），
+  //     註解自承「簡化：所有招式都 +160」—— 兩重錯誤（別的招式也吃到、而且會與其他加成相加）。
+  //   ⚠ 覆寫一律是招式限定的（沒有通用版卡面）⇒ 招式名快照缺席時**不生效**（fail-closed），
+  //     與加傷那段（快照缺席時照舊生效，fail-open）刻意相反：加傷有通用版、覆寫沒有。
+  if (aInst.damageOverrideThisTurn && aInst.damageOverrideThisTurn > 0
+    && aInst.damageOverrideThisTurnAttackName
+    && state._attackTimeAttackName === aInst.damageOverrideThisTurnAttackName) {
+    const _ov = aInst.damageOverrideThisTurn;
+    const _before = d;
+    d = _ov;
+    s = addLog(s, `${aCard.name}「${aInst.damageOverrideThisTurnAttackName}」的傷害改為 ${_ov}（${_before} → ${_ov}）`, aIdx);
+    // ⚠ **刻意不 push 進 formula**：formula 記的是「加成項」（+N／-N），而覆寫改的是
+    //   招式本身的基礎數字 ⇒ 它不是加成項。真要顯示的話應該改「基礎」那一項，
+    //   那是 engine 產生的，與本函式無關。改動由上面的 addLog 對玩家交代。
+    //   （也因此 test-v6408 C1 的「formula.push 數 === A 段組數」不受本版影響。）
+    if (!isFestivalDanceFirstAttack(state, aIdx, pool) && s.players[aIdx].active) {
+      const na = { ...s.players[aIdx].active! };
+      delete na.damageOverrideThisTurn;
+      delete na.damageOverrideThisTurnAttackName;
+      const ps = [...s.players] as [PlayerState, PlayerState]; ps[aIdx] = { ...ps[aIdx], active: na };
+      s = { ...s, players: ps };
+    }
+  }
+  // <<< v6414-attack-scoped-override
   // ── v5.535 回合加傷（damageBonusThisTurn；巨金怪彗星拳／大電海燕風力充能／奔流之心，下次攻擊 +N）──
   //   消耗型，祭典樂舞首擊不消耗。一般攻擊 engine 已 inline 套+設 guard→此處只在延後/狙擊(baseDamage=0)路徑生效。
-  if (aInst.damageBonusThisTurn) {
+  // >>> v6414-attack-scoped-gate
+  // ⭐⭐⭐v6.414：**招式限定**的加傷只有招式名相符時才生效（卡面「這隻寶可夢『某招』的傷害」）。
+  //   ⚠ 招式名快照由 engine 在攻擊宣告時寫進 `state._attackTimeAttackName`（Rule 38：只有一份，
+  //     延後結算／狙擊路徑讀到的也是它）。快照缺席時**照舊生效**（不改變既有通用卡的行為）。
+  //   ⚠ 不相符時**不加也不消耗** —— END_TURN 的清除器會清掉，不會殘留到下一個回合。
+  const _scopedName = aInst.damageBonusThisTurnAttackName;
+  const _thisAttackName = state._attackTimeAttackName;
+  const _scopeOk = !_scopedName || !_thisAttackName || _scopedName === _thisAttackName;
+  if (aInst.damageBonusThisTurn && _scopeOk) {
+  // <<< v6414-attack-scoped-gate
     const b = aInst.damageBonusThisTurn; d += b;
-    s = addLog(s, `${aCard.name} 招式傷害 +${b}（回合加傷效果）`, aIdx);
+    s = addLog(s, _scopedName
+      ? `${aCard.name}「${_scopedName}」的傷害 +${b}（回合加傷效果）`
+      : `${aCard.name} 招式傷害 +${b}（回合加傷效果）`, aIdx);
     formula.push({ sign: '+', value: b, label: '回合加傷' });
     // ⚠v6.408：基底一律是**最新的** s.players[aIdx].active（不是快照）——
     //   用快照當基底會把 PRE 之前清掉的其他旗標一起復活。
     if (!isFestivalDanceFirstAttack(state, aIdx, pool) && s.players[aIdx].active) {
-      const na = { ...s.players[aIdx].active! }; delete na.damageBonusThisTurn;
+      const na = { ...s.players[aIdx].active! };
+      delete na.damageBonusThisTurn;
+      delete na.damageBonusThisTurnAttackName;   // ⭐v6.414 配對清除
       const ps = [...s.players] as [PlayerState, PlayerState]; ps[aIdx] = { ...ps[aIdx], active: na };
       s = { ...s, players: ps };
     }
@@ -12691,20 +12736,60 @@ regPre('椰蛋樹|投球時刻', (state, aIdx, pool) => {
 //   電蜘蛛 複眼（PRE：若對手戰鬥擁有特性則 +50，和 麻麻羅網 疊加）
 // ══════════════════════════════════════════════════════════════════════════════
 
-function setSelfDamageBonusPendingPost(amount: number, label: string): AttackPostFn {
+// >>> v6414-attack-scoped-bonus-setter
+/**
+ * ⭐⭐⭐v6.414：「在下個自己的回合…傷害 +N」的**唯一** setter（IRON_RULES Rule 38）。
+ *
+ * 站內原本有 6 個地方各自手刻 `damageBonusPending: N` ⇒ 判準六份，
+ * 而且其中 5 張卡的卡面其實是**招式限定**的，手刻版全部漏掉限定條件。
+ *
+ * @param attackName 有值 ⇒ **只有**用這一招時才加（卡面「這隻寶可夢『某招』的傷害」）；
+ *                   不傳 ⇒ 通用（卡面「這隻寶可夢**使用的招式**…」），行為與 v6.413 相同。
+ */
+export function setSelfDamageBonusPendingPost(amount: number, label: string, attackName?: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const att = state.players[aIdx].active;
     if (!att) return state;
     const name = pool.get(att.cardId)?.name ?? '?';
-    const s = addLog(state, `${label}：${name} 下回合招式傷害 +${amount}`, aIdx);
+    const s = addLog(state, attackName
+      ? `${label}：${name} 下回合「${attackName}」的傷害 +${amount}`
+      : `${label}：${name} 下回合招式傷害 +${amount}`, aIdx);
     return updatePlayer(s, aIdx, p => ({
       ...p,
-      active: p.active ? { ...p.active, damageBonusPending: (p.active.damageBonusPending ?? 0) + amount } : null,
+      active: p.active
+        ? {
+          ...p.active,
+          damageBonusPending: (p.active.damageBonusPending ?? 0) + amount,
+          ...(attackName ? { damageBonusPendingAttackName: attackName } : {}),
+        }
+        : null,
     }));
   };
 }
 
-regPost('巨金怪|彗星拳', setSelfDamageBonusPendingPost(60, '彗星拳'));
+/**
+ * ⭐v6.414：「在下個自己的回合，這隻寶可夢『某招』的傷害**改為**『N』點」的唯一 setter。
+ * 目前只有步哨鼠｜聚氣（「必殺門牙」改為 240）。
+ * ⚠ 與加傷是**不同語意**：覆寫的是招式的基礎傷害，不與 +N 相加。
+ */
+export function setSelfDamageOverridePendingPost(amount: number, label: string, attackName: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const att = state.players[aIdx].active;
+    if (!att) return state;
+    const name = pool.get(att.cardId)?.name ?? '?';
+    const s = addLog(state, `${label}：${name} 下回合「${attackName}」的傷害改為 ${amount}`, aIdx);
+    return updatePlayer(s, aIdx, p => ({
+      ...p,
+      active: p.active
+        ? { ...p.active, damageOverridePending: amount, damageOverridePendingAttackName: attackName }
+        : null,
+    }));
+  };
+}
+// <<< v6414-attack-scoped-bonus-setter
+
+// ⭐v6.414：卡面「這隻寶可夢**「彗星拳」**的傷害『+60』點」⇒ 招式限定（第三參數）。
+regPost('巨金怪|彗星拳', setSelfDamageBonusPendingPost(60, '彗星拳', '彗星拳'));
 regPost('大電海燕|風力充能', setSelfDamageBonusPendingPost(120, '風力充能'));
 
 // 電蜘蛛｜麻麻羅網 — 複眼 +50（對「擁有特性」的對手戰鬥寶可夢）由 PASSIVE_ATTACK_BONUS['複眼']
@@ -14692,6 +14777,12 @@ regR('sylveon-skystone-bounce', (state, aIdx, iids, _params, pool) => {
       cantRetreatNextTurn: undefined,
       cantRetreatPendingSelf: undefined,
       damageBonusPending: undefined,
+      damageBonusThisTurnAttackName: undefined,   // ⭐v6.414 配對清除
+      damageBonusPendingAttackName: undefined,
+      damageOverrideThisTurn: undefined,
+      damageOverridePending: undefined,
+      damageOverrideThisTurnAttackName: undefined,
+      damageOverridePendingAttackName: undefined,
       takeExtraDamageThisTurn: undefined,
       takeExtraDamageNextTurn: undefined,
       blockedAttackNamesNextTurn: undefined,

@@ -181,6 +181,38 @@ export interface CardInstance {
    * 在 END_TURN 切換到擁有者下個回合時，自動 promote 為 damageBonusThisTurn。
    */
   damageBonusPending?: number;
+  // >>> v6414-attack-scoped-bonus
+  /**
+   * ⭐⭐⭐v6.414：**招式限定**的下回合加傷／傷害覆寫。
+   *
+   * 【為什麼要分開】卡面其實有兩種寫法，站內先前全部寫成同一種（通用加傷）：
+   *   ・通用（4 張）：「在下個自己的回合，這隻寶可夢**使用的招式**，對對手的戰鬥寶可夢
+   *     造成的傷害『+N』點。」—— 大電海燕｜風力充能、樹枕尾熊｜晚安敲擊、
+   *     戰槌龍ex｜亂暴錘、頓甲｜接二連三。
+   *   ・**招式限定**（5 張）：「在下個自己的回合，這隻寶可夢**「某招」**的傷害『+N』點。」
+   *     —— 巨金怪｜彗星拳 +60、路卡利歐ex｜龍捲風猛攻 +100、桃歹郎｜糬猛攻 +50、
+   *     美洛耶塔ex｜回聲 +80；以及步哨鼠｜聚氣（「必殺門牙」的傷害**改為**「240」點）。
+   *
+   * 站內先前把後者也寫成通用加傷 ⇒ **改用別的招式也會吃到加傷**（玩家可見的錯誤）。
+   * 這兩個欄位與 `damageBonusPending` / `damageBonusThisTurn` **配對存在**：
+   * 有值 ⇒ 只有招式名相符時才生效；沒有值 ⇒ 通用（行為與 v6.413 完全相同）。
+   */
+  damageBonusPendingAttackName?: string;
+  /** 由 `damageBonusPendingAttackName` 在擁有者下個回合開始時一併 promote 而來。 */
+  damageBonusThisTurnAttackName?: string;
+  /**
+   * ⭐v6.414：步哨鼠｜聚氣 —— 卡面是「傷害**改為**『240』點」，不是「+N」。
+   * 先前站內用 `damageBonusPending: 160` 逼近（80+160=240），註解自承「簡化：所有招式都 +160」。
+   * ⚠ 那是兩重錯誤：① 別的招式也吃到 +160；② 「改為」是**覆寫**，不該再與其他加成相加。
+   */
+  damageOverridePending?: number;
+  /** 與 `damageOverridePending` 配對的招式名（覆寫一律是招式限定的，沒有通用版卡面）。 */
+  damageOverridePendingAttackName?: string;
+  /** promote 後的覆寫值（在該回合 END_TURN 清除）。 */
+  damageOverrideThisTurn?: number;
+  /** 與 `damageOverrideThisTurn` 配對的招式名。 */
+  damageOverrideThisTurnAttackName?: string;
+  // <<< v6414-attack-scoped-bonus
   /**
    * v2.69 超級赫拉克羅斯ex｜重裝角擊 — 累計上個對手回合此寶可夢受到的招式傷害。
    * 在每次 ATTACK 對 defender 結算後 +baseDamage；於 defender 自己回合的 END_TURN 時清為 0。
@@ -775,6 +807,14 @@ export interface GameState {
    * ⚠ engine 在每一次 ATTACK 開頭重置（與 `_attackerActiveBonusDone` 同一處）。
    */
   _attackSelfPenalty?: number;
+  // >>> v6414-attack-time-attack-name
+  /**
+   * ⭐⭐⭐v6.414：**本次攻擊宣告的招式名**（攻擊宣告當時的快照，與其他 `_attackTime*` 同一個
+   * 設定點）。招式限定的加傷／覆寫要靠它比對，而且**延後結算／狙擊路徑**也讀得到同一份
+   * （IRON_RULES Rule 38：判準只能有一份，不可以讓 engine 與 effects 各自再取一次招式名）。
+   */
+  _attackTimeAttackName?: string;
+  // <<< v6414-attack-time-attack-name
   // <<< v6413-attack-self-penalty
   /**
    * ⭐⭐⭐ v6.407：本次招式「已經決定、但還沒有執行」的**自身能量付出**。

@@ -16,14 +16,18 @@ const { clearActiveEffects, CLEAR_ON_EXIT_FLAGS, BENCH_SCRUB_LOCK_FLAGS } = awai
 let pass=0,fail=0;
 const T=(n,fn)=>{try{fn();console.log('PASS',n);pass++;}catch(e){console.log('FAIL',n,'::',e.message);fail++;}};
 
-T('① CLEAR_ON_EXIT_FLAGS=64、BENCH_SCRUB_LOCK_FLAGS=10 且為子集',()=>{
-  assert.equal(CLEAR_ON_EXIT_FLAGS.length,64,'CLEAR_ON_EXIT 應 64，實際'+CLEAR_ON_EXIT_FLAGS.length);
+// ⭐v6.414：64 → 70。新增的 6 個是招式限定的下回合加傷／「傷害改為 N」覆寫
+//   （damageBonus{Pending,ThisTurn}AttackName、damageOverride{Pending,ThisTurn}
+//    與其 AttackName）。⚠ 這個數字是**刻意 pin 死**的：新增旗標必須回來這裡有意識地
+//   確認它該不該在離場時清除（②會逐一驗證每一個都真的被 clearActiveEffects 清掉）。
+T('① CLEAR_ON_EXIT_FLAGS=70、BENCH_SCRUB_LOCK_FLAGS=10 且為子集',()=>{
+  assert.equal(CLEAR_ON_EXIT_FLAGS.length,70,'CLEAR_ON_EXIT 應 70，實際'+CLEAR_ON_EXIT_FLAGS.length);
   assert.equal(BENCH_SCRUB_LOCK_FLAGS.length,10,'SCRUB 應 10');
   for(const k of BENCH_SCRUB_LOCK_FLAGS) assert(CLEAR_ON_EXIT_FLAGS.includes(k),'子集破壞 '+k);
 });
 
 T('②★ clearActiveEffects 清除【全部】CLEAR_ON_EXIT 旗標，保留身分/附加/傷害/進化',()=>{
-  // 建一個把所有 64 旗標都設真值的 instance + 身分欄位
+  // 建一個把所有 70 旗標都設真值的 instance + 身分欄位
   const inst={ iid:'x1', cardId:'9999', damage:120, energyAttached:[{iid:'e1',cardId:'14102'}],
     toolAttached:{iid:'t1',cardId:'tool'}, extraTools:[{iid:'t2',cardId:'tool2'}],
     evolvedFromStack:[{iid:'pre',cardId:'1'}], fossilOnField:true, abilityUsedThisTurn:true, justPlaced:true };

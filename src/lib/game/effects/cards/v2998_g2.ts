@@ -106,6 +106,12 @@ function swapOppActiveWithBench(
       damageReduceNextHit: undefined,
       damageBonusThisTurn: undefined,
       damageBonusPending: undefined,
+      damageBonusThisTurnAttackName: undefined,   // ⭐v6.414 配對清除
+      damageBonusPendingAttackName: undefined,
+      damageOverrideThisTurn: undefined,
+      damageOverridePending: undefined,
+      damageOverrideThisTurnAttackName: undefined,
+      damageOverridePendingAttackName: undefined,
       takeExtraDamageThisTurn: undefined,
       takeExtraDamageNextTurn: undefined,
       cantAttachEnergyThisTurn: undefined,

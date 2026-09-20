@@ -15,6 +15,7 @@ import type { Card } from '$lib/cards/types';   // ⭐v6.385b totalEnergyCount �
 import { startEnergyChain } from './v158_energy_chain';
 import { deckWithCardsToBottom, regAByName } from '../_shared'; // v6.124 「重洗放回牌庫下方」中央管線
 import { flipCoinsWithLog } from '../../effects';
+import { setSelfDamageBonusPendingPost } from '../../effects';   // ⭐v6.414 下回合加傷／覆寫的唯一寫入點
 import { countAttachedEnergyAsUnits } from '../_shared';   // ⭐v6.385b 能量**個數**（host-aware ＋ 繁茂）
 // v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
 import { oppDiscardChosenConcealedPost } from '../../effects';
@@ -231,15 +232,10 @@ regPost('大嘴蝠|隱密飛行', (state, aIdx) =>
 
 // 頓甲｜接二連三：20 + 下回合自身招式傷害 +120
 // 卡面：20 在下個自己的回合，這隻寶可夢使用的招式，對對手的戰鬥寶可夢造成的傷害「+120」點。
-// 實裝：regPost 設 damageBonusPending = 120（END_TURN promote 為 damageBonusThisTurn）
+// ⭐v6.414：卡面是「這隻寶可夢**使用的招式**…『+120』點」⇒ **通用**（不傳招式名），
+//   但寫入點收斂到中央 setSelfDamageBonusPendingPost（Rule 38）。行為零改變。
 regPre('頓甲|接二連三', (state) => ({ state, damage: 20 }));
-regPost('頓甲|接二連三', (state, aIdx) =>
-  updatePlayer(
-    addLog(state, '接二連三：下回合此寶可夢招式傷害 +120', aIdx),
-    aIdx,
-    p => p.active ? { ...p, active: { ...p.active, damageBonusPending: 120 } } : p,
-  ),
-);
+regPost('頓甲|接二連三', setSelfDamageBonusPendingPost(120, '接二連三'));
 
 // ── Group E：牌庫搜尋攻擊 ────────────────────────────────────────────────────
 

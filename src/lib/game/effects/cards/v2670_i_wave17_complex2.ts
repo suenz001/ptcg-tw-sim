@@ -36,6 +36,7 @@ import { bareCardsForReturn, splitPokemonReturnToHand } from '../_shared'; // v5
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, flipCoinsUntilTails, statusPost, applyStatusToSelfActive, applyDamageToAllOpp } from '../../effects';
+import { setSelfDamageBonusPendingPost } from '../../effects';   // ⭐v6.414 下回合加傷／覆寫的唯一寫入點
 // v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
 import { oppReturnChosenConcealedToDeckPost } from '../../effects';
 import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
@@ -72,10 +73,9 @@ regPost('樹枕尾熊|晚安敲擊', (state, aIdx, pool) => {
   // 自方戰鬥場睡眠 — v5.675 收斂到中央自身狀態 helper
   s = applyStatusToSelfActive(s, aIdx, 'asleep', pool, { label: '晚安敲擊' });
   // 下回合 +100
-  s = updatePlayer(s, aIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, damageBonusPending: 100 } : null,
-  }));
+  // ⭐v6.414：卡面是「這隻寶可夢**使用的招式**…『+100』點」⇒ **通用**（不傳招式名），
+  //   寫入點收斂到中央 setSelfDamageBonusPendingPost（Rule 38）。行為零改變。
+  s = setSelfDamageBonusPendingPost(100, '晚安敲擊')(s, aIdx, pool);
   return addLog(s, '晚安敲擊：雙方戰鬥場睡眠 + 自身下回合招式 +100', aIdx);
 });
 

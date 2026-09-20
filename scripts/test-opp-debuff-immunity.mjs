@@ -236,6 +236,12 @@ T('⭐⭐帝牙海獅｜凍結獠牙：【薄霧能量】**不可以**解除鎖�
 const SELF_OR_BUFF_FLAGS = new Set([
   'cantRetreatPendingSelf',             // 自身罰則（反衝類招式寫在攻擊方身上）
   'damageBonusPending',                 // 自身加傷
+  // ⭐v6.414：招式限定的下回合加傷／「傷害改為 N」覆寫 —— 全部都是**攻擊方寫在自己身上**的
+  //   增益（卡面「在下個自己的回合，**這隻寶可夢**…的傷害」），不是對手加在受招者身上的
+  //   debuff ⇒ 歸 SELF_OR_BUFF，不進 OPP_ATTACK_DEBUFF_FLAGS。
+  'damageBonusPendingAttackName', 'damageBonusThisTurnAttackName',
+  'damageOverridePending', 'damageOverridePendingAttackName',
+  'damageOverrideThisTurn', 'damageOverrideThisTurnAttackName',
   'damageReduceNextHit',                // 自身減傷（變硬類）
   'retaliateCountersOnNextHit',         // 自身反擊指示物
   'pointySpinNextTurn',                 // 自身加傷條件（v5.967 已被 attackUsedLastSelfTurn 取代）

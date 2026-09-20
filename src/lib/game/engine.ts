@@ -5582,6 +5582,12 @@ function handlePlaying(
     //   攻擊方能量單位數計，不計入招式自身條件丟棄（判例：三重冰霜類自丟能量招式仍以開打前計）。
     const attackTimeAttackerEnergyUnits = totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx, attacker.active);
     workingState = { ...workingState, _attackTimeAttackerEnergyUnits: attackTimeAttackerEnergyUnits };
+    // >>> v6414-attack-time-attack-name-set
+    // ⭐⭐⭐v6.414：本次攻擊宣告的招式名 —— 招式限定的下回合加傷／覆寫要靠它比對。
+    //   ⚠ 刻意沿用**同一個**設定點（Rule 38：不另開 ATTACK 起點 hook），
+    //     這樣延後結算／狙擊路徑讀到的也是同一份快照。
+    workingState = { ...workingState, _attackTimeAttackName: attack.name };
+    // <<< v6414-attack-time-attack-name-set
     // >>> v6373-as-of-declaration-holders-set
     // ⭐⭐⭐v6.373 站長裁定 A-3（逐字：「凡是有這種類似的狀況，請你都比照 謝米［特性］花之帷幔
     //   的判定邏輯」）：上面那 5 份 boolean 快照只記「宣告當時生沒生效」，分不出持有者後來是
@@ -8057,7 +8063,25 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       if (c.damageBonusPending && c.damageBonusPending > 0) {
         n = { ...n, damageBonusThisTurn: (n.damageBonusThisTurn ?? 0) + c.damageBonusPending };
         delete n.damageBonusPending;
+        // >>> v6414-promote-attack-name
+        // ⭐v6.414：招式限定旗標與數值**配對搬運**（少搬一邊＝限定失效或永久殘留）。
+        if (c.damageBonusPendingAttackName) {
+          n = { ...n, damageBonusThisTurnAttackName: c.damageBonusPendingAttackName };
+          delete n.damageBonusPendingAttackName;
+        }
+        // <<< v6414-promote-attack-name
       }
+      // >>> v6414-promote-override
+      // ⭐v6.414：步哨鼠｜聚氣的「傷害**改為** N」覆寫（與加傷是不同語意，不可相加）。
+      if (c.damageOverridePending && c.damageOverridePending > 0) {
+        n = { ...n, damageOverrideThisTurn: c.damageOverridePending };
+        delete n.damageOverridePending;
+        if (c.damageOverridePendingAttackName) {
+          n = { ...n, damageOverrideThisTurnAttackName: c.damageOverridePendingAttackName };
+          delete n.damageOverridePendingAttackName;
+        }
+      }
+      // <<< v6414-promote-override
       if (c.cantRetreatPendingSelf) {
         n = { ...n, cantRetreatNextTurn: true };
         delete n.cantRetreatPendingSelf;
@@ -8177,8 +8201,19 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     };
     // 清除目前玩家 active/bench 上殘留的 damageBonusThisTurn（若攻擊未命中用掉）
     const clearDmgBonusThisTurn = (c: CardInstance): CardInstance => {
-      if (!c.damageBonusThisTurn) return c;
-      const n = { ...c }; delete n.damageBonusThisTurn; return n;
+      // >>> v6414-clear-attack-scoped
+      // ⭐v6.414：招式限定的招式名與「改為 N」覆寫也要一起清 —— 少清一邊會殘留到下一個回合。
+      //   ⚠ 進入條件改成「四個欄位任一存在」：原本只看 damageBonusThisTurn，
+      //     覆寫型（沒有 damageBonusThisTurn）會整個漏清。
+      if (!c.damageBonusThisTurn && !c.damageBonusThisTurnAttackName
+        && !c.damageOverrideThisTurn && !c.damageOverrideThisTurnAttackName) return c;
+      const n = { ...c };
+      delete n.damageBonusThisTurn;
+      delete n.damageBonusThisTurnAttackName;
+      delete n.damageOverrideThisTurn;
+      delete n.damageOverrideThisTurnAttackName;
+      return n;
+      // <<< v6414-clear-attack-scoped
     };
     // v2.92：於 aIdx 方清除本回合已消耗完的 blockedAttackNamesThisTurn
     const clearBlockedAttackThisTurn = (c: CardInstance): CardInstance => {
@@ -9368,6 +9403,14 @@ function applyActionImpl(
     delete cleared._attackTimeAttackerEnergyUnits;
     next = cleared;
   }
+  // >>> v6414-attack-time-attack-name-clear
+  // ⭐v6.414：本次攻擊的招式名快照 同步清除（與上面同一個時機）。
+  if (next._attackTimeAttackName !== undefined && !next.pendingSelection) {
+    const cleared = { ...next };
+    delete cleared._attackTimeAttackName;
+    next = cleared;
+  }
+  // <<< v6414-attack-time-attack-name-clear
 
   // v5.335：集中偵測「自方戰鬥寶可夢於自己回合回到自己備戰區」→ 觸發 ON_RETREAT_TO_BENCH 類特性
   //   （海豚俠｜全能變身 / 鋼炮臂蝦｜返回重載）。原本只有 RETREAT handler inline 觸發；衝浪手 /

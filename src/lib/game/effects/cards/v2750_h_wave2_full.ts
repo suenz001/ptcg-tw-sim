@@ -32,6 +32,7 @@ import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { faceAttackDamage } from '../_shared'; // v6.333 同名不同印刷：讀出招那一張的卡面傷害
 import { canApplyEffectToTarget } from '../../defense';
 import { defCantRetreatNextPost, discardOppActiveEnergyPost, selfCantAttackNextPost, oppSwapDmgPost } from '../../effects'; // v5.840 收斂禁撤退+化隱gate; v5.973 咬碎能量丟棄中央; v5.982 全鎖自鎖
+import { setSelfDamageBonusPendingPost } from '../../effects';   // ⭐v6.414 下回合加傷／覆寫的唯一寫入點
 import { flipCoinsUntilTails } from '../../effects'; // v6.234 擲到反面為止中央 helper（上限逐處宣告）
 import { openPeekOppHandView } from '../../effects'; // v5.876 查看對手手牌 UI
 import { registerDirectEvolveAwaken } from '../../effects'; // v6.078 「覺醒」型直接進化中央 helper
@@ -1596,14 +1597,11 @@ regPost('輕身鱈ex|光芒強襲', (state, aIdx, _pool, action) => {
   }));
 });
 
-// 路卡利歐ex|龍捲風猛攻 100 — 下回合本招式 +100（用 damageBonusPending）
+// 路卡利歐ex|龍捲風猛攻 100 — 下回合**本招式** +100
+// ⭐⭐v6.414：卡面「這隻寶可夢**「龍捲風猛攻」**的傷害『+100』點」⇒ **招式限定**。
+//   先前手刻 `damageBonusPending: 100`（通用）⇒ 下回合用別的招式也會吃到 +100。
 regPre('路卡利歐ex|龍捲風猛攻', (s) => ({ state: s, damage: 100 }));
-regPost('路卡利歐ex|龍捲風猛攻', (state, aIdx, _pool) => {
-  return updatePlayer(addLog(state, '龍捲風猛攻：下回合本招式 +100', aIdx), aIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, damageBonusPending: 100 } : null,
-  }));
-});
+regPost('路卡利歐ex|龍捲風猛攻', setSelfDamageBonusPendingPost(100, '龍捲風猛攻', '龍捲風猛攻'));
 
 // 摔角鷹人|上升衝撞、哲爾尼亞斯ex|上升角擊、鐵臂膀|超合金之手 — 已在 H Wave 1
 // 雷吉斯奇魯|激怒之錘 / 故勒頓ex|復仇懲處 — 已在 H Wave 1

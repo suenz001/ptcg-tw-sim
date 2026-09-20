@@ -21,6 +21,7 @@ import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost, snipeOneOppBenchPost, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware, resolveOptInPayment } from '../../effects'; // v5.992 若希望 opt-in 中央管線
+import { setSelfDamageOverridePendingPost } from '../../effects';   // ⭐v6.414 下回合加傷／覆寫的唯一寫入點
 import { registerDirectEvolveAwaken } from '../../effects'; // v6.078 「覺醒」型直接進化中央 helper
 import { defHasCountersBonusPre } from '../../effects'; // ⭐v6.388a 收斂：對手身上有指示物則加傷（中央）
 import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
@@ -702,21 +703,17 @@ regPost('奇樹的頑皮雷彈|怦怦炸彈', (state, aIdx, pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 6. 自身招式 +N — 步哨鼠｜聚氣（下回合「必殺門牙」傷害改為 240）
+// 6. 步哨鼠｜聚氣 — 下回合「必殺門牙」的傷害**改為** 240
 // ══════════════════════════════════════════════════════════════════════════════
+// ⭐⭐⭐v6.414：卡面逐字是
+//   「在下個自己的回合，這隻寶可夢「必殺門牙」的傷害**改為**「240」點。」
+//   先前寫成 `damageBonusPending: 160`，註解自承「簡化：所有招式都 +160」—— **兩重錯誤**：
+//     ① 招式限定被忽略 ⇒ 下回合用別的招式（例如「咬住」）也會 +160；
+//     ② 「改為」是**覆寫**不是加傷 ⇒ 先前會與其他加成相加（例如力量蛋白飲 +30 會變成 270，
+//        而卡面的語意是「必殺門牙的傷害就是 240」，其他加成應該疊在 240 之上而不是 80+160+30）。
+//   收斂到中央 `setSelfDamageOverridePendingPost`（覆寫型的唯一寫入點，Rule 38）。
 regPre('步哨鼠|聚氣', (s) => ({ state: s, damage: 0 }));
-regPost('步哨鼠|聚氣', (state, aIdx, _pool) => {
-  return updatePlayer(
-    addLog(state, '聚氣：下回合自身招式 +160（針對「必殺門牙」效果為 80 → 240）', aIdx),
-    aIdx, p => ({
-      ...p,
-      active: p.active ? {
-        ...p.active,
-        damageBonusPending: 160,  // +160 → 必殺門牙 80 + 160 = 240（簡化：所有招式都 +160）
-      } : null,
-    }),
-  );
-});
+regPost('步哨鼠|聚氣', setSelfDamageOverridePendingPost(240, '聚氣', '必殺門牙'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 7. 看對手牌庫頂排序（2 張）
