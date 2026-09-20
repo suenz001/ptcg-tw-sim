@@ -304,8 +304,12 @@ if (!chromium) {
       blocked: [{ fid: 'f4', status: 'blocked', nick: '壞人', alias: null, uid: null, uids: [], requestedByMe: true, blockedByMe: true, via: null, at: 4 }],
       limit: 100, truncated: false,
     };
+    // ⭐⭐v6.409：pwLaunchWith 在「有模組、瀏覽器起不來」時會 envSkip 並回 **null**。
+    //   過渡期 PTCG_PW='off' 時走不到這裡；改成 'auto' 之後 finally 會對 null 呼叫 .close()
+    //   ⇒ TypeError 把整支守衛炸掉，而不是乾淨地 ENV-SKIP。
     const browser = await pwLaunchWith(chromium, 'v6.296 【E】共用元件掛載行為');
-    try {
+    if (!browser) skipped.push('【E】共用元件掛載行為（瀏覽器起不來，已 ENV-SKIP）');
+    if (browser) try {
       const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
       const pg = await ctx.newPage();
       await pg.route('**/*', (route) => route.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body><div id="app"></div></body></html>' }));
@@ -399,7 +403,7 @@ if (!chromium) {
         assert.strictEqual(xss.html, false, '資料被當成 HTML 渲染了');
       });
       await ctx.close();
-    } finally { await browser.close(); }
+    } finally { if (browser) await browser.close(); }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 

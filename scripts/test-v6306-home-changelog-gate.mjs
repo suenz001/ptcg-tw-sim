@@ -35,6 +35,7 @@ import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
+import { envSkip } from './lib/env-skip.mjs';   // ⭐v6.409：瀏覽器起不來時乾淨地 ENV-SKIP
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = 'e3233caea4b4f3daab92b49b636bf9e6e0d03846';   // v6.305（HEAD-FAIL 對照；取不到 ⇒ SHALLOW-SKIP，不 fail-open）
@@ -367,7 +368,12 @@ if (!hasPw) {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const PORT = server.address().port;
   // 沙盒：PLAYWRIGHT_MODULE 指到 playwright-core、PW_EXECUTABLE 指到 headless shell 可執行檔
+  // ⭐⭐v6.409：pwLaunchWith 在「有模組、瀏覽器起不來」時會 envSkip 並回 **null**。
+  //   過渡期 PTCG_PW='off' 時走不到這裡；改成 'auto' 之後 newContext()／finally 都會對 null 動手
+  //   ⇒ TypeError 把整支守衛炸掉，而不是乾淨地 ENV-SKIP。
   const browser = await pwLaunchWith(pw.chromium, 'v6.306 【N】網路層（真瀏覽器）');
+  if (!browser) { server.close(); envSkip('v6.306 【N】網路層（真瀏覽器）', '瀏覽器起不來（模組在、但 launch 不成）'); }
+  if (browser) {
   async function newCtx(fsDoc) {
     const ctx = await browser.newContext();
     const hits = [];
@@ -458,6 +464,7 @@ if (!hasPw) {
   } finally {
     await browser.close();
     server.close();
+  }
   }
 }
 

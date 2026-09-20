@@ -9170,19 +9170,23 @@ export function applyAttackerActiveDamageBonuses(
   const dCard = pool.get(dInst.cardId);
   let d = dmg;
   let s = state;
-  // >>> v6408-per-term-gate
-  // ⚠⚠ v6.408 零行為改變的關鍵：engine 主管線的 inline 版**每一段**都有 `baseDamage > 0` 的閘，
-  //   減項（招致削傷）把傷害打到 0 之後，後面的加項**全部不套**（實測：基礎 50、−100、伏特×2
-  //   ⇒ BASE 是 0，不是 40）。中央 helper 原本只在入口檢查一次 ⇒ 收斂時若不補這個閘，
-  //   「減項 ≥ 基礎傷害」的盤面會無聲變成「繼續加」。
-  //   ⚠ 只在 engine 主管線（有傳 attackerSnapshot）套用 —— 延後／狙擊路徑照舊沒有逐段閘，
-  //     行為與 v6.407 完全相同。
-  //   ⚠⚠ 「中途 clamp 到 0 之後不再加」本身是否符合官方規則**尚未裁定**
-  //     （`PTCG RULES/PTCG_RULES.md` §18.E／§17.2.H 都沒有明文），已列入待站長裁示。
-  //     本版的立場是「不夾帶未裁定的行為改變」⇒ 逐字保留 BASE 的行為。
-  const _perTermGate = !!opts?.attackerSnapshot;
-  const _stopped = () => _perTermGate && d <= 0;
-  // <<< v6408-per-term-gate
+  // >>> v6409-clamp-at-the-end
+  // ⭐⭐⭐v6.409 站長裁定（2026-09-20）：**攻擊方的所有加減先算完，最後才不能低於 0。**
+  //   逐字：「傷害應該是 50+40-100=-10 然後等於 0」。
+  //   ⇒ 中途**不**夾 0：招致削傷之後即使變成負的，後面的加項照樣累加。
+  //   例：基礎 50、受「吠」-50、身上 2 張伏特【雷】能量
+  //       舊：50-50=0 ⇒ 逐段閘擋掉後面 ⇒ **0**
+  //       新：50-50+40 = **40**
+  //   例：基礎 50、受「大聲咆哮」-100、2 張伏特
+  //       50-100+40 = -10 ⇒ 最後 clamp ⇒ **0**（新舊同值）
+  //
+  // ⚠ v6.408 曾在這裡放一組 `_perTermGate` 逐段閘，逐字保留 engine inline 版的
+  //   「中途 clamp 之後不再加」。那是**未裁定前不夾帶行為改變**的權宜；裁定下來之後拆掉。
+  // ⚠ 兩條路徑（engine 主管線 / 延後・狙擊）現在**共用同一套算法**，不再分歧。
+  // ⚠ `_engineMainline` 只剩一個用途：旗標 `_attackerActiveBonusDone` 的設定時機
+  //   （engine 主管線沿用「最終 > 0 才標記」，讓最終 0 的招式仍能由中央 helper 補套）。
+  const _engineMainline = !!opts?.attackerSnapshot;
+  // <<< v6409-clamp-at-the-end
   const _colorlessBlocked = (card: Card | undefined): boolean => {
     if (!card || card.pokemonType !== 'Colorless') return false;
     const sd = state.activeStadium; if (!sd) return false;
@@ -9193,7 +9197,7 @@ export function applyAttackerActiveDamageBonuses(
     && JAMMING_TOWER_STADIUMS.has(pool.get(state.activeStadium.cardId)?.name ?? '');
   // ── v5.535 回合加傷（damageBonusThisTurn；巨金怪彗星拳／大電海燕風力充能／奔流之心，下次攻擊 +N）──
   //   消耗型，祭典樂舞首擊不消耗。一般攻擊 engine 已 inline 套+設 guard→此處只在延後/狙擊(baseDamage=0)路徑生效。
-  if (!_stopped() && aInst.damageBonusThisTurn) {
+  if (aInst.damageBonusThisTurn) {
     const b = aInst.damageBonusThisTurn; d += b;
     s = addLog(s, `${aCard.name} 招式傷害 +${b}（回合加傷效果）`, aIdx);
     formula.push({ sign: '+', value: b, label: '回合加傷' });
@@ -9212,8 +9216,10 @@ export function applyAttackerActiveDamageBonuses(
     //   寫回仍以最新的 s.players[aIdx].active 為基底（理由同上一段）。
     //   ⚠ 上一段只 delete 了 damageBonusThisTurn，不影響這一段要讀的欄位。
     const cur = aInst;
-    if (!_stopped() && cur?.nextOwnAttackPenalty) {
-      const pen = cur.nextOwnAttackPenalty; d = Math.max(0, d - pen);
+    if (cur?.nextOwnAttackPenalty) {
+      // ⭐v6.409：**中途不夾 0**（站長裁定：所有加減先算完再 clamp）。
+      //   舊寫法 `Math.max(0, d - pen)` 會把 -10 夾成 0，後面的加項就從 0 起跳 ⇒ 多給傷害。
+      const pen = cur.nextOwnAttackPenalty; d = d - pen;
       s = addLog(s, `${aCard.name} 招式傷害 -${pen}（受招致使傷害削減效果）`, aIdx);
       formula.push({ sign: '-', value: pen, label: '招致削傷' });
       if (!_isFestivalDanceFirstAttackLocal(state, aIdx, pool) && s.players[aIdx].active) {
@@ -9224,7 +9230,7 @@ export function applyAttackerActiveDamageBonuses(
     }
   }
   // ── v5.535 格拉吉歐的決戰（player-level +80，非規則寶可夢；END_TURN 清、不在此消耗）──
-  if (!_stopped() && attacker.gladionDuelBonusThisTurn && !isRulePokemon(aCard)) {
+  if (attacker.gladionDuelBonusThisTurn && !isRulePokemon(aCard)) {
     d += 80;
     s = addLog(s, `${aCard.name} 招式傷害 +80（格拉吉歐的決戰，非規則寶可夢加成）`, aIdx);
     formula.push({ sign: '+', value: 80, label: '格拉吉歐的決戰' });
@@ -9232,7 +9238,7 @@ export function applyAttackerActiveDamageBonuses(
   // ── 伏特【雷】能量（【雷】屬性附加者 +20/張）─────────────────────────────
   // >>> v6402-volt-lightning-effects
   // ⭐v6.402「附有這張卡的【雷】寶可夢」＝場上**有效**屬性（與 engine 主管線同一支述詞）。
-  if (!_stopped() && fieldPokemonHasType(s, aIdx, aInst, pool, 'Lightning')) {
+  if (fieldPokemonHasType(s, aIdx, aInst, pool, 'Lightning')) {
   // <<< v6402-volt-lightning-effects
     const n = aInst.energyAttached.filter(e => pool.get(e.cardId)?.name === '伏特【雷】能量').length;
     if (n > 0) {
@@ -9242,7 +9248,7 @@ export function applyAttackerActiveDamageBonuses(
     }
   }
   // ── 攻擊方道具加成（極限腰帶 / 猛攻手鐲 等；阻礙之塔時失效）─────────────
-  if (!_stopped() && !_toolsJammed) {
+  if (!_toolsJammed) {
     for (const t of getAllAttachedTools(aInst)) {
       const atkTool = pool.get(t.cardId); if (!atkTool) continue;
       const fn = TOOL_ATTACK_BONUS.get(atkTool.name); if (!fn) continue;
@@ -9258,27 +9264,25 @@ export function applyAttackerActiveDamageBonuses(
   }
   // ── 被動特性 +N — ⭐ v6.258 改接中央 dispatch collectPassiveAttackBonuses ─────
   //   （主詞閘／監視塔／特性消除／NO_STACK dedup 全在中央；這裡只寫 log 與加總）
-  if (!_stopped()) {
-    for (const { name, bonus } of collectPassiveAttackBonuses(s, attacker, aIdx, aInst, aCard, dCard, pool)) {
-      d += bonus;
-      s = addLog(s, `「${name}」啟動：${aCard.name} 招式傷害 +${bonus}`, aIdx);
-      formula.push({ sign: '+', value: bonus, label: name });
-    }
+  for (const { name, bonus } of collectPassiveAttackBonuses(s, attacker, aIdx, aInst, aCard, dCard, pool)) {
+    d += bonus;
+    s = addLog(s, `「${name}」啟動：${aCard.name} 招式傷害 +${bonus}`, aIdx);
+    formula.push({ sign: '+', value: bonus, label: name });
   }
   // ── 力量蛋白飲（本回合自己【鬥】寶可夢對對手戰鬥位 +30，累加）─────────────
-  if (!_stopped() && aCard.pokemonType === 'Fighting' && attacker.damageBoostFightingThisTurn) {
+  if (aCard.pokemonType === 'Fighting' && attacker.damageBoostFightingThisTurn) {
     const b = attacker.damageBoostFightingThisTurn; d += b;
     s = addLog(s, `「力量蛋白飲」啟動：${aCard.name} 招式傷害 +${b}`, aIdx);
     formula.push({ sign: '+', value: b, label: '力量蛋白飲' });
   }
   // ── 夠讚狗｜腎上腺力量（自身附【惡】能量 +100）─────────────────────────
-  if (!_stopped() && aCard.name === '夠讚狗' && isAbilityHolderEffective(state, aInst, aCard, aIdx, '腎上腺力量', 'active', pool) && countEnergyTypeHostAware(aInst, 'Darkness', pool, { state, ownerIdx: aIdx }) >= 1) {
+  if (aCard.name === '夠讚狗' && isAbilityHolderEffective(state, aInst, aCard, aIdx, '腎上腺力量', 'active', pool) && countEnergyTypeHostAware(aInst, 'Darkness', pool, { state, ownerIdx: aIdx }) >= 1) {
     d += 100;
     s = addLog(s, `「腎上腺力量」啟動：夠讚狗 招式傷害 +100`, aIdx);
     formula.push({ sign: '+', value: 100, label: '腎上腺力量' });
   }
   // ── 化朗鎮（赫普的寶可夢 +30）───────────────────────────────────────────
-  if (!_stopped() && aCard.name.startsWith('赫普的')) {
+  if (aCard.name.startsWith('赫普的')) {
     const stN = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
     if (stN === '化朗鎮') {
       d += 30;
@@ -9287,13 +9291,13 @@ export function applyAttackerActiveDamageBonuses(
     }
   }
   // ── 空手道王的演練（本回合對對手戰鬥位 ex +40）────────────────────────
-  if (!_stopped() && attacker.karateKingBonusThisTurn && dCard && isPokemonExCard(dCard)) {   // ⭐v6.403 收斂
+  if (attacker.karateKingBonusThisTurn && dCard && isPokemonExCard(dCard)) {   // ⭐v6.403 收斂
     d += 40;
     s = addLog(s, `「空手道王的演練」啟動：對 ${dCard.name}（ex）+40`, aIdx);
     formula.push({ sign: '+', value: 40, label: '空手道王演練' });
   }
   // ── 烏栗（本回合對對手戰鬥位 ex/V +30）──────────────────────────────────
-  if (!_stopped() && attacker.unrudaBonusThisTurn && dCard) {
+  if (attacker.unrudaBonusThisTurn && dCard) {
     // ⭐v6.403 收斂：卡面「…對對手的戰鬥場的「寶可夢【ex】・【V】」造成的傷害「+30」點。」
     const isExV = isRuleBoxExOrV(dCard);
     if (isExV) {
@@ -9302,9 +9306,12 @@ export function applyAttackerActiveDamageBonuses(
       formula.push({ sign: '+', value: 30, label: '烏栗' });
     }
   }
-  // ⚠v6.408：BASE 的 engine 主管線是用**加成後**的 baseDamage > 0 才設這個旗標
-  //   （減項把傷害打到 0 時不設，讓中央 helper 之後還能補套）。延後／狙擊路徑照舊無條件設。
-  if (!_perTermGate || d > 0) s = { ...s, _attackerActiveBonusDone: true } as GameState;
+  // ⭐⭐v6.409：**唯一的 clamp 點**（站長裁定：所有加減算完才不能低於 0）。
+  //   ⚠ 這一行是本函式對外的保證：回傳的 damage 永遠 ≥ 0，呼叫端不必自己再夾一次。
+  if (d < 0) d = 0;
+  // ⚠v6.408：engine 主管線沿用「**加成後** > 0 才設這個旗標」（最終 0 時不設，
+  //   讓中央 helper 之後還能補套）。延後／狙擊路徑照舊無條件設。
+  if (!_engineMainline || d > 0) s = { ...s, _attackerActiveBonusDone: true } as GameState;
   return { damage: d, state: s, formula };
 }
 

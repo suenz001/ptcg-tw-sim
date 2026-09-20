@@ -33,7 +33,7 @@ import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { revertV6384, revertV6381 as _rv6381 } from './lib/tourn-revert-v6384.mjs';
 import { styleBlockOf } from './lib/svelte-style-block.mjs';
-import { pwChromium } from './lib/pw.mjs';
+import { pwUsable } from './lib/pw.mjs';
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
 
 const esbuild = await import('esbuild');
@@ -437,7 +437,9 @@ await T('F5 決策查證：牌組編輯器那一組**真的是半透明的**（�
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【G】四種尺寸的 DOM 量測（playwright）');
 let hasPw = false;
-hasPw = pwChromium('v6.303 【G】四種尺寸的 DOM 量測') !== null;
+// ⭐⭐v6.409：spawn measure-*.mjs 型 ⇒ 必須用 pwUsable（真的 launch 一次），
+//   不能用只檢查模組的 pwChromium —— 理由與 test-v6297 【F】那一格相同。
+hasPw = await pwUsable('v6.303 【G】四種尺寸的 DOM 量測');
 if (!hasPw) {
   console.log('  ⚠⚠ SKIP【G】：這台機器沒有 Playwright，DOM 量測沒有跑（沙盒證據見 scripts/measure-v6303-ui-batch.mjs 的輸出）');
   skipped.push('【G】四種尺寸的 DOM 量測（沒有 playwright 模組）');

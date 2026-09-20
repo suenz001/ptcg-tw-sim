@@ -28,34 +28,53 @@ const V6285 = 'scripts/test-v6285-settings-scroll.mjs';
 /** @type {{id:string,file:string,from:string,to:string,red:string[],green?:string[]}[]} */
 const MUTS = [
   {
-    id: 'M1 ⭐ 把過渡期預設改成 auto 卻忘了刪 deploy.yml 的三行把手',
+    // ⭐v6.409：過渡期已收尾（預設 'auto'、yml 的把手都刪了）⇒ 原本那個「改成 auto 卻忘了刪 yml」
+    //   的突變錨點已經不存在。改成**反方向**的同一件事：把預設改回 'off' 卻沒把 yml 的把手加回來。
+    //   守的意圖完全沒變 —— B0 要的是「三者一致」，不是「維持在哪一邊」。
+    id: 'M1 ⭐ 把預設改回 off 卻沒把 deploy.yml 的把手加回來（三者不一致）',
     file: GATE,
-    from: String.raw`export const PW_DEFAULT_MODE = 'off';`,
-    to: String.raw`export const PW_DEFAULT_MODE = 'auto';`,
+    from: String.raw`export const PW_DEFAULT_MODE = 'auto';`,
+    to: String.raw`export const PW_DEFAULT_MODE = 'off';`,
     red: ['B0'],
     green: ['A1', 'C1', 'C2', 'C3', 'C4'],
   },
   {
+    // ⚠⚠ v6.409 踩到：`to` 的值**必須與現行的 PW_DEFAULT_MODE 不同**，否則是**等價突變**
+    //   （過渡期預設是 'off' 時寫 'auto' 才有效；收尾改成 'auto' 之後，這個突變就變成
+    //   「把常數換成一模一樣的字面量」⇒ 守衛當然不紅，當場被 mutcheck 判成「突變存活」）。
+    //   ⭐ 通則：突變的目標值不可以剛好等於被突變常數的現值 —— 改預設時要回來看這一條。
     id: 'M2 pwMode 對無效值不退回預設（判準被改寫）',
     file: GATE,
     from: String.raw`  return PW_DEFAULT_MODE;`,
-    to: String.raw`  return 'auto';`,
+    to: String.raw`  return 'strict';`,
     red: ['D1'],
     green: ['B0', 'A1', 'C4'],
   },
   {
-    id: 'M4 ⭐ deploy.yml 主 chain 的 PTCG_PW: off 被刪掉',
+    // ⭐v6.409：同上，反方向 —— 在 yml 主 chain 把 `PTCG_PW: 'off'` 加回來，但 pw.mjs 還是 'auto'。
+    id: 'M4 ⭐ deploy.yml 主 chain 又出現 PTCG_PW: off（但 pw.mjs 已是 auto）',
     file: YML,
-    from: String.raw`          PTCG_PW: 'off'`,
-    to: String.raw`          # PTCG_PW removed-by-mutcheck`,
+    from: String.raw`      - name: Run engine regression tests
+        run: npm test`,
+    to: String.raw`      - name: Run engine regression tests
+        env:
+          PTCG_PW: 'off'
+        run: npm test`,
     red: ['B0'],
     green: ['C1', 'C2', 'C3', 'D1'],
   },
   {
-    id: 'M5 ⭐ 獨立 step 的 continue-on-error 被拿掉（PW 紅燈會直接擋 deploy）',
+    // ⭐v6.409：過渡期的那個 continue-on-error 獨立 step 已經刪掉 ⇒ 原本「把它改成 false」的
+    //   錨點不存在了。改成**把它加回來**：yml 有獨立 step、pw.mjs 卻已是 'auto' ⇒ 三者不一致。
+    id: 'M5 ⭐ deploy.yml 又長回過渡期的獨立 step（但 pw.mjs 已是 auto）',
     file: YML,
-    from: String.raw`        continue-on-error: true`,
-    to: String.raw`        continue-on-error: false`,
+    from: String.raw`      - name: Build SvelteKit app`,
+    to: String.raw`      - name: Playwright guards (mutcheck)
+        continue-on-error: true
+        env:
+          PTCG_PW: 'strict'
+        run: node scripts/run-pw-guards.mjs
+      - name: Build SvelteKit app`,
     red: ['B0'],
     green: ['C1', 'C2', 'C3'],
   },

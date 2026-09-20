@@ -389,28 +389,53 @@ await T('E5 ⭐ 反安慰劑：E4 不是恆真（旗標為 false 時第二次會
     '⚠ 把旗標拿掉之後第二次竟然還是早退 ⇒ E4 守的不是旗標（可能是別的早退條件）');
 });
 
-console.log('\n【G】⭐⭐⭐ 零行為改變：「減項 ≥ 基礎傷害」時後面的加項一律不套（逐字保留 BASE 的行為）');
-// ⚠⚠ engine 的 inline 版**每一段**都有 `baseDamage > 0` 的閘；中央 helper 原本只在入口檢查一次。
-//   收斂時若不補逐段閘，「招致削傷 ≥ 基礎」的盤面會無聲從「0」變成「繼續加」。
-//   ⚠ 「中途 clamp 到 0 之後不再加」本身是否符合官方規則**尚未裁定**
-//     （PTCG_RULES.md §18.E／§17.2.H 都沒有明文）⇒ 本版只負責「不夾帶未裁定的行為改變」。
-//   ⚠ v6.407a 的差分守衛刻意避開了這個區域（pickPure 的 minDmg = 50），所以當時沒抓到。
-await T('G1 ⭐⭐⭐ 削傷 ≥ 基礎 ⇒ 伏特【雷】能量的加成不套，最終沒有造成傷害', () => {
+console.log('\n【G】⭐⭐⭐ 攻擊方的加減**先算完、最後才不能低於 0**（v6.409 站長裁定）');
+// ⭐ 站長 2026-09-20 裁定，逐字：「傷害應該是 50+40-100=-10 然後等於 0」。
+//   ⇒ 中途**不**夾 0：招致削傷之後即使變成負的，後面的加項照樣累加，最後才 clamp。
+//   ⚠ v6.408 之前（含 engine 的 inline 版）是「中途 clamp、之後的加項全部不套」，
+//     兩者只在「減項 ≥ 基礎，但加總之後 > 0」時會給出不同答案 —— 那正是 G4 守的那一格。
+//   ⚠ PTCG_RULES.md §18.E／§17.2.H 只講到減項本身，沒有這一條的明文 ⇒ 判準來源是站長裁定，
+//     不是官方原文。改判準的話要連這段註解一起改。
+await T('G1 ⭐⭐ 加總之後仍 ≤ 0 ⇒ 0（50 − 100 + 40 = −10 ⇒ 0，沒有造成傷害）', () => {
   const r = attackAndReadFlags({ nextOwnAttackPenalty: P_L.dmg + 50 }, [VOLT, VOLT, BL]);
   assert.strictEqual(r.dmg, null, `應該完全沒有造成傷害（沒有「造成 N 點傷害」那一行），實際 ${r.dmg}`);
   assert.strictEqual(r.defDamage, 0, `對手不該受到傷害，實際 ${r.defDamage}`);
 });
-await T('G2 ⭐⭐ 削傷 ≥ 基礎 ⇒ 道具加成也不套（多一項就會露餡）', () => {
+await T('G2 ⭐⭐⭐ 加總之後 > 0 ⇒ 照給（50 − 60 + 40 = 30）—— 這一格是 v6.409 改掉的那個', () => {
+  // ⚠⚠ 這是整個【G】段唯一測得到本版改動的一條：
+  //   舊行為 50−60 ⇒ 夾成 0 ⇒ 逐段閘擋掉伏特 ⇒ **0**；新行為 ⇒ **30**。
+  const pen = P_L.dmg + 10;                       // 比基礎多 10 ⇒ 中途一定是負的
+  const r = attackAndReadFlags({ nextOwnAttackPenalty: pen }, [VOLT, VOLT, BL]);
+  const want = P_L.dmg - pen + 40;                // = 30
+  assert.ok(want > 0, `測資設計壞了：期望值 ${want} 不是正數`);
+  assert.strictEqual(r.dmg, want,
+    `應該是 ${P_L.dmg} − ${pen} + 40 = ${want}，實際 ${r.dmg}（舊行為會是 0 ⇒ 中途夾 0 的寫法回來了）`);
+});
+await T('G3 ⭐⭐ 邊界：加總之後**正好 0** ⇒ 沒有造成傷害', () => {
+  const pen = P_L.dmg + 40;                       // 50 − 90 + 40 = 0
+  const r = attackAndReadFlags({ nextOwnAttackPenalty: pen }, [VOLT, VOLT, BL]);
+  assert.strictEqual(r.dmg, null, `正好 0 應該不造成傷害，實際 ${r.dmg}`);
+  assert.strictEqual(r.defDamage, 0, `對手不該受到傷害，實際 ${r.defDamage}`);
+});
+await T('G4 ⭐⭐ 道具加成也一樣參與加總（多一項就會露餡）', () => {
+  const pen = P_L.dmg + 10;
   const out = applyAction(mkState({
     atkCard: P_L.card, atkEnergy: [BL, BL, BL], atkTool: BELT, defCard: TANK_EX,
-    atkExtra: { nextOwnAttackPenalty: P_L.dmg + 50 },
+    atkExtra: { nextOwnAttackPenalty: pen },
   }), { type: 'ATTACK', attackIndex: P_L.ai }, pool);
   const st = out?.state ?? out;
-  assert.strictEqual(st.players[1].active.damage, 0, `對手不該受到傷害，實際 ${st.players[1].active.damage}`);
+  assert.strictEqual(st.players[1].active.damage, P_L.dmg - pen + 50,
+    `應該是 ${P_L.dmg} − ${pen} + 50 = ${P_L.dmg - pen + 50}，實際 ${st.players[1].active.damage}`);
 });
-await T('G3 ⭐ 正對照：削傷 < 基礎 ⇒ 加項照樣套（G1／G2 不是「永遠 0」的恆真式）', () => {
+await T('G5 ⭐ 正對照：沒有減項時數字不變（G1~G4 不是「永遠算錯」的恆真式）', () => {
   const r = attackAndReadFlags({ nextOwnAttackPenalty: 10 }, [VOLT, VOLT, BL]);
   assert.strictEqual(r.dmg, P_L.dmg - 10 + 40, `削傷 10 ＋ 伏特×2 應該是 ${P_L.dmg - 10 + 40}，實際 ${r.dmg}`);
+});
+await T('G6 ⭐⭐ 中央 helper 對外保證：回傳的 damage 永遠 ≥ 0（呼叫端不必自己再夾）', () => {
+  const st = mkState({ atkCard: P_L.card, atkEnergy: [VOLT, VOLT, BL],
+    atkExtra: { nextOwnAttackPenalty: P_L.dmg + 999 } });
+  const r = central(st, 0, P_L.dmg, pool, { attackerSnapshot: st.players[0] });
+  assert.strictEqual(r.damage, 0, `回傳的 damage 應該被夾成 0，實際 ${r.damage}`);
 });
 
 console.log('\n【F】⭐⭐ 靜態：engine.ts 不得再留著第二份 inline 實作');

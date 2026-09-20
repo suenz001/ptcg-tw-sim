@@ -39,7 +39,7 @@ import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { envSkip } from './lib/env-skip.mjs';   // 「缺瀏覽器」不是淺複製，標記要分開（CI 上會 throw）
 import { cssOf } from './lib/svelte-style-block.mjs';
-import { pwChromium } from './lib/pw.mjs';
+import { pwUsable } from './lib/pw.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_GAME = join(ROOT, 'src/routes/game/+page.svelte');
@@ -467,10 +467,13 @@ await T('E4 ⭐ v6.304 **只**動了模板的 each 位置與新增兩個 $derive
 
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【F】版面量測（playwright）');
-await T('F1 三尺寸量測 ＋ 三塊左右邊界對齊（沒有瀏覽器就 ENV-SKIP；CI 上會翻紅）', () => {
+await T('F1 三尺寸量測 ＋ 三塊左右邊界對齊（沒有瀏覽器就 ENV-SKIP；CI 上會翻紅）', async () => {
   assert.ok(existsSync(P_MEASURE), 'scripts/measure-v6304-tourn-group.mjs 必須存在');
-  let pw = null;
-  pw = pwChromium('v6304 F1 三尺寸版面量測');
+  // ⭐⭐v6.409：這一段是 **spawn measure-*.mjs** 型 —— 本行程自己從不 launch。
+  //   `pwChromium()` 只檢查「模式 + 模組」，**不檢查瀏覽器裝了沒**（那一步在 pwLaunch）
+  //   ⇒ 在「有模組、沒瀏覽器」的機器上會判成可以跑，然後子行程 launch 失敗 ⇒ 假紅。
+  //   ⚠ 過渡期 PTCG_PW='off' 時永遠 skip 所以看不出來；v6.409 改成 'auto' 之後當場暴露。
+  const pw = await pwUsable('v6304 F1 三尺寸版面量測');
   // ⚠ 這裡原本借用 shallowSkip() —— 但「缺瀏覽器」不是淺複製。兩者混在同一個標記裡，
   //   就沒辦法對任何一種下硬判準（平行 runner 想把 SHALLOW-SKIP 釘成 0，卻發現本機恆有 2 次）。
   if (!pw) { envSkip('v6304 F1 三尺寸版面量測', '這台機器沒有 playwright；量測腳本仍在 repo 內，可手動跑'); return; }

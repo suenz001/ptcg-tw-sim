@@ -438,8 +438,13 @@ if (!chromium) {
   skipped.push('【6】DOM 量測（沒有 playwright 模組）');
   console.log('  ⚠⚠ SKIP 【6-DOM】：這台機器沒有 Playwright，DOM 量測沒有跑（核心由 6a 的 CSS 級聯守；沙盒證據見 docs/changelog-internal.md v6.286）');
 } else {
+  // ⭐⭐v6.409：`pwLaunchWith` 在「有 playwright 模組、但瀏覽器沒裝／起不來」時會 envSkip 並回 **null**。
+  //   過渡期 PTCG_PW='off' 時 pwChromium 先回 null 就 return 了，走不到這裡；
+  //   改成 'auto' 之後當場暴露：finally 對 null 呼叫 .close() ⇒ TypeError，整支守衛炸掉
+  //   （而不是乾淨地 ENV-SKIP）。⇒ launch 不成就直接結束這一段。
   const browser = await pwLaunchWith(chromium, 'v6.286 【6】設定 modal ✕ 的 DOM 量測');
-  try {
+  if (!browser) skipped.push('DOM 量測（瀏覽器起不來，已 ENV-SKIP）');
+  if (browser) try {
     const R = (o) => [o.x, o.y, o.w, o.h].map((v) => +v.toFixed(1)).join(',');
     const mkH = settingsMarkup(GAME), mkB = markupWithoutDock(mkH), cssB = cssWithoutDock(CSS);
     const unwrapOk = () => { assert.notStrictEqual(mkH, mkB, 'HEAD-FAIL：解包器沒動到東西（markup 沒有 dock）'); assert.notStrictEqual(CSS.replace(/\/\*[\s\S]*?\*\//g, ''), cssB, 'HEAD-FAIL：解包器沒動到東西（css 沒有 dock 規則）'); };
@@ -487,7 +492,7 @@ if (!chromium) {
         await ctx.close();
       }
     });
-  } finally { await browser.close(); }
+  } finally { if (browser) await browser.close(); }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

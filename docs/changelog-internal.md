@@ -1,5 +1,150 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.409 ⭐⭐⭐ 站長裁定：攻擊方的加減**先算完、最後才不能低於 0** ＋ Playwright 過渡期收尾
+
+BASE `cdb2b39ae5f68a4dcb344bced81f8397a1d3250d`（v6.408a）。
+⚠ 本版**動了 `src/lib/game/effects.ts`**（傷害管線）⇒ 部署要跑
+**`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**（IRON_RULES Rule 43）。
+
+### 【零】站長裁定（2026-09-20）
+
+v6.408 列出的待裁示項目，站長的答覆逐字是：
+
+> 傷害應該是 50+40-100=-10 然後等於 0
+
+⇒ **所有加減先算完，最後才 clamp 到 0。中途不夾 0。**
+
+### 【一】改法
+
+`effects.ts` 的 `applyAttackerActiveDamageBonuses()`：
+
+1. 拆掉 v6.408 加的 `_perTermGate` 逐段閘（那是「未裁定前不夾帶行為改變」的權宜）。
+2. 招致削傷從 `d = Math.max(0, d - pen)` 改成 `d = d - pen`（中途不夾）。
+3. 函式結尾加上**唯一**的 `if (d < 0) d = 0;` —— 這一行同時是對外保證：
+   回傳的 `damage` 永遠 ≥ 0，呼叫端不必自己再夾一次（守衛 G6 釘住）。
+4. `_perTermGate` 更名為 `_engineMainline`，只剩一個用途：`_attackerActiveBonusDone`
+   的設定時機（engine 主管線沿用「最終 > 0 才標記」）。
+
+⇒ engine 主管線與延後／狙擊路徑現在**共用同一套算法**，不再分歧。
+⚠ 本版**沒有動 `engine.ts`** ⇒ 不需要新的 engine-strip 剝除器。
+
+### 【二】哪一格變了
+
+| 盤面（蟲電寶｜衝撞 50） | v6.408 | v6.409 |
+|---|---|---|
+| −50（超級火炎獅ex｜吠）＋伏特×2 | 0 | **40** ⭐ |
+| −60 ＋伏特×2 | 0 | **30** ⭐ |
+| −90 ＋伏特×2（加總正好 0） | 0 | 0 |
+| −100（黑魯加｜大聲咆哮）＋伏特×2 | 0 | 0 |
+| −100 ＋極限腰帶（對 ex +50） | 0 | **40** ⭐ |
+| 無減項 | 不變 | 不變 |
+
+⇒ **只有「減項 ≥ 基礎、但加總之後仍 > 0」那一格會變**，而且一律是「本來 0、現在給正確的數字」。
+
+卡面（`static/cards`，全是 H/I/J 現役）：
+黑魯加｜大聲咆哮 −100、仙子伊布ex｜魔法魅惑 −100、超級火炎獅ex｜吠 −50、
+嘎啦嘎啦｜叫聲 −40、布撥／尼多蘭｜叫聲 −30、菊草葉｜叫聲 −20、振翼髮｜月亮之力 −30。
+
+⚠ 官方規則書**沒有**這一條的明文（`PTCG RULES/PTCG_RULES.md` §18.E 的
+超級長耳兔ex 受「吠」−50 ⇒ 跳躍扣殺 110、§17.2.H 的團珠蛛「無法造成招式的傷害」但仍可擲硬幣，
+都只講到減項本身）。⇒ **判準來源是站長裁定**，守衛的註解裡寫清楚了；改判準要連註解一起改。
+
+### 【三】守衛
+
+`test-v6408-attacker-bonus-dual-criteria.mjs` 的【G】段改寫成 6 條（全檔 30 條）：
+
+| 條 | 內容 |
+|---|---|
+| G1 | 加總後仍 ≤ 0 ⇒ 0（50 − 100 + 40 = −10） |
+| **G2** | ⭐ 加總後 > 0 ⇒ 照給（50 − 60 + 40 = **30**）—— **整段唯一測得到本版改動的一條** |
+| G3 | 邊界：加總後正好 0 ⇒ 不造成傷害 |
+| **G4** | ⭐ 道具加成也參與加總（50 − 60 + 50 = 40） |
+| G5 | 正對照：沒有減項時數字不變 |
+| G6 | 中央 helper 對外保證 damage ≥ 0 |
+
+**HEAD-FAIL 實測**（BASE = v6.408a 的 src）：**28 PASS / 2 FAIL**，紅的正好是 **G2 與 G4**。
+
+### 【四】Playwright 過渡期收尾（三件事一起）
+
+收尾的依據是**兩個平台都實測全綠**：
+
+- 站長的 Windows（2026-09-20）：`set PTCG_PW=strict && node scripts\run-pw-guards.mjs` ⇒ **10 / 10 綠**
+- CI（ubuntu-latest）：deploy.yml 那個 `continue-on-error` 的獨立 step 連續**四次** run
+  （`4f547434`／`732e8f4d`／`a00e830a`／`cdb2b39a`）都是 `success`
+
+⇒ v6.408 檔頭記的那批紅燈（2026-09-19 的「test-v6301 H2／H4：按鈕群最右緣 333.97 vs BASE 356」）
+在兩個平台上都已經不紅。三件事：
+
+1. `scripts/lib/pw.mjs` 的 `PW_DEFAULT_MODE` `'off'` → `'auto'`
+2. `deploy.yml` 主 chain 的兩行過渡期 env 刪掉
+3. `deploy.yml` 的獨立 `continue-on-error` step 刪掉
+
+⚠ 從此主 chain 的 `npm test` 在 CI 上會**真的跑**那 10 支（約多 80 秒），紅了就擋 deploy。
+⚠ 本機沒裝瀏覽器時 `auto` 走 envSkip（不 throw），所以 Linux 沙盒跑全套仍然綠。
+
+### 【四・一】⭐⭐ 收尾當場暴露的兩個**既有缺口**（過渡期 `off` 時永遠看不到）
+
+把預設從 `'off'` 切到 `'auto'`，沙盒（有 playwright 模組、但瀏覽器起不來）立刻紅了 **7 支**。
+逐一查下去，兩個都是**既有的錯用**，不是本版造成的：
+
+**① `pwChromium()` 不檢查瀏覽器，卻被當成「能不能跑」的閘**
+
+`pw.mjs` 檔頭寫得很清楚：`pwChromium()` 只檢查「模式 + 模組」，
+**「瀏覽器裝了沒」那一步在 `pwLaunch()`**，而中央閘早就為「要 spawn `measure-*.mjs`」
+這種場合準備了 `pwUsable()`（真的 launch 一次再關掉）。
+
+但三支「純 spawn 型」的守衛（自己從不 launch）用的都是 `pwChromium`：
+
+| 守衛 | 症狀 |
+|---|---|
+| `test-v6297` 【F】 | 子行程 launch 失敗 ⇒ `execFileSync` 丟例外 ⇒ 被 catch 成「**版面量測不符**」的假紅 |
+| `test-v6303` 【G】 | 同上 |
+| `test-v6304` F1 | 同上 |
+
+⇒ 三支的閘改成 `await pwUsable(...)`。`test-v6304` 的 `T()` 回呼一併改成 `async`。
+
+**② `pwLaunchWith()` 回 `null` 時，`finally` 對 `null` 呼叫 `.close()`**
+
+四支「自己 launch」的守衛（`test-v6286`／`v6293`／`v6296`／`v6306`）寫成
+
+```js
+const browser = await pwLaunchWith(chromium, '…');
+try { … } finally { await browser.close(); }   // ⚠ browser 可能是 null
+```
+
+`pwLaunchWith` 在瀏覽器起不來時會 envSkip 並回 `null` ⇒ `TypeError: Cannot read properties of null`
+⇒ **整支守衛炸掉**，而不是乾淨地 ENV-SKIP。
+⇒ 四支都改成「launch 不成就跳過那一段」（`if (browser) try { … } finally { if (browser) … }`），
+`test-v6306` 另外補上 `envSkip` 的 import 與伺服器關閉。
+
+⭐⭐ **通則：一個「暫時關掉」的把手，關著的期間它後面那條路徑上的所有 bug 都是隱形的。**
+收尾不是「把旗標翻過來」而已 —— 要準備好接住那條路徑上累積的債。
+⚠ 這七支在 CI 與站長機器上都有瀏覽器 ⇒ 兩邊都不會踩到，只有「有模組、沒瀏覽器」的開發機會中。
+   沙盒（Linux VM）裝了 `chromium-headless-shell` 但缺系統依賴（`--with-deps` 要 sudo）⇒ 起不來，
+   正好成了這個情境的現成測試台。
+
+### 【五】踩到的坑
+
+1. ⚠⚠ **`mutcheck-pw-gate` 的 M2 變成等價突變**：它的突變是
+   `return PW_DEFAULT_MODE;` → `return 'auto';`，而本版把預設**就是**改成 `'auto'`
+   ⇒ 突變等於沒改，守衛當然不紅，mutcheck 當場判成「突變存活」。
+   ⭐ **通則：突變的目標值不可以剛好等於被突變常數的現值。** 改常數時要回來看突變定義。
+   （已改成 `'strict'`，並把這條通則寫進該處註解。）
+2. ⚠⚠ **我在 `deploy.yml` 的新註解裡原樣寫了那兩個 env 的 YAML 字面**
+   ⇒ `mutcheck` 的 **M4b**（把「剝註解」那一步拿掉，驗證 B0 不是假綠）連 B0 一起弄紅。
+   ⭐ 這正是 `ptcg-push` skill 記的那條：**寫註解時不要把被守衛釘住的那行字面量原樣抄進去。**
+   已改成描述性文字，並在該處寫明原因。
+3. `mutcheck-pw-gate` 的 M1／M4／M5 三個突變原本都建立在「過渡期狀態」上，收尾後錨點全部失效
+   ⇒ 改成**反方向的同一件事**（把預設改回 off 卻沒加回把手／yml 又出現那行 env／yml 又長回獨立 step），
+   守的意圖完全沒變（B0 要的是「三者一致」，不是「維持在哪一邊」）。**12 / 12 個突變都被抓到。**
+
+### 【六】bump 四配套
+
+`version.ts` 6.409／`admin.html` `SITE_VERSION_HINT`／`test-v6264` 的 `BASE_SHA` 前移到 `cdb2b39a`／
+`test-v6272` 的 `PREV_ALLOWED` 從空清單重新列本版的五個檔（`PREV_SHA` 維持 v6.408 的 `a00e830a`
+—— v6.408a 是純工具版、沒動 src/static，所以從它算起的差集就是本版的全部玩家端改動）。
+changelog 三步搬運：v6.409 進首頁、v6.397 的內文搬進 bodies、v6.304 整則搬進 archive。
+
 ## v6.408a ⭐ 純工具版：`test-v6272` 的基準前移重置 ＋ 補一條旗標契約守衛
 
 BASE `a00e830aac7572a43cfba16a494d3c921a026b1d`（v6.408）。

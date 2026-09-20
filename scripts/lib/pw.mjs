@@ -16,16 +16,20 @@
 //   `auto`   有模組就跑；模組或瀏覽器缺一 ⇒ envSkip（本機可接受、CI 上會 throw）。
 //   `strict` 一定要能跑；缺任何一項都 envSkip ⇒ 在 CI 上必然 throw（＝翻紅）。
 //
-// ⚠⚠ **預設是 `off`，而且這是過渡期狀態，不是終點。**
-//   2026-09-19 首次在本機裝好 `chromium-headless-shell` 之後實跑那 10 支，結果：
-//     test-v6301 的 H2／H4（375×812 DOM 版面量測）紅 —— 按鈕群最右緣 333.97 vs BASE 356。
-//   在把那些版面判準逐條判成「真退化」或「環境相依（Rule 40 上移判準）」之前，
-//   不能讓它們擋住主 chain。CI 那邊由 deploy.yml 的**獨立 continue-on-error step**
-//   以 `PTCG_PW=strict` 真的跑一遍，把結果攤開來看。
-//   ⭐ 修完之後要做的三件事（三者必須一起改，`test-pw-gate` 在守）：
-//     ① 這裡的預設改成 `auto`
-//     ② deploy.yml 主 chain 的 `PTCG_PW: 'off'` 與 `PTCG_ALLOW_ENV_SKIP: '1'` 兩行刪掉
-//     ③ deploy.yml 的獨立 continue-on-error step 刪掉
+// ⭐⭐ **過渡期已於 v6.409 收尾（2026-09-20）**，預設是 `auto`。
+//   收尾的依據是兩邊都實測全綠：
+//     ・站長的 Windows：`set PTCG_PW=strict && node scripts\run-pw-guards.mjs` ⇒ **10 / 10 綠**
+//     ・CI（ubuntu-latest）：deploy.yml 當時那個 continue-on-error 的獨立 step
+//       連續四次 run（4f547434／732e8f4d／a00e830a／cdb2b39a）都是 success
+//   ⇒ v6.408 的 425 字元那批版面判準（2026-09-19 一度讓 test-v6301 的 H2／H4 紅的
+//     「按鈕群最右緣 333.97 vs BASE 356」）在兩個平台上都已經不紅，沒有理由再關著。
+//   三件事一起做完了（`test-pw-gate` 的 B0 在守「三者一致」）：
+//     ① 這裡的預設 'off' → 'auto'
+//     ② deploy.yml 主 chain 的 `PTCG_PW: 'off'` 與 `PTCG_ALLOW_ENV_SKIP: '1'` 兩行已刪
+//     ③ deploy.yml 的獨立 continue-on-error step 已刪
+//   ⚠ 從此主 chain 的 `npm test` 在 CI 上會**真的跑**那 10 支（約多 80 秒），
+//     它們紅了就會擋 deploy —— 這正是收尾的意義。
+//   ⚠ 本機沒裝瀏覽器時 `auto` 會走 envSkip（不 throw），所以沙盒跑全套仍然綠。
 //
 // 【為什麼「模組在」不等於「跑得起來」】
 //   `chromium.executablePath()` **不吃 channel 參數** —— 實測不論傳
@@ -42,8 +46,8 @@
 import { createRequire } from 'node:module';
 import { envSkip } from './env-skip.mjs';
 
-/** 預設模式。⚠ 過渡期是 'off'，見檔頭。 */
-export const PW_DEFAULT_MODE = 'off';
+/** 預設模式。⭐v6.409 過渡期結束，改成 'auto'（見檔頭的「過渡期已收尾」一節）。 */
+export const PW_DEFAULT_MODE = 'auto';
 
 /** 目前模式：'off' | 'auto' | 'strict'。判準只有這一份。 */
 export function pwMode() {

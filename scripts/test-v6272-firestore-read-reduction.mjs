@@ -764,7 +764,16 @@ const PREV_ALLOWED = [
   //     下一個動玩家端的版本再從零重新列。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）——
   //     驗法：`git branch -a --contains a00e830a` 要印得出 main。
-  //   ⚠ 本版（v6.408a）是純工具版：只動 scripts/ 與 docs/ ⇒ 這份清單是**空的**。
+  //   ⚠ v6.408a 是純工具版：只動 scripts/ 與 docs/ ⇒ 當時這份清單是空的。
+  // ⭐v6.409：站長裁定「攻擊方的加減先算完、最後才不能低於 0」——
+  //   中央 applyAttackerActiveDamageBonuses 拆掉 v6.408 的逐段閘、招致削傷中途不再夾 0，
+  //   改成函式結尾唯一一個 clamp。玩家端只動這一支 helper ＋ version.ts ＋ changelog 三檔。
+  //   （Playwright 過渡期收尾動的是 scripts/ 與 .github/，不在這一節的掃描範圍。）
+  'src/lib/game/effects.ts',
+  'src/lib/version.ts',
+  'static/changelog-archive.html',
+  'static/changelog-bodies.html',
+  'static/changelog.html',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + [...PREV_ALLOWED].sort().join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }

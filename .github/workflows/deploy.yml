@@ -53,35 +53,17 @@ jobs:
         run: node scripts/anti-pattern-lint.mjs
       - name: Coverage report (未實裝/靜默失效卡牌, 資訊性非 gating)
         run: node scripts/coverage-unimplemented.mjs
+      # ⭐v6.409：Playwright 過渡期已收尾（兩個平台都實測全綠，依據寫在 scripts/lib/pw.mjs 檔頭）。
+      #   這裡原本有兩行過渡期用的 env（把 PW 模式壓成關閉、並放行 ENV-SKIP），
+      #   以及下面一個不擋 deploy 的獨立 step；三者連同 pw.mjs 的預設一起改掉了。
+      #   ⇒ 主 chain 的 npm test 現在會**真的跑**那 10 支有 PW 段的守衛，紅了就擋 deploy。
+      #
+      # ⚠⚠ 這段註解**刻意不寫出那兩個環境變數的 YAML 字面**（`名稱: '值'` 的形式）——
+      #   test-pw-gate 的 B0 是掃 deploy.yml 找那兩行，雖然它會先剝 `#` 註解，
+      #   但 mutcheck 的 M4b 會把「剝註解」這一步拿掉來驗證 B0 不是假綠；
+      #   註解裡只要有那個字面，M4b 就會連 B0 一起弄紅。（v6.409 當場踩到。）
       - name: Run engine regression tests
-        env:
-          # ⚠⚠ 這三行是**同一組**過渡期把手，要刪就三行一起刪（scripts/test-pw-gate.mjs 在守）。
-          #
-          #   `PTCG_PW: 'off'` —— 讓那 10 支有 PW 段的守衛走 ENV-SKIP，主 chain 維持
-          #   「裝 playwright 之前」的行為。理由：2026-09-19 第一次真的把瀏覽器裝起來跑，
-          #   test-v6301 的 375×812 版面量測就紅了（按鈕群最右緣 333.97 vs BASE 356）。
-          #   那些紅燈要逐條判「真退化 vs 環境相依（Rule 40 上移判準）」，
-          #   在判完之前不能讓它們擋住 deploy。
-          #
-          #   `PTCG_ALLOW_ENV_SKIP: '1'` —— 因為上面那行會產生 ENV-SKIP，
-          #   而 scripts/lib/env-skip.mjs 預設「CI ⇒ ENV-SKIP 直接 throw」。
-          #
-          # ⭐ 修完那些版面判準之後要做的三件事（三者必須一起）：
-          #   ① 刪掉這兩行 env
-          #   ② scripts/lib/pw.mjs 的 PW_DEFAULT_MODE 從 'off' 改成 'auto'
-          #   ③ 刪掉下面那個 continue-on-error 的獨立 step
-          PTCG_PW: 'off'
-          PTCG_ALLOW_ENV_SKIP: '1'
         run: npm test
-      # ⭐ 過渡期的獨立 step：把那 10 支**真的**跑一遍，結果攤開來看，但不擋 deploy。
-      #   ⚠ 這裡**刻意不設** PTCG_ALLOW_ENV_SKIP ⇒ 萬一瀏覽器沒裝成功，
-      #     env-skip.mjs 會 throw ⇒ 這個 step 翻紅（被 continue-on-error 承接），
-      #     而不是靜默 SKIP 之後假裝有在守。
-      - name: Playwright guards (過渡期，不擋 deploy)
-        continue-on-error: true
-        env:
-          PTCG_PW: 'strict'
-        run: node scripts/run-pw-guards.mjs
       - name: Build SvelteKit app
         run: npm run build
         env:

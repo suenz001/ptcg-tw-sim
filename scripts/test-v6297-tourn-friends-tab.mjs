@@ -39,7 +39,7 @@ import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.311 行級剝註解（含護欄）
 import { sectionInner, markupSections, GAME_INLINE_STYLE, allowResidualFor } from './lib/strip-markup-sections.mjs';     // ⭐v6.317 中央 helper；v6.318 單趟行級狀態機；v6.319 BOM／同行註解／殘留護欄
 import { styleBlockOf } from './lib/svelte-style-block.mjs';
-import { pwChromium } from './lib/pw.mjs';
+import { pwUsable } from './lib/pw.mjs';
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -557,7 +557,13 @@ await T('E6 ⭐⭐ 私聊面板只在有狀態時渲染，且掛在 foot snippet
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【F】版面量測（四種尺寸；沒有瀏覽器就 SKIP）');
 let hasPw = false;
-hasPw = pwChromium('v6.297 【F】四種尺寸的版面量測') !== null;
+// ⭐⭐v6.409：這一段是 **spawn measure-*.mjs** 型 —— 本行程自己從不 launch。
+//   `pwChromium()` 只檢查「模式 + 模組」，**不檢查瀏覽器裝了沒**（那一步在 pwLaunch）
+//   ⇒ 在「有 playwright 模組、沒有瀏覽器」的機器上會判成「可以跑」，
+//     然後子行程 launch 失敗、execFileSync 丟例外，被 catch 成「版面量測不符」的假紅。
+//   ⚠ 過渡期 PTCG_PW='off' 時這條路徑永遠 skip，所以看不出來；v6.409 把預設改成 'auto'
+//     之後當場暴露。⇒ 改用中央閘為這種場合準備的 `pwUsable()`（它會真的 launch 一次再關掉）。
+hasPw = await pwUsable('v6.297 【F】四種尺寸的版面量測');
 if (!hasPw) {
   skipped.push('【F】四種尺寸的 DOM 量測（沒有 playwright 模組）');
   console.log('  ⚠⚠ SKIP 【F】：這台機器沒有 Playwright ⇒ 版面沒有量（【C】的 CSS 逐字比對仍在守）');
