@@ -815,6 +815,24 @@ export interface GameState {
    */
   _attackTimeAttackName?: string;
   // <<< v6414-attack-time-attack-name
+  // >>> v6416-client-version-stamp
+  /**
+   * ⭐⭐⭐v6.416：**算這一手的那台 client 的引擎版本**（每一座各一個純量欄位）。
+   *
+   * 【為什麼需要】休閒線上對戰**不是伺服器權威**：誰做動作、誰的瀏覽器就跑 `applyAction`，
+   * 再由 `pushGameState` 把整份盤面推給對手。⇒ 一局裡每一手可能由**不同版本**算出來，
+   * 而對戰記錄上完全看不出來。
+   * 2026-09-20 的「耿鬼ex｜死亡宣告沒觸發」回報就是這樣：引擎其實沒有 bug，
+   * 是攻擊方那台停在 v6.355 之前的舊 bundle —— 但要靠逐版重現才能定案。
+   * 有了這兩個欄位，對戰記錄第一眼就看得出雙方跑的是哪一版。
+   *
+   * ⚠⚠ **刻意用兩個純量而不是 `[string, string]` 陣列**：Firestore 禁巢狀陣列
+   * （v6.056／v6.359／v6.361 同一條規則）。
+   */
+  _clientVerP0?: string;
+  /** 見 `_clientVerP0`。 */
+  _clientVerP1?: string;
+  // <<< v6416-client-version-stamp
   // <<< v6413-attack-self-penalty
   /**
    * ⭐⭐⭐ v6.407：本次招式「已經決定、但還沒有執行」的**自身能量付出**。

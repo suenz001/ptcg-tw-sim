@@ -1,5 +1,73 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.416 ⭐⭐ 昏厥特性 gate 診斷 log ＋ client 引擎版本蓋章（玩家可見；行為零改變）
+
+BASE `e129014be6b617974f96bea627c9bb9943c70caa`（v6.415）。
+⚠ 本版動了 `src/lib/game/effects.ts` 與 `src/routes/game/+page.svelte` ⇒ 部署要跑
+**`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**（IRON_RULES Rule 43）。
+⚠ **沒有動 `engine.ts`** ⇒ 不需要新的 engine-strip。
+⚠⚠ **本版不改變任何對戰結果**（守衛 C5 逐條釘住四種組合的入列數與 BASE 相同）。
+
+### 【零】由來與站長裁示
+
+2026-09-20 玩家回報「耿鬼ex｜死亡宣告被破破舵輪｜悔念錨打死時沒有觸發」（附對戰記錄截圖）。
+**逐版重現的結論：引擎沒有 bug。**
+
+| 版本 | 20 次中觸發 |
+|---|---|
+| v6.415（當時最新） | 20 ✅ |
+| v6.408a（當時正式站） | 20 ✅ |
+| **v6.354（死亡宣告實裝的前一版）** | **0 —— log 與玩家截圖逐字相同** 🎯 |
+
+根因：休閒線上對戰**不是伺服器權威** —— `src/routes/game/+page.svelte` 的 dispatch
+是「誰做動作、誰的瀏覽器就跑 `applyAction`」，再由 `room-oracle.ts` 的 `pushGameState`
+推整份盤面給對手（兩處都已讀原始碼確認）。那一手是**攻擊方**打的 ⇒ 他那台停在 v6.355 之前。
+
+已排除（都實測，不是推論）：稜鏡塔、耿鬼ex 中毒、對手備戰的振翼髮（暗夜羽擊卡面要求持有者
+**在戰鬥場**）、備戰隻數、state 的 JSON 序列化與 delta patch。
+另查到：招式版「暗夜羽擊」在現役 H／I／J 卡池**沒有對應卡**
+（`v2362_new_decks_batch.ts` 的註解自己寫明）⇒ `abilityNullifiedThisTurn` 那條擋法打不出來。
+
+⇒ 站長裁示：兩項改善排進 v6.416。
+
+### 【一】昏厥特性的四道 gate 補診斷 log
+
+`firePassiveOnKoAfterPrize` 原本**一個字都不寫**，所以分不出「被規則正確擋掉」與
+「這台 client 根本沒有這張卡的實作」。現在四道都寫清楚：
+①「不是傷害造成的昏厥」②「卡片資料缺失」③「卡面寫在戰鬥場」④「特性此刻被消除」。
+
+⚠ **噪音防線**：先算 `_famNames`（這張卡印著的、屬於本家族的特性），空的就直接 return
+⇒ 絕大多數昏厥一行都不會寫（守衛 D4 釘住這個早退）。
+⚠ `queued.length === 0` 的 return 從 `state` 改成 `s`（否則診斷 log 會被丟掉）。
+
+### 【二】client 引擎版本蓋章
+
+`GameState._clientVerP0` / `_clientVerP1`（**兩個純量**，不是陣列 —— Firestore 禁巢狀陣列，
+與 v6.056／v6.359／v6.361 同一條規則）。
+中央 helper `stampClientVersion(state, seat, ver)`（`effects.ts`，**唯一寫入點**）：
+版本第一次出現或改變時寫一行 log，同版本重複呼叫是 no-op。
+接線：`+page.svelte` 的 dispatch 在 `game = newState` 之前蓋**自己這一座**。
+
+⇒ 日後這類回報，對戰記錄自己就說明白是哪一版算的，不必再逐版重現。
+
+### 【三】守衛
+
+新增 `scripts/test-v6416-onko-diagnostics-and-version-stamp.mjs`（19 條）：
+A(1 哨兵)／B(6 版本蓋章，含純量與空字串負對照)／C(6 gate 診斷，含**行為零改變**的 C5)／
+D(4 靜態 Rule 38，含接線斷言)／E(2 反安慰劑)。
+**HEAD-FAIL 實測**：在 BASE（v6.415）上 **13 條紅**，正對照（C0／C1／C4／C5／E1／E2）全綠
+—— 其中 C5 就是「行為零改變」的證明。
+
+⚠ 誠實標記：`PASSIVE_ON_KO_AFTER_PRIZE` 目前只有「死亡宣告」一個成員，而它在
+`PASSIVE_ON_KO_BENCH_ALSO` 裡 ⇒ 「卡面寫在戰鬥場」那一道 gate **行為端測不到**，
+由 D3 的靜態斷言釘住它還在。
+
+### 【四】後續（已建排程追蹤）
+
+每週一台灣時間 10:00 的排程任務會回來確認：有沒有新的回報、是不是錦標賽（那是伺服器權威，
+另一回事）、以及正式站版本與 repo 是否一致。
+
+
 ## v6.415 ⭐⭐⭐ 傷害免疫判準收斂成一份＋備戰擲幣免疫（玩家可見）
 
 BASE `d2b5b17abd9dc2c2fe8a69b893733095329d08e6`（v6.414）。

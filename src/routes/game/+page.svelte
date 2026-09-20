@@ -68,7 +68,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   // ⭐⭐⭐v6.337 借招（複製他人招式）中央管線 —— 候選枚舉與規則層共用同一份，
   //   且提供「借到的招式本身也是借招卡」時要不要再開一段 picker 的判準。
   import { copyAttackCandidates, isCopyAttackKey, COPY_ATTACK_MAX_DEPTH, type CopyChoice } from '$lib/game/copy-attack';
-  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, effectivePreDiscardMin, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType, preDiscardEnergyEligible, OPTIN_NO_PAYMENT, damageCounterCount } from '$lib/game/effects'; // v5.992 若希望 opt-in sentinel / ⭐v6.349 preDiscardEnergyEligible
+  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, effectivePreDiscardMin, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType, preDiscardEnergyEligible, OPTIN_NO_PAYMENT, damageCounterCount, stampClientVersion } from '$lib/game/effects'; // v5.992 若希望 opt-in sentinel / ⭐v6.349 preDiscardEnergyEligible
   import { JAMMING_TOWER_STADIUMS } from '$lib/game/effects/cards/stadiums';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
@@ -7441,6 +7441,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
         }
       }
     }
+    // >>> v6416-client-version-stamp-call
+    // ⭐⭐⭐v6.416（站長裁示）：把「算這一手的是哪一版引擎」蓋進盤面。
+    //   休閒線上對戰是「誰做動作誰算、再 pushGameState 推整份盤面」⇒ 一局裡每一手
+    //   可能由不同版本算出來，而對戰記錄完全看不出來。
+    //   2026-09-20 的「耿鬼ex｜死亡宣告沒觸發」就是這樣：引擎沒有 bug，是攻擊方那台
+    //   停在舊 bundle —— 只能靠逐版重現才定案。有了這一行，記錄自己就說明白了。
+    //   ⚠ 同版本重複呼叫是 no-op（helper 內判斷），不會每一手刷一行。
+    //   ⚠ 只蓋**自己這一座**：對手那一座由對手的 client 自己蓋，推過來時就帶著。
+    if (mySeatIdx === 0 || mySeatIdx === 1) {
+      newState = stampClientVersion(newState, mySeatIdx as 0 | 1, VERSION);
+    }
+    // <<< v6416-client-version-stamp-call
     game = newState;
     floatingEvoMenu = null; floatingRetreatMenu = null; selectedEnergyIid = null;
 

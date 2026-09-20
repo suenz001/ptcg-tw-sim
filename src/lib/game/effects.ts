@@ -18047,6 +18047,31 @@ export const PASSIVE_ON_KO_AFTER_PRIZE = new Map<string, PassiveOnKoAfterPrizeFn
   }],
 ]);
 
+// >>> v6416-client-version-stamp-central
+/**
+ * ⭐⭐⭐v6.416：把「算這一手的那台 client 的引擎版本」蓋進盤面 —— **唯一寫入點**（Rule 38）。
+ *
+ * 休閒線上對戰是「誰做動作誰算、再推整份盤面」⇒ 一局裡每一手可能由不同版本算出來。
+ * 這支 helper 在版本**第一次出現或改變**時寫一行 log，讓對戰記錄自己說明白
+ * （2026-09-20 的「死亡宣告沒觸發」就是靠逐版重現才定案的，有這行就不必）。
+ *
+ * ⚠ 同版本重複呼叫是 no-op（不會每一手都刷一行）。
+ * ⚠ 兩個欄位都是純量（Firestore 禁巢狀陣列）。
+ */
+export function stampClientVersion(state: GameState, seat: 0 | 1, ver: string): GameState {
+  if (!ver) return state;
+  const cur = seat === 0 ? state._clientVerP0 : state._clientVerP1;
+  if (cur === ver) return state;
+  const s: GameState = seat === 0
+    ? { ...state, _clientVerP0: ver }
+    : { ...state, _clientVerP1: ver };
+  const name = state.players[seat]?.name ?? (seat === 0 ? 'P1' : 'P2');
+  return addLog(s, cur
+    ? `⚙️ ${name} 的對戰引擎版本：v${ver}（原本記錄的是 v${cur}）`
+    : `⚙️ ${name} 的對戰引擎版本：v${ver}`, null);
+}
+// <<< v6416-client-version-stamp-central
+
 /**
  * ⭐⭐⭐ v6.355 入列唯一入口（gate 只有這一份）。兩個呼叫點共用：
  *   ・effects.ts fireDefenderOnKO ④ 段
@@ -18065,21 +18090,53 @@ export function firePassiveOnKoAfterPrize(
   isActive: boolean,
   koByAttackDamage: boolean,
 ): GameState {
-  if (!koByAttackDamage) return state;
+  // >>> v6416-onko-gate-diagnostics
+  // ⭐⭐⭐v6.416（站長裁示）：這四道 gate 原本**一個字都不寫 log**。
+  //   2026-09-20 的「耿鬼ex｜死亡宣告沒觸發」回報就卡在這裡：全靜默 ⇒ 分不出
+  //   「被規則正確擋掉」與「這台 client 根本沒有這張卡的實作（舊 bundle）」，
+  //   最後是靠逐版重現（v6.354 的 log 與玩家截圖逐字相同）才定案的。
+  //   ⇒ 只要這張卡**印著**本家族的特性，被哪一道擋掉就寫清楚。
+  //   ⚠ 沒印本家族特性的卡（絕大多數）一行都不會寫 —— 不製造噪音。
+  //   ⚠ 純 log，行為零改變（守衛 test-v6416 的 B 段逐條釘住「擋不擋」與原本相同）。
   const koCard = pool.get(koInst.cardId);
-  if (!koCard?.abilities) return state;
+  const _famNames = (koCard?.abilities ?? [])
+    .filter(ab => PASSIVE_ON_KO_AFTER_PRIZE.has(ab.name))
+    .map(ab => ab.name);
+  const _who = koCard?.name ?? '?';
+  if (!koByAttackDamage) {
+    if (_famNames.length === 0) return state;
+    return addLog(state,
+      `${_who}｜${_famNames.join('・')}：不觸發（卡面是「受到…招式的**傷害**而【昏厥】時」，這次不是傷害造成的昏厥）`,
+      dIdx);
+  }
+  if (!koCard) {
+    // ⚠ 這一條在 engine 主管線通常到不了（getCard 查不到會先 throw），
+    //   但 effects.ts 那條路徑到得了。拿不到卡面就無從判定，據實說出來。
+    return addLog(state,
+      `⚠ 找不到昏厥寶可夢的卡片資料（cardId=${koInst.cardId}）⇒ 「昏厥時觸發」的特性無法判定`, null);
+  }
+  if (!koCard.abilities) return state;
   const queued: NonNullable<GameState['_onKoAfterPrize']> = [];
+  let s: GameState = state;
   for (const ab of koCard.abilities) {
     if (!PASSIVE_ON_KO_AFTER_PRIZE.has(ab.name)) continue;
-    if (!isActive && !PASSIVE_ON_KO_BENCH_ALSO.has(ab.name)) continue;
-    if (!isAbilityHolderEffective(state, koInst, koCard, dIdx, ab.name, isActive ? 'active' : 'bench', pool)) continue;
+    if (!isActive && !PASSIVE_ON_KO_BENCH_ALSO.has(ab.name)) {
+      s = addLog(s, `${_who}｜${ab.name}：不觸發（卡面寫「在戰鬥場」，在備戰區昏厥不算）`, dIdx);
+      continue;
+    }
+    if (!isAbilityHolderEffective(state, koInst, koCard, dIdx, ab.name, isActive ? 'active' : 'bench', pool)) {
+      s = addLog(s, `${_who}｜${ab.name}：不觸發（特性此刻被消除 —— 初始化／監視塔／傳說的熔岩洞／黏著束縛 之類）`, dIdx);
+      continue;
+    }
     queued.push({
       ability: ab.name, dIdx, aIdx, koInst,
       attackerIid: state.players[aIdx].active?.iid,
     });
   }
-  if (queued.length === 0) return state;
-  return { ...state, _onKoAfterPrize: [...(state._onKoAfterPrize ?? []), ...queued] };
+  // <<< v6416-onko-gate-diagnostics
+  // ⭐v6.416：`s` 可能已經帶著上面的診斷 log ⇒ 一律以 `s` 為基底（原本是 `state`）。
+  if (queued.length === 0) return s;
+  return { ...s, _onKoAfterPrize: [...(s._onKoAfterPrize ?? []), ...queued] };
 }
 
 /**

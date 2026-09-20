@@ -308,7 +308,17 @@ console.log('\n【D】卡面「受到…**傷害**而【昏厥】」⇒ 效果�
   chk('D1 ⭐效果昏厥（放指示物）⇒ 死亡宣告**不**觸發：攻擊方仍在場且 0 點',
     !!A0(r) && A0(r).damage === 0, JSON.stringify([!!A0(r), A0(r)?.damage]));
   chk('D1 ⭐效果昏厥 ⇒ 被 KO 的那一側**不**取得獎賞（仍是 6）', PZ(r, 1) === 6, String(PZ(r, 1)));
-  chk('D1 ⭐效果昏厥 ⇒ 完全沒有「死亡宣告」的 log', nLog(r, '死亡宣告') === 0,
+  // ⭐⭐v6.416（IRON_RULES Rule 40）：本條原本是「完全沒有『死亡宣告』的 log」。
+  //   v6.416 起，被 gate 擋掉時會**刻意**寫一行診斷 log（站長裁示；起因是「死亡宣告沒觸發」
+  //   的玩家回報全靜默、分不出是規則擋掉還是舊版 bundle）。
+  //   意圖（效果昏厥不得觸發、連硬幣都不該擲）沒有被破壞 ⇒ 觀測點改成**更精確**的兩條：
+  //     ① 不得出現「擲硬幣」或「啟動」（真的跑了才會有這兩種字樣）；
+  //     ② **必須**出現那一行診斷 log（v6.416 的意圖本身也被守住）。
+  chk('D1 ⭐效果昏厥 ⇒ 連硬幣都不該擲（不得有「擲硬幣」／「啟動」的 log）',
+    LOGS(r).filter((x) => /死亡宣告/.test(x) && /(擲硬幣|啟動)/.test(x)).length === 0,
+    LOGS(r).filter((x) => x.includes('死亡宣告')).join(' / '));
+  chk('D1b ⭐v6.416 ⇒ 必須寫出「不是傷害造成的昏厥」的診斷 log',
+    LOGS(r).some((x) => /死亡宣告/.test(x) && /不是傷害造成的昏厥/.test(x)),
     LOGS(r).filter((x) => x.includes('死亡宣告')).join(' / '));
 
   // D2 中毒檢查階段昏厥（寶可夢檢查，不是招式的傷害）
@@ -339,8 +349,16 @@ console.log('\n【E】特性被消除（【傳說的熔岩洞】：雙方場上*
     D0(R) == null && D0(C) == null, JSON.stringify([D0(R), D0(C)]));
   chk('E1 ⭐熔岩洞在場 ⇒ 死亡宣告被消除：攻擊方仍在場且 0 點',
     !!A0(R) && A0(R).damage === 0, JSON.stringify([!!A0(R), A0(R)?.damage]));
-  chk('E1 ⭐熔岩洞在場 ⇒ 連硬幣都不該擲（完全沒有「死亡宣告」的 log）',
-    nLog(R, '死亡宣告') === 0, LOGS(R).filter((x) => x.includes('死亡宣告')).join(' / '));
+  // ⭐⭐v6.416（Rule 40）：同 D1 —— 觀測點從「完全沒有 log」改成「不得擲幣 ＋ 必須寫診斷」。
+  chk('E1 ⭐熔岩洞在場 ⇒ 連硬幣都不該擲（不得有「擲硬幣」／「啟動」的 log）',
+    LOGS(R).filter((x) => /死亡宣告/.test(x) && /(擲硬幣|啟動)/.test(x)).length === 0,
+    LOGS(R).filter((x) => x.includes('死亡宣告')).join(' / '));
+  chk('E1b ⭐v6.416 ⇒ 必須寫出「特性此刻被消除」的診斷 log',
+    LOGS(R).some((x) => /死亡宣告/.test(x) && /特性此刻被消除/.test(x)),
+    LOGS(R).filter((x) => x.includes('死亡宣告')).join(' / '));
+  chk('E1c ⭐【正對照】沒有熔岩洞時**不該**出現那一行診斷 log（不是恆真）',
+    !LOGS(C).some((x) => /特性此刻被消除/.test(x)),
+    LOGS(C).filter((x) => x.includes('死亡宣告')).join(' / '));
   chk('E1 ⭐熔岩洞在場 ⇒ 耿鬼ex 那一側不取得獎賞（仍是 6）', PZ(R, 1) === 6, String(PZ(R, 1)));
   chk('E2 ⭐正對照（差別只有場地）：沒有熔岩洞時照樣觸發（攻擊方昏厥、獎賞 6 − 1 = 5）',
     A0(C) == null && PZ(C, 1) === 5, JSON.stringify([!!A0(C), PZ(C, 1)]));

@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'd2b5b17abd9dc2c2fe8a69b893733095329d08e6';   // v6.414（上一版）
+const PREV_SHA = 'e129014be6b617974f96bea627c9bb9943c70caa';   // v6.415（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,15 +757,16 @@ const PREV_SHA = 'd2b5b17abd9dc2c2fe8a69b893733095329d08e6';   // v6.414（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.415 前移：PREV_SHA 從 v6.414（d2b5b17a）起算。
+  // ⚠⚠ v6.416 前移：PREV_SHA 從 v6.415（e129014b）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.415：傷害免疫的判準收斂成一份（中央閘 resolveMultiTargetDamageGuard），
-  //   修掉「擲幣型免疫（順滑大衣／腎上腺費洛蒙）在**備戰**完全不生效」的真 bug；
-  //   死碼 manualDamageImmunity 刪除；好友名單「💬 私聊」拿掉 emoji（站長裁示，320 寬餘裕）。
-  'src/lib/friends/FriendsPanel.svelte',
+  // ⭐v6.416（站長裁示，起因是「耿鬼ex｜死亡宣告沒觸發」的玩家回報）：
+  //   ①「昏厥時觸發」特性的四道 gate 補診斷 log（純 log，行為零改變）；
+  //   ② 把「算這一手的那台 client 的引擎版本」蓋進盤面並寫進對戰記錄
+  //      —— 休閒線上是「誰做動作誰算、再推整份盤面」，混版時記錄本來完全看不出來。
   'src/lib/game/effects.ts',
-  'src/lib/game/effects/cards/m5_preview.ts',
+  'src/lib/game/types.ts',
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',

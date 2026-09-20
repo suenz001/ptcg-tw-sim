@@ -503,6 +503,15 @@ const EXEMPT=new Map(Object.entries({
   //   而豁免的代價是真 bug：站長回報「振翼髮消掉鐵荊棘ex 的初始化後，天空徑線仍沒恢復」。
   //   兩支現在都接上了中央閘 ⇒ 條目變成死條目，依 20e 必須刪除。
   // ── 已在上游／下游過閘 ──────────────────────────────────────────────────
+  // ⭐⭐v6.416：`firePassiveOnKoAfterPrize` 開頭新增的 `_famNames` 只是**診斷用途**的
+  //   前置判斷（「這張卡有沒有印著本家族的特性」⇒ 決定要不要寫 gate 診斷 log），
+  //   **不驅動任何效果**；真正的特性消除閘就在同一支函式下面幾行的
+  //   `isAbilityHolderEffective(...)`（那一行有接，20d 掃得到）。
+  //   ⭐ 行為端證明（安慰劑型態 7 要求的，不是文字保證）：
+  //     ・test-v6416 C2：傳說的熔岩洞在場 ⇒ 入列數 0（與 BASE 相同）且寫出「特性此刻被消除」
+  //     ・test-v6416 C5：四種組合的入列數與 BASE 逐一相同 ⇒ 行為零改變
+  //     ・test-v6355 E1／E1b／E1c：熔岩洞在場不得擲幣、必須寫診斷、沒有熔岩洞時不得誤寫
+  'src/lib/game/effects.ts|PASSIVE_ON_KO_AFTER_PRIZE':'v6.416 的 `_famNames` 是診斷 log 的前置判斷（要不要寫 log），不驅動效果；真正的消除閘是同一支函式裡的 isAbilityHolderEffective（已接）。行為端證明：test-v6416 C2／C5 與 test-v6355 E1b／E1c',
   'src/lib/game/effects/cards/m6_wave8.ts|大洋增輝':'regA 內對**同一隻**的自我複核（同名卡陷阱防護）；USE_ABILITY 先過 getUsableAbilities → isAbilityHolderEffective',
   'src/lib/game/effects/cards/m6_wave8.ts|深海抽出':'同上：regA 對同一隻的自我複核，上游 getUsableAbilities 已過中央閘',
   'src/lib/game/effects.ts|懶怠個性':'v6.113 起「特性有沒有被消除」交給 engine selfAttackPreconditionBlock → isAbilityHolderEffective',
