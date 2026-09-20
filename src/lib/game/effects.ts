@@ -9395,9 +9395,19 @@ export function dealAttackDamageToTarget(
   targetIid: string,
   dmg: number,
   pool: Map<string, Card>,
-  opts?: { kind?: DamageKind; label?: string; noWeakness?: boolean },
+  // >>> v6412-skip-def-effects-opt
+  //   ⭐⭐⭐v6.412：`skipDefEffects` ＝ 卡面「這個招式的傷害不計算受傷寶可夢身上附加的效果」
+  //   （跳躍扣殺／雙刃劍／出奇一擊…）。逐字鏡射 engine 主管線的 `!skipDefEffects` 闘：
+  //   跳過免疫 guard、Block A、備戰減傷、下次被擊減傷（且**不消耗**）、變硬、傷害量門檻免疫、擲幣免傷。
+  //   ⚠⚠ **不跳過攻擊方自己身上的效果**（官方 §18.E：「雖然招式『跳躍扣殺』不計算對手的
+  //     戰鬥寶可夢身上的附加效果，但**會計算超級長耳兔ex自己身上的附加效果**」）
+  //     ⇒ `applyAttackerActiveDamageBonuses` 照樣套。
+  //   ⚠ 與 `noWeakness` 是兩件事：弱點・抵抗力不是「身上的附加效果」，engine 也分開兩個旗標。
+  opts?: { kind?: DamageKind; label?: string; noWeakness?: boolean; skipDefEffects?: boolean },
+  // <<< v6412-skip-def-effects-opt
 ): GameState {
   const kind = opts?.kind ?? 'attack-damage';
+  const _skipDef = opts?.skipDefEffects === true;   // ⭐v6.412
   const label = opts?.label ?? '攻擊';
   const dIdx = (1 - actorIdx) as 0 | 1;
   const defender = st.players[dIdx];
@@ -9415,7 +9425,11 @@ export function dealAttackDamageToTarget(
   //   ⚠新卡若是「非放指示物」的招式效果（換位/退化/丟道具/bounce），**請勿走本 helper**，
   //     否則會被對戰圓形誤擋；請直接呼叫 canApplyEffectToTarget 並傳 counterPlacement:false。
   //   （kind='attack-damage' 時對戰圓形本來就不擋，此旗標無作用。）
-  const guard = canApplyEffectToTarget(st, actorIdx, target, targetCard, kind, pool, { isBench: !isActive, counterPlacement: true });
+  // >>> v6412-skip-def-effects-guard
+  const guard = _skipDef
+    ? { blocked: false, reason: '' }
+    : canApplyEffectToTarget(st, actorIdx, target, targetCard, kind, pool, { isBench: !isActive, counterPlacement: true });
+  // <<< v6412-skip-def-effects-guard
   if (guard.blocked) {
     const name = targetCard?.name ?? '?';
     return addLog(st, `${label}：${name} 因${guard.reason}不受傷害`, actorIdx);
@@ -9424,7 +9438,7 @@ export function dealAttackDamageToTarget(
   //   （順滑大衣）— canApplyEffectToTarget 的 active 分支不查 PASSIVE_IMMUNITY，狙擊又繞過主管線，
   //   故戰鬥位的條件免疫會漏（回歸測試矩陣抓到：神秘石居在戰鬥位被 ex 狙擊仍受傷）。
   //   只在【傷害】語境套（放指示物 attack-effect 不套）。bench 由 canApplyEffectToTarget→resolveBenchGuard 已含。
-  if (isActive && kind === 'attack-damage') {
+  if (!_skipDef && isActive && kind === 'attack-damage') {   // ⭐v6.412 skipDefEffects 跳過
     const _pb = passiveImmunityDamageBlock(st, actorIdx, target, targetCard, pool);
     if (_pb.blocked) return addLog(st, `${label}：${targetCard?.name ?? '?'} ${_pb.reason}（免疫此招式傷害）`, actorIdx);
     const _coin = passiveCoinImmunity(st, actorIdx, target, targetCard, pool);
@@ -9475,7 +9489,7 @@ export function dealAttackDamageToTarget(
       //   （鐵之防禦／守護之鐘／福祿果…）其實都在裡面。現在併進 `_formula`。
       const _fm: FormulaTerm[] = [];
       const _rr = applyDefenderReductionsBlockA(
-        st, st, _defP, _atkP, targetCard, _atkCardR, effDmg, false,
+        st, st, _defP, _atkP, targetCard, _atkCardR, effDmg, _skipDef,   // ⭐v6.412 第 8 參數就是 skipDefEffects
         isToolsJammed(st, pool), dIdx, actorIdx, _fm, pool);
       st = _rr.workingState;
       effDmg = _rr.baseDamage;
@@ -9493,7 +9507,7 @@ export function dealAttackDamageToTarget(
       }
       // damageReduceNextHit（下次被擊減傷）消耗 — 鏡射引擎 step 4（祭典樂舞首擊不消耗）
       const _dAct = st.players[dIdx].active;
-      if (effDmg > 0 && _dAct?.damageReduceNextHit) {
+      if (!_skipDef && effDmg > 0 && _dAct?.damageReduceNextHit) {   // ⭐v6.412（跳過時旗標也不消耗）
         const _drBefore = effDmg;
         effDmg = Math.max(0, effDmg - _dAct.damageReduceNextHit);
         // v5.900：狙擊/延後型路徑補寫「下次被擊減傷」log(此路徑只顯示最終傷害、無公式，原本傷害少了卻無任何說明；鏡射主引擎 formula「下次被擊減傷」項)
@@ -9506,7 +9520,7 @@ export function dealAttackDamageToTarget(
       }
       // v5.886 變硬:最終傷害 ≤ N 歸 0(持續整回合,不消耗) — 鏡射引擎主路徑。
       const _dAct886 = st.players[dIdx].active;
-      if (effDmg > 0 && _dAct886?.blockAttackDamageIfLTEThisTurn != null && effDmg <= _dAct886.blockAttackDamageIfLTEThisTurn) {
+      if (!_skipDef && effDmg > 0 && _dAct886?.blockAttackDamageIfLTEThisTurn != null && effDmg <= _dAct886.blockAttackDamageIfLTEThisTurn) {   // ⭐v6.412
         // v5.900：狙擊/延後型路徑補寫「變硬」免傷 log(原本傷害歸 0 卻無任何說明；鏡射主引擎 engine.ts 4848)
         st = addLog(st, `${targetCard.name} 因變硬效果，不受「${_dAct886.blockAttackDamageIfLTEThisTurn}」以下招式的傷害`, dIdx);
         // ⭐v6.239 對齊 engine 主管線的同名項
@@ -9518,7 +9532,7 @@ export function dealAttackDamageToTarget(
   // v5.583：bench 受招式【傷害】→ 套防守方特性/場地減傷（捲牆/守護之鐘/齒輪塗層/凍原堡壘/
   //   自身 PASSIVE_DAMAGE_REDUCE 等）。active 已於上方 applyDefenderReductionsBlockA 處理，故只補 bench。
   //   收斂：與 hitBenchAll/hitBenchPickPost/snipe-multi 同一條 _applyBenchAbilityReduce。
-  if (!isActive && kind === 'attack-damage' && effDmg > 0 && targetCard) {
+  if (!_skipDef && !isActive && kind === 'attack-damage' && effDmg > 0 && targetCard) {   // ⭐v6.412
     const _rb = _applyBenchAbilityReduce(st, target, targetCard, dIdx, actorIdx, pool, effDmg);
     if (_rb.amount !== effDmg && _rb.logs.length > 0) st = addLog(st, `${targetCard.name}：${_rb.logs.join('、')}`, null);
     effDmg = _rb.amount;
@@ -9529,14 +9543,14 @@ export function dealAttackDamageToTarget(
   }
   // v6.165：依傷害量判定的被動免疫（暴噬龜｜鐵壁硬殼）。狙擊/延後型招式對戰鬥位可以輕鬆
   //   超過 200（例：180 × 弱點 2 = 360），過去這條路徑用假值 1 探測 ⇒ 該特性完全失效。
-  if (kind === 'attack-damage' && effDmg > 0) {
+  if (!_skipDef && kind === 'attack-damage' && effDmg > 0) {   // ⭐v6.412
     const _pdt = passiveImmunityByDamageAmount(st, actorIdx, target, targetCard, pool, effDmg, { isBench: !isActive });
     if (_pdt.blocked) {
       return addLog(st, `${label}：${targetCard?.name ?? '?'} ${_pdt.reason}`, actorIdx);
     }
   }
   // v5.599 受招式傷害擲幣免傷（躲藏高手/腎上腺費洛蒙）：active+bench 皆套（中央 helper 過去漏,只引擎主管線有）。
-  if (kind === 'attack-damage' && effDmg > 0) {
+  if (!_skipDef && kind === 'attack-damage' && effDmg > 0) {   // ⭐v6.412
     const _ca = applyDefenderCoinAvoid(st, target, targetCard, dIdx, effDmg, pool);
     st = _ca.state;
     if (_ca.avoided) effDmg = 0;
@@ -12085,151 +12099,27 @@ function multiSnipePost(targetCount: number, damage: number, label: string, opts
   };
 }
 regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
+  // ⭐⭐⭐v6.412 收斂：整段 inline 傷害管線刪掉，改成逐目標呼叫中央 `dealAttackDamageToTarget`
+  //   （理由與 clone-strike-multi-hit 完全相同，見那一段的註解：缺 10 項攻擊方加成、
+  //     缺 Block A、缺下次被擊減傷與變硬、加成與弱點的順序也相反）。
+  //
+  // ⚠ `flat`（雙刃劍／出奇一擊，卡面「不計算弱點・抵抗力」＋「不計算受傷寶可夢身上附加的效果」）
+  //   對應中央 helper 的 `noWeakness` ＋ v6.412 新增的 `skipDefEffects`。
+  //   ⚠⚠ 官方 §18.E：這種招式**仍然計算攻擊方自己身上的附加效果** ⇒ 中央 helper 的
+  //     `applyAttackerActiveDamageBonuses` 照樣套（skipDefEffects 不擋它），與舊 inline 版
+  //     「flat 就整段跳過」不同 —— 這是**本版修正的行為**，不是退化。
+  // ⚠ `kind` 由 params 帶進來（'attack-effect' ＝放指示物型），照舊透傳給中央 helper。
   const dmg = (params?.damage as number) ?? 0;
   const label = (params?.label as string) ?? '多目標攻擊';
-  // v2.46：caller 可用 kind 指定是招式傷害還是招式效果。預設 'attack-damage'。
   const kind = ((params?.kind as DamageKind) ?? 'attack-damage');
-  const flat = !!params?.flat; // v5.784：整招不計弱抗+附加效果(雙刃劍/出奇一擊)
-  const dIdx = (1 - actorIdx) as 0 | 1;
+  const flat = !!params?.flat;
+  if (dmg === 0 || selectedIids.length === 0) return st;
   let s = st;
-  let totalPrize = 0;
-  let opponentActiveKOed = false;
   for (const iid of selectedIids) {
-    const defender = s.players[dIdx];
-    const isActive = defender.active?.iid === iid;
-    const target = isActive ? defender.active! : defender.bench.find(c => c.iid === iid);
-    if (!target) continue;
-    const targetCard = pool.get(target.cardId);
-    // v4.979: 統一 — active + bench 都過 canApplyEffectToTarget
-    //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等
-    //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩牆 / 防護代碼 / 塗層攻擊
-    //   注意：kind 透傳（多目標 resolver 同時用於 attack-damage 跟 attack-effect）
-    // v5.861：flat 招式(skipDefEffects 語意,雙刃劍/出奇一擊)「不計算受傷寶可夢身上的附加效果」
-    //   → 對齊 engine 主路徑 skipDefEffects,bypass 所有 defender 免疫(太晶備戰/謝米花之帷幔/
-    //   防護代碼/飛翔/暗影惡能量/太鼓防壁…)。官方判例:不計算不受招式傷害的效果,可造成傷害。
-    // v6.029：本 resolver 的 kind='attack-effect' 是保留給「放指示物型多目標」用的 → 對戰圓形應擋。
-    // ⭐ v6.164【中央收斂】原本只呼叫 canApplyEffectToTarget —— 那一層對**戰鬥位**目標
-    //   不含 PASSIVE_IMMUNITY（礎石之勢／神秘之盾／神秘石居／璀璨鱗片／尾甲／鐵壁硬殼）
-    //   也不含擲幣型免疫（順滑大衣）；備戰側因為 resolveBenchGuard 內含 v5.367 那層才沒事。
-    //   玩家回報：酋雷姆｜三重冰霜（走本 resolver）打得到戰鬥場的 厄鬼椪 礎石面具ex。
-    //   → 統一改走 v6.141 就已經存在的中央閘 resolveMultiTargetDamageGuard。
-    let guard: { blocked: boolean; reason: string } | null = null;
-    if (!flat) {
-      const g = resolveMultiTargetDamageGuard(s, actorIdx, target, targetCard, pool, {
-        isBench: !isActive, kind, counterPlacement: true,
-      });
-      s = g.state;
-      guard = { blocked: g.blocked, reason: g.reason };
-    }
-    if (guard?.blocked) {
-      const name = targetCard?.name ?? '?';
-      s = addLog(s, `${label}：${name} 因${guard.reason}不受傷害`, actorIdx);
-      continue;
-    }
-    // v5.153：active 補套 weakness/resistance/猛攻手鐲等攻擊方 tool（卡面註解「備戰區不計
-    //   弱點抵抗力」暗示戰鬥場要計算）。Wilson 回報耀閃挑戰學三重冰霜對 ex 沒算 +30。
-    let effDmg = dmg;
-    if (isActive) {
-      const attacker = s.players[actorIdx].active;
-      const attackerCard = attacker ? pool.get(attacker.cardId) : null;
-      // v5.673：弱點/抵抗力收斂到中央 applyWeakRes(妖精領域/掌握弱點/弱點失效/攻擊方雙屬性,與主管線一致)。
-      // v5.784：flat 招式(雙刃劍/出奇一擊「不計算弱點・抵抗力」)整招不計 → 跳過。
-      if (!flat) effDmg = applyWeakRes(s, actorIdx, target, targetCard, effDmg, pool);
-      // TOOL_ATTACK_BONUS（猛攻手鐲等）— iterate 攻擊方所有道具（v5.761：阻礙之塔時道具失效，比照主管線 gate）
-      if (attacker && attackerCard && !isToolsJammed(s, pool)) {
-        for (const t of getAllAttachedTools(attacker)) {
-          const atkTool = pool.get(t.cardId);
-          if (!atkTool) continue;
-          const fn = TOOL_ATTACK_BONUS.get(atkTool.name);
-          if (!fn) continue;
-          const bonus = fn(attackerCard, attacker, targetCard ?? attackerCard, target);
-          if (bonus > 0) effDmg += bonus;
-        }
-      }
-    }
-    // v5.583：套防守方特性/場地【傷害減免】（爆炸頭水牛 捲牆 / 守護之鐘 / 齒輪塗層 / 凍原堡壘 /
-    //   岩石宮殿 / 自身 PASSIVE_DAMAGE_REDUCE 等）。弱點/抵抗力非此類，已於上方戰鬥位另計。
-    //   收斂：與 hitBenchAll / hitBenchPickPost / dealAttackDamageToTarget 同一條 _applyBenchAbilityReduce，
-    //   active+bench 皆適用（snipe-multi 不走引擎主管線，過去完全漏套 → 備戰捲牆等無效）。
-    if (effDmg > 0 && targetCard && !flat) { // v5.784：flat 招式不計「身上附加效果」(防守方減傷)
-      const _rd = _applyBenchAbilityReduce(s, target, targetCard, dIdx, actorIdx, pool, effDmg);
-      if (_rd.amount !== effDmg && _rd.logs.length > 0) s = addLog(s, `${targetCard.name}：${_rd.logs.join('、')}`, null);
-      effDmg = _rd.amount;
-      if (_rd.toolToDiscard) { // v5.818：防具道具果實觸發 → 從備戰目標丟棄
-        const _td = _rd.toolToDiscard;
-        s = updatePlayer(s, dIdx, pl => ({ ...pl, bench: pl.bench.map(b => b.iid === iid ? _stripBenchTool(b, _td.iid) : b), discard: [...pl.discard, _td] }));
-      }
-    }
-    // v6.165：依傷害量判定的被動免疫（鐵壁硬殼）。flat（「不計算受傷寶可夢身上的附加效果」）
-    //   招式一律 bypass，與 engine skipDefEffects 及上方擲幣免傷同一判準。
-    if (effDmg > 0 && !flat) {
-      const _pdt = passiveImmunityByDamageAmount(s, actorIdx, target, targetCard, pool, effDmg, { isBench: !isActive });
-      if (_pdt.blocked) {
-        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${_pdt.reason}`, actorIdx);
-        continue;
-      }
-    }
-    // v5.599 擲幣免傷（躲藏高手/腎上腺費洛蒙）：active+bench 皆套
-    // v5.861：flat 招式亦 bypass 擲幣免傷(順滑大衣等)——Wilson 引用官方判例即以順滑大衣為例,與 engine skipDefEffects 一致
-    if (effDmg > 0 && !flat) {
-      const _ca = applyDefenderCoinAvoid(s, target, targetCard, dIdx, effDmg, pool);
-      s = _ca.state;
-      if (_ca.avoided) effDmg = 0;
-    }
-    // v5.435：active 受招式傷害 → 觸發防守方 on-damaged 全機制（共用 fireDefenderOnDamaged，
-    //   升級原本只有 SPECIAL_ENERGY 的版本；補 TOOL_ON_DAMAGED/還擊斧/龐克頭盔/反擊特性/警備濁霧）。
-    // v6.120：同 dealAttackDamageToTarget —— 記下 on-damaged 是否跑過。
-    const _onDamagedFired = isActive && effDmg > 0;
-    if (_onDamagedFired) {
-      s = fireDefenderOnDamaged(s, dIdx, actorIdx, effDmg, pool);
-      if (s.phase === 'game-over') return s;
-    }
-    // re-fetch（helper 可能消費還擊旗標 / 改 attacker 狀態）
-    const defenderNow = s.players[dIdx];
-    const targetNow = isActive ? defenderNow.active : defenderNow.bench.find(c => c.iid === iid);
-    if (!targetNow) continue;
-    const newDmg = targetNow.damage + effDmg;
-    const hp = effectiveHPInline(targetNow, pool, st);  // v5.091
-    if (hp > 0 && newDmg >= hp) {
-      // v5.594 prevent-KO（堅忍之軀/倖存鍛鍊器等）：命中則留 HP 不昏厥
-      const _pk = applyPreventKOToVictim(s, targetNow, targetCard, dIdx, effDmg, pool, kind);
-      if (_pk.prevented) { s = _pk.state; continue; }
-      const ko: CardInstance[] = [
-        { ...targetNow, damage: newDmg },
-        ...targetNow.energyAttached,
-        ...getAllAttachedTools(targetNow),
-        ...(targetNow.evolvedFromStack ?? []),
-      ];
-      const _ko = koPrizesAdjusted(s, targetNow, targetCard, actorIdx, dIdx, pool);
-      s = _ko.state;
-      const p = _ko.prizes;
-      totalPrize += p;
-      const players = [...s.players] as [PlayerState, PlayerState];
-      const newDefender = { ...defenderNow, discard: [...defenderNow.discard, ...ko] };
-      if (isActive) { newDefender.active = null; opponentActiveKOed = true; }
-      else newDefender.bench = defenderNow.bench.filter(c => c.iid !== iid);
-      players[dIdx] = newDefender;
-      s = addLog({ ...s, players }, `${label}：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
-      s = recordOppKO(s, dIdx, targetCard, 'attack');
-      // v5.613 收斂：多目標狙擊招式 KO 戰鬥位 → 補觸發防守方 on-KO（沉重接力棒/反擊等），與引擎主管線/中央 helper 一致
-      s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive, true, _onDamagedFired);
-    } else {
-      const players = [...s.players] as [PlayerState, PlayerState];
-      const newDefender = { ...defenderNow };
-      // ⭐v6.256：snipe-multi 過去完全沒寫 damageTakenLastOppTurn ⇒ 走中央寫入點。
-      //   kind 由 params 帶進來：'attack-effect'（放指示物型卡面）不算「受到的傷害」。
-      if (isActive) newDefender.active = withAttackDamageTaken(targetNow, targetNow.damage, newDmg, kind);
-      else newDefender.bench = defenderNow.bench.map(c => c.iid === iid ? withAttackDamageTaken(c, c.damage, newDmg, kind) : c);
-      players[dIdx] = newDefender;
-      s = addLog({ ...s, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${effDmg} 傷害`, actorIdx);
-    }
+    s = dealAttackDamageToTarget(s, actorIdx, iid, dmg, pool,
+      { kind, label, noWeakness: flat, skipDefEffects: flat });
+    if (s.phase === 'game-over') return s;
   }
-  // 檢查 KO 後的狀態
-  const defender = s.players[dIdx];
-  if (opponentActiveKOed && !defender.active && defender.bench.length === 0) {
-    return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
-  }
-  if (totalPrize > 0) s = addPendingPrize(s, actorIdx, totalPrize, pool);
   return s;
 });
 
@@ -17028,134 +16918,29 @@ regPost('甲賀忍蛙ex|分身連打', (state, aIdx, pool) => {
 //   完整 KO 流程（取獎、棄牌、game-over check）。
 //   也可給未來其他「對 N 隻寶可夢各造成傷害（在備戰區不計算弱抗）」的招式重用。
 regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
+  // ⭐⭐⭐v6.412 收斂：整段 inline 傷害管線刪掉，改成逐目標呼叫中央 `dealAttackDamageToTarget`
+  //   （與 wave16-snipe-multi／wave13-snipe-multi-opp-bench 同一個範本）。
+  //
+  // 【為什麼】這一份 inline 管線缺了**一大塊**，而且是玩家看得到的：
+  //   ・攻擊方 11 項加成只做了 TOOL_ATTACK_BONUS ⇒ 力量蛋白飲／伏特【雷】能量／回合加傷／
+  //     招致削傷／格拉吉歐的決戰／PASSIVE_ATTACK_BONUS／化朗鎮／空手道王演練／烏栗／腎上腺力量 **全漏**
+  //   ・防守方 Block A（威嚇之顎／同步脈衝／鐵之防禦…）整塊沒有，只有備戰用的 _applyBenchAbilityReduce
+  //   ・下次被擊減傷（鐵羽毛類）、變硬 兩項沒有
+  //   ・順序也錯：inline 是「弱點 → 道具加成」，官方與 engine 主管線都是「加成 → 弱點」
+  //   實測（v6.412 探針）：甲賀忍蛙ex｜分身連打【鬥】，本回合用過力量蛋白飲 ⇒ 打 120（應 150）；
+  //   對手帶「下次被擊減傷 30」⇒ 仍打 120（應 90）；對手「變硬」⇒ 仍打 120（應 0）；
+  //   攻擊方帶「招致削傷 -50」⇒ 仍打 120（應 70）且旗標沒被消耗。
+  //
+  // ⚠ 卡面「[在備戰區不計算弱點・抵抗力。]」由中央 helper 的 isActive 分支承接（它對備戰本來就不套弱抗）。
+  // ⚠ 免疫、prevent-KO、獎賞、on-damaged／on-KO、withAttackDamageTaken、無限之影、奇跡之吻、
+  //   傷害公式字串、attackDamageToDefActive（傷害預估要讀）全部由中央 helper 一次做完。
   const baseDmg = (params?.dmg as number) ?? 0;
   const label = (params?.label as string) ?? '招式';
   if (baseDmg <= 0 || selectedIids.length === 0) return st;
   let s = st;
-  const attacker = st.players[actorIdx].active;
-  const attackerCard = attacker ? pool.get(attacker.cardId) : null;
-  // v5.436：分身連打/大吼大叫/三色炮 的受傷反擊改走共用 fireDefenderOnDamaged，
-  //   與中央函式 / snipe-multi 同一條（原本只 inline SPECIAL_ENERGY + 龐克頭盔累計，
-  //   缺 TOOL_ON_DAMAGED/還擊斧/反擊特性/警備濁霧 4 種）。
   for (const iid of selectedIids) {
-    const dIdx = (1 - actorIdx) as 0 | 1;
-    const defender = s.players[dIdx];
-    const isActive = defender.active?.iid === iid;
-    const target = isActive ? defender.active! : defender.bench.find(c => c.iid === iid);
-    if (!target) continue;
-    const targetCard = pool.get(target.cardId);
-    // v4.975: 統一守護 — active + bench 都過 canApplyEffectToTarget
-    //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等（同 v2.129 原行為）
-    //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩牆 等
-    //   （v4.975 新增；之前只查 bench 路徑導致 ex.g. 飛翔擋不住分身連打 bug）
-    // ⭐ v6.164【中央收斂】同 snipe-multi —— 原本只有 canApplyEffectToTarget，
-    //   戰鬥位目標漏掉 PASSIVE_IMMUNITY（礎石之勢等）與擲幣型免疫（順滑大衣）。
-    //   分身連打／大吼大叫／三色炮 都是卡面「造成傷害」型 ⇒ kind 固定 'attack-damage'。
-    const _g = resolveMultiTargetDamageGuard(s, actorIdx, target, targetCard, pool, { isBench: !isActive });
-    s = _g.state;
-    if (_g.blocked) {
-      s = addLog(s, `${label}：${targetCard?.name ?? '?'} 因${_g.reason}不受傷害`, actorIdx);
-      continue;
-    }
-    // 戰鬥場：套用弱點 ×2；備戰位：不計弱抗（卡面明示）
-    let dmg = baseDmg;
-    // v5.673：弱點+抵抗力收斂到中央 applyWeakRes(妖精領域/掌握弱點/弱點失效/攻擊方雙屬性)。
-    if (isActive) {
-      dmg = applyWeakRes(s, actorIdx, target, targetCard, dmg, pool);
-    }
-    // v5.153：active 補套 resistance + 攻擊方 tool（猛攻手鐲）
-    //   Wilson 回報多目標招式對戰鬥場 ex 沒算 +30。
-    if (isActive) {
-      // v5.673：resistance 已併入上方 applyWeakRes(中央收斂)。
-      // TOOL_ATTACK_BONUS — iterate 攻擊方所有道具（v5.761：阻礙之塔時道具失效，比照主管線 gate）
-      if (attacker && attackerCard && !isToolsJammed(s, pool)) {
-        for (const t of getAllAttachedTools(attacker)) {
-          const atkTool = pool.get(t.cardId);
-          if (!atkTool) continue;
-          const fn = TOOL_ATTACK_BONUS.get(atkTool.name);
-          if (!fn) continue;
-          const bonus = fn(attackerCard, attacker, targetCard ?? attackerCard, target);
-          if (bonus > 0) dmg += bonus;
-        }
-      }
-    }
-    // v5.583：套防守方特性/場地【傷害減免】（捲牆/守護之鐘/齒輪塗層/凍原堡壘/自身減傷特性），
-    //   active+bench 皆適用（收斂 _applyBenchAbilityReduce；分身連打過去備戰漏套）。
-    if (dmg > 0 && targetCard) {
-      const _rd = _applyBenchAbilityReduce(s, target, targetCard, dIdx, actorIdx, pool, dmg);
-      if (_rd.amount !== dmg && _rd.logs.length > 0) s = addLog(s, `${targetCard.name}：${_rd.logs.join('、')}`, null);
-      dmg = _rd.amount;
-      if (_rd.toolToDiscard) { // v5.818：防具道具果實觸發 → 從備戰目標丟棄
-        const _td = _rd.toolToDiscard;
-        s = updatePlayer(s, dIdx, pl => ({ ...pl, bench: pl.bench.map(b => b.iid === iid ? _stripBenchTool(b, _td.iid) : b), discard: [...pl.discard, _td] }));
-      }
-    }
-    // v6.165：依傷害量判定的被動免疫（鐵壁硬殼）—— 最終傷害算完後才判。
-    if (dmg > 0) {
-      const _pdt = passiveImmunityByDamageAmount(s, actorIdx, target, targetCard, pool, dmg, { isBench: !isActive });
-      if (_pdt.blocked) {
-        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${_pdt.reason}`, actorIdx);
-        continue;
-      }
-    }
-    // v5.599 擲幣免傷（躲藏高手/腎上腺費洛蒙）：active+bench 皆套
-    if (dmg > 0) {
-      const _ca = applyDefenderCoinAvoid(s, target, targetCard, dIdx, dmg, pool);
-      s = _ca.state;
-      if (_ca.avoided) dmg = 0;
-    }
-    // v5.436：active 受招式傷害 → 觸發防守方 on-damaged 全機制（共用 fireDefenderOnDamaged）。
-    // v6.120：同 dealAttackDamageToTarget —— 記下 on-damaged 是否跑過。
-    const _onDamagedFired = isActive && dmg > 0;
-    if (_onDamagedFired) {
-      s = fireDefenderOnDamaged(s, dIdx, actorIdx, dmg, pool);
-      if (s.phase === 'game-over') return s;
-    }
-    // re-fetch（helper 可能消費還擊旗標 / 改 attacker 狀態）
-    const defenderNow = s.players[dIdx];
-    const targetNow = isActive ? defenderNow.active : defenderNow.bench.find(c => c.iid === iid);
-    if (!targetNow) continue;
-    const newDmg = targetNow.damage + dmg;
-    const hp = effectiveHPInline(targetNow, pool, s);
-    const players = [...s.players] as [PlayerState, PlayerState];
-    if (hp > 0 && newDmg >= hp) {
-      // v5.594 prevent-KO（堅忍之軀/倖存鍛鍊器等）：命中則留 HP 不昏厥
-      const _pk = applyPreventKOToVictim(s, targetNow, targetCard, dIdx, dmg, pool, 'attack-damage');
-      if (_pk.prevented) { s = _pk.state; continue; }
-      // KO：棄牌遷移 + 累計獎賞 + 移除位置
-      const ko: CardInstance[] = [
-        { ...targetNow, damage: newDmg },
-        ...targetNow.energyAttached,
-        ...getAllAttachedTools(targetNow),
-        ...(targetNow.evolvedFromStack ?? []),
-      ];
-      const _ko = koPrizesAdjusted(s, targetNow, targetCard, (1 - dIdx) as 0 | 1, dIdx, pool);
-      s = _ko.state;
-      const prizeCount = _ko.prizes;
-      const newDef = { ...defenderNow, discard: [...defenderNow.discard, ...ko] };
-      if (isActive) newDef.active = null;
-      else newDef.bench = defenderNow.bench.filter(c => c.iid !== iid);
-      players[dIdx] = newDef;
-      s = addPendingPrize({ ...s, players }, actorIdx, prizeCount, pool);
-      s = addLog(s, `${label}：對 ${targetCard?.name ?? '?'}（${isActive ? '戰鬥場' : '備戰位'}）造成 ${dmg} 點傷害 → 被擊倒！+${prizeCount} 張獎賞卡`, actorIdx);
-      // v2.246：clone-strike-multi-hit 屬於招式 KO（共用大吼大叫 / 三色炮 / 分身連打）
-      s = recordOppKO(s, dIdx, targetCard, 'attack');
-      // v5.613 收斂：分身連打/三色炮類 KO 戰鬥位 → 補觸發防守方 on-KO（沉重接力棒/反擊等）
-      s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive, true, _onDamagedFired);
-      // 戰鬥場昏厥且對手沒有備戰 → game over
-      if (isActive && newDef.bench.length === 0) {
-        s = { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defenderNow.name} 沒有可上場的寶可夢` };
-        return s;
-      }
-    } else {
-      const newDef = { ...defenderNow };
-      // ⭐v6.256：分身連打/大吼大叫/三色炮 卡面皆為「造成傷害」⇒ 固定 'attack-damage'（見 L15796 註解）。
-      if (isActive) newDef.active = withAttackDamageTaken(targetNow, targetNow.damage, newDmg, 'attack-damage');
-      else newDef.bench = defenderNow.bench.map(c => c.iid === iid ? withAttackDamageTaken(c, c.damage, newDmg, 'attack-damage') : c);
-      players[dIdx] = newDef;
-      s = { ...s, players };
-      s = addLog(s, `${label}：對 ${targetCard?.name ?? '?'}（${isActive ? '戰鬥場' : '備戰位'}）造成 ${dmg} 點傷害`, actorIdx);
-    }
+    s = dealAttackDamageToTarget(s, actorIdx, iid, baseDmg, pool, { kind: 'attack-damage', label });
+    if (s.phase === 'game-over') return s;
   }
   return s;
 });

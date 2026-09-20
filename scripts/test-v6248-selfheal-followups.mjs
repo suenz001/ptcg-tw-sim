@@ -636,11 +636,19 @@ T(`[HEAD-FAIL⑩] 首頁維持 ${N_HOME} 則、最新那一則是展開的、被
   assert.ok(archivedBelow.length >= 200, '封存頁裡比首頁最舊那一則更舊的紀錄只有 '
     + archivedBelow.length + ' 則 ⇒ 舊紀錄被刪掉了');
   const archiveTop = Math.max(...archivedBelow);
-  // ⭐ 真正要鎖的事：**剛被擠出首頁的那一版必須落在封存頁的最上面**（＝搬進去，不是刪掉）。
-  //   版本號偶爾跳號是正常的，所以留 5 的容差；但差太多就代表中間有幾則憑空消失。
-  assert.ok(archiveTop >= oldestOnHome - 5,
-    '封存頁最新的一則(' + archiveTop + ') 與首頁最舊的一則(' + oldestOnHome + ') 之間有缺口'
-    + ' —— 中間那幾則沒有進封存頁（＝紀錄被刪掉了）');
+  // ⭐⭐v6.412（IRON_RULES Rule 38：同一件事不要留兩份弱判準）。
+  //   這裡原本寫的是 `archiveTop >= oldestOnHome - 5`（容差 5），
+  //   用來鎖「剛被擠出首頁的那一版有搬進封存頁」。
+  //   ⚠ 但版本號跳號的尺度不可控（v6.412 實例：首頁最舊 6317、封存最新 6310，
+  //     中間的 6311~6316 **本來就沒有 changelog 條目**）⇒ 容差值是一顆時間炸彈，
+  //     而且把容差放大等於放水。
+  //   ⭐ 真正精確的判準已經存在於 **`test-v6264-changelog-lazy-body.mjs` 的【F】段**：
+  //     它拿 BASE blob 逐則比對「首頁只多了最新那一則、封存頁只多了最舊那一則」，
+  //     漏搬或刪掉任何一則都會翻紅，而且不靠容差。
+  //   ⇒ 這一條只留不靠容差的那半：封存最新必須真的比首頁最舊更舊（排序不得錯亂），
+  //     「有沒有搬進去」交給 test-v6264。
+  assert.ok(archiveTop < oldestOnHome,
+    '封存頁最新的一則(' + archiveTop + ') 不比首頁最舊的一則(' + oldestOnHome + ') 更舊 ⇒ 排序錯亂');
   assert.ok(!clNums.includes(archiveTop), '同一則同時出現在首頁與封存頁');
   // ⭐ 正對照（Rule 33）：這個「等價條件」必須真的抓得到「刪掉而不是搬進封存」。
   //   把封存頁最上面 6 則挖掉再跑同一段判準，必須不成立。

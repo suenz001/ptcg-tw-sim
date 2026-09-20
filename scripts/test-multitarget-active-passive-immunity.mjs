@@ -138,19 +138,34 @@ console.log('【正對照】攻擊方沒有特性 ⇒ 礎石之勢不生效');
 {
   const src = readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/[​-‍﻿]/g, '');
+  // ⭐⭐v6.412（IRON_RULES Rule 40：意圖沒被破壞，只是觀測點被收斂掉了）。
+  //   本版把兩個 resolver 的 inline 傷害管線整段刪掉，改成逐目標呼叫中央
+  //   `dealAttackDamageToTarget` ⇒ 它們裡面已經沒有（也不該有）
+  //   `resolveMultiTargetDamageGuard(` 這個字面。
+  //   意圖（戰鬥位的 PASSIVE_IMMUNITY 與擲幣免疫不得漏）改由中央 helper 的
+  //   `passiveImmunityDamageBlock` / `passiveCoinImmunity` 承接——這一檔上方的**行為端**
+  //   斷言（醮石之勢／順滑大衣在戰鬥位）就是它的主防線，這裡只負責釘住接線。
   const anchors = ["regR('snipe-multi'", "regR('clone-strike-multi-hit'"];
   let checked = 0;
   for (const a of anchors) {
     const i = src.indexOf(a);
     assert.ok(i >= 0, 'anchor 失效：' + a);
     const blk = src.slice(i, i + 6000);
-    assert.ok(blk.length > 2000 && blk.length <= 6000, 'anchor 窗口異常：' + a);
-    assert.ok(blk.includes('resolveMultiTargetDamageGuard('),
-      `${a} 必須走中央 resolveMultiTargetDamageGuard（否則戰鬥位漏 PASSIVE_IMMUNITY）`);
+    assert.ok(blk.length > 500 && blk.length <= 6000, 'anchor 窗口異常：' + a);
+    // 接線斷言：要麼自己走中央闘（舊形式），要麼整個交給中央 helper（v6.412 後）。
+    assert.ok(blk.includes('resolveMultiTargetDamageGuard(') || blk.includes('dealAttackDamageToTarget('),
+      `${a} 既沒走中央 resolveMultiTargetDamageGuard、也沒交給 dealAttackDamageToTarget`
+      + `（兩者必居其一，否則戰鬥位會漏 PASSIVE_IMMUNITY）`);
     checked++;
   }
   assert.ok(checked === 2, '掃描器只檢查到 ' + checked + ' 個 anchor，掃描器壞了？');
-  ok(true, '兩個多目標 resolver 都走中央 resolveMultiTargetDamageGuard');
+  // ⭐ 正對照（防空真）：兩個字面都拿掉的樣本必須被抓到。
+  {
+    const fake = "regR('snipe-multi', () => { for (const iid of ids) { s = doSomethingElse(s, iid); } });";
+    assert.ok(!(fake.includes('resolveMultiTargetDamageGuard(') || fake.includes('dealAttackDamageToTarget(')),
+      '正對照失效：判準對違規樣本也放行');
+  }
+  ok(true, '兩個多目標 resolver 都接上中央傷害管線（v6.412 起是 dealAttackDamageToTarget）');
 }
 
 console.log(`\n✅ test-multitarget-active-passive-immunity: ${pass} 項全數通過`);

@@ -259,7 +259,11 @@ T('全站每條自跑傷害迴圈都接上 passiveImmunityByDamageAmount（含 b
     total += sites.length;
     for (const x of sites) if (!x.hasThreshold) missing.push(`${f}@${x.index}(${x.name})`);
   }
-  ok(total >= 8, `只掃到 ${total} 個傷害迴圈錨點，掃描器壞了？（預期 ≥8＝5 減傷 + 3 擲幣）`);
+  // ⭐⭐v6.412（Rule 40：意圖沒被破壞，只是觀測點被收斂掉）：8 → 4（實測 4）。
+  //   snipe-multi 與 clone-strike-multi-hit 的 inline 傷害迴圈整段刪掉了，
+  //   改成逐目標呼叫中央 `dealAttackDamageToTarget` ⇒ 它們不再是「自跑迴圈」。
+  //   意圖（鐵壁硬殼不得在任何一條傷害路徑靜默失效）改由下一條接線斷言接住。
+  ok(total >= 4, `只掃到 ${total} 個傷害迴圈錨點，掃描器壞了？（v6.412 後預期 ≥4）`);
   ok(missing.length === 0,
     `${missing.length} 條傷害迴圈沒有接依傷害量的被動免疫（鐵壁硬殼會在那裡靜默失效）：` + missing.join('、'));
 });
@@ -268,8 +272,17 @@ T('五＋一條插入點逐一存在（hitBenchAll／bench-hit-N／dealAttackDam
   const mega = stripComments(readFileSync(join(ROOT, 'src/lib/game/effects/cards/mega_decks.ts'), 'utf8'));
   const nEff = (eff.match(/passiveImmunityByDamageAmount\s*\(/g) || []).length;
   const nMega = (mega.match(/passiveImmunityByDamageAmount\s*\(/g) || []).length;
-  // effects.ts：1 個定義 + 5 個呼叫；mega_decks.ts：1 個 import + 1 個呼叫
-  ok(nEff >= 6, `effects.ts 只有 ${nEff} 處（定義 1 + 呼叫 5），有插入點被拿掉？`);
+  // ⭐⭐v6.412：6 → 4（實測 4）。snipe-multi 與 clone-strike 不再自己插（整段交給中央 helper）。
+  //   現在的插入點：定義 1 + hitBenchAll / bench-hit-N / dealAttackDamageToTarget 共 3 個呼叫。
+  ok(nEff >= 4, `effects.ts 只有 ${nEff} 處（定義 1 + 呼叫 3），有插入點被拿掉？`);
+  // ⭐ 接線斷言（意圖轉移到這裡）：兩個多目標 resolver 必須交給中央 helper，
+  //   否則它們就是「自跑迴圈但沒接門檻免疫」的那一種洞。
+  for (const a of ["regR('snipe-multi'", "regR('clone-strike-multi-hit'"]) {
+    const i = eff.indexOf(a);
+    ok(i >= 0, 'anchor 失效：' + a);
+    ok(eff.slice(i, i + 4000).includes('dealAttackDamageToTarget('),
+      `${a} 沒有交給中央 dealAttackDamageToTarget ⇒ 它必須自己接門檻免疫`);
+  }
   ok(nMega >= 1, `mega_decks.ts 的油之機關槍插入點不見了（${nMega} 處）`);
 });
 

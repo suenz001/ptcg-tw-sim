@@ -1,5 +1,99 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.412 ⭐⭐⭐ 多目標招式的傷害管線**收斂成一份** —— 修掉十幾項漏算（玩家可見）
+
+BASE `404b4063328067ae348d489f23f0afa38c9c2826`（v6.411）。
+⚠ 本版**動了 `src/lib/game/effects.ts`**（傷害管線）⇒ 部署要跑
+**`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**（IRON_RULES Rule 43）。
+⚠⚠ **這一版會改變對戰結果**（都是「本來就該算而沒算到」的補正）。
+
+### 【零】站長裁示
+
+v6.411 收尾時問的「主傷害在 ATTACK_POST 的收斂」⇒ 站長選「**排入下一版做大收斂**」。
+
+### 【一】問題：打「對手戰鬥位」的招式傷害有四份各自獨立的管線
+
+| 步驟 | engine 主管線 | dealAttackDamageToTarget | clone-strike-multi-hit | snipe-multi |
+|---|---|---|---|---|
+| 攻擊方 11 項加成（中央 helper） | ✔ | ✔ | **✖** | **✖** |
+| TOOL_ATTACK_BONUS | （含在中央） | （含在中央） | inline，**在弱點之後** | inline，**在弱點之後** |
+| 防守方 Block A（威嚇之顎／同步脈衝／鐵之防禦…） | ✔ | ✔ | **✖** | **✖** |
+| 下次被擊減傷（鐵羽毛類） | ✔ | ✔ | **✖** | **✖** |
+| 變硬（≤N 免傷） | ✔ | ✔ | **✖** | **✖** |
+| 順序 | 加成→弱點 | 加成→弱點 | **弱點→道具** | **弱點→道具** |
+
+⇒ clone-strike／snipe-multi 少了 **10 項攻擊方加成**（力量蛋白飲、伏特【雷】能量、回合加傷、
+招致削傷、格拉吉歐的決戰、PASSIVE_ATTACK_BONUS、化朗鎮、空手道王演練、烏栗、腎上腺力量）
+與 **三類防守方減傷**，而且弱點的順序是反的。
+
+**自行查證（`__m6a/probe412.mjs`，甲賀忍蛙ex｜分身連打，H 標【鬥】屬性）**：
+
+| 盤面 | 修正前 | 修正後 |
+|---|---|---|
+| 本回合用過「力量蛋白飲」 | 120 🔴 | **150** ✅ |
+| 對手帶「下次被擊減傷 30」 | 120 🔴 | **90** ✅ |
+| 對手「變硬（≤200 免傷）」 | 120 🔴 | **0** ✅ |
+| 攻擊方帶「招致削傷 −50」 | 120 🔴（旗標還沒被消耗） | **70** ✅（旗標消耗） |
+| 帶極限腰帶打弱點 ex | 120×2+50 = 290 🔴 | **(120+50)×2 = 340** ✅ |
+
+### 【二】改法
+
+1. `dealAttackDamageToTarget` 新增 `skipDefEffects?: boolean`（9 處閘點），逐字鏡射 engine 主管線
+   的 `!skipDefEffects`：跳過免疫 guard、Block A、備戰減傷、下次被擊減傷（**且不消耗**）、
+   變硬、傷害量門檻免疫、擲幣免傷。
+   ⚠⚠ **不跳過攻擊方自己身上的效果** —— 官方 §18.E：「雖然招式『跳躍扣殺』不計算對手的
+   戰鬥寶可夢身上的附加效果，但**會計算超級長耳兔ex自己身上的附加效果**」。
+   ⚠ 與 `noWeakness` 是兩件事（弱點・抵抗力不是「身上的附加效果」），engine 也分開兩個旗標。
+2. `clone-strike-multi-hit`（6534 字元 → 1307）與 `snipe-multi`（7728 → 1117）的 inline 管線
+   整段刪掉，改成逐目標呼叫中央 helper；`flat` 型（雙刃劍／出奇一擊）傳
+   `{ noWeakness: true, skipDefEffects: true }`。
+
+### 【三】受影響的卡（H/I/J）
+
+- clone-strike-multi-hit：甲賀忍蛙ex｜分身連打、三海地鼠ex｜三色炮、超級盔甲鳥ex｜音波拆裂
+- snipe-multi：酋雷姆｜三重冰霜、鐵頭殼ex｜雙刃劍
+- ⚠ 吼叫尾｜大吼大叫、月亮伊布｜出奇一擊、鐵脖頸｜自動導向頭擊 都只有 **G 標**（不在維護範圍；已逐張查證）
+
+### 【四】守衛
+
+新增 `test-v6412-multitarget-damage-central.mjs`（18 條）：
+- 【A】4 條靜態：兩個 resolver 必須交給中央 helper 且**不得**再出現 inline 管線的任何字面；
+  `flat` 必須同時接 `noWeakness` 與 `skipDefEffects`；中央 helper **不得**用 skipDefEffects 擋攻擊方加成。
+- 【B】10 條行為端：上表每一格各一條，全部配「不帶那個效果」的基準（不是恆真式）。
+  含 B7 順序條（(base+50)×2 vs base×2+50）與 B9「力量蛋白飲不得外溢到備戰」（官方 §17.46.E 明文）。
+- 【C】4 條 skipDefEffects 契約：直呼 helper 的帶／不帶差分 ＋ §18.E ＋ 正對照。
+
+**HEAD-FAIL 實測**：把 `effects.ts` 還原成 BASE ⇒ **14 條紅**，而且 B7 的訊息直接印出舊行為
+「實得 290」＝「弱點先於加成」的舊順序。
+
+### 【五】既有守衛（IRON_RULES Rule 40／38）
+
+| 守衛 | 為何紅 | 處置 |
+|---|---|---|
+| `test-multitarget-active-passive-immunity` | 錨點要求 resolver 區塊內含 `resolveMultiTargetDamageGuard(` | 改成「走中央閘 **或** 交給 dealAttackDamageToTarget」二擇一 ＋ 正對照 |
+| `test-v6165-damage-threshold-immunity` | 自跑傷害迴圈 8→4、插入點 6→4 | 下限依實測下修 ＋ **補接線斷言**（兩個 resolver 必須呼叫中央 helper），意圖轉移而非放寬 |
+| `test-v6256-damage-taken-central` C2/C3 | `withAttackDamageTaken` 12→8、`applyPreventKOToVictim` 6→4 | 同上（下限 ＋ 接線斷言） |
+| `test-v6248-selfheal-followups` ⑩ | `archiveTop >= oldestOnHome - 5` 的**容差**被版本跳號吃掉（首頁最舊 6317、封存最新 6310，中間 6311~6316 本來就沒有 changelog 條目） | ⭐ Rule 38：這件事 `test-v6264` 的【F】段已經用 BASE blob **精確**守住（漏搬或刪掉都會紅、不靠容差）⇒ 這裡只留「封存最新必須比首頁最舊更舊」的排序檢查，不再留第二份弱判準 |
+
+### 【六】列管（下一版，需站長裁示）
+
+1. ⭐ **招致削傷（吠／叫聲／大聲咆哮）的卡面沒有位置限定** ——
+   「在下個對手的回合，受到這個招式的寶可夢**使用招式的傷害**「-100」點」（逐字查證：黑魯加、
+   超級火炎獅ex 等），而站內唯一讀 `nextOwnAttackPenalty` 的地方是
+   `applyAttackerActiveDamageBonuses`，它只在「打戰鬥位」時被呼叫
+   ⇒ **所有備戰傷害路徑都漏掉 −N**。官方 §18.E 支持「攻擊方自己身上的效果照算」。
+   ⚠ 修它要決定「一招打多隻時只消耗一次」的語意 ⇒ 列給站長裁示。
+2. **第五份管線**：`mega_decks.ts` 的 `olive-oil-distribute`（奧利瓦ex｜油之機關槍，I 標）
+   也是自跑迴圈，缺 9 項攻擊方加成、全部防守方減傷、擲幣免傷、`withAttackDamageTaken`。
+3. **招式限定型回合加傷被當成通用加傷**：巨金怪｜彗星拳等卡面是「這隻寶可夢『X』的傷害 +N」，
+   站內寫成通用的 `damageBonusPending` ⇒ 下回合改用別招也 +N（註解自承是簡化）。
+
+### 【七】驗收
+
+- 全套 **745 支全綠**（唯一例外仍是 `test-base-blob-git-errors` 的 B4c 環境差異）。
+- `tsc --noEmit` **0 錯誤**。
+- 本版**沒有動 `engine.ts`** ⇒ 不需要新的 engine-strip 剝除器。
+
 ## v6.411 ⭐ 好友列「錦標賽對戰中」縮字 ＋ 窄畫面按鈕群預算契約
 
 BASE `a8cc4a7356d1f7bde4c847f2ce098e1bd803c135`（v6.410）。

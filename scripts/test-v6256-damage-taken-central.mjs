@@ -329,8 +329,19 @@ T('C2 ⭐⭐中央 helper 的算式與所有消費端（＋下限斷言＋正對
   //   v6.325 已經實證：把兩個 `withAttackDamageTaken(` 改寫成 `withAttackDamageTaken (`（12 → 10）
   //   時，`>= 10` 是**綠的**、`>= 11` 才紅 ⇒ 放到 10 就抓不到那個 HEAD-FAIL。
   //   ⇒ 這一條刻意不跟其他 A 類一起放到 2~3。往下掉 1 若確認是合法收斂，再改這一行。
-  assert.ok(calls.length >= 11,
-    `withAttackDamageTaken 呼叫點只剩 ${calls.length} 個（A 類但 slack 只留 1／實測基準 12）⇒ 有管線被拔掉`);
+  // ⭐⭐v6.412（Rule 40）：11 → 7（實測 8）。snipe-multi 與 clone-strike-multi-hit 的
+  //   inline 傷害管線整段刪掉（各 2 個呼叫點），改成交給中央 dealAttackDamageToTarget。
+  //   ⚠ 這一條兼任「有管線被拔掉」的偵測器 ⇒ 下面補一條**接線斷言**把意圖接住，
+  //     不是單純把數字調低。
+  assert.ok(calls.length >= 7,
+    `withAttackDamageTaken 呼叫點只剩 ${calls.length} 個（v6.412 後實測 8，slack 1）⇒ 有管線被拔掉`);
+  // ⭐v6.412 接線斷言：兩個多目標 resolver 不再自己寫受傷記錄，必須交給中央 helper。
+  for (const a of ["regR('snipe-multi'", "regR('clone-strike-multi-hit'"]) {
+    const i = SRC.effects.indexOf(a);
+    assert.ok(i >= 0, 'anchor 失效：' + a);
+    assert.ok(SRC.effects.slice(i, i + 4000).includes('dealAttackDamageToTarget('),
+      `${a} 既沒自己寫 withAttackDamageTaken、也沒交給 dealAttackDamageToTarget ⇒ 受傷記錄會漏`);
+  }
   assert.ok(/withAttackDamageTaken\(defenderState\.active!, _damageBeforeThisAttack, _survivedDamage, 'attack-damage'\)/.test(SRC.engine),
     'engine 主管線沒有走中央寫入點');
   // 正對照
@@ -347,8 +358,11 @@ T('C3 ⭐⭐防 KO 中央 helper 的三個呼叫端都必須宣告 kind（＋正
   const megaSrc = strip(readFileSync(join(ROOT, 'src/lib/game/effects/cards/mega_decks.ts'), 'utf8'), 'mega_decks.ts');
   const sites = [...SRC.effects.matchAll(re)].map(m => m[1]);
   const megaSites = [...megaSrc.matchAll(re)].map(m => m[1]);
-  assert.equal(sites.length, 6,
-    `applyPreventKOToVictim effects.ts 呼叫端應恰好 6 個（dealAttackDamageToTarget／snipe-multi／clone-strike-multi-hit／` +
+  // ⭐⭐v6.412：6 → 4。snipe-multi 與 clone-strike-multi-hit 整段交給中央 helper，
+  //   不再自己做防 KO ⇒ 剩下 dealAttackDamageToTarget／hitBenchAll／bench-hit-N／snipe-60-ex。
+  //   意圖（每一個呼叫端都必須宣告 kind）不變，下方的逐個參數數檢查照舊。
+  assert.equal(sites.length, 4,
+    `applyPreventKOToVictim effects.ts 呼叫端應恰好 4 個（dealAttackDamageToTarget／` +
     `hitBenchAll／bench-hit-N／snipe-60-ex），實得 ${sites.length} ⇒ 新增了管線就必須回來讀卡面決定 kind`);
   assert.equal(megaSites.length, 1,
     `applyPreventKOToVictim mega_decks.ts 呼叫端應恰好 1 個（olive-oil-distribute），實得 ${megaSites.length}`);
