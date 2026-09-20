@@ -1950,10 +1950,25 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //     也就是說「對戰中的 client 手上就有對手獎賞的 cardId」⇒ 這道 client 端的閘是唯一防線。
   //   ⇒ 三道閘：① openPrizeView 早退 ② 觸發按鈕包在 isTReplay 內 ③ 視窗本體 {#if isTReplay ...}。
   let prizeViewOpen = $state(false);
+  // >>> v6418-prize-view-in-battle
+  // ⭐⭐⭐v6.418（站長需求）：對戰中也能點開獎賞卡檢視 —— 但**只看得到已翻到正面的那幾張**。
+  //
+  // 【為什麼需要】克雷色利亞｜弦月光芒「選擇1張自己的反面朝上的獎賞卡，翻到正面。
+  //   …（在對戰結束前，那張獎賞卡維持正面朝上。）」火箭隊的妨礙機器人翻的是**對手**的。
+  //   卡面明說那張在對戰結束前一直是正面 ⇒ 雙方本來就該隨時查得到它是哪一張。
+  //
+  // ⚠⚠⚠ **公平性是這裡的唯一重點**：休閒線上對戰是「雙端各自 applyAction 後推整份盤面」
+  //   ⇒ 對手所有蓋著的獎賞 cardId **就在你的瀏覽器記憶體裡**（伺服器 redact 只在錦標賽端，
+  //   而玩家端遮蔽是灰度旗標、v6.153 預設關）⇒ **client 端的這道閘是唯一防線**。
+  //   ⇒ 規則只有一條：`isTReplay === false` 時，**非 `faceUp` 的獎賞一律不得取得 cardId**
+  //     （不是「不顯示」而已 —— 連 getCard 都不呼叫，卡名、圖片、zoom 全都不給）。
+  //   回放（isTReplay）讀的是已結束對局的歸檔快照，攤牌是刻意的（v5.940／v6.135 同一個決定）。
+  /** 'replay' ＝ 攤開全部（回放限定）；'battle' ＝ 只看得到翻正面的那幾張。 */
+  let prizeViewMode = $derived(isTReplay ? 'replay' : 'battle');
   function openPrizeView() {
-    if (!isTReplay) { prizeViewOpen = false; return; }   // ⚠ 非回放一律拒絕（不是只有不顯示）
     prizeViewOpen = true;
   }
+  // <<< v6418-prize-view-in-battle
   function closePrizeView() { prizeViewOpen = false; }
   // v2.129：全螢幕卡牌放大 lightbox（鏡射 /cards 樣式）— 從任何 zoom-img 或 cards 點擊觸發
   let lightboxUrl = $state<string | null>(null);
@@ -11927,11 +11942,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
               class:legend-half-r={twoCardStadiumHalfIndex(oppPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           </div>
         {/key}
-        {#if isTReplay}
-          <button class="zone-label-sm prize-view-btn" onclick={openPrizeView} title="查看雙方獎賞卡（回放限定）">🎁 獎賞 {oppPlayer?.prizes.length??0}張 🔍</button>
-        {:else}
-          <div class="zone-label-sm">獎賞 {oppPlayer?.prizes.length??0}張</div>
-        {/if}
+        <!-- ⭐v6.418：對戰中也可點開（只看得到翻正面的那幾張，見 v6418-prize-view-in-battle） -->
+        <button class="zone-label-sm prize-view-btn" onclick={openPrizeView}
+          title={isTReplay ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 獎賞 {oppPlayer?.prizes.length??0}張 🔍</button>
       </div>
     </div>
 
@@ -12186,11 +12199,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         </div>
       {/if}
       <div class="zone-prizes">
-        {#if isTReplay}
-          <button class="zone-label-sm prize-view-btn" onclick={openPrizeView} title="查看雙方獎賞卡（回放限定）">🎁 獎賞 {myPlayer?.prizes.length??0}張 🔍</button>
-        {:else}
-          <div class="zone-label-sm">獎賞 {myPlayer?.prizes.length??0}張</div>
-        {/if}
+        <!-- ⭐v6.418：對戰中也可點開（只看得到翻正面的那幾張，見 v6418-prize-view-in-battle） -->
+        <button class="zone-label-sm prize-view-btn" onclick={openPrizeView}
+          title={isTReplay ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 獎賞 {myPlayer?.prizes.length??0}張 🔍</button>
         <div class="prize-grid">
           {#key prizeAnimKey[myIdx]}
             {#each Array(6) as _, i (i)}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}
@@ -14604,24 +14615,32 @@ function _setupSelfPending(g: any, seat: number): string | null {
        `{#if isPortraitMobile && game}` … `{:else}` … `{/if}` 這組版面分支**之外**，
        手機直式與桌機共用同一個視窗（v6.167：畫在錯的分支＝有一種版面永遠顯示不出來）。
        ⚠⚠ 第一個條件永遠是 isTReplay：正式對戰／觀戰時這段 DOM 根本不存在。 -->
-  {#if isTReplay && prizeViewOpen && game}
+  {#if prizeViewOpen && game}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="zoom-overlay" onclick={closePrizeView}>
       <div class="zoom-modal discard-modal prize-view-modal" onclick={(e)=>e.stopPropagation()}>
         <button class="zoom-close" onclick={closePrizeView} aria-label="關閉">✕</button>
-        <h3 class="discard-title">🎁 獎賞卡（回放限定）</h3>
+        <h3 class="discard-title">{prizeViewMode === 'replay' ? '🎁 獎賞卡（回放：全部攤開）' : '🎁 獎賞卡（只看得到已翻到正面的）'}</h3>
+        {#if prizeViewMode !== 'replay'}
+          <p class="prize-view-note">蓋著的獎賞卡對雙方都是機密，這裡只會顯示被「弦月光芒」「火箭隊的妨礙機器人」之類的效果翻到正面的那幾張。</p>
+        {/if}
         {#each [myPlayer, oppPlayer] as _pvp, _pvi (_pvi)}
           <div class="prize-view-side">
             <div class="prize-view-side-title">{_pvp?.name ?? (_pvi === 0 ? '下方玩家' : '上方玩家')}　剩 {_pvp?.prizes.length??0} 張</div>
             <div class="sel-grid">
-              {#each dedupeByIid(_pvp?.prizes) as _pvc (_pvc.iid)}{@const _pvcard = getCard(_pvc.cardId)}
+              <!-- ⭐⭐⭐v6.418：`_pvcard` 的那道三元式就是**唯一的公平性防線** —— 對戰中
+                   （prizeViewMode !== 'replay'）非 faceUp 的卡連 `getCard` 都不呼叫，
+                   所以卡名／圖片／zoom 全都拿不到。詳見 v6418-prize-view-in-battle。 -->
+              {#each dedupeByIid(_pvp?.prizes) as _pvc (_pvc.iid)}{@const _pvcard = (prizeViewMode === 'replay' || _pvc.faceUp) ? getCard(_pvc.cardId) : null}
                 {#if _pvcard}
                   <button class="sel-card" onclick={() => openZoom(_pvc.cardId, _pvc)}>
                     <img use:retryImg={_pvcard.imageUrl} src={_pvcard.imageUrl} alt={_pvcard.name} loading="lazy"
                       class:legend-half-l={twoCardStadiumHalfIndex(_pvp?.prizes, _pvc.iid, pool) === 0}
                       class:legend-half-r={twoCardStadiumHalfIndex(_pvp?.prizes, _pvc.iid, pool) === 1}/><span class="sel-name">{_pvcard.name}</span>
                   </button>
+                {:else}
+                  <div class="sel-card prize-view-back" title="蓋著的獎賞卡（雙方都看不到）"><span class="prize-view-back-mark">🂠</span><span class="sel-name">蓋著</span></div>
                 {/if}
               {/each}
               {#if (_pvp?.prizes.length??0) === 0}<p class="sel-empty">（獎賞卡已全部取完）</p>{/if}
@@ -18395,6 +18414,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .prize-view-modal .sel-grid{ max-height:none; overflow:visible; min-height:auto; }
   .prize-view-side{ margin-bottom:.5rem; }
   .prize-view-side-title{ margin:.15rem 0 .35rem; color:#ffd23f; font-size:.9rem; font-weight:700; }
+  /* ⭐v6.418 對戰中的獎賞檢視：說明列與「蓋著」的卡背格 */
+  .prize-view-note{ margin:.1rem 0 .5rem; color:#cfe0ff; font-size:.8rem; line-height:1.5; opacity:.85; }
+  .prize-view-back{ display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:.2rem; background:linear-gradient(145deg,#1d2b4a,#16203a); border:1px solid #2f4470;
+    border-radius:6px; color:#8fa6cc; cursor:default; }
+  .prize-view-back-mark{ font-size:1.6rem; line-height:1; }
   .prize-view-btn{ background:rgba(255,210,63,.14); border:1px solid #a8842a; border-radius:6px; color:#ffd23f; cursor:pointer; font:inherit; padding:1px 7px; }
   .prize-view-btn:hover{ background:rgba(255,210,63,.28); }
 

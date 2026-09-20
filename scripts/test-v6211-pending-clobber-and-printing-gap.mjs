@@ -32,7 +32,7 @@
 //      不是只斷言「有呼叫某函式」）。HEAD 時 A 段全紅。
 //   B) 正對照：沒有防守方道具時，這些招式原本的 picker 行為完全不變（防止修出迴歸）。
 //   C) 靜態接線守衛：`src/lib/game/effects/**` 內禁止 `pendingSelection:` 物件字面量
-//      （唯一白名單 = `_shared.ts` addPendingPrize，且它必須保留 `!state.pendingSelection` 前置閘）。
+//      （⭐v6.418 起**白名單是空的**：addPendingPrize 也改走 withPending ⇒ 一處都不准）。
 //      含**正對照**（餵違規樣本必須被抓到）＋**下限斷言**（掃描器自己壞掉時要紅）。
 //   D) 卡庫：同一張卡的不同印刷，招式／特性不得少收（v6.211 SV-P-H 10100~10103 那一批）。
 //      含正對照與下限斷言。
@@ -252,7 +252,12 @@ T('⭐ 判準正對照：餵一個違規樣本必須被抓到（否則這條是�
   ok(good.length === 0, '偵測器把註解／withPending 誤判成違規：' + JSON.stringify(good));
 });
 
-T('⭐⭐⭐ effects/** 內只剩唯一白名單（addPendingPrize），其餘一律 withPending', () => {
+// ⭐⭐⭐v6.418（IRON_RULES Rule 40：意圖沒被破壞，觀測點被本版蓋住了）
+//   本版把 `addPendingPrize` 也改成走中央 `withPending`（原本是「已有 pending 就自動取」，
+//   會剝奪第二位玩家指定獎賞的權利）⇒ **白名單的最後一個 producer 消失**。
+//   ⚠ 白名單留著一個零 producer 的死條目，正是 ptcg-card-audit 點名的那種安慰劑
+//   ⇒ 這裡把數量從 1 收成 **0**（更強，不是放寬）：`effects/**` 現在一處都不准直接覆寫。
+T('⭐⭐⭐ effects/** 一處都不准直接覆寫 pendingSelection（v6.418 起白名單清空）', () => {
   const hits = scanDirectWrites(EFFECT_FILES);
   const allowed = hits.filter(h => h.file === 'effects/_shared.ts');
   const bad = hits.filter(h => h.file !== 'effects/_shared.ts');
@@ -260,19 +265,30 @@ T('⭐⭐⭐ effects/** 內只剩唯一白名單（addPendingPrize），其餘�
     bad.length + ' 處直接覆寫 pendingSelection（會蓋掉別人已開好的 picker ＝ 假 log）：\n      '
     + bad.map(h => h.file + ':' + h.line + '  ' + h.text).join('\n      ')
     + '\n      → 改成 withPending(state, {...})');
-  ok(allowed.length === 1, '_shared.ts 的白名單數量變了（' + allowed.length + '）—— 請重新檢視');
+  ok(allowed.length === 0,
+    '_shared.ts 又出現 ' + allowed.length + ' 處直接覆寫（v6.418 起白名單是空的）：\n      '
+    + allowed.map(h => h.file + ':' + h.line + '  ' + h.text).join('\n      ')
+    + '\n      → 改成 withPending(state, {...})，才會排進 pendingChainQueue');
 });
 
-T('⭐ 白名單本身要有前置閘：addPendingPrize 必須先確認沒有既存 pending', () => {
+// ⭐⭐v6.418：上一條的孿生 —— 原本這裡守的是「白名單那一處要有 `!state.pendingSelection`
+//   前置閘」。本版拿掉那道閘（它就是剝奪指定權的元凶），改成排隊。
+//   ⇒ 這一條改成守「addPendingPrize 真的走 withPending」，觀測點落在被改動的那一層。
+//   ⚠ 排隊之後的行為（picker 進 pendingChainQueue、獎賞一張都不准先取）由
+//     `scripts/test-v6418-prize-picker-queue.mjs` 的 A3 在**行為端**釘住，這裡只守接線。
+T('⭐ addPendingPrize 走中央 withPending（不得自己組 pendingSelection、也不得自動取）', () => {
   const src = stripComments(readFileSync(join(ROOT, 'src/lib/game/effects/_shared.ts'), 'utf8'), 'effects/_shared.ts');
   const i = src.indexOf('export function addPendingPrize');
   ok(i > 0, '找不到 addPendingPrize —— anchor 失效');
-  const j = src.indexOf('pendingSelection: {', i);
-  ok(j > i, 'addPendingPrize 內找不到那個字面量 —— anchor 失效或已被改寫');
-  const win = src.slice(i, j);
-  ok(win.length < 4000, 'anchor 之間距離 ' + win.length + ' 太遠，窗口可能失效');
-  ok(/!\s*state\.pendingSelection/.test(win),
-    'addPendingPrize 失去了 `!state.pendingSelection` 前置閘 —— 它會開始蓋掉別人的 picker');
+  const rest = src.slice(i + 10);
+  const k = rest.search(/\nexport /);
+  const win = k >= 0 ? src.slice(i, i + 10 + k) : src.slice(i);
+  ok(win.length > 200 && win.length < 4000, '窗口長度 ' + win.length + ' 異常 —— anchor 可能失效');
+  ok(/prizes\.some\(/.test(win), '窗口抓錯了：裡面沒有 faceUp 判斷');
+  ok(/withPending\(/.test(win), 'addPendingPrize 沒有走 withPending ⇒ 不會排進 pendingChainQueue');
+  ok(!/pendingSelection:\s*\{/.test(win), 'addPendingPrize 又自己組 pendingSelection 了');
+  ok(!/!\s*state\.pendingSelection/.test(win),
+    '又把「已有 pending 就自動取」的短路加回來了 —— 第二位玩家會失去指定獎賞的權利');
 });
 
 T('⭐⭐ engine.ts 的直接覆寫處數量凍結（新增第 19 處要回來說明為何安全）', () => {

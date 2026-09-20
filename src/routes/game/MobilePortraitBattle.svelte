@@ -912,8 +912,10 @@
 
   <!-- ─── 對手 chips: 獎賞/牌庫/棄牌（緊湊） ─── -->
   <div class="mp-chips mp-opp-chips">
-    {#if isTReplay && onOpenPrizes}
-      <button class="mp-chip mp-clickable" onclick={onOpenPrizes} title="查看雙方獎賞卡（回放限定）">🎁 {oppPlayer.prizes.length} 🔍</button>
+    {#if onOpenPrizes}
+      <!-- ⭐v6.418：對戰中也可點（視窗只顯示已翻到正面的那幾張，見 +page.svelte 的 v6418-prize-view-in-battle） -->
+      <button class="mp-chip mp-clickable" onclick={onOpenPrizes}
+        title={isTReplay ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 {oppPlayer.prizes.length} 🔍</button>
     {:else}
       <span class="mp-chip">🎁 {oppPlayer.prizes.length}</span>
     {/if}
@@ -1078,8 +1080,10 @@
 
   <!-- ─── 我方 chips: 獎賞/牌庫/棄牌 ─── -->
   <div class="mp-chips mp-my-chips">
-    {#if isTReplay && onOpenPrizes}
-      <button class="mp-chip mp-clickable" onclick={onOpenPrizes} title="查看雙方獎賞卡（回放限定）">🎁 {myPlayer.prizes.length} 🔍</button>
+    {#if onOpenPrizes}
+      <!-- ⭐v6.418：對戰中也可點（視窗只顯示已翻到正面的那幾張，見 +page.svelte 的 v6418-prize-view-in-battle） -->
+      <button class="mp-chip mp-clickable" onclick={onOpenPrizes}
+        title={isTReplay ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 {myPlayer.prizes.length} 🔍</button>
     {:else}
       <span class="mp-chip">🎁 {myPlayer.prizes.length}</span>
     {/if}

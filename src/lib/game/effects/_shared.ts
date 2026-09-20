@@ -2202,7 +2202,20 @@ export function addPendingPrize(state: GameState, ownerIdx: 0 | 1, n: number, po
   //   改開逐張 picker 讓玩家指定要取哪張（卡面用意：知道獎賞內容後可選要不要拿那張已知卡）。
   //   無 faceUp → 維持 v5.466 KO 當下自動取（front），正常對局完全不變、無線上 desync。
   //   實際取獎由 engine 的 take-prize-choose resolver 依 params.remaining 逐張結算。
-  if (takerPeek.prizes.some(c => c.faceUp) && !state.pendingSelection) {  // v5.889 已有 pending(mutual/checkup 連KO)→自動取,不開第二個 picker
+  // >>> v6418-prize-picker-queue
+  // ⭐⭐⭐v6.418（站長裁示）：原本是 `&& !state.pendingSelection`（v5.889：已有 pending
+  //   就自動取、不開第二個 picker）。那會**剝奪玩家指定獎賞的權利**：
+  //   實測情境 —— 雙方獎賞區都有正面朝上的卡，攻擊方打死耿鬼ex ⇒ 攻擊方的
+  //   take-prize-choose picker 開著；接著「死亡宣告」讓攻擊方昏厥 ⇒ 耿鬼方也要取獎賞，
+  //   但此時已有 pending ⇒ 耿鬼方被**自動取**，看得到卻選不了自己那張翻正面的。
+  //   ⇒ 改成走中央 `withPending`：已有 pending 時**排進 `pendingChainQueue`**
+  //     （v4.933 起就是全站 picker 排隊的唯一機制），兩個 picker 依序解，誰都不被吃掉。
+  //   ⚠ 排隊期間獎賞區可能已經變了 ⇒ 取出時由 `PENDING_REFRESH_ON_POP`
+  //     重算候選與 remaining（登記在 engine.ts，見 v6418-prize-picker-refresh）。
+  //   ⚠ 時序**沒有改**：死亡宣告仍然在「獎賞排隊但還沒發」時結算
+  //     （官方規則 §12 對這個先後沒有明文 ⇒ 站長裁示維持現況，只修被剝奪的權利）。
+  if (takerPeek.prizes.some(c => c.faceUp)) {
+  // <<< v6418-prize-picker-queue
     // v5.890：蓋著的獎賞彼此對玩家無差異 → 不逐張列 #1/#2/#3,只讓玩家決定要不要取「翻正面」的那幾張,
     //   其餘用單一「隨機取一張蓋著的」選項交給系統代抽(sentinel 與 engine take-prize-choose resolver 一致)。
     const options: { id: string; text: string }[] = [];
@@ -2212,14 +2225,11 @@ export function addPendingPrize(state: GameState, ownerIdx: 0 | 1, n: number, po
     if (takerPeek.prizes.some(pr => !pr.faceUp)) {
       options.push({ id: '__prize_random_facedown__', text: `🂠 隨機取一張蓋著的獎賞` });
     }
-    return {
-      ...state,
-      pendingSelection: {
-        type: 'modal-choice', actorIdx: ownerIdx, sourcePlayerIdx: ownerIdx,
-        minCount: 1, maxCount: 1, effectKey: 'take-prize-choose',
-        params: { remaining: count0, titleOverride: `取獎賞：還需取 ${count0} 張。可指定翻正面的獎賞,或選「隨機取一張蓋著的」由系統代抽`, options },
-      },
-    };
+    return withPending(state, {
+      type: 'modal-choice', actorIdx: ownerIdx, sourcePlayerIdx: ownerIdx,
+      minCount: 1, maxCount: 1, effectKey: 'take-prize-choose',
+      params: { remaining: count0, titleOverride: `取獎賞：還需取 ${count0} 張。可指定翻正面的獎賞,或選「隨機取一張蓋著的」由系統代抽`, options },
+    });
   }
   const taker = { ...state.players[ownerIdx] };
   const count = Math.min(n, taker.prizes.length);

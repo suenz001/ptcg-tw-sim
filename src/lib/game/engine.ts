@@ -539,6 +539,41 @@ function openPrizeTakePicker(state: GameState, ownerIdx: 0 | 1, remaining: numbe
     },
   };
 }
+// >>> v6418-prize-picker-refresh
+// ⭐⭐⭐v6.418：`take-prize-choose` 從 `pendingChainQueue` 取出時重算候選（v6.215 的機制）。
+//
+// 【為什麼一定要有】v6.418 讓「取獎賞」的 picker 可以排隊（原本已有 pending 就自動取，
+//   會剝奪玩家指定的權利）。但排隊期間獎賞區可能已經被別的路徑動過：
+//   ・獎賞被取光 ⇒ 這一筆沒有對象了 ⇒ 回 `sel: null` 丟掉（v6.215 的契約）。
+//   ・`remaining` 比現有獎賞數還多 ⇒ 夾制，否則 resolver 會一直續開到空轉。
+//   ・已經沒有正面朝上的了 ⇒ 問也沒意義（蓋著的彼此無差異）⇒ 直接自動取完、丟掉這一筆。
+// ⚠ 依 v6.215 契約：refresher **只准改 `params`**，
+//   `type`／`effectKey`／`minCount`／`maxCount`／`actorIdx`／`sourcePlayerIdx` 一律照抄。
+PENDING_REFRESH_ON_POP.set('take-prize-choose', (state, sel, pool) => {
+  const idx = sel.actorIdx as 0 | 1;
+  const prizes = state.players[idx]?.prizes ?? [];
+  if (prizes.length === 0) return { state, sel: null };
+  const want = (sel.params?.remaining as number) ?? 1;
+  const remaining = Math.min(Math.max(1, want), prizes.length);
+  if (!prizes.some(c => c.faceUp)) {
+    // 沒有正面朝上的了 ⇒ 蓋著的彼此無差異，直接自動取完（與 resolver 尾端同一套語意）
+    const front = prizes.slice(0, remaining).map(c => c.iid);
+    return { state: takeSpecificPrizes(state, idx, front, pool), sel: null };
+  }
+  return {
+    state,
+    sel: {
+      ...sel,
+      params: {
+        ...sel.params,
+        remaining,
+        titleOverride: `取獎賞：還需取 ${remaining} 張。可指定翻正面的獎賞,或選「隨機取一張蓋著的」由系統代抽`,
+        options: buildPrizeTakeOptions(prizes, pool),
+      },
+    },
+  };
+});
+// <<< v6418-prize-picker-refresh
 RESOLVERS.set('take-prize-choose', (state, ownerIdx, selectedIids, params, pool) => {
   const pickedIid = selectedIids[0];
   const remaining = (params?.remaining as number) ?? 1;

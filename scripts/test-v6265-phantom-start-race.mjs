@@ -23,6 +23,7 @@ import { stripV6400Engine } from './lib/engine-strip-v6400.mjs';
 import { stripV6402Engine } from './lib/engine-strip-v6402.mjs';
 import { stripV6403Engine } from './lib/engine-strip-v6403.mjs';   // ⭐v6.403 ex 判準收斂（12 組）
 import { stripV6408Engine } from './lib/engine-strip-v6408.mjs';   // ⭐v6.408 攻擊方加成收斂成一份（2 組）
+import { stripV6418Engine } from './lib/engine-strip-v6418.mjs';   // ⭐v6.418 取獎賞 picker 排隊 refresher（1 組）
 import { stripV6414Engine } from './lib/engine-strip-v6414.mjs';   // ⭐v6.414 招式限定加傷／覆寫（4 組）
 import { stripV6413Engine } from './lib/engine-strip-v6413.mjs';   // ⭐v6.413 招致削傷本次攻擊快照重置（1 組）
 import { stripV6410Engine } from './lib/engine-strip-v6410.mjs';   // ⭐v6.410 祭典樂舞判準收斂成一份（3 組）
@@ -1192,8 +1193,11 @@ await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等�
         //   （被刪掉的 185 行 inline 加成）裡含有對首擊判定的呼叫。
         // ⭐⭐ Rule 54（由新到舊）：v6.413 必須排在 v6.410 **之前**（它是最新的一版）。
         // ⭐⭐ Rule 54（由新到舊）：v6.414 必須排在 v6.413 **之前**（它是最新的一版）。
-        const rawA14 = stripV6414Engine(raw);
-        ok(rawA14 !== raw, 'v6.414 的還原器過期（四組哨兵區塊的字面對不上）');
+        // ⭐⭐ Rule 54（由新到舊）：v6.418 必須排在 v6.414 **之前**（它是最新的一版）。
+        const rawA18 = stripV6418Engine(raw);
+        ok(rawA18 !== raw, 'v6.418 的還原器過期（哨兵區塊的字面對不上）');
+        const rawA14 = stripV6414Engine(rawA18);
+        ok(rawA14 !== rawA18, 'v6.414 的還原器過期（四組哨兵區塊的字面對不上）');
         const rawA13 = stripV6413Engine(rawA14);
         ok(rawA13 !== rawA14, 'v6.413 的還原器過期（哨兵區塊的字面對不上）');
         const rawA10 = stripV6410Engine(rawA13);
@@ -1256,8 +1260,11 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
         //   （被刪掉的 185 行 inline 加成）裡含有對首擊判定的呼叫。
         // ⭐⭐ Rule 54（由新到舊）：v6.413 必須排在 v6.410 **之前**（它是最新的一版）。
         // ⭐⭐ Rule 54（由新到舊）：v6.414 必須排在 v6.413 **之前**（它是最新的一版）。
-        const rawA14 = stripV6414Engine(raw);
-        ok(rawA14 !== raw, 'v6.414 的還原器過期（四組哨兵區塊的字面對不上）');
+        // ⭐⭐ Rule 54（由新到舊）：v6.418 必須排在 v6.414 **之前**（它是最新的一版）。
+        const rawA18 = stripV6418Engine(raw);
+        ok(rawA18 !== raw, 'v6.418 的還原器過期（哨兵區塊的字面對不上）');
+        const rawA14 = stripV6414Engine(rawA18);
+        ok(rawA14 !== rawA18, 'v6.414 的還原器過期（四組哨兵區塊的字面對不上）');
         const rawA13 = stripV6413Engine(rawA14);
         ok(rawA13 !== rawA14, 'v6.413 的還原器過期（哨兵區塊的字面對不上）');
         const rawA10 = stripV6410Engine(rawA13);

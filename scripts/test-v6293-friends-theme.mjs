@@ -540,6 +540,35 @@ function revertV6389(region) {
   return r;
 }
 
+// ⭐⭐⭐v6.418（IRON_RULES Rule 40：守的意圖沒變，只是觀測點被本版蓋住了）
+//   站長需求：對戰中也要能點開獎賞卡檢視（克雷色利亞｜弦月光芒翻到正面的那張，
+//   卡面明說「在對戰結束前維持正面朝上」⇒ 雙方本來就該隨時查得到）。
+//   ⇒ 對戰版面分支內的兩顆獎賞按鈕（對手側／我方側）從「回放限定」改成一律顯示，
+//     title 依 isTReplay 切換。**機密性一點都沒有鬆**：真正的防線移到視窗內
+//     `_pvcard` 的 faceUp 閘（非回放且非 faceUp ⇒ 連 getCard 都不呼叫），
+//     由 scripts/test-v6190-replay-prize-view.mjs 的 B8／B9 在行為端守。
+//   ⚠ 與 V6321／V6389 同一個機制：逐條還原之後，其餘仍必須逐位元等於 BASE
+//     （少列一條就紅 —— 見 E1e 正對照）。
+const V6418_BATTLE_EDITS = [
+  [
+    "        <!-- ⭐v6.418：對戰中也可點開（只看得到翻正面的那幾張，見 v6418-prize-view-in-battle） -->\n        <button class=\"zone-label-sm prize-view-btn\" onclick={openPrizeView}\n          title={isTReplay ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 獎賞 {oppPlayer?.prizes.length??0}張 🔍</button>\n",
+    "        {#if isTReplay}\n          <button class=\"zone-label-sm prize-view-btn\" onclick={openPrizeView} title=\"查看雙方獎賞卡（回放限定）\">🎁 獎賞 {oppPlayer?.prizes.length??0}張 🔍</button>\n        {:else}\n          <div class=\"zone-label-sm\">獎賞 {oppPlayer?.prizes.length??0}張</div>\n        {/if}\n"
+  ],
+  [
+    "        <!-- ⭐v6.418：對戰中也可點開（只看得到翻正面的那幾張，見 v6418-prize-view-in-battle） -->\n        <button class=\"zone-label-sm prize-view-btn\" onclick={openPrizeView}\n          title={isTReplay ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 獎賞 {myPlayer?.prizes.length??0}張 🔍</button>\n",
+    "        {#if isTReplay}\n          <button class=\"zone-label-sm prize-view-btn\" onclick={openPrizeView} title=\"查看雙方獎賞卡（回放限定）\">🎁 獎賞 {myPlayer?.prizes.length??0}張 🔍</button>\n        {:else}\n          <div class=\"zone-label-sm\">獎賞 {myPlayer?.prizes.length??0}張</div>\n        {/if}\n"
+  ]
+];
+function revertV6418(region) {
+  let r = region;
+  for (const [now, before] of V6418_BATTLE_EDITS) {
+    const n = r.split(now).length - 1;
+    assert.strictEqual(n, 1, 'v6.418 的合法改動必須恰出現一次（實際 ' + n + '）：' + now.slice(0, 70));
+    r = r.replace(now, before);
+  }
+  return r;
+}
+
 // ⭐⭐ v6.362（Rule 40：判準上移到意圖層，不放寬也不刪除）
 //   v6.361（站長裁定 D-10／D-11）在本檔新增了「非錦標賽平手結算視窗」。那一塊是**純新增**，
 //   而且整塊用 HTML 註解哨兵框住：
@@ -575,7 +604,7 @@ function stripV6361DrawModal(src) {
 await T('E1 ⭐⭐⭐ 對戰版面分支區間（手機直式＋三種桌機版面）還原 v6.321 的合法改動後與 BASE **逐位元相同**；勝負 modal 區間剝掉 v6.361 平手視窗哨兵後同樣逐位元相同', () => {
   if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6293 E1 對戰版面分支逐位元比對', '需要歷史 commit；E1c 的結構斷言不需要歷史，仍在守'); skipped.push('E1（淺複製）'); return; }
   const baseSrc = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':src/routes/game/+page.svelte'], { maxBuffer: 1 << 28 }).toString('utf8');
-  assert.strictEqual(sha256(revertV6389(revertV6321(battleRegionOf(GAME)))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
+  assert.strictEqual(sha256(revertV6418(revertV6389(revertV6321(battleRegionOf(GAME))))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
   assert.strictEqual(sha256(gameoverRegionOf(stripV6361DrawModal(GAME))), sha256(gameoverRegionOf(baseSrc)), '⚠⚠ 勝負結算 modal 被動到了');
 });
 await T('E1b ⭐ 正對照：把對戰版面分支改一個位元 ⇒ E1 的比對必須不同（不是恆真式）', () => {
@@ -602,6 +631,16 @@ await T('E1d ⭐⭐ 正對照：v6.361 平手視窗的哨兵剝除**只**剝哨�
   // ② 哨兵被拿掉（有人把平手視窗搬出哨兵）⇒ 必須大聲紅，不可以默默放行變成免檢區
   assert.throws(() => stripV6361DrawModal(GAME.replace('>>> ' + V6361_DRAW_MODAL_TAG, 'xxx')), /恰出現一次/,
     '哨兵消失時剝除器沒有紅 ⇒ 等於把那一整塊變成免檢區');
+});
+await T('E1e ⭐⭐ 正對照：v6.418 的還原表少列一條 ⇒ revertV6418 必須紅（不是把改動洗掉）', () => {
+  const r = battleRegionOf(GAME);
+  // ① 還原表不會把無關改動洗掉（否則 E1 變恆真式）
+  const mutated = GAME.replace(BATTLE_START, BATTLE_START + '<!-- v6418-probe -->');
+  assert.notStrictEqual(sha256(revertV6418(battleRegionOf(mutated))), sha256(revertV6418(r)),
+    'revertV6418 把無關改動洗掉了 ⇒ E1 變成恆真式');
+  // ② 合法改動不存在時必須大聲紅（不可以默默放行）
+  assert.throws(() => revertV6418(r.replace(V6418_BATTLE_EDITS[0][0], V6418_BATTLE_EDITS[0][1])), /恰出現一次/,
+    '合法改動不存在時 revertV6418 沒有紅');
 });
 await T('E1c ⭐⭐ 不需要歷史的等價條件：對戰版面分支區間零 `friend`／零 `lobby-tab`／零 `FriendsPanel`（本版新增的東西一個都不准滲進去）；且區間 >20000 字元、含兩套分支', () => {
   const r = battleRegionOf(GAME);

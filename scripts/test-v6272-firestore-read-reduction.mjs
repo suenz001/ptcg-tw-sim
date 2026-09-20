@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '8320c6f0937489b99ec8ae6698573c6d48d9de11';   // v6.416（上一版）
+const PREV_SHA = 'eb20722dd7fc0b94b5afbbb6d581b3c1a48d408d';   // v6.417（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,14 +757,20 @@ const PREV_SHA = '8320c6f0937489b99ec8ae6698573c6d48d9de11';   // v6.416（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.417 前移：PREV_SHA 從 v6.416（8320c6f0）起算。
+  // ⚠⚠ v6.418 前移：PREV_SHA 從 v6.417（eb20722d）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.417：`drainOnKoAfterPrize` 改用 `delete` 移除 `_onKoAfterPrize`（原本設成
-  //   `undefined` ⇒ delta patch 會走 set 而不是 del）。**行為零改變**（正式路徑的
-  //   JSON round-trip 會先抹掉 undefined 的 key，守衛 B3 釘住這個事實），
-  //   拆的是「改動推送順序就會引爆」的地雷。
-  'src/lib/game/effects.ts',
+  // ⭐⭐v6.418：(一) 對戰中也能查看獎賞卡（蓋著的仍然只顯示卡背，唯一防線是
+  //   `_pvcard` 那道 faceUp 閘，由 test-v6190 的 B8／B9 守）——動 game/+page.svelte
+  //   （prizeViewMode／openPrizeView／視窗本體／按鈕／CSS）與 MobilePortraitBattle.svelte
+  //   （兩處 chip 從回放限定改成一律可點）。
+  //   (二) 取獎賞的 picker 改走中央 withPending ⇒ 已有 pending 時排進 pendingChainQueue
+  //   （原本自動取，會剝奪第二位玩家的指定權）——動 effects/_shared.ts（addPendingPrize）
+  //   與 engine.ts（PENDING_REFRESH_ON_POP 登記）。
+  'src/lib/game/effects/_shared.ts',
+  'src/lib/game/engine.ts',
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
+  'src/routes/game/MobilePortraitBattle.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',

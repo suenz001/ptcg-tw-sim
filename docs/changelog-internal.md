@@ -1,5 +1,111 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.418 ⭐⭐ 對戰中的獎賞卡檢視（faceUp 閘）＋ 取獎賞 picker 改走排隊
+
+BASE `eb20722dd7fc0b94b5afbbb6d581b3c1a48d408d`（v6.417）。
+⚠ 動了 `engine.ts` ⇒ 必須有 `scripts/lib/engine-strip-v6418.mjs`，並接線
+`test-v6265`（兩處）／`test-v6375`／`test-v6371`（Rule 54：由新到舊，本版排最前）。
+⚠ 部署照 Rule 43：**`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**。
+
+### 【一】站長需求：對戰中也要看得到獎賞卡
+
+克雷色利亞｜弦月光芒的卡面明寫「（在對戰結束前，那張獎賞卡維持正面朝上。）」
+⇒ 雙方本來就該隨時查得到那一張是什麼。先前查看獎賞卡的 UI 是**回放限定**（v6.190）。
+
+**防線位置整個換掉（Rule 40：意圖沒變，觀測點變了）**
+
+| | v6.190～v6.417 | v6.418 起 |
+|---|---|---|
+| 視窗／按鈕 | 用 `isTReplay` 整個擋掉（粗但有效） | **一律可開** |
+| 蓋著的獎賞 | （看不到，因為視窗開不了） | `_pvcard` 的三元式擋住：非回放且非 `faceUp` ⇒ **連 `getCard` 都不呼叫**，畫卡背 |
+
+⚠⚠ 伺服器端的盤面遮蔽（`_redactStateForSeat`）是**預設關閉的灰度旗標**
+⇒ 對戰中的 client 手上本來就有對手獎賞的 `cardId`，**client 端這道閘是唯一防線**。
+⇒ `test-v6190` 的 **B8**（行為端：數 `getCard` 被呼叫幾次）與 **B9**（反安慰劑）就是守這件事；
+判準只寫一份（`prizeGateProbe`），B8 與 B9 共用（Rule 38 / 安慰劑型態 11）。
+
+改動：`game/+page.svelte`（`prizeViewMode` 模式旗標／`openPrizeView` 不再早退／視窗閘改 `prizeViewOpen`／
+兩處桌機按鈕一律顯示、title 依 `isTReplay` 切換／`.prize-view-back` 等 CSS）、
+`MobilePortraitBattle.svelte`（兩處 chip 從 `{#if isTReplay && onOpenPrizes}` 改成 `{#if onOpenPrizes}`）。
+`test-v6190` 的 A／B／D 段從「不得渲染」改到意圖級（`prizeViewMode` 求值、「渲染得出來」），**不是放寬**。
+
+### 【二】實害：雙方同時取獎賞時，第二位被剝奪指定權
+
+v5.889 起 `addPendingPrize` 的閘是 `prizes.some(faceUp) && !state.pendingSelection`
+⇒ **已有 pending 就自動取**。實測情境（站長裁示「修實害、時序維持現況」）：
+
+```
+雙方獎賞區都有正面朝上的卡
+→ 攻擊方打死耿鬼ex，攻擊方的 take-prize-choose picker 開著
+→ 死亡宣告正面，攻擊方的寶可夢也昏厥 ⇒ 耿鬼方也要取獎賞
+→ 此時已有 pending ⇒ 耿鬼方被**自動取**，看得到卻選不了
+```
+
+修法：拿掉 `&& !state.pendingSelection`，改走中央 `withPending`
+（v4.933 起就是全站 picker 排隊的唯一機制）⇒ 排進 `pendingChainQueue`，兩個 picker 依序解。
+配套：`engine.ts` 登記 `PENDING_REFRESH_ON_POP.set('take-prize-choose', …)`（v6.215 機制），
+取出時重算候選與 `remaining`：獎賞取光 ⇒ `sel: null`；`remaining` 夾制到現有張數；
+沒有 `faceUp` 了 ⇒ 自動取完並丟掉這一筆。依 v6.215 契約只改 `params`。
+
+⚠ **時序沒有動**：死亡宣告仍在「獎賞排隊但還沒發」時結算。官方規則 §12 對
+「昏厥時觸發的特性」與「取獎賞」誰先**沒有明文** ⇒ 站長裁示維持現況，由 `test-v6417`【D】段列管。
+
+### 【三】守衛
+
+- 新增 `scripts/test-v6418-prize-picker-queue.mjs`（18 條）：
+  A 段四種組合（faceUp × 已有 pending）含 A3b 反安慰劑、B 段 refresher 五條、
+  C 段端到端（破破舵輪｜悔念錨打死耿鬼ex，死亡宣告擲到正面為止）、D 段靜態＋正對照。
+  **HEAD-FAIL：BASE 上 11 條紅**（A3／A3b 以外的 B0～B4／C1～C3／D1／D2）。
+- `test-v6190` 新增 B8a～B8d（faceUp 閘的行為端）、B9a／B9b（反安慰劑＋正對照）、B10（卡背替代 DOM）；
+  A2／A3／A3b／B2／D2／D4 改到意圖級。**HEAD-FAIL：BASE 上 47 條紅。**
+- `scripts/lib/engine-strip-v6418.mjs`（1 組哨兵），接線四處。
+
+### 【四】獨立審查（fable 5.1）與其發現 —— **兩項結論都已自行查證**
+
+站長指示「重大修改務必由 fable 5.1 獨立審查」。審查者做了 7 個突變測試、自寫終局 harness，
+結論「可以 push」，但抓到**兩個守衛缺口**與**一個既有 bug**。我逐項複驗：
+
+#### ① 守衛缺口：B8 只守那一行三元式，視窗其餘 DOM 是無人看守區 ✅ 屬實，已修
+
+實測（我自己做過一次）：把 `{:else}` 卡背格的 `title` 改成 `getCard(_pvc.cardId)?.name`
+⇒ `test-v6190` 照樣 **175 PASS / 0 FAIL**。也就是說「三元式是唯一防線」這個架構，
+它的**邊界**沒有人守 —— 任何兄弟節點自己去讀 `_pvc.cardId` 就是實洩漏。
+⇒ 新增 **B8e／B8e0**（each 區塊內，除了三元式本身與 `{#if _pvcard}` … `{:else}` 的 then 段，
+一律不得出現 `_pvc.cardId`／`getCard(`／`openZoom(`／`imageUrl`）＋ **B9c／B9d** 反安慰劑。
+複驗：上面兩個突變（title 偷讀、卡背格加 `onclick openZoom`）現在都 **紅在 B8e**。
+
+#### ② 守衛缺口：C3 分不出 refresher 有沒有被呼叫（安慰劑型態 12） ✅ 屬實，已修
+
+E2E 情境裡「入列當下算好的 options」與「重算後的 options」**恰好同值**
+⇒ 把 engine 的 `PENDING_REFRESH_ON_POP.get(...)` 短路掉，C1～C3 照樣全綠。
+⇒ 新增 **C4**：佇列裡那一筆刻意帶**過期**的 `params.options`（`id: 'stale'`），
+解掉第一個 picker 之後浮上來的那一筆必須已經重算。
+複驗突變 `if (!_refresh || true)` ⇒ **C4 紅**、其餘照舊綠。
+
+#### ③ 既有 bug（**本版不修，列管**）：雙方同時取完最後一張獎賞時的勝負
+
+| 盤面 | 結果 |
+|---|---|
+| 雙方都**沒有** faceUp（不開 picker） | 走中央 `judgeEndgameV6361` ⇒ **平手** ✅ |
+| 雙方都**有** faceUp（開 picker）— BASE v6.417 | `winner=1`（自動取的那一方先取完） ❌ |
+| 同上 — HEAD v6.418 | `winner=0`（先解 picker 的那一方） ❌ |
+
+根因：`takeSpecificPrizes` 取光時**自己寫死** `winner: ownerIdx`，繞過 v6.361 的中央判定；
+對手排在 `pendingChainQueue` 裡的那一筆永遠不會被兌現。
+⚠ **BASE 也是錯的**（只是錯向另一邊）⇒ **不是本版引入的回歸**。
+⇒ 本版刻意不修：它牽涉終局判定與錦標賽勝負，「要平手還是先取者勝」屬**站長裁定**範圍，
+與本版要修的「指定權被剝奪」是兩件事。`test-v6418` 的【E】段把現況釘住（E1 對照／E2 列管）。
+⚠ 審查者另提「engine 的 pop 迴圈應加 `phase === 'playing'` 前置」（終局後仍會浮出 picker）——
+同樣是既有行為（BASE 實測也留著一個解不掉的 picker），UI 上被 `.gameover-modal`（z-index 9999）
+蓋住，併入同一條列管，等站長對 ③ 裁定後一起處理。
+
+#### 審查者複驗過而**沒有**問題的部分（我抽驗過其中三項）
+
+洩漏路徑全掃（`openZoom`／`img src/alt`／`sel-name`／`twoCardStadiumHalfIndex`／`title`／
+手機元件只讀 `.prizes.length`／`isTReplay` 的來源）、`remaining` 夾制不會讓玩家少拿、
+排隊不會死結或軟鎖、三處既有守衛的改動都是**收緊**而非放寬、
+`engine-strip-v6418` 剝除後逐字等於 BASE 且對 BASE 會大聲紅、四處接線順序正確。
+
 ## v6.417 ⭐ drain 的 key 真的移除（拆地雷）＋「正面朝上獎賞 vs 死亡宣告」列管
 
 BASE `8320c6f0937489b99ec8ae6698573c6d48d9de11`（v6.416）。
