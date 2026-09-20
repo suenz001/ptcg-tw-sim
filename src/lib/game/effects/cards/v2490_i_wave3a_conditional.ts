@@ -29,6 +29,8 @@ import type { AttackPreFn, AttackPostFn } from '../_shared';
 // v5.177：補 import (v5.176 hotfix wave3a-snipe-bench resolver 用此 helper 但漏 import)
 import { canApplyEffectToTarget } from '../../defense';
 import { flipCoinsWithLog, countAttachedEnergyAsUnits, countEnergyTypeHostAware, prizesConditionPre } from '../../effects';
+// ⭐v6.413：「對手所有備戰各受 N」的中央實作（取代本檔原本的自跑迴圈）
+import { snipeAllOppBenchDamage } from '../../effects';
 import { oppCountersMultiplyPre } from '../../effects'; // ⭐v6.399 收斂：對手傷害指示物 × N（中央唯一一份）
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -128,28 +130,17 @@ function snipeOneBenchPost(amount: number, label: string): AttackPostFn {
 // 對手所有備戰每隻 +N
 // v5.268: per-bench 走 canApplyEffectToTarget('attack-damage', isBench:true)
 //   修花之帷幔/球形盾牌/藏隱/深度下潛/羽毛化石/太晶/中立中心/暗影【惡】能量 等備戰免傷.
+// >>> v6413-snipe-all-opp-bench-central-v2490
+// ⭐⭐⭐v6.413：這一份自跑迴圈刪掉，改呼叫中央 `snipeAllOppBenchDamage`。
+//   舊實作只做 guard 然後直接 `damage + amount` ⇒ 缺備戰減傷、擲幣免傷、
+//   傷害量門檻免疫、防 KO、**KO 與獎賞卡**、on-KO、withAttackDamageTaken、招致削傷…
+//   ⚠ 最嚴重的是備戰被打死**不會昆厥**（只把傷害加上去）。
+//   ⚠ v2610_i_wave11_misc4.ts 裡有一份**同名**的正確實作（走中央 helper）——
+//     兩份同名、行為天差地別，正是 Rule 38 要擋的東西。
 function snipeAllOppBenchPost(amount: number, label: string): AttackPostFn {
-  return (state, aIdx, pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const opp = state.players[dIdx];
-    if (opp.bench.length === 0) {
-      return addLog(state, `${label}：對手備戰區無寶可夢`, aIdx);
-    }
-    let s = state;
-    const newBench = opp.bench.map(b => {
-      const card = pool.get(b.cardId);
-      const guard = canApplyEffectToTarget(s, aIdx, b, card, 'attack-damage', pool, { isBench: true });
-      if (guard.blocked) {
-        s = addLog(s, `${label}：${card?.name ?? '?'} 因 ${guard.reason} 不受傷害`, aIdx);
-        return b;
-      }
-      return { ...b, damage: (b.damage ?? 0) + amount };
-    });
-    const players = [...s.players] as [PlayerState, PlayerState];
-    players[dIdx] = { ...opp, bench: newBench };
-    return addLog({ ...s, players }, `${label}：對手備戰寶可夢各受到 ${amount} 點傷害（未被擋者）`, aIdx);
-  };
+  return (state, aIdx, pool) => snipeAllOppBenchDamage(state, aIdx, amount, pool, label);
 }
+// <<< v6413-snipe-all-opp-bench-central-v2490
 
 // 雙方所有備戰每隻 +N
 // v5.268: 對手側 per-bench 走 canApplyEffectToTarget guard (花之帷幔等可擋);

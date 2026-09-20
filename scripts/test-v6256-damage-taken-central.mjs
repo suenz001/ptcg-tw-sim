@@ -364,8 +364,19 @@ T('C3 ⭐⭐防 KO 中央 helper 的三個呼叫端都必須宣告 kind（＋正
   assert.equal(sites.length, 4,
     `applyPreventKOToVictim effects.ts 呼叫端應恰好 4 個（dealAttackDamageToTarget／` +
     `hitBenchAll／bench-hit-N／snipe-60-ex），實得 ${sites.length} ⇒ 新增了管線就必須回來讀卡面決定 kind`);
-  assert.equal(megaSites.length, 1,
-    `applyPreventKOToVictim mega_decks.ts 呼叫端應恰好 1 個（olive-oil-distribute），實得 ${megaSites.length}`);
+  // ⭐⭐v6.413（IRON_RULES Rule 40）：olive-oil-distribute 整段收斂進中央
+  //   `dealAttackDamageToTarget` ⇒ 它不再自己做防 KO（那份已經在中央管線裡做過了）。
+  //   意圖（每一條會造成傷害的路徑都必須經過防 KO，且必須宣告 kind）沒有被破壞，
+  //   只是觀測點被收斂掉 ⇒ 改成接線斷言：油之機關槍必須走中央管線。
+  //   ⚠ 這裡用 `=== 0` 而不是 `>= 0`：留一份 inline 的防 KO 就是判準兩份（安慰劑型態 11）。
+  const iOO = megaSrc.indexOf("regR('olive-oil-distribute'");
+  assert.ok(iOO >= 0, "anchor 失效：regR('olive-oil-distribute'");
+  const ooBlk = megaSrc.slice(iOO, iOO + 4000);
+  assert.ok(/^\s*\}\);/m.test(ooBlk), '切片 4000 字元內沒有 resolver 收尾 —— 錨點窗口不夠大');
+  assert.ok(ooBlk.includes('dealAttackDamageToTarget('),
+    '油之機關槍既沒有走中央 dealAttackDamageToTarget，也沒有自己做防 KO ⇒ 免於昏厥會靜默失效');
+  assert.equal(megaSites.length, 0,
+    `applyPreventKOToVictim mega_decks.ts 呼叫端應為 0（已收斂進中央管線），實得 ${megaSites.length}`);
   sites.push(...megaSites);
   for (const args of sites) {
     const n = args.split(',').length;

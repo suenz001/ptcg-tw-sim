@@ -171,10 +171,25 @@ T('⭐⭐⭐ 油之機關槍不得宣告 skipDefEffects（卡面只有「不計�
 
 T('⭐⭐ 兩個 resolver 都走中央閘，不得再各自手刻', () => {
   ok(/export function resolveMultiTargetDamageGuard/.test(EFF_C), '中央閘不存在');
-  ok(/resolveMultiTargetDamageGuard\(/.test(MEGA_C), '油之機關槍沒有走中央閘');
-  const oo = MEGA_C.slice(MEGA_C.indexOf("regR('olive-oil-distribute'"), MEGA_C.indexOf('function computeOliveOilBuff') + 1 || undefined);
+  // ⭐v6.413（IRON_RULES Rule 40）：油之機關槍已整段收斂進中央傷害管線
+  //   `dealAttackDamageToTarget`，而中央閘 `resolveMultiTargetDamageGuard` 由該管線
+  //   內部統一呼叫 ⇒ 這裡的**意圖沒有變**（resolver 不得自己手刻免疫判準），
+  //   只是觀測點從「resolver 要直接呼叫中央閘」上移成「resolver 必須走中央傷害管線」。
+  //   ⚠ 放寬成「呼叫中央閘 or 走中央管線」是不行的（那等於什麼都不守）；
+  //   這裡改成**更強**的斷言：必須走中央管線，且不得殘留任何手刻的傷害結算步驟。
+  const _i = MEGA_C.indexOf("regR('olive-oil-distribute'");
+  ok(_i >= 0, "找不到 regR('olive-oil-distribute') 錨點 —— 掃描器失效");
+  const oo = MEGA_C.slice(_i, _i + 4000);
+  ok(/^\s*\}\);/m.test(oo), '切片 4000 字元內沒有 resolver 的收尾 —— 錨點窗口可能不夠大');
+  ok(/dealAttackDamageToTarget\(/.test(oo),
+    '油之機關槍沒有走中央傷害管線 dealAttackDamageToTarget（免疫／弱抵／反擊寫入點全部會漏）');
   ok(!/wouldNeutralCenterBlock\(/.test(oo), '油之機關槍 resolver 還留著手刻的中立中心檢查（應已收斂）');
   ok(!/passiveCoinImmunity\(/.test(oo), '油之機關槍 resolver 還留著手刻的擲幣檢查（應已收斂）');
+  // 反安慰劑：手刻的傷害結算殘留一律紅（判準兩份＝安慰劑型態 11）
+  ok(!/applyWeakRes\(/.test(oo), '油之機關槍 resolver 還自己算弱點抵抗力（應由中央管線處理）');
+  ok(!/withAttackDamageTaken\(/.test(oo), '油之機關槍 resolver 還自己寫「受到的招式傷害」（應由中央管線處理）');
+  ok(!/applyPreventKOToVictim\(/.test(oo), '油之機關槍 resolver 還自己處理免於昏厥（應由中央管線處理）');
+  ok(!/koPrizesAdjusted/.test(oo), '油之機關槍 resolver 還自己算獎賞卡（應由中央管線處理）');
 });
 
 T('⭐⭐ 中央閘用 attack-damage 語意（用 attack-effect 會誤擋薄霧能量那類）', () => {

@@ -397,8 +397,20 @@ T('L2 全站 `PASSIVE_ATTACK_BONUS.get(` 只出現在 collectPassiveAttackBonuse
 const _l3 = (srcs) => {
   const hasDispatch = (rel) => /collectPassiveAttackBonuses\s*\(/.test(srcs[rel] ?? '');
   const callers = Object.keys(srcs).filter(hasDispatch).sort();
-  const must = ['src/lib/game/effects.ts', 'src/lib/game/effects/cards/mega_decks.ts'];
+  // ⭐⭐v6.413（IRON_RULES Rule 40）：奧利瓦ex｜油之機關槍整段收斂進中央
+  //   `dealAttackDamageToTarget` ⇒ mega_decks 不再自己消費 PASSIVE_ATTACK_BONUS。
+  //   意圖（passive 加成只能有一個消費點，且每條傷害路徑都要吃得到）沒有被破壞，
+  //   觀測點改成下面兩條接線斷言：mega_decks **不得**再自己消費（那會是第二份），
+  //   但**必須**走中央傷害管線（否則加成會整個漏掉）。
+  const must = ['src/lib/game/effects.ts'];
   if (!must.every((m) => callers.includes(m))) return { ok: false, why: '固定消費點少了：' + JSON.stringify(callers) };
+  const mega = srcs['src/lib/game/effects/cards/mega_decks.ts'] ?? '';
+  if (/collectPassiveAttackBonuses\s*\(/.test(mega)) {
+    return { ok: false, why: 'mega_decks 又自己消費 passive 加成了（判準兩份；應交給中央傷害管線）' };
+  }
+  if (!/dealAttackDamageToTarget\s*\(/.test(mega)) {
+    return { ok: false, why: 'mega_decks 既不走中央傷害管線、也不自己算 ⇒ passive 加成會整條漏掉' };
+  }
   const engineOk = hasDispatch('src/lib/game/engine.ts')
     || /applyAttackerActiveDamageBonuses\s*\(/.test(srcs['src/lib/game/engine.ts'] ?? '');
   if (!engineOk) return { ok: false, why: 'engine.ts 既沒呼叫中央 dispatch，也沒委託給 applyAttackerActiveDamageBonuses' };
@@ -427,6 +439,13 @@ T('L3 每個消費點都走中央 dispatch（engine 可改為委託給 applyAtta
   const mut2 = { ...srcs, 'src/lib/game/effects/cards/tools.ts':
     (srcs['src/lib/game/effects/cards/tools.ts'] ?? '') + '\nconst x = PASSIVE_ATTACK_BONUS.get(name);\n' };
   assert.ok(!_l3(mut2).ok, '⚠ 多出第二個 PASSIVE_ATTACK_BONUS.get( 消費點時，L3 竟然還是綠的');
+  // ⭐v6.413 反安慰劑：mega_decks 不走中央傷害管線時必須紅（否則上面那兩條接線斷言是裝飾）
+  const mut3 = { ...srcs, 'src/lib/game/effects/cards/mega_decks.ts':
+    (srcs['src/lib/game/effects/cards/mega_decks.ts'] ?? '').split('dealAttackDamageToTarget').join('__mut3__') };
+  assert.ok(!_l3(mut3).ok, '⚠ mega_decks 不走中央傷害管線時，L3 竟然還是綠的');
+  const mut4 = { ...srcs, 'src/lib/game/effects/cards/mega_decks.ts':
+    (srcs['src/lib/game/effects/cards/mega_decks.ts'] ?? '') + '\nconst y = collectPassiveAttackBonuses(a, b);\n' };
+  assert.ok(!_l3(mut4).ok, '⚠ mega_decks 又自己消費 passive 加成時，L3 竟然還是綠的');
 });
 
 // ══ W. v6.257 lint 白名單的「行為端」證明（不可只有文字理由）═══════════════

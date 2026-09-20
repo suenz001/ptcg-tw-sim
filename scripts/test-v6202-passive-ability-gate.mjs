@@ -443,23 +443,35 @@ T('18b. 侵蝕詛咒：傳說的熔岩洞（耿鬼ex Stage2）⇒ 不再放指�
 });
 
 // ── 19. mega_decks 的 PASSIVE_ATTACK_BONUS 第二份（奧利瓦ex｜油之機關槍 ＋ 裙兒小姐｜大晴天）──
-const oilBuff = stadium => {
-  const oliva=I(OLIVA,{energyAttached:[I(GRASSE)]});
-  const foe=I(FILLER);
-  const st=ST({active:oliva,bench:[I(SKIRT)],deck:[I(FILLER)]},
-              {active:foe,bench:[],deck:[I(FILLER)]},
-              stadium?{activeStadium:I(stadium)}:{});
-  let s=mod.applyAction(st,{type:'ATTACK',attackIndex:0,actorIdx:0},pool);
-  // 油之機關槍開 damage-distribute picker：6 次全部指到對手戰鬥位
-  assert.ok(s.pendingSelection,'油之機關槍沒開 picker');
-  s=mod.applyAction(s,{type:'RESOLVE_SELECTION',selectedIids:[foe.iid,foe.iid,foe.iid,foe.iid,foe.iid,foe.iid],actorIdx:0},pool);
-  return s.log.map(l=>l.message).join('\n');
+// ⭐⭐v6.413（IRON_RULES Rule 40）：油之機關槍已整段收斂進中央 `dealAttackDamageToTarget`
+//   ⇒ 戰鬥記錄的措辭換成中央管線那一套，原本比對 `+20=` 字樣的觀測點被蓋住了。
+//   意圖（大晴天的 +20 要生效、傳說的熔岩洞要擋掉）**完全沒有被破壞**，
+//   所以這裡把觀測點從「log 字串」下移到**實際傷害數字**（比原本更強：字串改了也守得住），
+//   並補一個「沒有裙兒小姐」的基準，讓 +20 是真的被量出來、不是恆真。
+const oilDmg = (stadium, withSkirt = true) => {
+  const oliva = I(OLIVA, { energyAttached: [I(GRASSE)] });
+  // ⚠ 靶不能用咕咕（HP 60）：6×20=120 會把它打死 ⇒ active 變 null、量到 -1（空真）。
+  //   用高 HP 的奧利瓦ex（310）當靶；卡面「不計算弱點・抵抗力」⇒ 差值就是純粹的 +20。
+  const foe = I(OLIVA);
+  const st = ST({ active: oliva, bench: withSkirt ? [I(SKIRT)] : [], deck: [I(FILLER)] },
+                { active: foe, bench: [], deck: [I(FILLER)] },
+                stadium ? { activeStadium: I(stadium) } : {});
+  let s = mod.applyAction(st, { type: 'ATTACK', attackIndex: 0, actorIdx: 0 }, pool);
+  assert.ok(s.pendingSelection, '油之機關槍沒開 picker');
+  s = mod.applyAction(s, { type: 'RESOLVE_SELECTION', selectedIids: [foe.iid, foe.iid, foe.iid, foe.iid, foe.iid, foe.iid], actorIdx: 0 }, pool);
+  return s.players[1].active?.damage ?? -1;
 };
-T('19a. 大晴天（multi-target 路徑）【正對照】無競技場 ⇒ 油之機關槍每個目標 +20',()=>{
-  assert.ok(/\+20=/.test(oilBuff(null)),'fixture 不成立：正常盤面就沒 +20\n'+oilBuff(null));
+const OIL_NO_SKIRT = oilDmg(null, false);
+T('19z. 基準盤面成立：沒有裙兒小姐時油之機關槍 6×20 打得出傷害（否則 19a/19b 是空真）', () => {
+  assert.ok(OIL_NO_SKIRT > 0, `基準傷害 ${OIL_NO_SKIRT}`);
 });
-T('19b. 大晴天：傳說的熔岩洞（裙兒小姐 Stage1）⇒ +20 失效（effects.ts 那份早就有閘，這份原本漂了）',()=>{
-  assert.ok(!/\+20=/.test(oilBuff(CAVE)),'熔岩洞在場仍 +20\n'+oilBuff(CAVE));
+T('19a. 大晴天（multi-target 路徑）【正對照】無競技場 ⇒ 油之機關槍 +20', () => {
+  const d = oilDmg(null);
+  assert.strictEqual(d - OIL_NO_SKIRT, 20, `fixture 不成立：正常盤面就沒 +20（${OIL_NO_SKIRT} → ${d}）`);
+});
+T('19b. 大晴天：傳說的熔岩洞（裙兒小姐 Stage1）⇒ +20 失效（effects.ts 那份早就有閘，這份原本漂了）', () => {
+  const d = oilDmg(CAVE);
+  assert.strictEqual(d - OIL_NO_SKIRT, 0, `熔岩洞在場仍 +20（${OIL_NO_SKIRT} → ${d}）`);
 });
 
 // ══════════════ ④ 枚舉守衛：全站 passive 消費點凍結表 ══════════════

@@ -23,6 +23,7 @@ import { stripV6400Engine } from './lib/engine-strip-v6400.mjs';
 import { stripV6402Engine } from './lib/engine-strip-v6402.mjs';
 import { stripV6403Engine } from './lib/engine-strip-v6403.mjs';   // ⭐v6.403 ex 判準收斂（12 組）
 import { stripV6408Engine } from './lib/engine-strip-v6408.mjs';   // ⭐v6.408 攻擊方加成收斂成一份（2 組）
+import { stripV6413Engine } from './lib/engine-strip-v6413.mjs';   // ⭐v6.413 招致削傷本次攻擊快照重置（1 組）
 import { stripV6410Engine } from './lib/engine-strip-v6410.mjs';   // ⭐v6.410 祭典樂舞判準收斂成一份（3 組）
 import { stripV6407Engine } from './lib/engine-strip-v6407.mjs';   // ⭐v6.407 自身能量付出延後（3 組）
 import { stripV6401Engine } from './lib/engine-strip-v6401.mjs';
@@ -1188,8 +1189,11 @@ await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等�
         // ⭐⭐ Rule 54（由新到舊）：v6.410 必須排在 v6.408 **之前**：
         //   v6.410 把 engine 的三個祭典樂舞 local 函式整段刪掉，而 v6.408 的還原內容
         //   （被刪掉的 185 行 inline 加成）裡含有對首擊判定的呼叫。
-        const rawA10 = stripV6410Engine(raw);
-        ok(rawA10 !== raw, 'v6.410 的還原器過期（三個哨兵區塊的字面對不上）');
+        // ⭐⭐ Rule 54（由新到舊）：v6.413 必須排在 v6.410 **之前**（它是最新的一版）。
+        const rawA13 = stripV6413Engine(raw);
+        ok(rawA13 !== raw, 'v6.413 的還原器過期（哨兵區塊的字面對不上）');
+        const rawA10 = stripV6410Engine(rawA13);
+        ok(rawA10 !== rawA13, 'v6.410 的還原器過期（三個哨兵區塊的字面對不上）');
         const rawA8 = stripV6408Engine(rawA10);
         ok(rawA8 !== rawA10, 'v6.408 的還原器過期（兩個哨兵區塊的字面對不上）');
         const s0 = stripV6376Engine(stripV6373Engine(stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(rawA8))))))))))))))))));
@@ -1246,8 +1250,11 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
         // ⭐⭐ Rule 54（由新到舊）：v6.410 必須排在 v6.408 **之前**：
         //   v6.410 把 engine 的三個祭典樂舞 local 函式整段刪掉，而 v6.408 的還原內容
         //   （被刪掉的 185 行 inline 加成）裡含有對首擊判定的呼叫。
-        const rawA10 = stripV6410Engine(raw);
-        ok(rawA10 !== raw, 'v6.410 的還原器過期（三個哨兵區塊的字面對不上）');
+        // ⭐⭐ Rule 54（由新到舊）：v6.413 必須排在 v6.410 **之前**（它是最新的一版）。
+        const rawA13 = stripV6413Engine(raw);
+        ok(rawA13 !== raw, 'v6.413 的還原器過期（哨兵區塊的字面對不上）');
+        const rawA10 = stripV6410Engine(rawA13);
+        ok(rawA10 !== rawA13, 'v6.410 的還原器過期（三個哨兵區塊的字面對不上）');
         const rawA8 = stripV6408Engine(rawA10);
         ok(rawA8 !== rawA10, 'v6.408 的還原器過期（兩個哨兵區塊的字面對不上）');
         const s0 = stripV6376Engine(stripV6373Engine(stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(rawA8))))))))))))))))));

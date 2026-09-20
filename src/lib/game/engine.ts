@@ -5452,6 +5452,11 @@ function handlePlaying(
       ...state,
       coinFlippedThisAttack: false,
       _attackerActiveBonusDone: false,  // v5.517 每次攻擊重置攻擊方加成 guard
+      // >>> v6413-attack-self-penalty-reset
+      // ⭐v6.413：招致削傷的「本次攻擊快照」也要每次攻擊重置，
+      //   否則上一招的 -N 會漏到這一招（旗標本身早就被消耗掉了）。
+      _attackSelfPenalty: undefined,
+      // <<< v6413-attack-self-penalty-reset
       _machineGunLastFlips: undefined,
       // 重跑時保留 queue; 一般攻擊清空殘留 queue (防呆)
       _retryInjectedFlipsQueue: isRetryReplay ? state._retryInjectedFlipsQueue : undefined,

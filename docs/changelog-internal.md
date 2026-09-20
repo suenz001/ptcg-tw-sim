@@ -1,5 +1,80 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.413 ⭐⭐⭐ 招致削傷不限目標位置＋全備戰傷害與油之機關槍收斂（玩家可見）
+
+BASE `c65786c7b373da3b82fef0b641899d4ef2437091`（v6.412）。
+⚠ 本版**動了 `src/lib/game/engine.ts` 與 `src/lib/game/effects.ts`** ⇒ 部署要跑
+**`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**（IRON_RULES Rule 43）。
+⚠⚠ **這一版會改變對戰結果**（都是「本來就該算／該判定而沒做」的補正）。
+
+### 【零】站長裁示
+
+v6.412 收尾時的三選多題，站長**三項全選**：
+叫聲類減傷對備戰也要算（推薦）、奧利瓦ex「油之機關槍」也收進來、招式限定型加傷寫成通用加傷。
+⇒ 前兩項在本版；第三項（巨金怪｜彗星拳、美洛耶塔ex｜回聲、桃歹郎｜糬猛攻、路卡利歐ex｜
+龍捲風猛攻、步哨鼠｜聚氣）排 **v6.414**。
+
+### 【一】招致削傷（`nextOwnAttackPenalty`）不限目標位置
+
+**卡面逐字**（H／I／J 標共 10 張）：布撥／菊草葉／尼多蘭／嘎啦嘎啦｜叫聲、黑魯加｜大聲咆哮、
+超級火炎獅ex｜吠、仙子伊布ex｜魔法魅惑、振翼髮｜月亮之力、捲捲耳｜撒嬌、赫普的稚山雀｜恐怖視線：
+
+> 在下個對手的回合，受到這個招式的寶可夢**使用招式的傷害**「-N」點。
+
+⚠⚠ **沒有**「對對手的戰鬥寶可夢」這一句。對照力量蛋白飲／伏特【雷】能量／極限腰帶的卡面
+**都有**那一句，而且官方 §17.46.E 還特別裁定「對備戰寶可夢造成的傷害**不會**『＋30』點」。
+
+**官方 §18.E**：「雖然招式『跳躍扣殺』不計算對手的戰鬥寶可夢身上的附加效果，但**會計算
+超級長耳兔ex自己身上的附加效果**，因此…使用的招式的傷害會『－50』點。」
+⇒ 這是**攻擊方自己身上**的效果：打備戰要扣，`skipDefEffects` 型招式也不擋它。
+
+**站長裁定（2026-09-20）**：一招打多隻時**每一隻都扣 -N**，但旗標**只消耗一次**
+（`state._attackSelfPenalty` 快照，engine 每次 ATTACK 開頭重置）。
+
+**收斂**：新 `applyAttackerSelfPenalty()`（`effects.ts`，全站唯一實作），四個呼叫點：
+`applyAttackerActiveDamageBonuses`（戰鬥位，v6.408／v6.409 的快照與不中途夾 0 兩個契約都保留）、
+`dealAttackDamageToTarget` 備戰分支、`hitBenchAll`、`bench-hit-N`（後兩者在迴圈**外面**扣一次）。
+
+### 【二】`snipeAllOppBenchPost` 兩份同名實作收斂
+
+站內原本有**兩份同名**（不同卡檔各一份）：
+
+| 檔 | 實作 | 用它的卡 |
+|---|---|---|
+| `v2610_i_wave11_misc4.ts` | 走中央 `dealAttackDamageToTarget` ✅ | 暴飛龍ex｜廣域爆破 50 |
+| `v2490_i_wave3a_conditional.ts` | **自跑迴圈**，只做 guard 然後 `damage + amount` 🔴 | N的雙倍多多冰｜暴風雪 10 |
+
+🔴 那一份缺：備戰減傷、擲幣免傷、傷害量門檻免疫、防 KO、**KO 與獎賞卡**、on-KO、
+`withAttackDamageTaken`、招致削傷 —— 最嚴重的是**備戰被打死不會昏厥**（傷害只是加上去）。
+⇒ 兩份一起委派給新的中央 `snipeAllOppBenchDamage()`（Rule 38）。
+
+### 【三】奧利瓦ex｜油之機關槍收進中央傷害管線
+
+站內**第五份**自跑傷害管線（前四份在 v6.412 收掉兩份）。`computeOliveOilBuff` 只做
+TOOL_ATTACK_BONUS ＋ PASSIVE_ATTACK_BONUS，其餘 9 項加成、防守方 Block A、下次被擊減傷、
+變硬、擲幣免傷、`withAttackDamageTaken` 全漏；而且**方向相反**地對**備戰**目標也套了那些
+「只對戰鬥寶可夢」的加傷。⇒ 整段改成逐目標 `dealAttackDamageToTarget(..., { noWeakness: true })`，
+`computeOliveOilBuff` 與 12 個未使用 import 一併刪除。
+⚠ 卡面只有「不計算弱點・抵抗力」⇒ **不傳** `skipDefEffects`。
+
+### 【四】守衛
+
+新增 `scripts/test-v6413-self-penalty-central.mjs`（33 條）：
+A(2 HEAD-FAIL 哨兵)／B(11 行為端，含鏡像與兩條負對照)／C(4 收斂行為)／D(5 油之機關槍)／
+E(7 Rule 38 靜態)／F(4 反安慰劑自檢)。
+**HEAD-FAIL 實測**：在 BASE（v6.412）上 **20 條紅**，正對照（B0／B1／B9／B10／C1／C5／D0／D3
+與 F 段自檢）全綠。
+
+⚠ 本版動了 `engine.ts` ⇒ 依慣例新增 `scripts/lib/engine-strip-v6413.mjs`
+（由 `__m6a/gen_strip413.py` 產生並**當場驗證剝除後逐字等於 BASE**），
+接線到 `test-v6265`（兩處）、`test-v6375`、`test-v6371`，**Rule 54 排在 v6.410 之前**。
+
+因本版收斂而翻紅的三支既有守衛，依 **Rule 40** 把觀測點上移成接線斷言（不是放寬）：
+`test-v6141-multitarget-damage-guard`、`test-v6165-damage-threshold-immunity`、
+`test-v6256-damage-taken-central`（C3）—— 三支都改成「油之機關槍必須走中央管線」＋
+「不得殘留手刻步驟」的否定斷言，比原本更強。
+
+
 ## v6.412 ⭐⭐⭐ 多目標招式的傷害管線**收斂成一份** —— 修掉十幾項漏算（玩家可見）
 
 BASE `404b4063328067ae348d489f23f0afa38c9c2826`（v6.411）。

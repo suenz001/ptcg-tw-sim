@@ -267,7 +267,7 @@ T('全站每條自跑傷害迴圈都接上 passiveImmunityByDamageAmount（含 b
   ok(missing.length === 0,
     `${missing.length} 條傷害迴圈沒有接依傷害量的被動免疫（鐵壁硬殼會在那裡靜默失效）：` + missing.join('、'));
 });
-T('五＋一條插入點逐一存在（hitBenchAll／bench-hit-N／dealAttackDamageToTarget／snipe-multi／clone-strike／油之機關槍）', () => {
+T('插入點逐一存在（hitBenchAll／bench-hit-N／dealAttackDamageToTarget）＋ 多目標 resolver 接線', () => {
   const eff = stripComments(readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8'));
   const mega = stripComments(readFileSync(join(ROOT, 'src/lib/game/effects/cards/mega_decks.ts'), 'utf8'));
   const nEff = (eff.match(/passiveImmunityByDamageAmount\s*\(/g) || []).length;
@@ -283,7 +283,18 @@ T('五＋一條插入點逐一存在（hitBenchAll／bench-hit-N／dealAttackDam
     ok(eff.slice(i, i + 4000).includes('dealAttackDamageToTarget('),
       `${a} 沒有交給中央 dealAttackDamageToTarget ⇒ 它必須自己接門檻免疫`);
   }
-  ok(nMega >= 1, `mega_decks.ts 的油之機關槍插入點不見了（${nMega} 處）`);
+  // ⭐⭐v6.413（IRON_RULES Rule 40）：油之機關槍整段收斂進中央 `dealAttackDamageToTarget`
+  //   ⇒ 它不再是「自跑傷害迴圈」，也就**不該**再自己插門檻免疫
+  //   （插了反而變成第二份判準 ＝ 守衛安慰劑型態 11）。
+  //   意圖（鐵壁硬殼不得在油之機關槍這條路徑靜默失效）轉成下面的接線斷言。
+  const iOO = mega.indexOf("regR('olive-oil-distribute'");
+  ok(iOO >= 0, "anchor 失效：regR('olive-oil-distribute'");
+  const ooBlk = mega.slice(iOO, iOO + 4000);
+  ok(/^\s*\}\);/m.test(ooBlk), '切片 4000 字元內沒有 resolver 收尾 —— 錨點窗口不夠大');
+  ok(ooBlk.includes('dealAttackDamageToTarget('),
+    '油之機關槍沒有交給中央 dealAttackDamageToTarget ⇒ 它必須自己接門檻免疫（兩者都沒有＝鐵壁硬殼失效）');
+  ok(nMega === 0,
+    `油之機關槍已收斂到中央管線，mega_decks.ts 不該再自己插門檻免疫（實得 ${nMega} 處）—— 判準留兩份＝安慰劑`);
 });
 
 console.log(`\n=== v6.165 damage-threshold immunity: ${pass} PASS / ${fail} FAIL ===`);

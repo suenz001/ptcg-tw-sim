@@ -25,6 +25,7 @@
 
 import type { CardInstance, PlayerState } from '../../types';
 import { applyStatusToOppActive, countEnergyTypeHostAware, flipCoinsWithLog, dealAttackDamageToTarget, selfReturnToHandPost, returnSelfActiveEnergyPost} from '../../effects'; // v5.795 host-aware；v5.797 中央施狀態
+import { snipeAllOppBenchDamage } from '../../effects';   // ⭐v6.413 對手全備戰傷害的唯一實作
 import { regPre, regPost, addLog, updatePlayer, withPending, regR, fireOnHandEnergyAttached, shuffle } from '../_shared'; // v5.782 fire // v6.174 shuffle
 import { countSpecialConditions } from '../_shared'; // v5.834 特殊狀態數(三槽)
 import { energyMatchesType } from '../_shared';
@@ -80,18 +81,16 @@ function coinFlipPlusMultiPre(base: number, coinCount: number, perHead: number, 
 // helper: 對手所有備戰各受到 N
 // v5.434：改走中央 dealAttackDamageToTarget 補免疫 guard（太晶/化隱/中立中心擋；對戰圓形對「傷害」不擋）。
 //   備戰位不計弱抗（中央函式 isActive gate 自動處理）。
+// >>> v6413-snipe-all-opp-bench-central-v2610
+// ⭐⭐⭐v6.413：站內原本有**兩份同名** `snipeAllOppBenchPost`（本檔一份、
+//   `v2490_i_wave3a_conditional.ts` 一份），而且那一份是自跑迴圈、少了一大截
+//   （最嚴重的是備戰被打死不會昏厥）。⇒ 兩份一起收斂到中央 `snipeAllOppBenchDamage`
+//   （IRON_RULES Rule 38：判準只能有一份，否則針對其中一份的守衛必然是安慰劑）。
+//   ⚠ 本檔這一份的行為零改變（逐字相同），唯一差別是備戰區為空時 log 更精確。
 function snipeAllOppBenchPost(amount: number, label: string): AttackPostFn {
-  return (state, aIdx, pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const benchIids = state.players[dIdx].bench.map(b => b.iid);
-    let s = addLog(state, `${label}：對手所有備戰寶可夢各受到 ${amount} 點傷害`, aIdx);
-    for (const iid of benchIids) {
-      s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
-      if (s.phase === 'game-over') return s;
-    }
-    return s;
-  };
+  return (state, aIdx, pool) => snipeAllOppBenchDamage(state, aIdx, amount, pool, label);
 }
+// <<< v6413-snipe-all-opp-bench-central-v2610
 
 // 對手所有寶可夢（active+bench）各受到 N
 // v5.434：改走中央函式。卡面僅「[在備戰區]不計弱抗」→ active 仍計弱點/抵抗/攻擊方道具（中央函式 isActive 公式）、

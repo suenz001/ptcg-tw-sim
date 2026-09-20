@@ -13,28 +13,20 @@ import type { Card } from '$lib/cards/types';
 import {
   reg, regR, regG, regA, regPre, regPost,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardHand,
-  healResolver, recordOppKO, getAllAttachedTools, joinCardNames, rejectAbilityUse } from '../_shared';
+  healResolver, getAllAttachedTools, joinCardNames, rejectAbilityUse } from '../_shared';
 import {
-  hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard,
-  passiveImmunityDamageBlock,
-  passiveCoinImmunity,
+  hitBenchPickPost,
   TOOL_ATTACK_BONUS, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
-  collectPassiveAttackBonuses,   // v6.258 攻擊方被動加成唯一 dispatch
-  JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
   // v5.190：中立中心對非規則寶可夢免疫招式傷害（玩家回報奧利瓦ex 油之機關槍）
-  wouldNeutralCenterBlock,
-  koPrizesAdjusted,
-  fireDefenderOnDamaged,
-  fireDefenderOnKO,        // ⭐v6.260 油之機關槍 KO 補中央 on-KO（原漏：接力棒/護身符/最後鎖鏈/潛者捕捉）
-  applyPreventKOToVictim,  // ⭐v6.260 油之機關槍 KO 補防 KO（倖存鍛鍊器/勤奮之心等）
-  resolveMultiTargetDamageGuard,   // v6.141 多目標傷害免疫中央閘
-  passiveImmunityByDamageAmount,   // v6.165 依傷害量判定的被動免疫（鐵壁硬殼）
   prizesTakenMultiplyPre,          // v6.342「自己已取獎賞張數×N」中央 helper
   selfClearAllStatusPost,          // ⭐v6.346「將這隻寶可夢的特殊狀態全部恢復」中央出口（三槽全清）
 } from '../../effects';
-import { isBasicEnergyOfType, getEffectiveHP } from '../../engine';  // v5.091
+// >>> v6413-olive-oil-central-import
+// ⭐⭐⭐v6.413：油之機關槍收斂到中央傷害管線（與 v6.412 的兩條多目標 resolver 同一個範本）。
+import { dealAttackDamageToTarget } from '../../effects';
+// <<< v6413-olive-oil-central-import
+import { isBasicEnergyOfType } from '../../engine';  // v5.091
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
-import { addPendingPrize } from '../_shared';
 // v6.202：「這隻場上寶可夢的這個特性此刻是否生效」中央述詞（v6.196／v5.224）。
 //   本檔的 PASSIVE_ATTACK_BONUS 迴圈是 effects.ts:8149 那份的第二份實作，必須接同一個閘。
 import { isAbilityHolderEffective } from './v3001_g3_wave3';
@@ -554,50 +546,13 @@ regPost('奧利瓦ex|油之機關槍', (state, aIdx) => {
 //   嚴格只套已 audit 確認的 buff（7 個 TOOL_ATTACK_BONUS + 4 個 PASSIVE_ATTACK_BONUS）。
 //   阻礙之塔 gate（道具失效）、監視塔【無】寶可夢特性擋、PASSIVE_ATTACK_NO_STACK dedup
 //   都比照 engine.ts ATTACK pipeline 同邏輯（line 3447~3500）。
-function computeOliveOilBuff(
-  st: GameState,
-  actorIdx: 0 | 1,
-  defenderInst: CardInstance,
-  defenderCard: Card | undefined,
-  pool: Map<string, Card>,
-): number {
-  const attacker = st.players[actorIdx];
-  if (!attacker.active) return 0;
-  const attackerCard = pool.get(attacker.active.cardId);
-  if (!attackerCard) return 0;
-  // v3.994：TOOL/PASSIVE_ATTACK_BONUS 簽名要求 defCard 為 Card（非 undefined）；
-  // defenderCard undefined 表示 pool lookup 失敗 — 罕見邊界，返回 0。
-  if (!defenderCard) return 0;
-  let bonus = 0;
-  // 阻礙之塔 / 監視塔 gate
-  const stadium = st.activeStadium;
-  const stadiumCard = stadium ? pool.get(stadium.cardId) : undefined;
-  const toolsJammed = !!stadiumCard && JAMMING_TOWER_STADIUMS.has(stadiumCard.name);
-  const watchtowerActive = !!stadiumCard && ROCKET_WATCHTOWER_STADIUMS.has(stadiumCard.name);
-  // 1. TOOL_ATTACK_BONUS — iterate attacker 道具
-  if (!toolsJammed) {
-    for (const t of getAllAttachedTools(attacker.active)) {
-      const atkTool = pool.get(t.cardId);
-      if (!atkTool) continue;
-      const fn = TOOL_ATTACK_BONUS.get(atkTool.name);
-      if (!fn) continue;
-      const b = fn(attackerCard, attacker.active, defenderCard, defenderInst);
-      if (b > 0) bonus += b;
-    }
-  }
-  // 2. PASSIVE_ATTACK_BONUS — ⭐ v6.258 改接中央 dispatch（原本這裡是第三份手抄迴圈）
-  //   v6.202 曾因為這份漏接特性消除閘而與 effects.ts 那份漂移；v6.258 直接收斂成同一個函式，
-  //   主詞閘（自指型必須 holder === attacker）也一併吃到。
-  for (const { bonus: b } of collectPassiveAttackBonuses(
-    st, attacker, actorIdx, attacker.active, attackerCard, defenderCard, pool)) {
-    bonus += b;
-  }
-  return bonus;
-}
+// >>> v6413-olive-oil-buff-removed
+// ⭐v6.413：原本這裡有 `computeOliveOilBuff`（油之機關槍專用的加成計算）。
+// 它只做 TOOL_ATTACK_BONUS ＋ PASSIVE_ATTACK_BONUS 兩類（其餘 9 項加成全漏），
+// 而且對**備戰目標也套**（那些卡面逐字是「對對手的**戰鬥**寶可夢」）。
+// 收斂到中央 `dealAttackDamageToTarget` 之後它沒有呼叫端了 ⇒ 刪除，不留第二份判準。
+// <<< v6413-olive-oil-buff-removed
 
-// resolver：v3.994 改為 per-target batch（aggregate counts），buff 對每個 target 一次性套
-//   PTCG 規則：極限腰帶 +50 是「對該目標寶可夢的整批傷害一次套用」，不是每個 counter 都加。
-//   範例：選 6 次同隻 ex → 6×20 (=120) + 50 (極限腰帶) = 170 傷害（與官方 QA 一致）
 regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
   const totalCounters = (params?.totalCounters as number) ?? 6;
   const placedBefore = (params?.placedCounters as number) ?? 0;
@@ -612,130 +567,34 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
   const placedThisBatch = selectedIids.length;  // 全部 counter 計入消耗（含被擋的，比照 dragapult 溢出邏輯）
 
   let s: GameState = st;
-  const koNames: string[] = [];
-  let morePrizes = 0;
-  const blockedTargetsOO = new Set<string>();
 
+  // >>> v6413-olive-oil-central-loop
+  // ⭐⭐⭐v6.413 收斂：整段 inline 傷害管線刪掉，改成逐目標呼叫中央 `dealAttackDamageToTarget`
+  //   （與 v6.412 收掉的 clone-strike-multi-hit／snipe-multi 同一個範本）。
+  //
+  // 【為什麼】這是站內**第五份**自跑的傷害管線，缺的東西與那兩條幾乎一樣：
+  //   ・攻擊方加成只做了 TOOL_ATTACK_BONUS ＋ PASSIVE_ATTACK_BONUS（`computeOliveOilBuff`），
+  //     其餘 9 項（力量蛋白飲／伏特【雷】能量／回合加傷／招致削傷／格拉吉歐的決戰／
+  //     化朗鎮／空手道王演練／烏栗／腎上腺力量）全漏。
+  //   ・防守方 Block A（威嚇之顎／同步脈衝／鐵之防禦…）、下次被擊減傷、變硬 都沒有。
+  //   ・擲幣免傷（躲藏高手／腎上腺費洛蒙）沒有。
+  //   ・`withAttackDamageTaken`（「受到的招式的傷害」中央寫入點）沒有 ⇒ 反擊類讀不到。
+  //   ⚠⚠ 還有一個**方向相反**的 bug：`computeOliveOilBuff` 對**備戰目標也套**道具與被動加成，
+  //     但那些卡面逐字都是「對對手的**戰鬥**寶可夢／**戰鬥場**的『寶可夢【ex】』」
+  //     ⇒ 對備戰本來就不該加。中央 helper 的 `isActive` 閘一併修掉。
+  //
+  // ⚠ 卡面：「對所選的所有寶可夢**不計算弱點・抵抗力**，造成其選擇次數×20點傷害」
+  //   ⇒ 只有 `noWeakness`；卡面**沒有**「不計算受傷寶可夢身上附加的效果」⇒ 不傳 skipDefEffects。
+  // ⚠ 「一隻可選擇 2 次以上」⇒ 同一隻的次數先 aggregate（上方 counts），一次算完再打
+  //   （與舊版「per-target 一次套用加成」的語意相同）。
   for (const [iid, count] of counts) {
-    const defender = s.players[dIdx];
-    const target = defender.active?.iid === iid ? defender.active
-      : defender.bench.find(c => c.iid === iid);
-    if (!target) continue;
-    const targetCard = pool.get(target.cardId);
-
-    // v4.18：移除 v2.89 在此加的 canApplyAttackEffectToTarget check（語意錯誤，比照 v3.894 bench-hit-N 修法）。
-    //   油之機關槍卡面：「不計算弱點・抵抗力，造成其選擇次數×20 點傷害」— 屬於【招式傷害 attack-damage】，
-    //   不是【招式效果 attack-effect】。薄霧能量 / 對戰圓形 / 皇帝之勢 / 硬岩能量 / 抵抗之幕 等只擋招式效果，不擋傷害。
-    //   玩家回報：奧利瓦 vs 附【薄霧能量】寶可夢 → 油之機關槍對其無效（誤判）。
-    // v5.190：加中立中心 check — 對 active+bench 都擋（奧利瓦ex 是規則寶可夢，對非規則寶可夢應該擋）
-    //   玩家回報：場上有中立中心時，奧利瓦ex 油之機關槍應該對非規則寶可夢都不會受到傷害
-    //   既有實作 active target 完全沒檢查中立中心 → bug
-    // v6.141【中央收斂】原本這裡手刻了「中立中心 → 特性免疫 → 備戰守衛 → 擲幣免疫」四段，
-    //   但**獨漏 active 的 per-turn 免疫旗標**（閃光屏障／飛翔／要害斬／阿塞蘿拉／精神防護／
-    //   熔岩牆／防護代碼／塗層攻擊）——「這隻寶可夢不會受到進化寶可夢招式的傷害」對這招完全沒作用。
-    //   改走單一中央閘 resolveMultiTargetDamageGuard，四層一次到位，日後新增免疫來源不必再逐處補。
-    const isBenchTargetOO = defender.active?.iid !== iid;
-    const guardOO = resolveMultiTargetDamageGuard(s, actorIdx, target, targetCard, pool, {
-      isBench: isBenchTargetOO,
-    });
-    s = guardOO.state;
-    if (guardOO.blocked) {
-      if (!blockedTargetsOO.has(iid)) {
-        blockedTargetsOO.add(iid);
-        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${guardOO.reason}（免疫此招式傷害）`, actorIdx);
-      }
-      continue;
-    }
-    // （v5.367 特性免疫 / v3.993 備戰守衛 / v5.368 擲幣免疫 三段已收斂進上面的中央閘，
-    //   行為等價；順序也維持原樣。）
-    // v3.994 計算最終傷害：base × count + attacker buff（per-target 一次套用）
-    const baseAmt = counterDamage * count;
-    const buff = computeOliveOilBuff(s, actorIdx, target, targetCard, pool);
-    const finalDmg = baseAmt + buff;
-
-    const buffLog = buff > 0 ? `+${buff}=${finalDmg}` : '';
-    s = addLog(s, `${label}：${targetCard?.name ?? '?'} 受 ${count}×${counterDamage}=${baseAmt}${buffLog} 傷害`, actorIdx);
-
-    // v5.916：對手【戰鬥位】受招式傷害 → 先觸發防守方 on-damaged 反應(灼熱之軀灼傷攻擊方 / 毒刺 / 反擊 /
-    //   凸凸頭盔 / 扣殺能量 / 尖刺盔甲 / 還擊斧…)。收斂共用中央 fireDefenderOnDamaged(與 dealAttackDamageToTarget、
-    //   snipe-multi 同一條);on-damaged 先於 KO(卡面「受到傷害時」即使被打死仍觸發)。備戰目標不觸發。
-    //   玩家回報:油之機關槍打席多藍恩(灼熱之軀)沒灼傷攻擊方——本 resolver 自跑傷害迴圈漏了這步。
-    // v6.165：依傷害量判定的被動免疫（暴噬龜｜鐵壁硬殼「不受『200』以上的招式傷害」）——
-    //   本 resolver 自跑傷害迴圈，最終傷害在這裡才算得出來（count×20＋buff），故在此判。
-    //   免疫成立 ⇒ 該 target 這一次不受傷害，也不觸發 on-damaged（鏡射引擎主管線）。
-    if (finalDmg > 0) {
-      const _pdt = passiveImmunityByDamageAmount(s, actorIdx, target, targetCard, pool, finalDmg, { isBench: isBenchTargetOO });
-      if (_pdt.blocked) {
-        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${_pdt.reason}`, actorIdx);
-        continue;
-      }
-    }
-    if (defender.active?.iid === iid && finalDmg > 0) {
-      s = fireDefenderOnDamaged(s, dIdx, actorIdx, finalDmg, pool);
-      if (s.phase === 'game-over') return s;  // 反傷把攻擊方打死 → game-over
-    }
-    // re-fetch(on-damaged 可能消費防守方旗標;attacker 反傷不影響 target.damage)
-    const defenderNow = s.players[dIdx];
-    const targetNow = defenderNow.active?.iid === iid ? defenderNow.active : defenderNow.bench.find(c => c.iid === iid);
-    if (!targetNow) continue;
-    const newDmg = targetNow.damage + finalDmg;
-    const tHp = getEffectiveHP(targetNow, pool, st);  // v5.091
-
-    if (tHp > 0 && newDmg >= tHp) {
-      // ⭐v6.260 防 KO（倖存鍛鍊器/勤奮之心/結實/堅忍之軀/不朽身軀 —— 卡面皆無「在戰鬥場」，
-      //   active/bench 都適用）。本 resolver 原本完全沒接（中央 dealAttackDamageToTarget v5.594 起就有）。
-      {
-        const _pk = applyPreventKOToVictim(s, targetNow, targetCard, dIdx, finalDmg, pool, 'attack-damage');
-        if (_pk.prevented) { s = _pk.state; continue; }
-      }
-      // KO
-      const _wasActiveTgt = defenderNow.active?.iid === iid;  // ⭐v6.260 KO 前位置快照
-      const ko: CardInstance[] = [
-        { ...targetNow, damage: newDmg }, ...targetNow.energyAttached,
-        ...getAllAttachedTools(targetNow),   // ⭐v6.260 原漏 extraTools（v5.067/v6.136 同型教訓）
-        ...(targetNow.evolvedFromStack ?? []),
-      ];
-      // v5.468：改走 koPrizesAdjusted（原 raw ex?2:1 漏古舊能量-1/莉莉艾珍珠/影藏/脆弱蛻殼）。玩家回報古舊能量沒-1。
-      const _ko = koPrizesAdjusted(s, targetNow, targetCard, actorIdx, dIdx, pool);
-      const prizes = _ko.prizes;
-      s = _ko.state;
-      morePrizes += prizes;
-      koNames.push(targetCard?.name ?? '?');
-      const players = [...s.players] as [PlayerState, PlayerState];
-      if (_wasActiveTgt) {
-        players[dIdx] = { ...defenderNow, active: null, discard: [...defenderNow.discard, ...ko] };
-      } else {
-        players[dIdx] = {
-          ...defenderNow,
-          bench: defenderNow.bench.filter(c => c.iid !== iid),
-          discard: [...defenderNow.discard, ...ko],
-        };
-      }
-      s = { ...s, players };
-      // v2.246：油之機關槍 = 招式 KO
-      s = recordOppKO(s, dIdx, targetCard, 'attack');
-      // ⭐⭐⭐ v6.260：中央 on-KO（沉重接力棒/希望護身符/最後鎖鏈/潛者捕捉…）——本 resolver 原本
-      //   完全沒呼叫（連戰鬥位 KO 都漏）。onDamagedAlreadyFired：上方僅 active 目標跑過
-      //   fireDefenderOnDamaged（finalDmg>0），鏡射道具據此防雙觸發（v6.120）。
-      s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg },
-        _wasActiveTgt, true, _wasActiveTgt && finalDmg > 0);
-    } else {
-      const players = [...s.players] as [PlayerState, PlayerState];
-      const newDef = { ...defenderNow };
-      if (defenderNow.active?.iid === iid) {
-        newDef.active = { ...defenderNow.active!, damage: newDmg };
-      } else {
-        newDef.bench = defenderNow.bench.map(c => c.iid === iid ? { ...c, damage: newDmg } : c);
-      }
-      players[dIdx] = newDef;
-      s = { ...s, players };
-    }
+    s = dealAttackDamageToTarget(s, actorIdx, iid, counterDamage * count, pool,
+      { kind: 'attack-damage', label, noWeakness: true });
+    if (s.phase === 'game-over') return s;
   }
+  // <<< v6413-olive-oil-central-loop
 
-  if (koNames.length > 0) {
-    s = addLog(s, `${label}：${koNames.join('、')} 被擊倒！+${morePrizes} 張獎賞卡`, null);
-    s = addPendingPrize(s, actorIdx, morePrizes, pool);
-  }
+  // ⭐v6.413：KO／獎賞卡／on-KO 已由中央 helper 逐目標處理，這裡不再自己累計。
 
   const placedAfter = placedBefore + placedThisBatch;
   const remaining = Math.max(0, totalCounters - placedAfter);

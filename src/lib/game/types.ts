@@ -764,6 +764,18 @@ export interface GameState {
   /** v5.517 收斂：本次攻擊是否已於引擎主管線套過「攻擊方加成」(力量蛋白飲/烏栗/passive 等)。
    *  防止中央 helper dealAttackDamageToTarget 對戰鬥位重複套。ATTACK 起點 reset。 */
   _attackerActiveBonusDone?: boolean;
+  // >>> v6413-attack-self-penalty
+  /**
+   * ⭐⭐⭐v6.413：本次攻擊讀到的「招致削傷」（nextOwnAttackPenalty）數值快照。
+   *
+   * 卡面逐字：「在下個對手的回合，受到這個招式的寶可夢**使用招式的傷害**「-N」點。」
+   * ⇒ 說的是「這一次招式的傷害」，不是「對某一隻的傷害」。
+   * 站長裁定（2026-09-20）：一招打多隻時**每一隻都扣 -N**，而旗標**只消耗一次**。
+   * ⇒ 第一次讀到旗標時把值寫進這裡，後續目標改讀這一個。
+   * ⚠ engine 在每一次 ATTACK 開頭重置（與 `_attackerActiveBonusDone` 同一處）。
+   */
+  _attackSelfPenalty?: number;
+  // <<< v6413-attack-self-penalty
   /**
    * ⭐⭐⭐ v6.407：本次招式「已經決定、但還沒有執行」的**自身能量付出**。
    *

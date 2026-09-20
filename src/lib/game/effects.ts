@@ -1612,6 +1612,26 @@ function hitBenchAll(
 ): GameState {
   const target = state.players[targetIdx];
   if (target.bench.length === 0 || amount <= 0) return state;
+  // >>> v6413-self-penalty-hitbenchall
+  // ⭐⭐⭐v6.413：招致削傷（吠／叫聲／大聲咆哮／魔法魅惑／月亮之力…）**不限目標位置**。
+  //   卡面逐字是「受到這個招式的寶可夢**使用招式的傷害**「-N」點」——沒有「對對手的戰鬥寶可夢」，
+  //   而力量蛋白飲／伏特【雷】能量／極限腰帶那些**都有**那一句（官方 §17.46.E 還特別裁定
+  //   「對備戰寶可夢造成的傷害不會 +30」）⇒ 只有這一族是「攻擊方自己身上的效果」，備戰也要扣。
+  //   官方 §18.E：「…但**會計算超級長耳兔ex自己身上的附加效果**」。
+  // ⚠ 在迴圈**外面**扣一次：卡面說的是「這一次招式的傷害 -N」，對每一隻都一樣；
+  //   站長裁定「每一隻都扣、旗標只消耗一次」⇒ 先扣 amount 再進迴圈，語意正好相符。
+  // ⚠ 只對**對手側**的備戰套（targetIdx !== attackerIdx）：打自己備戰是自傷型效果，不是「對對手造成的招式傷害」。
+  if (attackerIdx !== targetIdx && amount > 0) {
+    const _sp = applyAttackerSelfPenalty(state, attackerIdx, amount, pool);
+    if (_sp.amount > 0) {
+      state = _sp.state;
+      const _b = amount;
+      amount = Math.max(0, _sp.damage);
+      state = addLog(state, `${attackLabel}：備戰受到的傷害 -${_sp.amount}（攻擊方受招致使傷害削減效果，${_b} → ${amount}）`, attackerIdx);
+      if (amount <= 0) return state;
+    }
+  }
+  // <<< v6413-self-penalty-hitbenchall
   // v5.832：太古防壁（護城龍）— hitBenchAll 走 inline guard 不經 canApplyEffectToTarget/resolveBenchGuard，
   //   過去漏此檢查（天空波/大地斷裂 打對手全體備戰）。對手能量≤2 時整段不造成傷害。
   if (attackerIdx !== targetIdx && taikoBariBlocksAttackDamage(state, attackerIdx, pool)) {
@@ -1898,6 +1918,27 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   //   花之帷幔 / 太晶 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石（這些才擋招式傷害）。
   //   玩家回報：激流水泵對備戰 120（attack-damage）被誤判為對戰圓形擋住。
   const target = st.players[targetIdx];
+  // >>> v6413-self-penalty-benchhitn
+  // ⭐⭐⭐v6.413：招致削傷（吠／叫聲／大聲咆哮／魔法魅惑／月亮之力…）**不限目標位置**。
+  //   卡面逐字是「受到這個招式的寶可夢**使用招式的傷害**「-N」點」——沒有「對對手的戰鬥寶可夢」，
+  //   而力量蛋白飲／伏特【雷】能量／極限腰帶那些**都有**那一句（官方 §17.46.E 還特別裁定
+  //   「對備戰寶可夢造成的傷害不會 +30」）⇒ 只有這一族是「攻擊方自己身上的效果」，備戰也要扣。
+  //   官方 §18.E：「…但**會計算超級長耳兔ex自己身上的附加效果**」。
+  // ⚠ 在迴圈**外面**扣一次：卡面說的是「這一次招式的傷害 -N」，對每一隻都一樣；
+  //   站長裁定「每一隻都扣、旗標只消耗一次」⇒ 先扣 amount 再進迴圈，語意正好相符。
+  // ⚠ 只對**對手側**的備戰套（targetIdx !== actorIdx）：打自己備戰是自傷型效果，不是「對對手造成的招式傷害」。
+  let amount2 = amount;
+  if (actorIdx !== targetIdx && amount2 > 0) {
+    const _sp = applyAttackerSelfPenalty(st, actorIdx, amount2, pool);
+    if (_sp.amount > 0) {
+      st = _sp.state;
+      const _b = amount2;
+      amount2 = Math.max(0, _sp.damage);
+      st = addLog(st, `${label}：備戰受到的傷害 -${_sp.amount}（攻擊方受招致使傷害削減效果，${_b} → ${amount2}）`, actorIdx);
+      if (amount2 <= 0) return st;
+    }
+  }
+  // <<< v6413-self-penalty-benchhitn
 
   let morePrizes = 0;
   const newBench: CardInstance[] = [];
@@ -1941,7 +1982,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
       if (coinBH.immune) { guardBlockedLog.push(`${card?.name ?? '?'}：擲幣免疫（正面）`); newBench.push(c); continue; }
     }
     // v5.293/v5.294 bench 招式傷害套特性減傷 (含厚脂肪等 BY_ATTACKER)
-    let perAmt = amount;
+    let perAmt = amount2;   // ⭐v6.413：已扣過招致削傷的基數
     let _btd2: CardInstance | null = null;
     if (perAmt > 0 && card) {
       const r = _applyBenchAbilityReduce(st, c, card, targetIdx, actorIdx, pool, perAmt);
@@ -9138,6 +9179,88 @@ export function fireDefenderOnKO(
 //   行為零改變：舊版的前置 `card?.abilities?.some(...)` 是冗餘的
 //   （中央述詞 hasEffectiveAbilityByInst 第一行就做同一個比對）。
 // <<< v6410-festival-central-removed-effects
+// >>> v6413-self-penalty-central
+/**
+ * ⭐⭐⭐v6.413：「招致削傷」（nextOwnAttackPenalty）的**唯一實作**（IRON_RULES Rule 38）。
+ *
+ * 【卡面】逐字（黑魯加｜大聲咆哮、超級火炎獅ex｜吠、嘎啦嘎啦／菊草葉／尼多蘭／布撥｜叫聲、
+ *   振翼髮｜月亮之力、仙子伊布ex｜魔法魅惑、捲捲耳｜撒嬌、赫普的稚山雀｜恐怖視線…）：
+ *   「在下個對手的回合，受到這個招式的寶可夢**使用招式的傷害**「-N」點。」
+ *   ⚠⚠ 它**沒有目標位置限定** —— 不是「對對手的**戰鬥**寶可夢造成的傷害」。
+ *   對照：力量蛋白飲／伏特【雷】能量／極限腰帶… 的卡面都**明寫**「對對手的戰鬥寶可夢」，
+ *   而且官方 §17.46.E 還特別裁定「對備戰寶可夢造成的傷害不會 +30」⇒ 那些只對戰鬥位。
+ *
+ * 【官方】§18.E：「雖然招式『跳躍扣殺』不計算對手的戰鬥寶可夢身上的附加效果，但**會計算
+ *   超級長耳兔ex自己身上的附加效果**，因此…使用的招式的傷害會「－50」點。」
+ *   ⇒ 這是**攻擊方自己身上**的效果：打備戰要扣，`skipDefEffects` 型招式也要扣。
+ *
+ * 【站長裁定 2026-09-20】一招打多隻時**每一隻都扣 -N**，旗標**只消耗一次**
+ *   （卡面說的是「這一次招式的傷害」，不是「對每一隻的傷害」）。
+ *   ⇒ 第一次讀到旗標時把值寫進 `state._attackSelfPenalty`（engine 每次 ATTACK 開頭重置），
+ *     後續目標改讀它。
+ *
+ * ⚠ 祭典樂舞首擊不消耗旗標（與其他消耗型旗標一致）。
+ * ⚠ **不在這裡 clamp**（v6.409 站長裁定：所有加減先算完，最後才不得低於 0）。
+ *
+ * @param snapshotInst 讀取來源（engine 主管線讀的是攻擊方**快照**，v6.408 的契約）；不傳則讀最新盤面。
+ */
+export function applyAttackerSelfPenalty(
+  stateIn: GameState,
+  aIdx: 0 | 1,
+  dmg: number,
+  pool: Map<string, Card>,
+  snapshotInst?: CardInstance | null,
+): { damage: number; state: GameState; amount: number } {
+  let s = stateIn;
+  const cur = snapshotInst !== undefined ? snapshotInst : s.players[aIdx].active;
+  const fromFlag = cur?.nextOwnAttackPenalty ?? 0;
+  const fromSnap = s._attackSelfPenalty ?? 0;
+  const pen = fromFlag > 0 ? fromFlag : fromSnap;
+  if (!(pen > 0)) return { damage: dmg, state: s, amount: 0 };
+  if (fromFlag > 0) {
+    // 第一次讀到旗標：記進本次攻擊快照，並（非祭典樂舞首擊時）消耗掉旗標。
+    s = { ...s, _attackSelfPenalty: fromFlag } as GameState;
+    if (!isFestivalDanceFirstAttack(stateIn, aIdx, pool) && s.players[aIdx].active) {
+      const na = { ...s.players[aIdx].active! };
+      delete na.nextOwnAttackPenalty;
+      const ps = [...s.players] as [PlayerState, PlayerState];
+      ps[aIdx] = { ...ps[aIdx], active: na };
+      s = { ...s, players: ps };
+    }
+  }
+  return { damage: dmg - pen, state: s, amount: pen };
+}
+// <<< v6413-self-penalty-central
+
+// >>> v6413-snipe-all-opp-bench-central
+/**
+ * ⭐⭐⭐v6.413：「對手的**所有備戰**寶可夢各受到 N 點傷害」的**唯一實作**（IRON_RULES Rule 38）。
+ *
+ * 【為什麼要收】站內原本有**兩份同名** `snipeAllOppBenchPost`（不同卡檔各一份）：
+ *   ・`v2610_i_wave11_misc4.ts`：走中央 `dealAttackDamageToTarget` ✅
+ *   ・`v2490_i_wave3a_conditional.ts`：**自跑迴圈**，只做 `canApplyEffectToTarget` 然後
+ *     直接 `damage + amount` ⇒ 缺備戰減傷、擲幣免傷、傷害量門檻免疫、防 KO、
+ *     **KO 與獎賞卡**、on-KO、`withAttackDamageTaken`、招致削傷…
+ *     ⚠ 最嚴重的是**備戰被打死不會昏厥**（傷害只是加上去，沒有任何 KO 判定）。
+ *   兩份同名、行為天差地遠，正是 Rule 38 要擋的東西。
+ *
+ * ⚠ 卡面「在備戰區不計算弱點・抵抗力」由中央 helper 的 isActive 分支承接（備戰本來就不套）。
+ */
+export function snipeAllOppBenchDamage(
+  state: GameState, aIdx: 0 | 1, amount: number, pool: Map<string, Card>, label: string,
+): GameState {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const benchIids = state.players[dIdx].bench.map(b => b.iid);
+  if (benchIids.length === 0) return addLog(state, `${label}：對手備戰區無寶可夢`, aIdx);
+  let s = addLog(state, `${label}：對手所有備戰寶可夢各受到 ${amount} 點傷害`, aIdx);
+  for (const iid of benchIids) {
+    s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
+    if (s.phase === 'game-over') return s;
+  }
+  return s;
+}
+// <<< v6413-snipe-all-opp-bench-central
+
 export function applyAttackerActiveDamageBonuses(
   stateIn: GameState, aIdx: 0 | 1, dmg: number, pool: Map<string, Card>,
   // >>> v6408-attacker-snapshot-param
@@ -9212,22 +9335,18 @@ export function applyAttackerActiveDamageBonuses(
   // ── v5.535 受招削傷（nextOwnAttackPenalty；對手叫聲/吠/咆哮設給我方 active，自己出招 -N）──
   //   消耗型，祭典樂舞首擊不消耗。
   {
-    // ⚠v6.408：**讀**用快照（aInst）—— engine 主管線的 inline 版讀的就是快照；
-    //   寫回仍以最新的 s.players[aIdx].active 為基底（理由同上一段）。
-    //   ⚠ 上一段只 delete 了 damageBonusThisTurn，不影響這一段要讀的欄位。
-    const cur = aInst;
-    if (cur?.nextOwnAttackPenalty) {
-      // ⭐v6.409：**中途不夾 0**（站長裁定：所有加減先算完再 clamp）。
-      //   舊寫法 `Math.max(0, d - pen)` 會把 -10 夾成 0，後面的加項就從 0 起跳 ⇒ 多給傷害。
-      const pen = cur.nextOwnAttackPenalty; d = d - pen;
-      s = addLog(s, `${aCard.name} 招式傷害 -${pen}（受招致使傷害削減效果）`, aIdx);
-      formula.push({ sign: '-', value: pen, label: '招致削傷' });
-      if (!isFestivalDanceFirstAttack(state, aIdx, pool) && s.players[aIdx].active) {
-        const na = { ...s.players[aIdx].active! }; delete na.nextOwnAttackPenalty;
-        const ps = [...s.players] as [PlayerState, PlayerState]; ps[aIdx] = { ...ps[aIdx], active: na };
-        s = { ...s, players: ps };
-      }
+    // >>> v6413-self-penalty-call
+    // ⭐⭐⭐v6.413：收斂到中央 `applyAttackerSelfPenalty`（全站只剩這一份實作）。
+    //   ⚠v6.408 的契約保留：**讀**用快照（aInst），寫回以最新盤面為基底。
+    //   ⚠v6.409 的契約保留：中途不夾 0，函式結尾才 clamp。
+    const _sp = applyAttackerSelfPenalty(s, aIdx, d, pool, aInst);
+    if (_sp.amount > 0) {
+      d = _sp.damage;
+      s = _sp.state;
+      s = addLog(s, `${aCard.name} 招式傷害 -${_sp.amount}（受招致使傷害削減效果）`, aIdx);
+      formula.push({ sign: '-', value: _sp.amount, label: '招致削傷' });
     }
+    // <<< v6413-self-penalty-call
   }
   // ── v5.535 格拉吉歐的決戰（player-level +80，非規則寶可夢；END_TURN 清、不在此消耗）──
   if (attacker.gladionDuelBonusThisTurn && !isRulePokemon(aCard)) {
@@ -9529,6 +9648,26 @@ export function dealAttackDamageToTarget(
       }
     }
   }
+  // >>> v6413-self-penalty-bench
+  // ⭐⭐⭐v6.413：招致削傷（吠／叫聲／大聲咆哮…）**不限目標位置** —— 卡面是
+  //   「受到這個招式的寶可夢**使用招式的傷害**「-N」點」，沒有「對對手的戰鬥寶可夢」這一句。
+  //   官方 §18.E 也明說那是**攻擊方自己身上**的附加效果（跳躍扣殺仍要扣）。
+  //   戰鬥位那一份由 `applyAttackerActiveDamageBonuses` 內部套（它整體只對戰鬥位呼叫），
+  //   這裡補**備戰**目標那一份，兩邊呼叫的是同一支中央 helper（Rule 38）。
+  // ⚠ 站長裁定（2026-09-20）：一招打多隻時每一隻都扣、旗標只消耗一次
+  //   （helper 用 `state._attackSelfPenalty` 實現）。
+  // ⚠ `skipDefEffects` **不擋它**（§18.E）⇒ 這裡刻意沒有 `!_skipDef`。
+  // ⚠ 備戰分支後面沒有任何加項 ⇒ 這裡直接夾 0 是安全的（不違反 v6.409 的「最後才 clamp」）。
+  if (!isActive && kind === 'attack-damage' && effDmg > 0) {
+    const _sp = applyAttackerSelfPenalty(st, actorIdx, effDmg, pool);
+    if (_sp.amount > 0) {
+      st = _sp.state;
+      const _before = effDmg;
+      effDmg = Math.max(0, _sp.damage);
+      st = addLog(st, `${label}：${targetCard?.name ?? '?'} 受到的傷害 -${_sp.amount}（攻擊方受招致使傷害削減效果，${_before} → ${effDmg}）`, actorIdx);
+    }
+  }
+  // <<< v6413-self-penalty-bench
   // v5.583：bench 受招式【傷害】→ 套防守方特性/場地減傷（捲牆/守護之鐘/齒輪塗層/凍原堡壘/
   //   自身 PASSIVE_DAMAGE_REDUCE 等）。active 已於上方 applyDefenderReductionsBlockA 處理，故只補 bench。
   //   收斂：與 hitBenchAll/hitBenchPickPost/snipe-multi 同一條 _applyBenchAbilityReduce。
