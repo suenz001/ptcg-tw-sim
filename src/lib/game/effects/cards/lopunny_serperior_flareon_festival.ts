@@ -15,6 +15,7 @@
  */
 
 import type { CardInstance } from '../../types';
+import { hasFestivalDanceActive } from '../../festival';   // ⭐v6.410 祭典樂舞判準中央述詞
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import type { Card } from '$lib/cards/types';
 import {
@@ -27,7 +28,6 @@ import {
 import { openDeckViewReshuffle } from '../_shared';  // v5.963 0-pick 重洗
 import { isBasicEnergyOfType } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
-import { isAbilityHolderEffective } from './v3001_g3_wave3';
 import { getEffectivePokemonTypes } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -108,12 +108,15 @@ regR('serperior-mature-charge', (st, idx, iids, params, pool) => {
 regA('啪咚猴', 0, (st, idx, pool) => {
   const active = st.players[idx].active;
   if (!active) return st;
-  const card = pool.get(active.cardId);
   // ⭐ v6.202：原本只接 isAbilityNullifiedByPassive（初始化／振翼髮 passive／黏著束縛），
   //   漏掉招式版暗夜羽擊、火箭隊的監視塔、傳說的熔岩洞。與 engine getUsableAbilities 的
   //   '衝衝鼓' gate 同一條件、必須同 commit（判定端 vs 動作端）。
-  if (!card?.abilities?.some(a => a.name === '祭典樂舞')
-      || !isAbilityHolderEffective(st, active, card, idx, '祭典樂舞', 'active', pool)) {
+  // >>> v6410-festival-central-chongchong-effect
+  // ⭐⭐⭐v6.410：改呼叫中央述詞（與 engine 的 gate 同一份，Rule 38）。
+  //   行為零改變：舊寫法的前置 some 是冗餘的，而 `location` 這裡本來就固定傳 'active'
+  //   （active 就是 st.players[idx].active）⇒ 中央述詞自動推導出來的也是 'active'。
+  if (!hasFestivalDanceActive(st, idx, pool)) {
+  // <<< v6410-festival-central-chongchong-effect
     // v5.456 暗夜羽擊：戰鬥位「祭典樂舞」被對手 passive 消除亦視為條件不成立
     return addLog(st, '衝衝鼓：戰鬥位不是有效的祭典樂舞寶可夢（或已被對手特性消除）', idx);
   }

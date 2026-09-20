@@ -566,7 +566,12 @@ const sites=scanSites(realFiles);
 //   長期就變成「橡皮圖章式 bump」（第 8 種安慰劑）。
 //   ⚠ 往下掉 1~3 通常是合法收斂：**確認過確實是收斂之後**改這一行的數字；掉超過 3 請回來重判。
 T('20a. 掃描器下限：全站 passive 消費點掃到 ≥90 個（掃不到＝掃描器壞了）',()=>{
-  assert.ok(sites.length>=90,'只掃到 '+sites.length+' 個（A 類下限 90／實測基準 93；掉 1~3 多半是合法收斂，確認後改守衛這一行）');
+  // ⭐v6.410【A 類：收斂就會掉】90→85（slack 3，實測 88）。
+  //   本版把祭典樂舞的判準收斂到 leaf festival.ts，四處消費點整段消失：
+  //   ① engine 的「持有生效特性」前置 some、② effects 本地複製的同一行、
+  //   ③ engine 衝衝鼓 gate、④ 啡咚猴卡檔衝衝鼓效果本體。
+  //   ⭐ 意圖沒被破壞：掃描器仍然掃到 88 個，20d 枚舉守衛仍釘住「沒接闘的必須在豁免表」。
+  assert.ok(sites.length>=85,'只掃到 '+sites.length+' 個（A 類下限 85／實測基準 88）');
 });
 T('20b. 掃描器下限：兩種 pattern 都要抓得到東西（少一種＝那一族又隱形了）',()=>{
   const lit=sites.filter(s=>s.kind==='lit').length, reg=sites.filter(s=>s.kind==='reg').length;
@@ -577,7 +582,12 @@ T('20b. 掃描器下限：兩種 pattern 都要抓得到東西（少一種＝那
   //   理由同 20a：兩者都是**程式碼消費點**計數。上面 v6.204 那行就是實例
   //   （6 支 helper 的字面量整段換成中央述詞呼叫 ⇒ pattern1 下限被迫 55 → 50）。
   //   ⚠ 掉 1~3 多半是合法收斂，確認後改這一行。
-  assert.ok(lit>=56,'pattern1 只 '+lit+'（A 類下限 56／實測基準 59）'); assert.ok(reg>=31,'pattern2(registry 查表) 只 '+reg+'（A 類下限 31／實測基準 34）');
+  // ⭐v6.410【A 類：收斂就會掉】56→49（slack 3，實測 52）。
+  //   本版收斂掉**4 個**字面比對（都是一行 `abilities?.some(a => a.name === '祭典樂舞')`）：
+  //   engine 「持有生效特性」、effects 本地複製、engine 衝衝鼓 gate、啡咚猴卡檔。
+  //   ⚠ 「祭典會場」那幾處字面**本來就沒被 pattern1 數到**（它要求 6 行內有 abilities 且是 `===`）。
+  //   ⚠ BASE 時 lit 恰好＝56＝舊下限（slack 0），任何收斂都注定翻紅 ⇒ 這次改成 slack 3。
+  assert.ok(lit>=49,'pattern1 只 '+lit+'（A 類下限 49／實測基準 52）');
 });
 // ⭐v6.325：下限自 63 收緊到 76（實測 77）。
 // ⭐v6.326【A 類：收斂就會掉】76（slack 1）→ 74（slack 3，實測 77）。
@@ -585,7 +595,8 @@ T('20b. 掃描器下限：兩種 pattern 都要抓得到東西（少一種＝那
 //   ⚠ 掉 1~3 多半是合法收斂，確認後改這一行。
 T('20c. 掃描器下限：其中「已接中央閘」的 ≥74 個（v6.204 把 C 段整段接上後的新底線）',()=>{
   const g=sites.filter(s=>s.gated).length;
-  assert.ok(g>=74,'只有 '+g+' 個接了閘（A 類下限 74／實測基準 77）');
+  // ⭐v6.410【A 類：收斂就會掉】74→69（slack 3，實測 72）——理由同 20a。
+  assert.ok(g>=69,'只有 '+g+' 個接了闘（A 類下限 69／實測基準 72）');
 });
 T('20d. 枚舉守衛：每個沒接閘的消費點都必須在豁免表內並附理由',()=>{
   const bad=sites.filter(s=>!s.gated && !EXEMPT.has(`${s.rel}|${s.ability}`))

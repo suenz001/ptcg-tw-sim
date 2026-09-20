@@ -292,6 +292,12 @@ export function countAncientOnField(
  */
 // v4.51 Phase 2：統一 defense helper
 import { canApplyEffectToTarget, isOppActiveImmuneToAttackEffect, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst as _v6196HasEffAbilByInst } from './defense';  // v6.196 中央述詞
+// >>> v6410-festival-central-import-effects
+// ⭐⭐⭐v6.410：祭典樂舞首擊判定收斂成**一份**（IRON_RULES Rule 38）。
+//   原本這一檔有一份本地複製（註解寫「effects.ts 不能 import engine」）；
+//   現在判準住在 leaf `./festival`，engine 與 effects 兩邊 import 同一份。
+import { isFestivalDanceFirstAttack, hasFestivalVenue } from './festival';
+// <<< v6410-festival-central-import-effects
 import { applyDefenderReductionsBlockA, isToolsJammed, getEffectiveHP, computeActiveRetreatCostFor, energyTypeUnitsHostAware, energyProvidesType, composeAttackFormula, attackFormulaReconstructs, type FormulaTerm } from './engine'; 
 import { applyOppActiveReturnedToBenchTriggers } from './engine'; // v5.831 對手回備戰觸發統一入口 // v5.544 防守方減傷中央收斂；v5.677 getEffectiveHP 單一來源；v5.702 host-aware 能量述詞移至 engine 單一來源
 
@@ -3225,8 +3231,10 @@ export function isFestivalVenueStatusProtected(
   inst: CardInstance,
   pool: Map<string, Card>,
 ): boolean {
-  const stadium = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
-  return stadium?.name === '祭典會場' && (inst.energyAttached?.length ?? 0) > 0;
+  // >>> v6410-festival-venue-central-status
+  // ⭐v6.410：「場上是不是祭典會場」的判準收斂到 `./festival`（原本全站五份）。
+  return hasFestivalVenue(state, pool) && (inst.energyAttached?.length ?? 0) > 0;
+  // <<< v6410-festival-venue-central-status
 }
 
 /** 祭典會場：雙方身上附有能量卡的寶可夢，將受到的特殊狀態全部恢復。
@@ -3237,8 +3245,9 @@ export function clearFestivalVenueProtectedStatuses(
   state: GameState,
   pool: Map<string, Card>,
 ): GameState {
-  const stadium = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
-  if (stadium?.name !== '祭典會場') return state;
+  // >>> v6410-festival-venue-central-clear
+  if (!hasFestivalVenue(state, pool)) return state;
+  // <<< v6410-festival-venue-central-clear
 
   // 特殊狀態 → 中文標籤（log 用）
   const STATUS_LABEL: Record<SpecialCondition, string> = {
@@ -9124,20 +9133,11 @@ export function fireDefenderOnKO(
 //   狙擊類）會漏。現納入 applyAttackerActiveDamageBonuses（受 _attackerActiveBonusDone guard：
 //   一般攻擊 engine 已 inline 套用並設旗標→中央 helper 早退、不雙套；只有 baseDamage=0 的延後／
 //   狙擊路徑才會在此套用）。祭典樂舞首擊不消耗消耗型旗標，需本地複製判定（effects.ts 不能 import engine）。
-function _isFestivalDanceFirstAttackLocal(state: GameState, aIdx: 0 | 1, pool: Map<string, Card>): boolean {
-  const a = state.players[aIdx].active;
-  if (!a) return false;
-  const card = pool.get(a.cardId);
-  // ⭐ v6.202：effects.ts 這份是 engine `_isFestivalDanceFirstAttack` 的本地複製
-  //   （effects.ts 不能 import engine），同樣要問「特性此刻有沒有被消除」，否則兩份會分岔。
-  if (!card?.abilities?.some(ab => ab.name === '祭典樂舞')) return false;
-  if (!_v6196HasEffAbilByInst(state, aIdx, a, pool, '祭典樂舞')) return false;
-  const sd = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
-  if (sd?.name !== '祭典會場') return false;
-  if (state.festivalDanceUsedThisTurn?.[aIdx]) return false;
-  if (state.festivalDanceSecondAttackUsed?.[aIdx]) return false;
-  return true;
-}
+// >>> v6410-festival-central-removed-effects
+// ⭐⭐⭐v6.410：原本這裡的本地複製已刪除，改用檔頭 import 進來的中央述詞。
+//   行為零改變：舊版的前置 `card?.abilities?.some(...)` 是冗餘的
+//   （中央述詞 hasEffectiveAbilityByInst 第一行就做同一個比對）。
+// <<< v6410-festival-central-removed-effects
 export function applyAttackerActiveDamageBonuses(
   stateIn: GameState, aIdx: 0 | 1, dmg: number, pool: Map<string, Card>,
   // >>> v6408-attacker-snapshot-param
@@ -9203,7 +9203,7 @@ export function applyAttackerActiveDamageBonuses(
     formula.push({ sign: '+', value: b, label: '回合加傷' });
     // ⚠v6.408：基底一律是**最新的** s.players[aIdx].active（不是快照）——
     //   用快照當基底會把 PRE 之前清掉的其他旗標一起復活。
-    if (!_isFestivalDanceFirstAttackLocal(state, aIdx, pool) && s.players[aIdx].active) {
+    if (!isFestivalDanceFirstAttack(state, aIdx, pool) && s.players[aIdx].active) {
       const na = { ...s.players[aIdx].active! }; delete na.damageBonusThisTurn;
       const ps = [...s.players] as [PlayerState, PlayerState]; ps[aIdx] = { ...ps[aIdx], active: na };
       s = { ...s, players: ps };
@@ -9222,7 +9222,7 @@ export function applyAttackerActiveDamageBonuses(
       const pen = cur.nextOwnAttackPenalty; d = d - pen;
       s = addLog(s, `${aCard.name} 招式傷害 -${pen}（受招致使傷害削減效果）`, aIdx);
       formula.push({ sign: '-', value: pen, label: '招致削傷' });
-      if (!_isFestivalDanceFirstAttackLocal(state, aIdx, pool) && s.players[aIdx].active) {
+      if (!isFestivalDanceFirstAttack(state, aIdx, pool) && s.players[aIdx].active) {
         const na = { ...s.players[aIdx].active! }; delete na.nextOwnAttackPenalty;
         const ps = [...s.players] as [PlayerState, PlayerState]; ps[aIdx] = { ...ps[aIdx], active: na };
         s = { ...s, players: ps };
@@ -9500,7 +9500,7 @@ export function dealAttackDamageToTarget(
         const _drAmt = _drBefore - effDmg;
         if (_drAmt > 0) st = addLog(st, `${targetCard.name}：下次被擊減傷 -${_drAmt}`, dIdx);
         if (_drAmt > 0) _formula.push({ sign: '-', value: _drAmt, label: '下次被擊減傷' });  // ⭐v6.239 對齊 engine 的同名項
-        if (!_isFestivalDanceFirstAttackLocal(st, actorIdx, pool)) {
+        if (!isFestivalDanceFirstAttack(st, actorIdx, pool)) {
           st = updatePlayer(st, dIdx, p => ({ ...p, active: p.active ? { ...p.active, damageReduceNextHit: undefined } : p.active }));
         }
       }

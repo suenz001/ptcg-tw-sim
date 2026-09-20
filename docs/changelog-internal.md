@@ -1,5 +1,119 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.410 ⭐⭐⭐ 祭典樂舞／祭典會場的判準**收斂成一份**（Rule 38）＋「付出早於主傷害」列管
+
+BASE `a6ab0b63f4d45942e6c34e66225641c15514728c`（v6.409）。
+⚠ 本版**動了 `src/lib/game/engine.ts` 與 `effects.ts`**（引擎）⇒ 部署要跑
+**`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**（IRON_RULES Rule 43）。
+⭐ **玩家端行為零改變**（守衛【B】段逐條實測 + 獨立審查的 600 次差分模糊測試 0 diff）。
+
+### 【零】站長交辦（2026-09-20）四項，本版做掉第 1、2 項
+
+1. ✅「烈雀｜啄食在造成傷害前丟對手道具，遇到減傷道具怎麼處理」—— **實測過，站長的判定與站上一致，沒有 bug**（見【四】）。
+2. ✅ 祭典樂舞首擊判定的收斂 —— 本版主題。
+3. ⏸ 主傷害在 ATTACK_POST 的收斂 —— **本版不硬修，改成「列管守衛」**（見【五】，理由寫在那裡）。
+4. ⏸ v6.406 的 320×568 錦標賽列差 6px —— 留給下一版（要先請站長裁示做法）。
+
+### 【一】問題：判準寫了好幾份（安慰劑型態 11）
+
+| 判準 | 收斂前在哪裡 |
+|---|---|
+| 「這一拳是不是祭典樂舞的第一次招式」 | `engine.ts` 的 `_isFestivalDanceFirstAttack` ＋ `effects.ts` 的 `_isFestivalDanceFirstAttackLocal`（**註解自承是本地複製**，因為 effects 不能 import engine） |
+| 「場上是不是祭典會場」 | engine 的 `hasFestivalVenue`、engine 首擊判定裡的 inline、effects 本地版的 inline、`isFestivalVenueStatusProtected`、`clearFestivalVenueProtectedStatuses` —— **五份** |
+| 「戰鬥位有沒有生效中的祭典樂舞特性」 | engine 的 `hasFestivalDanceActive`、engine 的衝衝鼓 gate、啪咚猴卡檔的衝衝鼓效果本體 —— **三份** |
+
+v6.202 修「特性被消除時不算首擊」時，就必須**兩邊各改一次**。這正是 Rule 38 要擋的東西。
+
+### 【二】改法：新增 leaf `src/lib/game/festival.ts`
+
+export `FESTIVAL_DANCE_ABILITY` / `FESTIVAL_VENUE_STADIUM` / `hasFestivalVenue` /
+`hasFestivalDanceActive` / `isFestivalDanceFirstAttack`，五個呼叫端全部改接它：
+engine（主管線減傷消耗、衝衝鼓 gate、狀態機三處）、effects（中央加成 2 處、狙擊路徑 1 處、
+祭典會場場地效果 2 處）、啪咚猴卡檔 1 處。順手刪掉 `canResumeFestivalDanceSecondAttack`（0 呼叫端的死碼）。
+
+**行為零改變的理由**（每一條都查證過）：
+- 舊版的前置 `card?.abilities?.some(a => a.name === '祭典樂舞')` 是**冗餘**的——
+  中央述詞 `hasEffectiveAbilityByInst`（defense.ts）第一行就做同一個比對。
+- 舊版 inline 比對 `stadiumCard?.name !== '祭典會場'` 與 `hasFestivalVenue` 逐字同型。
+- 啪咚猴卡檔原本固定傳 `location='active'`，而中央述詞對 `players[idx].active` 自動推導出的也是 `'active'`。
+
+⚠ `festival.ts` **不是真 leaf**：`defense.ts` 本身 value-import `./effects`
+⇒ 存在傳遞式循環（festival → defense → effects → festival）。與站內既有的
+engine↔effects↔defense 是同一類**良性**循環（export 全是函式、只在函式體內求值）。
+守衛【C8】釘住唯一會讓它變成 TDZ 爆炸的寫法：**任何模組在 module top-level 讀它的 export**。
+
+### 【三】守衛 `test-v6410-festival-criteria-central.mjs`（50 條）
+
+- 【A】3 條 HEAD-FAIL 哨兵：BASE 上 `festival.ts` 不存在 ⇒ 每條各自誠實翻紅（Rule 41，
+  用 `existsSync` 決定要不要把它寫進 esbuild entry，否則整支 bundle 會炸）。
+- 【B】13 條行為端：四個呼叫點的「首擊不消耗／非首擊消耗」，**每條都配差分輸入**，
+  並且**先手／後手各測一次**。
+- 【C】11 條 Rule 38 靜態：場地名比對全站 0 處、簽章欄位不得回到 effects、
+  就地 some 判定全站 0 處、leaf 契約、接線斷言、top-level 讀取禁令。
+- 【D】14 條反安慰劑：直呼中央述詞，四項條件各缺一項 ⇒ false，鏡像側同樣測一遍。
+- 【E】5 條列管（見【五】）。
+
+**突變測試 16/16 被殺**（`__m6a/mut410.py`）。
+
+### 【四】站長問的「在造成傷害前丟對手道具」——實測結論：沒有 bug
+
+掃出 H/I/J 卡面含「在造成傷害前」的招式共 **11 支**，全部實測：
+
+- **9 支丟對手道具**（金魚王／燃燒蟲｜啄落、破破舵輪｜破壞船錨、烈雀｜啄食、拉達｜削落、
+  派帕的貪心栗鼠｜咬取、藏瑪然特｜彈落、切割洛托姆｜割除衝刺、N的電電蟲｜劈哩啪啦短路）
+  —— **先丟道具、再造成完整傷害**，與站長的判定一致。
+  正對照（防空真）：同樣盤面換成不丟道具的純傷害招式，渾厚鱗片對【草火水雷】確實 −50、其他屬性 0。
+- **2 支動到攻擊方自己**：美錄梅塔｜重塑斧（先丟自己的道具 ⇒ 帶極限腰帶時**不**加傷，實測 250 ✅；
+  無道具時招式失敗 ⇒ 0 ✅）、櫻花魚｜漸強波（先附上去的【水】能量**有**算進 ×30，實測 2+2 顆 ⇒ 120 ✅）。
+
+中央 helper `defToolDiscardPre(base, label)` 已經是收斂式實作（7 支共用），另 2 支獨立實作。
+
+### 【五】列管：「自身能量的付出**早於**主傷害」的那一族（守衛【E】段）
+
+v6.407 把付出改成「PRE 只登記、engine 在主傷害造成後單點 flush」。但有一族招式的主傷害
+**不在 engine 主管線**：PRE 回傳 damage=0，真正的傷害在 ATTACK_POST 開 picker、由 resolver 才造成
+⇒ 對它們而言 flush 仍然早於主傷害。行為端枚舉（跑 2978 支 ATTACK_PRE）出 **4 支**：
+超級噴火龍Yex｜炎獄狂爆Y【火】、超級盔甲鳥ex｜音波拆裂【鋼】、烏鴉頭頭｜狙擊羽毛【惡】、雙尾怪手｜雙尾【無】。
+
+**目前影響為 0**：中央加成裡會讀「攻擊方自身能量」的只有兩項——伏特【雷】能量（gate 是
+`fieldPokemonHasType(...,'Lightning')`，**有效**屬性）與 夠讚狗｜腎上腺力量（卡名）——這 4 支都套不到。
+獨立審查另外逐函式掃過弱抗／防守方減傷／道具加成／`clone-strike-multi-hit` 的 inline 管線，
+**0 個攻擊方能量讀取**；太古防壁讀的 `_attackTimeAttackerEnergyUnits` 是宣告攻擊時的快照、跨 picker 保留。
+
+⇒ **本版不硬修**。真正的收斂要先把「③ 受傷時的特性／道具」收成單一入口
+（現在 engine 的 KO／非 KO 分支、`fireDefenderOnDamaged`、`clone-strike-multi-hit` 各有一份），
+那是獨立的大工程。本版改成**列管守衛**：
+- 【E1】掃描器下限（2978 支 PRE、79 筆登記）
+- 【E2】集合必須 ⊆ 白名單 ⇒ **新卡掉進這一族時立刻翻紅**
+- 【E3】白名單每一支的安全條件（用與被守方**同一支**述詞 `fieldPokemonHasType`，不是印刷屬性）
+- 【E4】前提釘樁：中央加成裡讀自身能量的只有 2 處（多一處就紅）
+- 【E5】正對照：【雷】屬性招式帶伏特能量確實 +20（證明這個維度真的會咬人）
+⚠ 已知缺口（誠實記錄）：探針用 `fn(state,0,pool,{})` 驅動 PRE ⇒ **opt-in 型**（aiDefault:'skip'）
+不會登記 ⇒ 不在 E2 雷達內。已逐支查證現況無漏，但日後「opt-in skip ＋ 主傷害在 POST」的新卡會靜默漏掉。
+
+### 【六】獨立審查（Fable）抓到的，全部已修
+
+| # | 問題 | 處置 |
+|---|---|---|
+| 🔴1 | 守衛 34 條**全部只測 aIdx=0** ⇒「把玩家索引寫死成 0」的退化，全站 38 支相關守衛 0 條翻紅（**真退化**：後手的祭典樂舞首擊會把旗標吃掉） | B／D 兩段各補鏡像條，共 +13 條；突變 X1/X1b/X2/X3 全被殺 |
+| 🔴2 | 檔頭自稱「四個呼叫點」，B 段只覆蓋 3 個；第 4 個（狙擊路徑的減傷消耗）改成「永不消耗」全站不紅 | 補【B7】行為端（動態挑卡，不 pin id）；反方向是等價突變，如實記在註解 |
+| 🔴3 | `festival.ts` 檔頭把持有者寫成「超級快龍ex」、卡面寫成「**自己**場上」——**兩處都是幻覺** | 照 `static/cards` 逐字改成裹蜜蟲／角金魚／金魚王／綿綿泡芙，並標明卡面是「場上」（對手的祭典會場也算） |
+| 🟡4 | v6202 的 20b 下限我寫「掉 5 個」，實際 pattern1 只掉 **4** 個（場地名字面本來就沒被 pattern1 數到） | 註解改正；三個下限依實測重設（20a 90→85、20b 56→49、20c 74→69，各 slack 3） |
+| 🟡5 | 「收斂成一份」沒收乾淨：engine 衝衝鼓 gate、啪咚猴卡檔還有兩份同型判定 | 一併收斂；補【C9】全站掃描守衛（突變 M9/M10 被殺） |
+| 🟡6 | `festival.ts` 不是真 leaf（傳遞式循環），C6 只擋直接 import | 檔頭改成正確描述；補【C8】top-level 讀取禁令（突變 M11 被殺） |
+| 🟡7 | `canResumeFestivalDanceSecondAttack` 是 0 呼叫端的死碼 | 刪除（獨立查證：scripts/ 與 docs/ 也沒有任何守衛依賴它） |
+| 🟡8 | 【E3】用印刷屬性，而伏特能量的 gate 是**有效**屬性 | 改走同一支中央述詞 `fieldPokemonHasType` ＋ 正對照 |
+
+### 【七】驗收
+
+- 全套 **744 支：743 綠**。唯一紅的是 `test-base-blob-git-errors` 的 B4c
+  （沙盒 git 2.34.1 的錯誤訊息措辭與斷言不同，環境差異，非本版）。
+- `test-v6301-friend-join-room` 在平行 runner 下曾因兩個 worker 同時 launch chromium 而失敗，
+  單獨跑 30 PASS / 0 FAIL（PW 段 ENV-SKIP）。
+- `tsc --noEmit` **0 錯誤**。
+- `stripV6410Engine(HEAD engine.ts) === BASE engine.ts`（逐字，由 `__m6a/gen_strip410.py` 當場驗證）。
+- 剝除鏈接線：test-v6265（兩處）、test-v6375、test-v6371，Rule 54 由新到舊 ⇒ v6.410 排在 v6.408 之前。
+
 ## v6.409 ⭐⭐⭐ 站長裁定：攻擊方的加減**先算完、最後才不能低於 0** ＋ Playwright 過渡期收尾
 
 BASE `cdb2b39ae5f68a4dcb344bced81f8397a1d3250d`（v6.408a）。

@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'a00e830aac7572a43cfba16a494d3c921a026b1d';   // v6.408（v6.408a 的上一版）
+const PREV_SHA = 'a6ab0b63f4d45942e6c34e66225641c15514728c';   // v6.409（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,19 +757,17 @@ const PREV_SHA = 'a00e830aac7572a43cfba16a494d3c921a026b1d';   // v6.408（v6.40
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.408a **前移重置**：PREV_SHA 從 v6.387 前移到 v6.408（a00e830a）。
-  //   這份清單原本從 v6.387 一路累積了 20 多版、50 多個檔案 —— 累積到最後，
-  //   「這一版動了什麼」的宣告會被淹沒在歷史裡，等於失去守護力（誰也看不出哪幾個是本版的）。
-  //   ⭐ 規矩：**每個純工具版（src/ 與 static/ 零改動）都應該順手把 PREV_SHA 前移、清單清空**，
-  //     下一個動玩家端的版本再從零重新列。
+  // ⚠⚠ v6.410 前移：PREV_SHA 從 v6.408（a00e830a）移到 v6.409（a6ab0b63），
+  //   清單重列成**本版的**玩家端改動（規矩見上方：不讓清單累積到看不出哪幾個是本版）。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）——
-  //     驗法：`git branch -a --contains a00e830a` 要印得出 main。
-  //   ⚠ v6.408a 是純工具版：只動 scripts/ 與 docs/ ⇒ 當時這份清單是空的。
-  // ⭐v6.409：站長裁定「攻擊方的加減先算完、最後才不能低於 0」——
-  //   中央 applyAttackerActiveDamageBonuses 拆掉 v6.408 的逐段閘、招致削傷中途不再夾 0，
-  //   改成函式結尾唯一一個 clamp。玩家端只動這一支 helper ＋ version.ts ＋ changelog 三檔。
-  //   （Playwright 過渡期收尾動的是 scripts/ 與 .github/，不在這一節的掃描範圍。）
+  //     驗法：`git branch -a --contains a6ab0b63` 要印得出 main。
+  // ⭐v6.410：祭典樂舞／祭典會場的判準收斂成一份（Rule 38）——
+  //   新增 leaf `src/lib/game/festival.ts`，engine.ts 與 effects.ts 各自把本地實作刪掉改 import。
+  //   行為零改變（守衛 test-v6410 的【B】段逐條實測）。
   'src/lib/game/effects.ts',
+  'src/lib/game/effects/cards/lopunny_serperior_flareon_festival.ts',
+  'src/lib/game/engine.ts',
+  'src/lib/game/festival.ts',
   'src/lib/version.ts',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',

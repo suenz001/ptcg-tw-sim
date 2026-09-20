@@ -23,6 +23,7 @@ import { stripV6400Engine } from './lib/engine-strip-v6400.mjs';
 import { stripV6402Engine } from './lib/engine-strip-v6402.mjs';
 import { stripV6403Engine } from './lib/engine-strip-v6403.mjs';   // ⭐v6.403 ex 判準收斂（12 組）
 import { stripV6408Engine } from './lib/engine-strip-v6408.mjs';   // ⭐v6.408 攻擊方加成收斂成一份（2 組）
+import { stripV6410Engine } from './lib/engine-strip-v6410.mjs';   // ⭐v6.410 祭典樂舞判準收斂成一份（3 組）
 import { stripV6407Engine } from './lib/engine-strip-v6407.mjs';   // ⭐v6.407 自身能量付出延後（3 組）
 import { stripV6401Engine } from './lib/engine-strip-v6401.mjs';
 import { readFileSync } from 'node:fs';
@@ -1184,8 +1185,13 @@ await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等�
         // ⭐⭐ v6.408 必須排在**整條鏈的最前面**（Rule 54 的極端情形）：它刪掉的那一整段
         //   inline 加成裡，含有 v6.368／v6.402／v6.403／v6.407 的哨兵與字面。晚於它們剝除的話，
         //   那幾支會在「已經被刪掉的內容」上找不到自己的錨點（命中 0 次）。
-        const rawA8 = stripV6408Engine(raw);
-        ok(rawA8 !== raw, 'v6.408 的還原器過期（兩個哨兵區塊的字面對不上）');
+        // ⭐⭐ Rule 54（由新到舊）：v6.410 必須排在 v6.408 **之前**：
+        //   v6.410 把 engine 的三個祭典樂舞 local 函式整段刪掉，而 v6.408 的還原內容
+        //   （被刪掉的 185 行 inline 加成）裡含有對首擊判定的呼叫。
+        const rawA10 = stripV6410Engine(raw);
+        ok(rawA10 !== raw, 'v6.410 的還原器過期（三個哨兵區塊的字面對不上）');
+        const rawA8 = stripV6408Engine(rawA10);
+        ok(rawA8 !== rawA10, 'v6.408 的還原器過期（兩個哨兵區塊的字面對不上）');
         const s0 = stripV6376Engine(stripV6373Engine(stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(rawA8))))))))))))))))));
         ok(s0 !== rawA8, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360／v6.362／v6.367／v6.368／v6.369／v6.376 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
@@ -1237,8 +1243,13 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
         // ⭐⭐ v6.408 必須排在**整條鏈的最前面**（Rule 54 的極端情形）：它刪掉的那一整段
         //   inline 加成裡，含有 v6.368／v6.402／v6.403／v6.407 的哨兵與字面。晚於它們剝除的話，
         //   那幾支會在「已經被刪掉的內容」上找不到自己的錨點（命中 0 次）。
-        const rawA8 = stripV6408Engine(raw);
-        ok(rawA8 !== raw, 'v6.408 的還原器過期（兩個哨兵區塊的字面對不上）');
+        // ⭐⭐ Rule 54（由新到舊）：v6.410 必須排在 v6.408 **之前**：
+        //   v6.410 把 engine 的三個祭典樂舞 local 函式整段刪掉，而 v6.408 的還原內容
+        //   （被刪掉的 185 行 inline 加成）裡含有對首擊判定的呼叫。
+        const rawA10 = stripV6410Engine(raw);
+        ok(rawA10 !== raw, 'v6.410 的還原器過期（三個哨兵區塊的字面對不上）');
+        const rawA8 = stripV6408Engine(rawA10);
+        ok(rawA8 !== rawA10, 'v6.408 的還原器過期（兩個哨兵區塊的字面對不上）');
         const s0 = stripV6376Engine(stripV6373Engine(stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(rawA8))))))))))))))))));
         ok(s0 !== rawA8, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360／v6.362／v6.367／v6.368／v6.369／v6.376 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');

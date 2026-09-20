@@ -1003,6 +1003,14 @@ import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽�
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared';
 import { withAttackDamageTaken } from './effects/_shared'; // ⭐v6.256「受到的招式的傷害」唯一中央寫入點 // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst } from './defense';  // v6.196 中央述詞
+// >>> v6410-festival-central-import
+// ⭐⭐⭐v6.410：祭典樂舞／祭典會場的判準收斂成**一份**（IRON_RULES Rule 38）。
+//   原本 engine 這裡有 hasFestivalDanceActive / 首擊判定 / hasFestivalVenue
+//   三個 local 實作，而 effects.ts 另有一份逐字複製的本地版
+//   （註解自承「effects.ts 不能 import engine」）⇒ 判準兩份＝安慰劑型態 11。
+//   下沉到 leaf `./festival`（只 import types 與 defense，兩邊都能 import、無循環）。
+import { hasFestivalDanceActive, hasFestivalVenue, isFestivalDanceFirstAttack } from './festival';
+// <<< v6410-festival-central-import
 // v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。述詞放 _shared(leaf) 避免底層反向 import 卡檔。
 import { isStadiumPendingImplementation, isTwoCardStadiumName, canPlayTwoCardStadium, assignTwoCardStadiumHalves, twoCardStadiumPartnerCardId, splitTwoCardStadiumDeckEntries } from './effects/_shared'; // v6.084 兩張合一競技場 / v6.090 左右身分 / v6.093 左右拆成兩張卡 / v6.094 建局入口 fail-safe
 import { twoCardStadiumHalfIndex, twoCardStadiumSide } from './effects/_shared'; // v6.086 手牌裁半（左/右）／v6.095 依 cardId 判左右
@@ -2175,61 +2183,23 @@ function addLog(
   };
 }
 
-function hasFestivalDanceActive(state: GameState, idx: 0 | 1, pool: Map<string, Card>): boolean {
-  const active = state.players[idx].active;
-  const card = active ? pool.get(active.cardId) : null;
-  if (!card?.abilities?.some(a => a.name === '祭典樂舞')) return false;
-  // ⭐ v6.202：原本只比對特性名，**沒問特性此刻有沒有被消除**（v6.196 那一族的漏網）。
-  //   祭典樂舞持有者一定在戰鬥場（是使用招式的那隻）⇒ 招式版暗夜羽擊（abilityNullifiedThisTurn）
-  //   與 passive 振翼髮｜暗夜羽擊 都打得到它。改走 v6.196 中央述詞（不另建第四份）。
-  //   ⚠ 傳說的熔岩洞打不到本特性：祭典樂舞的成立條件是場上有「祭典會場」，
-  //     兩張都是競技場卡、不可能同時在場（唯一場地槽 state.activeStadium）。
-  return hasEffectiveAbilityByInst(state, idx, active, pool, '祭典樂舞');
-}
+// >>> v6410-festival-central-removed
+// ⭐⭐⭐v6.410：原本這裡的三個 local 定義（持有生效特性／首擊判定／場地判定）
+//   已整段下沉到 `./festival`（見檔頭 import 哨兵）。
+//   ⚠ 行為零改變：
+//     ・持有生效特性：原本先 `card?.abilities?.some(...)` 再走中央述詞；
+//       中央述詞 hasEffectiveAbilityByInst 自己**第一行**就做同一個比對 ⇒ 前置檢查是冗餘的。
+//     ・首擊判定：原本 inline 比對「祭典會場」，現改呼叫 hasFestivalVenue
+//       （同一個判準原本三份：engine 的 hasFestivalVenue、engine 的 inline、effects 的 inline）。
+//     ・呼叫端名稱完全不變，只有首擊判定去掉底線前綴改叫 `isFestivalDanceFirstAttack`。
+// <<< v6410-festival-central-removed
 
-/**
- * v5.226 偵測「本次攻擊是祭典樂舞會觸發第二次的第一次攻擊」。
- * 用於 attack pipeline 內保留一次性 flag（鐵羽毛 / 下回合加傷 等）給第二次攻擊。
- * 條件：攻擊者有祭典樂舞特性 + 場上祭典會場 + 還沒記為 used + 還沒用過 second attack。
- */
-function _isFestivalDanceFirstAttack(
-  state: GameState,
-  aIdx: 0 | 1,
-  pool: Map<string, Card>,
-): boolean {
-  const attacker = state.players[aIdx].active;
-  if (!attacker) return false;
-  const card = pool.get(attacker.cardId);
-  // ⭐ v6.202：同 hasFestivalDanceActive —— 原本只比對特性名，沒問特性是否被消除。
-  if (!hasEffectiveAbilityByInst(state, aIdx, attacker, pool, '祭典樂舞')) return false;
-  const stadiumCard = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
-  if (stadiumCard?.name !== '祭典會場') return false;
-  if (state.festivalDanceUsedThisTurn?.[aIdx]) return false;
-  if (state.festivalDanceSecondAttackUsed?.[aIdx]) return false;
-  return true;
-}
-
-function hasFestivalVenue(state: GameState, pool: Map<string, Card>): boolean {
-  const stadium = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
-  return stadium?.name === '祭典會場';
-}
-
-function canResumeFestivalDanceSecondAttack(
-  state: GameState,
-  idx: 0 | 1,
-  pool: Map<string, Card>,
-): boolean {
-  const oppIdx = (1 - idx) as 0 | 1;
-  return state.phase === 'playing'
-    && state.turnPhase === 'end'
-    && !state.pendingSelection
-    && !hasAnyPendingPrize(state)
-    && state.players[idx].active !== null
-    && state.players[oppIdx].active !== null
-    && hasFestivalDanceActive(state, idx, pool)
-    && hasFestivalVenue(state, pool);
-}
-
+// >>> v6410-festival-dead-code-removed
+// ⭐v6.410：原本這裡有 `canResumeFestivalDanceSecondAttack`（v5.211），
+// 全檔只有定義、**0 個呼叫端**（獨立審查查證）⇒ 死碼。
+// 它是這一族判準的一部分，本版正在收斂這一族 ⇒ 順手刪掉，
+// 不讓它日後變成「看起來有人在用的第二份判準」。
+// <<< v6410-festival-dead-code-removed
 /**
  * v5.201 改寫：祭典樂舞「若場上有『祭典會場』，則這隻寶可夢可使用持有的招式 2 次。」
  *
@@ -6035,7 +6005,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       baseDamage = Math.max(0, baseDamage - defenderState.active.damageReduceNextHit);
       formula.push({ sign: '-', value: drBefore - baseDamage, label: '下次被擊減傷' });
       // v5.226：祭典樂舞第一次攻擊不消耗 — 第二次攻擊也能套用「鐵羽毛」等減傷
-      if (!_isFestivalDanceFirstAttack(state, aIdx, pool)) {
+      // >>> v6410-festival-central-call
+      if (!isFestivalDanceFirstAttack(state, aIdx, pool)) {
+      // <<< v6410-festival-central-call
         defenderState.active = { ...defenderState.active, damageReduceNextHit: undefined };
       }
     }
@@ -11116,15 +11088,15 @@ export function getUsableAbilities(
       }
       // v2.229 啪咚猴｜衝衝鼓：戰鬥位是「祭典樂舞」寶可夢 + 牌庫不空
       if (ab.name === '衝衝鼓') {
+        // >>> v6410-festival-central-chongchong
+        // ⭐⭐⭐v6.410：這裡原本是「前置 some(特性名) ＋ 中央述詞」——與本版刪掉的
+        //   engine local 「持有生效祭典樂舞」述詞**逐字同型**（Rule 38 的同一筆債）。
+        //   改呼叫中央述詞；行為零改變（前置 some 是冗餘的，理由見 festival.ts 檔頭）。
+        //   ⚠ 這裡讀的是**戰鬥位另一隻**的特性（啡咚猴在備戰），上游 getUsableAbilities 那道
+        //     isAbilityHolderEffective 只驗「啡咚猴自己的衝衝鼓」，蓋不到這一條 ⇒ 必須自己問。
         if (!player.active) return;
-        const activeCard = pool.get(player.active.cardId);
-        const isFestival = activeCard?.abilities?.some(a => a.name === '祭典樂舞');
-        if (!isFestival) return;
-        // ⭐ v6.202：原本只接 isAbilityNullifiedByPassive（初始化／振翼髮 passive／黏著束縛），
-        //   漏掉招式版暗夜羽擊（abilityNullifiedThisTurn）、火箭隊的監視塔、傳說的熔岩洞。
-        //   ⚠ 這裡讀的是**戰鬥位另一隻**的特性（啪咚猴在備戰），上游 getUsableAbilities 那道
-        //     isAbilityHolderEffective 只驗「啪咚猴自己的衝衝鼓」，蓋不到這一條 ⇒ 必須自己問。
-        if (!hasEffectiveAbilityByInst(state, state.activePlayerIndex as 0 | 1, player.active, pool, '祭典樂舞')) return;
+        if (!hasFestivalDanceActive(state, state.activePlayerIndex as 0 | 1, pool)) return;
+        // <<< v6410-festival-central-chongchong
         if (player.deck.length === 0) return;
       }
       // v2.229 貓頭夜鷹｜搜尋寶石：evolvedThisTurn + 場上太晶寶可夢 + 牌庫不空
