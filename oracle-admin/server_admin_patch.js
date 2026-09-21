@@ -571,6 +571,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
     const ROOMS_RANGE_MS = { '7d': 7 * 86400000, '30d': 30 * 86400000, '90d': 90 * 86400000 };
     const ROOMS_MAX_PAGE_SIZE = 200;
     const ROOMS_LEGACY_CAP = 2000;   // 沒帶 ?page= 的舊 client 上限（見下方 else 分支的說明）
+    // >>> v146-admin-arch-search
+    // v1.46 原型搜尋最多掃幾間房（依 updatedAt 由新到舊）。只在 q 對上某個原型名稱時才掃，
+    //   而且只取 _id ＋ seats.deckEntries（不帶 gameState.log）；超過上限時回應帶 archScan.capped，
+    //   前端明講「只掃了最近 N 間」—— 絕不靜默截斷（v6.218／v6.240 同一條紀律）。
+    const ROOMS_ARCH_SCAN_CAP = 5000;
+    // <<< v146-admin-arch-search
     const _escapeRegExpLiteral = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     try {
       // v1.18: 接受 ?status=playing|lobby|ended → 只撈該 status 子集（admin 進行中分頁 Refresh 加速）。
@@ -584,6 +590,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
       if (_since) _filter.updatedAt = { $gte: _since };
       // v1.22 搜尋改伺服器端 —— 分頁之後前端手上只有 50 筆，本機搜尋只搜得到那一頁。
       const _q = String(req.query.q || '').trim();
+      // >>> v146-admin-arch-search
+      let _archScan = null;   // v1.46：有做原型搜尋時回報掃描範圍（前端據此提示是否被截斷）
+      // <<< v146-admin-arch-search
       if (_q) {
         const _rx = new RegExp(_escapeRegExpLiteral(_q), 'i');
         const _or = [{ _id: _rx }, { roomName: _rx }, { 'seats.name': _rx }, { 'seats.email': _rx }];
@@ -597,6 +606,25 @@ import('firebase-admin').then(async ({ default: admin }) => {
           }
           if (_ids.length) _or.push({ 'seats.deckEntries.cardId': { $in: _ids } });
         } catch (e) { console.warn('[admin] rooms 卡名搜尋略過:', e && e.message); }
+        // >>> v146-admin-arch-search
+        // v1.46 牌組原型搜尋（含「未分類」）：原型是即時算的、不在文件裡 ⇒ 先在同一個狀態／時間範圍內
+        //   把房間的牌表撈出來分類，命中的房號再併進 $or。helper 在 registerDeckRules IIFE 的
+        //   app.locals（handler 執行時才取，v0.94 教訓）；沒掛上或失敗 ⇒ 略過，其他搜尋照常。
+        try {
+          const _locals = app.locals || {};
+          const _nameHit = _locals._archetypeNameMatches, _matchIds = _locals._archetypeMatchRoomIds;
+          if (typeof _nameHit === 'function' && typeof _matchIds === 'function' && await _nameHit(_q)) {
+            const _base = { ..._filter };   // 此時還沒有 $or ＝ 只有 status／updatedAt 條件
+            const _docs = await db.collection('rooms')
+              .find(_base, { projection: { _id: 1, 'seats.deckEntries': 1 } })
+              .sort({ updatedAt: -1 }).limit(ROOMS_ARCH_SCAN_CAP).toArray();
+            const _aids = await _matchIds(_docs, _q);
+            if (_aids.length) _or.push({ _id: { $in: _aids } });
+            _archScan = { scanned: _docs.length, cap: ROOMS_ARCH_SCAN_CAP,
+              capped: _docs.length >= ROOMS_ARCH_SCAN_CAP, matched: _aids.length };
+          }
+        } catch (e) { console.warn('[admin] rooms 原型搜尋略過:', e && e.message); }
+        // <<< v146-admin-arch-search
         _filter.$or = _or;
       }
       const _projection = {
@@ -669,7 +697,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       //   舊伺服器不會有這個欄位 → 前端自動退回舊的前端切頁（v6.218 教訓：不可以
       //   靜默回一份未分頁的結果，讓前端誤以為那就是全部）。
       res.json({ rooms, counts, paged: _paged, truncated: (!_paged && rooms.length >= ROOMS_LEGACY_CAP),
-        total: _total, page: _page, pageSize: _pageSize, totalPages: _totalPages, range: _range, q: _q });
+        total: _total, page: _page, pageSize: _pageSize, totalPages: _totalPages, range: _range, q: _q, archScan: _archScan });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
@@ -2923,6 +2951,44 @@ import('firebase-admin').then(async ({ default: admin }) => {
         }
       }
     };
+    // >>> v146-admin-arch-search
+    // ── v1.46（2026-09-21）admin 房間搜尋也能搜【牌組原型名稱】（含「未分類」）──────────────
+    //   站長需求（逐字）：「Oracle 對戰的搜尋功能，應該也要能搜尋排組原型的名稱，這樣子我只要去
+    //   已結束的分頁，搜尋 未分類，這樣我就可以快速把還沒分類的排組原型建立起來」。
+    //   背景：v6.240 起搜尋改在伺服器端做（分頁後前端只有 50 筆），而原型是**即時算出來的**
+    //   （不存在 rooms 文件裡，規則一改結果就變）⇒ Mongo 查不到它，原型搜尋從那時起就失效了。
+    //   ⇒ 兩支 helper，分類一律走本 IIFE 的中央 archetypeNameOf（Rule 38：不另寫一份分類）：
+    //   ・_archetypeNameMatches(q)：q 有沒有對上任何一條啟用中規則的名稱或「未分類」
+    //     （對不上就完全不掃，一般的玩家名／房號搜尋零額外成本）。
+    //   ・_archetypeMatchRoomIds(docs, q)：對傳進來的房間（只需 _id ＋ seats.deckEntries）逐座位分類，
+    //     回傳任一座位原型名稱包含 q 的房號。null（還不知道）一律不算命中。
+    app.locals._archetypeNameMatches = async (q) => {
+      const lc = String(q || '').trim().toLowerCase();
+      if (!lc) return false;
+      if ('未分類'.includes(lc)) return true;
+      const nameMap = await getCardNameMap();
+      if (!nameMap.size) return false;
+      const rules = await getEnabledRulesCached();
+      return rules.some((r) => r && r.name && String(r.name).toLowerCase().includes(lc));
+    };
+    app.locals._archetypeMatchRoomIds = async (docs, q) => {
+      const lc = String(q || '').trim().toLowerCase();
+      if (!lc) return [];
+      const nameMap = await getCardNameMap();
+      const rules = nameMap.size ? await getEnabledRulesCached() : [];
+      const ids = [];
+      for (const r of (docs || [])) {
+        const seats = Array.isArray(r && r.seats) ? r.seats : [];
+        const hit = seats.some((s) => {
+          if (!s) return false;
+          const a = archetypeNameOf(s.deckEntries, nameMap, rules);
+          return a != null && String(a).toLowerCase().includes(lc);
+        });
+        if (hit) ids.push(r._id);
+      }
+      return ids;
+    };
+    // <<< v146-admin-arch-search
     // ══ v1.28（v6.266）套牌戰績（P1，只有伺服器端）：GET /api/deck-stats?deckId= ══
     //   玩家許願：牌組列表的 ✕ 旁邊放一個 🔍，看這一副牌的休閒勝率／對各原型勝率。
     //   ⭐ 「勝敗紀錄跟著套牌走」天然成立：Deck.id 是 client 端 `crypto.randomUUID()`

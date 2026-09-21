@@ -1,5 +1,19 @@
 # 內部改版紀錄（不打包進網站）
 
+## admin v1.75 ＋ server patch v1.46：🎮 Oracle 對戰的搜尋能搜牌組原型名稱（含「未分類」）
+
+BASE `b00f5d3afaecfb8ed7512b2bfaabf176d4e68ad0`。只動 admin（`oracle-admin/admin.html`、`oracle-admin/server_admin_patch.js`），
+玩家端 src/static 零改動 ⇒ 網站版本號不動（仍 6.423）。
+部署：`update-tournament.bat`（先，把本機 E:\ 同步到最新）＋ `update-admin-full.bat`（上傳 admin.html＋server patch 並重啟）。
+
+- 站長需求（逐字）：「Oracle 對戰的搜尋功能，應該也要能搜尋排組原型的名稱，這樣子我只要去已結束的分頁，搜尋 未分類，
+  這樣我就可以快速把還沒分類的排組原型建立起來」。
+- 真因：v6.240 起搜尋改在伺服器端（分頁後前端只有 50 筆），原型是即時算的、不在 rooms 文件裡 ⇒ 原型搜尋從那時起失效。
+- 做法：registerDeckRules IIFE 新增 `_archetypeNameMatches(q)`／`_archetypeMatchRoomIds(docs,q)`（走中央 archetypeNameOf）；
+  端點只在 q 對上某個規則名或「未分類」時，於同一狀態／時間範圍內依 updatedAt 由新到舊最多掃 5000 間（只取 _id＋牌表），
+  命中房號併進 $or；回應帶 `archScan {scanned,cap,capped,matched}`，前端在被截斷時明講。null（還不知道）不算未分類。
+- 守衛 `test-admin-v175-archetype-search`（9 條；BASE 2 PASS／7 FAIL）。
+
 ## v6.423 ⭐⭐ 浮動元件拖曳收斂到中央 modal-drag.ts（v6.420 列管）
 
 BASE `d27102c8eeb5f9d2e8d49a78b97c7671ba707c34`（v6.422）。純前端，**沒有動 engine.ts** ⇒ 不需要剝除器。

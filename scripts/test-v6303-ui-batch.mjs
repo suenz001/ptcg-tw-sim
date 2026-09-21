@@ -32,6 +32,9 @@ import { execFileSync } from 'node:child_process';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { revertV6384, revertV6381 as _rv6381 } from './lib/tourn-revert-v6384.mjs';
+// ⭐admin v1.75／server patch v1.46（Rule 40）：回應物件多一個 archScan 欄位是行內改動、無法用哨兵框 ⇒
+//   由 scripts/lib/sap-revert-admin-v146.mjs 逐字宣告、逐字還原（命中不是恰好 1 次就 throw），H3 的逐位元比對一個字都沒放寬。
+import { revertAdminV146 } from './lib/sap-revert-admin-v146.mjs';
 import { styleBlockOf } from './lib/svelte-style-block.mjs';
 import { pwUsable } from './lib/pw.mjs';
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
@@ -497,7 +500,7 @@ await T('H3 ⭐ 沒有動到不該動的檔：oracle-admin/server_admin_patch.js
   //   沒辦法用 `// >>> …` 哨兵框住 ⇒ 沿用 v6.292 的形狀，由
   //   scripts/lib/tourn-revert-v6381.mjs 逐字還原（它對「命中次數不合理」「還原後仍有
   //   v6381 痕跡」一律 throw ⇒ 這不是放寬，是把改動搬到宣告端）。
-  const SAP_REVERTED = revertV6381(SAP_RAW);
+  const SAP_REVERTED = revertV6381(revertAdminV146(SAP_RAW));   // 由新到舊（Rule 54）
   assert.ok(SAP_REVERTED !== SAP_RAW, '⚠ v6.381 的還原器對 server_admin_patch.js 是 no-op（宣告端過期了）');
   const SAP_STRIPPED = SAP_REVERTED.replace(/[ \t]*\/\/ >>> v\d+-[\w-]+[\s\S]*?\/\/ <<< v\d+-[\w-]+\n/g, '');
   assert.ok(SAP_STRIPPED !== SAP_REVERTED,

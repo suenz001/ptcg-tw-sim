@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.74</title>
+<title>PTCG Oracle Admin v1.75</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.74</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.75</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2179,6 +2179,8 @@ window.runFirestoreAudit = async function() {
 //   當掉的地方就在「整包撈回來」。改成 skip/limit 由伺服器只回一頁，
 //   並預設只看近 7 天；要看更久按 30/90 天或「全部資料」（一樣走分頁，不會當）。
 let oracleRoomsRange = '7d';     // '7d' | '30d' | '90d' | 'all'
+// v1.75：伺服器端牌組原型搜尋的掃描結果 { scanned, cap, capped, matched }；沒做原型搜尋時為 null
+let oracleRoomsArchScan = null;
 let oracleRoomsSearch = '';      // 送到伺服器的關鍵字（分頁後本機搜尋只搜得到當前這頁）
 let oracleRoomsSrv = null;       // 伺服器回的 { total, page, pageSize, totalPages }；null＝舊伺服器
 // v6.272：Firebase 房間清單改成伺服器端**有上限**（Firestore 讀取要錢，見 server_admin_patch v1.31）。
@@ -2206,6 +2208,8 @@ async function loadOracleRooms() {
   if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
   oracleRoomsCache = data.rooms;
   if (data.counts) oracleRoomsCounts = data.counts;  // 三狀態計數，toolbar 用
+  // v1.75：伺服器有做牌組原型搜尋時回報掃描範圍（舊伺服器不會有這個欄位 ⇒ null，不顯示提示）
+  oracleRoomsArchScan = data.archScan || null;
   // ⚠ paged 哨兵：舊伺服器不會回它 → 退回 v6.239 的前端切頁（行為不變），
   //   而不是靜默把「伺服器只回的一頁」當成全部。
   oracleRoomsSrv = data.paged ? { total: data.total, page: data.page, pageSize: data.pageSize, totalPages: data.totalPages } : null;
@@ -2320,6 +2324,13 @@ function renderRoomsTab(el, source, rooms) {
         + '" onclick="setOracleRoomsRange(\'' + r + '\')">' + _rangeLabels[r] + '</span>').join('')
     + '<span class="small muted" style="margin-left:auto;">預設近 7 天；每頁 ' + (srv.pageSize || ROOMS_PAGE_SIZE)
     + ' 筆由伺服器切好再送（不再整包撈回瀏覽器），選「全部資料」也不會當。</span></div>') : '';
+  // v1.75：牌組原型搜尋的掃描範圍提示（原型是伺服器即時算的，只能掃最近 N 間 ⇒ 被截斷時一定要講明白）
+  const _as = (source === 'oracle' && srv && oracleRoomsSearch) ? oracleRoomsArchScan : null;
+  const archScanHtml = _as ? ('<div class="toolbar" style="margin:0 0 10px;"><span class="small" style="color:'
+    + (_as.capped ? '#b45309' : '#5b6472') + '">🎴 牌組原型搜尋：在這個狀態／時間範圍內'
+    + (_as.capped ? ('只掃了<b>最近 ' + Number(_as.cap).toLocaleString() + ' 間</b>房（沒有全部掃完，請縮小時間範圍）')
+                  : ('掃了全部 ' + Number(_as.scanned).toLocaleString() + ' 間房'))
+    + '，其中 ' + Number(_as.matched).toLocaleString() + ' 間有座位的原型名稱符合。</span></div>') : '';
   const pagerHtml = totalPages > 1 ? `
     <div class="rooms-pager" style="display:flex;gap:0.4rem;align-items:center;justify-content:center;margin:0.6rem 0;flex-wrap:wrap">
       <button class="ghost" onclick="setRoomsPage(1, '${source}')" ${page === 1 ? 'disabled' : ''}>« 第一頁</button>
@@ -2336,12 +2347,13 @@ function renderRoomsTab(el, source, rooms) {
     <h2>${sourceLabel} <span class="small">(共 ${totalCount})</span></h2>
     ${fbNoticeHtml}
     ${rangeBarHtml}
+    ${archScanHtml}
     <div class="toolbar">
       <span class="filter-btn ${statusFilter === 'all' ? 'active' : ''}" onclick="setStatusFilter('all', '${source}')">全部 (${totalCount.toLocaleString()})</span>
       <span class="filter-btn ${statusFilter === 'playing' ? 'active' : ''}" onclick="setStatusFilter('playing', '${source}')">⚔️ 進行中 (${(counts.playing || 0).toLocaleString()})</span>
       <span class="filter-btn ${statusFilter === 'lobby' ? 'active' : ''}" onclick="setStatusFilter('lobby', '${source}')">🏠 等待中 (${(counts.lobby || 0).toLocaleString()})</span>
       <span class="filter-btn ${statusFilter === 'ended' ? 'active' : ''}" onclick="setStatusFilter('ended', '${source}')">✅ 已結束 (${(counts.ended || 0).toLocaleString()})</span>
-      <input class="search-box" id="rooms-search-${source}" value="${source === 'oracle' ? escapeHtml(oracleRoomsSearch) : ''}" placeholder="搜尋 房號 / 房間名 / 玩家名 / Email / 牌組卡名" oninput="filterRoomsBySearch(this.value, '${source}')" />
+      <input class="search-box" id="rooms-search-${source}" value="${source === 'oracle' ? escapeHtml(oracleRoomsSearch) : ''}" placeholder="${source === 'oracle' ? '搜尋 房號 / 房間名 / 玩家名 / Email / 牌組卡名 / 牌組原型（可搜「未分類」）' : '搜尋 房號 / 房間名 / 玩家名 / Email / 牌組卡名'}" oninput="filterRoomsBySearch(this.value, '${source}')" />
       <input class="search-box" id="diag-code-${source}" placeholder="🔍 房號卡死診斷 (如 E5D9)" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')showRoomDiag((this.value||'').trim().toUpperCase(),'${source}')" />
       <button class="ghost" onclick="showRoomDiag((document.getElementById('diag-code-${source}').value||'').trim().toUpperCase(),'${source}')">🔍 診斷</button>
     </div>
