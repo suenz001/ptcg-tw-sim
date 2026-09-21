@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.75</title>
+<title>PTCG Oracle Admin v1.76</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.75</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.76</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1802,13 +1802,15 @@ function renderTournamentStats(el, data) {
   tvSetRows('tsArchives', archives);
 }
 
-window.switchTab = function(name) {
+window.switchTab = function(name, opts) {
   currentTab = name;
-  if (name === 'oracle-rooms') statusFilter = 'playing'; // v1.41 點「Oracle 對戰」分頁預設只載「進行中」(server 只查 playing 房→快很多)；要看全部再按「全部」
+  // v1.41 點「Oracle 對戰」分頁預設只載「進行中」(server 只查 playing 房→快很多)；要看全部再按「全部」
+  // v1.76：跨分頁跳轉（例：牌組原型統計 →「看房間」）可指定要停在哪個狀態分頁（opts.status）。
+  if (name === 'oracle-rooms') statusFilter = (opts && opts.status) || 'playing';
 
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach(c => c.style.display = c.id === 'tab-' + name ? 'block' : 'none');
-  loadActive();
+  return loadActive();   // v1.76：回傳載入的 Promise，讓跨分頁跳轉可以等載完再填表單
 };
 
 window.loadActive = function(forceRefresh = false) {
@@ -2331,6 +2333,8 @@ function renderRoomsTab(el, source, rooms) {
     + (_as.capped ? ('只掃了<b>最近 ' + Number(_as.cap).toLocaleString() + ' 間</b>房（沒有全部掃完，請縮小時間範圍）')
                   : ('掃了全部 ' + Number(_as.scanned).toLocaleString() + ' 間房'))
     + '，其中 ' + Number(_as.matched).toLocaleString() + ' 間有座位的原型名稱符合。</span></div>') : '';
+  // v1.76：原型下拉（規則名＋未分類）——選了就等於在搜尋框輸入該名稱（伺服器端原型搜尋，v1.75）
+  const archPickHtml = (source === 'oracle' && srv) ? archetypePickerHtml(oracleRoomsSearch) : '';
   const pagerHtml = totalPages > 1 ? `
     <div class="rooms-pager" style="display:flex;gap:0.4rem;align-items:center;justify-content:center;margin:0.6rem 0;flex-wrap:wrap">
       <button class="ghost" onclick="setRoomsPage(1, '${source}')" ${page === 1 ? 'disabled' : ''}>« 第一頁</button>
@@ -2354,6 +2358,7 @@ function renderRoomsTab(el, source, rooms) {
       <span class="filter-btn ${statusFilter === 'lobby' ? 'active' : ''}" onclick="setStatusFilter('lobby', '${source}')">🏠 等待中 (${(counts.lobby || 0).toLocaleString()})</span>
       <span class="filter-btn ${statusFilter === 'ended' ? 'active' : ''}" onclick="setStatusFilter('ended', '${source}')">✅ 已結束 (${(counts.ended || 0).toLocaleString()})</span>
       <input class="search-box" id="rooms-search-${source}" value="${source === 'oracle' ? escapeHtml(oracleRoomsSearch) : ''}" placeholder="${source === 'oracle' ? '搜尋 房號 / 房間名 / 玩家名 / Email / 牌組卡名 / 牌組原型（可搜「未分類」）' : '搜尋 房號 / 房間名 / 玩家名 / Email / 牌組卡名'}" oninput="filterRoomsBySearch(this.value, '${source}')" />
+      ${archPickHtml}
       <input class="search-box" id="diag-code-${source}" placeholder="🔍 房號卡死診斷 (如 E5D9)" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')showRoomDiag((this.value||'').trim().toUpperCase(),'${source}')" />
       <button class="ghost" onclick="showRoomDiag((document.getElementById('diag-code-${source}').value||'').trim().toUpperCase(),'${source}')">🔍 診斷</button>
     </div>
@@ -2652,6 +2657,18 @@ window.showDeckModal = async function(code, source) {
   if (!room) { document.getElementById('modal-container').innerHTML = ''; alert('Room not found'); return; }
   const s0 = room.seats?.[0];
   const s1 = room.seats?.[1];
+  // v1.76：記下這間房，讓「以這副牌建立原型規則」拿得到牌表；原型名稱取自房間列表（伺服器 enrich 的 seat.archetype）
+  window._deckModalRoom = { code, source, room };
+  const _listRoom = (source === 'oracle') ? (oracleRoomsCache || []).find((r) => r && r._id === code) : null;
+  const seatHead = (seat, idx) => {
+    if (!seat?.uid || !(seat.deckEntries || []).length) return '';
+    const ls = _listRoom && Array.isArray(_listRoom.seats) ? _listRoom.seats[idx] : null;
+    const arch = (ls && ('archetype' in ls)) ? ls.archetype : undefined;
+    // 語義同房間列表：字串（含「未分類」）＝已比對；null／undefined ＝還不知道 ⇒ 不顯示（絕不當成未分類）
+    const archHtml = arch ? '<div class="small" style="color:#b8860b;font-weight:600;margin:2px 0 4px;">【' + escapeHtml(arch) + '】</div>' : '';
+    return archHtml + '<button class="tiny ghost" style="margin-bottom:6px;" onclick="draftRuleFromSeat(' + idx + ')"'
+      + ' title="切到「🎴 牌組原型規則」並用這副牌的主力寶可夢預填表單（存檔前記得按預覽命中）">🎴 以這副牌建立原型規則</button>';
+  };
   const renderDeck = (seat) => {
     if (!seat?.uid) return '<div class="empty">空位</div>';
     const entries = seat.deckEntries || [];
@@ -2669,10 +2686,12 @@ window.showDeckModal = async function(code, source) {
         <div class="deck-grid">
           <div class="deck-col">
             <h4>P1 — ${escapeHtml(s0?.name || '空')}</h4>
+            ${seatHead(s0, 0)}
             ${renderDeck(s0)}
           </div>
           <div class="deck-col">
             <h4>P2 — ${escapeHtml(s1?.name || '空')}</h4>
+            ${seatHead(s1, 1)}
             ${renderDeck(s1)}
           </div>
         </div>
@@ -2856,6 +2875,9 @@ function renderDeckRules(el) {
     background:#eef3fb;border:1px solid #d6e0f0;color:#2a4a7a;font-size:12px;cursor:pointer;}
   .uncls-chip:hover{background:#fdecec;border-color:#ef9a9a;color:#c62828;}
   .uncls-n{color:#7a8898;font-size:11px;}
+  .uncls-rule{margin-left:2px;padding:0 5px;border-radius:8px;background:#e3f2e6;color:#2e7d32;font-size:11px;}
+  .uncls-rule:hover{background:#2e7d32;color:#fff;}
+  .arch-rooms-link{margin-left:6px;font-size:11px;white-space:nowrap;}
       .rule-form label{display:block;font-size:12px;color:#5a6472;margin:8px 0 2px;}
       .rule-form input,.rule-form textarea{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #d6dbe3;border-radius:6px;font-size:13px;}
       .rule-form textarea{min-height:56px;resize:vertical;font-family:inherit;}
@@ -5566,7 +5588,8 @@ function renderArchetypeStats() {
       '<tr><td>' + (i + 1) + '</td>'
       + '<td><a href="#" class="player-name" title="看這個原型的代表牌組與推薦搭配"'
       + ' onclick="showArchetypeDetail(\'' + String(r.ruleId).replace(/'/g, '&apos;') + '\',\'' + srcKey + '\'); return false;"><b>'
-      + escapeHtml(r.name) + '</b></a></td>'
+      + escapeHtml(r.name) + '</b></a>'
+      + (srcKey === 'casual' ? archRoomsLink(r.name) : '') + '</td>'
       + '<td>' + r.usage + '</td>'
       + '<td>' + r.wins + '</td><td>' + r.losses + '</td>'
       + (showDraws ? '<td>' + (r.draws || 0) + '</td>' : '')
@@ -5574,10 +5597,14 @@ function renderArchetypeStats() {
     const u = blk.unclassified || {};
     // v1.63 高頻卡改成可點的 chip：點一下就把該卡加進「支援型寶可夢」排除清單並重算。
     //   後端已先濾掉非寶可夢（老大的指令／基本能量這類通用卡對「該開什麼規則」沒有鑑別度）。
+    // v1.76：chip 內多一個「＋規則」：直接用這張卡開新規則（與牌組 modal 共用 openRuleDraft）。
+    //   ⚠ 內層按鈕要 stopPropagation，否則會連帶觸發外層的「設為支援型」。
     const uTop = (u.topCards || []).slice(0, 20).map((c) =>
       '<span class="uncls-chip" title="點一下：設為支援型寶可夢（從此清單排除）"'
-      + ' onclick="addSupportPokemon(\'' + String(c.name).replace(/'/g, '&apos;') + '\')">'
-      + escapeHtml(c.name) + '<span class="uncls-n">×' + c.decks + '</span></span>').join('');
+      + ' onclick="addSupportPokemon(' + jsArgAttr(c.name) + ')">'
+      + escapeHtml(c.name) + '<span class="uncls-n">×' + c.decks + '</span>'
+      + '<span class="uncls-rule" title="用這張卡開一條新的原型規則"'
+      + ' onclick="event.stopPropagation(); draftRuleFromCard(' + jsArgAttr(c.name) + ')">＋規則</span></span>').join('');
     const uFiltered = u.filteredOut || {};
     const headHtml = '<tr><th>#</th>' + th('name', '牌組原型') + th('usage', '使用次數')
       + th('wins', '勝') + th('losses', '負') + (showDraws ? th('draws', '平') : '')
@@ -5589,7 +5616,7 @@ function renderArchetypeStats() {
           ? '<table><thead>' + headHtml + '</thead><tbody>' + rows + '</tbody></table>'
           : '<div class="empty">目前的規則在這個資料源沒有任何命中。</div>')
       + '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #dfe4ea;">'
-      + '<b>未分類</b>：' + (u.usage || 0) + ' 副（勝 ' + (u.wins || 0) + ' / 負 ' + (u.losses || 0) + '，勝率 ' + pct(u.winRate) + '）'
+      + '<b>未分類</b>' + (srcKey === 'casual' ? archRoomsLink('未分類') : '') + '：' + (u.usage || 0) + ' 副（勝 ' + (u.wins || 0) + ' / 負 ' + (u.losses || 0) + '，勝率 ' + pct(u.winRate) + '）'
       + (uTop
           ? '<div class="small muted" style="margin-top:6px;">未分類牌組裡最常出現的<b>寶可夢</b>（可據此開新規則；點卡片可設為支援型並排除）：</div>'
             + '<div class="uncls-chips">' + uTop + '</div>'
@@ -5694,6 +5721,110 @@ window.saveDeckRule = async function() {
   if (!res || res.error) { alert('儲存失敗：' + (res?.error || '?')); return; }
   _rulePreview = null;
   await loadDeckRules();
+};
+
+// ══ v1.76 牌組原型 ↔ 房間 ↔ 規則 互通（站長四選：牌組視窗一鍵建規則／高頻卡直接開規則／原型與房間互相跳轉）══
+//   ⭐ 所有「開一條新規則」的入口一律走 openRuleDraft（牌組 modal、未分類高頻卡 chip），
+//      所有「看某原型的房間」一律走 openArchetypeRooms（原型統計的每列、未分類列）——入口不各寫一套。
+/**
+ * 切到「🎴 牌組原型規則」並預填表單（**不存檔**；站長按「預覽命中」確認後再存）。
+ * draft = { name, includes: [卡名…], note }
+ */
+window.openRuleDraft = async function (draft) {
+  const d = draft || {};
+  await switchTab('deck-rules');
+  _rulePreview = null;
+  renderDeckRules(document.getElementById('tab-deck-rules'));
+  const set = (k, v) => { const e = document.getElementById(k); if (e) e.value = v; };
+  set('rule-id', '');                                   // ⚠ 一定是新規則，絕不覆蓋既有規則
+  set('rule-name', String(d.name || ''));
+  set('rule-includes', (d.includes || []).filter(Boolean).join('\n'));
+  set('rule-excludes', ''); set('rule-include-ids', ''); set('rule-exclude-ids', '');
+  set('rule-priority', 100); set('rule-note', String(d.note || ''));
+  const en = document.getElementById('rule-enabled'); if (en) en.checked = true;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  const nm = document.getElementById('rule-name'); if (nm) { try { nm.focus(); nm.select(); } catch (e) { /* 無 */ } }
+};
+/** 牌組原型用的「支援型寶可夢」名單（伺服器）；讀不到就當空名單（只是預填少排除幾張，不影響任何資料）。 */
+async function getSupportPokemonNames() {
+  try {
+    const cur = await api('/api/admin/support-pokemon');
+    return new Set((cur && Array.isArray(cur.names)) ? cur.names : []);
+  } catch (e) { return new Set(); }
+}
+/** 牌組 modal：用第 idx 個座位的牌表草擬規則（主力寶可夢前 2 名當「必須包含」）。 */
+window.draftRuleFromSeat = async function (idx) {
+  const m = window._deckModalRoom;
+  const seat = m && m.room && m.room.seats ? m.room.seats[idx] : null;
+  if (!seat || !(seat.deckEntries || []).length) { alert('這個座位沒有牌表'); return; }
+  await Promise.all([ensureCardIndex(), ensureCardTags()]);
+  const cands = mainPokemonCandidates(seat.deckEntries, await getSupportPokemonNames());
+  if (!cands.length) { alert('這副牌找不到非支援型的寶可夢，請手動建立規則。'); return; }
+  closeModal();
+  await openRuleDraft({
+    name: cands[0], includes: cands.slice(0, 2),
+    note: '由房間 ' + m.code + ' P' + (idx + 1) + '（' + (seat.name || '?') + '）的牌組草擬',
+  });
+};
+/** 未分類高頻卡 chip 的「＋規則」：用這一張卡開新規則。 */
+window.draftRuleFromCard = function (name) {
+  if (!name) return;
+  return openRuleDraft({ name, includes: [name], note: '由未分類高頻卡建立' });
+};
+/** 原型統計「統計範圍」→ 🎮 Oracle 對戰的時間範圍（對不上的一律「全部資料」，寧可多不可漏）。 */
+function archSinceToRoomsRange(since) {
+  return ({ '7': '7d', '30': '30d', '90': '90d' })[String(since)] || 'all';
+}
+/** 原型 → 房間：切到 🎮 Oracle 對戰「已結束」，帶入原型名搜尋（伺服器端原型搜尋，v1.75）。 */
+window.openArchetypeRooms = async function (name) {
+  if (!name) return;
+  oracleRoomsSearch = String(name);
+  oracleRoomsRange = archSinceToRoomsRange(currentArchSince());
+  oracleRoomsPage = 1;
+  _oracleSearchFocus = false;
+  await switchTab('oracle-rooms', { status: 'ended' });
+};
+/** 把任意字串變成「可以放進雙引號 HTML 屬性裡的 JS 字串字面值」（含引號、反斜線、&、<）。
+ *  ⚠ 不可用舊的 `&apos;` 手法：屬性值解碼後 `&apos;` 會變回 `'`，把 JS 字串提前截斷。 */
+function jsArgAttr(v) { return escapeHtml(JSON.stringify(String(v == null ? '' : v))); }
+/** 原型統計列上的「🎮 看房間」連結（唯一產生器）。 */
+function archRoomsLink(name) {
+  return ' <a href="#" class="arch-rooms-link" title="到「🎮 Oracle 對戰 → 已結束」搜尋這個原型的房間"'
+    + ' onclick="openArchetypeRooms(' + jsArgAttr(name) + '); return false;">🎮 看房間</a>';
+}
+/** 規則庫（啟用中的規則名）——🎮 Oracle 對戰的原型下拉用。
+ *  ⚠ 每個頁面生命週期**只嘗試一次**（in-flight 共用同一個 Promise，失敗也算嘗試過）——
+ *    api() 失敗時是 resolve 成 {error}，若失敗不記、下拉每次重繪又重打，就會「重繪 → 請求 → 重繪」無限迴圈
+ *    （未登入時 api 同步回 {error}，會變成整頁凍結；fable 審查抓到）。規則分頁存檔後 _deckRules 會自然更新。 */
+let _deckRulesLoadPromise = null;
+function ensureDeckRulesLoaded() {
+  if (_deckRulesLoadPromise) return _deckRulesLoadPromise;
+  if (_deckRules && _deckRules.length) { _deckRulesLoadPromise = Promise.resolve(false); return _deckRulesLoadPromise; }
+  _deckRulesLoadPromise = api('/api/admin/deck-rules').then((res) => {
+    if (res && !res.error && Array.isArray(res.rules) && res.rules.length) { _deckRules = res.rules; return true; }
+    return false;                                        // 失敗／沒有規則 ⇒ 不重繪、不重試
+  }, () => false);
+  return _deckRulesLoadPromise;
+}
+/** 🎮 Oracle 對戰搜尋框旁的原型下拉（規則名＋未分類）。 */
+function archetypePickerHtml(cur) {
+  if (!_deckRulesLoadPromise && !(_deckRules && _deckRules.length)) {
+    ensureDeckRulesLoaded().then((changed) => {
+      // 只有「真的拿到新規則」才重繪一次；失敗絕不重繪（否則又回到這裡）
+      if (changed && currentTab === 'oracle-rooms') { renderRoomsTab(document.getElementById('tab-oracle-rooms'), 'oracle', oracleRoomsCache); _restoreOracleSearchFocus(); }
+    });
+  }
+  const names = [...new Set((_deckRules || []).filter((r) => r && r.enabled !== false && r.name).map((r) => String(r.name)))]
+    .sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+  const opt = (v, label) => '<option value="' + escapeHtml(v) + '"' + (cur === v ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+  return '<select id="arch-pick-oracle" class="search-box" style="max-width:190px;" title="選一個牌組原型＝在搜尋框輸入它的名稱"'
+    + ' onchange="pickOracleArchetype(this.value)">'
+    + opt('', '🎴 依牌組原型…') + opt('未分類', '未分類') + names.map((n) => opt(n, n)).join('') + '</select>';
+}
+window.pickOracleArchetype = function (v) {
+  if (!v) return;
+  const si = document.getElementById('rooms-search-oracle'); if (si) si.value = v;
+  filterRoomsBySearch(v, 'oracle');
 };
 
 // ══ v1.50 玩家總覽（批次1）══════════════════════════════════════════════════
@@ -6147,6 +6278,7 @@ let matchRecordsCache = [];
 let matchRecordsTotal = 0;
 let matchRecordsFilter = '';
 let matchRecordsSearch = '';  // v1.23：全站搜尋字串（房號/玩家名/email/牌組）
+let matchRecordsArchScan = null;  // v1.76：{ scanned, cap, capped, matched }；沒做原型搜尋時為 null
 let matchRecordsModeFilter = 'all';  // v0.82: 'all' | 'online' | 'local'（線上=有 roomCode，本機=無）
 let matchRecordsLoading = false;
 // v0.91: 真正翻頁取代「載入更多」append 模式
@@ -6190,6 +6322,7 @@ async function loadMatchRecords(reset = false) {
     // v0.91: 直接 replace cache (不 concat) — 一頁 50 筆顯示
     matchRecordsCache = data.records || [];
     matchRecordsTotal = data.total ?? matchRecordsCache.length;
+    matchRecordsArchScan = data.archScan || null;   // v1.76：伺服器端原型搜尋的掃描範圍（舊伺服器 ⇒ null）
     renderMatchRecords(el);
     // v1.23：首次未載卡片索引時背景載入 → 補 ⚔️ 主力 badge（不擋初始 render）。
     if (!Object.keys(cardInfoMap).length) {
@@ -6334,8 +6467,15 @@ function renderMatchRow(r) {
     ? '<span class="mode-badge mode-online" title="線上對戰">🌐</span>'
     : '<span class="mode-badge mode-local" title="本機雙人對戰">🏠</span>';
   const _mainBadge = (m) => m ? `<div class="small" style="color:#d98c3f;font-size:10px;font-weight:600">⚔️ ${escapeHtml(m)}</div>` : '';
-  const p1MainBadge = _mainBadge(detectMainFromCardCounts(r.p1?.cardCounts));
-  const p2MainBadge = _mainBadge(detectMainFromCardCounts(r.p2?.cardCounts));
+  // v1.76：伺服器（v1.48）有補 archetype 就顯示【牌組原型】（與 🎮 Oracle 對戰／原型統計同一份分類）；
+  //   欄位不存在（舊伺服器）或 null（還不知道）才退回前端猜的「⚔️ 主力打手」。
+  const _archBadge = (m) => m ? `<div class="small" style="color:#b8860b;font-size:10px;font-weight:600">【${escapeHtml(m)}】</div>` : '';
+  //   v1.76 審查：archetype 為 null（還不知道）時也退回主力打手（仍絕不把 null 顯示成「未分類」）。
+  const _deckBadge = (p) => (p && typeof p === 'object' && p.archetype != null)
+    ? _archBadge(p.archetype)
+    : _mainBadge(detectMainFromCardCounts(p?.cardCounts));
+  const p1MainBadge = _deckBadge(r.p1);
+  const p2MainBadge = _deckBadge(r.p2);
   return `<tr>
     <td>${fmtMatchTime(r.endedAt)}</td>
     <td>${modeBadge} <code>${escapeHtml(r.roomCode || '本機')}</code></td>
@@ -6385,11 +6525,14 @@ function renderMatchRecords(el) {
       <span class="filter-btn ${matchRecordsModeFilter === 'online' ? 'active' : ''}" onclick="setMatchRecordsModeFilter('online')">🌐 線上對戰</span>
       <span class="filter-btn ${matchRecordsModeFilter === 'local' ? 'active' : ''}" onclick="setMatchRecordsModeFilter('local')">🏠 本機雙人</span>
       <span style="flex:1"></span>
-      <input class="search-box" id="match-global-search" placeholder="🔍 全站搜尋 房號/玩家名/Email/牌組(主力)" value="${escapeHtml(matchRecordsSearch)}"
+      <input class="search-box" id="match-global-search" placeholder="🔍 全站搜尋 房號/玩家名/Email/牌組(主力)/牌組原型（可搜「未分類」）" value="${escapeHtml(matchRecordsSearch)}"
         style="max-width:340px;" onkeydown="if(event.key==='Enter')filterMatchRecordsBySearch(this.value)" />
       <button onclick="filterMatchRecordsBySearch(document.getElementById('match-global-search').value)">搜尋</button>
       <button class="ghost" onclick="filterMatchRecordsBySearch('')">清除</button>
     </div>
+    ${matchRecordsArchScan ? ('<div class="small" style="margin:4px 0;color:' + (matchRecordsArchScan.capped ? '#b45309' : '#5b6472') + '">🎴 牌組原型搜尋：'
+      + (matchRecordsArchScan.capped ? ('只掃了<b>最近 ' + Number(matchRecordsArchScan.cap).toLocaleString() + ' 場</b>（沒有全部掃完）') : ('掃了全部 ' + Number(matchRecordsArchScan.scanned).toLocaleString() + ' 場'))
+      + '，其中 ' + Number(matchRecordsArchScan.matched).toLocaleString() + ' 場有一方的原型名稱符合。</div>') : ''}
     <div class="small" style="margin: 4px 0 12px; color: #7a8898;">點玩家名字 → 看這場用的牌組（勝者綠底）· 🗑 刪除測試紀錄</div>
     ${records.length === 0 ? '<div class="empty">尚無對戰紀錄（符合目前 filter 條件）</div>' : `
       <div class="table-wrap"><table>
@@ -6566,19 +6709,33 @@ async function ensureCardTags() {
 //   評分：規則卡(ex)+1000 / 進化階級×100(Stage2=2,Stage1=1,Basic=0) / 張數×10 → 取最高。
 //   需 cardInfoMap(ensureCardIndex) + cardTagsCache(ensureCardTags) 先載好。
 function detectMainPokemon(seat) {
-  const entries = seat?.deckEntries || [];
-  if (!entries.length) return '';
-  let bestName = '', bestScore = -1;
-  for (const e of entries) {
+  return mainPokemonCandidates(seat?.deckEntries || [])[0] || '';
+}
+/**
+ * v1.76 主力寶可夢候選（由強到弱、去重）的**唯一**判準 —— ⚔️ 主力打手 badge 與
+ * 「以這副牌建立原型規則」的預填共用這一份（Rule 38：判準不寫兩份）。
+ * 分數：ex +1000、Stage2 +200／Stage1 +100、每張 +10；排除卡片標籤『支援型』與
+ * extraSupport（牌組原型用的「支援型寶可夢」名單，名稱比對）。同名取最高分；第一名與 v1.19 相同。
+ */
+function mainPokemonCandidates(entries, extraSupport) {
+  const sup = extraSupport instanceof Set ? extraSupport : new Set(extraSupport || []);
+  const best = new Map();   // name -> { sc, i }：i ＝該名稱**達到最高分**的那一張的位置
+  let idx = -1;
+  for (const e of (entries || [])) {
+    idx++;
     const info = cardInfoMap[e.cardId];
     if (!info || info.supertype !== 'Pokemon') continue;
     if ((cardTagsCache[e.cardId] || []).includes('support')) continue; // 排除手動標『支援型』的寶可夢
+    const nm = info.displayName || info.name;
+    if (!nm || sup.has(nm) || sup.has(info.name)) continue;
     const isRuleBox = info.subtype === 'ex';
     const stageRank = info.subtype === 'Stage2' ? 2 : (info.subtype === 'Stage1' ? 1 : 0);
     const score = (isRuleBox ? 1000 : 0) + stageRank * 100 + (e.count || 0) * 10;
-    if (score > bestScore) { bestScore = score; bestName = info.displayName || info.name; }
+    if (!best.has(nm) || score > best.get(nm).sc) best.set(nm, { sc: score, i: idx });
   }
-  return bestName;
+  // 分數高者在前；同分依「達到該分數的那一張」出現的順序 ⇒ 第一名恆等於 v1.19 的「第一個嚴格最高分」
+  return [...best.entries()].map(([n, v]) => ({ n, sc: v.sc, i: v.i }))
+    .sort((a, b) => (b.sc - a.sc) || (a.i - b.i)).map((x) => x.n);
 }
 let statsLoading = false;
 let pokemonFilterMode = 'all';  // 'all' | 'main' | 'support'

@@ -1,5 +1,28 @@
 # 內部改版紀錄（不打包進網站）
 
+## admin v1.76 ＋ server patch v1.48：牌組原型 ↔ 房間 ↔ 規則 互通（站長四選）
+
+BASE `f0263cd8`（server patch v1.47）。只動 admin（`oracle-admin/admin.html`、`oracle-admin/server_admin_patch.js`），
+玩家端 src/static 零改動 ⇒ 網站版本號不動（仍 6.424）。
+部署：`update-tournament.bat`（先，把本機 E:\ 同步到最新）＋ `update-admin-full.bat`。
+
+- 站長選項（逐字）：「牌組視窗一鍵建規則（推薦）,對戰歷史改用原型,高頻卡直接開規則,原型與房間互相跳轉」。
+- ① 🃏 牌組 modal：每個座位顯示【原型】（取自房間列表的 seat.archetype，null 不顯示）＋「🎴 以這副牌建立原型規則」
+  → 中央 `openRuleDraft` 切到規則分頁預填（名稱＝主力第一名、必含＝主力前 2 名、備註記房號；rule-id 一律清空，不存檔）。
+  主力候選收斂成唯一判準 `mainPokemonCandidates`（⚔️ 主力打手 badge 的 detectMainPokemon 改呼叫它），另排除原型用的支援型名單。
+- ② 📜 對戰歷史：server v1.48 `app.locals._archetypeEnrichMatchRecords` 替每筆 p1/p2 補 archetype（中央 archetypeNameOf）；
+  q 對上原型名／「未分類」時在同一組篩選內依 endedAt 最多掃 5000 筆（只取 _id＋雙方 cardCounts），命中併進 $or，回 archScan。
+  前端有欄位顯示【原型】、沒欄位（舊伺服器）退回主力打手；分類失敗不影響列表。
+- ③ 未分類高頻卡 chip 多「＋規則」（stopPropagation，不會連帶設為支援型）→ 同一個 openRuleDraft。
+- ④ 🎮 Oracle 對戰搜尋框旁加原型下拉（規則名＋未分類）；原型統計（休閒表）每列與未分類列加「🎮 看房間」
+  → `openArchetypeRooms`：切到已結束、帶入原型名、時間範圍跟著原型統計的範圍（對不上一律全部資料）。switchTab 新增 opts.status 並回傳載入 Promise。
+- fable 5.1 獨立審查，必修兩條已修：① 原型下拉的規則庫載入失敗時會「重繪→請求→重繪」無限迴圈（api 失敗是 resolve {error}）
+  ⇒ 改成整頁只嘗試一次（共用 in-flight Promise），只有真的拿到規則才重繪一次；② match-records 的原型掃描沒包 try ⇒ 丟錯會讓請求掛住，已包。
+  建議採納：inline onclick 字串參數改用 `jsArgAttr`（JSON.stringify＋escapeHtml；舊 `&apos;` 手法解碼後會截斷 JS 字串，順手修掉「設為支援型」chip）；
+  對戰歷史 archetype 為 null 時退回主力打手；mainPokemonCandidates 同分順序與 v1.19 完全一致。
+  未採納（列管）：「未」「分」「ex」等短字串也會觸發 5000 筆原型掃描（沿用 v1.46 房間版的語義）；`_mrEntries` 與原型統計的 `ccToEntries` 形狀轉換兩份（純形狀轉換，改既有行需另寫還原器）。
+- 守衛 `test-admin-v176-archetype-links`（17 條；BASE 3 PASS／14 FAIL）；行內改動還原器 `sap-revert-admin-v148`（接進 test-v6303 H3 最前面）。
+
 ## server patch v1.47：休閒閒置判負改用「盤面進度時鐘」（玩家回報 EU3Y 掛機 11 分鐘沒被判）
 
 BASE `410cde01`（v6.424）。只動 `oracle-admin/server_admin_patch.js`（＋守衛），玩家端 src/static 零改動 ⇒ 網站版本號不動（仍 6.424）。

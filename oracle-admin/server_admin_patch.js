@@ -1600,6 +1600,30 @@ import('firebase-admin').then(async ({ default: admin }) => {
       const cardIds = req.query.cardIds
         ? String(req.query.cardIds).split(',').map(s => s.trim()).filter(Boolean).slice(0, 300)
         : [];
+      // >>> v148-admin-match-arch
+      // v1.48：q 對上某條原型規則名（或「未分類」）時，在同一組篩選（模式／時間／email，尚未加 q）裡
+      //   依 endedAt 由新到舊最多掃 MR_ARCH_SCAN_CAP 筆（只取 _id＋雙方 cardCounts），命中的 _id 併進 $or。
+      //   原型是即時算的、不在文件裡 ⇒ 只能這樣掃；被截斷時 archScan.capped=true，前端一定要講明白。
+      const MR_ARCH_SCAN_CAP = 5000;
+      let _mArchScan = null;
+      let _mArchIds = null;
+      //   ⚠ 整段包 try：原型掃描失敗就略過（其他搜尋照常），絕不可讓 reject 逃出 handler（請求會掛住）。
+      try {
+        if (q && app.locals && typeof app.locals._archetypeNameMatches === 'function'
+            && typeof app.locals._archetypeMatchRecordIds === 'function'
+            && await app.locals._archetypeNameMatches(q)) {
+          const _baseF = and.length ? { $and: and.slice() } : {};
+          const _docs = await db.collection('matchRecords')
+            .find(_baseF, { projection: { _id: 1, 'p1.cardCounts': 1, 'p2.cardCounts': 1 } })
+            .sort({ endedAt: -1 }).limit(MR_ARCH_SCAN_CAP).toArray();
+          _mArchIds = await app.locals._archetypeMatchRecordIds(_docs, q);
+          _mArchScan = { scanned: _docs.length, cap: MR_ARCH_SCAN_CAP, capped: _docs.length >= MR_ARCH_SCAN_CAP, matched: _mArchIds.length };
+        }
+      } catch (e) {
+        console.warn('[admin match-records] archetype scan skipped:', e && e.message);
+        _mArchIds = null; _mArchScan = null;
+      }
+      // <<< v148-admin-match-arch
       if (q || cardIds.length) {
         const or = [];
         if (q) {
@@ -1609,6 +1633,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
         for (const id of cardIds) {
           or.push({ ['p1.cardCounts.' + id]: { $gt: 0 } }, { ['p2.cardCounts.' + id]: { $gt: 0 } });
         }
+        // >>> v148-admin-match-arch
+        if (_mArchIds && _mArchIds.length) or.push({ _id: { $in: _mArchIds } });
+        // <<< v148-admin-match-arch
         if (or.length) and.push({ $or: or });
       }
       const filter = and.length ? { $and: and } : {};
@@ -1622,7 +1649,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
             .toArray(),
           db.collection('matchRecords').countDocuments(filter),
         ]);
-        res.json({ records, total, limit, skip });
+        // >>> v148-admin-match-arch
+        // v1.48：每筆補 p1/p2.archetype（失敗就不補 ⇒ 前端退回「⚔️ 主力打手」，列表照常）
+        try {
+          if (app.locals && typeof app.locals._archetypeEnrichMatchRecords === 'function') {
+            await app.locals._archetypeEnrichMatchRecords(records);
+          }
+        } catch (e) { console.warn('[admin match-records] archetype enrich failed:', e && e.message); }
+        // <<< v148-admin-match-arch
+        res.json({ records, total, limit, skip, archScan: _mArchScan });
       } catch (e) {
         console.warn('[admin match-records] error:', e.message);
         res.status(500).json({ error: e.message });
@@ -2989,6 +3024,46 @@ import('firebase-admin').then(async ({ default: admin }) => {
       return ids;
     };
     // <<< v146-admin-arch-search
+    // >>> v148-admin-match-arch
+    // ── v1.48（2026-09-21）admin 📜 對戰歷史改用【牌組原型】＋可搜原型 ──────────────────────────
+    //   站長選項（逐字）：「對戰歷史改用原型」。舊版每列只顯示前端猜的「⚔️ 主力打手」
+    //   （detectMainFromCardCounts），和 🎮 Oracle 對戰／牌組原型統計用的分類不是同一份。
+    //   ⇒ 對戰紀錄的 p1/p2.cardCounts 一律走本 IIFE 的中央 archetypeNameOf（Rule 38：不另寫分類）。
+    //   ⚠ cardCounts 是 {cardId: 張數} 物件，archetypeNameOf 要 [{cardId,count}]（它用 .length 判「沒牌表」）
+    //     ⇒ 形狀轉換與牌組原型統計的 ccToEntries 相同（純形狀轉換，不含任何分類判準）。
+    const _mrEntries = (cc) => (cc && typeof cc === 'object' && !Array.isArray(cc)
+      ? Object.entries(cc).map(([cardId, count]) => ({ cardId, count }))
+      : []);
+    //   就地替每筆紀錄的 p1/p2 補 archetype（字串含「未分類」＝已比對；null＝還不知道）。
+    app.locals._archetypeEnrichMatchRecords = async (records) => {
+      const nameMap = await getCardNameMap();
+      const rules = nameMap.size ? await getEnabledRulesCached() : [];
+      for (const r of (records || [])) {
+        for (const k of ['p1', 'p2']) {
+          const p = r && r[k];
+          if (p && typeof p === 'object') p.archetype = archetypeNameOf(_mrEntries(p.cardCounts), nameMap, rules);
+        }
+      }
+    };
+    //   任一方原型名稱包含 q 的紀錄 _id（null＝還不知道，一律不算命中）。
+    app.locals._archetypeMatchRecordIds = async (docs, q) => {
+      const lc = String(q || '').trim().toLowerCase();
+      if (!lc) return [];
+      const nameMap = await getCardNameMap();
+      const rules = nameMap.size ? await getEnabledRulesCached() : [];
+      const ids = [];
+      for (const r of (docs || [])) {
+        const hit = ['p1', 'p2'].some((k) => {
+          const p = r && r[k];
+          if (!p) return false;
+          const a = archetypeNameOf(_mrEntries(p.cardCounts), nameMap, rules);
+          return a != null && String(a).toLowerCase().includes(lc);
+        });
+        if (hit) ids.push(r._id);
+      }
+      return ids;
+    };
+    // <<< v148-admin-match-arch
     // ══ v1.28（v6.266）套牌戰績（P1，只有伺服器端）：GET /api/deck-stats?deckId= ══
     //   玩家許願：牌組列表的 ✕ 旁邊放一個 🔍，看這一副牌的休閒勝率／對各原型勝率。
     //   ⭐ 「勝敗紀錄跟著套牌走」天然成立：Deck.id 是 client 端 `crypto.randomUUID()`
