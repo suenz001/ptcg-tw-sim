@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'afa88763e23a273739d188ed1a8e179552b98475';   // v6.418（上一版）
+const PREV_SHA = 'e6f0ce96015b45187f897ffbab59df476b9bed09';   // v6.419（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,13 +757,19 @@ const PREV_SHA = 'afa88763e23a273739d188ed1a8e179552b98475';   // v6.418（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.419 前移：PREV_SHA 從 v6.418（afa88763）起算。
+  // ⚠⚠ v6.420 前移：PREV_SHA 從 v6.419（e6f0ce96）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐⭐v6.419（站長裁定）：「雙方同時取完最後一張獎賞」統一成**平手** ——
-  //   終局判出來時若佇列裡還有沒兌現的 take-prize-choose，先結清再交給 v6.361 中央判定重判；
-  //   並且終局之後不再把佇列裡的 picker 浮上檯面。玩家端只動 engine.ts ＋ version.ts。
+  // ⭐⭐⭐v6.420（站長交辦三件事）：
+  //   (一) 全站浮動視窗的拖曳收斂成 `src/lib/modal-drag.ts`（新檔）＋ 加上**邊界夾制**
+  //        ⇒ 玩家回報「視窗被拖到側邊就關不掉、也不能做任何動作」根治；
+  //        game/+page.svelte 與 MobilePortraitBattle.svelte 各自那一份實作刪掉、改掛 action。
+  //   (二) 對戰中獎賞卡檢視的卡背改用站內唯一那一份 `.card-back`（紅色圓形）。
+  //   (三) engine：取完獎賞的一方若自己沒有可上場的寶可夢 ⇒ 平手（站長裁定）。
   'src/lib/game/engine.ts',
+  'src/lib/modal-drag.ts',
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
+  'src/routes/game/MobilePortraitBattle.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',

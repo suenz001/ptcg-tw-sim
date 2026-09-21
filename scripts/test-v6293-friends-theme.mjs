@@ -569,6 +569,26 @@ function revertV6418(region) {
   return r;
 }
 
+// ⭐⭐⭐v6.420（IRON_RULES Rule 40）：勝負視窗原本有一份**自己的**拖曳（`gameoverPanelPos`），
+//   完全沒有夾制——而它是終局後唯一的出口，拖出畫面就只能重新整理（fable 5.1 審查列為阻擋級）。
+//   本版改掛中央 `use:modalDrag`、標題列掛 `modal-drag-handle`，其餘 markup 一個字都沒動。
+//   ⚠ 與 V6321／V6389／V6418 同一個機制：逐條還原之後，其餘仍必須逐位元等於 BASE。
+const V6420_GAMEOVER_EDITS = [
+  [
+    "<div class=\"gameover-modal\" use:modalDrag>\n      <div class=\"gameover-modal-header modal-drag-handle\"\n",
+    "<div class=\"gameover-modal\"\n      style:transform={`translate(calc(-50% + ${gameoverPanelPos.x}px), calc(-50% + ${gameoverPanelPos.y}px))`}>\n      <div class=\"gameover-modal-header\"\n        onpointerdown={onGameoverHeaderDown}\n        onpointermove={onGameoverHeaderMove}\n        onpointerup={onGameoverHeaderUp}\n"
+  ]
+];
+function revertV6420Gameover(region) {
+  let r = region;
+  for (const [now, before] of V6420_GAMEOVER_EDITS) {
+    const n = r.split(now).length - 1;
+    assert.strictEqual(n, 1, 'v6.420 的合法改動必須恰出現一次（實際 ' + n + '）：' + now.slice(0, 70));
+    r = r.replace(now, before);
+  }
+  return r;
+}
+
 // ⭐⭐ v6.362（Rule 40：判準上移到意圖層，不放寬也不刪除）
 //   v6.361（站長裁定 D-10／D-11）在本檔新增了「非錦標賽平手結算視窗」。那一塊是**純新增**，
 //   而且整塊用 HTML 註解哨兵框住：
@@ -605,7 +625,7 @@ await T('E1 ⭐⭐⭐ 對戰版面分支區間（手機直式＋三種桌機版�
   if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6293 E1 對戰版面分支逐位元比對', '需要歷史 commit；E1c 的結構斷言不需要歷史，仍在守'); skipped.push('E1（淺複製）'); return; }
   const baseSrc = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':src/routes/game/+page.svelte'], { maxBuffer: 1 << 28 }).toString('utf8');
   assert.strictEqual(sha256(revertV6418(revertV6389(revertV6321(battleRegionOf(GAME))))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
-  assert.strictEqual(sha256(gameoverRegionOf(stripV6361DrawModal(GAME))), sha256(gameoverRegionOf(baseSrc)), '⚠⚠ 勝負結算 modal 被動到了');
+  assert.strictEqual(sha256(revertV6420Gameover(gameoverRegionOf(stripV6361DrawModal(GAME)))), sha256(gameoverRegionOf(baseSrc)), '⚠⚠ 勝負結算 modal 被動到了');
 });
 await T('E1b ⭐ 正對照：把對戰版面分支改一個位元 ⇒ E1 的比對必須不同（不是恆真式）', () => {
   const r = battleRegionOf(GAME);
@@ -641,6 +661,13 @@ await T('E1e ⭐⭐ 正對照：v6.418 的還原表少列一條 ⇒ revertV6418 
   // ② 合法改動不存在時必須大聲紅（不可以默默放行）
   assert.throws(() => revertV6418(r.replace(V6418_BATTLE_EDITS[0][0], V6418_BATTLE_EDITS[0][1])), /恰出現一次/,
     '合法改動不存在時 revertV6418 沒有紅');
+});
+await T('E1f ⭐⭐ 正對照：v6.420 勝負視窗的還原表少列一條 ⇒ 必須紅（不是把改動洗掉）', () => {
+  const r = gameoverRegionOf(stripV6361DrawModal(GAME));
+  assert.throws(() => revertV6420Gameover(r.replace(V6420_GAMEOVER_EDITS[0][0], V6420_GAMEOVER_EDITS[0][1])), /恰出現一次/,
+    '合法改動不存在時 revertV6420Gameover 沒有紅');
+  const probe = r + '<!-- v6420-probe -->';
+  assert.notStrictEqual(sha256(revertV6420Gameover(probe)), sha256(revertV6420Gameover(r)), '還原表把無關改動洗掉了 ⇒ E1 恆真');
 });
 await T('E1c ⭐⭐ 不需要歷史的等價條件：對戰版面分支區間零 `friend`／零 `lobby-tab`／零 `FriendsPanel`（本版新增的東西一個都不准滲進去）；且區間 >20000 字元、含兩套分支', () => {
   const r = battleRegionOf(GAME);

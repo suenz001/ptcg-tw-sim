@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
   import { retryImg } from '$lib/img-retry';
+  import { modalDrag } from '$lib/modal-drag';   // ⭐v6.420：全站視窗拖曳＋邊界夾制的唯一來源
 import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式清單上限（單一來源，UI 與守衛共用）
   // ⭐⭐⭐v6.177「抓取中／抓取失敗不清空已顯示資料」的唯一中央述詞（stale-while-revalidate）。
   import { adoptOrKeep, mergeKeyedOrKeep } from '$lib/ui/stale-keep';
@@ -1725,24 +1726,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
       : 0
   );
 
-  // v4.21 勝負視窗（可拖曳）— 對局結束時 overlay 戰鬥盤面，保留場上狀況檢視
-  //   gameoverPanelPos：拖曳偏移（初始 0,0；CSS center 定位 + transform translate）
-  //   gameoverPanelDragStart：drag origin（null = 非拖曳中）
-  let gameoverPanelPos = $state({ x: 0, y: 0 });
-  let gameoverPanelDragStart: { mx: number; my: number; ox: number; oy: number } | null = null;
-  function onGameoverHeaderDown(e: PointerEvent) {
-    gameoverPanelDragStart = { mx: e.clientX, my: e.clientY, ox: gameoverPanelPos.x, oy: gameoverPanelPos.y };
-    (e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
-  }
-  function onGameoverHeaderMove(e: PointerEvent) {
-    if (!gameoverPanelDragStart) return;
-    const dx = e.clientX - gameoverPanelDragStart.mx;
-    const dy = e.clientY - gameoverPanelDragStart.my;
-    gameoverPanelPos = { x: gameoverPanelDragStart.ox + dx, y: gameoverPanelDragStart.oy + dy };
-  }
-  function onGameoverHeaderUp(_e: PointerEvent) {
-    gameoverPanelDragStart = null;
-  }
+  // v4.21 勝負視窗（可拖曳）— 對局結束時 overlay 戰鬥盤面，保留場上狀況檢視。
+  // ⭐⭐⭐v6.420：這是站內**第三份**各自為政的拖曳實作，而且完全沒有夾制
+  //   —— 勝負視窗是終局後**唯一的出口**（返回房間／再來一局都在裡面），
+  //   把它拖出畫面就只能重新整理。改掛中央 `use:modalDrag`（見 src/lib/modal-drag.ts）。
+  //   ⚠ 它靠 CSS `transform: translate(-50%,-50%)` 置中 ⇒ 中央 action 刻意改用獨立的
+  //     `translate` 屬性，兩者自然疊加，置中不會被蓋掉。
 
   // v3.98 聊天 fab 圖示拖曳 — 玩家可移動到不擋牌的位置
   //   位置存 localStorage 重整保留；session 內也持續
@@ -2232,16 +2221,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let floatingRetreatMenu = $state<{ x: number; y: number } | null>(null);
   let viewDiscardFor = $state<0 | 1 | null>(null);
 
-  // ── 彈出 UI 視窗拖曳（v2.44） ──────────────────────────────────────────────
+  // ── 彈出 UI 視窗拖曳（v2.44 起；⭐v6.420 收斂成中央 action）────────────────
   // Leon feedback：選牌 / 選寶可夢 modal 彈出後，玩家想拖曳視窗回去看場上的卡，
   // 被拖曳後背景變暗狀況也要取消，讓玩家看到被遮住的場面。
-  // 實作：
-  //   - `.sel-header` 為拖曳把手（避免按到按鈕）
-  //   - 被拖曳後 `.selection-overlay` 加 `.dragged` → 背景 transparent + pointer-events:none
-  //   - `.selection-modal` pointer-events:auto 讓 modal 本身仍可點
-  //   - 切換新 modal 時 $effect 自動重置 offset（pendingSelection 物件變更就 trigger）
-  let modalOffset = $state<{ x: number; y: number }>({ x: 0, y: 0 });
-  let modalDragged = $state(false);
+  // ⭐⭐⭐v6.420：實作整個搬到 `src/lib/modal-drag.ts`（`use:modalDrag`）——
+  //   ・本檔原本這一份與 MobilePortraitBattle 的 `sheetOffset` 是**同一件事的兩份實作**（Rule 38）。
+  //   ・原本**沒有邊界夾制**，視窗可以被拖到畫面外 ⇒ 關閉鈕跟著出去 ⇒ 玩家回報的「關不掉、
+  //     也不能做任何動作」。中央 action 一律夾住（至少留 `MODAL_MIN_VISIBLE` 在畫面內）。
+  //   ・原本十幾個視窗共用同一個 `modalOffset` ⇒ 拖過 A 之後開 B 會直接出現在被拖走的位置；
+  //     action 版每個視窗各自持有位移，並用 `resetKey` 在換內容時歸零。
   let suppressToolSelectModal = $state(false); // v5.413：拖曳道具自動解期間抑制 attach-tool modal 閃現
   // v4.923：mulligan 補抽 stepper 計數覆寫值 — null 代表使用預設最大值
   let mulliganPickOverride = $state<number | null>(null);
@@ -2253,29 +2241,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let takePrizeTimerId = $state<ReturnType<typeof setInterval> | null>(null);
   // v3.74：mulligan 揭示 modal 的當前頁碼（每頁顯示一手起手 = 7 張卡）
   let revealPage = $state(0);
-  let modalDragStart: { sx: number; sy: number; ox: number; oy: number } | null = null;
-  function onModalHeaderPointerDown(e: PointerEvent) {
-    const t = e.target as HTMLElement | null;
-    if (!t) return;
-    // 按到 header 裡面的按鈕/輸入框時不觸發拖曳
-    if (t.closest('button, input, select, textarea, a, [role="button"]')) return;
-    modalDragStart = {
-      sx: e.clientX, sy: e.clientY,
-      ox: modalOffset.x, oy: modalOffset.y,
-    };
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    e.preventDefault();
-  }
-  function onModalHeaderPointerMove(e: PointerEvent) {
-    if (!modalDragStart) return;
-    const dx = e.clientX - modalDragStart.sx;
-    const dy = e.clientY - modalDragStart.sy;
-    modalOffset = { x: modalDragStart.ox + dx, y: modalDragStart.oy + dy };
-    if (!modalDragged && Math.abs(dx) + Math.abs(dy) > 3) modalDragged = true;
-  }
-  function onModalHeaderPointerUp(_e: PointerEvent) {
-    modalDragStart = null;
-  }
 
   // ── 招式前置丟能量選擇（v1.57） ────────────────────────────────────────────
   // 玩家宣告招式、ATTACK_PRE_DISCARD_CHOICE 命中時彈出的能量挑選 modal 狀態
@@ -3569,9 +3534,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
       selectionCounts = {};
       selectionReorderKeep = [];
       selectionReorderDiscard = new Set();
-      modalOffset = { x: 0, y: 0 };
-      modalDragged = false;
-      modalDragStart = null;
       // reorder-deck-top 切到新 pending 時，從 candidateIids 初始化 keep 列表（保持原順序）
       if (pendingSelection?.type === 'reorder-deck-top') {
         const cand = (pendingSelection.params?.candidateIids as string[] | undefined) ?? [];
@@ -5657,17 +5619,24 @@ function _setupSelfPending(g: any, seat: number): string | null {
     }
   }
   // v5.642 名人堂點選 → 載入該賽事「當初賽程」(歸檔 TARCHIVE)
+  // ⭐v6.420：請求序號 —— 玩家在「載入賽程中…」就按了關閉，之後 API 才回來時，
+  //   不可以再把賽程視窗彈出來（審查者抓到；關掉的視窗自己冒回來也是一種「關不掉」）。
+  let tHofSeq = 0;
   async function tHofOpen(c: any) {
     if (!c || !c.eventId) { tError = '此冠軍紀錄沒有可顯示的賽程'; return; }
+    const seq = ++tHofSeq;
     tHofLoading = true; tHofView = null; tHofPage = 1; tError = ''; tHofEventId = c.eventId || '';
     try {
       const r = await tApi(`/champion-bracket?eventId=${encodeURIComponent(c.eventId)}`);
+      if (seq !== tHofSeq) return;   // 已經被關掉（或又開了別的）⇒ 丟棄這個過期回應
       tHofView = (r && Array.isArray(r.matches)) ? r : null;
       tHofPage = 1;
-    } catch (e: any) { tError = String(e?.message ?? e); }
-    finally { tHofLoading = false; }
+    } catch (e: any) { if (seq === tHofSeq) tError = String(e?.message ?? e); }
+    finally { if (seq === tHofSeq) tHofLoading = false; }
   }
-  function tHofClose() { tHofView = null; }
+  // ⭐v6.420：loading 也要一起收 —— 否則 API 慢／失敗時「載入賽程中…」會永遠蓋在畫面上（玩家回報的那一類卡死）。
+  //   並把序號往前推，讓還在路上的回應作廢。
+  function tHofClose() { tHofView = null; tHofLoading = false; tHofSeq++; }
   // v5.692 對戰戰報：點賽程某場 → 載入公開 log（已結束賽事，後端已剝私有訊息）
   async function tMatchLogOpen(round: number, idx: number, p1: string, p2: string) {
     if (!tHofEventId) return;
@@ -10612,15 +10581,21 @@ function _setupSelfPending(g: any, seat: number): string | null {
         </div>
       {/if}
       {#if tHofLoading}
-        <div class="hof-modal-backdrop" role="presentation"><div class="hof-modal"><p class="muted" style="text-align:center;margin:18px 0;">載入賽程中…</p></div></div>
+        <!-- ⭐v6.420：資訊類視窗一律要有出口（✕ ＋ 點背景關閉）＋ 可拖曳 -->
+        <div class="hof-modal-backdrop" role="presentation" onclick={tHofClose}>
+          <div class="hof-modal" use:modalDrag role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+            <div class="tourn-bracket-head modal-drag-handle">📋 載入賽程中…<button class="hof-modal-x" onclick={tHofClose} aria-label="關閉">✕</button></div>
+            <p class="muted" style="text-align:center;margin:18px 0;">載入賽程中…</p>
+          </div>
+        </div>
       {/if}
       {#if tHofView}
         {@const _hr = Math.max(1, tHofView.rounds ?? 1)}
         {@const _hpg = Math.min(Math.max(1, tHofPage), _hr)}
         {@const _hrm = (tHofView.matches ?? []).filter((m: any) => m.round === _hpg)}
         <div class="hof-modal-backdrop" role="presentation" onclick={tHofClose}>
-          <div class="hof-modal" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Escape' && tHofClose()}>
-            <div class="tourn-bracket-head">📋 {tHofView.eventName ?? '錦標賽'}{#if tHofView.championName} ｜ 🏆 {tHofView.championName}{/if}<button class="hof-modal-x" onclick={tHofClose} aria-label="關閉">✕</button></div>
+          <div class="hof-modal" use:modalDrag role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Escape' && tHofClose()}>
+            <div class="tourn-bracket-head modal-drag-handle">📋 {tHofView.eventName ?? '錦標賽'}{#if tHofView.championName} ｜ 🏆 {tHofView.championName}{/if}<button class="hof-modal-x" onclick={tHofClose} aria-label="關閉">✕</button></div>
             <div class="tourn-bracket-pager">
               <button class="tourn-pg-btn" onclick={() => tHofPage = Math.max(1, _hpg - 1)} disabled={_hpg <= 1}>◀ 上一輪</button>
               <span class="tourn-pg-title">{_hpg === _hr ? '🏆 決賽' : '第 ' + _hpg + ' 輪'}</span>
@@ -10650,8 +10625,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {/if}
       {#if tMatchLog || tMatchLogLoading}
         <div class="hof-modal-backdrop" role="presentation" onclick={tMatchLogClose}>
-          <div class="hof-modal mlog-modal" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Escape' && tMatchLogClose()}>
-            <div class="tourn-bracket-head">📜 對戰戰報 ｜ {tMatchLogTitle}<button class="hof-modal-x" onclick={tMatchLogClose} aria-label="關閉">✕</button></div>
+          <div class="hof-modal mlog-modal" use:modalDrag role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Escape' && tMatchLogClose()}>
+            <div class="tourn-bracket-head modal-drag-handle">📜 對戰戰報 ｜ {tMatchLogTitle}<button class="hof-modal-x" onclick={tMatchLogClose} aria-label="關閉">✕</button></div>
             {#if tMatchLogLoading}
               <p class="muted" style="text-align:center;margin:18px 0;">載入戰報中…</p>
             {:else if !tMatchLog || (tMatchLog.log?.length ?? 0) === 0}
@@ -12555,8 +12530,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
 {/if}
 {#if showForfeitConfirm}
   <div class="forfeit-modal-backdrop" onclick={() => showForfeitConfirm = false} role="presentation">
-    <div class="forfeit-modal" onclick={(e) => e.stopPropagation()} role="dialog">
-      <h3 class="forfeit-title">確定宣告對手棄權？</h3>
+    <div class="forfeit-modal" use:modalDrag onclick={(e) => e.stopPropagation()} role="dialog">
+      <h3 class="forfeit-title modal-drag-handle">確定宣告對手棄權？</h3>
       <p class="forfeit-desc">對手已超過 {fmtMMSS(Math.min(300, Math.max(60, roomData?.idleTimeoutSec ?? 180)))} 無回應。確認後系統會立刻判定你獲勝，無法撤回。</p>
       <div class="forfeit-actions">
         <button class="forfeit-confirm" onclick={confirmClaimForfeit}>確定獲勝</button>
@@ -12587,9 +12562,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {@const energyTotal = (pendingSelection.params?.totalCount as number | undefined) ?? pendingSelection.maxCount}
     {@const energyPlaced = (pendingSelection.params?.placedCount as number | undefined) ?? 0}
     {@const energyTypeName = (pendingSelection.params?.energyTypeName as string | undefined) ?? ''}
-    <div class="selection-overlay" class:dragged={modalDragged}>
-      <div class="selection-modal" class:retreat-modal={isPokePicker || isDmgDist || isEnergyDist} style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
-        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+    <div class="selection-overlay">
+      <div class="selection-modal" class:retreat-modal={isPokePicker || isDmgDist || isEnergyDist} use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
+        <div class="sel-header" title="拖曳視窗">
           <h3>{selectionTitle(pendingSelection.type)}</h3>
           {#if isDmgDist}
             <div class="dmg-progress">
@@ -13183,8 +13158,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   <!-- Floating Evolution Menu -->
   {#if floatingEvoMenu}
     <div class="float-evo-backdrop" onclick={() => floatingEvoMenu = null}></div>
-    <div class="float-evo-menu" style="left:{floatingEvoMenu.x}px;top:{floatingEvoMenu.y}px;">
-      <div class="float-evo-title">選擇進化</div>
+    <div class="float-evo-menu" use:modalDrag={{ resetKey: floatingEvoMenu?.iid }} style="left:{floatingEvoMenu.x}px;top:{floatingEvoMenu.y}px;">
+      <div class="float-evo-title modal-drag-handle">選擇進化</div>
       {#each floatingEvoMenu.evoOpts as evo}{@const ec=getCard(evo.cardId)}
         <button class="evo-choice wide-evo" disabled={actionBusy} onclick={(e)=>{e.stopPropagation();dispatch(GameActions.evolve(floatingEvoMenu!.fromIid,evo.iid));floatingEvoMenu=null;}}>
           <img use:retryImg={ec?.imageUrl} src={ec?.imageUrl} alt={ec?.name}/><span>{ec?.name}</span>
@@ -13283,9 +13258,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {@const burstNames = [...new Set((myPlayer?.hand ?? [])
         .filter(c => canBeInitialActiveCard(pool.get(c.cardId)))
         .map(c => pool.get(c.cardId)?.name ?? '?'))]}
-    <div class="selection-overlay" class:dragged={modalDragged}>
-      <div class="selection-modal mulligan-modal mulligan-reveal-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
-        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+    <div class="selection-overlay">
+      <div class="selection-modal mulligan-modal mulligan-reveal-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
+        <div class="sel-header" title="拖曳視窗">
           <h3>🔥 起手沒有【基礎】寶可夢</h3>
           <p class="sel-hint">
             你的起手沒有【基礎】寶可夢，但有 <strong>{burstNames.join('、')}</strong>，
@@ -13338,9 +13313,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {@const pageIdx = Math.min(Math.max(revealPage, 0), totalPages - 1)}
     {@const curHand = oppHands[pageIdx] ?? []}
     {@const oppName2 = game.players[oppIdx].name}
-    <div class="selection-overlay" class:dragged={modalDragged}>
-      <div class="selection-modal mulligan-modal mulligan-reveal-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
-        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+    <div class="selection-overlay">
+      <div class="selection-modal mulligan-modal mulligan-reveal-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
+        <div class="sel-header" title="拖曳視窗">
           <h3>👀 對手起手揭示</h3>
           <p class="sel-hint">
             <strong>{oppName2}</strong> 起手無基礎寶可夢，重抽 {totalPages} 次。依 PTCG 官方規則，每次重抽前的 7 張手牌需向你揭示確認。
@@ -13403,9 +13378,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {@const nDraw = game.pendingMulliganDraw[myIdx]}
     {@const pickCount = mulliganPickOverride === null ? nDraw : Math.min(Math.max(0, mulliganPickOverride), nDraw)}
     {@const oppName = game.players[oppIdx].name}
-    <div class="selection-overlay" class:dragged={modalDragged}>
-      <div class="selection-modal mulligan-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
-        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+    <div class="selection-overlay">
+      <div class="selection-modal mulligan-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
+        <div class="sel-header" title="拖曳視窗">
           <h3>🔄 對手的重抽懲罰</h3>
           <p class="sel-hint">
             <strong>{oppName}</strong> 起手沒有基礎寶可夢，重新洗牌 {nDraw} 次。
@@ -13443,9 +13418,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
          `position:fixed; inset:0` 的全螢幕遮罩。舊條件下，重抽過的那一方整個開局都被蓋住；
          等對手一按【準備完成】，規則上就輪到他放出場了（setupActorSeat 回他），
          盤面卻還是被這層遮罩擋著—— 他什麼都按不到，而伺服器正在倒數判他閒置敗。 -->
-    <div class="selection-overlay" class:dragged={modalDragged}>
-      <div class="selection-modal mulligan-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
-        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+    <div class="selection-overlay">
+      <div class="selection-modal mulligan-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
+        <div class="sel-header" title="拖曳視窗">
           <h3>⏳ 等待對手</h3>
           <!-- v6.158 文案改成【對手現在真的卡在哪一步】：舊文案一律寫「正在決定是否多抽」，
                但對手那時候其實還在選出場寶可夢（揭示確認、補抽都要等他 setupDone 之後）。 -->
@@ -13463,9 +13438,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {@const currentN = preAttackDiscard.picked.size}
     {@const estDmg = spec.baseDamage + currentN * spec.damagePerEnergy}
     {@const estSelfDmg = currentN * (spec.selfDamagePerCounter ?? 0)}
-    <div class="selection-overlay" class:dragged={modalDragged}>
-      <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
-        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+    <div class="selection-overlay">
+      <div class="selection-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
+        <div class="sel-header" title="拖曳視窗">
           <h3>🔢 {preAttackDiscard.attackName}</h3>
           <p class="sel-hint">{spec.choicePrompt ?? `選擇放置幾個傷害指示物（${minN}~${maxN}）`}</p>
           <p class="sel-hint">
@@ -13517,9 +13492,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {@const spec = preAttackDiscard.spec}
     {@const yesLabel = spec.choiceYesLabel ?? '是'}
     {@const noLabel = spec.choiceNoLabel ?? '否'}
-    <div class="selection-overlay" class:dragged={modalDragged}>
-      <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
-        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+    <div class="selection-overlay">
+      <div class="selection-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
+        <div class="sel-header" title="拖曳視窗">
           <h3>❓ {preAttackDiscard.attackName}</h3>
           <p class="sel-hint">{spec.choicePrompt ?? '是否觸發此選用效果？'}</p>
         </div>
@@ -13608,9 +13583,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
          原 v4.23 邏輯允許 0 張當「跳過」path，但 footer 已有 secondary「不啟用追加效果」按鈕
          專門走 0 張，primary「啟用追加效果」應只在 pickedAmount >= req 時 enable，
          否則 disabled 並提示「目前 X/req」。 -->
-    <div class="selection-overlay" class:dragged={modalDragged}>
-      <div class="selection-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
-        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+    <div class="selection-overlay">
+      <div class="selection-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
+        <div class="sel-header" title="拖曳視窗">
           <h3>{isHandDiscard ? '🪶' : '⚡'} {preAttackDiscard.attackName}：選擇要{
             spec.verb === 'return-to-hand' ? '放回手牌的' :
             spec.verb === 'return-to-deck' ? '放回牌庫的' :
@@ -13690,7 +13665,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   <!-- v2.119 N的索羅亞克ex｜暗黑底牌 copy-attack picker ─────────────────── -->
   {#if copyAttackPicker}
     <div class="selection-overlay">
-      <div class="selection-modal copy-attack-modal">
+      <div class="selection-modal copy-attack-modal" use:modalDrag>
         <div class="sel-header">
           <h3>🌑 暗黑底牌：選擇要使用的招式</h3>
           <p class="sel-hint">從備戰區的「N的」寶可夢中選一隻，複製它的招式作為這個招式使用。</p>
@@ -13734,7 +13709,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   <!-- ⭐v6.389 招式清單溢出 picker ───────────────────────────────────────────── -->
 {#if attackListPicker}
   <div class="selection-overlay">
-    <div class="selection-modal copy-attack-modal">
+    <div class="selection-modal copy-attack-modal" use:modalDrag>
       <div class="sel-header">
         <h3>⚔ 選擇要使用的招式</h3>
         <p class="sel-hint">這隻寶可夢目前可以使用 {attackListPicker.eff.length} 個招式（含特性／道具借來的）。</p>
@@ -13782,7 +13757,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {#if personateAttackPicker}
     {@const op = personateAttackPicker.oppPoke}
     <div class="selection-overlay">
-      <div class="selection-modal copy-attack-modal">
+      <div class="selection-modal copy-attack-modal" use:modalDrag>
         <div class="sel-header">
           <h3>🎭 扮晶晶酒：選擇要扮演的招式</h3>
           <p class="sel-hint">從對手戰鬥場的「太晶」寶可夢中選 1 個招式，作為這個招式使用。<br/>若選到有「若希望」效果的招式（如激流水泵），下一步會詢問是否啟用追加效果。</p>
@@ -13823,7 +13798,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {#if brightChallengePicker}
     {@const tp = brightChallengePicker.topPoke}
     <div class="selection-overlay">
-      <div class="selection-modal copy-attack-modal">
+      <div class="selection-modal copy-attack-modal" use:modalDrag>
         <div class="sel-header">
           <h3>耀閃挑戰：選擇要使用的招式</h3>
           <p class="sel-hint">自己的牌庫上方 1 張卡為「{tp.card.name}」（將被丟棄）。請選擇 1 個它持有的招式作為這個招式使用。</p>
@@ -13863,7 +13838,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   <!-- v4.39 火箭隊的貓老大ex｜高傲指令 — 對手牌庫頂 10 張寶可夢的招式選擇 picker ─── -->
   {#if rocketCommandPicker}
     <div class="selection-overlay">
-      <div class="selection-modal copy-attack-modal">
+      <div class="selection-modal copy-attack-modal" use:modalDrag>
         <div class="sel-header">
           <!-- v5.181：sourceAttackName 動態 (高傲指令/揮指/試著模仿). 用 inline ?? 避開 svelte 5 @const placement rule -->
           {#if rocketCommandPicker.revealOnly}
@@ -13964,8 +13939,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
      避免玩家直覺按掉導致瀏覽器永久封鎖、之後很難再開） -->
 {#if showNotifyPrompt}
   <div class="modal-overlay notify-prompt-overlay" role="dialog" aria-modal="true" aria-label="開啟賽事通知">
-    <div class="notify-prompt-modal">
-      <h3>🔔 開啟賽事通知？</h3>
+    <div class="notify-prompt-modal" use:modalDrag>
+      <h3 class="modal-drag-handle">🔔 開啟賽事通知？</h3>
       <p>開放報到、輪到你可以進場、以及對戰中輪到你行動時，就算你切到別的分頁或鎖屏，也會跳通知提醒你。</p>
       <p class="muted">此分頁需保持開啟；你正在看畫面時不會打擾你。隨時可在設定中關閉。</p>
       {#if notifyIOSNeedsInstall}
@@ -14156,9 +14131,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   <!-- Retreat Menu（置中橫向 grid，支援放大鏡，避免撞到畫面頂部） -->
   {#if floatingRetreatMenu && myPlayer?.active}
-    <div class="selection-overlay" class:dragged={modalDragged} onclick={() => floatingRetreatMenu = null}>
-      <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
-        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+    <div class="selection-overlay" onclick={() => floatingRetreatMenu = null}>
+      <div class="selection-modal retreat-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }} onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header" title="拖曳視窗">
           <h3>🔄 選擇換入的寶可夢</h3>
           <p class="sel-hint">挑選一隻備戰區的寶可夢上場；點放大鏡 🔍 查看詳情以區分同名卡身上的能量</p>
         </div>
@@ -14240,9 +14215,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {@const _benchD = defenderPlayer?.bench ?? []}
     {@const _pickOkD = !!promotePickDef && _benchD.some((b) => b.iid === promotePickDef)}
     {@const _pickNameD = _pickOkD ? (getCard(_benchD.find((b) => b.iid === promotePickDef)!.cardId)?.name ?? '') : ''}
-    <div class="selection-overlay" class:dragged={modalDragged}>
-      <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
-        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+    <div class="selection-overlay">
+      <div class="selection-modal retreat-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }} onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header" title="拖曳視窗">
           <h3>⚠️ 派出新的戰鬥寶可夢</h3>
           <p class="sel-hint">先點選要上場的寶可夢，再按下方的「確定上場」；點放大鏡 🔍 查看詳情</p>
         </div>
@@ -14265,9 +14240,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {@const _benchS = myPlayer?.bench ?? []}
     {@const _pickOkS = !!promotePickSelf && _benchS.some((b) => b.iid === promotePickSelf)}
     {@const _pickNameS = _pickOkS ? (getCard(_benchS.find((b) => b.iid === promotePickSelf)!.cardId)?.name ?? '') : ''}
-    <div class="selection-overlay" class:dragged={modalDragged}>
-      <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
-        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+    <div class="selection-overlay">
+      <div class="selection-modal retreat-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }} onclick={(e)=>e.stopPropagation()}>
+        <div class="sel-header" title="拖曳視窗">
           <h3>⚠️ 派出新的戰鬥寶可夢</h3>
           <p class="sel-hint">先點選要上場的寶可夢，再按下方的「確定上場」；點放大鏡 🔍 查看詳情</p>
         </div>
@@ -14311,9 +14286,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       });
     })()}
     <div class="zoom-overlay" onclick={() => viewDiscardFor = null}>
-      <div class="zoom-modal discard-modal" onclick={(e)=>e.stopPropagation()}>
+      <div class="zoom-modal discard-modal" use:modalDrag={{ resetKey: viewDiscardFor }} onclick={(e)=>e.stopPropagation()}>
         <button class="zoom-close" onclick={() => viewDiscardFor = null}>✕</button>
-        <h3 class="discard-title">🗑 {viewPlayer.name} 的棄牌區（{viewPlayer.discard.length} 張）</h3>
+        <h3 class="discard-title modal-drag-handle">🗑 {viewPlayer.name} 的棄牌區（{viewPlayer.discard.length} 張）</h3>
         <div class="sel-grid">
           {#each discardGrouped as g}{@const c=getCard(g.cardId)}
             {#if c}
@@ -14334,13 +14309,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   <!-- Settings Modal (Audio & BGM) -->
   {#if showSettingsModal}
     <div class="zoom-overlay" onclick={() => showSettingsModal = false}>
-      <div class="zoom-modal settings-modal" onclick={(e)=>e.stopPropagation()}>
+      <div class="zoom-modal settings-modal" use:modalDrag onclick={(e)=>e.stopPropagation()}>
         <!-- ⭐ v6.286：✕ 放進零高度的 sticky dock（.settings-close-dock），捲動時釘在 modal 頂端。
              v6.285 讓設定 modal 能捲之後，position:absolute 的 ✕ 會跟著內容被捲出畫面（375×667 捲到底 ✕ top=-148）；
              手機橫式的 modal 蓋滿整個 overlay ⇒ 只能捲回頂端才關得掉。只有設定 modal 有這個 dock，
              其他三個 zoom modal（棄牌區／獎賞卡檢視／卡牌放大）的 markup 與 CSS 原樣（守衛 test-v6286 DOM rect 全等）。 -->
         <div class="settings-close-dock"><button class="zoom-close" onclick={() => showSettingsModal = false}>✕</button></div>
-        <h3 class="settings-title">⚙️ 設定</h3>
+        <h3 class="settings-title modal-drag-handle">⚙️ 設定</h3>
         
         <details class="settings-section">
           <summary>🎵 背景音樂 (BGM)</summary>
@@ -14558,8 +14533,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   <!-- v4.60 對方提議 modal -->
   {#if oppRestartProposed && mode === 'online'}
     <div class="zoom-overlay restart-proposal-overlay">
-      <div class="restart-proposal-modal" onclick={(e)=>e.stopPropagation()}>
-        <h3>🔄 對手提議重新開局</h3>
+      <div class="restart-proposal-modal" use:modalDrag onclick={(e)=>e.stopPropagation()}>
+        <h3 class="modal-drag-handle">🔄 對手提議重新開局</h3>
         <p>對方希望從擲幣重新開始這場對戰。是否同意？</p>
         <p class="restart-countdown-text">倒數 {restartCountdown}s 後自動拒絕</p>
         <div class="restart-proposal-actions">
@@ -14588,8 +14563,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   <!-- v5.180 提議返回房間 modal/strip/toast -->
   {#if oppReturnRoomProposed && mode === 'online'}
     <div class="zoom-overlay restart-proposal-overlay">
-      <div class="restart-proposal-modal" onclick={(e)=>e.stopPropagation()}>
-        <h3>🚪 對手提議返回房間</h3>
+      <div class="restart-proposal-modal" use:modalDrag onclick={(e)=>e.stopPropagation()}>
+        <h3 class="modal-drag-handle">🚪 對手提議返回房間</h3>
         <p>對方希望結束目前對戰返回房間，雙方可重新選擇牌組。是否同意？</p>
         <p class="restart-countdown-text">倒數 {returnRoomCountdown}s 後自動拒絕</p>
         <div class="restart-proposal-actions">
@@ -14619,9 +14594,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="zoom-overlay" onclick={closePrizeView}>
-      <div class="zoom-modal discard-modal prize-view-modal" onclick={(e)=>e.stopPropagation()}>
+      <div class="zoom-modal discard-modal prize-view-modal" use:modalDrag onclick={(e)=>e.stopPropagation()}>
         <button class="zoom-close" onclick={closePrizeView} aria-label="關閉">✕</button>
-        <h3 class="discard-title">{prizeViewMode === 'replay' ? '🎁 獎賞卡（回放：全部攤開）' : '🎁 獎賞卡（只看得到已翻到正面的）'}</h3>
+        <h3 class="discard-title modal-drag-handle">{prizeViewMode === 'replay' ? '🎁 獎賞卡（回放：全部攤開）' : '🎁 獎賞卡（只看得到已翻到正面的）'}</h3>
         {#if prizeViewMode !== 'replay'}
           <p class="prize-view-note">蓋著的獎賞卡對雙方都是機密，這裡只會顯示被「弦月光芒」「火箭隊的妨礙機器人」之類的效果翻到正面的那幾張。</p>
         {/if}
@@ -14640,7 +14615,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                       class:legend-half-r={twoCardStadiumHalfIndex(_pvp?.prizes, _pvc.iid, pool) === 1}/><span class="sel-name">{_pvcard.name}</span>
                   </button>
                 {:else}
-                  <div class="sel-card prize-view-back" title="蓋著的獎賞卡（雙方都看不到）"><span class="prize-view-back-mark">🂠</span><span class="sel-name">蓋著</span></div>
+                  <div class="sel-card prize-view-back" title="蓋著的獎賞卡（雙方都看不到）"><div class="card-back prize-view-cardback"><span class="card-back-mark">?</span></div><span class="sel-name">蓋著</span></div>
                 {/if}
               {/each}
               {#if (_pvp?.prizes.length??0) === 0}<p class="sel-empty">（獎賞卡已全部取完）</p>{/if}
@@ -14654,7 +14629,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   <!-- Zoom -->
   {#if zoomCard}
     <div class="zoom-overlay" onclick={closeZoom}>
-      <div class="zoom-modal" onclick={(e)=>e.stopPropagation()}>
+      <div class="zoom-modal" use:modalDrag={{ resetKey: zoomCard?.id }} onclick={(e)=>e.stopPropagation()}>
+        <!-- ⭐v6.420：這個視窗沒有標題列 ⇒ 補一條極簡把手（其餘 markup 一個字都沒動） -->
+        <div class="modal-drag-handle zoom-drag-bar" title="拖曳視窗（可移開查看下方戰況）">⠿</div>
         {#if zoomStack.length > 0}
           <button class="zoom-back" onclick={popZoom} title="返回上一層">← 返回</button>
         {/if}
@@ -14860,8 +14837,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {#if mode === 'online' && game && roomData?.undoRequest && roomData.undoRequest.status === 'pending' && mySeatIdx >= 0 && mySeatIdx <= 1 && roomData.undoRequest.fromSeatIdx !== mySeatIdx
       && undoRequestForThisGame(roomData.undoRequest, game)}
     <div class="modal-overlay undo-modal-overlay" role="dialog" aria-modal="true" aria-label="對手請求悔棋">
-      <div class="undo-request-modal">
-        <h3>↩ 對手請求悔棋</h3>
+      <div class="undo-request-modal" use:modalDrag>
+        <h3 class="modal-drag-handle">↩ 對手請求悔棋</h3>
         <p class="undo-action-desc">對方上一手：<b>{roomData.undoRequest.actionDesc}</b></p>
         <p class="muted">同意後雙方回到對方做這個動作之前的狀態。<br>不同意則此手悔棋按鈕消失，對方需做新動作才能再次請求。</p>
         <div class="undo-modal-btns">
@@ -14880,12 +14857,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
        把平手說成「雙敗」，不再叫玩家等管理員），
        所以這裡 gate 掉 isTournament，不重複渲染、也不改動錦標賽的任何既有行為。 -->
   {#if game.phase === 'game-over' && (game.winner === null || game.winner === undefined) && !isTournament}
-    <div class="gameover-modal"
-      style:transform={`translate(calc(-50% + ${gameoverPanelPos.x}px), calc(-50% + ${gameoverPanelPos.y}px))`}>
-      <div class="gameover-modal-header"
-        onpointerdown={onGameoverHeaderDown}
-        onpointermove={onGameoverHeaderMove}
-        onpointerup={onGameoverHeaderUp}
+    <div class="gameover-modal" use:modalDrag>
+      <div class="gameover-modal-header modal-drag-handle"
         title="拖曳此處移動平手視窗 — 可看到背後戰鬥盤最終狀態">
         <span class="gameover-modal-drag-hint">☰ 拖曳移動</span>
       </div>
@@ -14924,12 +14897,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       aiPlayerIndex !== null ? (game.winner === (1 - aiPlayerIndex)) :
       true
     )}
-    <div class="gameover-modal"
-      style:transform={`translate(calc(-50% + ${gameoverPanelPos.x}px), calc(-50% + ${gameoverPanelPos.y}px))`}>
-      <div class="gameover-modal-header"
-        onpointerdown={onGameoverHeaderDown}
-        onpointermove={onGameoverHeaderMove}
-        onpointerup={onGameoverHeaderUp}
+    <div class="gameover-modal" use:modalDrag>
+      <div class="gameover-modal-header modal-drag-handle"
         title="拖曳此處移動勝負視窗 — 可看到背後戰鬥盤最終狀態">
         <span class="gameover-modal-drag-hint">☰ 拖曳移動</span>
       </div>
@@ -15007,10 +14976,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
 <!-- ── v4.913 Auth modal (port 自牌組編輯器) ─────────────────────────── -->
 {#if showAuthModal}
   <div class="pv-overlay" onclick={() => { showAuthModal = false; }}>
-    <div class="pv-inner auth-modal" onclick={(e) => e.stopPropagation()}>
+    <div class="pv-inner auth-modal" use:modalDrag onclick={(e) => e.stopPropagation()}>
       <button class="pv-close" onclick={() => { showAuthModal = false; }} aria-label="關閉">×</button>
 
-      <h3 class="modal-title">帳號管理</h3>
+      <h3 class="modal-title modal-drag-handle">帳號管理</h3>
 
       <div class="auth-tabs">
         <button class:active={authTab === 'upgrade'} onclick={() => { authTab = 'upgrade'; authError = null; }}>
@@ -15071,9 +15040,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
 <!-- ── v4.913 Change-password modal ──────────────────────────────────── -->
 {#if showChangePasswordModal}
   <div class="pv-overlay" onclick={() => { showChangePasswordModal = false; }}>
-    <div class="pv-inner auth-modal" onclick={(e) => e.stopPropagation()}>
+    <div class="pv-inner auth-modal" use:modalDrag onclick={(e) => e.stopPropagation()}>
       <button class="pv-close" onclick={() => { showChangePasswordModal = false; }} aria-label="關閉">×</button>
-      <h3 class="modal-title">🔑 更改密碼</h3>
+      <h3 class="modal-title modal-drag-handle">🔑 更改密碼</h3>
       {#if cpSuccess}
         <p class="auth-success">密碼已成功更改！下次登入請使用新密碼。</p>
         <div class="auth-form">
@@ -18005,8 +17974,30 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   .selection-overlay{ position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.82); display:flex; align-items:center; justify-content:center; font-family:system-ui,'Microsoft JhengHei',sans-serif; transition:background .15s ease; }
   /* v2.44：modal 被拖曳後背景變透明且不擋互動（讓玩家看見、甚至操作場上），modal 本體仍可互動 */
-  .selection-overlay.dragged{ background:transparent; pointer-events:none; }
-  .selection-overlay.dragged .selection-modal{ pointer-events:auto; box-shadow:0 8px 32px rgba(0,0,0,.6); }
+  /* ⭐⭐⭐v6.420：「視窗被拖曳後讓出下方畫面」的**唯一**一份規則（站長：拖曳視窗查看下方戰況）。
+     `dragged` 這個 class 由中央 action（src/lib/modal-drag.ts）掛在最近的 overlay／backdrop 上，
+     所以這裡把站內每一種 overlay 都列進同一條規則，而不是每種各寫一份。 */
+  .selection-overlay.dragged, .zoom-overlay.dragged, .pv-overlay.dragged,
+  .hof-modal-backdrop.dragged, .forfeit-modal-backdrop.dragged, .modal-overlay.dragged{
+    background:transparent; pointer-events:none; }
+  /* ⚠ 這裡一定要**把祖先寫出來**：Svelte 的 scoped CSS 會把「以 .dragged 開頭」的規則
+     當成 unused selector 整條刪掉（.dragged 是 action 在 runtime 加的，markup 裡看不到）。
+     實測：寫成 `.dragged > .zoom-modal` 時編譯產物裡完全沒有那一條。 */
+  .selection-overlay.dragged .selection-modal,
+  .zoom-overlay.dragged .zoom-modal,
+  .zoom-overlay.dragged .restart-proposal-modal,
+  .pv-overlay.dragged .pv-inner,
+  .hof-modal-backdrop.dragged .hof-modal,
+  .forfeit-modal-backdrop.dragged .forfeit-modal,
+  .modal-overlay.dragged .notify-prompt-modal,
+  .modal-overlay.dragged .undo-request-modal{
+    pointer-events:auto; box-shadow:0 8px 32px rgba(0,0,0,.6); }
+  /* ⭐v6.420：所有拖曳把手共用這一份（cursor／不選取／touch-action —— 手機沒有 touch-action:none 會被當成捲動）。 */
+  .modal-drag-handle{ cursor:grab; user-select:none; touch-action:none; }
+  .modal-drag-handle:active{ cursor:grabbing; }
+  /* 卡牌放大視窗沒有標題列 ⇒ 補一條極簡把手（只有這一個視窗用得到）。 */
+  .zoom-drag-bar{ display:flex; align-items:center; justify-content:center; height:18px; margin:-.2rem 0 .1rem;
+    color:#8fa6cc; font-size:.8rem; letter-spacing:.3em; opacity:.75; }
   .selection-modal{ background:#1a2a1a; border:1px solid #4a8a4a; border-radius:12px; padding:1.25rem; max-width:680px; width:95vw; max-height:85vh; display:flex; flex-direction:column; gap:.75rem; color:#f0f0f0; will-change:transform; }
   /* v2.44：sel-header 兼任拖曳把手，給 cursor 提示；touch-action:none 阻止觸控滾動干擾 */
   .sel-header{ cursor:grab; user-select:none; touch-action:none; }
@@ -18416,10 +18407,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .prize-view-side-title{ margin:.15rem 0 .35rem; color:#ffd23f; font-size:.9rem; font-weight:700; }
   /* ⭐v6.418 對戰中的獎賞檢視：說明列與「蓋著」的卡背格 */
   .prize-view-note{ margin:.1rem 0 .5rem; color:#cfe0ff; font-size:.8rem; line-height:1.5; opacity:.85; }
-  .prize-view-back{ display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:.2rem; background:linear-gradient(145deg,#1d2b4a,#16203a); border:1px solid #2f4470;
-    border-radius:6px; color:#8fa6cc; cursor:default; }
-  .prize-view-back-mark{ font-size:1.6rem; line-height:1; }
+  .prize-view-back{ cursor:default; }
+  /* ⭐v6.420（站長）：卡背一律用站內**唯一**那一份紅色圓形卡背 `.card-back`
+     （setup 階段的對手寶可夢、觀戰的手牌、抽牌動畫、取獎賞動畫都是同一份）。
+     這裡只補尺寸，讓它與 `.sel-card img`（width:64px）對齊；顏色／圖案完全不另外寫一份。 */
+  .prize-view-cardback{ width:64px; height:89px; }
   .prize-view-btn{ background:rgba(255,210,63,.14); border:1px solid #a8842a; border-radius:6px; color:#ffd23f; cursor:pointer; font:inherit; padding:1px 7px; }
   .prize-view-btn:hover{ background:rgba(255,210,63,.28); }
 

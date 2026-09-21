@@ -425,10 +425,17 @@ await T('6a 靜態：dock 規則存在於三個 @media（桌機／手機直式�
   const noCmt = GAME.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
   assert.strictEqual((noCmt.match(/settings-close-dock/g) || []).length, 1 + rules.length, 'dock class 只准出現在設定 modal 的 markup（1 處）與 dock 的 CSS 規則（' + rules.length + ' 條）');
   // 其他三個 zoom modal 的 ✕ 仍是 modal 的直接子元素（沒有被包進 dock）
-  for (const anchor of ['<div class="zoom-modal discard-modal" onclick', '<div class="zoom-modal discard-modal prize-view-modal" onclick', '<div class="zoom-modal" onclick']) {
+  // ⚠ v6.420：anchor 不再帶 ` onclick` —— 本版在 class 與 onclick 之間插了 `use:modalDrag`
+  //   （全站視窗拖曳收斂）。class 的結尾引號已足以區分三個 modal，守的意圖（✕ 沒被包進 dock）不變。
+  for (const anchor of ['<div class="zoom-modal discard-modal"', '<div class="zoom-modal discard-modal prize-view-modal"', '<div class="zoom-modal"']) {
     const i = GAME.indexOf(anchor); assert.ok(i > 0, '找不到 ' + anchor);
-    const seg = GAME.slice(i, GAME.indexOf('</div>', i));
-    assert.ok(seg.includes('<button class="zoom-close"') && !seg.includes('settings-close-dock'), anchor + ' 的 ✕ 被動到了');
+    // ⚠ v6.420：卡牌放大視窗（`<div class="zoom-modal"`）在 ✕ 之前多了一條拖曳把手
+    //   （`.zoom-drag-bar`，因為它是唯一沒有標題列的 zoom modal）⇒ 不能再用「到第一個 </div>」切片。
+    //   守的意圖不變：✕ 仍在這個 modal 內，而且**沒有**被包進 `.settings-close-dock`。
+    const seg = GAME.slice(i, i + 1500);
+    const xi = seg.indexOf('<button class="zoom-close"');
+    assert.ok(xi > 0, anchor + ' 的 ✕ 不見了');
+    assert.ok(!seg.slice(0, xi).includes('settings-close-dock'), anchor + ' 的 ✕ 被包進 dock 了');
   }
 });
 let chromium = null;

@@ -9302,8 +9302,22 @@ export function judgeEndgameV6361(state: GameState, withPrizeRule: boolean): End
       if (v.over) return v;
       return { over: true, winner: null, reason: '雙方同時取得所有獎賞卡，且雙方皆可放置戰鬥寶可夢' };
     }
-    if (out[0]) return { over: true, winner: 0, reason: `${ps[0].name} 取得所有獎賞卡` };
-    if (out[1]) return { over: true, winner: 1, reason: `${ps[1].name} 取得所有獎賞卡` };
+    // >>> v6420-prize-and-no-mon-draw
+    // ⭐⭐⭐v6.420（站長裁定，逐字）：「單方取完6張獎賞、而同一瞬間該方自己也沒有寶可夢可上場，
+    //   如果攻擊方因此沒有能上場的寶可夢，應該判定為雙方平手（一方拿完獎賞卡，但自己卻沒有寶可夢可以上場）」。
+    //   ⇒ 取完獎賞的那一方（w）若自己 `noMon[w]`，則**雙方各自滿足一個勝利條件**
+    //     （w 取完獎賞、對手依放置規則獲勝）⇒ 同時達成 ⇒ 平手。
+    //   ⚠ 對手沒有寶可夢（`noMon[1 - w]`）的情形**不變**：兩個條件都指向 w 勝。
+    //   ⚠ 這一段只在 `withPrizeRule`（重判）時走得到，與「雙方都取完」那一格互斥（上面已 return）。
+    if (out[0] || out[1]) {
+      const w: 0 | 1 = out[0] ? 0 : 1;
+      if (noMon[w]) {
+        return { over: true, winner: null,
+          reason: `${ps[w].name} 取得所有獎賞卡，但同時沒有可上場的寶可夢` };
+      }
+      return { over: true, winner: w, reason: `${ps[w].name} 取得所有獎賞卡` };
+    }
+    // <<< v6420-prize-and-no-mon-draw
   }
   return byPlacement();
 }

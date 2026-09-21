@@ -23,6 +23,7 @@ import { stripV6400Engine } from './lib/engine-strip-v6400.mjs';
 import { stripV6402Engine } from './lib/engine-strip-v6402.mjs';
 import { stripV6403Engine } from './lib/engine-strip-v6403.mjs';   // ⭐v6.403 ex 判準收斂（12 組）
 import { stripV6408Engine } from './lib/engine-strip-v6408.mjs';   // ⭐v6.408 攻擊方加成收斂成一份（2 組）
+import { stripV6420Engine } from './lib/engine-strip-v6420.mjs';   // ⭐v6.420 取完獎賞但自己沒寶可夢⇒平手（1 組）
 import { stripV6419Engine } from './lib/engine-strip-v6419.mjs';   // ⭐v6.419 同時取完⇒平手＋終局不浮 picker（2 組）
 import { stripV6418Engine } from './lib/engine-strip-v6418.mjs';   // ⭐v6.418 取獎賞 picker 排隊 refresher（1 組）
 import { stripV6414Engine } from './lib/engine-strip-v6414.mjs';   // ⭐v6.414 招式限定加傷／覆寫（4 組）
@@ -1195,9 +1196,12 @@ await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等�
         // ⭐⭐ Rule 54（由新到舊）：v6.413 必須排在 v6.410 **之前**（它是最新的一版）。
         // ⭐⭐ Rule 54（由新到舊）：v6.414 必須排在 v6.413 **之前**（它是最新的一版）。
         // ⭐⭐ Rule 54（由新到舊）：v6.418 必須排在 v6.414 **之前**。
-        // ⭐⭐ Rule 54（由新到舊）：v6.419 必須排在 v6.418 **之前**（它是最新的一版）。
-        const rawA19 = stripV6419Engine(raw);
-        ok(rawA19 !== raw, 'v6.419 的還原器過期（兩組哨兵區塊的字面對不上）');
+        // ⭐⭐ Rule 54（由新到舊）：v6.419 必須排在 v6.418 **之前**。
+        // ⭐⭐ Rule 54（由新到舊）：v6.420 必須排在 v6.419 **之前**（它是最新的一版）。
+        const rawA20 = stripV6420Engine(raw);
+        ok(rawA20 !== raw, 'v6.420 的還原器過期（哨兵區塊的字面對不上）');
+        const rawA19 = stripV6419Engine(rawA20);
+        ok(rawA19 !== rawA20, 'v6.419 的還原器過期（兩組哨兵區塊的字面對不上）');
         const rawA18 = stripV6418Engine(rawA19);
         ok(rawA18 !== rawA19, 'v6.418 的還原器過期（哨兵區塊的字面對不上）');
         const rawA14 = stripV6414Engine(rawA18);
@@ -1265,9 +1269,12 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
         // ⭐⭐ Rule 54（由新到舊）：v6.413 必須排在 v6.410 **之前**（它是最新的一版）。
         // ⭐⭐ Rule 54（由新到舊）：v6.414 必須排在 v6.413 **之前**（它是最新的一版）。
         // ⭐⭐ Rule 54（由新到舊）：v6.418 必須排在 v6.414 **之前**。
-        // ⭐⭐ Rule 54（由新到舊）：v6.419 必須排在 v6.418 **之前**（它是最新的一版）。
-        const rawA19 = stripV6419Engine(raw);
-        ok(rawA19 !== raw, 'v6.419 的還原器過期（兩組哨兵區塊的字面對不上）');
+        // ⭐⭐ Rule 54（由新到舊）：v6.419 必須排在 v6.418 **之前**。
+        // ⭐⭐ Rule 54（由新到舊）：v6.420 必須排在 v6.419 **之前**（它是最新的一版）。
+        const rawA20 = stripV6420Engine(raw);
+        ok(rawA20 !== raw, 'v6.420 的還原器過期（哨兵區塊的字面對不上）');
+        const rawA19 = stripV6419Engine(rawA20);
+        ok(rawA19 !== rawA20, 'v6.419 的還原器過期（兩組哨兵區塊的字面對不上）');
         const rawA18 = stripV6418Engine(rawA19);
         ok(rawA18 !== rawA19, 'v6.418 的還原器過期（哨兵區塊的字面對不上）');
         const rawA14 = stripV6414Engine(rawA18);

@@ -36,6 +36,7 @@
 <script lang="ts">
   import type { GameState, CardInstance, PendingSelection } from '$lib/game/types';
   import { retryImg } from '$lib/img-retry';
+  import { modalDrag } from '$lib/modal-drag';   // ⭐v6.420：與桌機版共用同一份拖曳＋邊界夾制
   import type { Card } from '$lib/cards/types';
   import {
     getEffectiveAttacks, getAvailableAttacks, getEvolvableTargets, getUsableAbilities,
@@ -242,38 +243,10 @@
     }).join('');
   }
   // v5.205：mp-sheet 拖曳支援（仿桌面 modal） — 玩家可拖開 picker 看後面場上資訊再決定
-  let sheetOffset = $state<{ x: number; y: number }>({ x: 0, y: 0 });
-  let sheetDragged = $state(false);
-  let sheetDragStart: { sx: number; sy: number; ox: number; oy: number } | null = null;
-  function onSheetHeaderPointerDown(e: PointerEvent) {
-    const t = e.target as HTMLElement | null;
-    if (!t) return;
-    // 按到 header 內的 button / icon 不觸發拖曳
-    if (t.closest('button, input, select, textarea, a, [role="button"]')) return;
-    sheetDragStart = {
-      sx: e.clientX, sy: e.clientY,
-      ox: sheetOffset.x, oy: sheetOffset.y,
-    };
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    e.preventDefault();
-  }
-  function onSheetHeaderPointerMove(e: PointerEvent) {
-    if (!sheetDragStart) return;
-    const dx = e.clientX - sheetDragStart.sx;
-    const dy = e.clientY - sheetDragStart.sy;
-    sheetOffset = { x: sheetDragStart.ox + dx, y: sheetDragStart.oy + dy };
-    if (!sheetDragged && Math.abs(dx) + Math.abs(dy) > 3) sheetDragged = true;
-  }
-  function onSheetHeaderPointerUp(_e: PointerEvent) {
-    sheetDragStart = null;
-  }
-  // 切換 sheet（sheet 物件變化）時自動 reset offset
-  $effect(() => {
-    if (sheet === null || sheet) {
-      sheetOffset = { x: 0, y: 0 };
-      sheetDragged = false;
-    }
-  });
+  // ⭐⭐⭐v6.420：實作整個搬到中央 `src/lib/modal-drag.ts`（`use:modalDrag`），與桌機版**同一份**。
+  //   原本這裡與 game/+page.svelte 各寫一份（Rule 38），而且兩份都**沒有邊界夾制**
+  //   ⇒ 手機上把視窗拖到側邊之後關不掉、也不能做任何動作（玩家回報）。
+  //   位移重置改由 action 的 `resetKey`（綁 sheet 內容）負責。
 
   // v5.116：觀戰者 isSpectator=true → isMyTurn 永遠 false → 所有按鈕 / popup actions / dispatch gate 全部失效（read-only 模式）
   let isMyTurn = $derived(!isSpectator && game.activePlayerIndex === myIdx);
@@ -1186,14 +1159,14 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <!-- v5.205：拖曳時 overlay 加 .dragged → 背景透明 + pointer-events: none（仿桌面 modal）-->
-  <div class="mp-sheet-overlay" class:dragged={sheetDragged} onclick={closeSheet} role="presentation">
+  <div class="mp-sheet-overlay" onclick={closeSheet} role="presentation">
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div class="mp-sheet" style:transform={`translate(${sheetOffset.x}px, ${sheetOffset.y}px)`} onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
+    <div class="mp-sheet" use:modalDrag={{ resetKey: (sheet?.type ?? "") + ":" + (sheet?.inst?.iid ?? "") }} onclick={(e) => e.stopPropagation()} role="dialog" tabindex="-1">
       {#if sheet.type === 'hand'}
         {@const acts = handActions(sheet.inst)}
         {@const c = cardOf(sheet.inst)}
-        <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">{c?.name ?? '?'}</div>
+        <div class="mp-sheet-title mp-sheet-drag-handle" title="拖曳視窗位置">{c?.name ?? '?'}</div>
         {#if acts.length === 0}
           <div class="mp-sheet-empty">本回合無可執行動作</div>
         {/if}
@@ -1202,7 +1175,7 @@
         {/each}
       {:else if sheet.type === 'active'}
         {@const acts = activeActions()}
-        <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">戰鬥寶可夢動作</div>
+        <div class="mp-sheet-title mp-sheet-drag-handle" title="拖曳視窗位置">戰鬥寶可夢動作</div>
         {#if acts.length === 0}
           <div class="mp-sheet-empty">本回合無可執行動作</div>
         {/if}
@@ -1224,13 +1197,13 @@
       {:else if sheet.type === 'bench'}
         {@const acts = benchActions(sheet.inst)}
         {@const c = cardOf(sheet.inst)}
-        <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">{c?.name ?? '?'}</div>
+        <div class="mp-sheet-title mp-sheet-drag-handle" title="拖曳視窗位置">{c?.name ?? '?'}</div>
         {#each acts as a}
           <button class="mp-sheet-btn" class:primary={a.primary} disabled={actionBusy} onclick={a.action}>{a.label}</button>
         {/each}
       {:else if sheet.type === 'pick-energy-target'}
         <!-- v5.200：附加能量目標改卡圖網格（鏡射桌面送新戰鬥位 modal UX）-->
-        <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">⚡ 選擇附加目標</div>
+        <div class="mp-sheet-title mp-sheet-drag-handle" title="拖曳視窗位置">⚡ 選擇附加目標</div>
         <div class="mp-pick-grid">
           {#each energyTargets() as tinst}
             {@const c = cardOf(tinst)}
@@ -1258,7 +1231,7 @@
         </div>
       {:else if sheet.type === 'pick-evolve-target'}
         <!-- v5.200：進化目標改卡圖網格 -->
-        <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">🔺 選擇進化目標</div>
+        <div class="mp-sheet-title mp-sheet-drag-handle" title="拖曳視窗位置">🔺 選擇進化目標</div>
         <div class="mp-pick-grid">
           {#each (sheet.type === 'pick-evolve-target' ? sheet.candidates : []) as fromIid}
             {@const inst = [...(myPlayer.active ? [myPlayer.active] : []), ...myPlayer.bench].find(x => x.iid === fromIid)}
@@ -1289,7 +1262,7 @@
         </div>
       {:else if sheet.type === 'pick-retreat-target'}
         <!-- v5.200：撤退選備戰改卡圖網格（鏡射桌面送新戰鬥位 modal）-->
-        <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">🔄 選擇換入的寶可夢{currentRetreatCost !== null ? `（撤退費 -${currentRetreatCost}）` : ''}</div>
+        <div class="mp-sheet-title mp-sheet-drag-handle" title="拖曳視窗位置">🔄 選擇換入的寶可夢{currentRetreatCost !== null ? `（撤退費 -${currentRetreatCost}）` : ''}</div>
         <div class="mp-pick-grid">
           {#each myPlayer.bench as b}
             {@const bc = cardOf(b)}
@@ -1315,7 +1288,7 @@
           {/each}
         </div>
       {:else if sheet.type === 'discard'}
-        <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">🗑 {sheet.owner}棄牌區（{sheet.list.length} 張）</div>
+        <div class="mp-sheet-title mp-sheet-drag-handle" title="拖曳視窗位置">🗑 {sheet.owner}棄牌區（{sheet.list.length} 張）</div>
         <!-- v5.129：改 grid 顯示「卡圖縮圖 + 右下角紅色數字」，更易檢索 -->
         <div class="mp-discard-grid">
           {#each groupDiscardList(sheet.list) as g (g.key)}
