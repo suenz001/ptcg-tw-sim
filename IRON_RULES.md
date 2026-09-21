@@ -2247,3 +2247,93 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
 所以不是「污染別人」的 escape；真正的風險只有**同一個沙盒內的順序相依**。
 ⇒ `restoreTmp()` 在每支跑完清掉那裡新增的檔，escape 面改列 allowed（列報不擋）。
 實測：修前 escape 3（硬判準紅），修後 escape 0。
+
+---
+
+## Rule 62（v6.421）：終局一律可「收回重判」—— 提早寫下的終局不是最終結果，防守方全滅不得跳過招式剩下的效果
+
+### 背景（正式站 v6.420 可重現的三個 bug）
+1. `engine.ts` 防守方最後一隻被打倒時 `if (_koEnd) return _koEnd;` ⇒ 招式的 **postFn 整段被跳過**：
+   密勒頓｜打雷（這隻寶可夢也受到30點傷害。）自傷沒套上、判攻擊方勝；未知圖騰｜神秘信號「多獲得1張」少拿。
+2. `addPendingPrize`／`takeSpecificPrizes` 取完獎賞當下就寫 `game-over` ⇒ 末端 `sanityKOSweep` 被 gate 掉
+   ⇒ 攻擊方帶著「傷害 ≥ HP」留在終局盤面（**zombie**）而被判勝。
+3. 攻擊方最後一張獎賞是**正面朝上**（開 take-prize-choose picker）⇒ 延後與 sweep 都被 pendingSelection 擋住（fable 抓到）。
+
+### ⭐ 正確做法（全部走 v6.361 的中央管線，不另寫一份判定）
+- 任何「本 action 才寫下的終局」若還有事情沒結算，一律用 **`liftEndgameForOnKoV6361`** 收回（留 fail-safe 還原值），
+  結算完由 **v6.361 中央判定**（`judgeEndgameV6361` ＋ `applyEndgameVerdictV6361`）重判。
+- 延後條件（`v6421-defer-endgame-zombie`）三條，缺一不可：
+  on-KO 佇列非空｜`hasUnresolvedKnockout(next,pool)`（zombie）｜`centralVerdictIsDrawV6421(next)`（中央會判平手、盤面卻寫某方勝）。
+- zombie 判準 **`isZombieKO` 只有一份**（sanityKOSweep 戰鬥場／備戰兩處＋延後判斷共用；Rule 38）。
+- picker 開著而終局已判出 ⇒ `v6421-sweep-zombie-under-picker` 照樣掃；**位置必須在 v6.376 持有者快照 clear 之前**
+  （clear 必須在本 action 最後一次 sanityKOSweep 之後，否則 樂天河童｜生機森巴 型最大 HP 會被重算殺掉；test-v6376 D4）。
+- `centralVerdictIsDrawV6421` 只處理「→平手」方向，直接呼叫 `judgeEndgameV6361(s, true)`，不另寫 noMon。
+
+### ⭐ 站長裁定（逐字，勿重推）
+- v6.419：雙方同時取完 ⇒「統一成平手」（有沒有 picker 同解）。
+- v6.420：「單方取完6張獎賞、而同一瞬間該方自己也沒有寶可夢可上場 … 應該判定為雙方平手」。
+- v6.421：自傷招式取完獎賞同時自己昏厥且無備戰 ⇒「也判平手」；**自己離場**（喵喵ex｜夾尾巴逃跑 放回手牌）同樣涵蓋。
+- 雙方都取完 ⇒ 依放置規則（PTCG_RULES.md L622-624 利歐路｜突擊）：只有一方可放置 ⇒ 該方勝；都可／都不可 ⇒ 平手。
+
+### ⚠ postFn 在「防守方全滅」時跑是安全的
+一般 KO（有備戰）本來就是「清空戰鬥位 → 跑 postFn → 最後補位」，全滅只是「備戰也空」，不是新狀態。
+全卡 smoke（1216 個 ATTACK_POST、固定亂數 mulberry32(hash(key))）證實 0 丟例外。
+⚠ 比較 HEAD／BASE 勝負差異時**一定要固定亂數**，否則擲幣招式會製造假差異（嗡嗡榍石實例）。
+
+---
+
+## Rule 63（v6.421）：KO 獎賞一律由「被打倒那隻的主人的**對手**」取得 —— 禁止寫死 attackerIdx
+
+`hitBenchAll`／bench-hit 兩處寫死 `addPendingPrize(s, attackerIdx, …)` ⇒ 招式打倒**自己的**備戰時，攻擊方替自己的昏厥拿獎賞
+（固拉多｜大地裂破、穿山王｜地震、焚焰蚣｜燃燒熱浪、電飛鼠｜天空波、麒麟奇｜雙向頭擊）。KO 級、直接加速自己獲勝。
+- ⭐ 一律走 `koPrizeTaker(koOwnerIdx)`（effects.ts，只有一份）。
+- ⭐ **語義掃描法**（不是 grep 字面）：B 方全放 TANK（不會倒）、A 方備戰放殘血 TINY，全招式打一次；
+  「A 取了獎賞但 B 一隻都沒倒」⇒ 必定是替自己取。白名單只有 月亮伊布ex｜縞瑪瑙（卡面本來就是「獲得1張獎賞卡」），且附卡面證明。
+
+---
+
+## Rule 64（v6.422）：終局收尾只有一處（`finalizeEndgameV6422`），而且只能改「本 action 新增」的東西
+
+- 位置：`applyActionImpl` 末端 `return next` 之前、`next.phase === 'game-over'` 時（開頭對 game-over 早退 ⇒ 必為本 action 才判出）。
+- ① 殘留 `pendingSelection`／`pendingChainQueue`（含**只有佇列殘留**、含**值為 undefined 但 key 還在**）一律 `delete`，
+  不寫 `undefined`（v6.417 同理由：buildRoomPatch 會走 set 而不是 del）；`null` 不動。
+- ② 與最終結果不一致的提早勝利宣告（句尾「獲勝！」）改成「（勝負待效果結算完畢後判定）」，事實前半句保留。
+  - ⚠ **只動 index ≥ prev.log.length 的行**：之前的紀錄已經推上伺服器，delta PUT 只送 `logAppend`。
+  - ⚠⚠ **用兩位玩家的實際名字做後綴比對，禁止用 regex 猜名字**：玩家名稱可以含全形逗號（伺服器只截長度），
+    `/，([^，]+) 獲勝！$/` 會把「小明，大王」切斷、把正確宣告誤改（fable 實測）。兩個名字互為後綴時取較長者。
+  - 雙方同名 ⇒ 有勝方時分不出是誰 ⇒ 不改；只有平手才改。
+- 房間棄權／離開路徑（room.ts、room-oracle.ts）不經 applyActionImpl —— 目前各消費者都 gate 在 phase==='playing'，列管。
+
+---
+
+## Rule 65（v6.420～v6.423）：所有可拖曳的東西只走 `src/lib/modal-drag.ts`，並且一律夾在畫面內
+
+- 夾制規則：**整個視窗留在可視範圍內**（不是「留一角」—— 實測留 72px 時右上角的 ✕ 仍會出畫面）；垂直上緣一律 ≥ 0。
+- 位移用 **CSS `translate` 屬性**，不是 `transform`（勝負視窗／進化選單本來就靠 transform 定位，會被蓋掉）。
+- 例外：手機直式聊天面板用 `mode:'margin'`（v5.626：iOS 上 position:fixed ＋ transform 會破壞面板內捲動）。
+- 浮動**按鈕**（本身就是 `<button>`）用 `wholeNode:true`；輕觸門檻 `threshold`（FAB 12px／v5.591、對手回合按鈕 5px／v5.057）；
+  拖曳後緊接的 click 由中央吃掉，**旗標必須 setTimeout 0 過期**（否則拖曳被中斷時會吃掉下一次真點擊——突變實證）；
+  `stopPropagation`（v5.231 防穿透）；`overlay:false`（不遮擋畫面的元件不可去動祖先的 `dragged`）；
+  位置保存用 `initial`＋`onEnd`，掛載後與 resize 時夾制並回報。wholeNode 不可 `preventDefault`（部分瀏覽器不產生 click）。
+- 資訊類視窗務必有 ✕；載入中的視窗也要有 ✕，而且關掉後遲到的回應不可把它彈回來（請求序號）。
+- ⚠ Svelte scoped CSS：以 `.dragged` 開頭的規則會被當 unused 刪掉 ⇒ 要寫出祖先（`.selection-overlay.dragged …`）。
+- ⚠ Playwright：Chromium 會把 `translate: 2px 0px` 正規化成 `2px` ⇒ 斷言要接受兩種寫法。
+
+---
+
+## Rule 66（2026-09-21）：守衛與流程的五個新教訓（v6.418～v6.423）
+
+1. **掃描窗口用「元素自己的子樹」，不可以固定取 N 個字元** —— test-v6420 的 overlay 掃描器取 900 字元，
+   把後面的**兄弟元素**（新放的對手回合按鈕）算進去 ⇒ turn-banner-overlay 被誤判。改成 div 開合配對（上限不變）。
+2. **新防護層會蓋住舊守衛的觀測點**（Rule 40 第 3 型再現）—— v6.422 收尾層清掉終局佇列後，test-v6419 E1
+   「佇列仍留著別人的 picker」必紅。改成兩層各自驗（行為：沒被當成取獎賞結清；結構：`_restQ` 過濾式逐字），不放寬。
+3. **突變存活要誠實分類**：
+   - 等價突變（例：`centralVerdictIsDrawV6421` 放寬成任何勝負都收回 —— 同勝方重判結果相同）照實寫進守衛檔頭；
+   - 被突變證實是**死碼**的分支要刪掉（v6.422 第一版的 `sameNames` 在 regex 版是死碼）；
+   - 「前置不成立就恆綠」的條目要先斷言前置（例：拖不動時 click 本來就不會發生 ⇒ 先斷言真的有拖動）。
+4. **全套在使用者 Linux VM（device_bash）跑的方式**：`/tmp/w407`＋`/tmp/w407a` 兩個沙盒、平行 runner `/tmp/prun.mjs --budget 150`、
+   已知偽紅 `test-base-blob-git-errors`（本機 git 2.34.1 訊息不同，環境性）；`test-evolve-iid-regression`（1000 局）單支超過工具時限
+   ⇒ 拆 10 段 `S0/S1` 平行跑，全部 1000 seeds 過才算數，**不可以跳過還宣稱全綠**。
+5. **子代理（審查者）不可以在沙盒裡跑 `scripts/run-tests.mjs`** —— 它會在沙盒內建 worktree（實例：`/tmp/w407/E:\sb`），
+   污染 index／留下 index.lock。派審查時要明講「只可在第二沙盒做突變並還原」。
+   審查者分級（站長 2026-09-21）：**重大修改**（引擎判定、勝負、獎賞）派 fable 5.1；**小事**（純前端收斂、可用 Playwright＋突變驗證的）不派，節約 token。
