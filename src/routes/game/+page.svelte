@@ -1587,68 +1587,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let oppTurnPanelPos = $state({ x: 0, y: 0 });
   let oppTurnTogglePos = $state({ x: 0, y: 0 });  // v5.057：toggle 按鈕拖曳位置
   let oppTurnViewIndex = $state(0);  // 0 = 最新 (上一回合)
-  // v5.057：拖曳 vs 點擊區分 — 拖移超過 5px 視為拖曳，不觸發 click
-  let oppTurnToggleMoved = $state(false);
 
-  // v5.055：對手回合 panel 拖曳 handler
-  let oppTurnDragStart: { x: number; y: number; panelX: number; panelY: number } | null = null;
-  function onOppTurnDragStart(e: PointerEvent) {
-    oppTurnDragStart = {
-      x: e.clientX, y: e.clientY,
-      panelX: oppTurnPanelPos.x, panelY: oppTurnPanelPos.y,
-    };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }
-  function onOppTurnDragMove(e: PointerEvent) {
-    if (!oppTurnDragStart) return;
-    oppTurnPanelPos = {
-      x: oppTurnDragStart.panelX + (e.clientX - oppTurnDragStart.x),
-      y: oppTurnDragStart.panelY + (e.clientY - oppTurnDragStart.y),
-    };
-  }
-  function onOppTurnDragEnd(e: PointerEvent) {
-    oppTurnDragStart = null;
-    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
-  }
-
-  // v5.057：toggle 按鈕拖曳 — 仿 panel header 邏輯但操作 togglePos
-  let oppTurnToggleDragStart: { x: number; y: number; btnX: number; btnY: number } | null = null;
-  function onOppTurnToggleDragStart(e: PointerEvent) {
-    e.stopPropagation();  // v5.231 防止穿透點到下面的卡
-    oppTurnToggleDragStart = {
-      x: e.clientX, y: e.clientY,
-      btnX: oppTurnTogglePos.x, btnY: oppTurnTogglePos.y,
-    };
-    oppTurnToggleMoved = false;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }
-  function onOppTurnToggleDragMove(e: PointerEvent) {
-    e.stopPropagation();  // v5.231 防止穿透
-    if (!oppTurnToggleDragStart) return;
-    const dx = e.clientX - oppTurnToggleDragStart.x;
-    const dy = e.clientY - oppTurnToggleDragStart.y;
-    if (Math.hypot(dx, dy) > 5) oppTurnToggleMoved = true;  // 超過 5px 算拖曳
-    oppTurnTogglePos = {
-      x: oppTurnToggleDragStart.btnX + dx,
-      y: oppTurnToggleDragStart.btnY + dy,
-    };
-  }
-  function onOppTurnToggleDragEnd(e: PointerEvent) {
-    e.stopPropagation();  // v5.231 防止穿透
-    oppTurnToggleDragStart = null;
-    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
-  }
+  // ⭐⭐v6.423：對手回合 panel／toggle 按鈕的拖曳收斂到中央 `use:modalDrag`（src/lib/modal-drag.ts）。
+  //   原本各自一份 pointer 數學、**完全沒有夾制**（拖出畫面就找不回來）。
+  //   位置仍存在 oppTurnPanelPos／oppTurnTogglePos（關掉再開維持上次的位置，與舊行為一致）；
+  //   「拖完不要當成點擊」改由中央 action 吃掉拖曳後的那一個 click。
   function onOppTurnToggleClick() {
-    // 拖曳結束時也會 fire click — 拖移超過 5px 不觸發 panel 開啟
-    if (oppTurnToggleMoved) {
-      oppTurnToggleMoved = false;
-      return;
-    }
+    // 拖曳結束後的那一個 click 已由中央 action 吃掉（v6.423）
     oppTurnPanelOpen = true;
     oppTurnViewIndex = 0;
   }
   let chatPanelPos = $state({ x: 0, y: 0 });
-  let chatPanelDragStart: { mx: number; my: number; ox: number; oy: number } | null = null;
   let lastSeenChatCount = $state(0);
   const unreadChatCount = $derived(Math.max(0, chatMessages.length - lastSeenChatCount));
   let tLastSeenChat = $state(0); // v5.577 錦標賽對戰中浮動聊天(接大廳)已讀數
@@ -1668,26 +1617,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       }, 50);
     }
   }
-  function onChatHeaderDown(e: PointerEvent) {
-    chatPanelDragStart = { mx: e.clientX, my: e.clientY, ox: chatPanelPos.x, oy: chatPanelPos.y };
-    (e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
-  }
-  function onChatHeaderMove(e: PointerEvent) {
-    if (!chatPanelDragStart) return;
-    const dx = e.clientX - chatPanelDragStart.mx;
-    const dy = e.clientY - chatPanelDragStart.my;
-    let x = chatPanelDragStart.ox + dx, y = chatPanelDragStart.oy + dy;
-    // v5.626 手機版用 margin 位移(避免 transform 破壞 iOS 內部捲動)→ clamp 保留面板大致在畫面內不拖丟
-    if (isPortraitMobile && typeof window !== 'undefined') {
-      const W = window.innerWidth, H = window.innerHeight;
-      x = Math.max(-W * 0.45, Math.min(W * 0.45, x));
-      y = Math.max(-(H * 0.25), Math.min(H * 0.45, y));
-    }
-    chatPanelPos = { x, y };
-  }
-  function onChatHeaderUp(_e: PointerEvent) {
-    chatPanelDragStart = null;
-  }
+  // ⭐⭐v6.423：聊天面板的拖曳收斂到中央 `use:modalDrag`。手機直式仍用 margin 位移
+  //   （v5.626：iOS 上 position:fixed ＋ transform 會破壞面板內部捲動）⇒ 走 action 的 `mode: 'margin'`。
+  //   夾制改用中央規則（整個面板留在畫面內；舊版手機直式允許拖出 45%）。
 
   // v4.24 對戰計時器 — tickTime 每秒更新驅動 derived 顯示時間
   let tickTime = $state(Date.now());
@@ -1736,61 +1668,23 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // v3.98 聊天 fab 圖示拖曳 — 玩家可移動到不擋牌的位置
   //   位置存 localStorage 重整保留；session 內也持續
   let chatFabPos = $state<{ x: number; y: number }>({ x: 0, y: 0 });
-  let chatFabDragStart: { mx: number; my: number; ox: number; oy: number } | null = null;
-  let chatFabDragged = false;  // 區分 click vs drag（drag 後不觸發 toggle）
-
-  // 載入 localStorage 保存的位置
-  // v5.613：clamp 聊天 fab 位置在視窗內——避免拖出畫面、或換裝置/旋轉後偏移超出視窗導致 fab「不見」
-  function clampChatFabPos(p: { x: number; y: number }): { x: number; y: number } {
-    if (typeof window === 'undefined') return p;
-    const W = window.innerWidth, H = window.innerHeight, PAD = 6, SIZE = 54, BASE = 18;
-    const minX = PAD + BASE + SIZE - W, maxX = BASE - PAD;
-    const minY = PAD + BASE + SIZE - H, maxY = BASE - PAD;
-    return { x: Math.max(minX, Math.min(maxX, p.x)), y: Math.max(minY, Math.min(maxY, p.y)) };
-  }
+  // ⭐⭐v6.423：拖曳收斂到中央 `use:modalDrag`（門檻 12px 沿用 v5.591 的手機輕觸抖動值）。
+  //   舊的 clampChatFabPos（v5.613）由中央夾制取代：掛載時與轉向／縮放時都會重夾，拖不出畫面。
   if (typeof window !== 'undefined') {
     try {
       const saved = localStorage.getItem('ptcg_chat_fab_pos');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
-          chatFabPos = clampChatFabPos(parsed);
+          chatFabPos = { x: parsed.x, y: parsed.y };   // 夾制由中央 action 在掛載後完成
         }
       }
     } catch { /* ignore parse errors */ }
   }
-
-  function onFabPointerDown(e: PointerEvent) {
-    e.stopPropagation();  // v5.231 防止穿透點到下面的卡
-    chatFabDragStart = { mx: e.clientX, my: e.clientY, ox: chatFabPos.x, oy: chatFabPos.y };
-    chatFabDragged = false;
-    (e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
-  }
-  function onFabPointerMove(e: PointerEvent) {
-    e.stopPropagation();  // v5.231 防止穿透
-    if (!chatFabDragStart) return;
-    const dx = e.clientX - chatFabDragStart.mx;
-    const dy = e.clientY - chatFabDragStart.my;
-    if (!chatFabDragged && Math.abs(dx) + Math.abs(dy) > 12) {
-      chatFabDragged = true;  // v5.591 門檻 4→12px：手機觸控輕觸常有 <12px 抖動，避免被誤判成拖曳而點不開聊天室
-    }
-    if (chatFabDragged) {
-      chatFabPos = clampChatFabPos({ x: chatFabDragStart.ox + dx, y: chatFabDragStart.oy + dy });
-    }
-  }
-  function onFabPointerUp(e: PointerEvent) {
-    e.stopPropagation();  // v5.231 防止穿透
-    if (!chatFabDragStart) return;
-    if (!chatFabDragged) {
-      // 沒拖曳 → 視為 click，開 panel
-      toggleChatPanel();
-    } else {
-      // 拖曳結束 → 存 localStorage 保留位置
-      try {
-        localStorage.setItem('ptcg_chat_fab_pos', JSON.stringify(chatFabPos));
-      } catch { /* ignore quota errors */ }
-    }
-    chatFabDragStart = null;
+  /** 拖曳結束（或轉向後被重新夾制）⇒ 記住位置，重整後還原。 */
+  function saveChatFabPos(p: { x: number; y: number }) {
+    chatFabPos = p;
+    try { localStorage.setItem('ptcg_chat_fab_pos', JSON.stringify(p)); } catch { /* ignore quota errors */ }
   }
   // 新訊息進來時若 panel 已開 → markChatSeen + 自動 scroll
   $effect(() => {
@@ -2206,8 +2100,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       
       // v2.45：依視窗 / 設定重算 game zoom
       recomputeZoom();
-      // v5.613：視窗大小/方向改變後重新 clamp 聊天 fab，避免偏移超出新視窗而消失
-      chatFabPos = clampChatFabPos(chatFabPos);
+      // （v6.423：聊天 fab 的重新夾制改由中央 modalDrag 的 resize 監聽處理）
     };
     
     window.addEventListener('resize', onResize);
@@ -13975,10 +13868,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
          && (oppPlayer?.turnActionsLog?.length ?? 0) > 0
          && !oppTurnPanelOpen}
       <button class="opp-turn-toggle-btn"
-        style:transform={`translate(${oppTurnTogglePos.x}px, ${oppTurnTogglePos.y}px)`}
-        onpointerdown={onOppTurnToggleDragStart}
-        onpointermove={onOppTurnToggleDragMove}
-        onpointerup={onOppTurnToggleDragEnd}
+        use:modalDrag={{ wholeNode: true, threshold: 5, stopPropagation: true, overlay: false,
+          initial: oppTurnTogglePos, onEnd: (o) => { oppTurnTogglePos = o; } }}
         onclick={onOppTurnToggleClick}
         title="查看對手回合出牌（拖曳移動位置）">📜</button>
     {/if}
@@ -13989,11 +13880,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {@const _maxIdx = Math.max(0, _log.length - 1)}
       {@const _safeIdx = Math.min(oppTurnViewIndex, _maxIdx)}
       {@const _currentEntry = _log.length > 0 ? _log[_log.length - 1 - _safeIdx] : null}
-      <div class="opp-turn-panel" style:transform={`translate(${oppTurnPanelPos.x}px, ${oppTurnPanelPos.y}px)`}>
-        <div class="opp-turn-panel-header"
-          onpointerdown={onOppTurnDragStart}
-          onpointermove={onOppTurnDragMove}
-          onpointerup={onOppTurnDragEnd}>
+      <div class="opp-turn-panel"
+        use:modalDrag={{ handle: '.opp-turn-panel-header', overlay: false,
+          initial: oppTurnPanelPos, onEnd: (o) => { oppTurnPanelPos = o; } }}>
+        <div class="opp-turn-panel-header">
           <span class="opp-turn-panel-title">
             <button class="opp-turn-nav-btn" disabled={_safeIdx >= _maxIdx}
               onpointerdown={(e) => e.stopPropagation()}
@@ -14049,21 +13939,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {#if !chatPanelOpen}
       <!-- v3.98 收合：圓形按鈕可拖曳（pointer events 區分 click vs drag）-->
       <button class="chat-fab"
-        style:transform={`translate(${chatFabPos.x}px, ${chatFabPos.y}px)`}
-        onpointerdown={onFabPointerDown}
-        onpointermove={onFabPointerMove}
-        onpointerup={onFabPointerUp}
+        use:modalDrag={{ wholeNode: true, threshold: 12, stopPropagation: true, overlay: false,
+          initial: chatFabPos, onEnd: saveChatFabPos }}
+        onclick={toggleChatPanel}
         title="點擊開啟聊天室；長按拖曳可移動位置">
         💬
         {#if chatFabUnread > 0}<span class="chat-fab-badge">{chatFabUnread}</span>{/if}
       </button>
     {:else}
       <!-- 展開：floating panel（桌機）/ 全螢幕 modal（手機 portrait CSS @media） -->
-      <div class="chat-panel" style:transform={`translate(${chatPanelPos.x}px, ${chatPanelPos.y}px)`} style:margin-left={isPortraitMobile ? `${chatPanelPos.x}px` : undefined} style:margin-top={isPortraitMobile ? `${chatPanelPos.y}px` : undefined}>
+      <div class="chat-panel"
+        use:modalDrag={{ handle: '.chat-panel-header', overlay: false, mode: isPortraitMobile ? 'margin' : 'translate',
+          initial: chatPanelPos, onEnd: (o) => { chatPanelPos = o; } }}>
         <div class="chat-panel-header"
-          onpointerdown={onChatHeaderDown}
-          onpointermove={onChatHeaderMove}
-          onpointerup={onChatHeaderUp}
           title="拖曳此處移動聊天視窗（手機版固定全螢幕）">
           <span>{isTournament ? '💬 大廳聊天室' : '💬 聊天室'}</span>
           {#if isTournament}

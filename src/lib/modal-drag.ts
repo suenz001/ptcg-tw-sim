@@ -80,8 +80,11 @@ export function clampModalOffset(
 export interface ModalDragOptions {
   /** 把手選擇器（事件委派）。省略＝ DEFAULT_HANDLE_SELECTOR。 */
   handle?: string;
-  /** 拖曳時要加上 `dragged` 的祖先選擇器。省略＝自動找最近的 overlay／backdrop。 */
-  overlay?: string;
+  /**
+   * 拖曳時要加上 `dragged` 的祖先選擇器。省略＝自動找最近的 overlay／backdrop。
+   * `false` ＝ 不動任何祖先（浮動按鈕／不遮擋畫面的面板用 —— 否則可能誤把無關的祖先變透明）。
+   */
+  overlay?: string | false;
   /** 關掉拖曳（例如某個視窗刻意固定）。 */
   disabled?: boolean;
   /**
@@ -90,6 +93,29 @@ export interface ModalDragOptions {
    *   ⇒ 不給 `resetKey` 的話，新的 picker 會直接出現在上一個被拖走的位置。
    */
   resetKey?: unknown;
+  // ── v6.423：浮動按鈕／浮動面板（聊天 FAB、聊天面板、對手回合按鈕與面板）收斂進來所需 ──
+  /**
+   * 整個元素都是把手（浮動按鈕本身就是 `<button>`，一般規則會因為「按在按鈕上不拖」而拖不動）。
+   * ⚠ 元素**內部**的互動元件仍照 DRAG_IGNORE_SELECTOR 不拖。
+   */
+  wholeNode?: boolean;
+  /**
+   * 超過幾 px 才算拖曳（也才開始移動）。省略＝ 3px 判定、從第一個 px 就跟手（v6.420 行為）。
+   * 給值時「未超過門檻前完全不動」—— 手機輕觸常有數 px 抖動，否則點一下就被當成拖曳而打不開。
+   */
+  threshold?: number;
+  /** 拖曳相關的 pointer 事件不往上冒（v5.231：浮動按鈕下面就是場上的卡，避免穿透）。 */
+  stopPropagation?: boolean;
+  /** 掛載時的初始位移（例如從 localStorage 或上一次開啟時的位置還原）；掛載後會夾制一次。 */
+  initial?: ModalOffset;
+  /** 一次拖曳結束（有真的移動）時通知目前位移 —— 呼叫端自己決定要不要保存。 */
+  onEnd?: (off: ModalOffset) => void;
+  /**
+   * 位移的套用方式。預設 `translate`（CSS translate 屬性）。
+   * `margin` ＝ 用 margin-left／margin-top：手機直式的聊天面板必須用這個
+   *   （v5.626：iOS 上 position:fixed ＋ transform 會破壞面板內部的捲動）。
+   */
+  mode?: 'translate' | 'margin';
 }
 
 const OVERLAY_SELECTOR = '[class*="overlay"], [class*="backdrop"]';
@@ -97,13 +123,18 @@ const OVERLAY_SELECTOR = '[class*="overlay"], [class*="backdrop"]';
 /** Svelte action：`use:modalDrag` / `use:modalDrag={{ handle: '.sel-header' }}`。 */
 export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
   let opts: ModalDragOptions = { ...param };
-  let off: ModalOffset = { x: 0, y: 0 };
+  let off: ModalOffset = param.initial ? { x: param.initial.x, y: param.initial.y } : { x: 0, y: 0 };
   let base: ModalRect | null = null;
   let start: { sx: number; sy: number; ox: number; oy: number; pid: number } | null = null;
   let moved = false;
+  /** 拖曳結束後緊接著的那一個 click 要吃掉（否則浮動按鈕拖完就被當成點擊而打開面板）。 */
+  let swallowClick = false;
+  let appliedMode: 'translate' | 'margin' = opts.mode ?? 'translate';
 
-  const overlayEl = (): HTMLElement | null =>
-    (opts.overlay ? node.closest<HTMLElement>(opts.overlay) : node.parentElement?.closest<HTMLElement>(OVERLAY_SELECTOR) ?? null);
+  const overlayEl = (): HTMLElement | null => {
+    if (opts.overlay === false) return null;
+    return opts.overlay ? node.closest<HTMLElement>(opts.overlay) : node.parentElement?.closest<HTMLElement>(OVERLAY_SELECTOR) ?? null;
+  };
 
   const view = () => ({
     vw: typeof window === 'undefined' ? 0 : window.innerWidth,
@@ -117,22 +148,42 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
   }
 
   /**
-   * ⚠⚠ 用**獨立的 `translate` 屬性**，不是 `transform`。
+   * ⚠⚠ 預設用**獨立的 `translate` 屬性**，不是 `transform`。
    *   站內有兩個視窗本來就靠 `transform` 定位（勝負視窗 `translate(-50%,-50%)` 置中、
    *   進化浮動選單 `translate(-50%,-105%)`）——寫 `style.transform` 會把那個定位蓋掉，
    *   實測（審查者 probe）選單拖 1px 就整個跳位、而且第一次拖曳的夾制基準是錯的。
    *   CSS `translate` 屬性在 `transform` **之前**套用且互相獨立 ⇒ 兩者自然疊加。
+   * `mode: 'margin'` 時改寫 margin（見 ModalDragOptions.mode）；切換模式時先清掉另一種的殘值。
    */
   function apply() {
-    node.style.translate = off.x === 0 && off.y === 0 ? '' : `${off.x}px ${off.y}px`;
+    const zero = off.x === 0 && off.y === 0;
+    const mode = opts.mode ?? 'translate';
+    if (mode !== appliedMode) {
+      if (appliedMode === 'margin') { node.style.marginLeft = ''; node.style.marginTop = ''; }
+      else node.style.translate = '';
+      appliedMode = mode;
+    }
+    if (mode === 'margin') {
+      node.style.marginLeft = zero ? '' : `${off.x}px`;
+      node.style.marginTop = zero ? '' : `${off.y}px`;
+    } else {
+      node.style.translate = zero ? '' : `${off.x}px ${off.y}px`;
+    }
   }
 
   function onDown(e: PointerEvent) {
     if (opts.disabled) return;
     const t = e.target as HTMLElement | null;
     if (!t) return;
-    if (t.closest(DRAG_IGNORE_SELECTOR)) return;
-    if (!t.closest(opts.handle ?? DEFAULT_HANDLE_SELECTOR)) return;
+    if (opts.wholeNode) {
+      // 元素本身（例如 <button class="chat-fab">）不算「按在按鈕上」；只有內部的互動元件才不拖
+      const ig = t.closest(DRAG_IGNORE_SELECTOR);
+      if (ig && ig !== node && node.contains(ig)) return;
+    } else {
+      if (t.closest(DRAG_IGNORE_SELECTOR)) return;
+      if (!t.closest(opts.handle ?? DEFAULT_HANDLE_SELECTOR)) return;
+    }
+    if (opts.stopPropagation) e.stopPropagation();
     base = measure();
     start = { sx: e.clientX, sy: e.clientY, ox: off.x, oy: off.y, pid: e.pointerId };
     moved = false;
@@ -144,48 +195,78 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
       window.addEventListener('pointerup', onUp, { once: true });
       window.addEventListener('pointercancel', onUp, { once: true });
     }
-    e.preventDefault();
+    // ⚠ wholeNode（按鈕）不可以 preventDefault：那會讓部分瀏覽器不產生後續的 click ⇒ 點不開。
+    if (!opts.wholeNode) e.preventDefault();
   }
   function onMove(e: PointerEvent) {
     if (!start || !base) return;
+    if (opts.stopPropagation) e.stopPropagation();
+    const dist = Math.abs(e.clientX - start.sx) + Math.abs(e.clientY - start.sy);
+    const th = opts.threshold ?? 3;
+    if (!moved && dist > th) {
+      moved = true;
+      overlayEl()?.classList.add('dragged');
+    }
+    // 有指定門檻時，未超過門檻前完全不動（輕觸抖動不位移）
+    if (opts.threshold !== undefined && !moved) return;
     const { vw, vh } = view();
     const want = { x: start.ox + (e.clientX - start.sx), y: start.oy + (e.clientY - start.sy) };
     off = clampModalOffset(base, want, vw, vh);
     apply();
-    if (!moved && Math.abs(e.clientX - start.sx) + Math.abs(e.clientY - start.sy) > 3) {
-      moved = true;
-      overlayEl()?.classList.add('dragged');
-    }
   }
   function onUp(e: PointerEvent) {
-    if (start) { try { node.releasePointerCapture?.(e.pointerId); } catch { /* 同上 */ } }
+    if (start) {
+      if (opts.stopPropagation) e.stopPropagation();
+      try { node.releasePointerCapture?.(e.pointerId); } catch { /* 同上 */ }
+      if (moved) {
+        swallowClick = true;
+        // 萬一這次沒有產生 click（例如在元素外放開），不可以把「下一次真正的點擊」吃掉
+        setTimeout(() => { swallowClick = false; }, 0);
+        opts.onEnd?.({ x: off.x, y: off.y });
+      }
+    }
     start = null;
     if (typeof window !== 'undefined') {
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
     }
   }
+  function onClickCapture(e: MouseEvent) {
+    if (!swallowClick) return;
+    swallowClick = false;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }
   /** 轉向／縮放後視窗可能整個跑到畫面外 ⇒ 重新夾一次（這是「自己彈走」的最後一道保險）。 */
   function onResize() {
     if (off.x === 0 && off.y === 0) return;
     const { vw, vh } = view();
     base = measure();
+    const before = off;
     off = clampModalOffset(base, off, vw, vh);
     apply();
+    if (before.x !== off.x || before.y !== off.y) opts.onEnd?.({ x: off.x, y: off.y });
   }
 
   node.addEventListener('pointerdown', onDown);
   node.addEventListener('pointermove', onMove);
   node.addEventListener('pointerup', onUp);
   node.addEventListener('pointercancel', onUp);
+  node.addEventListener('click', onClickCapture, true);
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
+  }
+  // 有初始位移（還原上次的位置）⇒ 先套用，版面排好後再夾一次（換裝置／換方向後舊位置可能在畫面外）
+  if (off.x !== 0 || off.y !== 0) {
+    apply();
+    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => onResize());
   }
 
   return {
     update(next: ModalDragOptions = {}) {
       const changed = 'resetKey' in next && next.resetKey !== opts.resetKey;
+      const modeChanged = (next.mode ?? 'translate') !== (opts.mode ?? 'translate');
       opts = { ...next };
       if (changed) {
         off = { x: 0, y: 0 };
@@ -194,6 +275,8 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
         moved = false;
         apply();
         overlayEl()?.classList.remove('dragged');
+      } else if (modeChanged) {
+        apply();
       }
     },
     destroy() {
@@ -201,6 +284,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
       node.removeEventListener('pointermove', onMove);
       node.removeEventListener('pointerup', onUp);
       node.removeEventListener('pointercancel', onUp);
+      node.removeEventListener('click', onClickCapture, true);
       if (typeof window !== 'undefined') {
         window.removeEventListener('resize', onResize);
         window.removeEventListener('orientationchange', onResize);

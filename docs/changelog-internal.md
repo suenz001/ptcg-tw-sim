@@ -1,5 +1,24 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.423 ⭐⭐ 浮動元件拖曳收斂到中央 modal-drag.ts（v6.420 列管）
+
+BASE `d27102c8eeb5f9d2e8d49a78b97c7671ba707c34`（v6.422）。純前端，**沒有動 engine.ts** ⇒ 不需要剝除器。
+部署：照慣例 `update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）；本版只動前端，實際生效的是後者。
+
+- 收斂對象：聊天 FAB（v3.98）、聊天面板（v3.97／v5.626）、對手回合 toggle（v5.057）、對手回合面板（v5.055）。
+  四份各自的 pointer 數學刪除（Rule 38）；對手回合兩者與桌機聊天面板原本**完全沒有夾制**。
+- 中央 action 新增選項：`wholeNode`（按鈕本身當把手）、`threshold`（門檻內不動；FAB 12px 沿用 v5.591、toggle 5px 沿用 v5.057）、
+  拖曳後吃掉緊接著的 click（旗標 setTimeout 0 過期）、`stopPropagation`（v5.231）、`overlay:false`、`initial`／`onEnd`
+  （保存位置：FAB 存 localStorage，其餘存 session 內的 state；掛載後與 resize 時夾制並回報）、`mode:'margin'`
+  （手機直式聊天面板，v5.626 iOS fixed＋transform 捲動問題）。未指定 threshold 的一般視窗行為不變（第一個 px 就跟手）。
+- 行為差異：夾制改用中央規則（整個元件留在畫面內；舊手機直式聊天面板允許拖出 45%）；FAB 由 pointerup 開面板改為 onclick
+  （鍵盤也能開）；hover 的 scale／translateY 原本被 inline transform 蓋掉，現在會生效（translate 屬性與 transform 獨立）。
+- Rule 40：`test-v6420` 的 overlay 掃描器原本固定取 900 字元，會把後面的兄弟元素算進來（對手回合按鈕緊接在回合橫幅之後，
+  C3 誤判 turn-banner-overlay「掛了 action 卻沒有把手」）⇒ 改成只取元素自己的子樹（div 開合配對），上限不變；BASE 上仍 58/58。
+- 守衛 `test-v6423-floating-drag-central`（20 條：S 靜態 6、H Playwright 14）。BASE 10 PASS / 9 FAIL。
+  突變 9 個皆紅（不吃 click、門檻內移動、wholeNode 失效、不擋穿透、掛載不夾、margin 寫成 translate、切模式不清殘值、吃 click 不過期…）。
+- 依站長「小事不找 fable、節約 token」：本版為前端收斂、以 Playwright 實測＋突變驗證，未派 fable 審查。
+
 ## v6.422 ⭐⭐ 終局收尾中央化：清殘留 picker ＋ 改寫與最終結果不一致的提早勝利宣告
 
 BASE `7183c79730a3a306ee6ffe7d6081992b4d794f89`（v6.421）。處理 v6.421 列管的兩項（fable 5.1 審查提出）。

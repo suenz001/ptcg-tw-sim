@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '7183c79730a3a306ee6ffe7d6081992b4d794f89';   // v6.421（上一版）
+const PREV_SHA = 'd27102c8eeb5f9d2e8d49a78b97c7671ba707c34';   // v6.422（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,15 +757,26 @@ const PREV_SHA = '7183c79730a3a306ee6ffe7d6081992b4d794f89';   // v6.421（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.422 前移：PREV_SHA 從 v6.421（7183c797）起算。
+  // ⚠⚠ v6.423 前移：PREV_SHA 從 v6.422（d27102c8）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐⭐v6.422：engine 終局收尾 finalizeEndgameV6422（清終局殘留 picker、改寫與最終結果不一致的提早勝利宣告）。
-  'src/lib/game/engine.ts',
+  // ⭐⭐v6.423：聊天 FAB／聊天面板／對手回合按鈕與面板的拖曳收斂到中央 modal-drag.ts
+  //   （中央 action 新增 wholeNode／threshold／吃 click／stopPropagation／overlay:false／initial／onEnd／mode:margin）。
+  'src/lib/modal-drag.ts',
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.422）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.422 前移：PREV_SHA 從 v6.421（7183c797）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐⭐v6.422：engine 終局收尾 finalizeEndgameV6422（清終局殘留 picker、改寫與最終結果不一致的提早勝利宣告）。
+//   'src/lib/game/engine.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.421）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.421 前移：PREV_SHA 從 v6.420（31cea433）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。

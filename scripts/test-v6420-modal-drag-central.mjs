@@ -182,6 +182,18 @@ const DRAG_EXEMPT = {
 //   ⇒ 改成「class 清單中**任一** token 以 overlay／backdrop 結尾」，並用**最具體**的那個 token 當名字。
 const OVERLAY_RE = /<div class="([^"]*)"/g;
 const GENERIC = new Set(['modal-overlay', 'zoom-overlay']);
+/** 從 `<div` 開頭配對到它自己的 `</div>`（只數 div），超過 cap 就截在 cap。 */
+function ownSubtree(tpl, start, cap) {
+  const re = /<div\b|<\/div>/g;
+  re.lastIndex = start;
+  let depth = 0, mm;
+  while ((mm = re.exec(tpl)) !== null) {
+    depth += mm[0] === '</div>' ? -1 : 1;
+    if (depth === 0) return tpl.slice(start, Math.min(re.lastIndex, start + cap));
+    if (re.lastIndex - start > cap) break;
+  }
+  return tpl.slice(start, start + cap);
+}
 function scanOverlays(tpl, label) {
   const out = [];
   for (const m of tpl.matchAll(OVERLAY_RE)) {
@@ -190,7 +202,10 @@ function scanOverlays(tpl, label) {
     if (hits.length === 0) continue;
     if (toks.some((t) => t.startsWith('tt-attach'))) continue;   // 場上能量標記，不是視窗
     const cls = hits.find((t) => !GENERIC.has(t)) ?? hits[0];
-    const seg = tpl.slice(m.index, m.index + 900);
+    // ⭐v6.423（Rule 40）：原本固定取 900 字元 ⇒ 會把**後面的兄弟元素**也算進來
+    //   （v6.423 在回合橫幅之後放了掛 action 的對手回合按鈕，C3 就把 turn-banner-overlay 誤判成
+    //   「掛了 action 卻沒有把手」）。改成只取**這個元素自己的子樹**（div 開合配對），上限 900 不變。
+    const seg = ownSubtree(tpl, m.index, 900);
     out.push({ label, cls, toks, index: m.index, hasDrag: seg.includes('use:modalDrag'), seg });
   }
   return out;
