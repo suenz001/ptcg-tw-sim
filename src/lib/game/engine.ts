@@ -9399,6 +9399,86 @@ function applyEndgameVerdictV6361(
     message: `${state.players[(1 - w) as 0 | 1].name} 沒有可上場的寶可夢，${state.players[w].name} 獲勝！` }] };
 }
 // <<< v6361-central-endgame
+// >>> v6422-endgame-finalize-helper
+/**
+ * ⭐⭐v6.422：終局收尾（只在「本次 action 才判出終局」時呼叫一次，見 applyActionImpl 末端）。
+ *
+ * ① **清掉終局盤面上殘留的選擇視窗**（pendingSelection／pendingChainQueue）。
+ *    審查者全卡實測：108 個招式在「取完最後一張獎賞」後，postFn 仍開出一般 picker，
+ *    盤面寫著 game-over 卻留著 pendingSelection —— applyActionImpl 開頭對 game-over 早退，
+ *    那個視窗永遠解不掉，只是剛好被勝負結算畫面蓋住。v4.73／v6.361 各自在自己的分支清，
+ *    這裡把「任何一條路徑判出的終局」一次收齊。
+ *
+ * ② **改寫本 action 內「提早寫下的勝利宣告」**。
+ *    v6.361 起，終局可能被收回（liftEndgameForOnKoV6361）、效果結算完之後再由中央重判。
+ *    收回之前 addPendingPrize／resolveKnockouts 已經寫了「A 取得所有獎賞卡，獲勝！」
+ *    ⇒ 玩家在紀錄裡先看到「A 獲勝」，接著才看到「⚖️ … 平手」。
+ *    ⇒ 只改寫**與最終結果不一致**的那幾行：句尾「獲勝！」換成「（勝負待效果結算完畢後判定）」，
+ *      前半句（取得所有獎賞卡／沒有可上場的寶可夢）照留，事實陳述不變。
+ *    ⚠ 只動**本 action 新增**的紀錄（index ≥ 前一個盤面的 log 長度）：之前的紀錄已經推上伺服器，
+ *      oracle-client 的 delta PUT 只送追加的部分（logAppend），改寫舊行會讓兩端不一致。
+ *    ⚠ 雙方同名時宣告的名字必然等於勝方名字 ⇒ 有勝方時自然不改寫（分不出是誰就不動），
+ *      只有「最終平手」會改寫（平手時任何勝利宣告都不成立）。
+ */
+const V6422_PENDING_NOTE = '（勝負待效果結算完畢後判定）';
+/**
+ * 一行紀錄若是某位玩家的勝利宣告，回傳 [勝方座位, 去掉「獲勝」後綴的前半句]；否則 null。
+ *   ⚠ 用**兩位玩家的實際名字**做後綴比對，不用 regex 猜名字 —— 玩家名稱可以含全形逗號
+ *     （伺服器只做長度截斷），「，([^，]+) 獲勝！」會把名字切斷（審查者實測：「小明，大王」）。
+ *   句型（全站 grep「獲勝！」逐一核對）：
+ *     「{名} 取得所有獎賞卡，獲勝！」／「…，{名} 獲勝！」（沒有可上場的寶可夢、無法抽牌）
+ */
+function parseWinClaimV6422(msg: string, names: [string, string]): [0 | 1, string] | null {
+  let best: [0 | 1, string] | null = null;
+  let bestLen = -1;
+  for (const w of [0, 1] as const) {
+    // ⚠ 兩個名字都對得上時取**較長**的那個（例：「大王」與「小明，大王」—— 後者的宣告也以「，大王 獲勝！」結尾）
+    if (names[w].length <= bestLen) continue;
+    if (msg === `${names[w]} 取得所有獎賞卡，獲勝！`) { best = [w, `${names[w]} 取得所有獎賞卡`]; bestLen = names[w].length; continue; }
+    const tail = `，${names[w]} 獲勝！`;
+    if (msg.endsWith(tail) && msg.length > tail.length) { best = [w, msg.slice(0, -tail.length)]; bestLen = names[w].length; }
+  }
+  return best;
+}
+export function finalizeEndgameV6422(prev: GameState, next: GameState): GameState {
+  let out: GameState = next;
+  // ① 殘留的選擇視窗
+  //   ⚠ 用 delete、不寫 undefined（v6.417 同一個理由：留著 key 的 undefined 會讓 buildRoomPatch
+  //     走 set 而不是 del，一旦被 JSON.stringify 丟掉，伺服器端的舊值就永遠刪不掉）。
+  //   ⚠ 值為 undefined 但 key 還在的也一併 delete（applyEndgameVerdictV6361／v4.73 兜底寫的是
+  //     `pendingSelection: undefined`；審查者提醒：與 v6.417 同一顆地雷）。null 不動（Firestore 可存）。
+  if (out.pendingSelection || (out.pendingChainQueue?.length ?? 0) > 0
+      || ('pendingSelection' in out && out.pendingSelection === undefined)
+      || ('pendingChainQueue' in out && out.pendingChainQueue === undefined)) {
+    const c: GameState = { ...out };
+    delete (c as { pendingSelection?: unknown }).pendingSelection;
+    delete (c as { pendingChainQueue?: unknown }).pendingChainQueue;
+    out = c;
+  }
+  // ② 與最終結果不一致的提早勝利宣告
+  const base = prev.log?.length ?? 0;
+  const log = out.log ?? [];
+  if (log.length > base) {
+    const draw = out.isDraw === true;
+    const w = (out.winner === 0 || out.winner === 1) ? out.winner : null;
+    const names: [string, string] = [String(out.players[0]?.name ?? ''), String(out.players[1]?.name ?? '')];
+    // 雙方同名時宣告的是誰無從分辨 ⇒ 只在平手時改寫（平手時任何勝利宣告都不成立）
+    const sameNames = names[0] === names[1];
+    let changed = false;
+    const nl = log.map((e, i) => {
+      if (i < base || typeof e?.message !== 'string') return e;
+      const c = parseWinClaimV6422(e.message, names);
+      if (c === null) return e;
+      const wrong = draw || (!sameNames && w !== null && c[0] !== w);
+      if (!wrong) return e;
+      changed = true;
+      return { ...e, message: c[1] + V6422_PENDING_NOTE };
+    });
+    if (changed) out = { ...out, log: nl };
+  }
+  return out;
+}
+// <<< v6422-endgame-finalize-helper
 function applyActionImpl(
   state: GameState,
   action: GameAction,
@@ -9802,6 +9882,13 @@ function applyActionImpl(
     next = discardIllegalRocketEnergy(next, 1, pool);
   }
 
+  // >>> v6422-endgame-finalize
+  // ⭐⭐v6.422：本次 action 判出終局時的**最後一道收尾**（全站只有這一處）。
+  //   （開頭對 state.phase === 'game-over' 早退 ⇒ 走到這裡的一定是「本次才判出終局」。）
+  if (next.phase === 'game-over') {
+    next = finalizeEndgameV6422(state, next);
+  }
+  // <<< v6422-endgame-finalize
   return next;
 }
 

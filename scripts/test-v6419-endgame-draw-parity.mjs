@@ -268,8 +268,17 @@ T('E1. ⭐⭐【M3】結清只准挑 take-prize-choose —— 佇列裡**別的*
   assert.strictEqual(st.phase, 'game-over', '沒有終局');
   assert.strictEqual(st.winner, 0, `別人的 picker 被當成取獎賞結清了（winner=${st.winner} isDraw=${st.isDraw}）`);
   assert.strictEqual(st.players[1].prizes.length, 2, '對手的獎賞被白白取走了');
-  const q = st.pendingChainQueue ?? [];
-  assert.ok(q.some((x) => x.effectKey === '__v6419_other_picker__'), '佇列裡別人的 picker 不見了');
+  // ⭐v6.422（Rule 40）：原本斷言「終局盤面的佇列裡仍留著別人的 picker」。v6.422 起
+  //   applyActionImpl 末端的 finalizeEndgameV6422 會把**任何**終局盤面的殘留 picker 清掉
+  //   （終局早退 ⇒ 那個 picker 永遠沒有人解）⇒ 觀測點被新的收尾層蓋住。
+  //   本條的意圖「結清只挑 take-prize-choose、不動別人的 picker」改成兩層各自驗：
+  //   ① 行為：別人的 picker 沒被當成取獎賞結清（上面 winner／獎賞張數兩條）
+  //   ② 結構：v6419 保留佇列的過濾式仍然只剔除 take-prize-choose（逐字）
+  //   ＋ 新的收尾層：終局盤面不得留有任何 picker。
+  const ENG = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8');
+  assert.ok(ENG.includes("const _restQ = (next.pendingChainQueue ?? []).filter(q => q.effectKey !== 'take-prize-choose');"),
+    'v6419 保留佇列的過濾式被改動了（別人的 picker 可能被一起結清）');
+  assert.ok(!st.pendingSelection && (st.pendingChainQueue ?? []).length === 0, '終局盤面留有 picker（v6.422 收尾層失效）');
 });
 T('E2. ⭐⭐【M10】結清要照 `remaining` 取足張數（不是固定取 1 張）', () => {
   const st = craft(1, 2, prizeSel(1, 2));   // 對手欠 2 張、手上剛好 2 張 ⇒ 結清後雙方都 0 ⇒ 平手

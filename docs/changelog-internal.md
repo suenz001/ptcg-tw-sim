@@ -1,5 +1,28 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.422 ⭐⭐ 終局收尾中央化：清殘留 picker ＋ 改寫與最終結果不一致的提早勝利宣告
+
+BASE `7183c79730a3a306ee6ffe7d6081992b4d794f89`（v6.421）。處理 v6.421 列管的兩項（fable 5.1 審查提出）。
+⚠ 動了 `engine.ts` ⇒ `scripts/lib/engine-strip-v6422.mjs`（2 組，皆純新增），接線 `test-v6265`（兩處）／
+`test-v6375`／`test-v6371`（Rule 54：本版排最前）。
+⚠ 部署照 Rule 43：**`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**。
+
+- `finalizeEndgameV6422(prev, next)`：applyActionImpl 末端**唯一**呼叫點（開頭對 game-over 早退 ⇒ 走到這裡的
+  一定是本 action 才判出終局）。
+  ① 終局盤面若有 pendingSelection／pendingChainQueue ⇒ `delete`（不寫 undefined，v6.417 同理由）。BASE 全卡 108 個。
+  ② 本 action 新增的紀錄中，句尾「獲勝！」且宣告的勝方與最終結果不一致（平手或換人）⇒ 句尾「，…獲勝！」改成
+  「（勝負待效果結算完畢後判定）」。之前的紀錄絕不改（delta PUT 只送 logAppend）。BASE 全卡 90 個平手終局留著宣告。
+- Rule 40：`test-v6419` E1 原本斷言「終局佇列仍留著別人的 picker」，被新收尾層蓋住 ⇒ 改成兩層各自驗
+  （行為：未被當成取獎賞結清；結構：v6419 的 `_restQ` 過濾式逐字）＋新層：終局不得留 picker。
+- fable 5.1 審查後補修：① 勝利宣告改用**兩位玩家的實際名字**做後綴比對（原本的 regex／lastIndexOf 會把含全形逗號的名字切斷，
+  實測「小明，大王」的正確宣告被誤改）；名字互為後綴時取較長者。② 只有佇列殘留（檯面沒 picker）也清。
+  ③ `pendingSelection: undefined` 這種「key 還在、值是 undefined」也 delete（v6.417 同一顆地雷）；null 不動。
+- 守衛 `test-v6422-endgame-finalize`（26 條）：L 行為（密勒頓平手、深紅炸彈換人、零回歸、舊紀錄不動、同名）、
+  U 直呼中央單元（含逗號名字、後綴名字、佇列、undefined key）、Z 全 ATTACK_POST 掃描、K 結構。BASE 5 PASS / 21 FAIL。
+  突變 8 個皆紅（含審查者第一輪存活的「只清檯面」「indexOf」兩個）。
+- 列管（非本版）：房間棄權／離開路徑（room.ts、room-oracle.ts）直接寫 game-over、不經 applyActionImpl；
+  `+page.svelte` 的 picker modal 沒有 phase 閘。目前各消費者都 gate 在 phase==='playing'，無實害。
+
 ## v6.421 ⭐⭐⭐ 自傷同時昏厥也判平手（站長裁定）＋ 防守方全滅不再跳過 postFn ＋ 打倒自己備戰的獎賞歸屬
 
 BASE `31cea43393552e4f3e02b06be3f462778fce67a3`（v6.420）。
