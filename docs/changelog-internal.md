@@ -1,5 +1,30 @@
 # 內部改版紀錄（不打包進網站）
 
+## server patch v1.47：休閒閒置判負改用「盤面進度時鐘」（玩家回報 EU3Y 掛機 11 分鐘沒被判）
+
+BASE `410cde01`（v6.424）。只動 `oracle-admin/server_admin_patch.js`（＋守衛），玩家端 src/static 零改動 ⇒ 網站版本號不動（仍 6.424）。
+部署：`update-tournament.bat`（先，把本機 E:\ 同步到最新）＋ `update-admin-full.bat`（上傳 server patch 並重啟 pm2）。
+
+- 實錄（admin 診斷 gameState）：YT 最後動作 18:45:32，盤面之後完全沒變，諺爸 18:56:50 自己離開 ⇒ 閒置 11 分 18 秒
+  （門檻上限 5 分 15 秒）卻沒判；結果掛機方反而拿到勝場。同時段 pm2 log 其他房照常判負、無 sweep error。
+  引擎端用同盤面重現：感應【超】能量放完備戰後無殘留 pending，YT 可正常行動 ⇒ 不是卡牌卡死。
+- v1.03 舊掃描三個結構性盲點：① 閒置時鐘＝updatedAt，而 server.js 的 PUT 無條件蓋 updatedAt、client oracleTx 盤面沒變也照送
+  PUT ⇒ 沒有進度的寫入會歸零閒置時鐘；② `updatedAt<now-60s`＋`limit(200)` 無排序（走 {status,updatedAt:-1} 索引＝由新到舊），
+  最久沒動的房排在名額外；③ 重入鎖無逾時，一輪查詢卡死就永久停判。
+  ⚠ 線上是哪一個（或哪幾個）命中 EU3Y 無法從現有資料分辨（pm2 log 無時間戳、沒有逐房紀錄）；新版三個一起收斂。
+- 修法：閒置時鐘改為「盤面指紋（gameState 去掉 log 內容／_clientVerP0/P1 後的雜湊＋log 長度與最後一則）最後一次改變時的
+  伺服器 updatedAt」；每輪只列 status=playing 的 4 個小欄位（上限 5000），只有 _version 變了的房才批次拉 gameState；
+  判負前重讀整間房、比對版本＋指紋，寫入用 _version 樂觀鎖；重入鎖 5 分鐘逾時且只解自己的鎖。
+  錯誤一律往「不判」方向（指紋誤變＝晚判，不會誤判正在動作的人）。currentActorSeat 照舊共用。
+- 守衛 `test-v6425-casual-idle-progress-clock`（23 條；BASE 9 PASS／14 FAIL）：抽出真 IIFE＋假 Mongo＋假時鐘逐 tick 跑；
+  S1/S4/S5 在「同一份檔案還原出的 v1.46」上證明會紅（history-free HEAD-FAIL）；安全面 S2（每 150 秒動一步 15 分鐘不判）、
+  S6 競態不蓋寫；突變 M1–M4 各紅在預期那一條，另有正對照證明 S4 的紅來自名額＋順序。
+- fable 5.1 獨立審查：無必修。採納：updatedAt 缺席時改用 now 起算（原本退回 0 會「一看到就判」，補守衛＋突變 M6）；
+  每 20 輪印統計行、樂觀鎖沒命中印一行（可觀測性）；註解明寫 room 層級請求（悔棋／重開）不再算進度的刻意差異。
+  未採納：指紋改 sha1（FNV 32×2 碰撞機率 ~2⁻⁶⁴，且純函式需零依賴才能被守衛抽出執行）；
+  「只解自己的鎖」與 Map 清理沒有專屬守衛（審查確認兩者不影響判負正確性）。
+- `scripts/lib/sap-revert-casual-idle-v147.mjs`：整段替換的宣告式還原器，接進 test-v6303 H3 的還原鏈最前面（Rule 54）。
+
 ## v6.424 勝負結算視窗置中（v6.420 回歸）
 
 BASE `99eb8f19d2b3ebfb555ce83958812ebd00ffdd5e`（v6.423 ＋ admin v1.75）。站長回報：改版後對戰結束的結算小視窗都偏到右下角。

@@ -4529,29 +4529,144 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //   ・只把房間寫成 game-over + status:'ended'（**不刪房**），雙方都能看到結果畫面。
     //   ・門檻＝房主設定的 idleTimeoutSec（60~300，預設 180），與畫面上那行說明一致。
     //   ・多加 15 秒緩衝，避免和前端「剛好在門檻邊緣送出動作」打架。
+    // >>> v147-casual-idle-progress
+    // ═══════════════════════════════════════════════════════════════════════
+    // v1.47（v6.425）⭐ 休閒閒置判負改用「盤面進度時鐘」（玩家回報 EU3Y：對手掛機 11 分鐘沒被判負）
+    // ═══════════════════════════════════════════════════════════════════════
+    // 實錄（admin 診斷的 gameState）：YT 最後一個動作 18:45:32，盤面之後一個字都沒變，
+    //   諺爸 等到 18:56:50 自己離開 ⇒ 閒置 11 分 18 秒，門檻上限才 5 分 15 秒，卻從沒被判。
+    //   同一段時間 pm2 log 裡其他房照常被判（掃描本身有在跑、也沒有 sweep error）。
+    //
+    // v1.03 的舊掃描有三個結構性盲點（任一個都能讓「某一間」永遠判不到）：
+    //   ① 閒置時鐘＝房間的 updatedAt。但休閒房**任何一發 PUT 都會把 updatedAt 蓋成現在**
+    //      （server.js 的 PUT 無條件 `$set updatedAt: Date.now()`），而 client 的 oracleTx
+    //      即使盤面沒變（stale 守衛原樣回傳）也照樣送出 PUT ⇒ 「沒有進度的寫入」會把閒置時鐘歸零。
+    //   ② 查詢 `updatedAt < now-60s` 再 `.limit(200)`、沒有排序：走 {status, updatedAt:-1} 索引時
+    //      回傳順序是「最近的先」，閒置最久、最該判的那幾間反而排在名額之外。
+    //   ③ 重入鎖 `running` 沒有逾時：只要有一輪資料庫查詢永遠沒回來，之後全部 tick 都直接 return，
+    //      直到 pm2 重啟都不會再判任何人（而且完全沒有 log）。
+    //
+    // ⭐ 修法（一次收斂三個盲點）：
+    //   ・閒置時鐘改成「**盤面指紋**最後一次改變的那一刻」（伺服器時鐘）。
+    //     指紋＝整份 gameState 去掉純中繼欄位（版本戳記／log 內容只取長度與最後一則）後的雜湊。
+    //     ⇒ 沒有進度的 PUT 不再歸零；有任何真實動作（盤面任何一格改變）一定歸零。
+    //     ⚠ 錯誤一律往「不判」的方向：指紋算錯（例如鍵順序變了）只會被當成「有進度」＝晚判，
+    //       絕不會把正在動作的人判負。
+    //   ・掃描清單改成「所有 status=playing 的房」只取 _id/_version/updatedAt/idleTimeoutSec
+    //     （極小），**只有 _version 變了的房**才去拉 gameState 重算指紋 ⇒ 沒有名額問題，
+    //     也不比舊版多拉資料（舊版每 tick 拉最多 200 份完整 gameState）。
+    //   ・重入鎖加逾時（5 分鐘）：卡死的那一輪不會永久封鎖後面所有 tick。
+    //   ・判負前再讀一次整間房，確認版本與指紋都沒變，寫入時用 _version 樂觀鎖 ——
+    //     讀到之後對方剛好動作了，更新不會命中，下一輪用新值重算。
+    //   ・可觀測性：每 20 輪（約 10 分鐘）印一行統計；樂觀鎖沒命中也印一行 ——
+    //     EU3Y 查了很久的原因之一，就是舊版對「為什麼沒判」一句話都沒說。
+    // ⚠ 行為差異（刻意）：房間層級的欄位（undoRequest／restartRequest／returnRequest 等）不在指紋內
+    //   （指紋只看 gameState）。舊版因為任何 PUT 都會重計時而「順便」把它們算成進度；新版不會。
+    //   actor 在這些請求期間盤面仍可操作、也可取消請求，所以不構成誤判。
+    // ⚠ 判「該誰動作」仍然直接複用 currentActorSeat（見上方 v1.03 註解，絕不另寫一份）。
+    // ⚠ 純函式 casualIdleFingerprint / casualIdleTrack / casualIdleDue 不引用任何外部狀態
+    //   （scripts/test-v6425-casual-idle-progress-clock.mjs 會把它們抽出來直接執行）。
+    function casualIdleFingerprint(gs) {
+      if (!gs || typeof gs !== 'object') return 'none';
+      const log = Array.isArray(gs.log) ? gs.log : [];
+      const last = log.length ? log[log.length - 1] : null;
+      // 純中繼欄位：不代表任何玩家動作，排除（漏排只會「晚判」，不會誤判）
+      const rest = {};
+      for (const k of Object.keys(gs).sort()) {
+        if (k === 'log' || k === '_clientVerP0' || k === '_clientVerP1') continue;
+        rest[k] = gs[k];
+      }
+      const s = JSON.stringify(rest) + '|' + log.length + '|' + JSON.stringify(last && last.message);
+      // FNV-1a 32 位元 ×2（正反兩向）⇒ 64 位元級的碰撞機率，零依賴
+      let h1 = 0x811c9dc5, h2 = 0x811c9dc5;
+      for (let i = 0; i < s.length; i++) {
+        h1 = Math.imul(h1 ^ s.charCodeAt(i), 0x01000193) >>> 0;
+        h2 = Math.imul(h2 ^ s.charCodeAt(s.length - 1 - i), 0x01000193) >>> 0;
+      }
+      return s.length + ':' + h1.toString(16) + h2.toString(16);
+    }
+    // prev：上一輪的追蹤紀錄（沒有就是 undefined）；cur：{ ver, fp, updatedAt }（updatedAt 是伺服器蓋的）；
+    // now：伺服器現在時間。回傳新的追蹤紀錄 { ver, fp, progressAt }。
+    // ⚠ updatedAt 缺席／不是有限數字時一律用 now（＝從現在重新計時，只會晚判；審查指出用 0 會「一看到就判」）。
+    function casualIdleTrack(prev, cur, now) {
+      const at = (typeof cur.updatedAt === 'number' && isFinite(cur.updatedAt)) ? cur.updatedAt : now;
+      // 第一次看到（含 pm2 重啟後）：保守地以 updatedAt 當進度時間（它 ≥ 真正的最後進度 ⇒ 只會晚判）
+      if (!prev) return { ver: cur.ver, fp: cur.fp, progressAt: at };
+      // 指紋變了＝有真實進度 ⇒ 進度時間＝這一發寫入的時間
+      if (prev.fp !== cur.fp) return { ver: cur.ver, fp: cur.fp, progressAt: at };
+      // 只有版本變、盤面沒變（沒有進度的 PUT）⇒ 進度時間**不動**
+      return { ver: cur.ver, fp: cur.fp, progressAt: prev.progressAt };
+    }
+    // 門檻＝房主設定 idleTimeoutSec（clamp 60~300，預設 180）＋ graceMs
+    function casualIdleDue(ent, idleTimeoutSec, now, graceMs) {
+      if (!ent) return false;
+      const sec = Math.min(300, Math.max(60, Number(idleTimeoutSec) || 180));
+      return now > (Number(ent.progressAt) || 0) + sec * 1000 + graceMs;
+    }
     (function startCasualIdleForfeit() {
       const TICK_MS = 30 * 1000;          // 每 30 秒掃一次（門檻最短 60 秒，取樣要夠密）
       const GRACE_MS = 15 * 1000;         // 門檻外的緩衝
-      let running = false;                // 重入鎖：DB 慢查詢時不讓兩個 tick 重疊
+      const SCAN_CAP = 5000;              // 單輪最多看幾間（只取 4 個小欄位；遠大於實際對戰中房數）
+      const FETCH_BATCH = 50;             // 版本有變的房，一次最多批次拉幾份 gameState
+      const STALE_LOCK_MS = 5 * 60 * 1000; // 重入鎖逾時：卡死的一輪不得永久封鎖後續 tick
+      const track = new Map();            // roomId → { ver, fp, progressAt }
+      let runningSince = 0;               // 重入鎖：0＝沒在跑
+      const STAT_EVERY = 20;              // 每幾輪印一次統計（30 秒 × 20 ＝ 10 分鐘）
+      let tickNo = 0, statLockSkip = 0, statJudged = 0, statCasMiss = 0;
       async function sweepCasualIdle() {
-        if (running) return;
         if (typeof db === 'undefined' || !db) return;
-        running = true;
+        const startedAt = Date.now();
+        if (runningSince && startedAt - runningSince < STALE_LOCK_MS) { statLockSkip++; return; }
+        if (runningSince) console.warn('[casual-idle] 上一輪已卡住 ' + Math.round((startedAt - runningSince) / 1000) + ' 秒，解除重入鎖');
+        const myRun = startedAt;
+        runningSince = myRun;
         try {
+          const col = db.collection('rooms');
+          const rows = await col.find(
+            { status: 'playing' },
+            { projection: { _id: 1, _version: 1, updatedAt: 1, idleTimeoutSec: 1 } }
+          ).limit(SCAN_CAP).toArray();
+          const seen = new Set();
+          const changed = [];
+          for (const r of rows) {
+            seen.add(r._id);
+            const ent = track.get(r._id);
+            if (!ent || ent.ver !== r._version) changed.push(r._id);
+          }
+          for (const id of Array.from(track.keys())) if (!seen.has(id)) track.delete(id);
+          // 只有版本變了的房才拉 gameState 重算指紋
+          for (let i = 0; i < changed.length; i += FETCH_BATCH) {
+            const ids = changed.slice(i, i + FETCH_BATCH);
+            const docs = await col.find(
+              { _id: { $in: ids }, status: 'playing' },
+              { projection: { _id: 1, _version: 1, updatedAt: 1, gameState: 1 } }
+            ).toArray();
+            for (const d of docs) {
+              track.set(d._id, casualIdleTrack(track.get(d._id), {
+                ver: d._version, fp: casualIdleFingerprint(d.gameState), updatedAt: d.updatedAt,
+              }, Date.now()));
+            }
+          }
           const now = Date.now();
-          // 只看對戰中、且至少已經超過最短門檻（60s）的房，避免每 tick 撈全部
-          const rooms = await db.collection('rooms').find(
-            { status: 'playing', updatedAt: { $lt: now - 60000 } },
-            { projection: { _id: 1, gameState: 1, _version: 1, updatedAt: 1, idleTimeoutSec: 1 } }
-          ).limit(200).toArray();
-          for (const room of rooms) {
-            const gs = room && room.gameState;
+          let due = 0;
+          for (const r of rows) {
+            const ent = track.get(r._id);
+            if (!ent || ent.ver !== r._version) continue;              // 這一輪中途又被寫了 ⇒ 下一輪再說
+            if (!casualIdleDue(ent, r.idleTimeoutSec, now, GRACE_MS)) continue;
+            due++;
+            // 判負前再讀一次整間房：版本與指紋都必須還是同一份
+            const room = await col.findOne(
+              { _id: r._id },
+              { projection: { _id: 1, gameState: 1, _version: 1, status: 1, idleTimeoutSec: 1 } }
+            );
+            if (!room || room.status !== 'playing' || room._version !== ent.ver) continue;
+            const gs = room.gameState;
             if (!gs || gs.phase === 'game-over') continue;
-            const sec = Math.min(300, Math.max(60, Number(room.idleTimeoutSec) || 180));
-            if (now <= (room.updatedAt || 0) + sec * 1000 + GRACE_MS) continue;
+            if (casualIdleFingerprint(gs) !== ent.fp) continue;
             const actor = currentActorSeat(gs);
             // -1（雙方都欠動作）/ null（判不出）→ 不判任何一方
             if (actor !== 0 && actor !== 1) continue;
+            const sec = Math.min(300, Math.max(60, Number(room.idleTimeoutSec) || 180));
             const winSeat = (1 - actor);
             const nameOf = (i) => (gs.players && gs.players[i] && gs.players[i].name) || ('P' + (i + 1));
             const loserName = nameOf(actor), winnerName = nameOf(winSeat);
@@ -4565,27 +4680,36 @@ import('firebase-admin').then(async ({ default: admin }) => {
               { turn: og.turn, playerIndex: null, message: '⏰ ' + reason },
             ]);
             // ⚠⚠ 休閒房的版本欄位是 **_version**（不是 version，那是錦標賽 TROOMS 的欄位名）。
-            //   client 的輪詢只在 `room._version !== lastVersion` 才回呼（oracle-client.ts），
-            //   而且 server 對 ?since=_version 相同時直接回 204 無 body。
-            //   ⇒ 沒 bump _version 的話：判負寫進 DB 了，但**兩邊玩家都看不到結果**，
-            //     而且掛機者醒來時用舊 _version 當 expectedVersion 的 PUT 還會把 game-over 整包蓋回 playing。
-            // ⚠ 樂觀鎖同時比對 updatedAt + _version：這一輪讀到之後對方若剛好動作了，更新不會命中，
-            //   下一輪 tick 用新值重算 —— 不會誤判剛好在邊緣行動的人。
-            await db.collection('rooms').updateOne(
-              { _id: room._id, updatedAt: room.updatedAt, _version: room._version, status: 'playing' },
-              { $set: { gameState: og, status: 'ended', _version: (room._version || 0) + 1, updatedAt: now } }
+            //   client 的輪詢只在 `room._version !== lastVersion` 才回呼 ⇒ 一定要 bump，否則雙方都看不到結果，
+            //   而且掛機者醒來時用舊 _version 的 PUT 會把 game-over 整包蓋回 playing。
+            const wr = await col.updateOne(
+              { _id: r._id, _version: ent.ver, status: 'playing' },
+              { $set: { gameState: og, status: 'ended', _version: (ent.ver || 0) + 1, updatedAt: now } }
             );
-            console.log('[casual-idle] ' + room._id + ' → ' + reason);
+            if (wr && wr.modifiedCount === 0) {                          // 樂觀鎖沒命中＝對方剛好動作了
+              statCasMiss++;
+              console.log('[casual-idle] ' + r._id + ' 判負前被寫入（樂觀鎖沒命中），下一輪重算');
+              continue;
+            }
+            track.delete(r._id);
+            statJudged++;
+            console.log('[casual-idle] ' + r._id + ' → ' + reason);
+          }
+          if (++tickNo % STAT_EVERY === 0) {
+            console.log('[casual-idle] stat rooms=' + rows.length + ' changed=' + changed.length + ' due=' + due
+              + ' judged=' + statJudged + ' casMiss=' + statCasMiss + ' lockSkip=' + statLockSkip + '（最近 ' + STAT_EVERY + ' 輪）');
+            statJudged = 0; statCasMiss = 0; statLockSkip = 0;
           }
         } catch (err) {
           console.warn('[casual-idle] sweep error:', (err && err.message) || err);
         } finally {
-          running = false;
+          if (runningSince === myRun) runningSince = 0;                // 只解自己的鎖（逾時後被接手的舊輪不可解新輪的鎖）
         }
       }
-      console.log('[casual-idle] v1.0 已啟動：休閒房閒置逾房主設定（60~300 秒）自動判負，每 30 秒掃一次');
+      console.log('[casual-idle] v1.1 已啟動：休閒房盤面無進度逾房主設定（60~300 秒）自動判負，每 30 秒掃一次');
       setTimeout(() => { sweepCasualIdle(); setInterval(sweepCasualIdle, TICK_MS); }, 20 * 1000);
     })();
+    // <<< v147-casual-idle-progress
 
     // 強制 senderIdx/playerIdx = 自己 seat，防偽造替對手操作
     function normalizeAction(action, seat) {
