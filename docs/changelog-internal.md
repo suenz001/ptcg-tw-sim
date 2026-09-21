@@ -1,5 +1,23 @@
 # 內部改版紀錄（不打包進網站）
 
+## server patch v1.49：admin 原型搜尋不再卡住全站（錦標賽 lag 實錄）
+
+BASE `fb01e4b1`（admin v1.76／server v1.48）。只動 `oracle-admin/server_admin_patch.js`（＋守衛），網站版本號不動（仍 6.424）。
+部署：`update-tournament.bat`（先同步本機）＋ `update-admin-full.bat`（同時把 v1.47～v1.49 一起上線）。
+
+- 站長回報：今天錦標賽玩家反應 lag。dump-perf：本機探針全天 0.002～0.006 秒、零筆超過 1 秒；但 nginx 慢請求在
+  UTC 13:22:13（3＋1 筆）／13:35:40（20 筆）**同一秒**一起結束，每筆都在 node 裡等 1.00～1.06 秒 ⇒ 事件迴圈被同步運算卡住約 1 秒。
+  兩批都有 admin `/api/admin/oracle/rooms?status=ended&range=7d&q=未分類`（1.235／1.273 秒）⇒ 元兇＝v1.46 的原型搜尋
+  （`.limit(5000).toArray()` 後同步逐座位分類，違反 Rule 30／v6.242）。v1.48 對戰歷史原型搜尋同一寫法。
+  UTC 09:44:13 另有一批（21 筆、等 1.03～1.21 秒），同一秒找不到 >1 秒的 admin 請求，元兇未明。
+  閒置判負 v1.47 當時**尚未部署**（pm2 log 只有 v1.0 啟動訊息），已排除。
+- 修法：中央 `app.locals._archetypeScanIds(cursor, cap, q, entriesListOf)`：cursor 逐筆（batchSize 200）＋每 200 筆
+  adminScanYield 讓路＋邊掃邊分類（archetypeNameOf 仍是唯一分類）；兩個端點都改用它，刪掉舊的 toArray 版 helper。
+  另加 `[loop-lag]`：每 500ms 量計時器遲到，≥300ms 印一行（自帶 ISO 時間，unref），下次可直接對 nginx 時間找元兇。
+  閒置判負 v1.47 的 FETCH_BATCH 50→20（每批同步工作約 20ms）。
+- 守衛 `test-admin-v149-arch-scan-yield`（10 條；BASE 2 PASS／8 FAIL）：假游標每筆都是已解決 promise（＝真 mongodb 一批之內），
+  掃描期間跑 setImmediate 探針——BASE 探針 0 次（重現卡死），新版 ≥ 20 次；讓路前後命中結果逐筆相同；突變「拿掉讓路」必紅。
+
 ## admin v1.76 ＋ server patch v1.48：牌組原型 ↔ 房間 ↔ 規則 互通（站長四選）
 
 BASE `f0263cd8`（server patch v1.47）。只動 admin（`oracle-admin/admin.html`、`oracle-admin/server_admin_patch.js`），

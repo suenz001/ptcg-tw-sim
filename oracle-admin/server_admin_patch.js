@@ -612,16 +612,19 @@ import('firebase-admin').then(async ({ default: admin }) => {
         //   app.locals（handler 執行時才取，v0.94 教訓）；沒掛上或失敗 ⇒ 略過，其他搜尋照常。
         try {
           const _locals = app.locals || {};
-          const _nameHit = _locals._archetypeNameMatches, _matchIds = _locals._archetypeMatchRoomIds;
-          if (typeof _nameHit === 'function' && typeof _matchIds === 'function' && await _nameHit(_q)) {
+          // v1.49：掃描＋分類改走中央 _archetypeScanIds（邊掃邊讓路；v1.46 的 limit(5000).toArray() 會卡住全站約 1 秒）
+          const _nameHit = _locals._archetypeNameMatches, _scanIds = _locals._archetypeScanIds;
+          if (typeof _nameHit === 'function' && typeof _scanIds === 'function' && await _nameHit(_q)) {
             const _base = { ..._filter };   // 此時還沒有 $or ＝ 只有 status／updatedAt 條件
-            const _docs = await db.collection('rooms')
+            const _cur = db.collection('rooms')
               .find(_base, { projection: { _id: 1, 'seats.deckEntries': 1 } })
-              .sort({ updatedAt: -1 }).limit(ROOMS_ARCH_SCAN_CAP).toArray();
-            const _aids = await _matchIds(_docs, _q);
+              .sort({ updatedAt: -1 });
+            const _r = await _scanIds(_cur, ROOMS_ARCH_SCAN_CAP, _q,
+              (d) => (Array.isArray(d && d.seats) ? d.seats : []).map((s) => (s && s.deckEntries) || null));
+            const _aids = _r.ids;
             if (_aids.length) _or.push({ _id: { $in: _aids } });
-            _archScan = { scanned: _docs.length, cap: ROOMS_ARCH_SCAN_CAP,
-              capped: _docs.length >= ROOMS_ARCH_SCAN_CAP, matched: _aids.length };
+            _archScan = { scanned: _r.scanned, cap: ROOMS_ARCH_SCAN_CAP,
+              capped: _r.scanned >= ROOMS_ARCH_SCAN_CAP, matched: _aids.length };
           }
         } catch (e) { console.warn('[admin] rooms 原型搜尋略過:', e && e.message); }
         // <<< v146-admin-arch-search
@@ -1168,6 +1171,27 @@ import('firebase-admin').then(async ({ default: admin }) => {
     if (n % ADMIN_SCAN_YIELD_EVERY !== 0) return null;
     return new Promise((resolve) => setImmediate(resolve));
   }
+  // >>> v149-loop-lag-log
+  // ══ v1.49（2026-09-21）事件迴圈卡頓紀錄 ══════════════════════════════════════════════
+  //   實錄：錦標賽玩家回報 lag。nginx 慢請求紀錄裡，台灣 21:22:13／21:35:40 各有一批「不同房間、不同種類」
+  //   的請求**同一秒**一起結束、每筆都在 node 裡等了 1.0～1.2 秒 ⇒ 那一刻事件迴圈整個被同步運算卡住。
+  //   其中兩批的元兇是 admin 的原型搜尋（v1.46，見 _archetypeScanIds）；但 17:44:13 那批找不到元兇
+  //   ——本機探針 15 秒才一筆，測不到 1 秒級的短卡頓。
+  //   ⇒ 每 500ms 量一次計時器遲到多少；遲到 ≥ 300ms 就印一行（**自帶 ISO 時間**，pm2 log 沒有時間戳），
+  //     之後拿去跟 nginx 的 ptcg-time.log 對時間就知道是誰卡住全站。成本：每 500ms 一次空回呼。
+  //   ⚠ unref：不能讓這個計時器擋住行程結束（測試／重啟）。
+  (function startLoopLagLog() {
+    const LAG_TICK_MS = 500, LAG_WARN_MS = 300;
+    let expect = Date.now() + LAG_TICK_MS;
+    const t = setInterval(() => {
+      const now = Date.now();
+      const lag = now - expect;
+      expect = now + LAG_TICK_MS;
+      if (lag >= LAG_WARN_MS) console.warn('[loop-lag] ' + new Date(now).toISOString() + ' 事件迴圈卡住約 ' + lag + 'ms');
+    }, LAG_TICK_MS);
+    if (t && typeof t.unref === 'function') t.unref();
+  })();
+  // <<< v149-loop-lag-log
 
   // ══ v1.28（v6.266）套牌戰績 GET /api/deck-stats 的兩支索引 ═════════════════
   //   查詢形狀＝`$or:[{'p1.deckId':X},{'p2.deckId':X}]` ⇒ 兩支單欄索引，planner 走 index union。
@@ -1609,15 +1633,18 @@ import('firebase-admin').then(async ({ default: admin }) => {
       let _mArchIds = null;
       //   ⚠ 整段包 try：原型掃描失敗就略過（其他搜尋照常），絕不可讓 reject 逃出 handler（請求會掛住）。
       try {
+        // v1.49：掃描＋分類改走中央 _archetypeScanIds（邊掃邊讓路，不再 limit(5000).toArray() 卡住全站）
         if (q && app.locals && typeof app.locals._archetypeNameMatches === 'function'
-            && typeof app.locals._archetypeMatchRecordIds === 'function'
+            && typeof app.locals._archetypeScanIds === 'function'
+            && typeof app.locals._matchRecordEntriesList === 'function'
             && await app.locals._archetypeNameMatches(q)) {
           const _baseF = and.length ? { $and: and.slice() } : {};
-          const _docs = await db.collection('matchRecords')
+          const _cur = db.collection('matchRecords')
             .find(_baseF, { projection: { _id: 1, 'p1.cardCounts': 1, 'p2.cardCounts': 1 } })
-            .sort({ endedAt: -1 }).limit(MR_ARCH_SCAN_CAP).toArray();
-          _mArchIds = await app.locals._archetypeMatchRecordIds(_docs, q);
-          _mArchScan = { scanned: _docs.length, cap: MR_ARCH_SCAN_CAP, capped: _docs.length >= MR_ARCH_SCAN_CAP, matched: _mArchIds.length };
+            .sort({ endedAt: -1 });
+          const _r = await app.locals._archetypeScanIds(_cur, MR_ARCH_SCAN_CAP, q, app.locals._matchRecordEntriesList);
+          _mArchIds = _r.ids;
+          _mArchScan = { scanned: _r.scanned, cap: MR_ARCH_SCAN_CAP, capped: _r.scanned >= MR_ARCH_SCAN_CAP, matched: _mArchIds.length };
         }
       } catch (e) {
         console.warn('[admin match-records] archetype scan skipped:', e && e.message);
@@ -3006,23 +3033,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       const rules = await getEnabledRulesCached();
       return rules.some((r) => r && r.name && String(r.name).toLowerCase().includes(lc));
     };
-    app.locals._archetypeMatchRoomIds = async (docs, q) => {
-      const lc = String(q || '').trim().toLowerCase();
-      if (!lc) return [];
-      const nameMap = await getCardNameMap();
-      const rules = nameMap.size ? await getEnabledRulesCached() : [];
-      const ids = [];
-      for (const r of (docs || [])) {
-        const seats = Array.isArray(r && r.seats) ? r.seats : [];
-        const hit = seats.some((s) => {
-          if (!s) return false;
-          const a = archetypeNameOf(s.deckEntries, nameMap, rules);
-          return a != null && String(a).toLowerCase().includes(lc);
-        });
-        if (hit) ids.push(r._id);
-      }
-      return ids;
-    };
+    //   v1.49：原本的 _archetypeMatchRoomIds（先 toArray 再同步分類）已由中央 _archetypeScanIds 取代。
     // <<< v146-admin-arch-search
     // >>> v148-admin-match-arch
     // ── v1.48（2026-09-21）admin 📜 對戰歷史改用【牌組原型】＋可搜原型 ──────────────────────────
@@ -3045,25 +3056,60 @@ import('firebase-admin').then(async ({ default: admin }) => {
         }
       }
     };
-    //   任一方原型名稱包含 q 的紀錄 _id（null＝還不知道，一律不算命中）。
-    app.locals._archetypeMatchRecordIds = async (docs, q) => {
+    //   v1.49：對戰紀錄要分類的兩副牌表（p1、p2）；原型搜尋交給中央 _archetypeScanIds（邊掃邊讓路）。
+    app.locals._matchRecordEntriesList = (r) => ['p1', 'p2'].map((k) => (r && r[k] ? _mrEntries(r[k].cardCounts) : null));
+    // <<< v148-admin-match-arch
+    // >>> v149-arch-scan-yield
+    // ── v1.49 ⭐ 原型搜尋的掃描＋分類一律走這支（邊掃邊讓路）──────────────────────────────
+    //   實錄（nginx，台灣 21:22:13 與 21:35:40）：admin「已結束＋搜 未分類」的請求花 1.24／1.27 秒，
+    //   同一秒全站其他請求（錦標賽 state／event／chat、休閒輪詢）全部在 node 裡等了 1.0～1.06 秒。
+    //   真因：v1.46 用 `.limit(5000).toArray()` 一口氣拉 5000 間房，再同步逐座位分類 ⇒
+    //   整段沒有讓出事件迴圈（違反 v6.242 的 Rule 30：admin 全量掃描絕不可讓玩家變慢）。
+    //   v1.48 的對戰歷史原型搜尋是同一個寫法，同一個問題。
+    //   ⇒ 兩個端點改成共用本 helper：cursor 逐筆（batchSize 200）＋每 200 筆 adminScanYield 讓路＋
+    //     分類也在同一個迴圈裡做（不再先整包進記憶體再分類）。分類仍走中央 archetypeNameOf（Rule 38）。
+    //   cursor：還沒加 limit 的查詢游標（本 helper 自己數到 cap 就停）；
+    //   entriesListOf(doc)：回傳這份文件要分類的牌表陣列（每個元素是 [{cardId,count}]）。
+    //   回傳 { ids, scanned }。null（還不知道）一律不算命中。
+    //   ⚠ adminScanYield 在外層作用域；用 typeof 取，拿不到時退回同節拍的 setImmediate（守衛抽取時用）。
+    const _archYield = (n) => ((typeof adminScanYield === 'function')
+      ? adminScanYield(n)
+      : ((n % 200 !== 0) ? null : new Promise((r) => setImmediate(r))));
+    app.locals._archetypeScanIds = async (cursor, cap, q, entriesListOf) => {
       const lc = String(q || '').trim().toLowerCase();
-      if (!lc) return [];
+      if (!lc || !cursor) return { ids: [], scanned: 0 };
       const nameMap = await getCardNameMap();
       const rules = nameMap.size ? await getEnabledRulesCached() : [];
       const ids = [];
-      for (const r of (docs || [])) {
-        const hit = ['p1', 'p2'].some((k) => {
-          const p = r && r[k];
-          if (!p) return false;
-          const a = archetypeNameOf(_mrEntries(p.cardCounts), nameMap, rules);
+      let scanned = 0;
+      const handle = (doc) => {
+        const hit = (entriesListOf(doc) || []).some((en) => {
+          const a = archetypeNameOf(en, nameMap, rules);
           return a != null && String(a).toLowerCase().includes(lc);
         });
-        if (hit) ids.push(r._id);
+        if (hit) ids.push(doc._id);
+      };
+      if (typeof cursor[Symbol.asyncIterator] === 'function') {
+        if (typeof cursor.batchSize === 'function') cursor.batchSize(200);
+        for await (const doc of cursor) {
+          if (scanned >= cap) break;
+          scanned++;
+          const _y = _archYield(scanned); if (_y) await _y;
+          handle(doc);
+        }
+      } else {
+        // 只有測試替身會走到這裡（真的 mongodb FindCursor 一定可以 async 迭代）；分類仍逐 200 筆讓路
+        const arr = await cursor.limit(cap).toArray();
+        for (const doc of arr) {
+          if (scanned >= cap) break;
+          scanned++;
+          const _y = _archYield(scanned); if (_y) await _y;
+          handle(doc);
+        }
       }
-      return ids;
+      return { ids, scanned };
     };
-    // <<< v148-admin-match-arch
+    // <<< v149-arch-scan-yield
     // ══ v1.28（v6.266）套牌戰績（P1，只有伺服器端）：GET /api/deck-stats?deckId= ══
     //   玩家許願：牌組列表的 ✕ 旁邊放一個 🔍，看這一副牌的休閒勝率／對各原型勝率。
     //   ⭐ 「勝敗紀錄跟著套牌走」天然成立：Deck.id 是 client 端 `crypto.randomUUID()`
@@ -4682,7 +4728,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       const TICK_MS = 30 * 1000;          // 每 30 秒掃一次（門檻最短 60 秒，取樣要夠密）
       const GRACE_MS = 15 * 1000;         // 門檻外的緩衝
       const SCAN_CAP = 5000;              // 單輪最多看幾間（只取 4 個小欄位；遠大於實際對戰中房數）
-      const FETCH_BATCH = 50;             // 版本有變的房，一次最多批次拉幾份 gameState
+      const FETCH_BATCH = 20;             // 版本有變的房，一次最多批次拉幾份 gameState（v1.49：50→20，每批同步反序列化＋雜湊約 20ms，批與批之間 await 讓路）
       const STALE_LOCK_MS = 5 * 60 * 1000; // 重入鎖逾時：卡死的一輪不得永久封鎖後續 tick
       const track = new Map();            // roomId → { ver, fp, progressAt }
       let runningSince = 0;               // 重入鎖：0＝沒在跑
