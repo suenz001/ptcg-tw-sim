@@ -1,5 +1,42 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.421 ⭐⭐⭐ 自傷同時昏厥也判平手（站長裁定）＋ 防守方全滅不再跳過 postFn ＋ 打倒自己備戰的獎賞歸屬
+
+BASE `31cea43393552e4f3e02b06be3f462778fce67a3`（v6.420）。
+站長裁定（AskUserQuestion，逐字）：自傷招式取完獎賞同時自己昏厥且無備戰 ⇒「也判平手（推薦）」。
+官方依據：PTCG_RULES.md L622-624（利歐路｜突擊）「可以從備戰區放置寶可夢至戰鬥場上的玩家獲勝。
+若雙方皆可以放置，或雙方皆不可放置，則為平手。」⇒ 自傷的昏厥必須被結算並進入判定。
+⚠ 動了 `engine.ts` ⇒ `scripts/lib/engine-strip-v6421.mjs`（5 組），接線 `test-v6265`（兩處）／
+`test-v6375`／`test-v6371`（Rule 54：本版排最前）；`test-v6361` H4/H9、`test-v6369` D5/D7 依 Rule 40
+改成先剝 v6.421 再逐字比對（意圖「v6.361 原本那一格沒被改寬」不變）。
+⚠ 部署照 Rule 43：**`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**。
+
+### 三個 bug（BASE v6.420 皆可重現）
+1. **防守方全滅直接 `return _koEnd`** ⇒ postFn 整段被跳過：密勒頓｜打雷自傷 30 沒套上（判攻擊方勝）；
+   未知圖騰｜神秘信號「多獲得1張」少拿。⇒ 改 `liftEndgameForOnKoV6361(_koEnd)` 收回終局、postFn 照跑，
+   末端 sanityKOSweep 結算、v6.361 中央判定重判（v6.420 的平手分支接手）。
+2. **zombie**：取完獎賞當下寫 game-over ⇒ sanityKOSweep 被 gate ⇒ 攻擊方帶著傷害 ≥ HP 留在場上。
+   ⇒ v6.361 延後條件加 `hasUnresolvedKnockout(next, pool)`；判準 `isZombieKO` 只有一份
+   （sanityKOSweep 戰鬥場／備戰兩處也改走它，Rule 38）。全卡掃描另抓到奇樹的頑皮雷彈｜怦怦炸彈。
+3. **打倒自己備戰時攻擊方取獎賞**（hitBenchAll／bench-hit 寫死 attackerIdx）：固拉多｜大地裂破、
+   穿山王｜地震、焚焰蚣｜燃燒熱浪、電飛鼠｜天空波。⇒ `koPrizeTaker(targetIdx)`（KO 方的對手）。
+
+### fable 5.1 審查後補修（自行重現屬實）
+4. **正面朝上的最後一張獎賞**：picker 擋住延後與 sweep，v6419 結清後沒人再掃 zombie ⇒ R1 盤面判 A 勝且留 zombie。
+   ⇒ `v6421-sweep-zombie-under-picker`：已判出終局（或重判中）而檯面有 picker、場上有 zombie ⇒ lift＋sweep
+   （新增的取獎賞排進佇列由 v6419 結清），交給中央重判。位置在 v6.376 快照 clear 之前（test-v6376 D4）。
+5. **自己離場＋取完＋沒有備戰**（喵喵ex｜夾尾巴逃跑 等 9 招；v6.420 裁定原文涵蓋）：addPendingPrize 當場寫的終局
+   沒有重判點 ⇒ 延後條件加 `centralVerdictIsDrawV6421(next)`（直接呼叫 judgeEndgameV6361，只處理「→ 平手」方向）。
+6. 可見的行為變更：重試徽章＋擲硬幣招式打倒對手最後一隻 ⇒ 先問是否重擲（BASE 直接終局）。已寫進 changelog。
+列管（未修）：lift 路徑的 log 會先留「A 獲勝！」再出現「⚖️ 平手」—— v6.361 死亡宣告路徑同型、既有行為；
+另開一版收斂（lift 時改寫終局 log）。
+
+### 守衛 `test-v6421-selfko-endgame-and-prize-owner`（44 條）
+R1～R15（真值表、反安慰劑、正面朝上、自己離場、備戰 zombie）、U 神秘信號、S 五張自傷備戰卡（含麒麟奇 bench-hit resolver）、
+Z 全卡語義掃描（ATTACK_POST 1216 個＋全部 H/I/J 招式：不丟例外／無 zombie／不替自己的昏厥取獎賞／取完但沒寶可夢一律平手；
+白名單 月亮伊布ex｜縞瑪瑙 附卡面證明）、K 結構（判準一份＋反安慰劑）。HEAD-FAIL：BASE 上 PASS 12 / FAIL 32（逐條）。
+突變 7 個皆紅；1 個等價突變存活（centralVerdictIsDrawV6421 放寬成任何勝負都收回），誠實記錄於守衛檔頭。
+
 ## v6.420 ⭐⭐⭐ 全站視窗拖曳收斂成中央管線（含邊界夾制）＋ 卡背統一 ＋ 取完獎賞但自己沒寶可夢 ⇒ 平手
 
 BASE `e6f0ce96015b45187f897ffbab59df476b9bed09`（v6.419）。站長一次交辦三件事。

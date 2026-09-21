@@ -1602,6 +1602,19 @@ function _applyBenchAbilityReduce(
   return { amount: dmg, logs, toolToDiscard };
 }
 
+// >>> v6421-ko-prize-taker
+/**
+ * ⭐⭐⭐v6.421：寶可夢昏厥時，由**它的主人的對手**取獎賞 —— 與誰使出招式無關（官方基本規則）。
+ *   實測（v6.421 全卡 smoke 抓到、正式站 v6.420 一般對局可重現）：焚焰蚣｜燃燒熱浪
+ *   （卡面：自己的所有備戰寶可夢也各受到30點傷害。）打倒**自己的**備戰時，log 寫
+ *   「A 額外取得 1 張獎賞卡」—— 攻擊方替自己的昏厥拿獎賞，直接加速自己獲勝。
+ *   原因：hitBenchAll／bench-hit 兩處都寫死 `addPendingPrize(s, attackerIdx, …)`，
+ *   沒有看 KO 的是哪一方。⇒ 兩處改走這一份。
+ */
+function koPrizeTaker(koOwnerIdx: 0 | 1): 0 | 1 {
+  return (1 - koOwnerIdx) as 0 | 1;
+}
+// <<< v6421-ko-prize-taker
 function hitBenchAll(
   state: GameState,
   attackerIdx: 0 | 1,
@@ -1802,8 +1815,9 @@ function hitBenchAll(
     s = addLog(s, `${attackLabel}：${teraImmunNames.join('、')} 為太晶寶可夢，在備戰位免疫招式傷害`, null);
   }
   if (koNames.length > 0) {
-    s = addLog(s, `${attackLabel}：${koNames.join('、')} 被擊倒，${state.players[attackerIdx].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
-    s = addPendingPrize(s, attackerIdx, morePrizes, pool);
+    // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）
+    s = addLog(s, `${attackLabel}：${koNames.join('、')} 被擊倒，${state.players[koPrizeTaker(targetIdx)].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
+    s = addPendingPrize(s, koPrizeTaker(targetIdx), morePrizes, pool);
     // v2.246 KO cause tracking — 每隻 KO 都登錄為招式 KO（self-KO 由 recordOppKO 內部 skip）
     for (const card of koCards) {
       s = recordOppKO(s, targetIdx, card, 'attack');
@@ -2057,8 +2071,9 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
     s = addLog(s, `${label}：${teraImmunNames.join('、')} 為太晶寶可夢，在備戰位免疫招式傷害`, null);
   }
   if (koNames.length > 0) {
-    s = addLog(s, `${label}：${koNames.join('、')} 被擊倒，${st.players[actorIdx].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
-    s = addPendingPrize(s, actorIdx, morePrizes, pool);
+    // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）
+    s = addLog(s, `${label}：${koNames.join('、')} 被擊倒，${st.players[koPrizeTaker(targetIdx)].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
+    s = addPendingPrize(s, koPrizeTaker(targetIdx), morePrizes, pool);
     // v2.246 KO cause tracking — 每隻 KO 都登錄為招式 KO（self-KO 由 recordOppKO 內部 skip）
     for (const card of koCards) {
       s = recordOppKO(s, targetIdx, card, 'attack');

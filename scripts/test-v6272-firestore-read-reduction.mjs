@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'e6f0ce96015b45187f897ffbab59df476b9bed09';   // v6.419（上一版）
+const PREV_SHA = '31cea43393552e4f3e02b06be3f462778fce67a3';   // v6.420（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,23 +757,36 @@ const PREV_SHA = 'e6f0ce96015b45187f897ffbab59df476b9bed09';   // v6.419（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.420 前移：PREV_SHA 從 v6.419（e6f0ce96）起算。
+  // ⚠⚠ v6.421 前移：PREV_SHA 從 v6.420（31cea433）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐⭐⭐v6.420（站長交辦三件事）：
-  //   (一) 全站浮動視窗的拖曳收斂成 `src/lib/modal-drag.ts`（新檔）＋ 加上**邊界夾制**
-  //        ⇒ 玩家回報「視窗被拖到側邊就關不掉、也不能做任何動作」根治；
-  //        game/+page.svelte 與 MobilePortraitBattle.svelte 各自那一份實作刪掉、改掛 action。
-  //   (二) 對戰中獎賞卡檢視的卡背改用站內唯一那一份 `.card-back`（紅色圓形）。
-  //   (三) engine：取完獎賞的一方若自己沒有可上場的寶可夢 ⇒ 平手（站長裁定）。
+  // ⭐⭐⭐v6.421（站長裁定：自傷同時昏厥也判平手）：
+  //   (一) engine：防守方全滅時不再跳過招式剩下的效果（postFn）；取完獎賞當下若場上還有
+  //        「傷害 ≥ HP」的寶可夢則延後終局、先結算昏厥（判準 isZombieKO 只有一份）。
+  //   (二) effects：打倒自己備戰時的 KO 獎賞改由 KO 方的對手取得（koPrizeTaker）。
+  'src/lib/game/effects.ts',
   'src/lib/game/engine.ts',
-  'src/lib/modal-drag.ts',
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
-  'src/routes/game/MobilePortraitBattle.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.420）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.420 前移：PREV_SHA 從 v6.419（e6f0ce96）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐⭐⭐v6.420（站長交辦三件事）：
+//   (一) 全站浮動視窗的拖曳收斂成 `src/lib/modal-drag.ts`（新檔）＋ 加上**邊界夾制**
+//        ⇒ 玩家回報「視窗被拖到側邊就關不掉、也不能做任何動作」根治；
+//        game/+page.svelte 與 MobilePortraitBattle.svelte 各自那一份實作刪掉、改掛 action。
+//   (二) 對戰中獎賞卡檢視的卡背改用站內唯一那一份 `.card-back`（紅色圓形）。
+//   (三) engine：取完獎賞的一方若自己沒有可上場的寶可夢 ⇒ 平手（站長裁定）。
+//   'src/lib/game/engine.ts',
+//   'src/lib/modal-drag.ts',
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'src/routes/game/MobilePortraitBattle.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.418）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 //   ⚠⚠ v6.418 前移：PREV_SHA 從 v6.417（eb20722d）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。

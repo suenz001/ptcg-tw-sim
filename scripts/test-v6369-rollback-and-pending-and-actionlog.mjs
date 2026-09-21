@@ -24,6 +24,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 //   engine.ts 新增了第二個合法呼叫點（v6419-settle-queued-prizes，站長裁定）
 //   ⇒ 先把本版的哨兵區塊剝掉再數，原判準（恰 1 個）一個字都沒有放寬。
 import { stripV6419Engine } from './lib/engine-strip-v6419.mjs';
+// ⭐v6.421（Rule 40）：v6.421 在延後條件合法加了一條 zombie 分支（由 test-v6421 守）⇒ D5／D7 先剝 v6.421 再比對。
+import { stripV6421Engine } from './lib/engine-strip-v6421.mjs';
 import { normEol as _normEol419 } from './lib/eol-agnostic.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -416,20 +418,23 @@ console.log('\n【D】中央性／結構（補充層，Rule 28：不單獨成立
     cnt(ENG, /drainOnKoAfterPrize\(/g) === 1
     && ENG.includes('  state = drainOnKoAfterPrize(state, pool);'),
     String(cnt(ENG, /drainOnKoAfterPrize\(/g)));
-  const _eng369No419 = stripV6419Engine(_normEol419(ENG));
+  let _eng369No421 = null;
+  try { _eng369No421 = stripV6421Engine(_normEol419(ENG)); } catch { _eng369No421 = null; }
+  const _eng369No419 = stripV6419Engine(_eng369No421 ?? _normEol419(ENG));
   chk('D5 ⭐⭐⭐(乙) 收回終局的呼叫點也沒有新增（剝掉 v6.419 的合法新增後仍只有 v6.361 那 1 個）',
     cnt(_eng369No419, /liftEndgameForOnKoV6361\(next\)/g) === 1
     && cnt(ENG, /export function liftEndgameForOnKoV6361\(/g) === 0
-    && _eng369No419 !== _normEol419(ENG),   // 剝除器過期時大聲紅，不讓這一條變恆真
+    && _eng369No419 !== (_eng369No421 ?? _normEol419(ENG)),   // 剝除器過期時大聲紅，不讓這一條變恆真
     String(cnt(_eng369No419, /liftEndgameForOnKoV6361\(next\)/g)));
   chk('D6 ⭐⭐(乙) 放行條件只對「已判出終局 ＋ 有 picker ＋ 佇列非空」成立（不可以改寬）',
     ENG.includes("  const _v6369NeedDrain = next.phase === 'game-over' && state.phase === 'playing'")
     && ENG.includes('    && !!next.pendingSelection && (next._onKoAfterPrize?.length ?? 0) > 0;'),
     '放行條件被改寬了');
   chk('D7 ⭐⭐v6.361 原本的延後條件**逐字未動**（本版只加一條旁路，不動既有那一格）',
-    ENG.includes("  if (next.phase === 'game-over' && state.phase === 'playing'")
-    && ENG.includes('      && !next.pendingSelection && (next._onKoAfterPrize?.length ?? 0) > 0) {'),
-    'v6.361 的延後條件被動過了');
+    _eng369No421 !== null && _eng369No421 !== _normEol419(ENG)
+    && _eng369No421.includes("  if (next.phase === 'game-over' && state.phase === 'playing'")
+    && _eng369No421.includes('      && !next.pendingSelection && (next._onKoAfterPrize?.length ?? 0) > 0) {'),
+    'v6.361 的延後條件被動過了（或 v6.421 剝除器過期）');
   chk('D8 ⭐Firestore 禁令：_v6369CheckupDmgUp 是 iid→number 的物件 map，不是陣列／不是 per-player 陣列',
     /_v6369CheckupDmgUp\?: Record<string, number>;/.test(TYP)
     && !/_v6369CheckupDmgUp\?:\s*(\[|number\[\]|\w+\[\]\[\])/.test(TYP),

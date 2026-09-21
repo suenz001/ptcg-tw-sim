@@ -27,6 +27,9 @@ import { execFileSync } from 'node:child_process';
 //   H9 的意圖是「helper 只有一份、engine 不得自己重寫」，不是「只能呼叫一次」
 //   ⇒ 這裡把本版的哨兵區塊剝掉之後再數，原判準（恰 1 個）**一個字都沒有放寬**。
 import { stripV6419Engine } from './lib/engine-strip-v6419.mjs';
+// ⭐v6.421（Rule 40）：v6.421 刻意在延後條件加一條「場上還有 zombie」（站長裁定：自傷同時昏厥也判平手），
+//   該新增由 test-v6421 守。H4／H9 的意圖是「v6.361 原本那一格沒被改寬」⇒ 先剝掉 v6.421 的哨兵再逐字比對。
+import { stripV6421Engine } from './lib/engine-strip-v6421.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -368,10 +371,14 @@ console.log('\n【H】結構／中央性（哨兵、單一判定點、v6.355 架
     cnt(ENG, /drainOnKoAfterPrize\(/g) === 1
     && ENG.includes('  state = drainOnKoAfterPrize(state, pool);'),
     String(cnt(ENG, /drainOnKoAfterPrize\(/g)));
-  chk('H4 ⭐⭐延後只在「本次 action 才判出終局 ＋ 佇列非空 ＋ 沒有 pendingSelection」時發生',
-    ENG.includes("  if (next.phase === 'game-over' && state.phase === 'playing'")
-    && ENG.includes("      && !next.pendingSelection && (next._onKoAfterPrize?.length ?? 0) > 0) {"),
-    '延後條件被改寬了');
+  // ⭐v6.421：先剝掉 v6.421 的合法新增（剝除器過期時 throw ⇒ 視為紅，不讓這一條變恆真）
+  let ENG_NO421 = null;
+  try { ENG_NO421 = stripV6421Engine(normEol(ENG)); } catch { ENG_NO421 = null; }
+  chk('H4 ⭐⭐延後只在「本次 action 才判出終局 ＋ 佇列非空 ＋ 沒有 pendingSelection」時發生（剝掉 v6.421 後逐字）',
+    ENG_NO421 !== null && ENG_NO421 !== normEol(ENG)
+    && ENG_NO421.includes("  if (next.phase === 'game-over' && state.phase === 'playing'")
+    && ENG_NO421.includes("      && !next.pendingSelection && (next._onKoAfterPrize?.length ?? 0) > 0) {"),
+    '延後條件被改寬了（或 v6.421 剝除器過期）');
   chk('H5 ⭐⭐v2.135 防禦層逐字保留（本版不動它，test-v6265 F4 只需剝哨兵）',
     ENG.includes("        const winner = (1 - idx) as 0 | 1;")
     && ENG.includes("          winReason: `${p.name} 沒有可上場的寶可夢`,")
@@ -389,7 +396,7 @@ console.log('\n【H】結構／中央性（哨兵、單一判定點、v6.355 架
     !EFF.includes("    if (s.phase === 'game-over') break;")
     && EFF.includes('    s = liftEndgameForOnKoV6361(s);'),
     'drain 的順序被退回去了');
-  const ENG_NO419 = stripV6419Engine(normEol(ENG));   // ⭐v6.419 的合法新增先剝掉（見檔頭 import 處的說明）
+  const ENG_NO419 = stripV6419Engine(ENG_NO421 ?? normEol(ENG));   // ⭐v6.421 先剝（由新到舊，Rule 54）   // ⭐v6.419 的合法新增先剝掉（見檔頭 import 處的說明）
   chk('H9 ⭐⭐收回終局的 helper 只有一份（effects.ts），engine 只 import 不重寫',
     cnt(EFF, /export function liftEndgameForOnKoV6361\(/g) === 1
     && cnt(ENG, /export function liftEndgameForOnKoV6361\(/g) === 0
@@ -398,7 +405,7 @@ console.log('\n【H】結構／中央性（哨兵、單一判定點、v6.355 架
     && cnt(ENG, /_v6361NeedsVerdict: true/g) === 0,
     JSON.stringify([cnt(EFF, /export function liftEndgameForOnKoV6361\(/g), cnt(ENG_NO419, /liftEndgameForOnKoV6361\(next\)/g), cnt(ENG, /_v6361NeedsVerdict: true/g)]));
   chk('H9b ⭐v6.419 的剝除真的有作用（剝除器過期時這一條會紅，H9 才不會變成恆真）',
-    ENG_NO419 !== normEol(ENG), '剝除後沒有變 ⇒ 哨兵不在了');
+    ENG_NO419 !== (ENG_NO421 ?? normEol(ENG)), '剝除後沒有變 ⇒ 哨兵不在了');
   chk('H10 ⭐⭐⭐行為端：三個暫存旗標絕不可以留在回傳盤面上（會被推上 Firestore／Mongo）',
     [run(board({ b0: 1, b1: 0 })), run(board({ b0: 0, b1: 0 })), run(board({ b0: 1, b1: 1, pz0: 2 })),
      run(board({ b0: 1, b1: 1, pz0: 1, pz1: 1 })), run(board({ b0: 1, b1: 1 })),
