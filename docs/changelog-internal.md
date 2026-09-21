@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.424 勝負結算視窗置中（v6.420 回歸）
+
+BASE `99eb8f19d2b3ebfb555ce83958812ebd00ffdd5e`（v6.423 ＋ admin v1.75）。站長回報：改版後對戰結束的結算小視窗都偏到右下角。
+- 真因：v6.420 刪掉勝負視窗舊的 inline `style:transform={translate(calc(-50% + x), calc(-50% + y))}` 時，
+  置中其實**只**寫在那一行，CSS 只有 top/left 50% ⇒ 左上角落在畫面中央。v6.420 的註解寫「它靠 CSS transform 置中」
+  是沒查證就寫下的錯誤前提（fable 審查與 Playwright 都沒抓到：B 段測試頁是自己寫的 CSS，不是頁面上真正的規則）。
+- 修法：`.gameover-modal` CSS 補 `transform: translate(-50%, -50%)`；拖曳位移走 CSS translate 屬性，兩者疊加。
+- 守衛 `test-v6424-gameover-centered`（9 條；BASE 5／4）：語義掃描所有 fixed＋top/left 50% 規則必有置中 transform；
+  Playwright 把**頁面上真正的** CSS 規則原文搬進測試頁量中心（1280×800、375×667）＋拖曳夾制。
+- 教訓：UI 測試頁用自己寫的 CSS 只證明 action 本身，證明不了頁面整合 ⇒ 至少一條要搬真規則進來。
+- 部署：`redeploy-oracle.bat`（前端；照慣例可先 `update-tournament.bat`）。
+
 ## admin v1.75 ＋ server patch v1.46：🎮 Oracle 對戰的搜尋能搜牌組原型名稱（含「未分類」）
 
 BASE `b00f5d3afaecfb8ed7512b2bfaabf176d4e68ad0`。只動 admin（`oracle-admin/admin.html`、`oracle-admin/server_admin_patch.js`），

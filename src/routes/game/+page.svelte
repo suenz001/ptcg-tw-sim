@@ -1662,7 +1662,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // ⭐⭐⭐v6.420：這是站內**第三份**各自為政的拖曳實作，而且完全沒有夾制
   //   —— 勝負視窗是終局後**唯一的出口**（返回房間／再來一局都在裡面），
   //   把它拖出畫面就只能重新整理。改掛中央 `use:modalDrag`（見 src/lib/modal-drag.ts）。
-  //   ⚠ 它靠 CSS `transform: translate(-50%,-50%)` 置中 ⇒ 中央 action 刻意改用獨立的
+  //   ⚠ 它靠 CSS `transform: translate(-50%,-50%)` 置中（⚠v6.424 更正：v6.420 當時置中其實只寫在被刪掉的
+  //     inline style 裡，CSS 並沒有 ⇒ 視窗偏到右下角；v6.424 才把它補進 .gameover-modal 的 CSS）⇒ 中央 action 刻意改用獨立的
   //     `translate` 屬性，兩者自然疊加，置中不會被蓋掉。
 
   // v3.98 聊天 fab 圖示拖曳 — 玩家可移動到不擋牌的位置
@@ -16537,10 +16538,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .gameover-title.lose{ color:#cc6666; text-shadow:0 0 18px rgba(200,80,80,.5); }
 
   /* v4.21 勝負浮動視窗 — overlay 在戰鬥盤上，可拖曳 */
+  /* ⭐v6.424：置中的 translate(-50%,-50%) 寫在這裡（CSS），不再靠 inline style。
+     v6.420 把拖曳收斂到 modal-drag.ts 時刪掉了舊的 inline
+     `style:transform={translate(calc(-50% + x), calc(-50% + y))}`，而置中其實**只**寫在那一行
+     ⇒ 視窗左上角落在畫面正中央、整個偏到右下角（站長回報）。
+     拖曳位移走獨立的 CSS translate 屬性，與這裡的 transform 自然疊加，互不覆蓋。 */
   .gameover-modal {
     position: fixed;
     top: 50%;
     left: 50%;
+    transform: translate(-50%, -50%);
     width: min(440px, 90vw);
     max-height: 88vh;
     overflow-y: auto;
