@@ -167,17 +167,24 @@ if (chromium) {
       const st = await pg.evaluate(() => {
         const r = document.getElementById('m').getBoundingClientRect();
         const hit = document.elementFromPoint(60, 600);   // 左下角：紀錄區
-        return { l: r.left, t: r.top, logHit: !!hit && hit.id === 'log' };
+        const btn = document.querySelector('#m .modal-collapse-btn');
+        const hr = document.getElementById('h').getBoundingClientRect();
+        const lead = btn ? btn.getBoundingClientRect().right : hr.left;
+        return { l: r.left, t: r.top, logHit: !!hit && hit.id === 'log', grabW: Math.min(hr.right, innerWidth) - Math.max(lead, hr.left, 0) };
       });
       await T('D1 ⭐⭐⭐【HEAD-FAIL】手機：往右下拖之後，左下的對戰紀錄**看得到也點得到**', () => {
         assert.ok(st.logHit, '紀錄區仍被視窗或遮罩蓋住：' + JSON.stringify(st));
       });
       await T('D2 ⭐⭐ 把手一角仍在畫面內（≥ 72px 寬、上緣 ≤ 畫面高 − 56）', () => {
         assert.ok(st.l <= 375 - 72 + 0.5 && st.t <= 667 - 56 + 0.5 && st.t >= 0, JSON.stringify(st));
+        // ⭐v6.426（fable 審查）：露出區扣掉 padding 與折疊鈕之後，**真正能拖的把手**至少要 47px 寬
+        assert.ok(st.grabW >= 47, '往右拖到底後能拖的把手只剩 ' + st.grabW.toFixed(1) + 'px（手機上抓不回來）');
       });
       // 從露在畫面內的把手一角拖回來 ⇒ 關閉鈕點得到（「拖走之後永遠拖得回來」＝v6.420 真正要防的事）
-      await pg.mouse.move(st.l + 20, st.t + 20); await pg.mouse.down();
-      await pg.mouse.move(st.l + 20 - 2000, st.t + 20 - 2000, { steps: 8 }); await pg.mouse.up();
+      // ⭐v6.426（fable 審查）：抓把手露出區的**最右邊**（畫面右緣內 6px）——證明整條露出區裡真的有能拖的把手，
+      //   不是只靠抓在某個幸運座標（v6.426 起把手最前面是折疊鈕，按下去不拖曳）。
+      await pg.mouse.move(375 - 6, st.t + 20); await pg.mouse.down();
+      await pg.mouse.move(375 - 6 - 2000, st.t + 20 - 2000, { steps: 8 }); await pg.mouse.up();
       const xb = await pg.locator('#x').boundingBox();
       await pg.mouse.click(xb.x + xb.width / 2, xb.y + xb.height / 2);
       const clicked = await pg.evaluate(() => window.__x);

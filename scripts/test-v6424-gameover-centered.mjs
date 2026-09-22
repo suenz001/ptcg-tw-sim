@@ -110,8 +110,9 @@ if (chromium) {
         await pg.reload(); await pg.addScriptTag({ content: md });
         await pg.evaluate(() => { window.MDRAG.modalDrag(document.getElementById('m')); });
         const hb2 = await pg.locator('#h').boundingBox();
-        await pg.mouse.move(hb2.x + 30, hb2.y + hb2.height / 2); await pg.mouse.down();
-        await pg.mouse.move(hb2.x + 30 + 3000, hb2.y + hb2.height / 2 + 3000, { steps: 8 }); await pg.mouse.up();
+        // ⚠ v6.426 起把手最前面是折疊鈕（按下去不拖曳）⇒ 抓 x+80
+        await pg.mouse.move(hb2.x + 80, hb2.y + hb2.height / 2); await pg.mouse.down();
+        await pg.mouse.move(hb2.x + 80 + 3000, hb2.y + hb2.height / 2 + 3000, { steps: 8 }); await pg.mouse.up();
         const r2 = await pg.evaluate(() => { const r = document.getElementById('m').getBoundingClientRect(); return { l: r.left, t: r.top }; });
         // eslint-disable-next-line no-await-in-loop
         await TA(`P2b ⭐⭐${vw}×${vh}：預設（reachable）往右下拖 ⇒ 可出畫面但把手一角仍在（l ≤ vw−72、0 ≤ t ≤ vh−56）`, () => {

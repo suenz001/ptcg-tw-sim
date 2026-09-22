@@ -1,5 +1,23 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.426 視窗折疊鈕（玩家建議、站長同意）
+
+BASE `bdb8394f`（v6.425）。只動 `src/lib/modal-drag.ts`（＋版本／changelog）。
+- 站長回覆（AskUserQuestion）：「做，標題列加折疊鈕（推薦）」。
+- 做法：中央 `modalDrag` 在把手元素最前面插一顆 ▾／▸（float:left，標題文字排在右邊；`data-no-drag` 不觸發拖曳）；
+  折疊＝視窗加 `modal-collapsed`，CSS 只藏「把手所在的直接子元素」以外的子元素（只藏不拆，Svelte DOM 不動 ⇒ 展開後狀態還在），
+  並給 overlay 加 `dragged`（背景讓出來、點得到下面）；resetKey 變 ⇒ 自動展開；destroy ⇒ 按鈕移除。
+  樣式由模組自己注入一次 `<style id="modal-drag-collapse-style">`。
+  `modalCollapsible(opts)`：一般視窗預設有；`clamp:'contain'`（浮動按鈕／面板）與 `wholeNode` 沒有；`collapsible:false` 可關（目前無）。
+- 連帶：test-v6425 D3 抓把手點位改 x+50（左邊現在是折疊鈕；意圖不變）。
+- fable 5.1 獨立審查。必修已修：折疊鈕＋padding 吃掉 v6.425「橫向留 72px」的保證（往右拖到底後真正能拖的把手只剩 16～28px）
+  ⇒ 夾制新增 minVisibleW，由 action 量「折疊鈕右緣（或把手左緣）＋48px」傳入；v6425 D2 補「能拖的把手 ≥ 47px」（拿掉修正即紅在 38.4px），
+  D3 改抓露出區最右緣。建議採納：關閉鈕（class 含 close）折疊後仍顯示；守衛補「鈕在把手最前面」「頁尾也藏起來」「沒拖過的視窗展開後遮罩恢復」
+  （對應審查者存活突變 M4／M5／M6）。未改：zoom-drag-bar 置中排版與置中標題右偏約 16px（純視覺）。
+- 守衛 `test-v6426-modal-collapse`（11 條；BASE 1 PASS／10 FAIL）：純函式＋Playwright（按下只剩標題列、背景點得到、折疊仍可拖、
+  展開後輸入值還在、按鈕上拖不動、resetKey 自動展開不重複加鈕、destroy 移除）。
+- 部署：`redeploy-oracle.bat`（玩家前端）。
+
 ## v6.425 ⭐ 補位視窗一個座位只開一個＋一般視窗可拖到畫面外（v6.420 回歸）
 
 BASE `0fe9a100`（v6.424＋admin v1.76＋server v1.49）。站長回報（附圖，桌機＋手機）：寶可夢被擊倒後「派出新的戰鬥寶可夢」視窗兩個、

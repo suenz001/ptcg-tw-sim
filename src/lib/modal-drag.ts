@@ -81,6 +81,7 @@ export interface ModalOffset { x: number; y: number; }
 export function clampModalOffset(
   base: ModalRect, off: ModalOffset, vw: number, vh: number, mode: ModalClampMode = 'reachable',
   safeBottom = 0,
+  minVisibleW = MODAL_MIN_VISIBLE,
 ): ModalOffset {
   // 視窗左上角允許落在 [lo, hi]（畫面座標），再換算回位移。
   let loLeft: number, hiLeft: number, hiTop: number;
@@ -92,7 +93,10 @@ export function clampModalOffset(
   } else {
     // reachable：水平至少留 MODAL_MIN_VISIBLE（視窗比它窄時就是整個視窗）；
     //   下緣可以出畫面，但上緣最低到 vh − MODAL_HANDLE_KEEP（把手那一條永遠露著）。
-    const keepW = Math.min(MODAL_MIN_VISIBLE, base.width);
+    // minVisibleW：呼叫端量出來的「把手真正能拖的那一段」所需的露出寬度（≥ MODAL_MIN_VISIBLE）。
+    //   ⚠ v6.426 起把手最前面有折疊鈕（按下去不拖曳），再加上視窗 padding，固定 72px 時真正能拖的只剩 16～28px
+    //     （fable 審查實測）⇒ 由 action 以「折疊鈕右緣（或把手左緣）＋ 48px」量出來傳進來。
+    const keepW = Math.min(Math.max(MODAL_MIN_VISIBLE, minVisibleW || 0), base.width);
     loLeft = keepW - base.width;
     hiLeft = vw - keepW;
     // safeBottom：手機（尤其 PWA）底部的系統手勢區（env(safe-area-inset-bottom)，站內 --safe-bottom），
@@ -154,6 +158,43 @@ export interface ModalDragOptions {
    * 浮動按鈕／浮動面板請傳 `'contain'`。
    */
   clamp?: ModalClampMode;
+  /**
+   * ⭐v6.426 折疊鈕（玩家建議、站長同意）：標題列最前面多一顆 ▾／▸，折疊後只剩標題列、背景讓出來（可以看、也可以點下面的對戰畫面）。
+   * 省略＝ 一般視窗自動有；`clamp:'contain'`（浮動按鈕／面板）與 `wholeNode` 自動沒有。傳 `false` 可以關掉。
+   */
+  collapsible?: boolean;
+}
+
+// ══ v6.426 折疊鈕 ═════════════════════════════════════════════════════════════════
+//   ⚠ 樣式由本模組自己注入一次（全站所有視窗共用；不寫進各頁的 scoped CSS，否則每頁都要抄一份）。
+//   ⚠ 視窗的關閉鈕（class 含 close，例如 .zoom-close／.pv-close／.settings-close-dock）折疊後仍顯示，
+//     否則折疊狀態下要先展開才能關（fable 審查）。
+//   ⚠ 折疊只「藏」不「拆」：用 CSS 隱藏標題列以外的子元素，Svelte 管理的 DOM 一個都不動 ⇒ 展開後狀態完整保留
+//     （已經點選的卡、捲動位置都還在）。
+export const COLLAPSE_BTN_CLASS = 'modal-collapse-btn';
+export const COLLAPSED_CLASS = 'modal-collapsed';
+const KEEP_ATTR = 'data-md-keep';
+const COLLAPSE_STYLE_ID = 'modal-drag-collapse-style';
+const COLLAPSE_CSS = `
+.${COLLAPSE_BTN_CLASS}{float:left;flex:0 0 auto;width:24px;height:24px;padding:0;margin:0 8px 0 0;
+  display:inline-flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid rgba(255,255,255,.35);
+  background:rgba(0,0,0,.45);color:#fff;font-size:12px;line-height:1;cursor:pointer;touch-action:manipulation;position:relative;z-index:2;}
+.${COLLAPSE_BTN_CLASS}:hover{background:rgba(0,0,0,.7);}
+.${COLLAPSED_CLASS}{height:auto !important;min-height:0 !important;max-height:none !important;overflow:hidden !important;}
+.${COLLAPSED_CLASS} > :not([${KEEP_ATTR}]):not([class*="close"]){display:none !important;}
+`;
+function ensureCollapseStyle() {
+  if (typeof document === 'undefined' || document.getElementById(COLLAPSE_STYLE_ID)) return;
+  const st = document.createElement('style');
+  st.id = COLLAPSE_STYLE_ID;
+  st.textContent = COLLAPSE_CSS;
+  (document.head || document.documentElement).appendChild(st);
+}
+/** 這個視窗要不要有折疊鈕（純函式，守衛直接測）。 */
+export function modalCollapsible(o: ModalDragOptions): boolean {
+  if (o.collapsible === false) return false;
+  if (o.collapsible === true) return true;
+  return o.clamp !== 'contain' && !o.wholeNode;
 }
 
 const OVERLAY_SELECTOR = '[class*="overlay"], [class*="backdrop"]';
@@ -183,6 +224,18 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
   let swallowClick = false;
   let appliedMode: 'translate' | 'margin' = opts.mode ?? 'translate';
   let safeB = 0;   // 拖曳開始／重夾時量一次（不在 pointermove 裡量，避免每一格都動 DOM）
+  let collapseBtn: HTMLButtonElement | null = null;
+  let collapsed = false;
+  let minVisW = MODAL_MIN_VISIBLE;
+  /** 往右拖到底時要露出多寬，把手才真的抓得到：折疊鈕右緣（沒有鈕就是把手左緣）距視窗左緣 ＋ 48px。 */
+  function measureMinVisible(): number {
+    try {
+      const nr = node.getBoundingClientRect();
+      const lead = collapseBtn ? collapseBtn.getBoundingClientRect().right - nr.left
+        : (() => { const h = node.querySelector<HTMLElement>(opts.handle ?? DEFAULT_HANDLE_SELECTOR); return h ? h.getBoundingClientRect().left - nr.left : 0; })();
+      return Math.max(MODAL_MIN_VISIBLE, Math.round(lead + 48));
+    } catch { return MODAL_MIN_VISIBLE; }
+  }
 
   const overlayEl = (): HTMLElement | null => {
     if (opts.overlay === false) return null;
@@ -239,6 +292,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
     if (opts.stopPropagation) e.stopPropagation();
     base = measure();
     safeB = safeBottomPx();
+    minVisW = measureMinVisible();
     start = { sx: e.clientX, sy: e.clientY, ox: off.x, oy: off.y, pid: e.pointerId };
     moved = false;
     try { node.setPointerCapture?.(e.pointerId); } catch { /* 某些瀏覽器不支援 */ }
@@ -265,7 +319,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
     if (opts.threshold !== undefined && !moved) return;
     const { vw, vh } = view();
     const want = { x: start.ox + (e.clientX - start.sx), y: start.oy + (e.clientY - start.sy) };
-    off = clampModalOffset(base, want, vw, vh, opts.clamp ?? 'reachable', safeB);
+    off = clampModalOffset(base, want, vw, vh, opts.clamp ?? 'reachable', safeB, minVisW);
     apply();
   }
   function onUp(e: PointerEvent) {
@@ -303,10 +357,63 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
     base = measure();
     safeB = safeBottomPx();
     const before = off;
-    off = clampModalOffset(base, off, vw, vh, opts.clamp ?? 'reachable', safeB);
+    minVisW = measureMinVisible();
+    off = clampModalOffset(base, off, vw, vh, opts.clamp ?? 'reachable', safeB, minVisW);
     apply();
     if (before.x !== off.x || before.y !== off.y) opts.onEnd?.({ x: off.x, y: off.y });
   }
+
+  // ── v6.426 折疊鈕 ──
+  /** 找標題列所在的「node 直接子元素」（折疊時只留它）。找不到把手就不加折疊鈕。 */
+  function handleEl(): HTMLElement | null {
+    return node.querySelector<HTMLElement>(opts.handle ?? DEFAULT_HANDLE_SELECTOR);
+  }
+  function handleChild(h: HTMLElement): HTMLElement | null {
+    let c: HTMLElement | null = h;
+    while (c && c.parentElement !== node) c = c.parentElement;
+    return c;
+  }
+  function setCollapsed(v: boolean) {
+    collapsed = v;
+    node.classList.toggle(COLLAPSED_CLASS, v);
+    if (collapseBtn) {
+      collapseBtn.textContent = v ? '▸' : '▾';
+      const label = v ? '展開視窗' : '折疊視窗（只留標題列，看得到下面的對戰畫面）';
+      collapseBtn.title = label;
+      collapseBtn.setAttribute('aria-label', label);
+      collapseBtn.setAttribute('aria-expanded', v ? 'false' : 'true');
+    }
+    // 折疊時背景讓出來（看得到、也點得到下面的對戰畫面）；展開時若沒拖過就恢復遮罩
+    const ov = overlayEl();
+    if (ov) {
+      if (v) ov.classList.add('dragged');
+      else if (off.x === 0 && off.y === 0) ov.classList.remove('dragged');
+    }
+  }
+  function ensureCollapseBtn() {
+    if (!modalCollapsible(opts)) {
+      if (collapseBtn) { collapseBtn.remove(); collapseBtn = null; }
+      if (collapsed) setCollapsed(false);
+      return;
+    }
+    if (collapseBtn && node.contains(collapseBtn)) return;
+    const h = handleEl();
+    const keep = h ? handleChild(h) : null;
+    if (!h || !keep) return;
+    ensureCollapseStyle();
+    keep.setAttribute(KEEP_ATTR, '');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = COLLAPSE_BTN_CLASS;
+    b.setAttribute('data-no-drag', '');
+    b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); setCollapsed(!collapsed); });
+    // 放在標題列（把手）最前面、float:left ⇒ 標題文字自然排在它右邊，不會疊在一起。
+    //   ⚠ 只插進把手元素；Svelte 的 {#if}/{#each} 以自己的錨點插入，不受前面多一個節點影響。
+    h.insertBefore(b, h.firstChild);
+    collapseBtn = b;
+    setCollapsed(collapsed);
+  }
+  if (typeof document !== 'undefined') ensureCollapseBtn();
 
   node.addEventListener('pointerdown', onDown);
   node.addEventListener('pointermove', onMove);
@@ -337,12 +444,15 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
         moved = false;
         apply();
         overlayEl()?.classList.remove('dragged');
+        if (collapsed) setCollapsed(false);   // v6.426：換成另一個視窗內容 ⇒ 一律展開
       } else if (modeChanged) {
         apply();
       }
+      if (typeof document !== 'undefined') ensureCollapseBtn();
     },
     destroy() {
       ro?.disconnect();
+      collapseBtn?.remove();
       node.removeEventListener('pointerdown', onDown);
       node.removeEventListener('pointermove', onMove);
       node.removeEventListener('pointerup', onUp);
