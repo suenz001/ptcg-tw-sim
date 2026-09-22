@@ -500,9 +500,11 @@ chk('E10 ⭐(丙) 現況事實複驗：頭蓋尖刺走的是**卡名** key 的 I
   count(effSrc, "['陳舊的頭蓋化石', 3]") === 1
   && count(effSrc, 'export const INHERENT_RETALIATION') === 1
   && count(effSrc, 'export function applyInherentRetaliation(') === 1
-  && count(engSrc, 'applyInherentRetaliation(newState, dIdx, defenderCard, pool)') === 2,
+  // ⚠ Rule 40（v6.427）：兩個呼叫點多傳第 5 個參數（持有者實例，頭蓋尖刺卡面是「特性」⇒ 特性消除閘），
+  //   本條要守的意圖（仍以卡名為 key、engine KO／非 KO 兩處都有接線）不變 ⇒ 觀測點改成不含右括號的前綴。
+  && count(engSrc, 'applyInherentRetaliation(newState, dIdx, defenderCard, pool') === 2,
   JSON.stringify([count(effSrc, "['陳舊的頭蓋化石', 3]"),
-    count(engSrc, 'applyInherentRetaliation(newState, dIdx, defenderCard, pool)')]));
+    count(engSrc, 'applyInherentRetaliation(newState, dIdx, defenderCard, pool')]));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 【F】HEAD-FAIL 對 BASE

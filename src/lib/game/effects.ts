@@ -291,7 +291,7 @@ export function countAncientOnField(
  * 類似於基本能量 vs 特殊能量當初的拆分原則。
  */
 // v4.51 Phase 2：統一 defense helper
-import { canApplyEffectToTarget, isOppActiveImmuneToAttackEffect, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst as _v6196HasEffAbilByInst } from './defense';  // v6.196 中央述詞
+import { canApplyEffectToTarget, isOppActiveImmuneToAttackEffect, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst as _v6196HasEffAbilByInst, isImmuneToOppAbilityEffect, oppAbilityEffectBlockReason } from './defense';  // v6.196 中央述詞；v6.427 反擊豁免
 // >>> v6410-festival-central-import-effects
 // ⭐⭐⭐v6.410：祭典樂舞首擊判定收斂成**一份**（IRON_RULES Rule 38）。
 //   原本這一檔有一份本地複製（註解寫「effects.ts 不能 import engine」）；
@@ -3173,6 +3173,12 @@ export function canApplyAttackEffectToTarget(
       return { blocked: true, reason: source === 'ability' ? '化隱 免疫特性效果' : '化隱 免疫招式效果' };
     }
   }
+  // ⭐v6.427：來源是**特性**時，「不受對手特性效果影響」一律再問中央判準（光之翼…）。
+  //   原本這份 legacy 表只登記了化隱 ⇒ 耿鬼ex｜死亡宣告 會讓超級皮可西ex（光之翼）昏厥。
+  if (source === 'ability') {
+    const _oppAbWhy = oppAbilityEffectBlockReason(state, atkIdx, target, pool, false);   // 效果昏厥＝非放指示物
+    if (_oppAbWhy) return { blocked: true, reason: _oppAbWhy };
+  }
   // v5.333：per-turn 招式免疫旗標（飛翔/要害斬/躲藏=immuneToAllAttackThisTurn、純樸=
   //   immuneToAttackEffectsThisTurn、阿塞蘿拉=immuneToExAttackThisTurn）也納入此 legacy guard，
   //   與 unified canApplyEffectToTarget 一致 — 因 defCantAttackNextPost / defNextAtkReducePost /
@@ -5777,7 +5783,12 @@ export const ANYWHERE_RETALIATION = new Set<string>(['快掃拳返']);
 //   ★ 與 PASSIVE_RETALIATION 差異：化石**無 abilities 陣列**，反擊主迴圈只掃
 //      defenderCard.abilities → 永遠抓不到 → 玩家回報「沒在攻擊方放 3 個指示物」。
 //      故必須**按卡名**獨立判定（key = 卡名 → counters）。
-//   ★ 非特性 → **不受「光之翼」**（不受對手特性效果影響）阻擋；光之翼只擋 ability 型反擊。
+//   ★ ⚠⚠ v6.427 更正：台灣官方卡面（static/cards M5 id 19215）把這段印成
+//      `abilities[0] = { label:"特性", name:"頭蓋尖刺" }` —— 它**是特性**（上面兩行「無 abilities」
+//      「非特性」是 v5.494 當時卡資料的狀況，已過期）。所以：
+//      ① 攻擊方「不受對手特性效果影響」（光之翼／化隱…）時**不觸發**（中央 isImmuneToOppAbilityEffect）；
+//      ② 持有者的特性被消除（監視塔／初始化／暗夜羽擊…）時**不觸發**（中央 isAbilityHolderEffective）。
+//      仍以卡名為 key（沿用既有三個呼叫點與 log 格式），判準一律走中央、不在這裡另寫。
 //   ★ 依 PTCG 規則「受到傷害時」**含 KO 情境**（同龐克頭盔 v5.080）→ KO/非KO 兩分支都套。
 //   ★ 卡面「在戰鬥場」→ 只在化石位於戰鬥場（active）受傷時觸發；備戰被狙擊不觸發
 //      （三處呼叫點都在防守方 active 受招式傷害的路徑，天然符合）。
@@ -5795,11 +5806,19 @@ export const INHERENT_RETALIATION = new Map<string, number>([
  */
 export function applyInherentRetaliation(
   state: GameState, dIdx: 0 | 1, defenderCard: Card | null | undefined, pool: Map<string, Card>,
+  // ⭐v6.427：持有者（受傷的化石）實例 —— 判「特性有沒有被消除」要用（KO 分支傳受傷前的快照）。
+  //   不傳＝不做持有者消除閘（只給單元測直呼用；三個正式呼叫點都有傳）。
+  holderInst?: CardInstance | null,
 ): GameState {
   const counters = defenderCard ? INHERENT_RETALIATION.get(defenderCard.name) : undefined;
   if (!counters) return state;
   const aIdx = (1 - dIdx) as 0 | 1;
   if (!state.players[aIdx].active) return state; // 攻擊方無戰鬥寶可夢（理論上不會，保險）
+  // ⭐v6.427 ②：持有者的特性被消除 ⇒ 不觸發
+  const _abName = inherentRetaliationAbilityName(defenderCard);
+  if (_abName && holderInst && !isAbilityHolderEffective(state, holderInst, defenderCard!, dIdx, _abName, 'active', pool)) return state;
+  // ⭐v6.427 ①：攻擊方不受對手特性效果影響 ⇒ 不觸發（擋下的 log 由呼叫端的 blockedRetaliationNames 統一留一行）
+  if (_abName && isImmuneToOppAbilityEffect(state, dIdx, state.players[aIdx].active, pool, true)) return state;
   const players = [...state.players] as [PlayerState, PlayerState];
   const dmg = counters * 10;
   players[aIdx] = {
@@ -5809,6 +5828,55 @@ export function applyInherentRetaliation(
   const attName = pool.get(players[aIdx].active!.cardId)?.name ?? '攻擊方';
   return addLog({ ...state, players },
     `${defenderCard!.name}：在 ${attName} 身上放置 ${counters} 個傷害指示物（${dmg} 傷害）`, dIdx);
+}
+
+/** ⭐v6.427：卡名型受傷反擊在卡面上印的特性名（沒有印成特性 ⇒ null）。 */
+export function inherentRetaliationAbilityName(card: Card | null | undefined): string | null {
+  if (!card || !INHERENT_RETALIATION.has(card.name)) return null;
+  return card.abilities?.[0]?.name ?? null;
+}
+
+/**
+ * ⭐⭐v6.427：「本次受傷**本來會觸發**、但被攻擊方『不受對手特性效果影響』擋下」的反擊特性名 —— **log 專用**的唯一一份。
+ *   engine（KO／非 KO）與 effects（fireDefenderOnDamaged／fireDefenderOnKO）四處擋下時都用它列名字，
+ *   不再各自抄一份（v6.427 審查：engine 非 KO 分支原本列出防守方**全部**特性，化隱攻擊雪妖女會印「冰冷之帳 無效」）。
+ *   ⚠ 只決定 log 要列哪些名字；**擋不擋**一律由 isImmuneToOppAbilityEffect 決定。
+ * @param mode 'damaged'＝受傷反擊（PASSIVE_RETALIATION＋卡名型＋field-wide 備戰持有者）；
+ *             'ko'＝只列被擊倒反擊（PASSIVE_KO_RETALIATION）；'all'＝兩者皆列（engine KO 分支一次留一行）
+ */
+export function blockedRetaliationNames(
+  state: GameState, dIdx: 0 | 1, defInst: CardInstance | null | undefined, defCard: Card | null | undefined,
+  pool: Map<string, Card>, mode: 'damaged' | 'ko' | 'all',
+): string[] {
+  if (!defInst || !defCard) return [];
+  const out: string[] = [];
+  const eff = (name: string) => isAbilityHolderEffective(state, defInst, defCard, dIdx, name, 'active', pool);
+  for (const ab of defCard.abilities ?? []) {
+    const isDmg = PASSIVE_RETALIATION.has(ab.name) || inherentRetaliationAbilityName(defCard) === ab.name;
+    const isKo = PASSIVE_KO_RETALIATION.has(ab.name);
+    if (((mode !== 'ko' && isDmg) || (mode !== 'damaged' && isKo)) && eff(ab.name)) out.push(ab.name);
+  }
+  if (mode !== 'ko') {
+    for (const sp of FIELD_WIDE_RETALIATION) {
+      if (!sp.activeQualifies(defCard)) continue;
+      if (state.players[dIdx].bench.some((b) => {
+        const bc = pool.get(b.cardId);
+        return !!bc?.abilities?.some((ab) => ab.name === sp.ability)
+          && isAbilityHolderEffective(state, b, bc, dIdx, sp.ability, 'bench', pool);
+      })) out.push(sp.ability);
+    }
+  }
+  return [...new Set(out)];
+}
+
+/** ⭐v6.427：擋下反擊時的 log 文字（唯一一份）。names 為空 ⇒ 回 null（不留 log）。 */
+export function blockedRetaliationLog(
+  state: GameState, dIdx: 0 | 1, attackerInst: CardInstance | null | undefined, pool: Map<string, Card>, names: string[],
+): string | null {
+  if (names.length === 0) return null;
+  const why = (oppAbilityEffectBlockReason(state, dIdx, attackerInst, pool, true) ?? '光之翼').split(' ')[0];
+  const atkName = attackerInst ? (pool.get(attackerInst.cardId)?.name ?? '?') : '?';
+  return `${why}：${atkName} 不受對手特性效果影響（${names.join('、')} 無效）`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -8930,7 +8998,9 @@ export function fireDefenderOnDamaged(
   const toolsJammed = !!stadiumCard && JAMMING_TOWER_STADIUMS.has(stadiumCard.name);
   // ⭐ v6.196：改走中央述詞 — 超級皮可西ex 是 Stage1 進化 + ex 規則寶可夢，
   //   【傳說的熔岩洞】(進化全消)／【鐵荊棘ex｜初始化】(規則全消) 在場時光之翼應被消除。
-  const attackerHasMagicalShine = _v6196HasEffAbilByInst(st, aIdx, st.players[aIdx].active, pool, '光之翼');
+  // ⭐v6.427：豁免改問中央 isImmuneToOppAbilityEffect（光之翼＋化隱…）；原本寫死只認光之翼 ⇒ 化隱照樣被反擊。
+  //   （變數名沿用 attackerHasMagicalShine，語意已是「攻擊方不受對手特性效果影響」。）
+  const attackerHasMagicalShine = isImmuneToOppAbilityEffect(st, dIdx, st.players[aIdx].active, pool, true);
   let s = st;
   const atkDamageBefore = s.players[aIdx].active?.damage ?? 0;
   // 1. TOOL_ON_DAMAGED（阻礙之塔失效）
@@ -8952,21 +9022,33 @@ export function fireDefenderOnDamaged(
     const fn = SPECIAL_ENERGY_ON_DAMAGED.get(ec.name);
     if (fn) s = fn(s, dIdx, aIdx, baseDamage, pool);
   }
-  // 3+4. PASSIVE_RETALIATION + PASSIVE_ON_DAMAGED（光之翼擋）
+  // 3. PASSIVE_RETALIATION（攻擊方不受對手特性效果影響時擋：光之翼／化隱…，中央判準）
   if (!attackerHasMagicalShine && defCard?.abilities) {
     for (const ab of defCard.abilities) {
       if (!isAbilityHolderEffective(s, defActive0, defCard, dIdx, ab.name, 'active', pool)) continue; // v5.656 暗夜羽擊/初始化等壓制→反擊失效
       const retal = PASSIVE_RETALIATION.get(ab.name);
       if (retal) s = retal(s, dIdx, pool);
     }
+  }
+  // ⭐v6.427：擋下時留一行紀錄（原本這條路徑完全無聲，玩家看不出反擊為什麼沒發生）
+  if (attackerHasMagicalShine && baseDamage > 0) {
+    const _msg = blockedRetaliationLog(s, dIdx, s.players[aIdx].active, pool,
+      blockedRetaliationNames(s, dIdx, defActive0, defCard, pool, 'damaged'));
+    if (_msg) s = addLog(s, _msg, aIdx);
+  }
+  // 4. PASSIVE_ON_DAMAGED（警備濁霧：受傷後從**自己的**牌庫找寶可夢放備戰）
+  //   ⭐v6.427：效果只作用在持有者自己這一側、不作用在攻擊方 ⇒ 攻擊方的「不受對手特性效果影響」**不擋**
+  //   （原本跟反擊一起被光之翼擋掉；改成中央判準後化隱也會誤擋，故拆開）。
+  if (defCard?.abilities) {
     for (const ab of defCard.abilities) {
       if (!isAbilityHolderEffective(s, defActive0, defCard, dIdx, ab.name, 'active', pool)) continue; // v5.656
       const fnOD = PASSIVE_ON_DAMAGED.get(ab.name);
       if (fnOD) s = fnOD(s, dIdx, aIdx, pool, defCard);
     }
   }
-  // v5.494：卡面內建受傷反擊（陳舊的頭蓋化石等，無 abilities，按卡名；非特性不受光之翼擋）。
-  if (baseDamage > 0) s = applyInherentRetaliation(s, dIdx, defCard, pool);
+  // v5.494：卡面內建受傷反擊（陳舊的頭蓋化石｜頭蓋尖刺，按卡名）。
+  //   ⭐v6.427：卡面印的是特性 ⇒ 攻擊方豁免／持有者消除都在 applyInherentRetaliation 裡走中央判準。
+  if (baseDamage > 0) s = applyInherentRetaliation(s, dIdx, defCard, pool, defActive0);
   // 3b. ⭐v6.352 field-wide 受傷反擊（怨恨旋渦／群聚反擊）—— 持有者在**備戰**的那一份。
   //   光之翼的豁免**留在這裡**（理由見 FIELD_WIDE_RETALIATION 上方註解）。
   if (!attackerHasMagicalShine) {
@@ -9114,7 +9196,8 @@ export function fireDefenderOnKO(
   if (koByAttackDamage) {
     const koCard = pool.get(koInst.cardId);
     // ⭐ v6.196：改走中央述詞（熔岩洞/初始化 等消除來源）— 原只比對特性名。
-    const attackerHasMagicalShine = _v6196HasEffAbilByInst(s, aIdx, s.players[aIdx].active, pool, '光之翼');
+    // ⭐v6.427：同上（光之翼＋化隱，中央判準）
+    const attackerHasMagicalShine = isImmuneToOppAbilityEffect(s, dIdx, s.players[aIdx].active, pool, true);
     // ② PASSIVE_KO_RETALIATION（炸裂針）→ 對攻擊方放指示物（光之翼擋；初始化/暗夜羽擊等消除 holder 特性則跳過）
     if (koCard?.abilities && !attackerHasMagicalShine) {
       for (const ab of koCard.abilities) {
@@ -9131,6 +9214,11 @@ export function fireDefenderOnKO(
           s = addLog({ ...s, players: refPlayers }, `「${ab.name}」啟動：${attName} 身上放置 ${ret.counters} 個傷害指示物（+${dmg}）`, dIdx);
         }
       }
+    } else if (attackerHasMagicalShine && isActive) {   // 炸裂針卡面「在戰鬥場上」⇒ 只在戰鬥位留 log
+      // ⭐v6.427：擋下時留一行紀錄（與 engine KO 分支同一份文字）
+      const _msg = blockedRetaliationLog(s, dIdx, s.players[aIdx].active, pool,
+        blockedRetaliationNames(state, dIdx, koInst, koCard, pool, 'ko'));
+      if (_msg) s = addLog(s, _msg, aIdx);
     }
     // ③ PASSIVE_ON_KO（桃歹郎/鬆口氣/光子纜線）— v5.756 比照 engine.ts 主管線(v5.655)與本函式 ①②：
     //   holder 特性被暗夜羽擊/初始化/監視塔/黏著束縛等消除時,被KO觸發特性失效(fireDefenderOnKO 開頭已 gate isActive→傳 'active')。
@@ -9788,7 +9876,9 @@ export function dealAttackDamageToTarget(
     const _btCard = _bt ? pool.get(_bt.cardId) : null;
     if (_bt && _btCard?.abilities) {
       for (const ab of _btCard.abilities) {
-        if (ANYWHERE_RETALIATION.has(ab.name) && isAbilityHolderEffective(st, _bt, _btCard, dIdx, ab.name, 'bench', pool)) {
+        // ⭐v6.427：備戰 anywhere 型反擊原本**完全沒問**攻擊方豁免（連光之翼都沒有）⇒ 補中央判準
+        if (ANYWHERE_RETALIATION.has(ab.name) && isAbilityHolderEffective(st, _bt, _btCard, dIdx, ab.name, 'bench', pool)
+            && !isImmuneToOppAbilityEffect(st, dIdx, st.players[actorIdx].active, pool, true)) {
           const fn = PASSIVE_RETALIATION.get(ab.name);
           if (fn) st = fn(st, dIdx, pool, _bt);
         }

@@ -496,7 +496,8 @@ const EXEMPT=new Map(Object.entries({
   'src/lib/game/effects/cards/m5_preview.ts|化隱':'數的是自己**棄牌區**的卡（抹茶旋濺/魂之末/悔念錨），特性消除只作用於「雙方場上」',
   // ── 根本不是特性名（同一行/鄰近行剛好有 abilities 而被掃到）──────────────
   'src/lib/game/effects/cards/v2999_g3_wave1.ts|驅勁能量 未來':'比對的是**能量卡名**（二重核心的發動條件），不是特性名；v6.204 把 gate 上移緊貼特性名字面量後，這一行又落回掃描器的 ±6 行 abilities 視窗內',
-  'src/lib/game/engine.ts|PASSIVE_KO_RETALIATION':'只用來組 log 文案（光之翼擋下時列出被無效的特性名），不驅動任何效果',
+  // ⭐v6.427：engine.ts|PASSIVE_KO_RETALIATION 條目**已刪除** —— 擋下時的 log 文案改走中央
+  //   blockedRetaliationNames（effects.ts，內部有 isAbilityHolderEffective），engine 不再直接讀這張表 ⇒ 死條目（20e）。
   // ── 消除來源本身 ────────────────────────────────────────────────────────
   // ⭐⭐⭐ v6.253：初始化／黏著束縛兩條豁免**已刪除**。原本的理由是「加 gate 會自我遞迴」，
   //   但那是可以解的（isNullifierAbilityEffective 用 re-entrancy 集合擋住自我遞迴），
@@ -519,7 +520,8 @@ const EXEMPT=new Map(Object.entries({
   'src/lib/game/effects/_shared.ts|繁茂':'_bloomEffectiveFn 未注入時的 fallback；live 一律走 effects.ts 注入的有 gate 版（hasBloomOnField）',
   'src/lib/game/ai.ts|繁茂':'AI 評分啟發式（日光轉移的搬能量價值），不影響規則結算',
   // ── 結構上不可達（查證過，硬改也做不出行為差異 ⇒ 不改）──────────────────
-  'src/lib/game/engine.ts|化隱':'v6.201 查證：同支 isFrosmothCheckupTarget 首行先過 hasAnyEffectiveAbility ⇒ 化隱一被消除就先在那裡被踢掉。⚠ 前提是「持有者只有這一個特性」（現行 4 張都是單特性卡）；日後若出現「化隱＋另一個特性」的印刷，本推論失效，要回來重判',
+  // ⭐v6.427：engine.ts|化隱 條目**已刪除** —— 冰冷之帳不再裸讀「化隱」字面（改問中央 oppAbilityEffectBlockReason，
+  //   化隱的特性消除閘在 defense.ts 那一份裡）⇒ v6.201 那條「單特性卡」前提也不再需要 ⇒ 死條目（20e）。
   // ⭐ v6.209：岩石宮殿的豁免條目**已刪除** —— 事實判斷（6 個來源今天都打不到）仍然成立，
   //   但「不可達」是一條依賴其他 6 張卡條件的脆弱不變式，改成直接接上中央閘（保證的 no-op，
   //   差分實跑 0 mismatch）。見 scripts/test-steelix-palace-ability-nullify-gate.mjs 與

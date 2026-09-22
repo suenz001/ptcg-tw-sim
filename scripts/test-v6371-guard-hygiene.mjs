@@ -107,6 +107,7 @@ import { stripV6394Engine } from ${JSON.stringify(libDir + 'engine-strip-v6394.m
   import { stripV6400Engine } from ${JSON.stringify(libDir + 'engine-strip-v6400.mjs')};
   import { stripV6402Engine } from ${JSON.stringify(libDir + 'engine-strip-v6402.mjs')};
   import { stripV6403Engine } from ${JSON.stringify(libDir + 'engine-strip-v6403.mjs')};
+  import { stripV6427Engine } from ${JSON.stringify(libDir + 'engine-strip-v6427.mjs')};
   import { stripV6422Engine } from ${JSON.stringify(libDir + 'engine-strip-v6422.mjs')};
   import { stripV6421Engine } from ${JSON.stringify(libDir + 'engine-strip-v6421.mjs')};
   import { stripV6420Engine } from ${JSON.stringify(libDir + 'engine-strip-v6420.mjs')};

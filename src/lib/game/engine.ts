@@ -103,6 +103,7 @@ import {
   ON_EVOLVE_FROM_HAND_ABILITIES,
   wouldNeutralCenterBlock,  // v3.67 中立中心 stadium damage block
   applyInherentRetaliation,  // v5.494 化石卡面內建受傷反擊
+  blockedRetaliationNames, blockedRetaliationLog,  // ⭐v6.427 擋下反擊時的 log（唯一一份）
   // >>> v6352-field-wide-retal-import
   fireFieldWideRetaliation,  // ⭐v6.352 field-wide 受傷反擊中央管線（怨恨旋渦／群聚反擊）
   // <<< v6352-field-wide-retal-import
@@ -1037,7 +1038,7 @@ import { sameEvoName, canEvolveOnto, recordOppKO, isAbilityBlockedByOakEye, getA
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared';
 import { withAttackDamageTaken } from './effects/_shared'; // ⭐v6.256「受到的招式的傷害」唯一中央寫入點 // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
-import { canApplyEffectToTarget, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst } from './defense';  // v6.196 中央述詞
+import { canApplyEffectToTarget, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst, isImmuneToOppAbilityEffect, oppAbilityEffectBlockReason } from './defense';  // v6.196 中央述詞；v6.427 反擊豁免
 // >>> v6410-festival-central-import
 // ⭐⭐⭐v6.410：祭典樂舞／祭典會場的判準收斂成**一份**（IRON_RULES Rule 38）。
 //   原本 engine 這裡有 hasFestivalDanceActive / 首擊判定 / hasFestivalVenue
@@ -6470,7 +6471,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       // v4.56：補光之翼 check — attackerCard 是當前 attacker
       // ⭐ v6.196：改走中央述詞 — 超級皮可西ex 是 Stage1 進化 + ex 規則寶可夢，
       //   【傳說的熔岩洞】／【鐵荊棘ex｜初始化】在場時光之翼應被消除（原只比對特性名）。
-      const _v456KoMagicalShine = hasEffectiveAbilityByInst(newState, aIdx, newState.players[aIdx].active, pool, '光之翼');
+      // ⭐v6.427：改問中央 isImmuneToOppAbilityEffect（光之翼＋化隱…；原本寫死只認光之翼）
+      const _v456KoMagicalShine = isImmuneToOppAbilityEffect(newState, dIdx, newState.players[aIdx].active, pool, true);
       if (defenderCard.abilities && !_v456KoMagicalShine) {
         for (const ab of defenderCard.abilities) {
           if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
@@ -6488,15 +6490,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
               `「${ab.name}」啟動：${attName2} 身上放置 ${ret.counters} 個傷害指示物（+${dmg}）`, dIdx);
           }
         }
-      } else if (defenderCard.abilities && _v456KoMagicalShine) {
-        const koRetalNames = defenderCard.abilities
-          .filter(a => PASSIVE_KO_RETALIATION.has(a.name))
-          .map(a => a.name);
-        if (koRetalNames.length > 0) {
-          newState = addLog(newState,
-            `光之翼：${attackerCard?.name ?? '?'} 不受對手特性效果影響（${koRetalNames.join('、')} 無效）`,
-            aIdx);
-        }
+      } else if (_v456KoMagicalShine && baseDamage > 0) {
+        // ⭐v6.427：擋下時留一行（被擊倒反擊＋受傷反擊＋卡名型＋field-wide 一起列；名字與文字都走中央 helper）
+        const _msgKo = blockedRetaliationLog(newState, dIdx, newState.players[aIdx].active, pool,
+          blockedRetaliationNames(state, dIdx, koInst, defenderCard, pool, 'all'));
+        if (_msgKo) newState = addLog(newState, _msgKo, aIdx);
       }
       // v2.992 PASSIVE_ON_KO（桃歹郎 最後鎖鏈 / 願增猿ex 鬆口氣 / v4.893 密勒頓 光子纜線）
       // v4.893：傳 koInst (KO 前的 instance 快照) 給 fn — 部分特性需要讀取 KO 前
@@ -6616,6 +6614,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           const retal = PASSIVE_RETALIATION.get(ab.name);
           if (retal) newState = retal(newState, dIdx, pool, koInst);
         }
+      }
+      // ⭐v6.427：PASSIVE_ON_DAMAGED（警備濁霧）只作用在持有者自己這一側 ⇒ 攻擊方的豁免不擋（拆出反擊的 gate）
+      if (baseDamage > 0 && defenderCard.abilities) {
         for (const ab of defenderCard.abilities) {
           const fnOD = PASSIVE_ON_DAMAGED.get(ab.name);
           // v5.980：補 isAbilityHolderEffective gate(holder 特性被消除→不觸發,同上方 RETALIATION loop)。
@@ -6625,7 +6626,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       // v5.494：卡面內建受傷反擊（陳舊的頭蓋化石 — 無 abilities，按卡名）。
       //   「受到傷害時」含 KO 情境 → holder 被 KO 仍要對攻擊方放指示物（同龐克頭盔 v5.080）。
       //   傳 defenderCard（active 此時可能已移除）；反殺攻擊方交 sanityKOSweep/反彈檢查。
-      if (baseDamage > 0) newState = applyInherentRetaliation(newState, dIdx, defenderCard, pool);
+      if (baseDamage > 0) newState = applyInherentRetaliation(newState, dIdx, defenderCard, pool, koInst);   // ⭐v6.427 傳持有者快照（特性消除閘）
       // v5.980：招式旗標型受傷反擊(還擊斧/等待角擊/殼捲風旋轉/強大猛擊)holder 被一擊 KO 時仍觸發
       //   (受傷時含 KO,同龐克頭盔 v5.080/扣殺能量 v5.156/頭蓋化石 v5.494;旗標在 koInst 快照上,隨離場清)。
       if (baseDamage > 0 && koInst?.retaliateCountersOnNextHit && newState.players[aIdx].active) {
@@ -7022,7 +7023,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   共用版只在「沒走 KO branch」時跑（即 !wouldBeKO || preventedKO），
     //   否則甲殼刺/毒刺/灼熱之軀等會在 KO 時觸發 2 次（玩家回報）。
     // ⭐ v6.196：改走中央述詞（熔岩洞/初始化 等消除來源）— 原只比對特性名。
-    const attackerHasMagicalShine = hasEffectiveAbilityByInst(newState, aIdx, newState.players[aIdx].active, pool, '光之翼');
+    // ⭐v6.427：改問中央 isImmuneToOppAbilityEffect（光之翼＋化隱…；原本寫死只認光之翼）
+    const attackerHasMagicalShine = isImmuneToOppAbilityEffect(newState, dIdx, newState.players[aIdx].active, pool, true);
     const _v5113RanInKoBranch = wouldBeKO && !preventedKO;
     if (!_v5113RanInKoBranch && baseDamage > 0 && defenderCard.abilities && !attackerHasMagicalShine) {
       for (const ab of defenderCard.abilities) {
@@ -7030,17 +7032,19 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         const retal = PASSIVE_RETALIATION.get(ab.name);
         if (retal) newState = retal(newState, dIdx, pool);
       }
-    } else if (!_v5113RanInKoBranch && baseDamage > 0 && defenderCard.abilities && attackerHasMagicalShine) {
-      newState = addLog(newState,
-        `光之翼：${attackerCard?.name ?? '?'} 不受對手特性效果影響（${defenderCard.abilities.map(a => a.name).join('、')} 無效）`,
-        aIdx);
+    } else if (!_v5113RanInKoBranch && baseDamage > 0 && attackerHasMagicalShine) {
+      // ⭐v6.427：只列「本來會觸發」的反擊（原本列出防守方全部特性 ⇒ 化隱打雪妖女會印「冰冷之帳 無效」）
+      const _msgNk = blockedRetaliationLog(newState, dIdx, newState.players[aIdx].active, pool,
+        blockedRetaliationNames(newState, dIdx, newState.players[dIdx].active, defenderCard, pool, 'damaged'));
+      if (_msgNk) newState = addLog(newState, _msgNk, aIdx);
     }
     // v5.494：卡面內建受傷反擊（陳舊的頭蓋化石 — 非 KO 分支；攻擊方反殺交 sanityKOSweep）。
-    if (!_v5113RanInKoBranch && baseDamage > 0) newState = applyInherentRetaliation(newState, dIdx, defenderCard, pool);
+    if (!_v5113RanInKoBranch && baseDamage > 0) newState = applyInherentRetaliation(newState, dIdx, defenderCard, pool, newState.players[dIdx].active);   // ⭐v6.427 特性消除閘
 
     // v2.992 PASSIVE_ON_DAMAGED（火箭隊的瓦斯彈 警備濁霧）— 受傷觸發 deck search
     // v5.113 KO 重複觸發修：v5.081 KO branch L4994 已跑過，這裡共用版加 KO gate
-    if (!_v5113RanInKoBranch && baseDamage > 0 && defenderCard.abilities && !attackerHasMagicalShine) {
+    // ⭐v6.427：警備濁霧只作用在持有者自己這一側 ⇒ 攻擊方的「不受對手特性效果影響」不擋（原本誤跟著光之翼擋）
+    if (!_v5113RanInKoBranch && baseDamage > 0 && defenderCard.abilities) {
       for (const ab of defenderCard.abilities) {
         if (!isAbilityHolderEffective(newState, newState.players[dIdx].active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.656 非KO分支反擊/受傷觸發 gate
         const fnOD = PASSIVE_ON_DAMAGED.get(ab.name);
@@ -7594,8 +7598,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       //   冰冷之帳對其無效（不放指示物）。
       // ⭐ v6.196：改走中央述詞（同 v6.049 對 hasAnyEffectiveAbility 的處理）——
       //   超級皮可西ex 是 Stage1 進化 + ex 規則寶可夢，熔岩洞／初始化 在場時光之翼應被消除。
-      const hasMagicalShine = (c: CardInstance, ownerIdx: 0 | 1): boolean =>
-        hasEffectiveAbilityByInst(state, ownerIdx, c, pool, '光之翼');
+      // ⭐v6.427：光之翼／化隱只擋「**對手的**」冰冷之帳（自家雪妖女照放）——改問中央 isImmuneToOppAbilityEffect。
+      //   原本光之翼寫死「兩邊的雪妖女都不放」、化隱只看印刷（特性被消除時仍擋）。
+      //   回傳擋下的特性名（'化隱'／'光之翼'…；沒擋回 null），log 沿用舊格式「化隱擋對手」。
+      const oppFrosmothBlocked = (c: CardInstance, ownerIdx: 0 | 1): string | null => {
+        const r = oppAbilityEffectBlockReason(state, (1 - ownerIdx) as 0 | 1, c, pool, true);   // 冰冷之帳＝放指示物
+        return r === null ? null : r.split(' ')[0];
+      };
       // ⭐v6.049：卡面是「**擁有特性的**所有寶可夢」。原本只看卡片印刷有沒有特性，
       //   完全不管特性有沒有被消除 → 火箭隊的監視塔（「雙方場上所有【無】寶可夢的特性
       //   全部消除」）在場時，【無】寶可夢已經沒有特性了，卻仍被放指示物（玩家回報）。
@@ -7604,16 +7613,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         const card = pool.get(c.cardId);
         if (!hasAnyEffectiveAbility(state, c, card, ownerIdx, loc, pool)) return false;
         if (isFrosmothName(card)) return false;
-        if (hasMagicalShine(c, ownerIdx)) return false;  // 光之翼免疫
         return true;
       };
       // v5.083：化隱（斯魔茶 / 來悲粗茶 / 怨影娃娃 / 詛咒娃娃）— 卡面：
       //   「這隻寶可夢不會受到對手的招式或特性的效果。」冰冷之帳是「特性效果」必擋。
       //   per-target gate：化隱寶可夢只受 own frosmoth（自家雪妖女），不受 opp frosmoth。
       //   套用點在下方 dispatch loop 計算 counter 時。
-      const hasHuayinAbility = (card: Card | undefined): boolean => {
-        return card?.abilities?.some(a => a.name === '化隱') ?? false;
-      };
       const affectedNames: string[] = [];
       // [ownerIdx → prizes they owe to opponent]
       const koPrizesByOwner: [number, number] = [0, 0];
@@ -7630,13 +7635,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         // 戰鬥區
         // v5.083：per-target counter — 化隱寶可夢只算自家雪妖女（擋對手雪妖女特性效果）
         if (pl.active && isFrosmothCheckupTarget(pl.active, i, 'active')) {
-          const activeCardC = pool.get(pl.active.cardId);
-          const effectiveActiveCounters = hasHuayinAbility(activeCardC) ? ownFrosmoth : activeCounters;
+          const _oppBlkA = oppFrosmothBlocked(pl.active, i);
+          const effectiveActiveCounters = _oppBlkA !== null ? ownFrosmoth : activeCounters;
           if (effectiveActiveCounters > 0) {
           const newDmg = pl.active.damage + effectiveActiveCounters * 10;
           const card = pool.get(pl.active.cardId);
           const hp = getEffectiveHP(pl.active, pool, state);
-          affectedNames.push(`${card?.name ?? '?'}(-${effectiveActiveCounters * 10}${hasHuayinAbility(activeCardC) ? ' 化隱擋對手' : ''})`);
+          affectedNames.push(`${card?.name ?? '?'}(-${effectiveActiveCounters * 10}${_oppBlkA !== null ? ` ${_oppBlkA}擋對手` : ''})`);
           if (hp > 0 && newDmg >= hp) {
             const koDiscard: CardInstance[] = [
               { ...pl.active, damage: newDmg },
@@ -7658,15 +7663,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         const newBench: CardInstance[] = [];
         for (const b of pl.bench) {
           if (!isFrosmothCheckupTarget(b, i, 'bench')) { newBench.push(b); continue; }
-          const benchCardC = pool.get(b.cardId);
-          const effBenchCounters = hasHuayinAbility(benchCardC)
-            ? (benchProtected ? ownFrosmoth : ownFrosmoth)  // 化隱：擋對手 frosmoth 兩種情境都只算自家
-            : benchCounters;
+          const _oppBlkB = oppFrosmothBlocked(b, i);
+          const effBenchCounters = _oppBlkB !== null ? ownFrosmoth : benchCounters;   // 擋對手 frosmoth ⇒ 只算自家
           if (effBenchCounters === 0) { newBench.push(b); continue; }
           const newDmg = b.damage + effBenchCounters * 10;
           const card = pool.get(b.cardId);
           const hp = getEffectiveHP(b, pool, state);
-          affectedNames.push(`${card?.name ?? '?'}(-${effBenchCounters * 10}${hasHuayinAbility(benchCardC) ? ' 化隱擋對手' : ''})`);
+          affectedNames.push(`${card?.name ?? '?'}(-${effBenchCounters * 10}${_oppBlkB !== null ? ` ${_oppBlkB}擋對手` : ''})`);
           if (hp > 0 && newDmg >= hp) {
             const koDiscard: CardInstance[] = [
               { ...b, damage: newDmg },

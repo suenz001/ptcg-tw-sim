@@ -441,6 +441,48 @@ export function canApplyEffectToTarget(
   return { blocked: false };
 }
 
+/**
+ * ⭐⭐⭐ v6.427：「target 不受 sourceIdx 那一側的**寶可夢特性效果**影響」的**唯一**判準。
+ *
+ * 【玩家回報】詛咒娃娃｜化隱（「這隻寶可夢不會受到對手的招式與特性的效果的影響。」）用「玩偶捕捉」
+ *   打對手的弱丁魚｜群聚反擊，仍被放了 3 個傷害指示物。
+ * 【根因】受傷反擊（PASSIVE_RETALIATION／PASSIVE_KO_RETALIATION／field-wide 反擊）的豁免在 5 個消費點
+ *   各自寫死 `hasEffectiveAbilityByInst(…, '光之翼')` —— 只認光之翼，化隱完全沒被問到；
+ *   備戰 anywhere 型反擊（快掃拳返）則連光之翼都沒問。官方（PTCG_RULES §17，光之翼 × 咒詛炸彈）：
+ *   不受對手特性效果影響的寶可夢，不會因對手特性被放置傷害指示物。
+ * 【修法】一律改問 canApplyEffectToTarget(kind='ability-effect') —— 光之翼、化隱（含各自的特性消除閘、
+ *   「對手的」方向判定）都已經在那一份裡；以後再有同型特性只要加在那一份，所有反擊點自動生效。
+ *
+ * @param sourceIdx 特性效果的**施放方**（受傷反擊＝被打的那一方）
+ * @param target    受影響的寶可夢（受傷反擊＝使用招式的寶可夢）
+ */
+export function isImmuneToOppAbilityEffect(
+  state: GameState,
+  sourceIdx: 0 | 1,
+  target: CardInstance | null | undefined,
+  pool: Map<string, Card>,
+  /** 必填表態：這個特性效果是不是「放置／移轉傷害指示物」（決定對戰圓形競技場擋不擋；反擊＝true、效果昏厥＝false） */
+  counterPlacement: boolean,
+): boolean {
+  if (!target) return false;
+  return canApplyEffectToTarget(state, sourceIdx, target, pool.get(target.cardId), 'ability-effect', pool, { counterPlacement }).blocked;
+}
+/** 同上，但回傳擋下的理由（沒擋回 null）——log 用（例：「化隱 免疫對手招式效果與特性效果」）。
+ *  ⚠ 兩支都是 canApplyEffectToTarget 的薄包裝：target 在**備戰**時會連競技場級的備戰防護（對戰圓形競技場…）一起算。
+ *    受傷反擊的 target 永遠是攻擊方**戰鬥位** ⇒ 不受影響；冰冷之帳對備戰的結果與原本的 benchProtected 同值。 */
+export function oppAbilityEffectBlockReason(
+  state: GameState,
+  sourceIdx: 0 | 1,
+  target: CardInstance | null | undefined,
+  pool: Map<string, Card>,
+  /** 必填表態：這個特性效果是不是「放置／移轉傷害指示物」（決定對戰圓形競技場擋不擋；反擊＝true、效果昏厥＝false） */
+  counterPlacement: boolean,
+): string | null {
+  if (!target) return null;
+  const r = canApplyEffectToTarget(state, sourceIdx, target, pool.get(target.cardId), 'ability-effect', pool, { counterPlacement });
+  return r.blocked ? (r.reason ?? '不受對手特性效果影響') : null;
+}
+
 
 /**
  * v5.555 收斂：招式效果動「對手戰鬥位寶可夢」前的免疫閘門（單一來源）。

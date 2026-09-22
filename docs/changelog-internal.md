@@ -1,5 +1,30 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.427 ⭐ 化隱／光之翼 × 受傷反擊收斂到中央判準（玩家回報）
+
+BASE `8162e928`（v6.426）。站長回報（逐字）：「詛咒娃娃[特性]化隱，這隻寶可夢不會受到對手的招式與特性的效果的影響，
+但當詛咒娃娃使用招式 玩偶捕捉 攻擊對手的 弱丁魚 [特性]群聚反擊 時，會受到 放置3個傷害指示物 的特性效果。」
+- 真因：受傷反擊的攻擊方豁免在 5 個消費點各自寫死 `hasEffectiveAbilityByInst(…,'光之翼')`（effects：fireDefenderOnDamaged、
+  fireDefenderOnKO；engine：KO 分支、非 KO 分支、冰冷之帳），化隱從未被問到；備戰 anywhere 型反擊（快掃拳返）連光之翼都沒問。
+- 修法（中央）：defense.ts 新增 `isImmuneToOppAbilityEffect`／`oppAbilityEffectBlockReason`，底層就是既有
+  `canApplyEffectToTarget(kind='ability-effect')`（已含光之翼、化隱、特性消除閘、「對手的」方向判定）。五個消費點＋anywhere 型一律改問它；
+  engine／effects 內已無寫死 '光之翼' 的豁免判斷。擋下時補一行 log（原本 effects 路徑無聲）。
+- 整體 audit 連帶：①PASSIVE_ON_DAMAGED（火箭隊的瓦斯彈｜警備濁霧：只在自己那一側放寶可夢）原本和反擊一起被光之翼擋掉（既有 bug），
+  改中央判準後化隱也會誤擋 ⇒ 拆出、不受攻擊方豁免 gate。②冰冷之帳：化隱／光之翼只擋**對手的**雪妖女（`oppFrosmothBlocked`），自家雪妖女照放。
+- fable 5.1 獨立審查。必修已修：①陳舊的頭蓋化石｜頭蓋尖刺卡面（M5 19215 abilities[0] label「特性」）是特性，
+  但 v5.494 的 INHERENT_RETALIATION 註解寫「無 abilities／非特性」（當時卡資料的狀況，已過期）⇒ 化隱／光之翼擋不住、監視塔也消不掉
+  ⇒ applyInherentRetaliation 內補攻擊方豁免（中央判準）＋持有者特性消除閘（呼叫點傳持有者實例）；
+  ②耿鬼ex｜死亡宣告（source='ability'）走 legacy canApplyAttackEffectToTarget，只登記化隱 ⇒ 光之翼的皮可西會被昏厥
+  ⇒ source='ability' 時再問中央判準。建議採納：擋下 log 收斂成 blockedRetaliationNames／blockedRetaliationLog 一份
+  （engine 非 KO 原本列防守方全部特性，化隱打雪妖女會印「冰冷之帳 無效」）；fireDefenderOnKO 擋下補 log；
+  兩支中央函式加必填 counterPlacement（anti-pattern-lint V 規則）；守衛補無 picker 招式（怨影娃娃｜垂吊）走 engine 主管線的行為案例
+  （審查突變 M3a／M4／M5 原本存活，現在 9 個突變全殺）。未改：冰冷之帳 × 對戰圓形 的 log 文字（數量正確、純顯示）。
+- Rule 40：test-v6374 E10 觀測點改成不含右括號的前綴（呼叫點多傳持有者實例，意圖不變）。
+- 守衛 `test-v6427-opp-ability-immune-retaliation`（36 條；BASE 10 PASS／25 FAIL＋F8 新增）：卡面逐字、KO／非 KO／field-wide 群聚反擊、
+  熔岩洞消除化隱正對照、反擊針、光之翼零回歸、中央函式單元測、C4 不得再有寫死光之翼、anywhere 型、冰冷之帳雙向、警備濁霧。
+- engine.ts 逐字 pin：新增 `scripts/lib/engine-strip-v6427.mjs`（12 組配對，還原後 === v6.426 engine），接進 test-v6265 兩處、test-v6375、test-v6371。
+- 部署：`redeploy-oracle.bat`（玩家前端）＋ `update-tournament.bat`（動了引擎）。
+
 ## v6.426 視窗折疊鈕（玩家建議、站長同意）
 
 BASE `bdb8394f`（v6.425）。只動 `src/lib/modal-drag.ts`（＋版本／changelog）。
