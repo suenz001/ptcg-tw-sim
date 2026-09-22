@@ -1,5 +1,29 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.425 ⭐ 補位視窗一個座位只開一個＋一般視窗可拖到畫面外（v6.420 回歸）
+
+BASE `0fe9a100`（v6.424＋admin v1.76＋server v1.49）。站長回報（附圖，桌機＋手機）：寶可夢被擊倒後「派出新的戰鬥寶可夢」視窗兩個、
+提示兩條；手機上以前可以把視窗拖到角落看對戰紀錄，現在卡在畫面中間。
+- 真因①：補位視窗 A（防守方版：defender.active===null && isMyDefenderTurn）／B（自 KO 版：my.active===null && bench>0）
+  **我被擊倒時同時成立**（v2.123 起就重複）。v6.420 以前全站共用一個 modalOffset、兩個視窗永遠疊一起動 ⇒ 看不出來；
+  v6.420 改成各自位移 ⇒ 露出來；手機上底下那層 overlay 沒有 dragged ⇒ 仍擋住畫面。上方提示同型（四條各判，最多兩條重複）。
+- 同型（整體 audit）：招式前置 stepper（波盪水｜蜿蜒割裂，H 標 MC 16692／SV5a 10273）條件 `scope==='self-counter-stepper'`，
+  通用視窗條件 `scope!=='binary-yes-no'` 也成立 ⇒ 兩個視窗疊一起。其餘 selection-overlay 視窗逐一比對條件，未見其他重疊。
+- 真因②：v6.420 `clampModalOffset` 規定「視窗完整留在畫面內」⇒ 手機大視窗幾乎拖不動、拖不到角落。
+- 修法：新增 leaf `src/lib/game/modal-slots.ts`（promoteModalSeats／promoteAlerts／preDiscardModalKind，「該開哪個視窗」唯一判準）；
+  補位視窗改 `{#each promoteSeatsList}`、pick state 依座位；三個前置視窗改用 preDiscardModalKind 互斥。
+  modal-drag.ts 夾制分 `reachable`（預設：水平至少留 72px、上緣 ∈ [0, vh−56]，把手永遠抓得到）與 `contain`（v6.420 規則，
+  聊天鈕／聊天面板／對手回合鈕與面板／進化選單明確帶）。
+- Rule 40：test-v6122（兩個 modal 錨點 → 單一 {#each}，意圖不變）、test-v6420 A／B 段與 test-v6424 P2（改明確驗 contain 模式）。
+- fable 5.1 獨立審查：無必修；窮舉 6144 組輸入確認 promoteModalSeats／promoteAlerts 與舊條件除去重外逐一相同。採納：
+  ① modalDrag 掛 ResizeObserver，視窗自己變矮（置中容器會往下滑）時重夾——reachable 只留 56px，不重夾會連把手都滑出去；
+  ② 把手露出量再加上手機底部系統手勢區（--safe-bottom，探針量實際 px）；③ 守衛：v6424 補 reachable 的 P2b、v6425 Playwright 樁改用手機正式數值、
+  v6122 isSpectator 判準收緊、v6420 檔頭註明 contain/reachable。未改：waitSeat 在「雙方戰鬥場同時空＋我方回合」的極端組合只顯示一條（實戰幾乎不可達）。
+- 守衛 `test-v6425-promote-modal-dedupe-and-reach`（22 條；BASE 10 PASS／12 FAIL）：modal-slots 單元（含舊條件正對照）、
+  對戰頁靜態（補位單一 {#each}、提示文字唯一、三個前置視窗各一種）、reachable／contain 夾制、Playwright（拖到右下後左下紀錄點得到、
+  從露出的把手拖回來關閉鈕按得到）。
+- 部署：`redeploy-oracle.bat`（玩家前端）。
+
 ## server patch v1.49：admin 原型搜尋不再卡住全站（錦標賽 lag 實錄）
 
 BASE `fb01e4b1`（admin v1.76／server v1.48）。只動 `oracle-admin/server_admin_patch.js`（＋守衛），網站版本號不動（仍 6.424）。

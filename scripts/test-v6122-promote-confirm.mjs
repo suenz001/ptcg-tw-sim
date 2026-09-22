@@ -33,9 +33,17 @@ function modalWindow(anchor) {
   return end < 0 ? null : PAGE.slice(i, end);
 }
 
-// 兩個補位 modal 的 gating 條件（逐字，改了會被抓到 → 強迫重新檢視本守衛）
-const A = "{#if game && game.phase==='playing' && defenderPlayer?.active===null && isMyDefenderTurn() && !pendingSelection";
-const B = "{#if game && game.phase==='playing' && myPlayer?.active===null && (myPlayer?.bench??[]).length>0 && !pendingSelection";
+// ⭐v6.425（Rule 40）：A（防守方版）／B（自 KO 版）兩個 modal 收斂成「每個需要補位的座位一個 modal」
+//   （我被擊倒時 A、B 同時成立 ⇒ 玩家看到兩個視窗，站長回報）。本守衛的意圖不變：兩段式確認、擋觀戰者、
+//   pick state 依備戰區分開（改成依座位各一份）、卡片格子單一 snippet —— 只是錨點改成那一個 {#each} 區塊。
+const MODAL = '{#each promoteSeatsList as _ps (_ps)}';
+function eachWindow() {
+  const i = PAGE.indexOf(MODAL);
+  if (i < 0) return null;
+  const end = PAGE.indexOf('{/each}', i);
+  return end < 0 ? null : PAGE.slice(i, end);
+}
+const SLOTS = readFileSync(join(ROOT, 'src/lib/game/modal-slots.ts'), 'utf8');
 
 console.log('① 中央出口：全檔只能有一個送出 SEND_NEW_ACTIVE 的地方');
 
@@ -57,36 +65,27 @@ T('⭐⭐ 送出前必須再驗一次 iid 仍在該玩家備戰區（線上盤�
   ok(/if \(!iid\) return;/.test(body), '沒有擋掉「沒選任何一隻就送出」');
 });
 
-console.log('② 兩個 modal 都要有確定鈕，且卡片點擊不得直接送出');
+console.log('② 補位 modal 要有確定鈕，且卡片點擊不得直接送出');
 
-for (const [label, anchor, pickVar] of [['A 防守方版', A, 'promotePickDef'], ['B 自KO版', B, 'promotePickSelf']]) {
-  T('⭐⭐⭐ ' + label + '：卡片 onclick 不得直接 dispatch，必須有 disabled 的確定鈕', () => {
-    const w = modalWindow(anchor);
-    ok(w, '找不到 ' + label + ' 的 modal（gating 條件被改了？請重新檢視本守衛）');
-    ok(!/dispatch\(/.test(w),
-      label + ' 的 modal 裡還有直接 dispatch —— 等於沒有二段確認，玩家還是會按錯');
-    ok(/<div class="sel-footer">/.test(w), label + ' 沒有 sel-footer（確定鈕列）');
-    // v6.147：確定鈕多了「動作送出中」的 busy 條件（disabled={actionBusy||!_pickOkX}），
-    //   本條的判準是「有沒有 disabled 到那個選取旗標」，允許前面再 or 別的條件。
-    ok(/disabled=\{(?:[^}]*\|\|)?!_pickOk/.test(w), label + ' 的確定鈕沒有 disabled 條件（可能送出空選取）');
-    ok(new RegExp('confirmSendNewActive\\(' + pickVar).test(w),
-      label + ' 的確定鈕沒有呼叫 confirmSendNewActive(' + pickVar + ' …)');
-  });
+T('⭐⭐⭐ 補位 modal：卡片 onclick 不得直接 dispatch，必須有 disabled 的確定鈕', () => {
+  const w = eachWindow();
+  ok(w, '找不到補位 modal（' + MODAL + '）');
+  ok(!/dispatch\(/.test(w), '補位 modal 裡還有直接 dispatch —— 等於沒有二段確認，玩家還是會按錯');
+  ok(/<div class="sel-footer">/.test(w), '沒有 sel-footer（確定鈕列）');
+  ok(/disabled=\{(?:[^}]*\|\|)?!_pickOk/.test(w), '確定鈕沒有 disabled 條件（可能送出空選取）');
+  ok(/confirmSendNewActive\(_pick, _ps, _bench\)/.test(w), '確定鈕沒有呼叫 confirmSendNewActive(_pick, _ps, _bench)');
+});
 
-  T(label + '：必須擋掉觀戰者（原本會蓋一個點不動也關不掉的 modal 在觀戰畫面上）', () => {
-    const i = PAGE.indexOf(anchor);
-    ok(i >= 0, '找不到 ' + label);
-    const cond = PAGE.slice(i, PAGE.indexOf('}\n', i));
-    ok(/!isSpectator/.test(cond), label + ' 的條件缺 !isSpectator');
-  });
-}
+T('補位 modal：必須擋掉觀戰者（原本會蓋一個點不動也關不掉的 modal 在觀戰畫面上）', () => {
+  ok(/promoteModalSeats\(\{[\s\S]{0,400}?[\s,{]isSpectator\s*[,}]/.test(PAGE), '對戰頁呼叫 promoteModalSeats 時沒有把真正的 isSpectator 傳進去（寫成 isSpectator: false 之類不算）');
+  ok(/if \(v\.phase !== 'playing' \|\| v\.hasPendingSelection \|\| v\.isSpectator\) return \[\];/.test(SLOTS), 'promoteModalSeats 沒有對觀戰者回空清單');
+});
 
-T('⭐⭐ 兩個 modal 的 pick state 不得共用（本機雙人雙方同時自 KO 時是兩份不同的備戰區）', () => {
-  ok(/let promotePickDef = \$state/.test(PAGE) && /let promotePickSelf = \$state/.test(PAGE),
-    '缺少兩個獨立的 pick state');
-  const wA = modalWindow(A), wB = modalWindow(B);
-  ok(wA && !/promotePickSelf/.test(wA), 'Modal A 用到了 Modal B 的 state');
-  ok(wB && !/promotePickDef/.test(wB), 'Modal B 用到了 Modal A 的 state');
+T('⭐⭐ pick state 依座位各一份（本機雙人雙方同時被擊倒時是兩份不同的備戰區）', () => {
+  ok(/let promotePick = \$state<\[string \| null, string \| null\]>/.test(PAGE), '缺少依座位的 pick state');
+  const w = eachWindow();
+  ok(w && /promotePick\[_ps\]/.test(w), 'modal 沒有用 promotePick[_ps]（依座位）');
+  ok(!/promotePickDef|promotePickSelf/.test(PAGE), '舊的共用／分開 state 殘留');
 });
 
 T('正對照：把「卡片直接 dispatch」的舊寫法餵進同一判準，必須被抓到', () => {
@@ -115,7 +114,7 @@ console.log('④ 共用 markup（兩個 modal 不得再各抄一份卡片格子�
 T('⭐ 卡片格子收斂成單一 snippet', () => {
   ok(/\{#snippet promoteGrid\(/.test(PAGE), '沒有 promoteGrid snippet');
   const n = (PAGE.match(/@render promoteGrid\(/g) || []).length;
-  ok(n === 2, '@render promoteGrid 應為 2 次（兩個 modal），實得 ' + n);
+  ok(n === 1, '@render promoteGrid 應為 1 次（v6.425 起只有一個 {#each} 區塊），實得 ' + n);
 });
 
 console.log('\n=== v6.122 補位「選取→確定」兩段式 守衛：PASS ' + pass + ' / FAIL ' + fail + ' ===');

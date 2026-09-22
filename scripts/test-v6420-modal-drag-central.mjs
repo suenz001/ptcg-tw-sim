@@ -1,4 +1,6 @@
 // ⭐⭐⭐ v6.420 守衛：對戰畫面所有浮動視窗的「可拖曳 ＋ 拖不出畫面 ＋ 關得掉」。
+// ⚠⚠ v6.425 起：本檔守的「完整留在畫面內」已改名為 `contain` 模式（浮動按鈕／面板用）；一般視窗預設 `reachable`
+//   （可拖到畫面外、把手留在畫面內）——下文「留一角是錯的」指的是 v6.420 當時的判斷，現行規則見 test-v6425-promote-modal-dedupe-and-reach。
 //
 // 【玩家回報】手機上把視窗不小心拖到側邊（有時候會自己彈走）之後，**關不掉、也不能做任何動作**。
 //   根因兩個，兩個都在這一版根治：
@@ -59,6 +61,11 @@ if (MD_EXISTS) {
 }
 const MISSING = Symbol('missing');
 const clamp = typeof MD.clampModalOffset === 'function' ? MD.clampModalOffset : () => MISSING;
+// ⭐v6.425（Rule 40）：站長要求一般視窗可以拖到畫面外看底下的對戰紀錄 ⇒ 預設夾制改成 `reachable`
+//   （只保證把手抓得到，見 modal-drag.ts）。v6.420 的「完整留在畫面內」規則仍存在、改名為 `contain`
+//   （浮動按鈕／面板在用）——本檔 A／B 段守的正是那一條規則，所以一律明確帶 'contain' 驗；
+//   預設 `reachable` 的行為（含「拖出去之後一定拖得回來、關閉鈕按得到」）由 test-v6425-promote-modal-dedupe-and-reach 守。
+const clampContain = (b, o, vw, vh) => clamp(b, o, vw, vh, 'contain');
 const MINV = typeof MD.MODAL_MIN_VISIBLE === 'number' ? MD.MODAL_MIN_VISIBLE : 0;
 
 /** ⭐ 判準只寫一份：A2～A6 的正式斷言與 A8 的反安慰劑共用它。 */
@@ -101,14 +108,14 @@ T('A1. 不拖曳時位移不變（夾制不得把正常位置也改掉）', () =
 });
 T('A1b. ⭐ 視窗一開始就溢出畫面（轉向／縮放之後）⇒ 夾制要把它拉回來', () => {
   const rect = { left: 40, top: 60, width: 300, height: 400 };   // 320 寬的畫面放不下
-  const r = visibleAfterDrag(clamp, rect, { x: 0, y: 0 }, 320, 568);
+  const r = visibleAfterDrag(clampContain, rect, { x: 0, y: 0 }, 320, 568);
   assert.ok(r.left + rect.width <= 320 + 0.01, `右緣仍在畫面外（${(r.left + rect.width).toFixed(1)}）`);
   assert.ok(r.left >= -0.01, `左緣被拉到畫面外（${r.left.toFixed(1)}）`);
 });
 for (const [dx, dy, dir] of [[9999, 0, '右'], [-9999, 0, '左'], [0, -9999, '上'], [0, 9999, '下'], [9999, 9999, '右下'], [-9999, -9999, '左上']]) {
   T(`A2 拖到${dir}邊界外 ⇒ 視窗**完整**留在畫面內（比畫面大的軸則不露白）`, () => {
     for (const [vw, vh] of VIEWS) for (const b of BASES) {
-      const r = visibleAfterDrag(clamp, b.rect, { x: dx, y: dy }, vw, vh);
+      const r = visibleAfterDrag(clampContain, b.rect, { x: dx, y: dy }, vw, vh);
       assert.ok(r, 'clamp 不存在');
       // ⭐ 判準：可視交集 === min(視窗尺寸, 畫面尺寸) —— 一個像素都不准跑到畫面外
       const needW = Math.min(b.rect.width, vw), needH = Math.min(b.rect.height, vh);
@@ -125,7 +132,7 @@ T('A3. 比畫面矮的視窗：上緣不得被拖到 0 以上（把手與關閉�
 T('A3b. ⭐⭐ 比畫面窄的視窗：往右拖之後**右緣**也不得超出（關閉鈕多半在右上角）', () => {
   const b = { left: 40, top: 60, width: 300, height: 400 };
   for (const [vw, vh] of VIEWS) {
-    const r = visibleAfterDrag(clamp, b, { x: 9999, y: 0 }, vw, vh);
+    const r = visibleAfterDrag(clampContain, b, { x: 9999, y: 0 }, vw, vh);
     assert.ok(r.left + b.width <= vw + 0.01, `@${vw}x${vh} 右緣跑到 ${(r.left + b.width).toFixed(1)}（畫面寬 ${vw}）`);
   }
 });
@@ -140,7 +147,7 @@ T('A4. ⭐⭐ 比畫面高的視窗：**不准**往上拖（把手與關閉鈕�
 });
 T('A4b. ⭐ 比畫面寬的視窗：水平仍可左右拖（把手橫跨整個寬度，拖到哪都還抓得到）', () => {
   const b = { left: 0, top: 10, width: 500, height: 300 };
-  const r = visibleAfterDrag(clamp, b, { x: -9999, y: 0 }, 375, 667);
+  const r = visibleAfterDrag(clampContain, b, { x: -9999, y: 0 }, 375, 667);
   assert.ok(r.left < -1, `比畫面寬的視窗竟然不能往左拖（left=${r.left.toFixed(1)}）`);
   assert.ok(r.left + b.width >= 375 - 0.01, `右緣拖到 ${(r.left + b.width).toFixed(1)} ⇒ 畫面右側露白`);
 });
@@ -149,7 +156,7 @@ T('A5. ⭐【反安慰劑】把夾制拿掉的樣本，A2 的判準必須抓得�
   const bad = visibleAfterDrag(noClamp, b, { x: 9999, y: 9999 }, 375, 667);
   assert.ok(bad.visW < Math.min(b.width, 375) || bad.visH < Math.min(b.height, 667),
     'A2 的判準壞了：沒有夾制的樣本竟然也算「留得住」');
-  const good = visibleAfterDrag(clamp, b, { x: 9999, y: 9999 }, 375, 667);
+  const good = visibleAfterDrag(clampContain, b, { x: 9999, y: 9999 }, 375, 667);
   assert.ok(good.visW >= Math.min(b.width, 375) && good.visH >= Math.min(b.height, 667),
     'A2 的判準壞了：正確的夾制被判成留不住');
   // ⭐ 舊版「留一角」的夾制也必須被抓到（那正是實測發現關閉鈕仍會跑掉的那一版）
@@ -500,7 +507,7 @@ if (chromium) {
         await pg.route('**/*', (r) => r.fulfill({ contentType: 'text/html', body: HTML }));
         await pg.goto('https://t.local/');
         await pg.addScriptTag({ content: md });
-        await pg.evaluate(() => { window.MDRAG.modalDrag(document.getElementById('m')); });
+        await pg.evaluate(() => { window.MDRAG.modalDrag(document.getElementById('m'), { clamp: 'contain' }); });
         const h = await pg.locator('#h').boundingBox();
         await pg.mouse.move(h.x + 60, h.y + 20);
         await pg.mouse.down();
@@ -553,7 +560,7 @@ if (chromium) {
       const box = async (pg, sel) => pg.evaluate((q) => { const r = document.querySelector(q).getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; }, sel);
       {
         const { ctx, pg } = await openPg(HTML);
-        await pg.evaluate(() => { window.__clicked = 0; document.getElementById('x').onclick = () => { window.__clicked++; }; window.MDRAG.modalDrag(document.getElementById('m')); });
+        await pg.evaluate(() => { window.__clicked = 0; document.getElementById('x').onclick = () => { window.__clicked++; }; window.MDRAG.modalDrag(document.getElementById('m'), { clamp: 'contain' }); });
         const before = await box(pg, '#m');
         const xb = await pg.locator('#x').boundingBox();
         await pg.mouse.move(xb.x + 5, xb.y + 5); await pg.mouse.down();
@@ -570,7 +577,7 @@ if (chromium) {
       }
       {
         const { ctx, pg } = await openPg(HTML, 900, 700);
-        await pg.evaluate(() => { window.MDRAG.modalDrag(document.getElementById('m')); });
+        await pg.evaluate(() => { window.MDRAG.modalDrag(document.getElementById('m'), { clamp: 'contain' }); });
         const h = await pg.locator('#h').boundingBox();
         await pg.mouse.move(h.x + 60, h.y + 20); await pg.mouse.down();
         await pg.mouse.move(h.x + 60 + 3000, h.y + 20 + 3000, { steps: 6 }); await pg.mouse.up();
@@ -586,7 +593,7 @@ if (chromium) {
         const { ctx, pg } = await openPg(HTML);
         const out = await pg.evaluate(async () => {
           const m = document.getElementById('m');
-          const a = window.MDRAG.modalDrag(m, { resetKey: 'A' });
+          const a = window.MDRAG.modalDrag(m, { resetKey: 'A', clamp: 'contain' });
           const h = document.getElementById('h');
           const r = h.getBoundingClientRect();
           const ev = (t, x, y) => h.dispatchEvent(new PointerEvent(t, { bubbles: true, clientX: x, clientY: y, pointerId: 1 }));
@@ -620,7 +627,7 @@ if (chromium) {
         const H2 = HTML.replace('.selection-modal{background:#123;width:300px;height:400px;}',
           '.selection-modal{background:#123;width:300px;height:400px;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);}');
         const { ctx, pg } = await openPg(H2);
-        await pg.evaluate(() => { window.MDRAG.modalDrag(document.getElementById('m')); });
+        await pg.evaluate(() => { window.MDRAG.modalDrag(document.getElementById('m'), { clamp: 'contain' }); });
         const b0 = await box(pg, '#m');
         const h = await pg.locator('#h').boundingBox();
         await pg.mouse.move(h.x + 60, h.y + 20); await pg.mouse.down();
@@ -639,7 +646,7 @@ if (chromium) {
         const out = await pg.evaluate(() => {
           const m = document.getElementById('m');
           m.setPointerCapture = () => { throw new Error('不支援'); };   // 模擬 capture 失敗
-          window.MDRAG.modalDrag(m);
+          window.MDRAG.modalDrag(m, { clamp: 'contain' });
           const h = document.getElementById('h');
           const r = h.getBoundingClientRect();
           h.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: r.left + 60, clientY: r.top + 20, pointerId: 7 }));

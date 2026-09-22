@@ -2,6 +2,7 @@
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
   import { retryImg } from '$lib/img-retry';
   import { modalDrag } from '$lib/modal-drag';   // ⭐v6.420：全站視窗拖曳＋邊界夾制的唯一來源
+  import { promoteModalSeats, promoteAlerts, preDiscardModalKind } from '$lib/game/modal-slots';   // ⭐v6.425：「該開哪個視窗」的唯一判準
 import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式清單上限（單一來源，UI 與守衛共用）
   // ⭐⭐⭐v6.177「抓取中／抓取失敗不清空已顯示資料」的唯一中央述詞（stale-while-revalidate）。
   import { adoptOrKeep, mergeKeyedOrKeep } from '$lib/ui/stale-keep';
@@ -3732,8 +3733,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //     Modal A（防守方版）列的是 defenderPlayer.bench、Modal B（自 KO 版）列的是
   //     myPlayer.bench。一般情況兩者相同，但**本機雙人「雙方同時自傷 KO」**時是
   //     兩份不同的備戰區疊在一起 —— 共用一份 state 會跨清單汙染。
-  let promotePickDef = $state<string | null>(null);   // Modal A：防守方補位
-  let promotePickSelf = $state<string | null>(null);  // Modal B：自 KO 補位
+  //   ⭐v6.425：A／B 兩個視窗收斂成「每個需要補位的座位一個視窗」（modal-slots.ts 的 promoteModalSeats），
+  //     pick state 改成**依座位**各一份 —— 本機雙人雙方同時被擊倒時仍是兩份不同的備戰區、不會互相汙染。
+  let promotePick = $state<[string | null, string | null]>([null, null]);
   /**
    * v6.122 中央收斂：**全檔唯一**送出 SEND_NEW_ACTIVE 的地方（守衛會釘死這件事）。
    * ⚠ 送出前必須再驗一次 iid 仍在該玩家的備戰區 —— 線上盤面可能在玩家選好之後被
@@ -3743,8 +3745,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!iid) return;
     if (!(bench ?? []).some((b) => b.iid === iid)) return;
     dispatch(GameActions.sendNewActive(iid, senderIdx));
-    promotePickDef = null;
-    promotePickSelf = null;
+    promotePick = [null, null];
   }
 
   const isMyDefenderTurn = $derived(() => {
@@ -3764,6 +3765,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
     }
     return true; // 本機雙人模式
   });
+
+  // ⭐v6.425 補位視窗與提示的唯一判準（modal-slots.ts）：同一個座位只會有一個視窗、一條提示。
+  const promoteSeatsList = $derived(game ? promoteModalSeats({
+    phase: game.phase, players: game.players, hasPendingSelection: !!pendingSelection,
+    defenderIdx: dIdx, myIdx, defenderTurnMine: isMyDefenderTurn(), isSpectator,
+  }) : []);
+  const promoteAlert = $derived(game ? promoteAlerts({
+    phase: game.phase, players: game.players, hasPendingSelection: !!pendingSelection,
+    defenderIdx: dIdx, myIdx, oppIdx, defenderTurnMine: isMyDefenderTurn(), isMyTurn: isMyTurn(),
+    turnPhase: game.turnPhase,
+  }) : { mine: false, waitSeat: null });
 
   const selectionItemsRaw = $derived.by(() => {
     if (!pendingSelection || !game) return [] as CardInstance[];
@@ -11847,23 +11859,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
              v2.197：加 !pendingSelection guard — 攻擊方還在 pending（如幻影奇襲分配
              6 個 counter）時，防守方先別顯示「請派出戰鬥寶可夢」alert，等對方完成
              pending 後 modal 才彈，避免畫面卡住的視覺感。 -->
-        {#if game.phase==='playing' && defenderPlayer?.active===null && !pendingSelection}
-          {#if isMyDefenderTurn()}
-            <div class="alert warn-alert">⚠️ 請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>
-          {:else if isMyTurn()}
-            <div class="alert warn-alert">⚠️ 等待 {defenderPlayer?.name} 送出寶可夢</div>
-          {/if}
+        <!-- ⭐v6.425：補位提示改走 modal-slots.ts 的 promoteAlerts —— 舊的四條各自判斷，
+             「防守方＝我」時「請派出」會出現兩條；特性擊倒對手時「等待對手」也會兩條。 -->
+        {#if promoteAlert.mine}
+          <div class="alert warn-alert">⚠️ 請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>
+        {/if}
+        {#if promoteAlert.waitSeat !== null}
+          <div class="alert warn-alert">⚠️ 等待 {game.players[promoteAlert.waitSeat]?.name} 送出新戰鬥寶可夢</div>
         {/if}
         <!-- 對方 pending 處理中（如幻影奇襲分配傷害）時，防守方顯示「等待對方完成」 -->
         {#if game.phase==='playing' && defenderPlayer?.active===null && pendingSelection && isMyDefenderTurn()}
           <div class="alert warn-alert">⏳ 等待 {game.players[pendingSelection.actorIdx].name} 完成當前操作後，再派出新的戰鬥寶可夢</div>
-        {/if}
-        <!-- 自 KO（如咒詛炸彈、中毒）：主動方自己戰鬥場變空，須從備戰區送出新戰鬥寶可夢 -->
-        {#if game.phase==='playing' && myPlayer?.active===null && (myPlayer?.bench??[]).length>0 && !pendingSelection}
-          <div class="alert warn-alert">⚠️ 請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>
-        {/if}
-        {#if game.phase==='playing' && oppPlayer?.active===null && game.turnPhase!=='end' && (oppPlayer?.bench??[]).length>0 && !pendingSelection}
-          <div class="alert warn-alert">⚠️ 等待 {oppPlayer?.name} 送出新戰鬥寶可夢</div>
         {/if}
         <!-- v2.200 對手互動 picker：當 pending.actorIdx 是對手（且不是 my 視角）時，
              我方畫面顯示「等待對手選擇」訊息。馬志士的交易 / 泰姆 等對手互動 supporter
@@ -13052,7 +13058,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   <!-- Floating Evolution Menu -->
   {#if floatingEvoMenu}
     <div class="float-evo-backdrop" onclick={() => floatingEvoMenu = null}></div>
-    <div class="float-evo-menu" use:modalDrag={{ resetKey: floatingEvoMenu?.iid }} style="left:{floatingEvoMenu.x}px;top:{floatingEvoMenu.y}px;">
+    <div class="float-evo-menu" use:modalDrag={{ clamp: 'contain', resetKey: floatingEvoMenu?.iid }} style="left:{floatingEvoMenu.x}px;top:{floatingEvoMenu.y}px;">
       <div class="float-evo-title modal-drag-handle">選擇進化</div>
       {#each floatingEvoMenu.evoOpts as evo}{@const ec=getCard(evo.cardId)}
         <button class="evo-choice wide-evo" disabled={actionBusy} onclick={(e)=>{e.stopPropagation();dispatch(GameActions.evolve(floatingEvoMenu!.fromIid,evo.iid));floatingEvoMenu=null;}}>
@@ -13325,7 +13331,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {/if}
 
   <!-- v2.256 招式前置：0~max stepper overlay（波盪水|蜿蜒割裂 等「最多 N 個指示物」招式） -->
-  {#if preAttackDiscard && game && preAttackDiscard.spec.scope === 'self-counter-stepper'}
+  {#if preAttackDiscard && game && preDiscardModalKind(preAttackDiscard.spec.scope) === 'stepper'}
     {@const spec = preAttackDiscard.spec}
     {@const minN = spec.min}
     {@const maxN = spec.max ?? 9}
@@ -13382,7 +13388,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {/if}
 
   <!-- v2.255 招式前置：yes/no 二選一 overlay（蚊香泳士|跳躍衝天 等「若希望」招式） -->
-  {#if preAttackDiscard && game && preAttackDiscard.spec.scope === 'binary-yes-no'}
+  {#if preAttackDiscard && game && preDiscardModalKind(preAttackDiscard.spec.scope) === 'binary'}
     {@const spec = preAttackDiscard.spec}
     {@const yesLabel = spec.choiceYesLabel ?? '是'}
     {@const noLabel = spec.choiceNoLabel ?? '否'}
@@ -13455,8 +13461,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
     </div>
   {/if}
 
-  <!-- 招式前置：丟棄能量選擇（v1.57 花冠射線 / 猛擂鼓 EX 等變動張數招式） -->
-  {#if preAttackDiscard && game && preAttackDiscard.spec.scope !== 'binary-yes-no'}
+  <!-- 招式前置：丟棄能量選擇（v1.57 花冠射線 / 猛擂鼓 EX 等變動張數招式）
+       ⭐v6.425：舊條件 `scope !== 'binary-yes-no'` 對 stepper（波盪水｜蜿蜒割裂）也成立 ⇒ 兩個視窗疊在一起；
+         三種視窗改由 modal-slots.ts 的 preDiscardModalKind 一次分類，互斥。 -->
+  {#if preAttackDiscard && game && preDiscardModalKind(preAttackDiscard.spec.scope) === 'picker'}
     {@const spec = preAttackDiscard.spec}
     {@const energies = getDiscardableEnergies(spec)}
     {@const pickedCount = preAttackDiscard.picked.size}
@@ -13869,7 +13877,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
          && (oppPlayer?.turnActionsLog?.length ?? 0) > 0
          && !oppTurnPanelOpen}
       <button class="opp-turn-toggle-btn"
-        use:modalDrag={{ wholeNode: true, threshold: 5, stopPropagation: true, overlay: false,
+        use:modalDrag={{ clamp: 'contain', wholeNode: true, threshold: 5, stopPropagation: true, overlay: false,
           initial: oppTurnTogglePos, onEnd: (o) => { oppTurnTogglePos = o; } }}
         onclick={onOppTurnToggleClick}
         title="查看對手回合出牌（拖曳移動位置）">📜</button>
@@ -13882,7 +13890,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {@const _safeIdx = Math.min(oppTurnViewIndex, _maxIdx)}
       {@const _currentEntry = _log.length > 0 ? _log[_log.length - 1 - _safeIdx] : null}
       <div class="opp-turn-panel"
-        use:modalDrag={{ handle: '.opp-turn-panel-header', overlay: false,
+        use:modalDrag={{ clamp: 'contain', handle: '.opp-turn-panel-header', overlay: false,
           initial: oppTurnPanelPos, onEnd: (o) => { oppTurnPanelPos = o; } }}>
         <div class="opp-turn-panel-header">
           <span class="opp-turn-panel-title">
@@ -13940,7 +13948,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {#if !chatPanelOpen}
       <!-- v3.98 收合：圓形按鈕可拖曳（pointer events 區分 click vs drag）-->
       <button class="chat-fab"
-        use:modalDrag={{ wholeNode: true, threshold: 12, stopPropagation: true, overlay: false,
+        use:modalDrag={{ clamp: 'contain', wholeNode: true, threshold: 12, stopPropagation: true, overlay: false,
           initial: chatFabPos, onEnd: saveChatFabPos }}
         onclick={toggleChatPanel}
         title="點擊開啟聊天室；長按拖曳可移動位置">
@@ -13950,7 +13958,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {:else}
       <!-- 展開：floating panel（桌機）/ 全螢幕 modal（手機 portrait CSS @media） -->
       <div class="chat-panel"
-        use:modalDrag={{ handle: '.chat-panel-header', overlay: false, mode: isPortraitMobile ? 'margin' : 'translate',
+        use:modalDrag={{ clamp: 'contain', handle: '.chat-panel-header', overlay: false, mode: isPortraitMobile ? 'margin' : 'translate',
           initial: chatPanelPos, onEnd: (o) => { chatPanelPos = o; } }}>
         <div class="chat-panel-header"
           title="拖曳此處移動聊天視窗（手機版固定全螢幕）">
@@ -14092,59 +14100,35 @@ function _setupSelfPending(g: any, seat: number): string | null {
     </div>
   {/snippet}
 
-  <!-- Send New Active Modal（戰鬥寶可夢昏厥後派出新戰鬥寶可夢，使用統一的橫向 grid + 放大鏡介面）
-       v2.123：去掉 turnPhase==='end' 限制 — 特性/招式 KO 時 turnPhase 仍為 'main'，
-       舊條件會不彈 modal 造成卡住。
-       v2.197：加 !pendingSelection guard — 攻擊方還在 pending（如幻影奇襲分配
-       6 counter）時，防守方先不彈 modal；等 pending 結束後再彈，避免「modal 已開
-       但 button 按了沒反應」的卡頓視覺。
-       v6.122：改「選取 → 確定」兩段式；並補 !isSpectator（觀戰者的 dispatch 本來就被擋，
-       原本卻仍會蓋一個點不動也關不掉的 modal 在觀戰畫面上）。 -->
-  {#if game && game.phase==='playing' && defenderPlayer?.active===null && isMyDefenderTurn() && !pendingSelection && !isSpectator}
-    {@const _benchD = defenderPlayer?.bench ?? []}
-    {@const _pickOkD = !!promotePickDef && _benchD.some((b) => b.iid === promotePickDef)}
-    {@const _pickNameD = _pickOkD ? (getCard(_benchD.find((b) => b.iid === promotePickDef)!.cardId)?.name ?? '') : ''}
+  <!-- Send New Active Modal（戰鬥寶可夢被擊倒後派出新的戰鬥寶可夢，統一的橫向 grid + 放大鏡介面）
+       v2.123：去掉 turnPhase==='end' 限制 — 特性/招式 KO 時 turnPhase 仍為 'main'。
+       v2.197：pendingSelection 還在時先不彈（攻擊方還在處理效果）。
+       v6.122：「選取 → 確定」兩段式；觀戰者不彈。
+       ⭐⭐v6.425：原本 A（防守方版）／B（自 KO 版）兩個視窗各寫一份，**我被擊倒時兩個條件同時成立 ⇒ 兩個視窗**
+         （v6.420 以前全站共用一個拖曳位移、兩個視窗永遠疊在一起，所以看不出來）。
+         ⇒ 改成「每個需要補位的座位一個視窗」，座位清單由 modal-slots.ts 的 promoteModalSeats 唯一決定。
+         本機雙人雙方同時被擊倒 ⇒ 兩個**不同**座位、兩份不同備戰區 ⇒ 兩個視窗是對的（各自一份 pick state）。 -->
+  {#each promoteSeatsList as _ps (_ps)}
+    {@const _bench = game?.players[_ps]?.bench ?? []}
+    {@const _pick = promotePick[_ps]}
+    {@const _pickOk = !!_pick && _bench.some((b) => b.iid === _pick)}
+    {@const _pickName = _pickOk ? (getCard(_bench.find((b) => b.iid === _pick)!.cardId)?.name ?? '') : ''}
     <div class="selection-overlay">
-      <div class="selection-modal retreat-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }} onclick={(e)=>e.stopPropagation()}>
+      <div class="selection-modal retreat-modal" use:modalDrag={{ resetKey: 'promote-' + _ps }} onclick={(e)=>e.stopPropagation()}>
         <div class="sel-header" title="拖曳視窗">
-          <h3>⚠️ 派出新的戰鬥寶可夢</h3>
+          <h3>⚠️ 派出新的戰鬥寶可夢{promoteSeatsList.length > 1 ? `（${game?.players[_ps]?.name ?? ''}）` : ''}</h3>
           <p class="sel-hint">先點選要上場的寶可夢，再按下方的「確定上場」；點放大鏡 🔍 查看詳情</p>
         </div>
-        {@render promoteGrid(_benchD, promotePickDef, (iid) => { promotePickDef = promotePickDef === iid ? null : iid; })}
+        {@render promoteGrid(_bench, _pick, (iid) => { const nx = [...promotePick] as [string | null, string | null]; nx[_ps] = promotePick[_ps] === iid ? null : iid; promotePick = nx; })}
         <div class="sel-footer">
-          <button class="btn-act primary" disabled={actionBusy||!_pickOkD}
-            onclick={()=>confirmSendNewActive(promotePickDef, dIdx, _benchD)}>
-            {_pickOkD ? `✅ 確定讓「${_pickNameD}」上場` : '請先點選要上場的寶可夢'}
+          <button class="btn-act primary" disabled={actionBusy||!_pickOk}
+            onclick={()=>confirmSendNewActive(_pick, _ps, _bench)}>
+            {_pickOk ? `✅ 確定讓「${_pickName}」上場` : '請先點選要上場的寶可夢'}
           </button>
         </div>
       </div>
     </div>
-  {/if}
-
-  <!-- Send New Active Modal（自 KO 版）：主動方自 KO（如咒詛炸彈、中毒）後自己戰鬥場空欄 → 從自己備戰區選
-       v2.123：去掉 turnPhase!=='end' 限制 — 中毒於 END_TURN 觸發時 turnPhase 可能已是 'end'，
-       舊條件會擋掉 modal 造成當機。
-       v6.122：同上，改兩段式 + 補 !isSpectator。 -->
-  {#if game && game.phase==='playing' && myPlayer?.active===null && (myPlayer?.bench??[]).length>0 && !pendingSelection && !isSpectator}
-    {@const _benchS = myPlayer?.bench ?? []}
-    {@const _pickOkS = !!promotePickSelf && _benchS.some((b) => b.iid === promotePickSelf)}
-    {@const _pickNameS = _pickOkS ? (getCard(_benchS.find((b) => b.iid === promotePickSelf)!.cardId)?.name ?? '') : ''}
-    <div class="selection-overlay">
-      <div class="selection-modal retreat-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }} onclick={(e)=>e.stopPropagation()}>
-        <div class="sel-header" title="拖曳視窗">
-          <h3>⚠️ 派出新的戰鬥寶可夢</h3>
-          <p class="sel-hint">先點選要上場的寶可夢，再按下方的「確定上場」；點放大鏡 🔍 查看詳情</p>
-        </div>
-        {@render promoteGrid(_benchS, promotePickSelf, (iid) => { promotePickSelf = promotePickSelf === iid ? null : iid; })}
-        <div class="sel-footer">
-          <button class="btn-act primary" disabled={actionBusy||!_pickOkS}
-            onclick={()=>confirmSendNewActive(promotePickSelf, myIdx, _benchS)}>
-            {_pickOkS ? `✅ 確定讓「${_pickNameS}」上場` : '請先點選要上場的寶可夢'}
-          </button>
-        </div>
-      </div>
-    </div>
-  {/if}
+  {/each}
 
   <!-- Discard Viewer -->
   {#if viewDiscardFor !== null}

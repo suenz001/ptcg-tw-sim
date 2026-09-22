@@ -14,6 +14,9 @@
  *     `modalOffset` 被十幾個視窗共用 ⇒ 開了 A 拖過、再開 B 會直接出現在被拖走的位置）。
  *
  * 【夾制規則】（`clampModalOffset`，純函式、可單元測）
+ *   ⭐⭐ v6.425 起分兩種（`ModalClampMode`）：一般視窗預設 `reachable`＝**可以拖到畫面外、只保證把手抓得到**
+ *   （站長回報手機上要把視窗拖到角落看對戰紀錄）；浮動按鈕／面板用 `contain`＝下面這段 v6.420 的規則。
+ *   —— 以下是 v6.420 `contain` 規則的原始說明 ——
  *   **視窗一律完整留在可視範圍內** —— 不是「留一角」。
  *   ⚠⚠ 這條規則是實測改出來的：一開始寫成「至少留 72px 在畫面內」，
  *     Playwright 實測往**右**拖時關閉鈕（在視窗右上角）照樣跑出畫面
@@ -36,10 +39,27 @@
  */
 
 /**
- * 視窗比畫面大時允許溢出的方向仍然貼齊邊界；這個常數只留給守衛當「可視性下限」的門檻用。
- * ⚠ 夾制本身**不再**用「留一角」的語意（見檔頭），請勿再拿它當夾制量。
+ * ⭐v6.425：預設（`reachable`）夾制時，視窗**水平**至少要留這麼多 px 在畫面內（把手橫跨整個寬度 ⇒ 一定抓得到）。
+ * `contain` 模式（浮動按鈕／浮動面板）不用它 —— 那一類一律完整留在畫面內。
  */
 export const MODAL_MIN_VISIBLE = 72;
+/**
+ * ⭐v6.425：預設（`reachable`）夾制時，視窗**上緣**最低只能到 `畫面高 − MODAL_HANDLE_KEEP`
+ * ⇒ 把手（標題列）最上面這一條永遠露在畫面底部，隨時抓得回來。
+ */
+export const MODAL_HANDLE_KEEP = 56;
+
+/**
+ * 夾制模式：
+ * ・`reachable`（預設，v6.425）：視窗可以拖到畫面外，**只保證把手抓得到**
+ *   （水平至少留 MODAL_MIN_VISIBLE、上緣 ∈ [0, vh − MODAL_HANDLE_KEEP]）。
+ *   站長回報（v6.425）：手機上以前可以把視窗拖到角落看底下的對戰紀錄，v6.420 改成「完整留在畫面內」
+ *   之後視窗一定卡在畫面中間、看不到紀錄。v6.420 要防的是「拖走之後**抓不回來**」——只要把手還在畫面內，
+ *   隨時可以拖回來按關閉鈕，所以不需要把整個視窗鎖在畫面裡。
+ * ・`contain`：完整留在畫面內（v6.420 的規則）。浮動按鈕／浮動面板用：它們沒有「拖回來」的把手語意，
+ *   半截出畫面就是點不到。
+ */
+export type ModalClampMode = 'reachable' | 'contain';
 
 /** 站內所有拖曳把手的集合（新視窗請沿用其中一個 class，不要再發明新的）。 */
 export const DEFAULT_HANDLE_SELECTOR =
@@ -59,17 +79,30 @@ export interface ModalOffset { x: number; y: number; }
  * @param vw/vh 可視範圍
  */
 export function clampModalOffset(
-  base: ModalRect, off: ModalOffset, vw: number, vh: number,
+  base: ModalRect, off: ModalOffset, vw: number, vh: number, mode: ModalClampMode = 'reachable',
+  safeBottom = 0,
 ): ModalOffset {
   // 視窗左上角允許落在 [lo, hi]（畫面座標），再換算回位移。
-  // 視窗比畫面小 ⇒ [0, vw - width]（完全在畫面內）；比畫面大 ⇒ [vw - width, 0]（不露白）。
-  const loLeft = Math.min(0, vw - base.width);
-  const hiLeft = Math.max(0, vw - base.width);
-  // ⚠ 垂直**不允許**負值：把手與關閉鈕都在視窗頂端，上緣一出畫面就再也抓不回來
+  let loLeft: number, hiLeft: number, hiTop: number;
+  if (mode === 'contain') {
+    // 視窗比畫面小 ⇒ [0, vw - width]（完全在畫面內）；比畫面大 ⇒ [vw - width, 0]（不露白）。
+    loLeft = Math.min(0, vw - base.width);
+    hiLeft = Math.max(0, vw - base.width);
+    hiTop = Math.max(0, vh - base.height);
+  } else {
+    // reachable：水平至少留 MODAL_MIN_VISIBLE（視窗比它窄時就是整個視窗）；
+    //   下緣可以出畫面，但上緣最低到 vh − MODAL_HANDLE_KEEP（把手那一條永遠露著）。
+    const keepW = Math.min(MODAL_MIN_VISIBLE, base.width);
+    loLeft = keepW - base.width;
+    hiLeft = vw - keepW;
+    // safeBottom：手機（尤其 PWA）底部的系統手勢區（env(safe-area-inset-bottom)，站內 --safe-bottom），
+    //   把手不可以只露在那一條裡（手指點不到）⇒ 露出量要再加上它（fable 審查）。
+    hiTop = Math.max(0, vh - Math.min(MODAL_HANDLE_KEEP, base.height) - Math.max(0, safeBottom || 0));
+  }
+  // ⚠ 垂直**不允許**負值（兩種模式都一樣）：把手與關閉鈕都在視窗頂端，上緣一出畫面就再也抓不回來
   //   （審查者實測：500×900 的視窗被允許拖到 top=-233 之後，從畫面內任何一點都抓不到把手）。
   //   視窗比畫面高時靠**內部捲動**看下半部 —— 站內每個視窗都有 max-height ＋ overflow。
   const loTop = 0;
-  const hiTop = Math.max(0, vh - base.height);
   const clamp = (v: number, lo: number, hi: number) => (lo > hi ? lo : Math.min(Math.max(v, lo), hi));
   return {
     x: clamp(off.x, loLeft - base.left, hiLeft - base.left),
@@ -116,9 +149,28 @@ export interface ModalDragOptions {
    *   （v5.626：iOS 上 position:fixed ＋ transform 會破壞面板內部的捲動）。
    */
   mode?: 'translate' | 'margin';
+  /**
+   * ⭐v6.425 夾制模式（見 ModalClampMode）。省略＝ `reachable`（可拖到畫面外、把手留在畫面內）。
+   * 浮動按鈕／浮動面板請傳 `'contain'`。
+   */
+  clamp?: ModalClampMode;
 }
 
 const OVERLAY_SELECTOR = '[class*="overlay"], [class*="backdrop"]';
+
+/**
+ * 量出站內 `--safe-bottom`（底部系統手勢區）目前是幾 px（沒有就是 0）。
+ * ⚠ CSS 變數的值常是 `env(safe-area-inset-bottom)` 這種要瀏覽器才算得出來的字串 ⇒ 用一個探針元素量實際高度。
+ */
+function safeBottomPx(): number {
+  if (typeof document === 'undefined' || !document.body) return 0;
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;left:0;top:0;width:0;visibility:hidden;pointer-events:none;height:var(--safe-bottom, 0px);';
+  document.body.appendChild(probe);
+  const h = probe.getBoundingClientRect().height || 0;
+  probe.remove();
+  return h;
+}
 
 /** Svelte action：`use:modalDrag` / `use:modalDrag={{ handle: '.sel-header' }}`。 */
 export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
@@ -130,6 +182,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
   /** 拖曳結束後緊接著的那一個 click 要吃掉（否則浮動按鈕拖完就被當成點擊而打開面板）。 */
   let swallowClick = false;
   let appliedMode: 'translate' | 'margin' = opts.mode ?? 'translate';
+  let safeB = 0;   // 拖曳開始／重夾時量一次（不在 pointermove 裡量，避免每一格都動 DOM）
 
   const overlayEl = (): HTMLElement | null => {
     if (opts.overlay === false) return null;
@@ -185,6 +238,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
     }
     if (opts.stopPropagation) e.stopPropagation();
     base = measure();
+    safeB = safeBottomPx();
     start = { sx: e.clientX, sy: e.clientY, ox: off.x, oy: off.y, pid: e.pointerId };
     moved = false;
     try { node.setPointerCapture?.(e.pointerId); } catch { /* 某些瀏覽器不支援 */ }
@@ -211,7 +265,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
     if (opts.threshold !== undefined && !moved) return;
     const { vw, vh } = view();
     const want = { x: start.ox + (e.clientX - start.sx), y: start.oy + (e.clientY - start.sy) };
-    off = clampModalOffset(base, want, vw, vh);
+    off = clampModalOffset(base, want, vw, vh, opts.clamp ?? 'reachable', safeB);
     apply();
   }
   function onUp(e: PointerEvent) {
@@ -237,13 +291,19 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
     e.preventDefault();
     e.stopImmediatePropagation();
   }
-  /** 轉向／縮放後視窗可能整個跑到畫面外 ⇒ 重新夾一次（這是「自己彈走」的最後一道保險）。 */
+  /**
+   * 轉向／縮放後視窗可能整個跑到畫面外 ⇒ 重新夾一次（這是「自己彈走」的最後一道保險）。
+   * ⭐v6.425：視窗**自己的尺寸**變了也要重夾（ResizeObserver）—— 置中的視窗內容變矮時會自己往下滑，
+   *   reachable 模式只留 56px 把手，不重夾的話會連把手都滑出畫面（fable 審查實測：1280×800 拖到底後內容縮 200px ⇒ top 844）。
+   */
   function onResize() {
     if (off.x === 0 && off.y === 0) return;
+    if (start) return;   // 拖曳中由 onMove 負責
     const { vw, vh } = view();
     base = measure();
+    safeB = safeBottomPx();
     const before = off;
-    off = clampModalOffset(base, off, vw, vh);
+    off = clampModalOffset(base, off, vw, vh, opts.clamp ?? 'reachable', safeB);
     apply();
     if (before.x !== off.x || before.y !== off.y) opts.onEnd?.({ x: off.x, y: off.y });
   }
@@ -257,6 +317,8 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
   }
+  const ro: ResizeObserver | null = (typeof ResizeObserver !== 'undefined') ? new ResizeObserver(() => onResize()) : null;
+  ro?.observe(node);
   // 有初始位移（還原上次的位置）⇒ 先套用，版面排好後再夾一次（換裝置／換方向後舊位置可能在畫面外）
   if (off.x !== 0 || off.y !== 0) {
     apply();
@@ -280,6 +342,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
       }
     },
     destroy() {
+      ro?.disconnect();
       node.removeEventListener('pointerdown', onDown);
       node.removeEventListener('pointermove', onMove);
       node.removeEventListener('pointerup', onUp);

@@ -165,8 +165,9 @@ T('⭐⭐所有會送出動作的關鍵按鈕都要綁 actionBusy（v6.137 的�
     ['取獎賞', /btn-xs primary" disabled=\{actionBusy\}/],
     ['picker 確認', /disabled=\{actionBusy\|\|!selectionValid\}/],
     ['picker 放棄', /disabled=\{actionBusy\} onclick=\{abandonSelection\}/],
-    ['補位確認(防守方)', /disabled=\{actionBusy\|\|!_pickOkD\}/],
-    ['補位確認(自KO)', /disabled=\{actionBusy\|\|!_pickOkS\}/],
+    // ⭐v6.425（Rule 40）：補位 A／B 兩個 modal 收斂成單一 {#each promoteSeatsList}（我被擊倒時兩個同時成立＝兩個視窗）
+    //   ⇒ 確定鈕只剩一顆，仍必須綁 actionBusy（意圖不變，錨點改成那一顆）。
+    ['補位確認', /disabled=\{actionBusy\|\|!_pickOk\}/],
     // ⭐v6.172 這四處由「靜默 return」改成「講出來再 return」（tActSay），gate 本身還在。
     // ⭐v6.200：可拖與否改問中央述詞 handCardDraggable(ops)（拖曳與點擊同源），gate 本身不變。
     ['手牌拖曳 gate', /if\(handCardDraggable\(ops\)\)\{ if\(actionBusy\)\{tActSay\(TACT_BLOCKED_MSG,5000\);\} else startDrag/],

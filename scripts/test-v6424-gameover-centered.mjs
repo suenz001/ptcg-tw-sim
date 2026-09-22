@@ -90,7 +90,8 @@ if (chromium) {
         await pg.route('**/*', (r) => r.fulfill({ contentType: 'text/html', body: HTML }));
         await pg.goto('https://t.local/');
         await pg.addScriptTag({ content: md });
-        await pg.evaluate(() => { window.MDRAG.modalDrag(document.getElementById('m')); });
+        // ⭐v6.425（Rule 40）：本條守「置中 transform 不影響夾制」，用 v6.420 的完整夾制規則（contain）驗
+        await pg.evaluate(() => { window.MDRAG.modalDrag(document.getElementById('m'), { clamp: 'contain' }); });
         const r0 = await pg.evaluate(() => { const r = document.getElementById('m').getBoundingClientRect(); return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, l: r.left, t: r.top, rr: r.right, b: r.bottom }; });
         // eslint-disable-next-line no-await-in-loop
         await TA(`P1 ⭐⭐⭐【HEAD-FAIL】${vw}×${vh}：勝負視窗中心在畫面中心（誤差 ≤ 2px）`, () => {
@@ -104,6 +105,18 @@ if (chromium) {
         await TA(`P2 ⭐⭐${vw}×${vh}：往右下拖 3000px ⇒ 有移動、而且整個視窗仍在畫面內（置中 transform 不影響夾制）`, () => {
           assert.ok(r1.tr, '沒有移動');
           assert.ok(r1.l >= -0.5 && r1.t >= -0.5 && r1.rr <= vw + 0.5 && r1.b <= vh + 0.5, JSON.stringify(r1));
+        });
+        // ⭐v6.425：正式的勝負視窗用的是預設 reachable 夾制 ⇒ 也驗一次（對齊正式行為，fable 審查建議）
+        await pg.reload(); await pg.addScriptTag({ content: md });
+        await pg.evaluate(() => { window.MDRAG.modalDrag(document.getElementById('m')); });
+        const hb2 = await pg.locator('#h').boundingBox();
+        await pg.mouse.move(hb2.x + 30, hb2.y + hb2.height / 2); await pg.mouse.down();
+        await pg.mouse.move(hb2.x + 30 + 3000, hb2.y + hb2.height / 2 + 3000, { steps: 8 }); await pg.mouse.up();
+        const r2 = await pg.evaluate(() => { const r = document.getElementById('m').getBoundingClientRect(); return { l: r.left, t: r.top }; });
+        // eslint-disable-next-line no-await-in-loop
+        await TA(`P2b ⭐⭐${vw}×${vh}：預設（reachable）往右下拖 ⇒ 可出畫面但把手一角仍在（l ≤ vw−72、0 ≤ t ≤ vh−56）`, () => {
+          assert.ok(r2.l <= vw - 72 + 0.5 && r2.t >= -0.5 && r2.t <= vh - 56 + 0.5, JSON.stringify(r2));
+          assert.ok(r2.l > vw / 2, '沒有真的往右移出去：' + JSON.stringify(r2));
         });
         // eslint-disable-next-line no-await-in-loop
         await ctx.close();

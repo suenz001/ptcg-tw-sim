@@ -569,6 +569,26 @@ function revertV6418(region) {
   return r;
 }
 
+// ⭐⭐⭐v6.425（IRON_RULES Rule 40：守的意圖沒變，只是觀測點被本版蓋住了）
+//   站長回報：寶可夢被擊倒後「請從備戰區派出新的戰鬥寶可夢」提示出現兩條（補位視窗也兩個）。
+//   ⇒ 對戰版面分支內的四條補位提示改成由 modal-slots.ts 的 promoteAlerts 決定（最多「請派出」一條＋「等待對手」一條）。
+//   ⚠ 與 V6321／V6389／V6418 同一個機制：逐條還原之後，其餘仍必須逐位元等於 BASE。
+const V6425_BATTLE_EDITS = [
+  [
+    "        <!-- ⭐v6.425：補位提示改走 modal-slots.ts 的 promoteAlerts —— 舊的四條各自判斷，\n             「防守方＝我」時「請派出」會出現兩條；特性擊倒對手時「等待對手」也會兩條。 -->\n        {#if promoteAlert.mine}\n          <div class=\"alert warn-alert\">⚠️ 請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>\n        {/if}\n        {#if promoteAlert.waitSeat !== null}\n          <div class=\"alert warn-alert\">⚠️ 等待 {game.players[promoteAlert.waitSeat]?.name} 送出新戰鬥寶可夢</div>\n        {/if}\n        <!-- 對方 pending 處理中（如幻影奇襲分配傷害）時，防守方顯示「等待對方完成」 -->\n        {#if game.phase==='playing' && defenderPlayer?.active===null && pendingSelection && isMyDefenderTurn()}\n          <div class=\"alert warn-alert\">⏳ 等待 {game.players[pendingSelection.actorIdx].name} 完成當前操作後，再派出新的戰鬥寶可夢</div>\n        {/if}\n",
+    "        {#if game.phase==='playing' && defenderPlayer?.active===null && !pendingSelection}\n          {#if isMyDefenderTurn()}\n            <div class=\"alert warn-alert\">⚠️ 請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>\n          {:else if isMyTurn()}\n            <div class=\"alert warn-alert\">⚠️ 等待 {defenderPlayer?.name} 送出寶可夢</div>\n          {/if}\n        {/if}\n        <!-- 對方 pending 處理中（如幻影奇襲分配傷害）時，防守方顯示「等待對方完成」 -->\n        {#if game.phase==='playing' && defenderPlayer?.active===null && pendingSelection && isMyDefenderTurn()}\n          <div class=\"alert warn-alert\">⏳ 等待 {game.players[pendingSelection.actorIdx].name} 完成當前操作後，再派出新的戰鬥寶可夢</div>\n        {/if}\n        <!-- 自 KO（如咒詛炸彈、中毒）：主動方自己戰鬥場變空，須從備戰區送出新戰鬥寶可夢 -->\n        {#if game.phase==='playing' && myPlayer?.active===null && (myPlayer?.bench??[]).length>0 && !pendingSelection}\n          <div class=\"alert warn-alert\">⚠️ 請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>\n        {/if}\n        {#if game.phase==='playing' && oppPlayer?.active===null && game.turnPhase!=='end' && (oppPlayer?.bench??[]).length>0 && !pendingSelection}\n          <div class=\"alert warn-alert\">⚠️ 等待 {oppPlayer?.name} 送出新戰鬥寶可夢</div>\n        {/if}\n",
+  ],
+];
+function revertV6425(region) {
+  let r = region;
+  for (const [now, before] of V6425_BATTLE_EDITS) {
+    const n = r.split(now).length - 1;
+    assert.strictEqual(n, 1, 'v6.425 的合法改動必須恰出現一次（實際 ' + n + '）：' + now.slice(0, 70));
+    r = r.replace(now, before);
+  }
+  return r;
+}
+
 // ⭐⭐⭐v6.420（IRON_RULES Rule 40）：勝負視窗原本有一份**自己的**拖曳（`gameoverPanelPos`），
 //   完全沒有夾制——而它是終局後唯一的出口，拖出畫面就只能重新整理（fable 5.1 審查列為阻擋級）。
 //   本版改掛中央 `use:modalDrag`、標題列掛 `modal-drag-handle`，其餘 markup 一個字都沒動。
@@ -624,7 +644,7 @@ function stripV6361DrawModal(src) {
 await T('E1 ⭐⭐⭐ 對戰版面分支區間（手機直式＋三種桌機版面）還原 v6.321 的合法改動後與 BASE **逐位元相同**；勝負 modal 區間剝掉 v6.361 平手視窗哨兵後同樣逐位元相同', () => {
   if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6293 E1 對戰版面分支逐位元比對', '需要歷史 commit；E1c 的結構斷言不需要歷史，仍在守'); skipped.push('E1（淺複製）'); return; }
   const baseSrc = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':src/routes/game/+page.svelte'], { maxBuffer: 1 << 28 }).toString('utf8');
-  assert.strictEqual(sha256(revertV6418(revertV6389(revertV6321(battleRegionOf(GAME))))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
+  assert.strictEqual(sha256(revertV6425(revertV6418(revertV6389(revertV6321(battleRegionOf(GAME)))))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
   assert.strictEqual(sha256(revertV6420Gameover(gameoverRegionOf(stripV6361DrawModal(GAME)))), sha256(gameoverRegionOf(baseSrc)), '⚠⚠ 勝負結算 modal 被動到了');
 });
 await T('E1b ⭐ 正對照：把對戰版面分支改一個位元 ⇒ E1 的比對必須不同（不是恆真式）', () => {
