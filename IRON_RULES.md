@@ -2337,3 +2337,70 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
 5. **子代理（審查者）不可以在沙盒裡跑 `scripts/run-tests.mjs`** —— 它會在沙盒內建 worktree（實例：`/tmp/w407/E:\sb`），
    污染 index／留下 index.lock。派審查時要明講「只可在第二沙盒做突變並還原」。
    審查者分級（站長 2026-09-21）：**重大修改**（引擎判定、勝負、獎賞）派 fable 5.1；**小事**（純前端收斂、可用 Playwright＋突變驗證的）不派，節約 token。
+
+---
+
+## Rule 67（2026-09-23）：部署 bat 的真相 —— 只有 `update-tournament.bat` 會同步 GitHub
+
+- `update-admin-full.bat` **沒有任何 git 指令**：它只把站長電腦上 repo **現有**的 `admin.html`＋`server_admin_patch.js` scp 上 VM。
+  AI push 之後站長跑它，上傳的是**舊檔**（admin v1.77 事故：站長跑了 bat 卻看不到按鈕，本機 repo 還停在上一版）。
+- `update-tournament.bat` 會先 `git fetch origin`＋`git reset --hard origin/main`，再上傳 server patch＋admin.html＋引擎 bundle。
+- ⇒ **站長裁定（2026-09-23）**：以後 admin-only／server-only 的版本也一律請他跑 `update-tournament.bat`；
+  玩家前端（src/、static/）有改才另外加 `redeploy-oracle.bat`。回報部署步驟時**不再寫 update-admin-full.bat**。
+- 站長回報「看不到新功能」時，先查 mount repo 的 `git log -1 HEAD` vs `git ls-remote origin main`、
+  本機 `oracle-admin/admin.html` 的 `<title>` 版本、server patch 是否含本版哨兵 —— **查清楚再下結論**。
+- 給部署步驟前先 grep bat 內容確認它做什麼，不可憑記憶描述 bat 行為。
+
+---
+
+## Rule 68（2026-09-23）：動 `server_admin_patch.js` **錦標賽區塊**的完整流程（28 把鎖）
+
+錦標賽區塊＝`TAIL_ANCHOR`（第一支 `app.get('/api/tournament`）到檔尾；另有 `TEV_ANCHOR`（`const TEVENTS = …`）起算的第二把指紋。
+全站 **28 把區塊鎖**（18 支守衛的 tail sha／tev sha／tev 長度字面值）＋一條 revert-chain（`scripts/lib/tourn-revert-v6291 → 6292 → 6365 → 6381 → 6384 → v150`）。
+
+1. **先問能不能放在 `TAIL_ANCHOR` 之前**（v6.282 好友區塊先例）—— 放在前面就一把鎖都不動。
+2. 純新增一律框 `// >>> vNNN-tag` … `// <<< vNNN-tag\n`；**收尾哨兵後面不可以多一個空行**（剝除後會多出空行 ⇒ test-v6303 H3 逐位元比對紅）。
+3. 既有行的行內改動：寫 `scripts/lib/sap-revert-admin-vNNN.mjs`（`[本版, 前版]` pairs，命中 ≠ 1 就 throw），接進 test-v6303 H3 的還原鏈**最前面**（Rule 54 由新到舊）。
+4. 新增 `scripts/lib/tourn-revert-vNNN.mjs`：剝本版哨兵＋套 sap pairs（**直接 import sap 那一份，不抄第二份**，Rule 38）；
+   re-export 鏈上的常數與函式；⚠ `revertToV6292`／`revertToV6291` **必須先還原本版再呼叫舊的**（直接 re-export 會讓 test-v6381 C3 紅）；
+   提供 `revertToV6365`（test-v6379 的豁免檢查要求檔內出現 `revertV6365(` 等字樣）。
+5. 五支消費者（test-v6276／6291／6292／6303／6381）改 import 新 lib，並以別名 `const revertV6384 = (b) => _rv6384(revertVNNN(b))` 接上；
+   test-v6292 的 meta 斷言（import 路徑）、test-v6379 D3（上一版指紋列入 OLD_VALUES、LIB_DECL 加新 lib、size+1）同步改。
+6. 用腳本把 18 支守衛的三個字面值換成新值；新守衛加 D 組：現行＝新值／revert 後逐位元回上一版／自驗非恆真／上一版舊值零殘留／五支消費者都串上。
+7. ⚠⚠ **每改一次錦標賽區塊就要重釘一次** ⇒ 所有伺服器端改動（含審查者建議）**全部做完才重釘**。
+8. 其他地雷：
+   - `TCHAMPS`／`TARCHIVE` 在 create 端點**之後**才 `const` 宣告 —— handler 執行期讀沒問題，**註冊當下不可讀**（TDZ）。
+   - test-v6110：server patch 不可出現「官方賽」（註解、regex 字面都算）。
+   - anti-pattern-lint V：`canApplyEffectToTarget` 的 attack-effect／ability-effect 呼叫必須表態 `counterPlacement` ⇒ 包裝函式把它做成**必填**參數。
+   - admin.html 的 `api()` 對非 2xx 會把**整包 body 當字串**丟進 alert ⇒ 409／4xx 只回 `{ error }`。
+   - VM 是 UTC ⇒ 台北時間一律固定 `+480 分`＋`getUTC*`，不可用本地時間。
+   - `_id: 'evt_' + Date.now().toString(36)` 同毫秒會撞 ⇒ 連建多筆要加序號後綴；**不可以用「等時鐘前進」的迴圈**（守衛凍結 `Date.now` 會無限迴圈）。
+9. 動到錦標賽區塊的版本，**一開始就告訴站長預估時間**（重釘＋全套 766 支約 1～2 小時）。
+
+---
+
+## Rule 69（2026-09-23）：engine.ts 改動的配套與「不受對手特性效果影響」的唯一判準（v6.427）
+
+- `scripts/lib/engine-strip-vNNNN.mjs` 一律用 difflib 從 HEAD vs 工作樹**自動產生** pairs（每組命中恰 1 次、當場驗 strip(新) === HEAD），不手打；
+  接線：test-v6265 兩處（新版排最前）、test-v6375 最內層、test-v6371 prelude import。
+- 化隱／光之翼（「不會受到對手的…特性的效果的影響」）只問 defense.ts 的 `isImmuneToOppAbilityEffect`／`oppAbilityEffectBlockReason`
+  （底層 `canApplyEffectToTarget(kind='ability-effect')`），**禁止再寫死 `'光之翼'`**；擋下的 log 走 `blockedRetaliationNames`／`blockedRetaliationLog` 一份。
+- `source='ability'` 的效果昏厥（耿鬼ex｜死亡宣告）也要問中央判準（legacy 表只登記化隱）。
+- 只作用在持有者自己那一側的受傷觸發（火箭隊的瓦斯彈｜警備濁霧）**不受攻擊方豁免 gate**。
+- ⚠ 卡片事實會分散在多個欄位：陳舊的頭蓋化石｜頭蓋尖刺在 `static/cards` 是 `abilities[0]`、label「特性」 ——
+  舊註解「化石無 abilities／非特性」已過期。下「不是特性／卡面沒有」這種否定結論之前，**整包 dump 該卡所有欄位**。
+- 守衛要同時覆蓋 **engine 主管線**（無 picker 的招式，例：怨影娃娃｜垂吊）與 **effects resolver 路徑**（有 picker 的招式，例：詛咒娃娃｜玩偶捕捉）——只測一條，另一條的突變會存活。
+- 舊守衛的斷言本身就是 bug 時（test-burst-spine 期望化隱被炸裂針放 +60）⇒ Rule 40：保留意圖（中央 helper 路徑會觸發），改測試情境（熔岩洞消除化隱）＋補一條新規則的斷言，不是刪掉。
+
+---
+
+## Rule 70（2026-09-23）：使用者 Linux VM（device_bash）沙盒的事實（補 Rule 66）
+
+- **`/tmp` 會被清空**（VM 重啟）⇒ 沙盒可能整個消失。重建：`git archive <BASE> | tar -x -C /tmp/wNNN`、`node_modules` symlink 到 mount、
+  下載**同版本** `@esbuild/linux-x64` 到 `/tmp/ebx`、`git init`＋`objects/info/alternates` 指 mount objects＋`update-ref`＋`read-tree HEAD`。
+- **只有 2 核** ⇒ 兩根沙盒就好（開 4 根更慢）。**device_bash 呼叫結束時背景程序會被殺**（`setsid nohup` 也一樣）⇒ 每批 `timeout 178`＋`--budget 150` 前景跑。
+- 慢測試單跑：test-v6375／v6376 各約 50 秒、test-evolve-iid-regression 約 170 秒（可單跑，不必分段）；v62xx 段每支 60～150 秒。
+- 沙盒環境偽紅（逐一單跑確認後才可跳過並在回報寫明）：`test-base-blob-git-errors`（git 版本）、**`test-v6394-tsc-clean`**（mount 的 node_modules 只有 win32 rollup ⇒ `svelte-kit sync` 失敗；CI 綠）。
+- 被 SIGKILL 的 test-v6378 會留下 `scripts/.v6378-tmp-*.mjs` ⇒ 汙染 test-v6379 D3（舊指紋殘留假紅）；根目錄 `write_v2306.cjs` 也是殘檔 —— 一律刪掉再跑。
+- commit 清單用 `git diff --name-only --diff-filter=d HEAD`（排除已刪檔）並排除 `oracle-admin/check-health.bat`（行尾假差異）。
+- mount repo 的 `git diff --name-only HEAD` 會列一大堆假差異（index 不可信）⇒ 不可據此判斷工作樹狀態。
