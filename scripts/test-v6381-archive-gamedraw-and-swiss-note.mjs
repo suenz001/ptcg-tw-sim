@@ -19,10 +19,11 @@ import { createHash } from 'node:crypto';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
 import {
-  TAIL_ANCHOR, TEV_ANCHOR, revertV6384, revertV6381 as _rv6381, revertToV6292, revertToV6291,
-  NEW_TAIL_SHA_V6384, NEW_TEV_SHA_V6384, NEW_TEV_LEN_V6384,
+  TAIL_ANCHOR, TEV_ANCHOR, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertToV6292, revertToV6291,
+  NEW_TAIL_SHA_V150 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V150 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V150 as NEW_TEV_LEN_CUR,
   OLD_TAIL_SHA_V6365, OLD_TEV_SHA_V6365, OLD_TEV_LEN_V6365,
-} from './lib/tourn-revert-v6384.mjs';
+} from './lib/tourn-revert-v150.mjs';
+const revertV6384 = (b) => _rv6384(revertV150(b));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
 import { NEW_TAIL_SHA_V6292, NEW_TEV_SHA_V6292, NEW_TEV_LEN_V6292 } from './lib/tourn-revert-v6292.mjs';
 import { NEW_TAIL_SHA_V6291, NEW_TEV_SHA_V6291 } from './lib/tourn-revert-v6291.mjs';
@@ -160,8 +161,8 @@ console.log('\n【C】revert-chain：v6.381 → v6.365 → v6.292 → v6.291（�
   const tail = PATCH.slice(PATCH.indexOf(TAIL_ANCHOR));
   const tev = PATCH.slice(PATCH.indexOf(TEV_ANCHOR));
   chk('★★★ C1 現行區塊指紋 = v6.381 的新值（tail／tev／長度）',
-    sha256(tail) === NEW_TAIL_SHA_V6384 && sha256(tev) === NEW_TEV_SHA_V6384
-    && tev.length === NEW_TEV_LEN_V6384,
+    sha256(tail) === NEW_TAIL_SHA_CUR && sha256(tev) === NEW_TEV_SHA_CUR
+    && tev.length === NEW_TEV_LEN_CUR,
     'tail=' + sha256(tail) + ' tev=' + sha256(tev) + ' len=' + tev.length);
   chk('★★★ C2 還原 v6.381 後**逐位元**回到 v6.365（4 處行內改動＋1 個哨兵都宣告在還原器裡）',
     sha256(revertV6381(tail)) === OLD_TAIL_SHA_V6365
@@ -177,7 +178,7 @@ console.log('\n【C】revert-chain：v6.381 → v6.365 → v6.292 → v6.291（�
   // 突變：把本版的一處改動抹掉 ⇒ 還原器必須爆（不是靜默吃掉）
   const mutated = tev.replace('gameDraw: !!m.gameDraw, deadlockDraw:', 'deadlockDraw:');
   chk('★★★ C4 [自驗] 把本版一處改動抹掉後，指紋必須對不上（C1 不是恆真式）',
-    mutated !== tev && sha256(mutated) !== NEW_TEV_SHA_V6384);
+    mutated !== tev && sha256(mutated) !== NEW_TEV_SHA_CUR);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -201,7 +202,7 @@ console.log('\n【D】28 把區塊鎖全部重釘、v6.365 的舊指紋零殘留
   let nNew = 0, stale = [];
   for (const p of files) {
     const s = normEol(readFileSync(p, 'utf8'));
-    nNew += (s.split(NEW_TAIL_SHA_V6384).length - 1) + (s.split(NEW_TEV_SHA_V6384).length - 1);
+    nNew += (s.split(NEW_TAIL_SHA_CUR).length - 1) + (s.split(NEW_TEV_SHA_CUR).length - 1);
     if (DECL.has(rel(p))) continue;
     if (s.includes(OLD_TAIL_SHA_V6365)) stale.push(rel(p) + ' :: v6.365 tail');
     if (s.includes(OLD_TEV_SHA_V6365)) stale.push(rel(p) + ' :: v6.365 tev');
@@ -212,8 +213,8 @@ console.log('\n【D】28 把區塊鎖全部重釘、v6.365 的舊指紋零殘留
   chk('★★★ D2 新指紋真的被釘到很多地方（>= 25 處；掃描器壞掉會掉到 0）',
     nNew >= 25, '新指紋出現 ' + nNew + ' 處，掃了 ' + files.length + ' 個檔');
   chk('★★ D3 [自驗] 舊指紋與新指紋確實不同（否則 D1 是恆真式）',
-    OLD_TAIL_SHA_V6365 !== NEW_TAIL_SHA_V6384 && OLD_TEV_SHA_V6365 !== NEW_TEV_SHA_V6384
-    && OLD_TEV_LEN_V6365 !== NEW_TEV_LEN_V6384);
+    OLD_TAIL_SHA_V6365 !== NEW_TAIL_SHA_CUR && OLD_TEV_SHA_V6365 !== NEW_TEV_SHA_CUR
+    && OLD_TEV_LEN_V6365 !== NEW_TEV_LEN_CUR);
 }
 
 // ════════════════════════════════════════════════════════════════════════════

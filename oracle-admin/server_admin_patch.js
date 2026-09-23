@@ -7881,33 +7881,200 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可建立賽事' });
         // v0.40：移除「一次只辦一個」限制 — 可同時公布多場（時間不重疊），玩家各自報名。
         const b = req.body || {};
-        const regOpen = Number(b.registrationOpenAt) > 0 ? Number(b.registrationOpenAt) : null;
-        const regClose = Number(b.registrationCloseAt) > 0 ? Number(b.registrationCloseAt) : null;
-        const initStatus = (regOpen && regOpen > Date.now()) ? 'draft' : 'registration';
-        const ev = {
-          _id: 'evt_' + Date.now().toString(36),
-          createdAt: Date.now(),
-          name: String(b.name || '錦標賽').slice(0, 60),
-          format: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? 'swiss-then-cut' : 'single-elim', bestOf: 1,
-          // 瑞士制(swiss-then-cut)專屬：swissRounds/topCut 為 0 = 「依人數自動」(seed 時算)，admin 填數字則覆寫；phase 隨賽程 swiss→cut。
-          swissRounds: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? (Number(b.swissRounds) > 0 ? Number(b.swissRounds) : 0) : undefined,
-          topCut: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? (Number(b.topCut) > 0 ? Number(b.topCut) : 0) : undefined,
-          phase: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? 'swiss' : undefined,
-          status: initStatus,
-          registrationOpenAt: regOpen, registrationCloseAt: regClose,
-          maxPlayers: (b.maxPlayers == null || b.maxPlayers === '' || Number(b.maxPlayers) <= 0) ? null : Math.min(64, Number(b.maxPlayers)),
-          roundLimitMin: Number(b.roundLimitMin) > 0 ? Number(b.roundLimitMin) : 25,
-          noShowMin: Number(b.noShowMin) > 0 ? Number(b.noShowMin) : 5,
-          roundCountdownMin: (b.roundCountdownMin != null && b.roundCountdownMin !== '' && Number(b.roundCountdownMin) >= 0) ? Number(b.roundCountdownMin) : 3,
-          checkInEnabled: b.checkInEnabled !== false,
-          currentRound: 0,
-          createdBy: id.email || id.uid, createdAt: Date.now(),
-        };
-        await TEVENTS.insertOne(ev);
+        // ⭐v1.50：組賽事文件＋寫入 DB 收斂成中央 insertTournamentEvent（見 v150-daily-tournament 區塊）——
+        //   每日一鍵建立（/event/create-daily）走**同一份**，欄位與預設值永遠不會兩邊漂移（Rule 38）。
+        const ev = await insertTournamentEvent(b, id);
         res.json({ ok: true, event: ev });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
+    // >>> v150-daily-tournament
+    // ⭐⭐ server patch v1.50／admin v1.77：每日固定網站賽「一鍵建立」（站長需求）
+    //
+    // 站長每天手動建兩場：「網站賽-N【19:00 單敗淘汰】」與「網站賽-N+1【21:00 瑞士制】」。
+    // ⚙ 場次編號只存在**名稱字串**裡（系統沒有編號欄位）⇒ 自動接號＝掃「官方賽事的名稱」取最大號 +1。
+    //   ⚠ 一定要濾掉社群自辦賽（createdByPlayer／communityEvent）：玩家可以自訂賽名，會汙染編號。
+    //   ⚠ 掃三個來源：賽事（TEVENTS，含已結束的）、名人堂（TCHAMPS）、歸檔（TARCHIVE）——
+    //     只掃其中一個，會在「賽事被手動刪掉」或「賽事還沒完賽」時接到重複的號。
+    // ⚙ 時間一律用**台北時間**算（VM 的 TZ 是 UTC，用 new Date().getHours() 會差 8 小時）。
+    // ⚙ 系統沒有「開始時間」欄位：名稱裡的 19:00／21:00 ＝**報名截止時間**（到點 → 報到 → 倒數 → 開打）。
+    // ⚙ 站長裁定（3 問）：報名開始留空（＝立即開放）；其他參數沿用最近一場同賽制的網站賽；按下後先跳確認視窗。
+    const TDAILY_TZ_MIN = 480;                       // 台北 UTC+8
+    const TDAILY_SCAN_LIMIT = 300;                   // 每個來源只掃最近 300 筆（每天 2 場 ⇒ 約 150 天），不做全集合掃描
+    const TDAILY_SLOTS = [
+      { hour: 19, minute: 0, label: '單敗淘汰', format: 'single-elim' },
+      { hour: 21, minute: 0, label: '瑞士制', format: 'swiss' },
+    ];
+    // 名稱 → 場次編號（全形－、破折號都認）。沒有編號回 null。
+    //   ⚠ 只認 v6.110 更名後的現行場次名（test-v6110 守著「使用者可見字串不得出現舊稱」）；
+    //   實查線上名人堂，現行賽事名一律是「網站賽-N」，而更早的舊名編號都比現行小 ⇒ 不影響接號。
+    const TDAILY_NAME_RE = /^\s*網站賽\s*[-－—]\s*(\d{1,5})/;
+    function dailyNoOf(name) {
+      const m = TDAILY_NAME_RE.exec(String(name == null ? '' : name));
+      if (!m) return null;
+      const n = Number(m[1]);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    }
+    function dailySlotHHMM(slot) {
+      const hh = String(slot.hour), mm = String(slot.minute);
+      return (hh.length < 2 ? '0' + hh : hh) + ':' + (mm.length < 2 ? '0' + mm : mm);
+    }
+    function dailyEventName(no, slot) { return '網站賽-' + no + '【' + dailySlotHHMM(slot) + ' ' + slot.label + '】'; }
+    /** 「今天（台北）的 HH:MM」的 epoch 毫秒。⚠ 不讀伺服器時區，全程 getUTC*。 */
+    function dailySlotCloseAt(nowMs, slot) {
+      const shifted = new Date(Number(nowMs) + TDAILY_TZ_MIN * 60000);
+      return Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate(), slot.hour, slot.minute, 0, 0)
+        - TDAILY_TZ_MIN * 60000;
+    }
+    /** 三個來源各掃最近 N 筆，回 { evs（賽事，含設定欄位）, maxNo（目前最大場次編號；掃不到＝0）}。 */
+    async function dailyScanSources() {
+      const evs = await TEVENTS.find({ createdByPlayer: { $ne: true } },
+        { projection: { name: 1, status: 1, format: 1, registrationCloseAt: 1, createdAt: 1,
+          maxPlayers: 1, roundLimitMin: 1, noShowMin: 1, roundCountdownMin: 1, swissRounds: 1, topCut: 1 } })
+        .sort({ createdAt: -1 }).limit(TDAILY_SCAN_LIMIT).toArray();
+      const chs = await TCHAMPS.find({ communityEvent: { $ne: true } }, { projection: { eventName: 1, finishedAt: 1 } })
+        .sort({ finishedAt: -1 }).limit(TDAILY_SCAN_LIMIT).toArray();
+      const ars = await TARCHIVE.find({ communityEvent: { $ne: true } }, { projection: { eventName: 1, finishedAt: 1 } })
+        .sort({ finishedAt: -1 }).limit(TDAILY_SCAN_LIMIT).toArray();
+      let maxNo = 0;
+      const bump = (n) => { if (n != null && n > maxNo) maxNo = n; };
+      for (const e of evs) bump(dailyNoOf(e && e.name));
+      for (const c of chs) bump(dailyNoOf(c && c.eventName));
+      for (const a of ars) bump(dailyNoOf(a && a.eventName));
+      return { evs, maxNo };
+    }
+    /** 最近一場**同賽制的網站賽**的設定（站長裁定：參數沿用它）；一場都沒有 ⇒ null（用系統預設）。 */
+    function dailySettingsFrom(evs, formatRaw) {
+      const fmt = (formatRaw === 'swiss' || formatRaw === 'swiss-then-cut') ? 'swiss-then-cut' : 'single-elim';
+      const src = (evs || []).find((e) => e && e.format === fmt && dailyNoOf(e.name) != null);
+      if (!src) return null;
+      return {
+        from: String(src.name || ''),
+        maxPlayers: (src.maxPlayers == null ? '' : src.maxPlayers),
+        roundLimitMin: src.roundLimitMin, noShowMin: src.noShowMin, roundCountdownMin: src.roundCountdownMin,
+        swissRounds: (Number(src.swissRounds) > 0 ? Number(src.swissRounds) : ''),
+        topCut: (Number(src.topCut) > 0 ? Number(src.topCut) : ''),
+      };
+    }
+    /**
+     * 今天要建的兩場（預覽與建立走**同一份**，避免視窗上寫 A、實際建 B）。
+     * ⚠ 已建立（同一天同一時段已有網站賽）或時段已過 ⇒ willCreate:false，而且**不吃編號**。
+     * ⚠ 時段已過不自動建：報名截止在過去 ⇒ 排程器會立刻公布賽程開賽（玩家根本還沒報名）。
+     */
+    async function buildDailyPlan(nowMs) {
+      const scan = await dailyScanSources();
+      let no = scan.maxNo;
+      const slots = [];
+      for (const slot of TDAILY_SLOTS) {
+        const closeAt = dailySlotCloseAt(nowMs, slot);
+        const dup = scan.evs.find((e) => Number(e.registrationCloseAt) === closeAt && dailyNoOf(e && e.name) != null);
+        const past = closeAt <= Number(nowMs);
+        const willCreate = !dup && !past;
+        if (willCreate) no += 1;
+        slots.push({
+          hhmm: dailySlotHHMM(slot), label: slot.label, format: slot.format, closeAt,
+          name: willCreate ? dailyEventName(no, slot) : null,
+          exists: dup ? String(dup.name || '') : null, existsStatus: dup ? String(dup.status || '') : null,
+          past, willCreate, settings: willCreate ? dailySettingsFrom(scan.evs, slot.format) : null,
+        });
+      }
+      return { maxNo: scan.maxNo, slots, names: slots.filter((s) => s.willCreate).map((s) => s.name) };
+    }
+    /**
+     * 賽事文件的**唯一**組裝與寫入點（/event/create 與 /event/create-daily 共用）。
+     * ⚙ 內容逐字沿用 v0.40 以來的 create 端點，只是搬成函式（行為零改變）。
+     */
+    async function insertTournamentEvent(b, id, seq) {
+      const regOpen = Number(b.registrationOpenAt) > 0 ? Number(b.registrationOpenAt) : null;
+      const regClose = Number(b.registrationCloseAt) > 0 ? Number(b.registrationCloseAt) : null;
+      const initStatus = (regOpen && regOpen > Date.now()) ? 'draft' : 'registration';
+      const ev = {
+        // ⚠ 一鍵建立會**連建兩場**：_id 只有毫秒精度，同一毫秒的第二場會 duplicate key ⇒ 第 2 場起加序號後綴。
+        //   ⚙ seq 省略（既有 /event/create 走這條）時逐字維持 v0.40 以來的格式。
+        _id: 'evt_' + Date.now().toString(36) + (seq ? '_' + seq : ''),
+        createdAt: Date.now(),
+        name: String(b.name || '錦標賽').slice(0, 60),
+        format: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? 'swiss-then-cut' : 'single-elim', bestOf: 1,
+        // 瑞士制(swiss-then-cut)專屬：swissRounds/topCut 為 0 = 「依人數自動」(seed 時算)，admin 填數字則覆寫；phase 隨賽程 swiss→cut。
+        swissRounds: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? (Number(b.swissRounds) > 0 ? Number(b.swissRounds) : 0) : undefined,
+        topCut: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? (Number(b.topCut) > 0 ? Number(b.topCut) : 0) : undefined,
+        phase: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? 'swiss' : undefined,
+        status: initStatus,
+        registrationOpenAt: regOpen, registrationCloseAt: regClose,
+        maxPlayers: (b.maxPlayers == null || b.maxPlayers === '' || Number(b.maxPlayers) <= 0) ? null : Math.min(64, Number(b.maxPlayers)),
+        roundLimitMin: Number(b.roundLimitMin) > 0 ? Number(b.roundLimitMin) : 25,
+        noShowMin: Number(b.noShowMin) > 0 ? Number(b.noShowMin) : 5,
+        roundCountdownMin: (b.roundCountdownMin != null && b.roundCountdownMin !== '' && Number(b.roundCountdownMin) >= 0) ? Number(b.roundCountdownMin) : 3,
+        checkInEnabled: b.checkInEnabled !== false,
+        currentRound: 0,
+        createdBy: id.email || id.uid, createdAt: Date.now(),
+      };
+      await TEVENTS.insertOne(ev);
+      return ev;
+    }
+    app.get('/api/tournament/admin/daily-preset', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const now = Date.now();
+        const plan = await buildDailyPlan(now);
+        // dailyApi 哨兵：舊伺服器沒有這支端點 ⇒ admin 頁拿不到 ⇒ 整塊面板不顯示（而不是顯示一個按下去會錯的鈕）。
+        res.json({ ok: true, dailyApi: 1, now, tzOffsetMin: TDAILY_TZ_MIN, maxNo: plan.maxNo, slots: plan.slots });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    // ⚠ 同一時間只允許一個「一鍵建立」在跑：兩個 admin 分頁同時按，兩邊會各自算出同一份 plan
+    //   並各建兩場（四場、兩兩同名）。前端的 btn.disabled 只擋得住同一個分頁（fable 審查）。
+    let _dailyCreateBusy = false;
+    app.post('/api/tournament/admin/event/create-daily', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可建立賽事' });
+        if (_dailyCreateBusy) return res.status(409).json({ error: '另一個「一鍵建立」還在處理中，請稍候再試（避免重複建立）。' });
+        _dailyCreateBusy = true;
+        try {
+        const plan = await buildDailyPlan(Date.now());
+        // ⚙ fail-closed：掃不到任何「網站賽-N」就不猜，否則會建出「網站賽-1」。
+        // ⚠ 409 只回 { error }：admin 的 api() 對非 2xx 是把**整包 body 當字串**丟進 alert，
+        //   夾帶 slots 會讓站長看到 700 字元的 JSON、真正的人話被埋在裡面（fable 審查實測）。
+        if (!plan.maxNo) return res.status(409).json({ error: '找不到既有的「網站賽-N」場次編號，無法自動接號；請先手動建一場。' });
+        // 樂觀鎖：預覽到按下之間若又建了別的賽事（或跨過時段），不默默建出不一樣的東西。
+        const expected = Array.isArray(req.body && req.body.expectedNames) ? req.body.expectedNames.map(String) : null;
+        if (expected && expected.join('|') !== plan.names.join('|')) {
+          return res.status(409).json({
+            error: '按下按鈕之前編號或時段變了（你看到的：' + (expected.join('、') || '無')
+              + '；現在：' + (plan.names.join('、') || '無') + '）。請重新整理後再試。' });
+        }
+        if (!plan.names.length) {
+          return res.status(409).json({ error: '今天這兩場都不需要建立（已建立或時段已過）。' });
+        }
+        // ⚠ **必須序列建立**（for…of 逐場 await）：建立端點沒有去重，並行送會撞同一個毫秒 _id。
+        const created = [];
+        for (const s of plan.slots) {
+          if (!s.willCreate) continue;
+          const st = s.settings || {};
+          const ev = await insertTournamentEvent({
+            name: s.name,
+            maxPlayers: st.maxPlayers == null ? '' : st.maxPlayers,
+            roundLimitMin: st.roundLimitMin, noShowMin: st.noShowMin, roundCountdownMin: st.roundCountdownMin,
+            registrationOpenAt: '',              // 站長裁定：留空＝按下去就開放報名
+            registrationCloseAt: s.closeAt,      // 名稱上的 19:00／21:00（台北時間）
+            format: s.format, swissRounds: st.swissRounds, topCut: st.topCut,
+          }, id, created.length);   // ⚠ seq：同一毫秒建第二場才不會撞 _id
+          created.push({ _id: ev._id, name: ev.name, registrationCloseAt: ev.registrationCloseAt, format: ev.format,
+            createdAt: ev.createdAt, settingsFrom: st.from || null });
+        }
+        res.json({ ok: true, created, skipped: plan.slots.filter((s) => !s.willCreate).map((s) => ({
+          hhmm: s.hhmm, reason: s.exists ? ('已經建過：' + s.exists) : '今天這個時段已經過了',
+        })) });
+        } finally { _dailyCreateBusy = false; }
+      } catch (e) {
+        // ⚠ 第 1 場建好、第 2 場失敗時要講明白（只回 500 會讓站長以為一場都沒建，回頭又按一次）。
+        res.status(500).json({ error: e.message + '（若已經建到一半，請重新整理賽事列表確認；再按一次不會重複建立同一時段）' });
+      }
+    });
+    // <<< v150-daily-tournament
     // 管理員：轉換賽事階段
     app.post('/api/tournament/admin/event/status', async (req, res) => {
       try {

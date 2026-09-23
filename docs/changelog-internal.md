@@ -1,5 +1,30 @@
 # 內部改版紀錄（不打包進網站）
 
+## admin v1.77 ＋ server patch v1.50：每日固定網站賽「一鍵建立」
+
+BASE `3df3d856`（v6.427）。玩家端零改動（src/ 與 static/ 一個字都沒動 ⇒ 不 bump version.ts）。
+站長需求（逐字）：「我每日都會在admin賽事設定2個賽事…每天19:00舉辦的 網站賽-150【19:00 單敗淘汰】和 每天21:00舉辦的
+網站賽-151【21:00 瑞士制】…我想要你幫我設定成按紐…其中…數字是會一直累加的」。
+- 站長裁定（AskUserQuestion 三問）：①報名開始留空＝立即開放；②其他參數沿用最近一場同賽制的網站賽；③按下先跳確認視窗。
+- 自動接號：場次編號只存在**名稱字串**裡（系統沒有編號欄位）⇒ 掃 TEVENTS／TCHAMPS／TARCHIVE 三個來源（各最近 300 筆、
+  帶 projection）取 `網站賽-N`（舊名「官方賽-N」也認）的最大號 +1；⚠ 一律濾掉社群自辦賽（createdByPlayer／communityEvent），
+  玩家可自訂賽名會汙染編號。掃不到任何編號 ⇒ 409 fail-closed（絕不建出「網站賽-1」）。
+- 時間：名稱上的 19:00／21:00 ＝**報名截止**（系統沒有開始時間欄位）；一律用台北時間算（VM 的 TZ 是 UTC，
+  `dailySlotCloseAt` 全程 getUTC*＋固定 +480 分）。時段已過的場次不自動建（報名截止在過去＝一建立就開賽）。
+- 防呆：同一天同一時段已有網站賽 ⇒ 該場略過**且不吃編號**；預覽與建立走同一份 `buildDailyPlan`；送出帶 `expectedNames`
+  樂觀鎖（預覽到按下之間編號／時段變了 ⇒ 409，一場都不建）；兩場**序列建立**，`_id` 第 2 場起加序號後綴（同毫秒會 duplicate key）。
+- 收斂（Rule 38）：`/event/create` 的「組賽事文件＋insertOne」抽成中央 `insertTournamentEvent(b, id, seq)`，
+  一鍵建立走同一份 ⇒ 欄位與預設值不會兩邊漂移；全檔只剩一處 `_id: 'evt_' + …`。
+- 新端點：`GET /api/tournament/admin/daily-preset`（回哨兵 `dailyApi:1`＋兩場預覽）、`POST /api/tournament/admin/event/create-daily`。
+  admin 頁載入時抓預覽；舊伺服器沒有這支端點 ⇒ 整塊面板不顯示（不顯示一個按下去會錯的鈕）。
+- 守衛 `test-admin-v177-daily-tournament`（25 條；BASE 0 PASS／24 FAIL）：伺服器端注入假 Mongo 實跑真 handler
+  （接號／三來源／社群賽不汙染／台北時區／沿用設定／重複與已過時段／樂觀鎖／權限／查詢上限與 projection／
+  舊 create 端點零回歸），前端抽純函式與 tevCreateDaily 實跑（確認視窗、取消不送出、escapeHtml）。
+  突變 15 個全殺（含「文字級判準」與「名稱本身含 19:00 讓斷言恆真」兩種安慰劑，已改成行為端）。
+- Rule 40／H3：`/event/create` 的行內改動由新的 `scripts/lib/sap-revert-admin-v150.mjs` 逐字還原，
+  接進 test-v6303 的還原鏈最前（由新到舊）；其餘新增全部框在 `// >>> v150-daily-tournament` 哨兵內。
+- 部署：`update-admin-full.bat`（admin.html ＋ server_admin_patch.js）。
+
 ## v6.427 ⭐ 化隱／光之翼 × 受傷反擊收斂到中央判準（玩家回報）
 
 BASE `8162e928`（v6.426）。站長回報（逐字）：「詛咒娃娃[特性]化隱，這隻寶可夢不會受到對手的招式與特性的效果的影響，

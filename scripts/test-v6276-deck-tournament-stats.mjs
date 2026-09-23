@@ -37,7 +37,8 @@ import { revertV6292 } from './lib/tourn-revert-v6292.mjs';
 // ⭐v6.381：鏈又長一節（B 組：歸檔補 gameDraw ＋ 平手公告加「瑞士制仍可繼續」）。
 //   ⚠ 用**別名**把 v6.381 那一節接在最前面 ⇒ 下面每一個既有呼叫點一個字都不必改，
 //     語意也不變（還原後仍是 v6.292 的區塊）。test-v6292 B6 在守這條鏈。
-import { revertV6384, revertV6381 as _rv6381, revertV6365 as _rv6365 } from './lib/tourn-revert-v6384.mjs';
+import { revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365 } from './lib/tourn-revert-v150.mjs';
+const revertV6384 = (b) => _rv6384(revertV150(b));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
 const revertV6365 = (b) => _rv6365(revertV6381(b));   // ⭐v6.381 鏈又長一節（別名：既有呼叫點一個字都不必改）
 import { normEol, committedEolIsLf } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
@@ -127,8 +128,8 @@ const TEV_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
 const OLD_TAIL_SHA = '34a8448b7de92a1f9a3a30c02c01ecd274409e1520fcc73fe5e92d6da47cc12c';
 const OLD_TEV_SHA = '54cd122681c99f050eadf22e7823159bc5f40ecbc88118f49e5de88cb683b196';
 const OLD_TEV_LEN = 218193;
-const NEW_TAIL_SHA = '9b234e690ec261cafc40031b0730821042ef625e4383c8e46b9df857cb2df4d1';
-const NEW_TEV_SHA = '09370edc9c304d729962d0a0e4d4b6757e810a7029f264486979f39475b25486';
+const NEW_TAIL_SHA = '487f2ed8d976ca725d8446b758faa3cd43827c2a15c640ce0d3c7126a50391c0';
+const NEW_TEV_SHA = 'ebee9891421e33226965ee1afe63fb22878f433939b5771b355a8e5ace926dd8';
 
 console.log('\n══ 【A】結構（每一條在 BASE v6.275 上都必須紅，見【H】）═══════════════════');
 

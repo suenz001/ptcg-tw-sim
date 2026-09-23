@@ -327,6 +327,7 @@ const SRV = rd(SRV_REL);
 
   // ── 舊值零殘留（遞迴版）：值不硬寫，直接問 revert-chain 的單一資料來源 ──
   const RV65 = await import('./lib/tourn-revert-v6365.mjs');
+  const RV84 = await import('./lib/tourn-revert-v6384.mjs');   // ⭐v1.50：它的「新值」現在是舊值
   const RV92 = await import('./lib/tourn-revert-v6292.mjs');
   const RV91 = await import('./lib/tourn-revert-v6291.mjs');
   const OLD_VALUES = [
@@ -335,6 +336,8 @@ const SRV = rd(SRV_REL);
     ['v6.292 tail', RV92.NEW_TAIL_SHA_V6292], ['v6.292 tev', RV92.NEW_TEV_SHA_V6292],
     // ⭐v6.381：v6.365 的指紋從「現行值」變成「舊值」⇒ 也要納入零殘留檢查（本版 28 把鎖全部重釘，漏一把這裡就會紅）。
     ['v6.365 tail', RV65.NEW_TAIL_SHA_V6365], ['v6.365 tev', RV65.NEW_TEV_SHA_V6365],
+    // ⭐v1.50（每日固定網站賽一鍵建立）：v6.384 的指紋也從「現行值」變成「舊值」⇒ 納入零殘留檢查。
+    ['v6.384 tail', RV84.NEW_TAIL_SHA_V6384], ['v6.384 tev', RV84.NEW_TEV_SHA_V6384],
   ];
   chk('★ D3-前提：revert-chain 的舊值都拿得到，而且跟現行值不同（否則「零殘留」是恆真式）',
     OLD_VALUES.every(([, v]) => typeof v === 'string' && v.length === 64 && v !== CUR.tail && v !== CUR.tev),
@@ -345,9 +348,10 @@ const SRV = rd(SRV_REL);
   const LIB_DECL = new Set(['scripts/lib/tourn-revert-v6291.mjs', 'scripts/lib/tourn-revert-v6292.mjs',
     'scripts/lib/tourn-revert-v6365.mjs', 'scripts/lib/tourn-revert-v6381.mjs',   // ⭐v6.381 新節點
     'scripts/lib/tourn-revert-v6384.mjs',   // ⭐v6.384 新節點（休閒對戰版本閘的公開端點）
+    'scripts/lib/tourn-revert-v150.mjs',    // ⭐v1.50 新節點（每日固定網站賽一鍵建立）
     'scripts/test-v6292-tourn-verified-gate2.mjs']);
   chk('★★ D3-前提：被豁免的 ' + LIB_DECL.size + ' 個檔案**每一個**都真的是還原鏈的一員（豁免不能隨便加）',
-    LIB_DECL.size === 6 && [...LIB_DECL].every((rel) => {   // ⭐v6.384 鏈多一節 ⇒ 6
+    LIB_DECL.size === 7 && [...LIB_DECL].every((rel) => {   // ⭐v1.50 鏈多一節 ⇒ 7
       const s = rd(rel);
       const isLib = /^scripts\/lib\/tourn-revert-v\d+\.mjs$/.test(rel);
       const isConsumer = /from '\.\/lib\/tourn-revert-v\d+\.mjs'/.test(s);

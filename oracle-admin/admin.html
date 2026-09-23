@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.76</title>
+<title>PTCG Oracle Admin v1.77</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.76</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.77</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -832,6 +832,45 @@ async function api(path, options = {}) {
 // v1.40：ms 時間戳 -> datetime-local input 值（本地時區），給編輯表單預填用
 function tevMsToLocal(ms){ if(!ms) return ''; try { var d=new Date(Number(ms) - new Date().getTimezoneOffset()*60000); return d.toISOString().slice(0,16); } catch(e){ return ''; } }
 var tevSelEventId = null; // v1.44 多賽事：目前選中的賽事 id
+// ⭐v1.77：每日固定網站賽的預覽（伺服器 /admin/daily-preset 回的那一份）。
+//   ⚠ 舊伺服器沒有這支端點 ⇒ 永遠是 null ⇒ 面板整塊不顯示（不顯示一個按下去會錯的鈕）。
+var tevDailyPreset = null;
+var TEV_ST_LABELS = { draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' };
+/**
+ * ⭐v1.77：「每日固定網站賽」面板的 HTML（**純函式**，守衛可以直接餵 preset 驗文字與按鈕狀態）。
+ * 回空字串＝不顯示（舊伺服器）。時間一律用台灣時間顯示（twDateStr，固定 UTC+8）。
+ */
+function tevDailyPanelHtml(preset, btnStyle) {
+  if (!preset || !Array.isArray(preset.slots) || !preset.slots.length) return '';
+  var names = [];
+  var lines = preset.slots.map(function (s) {
+    var hhmm = escapeHtml(String(s && s.hhmm || ''));
+    if (s && s.willCreate) {
+      names.push(String(s.name || ''));
+      var from = (s.settings && s.settings.from)
+        ? '<span style="color:#5a7089;">（設定沿用「' + escapeHtml(String(s.settings.from)) + '」）</span>'
+        : '<span style="color:#a06000;">（找不到可沿用的設定，會用系統預設）</span>';
+      return '・<b>' + escapeHtml(String(s.name || '')) + '</b>　報名截止 ' + escapeHtml(twDateStr(s.closeAt)) + ' ' + hhmm + '　' + from;
+    }
+    if (s && s.exists) {
+      var st = TEV_ST_LABELS[String(s.existsStatus || '')] || String(s.existsStatus || '');
+      return '・' + hhmm + ' 場今天<b>已經建立</b>：' + escapeHtml(String(s.exists)) + (st ? '（' + escapeHtml(st) + '）' : '');
+    }
+    return '・' + hhmm + ' 場今天的時間<b>已經過了</b>，不自動建立（要補辦請用下面的表單手動建）';
+  });
+  var canCreate = names.length > 0 && Number(preset.maxNo) > 0;
+  var btn = canCreate
+    ? '<button style="' + btnStyle + '" onclick="tevCreateDaily(this)">⚡ 一鍵建立今日 ' + names.length + ' 場</button>'
+    : '<button style="' + btnStyle + 'opacity:.5;cursor:not-allowed;" disabled>⚡ 一鍵建立今日場次</button>'
+      + (Number(preset.maxNo) > 0 ? '' : ' <span style="color:#c62828;font-size:.85rem;">掃不到既有的「網站賽-N」編號，無法自動接號</span>');
+  return '<div style="margin:6px 0 14px;padding:10px 12px;border:1px solid #cfe0f5;background:#f4f9ff;border-radius:8px;">'
+    + '<div style="font-weight:700;color:#1a4b8f;margin-bottom:6px;">🗓️ 每日固定網站賽（自動接號）</div>'
+    + '<div style="font-size:.9rem;color:#2f4a68;line-height:1.85;margin-bottom:8px;">' + lines.join('<br>') + '</div>'
+    + btn
+    + '<div style="color:#7a8ba0;font-size:.8rem;margin-top:6px;">目前最大場次編號：' + escapeHtml(String(preset.maxNo || '？'))
+    + '　報名一按下去就開放；名稱上的時間＝報名截止時間。</div>'
+    + '</div>';
+}
 window.tevSelectEvent = function (eid) { tevSelEventId = eid; loadTournamentAdmin(); };
 async function loadTournamentAdmin() {
   const el = document.getElementById('tab-tournament');
@@ -864,15 +903,22 @@ async function loadTournamentAdmin() {
   if (ev && ev.status === 'running') { try { pendData = await api('/api/tournament/admin/pending-matches?eventId=' + encodeURIComponent(ev._id)); if (!pendData || !pendData.pending) pendData = { pending: [] }; } catch (e) { pendData = { pending: [] }; } }
   let champData = { champions: [] };
   try { champData = await api('/api/tournament/champions'); if (!champData || !champData.champions) champData = { champions: [] }; } catch (e) { champData = { champions: [] }; }
+  // ⭐v1.77：每日固定賽事的預覽（舊伺服器沒這支端點 ⇒ dailyApi 缺席 ⇒ 面板不顯示）
+  tevDailyPreset = null;
+  try {
+    const dp = await api('/api/tournament/admin/daily-preset');
+    if (dp && dp.dailyApi === 1 && Array.isArray(dp.slots)) tevDailyPreset = dp;
+  } catch (e) { tevDailyPreset = null; }
   // v1.62 三個動作按鈕改用全站的語意色（原本是深色底，與 admin 白底頁面格格不入）
   const btnS = 'padding:6px 14px;border:1px solid #a5d6a7;background:#eaf7ea;color:#2e7d32;border-radius:6px;cursor:pointer;font-weight:600;';
   const btnD = 'padding:6px 14px;border:1px solid #ef9a9a;background:#fdecec;color:#c62828;border-radius:6px;cursor:pointer;font-weight:600;';
   const btnW = 'padding:6px 14px;border:1px solid #e0c56a;background:#fff8e1;color:#8a6d00;border-radius:6px;cursor:pointer;font-weight:600;';
   let html = '<div style="max-width:760px;padding:16px;"><h2 style="margin-top:0;">🏆 錦標賽管理</h2>'
     + '<p style="color:#888;font-size:.85rem;">單敗淘汰 · Bo1 · 可同時公布多場（時間不重疊），玩家各自報名。建立後玩家於 /tournament 報名（牌組鎖定）。</p>'
-    + '<div style="margin:6px 0 12px;"><button style="' + btnD + '" onclick="tevClearChat(this)">🧹 清除所有聊天室訊息</button></div>';
+    + '<div style="margin:6px 0 12px;"><button style="' + btnD + '" onclick="tevClearChat(this)">🧹 清除所有聊天室訊息</button></div>'
+    + tevDailyPanelHtml(tevDailyPreset, btnS);   // ⭐v1.77 每日固定網站賽一鍵建立
   // v1.45：賽事下拉選單（多場切換顯示各自詳細）
-  var _stLabels = { draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' };
+  var _stLabels = TEV_ST_LABELS;   // ⭐v1.77：狀態中文對照表只留一份（面板與賽事下拉共用）
   html += '<div style="margin:4px 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
   html += '<span style="color:#9ab;font-size:.9rem;font-weight:600;">選擇賽事（共 ' + evList.length + ' 場）：</span>';
   if (!evList.length) html += '<span style="color:#888;">目前沒有開放中賽事</span>';
@@ -1014,6 +1060,35 @@ window.tevCreate = async function (btn) {
   try { localStorage.setItem('tevLastSettings', JSON.stringify({ name: body.name, maxPlayers: body.maxPlayers, roundLimitMin: body.roundLimitMin, noShowMin: body.noShowMin, roundCountdownMin: body.roundCountdownMin })); } catch (e) {}
   try { const d = await api('/api/tournament/admin/event/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (d.error) alert(d.error); }
   catch (e) { alert(e.message); }
+  loadTournamentAdmin();
+};
+/**
+ * ⭐v1.77：一鍵建立今日兩場固定網站賽。
+ * ⚠ 先跳確認視窗列出名稱與報名截止（站長裁定）；送出時帶 expectedNames，
+ *   伺服器重算後不一致就回 409（避免預覽到按下之間編號或日期變了還照建）。
+ */
+window.tevCreateDaily = async function (btn) {
+  const preset = tevDailyPreset;
+  const todo = (preset && Array.isArray(preset.slots) ? preset.slots : []).filter(function (s) { return s && s.willCreate; });
+  if (!todo.length) { alert('今天沒有需要建立的場次（已建立或時段已過）。'); return; }
+  const lines = todo.map(function (s) {
+    return '・' + s.name + '\n　報名截止：' + twDateStr(s.closeAt) + ' ' + s.hhmm
+      + (s.settings && s.settings.from ? '\n　設定沿用：' + s.settings.from : '\n　設定：系統預設（找不到可沿用的場次）');
+  });
+  if (!confirm('要建立今天的固定賽事嗎？\n\n' + lines.join('\n') + '\n\n報名立即開放；到報名截止時間就依賽事設定自動往下走（報到 → 倒數 → 開打）。')) return;
+  btn.disabled = true;
+  try {
+    const d = await api('/api/tournament/admin/event/create-daily', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expectedNames: todo.map(function (s) { return s.name; }) }),
+    });
+    if (d.error) alert(d.error);
+    else {
+      const made = (d.created || []).map(function (c) { return '・' + c.name; }).join('\n');
+      const skip = (d.skipped || []).map(function (s) { return '・' + s.hhmm + '：' + s.reason; }).join('\n');
+      alert('已建立：\n' + made + (skip ? '\n\n略過：\n' + skip : ''));
+    }
+  } catch (e) { alert(e.message); }
   loadTournamentAdmin();
 };
 window.tevUpdate = async function (btn) {
