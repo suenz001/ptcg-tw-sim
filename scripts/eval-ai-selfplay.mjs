@@ -6,65 +6,33 @@
 // 【判準】不是「勝率 > 50% 就算贏」。小樣本下勝率點估計非常吵，
 //   門檻是**勝率差的 95% 信賴區間下界 > 0**（Wilson score interval，對極端比例比
 //   常態近似穩健）。下界沒過就是「這批看不出有效」，不是「有效但樣本不夠」。
+//   ⚠ 而且這個工具只能用來「否決」，不能用來「認可」（離線評估排序不可信，見批次 A 說明）。
 //
 // 【⭐先後手公平：必須「同一個 seed 跑兩次鏡像」】
-//   PTCG 先攻有優勢。第一版是「前一半 seed 讓新版坐 0、後一半坐 1」—— 這**不會**對消
-//   先攻優勢，因為每個 seed 的先攻方是固定的，兩半只是換了不同的牌局，不是同一局換邊。
-//   實測：把新舊 AI 換成**完全相同的邏輯**跑 A/A 測試，勝率是 39.1% 而不是 50% ——
-//   工具本身就有系統性偏差，任何結論都不可信。
-//   正確作法：每個 seed 跑兩場，新版分別坐 0 與坐 1。同一副牌、同一個隨機序列，
+//   PTCG 先攻有優勢。每個 seed 跑兩場，新版分別坐 0 與坐 1。同一副牌、同一個隨機序列，
 //   先攻優勢在兩場之間完全抵銷，剩下的差異才是 AI 強度。
 //   ⚠新增測試方法時務必先跑 A/A（兩邊同一份程式碼）確認結果落在 50% 附近，
 //     否則量到的是工具的偏差。
 //
-// 用法：node scripts/eval-ai-selfplay.mjs [每組場數] [配對索引]
-import { build } from 'esbuild';
-import { readFileSync, readdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { execFileSync } from 'node:child_process';
-import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
+// 【批次 A3（2026-09-26）】
+//   - 預設每組 seed 數 40 → 400（每個 seed 兩場鏡像 ⇒ 每組 800 場）。
+//     Kaggle 實例：150 局看到 54.7% 差點出貨，400 局配信賴區間是 50.5% ± 4.9%。
+//   - 每一行都印出 95% 信賴區間 [下界, 上界] 與寬度；有效場數 < 400 印警告「此樣本量下的結論不可信」。
+//   - 「該誰行動」改走共用 harness（修掉 setup 階段固定問 0 ⇒ 被記成「未分出」的量尺 bug）。
+//
+// 用法：node scripts/eval-ai-selfplay.mjs [每組 seed 數=400] [配對索引] [seed 偏移]
+//   沙盒單次執行有時間上限時，可用 seed 偏移分批跑再把場次相加（各批 seed 不重疊）。
+//   ⚠ 沙盒沒有 .git 時用 AI_BASELINE_SRC=/path/to/head_ai.ts 指定基準版。
+import { fileURLToPath } from 'node:url';
+import {
+  buildAiBundle, loadLivePool, presetById, playGame, wilson, pct, MIN_TRUSTED_GAMES,
+} from './lib/ai-sim-harness.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const S = join(ROOT, '.x-ev-s.js'), E = join(ROOT, '.x-ev-e.ts'), O = join(ROOT, '.x-ev-o.mjs');
-const BASE = join(ROOT, 'src/lib/game/_ai_baseline.ts');
-process.on('exit', () => { for (const p of [S, E, O, BASE]) { try { unlinkSync(p); } catch {} } });
-
-// 基準版 = git HEAD 的 ai.ts（不是磁碟上的 —— 磁碟上那份已經是新版了）。
-// ⚠沙盒的測試工作區是 `git archive` 展開的、沒有 .git，所以允許用環境變數指定檔案：
-//   AI_BASELINE_SRC=/path/to/head_ai.ts node scripts/eval-ai-selfplay.mjs
-const headAI = process.env.AI_BASELINE_SRC && existsSync(process.env.AI_BASELINE_SRC)
-  ? readFileSync(process.env.AI_BASELINE_SRC, 'utf8')
-  : execFileSync('git', ['-C', ROOT, 'cat-file', '-p', 'HEAD:src/lib/game/ai.ts'],
-      { maxBuffer: 64 * 1024 * 1024 }).toString('utf8');
-writeFileSync(BASE, headAI);
-
-writeFileSync(S, 'export const base="";export const assets="";');
-writeFileSync(E, "export { createGame, applyAction } from './src/lib/game/engine';\n"
-  + "export { getAIAction as aiNew } from './src/lib/game/ai';\n"
-  + "export { getAIAction as aiOld } from './src/lib/game/_ai_baseline';\n"
-  + "import './src/lib/game/effects';");
-await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node',
-  target: 'node20', alias: { $lib: join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
-const { createGame, applyAction, aiNew, aiOld } = await import(pathToFileURL(O).href);
-
-const dir = join(ROOT, 'static/cards');
-const live = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).map((e) => e.code));
-const pool = new Map();
-for (const f of readdirSync(dir)) {
-  if (!f.endsWith('.json') || f === 'index.json' || !live.has(f.slice(0, -5))) continue;
-  for (const c of JSON.parse(readFileSync(join(dir, f), 'utf8'))) if (c?.id != null) pool.set(String(c.id), c);
-}
-
-const PRESET_SRC = normEol(readFileSync(join(ROOT, 'src/lib/decks/presets.ts'), 'utf8'));
-function presetEntries(id) {
-  const i = PRESET_SRC.indexOf(`id: '${id}'`);
-  if (i < 0) throw new Error('找不到預組 ' + id);
-  const j = PRESET_SRC.indexOf('entries: [', i);
-  const k = PRESET_SRC.indexOf('\n  ],', j);
-  return [...PRESET_SRC.slice(j, k).matchAll(/cardId:\s*'(\d+)',\s*count:\s*(\d+)/g)]
-    .map((m) => ({ cardId: m[1], count: Number(m[2]) }));
-}
+const mod = await buildAiBundle(ROOT, { withBaseline: true });
+const pool = loadLivePool(ROOT);
+const aiNew = (st, idx) => mod.aiNew(st, pool, idx);
+const aiOld = (st, idx) => mod.aiOld(st, pool, idx);
 
 const MATCHUPS = [
   ['N的索羅亞克', '__preset_n_zoroark__'],
@@ -73,83 +41,51 @@ const MATCHUPS = [
   ['竹蘭的烈咬陸鯊EX', '__preset_cynthia_garchomp__'],
 ];
 
-function seeded(seed) {
-  let a = seed >>> 0;
-  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+/** 跑一場：newSeat 指定新版 AI 坐哪一側。回傳 'new' | 'old' | 'draw'（未分出：平手／卡住／例外）。 */
+function playOne(seed, deck, newSeat) {
+  const agents = newSeat === 0 ? [aiNew, aiOld] : [aiOld, aiNew];
+  // maxRejects 8：沿用舊版「連續被拒 8 次就放棄」的口徑
+  const r = playGame({ mod, pool, decks: [deck, deck], agents, seed, maxRejects: 8 });
+  if (r.outcome !== 'ended' || r.winner == null) return 'draw';
+  return r.winner === newSeat ? 'new' : 'old';
 }
 
-/** 跑一場：newSeat 指定新版 AI 坐哪一側。回傳 'new' | 'old' | 'draw'。 */
-function playOne(seed, entries, newSeat) {
-  const orig = Math.random;
-  Math.random = seeded(seed);
-  try {
-    let st = createGame({ name: 'A', entries }, { name: 'B', entries }, pool);
-    let rejected = 0;
-    for (let i = 0; i < 20000 && st.phase !== 'game-over'; i++) {
-      let actor;
-      if (st.phase === 'setup') {
-        const mul = st.pendingMulliganDraw ?? [0, 0];
-        actor = mul[0] > 0 ? 0 : (mul[1] > 0 ? 1 : (!st.setupDone[0] ? 0 : (!st.setupDone[1] ? 1 : 0)));
-      } else if (st.pendingSelection) actor = st.pendingSelection.actorIdx;
-      else if (st.players[0].active === null && st.players[0].bench.length > 0) actor = 0;
-      else if (st.players[1].active === null && st.players[1].bench.length > 0) actor = 1;
-      else actor = st.activePlayerIndex;
-      const fn = actor === newSeat ? aiNew : aiOld;
-      const act = fn(st, pool, actor);
-      if (!act) break;
-      const next = applyAction(st, act, pool);
-      if (next === st) { if (++rejected > 8) break; continue; }
-      rejected = 0; st = next;
-    }
-    if (st.phase !== 'game-over' || st.winner == null) return 'draw';
-    return st.winner === newSeat ? 'new' : 'old';
-  } catch {
-    return 'draw';   // 例外不計入任一方，避免把 crash 算成勝負
-  } finally { Math.random = orig; }
+/** 一行結果：勝率、95% CI、寬度，樣本不足時加警告。 */
+function line(label, nw, ow, dr) {
+  const dec = nw + ow;
+  const [lo, hi] = wilson(nw, dec);
+  const warn = dec < MIN_TRUSTED_GAMES ? `　⚠ 有效 ${dec} 場 < ${MIN_TRUSTED_GAMES}：此樣本量下的結論不可信` : '';
+  return `${label}：新版 ${nw} 勝 / 基準 ${ow} 勝 / 未分出 ${dr}`
+    + `　→ 勝率 ${dec ? pct(nw / dec) : '—'}（95% CI ${pct(lo)}～${pct(hi)}，寬 ±${((hi - lo) * 50).toFixed(1)}pp）${warn}`;
 }
 
-/** Wilson score interval 下界（比常態近似對極端比例穩健）。 */
-function wilsonLower(wins, n, z = 1.96) {
-  if (n === 0) return 0;
-  const p = wins / n;
-  const d = 1 + (z * z) / n;
-  const c = p + (z * z) / (2 * n);
-  const s = z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n));
-  return (c - s) / d;
-}
-
-const N = Number(process.argv[2] ?? 40);
+const N = Number(process.argv[2] ?? 400);
 const only = process.argv[3] != null ? Number(process.argv[3]) : null;
-// 沙盒單次執行有時間上限，用 seed 偏移分批跑再把場次相加（各批 seed 不重疊）
 const seedOff = Number(process.argv[4] ?? 0);
 const list = only != null ? [MATCHUPS[only]] : MATCHUPS;
 
 let totalNew = 0, totalOld = 0, totalDraw = 0;
 for (const [name, id] of list) {
-  const entries = presetEntries(id);
+  const deck = presetById(mod, id);
   let nw = 0, ow = 0, dr = 0;
   for (let s = 0; s < N; s++) {
     // ⭐每個 seed 跑兩次鏡像：同一局分別讓新版坐 0 與坐 1，先攻優勢完全抵銷
     const seed = 7717 + (s + seedOff) * 104729;
     for (const seat of [0, 1]) {
-      const r = playOne(seed, entries, seat);
+      const r = playOne(seed, deck, seat);
       if (r === 'new') nw++; else if (r === 'old') ow++; else dr++;
     }
   }
   totalNew += nw; totalOld += ow; totalDraw += dr;
-  const dec = nw + ow;
-  const lo = wilsonLower(nw, dec);
-  console.log(`${name}：新版 ${nw} 勝 / 基準 ${ow} 勝 / 未分出 ${dr}`
-    + `　→ 勝率 ${dec ? (nw / dec * 100).toFixed(1) : '—'}%（95% CI 下界 ${(lo * 100).toFixed(1)}%）`);
+  console.log(line(name, nw, ow, dr));
 }
 
 const dec = totalNew + totalOld;
-const lo = wilsonLower(totalNew, dec);
+const [lo] = wilson(totalNew, dec);
 console.log('\n=== 合計 ===');
-console.log(`新版 ${totalNew} 勝 / 基準 ${totalOld} 勝 / 未分出 ${totalDraw}（有效 ${dec} 場）`);
-console.log(`新版勝率 ${dec ? (totalNew / dec * 100).toFixed(1) : '—'}%，95% CI 下界 ${(lo * 100).toFixed(1)}%`);
-console.log(lo > 0.5
-  ? '✅ 下界 > 50% → 這批確實讓 AI 變強（不是抽樣雜訊）'
-  : '⚠ 下界未超過 50% → 樣本內看不出顯著提升；要嘛加大樣本，要嘛這批沒效果。');
+console.log(line('合計', totalNew, totalOld, totalDraw));
+console.log(dec < MIN_TRUSTED_GAMES
+  ? `⚠ 有效場數不足 ${MIN_TRUSTED_GAMES}，不論勝率多少都不下結論。`
+  : (lo > 0.5
+    ? '✅ 下界 > 50% → 樣本內確實較強（⚠ 只能當「沒有變差」的佐證，不能當出貨理由）'
+    : '⚠ 下界未超過 50% → 樣本內看不出顯著提升；要嘛加大樣本，要嘛這批沒效果。'));
