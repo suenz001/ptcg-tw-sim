@@ -280,13 +280,14 @@ function newSideMetrics() {
  * @param {number} p.seed
  * @param {number} [p.maxSteps=20000]
  * @param {number} [p.maxRejects=30]  同一盤面連續被引擎拒絕幾次視為卡住
+ * @param {(prev, action, next, actor) => void} [p.onStep]  每個被引擎接受的動作之後呼叫（診斷用，只讀）
  * @param {0|1} [p.firstPlayer]  指定先攻方（createGame 的 firstPlayerOverride）。
  *   ⚠ 鏡像評估一定要指定：不指定時先攻由擲幣決定，而擲幣發生在洗牌與起手之後 ⇒
  *     兩副牌對調座位時亂數消耗量不同 ⇒ 兩場的先攻方不一定相同（fable 審查實測 50 對裡 9 對沒抵銷）。
  *     座位對調＋同一個 firstPlayer ⇒ 受測方恰好先攻一場、後攻一場。
  * @returns {{ outcome, winner, reason, reasonClass, turns, steps, sides, error?, lastAction? }}
  */
-export function playGame({ mod, pool, decks, agents, seed, maxSteps = 20000, maxRejects = 30, firstPlayer }) {
+export function playGame({ mod, pool, decks, agents, seed, maxSteps = 20000, maxRejects = 30, firstPlayer, onStep }) {
   const orig = Math.random;
   Math.random = seeded(seed);
   // 每局開始把 AI 試打用的 _simSeed 歸零 ⇒ 同 seed 同盤面可重現（不受前面跑過幾局影響）
@@ -326,6 +327,11 @@ export function playGame({ mod, pool, decks, agents, seed, maxSteps = 20000, max
         continue;
       }
       rejected = 0;
+      // 診斷腳本的觀察點（例：牌庫被哪些動作消耗）；只讀，不可改 state
+      if (onStep) {
+        // ⚠ fable 審查：觀察點自己的 bug 不可以被下面的 catch 吃成「exception」結局（會靜默變成未結束）
+        try { onStep(st, act, next, actor); } catch (e) { const err = e instanceof Error ? e : new Error(String(e)); err.__diagError = true; throw err; }
+      }
       if (act.type === 'ATTACK') {
         sides[actor].attacksSent++;
         if (atkKey && mainKeys[actor].has(atkKey)) sides[actor].mainMoveUsed = true;
@@ -334,6 +340,7 @@ export function playGame({ mod, pool, decks, agents, seed, maxSteps = 20000, max
     }
     return finish(st.phase === 'game-over' ? 'ended' : 'maxiter');
   } catch (e) {
+    if (e && e.__diagError) throw e;
     return finish('exception', e);
   } finally {
     Math.random = orig;
