@@ -20,9 +20,10 @@ import { execFileSync } from 'node:child_process';
  * @param {string} root repo 根目錄
  * @param {{ withBaseline?: boolean }} opts
  *   withBaseline：基準版 = git HEAD 的 ai.ts（或環境變數 AI_BASELINE_SRC 指定的檔案）。
+ *   extraExports：額外的 export 敘述（字串陣列，路徑相對 repo 根），給診斷腳本用。
  *   ⚠ 單變因：兩版之間只差「工作樹相對 HEAD 的 ai.ts 改動」，勝率差才能歸因到那一批。
  */
-export async function buildAiBundle(root, { withBaseline = false } = {}) {
+export async function buildAiBundle(root, { withBaseline = false, extraExports = [] } = {}) {
   // 暫存檔名帶 pid：多支腳本平行跑時不會互相覆蓋（先前固定檔名會撞）
   const tag = `.x-aish-${process.pid}`;
   const S = join(root, `${tag}-s.js`), E = join(root, `${tag}-e.ts`), O = join(root, `${tag}-o.mjs`);
@@ -46,6 +47,8 @@ export async function buildAiBundle(root, { withBaseline = false } = {}) {
     withBaseline ? `export { getAIAction as aiOld } from './src/lib/game/_ai_baseline_${process.pid}';` : 'export const aiOld = null;',
     "export { getCardRole } from './src/lib/game/ai-roles';",
     "export { PRESET_DECKS } from './src/lib/decks/presets';",
+    // 診斷腳本需要的額外匯出（例如 ai-eval 的 evaluateAttack），逐行附加；不影響其他腳本
+    ...extraExports,
     "import './src/lib/game/effects';",
   ].join('\n'));
   await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node',
