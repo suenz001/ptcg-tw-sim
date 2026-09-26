@@ -1,6 +1,8 @@
-# AI 對戰強化 批次 B 診斷報告（BASE `2f4e3801`，2026-09-26）
+# AI 對戰強化 批次 B 診斷報告（v6.428 工作樹，2026-09-26；fable 5.1 審查修正後重跑）
 
 產生方式：`node scripts/diag-ai-batch-b.mjs --games-per-pair 4 --out <本檔>`。只讀引擎，不改 src/。
+⚠ 本檔是在 v6.428（天仙石／渾沌匍匐冷卻修正）之上跑的，所以 B2 的兩個玩家層級冷卻已經是 ✅；
+  修正前（2f4e3801）這兩列是「下回合仍列為可用：是」。
 
 ## B1 印刷傷害非純數字的招式：AI 走哪條路徑
 - live H/I/J 不重複招式共 2802 個；傷害欄非純數字 974 個。
@@ -315,122 +317,148 @@
 </details>
 
 ## B2「下個自己的回合無法使用招式」類限制：機制與離場清除
-- 依據：PTCG_RULES.md 第 1518 行（換到備戰再撤退回場 ⇒ 可以使用）。live H/I/J 共 50 個招式。
-- ⚠ 需要人工看的：2 個（主詞與機制對不上，或合成盤面沒觸發）
+- 依據：PTCG_RULES.md 第 1518 行（換到備戰再撤退回場 ⇒ 可以使用）。live H/I/J 共 76 個招式。
+- ⚠ 需要人工看的：0 個（主詞與機制對不上，或合成盤面沒觸發）
 
 - 欄位：「下回合仍列為可用」＝ getAvailableAttacks（UI 按鈕與 AI 候選）還列不列；「引擎擋下」＝真的送出時引擎擋不擋；
-  「撤退實測清除」＝實際撤退到備戰後旗標是否消失（撤退費付不起時為 —）；「在離場清除清單」＝旗標在 CLEAR_ON_EXIT_FLAGS（靜態）。
+  「撤退實測清除」＝實際撤退到備戰後旗標是否消失（撤退沒有完成、或玩家層級不適用時為 —）；「在離場清除清單」＝實體旗標在 CLEAR_ON_EXIT_FLAGS（靜態；玩家層級為 —）。
 
 | 卡 | 招式 | 卡面主詞 | 實作機制 | 下回合仍列為可用 | 引擎擋下 | 撤退實測清除 | 在離場清除清單 | 判定 |
 |---|---|---|---|---|---|---|---|---|
-| 騎拉帝納 | 渾沌匍匐 | 玩家層級冷卻（自己的寶可夢使出了「X」） | attackUsedLastSelfTurn(玩家層級冷卻) | **是** | 是 | — | 是 | ⚠ |
-| 仙子伊布ex | 天仙石 | 玩家層級冷卻（自己的寶可夢使出了「X」） | attackUsedLastSelfTurn(玩家層級冷卻) | **是** | 是 | — | 是 | ⚠ |
-| 巨石丁 | 潛力 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 奇樹的電肚蛙ex | 閃電伏特 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | — | 是 | ✅ |
+| 利歐路 | 加速突刺 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 電龍 | 閃光伏特 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 索羅亞克ex | 猛擊在地 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 超級路卡利歐ex | 超級勇氣 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 巨石丁 | 潛力 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 自爆磁怪 | 閃光伏特 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 哲爾尼亞斯 | 光明角擊 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 雪暴馬 | 冰霜颱風 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 奇樹的電肚蛙ex | 閃電伏特 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
 | 拉帝亞斯ex | 無限之刃 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
-| N的捷克羅姆 | 亂暴閃電 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
+| 赫普的蒼響ex | 無畏斬 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| N的捷克羅姆 | 亂暴閃電 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
 | 爆炸頭水牛 | 潛力 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
-| 堅盾劍怪 | 金屬斬 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
+| 伊裴爾塔爾ex | 黑暗打擊 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 堅盾劍怪 | 金屬斬 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
 | 具甲武者 | 潛力 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
-| 勾帕路翁ex | 力量衝撞 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
+| 勾帕路翁ex | 力量衝撞 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 煤炭龜 | 烈焰爆 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
 | 雷公ex | 力量猛攻（擲幣） | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
-| 尼多后 | 終極衝擊 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 顫弦蠑螈 | 閃電伏特 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
+| 騎拉帝納 | 渾沌匍匐 | 玩家層級冷卻（自己的寶可夢使出了「X」） | attackUsedLastSelfTurn(玩家層級冷卻) | 否 | 是 | — | — | ✅ |
+| 尼多后 | 終極衝擊 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 顫弦蠑螈 | 閃電伏特 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
 | 超夢ex | 超能之力 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
-| 無極汰那 | 力量猛攻（擲幣） | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 莉佳的口呆花 | 葉子旋風 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 斗笠菇 | 關節衝擊 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 畢力吉翁 | 綠寶石利刃 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 鐵斑葉ex | 稜鏡刀鋒 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 火伊布ex | 紅玉髓 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 火炎獅 | 爆焰衝撞 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 水伊布ex | 海藍寶石 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 蓮帽小童 | 水流斬 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | — | 是 | ✅ |
-| 鐵螯龍蝦 | 暴亂之錘 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 浮潛鼬 | 水流斬 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 波普海豚 | 水流斬 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 海豚俠ex | 終極衝擊 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
+| 蒼響 | 猛擊在地 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 無極汰那 | 力量猛攻（擲幣） | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 莉佳的口呆花 | 葉子旋風 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 飛天螳螂 | 猛擊在地 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 斗笠菇 | 關節衝擊 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 畢力吉翁 | 綠寶石利刃 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 鐵斑葉ex | 稜鏡刀鋒 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 厄鬼椪 碧草面具 | 鬼之錘 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 火伊布ex | 紅玉髓 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 火炎獅 | 爆焰衝撞 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 炎熱喵 | 閃焰強襲 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 閃焰王牌ex | 閃焰強襲 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 水伊布ex | 海藍寶石 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 大力鱷 | 駭浪 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 蓮帽小童 | 水流斬 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 鐵螯龍蝦 | 暴亂之錘 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 浮潛鼬 | 水流斬 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 好勝毛蟹 | 揮大拳 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 波普海豚 | 水流斬 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 海豚俠ex | 終極衝擊 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
 | 雷伊布ex | 棕碧璽 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
 | 瑪力露麗 | 力量衝撞 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 仙子伊布ex | 天仙石 | 玩家層級冷卻（自己的寶可夢使出了「X」） | attackUsedLastSelfTurn(玩家層級冷卻) | 否 | 是 | — | — | ✅ |
 | 哲爾尼亞斯 | 終極衝擊 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
-| 流氓熊貓 | 力量衝撞 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | — | 是 | ✅ |
-| 胡帕 | 關節衝擊 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 席多藍恩 | 鐵之光炮 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 騎士蝸牛 | 鐵之光炮 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
+| 鐵武者 | 意念之刃 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 故勒頓ex | 衝擊打擊 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 流氓熊貓 | 力量衝撞 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 胡帕 | 關節衝擊 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 派帕的獒教父ex | 大佬頭擊 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 席多藍恩 | 鐵之光炮 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 騎士蝸牛 | 鐵之光炮 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
 | 鋁鋼橋龍 | 鐵之引爆 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 密勒頓ex | 異度猛衝 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
 | 吉利蛋 | 潛力 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 老翁龍 | 龍之強襲 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
 | 月月熊 赫月 ex | 血月 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
-| 斧牙龍 | 潛力 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
+| 棄世猴 | 衝擊打擊 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 斧牙龍 | 潛力 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
 | 咕咕鴿 | 噴射之翼 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
 | 高傲雉雞 | 潛力 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
 | 朝北鼻 | 力量猛攻（擲幣） | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
-| 大嘴蝠 | 漆黑利刃 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 大王銅象 | 鼻之金勾臂 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | — | 是 | ✅ |
-| 電擊魔獸 | 雷電在地 | 自己全場（所有寶可夢） | 玩家旗標(noAttacks*)＋玩家新欄位:noAttacksNextTurn | 否 | 是 | — | 是 | ✅ |
-| 電燈怪 | 閃電伏特 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 蒼炎刃鬼 | 黑煙斬 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
+| 大嘴蝠 | 漆黑利刃 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 願增猿ex | 惡劣頭擊 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 大王銅象 | 鼻之金勾臂 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 電擊魔獸 | 雷電在地 | 自己全場（所有寶可夢） | 玩家旗標(noAttacks*)＋玩家新欄位:noAttacksNextTurn | 否 | 是 | 是 | — | ✅ |
+| 電燈怪 | 閃電伏特 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 蒼炎刃鬼 | 黑煙斬 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 自爆磁怪 | 電磁炮 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
 | 月月熊 赫月ex | 血月 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
-| 火焰雞ex | 燃燒旋踢 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 帕底亞 土王ex | 終極衝擊 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
-| 大吾的金屬怪 | 金屬斬 | 這隻寶可夢 | cantAttackPending | 否 | 是 | — | 是 | ✅ |
+| 火焰雞ex | 燃燒旋踢 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 帕底亞 土王ex | 終極衝擊 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
+| 蒼響ex | 猛擊在地 | 這隻寶可夢 | blockedAttackNamesNextTurn | 否 | 是 | 是 | 是 | ✅ |
+| 大吾的金屬怪 | 金屬斬 | 這隻寶可夢 | cantAttackPending | 否 | 是 | 是 | 是 | ✅ |
 
 ## B3 所有可用招式都打不出傷害時，AI 仍送出 ATTACK 的比例
-- 模擬：56 副預組 × 3 個對手 × 4 局 = 672 局（73 秒）。
+- 模擬：56 副預組 × 3 個對手 × 4 局 = 672 局（80 秒）。
 - 判準：每一招都 `ok && !unresolved && !ko && prizes === 0 && oppDamage === 0`（平均值，不用 dealt）。
-- AI 決定攻擊的決策點：7372；其中「全部招式零傷害」：559（7.6%）
-- ⭐ B3 比例＝全零時仍送 ATTACK：559 / 559 = 100.0%（攻擊分支只要有招可發就一定 return ATTACK，所以結構上必然是 100%）
-- 再排除「有其他盤面效果」的：全零且無側效果 358 次 ⇒ 這才是批次 C 真正會擋下的範圍
-- 那 358 次裡，撤退分支會成立（撤退費 ≤ 2 且換上去有收益）：41 次；其餘仍會結束回合
+- 有招可用時的收尾決定（攻擊／撤退／結束回合）：7483；其中「全部招式零傷害」：510（6.8%）
+- ⭐ B3 比例＝全零時仍送 ATTACK：510 / 510 = 100.0%（攻擊分支只要有招可發就一定 return ATTACK，所以結構上必然是 100%）
+- 再排除「有其他盤面效果」的：全零且無側效果 306 次 ⇒ 這才是批次 C 真正會擋下的範圍
+- 那 306 次裡，撤退分支會成立（撤退費 ≤ 2 且換上去有收益）：58 次；其餘仍會結束回合
 
-側效果種類（零傷害招式在試打前後有變化的欄位；次數）：hand 113、deck 121、對手戰鬥位.damageReduceNextHit 4、discard 70、對手玩家.cantPlayItemNextTurn 18、對手戰鬥位.nextOwnAttackPenalty 26、myDmg 14、energy 1、oppStatus 9、對手戰鬥位.status 9、對手戰鬥位.cantRetreatNextTurn 6、我方戰鬥位.nextOwnAttackPenalty 1
+側效果種類（零傷害招式在試打前後有變化的欄位；次數）：myDmg 4、我方戰鬥位.healedThisTurn 1、對手戰鬥位.nextOwnAttackPenalty 13、hand 133、deck 149、oppStatus 11、對手戰鬥位.status 11、對手戰鬥位.damageReduceNextHit 6、discard 83、對手玩家.cantPlayItemNextTurn 10、對手戰鬥位.damageTakenLastOppTurn 4、energy 1、我方戰鬥位.cantAttackPending 4
 
 全零且無側效果的盤面（我方戰鬥位｜可用招式 → 對手戰鬥位；前 25 名）：
 
-- 火箭隊的烏鴉頭頭｜火箭羽毛 → 超級長耳兔ex：18 次
-- 謝米｜踢飛 → 大吾的鐵啞鈴：12 次
-- 太陽岩｜宇宙光束 → 含羞苞：11 次
-- 眷戀雲｜愛心標誌 → 爆炸頭水牛：11 次
-- 太陽岩｜宇宙光束 → 岩殿居蟹：10 次
-- 太陽岩｜宇宙光束 → 吉雉雞ex：8 次
-- 眷戀雲｜愛心標誌 → 洛奇亞ex：8 次
-- 破破舵輪｜悔念錨 → 月月熊 赫月 ex：8 次
-- 太陽岩｜宇宙光束 → 願增猿：7 次
+- 太陽岩｜宇宙光束 → 願增猿：10 次
+- N的達摩狒狒｜復燃 → 迷唇娃：10 次
+- 超級阿勃梭魯ex｜死亡終局 → 青銅鐘：10 次
+- 旋轉洛托姆｜突擊著地 → 熔蟻獸：7 次
+- 太陽岩｜宇宙光束 → 多龍巴魯托ex：7 次
+- 火箭隊的烏鴉頭頭｜火箭羽毛 → 夠讚狗：7 次
+- 火箭隊的烏鴉頭頭｜火箭羽毛 → 蓋諾賽克特：7 次
+- 菊草葉｜飛葉快刀 → 爆炸頭水牛：7 次
+- 貓頭夜鷹｜高速之翼 → 爆炸頭水牛：7 次
 - 多龍巴魯托ex｜噴射頭擊 → 岩殿居蟹：7 次
-- 厄鬼椪 碧草面具ex｜萬葉陣雨 → 岩殿居蟹：7 次
 - 竹蘭的花岩怪｜激怒咒詛 → 破破舵輪：6 次
-- 太陽岩｜宇宙光束 → 厄鬼椪 碧草面具ex：6 次
-- 太陽岩｜宇宙光束 → 喵喵ex：6 次
-- 火箭隊的烏鴉頭頭｜火箭羽毛 → 火焰鳥：5 次
-- 火箭隊的烏鴉頭頭｜火箭羽毛 → 月月熊 赫月：5 次
-- 太陽岩｜宇宙光束 → 火箭隊的烏鴉頭頭：5 次
-- 火箭隊的烏鴉頭頭｜火箭羽毛 → 太陽岩：5 次
-- 旋轉洛托姆｜突擊著地 → 猛雷鼓ex：5 次
-- 貓頭夜鷹｜高速之翼 → 爆炸頭水牛：5 次
-- 超級阿勃梭魯ex｜死亡終局 → 厄鬼椪 碧草面具ex：5 次
-- 幼基拉斯｜頭錘 → 輕飄飄：5 次
-- 來悲粗茶｜抹茶旋濺 → 吉雉雞ex：4 次
+- 超級大嘴娃ex｜貪心 → 吉雉雞ex：6 次
+- 太陽岩｜宇宙光束 → 拉帝亞斯ex：6 次
+- 太陽岩｜宇宙光束 → 超級袋獸ex：5 次
+- 太陽岩｜宇宙光束 → 青銅鐘：5 次
+- 夜巡靈｜前往渡魂 → 含羞苞：5 次
+- 願增猿｜精神歪曲 → 厄鬼椪 礎石面具ex：5 次
+- 土龍節節ex｜逆境之尾 → 岩殿居蟹：5 次
+- 勾魂眼｜動怒爪 → 超級蒂安希ex：4 次
 - 超級阿勃梭魯ex｜死亡終局 → 多龍巴魯托ex：4 次
-- 太陽岩｜宇宙光束 → 多龍奇：4 次
+- 旋轉洛托姆｜突擊著地 → 火箭隊的超夢ex：4 次
+- 超級阿勃梭魯ex｜死亡終局 → 月石：4 次
+- 火箭隊的烏鴉頭頭｜火箭羽毛 → 超級長耳兔ex：4 次
+- 火箭隊的烏鴉頭頭｜火箭羽毛 → 厄鬼椪 碧草面具ex：4 次
+- 破破舵輪｜悔念錨 → 月月熊 赫月 ex：4 次
 
 | 牌組（該側） | 全零決策點 | 其中無側效果 |
 |---|---|---|
-| 猛雷鼓ex | 60 | 9 |
-| 火箭隊的烏鴉頭頭 | 53 | 53 |
-| 夠讚狗 | 40 | 34 |
-| 顫弦蠑螈 | 37 | 28 |
-| 月月熊 赫月 | 27 | 27 |
-| 寶石猛雷鼓 | 26 | 3 |
-| 超級耿鬼ex（預組） | 24 | 6 |
-| 少年冠軍火焰雞多龍 | 20 | 0 |
-| 班基拉斯 | 20 | 18 |
-| 奧利瓦 | 19 | 0 |
-| 莉莉艾的皮皮 | 19 | 19 |
-| 蒼炎刃鬼 | 16 | 16 |
-| 鋁鋼橋龍 | 15 | 15 |
-| 大師亞軍化隱 | 15 | 15 |
-| 超級妙蛙花 | 15 | 0 |
-| 祭典樂舞 | 15 | 15 |
-| 竹蘭的烈咬陸鯊EX | 13 | 11 |
-| 超級快龍ex（戰術牌組） | 10 | 8 |
-| 超級路卡利歐 | 10 | 9 |
-| 超級蒂安希 | 10 | 9 |
+| 猛雷鼓ex | 55 | 7 |
+| 火箭隊的烏鴉頭頭 | 36 | 34 |
+| 寶石猛雷鼓 | 36 | 2 |
+| 夠讚狗 | 35 | 19 |
+| 鋁鋼橋龍 | 33 | 33 |
+| 顫弦蠑螈 | 30 | 19 |
+| 超級袋獸阿勃梭魯 | 24 | 24 |
+| 少年冠軍火焰雞多龍 | 23 | 0 |
+| 月月熊 赫月 | 23 | 23 |
+| 班基拉斯 | 20 | 17 |
+| 寶石大竺葵 | 18 | 16 |
+| 超級耿鬼ex（預組） | 17 | 5 |
+| 大師亞軍化隱 | 16 | 12 |
+| 大師冠軍超級袋獸厄鬼椪 | 12 | 1 |
+| 火伊布 | 12 | 12 |
+| N的索羅亞克 | 12 | 12 |
+| 蒼炎刃鬼 | 12 | 12 |
+| 奧利瓦 | 10 | 2 |
+| 超級蒂安希 | 10 | 10 |
+| 超級路卡利歐 | 9 | 9 |

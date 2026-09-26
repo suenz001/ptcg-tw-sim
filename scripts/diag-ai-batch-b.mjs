@@ -14,7 +14,7 @@
 import { fileURLToPath } from 'node:url';
 import { writeFileSync } from 'node:fs';
 import {
-  buildAiBundle, loadLivePool, playGame, seeded, pct,
+  buildAiBundle, loadLivePool, playGame, seeded, pct, firstPlayerOf,
 } from './lib/ai-sim-harness.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -134,7 +134,8 @@ const CLEAR = new Set(mod.CLEAR_ON_EXIT_FLAGS);
 const b2 = [];
 for (const { card, atk, idx } of uniq.values()) {
   const t = (atk.effect ?? '').replace(/‌/g, '');
-  const next = /下個自己的回合/.test(t) && /無法使用招式/.test(t);
+  // ⚠ fable 審查：卡面有兩種寫法 ——「無法使用招式」（全部招式）與「無法使用「X」」（單招）；初版只掃前者，漏了 26 張
+  const next = /下個自己的回合/.test(t) && /無法使用(招式|「)/.test(t);
   const lastSelf = /上個自己的回合/.test(t) && /無法使用這個招式/.test(t);
   if (!next && !lastSelf) continue;
   const scope = lastSelf ? '玩家層級冷卻（自己的寶可夢使出了「X」）'
@@ -180,7 +181,12 @@ for (const { card, atk, idx } of uniq.values()) {
       // 撤退到備戰 ⇒ 牠身上的限制旗標要被清掉（官方 L1518）
       const b = myTurn.players[0].bench[0];
       if (act?.iid === attackerIid && b) {
-        const rt = mod.applyAction(myTurn, { type: 'RETREAT', newActiveIid: b.iid }, pool);
+        let rt = mod.applyAction(myTurn, { type: 'RETREAT', newActiveIid: b.iid }, pool);
+        // 撤退會開選擇視窗（多屬性能量要選丟哪幾個）⇒ 交給 AI 選完，才看得到實體真的搬到備戰
+        for (let k = 0; k < 10 && rt !== myTurn && rt.pendingSelection; k++) {
+          const a2 = mod.aiNew(rt, pool, rt.pendingSelection.actorIdx); if (!a2) break;
+          rt = mod.applyAction(rt, a2, pool);
+        }
         if (rt !== myTurn) {
           const moved = rt.players[0].bench.find((c) => c.iid === attackerIid);
           row.cleared = moved ? !(moved.cantAttackThisTurn || moved.cantAttackPending || moved.blockedAttackNamesThisTurn?.length) : null;
@@ -189,7 +195,9 @@ for (const { card, atk, idx } of uniq.values()) {
       }
     }
     // 靜態：旗標在不在「離場清除」清單
-    row.inClearList = flags.filter((f) => /^[a-zA-Z]+$/.test(f)).every((f) => CLEAR.has(f));
+    //   只對「這隻寶可夢」的實體旗標有意義；玩家層級冷卻／玩家旗標刻意不在清單內 ⇒ 記「—」（初版誤印「是」）
+    const instFlags = flags.filter((f) => /^[a-zA-Z]+$/.test(f));
+    row.inClearList = scope === '這隻寶可夢' && instFlags.length ? instFlags.every((f) => CLEAR.has(f)) : null;
     break;
   }
   // 判定：主詞「這隻寶可夢」⇒ 必須是跟著實體、離場清除的旗標；任何一種都必須「下回合列表也不列、引擎也擋」
@@ -227,7 +235,7 @@ const bad2 = b2.filter((r) => r.verdict !== '✅');
 P(`- ⚠ 需要人工看的：${bad2.length} 個（主詞與機制對不上，或合成盤面沒觸發）`);
 P('');
 P('- 欄位：「下回合仍列為可用」＝ getAvailableAttacks（UI 按鈕與 AI 候選）還列不列；「引擎擋下」＝真的送出時引擎擋不擋；');
-P('  「撤退實測清除」＝實際撤退到備戰後旗標是否消失（撤退費付不起時為 —）；「在離場清除清單」＝旗標在 CLEAR_ON_EXIT_FLAGS（靜態）。');
+P('  「撤退實測清除」＝實際撤退到備戰後旗標是否消失（撤退沒有完成、或玩家層級不適用時為 —）；「在離場清除清單」＝實體旗標在 CLEAR_ON_EXIT_FLAGS（靜態；玩家層級為 —）。');
 P('');
 P('| 卡 | 招式 | 卡面主詞 | 實作機制 | 下回合仍列為可用 | 引擎擋下 | 撤退實測清除 | 在離場清除清單 | 判定 |');
 P('|---|---|---|---|---|---|---|---|---|');
@@ -260,11 +268,13 @@ function sideEffects(st, me, idx) {
       myDmg: field(p[me]).reduce((n, c) => n + (c.damage ?? 0), 0),
     };
   };
-  const clone = structuredClone(st); clone.activePlayerIndex = me;
-  const after = withSeed(777, () => mod.applyAction(clone, { type: 'ATTACK', attackIndex: idx }, pool));
-  if (!after || after === clone) return ['試打失敗'];
-  const a = snap(st), b = snap(after);
+  // ⚠ fable 審查：擲幣型零傷害招的正反面會被單一種子釘死 ⇒ 用 3 個種子各試一次，側效果取聯集
   const diff = [];
+  for (const sd of [777, 778, 779]) {
+  const clone = structuredClone(st); clone.activePlayerIndex = me;
+  const after = withSeed(sd, () => mod.applyAction(clone, { type: 'ATTACK', attackIndex: idx }, pool));
+  if (!after || after === clone) { diff.push('試打失敗'); continue; }
+  const a = snap(st), b = snap(after);
   for (const k of Object.keys(a)) if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) diff.push(k);
   // 戰鬥寶可夢身上的旗標（例：下回合不能撤退、下回合受傷減少、不會受到傷害）——排除傷害／能量與招式蓋章
   const inst = (s, p) => s.players[p].active;
@@ -284,7 +294,8 @@ function sideEffects(st, me, idx) {
       if (JSON.stringify(x[k]) !== JSON.stringify(y[k])) diff.push(`${tag}.${k}`);
     }
   }
-  return diff;
+  }
+  return [...new Set(diff)];
 }
 const presets = mod.PRESET_DECKS;
 const b3 = { decisions: 0, allZero: 0, allZeroAttack: 0, allZeroNoSide: 0, allZeroNoSideAttack: 0,
@@ -295,7 +306,9 @@ function makeObserver(deckName) {
     if (!act || st.phase !== 'playing' || st.pendingSelection || st.activePlayerIndex !== idx
         || st.turnPhase !== 'main' || !st.players[idx].active) return act;
     const atks = mod.getAvailableAttacks(st, pool);
-    if (!atks.length || act.type !== 'ATTACK') return act;
+    // 分母＝「這回合的收尾決定」（攻擊／撤退／結束回合），而且當下有招可用
+    //   ⚠ fable 審查：初版只在 act === ATTACK 時才計 ⇒ 再問「其中送 ATTACK 的比例」恆 100%，量不到 AI。
+    if (!atks.length || !['ATTACK', 'RETREAT', 'END_TURN'].includes(act.type)) return act;
     b3.decisions++;
     const evs = atks.map((i) => ({ i, ev: mod.evaluateAttack(st, idx, i, pool) }));
     const zero = evs.every(({ ev }) => ev.ok && !ev.unresolved && !ev.ko && ev.prizes === 0 && ev.oppDamage === 0);
@@ -335,7 +348,8 @@ for (let a = 0; a < presets.length; a++) {
       const agents = seat === 0
         ? [makeObserver(presets[a].name), makeObserver(presets[b].name)]
         : [makeObserver(presets[b].name), makeObserver(presets[a].name)];
-      playGame({ mod, pool, decks, agents, seed: 31337 + a * 1009 + off * 97 + g });
+      const seed = 31337 + a * 1009 + off * 97 + g;
+      playGame({ mod, pool, decks, agents, seed, firstPlayer: firstPlayerOf(seed) });
       b3.games++;
     }
   }
@@ -343,7 +357,7 @@ for (let a = 0; a < presets.length; a++) {
 P('## B3 所有可用招式都打不出傷害時，AI 仍送出 ATTACK 的比例');
 P(`- 模擬：56 副預組 × 3 個對手 × ${GAMES_PER_PAIR} 局 = ${b3.games} 局（${((Date.now() - t0) / 1000).toFixed(0)} 秒）。`);
 P('- 判準：每一招都 `ok && !unresolved && !ko && prizes === 0 && oppDamage === 0`（平均值，不用 dealt）。');
-P(`- AI 決定攻擊的決策點：${b3.decisions}；其中「全部招式零傷害」：${b3.allZero}（${pct(b3.decisions ? b3.allZero / b3.decisions : NaN)}）`);
+P(`- 有招可用時的收尾決定（攻擊／撤退／結束回合）：${b3.decisions}；其中「全部招式零傷害」：${b3.allZero}（${pct(b3.decisions ? b3.allZero / b3.decisions : NaN)}）`);
 P(`- ⭐ B3 比例＝全零時仍送 ATTACK：${b3.allZeroAttack} / ${b3.allZero} = ${pct(b3.allZero ? b3.allZeroAttack / b3.allZero : NaN)}`
   + '（攻擊分支只要有招可發就一定 return ATTACK，所以結構上必然是 100%）');
 P(`- 再排除「有其他盤面效果」的：全零且無側效果 ${b3.allZeroNoSide} 次 ⇒ 這才是批次 C 真正會擋下的範圍`);

@@ -1188,6 +1188,14 @@ export interface GameState {
    */
   ancientAttackedIidsThisTurn?: { p1: string[]; p2: string[] };
   ancientAttackedIidsLastSelfTurn?: { p1: string[]; p2: string[] };
+  /**
+   * ⭐v6.428 玩家層級「這個回合／上個自己的回合，自己的寶可夢使出的招式名稱」。
+   *   給卡面主詞是「自己的寶可夢」的招式冷卻用（仙子伊布ex｜天仙石、騎拉帝納｜渾沌匍匐）：
+   *   實體上的 attackUsedLastSelfTurn 會隨那一隻離場消失，這裡不會。
+   *   形狀用 `{ p1, p2 }`（Firestore 禁巢狀陣列，同上）。
+   */
+  attackNamesUsedThisTurn?: { p1: string[]; p2: string[] };
+  attackNamesUsedLastSelfTurn?: { p1: string[]; p2: string[] };
   oppAbilityKOdMeInLastOppTurn?: [number, number];
   oppAttackKOdMyRocketInLastOppTurn?: [number, number];
   oppAbilityKOdMyRocketInLastOppTurn?: [number, number];

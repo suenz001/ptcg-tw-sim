@@ -1,9 +1,62 @@
 # 內部改版紀錄（不打包進網站）
 
+## AI 對戰強化 批次 A／B：依 fable 5.1 審查修正（與 v6.428 同一個 commit；只動 scripts/ 與 docs/）
+
+批次 A、B 當初判定「只動量測腳本」而**沒有送審**——站長指正後補審。fable 5.1 抓到的問題與處理（全部自行重現過）：
+- 【高】基準版只換 ai.ts：AI 邏輯改在 ai-eval／ai-roles／ai-playbook 時新舊共用同一份 ⇒ 量尺全盲。
+  ⇒ `buildAiBundle` 改成整組快照 git HEAD 的 `src/lib/game/ai*.ts`（放 os.tmpdir()，esbuild 外掛把快照內對非 AI 模組的
+  相對 import 導回工作樹）；環境變數改為 `AI_BASELINE_REV`。重現：ai-eval 權重改負數，修前 selfplay 50%，修後 35%／44%。
+- 【中】ai-eval 的模組層級 `_simSeed` 跨局累積 ⇒ 同 seed 不可重現、A/A 不必然一勝一敗。
+  ⇒ 打包時以 onLoad 在 ai-eval 附加 `__harnessResetSimSeed`（不改 src/），`playGame` 每局開始歸零。實測 sim 兩次輸出 md5 相同。
+- 【中】pool 異牌組鏡像的先攻不一定抵銷（先攻擲幣在洗牌後，對調座位亂數消耗不同）。
+  ⇒ `playGame` 新增 `firstPlayer`（createGame 的 firstPlayerOverride），四支腳本一律用 `firstPlayerOf(seed)`，鏡像兩場同值。
+- 【中】守衛 ② 是安慰劑（先用關鍵字過濾才檢查；非字面 winReason 只計數不斷言——複審追加改成白名單）。⇒ 改掃 src/lib/game 全部 .ts 的 `winReason:` 字面與終局判定物件，
+  不過濾、線上限定以完整字面列白名單；**因此抓到漏類「勝利象徵特殊勝利條件達成」**，量尺新增「特殊勝利條件」一類。
+  突變：把「牌組耗盡」改成「超時判負」⇒ 守衛紅。
+- 【中】B2 正則只掃「無法使用招式」，漏掉「無法使用「X」」單招鎖 26 張 ⇒ 改 `/無法使用(招式|「)/`，重跑共 76 招、全 ✅（v6.428 之上）。
+- 【低】B2「在離場清除清單」對玩家層級誤印「是」、「撤退實測 —」實為撤退開了選擇視窗 ⇒ 改印 —、選擇視窗交給 AI 選完再看。
+- 【低】B3 分母循環定義（只在送 ATTACK 時計）⇒ 分母改為「有招可用時的收尾決定（攻擊／撤退／結束回合）」；側效果改 3 個種子取聯集。
+- 【低】pool「未分出」不亮紅 ⇒ 一格超過 5% 亮 🔴；隨機欄改稱「主階段隨機、其餘交給正式 AI 的混合 agent」。
+- 【低】`_ai_baseline_<pid>.ts` 被 SIGTERM 砍掉會殘留在 src/ ⇒ 快照移到 os.tmpdir()，並掛 SIGINT／SIGTERM 清理。
+- 【低】（複審）歸零與指定先攻沒有守衛 ⇒ test-ai-sim-harness 新增 ⑤：reset 真的歸零、playGame 每局呼叫新舊 reset、firstPlayer 0／1 都生效（三個突變都紅）。
+- 未修（記錄）：A2 主招＝「印刷傷害數字最大」對文字傷害主打手失準（甲賀忍蛙ex、奧利瓦ex）；首次可攻擊回合先攻方系統性 ≥ 2（兩組都混座位，只加噪音）。
+- 新基線（v6.428 工作樹；檔案 `docs/ai-eval/pool-baseline-v6428.json`、`docs/ai-eval/batch-b-report-v6428.md`，取代 2f4e3801 兩檔）：
+  - sim 400 局：卡住 0；敗因 取完獎賞 78.5%／牌組耗盡 19.8%／沒有寶可夢 1.8%。
+  - selfplay 4 組 × 800 場：A/A 1599／1599／未分出 2（CI ±1.7pp）。
+  - pool（每格 100 場）：最低格 呆呆王 vs 瑪俐的長毛巨魔ex 14%；災難格 2（另一格 呆呆王 vs 超級路卡利歐 15%）；
+    地板失守 4 副（胡地 69%／呆呆王 55%／超級路卡利歐 85%／魔靈多龍 64%）。敗因 取完獎賞 74.3%／牌組耗盡 22.1%／沒有寶可夢 3.6%。
+    A2 勝−敗差：攻擊可用率 +21.9pp、連續性 +21.5pp、主招打出 +35.0pp、首次可攻擊 −0.51 回合。
+  - B3：7483 個收尾決定中全部招式零傷害 510（6.8%），仍送 ATTACK 100%；排除側效果後 306，其中撤退分支會成立 58。
+
+## v6.428 天仙石／渾沌匍匐 玩家層級冷卻修正（AI 對戰強化 批次 B2 抓到＋fable 審查追加）
+
+BASE `533ed2a`（批次 A、B 之上；src/ 相對 v6.427 只有本版動 engine.ts、types.ts）。
+- 卡面（仙子伊布ex 16770 等、騎拉帝納 19581）：「在上個自己的回合，若自己的寶可夢使出了『X』，則無法使用這個招式。」
+  主詞「自己的寶可夢」⇒ **玩家層級的事實**。
+- bug 一（B2 診斷）：冷卻判斷只寫在 ATTACK handler ⇒ `getAvailableAttacks` 仍列為可用 ⇒ UI 招式按鈕亮著、按下才 log「無法使用」；
+  AI 的候選也來自它 ⇒ 只剩這一招可用時 AI 送 ATTACK、引擎只寫 log 回新 state；本機 AI 的無進展防呆（+page.svelte 約 3174 行，
+  連續 2 次盤面不變強制 END_TURN）會把回合結束 ⇒ 實際體感是白白浪費那一回合（守衛 C1 在 BASE 上實測 AI 送出 {ATTACK, 天仙石}）。
+- bug 二（fable 審查實測，v5.967 起就有）：冷卻只讀場上實體的 `attackUsedLastSelfTurn` ⇒ 用過的那一隻昏厥進棄牌區、回手、放回牌庫、
+  退化（buildEvolvedInstance 不繼承此欄位）之後，第二張同名卡可以接著使用、而且效果真的發動。
+- 修法（Rule 38）：中央述詞 `isPlayerLevelAttackOnCooldown(state, pIdx, attackName)`，ATTACK handler 與 `getAvailableAttacks` 共用；
+  新增遊戲層級 `attackNamesUsedThisTurn`／`attackNamesUsedLastSelfTurn`（`{p1,p2}`，Firestore 禁巢狀陣列；同 v5.911 輪番狂攻
+  `ancientAttackedIidsThisTurn` 的蓋章點與 END_TURN promote 點）。述詞讀遊戲層級，另併看實體蓋章當退路（v6.428 以前開始、
+  仍在進行中的對局沒有遊戲層級紀錄）。engine 全檔只剩述詞裡讀一次 `PLAYER_LEVEL_ATTACK_COOLDOWN.has(`。
+- 借招不受影響（fable 查證）：handler 以自身招式名判 gate、蓋章也是自身招名 ⇒ 借用天仙石不蓋「天仙石」章，符合 PTCG_RULES §17.31.Z。
+- engine-strip：`scripts/lib/engine-strip-v6428.mjs`（difflib，當場驗證還原後逐字等於 v6.427），接線 test-v6265 F4c／F4d、
+  test-v6375 最內層、test-v6371 探針 prelude（Rule 54：v6.428 排在 v6.427 之前）。
+- 守衛 `test-v6428-player-cooldown-listing`（14 條）：BASE engine 上 9 紅；fc654ff1（只修清單、未修離場）上 E1 紅。
+  突變 12 個全殺（含 fable 複審追加的 E3：遊戲層級紀錄不比對招式名）（清單不判、handler 不判、只掃戰鬥位、不比招式名、清單就地抄一份、述詞不看冷卻清單、不寫玩家層級蓋章、
+  END_TURN 不 promote、述詞不讀玩家層級、END_TURN 不清 ThisTurn、述詞讀錯玩家）。
+- bump 四配套：version.ts、admin.html SITE_VERSION_HINT、test-v6272 PREV_SHA＋PREV_ALLOWED（engine.ts、types.ts…）、
+  test-v6264 BASE_SHA（兩者都前移到 2f4e3801＝v6.427 之後 main 上最新一顆）。首頁 changelog 三步搬運（v6.416 內文 → bodies、v6.386 → archive）。
+- 未確認（fable 列管）：仙子伊布ex 用過天仙石後，下一個自己的回合由夢幻ex｜基因駭入借「天仙石」是否應被擋——PTCG_RULES 只有反向的兩條問答；引擎目前放行。
+- 部署：`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）。
+
 ## AI 對戰強化 批次 B：三條純診斷掃描（只動 scripts/ 與 docs/，玩家端零改動）
 
 BASE `2f4e3801`（接在批次 A 之後）。src/ 與 static/ 零改動 ⇒ 不 bump version.ts；正式站不需要跑任何 bat。
-新增 `scripts/diag-ai-batch-b.mjs`（不進 CI），報告存 `docs/ai-eval/batch-b-report-2f4e3801.md`。
+新增 `scripts/diag-ai-batch-b.mjs`（不進 CI），報告存 `docs/ai-eval/batch-b-report-2f4e3801.md`（⚠ 已由 v6.428 修正版 `batch-b-report-v6428.md` 取代，數字以上方「依 fable 5.1 審查修正」一節為準）。
 harness 的 `buildAiBundle` 加 `extraExports` 參數（診斷腳本要 ai-eval／instance-flags 的匯出；其他腳本不受影響）。
 - B1：live H/I/J 不重複招式 2802 個，傷害欄非純數字 974 個；引擎實打 730、回落欄位估值 240。
   風險 58 個（回落＋卡面有傷害＋估值 0 或 × 只剩底數），其中 15 個在內建預組裡（吉雉雞ex｜殘酷箭、奧利瓦ex｜油之機關槍、
@@ -33,7 +86,7 @@ BASE `2f4e3801`。src/ 與 static/ 一個字都沒動 ⇒ 不 bump version.ts；
 - A3 `eval-ai-selfplay.mjs`：預設每組 seed 40 → 400（每 seed 兩場鏡像），每行印 95% CI 與半寬；有效 < 400 場印警告。
 - A4 新增 `eval-ai-pool.mjs`：受測 AI（工作樹）× 基準 AI（HEAD）對戰矩陣＋隨機 agent 地板欄；印最低格、災難格
   （< 30%）、地板失守（對隨機 < 90%）；`--save`／`--compare`（兩比例 z < −1.96 ＝ 回歸，只用來否決）。
-  基線存 `docs/ai-eval/pool-baseline-2f4e3801.json`。
+  基線存 `docs/ai-eval/pool-baseline-2f4e3801.json`（⚠ 已由 `pool-baseline-v6428.json` 取代）。
 - 量尺 bug 修正：舊 sim／selfplay 在 setup 階段雙方 `setupDone` 都為 true 時固定問 0，0 已無事可做 ⇒
   另一方還卡在 CONFIRM_MULLIGAN_REVEAL ⇒ sim 約 25% 的局被誤判「卡住無動作」、selfplay 記成「未分出」。
   改為優先者回 null 時改問另一方（只限 setup；playing 階段回 null 仍原樣回報，不掩蓋真卡住）。
@@ -42,7 +95,7 @@ BASE `2f4e3801`。src/ 與 static/ 一個字都沒動 ⇒ 不 bump version.ts；
   setup 退路與反面、Wilson／z 對照手算值。突變：分類改回字串優先 ⇒ ① 紅；拿掉 setup 退路 ⇒ ③ 紅。
 - 基線（2026-09-26，HEAD=工作樹 A/A）：
   - sim 400 局：卡住 0（修前約 25%）；敗因 取完獎賞 78.3%／牌組耗盡 20.3%／沒有寶可夢 1.5%。
-  - selfplay 4 組 × 800 場：A/A 恰 50.0%（同 seed 鏡像＋同一份程式 ⇒ 必然一勝一敗；合計 95% CI ±1.7pp）。
+  - selfplay 4 組 × 800 場：A/A 恰 50.0%（合計 95% CI ±1.7pp）。⚠ 當時說「必然一勝一敗」不成立（_simSeed 跨局累積、先攻未指定），見上方審查修正一節。
   - 對手池（每格 100 場）：最低格 呆呆王 vs 瑪俐的長毛巨魔ex 12%；災難格 2 格（呆呆王 vs 超級路卡利歐 17%）；
     地板失守 3 副（胡地 61%／呆呆王 53%／魔靈多龍 72% 對隨機 agent）。敗因 取完獎賞 74.0%／牌組耗盡 22.8%／
     沒有寶可夢 3.2%。A2 勝−敗差：攻擊可用率 +21.5pp、連續性 +20.8pp、主招打出 +32.1pp、首次可攻擊 −0.47 回合。

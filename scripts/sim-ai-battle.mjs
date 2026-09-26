@@ -14,7 +14,7 @@
  */
 import { fileURLToPath } from 'node:url';
 import {
-  buildAiBundle, loadLivePool, presetById, playGame, newAggregate, addToAggregate, printAggregate,
+  buildAiBundle, loadLivePool, presetById, playGame, newAggregate, addToAggregate, printAggregate, firstPlayerOf,
 } from './lib/ai-sim-harness.mjs';
 
 const ROUNDS = Number(process.argv[2] ?? 100);
@@ -54,7 +54,9 @@ const agg = newAggregate();
 
 for (let r = 0; r < ROUNDS; r++) {
   const [a, b] = matchups[r % matchups.length];
-  const res = playGame({ mod, pool, decks: [DECKS[a], DECKS[b]], agents: [ai, ai], seed: 9001 + r * 7919 });
+  const seed = 9001 + r * 7919;
+  // 指定先攻＋每局歸零 AI 試打種子 ⇒ 異常範例的「局 r」可以單獨重跑重現
+  const res = playGame({ mod, pool, decks: [DECKS[a], DECKS[b]], agents: [ai, ai], seed, firstPlayer: firstPlayerOf(seed) });
   stats.total++;
   stats[res.outcome]++;
   addToAggregate(agg, res);

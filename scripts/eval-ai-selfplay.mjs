@@ -11,6 +11,8 @@
 // 【⭐先後手公平：必須「同一個 seed 跑兩次鏡像」】
 //   PTCG 先攻有優勢。每個 seed 跑兩場，新版分別坐 0 與坐 1。同一副牌、同一個隨機序列，
 //   先攻優勢在兩場之間完全抵銷，剩下的差異才是 AI 強度。
+//   ⭐ 先攻方用 firstPlayerOf(seed) 明確指定（兩場同一個值），並在每局開始把 AI 試打的 _simSeed 歸零
+//     ⇒ 同 seed 可重現；A/A（兩邊同一份程式）時每個 seed 恰好一勝一敗（fable 審查後修正）。
 //   ⚠新增測試方法時務必先跑 A/A（兩邊同一份程式碼）確認結果落在 50% 附近，
 //     否則量到的是工具的偏差。
 //
@@ -22,10 +24,10 @@
 //
 // 用法：node scripts/eval-ai-selfplay.mjs [每組 seed 數=400] [配對索引] [seed 偏移]
 //   沙盒單次執行有時間上限時，可用 seed 偏移分批跑再把場次相加（各批 seed 不重疊）。
-//   ⚠ 沙盒沒有 .git 時用 AI_BASELINE_SRC=/path/to/head_ai.ts 指定基準版。
+//   基準版＝git HEAD 的整組 AI 模組（src/lib/game/ai*.ts）；可用 AI_BASELINE_REV=<commit> 指定別的版本。
 import { fileURLToPath } from 'node:url';
 import {
-  buildAiBundle, loadLivePool, presetById, playGame, wilson, pct, MIN_TRUSTED_GAMES,
+  buildAiBundle, loadLivePool, presetById, playGame, wilson, pct, MIN_TRUSTED_GAMES, firstPlayerOf,
 } from './lib/ai-sim-harness.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -45,7 +47,7 @@ const MATCHUPS = [
 function playOne(seed, deck, newSeat) {
   const agents = newSeat === 0 ? [aiNew, aiOld] : [aiOld, aiNew];
   // maxRejects 8：沿用舊版「連續被拒 8 次就放棄」的口徑
-  const r = playGame({ mod, pool, decks: [deck, deck], agents, seed, maxRejects: 8 });
+  const r = playGame({ mod, pool, decks: [deck, deck], agents, seed, maxRejects: 8, firstPlayer: firstPlayerOf(seed) });
   if (r.outcome !== 'ended' || r.winner == null) return 'draw';
   return r.winner === newSeat ? 'new' : 'old';
 }

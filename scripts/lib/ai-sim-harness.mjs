@@ -7,8 +7,9 @@
 // ⚠ 本檔只讀引擎、不改引擎；所有統計都是「引擎提供了什麼選項」，不是「AI 選了什麼」，
 //   這樣才分得出「AI 選錯」和「AI 根本沒得選」。
 import { build } from 'esbuild';
-import { readFileSync, readdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, readdirSync, writeFileSync, unlinkSync, existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { join, resolve as pResolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
@@ -16,43 +17,88 @@ import { execFileSync } from 'node:child_process';
 // 1. 打包引擎＋AI
 // ─────────────────────────────────────────────────────────────────────────────
 /**
- * 把引擎、目前工作樹的 ai.ts（aiNew）以及選用的基準版 ai.ts（aiOld）打包成一個 ESM。
+ * 把引擎、目前工作樹的 AI（aiNew）以及選用的基準版 AI（aiOld）打包成一個 ESM。
  * @param {string} root repo 根目錄
- * @param {{ withBaseline?: boolean }} opts
- *   withBaseline：基準版 = git HEAD 的 ai.ts（或環境變數 AI_BASELINE_SRC 指定的檔案）。
+ * @param {{ withBaseline?: boolean, extraExports?: string[] }} opts
+ *   withBaseline：基準版 = git HEAD 的**整組 AI 模組**（src/lib/game/ai*.ts：ai.ts、ai-eval.ts、ai-roles.ts、
+ *     ai-playbook.ts…），或環境變數 AI_BASELINE_REV 指定的 commit。
+ *     ⚠ fable 審查（批次 A）：初版只換 ai.ts，AI 邏輯改在 ai-eval.ts 等檔時新舊共用同一份 ⇒ 量尺全盲
+ *       （實測把 ai-eval 權重整組改成負數，selfplay 仍是 50%）。現在整組快照，並在 AI 模組 import
+ *       非 AI 模組（engine 等）時導回工作樹 ⇒ 兩版之間只差 AI 模組本身，勝率差才能歸因到那一批。
+ *     ⚠ 快照放在 os.tmpdir()（不寫進 src/），被 SIGTERM 砍掉也不會在 repo 裡留殘檔。
  *   extraExports：額外的 export 敘述（字串陣列，路徑相對 repo 根），給診斷腳本用。
- *   ⚠ 單變因：兩版之間只差「工作樹相對 HEAD 的 ai.ts 改動」，勝率差才能歸因到那一批。
+ * 另外匯出 __resetNew／__resetOld：把 ai-eval 的模組層級 _simSeed 歸零。
+ *   ⚠ fable 審查：_simSeed 跨局累積 ⇒ 同一個 process 裡第 N 局的 AI 決策取決於前面跑過什麼（同 seed 不可重現）。
+ *     只在本打包裡以 onLoad 附加 reset 函式，不改 src/。
  */
 export async function buildAiBundle(root, { withBaseline = false, extraExports = [] } = {}) {
   // 暫存檔名帶 pid：多支腳本平行跑時不會互相覆蓋（先前固定檔名會撞）
   const tag = `.x-aish-${process.pid}`;
   const S = join(root, `${tag}-s.js`), E = join(root, `${tag}-e.ts`), O = join(root, `${tag}-o.mjs`);
-  const BASE = join(root, `src/lib/game/_ai_baseline_${process.pid}.ts`);
-  const tmp = [S, E, O];
-  if (withBaseline) tmp.push(BASE);
-  process.on('exit', () => { for (const p of tmp) { try { unlinkSync(p); } catch {} } });
+  const GAME = join(root, 'src/lib/game');
+  const baseDir = withBaseline ? mkdtempSync(join(tmpdir(), 'ai-baseline-')) : null;
+  const cleanup = () => {
+    for (const p of [S, E, O]) { try { unlinkSync(p); } catch {} }
+    if (baseDir) { try { rmSync(baseDir, { recursive: true, force: true }); } catch {} }
+  };
+  process.on('exit', cleanup);
+  for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => { cleanup(); process.exit(130); });
 
+  const aiFiles = [];
   if (withBaseline) {
-    const headAI = process.env.AI_BASELINE_SRC && existsSync(process.env.AI_BASELINE_SRC)
-      ? readFileSync(process.env.AI_BASELINE_SRC, 'utf8')
-      : execFileSync('git', ['-C', root, 'cat-file', '-p', 'HEAD:src/lib/game/ai.ts'],
-          { maxBuffer: 64 * 1024 * 1024 }).toString('utf8');
-    writeFileSync(BASE, headAI);
+    const rev = process.env.AI_BASELINE_REV || 'HEAD';
+    const ls = execFileSync('git', ['-C', root, 'ls-tree', '--name-only', `${rev}:src/lib/game/`]).toString('utf8');
+    for (const name of ls.split('\n').map((x) => x.trim())) {
+      if (!/^ai[^/]*\.ts$/.test(name)) continue;
+      aiFiles.push(name);
+      const txt = execFileSync('git', ['-C', root, 'cat-file', '-p', `${rev}:src/lib/game/${name}`],
+        { maxBuffer: 64 * 1024 * 1024 }).toString('utf8');
+      writeFileSync(join(baseDir, name), txt);
+    }
+    if (!aiFiles.includes('ai.ts') || !aiFiles.includes('ai-eval.ts')) throw new Error('基準快照缺 ai.ts／ai-eval.ts：' + aiFiles.join(','));
   }
   writeFileSync(S, 'export const base="";export const assets="";');
   writeFileSync(E, [
     "export { createGame, applyAction, getAvailableAttacks, getEffectiveAttacks, getPlayableTrainers,",
     "  getPlayableBasics, getEvolvableTargets, getUsableAbilities, canRetreat } from './src/lib/game/engine';",
     "export { getAIAction as aiNew } from './src/lib/game/ai';",
-    withBaseline ? `export { getAIAction as aiOld } from './src/lib/game/_ai_baseline_${process.pid}';` : 'export const aiOld = null;',
+    "export { __harnessResetSimSeed as __resetNew } from './src/lib/game/ai-eval';",
+    withBaseline ? `export { getAIAction as aiOld } from ${JSON.stringify(join(baseDir, 'ai.ts'))};` : 'export const aiOld = null;',
+    withBaseline ? `export { __harnessResetSimSeed as __resetOld } from ${JSON.stringify(join(baseDir, 'ai-eval.ts'))};` : 'export const __resetOld = null;',
     "export { getCardRole } from './src/lib/game/ai-roles';",
     "export { PRESET_DECKS } from './src/lib/decks/presets';",
     // 診斷腳本需要的額外匯出（例如 ai-eval 的 evaluateAttack），逐行附加；不影響其他腳本
     ...extraExports,
     "import './src/lib/game/effects';",
   ].join('\n'));
+  const harnessPlugin = {
+    name: 'ai-harness',
+    setup(b) {
+      // ① 基準快照裡的相對 import：目標是 AI 模組 ⇒ 用快照；其餘（engine、types…）⇒ 導回工作樹
+      if (baseDir) {
+        b.onResolve({ filter: /^\.\.?\//, namespace: 'file' }, (args) => {
+          if (!args.importer.startsWith(baseDir)) return undefined;
+          const target = pResolve(GAME, args.path);            // 以 src/lib/game 為基準解析
+          const rel = target.slice(GAME.length + 1);
+          if (!rel.includes('/') && aiFiles.includes(rel + '.ts')) return { path: join(baseDir, rel + '.ts') };
+          for (const cand of [target + '.ts', target + '.js', target, join(target, 'index.ts')]) {
+            if (existsSync(cand) && !statSync(cand).isDirectory()) return { path: cand };
+          }
+          return undefined;
+        });
+      }
+      // ② 兩份 ai-eval.ts 都附加 _simSeed 歸零函式（只存在於本打包）
+      b.onLoad({ filter: /[\\/]ai-eval\.ts$/ }, (args) => {
+        const src = readFileSync(args.path, 'utf8');
+        const m = /let _simSeed = (0x[0-9a-fA-F]+|\d+);/.exec(src);
+        if (!m) throw new Error('ai-eval.ts 找不到 `let _simSeed = …;`（改名了？請更新 ai-sim-harness）');
+        return { contents: src + `\nexport function __harnessResetSimSeed() { _simSeed = ${m[1]}; }\n`, loader: 'ts' };
+      });
+    },
+  };
   await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node',
-    target: 'node20', alias: { $lib: join(root, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
+    target: 'node20', alias: { $lib: join(root, 'src/lib'), '$app/paths': S }, logLevel: 'error',
+    plugins: [harnessPlugin] });
   return import(pathToFileURL(O).href);
 }
 
@@ -120,6 +166,9 @@ export const padW = (str, n) => String(str) + ' '.repeat(Math.max(0, n - dispWid
 
 export const pct = (x, digits = 1) => (Number.isFinite(x) ? (x * 100).toFixed(digits) + '%' : '—');
 
+/** 由 seed 決定先攻方（鏡像的兩場用同一個值；見 playGame 的 firstPlayer 說明）。 */
+export function firstPlayerOf(seed) { return seeded(seed ^ 0x5bd1e995)() < 0.5 ? 0 : 1; }
+
 /** 樣本量門檻：少於這個數字的勝率結論一律加警告（Kaggle 實例：150 局 54.7% → 400 局 50.5%±4.9%）。 */
 export const MIN_TRUSTED_GAMES = 400;
 
@@ -127,7 +176,8 @@ export const MIN_TRUSTED_GAMES = 400;
 // 3. 勝負原因分類（A1）
 // ─────────────────────────────────────────────────────────────────────────────
 // 引擎的 winReason 字串（main 2f4e3801 實查）：
-//   有勝負：「X 沒有可上場的寶可夢」／「X 牌組耗盡，無法抽牌」／「X 取得所有獎賞卡」；線上另有棄權類 ⇒ 歸「其他」。
+//   有勝負：「X 沒有可上場的寶可夢」／「X 牌組耗盡，無法抽牌」／「X 取得所有獎賞卡」／「勝利象徵特殊勝利條件達成」
+//   （卡片效果，effects/cards/v2650_i_wave15_misc8.ts；守衛改成不過濾掃描後才發現）；線上另有棄權類 ⇒ 歸「其他」。
 //   平手（winner 這個 key 不存在）：中央終局判定 engine.ts 的 v6.361／v6.420 段落至少有三種字串——
 //   「雙方皆沒有可上場的寶可夢」「雙方同時取得所有獎賞卡，且雙方皆可放置戰鬥寶可夢」
 //   「X 取得所有獎賞卡，但同時沒有可上場的寶可夢」。
@@ -137,6 +187,7 @@ export const REASON_CLASSES = [
   ['draw', '平手（雙方皆無寶可夢／同時取完獎賞等）'],
   ['deck-out', '牌組耗盡'],
   ['prizes', '取得所有獎賞卡'],
+  ['special', '特殊勝利條件（勝利象徵等）'],
   ['other', '其他（棄權等）'],
   ['unfinished', '未結束（卡住／超過步數／例外）'],
 ];
@@ -148,6 +199,7 @@ export function classifyReason(result) {
   if (r.includes('沒有可上場的寶可夢')) return 'no-pokemon';
   if (r.includes('牌組耗盡')) return 'deck-out';
   if (r.includes('取得所有獎賞卡')) return 'prizes';
+  if (r.includes('特殊勝利條件')) return 'special';
   return 'other';
 }
 
@@ -228,18 +280,26 @@ function newSideMetrics() {
  * @param {number} p.seed
  * @param {number} [p.maxSteps=20000]
  * @param {number} [p.maxRejects=30]  同一盤面連續被引擎拒絕幾次視為卡住
+ * @param {0|1} [p.firstPlayer]  指定先攻方（createGame 的 firstPlayerOverride）。
+ *   ⚠ 鏡像評估一定要指定：不指定時先攻由擲幣決定，而擲幣發生在洗牌與起手之後 ⇒
+ *     兩副牌對調座位時亂數消耗量不同 ⇒ 兩場的先攻方不一定相同（fable 審查實測 50 對裡 9 對沒抵銷）。
+ *     座位對調＋同一個 firstPlayer ⇒ 受測方恰好先攻一場、後攻一場。
  * @returns {{ outcome, winner, reason, reasonClass, turns, steps, sides, error?, lastAction? }}
  */
-export function playGame({ mod, pool, decks, agents, seed, maxSteps = 20000, maxRejects = 30 }) {
+export function playGame({ mod, pool, decks, agents, seed, maxSteps = 20000, maxRejects = 30, firstPlayer }) {
   const orig = Math.random;
   Math.random = seeded(seed);
+  // 每局開始把 AI 試打用的 _simSeed 歸零 ⇒ 同 seed 同盤面可重現（不受前面跑過幾局影響）
+  mod.__resetNew?.();
+  mod.__resetOld?.();
   const sides = [newSideMetrics(), newSideMetrics()];
   const mainKeys = decks.map((d) => mainMoveKeys(mod, d, pool));
   sides[0].hasMainMove = mainKeys[0].size > 0;
   sides[1].hasMainMove = mainKeys[1].size > 0;
   let st, steps = 0, rejected = 0, lastAction = null;
   try {
-    st = mod.createGame({ name: 'A', entries: decks[0].entries }, { name: 'B', entries: decks[1].entries }, pool);
+    st = mod.createGame({ name: 'A', entries: decks[0].entries }, { name: 'B', entries: decks[1].entries }, pool,
+      firstPlayer === 0 || firstPlayer === 1 ? { firstPlayerOverride: firstPlayer } : undefined);
     for (; steps < maxSteps && st.phase !== 'game-over'; steps++) {
       // ── 過程指標：在「輪到自己的主階段、沒有待選擇」時記錄引擎提供的攻擊選項 ──
       if (st.phase === 'playing' && st.turnPhase === 'main' && !st.pendingSelection) {
@@ -283,7 +343,7 @@ export function playGame({ mod, pool, decks, agents, seed, maxSteps = 20000, max
     const ended = outcome === 'ended';
     const winner = ended && st && st.winner != null ? st.winner : null;
     const res = { outcome, winner, reason: ended ? st.winReason : null, turns: st ? st.turn : 0,
-      steps, sides, lastAction };
+      steps, sides, lastAction, firstPlayerIdx: st ? st.firstPlayerIdx : null };
     if (err) res.error = String(err && err.message || err);
     res.reasonClass = classifyReason(res);
     return res;
@@ -369,9 +429,10 @@ export function printAggregate(agg, title = '') {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 8. 隨機合法動作 agent（A4 的地板）
+// 8. 「主階段隨機」agent（A4 的地板）
 // ─────────────────────────────────────────────────────────────────────────────
 /**
+ * ⚠ 這是**混合** agent，不是純隨機：只有主階段的動作是隨機的，其餘全交給正式 AI（fable 審查要求寫明）。
  * 只在「輪到自己的主階段、沒有待選擇、戰鬥位有寶可夢」時隨機挑一個合法動作；
  * 其餘情境（setup、選擇視窗、補位）一律交給正式 AI（getAIAction），否則對局會卡住。
  * 合法性以引擎為準：候選逐一丟給 applyAction 試，被拒絕（回傳同一個 state）就換下一個。

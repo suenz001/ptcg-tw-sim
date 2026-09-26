@@ -11,18 +11,20 @@
 //     2. 抓回歸：用 --compare 對照舊矩陣，某一格顯著下降（兩比例 z < −1.96）
 //   ⚠ 不能用「平均上升」當出貨理由——離線評估的排序本身不可信（有人把上線大輸 162 分的版本評在贏家之上）。
 //
-// 【⚠ 同一副牌的格子（對角線）在 A/A 時必然是 50%】
-//   兩邊同一份程式碼＋同一副牌＋同一個 seed ⇒ 兩場鏡像的勝方座位相同 ⇒ 恰好一勝一敗。
+// 【⚠ 同一副牌的格子（對角線）在 A/A 時恰好是 50%】
+//   兩邊同一份程式碼＋同一副牌＋同一個 seed＋同一個指定先攻方＋每局歸零 AI 試打種子 ⇒ 兩場鏡像完全對稱 ⇒ 恰好一勝一敗。
+//   （fable 審查：初版沒有指定先攻、沒有歸零種子，這句話不成立；已修。）
 //   所以對角線只有在受測 AI 與基準 AI 真的不同時才有資訊量。
 //
 // 用法：node scripts/eval-ai-pool.mjs [--seeds 50] [--save out.json] [--compare old.json] [--only 列索引]
 //   --seeds：每一格跑幾個 seed（×2 場鏡像）。預設 50 ⇒ 每格 100 場（抓崩盤夠用；單格 95% CI 約 ±10pp）。
-//   ⚠ 沙盒沒有 .git 時用 AI_BASELINE_SRC=/path/to/head_ai.ts 指定基準版。
+//   基準版＝git HEAD 的整組 AI 模組（src/lib/game/ai*.ts）；可用 AI_BASELINE_REV=<commit> 指定別的版本。
+//   ⚠ 隨機欄是「主階段隨機、其餘交給正式 AI」的混合 agent，不是純隨機。
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync } from 'node:fs';
 import {
   buildAiBundle, loadLivePool, presetById, playGame, makeRandomAgent, wilson, twoPropZ, pct, padW,
-  newAggregate, addToAggregate, printAggregate, MIN_TRUSTED_GAMES,
+  newAggregate, addToAggregate, printAggregate, MIN_TRUSTED_GAMES, firstPlayerOf,
 } from './lib/ai-sim-harness.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -42,6 +44,7 @@ const DECK_IDS = [
 ];
 const DISASTER = 0.30;          // 任一格低於 30% ⇒ 災難
 const RANDOM_FLOOR = 0.90;      // 對隨機 agent 應該壓倒性勝利；低於 90% ⇒ 那副牌的 AI 駕駛有根本問題
+const UNDECIDED_MAX = 0.05;     // 一格裡「未分出」超過 5% ⇒ 亮紅（卡住／例外也算）
 
 const mod = await buildAiBundle(ROOT, { withBaseline: true });
 const pool = loadLivePool(ROOT);
@@ -67,7 +70,8 @@ for (const row of rows) {
       for (const seat of [0, 1]) {
         const agents = seat === 0 ? [aiNew, oppAgent] : [oppAgent, aiNew];
         const deckPair = seat === 0 ? [row.deck, oppDeck] : [oppDeck, row.deck];
-        const r = playGame({ mod, pool, decks: deckPair, agents, seed });
+        // ⭐ 兩場用同一個先攻方：座位對調後受測方恰好先攻一場、後攻一場（先攻優勢確定抵銷）
+        const r = playGame({ mod, pool, decks: deckPair, agents, seed, firstPlayer: firstPlayerOf(seed) });
         if (!isRandom) addToAggregate(agg, r, [seat]);
         if (r.outcome !== 'ended' || r.winner == null) d++;
         else if (r.winner === seat) w++; else l++;
@@ -95,6 +99,8 @@ for (const row of rows) {
     if (!isRandom && n && (!minCell || p < minCell.p)) minCell = { row: row.name, col, p, n, w };
     if (!isRandom && n && p < DISASTER) flags.push(`🔴 災難格：${row.name} vs ${col} 只有 ${pct(p)}（${w}/${n}）`);
     if (isRandom && n && p < RANDOM_FLOOR) flags.push(`🔴 地板失守：${row.name} 對隨機 agent 只有 ${pct(p)}（${w}/${n}）`);
+    // 未分出（平手／卡住／例外）太多也要亮紅：某批改動讓某副牌整格卡住時，不可以只印「(未d)」而不否決
+    if (d / (w + l + d) > UNDECIDED_MAX) flags.push(`🔴 未分出過多：${row.name} vs ${col} 有 ${d}/${w + l + d} 局沒分出勝負（卡住／例外／平手）`);
   }
   console.log(lineStr);
 }
