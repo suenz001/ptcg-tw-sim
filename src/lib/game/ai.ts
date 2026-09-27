@@ -40,7 +40,7 @@ import {
   canPayTopCopy, pickTopCopyEnergy, TOP_COPY_ATTACK_NAME,
 } from './ai-slowking';
 import { knownDeckTopIids } from './deck-top-known';
-import { pickBenchEnergyAttach } from './ai-energy';   // ⭐v6.432 戰鬥位有招可用時也附能量（給備戰）
+import { pickActiveEnergyUnlock, pickBenchEnergyAttach } from './ai-energy';   // ⭐v6.432 戰鬥位有招可用時也附能量（給備戰）
 // ⭐v6.429 試打時「自己的選擇視窗」交給同一個選擇器解完（批次 B1：選對手 1 隻打的招不再被估成 0 分）。
 //   ai-eval 不能 import ai.ts（模組循環相依），所以由這裡註冊；autoResolveSelection 是 function 宣告（提升），此時已可呼叫。
 setSimSelectionResolver((st, pl) => (st.pendingSelection ? autoResolveSelection(st, pl) : null));
@@ -185,6 +185,9 @@ export function getAIAction(
     if (availableAttacks.length > 0) {
       // ⭐v6.432 戰鬥位有招可用時，舊版整回合不附能量（備戰永遠等不到能量；全預組 16% 的回合收尾因此少附一次）。
       //   現在改附給**備戰**裡還有招付不起的寶可夢（主打手優先；中央判定見 ai-energy.ts）；戰鬥位的行為不變。
+      // ⭐v6.433 但如果再附 1 個能量就能讓戰鬥位多出一招更好的（試打分數更高），這回合的能量先給戰鬥位
+      const _ap = pickActiveEnergyUnlock(state, myIdx, pool);
+      if (_ap) return { type: 'ATTACH_ENERGY', energyIid: _ap, targetIid: player.active.iid };
       const _bp = pickBenchEnergyAttach(state, myIdx, pool);
       if (_bp) return { type: 'ATTACH_ENERGY', energyIid: _bp.energyIid, targetIid: _bp.targetIid };
     } else {

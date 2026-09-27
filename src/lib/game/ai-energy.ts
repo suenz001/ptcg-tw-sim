@@ -20,9 +20,9 @@
  */
 import type { Card, EnergyType } from '$lib/cards/types';
 import type { GameState, CardInstance } from './types';
-import { applyAction, canAffordAttack, energyProvidesType } from './engine';
+import { applyAction, canAffordAttack, energyProvidesType, getAvailableAttacks } from './engine';
 import { getCardRole } from './ai-roles';
-import { cloneState, shuffleHiddenZonesForSim, withIsolatedRandom } from './ai-eval';
+import { cloneState, evaluateAttack, shuffleHiddenZonesForSim, withIsolatedRandom } from './ai-eval';
 
 const ROLE_RANK: Record<string, number> = { 'main-attacker': 2, 'sub-attacker': 1 };
 
@@ -94,6 +94,59 @@ export function energyStaysIfAttached(
   } catch {
     return false;
   }
+}
+
+/**
+ * ⭐v6.433 戰鬥位已經有招可用，但再附 1 個能量就能**多出一招更好的**（例：青銅鐘 身上【鋼】【鋼】，重摑 40 可用；
+ *   再附 1 個就能用金屬障礙 120）⇒ 這回合的能量附給戰鬥位，而不是備戰。
+ *   判準全部是自己的試打（evaluateAttack，與選招同一把尺）：
+ *   - 在洗過看不到區域的複本上用引擎真的附一次（附能量的效果照樣結算）；附完停在選擇視窗 ⇒ 不考慮（保守）。
+ *   - 只看「附了才付得起的**新招式**」的最佳分數，要**高過**現在可用招式的最佳分數才附——
+ *     不比同一招附前附後（擲幣招的試打雜訊會讓同一招的分數上下跳，容易誤判）。
+ *   - 同一種能量卡只試一次（卡號相同結果相同）。
+ *   - ⭐（fable 審查 v6.433 A）新招要有**實質增益**才改附戰鬥位：分數至少高出 UNLOCK_MIN_GAIN（60，與撤退換人的門檻同量級；
+ *     擊倒／拿獎賞是 +1000 等級，自然跨過）。否則像土龍弟弟（交替 0 → 衝撞 20）這種小增益會搶走備戰主打手的能量。
+ *   - ⭐（審查 B）現在可用的招有試打停在選擇視窗的（unresolved；例：長毛巨魔｜挑釁抓擊要對手選擇），它的試打分數不可信
+ *     ⇒ 不比、不改附戰鬥位（保守；交給 pickBenchEnergyAttach）。
+ * @returns 要附給戰鬥位的能量 iid；不值得 ⇒ null（交給 pickBenchEnergyAttach）
+ */
+/** 改附戰鬥位所需的最小分數增益（啟發式，不是卡面規則；與撤退換人的付費門檻 60 同量級）。 */
+export const UNLOCK_MIN_GAIN = 60;
+
+export function pickActiveEnergyUnlock(state: GameState, me: 0 | 1, pool: Map<string, Card>): string | null {
+  const p = state.players[me];
+  const act = p.active;
+  if (!act || act.cantAttachEnergyThisTurn) return null;
+  const energies = p.hand.filter((c) => pool.get(c.cardId)?.supertype === 'Energy');
+  if (!energies.length) return null;
+  const nowIdx = getAvailableAttacks(state, pool);
+  let cur = -Infinity;
+  for (const i of nowIdx) {
+    const ev = evaluateAttack(state, me, i, pool);
+    if (ev.ok && ev.unresolved) return null;   // 現有招的分數不可信 ⇒ 不比
+    if (ev.ok) cur = Math.max(cur, ev.score);
+  }
+  const tried = new Set<string>();
+  let best: { iid: string; score: number } | null = null;
+  for (const e of energies) {
+    if (tried.has(e.cardId)) continue;
+    tried.add(e.cardId);
+    try {
+      const after = withIsolatedRandom(() => {
+        const sim = shuffleHiddenZonesForSim(cloneState(state), me);
+        sim.activePlayerIndex = me;
+        return applyAction(sim, { type: 'ATTACH_ENERGY', energyIid: e.iid, targetIid: act.iid }, pool);
+      });
+      if (!after || after.pendingSelection) continue;
+      if (!after.players[me].active?.energyAttached.some((x) => x.iid === e.iid)) continue;   // 附不上去／當場被丟
+      const newIdx = getAvailableAttacks(after, pool).filter((i) => !nowIdx.includes(i));
+      for (const i of newIdx) {
+        const ev = evaluateAttack(after, me, i, pool);
+        if (ev.ok && !ev.unresolved && ev.score - cur >= UNLOCK_MIN_GAIN && (!best || ev.score > best.score)) best = { iid: e.iid, score: ev.score };
+      }
+    } catch { /* fail-open：評估失敗就不附戰鬥位 */ }
+  }
+  return best ? best.iid : null;
 }
 
 function lexGreater(a: number[], b: number[]): boolean {
