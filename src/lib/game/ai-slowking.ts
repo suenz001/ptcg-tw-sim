@@ -22,6 +22,7 @@ import type { GameState, GameAction, CardInstance } from './types';
 import { applyAction, getEffectiveAttacks, getAvailableAttacks, getUsableAbilities, isRulePokemon, canAffordAttack, energyProvidesType } from './engine';
 import { evaluateAttack, cloneState, withIsolatedRandom, shuffleHiddenZonesForSim, type AttackActionExtra } from './ai-eval';
 import { knownDeckTopIids, recordKnownDeckTop } from './deck-top-known';
+import { energyStaysIfAttached } from './ai-energy';
 
 /** 借「自己牌庫頂那張」招式的攻擊（目前全池只有這一招）。 */
 export const TOP_COPY_ATTACK_NAME = '耀閃挑戰';
@@ -70,6 +71,9 @@ export function pickTopCopyEnergy(
   resolve: (st: GameState, pool: Map<string, Card>) => GameAction | null,
 ): CardInstance | null {
   const ens = state.players[me].hand.filter((c) => pool.get(c.cardId)?.supertype === 'Energy')
+    // v6.432（fable 複審）附上去會被丟掉的能量不附（燃火能量、火箭隊能量給非火箭隊）——與 ai-energy.ts 同一個中央判定。
+    //   目標在戰鬥位時只要當下留得住（燃火能量本來就是給這回合出招用的）；在備戰時要留到回合結束之後。
+    .filter((c) => energyStaysIfAttached(state, me, c.iid, tgt.iid, pool, state.players[me].active?.iid !== tgt.iid))
     .filter((c) => !protect || !wouldDisturbKnownTop(state, me, { type: 'ATTACH_ENERGY', energyIid: c.iid, targetIid: tgt.iid }, pool, resolve));
   return ens.find((c) => energyProvidesType(tgt, c, 'Psychic', pool)) ?? ens[0] ?? null;
 }

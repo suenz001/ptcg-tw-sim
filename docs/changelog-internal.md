@@ -1,5 +1,21 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.432：戰鬥位有招可用時也把能量附給備戰（新增 ai-energy.ts；ai.ts 接線；對戰規則零改動）
+
+BASE `fd3c00f6`（v6.431）。詳細前後對照：`docs/ai-eval/energy-attach-report-v6432.md`。
+- 由災難格「呆呆王 vs 瑪俐」診斷（新 `scripts/diag-ai-slowking-vs-marnie.mjs`）追到 ai.ts v2.357「有招可用 ⇒ 不附能量」；
+  新 `scripts/diag-ai-energy-skip.mjs` 量到全預組 16.2% 的回合收尾「手上有能量卻沒附」（98% 因戰鬥位有招可用）→ v6.432 後 0.4%。
+- `pickBenchEnergyAttach`：備戰裡還有招付不起的寶可夢（canAffordAttack）；主打手 > 副打手 > 其他 → 立刻多付得起幾招 → 屬性（energyProvidesType）→ 能量多者。
+- （fable 審查 A）`energyStaysIfAttached`：引擎試附＋試跑回合結束，能量留不下來（燃火能量、火箭隊能量給非火箭隊）就不附。
+  複審順帶：v6.429 呆呆王分支的 pickTopCopyEnergy 也改過同一個判定（目標在戰鬥位只要當下留得住——燃火能量本來就給這回合出招用；
+  在備戰要留到回合結束之後）；test-v6429 新增 F10（24 條）。呆呆王預組沒有這兩種能量，對手池未重跑（只有試附消耗的隔離亂數序列不同）。
+- 對手池對 v6.431 自身基準（新基線 `docs/ai-eval/pool-baseline-v6431.json`）0 格下降、1 格顯著上升；selfplay 52.3%（CI 50.5～54.0），
+  超級耿鬼ex 47.5% 與另一組 seed 52.4% 合併 ≈ 50.0%（看不出差異）。
+- 呆呆王 vs 瑪俐 14→24%（不顯著）；剩下主要是預組結構（能量 9 張、呆呆王常不在場）⇒ 產品問題留給站長。
+- 守衛 `scripts/test-v6432-bench-energy-attach.mjs`（9 條）：HEAD-FAIL 7 紅 2 綠（零回歸 N2／N6）；突變 10 個殺 8 個
+  （存活：鎖能量排除被試附那一層撐住、試附例外分支無法觸發）。另案：戰鬥位納入附能量候選（用試打分數差比較）。
+- bump 四配套＋首頁 changelog 三步搬運（v6.420 內文 → bodies、v6.397 → archive）。
+
 ## v6.431：撤退換人的估值改用 evaluateAttack 3 次平均（只動 ai-eval.ts；對戰規則零改動）
 
 BASE `300cb1c6`（v6.430）。fable 審查 v6.430 C 點名的另案。

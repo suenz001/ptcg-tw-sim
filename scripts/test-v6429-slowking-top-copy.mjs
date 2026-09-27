@@ -60,7 +60,7 @@ for (const f of readdirSync(dir)) {
 }
 // 卡片事實一律取自 static/cards（台灣官方卡面）
 const C = { slowking: '10934', metagross: '18479', kyurem: '10629', spectrier: '14740', kangaskhan: '14071',
-  latias: '16783', cipher: '17169', academy: '10646', psy: '17220', tablet: '17133', ball: '17122', snorlax: '17038', genesect: '16960', noctowl: '13430', budew: '14671', stretcher: '11490', kingambit_pre: '16943', sensePsy: '18056', metal: '17219' };
+  latias: '16783', cipher: '17169', academy: '10646', psy: '17220', tablet: '17133', ball: '17122', snorlax: '17038', genesect: '16960', noctowl: '13430', budew: '14671', stretcher: '11490', kingambit_pre: '16943', sensePsy: '18056', metal: '17219', burn: '17207' };
 for (const [k, id] of Object.entries(C)) assert.ok(pool.get(id), `找不到 ${k} ${id}（卡池變了？）`);
 assert.ok(/將自己的牌庫上方1張卡丟棄.*擁有規則的寶可夢.*作為這個招式使用/.test(pool.get(C.slowking).attacks[0].effect), '耀閃挑戰卡面變了，請重新查證');
 const idxOf = (cid, name) => pool.get(cid).attacks.findIndex((a) => a.name === name);
@@ -361,6 +361,20 @@ T('F9 ⭐「付不付得起」看屬性不看張數：呆呆王身上 2 個【�
   const sNo = build([metal(), metal()]);
   const a = getAIAction(sNo, pool, 0);
   assert.equal(isCipher(sNo, a), false, '付不起耀閃挑戰還打暗碼迷的解讀：' + JSON.stringify(a));
+});
+
+T('F10 （v6.432）備戰的呆呆王要能量、手上只有燃火能量（回合結束就被丟）⇒ 不附給備戰的呆呆王', () => {
+  assert.ok(/在自己的回合結束時丟棄/.test(pool.get(C.burn).rulesText ?? ''), '燃火能量卡面變了');
+  // ⚠ 呆呆王在戰鬥位時燃火能量可以附（這回合就能用來出招）；在備戰時回合結束就被丟，白附
+  const st0 = mk({ active: inst(C.snorlax), bench: [inst(C.slowking)], hand: [inst(C.burn)], deck: fill(10) });
+  const st = { ...st0, players: [{ ...st0.players[0], energyAttachedThisTurn: false }, st0.players[1]] };
+  const a = getAIAction(st, pool, 0);
+  assert.ok(!(a?.type === 'ATTACH_ENERGY' && a.targetIid === st.players[0].bench[0].iid),
+    '把燃火能量附給備戰的呆呆王（回合結束就被丟）：' + JSON.stringify(a));
+  // 正對照：基本【超】能量會附
+  const st2 = { ...st0, players: [{ ...st0.players[0], hand: [inst(C.psy)], energyAttachedThisTurn: false }, st0.players[1]] };
+  const a2 = getAIAction(st2, pool, 0);
+  assert.ok(a2?.type === 'ATTACH_ENERGY' && a2.targetIid === st2.players[0].bench[0].iid, '正對照：基本【超】能量應該附給備戰的呆呆王：' + JSON.stringify(a2));
 });
 
 // ── G B1：試打把自己的選擇視窗解完 ──────────────────────────────────────────

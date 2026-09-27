@@ -40,6 +40,7 @@ import {
   canPayTopCopy, pickTopCopyEnergy, TOP_COPY_ATTACK_NAME,
 } from './ai-slowking';
 import { knownDeckTopIids } from './deck-top-known';
+import { pickBenchEnergyAttach } from './ai-energy';   // ⭐v6.432 戰鬥位有招可用時也附能量（給備戰）
 // ⭐v6.429 試打時「自己的選擇視窗」交給同一個選擇器解完（批次 B1：選對手 1 隻打的招不再被估成 0 分）。
 //   ai-eval 不能 import ai.ts（模組循環相依），所以由這裡註冊；autoResolveSelection 是 function 宣告（提升），此時已可呼叫。
 setSimSelectionResolver((st, pl) => (st.pendingSelection ? autoResolveSelection(st, pl) : null));
@@ -182,7 +183,10 @@ export function getAIAction(
     const availableAttacks = getAvailableAttacks(state, pool);
     // 若已有招式可发，不附能量（能量应留给真正需要的宝可梦）
     if (availableAttacks.length > 0) {
-      // 有招式可用，跳过填能量
+      // ⭐v6.432 戰鬥位有招可用時，舊版整回合不附能量（備戰永遠等不到能量；全預組 16% 的回合收尾因此少附一次）。
+      //   現在改附給**備戰**裡還有招付不起的寶可夢（主打手優先；中央判定見 ai-energy.ts）；戰鬥位的行為不變。
+      const _bp = pickBenchEnergyAttach(state, myIdx, pool);
+      if (_bp) return { type: 'ATTACH_ENERGY', energyIid: _bp.energyIid, targetIid: _bp.targetIid };
     } else {
       // v4.949 Phase 2a: role-aware 能量分配（保守版）
       //   舊版：在 active 沒招可發時，把能量附給 active。
