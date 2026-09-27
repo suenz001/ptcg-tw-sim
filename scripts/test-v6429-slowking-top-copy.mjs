@@ -60,7 +60,7 @@ for (const f of readdirSync(dir)) {
 }
 // 卡片事實一律取自 static/cards（台灣官方卡面）
 const C = { slowking: '10934', metagross: '18479', kyurem: '10629', spectrier: '14740', kangaskhan: '14071',
-  latias: '16783', cipher: '17169', academy: '10646', psy: '17220', tablet: '17133', ball: '17122', snorlax: '17038', genesect: '16960', noctowl: '13430', budew: '14671', stretcher: '11490', kingambit_pre: '16943', sensePsy: '18056', metal: '17219', burn: '17207' };
+  latias: '16783', cipher: '17169', academy: '10646', psy: '17220', tablet: '17133', ball: '17122', snorlax: '17038', genesect: '16960', noctowl: '13430', budew: '14671', stretcher: '11490', kingambit_pre: '16943', sensePsy: '18056', metal: '17219', burn: '17207', slowpoke: '18072', lillie: '17200' };
 for (const [k, id] of Object.entries(C)) assert.ok(pool.get(id), `找不到 ${k} ${id}（卡池變了？）`);
 assert.ok(/將自己的牌庫上方1張卡丟棄.*擁有規則的寶可夢.*作為這個招式使用/.test(pool.get(C.slowking).attacks[0].effect), '耀閃挑戰卡面變了，請重新查證');
 const idxOf = (cid, name) => pool.get(cid).attacks.findIndex((a) => a.name === name);
@@ -396,6 +396,108 @@ T('G2 ⭐ 對手要做的選擇一律不代答：哈約克｜吼叫（[由對手
   const ev = EVAL.evaluateAttack(st, 0, idxOf(C.noctowl, '吼叫'), pool);
   assert.ok(ev.ok, '試打失敗');
   assert.equal(ev.unresolved, true, '試打替對手做了選擇（應該停在對手的視窗、回報 unresolved）');
+});
+
+// ── K v6.434 站長打法：暗碼迷的解讀＋使者衝刺 快速找呆呆王；牌庫頂未知時不為了碰運氣換呆呆王 ──────────
+const handNames = (st) => st.players[0].hand.map((c) => pool.get(c.cardId).name);
+T('K1 ⭐ 場上沒有呆呆獸／呆呆王、超級袋獸ex 在戰鬥位（使者衝刺可用）⇒ 先打暗碼迷的解讀（比莉莉艾的決意優先），再用使者衝刺把呆呆獸與呆呆王抽上來', () => {
+  const deck = [...fill(3), inst(C.slowpoke), ...fill(3), inst(C.slowking), ...fill(6)];
+  let st = mk({ active: inst(C.kangaskhan, [psy(), psy(), psy()]), hand: [inst(C.lillie), inst(C.cipher)], deck });
+  const a1 = getAIAction(st, pool, 0);
+  assert.equal(a1?.type === 'PLAY_TRAINER' && a1.iid === st.players[0].hand[1].iid, true, '第一步應打暗碼迷的解讀：' + JSON.stringify(a1));
+  st = resolveAll(applyAction(st, a1, pool));
+  const top2 = st.players[0].deck.slice(0, 2).map((c) => pool.get(c.cardId).name).sort().join('、');
+  assert.equal(top2, ['呆呆王', '呆呆獸'].sort().join('、'), '牌庫頂應擺呆呆獸與呆呆王：' + top2);
+  const a2 = getAIAction(st, pool, 0);
+  assert.equal(a2?.type, 'USE_ABILITY', '擺好之後應馬上用使者衝刺：' + JSON.stringify(a2));
+  st = resolveAll(applyAction(st, a2, pool));
+  assert.ok(handNames(st).includes('呆呆王') && handNames(st).includes('呆呆獸'), '使者衝刺之後手上應有呆呆獸與呆呆王：' + handNames(st).join('、'));
+});
+
+T('K2 ⭐ 牌庫頂已擺好呆呆王、手上還有寶可平板（會重洗牌庫）⇒ 先用使者衝刺抽上來，不先打寶可平板', () => {
+  const record = F(DTK, 'recordKnownDeckTop');
+  const deck = [inst(C.slowking), inst(C.metagross), ...fill(10)];
+  let st = mk({ active: inst(C.kangaskhan, [psy(), psy(), psy()]), bench: [inst(C.slowpoke)], hand: [inst(C.tablet)], deck });
+  st = record(st, 0, [deck[0].iid, deck[1].iid]);
+  if (st === MISSING) throw new Error('recordKnownDeckTop 不存在');
+  const a = getAIAction(st, pool, 0);
+  assert.equal(a?.type, 'USE_ABILITY', '應先用使者衝刺：' + JSON.stringify(a));
+});
+
+T('K3 零回歸：使者衝刺用不了（超級袋獸ex 在備戰）、手上還有別的支援者 ⇒ 不為了擺牌庫頂先打暗碼迷的解讀', () => {
+  const deck = [...fill(3), inst(C.slowpoke), ...fill(3), inst(C.slowking), ...fill(6)];
+  const st = mk({ active: inst(C.snorlax), bench: [inst(C.kangaskhan)], hand: [inst(C.lillie), inst(C.cipher)], deck });
+  const a = getAIAction(st, pool, 0);
+  assert.ok(!(a?.type === 'PLAY_TRAINER' && a.iid === st.players[0].hand[1].iid), '沒有抽牌特性可接時不該先打暗碼迷的解讀：' + JSON.stringify(a));
+});
+
+T('K4 ⭐ 牌庫頂不知道時，不為了盲翻耀閃挑戰把呆呆王換上去（人類玩家會先擺好牌庫頂）；擺好了就換', () => {
+  const record = F(DTK, 'recordKnownDeckTop');
+  const build = () => {
+    const deck = [inst(C.metagross), ...fill(10)];
+    return { deck, st: mk({ active: inst(C.snorlax), bench: [inst(C.slowking, [psy(), psy()]), inst(C.latias)], deck, oppActive: C.kangaskhan }) };
+  };
+  // 前置條件：戰鬥位卡比獸沒能量、打不出招；拉帝亞斯ex 在場 ⇒ 基礎寶可夢撤退免費
+  const u = build();
+  assert.equal(ENG.getAvailableAttacks(u.st, pool).length, 0, '前置條件：戰鬥位應打不出招');
+  let blind = 0;
+  for (let k = 0; k < 8; k++) { EVAL.__testResetSimSeed(k); const a = getAIAction(u.st, pool, 0); if (a?.type === 'RETREAT' && a.newActiveIid === u.st.players[0].bench[0].iid) blind++; }
+  assert.equal(blind, 0, `牌庫頂未知時 8 個起點裡有 ${blind} 次換呆呆王上去碰運氣`);
+  // 正對照：牌庫頂擺好巨金怪 ⇒ 換呆呆王上去借金屬之錘
+  const k = build();
+  const st2 = record(k.st, 0, [k.deck[0].iid]);
+  if (st2 === MISSING) throw new Error('recordKnownDeckTop 不存在');
+  const a2 = getAIAction(st2, pool, 0);
+  assert.ok(a2?.type === 'RETREAT' && a2.newActiveIid === st2.players[0].bench[0].iid, '正對照：牌庫頂擺好時應換呆呆王：' + JSON.stringify(a2));
+});
+
+T('K5 ⭐ 手上有呆呆王、場上沒有呆呆獸 ⇒ 寶可平板搜尋時拿呆呆獸（不是 HP 比較高的酋雷姆）', () => {
+  assert.ok(/從自己的牌庫選擇1張寶可夢卡（「擁有規則的寶可夢」除外）/.test(pool.get(C.tablet).rulesText ?? ''), '寶可平板卡面變了');
+  const deck = [inst(C.kyurem), inst(C.slowpoke), ...fill(10, C.psy)];
+  let st = mk({ active: inst(C.snorlax), hand: [inst(C.slowking), inst(C.tablet)], deck });
+  st = applyAction(st, { type: 'PLAY_TRAINER', iid: st.players[0].hand[1].iid }, pool);
+  assert.equal(st.pendingSelection?.type, 'deck-search', '前置條件：寶可平板應開牌庫搜尋');
+  const a = getAIAction(st, pool, 0);
+  assert.equal(a?.type, 'RESOLVE_SELECTION');
+  assert.equal(a.selectedIids.map((iid) => pool.get(st.players[0].deck.find((c) => c.iid === iid)?.cardId)?.name).join(), '呆呆獸', '應拿呆呆獸：' + JSON.stringify(a));
+  // 零回歸對照：手上沒有呆呆王、牌庫也沒有（不是呆呆王牌組）⇒ 照舊拿 HP 高的酋雷姆
+  let st2 = mk({ active: inst(C.snorlax), hand: [inst(C.tablet)], deck: [inst(C.kyurem), inst(C.slowpoke), ...fill(10, C.psy)] });
+  st2 = applyAction(st2, { type: 'PLAY_TRAINER', iid: st2.players[0].hand[0].iid }, pool);
+  const a2 = getAIAction(st2, pool, 0);
+  assert.equal(a2.selectedIids.map((iid) => pool.get(st2.players[0].deck.find((c) => c.iid === iid)?.cardId)?.name).join(), '酋雷姆', '非呆呆王牌組照舊：' + JSON.stringify(a2));
+  // 對照：手上已經有呆呆獸與呆呆王（進化線不缺）⇒ 不必優先拿呆呆獸，照舊拿酋雷姆
+  let st3 = mk({ active: inst(C.snorlax), hand: [inst(C.slowking), inst(C.slowpoke), inst(C.tablet)], deck: [inst(C.kyurem), inst(C.slowpoke), ...fill(10, C.psy)] });
+  st3 = applyAction(st3, { type: 'PLAY_TRAINER', iid: st3.players[0].hand[2].iid }, pool);
+  const a3 = getAIAction(st3, pool, 0);
+  assert.equal(a3.selectedIids.map((iid) => pool.get(st3.players[0].deck.find((c) => c.iid === iid)?.cardId)?.name).join(), '酋雷姆', '進化線不缺時照舊：' + JSON.stringify(a3));
+});
+
+T('K6 ⭐ 手上已有呆呆王、場上沒有呆呆獸、超級袋獸ex 在戰鬥位 ⇒ 暗碼迷的解讀擺呆呆獸（＋借招目標），使者衝刺抽上來', () => {
+  // 牌庫裡也有另一張呆呆王：只缺呆呆獸時不該再把呆呆王擺上去（改配借招目標）
+  const deck = [...fill(3), inst(C.slowpoke), inst(C.slowking), ...fill(2), inst(C.metagross), ...fill(6)];
+  let st = mk({ active: inst(C.kangaskhan, [psy(), psy(), psy()]), hand: [inst(C.slowking), inst(C.cipher)], deck });
+  const a1 = getAIAction(st, pool, 0);
+  assert.equal(a1?.type === 'PLAY_TRAINER' && a1.iid === st.players[0].hand[1].iid, true, '應打暗碼迷的解讀：' + JSON.stringify(a1));
+  st = resolveAll(applyAction(st, a1, pool));
+  const top2 = st.players[0].deck.slice(0, 2).map((c) => pool.get(c.cardId).name);
+  assert.ok(top2.includes('呆呆獸') && top2.includes('巨金怪'), '牌庫頂應擺呆呆獸與借招目標：' + top2.join('、'));
+  const a2 = getAIAction(st, pool, 0);
+  assert.equal(a2?.type, 'USE_ABILITY', '擺好之後應馬上用使者衝刺：' + JSON.stringify(a2));
+});
+
+T('K7 公平性：進化線缺什麼（topCopyLineNeed）與牌庫順序無關——同一副牌庫打亂 20 次結果都一樣', () => {
+  const need = F(SK, 'topCopyLineNeed');
+  const deck = [...fill(5), inst(C.slowpoke), ...fill(3), inst(C.slowking), ...fill(4)];
+  const st = mk({ active: inst(C.snorlax), hand: [], deck });
+  const r0 = need(st, 0, pool);
+  assert.notEqual(r0, MISSING, 'topCopyLineNeed 不存在');
+  assert.ok(r0.needEvo && r0.needBasic, '前置條件：兩張都缺：' + JSON.stringify(r0));
+  for (let t = 0; t < 20; t++) {
+    const d = [...deck];
+    for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; }
+    const st2 = { ...st, players: [{ ...st.players[0], deck: d }, st.players[1]] };
+    assert.deepEqual(need(st2, 0, pool), r0, '牌庫順序改變了結果');
+  }
 });
 
 // ── H 其他牌組不受影響 ───────────────────────────────────────────────────────

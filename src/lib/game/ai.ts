@@ -37,7 +37,7 @@ import { estimateIfPromoted, evaluateAttack, isPointlessAttack, PRIZE_SCORE_UNIT
 import {
   isTopCopyPlayer, topCopyUser, bestKnownTopCopy, valueAsTop, pickCipherArrange,
   pickNightAcademyCard, shouldUseNightAcademy, hasValuableKnownTop, wouldDisturbKnownTop, drawingAbilitiesNow,
-  canPayTopCopy, pickTopCopyEnergy, TOP_COPY_ATTACK_NAME,
+  canPayTopCopy, pickTopCopyEnergy, topCopyLineNeed, TOP_COPY_ATTACK_NAME,
 } from './ai-slowking';
 import { knownDeckTopIids } from './deck-top-known';
 import { pickActiveEnergyUnlock, pickBenchEnergyAttach } from './ai-energy';   // ⭐v6.432 戰鬥位有招可用時也附能量（給備戰）
@@ -264,6 +264,29 @@ export function getAIAction(
   const _cipherIid = _tcReady ? trainerIids.find(iid => pool.get(player.hand.find(h => h.iid === iid)?.cardId ?? '')?.name === '暗碼迷的解讀') : undefined;
   // 還沒準備好（會耀閃挑戰的寶可夢不在場、能量不夠、或換不上去）⇒ 暗碼迷的解讀先留在手上，不要白擺。
   //   例外：場上有進化前、手上沒有能進化的呆呆王、又沒有別的支援者可打 ⇒ 用它把呆呆王擺到牌庫頂（下回合抽到）
+  // ⭐v6.434（站長打法 1）：「暗碼迷的解讀 搭配 使者衝刺 可以快速找到呆呆王」——
+  //   場上還沒有會耀閃挑戰的寶可夢、手上也沒有呆呆王時，先用暗碼迷的解讀把呆呆王（場上沒有呆呆獸時連呆呆獸）擺到牌庫頂，
+  //   再用抽牌特性（超級袋獸ex｜使者衝刺，抽 2 張）當回合抽上來。
+  //   ① 擺好之後（牌庫頂已知、裡面有會耀閃挑戰的寶可夢或牠的進化前）⇒ 馬上用抽牌特性，免得接著打的物品（寶可平板等）把牌庫洗掉。
+  const _line = _tcDeck ? topCopyLineNeed(state, myIdx, pool) : null;
+  const _tcSetupNeed = !!_line && (_line.needEvo || _line.needBasic);
+  if (_tcSetupNeed) {
+    // 缺什麼：呆呆王（needEvo）／呆呆獸（needBasic）。已知牌庫頂最上面 2 張（使者衝刺抽得到的）裡有缺的那張 ⇒ 馬上抽
+    const _topNow = knownDeckTopIids(state, myIdx);
+    const _topHasLine = _topNow.slice(0, 2).some(iid => {
+      const n = pool.get(player.deck.find(d => d.iid === iid)?.cardId ?? '')?.name;
+      return (_line!.needEvo && n === _line!.evoName) || (_line!.needBasic && n === _line!.basicName);
+    });
+    if (_topHasLine) {
+      const draws = drawingAbilitiesNow(state, myIdx, pool);
+      if (draws.length) return { type: 'USE_ABILITY', iid: draws[0].iid, abilityIndex: draws[0].abilityIndex };
+    }
+    // ② 還沒擺：手上有暗碼迷的解讀、這回合還能打支援者、而且有抽牌特性可以接著抽 ⇒ 先打暗碼迷的解讀（比其他支援者優先）
+    if (!player.supporterPlayedThisTurn && player.deck.length > 2) {
+      const _cipherSetup = trainerIids.find(iid => pool.get(player.hand.find(h => h.iid === iid)?.cardId ?? '')?.name === '暗碼迷的解讀');
+      if (_cipherSetup && drawingAbilitiesNow(state, myIdx, pool).length) return { type: 'PLAY_TRAINER', iid: _cipherSetup };
+    }
+  }
   if (_tcDeck && !_tcReady) {
     const nameOf = (iid: string) => pool.get(player.hand.find(h => h.iid === iid)?.cardId ?? '')?.name;
     const cipher = trainerIids.filter(iid => nameOf(iid) === '暗碼迷的解讀');
@@ -541,7 +564,10 @@ export function getAIAction(
       let _bestSwap: { iid: string; score: number } | null = null;
       for (const b of player.bench) {
         // 用引擎試打估「換上去打得出什麼」——弱點／減傷／免疫都由引擎算，AI 不重算公式
-        const o = estimateIfPromoted(state, myIdx, b, pool);
+        // ⭐v6.434（站長打法 2）：「人類玩家通常會使用借招打法，不會直接拼運氣」——牌庫頂沒有自己擺好的借招目標時，
+        //   不把「盲翻耀閃挑戰」算成換上去的收益（牠的其他招照算）
+        const o = estimateIfPromoted(state, myIdx, b, pool,
+          _tc && !hasValuableKnownTop(state, myIdx, pool) ? [TOP_COPY_ATTACK_NAME] : undefined);
         if (!o.ok) continue;
         // 能擊倒一定值得（直接換獎賞卡）；否則要跨過與撤退費相稱的收益門檻
         // ⚠ v6.431 起 o 來自 evaluateAttack 的 3 次平均：ko＝過半數試打會擊倒；dealt＝對手**全場**傷害平均
@@ -899,9 +925,12 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         ...actorPlayer.bench.map(c => pool.get(c.cardId)?.name),
         ...actorPlayer.hand.map(c => pool.get(c.cardId)?.name),
       ].filter((n): n is string => !!n));
+      // ⭐v6.434 呆呆王牌組：進化線缺呆呆獸／呆呆王時，搜尋牌庫優先拿缺的那張（站長：要快速找到呆呆王）
+      const _lineNeed = sel.actorIdx === 0 || sel.actorIdx === 1 ? topCopyLineNeed(state, sel.actorIdx, pool) : null;
       const _usefulness = (inst: CardInstance): number => {
         const card = pool.get(inst.cardId);
         if (!card || card.supertype !== 'Pokemon') return 1;  // 非寶可夢中性
+        if (_lineNeed && ((_lineNeed.needBasic && card.name === _lineNeed.basicName) || (_lineNeed.needEvo && card.name === _lineNeed.evoName))) return 5;
         // ⚠ isBasicPokemonCard 是型別述詞（card is Card）。card 在上一行已排除 undefined，
         //   直接寫 if 會讓 else 分支被窄成 never，下一行的 card.evolvesFrom 就編不過。
         //   Boolean() 把述詞降級成單純的 boolean，切斷窄化；回傳值完全相同。

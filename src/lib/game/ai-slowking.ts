@@ -174,21 +174,39 @@ export function rankTopTargets(state: GameState, me: 0 | 1, candidates: CardInst
 }
 
 /**
+ * ⭐v6.434 呆呆王進化線還缺什麼（站長打法：暗碼迷的解讀＋使者衝刺快速找到呆呆王）。
+ *   只看自己的公開資訊：場上、手牌；「進化線在哪」用牌組清單扣掉看得到的（手牌＋牌庫＋獎賞卡），不偷看牌庫順序。
+ *   場上已經有會耀閃挑戰的寶可夢 ⇒ 什麼都不缺。
+ */
+export function topCopyLineNeed(state: GameState, me: 0 | 1, pool: Map<string, Card>): {
+  evoName: string | null; basicName: string | null; needEvo: boolean; needBasic: boolean;
+} {
+  const none = { evoName: null, basicName: null, needEvo: false, needBasic: false };
+  const p = state.players[me];
+  const field = [p.active, ...p.bench].filter(Boolean) as CardInstance[];
+  if (field.some((c) => hasTopCopyAttack(pool.get(c.cardId)))) return none;
+  const evo = [...p.hand, ...p.deck, ...p.prizes].map((c) => pool.get(c.cardId)).find(hasTopCopyAttack);
+  if (!evo) return none;
+  const basicName = evo.evolvesFrom ?? null;
+  const has = (arr: CardInstance[], name: string | null) => !!name && arr.some((c) => pool.get(c.cardId)?.name === name);
+  return {
+    evoName: evo.name, basicName,
+    needEvo: !has(p.hand, evo.name),
+    needBasic: !!basicName && !has(field, basicName) && !has(p.hand, basicName),
+  };
+}
+
+/**
  * 暗碼迷的解讀的選擇（2 張，先選＝上方第 2 位、後選＝最上方）。
- * 有會耀閃挑戰的寶可夢在場 ⇒ 最好的目標放最上方、次好的放第 2 張；
- * 只有進化前在場 ⇒ 最上方放能進化的呆呆王（下回合抽到）、第 2 張放最好的目標（以印刷傷害排序）。
+ * 有會耀閃挑戰的寶可夢在場 ⇒ 最好的目標放最上方、次好的放第 2 張。
+ * ⭐v6.434 還沒有 ⇒ 依進化線缺什麼擺（接著用使者衝刺抽 2 張，兩張都會到手上）：
+ *   缺呆呆獸也缺呆呆王 ⇒ [呆呆王, 呆呆獸]；只缺呆呆獸 ⇒ [借招目標, 呆呆獸]；只缺呆呆王 ⇒ [借招目標, 呆呆王]
+ *   （借招目標以印刷傷害排序；牌庫裡找不到需要的卡 ⇒ 交回通用選擇器）。
  * 回傳 null ⇒ 交回通用選擇器。
  */
 export function pickCipherArrange(state: GameState, me: 0 | 1, pool: Map<string, Card>): string[] | null {
   const p = state.players[me];
   if (p.deck.length < 2) return null;
-  if (!isTopCopyPlayer(state, me, pool)) {
-    // 場上連進化前都沒有：最上方放進化前（下回合抽到、放上備戰），第 2 張放會耀閃挑戰的寶可夢
-    const evoCard = p.deck.map((c) => ({ c, card: pool.get(c.cardId) })).find((x) => hasTopCopyAttack(x.card));
-    if (!evoCard) return null;
-    const basic = p.deck.find((c) => pool.get(c.cardId)?.name === evoCard.card!.evolvesFrom);
-    return basic ? [evoCard.c.iid, basic.iid] : null;
-  }
   if (topCopyUser(state, me, pool)) {
     const ranked = rankTopTargets(state, me, p.deck, pool);
     if (ranked.length >= 2) return [ranked[1].iid, ranked[0].iid];
@@ -198,11 +216,19 @@ export function pickCipherArrange(state: GameState, me: 0 | 1, pool: Map<string,
     }
     return null;
   }
-  const evo = p.deck.find((c) => hasTopCopyAttack(pool.get(c.cardId)));
+  const need = topCopyLineNeed(state, me, pool);
+  const findName = (name: string | null, not: string[] = []) => (name ? p.deck.find((c) => !not.includes(c.iid) && pool.get(c.cardId)?.name === name) : undefined);
   const printed = (c: CardInstance) => Math.max(0, ...(pool.get(c.cardId)?.attacks ?? []).map((a) => parseInt(String(a.damage ?? '').replace(/[^0-9]/g, ''), 10) || 0));
-  const target = p.deck.filter((c) => c.iid !== evo?.iid && isBorrowableTop(pool.get(c.cardId))).sort((a, b) => printed(b) - printed(a))[0];
-  if (!evo || !target) return null;
-  return [target.iid, evo.iid];
+  const bestTarget = (not: string[]) => p.deck.filter((c) => !not.includes(c.iid) && isBorrowableTop(pool.get(c.cardId)) && !hasTopCopyAttack(pool.get(c.cardId))
+    && pool.get(c.cardId)?.name !== need.basicName).sort((a, b) => printed(b) - printed(a))[0];
+  const evoC = need.needEvo ? findName(need.evoName) : undefined;
+  const basicC = need.needBasic ? findName(need.basicName) : undefined;
+  if (evoC && basicC) return [evoC.iid, basicC.iid];
+  const one = basicC ?? evoC;
+  if (!one) return null;
+  const t = bestTarget([one.iid]);
+  const other = t ?? p.deck.find((c) => c.iid !== one.iid);
+  return other ? [other.iid, one.iid] : null;
 }
 
 /** 夜間學院的選擇：手牌裡最好的借招目標；沒有就交回通用選擇器（null）。 */

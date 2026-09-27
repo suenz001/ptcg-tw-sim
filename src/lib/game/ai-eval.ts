@@ -21,7 +21,7 @@
 import type { Card } from '$lib/cards/types';
 import type { GameState, CardInstance, GameAction } from './types';
 import { knownDeckTopIids, recordKnownDeckTop } from './deck-top-known';   // ⭐v6.429
-import { applyAction, getAvailableAttacks, getEffectiveHP } from './engine';
+import { applyAction, getAvailableAttacks, getEffectiveAttacks, getEffectiveHP } from './engine';
 
 /** 一次試打的結果。dealt 只在「沒擊倒」時有意義（擊倒時傷害多寡不重要）。 */
 export interface AttackOutcome {
@@ -200,10 +200,15 @@ export function bestAttackOutcome(
   state: GameState,
   actorIdx: 0 | 1,
   pool: Map<string, Card>,
+  excludeAttackNames?: readonly string[],
 ): { attackIndex: number; outcome: AttackOutcome } | null {
   let best: { attackIndex: number; outcome: AttackOutcome } | null = null;
   try {
+    // ⭐v6.434 excludeAttackNames：不列入估值的招式（例：牌庫頂未知時的呆呆王｜耀閃挑戰——那是碰運氣，不是收益）
+    const act = state.players[actorIdx].active;
+    const eff = excludeAttackNames?.length && act ? getEffectiveAttacks(state, act, pool) : null;
     for (const idx of getAvailableAttacks(state, pool)) {
+      if (eff && excludeAttackNames!.includes(eff[idx]?.atk?.name ?? '')) continue;
       const ev = evaluateAttack(state, actorIdx, idx, pool);
       if (!ev.ok) continue;
       const o: AttackOutcome = { ok: true, ko: ev.ko, dealt: ev.ko ? Infinity : ev.oppDamage, unresolved: ev.unresolved };
@@ -232,6 +237,7 @@ export function estimateIfPromoted(
   myIdx: 0 | 1,
   candidate: CardInstance,
   pool: Map<string, Card>,
+  excludeAttackNames?: readonly string[],
 ): AttackOutcome {
   try {
     const hypo = withIsolatedRandom(() => shuffleHiddenZonesForSim(cloneState(state), myIdx));
@@ -243,7 +249,7 @@ export function estimateIfPromoted(
     me.bench = me.bench.filter((_, i) => i !== bIdx);
     if (old) me.bench.push(old);
     hypo.activePlayerIndex = myIdx;
-    const best = bestAttackOutcome(hypo, myIdx, pool);
+    const best = bestAttackOutcome(hypo, myIdx, pool, excludeAttackNames);
     return best ? best.outcome : DEAD;
   } catch {
     return DEAD;
