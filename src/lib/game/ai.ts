@@ -32,7 +32,7 @@ import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemo
 import { getPlaybook, benchScoreOf } from './ai-playbook';
 // v6.039 批次4c：場面評估（引擎試打）。方向嚴格單向 ai.ts → ai-eval.ts → engine，
 //   ai-eval 不得反向 import ai.ts（會造成 module-init 循環，見 v5.985 TDZ 事故）。
-import { estimateIfPromoted, evaluateAttack, PRIZE_SCORE_UNIT, setSimSelectionResolver } from './ai-eval';
+import { estimateIfPromoted, evaluateAttack, isPointlessAttack, PRIZE_SCORE_UNIT, setSimSelectionResolver, type AttackEval } from './ai-eval';
 // ⭐v6.429 呆呆王「牌庫頂借招」打法（站長說明）；只對場上／手上有會耀閃挑戰寶可夢的一方生效
 import {
   isTopCopyPlayer, topCopyUser, bestKnownTopCopy, valueAsTop, pickCipherArrange,
@@ -423,12 +423,16 @@ export function getAIAction(
     const _oppRem = _oppActive ? _remHP(_oppActive, pool, state) : 0;
     // ⭐v6.429 牌庫頂已知（自己擺的）時，耀閃挑戰逐招試打「借哪一招」，選中的記下來放進 ATTACK 動作
     const _copyChoice = new Map<number, { pokeIid: string; attackIndex: number }>();
-    const scoreOfAttack = (atkIdx: number): number => {
+    // ⭐v6.430（批次 C）每一招最近一次的試打結果（「打不動」判定用；借招那條路徑記 null＝不當成打不動）
+    const _evOf = new Map<number, AttackEval | null>();
+    const _scoreOf = new Map<number, number>();   // 每一招最近一次的評分（批次 C 換招用）
+    const _scoreRaw = (atkIdx: number): number => {
       if (_tc && eff[atkIdx]?.atk?.name === TOP_COPY_ATTACK_NAME) {
         const kt = bestKnownTopCopy(state, myIdx, atkIdx, pool);
-        if (kt && kt.ok && !kt.unresolved) { _copyChoice.set(atkIdx, kt.choice); return kt.score; }
+        if (kt && kt.ok && !kt.unresolved) { _copyChoice.set(atkIdx, kt.choice); _evOf.set(atkIdx, null); return kt.score; }   // null＝不當成打不動
       }
       const ev = evaluateAttack(state, myIdx, atkIdx, pool);
+      _evOf.set(atkIdx, ev);
       // ⚠會開選擇視窗的招（暗黑底牌等）在試打當下傷害還沒結算 → 試打值會嚴重低估。
       //   這類招退回舊的 estimateDamage 估值，並換算成同一個評分尺度：
       //   估計傷害打得死對手戰鬥位就補上一張獎賞的份量，否則只算傷害。
@@ -443,11 +447,27 @@ export function getAIAction(
       }
       return ev.score;
     };
-    const best = atkIdxs.reduce((prev, cur) => {
+    const scoreOfAttack = (atkIdx: number): number => { const v = _scoreRaw(atkIdx); _scoreOf.set(atkIdx, v); return v; };
+    let best = atkIdxs.reduce((prev, cur) => {
       return scoreOfAttack(cur) > scoreOfAttack(prev) ? cur : prev;
     });
     // 只有一招可用時 reduce 不會呼叫 scoreOfAttack ⇒ 借招選擇沒有算到；補算一次（只在牌庫頂借招打法時）
     if (_tc && eff[best]?.atk?.name === TOP_COPY_ATTACK_NAME && !_copyChoice.has(best)) scoreOfAttack(best);
+    // ⭐v6.430（批次 C）「打不動」偵測：**每一招**都是引擎接受、沒擊倒、沒拿獎賞、對手零傷害、盤面沒有任何其他變化、
+    //   也沒用到亂數（isPointlessAttack，中央判定在 ai-eval）⇒ 不出招，落到下面的撤退換人；撤退也不成立才結束回合。
+    //   舊版一定 return ATTACK（reduce 永遠選得出一招），對手完全免疫時會一直空打、永遠走不到換人。
+    //   只有一招可用時 reduce 沒有試打過 ⇒ 補試打一次。
+    if (!_evOf.has(best)) scoreOfAttack(best);
+    const _pointless = atkIdxs.every(i => _evOf.has(i) && isPointlessAttack(_evOf.get(i)));
+    // ⭐v6.430（fable 審查 A①）選中的那招打不動、但另有一招「有其他效果、評分不是負的」（例：溶食獸 對 本回合不受傷害的對手，
+    //   口水 0 分打不動、毒之氣息 0 分但會讓對手中毒；reduce 平手取第一招 ⇒ 舊版會空打口水）⇒ 改出那一招。
+    //   負分的招（代價大於量得到的收益）不換過去，維持原選擇。
+    if (!_pointless && isPointlessAttack(_evOf.get(best))) {
+      const alt = atkIdxs
+        .filter(i => i !== best && !isPointlessAttack(_evOf.get(i)) && (_scoreOf.get(i) ?? -Infinity) >= 0)
+        .sort((a, b) => (_scoreOf.get(b) ?? 0) - (_scoreOf.get(a) ?? 0))[0];
+      if (alt !== undefined) best = alt;
+    }
     // ⭐v6.429 牌庫頂借招：戰鬥位不是會耀閃挑戰的寶可夢（例：超級袋獸ex 剛用完使者衝刺），而牌庫頂已擺好目標、
     //   可以免費撤退（拉帝亞斯ex｜天空徑線）、換上去打得比現在好 ⇒ 先撤退換呆呆王（站長說明的打法）
     if (_tcProtect && player.active && !pool.get(player.active.cardId)?.attacks?.some(a => a.name === TOP_COPY_ATTACK_NAME)
@@ -480,11 +500,14 @@ export function getAIAction(
         }
       }
     }
-    const _cc = _copyChoice.get(best);
-    if (_cc) return { type: 'ATTACK', attackIndex: best, copyAttackChoice: _cc };
-    return aiDiscardedEnergyIids
-      ? { type: 'ATTACK', attackIndex: best, discardedEnergyIids: aiDiscardedEnergyIids }
-      : { type: 'ATTACK', attackIndex: best };
+    // ⭐v6.430（批次 C）每一招都打不動 ⇒ 不出招（判定在上面，這裡只是出口）
+    if (!_pointless) {
+      const _cc = _copyChoice.get(best);
+      if (_cc) return { type: 'ATTACK', attackIndex: best, copyAttackChoice: _cc };
+      return aiDiscardedEnergyIids
+        ? { type: 'ATTACK', attackIndex: best, discardedEnergyIids: aiDiscardedEnergyIids }
+        : { type: 'ATTACK', attackIndex: best };
+    }
   }
 
   // ── v6.039 撤退換人 ────────────────────────────────────────────────────────

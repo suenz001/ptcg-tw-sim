@@ -12,6 +12,7 @@ import { join, resolve as pResolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. 打包引擎＋AI
@@ -103,6 +104,27 @@ export async function buildAiBundle(root, { withBaseline = false, extraExports =
 }
 
 /** 只載入 index.json 列管（live）的卡包，與 eval-ai-selfplay 既有做法一致。 */
+/**
+ * ⭐v6.430 基準 AI 的身分：commit 與「整組 ai*.ts 內容」的指紋。
+ *   對手池矩陣的每一格是「受測 AI（列的牌組）vs **基準 AI**（欄的牌組）」——HEAD 一前進，欄那一側的 AI 也跟著換了。
+ *   拿舊矩陣 --compare 時若基準 AI 不同，某格下降可能只是「欄那一側變強了」，不是本版回歸
+ *   （v6.430 實際踩到：v6.429 讓呆呆王變強後，對照 v6.428 的舊矩陣，超級路卡利歐 vs 呆呆王 84% → 72% 亮紅；
+ *    改用 v6.429 自己當基準重跑後是 71% → 72%）。所以 --save 一律記下它，--compare 一律先比它。
+ */
+export function baselineAiInfo(root) {
+  const rev = process.env.AI_BASELINE_REV || 'HEAD';
+  const sha = execFileSync('git', ['-C', root, 'rev-parse', rev]).toString('utf8').trim();
+  const ls = execFileSync('git', ['-C', root, 'ls-tree', '--name-only', `${sha}:src/lib/game/`]).toString('utf8')
+    .split('\n').map((x) => x.trim()).filter((n) => /^ai[^/]*\.ts$/.test(n)).sort();
+  const h = createHash('sha256');
+  for (const name of ls) {
+    h.update(name + '\0');
+    h.update(execFileSync('git', ['-C', root, 'cat-file', '-p', `${sha}:src/lib/game/${name}`], { maxBuffer: 64 * 1024 * 1024 }));
+    h.update('\0');
+  }
+  return { rev: sha, aiSig: h.digest('hex').slice(0, 16), files: ls };
+}
+
 export function loadLivePool(root) {
   const dir = join(root, 'static/cards');
   const live = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).map((e) => e.code));

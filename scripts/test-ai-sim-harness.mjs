@@ -12,7 +12,7 @@ import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { classifyReason, nextAction, wilson, twoPropZ, REASON_CLASSES, buildAiBundle, loadLivePool, presetById, playGame, firstPlayerOf } from './lib/ai-sim-harness.mjs';
+import { classifyReason, nextAction, wilson, twoPropZ, REASON_CLASSES, buildAiBundle, loadLivePool, presetById, playGame, firstPlayerOf, baselineAiInfo } from './lib/ai-sim-harness.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 let pass = 0;
@@ -130,6 +130,18 @@ ok(twoPropZ(50, 100, 50, 100) === 0, '④ 相同比例 z=0');
   ok(firstPlayerOf(12345) === firstPlayerOf(12345), '⑤ firstPlayerOf 必須是 seed 的純函式');
   const fps = new Set(Array.from({ length: 16 }, (_, i) => firstPlayerOf(1000 + i)));
   ok(fps.size === 2, '⑤ firstPlayerOf 應該兩種值都會出現');
+}
+
+// ── ⑥ 基準 AI 的身分（v6.430：--compare 先比它；基準 AI 不同時對照不可判讀）────────────────
+{
+  ok(typeof baselineAiInfo === 'function', '⑥ 沒有 baselineAiInfo');
+  const a = baselineAiInfo(ROOT), b = baselineAiInfo(ROOT);
+  ok(/^[0-9a-f]{40}$/.test(a.rev) && /^[0-9a-f]{16}$/.test(a.aiSig), '⑥ rev／aiSig 形狀不對：' + JSON.stringify(a));
+  ok(a.files.includes('ai.ts') && a.files.includes('ai-eval.ts'), '⑥ 指紋沒有涵蓋 ai.ts／ai-eval.ts：' + a.files.join(','));
+  ok(a.aiSig === b.aiSig, '⑥ 指紋必須是確定性的');
+  const pool = readFileSync(join(ROOT, 'scripts/eval-ai-pool.mjs'), 'utf8');
+  ok(/baseAiSig: BASE\.aiSig/.test(pool) && /old\.baseAiSig === BASE\.aiSig/.test(pool),
+    '⑥ eval-ai-pool 必須在 --save 記下基準 AI 指紋、在 --compare 先比對它');
 }
 
 console.log(`✅ test-ai-sim-harness：${pass} 條全數通過（掃到 ${lits.size} 種終局字面；非字面的 winReason ${nonLiteral.size} 種）`);

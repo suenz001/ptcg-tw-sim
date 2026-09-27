@@ -23,7 +23,7 @@ const GAMES_PER_PAIR = Number(arg('--games-per-pair', 4));
 const OUT = arg('--out', null);
 
 const mod = await buildAiBundle(ROOT, { extraExports: [
-  "export { evaluateAttack, estimateIfPromoted } from './src/lib/game/ai-eval';",
+  "export { evaluateAttack, estimateIfPromoted, isPointlessAttack } from './src/lib/game/ai-eval';",
   "export { computeActiveRetreatCostFor } from './src/lib/game/engine';",
   "export { CLEAR_ON_EXIT_FLAGS } from './src/lib/game/instance-flags';",
 ] });
@@ -248,58 +248,11 @@ P('');
 // ─────────────────────────────────────────────────────────────────────────────
 // B3 實戰模擬：「全部招式都打不出傷害」時 AI 仍送 ATTACK 的比例
 // ─────────────────────────────────────────────────────────────────────────────
-// 側效果偵測（批次 C「零傷害但有價值」豁免判準的原型；只在診斷腳本裡）
-// 招式蓋章類欄位（每次攻擊都會變、不代表效果）；清單由試跑觀察得出，印在報告裡供人工複核
-const STAMP_KEYS = new Set(['damage', 'energyAttached', 'attackUsedThisTurn', 'attackUsedLastSelfTurn',
-  'attackedThisTurn', 'usedAttackThisTurn', 'lastAttackName']);
-const PLAYER_SKIP = new Set(['active', 'bench', 'hand', 'deck', 'discard', 'prizes', 'currentTurnActions']);
-function sideEffects(st, me, idx) {
-  const opp = 1 - me;
-  const snap = (s) => {
-    const p = s.players;
-    const field = (x) => [x.active, ...x.bench].filter(Boolean);
-    const energy = (x) => field(x).reduce((n, c) => n + (c.energyAttached?.length ?? 0), 0);
-    const oa = p[opp].active;
-    return {
-      oppStatus: oa ? [oa.status, oa.secondaryStatus, oa.tertiaryStatus].map((v) => v ?? '').join('/') : '',
-      hand: [p[me].hand.length, p[opp].hand.length], deck: [p[me].deck.length, p[opp].deck.length],
-      discard: [p[me].discard.length, p[opp].discard.length], energy: [energy(p[me]), energy(p[opp])],
-      bench: [p[me].bench.length, p[opp].bench.length],
-      myDmg: field(p[me]).reduce((n, c) => n + (c.damage ?? 0), 0),
-    };
-  };
-  // ⚠ fable 審查：擲幣型零傷害招的正反面會被單一種子釘死 ⇒ 用 3 個種子各試一次，側效果取聯集
-  const diff = [];
-  for (const sd of [777, 778, 779]) {
-  const clone = structuredClone(st); clone.activePlayerIndex = me;
-  const after = withSeed(sd, () => mod.applyAction(clone, { type: 'ATTACK', attackIndex: idx }, pool));
-  if (!after || after === clone) { diff.push('試打失敗'); continue; }
-  const a = snap(st), b = snap(after);
-  for (const k of Object.keys(a)) if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) diff.push(k);
-  // 戰鬥寶可夢身上的旗標（例：下回合不能撤退、下回合受傷減少、不會受到傷害）——排除傷害／能量與招式蓋章
-  const inst = (s, p) => s.players[p].active;
-  for (const [tag, p] of [['我方戰鬥位', me], ['對手戰鬥位', opp]]) {
-    const x = inst(st, p), y = inst(after, p);
-    if (!x || !y || x.iid !== y.iid) continue;
-    for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) {
-      if (STAMP_KEYS.has(k)) continue;
-      if (JSON.stringify(x[k]) !== JSON.stringify(y[k])) diff.push(`${tag}.${k}`);
-    }
-  }
-  // 玩家物件上的旗標（例：下回合對手不能打物品）
-  for (const [tag, p] of [['我方玩家', me], ['對手玩家', opp]]) {
-    const x = st.players[p], y = after.players[p];
-    for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) {
-      if (PLAYER_SKIP.has(k)) continue;
-      if (JSON.stringify(x[k]) !== JSON.stringify(y[k])) diff.push(`${tag}.${k}`);
-    }
-  }
-  }
-  return [...new Set(diff)];
-}
+// 側效果／「打不動」判定：v6.430 起一律用 ai-eval 的中央 isPointlessAttack 與 AttackEval.sideEffectKeys
+//   （原型曾寫在這裡；判準只能有一份，IRON_RULES Rule 38）。
 const presets = mod.PRESET_DECKS;
 const b3 = { decisions: 0, allZero: 0, allZeroAttack: 0, allZeroNoSide: 0, allZeroNoSideAttack: 0,
-  retreatWouldFire: 0, byDeck: new Map(), sideKinds: new Map(), examples: new Map(), games: 0 };
+  retreatWouldFire: 0, randomExcluded: 0, retreatActual: 0, endTurnActual: 0, byDeck: new Map(), sideKinds: new Map(), examples: new Map(), games: 0 };
 function makeObserver(deckName) {
   return (st, idx) => {
     const act = mod.aiNew(st, pool, idx);
@@ -316,9 +269,9 @@ function makeObserver(deckName) {
     b3.allZero++;
     if (act.type === 'ATTACK') b3.allZeroAttack++;
     const d = b3.byDeck.get(deckName) ?? { zero: 0, noSide: 0 }; d.zero++;
-    const sides = evs.map(({ i }) => sideEffects(st, idx, i));
-    for (const s of sides) for (const k of s) b3.sideKinds.set(k, (b3.sideKinds.get(k) ?? 0) + 1);
-    if (sides.every((s) => s.length === 0)) {
+    for (const { ev } of evs) for (const k of ev.sideEffectKeys) b3.sideKinds.set(k, (b3.sideKinds.get(k) ?? 0) + 1);
+    if (evs.some(({ ev }) => ev.usedRandom)) b3.randomExcluded++;
+    if (evs.every(({ ev }) => mod.isPointlessAttack(ev))) {
       b3.allZeroNoSide++; d.noSide++;
       // 範例：我方戰鬥位｜可用招式 → 對手戰鬥位（看得出是對手免疫、還是招式本身就打不動）
       const me0 = st.players[idx], op0 = st.players[1 - idx];
@@ -326,6 +279,8 @@ function makeObserver(deckName) {
       const key = `${pool.get(me0.active.cardId)?.name}｜${atks.map((i) => eff[i]?.atk?.name).join('／')} → ${pool.get(op0.active?.cardId)?.name ?? '無'}`;
       b3.examples.set(key, (b3.examples.get(key) ?? 0) + 1);
       if (act.type === 'ATTACK') b3.allZeroNoSideAttack++;
+      else if (act.type === 'RETREAT') b3.retreatActual++;
+      else if (act.type === 'END_TURN') b3.endTurnActual++;
       // 批次 C 若擋下 ATTACK，會落到撤退分支：預估撤退分支是否成立（撤退費 ≤ 2、換上去能擊倒或傷害 ≥ 門檻）
       const me = st.players[idx];
       if (mod.canRetreat(st, pool) && me.bench.length) {
@@ -359,9 +314,11 @@ P(`- 模擬：56 副預組 × 3 個對手 × ${GAMES_PER_PAIR} 局 = ${b3.games}
 P('- 判準：每一招都 `ok && !unresolved && !ko && prizes === 0 && oppDamage === 0`（平均值，不用 dealt）。');
 P(`- 有招可用時的收尾決定（攻擊／撤退／結束回合）：${b3.decisions}；其中「全部招式零傷害」：${b3.allZero}（${pct(b3.decisions ? b3.allZero / b3.decisions : NaN)}）`);
 P(`- ⭐ B3 比例＝全零時仍送 ATTACK：${b3.allZeroAttack} / ${b3.allZero} = ${pct(b3.allZero ? b3.allZeroAttack / b3.allZero : NaN)}`
-  + '（攻擊分支只要有招可發就一定 return ATTACK，所以結構上必然是 100%）');
-P(`- 再排除「有其他盤面效果」的：全零且無側效果 ${b3.allZeroNoSide} 次 ⇒ 這才是批次 C 真正會擋下的範圍`);
-P(`- 那 ${b3.allZeroNoSide} 次裡，撤退分支會成立（撤退費 ≤ 2 且換上去有收益）：${b3.retreatWouldFire} 次；其餘仍會結束回合`);
+  + '（v6.430 之前攻擊分支只要有招可發就一定 return ATTACK，結構上必然是 100%；v6.430 起只有「零傷害但有其他效果或用到亂數」的才會出招）');
+P(`- 再排除「有其他盤面效果」與「用到亂數」的（中央 isPointlessAttack，v6.430）：${b3.allZeroNoSide} 次 ⇒ 批次 C 會擋下的範圍`
+  + `（其中因用到亂數而不擋：全零決策點裡 ${b3.randomExcluded} 次）`);
+P(`- ⭐ 批次 C 驗收：「打不動」時 AI 仍送 ATTACK：${b3.allZeroNoSideAttack} / ${b3.allZeroNoSide}（v6.430 之後應為 0）；`
+  + `實際撤退 ${b3.retreatActual} 次、結束回合 ${b3.endTurnActual} 次（撤退分支預估會成立：${b3.retreatWouldFire} 次）`);
 P('');
 P('側效果種類（零傷害招式在試打前後有變化的欄位；次數）：' + ([...b3.sideKinds].map(([k, v]) => `${k} ${v}`).join('、') || '無'));
 P('');

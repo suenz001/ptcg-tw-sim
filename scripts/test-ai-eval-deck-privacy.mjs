@@ -79,12 +79,33 @@ T('⭐⭐洗亂後牌庫順序確實改變（否則防線形同虛設）', () =>
     `洗牌後有 ${samePos}/${before.length} 張留在原位 —— 幾乎沒洗到，防線無效`);
 });
 
-T('⭐⭐洗亂不可增減或竄改牌庫內容（只能換順序）', () => {
+T('⭐⭐洗亂不可增減或竄改卡片（只能在看不到的區域之間重發）', () => {
+  // ⚠ v6.430（Rule 40 第 3 型：新防護層蓋住舊觀測點）：原本斷言「牌庫的卡片集合不變」。v6.430 起看不到的區域
+  //   （牌庫＋蓋著的獎賞卡＋非行動方的手牌）合在一起重發 ⇒ 牌庫單獨的集合會變，但這一條守的意圖
+  //   「不可以憑空增減或竄改卡片」沒有變 ⇒ 改成驗「看不到的那一堆」集合不變、各區張數不變，一個字都沒放寬。
+  const hiddenBag = (p, handHidden) => [...p.deck, ...p.prizes.filter((c) => !c.faceUp), ...(handHidden ? p.hand : [])]
+    .map((c) => c.iid).sort().join(',');
+  const sizes = (p) => [p.deck.length, p.prizes.length, p.hand.length].join('/');
+  // (a) 不指定行動方：雙方手牌都看不到
   const st = mkState(30);
-  const before = [...st.players[0].deck.map((c) => c.iid)].sort();
+  const b = st.players.map((p) => [hiddenBag(p, true), sizes(p)]);
   withIsolatedRandom(() => shuffleHiddenZonesForSim(st));
-  const after = [...st.players[0].deck.map((c) => c.iid)].sort();
-  assert.deepEqual(after, before, '洗牌只能改順序，卡片集合必須完全相同（憑空增減＝作弊）');
+  st.players.forEach((p, i) => {
+    assert.equal(hiddenBag(p, true), b[i][0], `玩家 ${i}：看不到的卡片集合必須完全相同（憑空增減＝作弊）`);
+    assert.equal(sizes(p), b[i][1], `玩家 ${i}：牌庫／獎賞卡／手牌張數必須不變`);
+  });
+  // (b) 指定行動方 0：自己的手牌原封不動，其餘同上
+  const st2 = mkState(30);
+  const hand0 = st2.players[0].hand.map((c) => c.iid).join(',');
+  const b2 = st2.players.map((p, i) => hiddenBag(p, i !== 0));
+  withIsolatedRandom(() => shuffleHiddenZonesForSim(st2, 0));
+  assert.equal(st2.players[0].hand.map((c) => c.iid).join(','), hand0, '行動方自己的手牌不可以被動到');
+  st2.players.forEach((p, i) => assert.equal(hiddenBag(p, i !== 0), b2[i], `玩家 ${i}：看不到的卡片集合必須完全相同`));
+  // 正對照：竄改一張（換成新 iid）必須被判準抓到
+  const st3 = mkState(30);
+  const b3 = hiddenBag(st3.players[1], true);
+  st3.players[1].deck[0] = { ...st3.players[1].deck[0], iid: '__forged__' };
+  assert.notEqual(hiddenBag(st3.players[1], true), b3, '正對照失效：判準抓不到被竄改的卡');
 });
 
 T('⭐雙方牌庫都要洗（對手的牌庫 AI 更沒有理由知道）', () => {

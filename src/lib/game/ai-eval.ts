@@ -87,16 +87,30 @@ export function cloneState(state: GameState): GameState {
 export function shuffleHiddenZonesForSim(st: GameState, keepKnownFor?: 0 | 1): GameState {
   // ⭐v6.429 行動方**自己擺到牌庫頂、合法知道**的那幾張（暗碼迷的解讀／夜間學院）保留在原位，
   //   只打亂它們以下的部分；對手的牌庫一律整副打亂（AI 不可以知道對手擺了什麼）。
-  //   驗證與「牌庫一被動過就作廢」都在 deck-top-known.ts；沒有紀錄時 k=0，亂數序列與舊版逐位元相同。
+  //   驗證與「牌庫一被動過就作廢」都在 deck-top-known.ts。
+  // ⭐v6.430（fable 審查 D）看不到的區域**合在一起**重新發牌，而不是只洗牌庫：
+  //   - 對手的手牌：行動方看不到內容，只知道張數。舊版試打盤面裡對手手牌是真的 ⇒ 依對手手牌內容而定的招
+  //     （粉碎脈衝、叼去藏、能量吸管…）試打結果等於偷看了對手手牌；批次 C 把「效果有沒有發生」納入出招決策後更明顯。
+  //   - 蓋著的獎賞卡（雙方）：連自己都不知道是哪幾張。
+  //   ⇒ 每一方「牌庫（已知牌庫頂以下）＋蓋著的獎賞卡＋（非行動方的）手牌」合成一疊洗亂，再依原張數發回原位置；
+  //     正面朝上的獎賞卡與行動方自己的手牌不動。這在資訊上等價於一次合法的隨機採樣。
+  //   ⚠ keepKnownFor 沒給（不知道行動方）時，雙方手牌都當成看不到。
   const keep = keepKnownFor === 0 || keepKnownFor === 1 ? knownDeckTopIids(st, keepKnownFor) : [];
   st.players.forEach((p, pi) => {
-    const d = p.deck;
     const k = pi === keepKnownFor ? keep.length : 0;
-    // Fisher-Yates（只洗 [k, n-1]）；此處的 Math.random 已被 withIsolatedRandom 換成隔離 PRNG
-    for (let i = d.length - 1; i > k; i--) {
-      const j = k + Math.floor(Math.random() * (i - k + 1));
-      [d[i], d[j]] = [d[j], d[i]];
+    type Slot = { zone: 'deck' | 'hand' | 'prizes'; i: number };
+    const slots: Slot[] = [];
+    for (let i = k; i < p.deck.length; i++) slots.push({ zone: 'deck', i });
+    p.prizes.forEach((c, i) => { if (!(c as { faceUp?: boolean }).faceUp) slots.push({ zone: 'prizes', i }); });
+    if (pi !== keepKnownFor) p.hand.forEach((_c, i) => slots.push({ zone: 'hand', i }));
+    const cards = slots.map((sl) => p[sl.zone][sl.i]);
+    // Fisher-Yates；此處的 Math.random 已被 withIsolatedRandom 換成隔離 PRNG
+    for (let i = cards.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [cards[i], cards[j]] = [cards[j], cards[i]];
     }
+    // 正面朝上的獎賞卡不在 slots 裡，所以發來發去的都是蓋著的卡，不必處理 faceUp
+    slots.forEach((sl, n) => { p[sl.zone][sl.i] = cards[n]; });
   });
   // 假想盤面的牌庫下半段已經打亂 ⇒ 重新記一次，巢狀試算（換人估值 → 試打）才看得到同一份已知牌庫頂
   return keep.length && (keepKnownFor === 0 || keepKnownFor === 1) ? recordKnownDeckTop(st, keepKnownFor, keep) : st;
@@ -247,11 +261,106 @@ export interface AttackEval extends AttackOutcome {
   gameWon: boolean;
   /** 綜合分數（越大越好） */
   score: number;
+  /**
+   * ⭐v6.430（批次 C）傷害與獎賞以外，盤面有變化的欄位（各次試打取聯集）。
+   *   例：對手戰鬥寶可夢被附加狀態、下回合受傷減少、雙方手牌／牌庫／棄牌區變動、能量移動…
+   *   空陣列＝這一擊除了傷害之外什麼都沒改變。判準見 attackBoardChangeKeys。
+   */
+  sideEffectKeys: string[];
+  /** ⭐v6.430 試打過程有沒有用到亂數（擲硬幣、洗牌）。有的話 3 次試打的平均不能代表「一定打不動」。 */
+  usedRandom: boolean;
 }
 
 const DEAD_EVAL: AttackEval = {
   ...DEAD, prizes: 0, oppDamage: 0, selfEnergyLost: 0, selfDamage: 0, gameWon: false, score: -Infinity,
+  sideEffectKeys: [], usedRandom: false,
 };
+
+// ── ⭐v6.430（AI 對戰強化 批次 C）「打不動」判定 ─────────────────────────────────
+/**
+ * 每次攻擊都一定會變、本身不代表任何效果的欄位（引擎的招式簿記）。
+ * ⚠ 每一條都要說得出「為什麼一定會變、為什麼不是效果」；判錯的後果是把有效果的招當成「打不動」而不出招。
+ *   反方向（漏排除簿記欄位）的後果只是「照舊出招」＝ v6.429 的行為，所以有疑慮一律**不要**加進來。
+ */
+const BOARD_SKIP_TOP = new Set([
+  'players',                   // 逐玩家／逐隻另外比
+  'log',                       // 對戰紀錄
+  'turnPhase',                 // 攻擊後一律進入回合結束階段
+  'pendingSelection',          // 另由 unresolved 判斷
+  'pendingPrizes',             // 另由 prizes 判斷
+  'lastDealtDamage',           // 本次招式傷害的簿記（傷害另由 oppDamage 判斷）
+  'attackDamageToDefActive',   // 同上
+  'attackNamesUsedThisTurn',   // v6.428 遊戲層級招式紀錄（每次攻擊都寫）
+  'coinFlippedThisAttack',     // 擲幣簿記（擲幣另由 usedRandom 判斷）
+  '_koDefenderSnapshot',       // 擊倒結算用的暫存
+  '_attackerActiveBonusDone',  // 攻擊方加成是否已結算的暫存
+  '_pendingSeq',               // 選擇視窗的發號機（v6.175；開過視窗就會前進，視窗本身的效果另由其他欄位判斷）
+  // ⚠ 刻意**不**排除 ancientAttackedIidsThisTurn：古代寶可夢「使出了招式」這件事下回合會被其他卡讀到（輪番狂攻），
+  //   零傷害也可能有價值；attackNamesUsedThisTurn 則只會造成自己的冷卻（不出招只會更好），所以排除。
+]);
+/** 玩家物件：場上寶可夢逐隻另外比；currentTurnActions 是「對手回合面板」的顯示紀錄。 */
+const BOARD_SKIP_PLAYER = new Set(['active', 'bench', 'currentTurnActions']);
+/** 寶可夢實體：攻擊蓋章（每次攻擊都寫）。damage 不排除（對手的另由 oppDamage、自己的反衝也算一種盤面變化）。 */
+const BOARD_SKIP_INST = new Set(['attackUsedThisTurn']);
+
+/** 盤面指紋（只取判定需要的部分；key → 字串）。 */
+function boardFingerprint(st: GameState): Map<string, string> {
+  const m = new Map<string, string>();
+  const put = (k: string, v: unknown) => m.set(k, JSON.stringify(v ?? null));
+  for (const k of Object.keys(st)) if (!BOARD_SKIP_TOP.has(k)) put('state.' + k, (st as unknown as Record<string, unknown>)[k]);
+  st.players.forEach((p, pi) => {
+    const pr = p as unknown as Record<string, unknown>;
+    for (const k of Object.keys(pr)) {
+      if (BOARD_SKIP_PLAYER.has(k)) continue;
+      const v = pr[k];
+      // 區域（手牌／牌庫／棄牌區／獎賞卡…）只比 iid 序列：張數或順序變了都算
+      if (Array.isArray(v)) put(`p${pi}.${k}`, v.map((c) => (c && typeof c === 'object' && 'iid' in c ? (c as { iid: string }).iid : c)));
+      else put(`p${pi}.${k}`, v);
+    }
+    put(`p${pi}.activeIid`, p.active?.iid ?? null);
+    put(`p${pi}.benchIids`, p.bench.map((c) => c.iid));
+    for (const c of [p.active, ...p.bench]) {
+      if (!c) continue;
+      const cr = c as unknown as Record<string, unknown>;
+      for (const k of Object.keys(cr)) if (!BOARD_SKIP_INST.has(k)) put(`p${pi}.${c.iid}.${k}`, cr[k]);
+    }
+  });
+  return m;
+}
+
+/**
+ * ⭐v6.430 試打前後，盤面在「傷害與獎賞」以外有變化的欄位（排序過的 key 清單）。
+ *   實體欄位的 key 會把 iid 換成「戰鬥位／備戰」，方便統計與閱讀。
+ */
+export function attackBoardChangeKeys(before: GameState, after: GameState): string[] {
+  const a = boardFingerprint(before), b = boardFingerprint(after);
+  const out = new Set<string>();
+  const label = (k: string, st: GameState) => {
+    const m = /^p([01])\.([^.]+)\.(.+)$/.exec(k);
+    if (!m) return k;
+    const p = st.players[Number(m[1])];
+    if (p.active?.iid === m[2]) return `p${m[1]}.戰鬥位.${m[3]}`;
+    if (p.bench.some((c) => c.iid === m[2])) return `p${m[1]}.備戰.${m[3]}`;
+    return k;
+  };
+  for (const k of new Set([...a.keys(), ...b.keys()])) {
+    // 欄位不存在與值為 undefined／null 視為相同（引擎在每次攻擊開頭會把暫存欄位重設成 undefined）
+    if ((a.get(k) ?? 'null') !== (b.get(k) ?? 'null')) out.add(label(k, a.has(k) ? before : after));
+  }
+  return [...out].sort();
+}
+
+/**
+ * ⭐v6.430（批次 C）這一招是不是「打不動」：引擎接受、沒有待選擇、沒擊倒、沒拿獎賞、對手全場零傷害、
+ *   盤面沒有任何其他變化、試打過程也沒用到亂數。**全部**可用招式都是這樣時，AI 不出招（改走撤退換人／結束回合）。
+ *   ⚠ 用平均值 oppDamage，不用 dealt（dealt 是最後一次試打的值）。
+ *   ⚠ 用到亂數（擲幣／洗牌）一律不算打不動：3 次試打剛好全擲反面時平均也是 0，那不代表打不動。
+ */
+export function isPointlessAttack(ev: AttackEval | null | undefined): boolean {
+  return !!ev && ev.ok && !ev.unresolved && !ev.ko && !ev.gameWon
+    && ev.prizes === 0 && ev.oppDamage === 0
+    && ev.sideEffectKeys.length === 0 && !ev.usedRandom;
+}
 
 /**
  * 這一擊對某方造成的**有效傷害**。
@@ -321,9 +430,24 @@ function evaluateAttackOnce(
       //   但少了它，日後有人想模擬「對手下回合能對我做什麼」就會靜默模擬錯人。
       const sim = shuffleHiddenZonesForSim(cloneState(state), actorIdx);
       sim.activePlayerIndex = actorIdx;
-      const after0 = applyAction(sim, { type: 'ATTACK', attackIndex, ...(actionExtra ?? {}) } as GameAction, pool);
-      if (!after0 || after0 === state) return DEAD_EVAL;
-      const after = resolveOwnPendingsInSim(after0, actorIdx, pool);
+      // ⭐v6.430 試打前的盤面指紋要在 applyAction 之前取（引擎若就地改動 sim，事後就比不出來）
+      const simBefore = cloneState(sim);
+      // ⭐v6.430 記下試打過程有沒有用到亂數（擲幣／洗牌）：此處的 Math.random 是隔離 PRNG，只包一層計數
+      const _rnd = Math.random;
+      let _rndCalls = 0;
+      Math.random = () => { _rndCalls++; return _rnd(); };
+      let after0: GameState;
+      let after: GameState;
+      try {
+        after0 = applyAction(sim, { type: 'ATTACK', attackIndex, ...(actionExtra ?? {}) } as GameAction, pool);
+        // ⚠（fable 審查 v6.430 C）這裡比的是外層 state 而不是 sim，所以引擎「原樣退回」的拒絕抓不到、會當成 ok 且盤面零變化。
+        //   在批次 C 之下那等於「打不動」⇒ 不送一個一定被拒的 ATTACK，方向是安全的；改成 === sim 反而會讓 AI 送出被拒的動作。
+        //   故意保留，改動前請先想清楚這一層。
+        if (!after0 || after0 === state) return DEAD_EVAL;
+        after = resolveOwnPendingsInSim(after0, actorIdx, pool);
+      } finally {
+        Math.random = _rnd;
+      }
 
       const gameWon = after.phase === 'game-over' && after.winner === actorIdx;
       const oppNow = after.players[oppIdx].active;
@@ -353,6 +477,7 @@ function evaluateAttackOnce(
       return {
         ok: true, ko, dealt: ko ? Infinity : oppDamage, unresolved: !!after.pendingSelection,
         prizes, oppDamage, selfEnergyLost, selfDamage, gameWon, score,
+        sideEffectKeys: attackBoardChangeKeys(simBefore, after), usedRandom: _rndCalls > 0,
       };
     });
   } catch {
@@ -388,7 +513,9 @@ export function evaluateAttack(
           gameWon: acc.gameWon || r.gameWon,
           score: acc.score === Number.MAX_SAFE_INTEGER || r.score === Number.MAX_SAFE_INTEGER
             ? Number.MAX_SAFE_INTEGER : acc.score + r.score,
-          unresolved: acc.unresolved || r.unresolved }
+          unresolved: acc.unresolved || r.unresolved,
+          sideEffectKeys: [...new Set([...acc.sideEffectKeys, ...r.sideEffectKeys])].sort(),
+          usedRandom: acc.usedRandom || r.usedRandom }
       : { ...r };
   }
   if (!acc || okCount === 0) return DEAD_EVAL;

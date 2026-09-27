@@ -23,7 +23,7 @@
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync } from 'node:fs';
 import {
-  buildAiBundle, loadLivePool, presetById, playGame, makeRandomAgent, wilson, twoPropZ, pct, padW,
+  buildAiBundle, baselineAiInfo, loadLivePool, presetById, playGame, makeRandomAgent, wilson, twoPropZ, pct, padW,
   newAggregate, addToAggregate, printAggregate, MIN_TRUSTED_GAMES, firstPlayerOf,
 } from './lib/ai-sim-harness.mjs';
 
@@ -47,6 +47,8 @@ const RANDOM_FLOOR = 0.90;      // 對隨機 agent 應該壓倒性勝利；低�
 const UNDECIDED_MAX = 0.05;     // 一格裡「未分出」超過 5% ⇒ 亮紅（卡住／例外也算）
 
 const mod = await buildAiBundle(ROOT, { withBaseline: true });
+const BASE = baselineAiInfo(ROOT);   // ⭐v6.430 基準 AI 的身分（--save 記下、--compare 先比）
+console.log(`基準 AI：${BASE.rev.slice(0, 8)}（ai*.ts 指紋 ${BASE.aiSig}）`);
 const pool = loadLivePool(ROOT);
 const aiNew = (st, idx) => mod.aiNew(st, pool, idx);
 const aiOld = (st, idx) => mod.aiOld(st, pool, idx);
@@ -119,6 +121,13 @@ if (COMPARE) {
   const old = JSON.parse(readFileSync(COMPARE, 'utf8'));
   console.log(`\n══════ 對照 ${COMPARE}（z < −1.96 ＝ 顯著下降）══════`);
   if (old.seeds !== SEEDS) console.log(`  ⚠ 舊矩陣每格 ${old.seeds} 個 seed、這次 ${SEEDS} 個：樣本量不同，請用相同 --seeds 重跑再比`);
+  // ⭐v6.430 欄那一側是基準 AI：基準 AI 不同時，「某格下降」可能只是對手那一側變強了 ⇒ 不可判讀、不否決也不放行
+  const sameBase = !!old.baseAiSig && old.baseAiSig === BASE.aiSig;
+  if (!sameBase) {
+    console.log(`  🟡 基準 AI 不同：舊矩陣 ${old.baseRev ? old.baseRev.slice(0, 8) : '（沒有記錄）'}／${old.baseAiSig ?? '—'}，`
+      + `這次 ${BASE.rev.slice(0, 8)}／${BASE.aiSig}。欄那一側的 AI 換過了，下面的升降混著「對手變強／變弱」，**不能拿來判定回歸**。`);
+    console.log('     ⇒ 請先在基準 commit 上（git worktree）用同樣的 --seeds 跑一次 --save，再拿那份來 --compare。');
+  }
   let regress = 0;
   for (const row of rows) for (const col of cols) {
     const a = old.cells?.[row.name]?.[col], b = cells[row.name][col];
@@ -129,12 +138,13 @@ if (COMPARE) {
     if (z < -1.96) regress++;
     console.log(`  ${padW(row.name + ' vs ' + col, 34)} ${pct(na ? a.w / na : NaN)} → ${pct(nb ? b.w / nb : NaN)}  z=${z.toFixed(2)} ${mark}`);
   }
-  console.log(regress ? `🔴 共 ${regress} 格顯著下降 ⇒ 否決` : '✅ 沒有任何一格顯著下降（⚠ 這不是出貨理由，只是沒有被否決）');
+  if (!sameBase) console.log(`🟡 基準 AI 不同，對照結果不可判讀（顯著下降 ${regress} 格僅供參考；請用同一個基準重跑）`);
+  else console.log(regress ? `🔴 共 ${regress} 格顯著下降 ⇒ 否決` : '✅ 沒有任何一格顯著下降（⚠ 這不是出貨理由，只是沒有被否決）');
 }
 
 printAggregate(agg, `受測 AI 那一側，${rows.length} 副牌 × ${cols.length - 1} 副對手`);
 
 if (SAVE) {
-  writeFileSync(SAVE, JSON.stringify({ seeds: SEEDS, cols, cells, createdAt: new Date().toISOString() }, null, 2));
+  writeFileSync(SAVE, JSON.stringify({ seeds: SEEDS, cols, cells, baseRev: BASE.rev, baseAiSig: BASE.aiSig, createdAt: new Date().toISOString() }, null, 2));
   console.log(`\n已存矩陣：${SAVE}（之後用 --compare 對照）`);
 }
