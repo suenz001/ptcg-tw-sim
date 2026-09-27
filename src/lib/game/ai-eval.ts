@@ -187,7 +187,15 @@ export function simulateAttack(
   }
 }
 
-/** 這方目前所有可用招式裡，試打結果最好的一個。沒有可用招式回 null。 */
+/**
+ * 這方目前所有可用招式裡，試打結果最好的一個。沒有可用招式回 null。
+ *
+ * ⭐v6.431（AI 對戰強化：撤退估值）改用 evaluateAttack（試打 3 次取平均）當量尺，與選招同一把尺：
+ *   舊版用 simulateAttack **只試打一次**，擲幣招（雙重衝擊、偷襲…）的結果被單一次擲幣釘死——
+ *   剛好反面就當成 0、剛好正面就當成全中，撤退換人的判斷跟著擲幣走。
+ *   現在：ko ＝ 過半數試打會擊倒；dealt ＝ 對手全場傷害的平均（oppDamage，擊倒時為 Infinity）。
+ *   ⚠ 取最佳的規則不變（先比擊倒、再比傷害），只換量尺。
+ */
 export function bestAttackOutcome(
   state: GameState,
   actorIdx: 0 | 1,
@@ -196,8 +204,9 @@ export function bestAttackOutcome(
   let best: { attackIndex: number; outcome: AttackOutcome } | null = null;
   try {
     for (const idx of getAvailableAttacks(state, pool)) {
-      const o = simulateAttack(state, actorIdx, idx, pool);
-      if (!o.ok) continue;
+      const ev = evaluateAttack(state, actorIdx, idx, pool);
+      if (!ev.ok) continue;
+      const o: AttackOutcome = { ok: true, ko: ev.ko, dealt: ev.ko ? Infinity : ev.oppDamage, unresolved: ev.unresolved };
       if (!best || (o.ko && !best.outcome.ko) || (o.ko === best.outcome.ko && o.dealt > best.outcome.dealt)) {
         best = { attackIndex: idx, outcome: o };
       }

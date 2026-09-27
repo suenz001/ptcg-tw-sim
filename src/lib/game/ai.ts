@@ -537,6 +537,9 @@ export function getAIAction(
         const o = estimateIfPromoted(state, myIdx, b, pool);
         if (!o.ok) continue;
         // 能擊倒一定值得（直接換獎賞卡）；否則要跨過與撤退費相稱的收益門檻
+        // ⚠ v6.431 起 o 來自 evaluateAttack 的 3 次平均：ko＝過半數試打會擊倒；dealt＝對手**全場**傷害平均
+        //   （含打到備戰的傷害；3 次裡有擊倒時，被擊倒那隻的剩餘 HP 也混進平均）。門檻 60 當初是以「戰鬥位傷害」校準的啟發式，
+        //   新語意下略為偏寬（fable 審查 v6.431 A），要重新校準另案處理。
         const score = o.ko ? Number.MAX_SAFE_INTEGER : o.dealt;
         if (!o.ko && score < _minGain) continue;
         if (!_bestSwap || score > _bestSwap.score) _bestSwap = { iid: b.iid, score };

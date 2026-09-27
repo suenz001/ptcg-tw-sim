@@ -1,5 +1,19 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.431：撤退換人的估值改用 evaluateAttack 3 次平均（只動 ai-eval.ts；對戰規則零改動）
+
+BASE `300cb1c6`（v6.430）。fable 審查 v6.430 C 點名的另案。
+- `bestAttackOutcome`（estimateIfPromoted 用它估「換上去打得出什麼」）從 simulateAttack 單次試打改成 evaluateAttack：
+  ko＝過半數試打會擊倒；dealt＝對手全場傷害平均（擊倒時 Infinity）；取最佳的規則不變（先比擊倒、再比傷害）。
+  舊版擲幣招換上去的收益被一次擲幣釘死（剛好反面就不撤、剛好正面就當全中）。simulateAttack 保留（test-v6396 用），AI 已不再呼叫。
+- 量測：對手池對 v6.430 自己的基準（新基線 `docs/ai-eval/pool-baseline-v6430.json`）**0 格下降**；B3 範圍內撤退 33、結束回合 288。
+- 守衛 `scripts/test-v6431-promote-estimate-average.mjs`（4 條）：R1 估值出現 10／20（單次只可能 0／30）、R2 免費撤退 64 起點 ≥ 48 次撤退、
+  R3 不擲幣零回歸、R4 擊倒。HEAD-FAIL（v6.430）R1、R2 紅；突變 4 個全殺。
+- selfplay（v6.431 vs v6.430）：50.1%（CI 48.4～51.8）。fable 5.1 審查：無安慰劑、效能可接受（實戰每決策點平均 3.3 ms、極端 8 備戰約 50–70 ms）；
+  指出語意變更 dealt＝全場平均（含備戰、擊倒混入剩餘 HP）、ko＝過半數 ⇒ 撤退門檻 60 略偏寬（實戰 708 決策點撤退 88→98，
+  差異 16 次全是呆呆王牌庫頂未擺好時免費撤退換呆呆王盲翻）⇒ ai.ts 撤退分支與守衛標頭註明新語意、首頁 changelog 補一句；門檻校準另案。
+- bump 四配套＋首頁 changelog 三步搬運（v6.419 內文 → bodies、v6.396 → archive）。
+
 ## v6.430：AI 對戰強化 批次 C —「打不動」偵測（只動 ai-eval.ts 與 ai.ts；對戰規則零改動；已送 fable 5.1 審查並依結論修正）
 
 BASE `21974d12`（v6.429）。詳細前後對照：`docs/ai-eval/batch-c-report-v6430.md`。
