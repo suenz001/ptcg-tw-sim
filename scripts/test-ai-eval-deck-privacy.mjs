@@ -99,14 +99,25 @@ T('⭐雙方牌庫都要洗（對手的牌庫 AI 更沒有理由知道）', () =
 });
 
 T('⭐⭐所有模擬入口都必須經過這道中央防線（不可有人繞過去）', () => {
-  const src = readFileSync(join(ROOT, 'src/lib/game/ai-eval.ts'), 'utf8');
-  // 每一處把複本交給引擎的地方，都要先過洗牌
-  const rawClones = [...src.matchAll(/applyAction\(\s*cloneState\(/g)];
-  assert.deepEqual(rawClones.map((m) => m.index), [],
+  // ⚠ v6.429（fable 審查 A-3）：原本只掃 ai-eval.ts —— ai-slowking.ts 的兩個試跑入口直接 applyAction(cloneState(…))
+  //   照樣綠（型態 10：掃描範圍漏掉語義同型的檔案）。改掃 src/lib/game/ 底下**全部** ai*.ts。
+  const dirG = join(ROOT, 'src/lib/game');
+  const files = readdirSync(dirG).filter((f) => /^ai.*\.ts$/.test(f));
+  assert.ok(files.length >= 4 && files.includes('ai-eval.ts') && files.includes('ai.ts'), '掃描器壞了？只掃到 ' + files.join(','));
+  let guarded = 0;
+  const raw = [];
+  for (const f of files) {
+    const src = readFileSync(join(dirG, f), 'utf8');
+    // 每一處把複本交給引擎的地方，都要先過洗牌
+    for (const m of src.matchAll(/applyAction\(\s*cloneState\(/g)) raw.push(f + '@' + m.index);
+    guarded += [...src.matchAll(/shuffleHiddenZonesForSim\(cloneState\(/g)].length;
+  }
+  assert.deepEqual(raw, [],
     '有模擬入口直接把 cloneState 的結果丟給 applyAction，繞過了洗牌防線 —— '
     + '一律要寫成 applyAction(shuffleHiddenZonesForSim(cloneState(state)), …)');
-  const guarded = [...src.matchAll(/shuffleHiddenZonesForSim\(cloneState\(/g)].length;
-  assert.ok(guarded >= 3, `經過防線的模擬入口只有 ${guarded} 處，應涵蓋全部（試打／評估／換上場估算）`);
+  // 正對照：判準抓得到違規樣本（否定型守衛必須配正對照）
+  assert.equal([...'const x = applyAction( cloneState(st), a, pool);'.matchAll(/applyAction\(\s*cloneState\(/g)].length, 1, '判準抓不到違規樣本');
+  assert.ok(guarded >= 5, `經過防線的模擬入口只有 ${guarded} 處，應涵蓋全部（試打／評估／換上場估算／牌庫頂借招的試跑）`);
 });
 
 T('⭐洗牌必須用隔離的 PRNG，不可消耗真實對局的隨機序列', () => {

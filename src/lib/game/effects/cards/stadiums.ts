@@ -19,6 +19,7 @@
 import { regR, updatePlayer, shuffle, addLog, clearActiveEffects, getOwnBenchLimit,
 } from '../_shared';
 import { joinCardNames, addPrivateLog } from '../_shared';
+import { recordKnownDeckTop, knownDeckTopIids } from '../../deck-top-known';   // ⭐v6.429 自己擺的牌庫頂（AI 試算用，不影響規則）
 import { tryPromptPromoteActive } from '../_shared';
 import { hasEffectivePokemonType } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
 
@@ -63,10 +64,14 @@ regR('night-academy-top', (st, idx, iids, _params, pool) => {
   const chosen = st.players[idx].hand.filter(c => iids.includes(c.iid));
   if (chosen.length === 0) return st;
   st = addPrivateLog(st, `夜間學院：將 ${joinCardNames(chosen, pool)} 放回牌庫上方`, `夜間學院：將 1 張手牌放回牌庫上方`, idx);
-  return updatePlayer(st, idx, p => {
+  // ⭐v6.429 放上去之前還合法知道的牌庫頂（例如先打了暗碼迷的解讀），放上去之後仍然在這張底下
+  const _prevKnown = knownDeckTopIids(st, idx as 0 | 1);
+  const placed = updatePlayer(st, idx, p => {
     const newHand = p.hand.filter(c => !iids.includes(c.iid));
     return { ...p, hand: newHand, deck: [...chosen, ...p.deck] };
   });
+  // 記下「自己擺的牌庫頂」（擺牌的那一方合法知道；AI 試算耀閃挑戰要用）。不影響規則。
+  return recordKnownDeckTop(placed, idx as 0 | 1, [...chosen.map(c => c.iid), ..._prevKnown]);
 });
 
 // ── 月光丘陵（Stadium）──────────────────────────────────────────────────────

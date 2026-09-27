@@ -441,5 +441,24 @@ function scanGameStateExprs(src) {
   ok('重新同步鈕會先強制刷新 token（憑證過期可就地自救）', PAGE3.includes('await firebaseUser.getIdToken(true)'));
 }
 
+// ── v6.429 deckTopKnown（自己擺的牌庫頂）只給擺牌的那一方 ─────────────────────
+{
+  const rec = (tag) => ({ iids: [tag + 'D0', tag + 'D7'], restSig: 'abc' });
+  const gs = mkGs({ deckTopKnown: { p1: rec('p0'), p2: rec('p1') } });
+  const o0 = R._redactStateForSeat(gs, 0);
+  ok('v6.429 玩家 0 視角：自己的 deckTopKnown.p1 保留', JSON.stringify(o0.deckTopKnown?.p1) === JSON.stringify(rec('p0')));
+  ok('v6.429 玩家 0 視角：對手的 deckTopKnown.p2 剝除', !!o0.deckTopKnown && !('p2' in o0.deckTopKnown));
+  const o1 = R._redactStateForSeat(gs, 1);
+  ok('v6.429 玩家 1 視角：自己的 p2 保留、對手的 p1 剝除', !!o1.deckTopKnown?.p2 && !('p1' in o1.deckTopKnown));
+  const oa = R._redactStateForSeat(gs, -1);
+  ok('v6.429 觀戰／認不出身分：兩側都剝除', !!oa.deckTopKnown && !('p1' in oa.deckTopKnown) && !('p2' in oa.deckTopKnown));
+  ok('v6.429 不改動原始盤面（DB 物件）', !!gs.deckTopKnown.p1 && !!gs.deckTopKnown.p2);
+  ok('v6.429 TSEAT_NO_REDACT（測試房）原樣', R._redactStateForSeat(gs, R.TSEAT_NO_REDACT) === gs);
+  ok('v6.429 旗標關閉時玩家視角原樣（零影響）', ROFF._redactStateForSeat(gs, 0) === gs);
+  ok('v6.429 沒有這個欄位的盤面不會多出空物件', !('deckTopKnown' in R._redactStateForSeat(mkGs(), 0)));
+  // 正對照：未剝除的原始盤面確實帶著對手的紀錄（否則上面的「剝除」是空真）
+  ok('v6.429 ★正對照：原始盤面含對手紀錄', !!gs.deckTopKnown.p2?.iids?.length);
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail === 0 ? 0 : 1);

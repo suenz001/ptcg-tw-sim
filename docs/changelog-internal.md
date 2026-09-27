@@ -1,5 +1,53 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.429：AI 呆呆王「牌庫頂借招」打法（只動 AI、「自己擺的牌庫頂」紀錄與錦標賽遮蔽；對戰規則零改動；已送 fable 5.1 審查並依結論修正）
+
+BASE `de61a6a4`（v6.428 ＋ 第 2 步診斷）。站長指定打法：用 暗碼迷的解讀／夜間學院 把巨金怪、酋雷姆、靈幽馬這類高傷害或
+多目標招式的寶可夢放到牌庫頂，再用 呆呆王｜耀閃挑戰 借招；超級袋獸ex｜使者衝刺 抽完後用 拉帝亞斯ex｜天空徑線 免費撤退換呆呆王。
+- `src/lib/game/deck-top-known.ts`（新增）：`deckTopKnown {p1,p2}` = { iids（由上而下）, restSig（其下那段的 FNV-1a）}。
+  只在 暗碼迷的解讀（`cipher-geek-arrange-top`）與 夜間學院（`night-academy-top`，會疊在既有已知頂之上）的 resolver 記錄。
+  讀取時驗證：只允許「上面被抽走 0..k 張」；洗牌、放下方、從中間拿、放上別的卡都作廢 ⇒ 回 []。
+- 公平性：`shuffleHiddenZonesForSim(st, keepKnownFor)` 只保留**行動方自己的**已知頂（位置 [0,k)），其餘照舊洗；k=0 時與舊版
+  逐位元相同。AI 不讀對手手牌、不讀任何一方的未知牌庫。
+- 試打：`setSimSelectionResolver` 由 ai.ts 註冊 `autoResolveSelection`；simulateAttack／evaluateAttackOnce 在 applyAction 之後
+  最多 8 步解完**行動方自己的**選擇視窗（有遞迴深度保護）⇒ 借招／殘酷箭這類「攻擊後才選」的招式估值不再是 0。
+- ATTACK 動作可帶 `copyAttackChoice {pokeIid, attackIndex}`（evaluateAttack 的 actionExtra）。
+- `src/lib/game/ai-slowking.ts`（新增）：bestKnownTopCopy（逐招試打）、valueAsTop（假想換上會耀閃挑戰的那隻、能量不夠用基本【超】補齊）、
+  pickCipherArrange（場上連呆呆獸都沒有時：最上放呆呆獸、第 2 張放呆呆王）、pickNightAcademyCard／shouldUseNightAcademy、
+  wouldDisturbKnownTop（隔離亂數試跑動作）、drawingAbilitiesNow。
+- ai.ts：能量優先給會耀閃挑戰的寶可夢；已知頂有價值時濾掉會弄掉它的訓練家／特性；還沒準備好（付不起、被鎖、無法免費換上）時
+  暗碼迷的解讀留手（setupUseful 例外）；打暗碼迷的解讀前先用抽牌特性；攻擊前可用夜間學院；免費撤退換呆呆王（valueAsTop > 目前最佳招）。
+- 量測（sim 呆呆王 80 局）：勝 14 → 23；夜間學院 0 → 41 次；耀閃挑戰 11 → 112 次（翻到巨金怪 42 次）。
+  對手池 compare（`--seeds 50`，對照 pool-baseline-v6428.json）：**沒有任何一格顯著下降**；呆呆王列 對胡地 43→56%、鏡像 50→68%、
+  對超級路卡利歐 15→31%、對隨機 55→74%、對瑪俐 14→15%（最低格，未改善，另案）。其他列幾乎不變。
+- 守衛 `scripts/test-v6429-slowking-top-copy.mjs`（23 條，串進 npm test；每條開頭把 ai-eval 試打種子歸零，結果不受測試順序影響；
+  fable 複審指出 F2（擲幣相關）與 B1 在少數種子起點會翻 ⇒ F2 改 12 個起點統計（使者衝刺 0 次、撤退 ≥ 9 次），B1 改 200 次／門檻 30）：
+  牌庫頂紀錄／作廢／夜間學院疊加／小牌庫門檻、公平性、暗碼迷的解讀與夜間學院選卡（有弱候選當對照）、借招選擇（靈幽馬選幻影碎）、
+  使者衝刺先用、免費撤退換呆呆王（要比分數）、已知頂時不打重洗牌庫的訓練家／不附感應【超】能量（各有正對照）、
+  付不付得起看屬性、殘酷箭試打解完、不替對手做選擇、其他牌組不受影響。
+  HEAD-FAIL（src 換回 v6.428）：22 紅 1 綠（綠的是零回歸守衛 G2「不替對手做選擇」）；
+  其中 F4、F7 在 v6.428 上是因為 recordKnownDeckTop 不存在而紅（較弱），靠突變 M18／M21 補證。突變 25 個全殺（M24「試跑不過中央防線」由 test-ai-eval-deck-privacy 殺）；
+  未守：resolveOwnPendingsInSim 的遞迴深度保護（拿掉後自然終止、只影響效能）。
+- 既有守衛：`test-ai-attack-eval` ③ 依 Rule 40 第 3 型拆 ③a（有選擇器：解完、傷害 > 0）／③b（無選擇器：仍標 unresolved）；
+  `test-v6398` C1 抓到能量分支用 `/【超】/.test(name)` 與張數判斷 ⇒ 改走中央 canAffordAttack／energyProvidesType（見下）。
+- **fable 5.1 審查（全部自行重現後處理）**：
+  - A-1【中】錦標賽 `_redactStateForSeat` 沒剝 `deckTopKnown` ⇒ 對手／觀戰拿得到重排前的牌庫頂 iid 序列
+    （`_redactDeckZone` 依 iid 重排就是為了不洩漏這個）。⇒ `oracle-admin/server_admin_patch.js` 剝除對手側（觀戰兩側），
+    `test-v6150-state-redact` 補 9 條（含正對照、旗標關零影響、無欄位不多出空物件）。**要跑 redeploy-oracle.bat。**
+    改動是純新增、以 `// >>> v6429-dtk-redact` 哨兵框住（第一版在既有 return 行中間改寫 ⇒ test-v6303 H3 整檔 pin 翻紅；
+    依 Rule 40 第 2 型改成哨兵＋`gs` 換成新物件，H3 剝除後仍逐字等於 BASE）。
+  - A-2【低】restSig 比對真實牌庫：重洗剛好洗回原順序時仍「知道」（3 張 1/6）⇒ 牌庫 < 5 張一律不知道（`KNOWN_DECK_TOP_MIN_DECK`）。
+    未處理：對手查看並原樣放回自己牌庫頂時 AI 仍知道順序沒變（需事件式作廢、要動 engine，另案）。
+  - A-3【低】`wouldDisturbKnownTop`／`drawingAbilitiesNow` 直接 `applyAction(cloneState(…))` 繞過中央洗牌防線 ⇒ 改過
+    `shuffleHiddenZonesForSim`；`test-ai-eval-deck-privacy` 改掃全部 `src/lib/game/ai*.ts`（原本只掃 ai-eval.ts，型態 10）＋正對照。
+  - A-4【低、v6.428 既有】試打盤面的對手手牌是真的 ⇒ 首頁 changelog 拿掉「不偷看對手手牌」這句（未改程式，另案）。
+  - D-1【低】已知頂時附「感應【超】能量」會重洗牌庫 ⇒ 新增 `pickTopCopyEnergy`（保護時過 wouldDisturbKnownTop、屬性走中央 energyProvidesType）。
+  - 自查追加：isTopCopyPlayer／_tcDeck 改看「手牌＋牌庫＋獎賞卡」（＝牌組清單扣掉看得到的），不單看牌庫。
+  - 付不付得起一律 `canPayTopCopy`（中央 canAffordAttack，host-aware），取代「身上幾張能量卡」。
+  - 審查確認無問題：規則零改動（非呆呆王預組 2166 步新舊 AI 0 步不同）、只解自己的視窗、隔離亂數、效能（每局 172 ms，舊 54 ms）。
+- 金屬之錘借用時「身上無鋼能也 +150」：已核對為官方 QA 裁定（effects.ts 金屬之錘段落），不是 bug。
+- 沒有改 engine.ts ⇒ 不需要 engine-strip。bump 四配套＋首頁 changelog 三步搬運（v6.417 內文 → bodies、v6.391 → archive）。
+
 ## AI 對戰強化 第 2 步：「牌組耗盡」敗局診斷（只動 scripts/ 與 docs/，玩家端零改動；已送 fable 5.1 審查並依結論修正）
 
 BASE `544cdd7`（v6.428 之上）。新增 `scripts/diag-ai-deckout.mjs`（不進 CI），報告 `docs/ai-eval/deckout-report-v6428.md`。

@@ -26,11 +26,11 @@ process.on('exit', () => { for (const p of [S, E, O]) { try { unlinkSync(p); } c
 writeFileSync(S, 'export const base="";export const assets="";');
 writeFileSync(E, "export { createGame, applyAction, getEffectiveHP } from './src/lib/game/engine';\n"
   + "export { getAIAction } from './src/lib/game/ai';\n"
-  + "export { evaluateAttack, PRIZE_SCORE_UNIT } from './src/lib/game/ai-eval';\n"
+  + "export { evaluateAttack, PRIZE_SCORE_UNIT, setSimSelectionResolver } from './src/lib/game/ai-eval';\n"
   + "import './src/lib/game/effects';");
 await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node',
   target: 'node20', alias: { $lib: join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
-const { createGame, applyAction, getAIAction, evaluateAttack, PRIZE_SCORE_UNIT }
+const { createGame, applyAction, getAIAction, evaluateAttack, PRIZE_SCORE_UNIT, setSimSelectionResolver }
   = await import(pathToFileURL(O).href);
 
 const dir = join(ROOT, 'static/cards');
@@ -124,14 +124,34 @@ T('⭐⭐能擊倒的招分數必須高於不能擊倒的招（漏 KO 是最嚴�
   }
 });
 
-T('⭐③會開選擇視窗的招要被標為 unresolved（否則它的傷害會被當成 0）', () => {
-  // 「波動突刺」的效果是從棄牌區選能量附給備戰 → 打完會停在選擇視窗
+// ⚠ v6.429（IRON_RULES Rule 40 的第 3 型：新防護層蓋住舊觀測點）：試打現在會把「行動方自己的」選擇視窗
+//   交給 AI 的選擇器解完（ai.ts 註冊的 setSimSelectionResolver），波動突刺不再停在視窗 ⇒ 傷害直接量得到。
+//   這一條守的意圖是「會開選擇視窗的招，傷害不可以被當成 0」—— 沒有被破壞，只是現在分兩層：
+//   ③a 有選擇器時：解完、unresolved=false、量到的傷害 > 0（新的第一層）；
+//   ③b 沒有選擇器時（巢狀試算、選擇器未註冊）：仍必須標 unresolved 讓呼叫端走保底估值（原本那一層）。
+//   ⚠ 只驗 ③a 會把上一版的修正守空（拿掉 unresolved 標記也不會紅），所以 ③b 必須留著。
+T('⭐③a 會開自己選擇視窗的招：試打把視窗解完，量到的傷害 > 0（不是 0）', () => {
   const st = mk(CID.def, 0);
   const ev = evaluateAttack(st, 0, IDX_WAVE, pool);
   assert.ok(ev.ok, '這招應該打得出來');
-  assert.ok(ev.unresolved,
-    '波動突刺打完應停在選擇視窗；沒被標記的話，呼叫端不會走保底估值，'
-    + '這招的傷害就會被當成 0 而永遠不被選');
+  assert.equal(ev.unresolved, false, '有註冊選擇器時，自己的選擇視窗應該在試打裡解完');
+  assert.ok(ev.oppDamage > 0, '解完之後應量到實際傷害，得到 ' + ev.oppDamage);
+});
+
+T('⭐③b 沒有選擇器時，會開選擇視窗的招要被標為 unresolved（否則它的傷害會被當成 0）', () => {
+  // 「波動突刺」的效果是從棄牌區選能量附給備戰 → 打完會停在選擇視窗
+  const st = mk(CID.def, 0);
+  setSimSelectionResolver(null);
+  try {
+    const ev = evaluateAttack(st, 0, IDX_WAVE, pool);
+    assert.ok(ev.ok, '這招應該打得出來');
+    assert.ok(ev.unresolved,
+      '波動突刺打完應停在選擇視窗；沒被標記的話，呼叫端不會走保底估值，'
+      + '這招的傷害就會被當成 0 而永遠不被選');
+  } finally {
+    // 還原成與 ai.ts 等價的選擇器（自己的選擇交給 AI 解）
+    setSimSelectionResolver((s2, pl) => (s2.pendingSelection ? getAIAction(s2, pl, s2.pendingSelection.actorIdx) : null));
+  }
 });
 
 T('⭐③欄位名 cantAttackPending 必須存在於引擎（寫錯名字不會報錯，代價會靜默歸零）', () => {

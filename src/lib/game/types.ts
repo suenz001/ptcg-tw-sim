@@ -1196,6 +1196,12 @@ export interface GameState {
    */
   attackNamesUsedThisTurn?: { p1: string[]; p2: string[] };
   attackNamesUsedLastSelfTurn?: { p1: string[]; p2: string[] };
+  /**
+   * ⭐v6.429 自己擺到牌庫頂、所以自己合法知道的那幾張（暗碼迷的解讀、夜間學院）。
+   *   讀寫一律走 deck-top-known.ts（含「牌庫被動過就作廢」的驗證）；只給擺牌的那一方自己用。
+   *   形狀 `{ p1?, p2? }`（Firestore 禁巢狀陣列）。不影響任何規則判定。
+   */
+  deckTopKnown?: { p1?: { iids: string[]; restSig: string }; p2?: { iids: string[]; restSig: string } };
   oppAbilityKOdMeInLastOppTurn?: [number, number];
   oppAttackKOdMyRocketInLastOppTurn?: [number, number];
   oppAbilityKOdMyRocketInLastOppTurn?: [number, number];

@@ -12,6 +12,7 @@ import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
 import { copyAttackCandidates, pickCopiedAttack } from '../../copy-attack';
 import type { Card } from '$lib/cards/types';
 import { isRulePokemon } from '../../selection-filter';   // ⭐v6.404 卡面「擁有規則的寶可夢」中央述詞（leaf）
+import { recordKnownDeckTop } from '../../deck-top-known';   // ⭐v6.429 自己擺的牌庫頂（AI 試算用，不影響規則）
 import {
   reg, regR, regG, regPre, regPost, regA,
   ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE,
@@ -427,7 +428,9 @@ regR('cipher-geek-arrange-top', (st, idx, iids) => {
   const rest = p.deck.filter(c => !chosenIids.has(c.iid));
   // 先選的放上方第 2 位、後選的放最上方 → 牌庫頂順序 = 選取序反轉
   const topOrder = [...chosen].reverse();
-  return updatePlayer(st, idx, pl => ({ ...pl, deck: [...topOrder, ...shuffle(rest)] }));
+  const arranged = updatePlayer(st, idx, pl => ({ ...pl, deck: [...topOrder, ...shuffle(rest)] }));
+  // ⭐v6.429 記下「自己擺的牌庫頂」（擺牌的那一方合法知道；AI 試算耀閃挑戰要用）。不影響規則。
+  return recordKnownDeckTop(arranged, idx as 0 | 1, topOrder.map(c => c.iid));
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

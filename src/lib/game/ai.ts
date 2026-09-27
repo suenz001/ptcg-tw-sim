@@ -32,7 +32,17 @@ import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemo
 import { getPlaybook, benchScoreOf } from './ai-playbook';
 // v6.039 批次4c：場面評估（引擎試打）。方向嚴格單向 ai.ts → ai-eval.ts → engine，
 //   ai-eval 不得反向 import ai.ts（會造成 module-init 循環，見 v5.985 TDZ 事故）。
-import { estimateIfPromoted, evaluateAttack, PRIZE_SCORE_UNIT } from './ai-eval';
+import { estimateIfPromoted, evaluateAttack, PRIZE_SCORE_UNIT, setSimSelectionResolver } from './ai-eval';
+// ⭐v6.429 呆呆王「牌庫頂借招」打法（站長說明）；只對場上／手上有會耀閃挑戰寶可夢的一方生效
+import {
+  isTopCopyPlayer, topCopyUser, bestKnownTopCopy, valueAsTop, pickCipherArrange,
+  pickNightAcademyCard, shouldUseNightAcademy, hasValuableKnownTop, wouldDisturbKnownTop, drawingAbilitiesNow,
+  canPayTopCopy, pickTopCopyEnergy, TOP_COPY_ATTACK_NAME,
+} from './ai-slowking';
+import { knownDeckTopIids } from './deck-top-known';
+// ⭐v6.429 試打時「自己的選擇視窗」交給同一個選擇器解完（批次 B1：選對手 1 隻打的招不再被估成 0 分）。
+//   ai-eval 不能 import ai.ts（模組循環相依），所以由這裡註冊；autoResolveSelection 是 function 宣告（提升），此時已可呼叫。
+setSimSelectionResolver((st, pl) => (st.pendingSelection ? autoResolveSelection(st, pl) : null));
 // v6.191：Gust 系支援者卡名的單一來源（葉子模組，零 import ⇒ 不觸發 effects 註冊、無循環風險）。
 import { GUST_SUPPORTER_NAMES } from './gust-supporters';
 
@@ -93,6 +103,13 @@ export function getAIAction(
 
   // ── 主階段決策 ───────────────────────────────────────────────────────────
 
+  // ⭐v6.429「牌庫頂借招」打法的狀態（其他牌組 _tc=false，下面每一處改動都不生效）
+  const _tc = isTopCopyPlayer(state, myIdx, pool);
+  // 牌組裡有會耀閃挑戰的寶可夢（場上還沒有也算）：暗碼迷的解讀要留給擺牌庫頂用，不要當一般支援者打掉
+  //   （牌庫＋獎賞卡一起看＝牌組清單扣掉看得到的，玩家本來就知道；不單看牌庫）
+  const _tcDeck = _tc || [...player.hand, ...player.deck, ...player.prizes].some(c => pool.get(c.cardId)?.attacks?.some(a => a.name === TOP_COPY_ATTACK_NAME));
+  const _tcProtect = _tc && hasValuableKnownTop(state, myIdx, pool);   // 已經擺好借招目標 ⇒ 別讓抽牌／洗牌弄掉
+
   // 進化
   const evoTargets = getEvolvableTargets(state, pool);
   if (evoTargets.length > 0) {
@@ -144,6 +161,18 @@ export function getAIAction(
   //   1. 只有在「当前没有任何招式可发」时才附能量，避免招式已够能时继续乱填。
   //   2. 选择能量时优先选「与宝可梦属性匹配」的能量，减少填错属性的问题。
   // v3.43 魔靈多龍：火/超 → 多龍系（滿 1F+1P 為止），惡 → 願增猿（1 顆），其他不填。
+  // ⭐v6.429 牌庫頂借招：能量先給會耀閃挑戰的寶可夢（戰鬥位優先），附到付得起為止
+  if (_tc && !player.energyAttachedThisTurn && player.active) {
+    const users = [player.active, ...player.bench].filter((c): c is CardInstance => !!c
+      && !!pool.get(c.cardId)?.attacks?.some(a => a.name === TOP_COPY_ATTACK_NAME) && !c.cantAttachEnergyThisTurn);
+    // 付不付得起一律問中央 canAffordAttack（host-aware），挑哪張能量交給 pickTopCopyEnergy（屬性走中央 energyProvidesType）
+    const needy = users.filter(c => !canPayTopCopy(state, myIdx, c, pool));
+    const tgt = needy.find(c => c.iid === player.active?.iid) ?? needy.sort((a, b) => b.energyAttached.length - a.energyAttached.length)[0];
+    if (tgt) {
+      const en = pickTopCopyEnergy(state, myIdx, tgt, pool, _tcProtect, autoResolveSelection);
+      if (en) return { type: 'ATTACH_ENERGY', energyIid: en.iid, targetIid: tgt.iid };
+    }
+  }
   if (!player.energyAttachedThisTurn && player.active) {
     if (isMarruneDragapult(player, pool)) {
       const dragapultAct = dragapultEnergyAction(state, player, pool);
@@ -212,7 +241,41 @@ export function getAIAction(
   }
 
   // 打訓練家（支援者先，再物品）
-  const trainerIids = getPlayableTrainers(state, pool);
+  let trainerIids = getPlayableTrainers(state, pool);
+  // ⭐v6.429 牌庫頂借招：已擺好的借招目標不可以被抽走／洗掉 ⇒ 會弄掉它的訓練家先不打
+  if (_tcProtect) {
+    trainerIids = trainerIids.filter(iid => !wouldDisturbKnownTop(state, myIdx, { type: 'PLAY_TRAINER', iid }, pool, autoResolveSelection));
+  }
+  // ⭐v6.429 牌庫頂借招：會耀閃挑戰的寶可夢付得起、牌庫頂還沒擺好 ⇒ 暗碼迷的解讀優先（把目標擺到牌庫頂）
+  const _tcUser = _tc ? topCopyUser(state, myIdx, pool) : null;
+  const _tcReady = !!_tcUser && !_tcProtect && (() => {
+    if (!canPayTopCopy(state, myIdx, _tcUser!, pool) || _tcUser!.cantAttackThisTurn) return false;
+    // 牠不在戰鬥位 ⇒ 這回合必須能免費換上去（否則擺好的牌庫頂會在下回合開頭被抽走，白擺）
+    if (player.active?.iid !== _tcUser!.iid) return canRetreat(state, pool) && computeActiveRetreatCostFor(state, myIdx, pool) === 0;
+    return true;
+  })();
+  const _cipherIid = _tcReady ? trainerIids.find(iid => pool.get(player.hand.find(h => h.iid === iid)?.cardId ?? '')?.name === '暗碼迷的解讀') : undefined;
+  // 還沒準備好（會耀閃挑戰的寶可夢不在場、能量不夠、或換不上去）⇒ 暗碼迷的解讀先留在手上，不要白擺。
+  //   例外：場上有進化前、手上沒有能進化的呆呆王、又沒有別的支援者可打 ⇒ 用它把呆呆王擺到牌庫頂（下回合抽到）
+  if (_tcDeck && !_tcReady) {
+    const nameOf = (iid: string) => pool.get(player.hand.find(h => h.iid === iid)?.cardId ?? '')?.name;
+    const cipher = trainerIids.filter(iid => nameOf(iid) === '暗碼迷的解讀');
+    if (cipher.length) {
+      const otherSupporter = trainerIids.some(iid => nameOf(iid) !== '暗碼迷的解讀'
+        && pool.get(player.hand.find(h => h.iid === iid)?.cardId ?? '')?.subtype === 'Supporter');
+      const evoInHand = player.hand.some(h => pool.get(h.cardId)?.attacks?.some(a => a.name === TOP_COPY_ATTACK_NAME));
+      const setupUseful = !otherSupporter && !evoInHand && !topCopyUser(state, myIdx, pool);
+      if (!setupUseful) trainerIids = trainerIids.filter(iid => nameOf(iid) !== '暗碼迷的解讀');
+    }
+  }
+  if (_cipherIid) {
+    // 站長的打法：先用抽牌特性（超級袋獸ex｜使者衝刺）抽完，再擺牌庫頂 ⇒ 擺好之後才不會被抽走
+    if (player.hand.length < 8 && player.deck.length > 5) {
+      const draws = drawingAbilitiesNow(state, myIdx, pool);
+      if (draws.length) return { type: 'USE_ABILITY', iid: draws[0].iid, abilityIndex: draws[0].abilityIndex };
+    }
+    return { type: 'PLAY_TRAINER', iid: _cipherIid };
+  }
   if (trainerIids.length > 0) {
     const sorted = [...trainerIids].sort((a, b) => {
       const scoreOf = (iid: string) => {
@@ -298,6 +361,12 @@ export function getAIAction(
         }
       }
 
+      // ⭐v6.429 牌庫頂借招：已擺好的借招目標不可以被抽走（使者衝刺等抽牌特性這時候不用）
+      if (_tcProtect && score > 0
+          && wouldDisturbKnownTop(state, myIdx, { type: 'USE_ABILITY', iid: ab.iid, abilityIndex: ab.abilityIndex }, pool, autoResolveSelection)) {
+        score = 0;
+      }
+
       return { ab, score };
     });
 
@@ -306,6 +375,11 @@ export function getAIAction(
     if (best.score > 0) {
       return { type: 'USE_ABILITY', iid: best.ab.iid, abilityIndex: best.ab.abilityIndex };
     }
+  }
+
+  // ⭐v6.429 牌庫頂借招：手牌有比牌庫頂更好的借招目標 ⇒ 用夜間學院把它放到牌庫頂
+  if (_tc && shouldUseNightAcademy(state, myIdx, pool)) {
+    return { type: 'USE_STADIUM' };
   }
 
   // 攻擊（選傷害最高的）
@@ -347,7 +421,13 @@ export function getAIAction(
     const _oppIdx = (1 - myIdx) as 0 | 1;
     const _oppActive = state.players[_oppIdx].active;
     const _oppRem = _oppActive ? _remHP(_oppActive, pool, state) : 0;
+    // ⭐v6.429 牌庫頂已知（自己擺的）時，耀閃挑戰逐招試打「借哪一招」，選中的記下來放進 ATTACK 動作
+    const _copyChoice = new Map<number, { pokeIid: string; attackIndex: number }>();
     const scoreOfAttack = (atkIdx: number): number => {
+      if (_tc && eff[atkIdx]?.atk?.name === TOP_COPY_ATTACK_NAME) {
+        const kt = bestKnownTopCopy(state, myIdx, atkIdx, pool);
+        if (kt && kt.ok && !kt.unresolved) { _copyChoice.set(atkIdx, kt.choice); return kt.score; }
+      }
       const ev = evaluateAttack(state, myIdx, atkIdx, pool);
       // ⚠會開選擇視窗的招（暗黑底牌等）在試打當下傷害還沒結算 → 試打值會嚴重低估。
       //   這類招退回舊的 estimateDamage 估值，並換算成同一個評分尺度：
@@ -366,6 +446,21 @@ export function getAIAction(
     const best = atkIdxs.reduce((prev, cur) => {
       return scoreOfAttack(cur) > scoreOfAttack(prev) ? cur : prev;
     });
+    // 只有一招可用時 reduce 不會呼叫 scoreOfAttack ⇒ 借招選擇沒有算到；補算一次（只在牌庫頂借招打法時）
+    if (_tc && eff[best]?.atk?.name === TOP_COPY_ATTACK_NAME && !_copyChoice.has(best)) scoreOfAttack(best);
+    // ⭐v6.429 牌庫頂借招：戰鬥位不是會耀閃挑戰的寶可夢（例：超級袋獸ex 剛用完使者衝刺），而牌庫頂已擺好目標、
+    //   可以免費撤退（拉帝亞斯ex｜天空徑線）、換上去打得比現在好 ⇒ 先撤退換呆呆王（站長說明的打法）
+    if (_tcProtect && player.active && !pool.get(player.active.cardId)?.attacks?.some(a => a.name === TOP_COPY_ATTACK_NAME)
+        && canRetreat(state, pool) && computeActiveRetreatCostFor(state, myIdx, pool) === 0) {
+      const user = topCopyUser(state, myIdx, pool);
+      const topIid = knownDeckTopIids(state, myIdx)[0];
+      if (user && topIid && user.iid !== player.active.iid) {
+        const v = valueAsTop(state, myIdx, topIid, pool);
+        if (canPayTopCopy(state, myIdx, user, pool) && v > scoreOfAttack(best)) {
+          return { type: 'RETREAT', newActiveIid: user.iid };
+        }
+      }
+    }
     // v3.883：AI 對 PRE_DISCARD_CHOICE 招式自動填 discardedEnergyIids
     //   目前只 special-case 激流水泵（厄鬼椪 水井面具ex）— 對手有 bench + 自身能量 ≥ required
     //   時自動啟用 option（多 120 bench 傷害很值得）。
@@ -385,6 +480,8 @@ export function getAIAction(
         }
       }
     }
+    const _cc = _copyChoice.get(best);
+    if (_cc) return { type: 'ATTACK', attackIndex: best, copyAttackChoice: _cc };
     return aiDiscardedEnergyIids
       ? { type: 'ATTACK', attackIndex: best, discardedEnergyIids: aiDiscardedEnergyIids }
       : { type: 'ATTACK', attackIndex: best };
@@ -534,6 +631,11 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
   switch (sel.type) {
     // 牌庫搜尋
     case 'deck-search': {
+      // ⭐v6.429 暗碼迷的解讀：牌庫頂借招打法時，最好的借招目標放最上方、次好的放第 2 張
+      if (sel.effectKey === 'cipher-geek-arrange-top') {
+        const pick = pickCipherArrange(state, sel.actorIdx, pool);
+        if (pick) return { type: 'RESOLVE_SELECTION', selectedIids: pick };
+      }
       const f = sel.filter ?? '';
       // v6.083：AI 一律再套 params.validIids 交集 —— 很多卡的「可勾範圍」是用 validIids 表達
       //   （filter 只負責顯示哪幾張）。AI 只看 filter 會選到 validIids 外的卡，接著被 engine 的
@@ -966,6 +1068,11 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
 
     // 手牌選擇（不丟棄，如神奇糖果）
     case 'hand-choose': {
+      // ⭐v6.429 夜間學院：牌庫頂借招打法時，放手牌裡最好的借招目標
+      if (sel.effectKey === 'night-academy-top') {
+        const iid = pickNightAcademyCard(state, sel.actorIdx, pool);
+        if (iid) return { type: 'RESOLVE_SELECTION', selectedIids: [iid] };
+      }
       const validIids = sel.params?.validIids as string[] | undefined;
       const hand = validIids
         ? actorPlayer.hand.filter(c => validIids.includes(c.iid))

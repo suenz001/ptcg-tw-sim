@@ -19,7 +19,8 @@
  * 把它固化進 AI 等於植入作弊知識。
  */
 import type { Card } from '$lib/cards/types';
-import type { GameState, CardInstance } from './types';
+import type { GameState, CardInstance, GameAction } from './types';
+import { knownDeckTopIids, recordKnownDeckTop } from './deck-top-known';   // ⭐v6.429
 import { applyAction, getAvailableAttacks, getEffectiveHP } from './engine';
 
 /** 一次試打的結果。dealt 只在「沒擊倒」時有意義（擊倒時傷害多寡不重要）。 */
@@ -60,7 +61,7 @@ export function withIsolatedRandom<T>(fn: () => T): T {
 }
 
 /** 深拷貝盤面。引擎多數 handler 是 immutable，但有就地改 shallow copy 的路徑，一律拷貝才安全。 */
-function cloneState(state: GameState): GameState {
+export function cloneState(state: GameState): GameState {
   try {
     return typeof structuredClone === 'function'
       ? structuredClone(state)
@@ -83,16 +84,54 @@ function cloneState(state: GameState): GameState {
  * ⚠這是**中央**防線：所有模擬入口都必須經過它，不要在個別估值函式裡各自防。
  * ⚠洗亂只在複本上做，絕不碰真實對局的 state。
  */
-export function shuffleHiddenZonesForSim(st: GameState): GameState {
-  for (const p of st.players) {
+export function shuffleHiddenZonesForSim(st: GameState, keepKnownFor?: 0 | 1): GameState {
+  // ⭐v6.429 行動方**自己擺到牌庫頂、合法知道**的那幾張（暗碼迷的解讀／夜間學院）保留在原位，
+  //   只打亂它們以下的部分；對手的牌庫一律整副打亂（AI 不可以知道對手擺了什麼）。
+  //   驗證與「牌庫一被動過就作廢」都在 deck-top-known.ts；沒有紀錄時 k=0，亂數序列與舊版逐位元相同。
+  const keep = keepKnownFor === 0 || keepKnownFor === 1 ? knownDeckTopIids(st, keepKnownFor) : [];
+  st.players.forEach((p, pi) => {
     const d = p.deck;
-    // Fisher-Yates；此處的 Math.random 已被 withIsolatedRandom 換成隔離 PRNG
-    for (let i = d.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+    const k = pi === keepKnownFor ? keep.length : 0;
+    // Fisher-Yates（只洗 [k, n-1]）；此處的 Math.random 已被 withIsolatedRandom 換成隔離 PRNG
+    for (let i = d.length - 1; i > k; i--) {
+      const j = k + Math.floor(Math.random() * (i - k + 1));
       [d[i], d[j]] = [d[j], d[i]];
     }
+  });
+  // 假想盤面的牌庫下半段已經打亂 ⇒ 重新記一次，巢狀試算（換人估值 → 試打）才看得到同一份已知牌庫頂
+  return keep.length && (keepKnownFor === 0 || keepKnownFor === 1) ? recordKnownDeckTop(st, keepKnownFor, keep) : st;
+}
+
+// ── ⭐v6.429 試打時把「自己的選擇視窗」接著解完（批次 B1）────────────────────────
+// 舊版：試打的招式一開選擇視窗（選對手 1 隻打、選要借的招…）就停在那裡 ⇒ unresolved ⇒ 退回印刷傷害估值，
+//   傷害欄是空字串的招（吉雉雞ex｜殘酷箭、呆呆王｜耀閃挑戰借來的三重冰霜…）一律被估成 0 分。
+// 新版：行動方自己的選擇視窗交給 AI 平常用的同一個選擇器（autoResolveSelection）解完，再讀盤面差。
+//   ⚠ 選擇器由 ai.ts 在載入時註冊（這裡不能 import ai.ts：模組循環相依，見 estimateIfPromoted 的說明）。
+//   ⚠ 只解行動方自己的視窗；對手要做的選擇一律不代答（維持 unresolved）。巢狀呼叫不再往下解（防遞迴）。
+type SimSelectionResolver = (state: GameState, pool: Map<string, Card>) => GameAction | null;
+let _simResolver: SimSelectionResolver | null = null;
+let _simResolveDepth = 0;
+/** ⭐v6.429 試打時附在 ATTACK 動作上的額外欄位（目前只有借招的選擇：呆呆王｜耀閃挑戰借哪一招）。 */
+export type AttackActionExtra = { copyAttackChoice?: { pokeIid: string; attackIndex: number } };
+export function setSimSelectionResolver(fn: SimSelectionResolver | null): void { _simResolver = fn; }
+function resolveOwnPendingsInSim(st0: GameState, actorIdx: 0 | 1, pool: Map<string, Card>): GameState {
+  if (!_simResolver || _simResolveDepth > 0) return st0;
+  _simResolveDepth++;
+  try {
+    let st = st0;
+    for (let i = 0; i < 8 && st.pendingSelection && st.pendingSelection.actorIdx === actorIdx && st.phase !== 'game-over'; i++) {
+      const act = _simResolver(st, pool);
+      if (!act || act.type !== 'RESOLVE_SELECTION') break;
+      const nx = applyAction(st, act, pool);
+      if (!nx || nx === st) break;
+      st = nx;
+    }
+    return st;
+  } catch {
+    return st0;
+  } finally {
+    _simResolveDepth--;
   }
-  return st;
 }
 
 /**
@@ -114,10 +153,11 @@ export function simulateAttack(
       //   必須落到假想盤面上，這個參數才名副其實（estimateIfPromoted 早就這樣做了）。
       //   目前兩個呼叫點傳的都等於盤面上的 activePlayerIndex，這一行是等價的；
       //   但少了它，日後有人想模擬「對手下回合能對我做什麼」就會靜默模擬錯人。
-      const sim = shuffleHiddenZonesForSim(cloneState(state));
+      const sim = shuffleHiddenZonesForSim(cloneState(state), actorIdx);
       sim.activePlayerIndex = actorIdx;
-      const after = applyAction(sim, { type: 'ATTACK', attackIndex }, pool);
-      if (!after || after === state) return DEAD;
+      const after0 = applyAction(sim, { type: 'ATTACK', attackIndex }, pool);
+      if (!after0 || after0 === state) return DEAD;
+      const after = resolveOwnPendingsInSim(after0, actorIdx, pool);
       const now = after.players[oppIdx].active;
       // 擊倒判定用 iid：被擊倒後戰鬥位會變空或換上別隻，兩種都算擊倒
       const ko = !now || now.iid !== before.iid;
@@ -171,7 +211,7 @@ export function estimateIfPromoted(
   pool: Map<string, Card>,
 ): AttackOutcome {
   try {
-    const hypo = withIsolatedRandom(() => shuffleHiddenZonesForSim(cloneState(state)));
+    const hypo = withIsolatedRandom(() => shuffleHiddenZonesForSim(cloneState(state), myIdx));
     const me = hypo.players[myIdx];
     const bIdx = me.bench.findIndex((b) => b.iid === candidate.iid);
     if (bIdx < 0) return DEAD;
@@ -258,6 +298,7 @@ function evaluateAttackOnce(
   actorIdx: 0 | 1,
   attackIndex: number,
   pool: Map<string, Card>,
+  actionExtra?: AttackActionExtra,
 ): AttackEval {
   try {
     const oppIdx = (1 - actorIdx) as 0 | 1;
@@ -278,10 +319,11 @@ function evaluateAttackOnce(
       //   必須落到假想盤面上，這個參數才名副其實（estimateIfPromoted 早就這樣做了）。
       //   目前兩個呼叫點傳的都等於盤面上的 activePlayerIndex，這一行是等價的；
       //   但少了它，日後有人想模擬「對手下回合能對我做什麼」就會靜默模擬錯人。
-      const sim = shuffleHiddenZonesForSim(cloneState(state));
+      const sim = shuffleHiddenZonesForSim(cloneState(state), actorIdx);
       sim.activePlayerIndex = actorIdx;
-      const after = applyAction(sim, { type: 'ATTACK', attackIndex }, pool);
-      if (!after || after === state) return DEAD_EVAL;
+      const after0 = applyAction(sim, { type: 'ATTACK', attackIndex, ...(actionExtra ?? {}) } as GameAction, pool);
+      if (!after0 || after0 === state) return DEAD_EVAL;
+      const after = resolveOwnPendingsInSim(after0, actorIdx, pool);
 
       const gameWon = after.phase === 'game-over' && after.winner === actorIdx;
       const oppNow = after.players[oppIdx].active;
@@ -330,11 +372,12 @@ export function evaluateAttack(
   attackIndex: number,
   pool: Map<string, Card>,
   samples = 3,
+  actionExtra?: AttackActionExtra,
 ): AttackEval {
   let acc: AttackEval | null = null;
   let okCount = 0, koCount = 0;
   for (let i = 0; i < samples; i++) {
-    const r = evaluateAttackOnce(state, actorIdx, attackIndex, pool);
+    const r = evaluateAttackOnce(state, actorIdx, attackIndex, pool, actionExtra);
     if (!r.ok) continue;
     okCount++;
     if (r.ko) koCount++;

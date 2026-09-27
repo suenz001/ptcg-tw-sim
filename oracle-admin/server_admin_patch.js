@@ -4385,6 +4385,17 @@ import('firebase-admin').then(async ({ default: admin }) => {
           prizes: _redactZone(p.prizes, prizeKeep, false),
         });
       }
+      // >>> v6429-dtk-redact
+      // v6.429：deckTopKnown（自己擺到牌庫頂、自己知道的那幾張 iid）只給擺牌的那一方。
+      //   對手側／觀戰視角要剝掉：它等於用另一個欄位再送一次「重排前的真實牌庫頂順序」
+      //   （_redactDeckZone 刻意依 iid 重排牌庫就是為了不洩漏這個）。
+      //   淺層複製（gs 換成新物件，不改 DB 物件）；純新增、用哨兵框住（test-v6303 H3 等整檔 pin 的慣例）。
+      if (gs.deckTopKnown && typeof gs.deckTopKnown === 'object') {
+        const dtk = Object.assign({}, gs.deckTopKnown);
+        for (const idx of sides) delete dtk[idx === 0 ? 'p1' : 'p2'];
+        gs = Object.assign({}, gs, { deckTopKnown: dtk });
+      }
+      // <<< v6429-dtk-redact
       return _redactLogForSeat(Object.assign({}, gs, { players: players }), seat);
     }
     /** 玩家端唯一出口：先截 log 再遮（兩者都只做淺層複製，不改 DB 裡的物件）。 */
