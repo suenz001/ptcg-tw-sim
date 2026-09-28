@@ -1,5 +1,35 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.437：AI 不做「會讓這回合攻擊明顯變差」的訓練家／特性；特性函式就地改實體的中央修正（v6.436 列的兩個另案）
+
+BASE `b404a8f2`（v6.436）。站長：「這次新發現的兩個問題，請你想辦法解決」。
+- ①（AI）ai-eval.ts 新增 `actionWeakensAttackThisTurn`：在洗過看不到區域的複本上真的做一次動作（自己的選擇視窗交給 AI 選擇器、
+  試跑期間 _simResolveDepth 讓昂貴的逐目標試打退回便宜判準）；雙方戰鬥位都沒變 ⇒ 快速路徑 false；
+  否則比較前後 `bestNowOutcome`，之前 `clearlyBetterOutcome` 之後 ⇒ true。回合被結束 ⇒ 之後當成 0。
+  `bestNowOutcome`／`betterOutcome`／`clearlyBetterOutcome` 從 ai-gust.ts 搬到 ai-eval.ts（老大的指令 gustWorth 委派同一把尺，Rule 38）。
+  ai.ts 訓練家（老大的指令判斷之後）與特性評分兩處都問它。
+- fable 5.1 審查抓到三個必須修（均已修、補守衛）：
+  ① 動作本身打倒對手戰鬥位（黑夜魔靈｜咒詛炸彈）被誤擋 ⇒ 對手戰鬥位空了或動作本身取獎 ⇒ 不擋（V9）；
+  ② 神奇糖果原地進化被「打得出 → 打不出」反向規則誤擋 ⇒ 改成只擋「這回合少拿至少半張獎賞」（V10）；
+  ③ 快速路徑把「本回合已用特性」也算成戰鬥位變了 ⇒ 純抽牌特性（使者衝刺）進入兩邊各自試打、擲幣招結論亂跳 ⇒ 快速路徑忽略該旗標（V11，連問 20 次）。
+  另：同一盤面物件的「做之前」結果用 WeakMap 快取（每步對每張候選各問一次）。
+- 量測：`diag-ai-gust`（52 副 × 3 對手 × 2 局）老大的指令拉上來被打倒 81.6% → 88.5%、完全沒受傷 12.3% → 6.1%；
+  對手池（50 seeds，基準 v6.436 自身 `docs/ai-eval/pool-baseline-v6436.json`）**0 格顯著下降**；
+  selfplay 400（對 v6.436 AI）54.1%（95% CI 52.4%～55.8%）——超級耿鬼ex 鏡像 66.7% 特別高：臨時診斷 30 局裡
+  「桃歹郎ex｜支配鎖鏈」被否決 130 次（舊 AI 一直用它把打得倒的戰鬥位換成沒能量的惡屬性寶可夢），其餘三副 ≈50%。
+  只當「沒有變差」的佐證。
+- ②（引擎）engine USE_ABILITY：使用特性的那一隻一律換新物件（不限次數特性也一樣）並交給特性函式；
+  effects resolve-play-ability-prompt 同樣換新物件 ⇒ 10 處 `instInPlay.abilityUsedThisTurn = true` 不必逐張改。
+- 守衛 `test-v6437-attack-keep.mjs`（14 條）：HEAD-FAIL V1～V3／V5／V6 紅（V9～V11 為審查修正的正對照）；V4、V7 正對照綠；R1～R3（J 標夢幻ex｜記憶螺旋 × 天仙石冷卻）
+  在 BASE 已綠（v6.428 中央述詞以招式名比對，已涵蓋；本版釘住）；V8 補「ai*.ts 不可 applyAction(state, …)」掃描
+  （突變 X5 改用真實盤面時 test-ai-eval-deck-privacy 只認 `applyAction(cloneState(` 抓不到）。
+- 守衛 `test-v6437-no-input-mutation.mjs`：A1 12 局 AI 對 AI 每次 applyAction 前後比對舊 state；B1 全卡池 308 張有特性的卡 × 戰鬥位／備戰
+  逐一 USE_ABILITY；C1 喵喵ex 登場確認。HEAD-FAIL A1、C1 紅（B1 在 BASE 綠：USE_ABILITY 路徑原本就對非不限次數特性換新物件）。
+- 突變 X1～X8、E1～E3 全殺（E2 引擎就地蓋章 ⇒ B1 紅；E3 FINISH_SETUP 改回 shift ⇒ A1 紅；X6 單拿掉「對手戰鬥位空了」存活＝與取獎檢查重疊，兩層都拿掉 ⇒ V9 紅；V9 第一版戰鬥位打不倒＝安慰劑，已改）。
+- engine 還原器 `scripts/lib/engine-strip-v6437.mjs`（2 組）接進 test-v6265（兩處）／test-v6375／test-v6371。
+- J 標夢幻ex（M6a 057/103）沒有「基因駭入」，是特性「記憶螺旋」（使用自己備戰寶可夢的招式）；用它使出天仙石會記成
+  「自己的寶可夢使出了天仙石」（R3，照卡面字義，待站長確認）。
+
 ## v6.436：老大的指令的保留邏輯＋拉誰上來（另案）；借招冷卻的對戰紀錄說明（v6.435 fable 建議）
 
 BASE `8a165679`（v6.435）。

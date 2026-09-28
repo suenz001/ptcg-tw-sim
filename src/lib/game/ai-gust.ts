@@ -19,36 +19,13 @@
  */
 import type { Card } from '$lib/cards/types';
 import type { GameState, CardInstance } from './types';
-import { applyAction, getAvailableAttacks } from './engine';
-import { cloneState, evaluateAttack, shuffleHiddenZonesForSim, withIsolatedRandom } from './ai-eval';
+import { applyAction } from './engine';
+import { cloneState, shuffleHiddenZonesForSim, withIsolatedRandom, bestNowOutcome, betterOutcome, clearlyBetterOutcome } from './ai-eval';
+export { bestNowOutcome };   // ⭐v6.437 本體搬到 ai-eval.ts（re-export，既有呼叫端不受影響）
 import { GUST_SUPPORTER_NAMES } from './gust-supporters';
 
 /** 一個目標被拉上來之後，自己能打出的最好結果 */
 export type GustOutcome = { targetIid: string; prizes: number; oppDamage: number; ko: boolean };
-
-/** 比大小：先比獎賞張數，再比對手受到的傷害 */
-function better(a: { prizes: number; oppDamage: number }, b: { prizes: number; oppDamage: number }): boolean {
-  if (a.prizes !== b.prizes) return a.prizes > b.prizes + 1e-9;
-  return a.oppDamage > b.oppDamage;
-}
-
-/** 目前盤面，戰鬥位能打出的最好結果（沒有招可用 ⇒ 0／0） */
-export function bestNowOutcome(state: GameState, me: 0 | 1, pool: Map<string, Card>): { prizes: number; oppDamage: number; ko: boolean } {
-  let best = { prizes: 0, oppDamage: 0, ko: false };
-  try {
-    if (state.activePlayerIndex !== me) return best;
-    for (const idx of getAvailableAttacks(state, pool)) {
-      // ⭐（fable 審查 v6.436 建議 4）先試打 1 次；過程沒用到亂數（純傷害招）⇒ 結果是確定的，不必再試 2 次；
-      //   用到亂數（擲硬幣、洗牌）才補成 3 次平均（與選招同一個取樣數）。
-      const once = evaluateAttack(state, me, idx, pool, 1);
-      const ev = once.ok && once.usedRandom ? evaluateAttack(state, me, idx, pool) : once;
-      if (!ev.ok || ev.unresolved) continue;   // 試打停在選擇視窗 ⇒ 分數不可信，不拿來當依據
-      const o = { prizes: ev.prizes, oppDamage: ev.oppDamage, ko: ev.ko };
-      if (better(o, best)) best = o;
-    }
-  } catch { /* fail-safe：評估失敗當成打不出東西 */ }
-  return best;
-}
 
 /** 這張手牌是不是 Gust 系支援者（卡名單一來源 gust-supporters.ts） */
 export function isGustSupporter(state: GameState, me: 0 | 1, handIid: string, pool: Map<string, Card>): boolean {
@@ -83,22 +60,18 @@ export function gustTargetOutcomes(pendingState: GameState, me: 0 | 1, pool: Map
 
 /**
  * ⭐ 值不值得打老大的指令 —— 純函式（fable 複審建議：抽出來讓守衛直接餵數字，不必靠擲幣招）。
+ *   ⭐v6.437 判準本體搬到 ai-eval.ts 的 clearlyBetterOutcome（「會不會讓這回合的攻擊明顯變差」也用同一把尺，Rule 38）。
  * @param base 不打老大的指令時，戰鬥位現在能打出的最好結果
  * @param best 拉上來之後最好的結果
  */
 export function gustWorth(base: { prizes: number; oppDamage: number }, best: { prizes: number; oppDamage: number }): boolean {
-  // ① 多拿獎賞。⚠（fable 審查 v6.436 B）擲幣招的獎賞是 3 次試打的平均：3 次裡只有 1 次擊倒（0.33 張）不算「值得」，
-  //   要多出**至少半張**（＝過半數試打會多拿）才打；純傷害招不受影響（結果確定，差距一定是整數張）。
-  if (best.prizes - base.prizes >= 0.5) return true;
-  // ② 原本打不動（拿不到獎賞、也打不出任何傷害），拉上來打得出傷害
-  if (base.prizes <= 1e-9 && base.oppDamage <= 0 && best.oppDamage > 0) return true;
-  return false;
+  return clearlyBetterOutcome(base, best);
 }
 
 /** 從 gustTargetOutcomes 挑最好的目標（沒有 ⇒ null） */
 export function bestGustOutcome(outcomes: readonly GustOutcome[]): GustOutcome | null {
   let best: GustOutcome | null = null;
-  for (const o of outcomes) if (!best || better(o, best)) best = o;
+  for (const o of outcomes) if (!best || betterOutcome(o, best)) best = o;
   return best;
 }
 

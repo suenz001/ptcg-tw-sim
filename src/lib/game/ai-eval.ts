@@ -259,6 +259,133 @@ export function estimateIfPromoted(
   }
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ⭐v6.437 「這回合的攻擊」比較用的中央小工具（老大的指令 ai-gust.ts 與 actionWeakensAttackThisTurn 共用，Rule 38）
+// ══════════════════════════════════════════════════════════════════════════════
+/** ⭐v6.436（v6.437 從 ai-gust.ts 搬來）比大小：先比獎賞張數，再比對手受到的傷害 */
+export function betterOutcome(a: { prizes: number; oppDamage: number }, b: { prizes: number; oppDamage: number }): boolean {
+  if (a.prizes !== b.prizes) return a.prizes > b.prizes + 1e-9;
+  return a.oppDamage > b.oppDamage;
+}
+
+/** ⭐v6.436（v6.437 從 ai-gust.ts 搬來）目前盤面，戰鬥位能打出的最好結果（沒有招可用 ⇒ 0／0） */
+export function bestNowOutcome(state: GameState, me: 0 | 1, pool: Map<string, Card>): { prizes: number; oppDamage: number; ko: boolean } {
+  let best = { prizes: 0, oppDamage: 0, ko: false };
+  try {
+    if (state.activePlayerIndex !== me) return best;
+    for (const idx of getAvailableAttacks(state, pool)) {
+      // ⭐（fable 審查 v6.436 建議 4）先試打 1 次；過程沒用到亂數（純傷害招）⇒ 結果是確定的，不必再試 2 次；
+      //   用到亂數（擲硬幣、洗牌）才補成 3 次平均（與選招同一個取樣數）。
+      const once = evaluateAttack(state, me, idx, pool, 1);
+      const ev = once.ok && once.usedRandom ? evaluateAttack(state, me, idx, pool) : once;
+      if (!ev.ok || ev.unresolved) continue;   // 試打停在選擇視窗 ⇒ 分數不可信，不拿來當依據
+      const o = { prizes: ev.prizes, oppDamage: ev.oppDamage, ko: ev.ko };
+      if (betterOutcome(o, best)) best = o;
+    }
+  } catch { /* fail-safe：評估失敗當成打不出東西 */ }
+  return best;
+}
+
+/**
+ * cand 是否**明顯**優於 base（純函式）：
+ *   ① 多拿獎賞**至少半張**（擲幣招是 3 次試打平均：0.33 張＝3 次裡只有 1 次，不算）；或
+ *   ② base 完全打不動（0 獎賞、0 傷害），cand 打得出傷害。
+ * v6.436 老大的指令「值不值得打」用這一把尺（v6.437 的 actionWeakensAttackThisTurn 另外只看「少拿獎賞」，見該函式說明）。
+ */
+export function clearlyBetterOutcome(base: { prizes: number; oppDamage: number }, cand: { prizes: number; oppDamage: number }): boolean {
+  if (cand.prizes - base.prizes >= 0.5) return true;
+  if (base.prizes <= 1e-9 && base.oppDamage <= 0 && cand.oppDamage > 0) return true;
+  return false;
+}
+
+/** ⭐v6.437 同一個盤面物件的 bestNowOutcome 只算一次（AI 同一步裡會對每一張候選訓練家／特性各問一次「做之前」）。 */
+//   ⭐（fable 複審 v6.437）同時記下當時試打用的亂數起點 seed：「做之後」用**同一個起點**試打（配對取樣）——
+//   擲幣招兩邊各自 3 次平均時，運氣差就會出現「治療道具讓獎賞變少」這種假結論；配對之後兩邊擲到同樣的硬幣序列。
+//   副鍵 turn＋log 長度：萬一同一個物件被就地改過內容，不會讀到舊值。
+const _nowOutcomeCache = new WeakMap<GameState, { me: 0 | 1; key: string; seed: number; out: { prizes: number; oppDamage: number; ko: boolean } }>();
+function bestNowOutcomeOf(state: GameState, me: 0 | 1, pool: Map<string, Card>): { out: { prizes: number; oppDamage: number; ko: boolean }; seed: number } {
+  const key = `${state.turn}|${state.log?.length ?? 0}`;
+  const c = _nowOutcomeCache.get(state);
+  if (c && c.me === me && c.key === key) return { out: c.out, seed: c.seed };
+  const seed = _simSeed;
+  const out = bestNowOutcome(state, me, pool);
+  _nowOutcomeCache.set(state, { me, key, seed, out });
+  return { out, seed };
+}
+
+/**
+ * ⭐v6.437 這個動作（打出訓練家／使用特性）會不會讓**這回合**戰鬥位的攻擊明顯變差？
+ *
+ * 背景（scripts/diag-ai-gust.mjs）：電腦對手打出老大的指令、把打得倒的寶可夢拉上來之後，
+ *   又用「能量轉移」把戰鬥位的能量搬走、用「支配鎖鏈」把戰鬥位換掉 ⇒ 這回合打不出招，老大的指令白費。
+ *   根因是訓練家／特性的評分完全不看「用完之後，戰鬥位這回合還打不打得出原本的結果」。
+ * 判準（結構上對戰無關：只看自己招式的結算結果，與選招同一把尺）：
+ *   - 在洗過看不到區域的複本上真的做一次這個動作，自己的選擇視窗交給 AI 平常的選擇器解完；
+ *   - 雙方戰鬥位（含身上能量、傷害、狀態；不含「本回合已用特性」這個簿記旗標）都沒變 ⇒ 不影響這回合的攻擊（快速路徑，不試打）；
+ *   - 否則比較做之前／做之後戰鬥位最好的攻擊結果（bestNowOutcome）：之後**少拿至少半張獎賞** ⇒ true（這回合先不做）。
+ *   - 動作讓回合直接結束 ⇒ 之後的結果當成 0。
+ *   - 動作本身打倒對手戰鬥位或拿到獎賞 ⇒ false；之前本來就拿不到獎賞 ⇒ 永遠 false（進化、換人、加速能量等佈局不受影響）。
+ * ⚠ 試跑期間的選擇視窗一律走便宜判準（_simResolveDepth，例：老大的指令不做逐目標試打），防遞迴、控制耗時。
+ * ⚠ 任何例外、試跑停在對手的選擇 ⇒ false（不擋；等同舊行為）。
+ */
+export function actionWeakensAttackThisTurn(
+  state: GameState, me: 0 | 1, action: GameAction, pool: Map<string, Card>,
+): boolean {
+  try {
+    if (state.activePlayerIndex !== me || state.phase !== 'playing' || !state.players[me].active) return false;
+    if (getAvailableAttacks(state, pool).length === 0) return false;
+    const after = withIsolatedRandom(() => {
+      _simResolveDepth++;
+      try {
+        let st = applyAction(shuffleHiddenZonesForSim(cloneState(state), me), action, pool);
+        for (let i = 0; i < 8 && st.pendingSelection && st.pendingSelection.actorIdx === me && _simResolver; i++) {
+          const a = _simResolver(st, pool);
+          if (!a) break;
+          const nx = applyAction(st, a, pool);
+          if (nx === st) break;
+          st = nx;
+        }
+        return st;
+      } finally {
+        _simResolveDepth--;
+      }
+    });
+    if (!after || after.pendingSelection || after.phase === 'game-over') return false;
+    const opp = (1 - me) as 0 | 1;
+    // ⭐（fable 審查 v6.437 必須修 1）動作**本身**就打倒了對手的戰鬥寶可夢或拿到獎賞（例：黑夜魔靈｜咒詛炸彈、
+    //   讓對手戰鬥位達到擊倒線的競技場）⇒ 不擋。否則「對手戰鬥位空了 ⇒ 之後打不出東西」會被誤判成變差。
+    //   ⚠ 這一層與下面的「動作本身取獎」目前互為備援（全卡池沒有「不擊倒就把對手戰鬥寶可夢移出場」的訓練家／特性，
+    //     擊倒又一定伴隨取獎）⇒ 單獨拿掉任一層的突變會存活（X6c／N5），這是預期，不是安慰劑；兩層都拿掉 ⇒ V9 紅。
+    if (!after.players[opp].active) return false;
+    if ((after.pendingPrizes?.[me] ?? 0) > (state.pendingPrizes?.[me] ?? 0)
+        || after.players[me].prizes.length < state.players[me].prizes.length) return false;
+    const turnOver = after.activePlayerIndex !== me;
+    // ⭐（審查必須修 3）快速路徑只比「影響出招的內容」：「本回合已用特性」是簿記旗標，戰鬥位用了純抽牌特性（使者衝刺）
+    //   不會改變這回合的攻擊 —— 若把它算成「變了」，就會進入兩邊各自試打的比較，擲幣招的平均會亂跳（實測同盤面 10 次結論不一）。
+    const proj = (c: CardInstance | null | undefined) => {
+      if (!c) return null;
+      const { abilityUsedThisTurn: _u, ...rest } = c as CardInstance & { abilityUsedThisTurn?: boolean };
+      return rest;
+    };
+    const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+    if (!turnOver && same(proj(state.players[me].active), proj(after.players[me].active))
+        && same(proj(state.players[opp].active), proj(after.players[opp].active))) return false;
+    const { out: before, seed } = bestNowOutcomeOf(state, me, pool);
+    let aft: { prizes: number; oppDamage: number } = { prizes: 0, oppDamage: 0 };
+    if (!turnOver) {
+      const resume = _simSeed;
+      _simSeed = seed;                 // 配對取樣：與「做之前」同一個亂數起點
+      try { aft = bestNowOutcome(after, me, pool); } finally { _simSeed = resume; }
+    }
+    // ⭐（審查必須修 2）只擋「這回合**少拿獎賞**（至少半張）」——原本的「打得出傷害 → 打不出」反向套用會把
+    //   神奇糖果進化（進化後這回合能量不夠出招，但原本也只能打 10～20 點）誤擋掉。沒有擊倒的零星傷害不值得犧牲佈局。
+    return before.prizes - aft.prizes >= 0.5;
+  } catch {
+    return false;
+  }
+}
+
 // ── 選招評估（批次 4d）─────────────────────────────────────────────────────
 /**
  * 一次攻擊的完整評估。所有欄位都是**引擎試打後的盤面差**，不是我解讀卡面得來的：

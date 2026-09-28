@@ -19622,7 +19622,16 @@ regR('resolve-play-ability-prompt', (state, actorIdx, selectedIids, params, pool
     : player.bench.find(c => c.iid === targetIid);
   if (!inst) return state;
 
-  return fn(state, actorIdx, pool, inst);
+  // ⭐v6.437 與 engine USE_ABILITY 同一個作法：發動特性的那一隻先換成新物件再交給特性函式 ——
+  //   有特性函式會就地改實體（例：喵喵ex｜殺手鐧捕捉 `instInPlay.abilityUsedThisTurn = true`），
+  //   沿用舊 state 的物件就會連傳進來的舊 state 一起改（診斷：30 局 AI 對戰裡 15 次）。
+  const acting: CardInstance = { ...inst };
+  const detached = updatePlayer(state, actorIdx, (pl) => ({
+    ...pl,
+    active: pl.active?.iid === targetIid ? acting : pl.active,
+    bench: pl.bench.map((b) => (b.iid === targetIid ? acting : b)),
+  }));
+  return fn(detached, actorIdx, pool, acting);
 });
 
 /**

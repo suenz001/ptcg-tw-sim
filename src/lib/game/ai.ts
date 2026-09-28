@@ -32,7 +32,7 @@ import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemo
 import { getPlaybook, benchScoreOf } from './ai-playbook';
 // v6.039 批次4c：場面評估（引擎試打）。方向嚴格單向 ai.ts → ai-eval.ts → engine，
 //   ai-eval 不得反向 import ai.ts（會造成 module-init 循環，見 v5.985 TDZ 事故）。
-import { estimateIfPromoted, evaluateAttack, isInSimResolve, isPointlessAttack, PRIZE_SCORE_UNIT, setSimSelectionResolver, type AttackEval } from './ai-eval';
+import { actionWeakensAttackThisTurn, estimateIfPromoted, evaluateAttack, isInSimResolve, isPointlessAttack, PRIZE_SCORE_UNIT, setSimSelectionResolver, type AttackEval } from './ai-eval';
 // ⭐v6.429 呆呆王「牌庫頂借招」打法（站長說明）；只對場上／手上有會耀閃挑戰寶可夢的一方生效
 import {
   isTopCopyPlayer, topCopyUser, bestKnownTopCopy, valueAsTop, pickCipherArrange,
@@ -318,6 +318,9 @@ export function getAIAction(
       trainerIids = trainerIids.filter(iid => !_gustIids.includes(iid));
     }
   }
+  // ⭐v6.437 會讓這回合的攻擊明顯變差的訓練家先不打（例：打出老大的指令拉上打得倒的寶可夢之後，
+  //   又用「能量轉移」把戰鬥位的能量搬走、用交替類物品把打得動的戰鬥位換下場）。中央判定 actionWeakensAttackThisTurn。
+  trainerIids = trainerIids.filter(iid => !actionWeakensAttackThisTurn(state, myIdx, { type: 'PLAY_TRAINER', iid }, pool));
   if (trainerIids.length > 0) {
     const sorted = [...trainerIids].sort((a, b) => {
       const scoreOf = (iid: string) => {
@@ -401,6 +404,11 @@ export function getAIAction(
           if (activeGrass >= REQUIRED_GRASS) score = 0;
           else if (benchGrass === 0) score = 0;
         }
+      }
+
+      // ⭐v6.437 會讓這回合的攻擊明顯變差的特性先不用（例：支配鎖鏈把打得動的戰鬥位換掉）——與訓練家同一個中央判定
+      if (score > 0 && actionWeakensAttackThisTurn(state, myIdx, { type: 'USE_ABILITY', iid: ab.iid, abilityIndex: ab.abilityIndex }, pool)) {
+        score = 0;
       }
 
       // ⭐v6.429 牌庫頂借招：已擺好的借招目標不可以被抽走（使者衝刺等抽牌特性這時候不用）

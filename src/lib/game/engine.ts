@@ -5015,12 +5015,20 @@ function handlePlaying(
     // 標記已使用（不限次數特性跳過）
     const updatedPlayers = [...state.players] as [PlayerState, PlayerState];
     const updatedP = { ...updatedPlayers[aIdx] };
-    if (!UNLIMITED_USE_ABILITY_NAMES.has(ability.name)) {
-      const markUsed = (c: CardInstance): CardInstance =>
-        c.iid === action.iid ? { ...c, abilityUsedThisTurn: true } : c;
-      updatedP.active = updatedP.active ? markUsed(updatedP.active) : null;
-      updatedP.bench = updatedP.bench.map(markUsed);
-    }
+    // ⭐v6.437 使用特性的那一隻**一律換成新物件**（不限次數特性也一樣，只是不蓋「已使用」）：
+    //   有 10 個特性函式寫著 `instInPlay.abilityUsedThisTurn = true`（就地改實體）——實體若沿用舊 state 的物件，
+    //   就會連傳進來的舊 state 一起改（引擎是純函式；AI 試打、回放、錦標賽樂觀更新回滾都會讀到壞資料）。
+    //   換成新物件後，特性函式從 state 找到的就是這個新物件，就地改只會落在新 state 上。
+    //   並且把這個新物件（而不是舊 state 的 targetPoke）交給特性函式當 inst 參數。
+    const _markUsed = !UNLIMITED_USE_ABILITY_NAMES.has(ability.name);
+    let _actingInst: CardInstance = targetPoke;
+    const markUsed = (c: CardInstance): CardInstance => {
+      if (c.iid !== action.iid) return c;
+      _actingInst = _markUsed ? { ...c, abilityUsedThisTurn: true } : { ...c };
+      return _actingInst;
+    };
+    updatedP.active = updatedP.active ? markUsed(updatedP.active) : null;
+    updatedP.bench = updatedP.bench.map(markUsed);
     // v2.91 → v2.93 修正：只有白名單特性（月光循環/使者衝刺）才記錄到
     // abilityNamesUsedThisTurn；一般特性的「每回合 1 次」由 per-instance
     // 的 abilityUsedThisTurn flag 負責。
@@ -5039,7 +5047,7 @@ function handlePlaying(
     );
     // 傳入觸發此特性的 CardInstance（以 iid 辨識），避免 ability 實作用
     // name 掃場而在「同回合多隻同名寶可夢發動」時誤中第一隻。
-    return abilityFn(newState, aIdx, pool, targetPoke);
+    return abilityFn(newState, aIdx, pool, _actingInst);
   }
 
   // ── v3.07 Deferred Wave D — 從手牌棄 1 張卡觸發場上特性 ────────────────────
