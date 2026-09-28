@@ -9,7 +9,7 @@
 import type { CardInstance, GameAction, GameState } from '../../types';
 import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
 // ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
-import { copyAttackCandidates, pickCopiedAttack } from '../../copy-attack';
+import { copyAttackCandidates, copyAttackCooldownNote, pickCopiedAttack } from '../../copy-attack';
 import type { Card } from '$lib/cards/types';
 import { isRulePokemon } from '../../selection-filter';   // ⭐v6.404 卡面「擁有規則的寶可夢」中央述詞（leaf）
 import { recordKnownDeckTop } from '../../deck-top-known';   // ⭐v6.429 自己擺的牌庫頂（AI 試算用，不影響規則）
@@ -55,6 +55,8 @@ regPre('呆呆王|耀閃挑戰', (state, aIdx, pool, action) => {
   const rest = p.deck.slice(1);
   // ⭐ v6.337：候選必須在「丟棄之前」對 deck[0] 取樣（與 UI 的 peek 同一個來源）
   const _cands = copyAttackCandidates('呆呆王|耀閃挑戰', state, aIdx, pool);
+  // ⭐v6.435 冷卻中被排除的招式在對戰紀錄說明（判準與候選同一份：copyAttackCooldownNote）
+  { const _cdNote = copyAttackCooldownNote('呆呆王|耀閃挑戰', state, aIdx, pool); if (_cdNote) state = addLog(state, _cdNote, aIdx); }
   const topCard = pool.get(top.cardId);
   const topName = topCard?.name ?? '?';
   // Step 1: 丟牌庫頂 1 張到棄牌區

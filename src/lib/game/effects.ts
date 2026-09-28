@@ -17,7 +17,7 @@ import { markDamageCounterMovedFrom } from './effects/_shared'; // v5.947 移動
 import { hasStatusInAnySlot, countSpecialConditions } from './effects/_shared'; // v5.834 跨三槽狀態讀取
 import { dispatchCopiedAttack } from './effects/_shared'; // ⭐v6.337 借招轉接唯一出口
 // ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
-import { copyAttackCandidates, pickCopiedAttack } from './copy-attack';
+import { copyAttackCandidates, copyAttackCooldownNote, pickCopiedAttack } from './copy-attack';
 
 import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction, SpecialCondition, FieldWideRetalHolderSnapshot } from './types';
 // ⭐v6.213 2 階判定的 per-pool 索引（leaf，只 import type ⇒ 不可能循環）
@@ -16811,6 +16811,8 @@ regPre('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool, action) => {
   }
   // ⭐ v6.337：候選枚舉改走中央 copyAttackCandidates（與 UI picker 同一份來源）
   const _cands = copyAttackCandidates('火箭隊的謎擬Ｑ|扮晶晶酒', state, aIdx, pool);
+  // ⭐v6.435 冷卻中被排除的招式在對戰紀錄說明（判準與候選同一份：copyAttackCooldownNote）
+  { const _cdNote = copyAttackCooldownNote('火箭隊的謎擬Ｑ|扮晶晶酒', state, aIdx, pool); if (_cdNote) state = addLog(state, _cdNote, aIdx); }
   if (_cands.length === 0) {
     return { state: addLog(state, `扮晶晶酒：${oppCard.name} 沒有可以扮演的招式`, aIdx), damage: 0 };
   }

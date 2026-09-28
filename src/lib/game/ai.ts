@@ -32,7 +32,7 @@ import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemo
 import { getPlaybook, benchScoreOf } from './ai-playbook';
 // v6.039 批次4c：場面評估（引擎試打）。方向嚴格單向 ai.ts → ai-eval.ts → engine，
 //   ai-eval 不得反向 import ai.ts（會造成 module-init 循環，見 v5.985 TDZ 事故）。
-import { estimateIfPromoted, evaluateAttack, isPointlessAttack, PRIZE_SCORE_UNIT, setSimSelectionResolver, type AttackEval } from './ai-eval';
+import { estimateIfPromoted, evaluateAttack, isInSimResolve, isPointlessAttack, PRIZE_SCORE_UNIT, setSimSelectionResolver, type AttackEval } from './ai-eval';
 // ⭐v6.429 呆呆王「牌庫頂借招」打法（站長說明）；只對場上／手上有會耀閃挑戰寶可夢的一方生效
 import {
   isTopCopyPlayer, topCopyUser, bestKnownTopCopy, valueAsTop, pickCipherArrange,
@@ -46,6 +46,7 @@ import { pickActiveEnergyUnlock, pickBenchEnergyAttach } from './ai-energy';   /
 setSimSelectionResolver((st, pl) => (st.pendingSelection ? autoResolveSelection(st, pl) : null));
 // v6.191：Gust 系支援者卡名的單一來源（葉子模組，零 import ⇒ 不觸發 effects 註冊、無循環風險）。
 import { GUST_SUPPORTER_NAMES } from './gust-supporters';
+import { planGust, isGustSupporter, gustTargetOutcomes, bestGustOutcome, plannedGustTarget } from './ai-gust';   // ⭐v6.436 老大的指令：打不打、拉誰（唯一判準）
 
 // ── 主要入口 ──────────────────────────────────────────────────────────────────
 
@@ -305,6 +306,17 @@ export function getAIAction(
       if (draws.length) return { type: 'USE_ABILITY', iid: draws[0].iid, abilityIndex: draws[0].abilityIndex };
     }
     return { type: 'PLAY_TRAINER', iid: _cipherIid };
+  }
+  // ⭐v6.436 老大的指令（Gust 系支援者）的保留邏輯 —— 打不打一律問中央 planGust（ai-gust.ts）：
+  //   拉上來能多拿獎賞、或原本打不動而拉上來打得動 ⇒ 這回合先打它（比其他支援者優先，免得支援者額度先被別張用掉）；
+  //   否則**保留**（這回合不打它，支援者額度留給其他支援者）。
+  //   ⚠ 魔靈多龍預組有自己調過的用法（配合咒詛炸彈把 ex 壓到 200 線，dragapultGustPick），不走這裡。
+  if (!isMarruneDragapult(player, pool)) {
+    const _gustIids = trainerIids.filter(iid => isGustSupporter(state, myIdx, iid, pool));
+    if (_gustIids.length) {
+      if (planGust(state, myIdx, pool, _gustIids[0])) return { type: 'PLAY_TRAINER', iid: _gustIids[0] };
+      trainerIids = trainerIids.filter(iid => !_gustIids.includes(iid));
+    }
   }
   if (trainerIids.length > 0) {
     const sorted = [...trainerIids].sort((a, b) => {
@@ -1041,6 +1053,17 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (isMarruneDragapult(me, pool)) {
           const pick = dragapultGustPick(bench, pool, state);
           if (pick) return { type: 'RESOLVE_SELECTION', selectedIids: [pick.iid] };
+        } else if (!isInSimResolve()) {
+          // ⭐v6.436 拉誰上來：與「打不打」同一把尺（ai-gust.ts gustTargetOutcomes：逐一試拉、試打自己的招式，
+          //   先比拿到的獎賞、再比傷害）。都拿不到獎賞也打不出傷害（例：招式造成的換位、這回合已經不能出招）
+          //   ⇒ 退回下面的舊判準（剩餘 HP 最少）。試打中的巢狀選擇不做這麼貴的試算（isInSimResolve）。
+          // ⭐（fable 審查 v6.436 建議 2）planGust 剛判定值得打的那張 ⇒ 直接沿用它預計拉的目標（同一次試算，不重抽）
+          const _planned = plannedGustTarget(state, sel.actorIdx);
+          if (_planned && bench.some(b => b.iid === _planned)) return { type: 'RESOLVE_SELECTION', selectedIids: [_planned] };
+          const best = bestGustOutcome(gustTargetOutcomes(state, sel.actorIdx, pool));
+          if (best && (best.prizes > 0 || best.oppDamage > 0) && bench.some(b => b.iid === best.targetIid)) {
+            return { type: 'RESOLVE_SELECTION', selectedIids: [best.targetIid] };
+          }
         }
       }
       // 選剩餘 HP 最少的（最容易擊倒）

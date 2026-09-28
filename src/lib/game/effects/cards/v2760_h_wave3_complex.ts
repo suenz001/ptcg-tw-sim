@@ -23,7 +23,7 @@ import { runAsCopiedSupporterEffect } from '../../supporter-effect-source';
 
 import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
 // ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
-import { copyAttackCandidates, pickCopiedAttack } from '../../copy-attack';
+import { copyAttackCandidates, copyAttackCooldownNote, pickCopiedAttack } from '../../copy-attack';
 import { canApplyEffectToTarget } from '../../defense';
 import { getAllAttachedTools } from '../_shared'; // v5.841 丟道具含 extraTools
 import { relocateOwnCounterToOpp } from '../../effects'; // v5.825 改放指示物中央管線
@@ -105,6 +105,8 @@ regPre('皮可西|揮指', (state, aIdx, pool, action) => {
   if (!da) return { state: addLog(state, '揮指：對手戰鬥場無寶可夢', aIdx), damage: 0 };
   // v6.337：候選枚舉與選招全部走中央管線
   const cands = copyAttackCandidates('皮可西|揮指', state, aIdx, pool);
+  // ⭐v6.435 冷卻中被排除的招式在對戰紀錄說明（判準與候選同一份：copyAttackCooldownNote）
+  { const _cdNote = copyAttackCooldownNote('皮可西|揮指', state, aIdx, pool); if (_cdNote) state = addLog(state, _cdNote, aIdx); }
   const pick = pickCopiedAttack(cands, action);
   if (!pick.candidate) return { state: addLog(state, '揮指：對手戰鬥場無可複製招式', aIdx), damage: 0 };
   const copiedKey = `${pick.candidate.ownerName}|${pick.candidate.attackName}`;

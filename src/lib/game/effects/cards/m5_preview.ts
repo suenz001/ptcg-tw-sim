@@ -74,7 +74,7 @@ import { openDeckViewReshuffle } from '../_shared';
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
 import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
 // ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
-import { copyAttackCandidates, pickCopiedAttack } from '../../copy-attack';
+import { copyAttackCandidates, copyAttackCooldownNote, pickCopiedAttack } from '../../copy-attack';
 import { joinCardNames } from '../_shared';  // v5.515 丟棄 log 顯示卡名
 import { clearActiveEffects } from '../_shared';  // v5.527 收斂 m5ClearTurnFlags→中央
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -2018,6 +2018,8 @@ regPre('狐大盜|技能大盜', (state, aIdx, pool, action) => {
 
   // ⭐ v6.337：候選枚舉與選招全部走中央管線（原本各自手寫一份判準）
   const cands = copyAttackCandidates('狐大盜|技能大盜', state, aIdx, pool);
+  // ⭐v6.435 冷卻中被排除的招式在對戰紀錄說明（判準與候選同一份：copyAttackCooldownNote）
+  { const _cdNote = copyAttackCooldownNote('狐大盜|技能大盜', state, aIdx, pool); if (_cdNote) state = addLog(state, _cdNote, aIdx); }
   const pick = pickCopiedAttack(cands, action);
   if (!pick.candidate) {
     return {

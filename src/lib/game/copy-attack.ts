@@ -236,7 +236,32 @@ export function copyAttackCandidates(
   key: string, state: GameState, aIdx: 0 | 1, pool: Map<string, Card>,
   depth: number = copyAttackDepth(state),
 ): CopyCandidate[] {
+  return enumerateCopyAttacks(key, state, aIdx, pool, depth).candidates;
+}
+
+/**
+ * ⭐v6.435（fable 審查建議）因「玩家層級冷卻」被排除的招式要在對戰紀錄說明 ——
+ *   否則玩家只會看到「對手戰鬥場無可複製招式」「自動挑印刷最高」，看不出是冷卻擋掉的（會被當成 bug 回報）。
+ * @returns 要寫進對戰紀錄的一句話；沒有被冷卻排除的招式 ⇒ 空字串
+ * ⚠ 判準與 copyAttackCandidates 同一份（enumerateCopyAttacks），不另寫。
+ */
+export function copyAttackCooldownNote(
+  key: string, state: GameState, aIdx: 0 | 1, pool: Map<string, Card>,
+  depth: number = copyAttackDepth(state),
+): string {
+  const cooled = enumerateCopyAttacks(key, state, aIdx, pool, depth).cooledDown;
+  if (cooled.length === 0) return '';
+  const label = key.slice(key.lastIndexOf('|') + 1);
+  const names = [...new Set(cooled)].map((n) => `「${n}」`).join('、');
+  return `${label}：${names}在上個自己的回合已經使出過（冷卻中），這個回合不能借用`;
+}
+
+/** 候選枚舉的本體（copyAttackCandidates 與 copyAttackCooldownNote 共用，Rule 38）。 */
+function enumerateCopyAttacks(
+  key: string, state: GameState, aIdx: 0 | 1, pool: Map<string, Card>, depth: number,
+): { candidates: CopyCandidate[]; cooledDown: string[] } {
   const out: CopyCandidate[] = [];
+  const cooledDown: string[] = [];
   const atDepthCap = depth >= COPY_ATTACK_MAX_DEPTH - 1;
   for (const inst of ownersFor(key, state, aIdx, pool)) {
     const card = pool.get(inst.cardId);
@@ -254,7 +279,7 @@ export function copyAttackCandidates(
       //   判準走中央 isPlayerLevelAttackOnCooldown（與 ATTACK handler／getAvailableAttacks 同一份）。
       //   ⚠ 反方向（借來用過天仙石，下回合能不能再用）官方 L2002～2005 答「可以」：引擎蓋章記的是
       //     印在卡上的那一招（例：揮指），不會把借來的天仙石記成冷卻 —— 那一側不需要動。
-      if (isPlayerLevelAttackOnCooldown(state, aIdx, atk.name)) continue;
+      if (isPlayerLevelAttackOnCooldown(state, aIdx, atk.name)) { cooledDown.push(atk.name); continue; }
       out.push({
         ownerIid: inst.iid,
         ownerCardId: inst.cardId,
@@ -265,7 +290,7 @@ export function copyAttackCandidates(
       });
     }
   }
-  return out;
+  return { candidates: out, cooledDown };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

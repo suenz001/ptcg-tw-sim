@@ -13,7 +13,7 @@ import { tryPromptPromoteActive, damageCounterCount } from '../_shared';
 import { deckWithCardsToBottom } from '../_shared'; // v6.124 「放回牌庫下方」中央管線 // v5.785 指示物個數中央
 import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
 // ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
-import { copyAttackCandidates, pickCopiedAttack } from '../../copy-attack';
+import { copyAttackCandidates, copyAttackCooldownNote, pickCopiedAttack } from '../../copy-attack';
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
 import { joinCardNames, toBareCard } from '../_shared';  // v5.515 丟棄 log 顯示卡名 / v5.993 rescue 回手裸化
 import { attachEnergyFromZoneToOwnPokemon } from '../_shared';  // ⭐ v6.174 附能目標解析失敗一律 no-op（禁半套：能量已離開來源區卻沒附上）
@@ -1071,6 +1071,8 @@ regPre('N的索羅亞克ex|暗黑底牌', (state, aIdx, pool, action) => {
   //     借招鏈時會讓整個招式失效。中央判準要求 choice 必須真的落在本層候選裡，
   //     對不上就走 fallback，不會把卡片白白浪費掉。
   const cands = copyAttackCandidates('N的索羅亞克ex|暗黑底牌', state, aIdx, pool);
+  // ⭐v6.435 冷卻中被排除的招式在對戰紀錄說明（判準與候選同一份：copyAttackCooldownNote）
+  { const _cdNote = copyAttackCooldownNote('N的索羅亞克ex|暗黑底牌', state, aIdx, pool); if (_cdNote) state = addLog(state, _cdNote, aIdx); }
   if (cands.length === 0) {
     return { state: addLog(state, '暗黑底牌：備戰區沒有「N的」寶可夢', aIdx), damage: 0 };
   }

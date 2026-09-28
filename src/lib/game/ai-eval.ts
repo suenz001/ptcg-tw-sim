@@ -128,6 +128,9 @@ let _simResolveDepth = 0;
 /** ⭐v6.429 試打時附在 ATTACK 動作上的額外欄位（目前只有借招的選擇：呆呆王｜耀閃挑戰借哪一招）。 */
 export type AttackActionExtra = { copyAttackChoice?: { pokeIid: string; attackIndex: number } };
 export function setSimSelectionResolver(fn: SimSelectionResolver | null): void { _simResolver = fn; }
+/** ⭐v6.436 目前是否正在「試打時代答自己的選擇視窗」裡（巢狀試算中）。
+ *   給選擇器用：昂貴的逐目標試打（例：老大的指令拉誰）在巢狀裡不做，退回便宜的舊判準（防遞迴、控制耗時）。 */
+export function isInSimResolve(): boolean { return _simResolveDepth > 0; }
 function resolveOwnPendingsInSim(st0: GameState, actorIdx: 0 | 1, pool: Map<string, Card>): GameState {
   if (!_simResolver || _simResolveDepth > 0) return st0;
   _simResolveDepth++;

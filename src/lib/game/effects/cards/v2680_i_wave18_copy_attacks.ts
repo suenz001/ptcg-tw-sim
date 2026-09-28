@@ -18,7 +18,7 @@
 import { regPre, regPost, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE, revealTopCardsLog } from '../_shared';
 import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
 // ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
-import { copyAttackCandidates, pickCopiedAttack } from '../../copy-attack';
+import { copyAttackCandidates, copyAttackCooldownNote, pickCopiedAttack } from '../../copy-attack';
 import { ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS } from '../_shared';
 // ⭐ v6.262 支援者效果來源（葉子模組）—— 複製成招式效果時關閉「從手牌使出」才有的免疫
 import { runAsCopiedSupporterEffect } from '../../supporter-effect-source';
@@ -50,6 +50,8 @@ regPre('索羅亞克|欺詐', (state, aIdx, pool, action) => {
   if (!da) return { state: addLog(state, '欺詐：對手戰鬥場無寶可夢', aIdx), damage: 0 };
   // v6.337：候選枚舉與選招全部走中央管線（卡面「選擇1個對手的戰鬥寶可夢持有的招式」）
   const cands = copyAttackCandidates('索羅亞克|欺詐', state, aIdx, pool);
+  // ⭐v6.435 冷卻中被排除的招式在對戰紀錄說明（判準與候選同一份：copyAttackCooldownNote）
+  { const _cdNote = copyAttackCooldownNote('索羅亞克|欺詐', state, aIdx, pool); if (_cdNote) state = addLog(state, _cdNote, aIdx); }
   const pick = pickCopiedAttack(cands, action);
   if (!pick.candidate) return { state: addLog(state, '欺詐：對手戰鬥場無可複製招式', aIdx), damage: 0 };
   const copiedKey = `${pick.candidate.ownerName}|${pick.candidate.attackName}`;
@@ -70,11 +72,14 @@ regPre('阿響的樹才怪|試著模仿', (state, aIdx, pool, action) => {
   if (!da) return { state: addLog(r.state, '試著模仿：正面但對手戰鬥場無寶可夢', aIdx), damage: 0 };
   // v6.337：候選枚舉與選招全部走中央管線
   const cands = copyAttackCandidates('阿響的樹才怪|試著模仿', r.state, aIdx, pool);
+  // ⭐v6.435 冷卻中被排除的招式在對戰紀錄說明（判準與候選同一份：copyAttackCooldownNote）
+  const _cdNoteT = copyAttackCooldownNote('阿響的樹才怪|試著模仿', r.state, aIdx, pool);
+  const rs = _cdNoteT ? addLog(r.state, _cdNoteT, aIdx) : r.state;
   const pick = pickCopiedAttack(cands, action);
-  if (!pick.candidate) return { state: addLog(r.state, '試著模仿：對手戰鬥場無可複製招式', aIdx), damage: 0 };
+  if (!pick.candidate) return { state: addLog(rs, '試著模仿：對手戰鬥場無可複製招式', aIdx), damage: 0 };
   const copiedKey = `${pick.candidate.ownerName}|${pick.candidate.attackName}`;
   const pickMode = pick.byPlayer ? '玩家選擇' : '自動挑印刷最高';
-  const sLog = addLog(r.state, `試著模仿：${pickMode}「${copiedKey}」`, aIdx);
+  const sLog = addLog(rs, `試著模仿：${pickMode}「${copiedKey}」`, aIdx);
   return dispatchCopiedAttack(sLog, aIdx, pool, copiedKey, pick.candidate.damage, action, pick.restChain);
 });
 regPost('阿響的樹才怪|試著模仿', copyAttackPost);
@@ -153,6 +158,8 @@ regPre('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool, action) => {
   //     「翻到的 10 張裡有貓老大ex，**可以**選它的高傲指令來使用」。
   //     中央管線改由 `COPY_ATTACK_MAX_DEPTH` 界定遞迴，不再靠排除自己。
   const cands = copyAttackCandidates('火箭隊的貓老大ex|高傲指令', state, aIdx, pool);
+  // ⭐v6.435 冷卻中被排除的招式在對戰紀錄說明（判準與候選同一份：copyAttackCooldownNote）
+  { const _cdNote = copyAttackCooldownNote('火箭隊的貓老大ex|高傲指令', state, aIdx, pool); if (_cdNote) state = addLog(state, _cdNote, aIdx); }
   const pick = pickCopiedAttack(cands, action);
   if (!pick.candidate) return { state: addLog(state, '高傲指令：對手牌庫頂無可複製招式', aIdx), damage: 0 };
   const picked = { cardName: pick.candidate.ownerName, attackName: pick.candidate.attackName, damage: pick.candidate.damage };
