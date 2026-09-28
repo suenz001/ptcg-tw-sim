@@ -190,9 +190,40 @@ T('R2 ⭐ 上個自己的回合用過天仙石 ⇒ 夢幻ex 透過記憶螺旋�
 });
 T('R3 ⭐ 夢幻ex 透過記憶螺旋使出天仙石 ⇒ 記成「自己的寶可夢使出了天仙石」（下個自己的回合冷卻）', () => {
   // 記憶螺旋是「這隻寶可夢可使用…的招式」——夢幻ex 自己使出了天仙石（不是「作為這個招式使用」的借招）
+  // ⭐ 站長裁定（2026-09-28）：「夢幻ex 透過「記憶螺旋」使出天仙石後，下個自己的回合自己的仙子伊布ex 也不能用天仙石。」
   const st = mewBoard([]);
   const nx = applyAction(st, { type: 'ATTACK', attackIndex: stoneIdx(st) }, pool);
   assert.ok((nx.attackNamesUsedThisTurn?.p1 ?? []).includes('天仙石'), JSON.stringify(nx.attackNamesUsedThisTurn));
+});
+T('R4 ⭐ 站長裁定端到端：夢幻ex 用記憶螺旋使出天仙石 → 回合結束 → 對手回合結束 → 自己的仙子伊布ex 不能用天仙石', () => {
+  let st = mewBoard([]);
+  st = applyAction(st, { type: 'ATTACK', attackIndex: stoneIdx(st) }, pool);
+  // 解掉天仙石的選擇視窗（選對手 2 隻備戰）
+  for (let i = 0; i < 4 && st.pendingSelection; i++) {
+    const ps = st.pendingSelection;
+    const ids = ps.params?.validIids ?? (ps.type === 'opp-bench-choose' ? st.players[ps.sourcePlayerIdx].bench.map((b) => b.iid) : []);
+    const n = Math.max(ps.minCount ?? 0, Math.min(ps.maxCount ?? 1, ids.length));
+    const nx = applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: ids.slice(0, n), pendingToken: ps.token }, pool);
+    if (nx === st) break;
+    st = nx;
+  }
+  assert.ok(!st.pendingSelection, '前提：選擇視窗沒解完 ' + JSON.stringify(st.pendingSelection)?.slice(0, 120));
+  if (st.activePlayerIndex === 0) st = applyAction(st, { type: 'END_TURN' }, pool);
+  assert.equal(st.activePlayerIndex, 1, '前提：沒換到對手回合');
+  st = applyAction(st, { type: 'END_TURN' }, pool);
+  // 對手 END_TURN 之後可能先進抽牌等流程；只要輪回我方主階段即可
+  assert.equal(st.activePlayerIndex, 0, '前提：沒回到自己的回合');
+  assert.ok((st.attackNamesUsedLastSelfTurn?.p1 ?? []).includes('天仙石'), '上個自己的回合沒有記到天仙石：' + JSON.stringify(st.attackNamesUsedLastSelfTurn));
+  // 把備戰的仙子伊布ex 換上戰鬥位、附好能量，確認天仙石不可用
+  const syl = st.players[0].bench.find((b) => b.cardId === SYLVEON);
+  assert.ok(syl, '前提：備戰沒有仙子伊布ex');
+  const me = st.players[0];
+  const st2 = { ...st, turnPhase: 'main', pendingSelection: null, players: [{ ...me,
+    active: { ...syl, energyAttached: [inst(EN.W), inst(EN.L), inst(EN.P)] },
+    bench: [me.active, ...me.bench.filter((b) => b.iid !== syl.iid)] }, st.players[1]] };
+  const idx = getEffectiveAttacks(st2, st2.players[0].active, pool).findIndex((e) => e.atk.name === '天仙石');
+  assert.ok(idx >= 0);
+  assert.ok(!getAvailableAttacks(st2, pool).includes(idx), '自己的仙子伊布ex 仍可以用天仙石');
 });
 
 console.log(`\n${pass} PASS / ${fail} FAIL`);
