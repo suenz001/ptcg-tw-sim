@@ -2404,3 +2404,64 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
 - 被 SIGKILL 的 test-v6378 會留下 `scripts/.v6378-tmp-*.mjs` ⇒ 汙染 test-v6379 D3（舊指紋殘留假紅）；根目錄 `write_v2306.cjs` 也是殘檔 —— 一律刪掉再跑。
 - commit 清單用 `git diff --name-only --diff-filter=d HEAD`（排除已刪檔）並排除 `oracle-admin/check-health.bat`（行尾假差異）。
 - mount repo 的 `git diff --name-only HEAD` 會列一大堆假差異（index 不可信）⇒ 不可據此判斷工作樹狀態。
+
+---
+
+## Rule 71（2026-09-28）：兩台電腦（leon-pc／wilson-pc）與換機交接的事實
+
+- 站長命名：**舊電腦＝leon-pc**（2026-09 當機無法啟動），**目前這台＝wilson-pc**。leon-pc 修好後站長想改回由它處理 ⇒ 屆時照本條第 4 點重新核對一次。
+- wilson-pc 的 `E:\ptcg-tw-sim` 是從 GitHub **全新 clone**；remote `https://github.com/suenz001/ptcg-tw-sim.git` **不內嵌 token**，push 走 Windows 憑證管理員（`credential.helper=manager`）。
+  - leon-pc 的 remote 網址**內嵌 token** —— 站長會自己改成憑證管理員並 rotate，**AI 不要碰**。
+- **AI 不在站長電腦上做 git 寫入**（device_bash 只做唯讀 git：`log`／`ls-remote`／`rev-parse`）。交接流程：
+  1. 雲端 clone 做好 commit（parent 寫死上一版 sha）→ `git bundle create ... <BASE>..main`；
+  2. `SendUserFile` 取 file_uuid → `device_commit_files` 放到 `E:\ptcg-tw-sim\_transfer\`；
+  3. 站長在 cmd 貼三行：`git fetch _transfer\xxx.bundle main:refs/remotes/bundle/main`、`git merge --ff-only bundle/main`、`git push origin main`。
+  4. 推之前先 `git ls-remote origin main` 確認遠端還在 BASE（站長可能正在跑 bat）。
+- **不在 git 裡、但部署必需**的檔（換機一定要從備份 `H:\我的雲端硬碟\遊戲開發\ptcg-tw-sim` 補）：
+  `oracle-admin/redeploy-oracle.bat`、`oracle-admin/oracle_admin_update.sh`（update-tournament.bat 會 scp 它上 VM）、
+  SSH 金鑰在 `D:\ai\ssh-key-2026-02-11.key`（**不在 repo**）。`firebase-admin-key.json` 只在 VM `/opt/ptcg/api/`，本機那份被 .gitignore 擋住、部署用不到。
+  補完後拿 `sha256sum` 與 VM 上那一份比對指紋一致才算數。
+- 部署：`E:\ptcg-tw-sim\oracle-admin\` 依序 `update-tournament.bat` → `redeploy-oracle.bat`（Rule 67；由站長自己跑，**AI 絕不代跑**）。
+- 查 CI：雲端 proxy 擋 GitHub API（403）⇒ 用 device_bash `curl -s https://api.github.com/repos/suenz001/ptcg-tw-sim/actions/runs?per_page=4`，
+  只看 build 與 deploy 的 `conclusion`；測試站／正式站版本用 curl 抓頁面 grep `ver-badge">v`。
+- 站長在 cmd 下指令的坑：`dir /s` 掃雲端硬碟會卡住、`robocopy` 大量輸出會卡住 ⇒ 給**非遞迴**的 `dir`、要整個 repo 就 `git clone`。
+- 隱私：`D:\ai` 有憑證檔（.p12／.pfx）與銀行帳單 —— 列目錄時只看需要的檔名，不讀、不回報內容。
+
+---
+
+## Rule 72（2026-09-28）：玩家層級招式冷卻 × 借招，判準只有一份；applyAction 不可改到傳入的舊 state（v6.435／v6.437）
+
+- 卡面「在上個自己的回合，若**自己的寶可夢**使出了『X』，則無法使用這個招式」＝**玩家層級**（天仙石、渾沌匍匐）。
+  判準唯一一份在 leaf `src/lib/game/player-attack-cooldown.ts` 的 `isPlayerLevelAttackOnCooldown`（engine ATTACK handler／getAvailableAttacks／
+  `copy-attack.ts` 借招候選 `enumerateCopyAttacks`／`copyAttackCandidates` 共用）。copy-attack.ts 的 runtime import 只能是 leaf（import engine 會成環 ⇒ TDZ）。
+- 站長裁定（2026-09-28）：
+  1. 「夢幻ex｜基因駭入不能借冷卻中的天仙石」—— 套用到 H/I/J **所有**借招卡（揮指／欺詐／試著模仿／技能大盜／高傲指令／耀閃挑戰…），不可以只修一張；
+     借不到時 log 走 `copyAttackCooldownNote` 一份。
+  2. 借來用的**不蓋章**（官方 PTCG_RULES.md L2002～2005：借天仙石後下個回合仙子伊布ex 仍可用）。
+  3. 「夢幻ex 透過『記憶螺旋』使出天仙石後，下個自己的回合自己的仙子伊布ex 也不能用天仙石」—— 記憶螺旋是**使出**，會蓋章（守衛 test-v6437-attack-keep R4）。
+- **引擎是純函式**：`applyAction(state, …)` 不可以改到傳進來的 state（AI 試打、樂觀更新、回放都依賴這條）。
+  - FINISH_SETUP 用 `slice` 取獎賞，不可 `splice` 原陣列（v6.435）。
+  - 發動特性時 engine `USE_ABILITY` 與 effects `resolve-play-ability-prompt` 先把**發動的那一隻換成新物件**再交給特性函式（v6.437 detach）——
+    特性函式就地改「自己那隻實體」只會落在新 state；**不要逐張卡改**，也**不要**在特性函式裡就地改 state 的其他部分。
+  - 守衛 `test-v6437-no-input-mutation`（A1 AI 對 AI 每一步 JSON 比對、B1 全卡池 H/I/J 特性逐一發動、C1 喵喵ex 登場特性）；新增特性若讓它紅，照它修。
+
+---
+
+## Rule 73（2026-09-28）：AI 對戰強化的量測紀律與「動作否決」守則（v6.434～v6.437）
+
+- 只做**結構上對戰無關**的改動；離線評估**只能否決不能認可**（看對手池矩陣**最低格**，不看平均）；不從小樣本下結論；
+  分清「決策／預組／卡池」問題；不做加權總和、多層前瞻、RL；AI 不讀對手手牌、牌庫順序、蓋著的獎賞；玩家端有改動就 bump 版本。
+- 量測：`eval-ai-pool.mjs --seeds 50 --save/--compare`（**每一版在上一版的 worktree 重跑自身基準**，基準檔 `docs/ai-eval/pool-baseline-vNNNN.json`）、
+  `eval-ai-selfplay.mjs 400`、`diag-ai-gust.mjs`、`diag-ai-retreat.mjs`。**量測期間不可改 src** —— 要改就先 kill 舊量測再重跑
+  （`pgrep -f '^node scripts/eval-ai'` 要錨定開頭，否則會殺到自己的 shell）。
+- 「AI 不做某動作」類（gust 保留、`actionWeakensAttackThisTurn`）的必備正對照 —— **動作本身就擊倒／取獎／進化的不可以被擋**：
+  咒詛炸彈（特性擊倒）、神奇糖果（進化後才打得出）、純抽牌特性（評估雜訊）。fable 審查 v6.437 三個必須修就是這三類。
+- plan 與 selector 必須讀同一份（`plannedGustTarget`）：擲幣招／隨機結果下「規劃的目標」和「picker 選的目標」各算一次會不一致；
+  跨回合的規劃要過期（守衛 P6）。模擬中（`isInSimResolve`）不可再遞迴規劃。
+- 評估用配對 seed（同一個亂數種子比較「做／不做」），快取 key 用 `turn|log.length`（WeakMap，不跨局）。
+- 守衛與突變：
+  - 比對 pendingSelection 一律比 **effectKey**（天仙石回手的 key 是 `sylveon-skystone-bounce`，比中文字面是安慰劑）。
+  - 否定型前提盤面要先斷言成立（例：「戰鬥位打不倒」的盤面，傷害要真的不夠；V9 第一版就是前提不成立的恆綠）。
+  - 突變 runner：**工具鏈錯誤（語法錯、esbuild 失敗）不算殺**。
+  - HEAD-FAIL 還原腳本動檔前**先整檔備份**（曾把 ai-gust.ts 截成空檔）。
+- 全套 `npm test` 在 CPU 競爭下 `test-evolve-iid-regression` 會 exit 124 ⇒ 單獨重跑確認，不是守衛壞。
