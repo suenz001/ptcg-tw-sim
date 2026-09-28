@@ -1,5 +1,28 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.435：借招借不到「玩家層級冷卻中」的招式（站長裁定：基因駭入不能借冷卻中的天仙石）
+
+BASE `8f9f7ea9`（v6.434）。站長原話（2026-09-28）：「夢幻ex｜基因駭入不能借冷卻中的天仙石」。
+- 夢幻ex 是 G 標（不在維護範圍、未實裝），但 H／I／J 的借招卡是同一句卡面、同一個判準：揮指／欺詐／試著模仿／技能大盜／
+  高傲指令／耀閃挑戰（可借非規則的騎拉帝納｜渾沌匍匐）／扮晶晶酒 ⇒ 在中央候選枚舉 `copyAttackCandidates` 一次處理。
+- 官方問答 PTCG_RULES.md L2002～2005 是**反方向**（借來用過天仙石 ⇒ 下回合自己的仙子伊布ex 可用、可再借）：
+  引擎蓋章記的是印在卡上的那一招（揮指），本來就符合；守衛 C1 釘住它。
+- 冷卻集合 `PLAYER_LEVEL_ATTACK_COOLDOWN`、述詞 `isPlayerLevelAttackOnCooldown`、`ancientKey` 從 engine.ts 搬到新 leaf 模組
+  `src/lib/game/player-attack-cooldown.ts`（copy-attack.ts 不可 import engine.ts，會成環）；engine.ts 改 import＋re-export。
+- ai-slowking `bestKnownTopCopy` 原本自己列 `card.attacks`（Rule 38 第二份「可借的招」）⇒ 改用中央候選。
+- 守衛 `test-v6435-copy-attack-cooldown.mjs`（14 條）：HEAD-FAIL A1／A2／A5／A6／B1／D1／E1 紅，正對照與反方向（C1）綠；
+  突變 Y1～Y6 全殺。第一版 B0／B1 用 `/天仙石/` 比對 pendingSelection JSON＝安慰劑（effectKey 是 sylveon-skystone-bounce），HEAD-FAIL 時抓出並改正。
+- engine 還原器 `scripts/lib/engine-strip-v6435.mjs`（4 組，difflib 產生並當場驗證）接進 test-v6265（兩處）／test-v6375／test-v6371。
+- Rule 40：test-v6428 D1 原本只在 engine.ts 數 `PLAYER_LEVEL_ATTACK_COOLDOWN.has(` ＝ 1；意圖（判準一份、兩個呼叫點）不變 ⇒ 觀測範圍改成 engine.ts＋leaf，
+  並加「engine.ts 自己不讀集合」。
+- 另案（v6.428 起列管）FINISH_SETUP 就地 shift：`player` 是淺拷貝，`player.deck.shift()` 連舊 state 的牌庫一起改
+  （舊 state 少 6 張、獎賞卡仍空）。改 slice；取牌順序不變。守衛 `test-v6435-finish-setup-pure.mjs`（HEAD-FAIL P1／P2 紅、P3 順序綠）。
+  臨時診斷（30 局 AI 對 AI、5,146 次 applyAction 逐次比對呼叫前後的舊 state）：只有兩種動作改到舊 state ——
+  FINISH_SETUP（60 次，本版修）與 **喵喵ex｜殺手鐧捕捉**（`instInPlay.abilityUsedThisTurn = true` 就地改實體，15 次）。
+  後者同型寫法全站 10 處（v2306_meta_pokemon.ts 9、maroon_dragon_deck.ts 1）⇒ **另案**（特性函式就地改實體的維度，要逐張查）。
+- fable 5.1 審查通過（10 個突變全翻紅、反方向 L2002～2005 實跑成立、伺服器 bundle 含新 leaf）。建議項：冷卻排除時 log 沒說明（下一版做）、UI 候選為空時直接出招（留意）。
+- 部署：有動 engine.ts ⇒ `update-tournament.bat` ＋ `redeploy-oracle.bat`。
+
 ## v6.434：站長的呆呆王打法兩點（暗碼迷的解讀＋使者衝刺找呆呆王；牌庫頂未知不為盲翻換呆呆王）
 
 BASE `bc05b449`（v6.433）。站長原話（2026-09-27）：「暗碼迷的解讀 搭配 使者衝刺 可以快速找到呆呆王」；

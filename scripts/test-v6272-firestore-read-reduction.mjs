@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'bc05b44937e2f7842a0cec6be28a725d3a60cfd3';   // v6.433（上一版）
+const PREV_SHA = '8f9f7ea90f04042de63bebd8074059db56d62b60';   // v6.434（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,17 +757,28 @@ const PREV_SHA = 'bc05b44937e2f7842a0cec6be28a725d3a60cfd3';   // v6.433（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.434 前移：PREV_SHA 從 bc05b449（v6.433）起算。
+  // ⚠⚠ v6.435 前移：PREV_SHA 從 8f9f7ea9（v6.434）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.434：站長的呆呆王打法兩點（暗碼迷的解讀＋使者衝刺找呆呆王；牌庫頂未知不為盲翻換呆呆王）——ai.ts、ai-eval.ts、ai-slowking.ts。
-  'src/lib/game/ai-eval.ts',
+  // ⭐v6.435：站長裁定「借招借不到冷卻中的天仙石」——冷卻判準搬到 leaf 模組 player-attack-cooldown.ts（新檔），
+  //   engine.ts 改 import＋re-export、copy-attack.ts 的候選過濾、ai-slowking.ts 改用中央候選。
   'src/lib/game/ai-slowking.ts',
-  'src/lib/game/ai.ts',
+  'src/lib/game/copy-attack.ts',
+  'src/lib/game/engine.ts',
+  'src/lib/game/player-attack-cooldown.ts',
   'src/lib/version.ts',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.434）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+//  ⭐v6.434：站長的呆呆王打法兩點（暗碼迷的解讀＋使者衝刺找呆呆王；牌庫頂未知不為盲翻換呆呆王）——ai.ts、ai-eval.ts、ai-slowking.ts。
+//   'src/lib/game/ai-eval.ts',
+//   'src/lib/game/ai-slowking.ts',
+//   'src/lib/game/ai.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.433）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 //  ⭐v6.433：戰鬥位差 1 個能量就有更好的招時附給戰鬥位（ai-energy.ts、ai.ts）。
 //   'src/lib/game/ai-energy.ts',

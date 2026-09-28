@@ -23,6 +23,7 @@ import { stripV6400Engine } from './lib/engine-strip-v6400.mjs';
 import { stripV6402Engine } from './lib/engine-strip-v6402.mjs';
 import { stripV6403Engine } from './lib/engine-strip-v6403.mjs';   // ⭐v6.403 ex 判準收斂（12 組）
 import { stripV6408Engine } from './lib/engine-strip-v6408.mjs';   // ⭐v6.408 攻擊方加成收斂成一份（2 組）
+import { stripV6435Engine } from './lib/engine-strip-v6435.mjs';   // ⭐v6.435 玩家層級冷卻判準搬到 leaf 模組＋FINISH_SETUP 純函式（4 組）
 import { stripV6428Engine } from './lib/engine-strip-v6428.mjs';   // ⭐v6.428 玩家層級招式冷卻收斂（5 組）
 import { stripV6427Engine } from './lib/engine-strip-v6427.mjs';   // ⭐v6.427 化隱／光之翼走中央判準（12 組）
 import { stripV6422Engine } from './lib/engine-strip-v6422.mjs';   // ⭐v6.422 終局收尾（2 組）
@@ -1205,9 +1206,12 @@ await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等�
         // ⭐⭐ Rule 54（由新到舊）：v6.421 必須排在 v6.420 **之前**。
         // ⭐⭐ Rule 54（由新到舊）：v6.422 必須排在 v6.421 **之前**。
         // ⭐⭐ Rule 54（由新到舊）：v6.427 必須排在 v6.422 **之前**。
-        // ⭐⭐ Rule 54（由新到舊）：v6.428 必須排在 v6.427 **之前**（它是最新的一版）。
-        const rawA28 = stripV6428Engine(raw);
-        ok(rawA28 !== raw, 'v6.428 的還原器過期（配對區塊的字面對不上）');
+        // ⭐⭐ Rule 54（由新到舊）：v6.428 必須排在 v6.427 **之前**。
+        // ⭐⭐ Rule 54（由新到舊）：v6.435 必須排在 v6.428 **之前**（它是最新的一版）。
+        const rawA35 = stripV6435Engine(raw);
+        ok(rawA35 !== raw, 'v6.435 的還原器過期（配對區塊的字面對不上）');
+        const rawA28 = stripV6428Engine(rawA35);
+        ok(rawA28 !== rawA35, 'v6.428 的還原器過期（配對區塊的字面對不上）');
         const rawA27 = stripV6427Engine(rawA28);
         ok(rawA27 !== rawA28, 'v6.427 的還原器過期（配對區塊的字面對不上）');
         const rawA22 = stripV6422Engine(rawA27);
@@ -1290,9 +1294,12 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
         // ⭐⭐ Rule 54（由新到舊）：v6.421 必須排在 v6.420 **之前**。
         // ⭐⭐ Rule 54（由新到舊）：v6.422 必須排在 v6.421 **之前**。
         // ⭐⭐ Rule 54（由新到舊）：v6.427 必須排在 v6.422 **之前**。
-        // ⭐⭐ Rule 54（由新到舊）：v6.428 必須排在 v6.427 **之前**（它是最新的一版）。
-        const rawA28 = stripV6428Engine(raw);
-        ok(rawA28 !== raw, 'v6.428 的還原器過期（配對區塊的字面對不上）');
+        // ⭐⭐ Rule 54（由新到舊）：v6.428 必須排在 v6.427 **之前**。
+        // ⭐⭐ Rule 54（由新到舊）：v6.435 必須排在 v6.428 **之前**（它是最新的一版）。
+        const rawA35 = stripV6435Engine(raw);
+        ok(rawA35 !== raw, 'v6.435 的還原器過期（配對區塊的字面對不上）');
+        const rawA28 = stripV6428Engine(rawA35);
+        ok(rawA28 !== rawA35, 'v6.428 的還原器過期（配對區塊的字面對不上）');
         const rawA27 = stripV6427Engine(rawA28);
         ok(rawA27 !== rawA28, 'v6.427 的還原器過期（配對區塊的字面對不上）');
         const rawA22 = stripV6422Engine(rawA27);

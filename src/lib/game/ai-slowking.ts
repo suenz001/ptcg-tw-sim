@@ -23,6 +23,7 @@ import { applyAction, getEffectiveAttacks, getAvailableAttacks, getUsableAbiliti
 import { evaluateAttack, cloneState, withIsolatedRandom, shuffleHiddenZonesForSim, type AttackActionExtra } from './ai-eval';
 import { knownDeckTopIids, recordKnownDeckTop } from './deck-top-known';
 import { energyStaysIfAttached } from './ai-energy';
+import { copyAttackCandidates } from './copy-attack';   // ⭐v6.435 可借哪幾招的唯一來源
 
 /** 借「自己牌庫頂那張」招式的攻擊（目前全池只有這一招）。 */
 export const TOP_COPY_ATTACK_NAME = '耀閃挑戰';
@@ -102,7 +103,11 @@ export function bestKnownTopCopy(
   const card = pool.get(top.cardId);
   if (!isBorrowableTop(card)) return null;
   let best: { score: number; choice: { pokeIid: string; attackIndex: number }; ok: boolean; unresolved: boolean } | null = null;
-  (card!.attacks ?? []).forEach((_a, j) => {
+  // ⭐v6.435 可以借哪幾招一律問中央 copyAttackCandidates（規則層與 UI 同一份；例：冷卻中的渾沌匍匐借不到）。
+  //   原本直接列 card.attacks ＝「可借的招」判準寫了第二份（Rule 38）。
+  const _userName = pool.get(state.players[me].active?.cardId ?? '')?.name ?? '';
+  const _borrowable = copyAttackCandidates(`${_userName}|${TOP_COPY_ATTACK_NAME}`, state, me, pool).filter((c) => c.ownerIid === top.iid);
+  _borrowable.forEach(({ attackIndex: j }) => {
     const choice = { pokeIid: top.iid, attackIndex: j };
     const ev = evaluateAttack(state, me, attackIndex, pool, 3, { copyAttackChoice: choice });
     if (!ev.ok) return;

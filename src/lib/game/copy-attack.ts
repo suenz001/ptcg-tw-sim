@@ -22,12 +22,13 @@
  *      鏈首的 `pokeIid` + `attackIndex` 必須**真的落在本層的候選裡**才算數；
  *      對不上就整條鏈丟掉走 fallback（fail-safe：深層不會再串味）。
  *
- * ⚠ 本檔的 runtime import **只有 `./types`**（純型別＋常數，不會回頭 import 本檔）⇒
+ * ⚠ 本檔的 runtime import 只有 leaf 模組（`./selection-filter`、`./player-attack-cooldown`，都不會回頭 import 本檔）⇒
  *   可以被 engine／effects／各卡檔／`+page.svelte` 任意 import 而不會成環
  *   （長期記憶：循環 import 下模組層級 `const` 會 TDZ）。
  */
 
 import { isRulePokemon } from './selection-filter';   // ⭐v6.404 卡面「擁有規則的寶可夢」中央述詞（leaf）
+import { isPlayerLevelAttackOnCooldown } from './player-attack-cooldown';   // ⭐v6.435 玩家層級冷卻唯一判準（leaf）
 import type { GameState, CardInstance } from './types';
 import type { Card } from '$lib/cards/types';
 
@@ -247,6 +248,13 @@ export function copyAttackCandidates(
       if (!atk?.name) continue;
       if (excludedAttack(key, card, atk)) continue;
       if (atDepthCap && COPY_ATTACK_KEY_SET.has(`${card.name}|${atk.name}`)) continue;
+      // ⭐v6.435 站長裁定（2026-09-28）：「夢幻ex｜基因駭入**不能**借冷卻中的天仙石」。
+      //   被借的招式卡面寫著「在上個自己的回合，若自己的寶可夢使出了『X』，則無法使用這個招式」——
+      //   借來用的時候這句照樣成立（「自己」＝借招的這一方），冷卻中 ⇒ 這一招不是候選。
+      //   判準走中央 isPlayerLevelAttackOnCooldown（與 ATTACK handler／getAvailableAttacks 同一份）。
+      //   ⚠ 反方向（借來用過天仙石，下回合能不能再用）官方 L2002～2005 答「可以」：引擎蓋章記的是
+      //     印在卡上的那一招（例：揮指），不會把借來的天仙石記成冷卻 —— 那一側不需要動。
+      if (isPlayerLevelAttackOnCooldown(state, aIdx, atk.name)) continue;
       out.push({
         ownerIid: inst.iid,
         ownerCardId: inst.cardId,

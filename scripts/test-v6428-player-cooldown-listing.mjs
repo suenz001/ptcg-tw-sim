@@ -11,7 +11,7 @@
 //   E0／E1／E3 紅（清單仍列出；E1 另驗「離場後仍冷卻」——fable 審查追加，只讀實體蓋章的版本也會紅；
 //   E3 驗遊戲層級紀錄要比對招式名——fable 複審追加），其餘綠（共 9 紅 5 綠）。
 import { build } from 'esbuild';
-import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
@@ -174,11 +174,19 @@ T('E3 真流程：上個自己的回合用的是別招（魔法魅惑）⇒ 天�
 // ── D：Rule 38 —— 判準只有一份 ───────────────────────────────────────────────
 T('D1 ⭐ 中央述詞存在、且 engine 只在述詞裡讀 PLAYER_LEVEL_ATTACK_COOLDOWN', () => {
   assert.equal(typeof ENG.isPlayerLevelAttackOnCooldown, 'function', '中央述詞不存在');
+  // ⚠ Rule 40（v6.435）：集合與述詞從 engine.ts 搬到 leaf 模組 player-attack-cooldown.ts
+  //   （借招候選 copy-attack.ts 也要問同一個判準，而它不可 import engine.ts）。
+  //   本條的意圖「判準只有一份、ATTACK handler 與 getAvailableAttacks 都呼叫它」不變 ⇒ 觀測範圍改成 engine.ts＋leaf：
+  //   讀集合的地方全站合計恰好 1 處（在 leaf 的述詞裡），engine.ts 至少 2 個呼叫點、自己不讀集合。
   const src = stripCommentsBlankChecked(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'));
-  const reads = src.split('PLAYER_LEVEL_ATTACK_COOLDOWN.has(').length - 1;
+  const leafP = join(ROOT, 'src/lib/game/player-attack-cooldown.ts');
+  const leaf = existsSync(leafP) ? stripCommentsBlankChecked(readFileSync(leafP, 'utf8')) : '';
+  const reads = (src + '\n' + leaf).split('PLAYER_LEVEL_ATTACK_COOLDOWN.has(').length - 1;
   assert.equal(reads, 1, `PLAYER_LEVEL_ATTACK_COOLDOWN.has( 出現 ${reads} 次（應只在中央述詞裡 1 次）`);
+  assert.equal(src.split('PLAYER_LEVEL_ATTACK_COOLDOWN.has(').length - 1, 0, 'engine.ts 又自己讀了一份冷卻集合');
+  assert.ok(/export function isPlayerLevelAttackOnCooldown\(/.test(leaf), '中央述詞不在 leaf 模組裡');
   const calls = src.split('isPlayerLevelAttackOnCooldown(').length - 1;
-  assert.ok(calls >= 3, `述詞定義＋兩個呼叫點應 ≥ 3 處，實際 ${calls}`);
+  assert.ok(calls >= 2, `ATTACK handler 與 getAvailableAttacks 兩個呼叫點應 ≥ 2 處，實際 ${calls}`);
 });
 T('D2 述詞本身：戰鬥位／備戰／別招／非冷卻招', () => {
   const f = ENG.isPlayerLevelAttackOnCooldown;
