@@ -1584,4 +1584,30 @@
        ALL 模式一次 render 全部 DOM）。純 CSS、零行為變更；不支援的瀏覽器等於沒加。 */
     .cardBtn { content-visibility: auto; contain-intrinsic-size: auto 210px; }
   }
+  /* >>> v6439-cards-mobile */
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⭐⭐⭐ v6.439 手機版卡牌資料庫：①不再左右滑動 ②「一般搜尋」不再超出畫面 ③聚焦不放大
+     ──────────────────────────────────────────────────────────────────────────
+     站長回報（2026-09-29，手機截圖）：卡包頁可以左右滑動，「一般搜尋」下拉選單超出畫面右緣。
+     實測（Playwright，寬 320／375／390／430）：整頁唯一超出視窗的就是搜尋列 ——
+     `.modeSelect` 右緣固定落在 435px，scrollWidth＝435 ＞ 視窗寬 ⇒ 整頁可以左右拖。
+     根因三個疊加：
+       ・`.searchRow` 寫死 `min-width: 320px`，再加 .controls 左右 padding 1rem ⇒ 320 寬的手機本身就放不下；
+       ・`input[type='search']` 寫死 `min-width: 240px`；
+       ・`<select>` 的寬度＝最長選項「關鍵字（搜尋招式）」，而 flex 子項的自動最小寬度是 min-content，縮不下來。
+     做法**比照牌組編輯器 v6.213**（/decks 同一個搜尋列＋下拉的組合）：會收縮的 flex 子項補 `min-width: 0`，
+     下拉給上限讓它截斷顯示，手機上會聚焦的控制項字級提到 16px（iOS 聚焦 <16px 會自動放大，放大後又能左右拖）。
+     ⚠ 用 `px` 不用 `rem`：iOS 的門檻是寫死的 16 CSS px。
+     ⚠ 這一塊只在 ≤600px 生效 ⇒ 桌機一個像素都不會變；放在樣式區塊最尾端是刻意的
+       （同權重時後出現者勝，放前面會被上方 `.searchRow`／`input[type='search']` 的宣告蓋掉而靜默失效）。
+     守衛：scripts/test-v6439-cards-mobile-no-hscroll.mjs（含 Playwright 實量 scrollWidth）。
+     ══════════════════════════════════════════════════════════════════════════ */
+  @media (max-width: 600px) {
+    .searchRow { min-width: 0; flex: 1 1 100%; }
+    input[type='search'] { min-width: 0; flex: 1 1 auto; }
+    .modeSelect { min-width: 0; flex: 0 1 auto; max-width: 40%; }
+    input[type='search'],
+    .modeSelect { font-size: 16px; }
+  }
+  /* <<< v6439-cards-mobile */
 </style>

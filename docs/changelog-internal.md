@@ -1,5 +1,21 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.439：手機版卡牌資料庫（/cards 卡包頁）不可左右滑動
+
+BASE `27917eba`（v6.438＋IRON_RULES Rule 71）。站長回報（2026-09-29，iPhone 截圖）：卡包頁手機版可以左右滑動、「一般搜尋」按鈕超出頁面。
+- 實量（Playwright，dev server，寬 320／375／390／430）：整頁唯一超出視窗的元素是搜尋列，`.modeSelect` 右緣固定 435px ⇒ scrollWidth 435。
+  根因三個疊加：`.searchRow { min-width: 320px }`（再加 .controls 左右 1rem）、`input[type='search'] { min-width: 240px }`、
+  `<select>` 寬度＝最長選項且 flex 子項自動最小寬度是 min-content。其他頁（卡包列表 /cards 無 set）實量不溢出。
+- 修法比照牌組編輯器 v6.213：`/cards` 樣式區塊最尾端新增 ≤600px 區塊（`>>> v6439-cards-mobile` 哨兵框住）：
+  `.searchRow`／`input[type='search']`／`.modeSelect` 補 `min-width: 0`，下拉 `max-width: 40%`，輸入框與下拉字級 16px（iOS 聚焦放大門檻）。
+  修後四種寬度 scrollWidth＝視窗寬、下拉右緣 304／359／374／414。桌機一個字元都沒動。
+- ⚠ 沒有採用「整頁 overflow-x 鎖住」：路由 CSS 不隨導航移除（見 friends 頁註解），`:global(html)` 會外溢到 /game 等頁；其他手機頁也是修根因而不是鎖捲動。
+- 守衛 `test-v6439-cards-mobile-no-hscroll.mjs`（32 條）：A 中央 css-cascade 問手機實際勝出的宣告（input 屬性選擇器改驗文件順序）；
+  B 剝除哨兵後與 BASE 逐位元相同＋剝除器非 no-op；C 真瀏覽器夾具（placeholder／選項逐字取自 markup）量 scrollWidth，
+  ⚠ isMobile 的 layout viewport 會被撐大（BASE innerWidth 變 435）⇒ 一律比設定的裝置寬，不比 innerWidth（第一版比 innerWidth 時 BASE 也綠＝安慰劑，反安慰劑段抓到）。
+  HEAD-FAIL：cards 頁換回 BASE ⇒ 17 條紅；反安慰劑：同夾具套 BASE CSS 必溢出。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## v6.438：大奶罐｜哞哞回轉 改成使用條件（ATTACK_USE_PRECONDITION）
 
 BASE `25391a6a`（v6.437＋R4 守衛＋IRON_RULES Rule 71～73）。站長交辦「可以自己做的整理」三項：
