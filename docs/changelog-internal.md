@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.440：首頁「權利人聯絡管道」改走意見回饋
+
+BASE `ae7d7cb3`（v6.439）。站長交辦（2026-09-29）：「點此來信」原本 mailto 到站長信箱，站長不常收信 ⇒
+改成開同一個意見回饋視窗（`showFeedbackModal`，送出後進 feedbacks 集合，admin 意見回饋頁同一處查看）。
+- 連結文字「點此來信」→「點此提交意見」；首頁不再有 mailto、也不再露出信箱字串。
+- ⚠ 未登入也能送（uid 記 anonymous＋deviceId）；權利人若要收到回覆，只能靠同一台裝置再開視窗看，或自己在內容裡留聯絡方式。
+- 守衛 `test-v6440-rights-contact-feedback.mjs`（8 條；HEAD-FAIL 紅 5 條）。
+- 首頁 changelog 也要補一則：`test-v6387` A4 要求首頁第一則＝`VERSION`（我原本以為玩家無感可以不寫，全套抓到）。部署：`redeploy-oracle.bat`。
+
 ## v6.439：手機版卡牌資料庫（/cards 卡包頁）不可左右滑動
 
 BASE `27917eba`（v6.438＋IRON_RULES Rule 71）。站長回報（2026-09-29，iPhone 截圖）：卡包頁手機版可以左右滑動、「一般搜尋」按鈕超出頁面。

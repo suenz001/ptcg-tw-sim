@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '27917ebacc5f6969b1764caab2dcc03d91aaaf88';   // v6.438（上一版；含其後只動 IRON_RULES 的一顆 commit）
+const PREV_SHA = 'ae7d7cb3e01fa4e007d90d72143a87c455b59be7';   // v6.439（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,16 +757,25 @@ const PREV_SHA = '27917ebacc5f6969b1764caab2dcc03d91aaaf88';   // v6.438（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.439 前移：PREV_SHA 從 27917eba（v6.438＋IRON_RULES Rule 71 文件 commit）起算。
+  // ⚠⚠ v6.440 前移：PREV_SHA 從 ae7d7cb3（v6.439）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.439：手機版卡牌資料庫不可左右滑動（/cards 手機分支補 min-width:0／下拉上限／16px；桌機逐字未動，test-v6439 B 在守）；
-  //   首頁 changelog 三步搬運（三檔）。
+  // ⭐v6.440：首頁「權利人聯絡管道」的 mailto 改成開意見回饋視窗（站長交辦）；首頁 changelog 三步搬運（三檔；test-v6387 A4 要求第一則＝版本號）。
   'src/lib/version.ts',
-  'src/routes/cards/+page.svelte',
+  'src/routes/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.439）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.439 前移：PREV_SHA 從 27917eba（v6.438＋IRON_RULES Rule 71 文件 commit）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.439：手機版卡牌資料庫不可左右滑動（/cards 手機分支補 min-width:0／下拉上限／16px；桌機逐字未動，test-v6439 B 在守）；
+//   首頁 changelog 三步搬運（三檔）。
+//   'src/lib/version.ts',
+//   'src/routes/cards/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.438）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.438 前移：PREV_SHA 從 25391a6a（v6.437＋R4 守衛＋IRON_RULES Rule 71～73）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -783,7 +792,7 @@ const PREV_ALLOWED = [
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
-// （⭐v6.439：歷史宣告只保留到 v6.422 —— 整段連續註解超過 200 行會觸發 strip-comments 護欄；更舊的見 git 歷史。）
+// （⭐v6.439：歷史宣告只保留到 v6.423 —— 整段連續註解超過 200 行會觸發 strip-comments 護欄；更舊的見 git 歷史。）
 // ── 上一版（v6.437）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.437 前移：PREV_SHA 從 b404a8f2（v6.436）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -932,15 +941,6 @@ const PREV_ALLOWED = [
 //   'src/lib/modal-drag.ts',
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.422）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.422 前移：PREV_SHA 從 v6.421（7183c797）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐⭐v6.422：engine 終局收尾 finalizeEndgameV6422（清終局殘留 picker、改寫與最終結果不一致的提早勝利宣告）。
-//   'src/lib/game/engine.ts',
-//   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
