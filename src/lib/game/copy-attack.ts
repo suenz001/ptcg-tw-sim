@@ -22,13 +22,14 @@
  *      鏈首的 `pokeIid` + `attackIndex` 必須**真的落在本層的候選裡**才算數；
  *      對不上就整條鏈丟掉走 fallback（fail-safe：深層不會再串味）。
  *
- * ⚠ 本檔的 runtime import 只有 leaf 模組（`./selection-filter`、`./player-attack-cooldown`，都不會回頭 import 本檔）⇒
+ * ⚠ 本檔的 runtime import 只有 leaf 模組（`./selection-filter`、`./player-attack-cooldown`、`./attack-use-precondition`，都不會回頭 import 本檔）⇒
  *   可以被 engine／effects／各卡檔／`+page.svelte` 任意 import 而不會成環
  *   （長期記憶：循環 import 下模組層級 `const` 會 TDZ）。
  */
 
 import { isRulePokemon } from './selection-filter';   // ⭐v6.404 卡面「擁有規則的寶可夢」中央述詞（leaf）
 import { isPlayerLevelAttackOnCooldown } from './player-attack-cooldown';   // ⭐v6.435 玩家層級冷卻唯一判準（leaf）
+import { ATTACK_USE_PRECONDITION } from './attack-use-precondition';   // ⭐v6.438 招式使用條件唯一登記處（leaf）
 import type { GameState, CardInstance } from './types';
 import type { Card } from '$lib/cards/types';
 
@@ -242,26 +243,32 @@ export function copyAttackCandidates(
 /**
  * ⭐v6.435（fable 審查建議）因「玩家層級冷卻」被排除的招式要在對戰紀錄說明 ——
  *   否則玩家只會看到「對手戰鬥場無可複製招式」「自動挑印刷最高」，看不出是冷卻擋掉的（會被當成 bug 回報）。
- * @returns 要寫進對戰紀錄的一句話；沒有被冷卻排除的招式 ⇒ 空字串
+ * @returns 要寫進對戰紀錄的一句話；沒有被冷卻／使用條件（⭐v6.438）排除的招式 ⇒ 空字串
  * ⚠ 判準與 copyAttackCandidates 同一份（enumerateCopyAttacks），不另寫。
  */
 export function copyAttackCooldownNote(
   key: string, state: GameState, aIdx: 0 | 1, pool: Map<string, Card>,
   depth: number = copyAttackDepth(state),
 ): string {
-  const cooled = enumerateCopyAttacks(key, state, aIdx, pool, depth).cooledDown;
-  if (cooled.length === 0) return '';
+  const { cooledDown: cooled, preconditionBlocked } = enumerateCopyAttacks(key, state, aIdx, pool, depth);
   const label = key.slice(key.lastIndexOf('|') + 1);
-  const names = [...new Set(cooled)].map((n) => `「${n}」`).join('、');
-  return `${label}：${names}在上個自己的回合已經使出過（冷卻中），這個回合不能借用`;
+  const parts: string[] = [];
+  if (cooled.length > 0) {
+    const names = [...new Set(cooled)].map((n) => `「${n}」`).join('、');
+    parts.push(`${label}：${names}在上個自己的回合已經使出過（冷卻中），這個回合不能借用`);
+  }
+  // ⭐v6.438 使用條件不符而被排除的招式（原因字串來自中央 ATTACK_USE_PRECONDITION，同一份）
+  for (const why of [...new Set(preconditionBlocked)]) parts.push(`${label}：不能借用 —— ${why}`);
+  return parts.join('；');
 }
 
 /** 候選枚舉的本體（copyAttackCandidates 與 copyAttackCooldownNote 共用，Rule 38）。 */
 function enumerateCopyAttacks(
   key: string, state: GameState, aIdx: 0 | 1, pool: Map<string, Card>, depth: number,
-): { candidates: CopyCandidate[]; cooledDown: string[] } {
+): { candidates: CopyCandidate[]; cooledDown: string[]; preconditionBlocked: string[] } {
   const out: CopyCandidate[] = [];
   const cooledDown: string[] = [];
+  const preconditionBlocked: string[] = [];
   const atDepthCap = depth >= COPY_ATTACK_MAX_DEPTH - 1;
   for (const inst of ownersFor(key, state, aIdx, pool)) {
     const card = pool.get(inst.cardId);
@@ -280,6 +287,14 @@ function enumerateCopyAttacks(
       //   ⚠ 反方向（借來用過天仙石，下回合能不能再用）官方 L2002～2005 答「可以」：引擎蓋章記的是
       //     印在卡上的那一招（例：揮指），不會把借來的天仙石記成冷卻 —— 那一側不需要動。
       if (isPlayerLevelAttackOnCooldown(state, aIdx, atk.name)) { cooledDown.push(atk.name); continue; }
+      // ⭐v6.438 站長裁定（2026-09-29）：大奶罐｜哞哞回轉「這個招式必須在上個自己的回合這隻寶可夢使用了「滾動」
+      //   才可使用」——借來用時「這隻寶可夢」＝借用方，條件不符 ⇒ 不讓借。
+      //   ⇒ 招式的**使用條件**（ATTACK_USE_PRECONDITION，與 ATTACK handler／getAvailableAttacks 同一份）
+      //   一律也是借招候選的條件；key 與登記時相同（被借那張卡的卡名｜招式名）。
+      {
+        const why = ATTACK_USE_PRECONDITION.get(`${card.name}|${atk.name}`)?.(state, aIdx, pool) ?? null;
+        if (why) { preconditionBlocked.push(why); continue; }
+      }
       out.push({
         ownerIid: inst.iid,
         ownerCardId: inst.cardId,
@@ -290,7 +305,7 @@ function enumerateCopyAttacks(
       });
     }
   }
-  return { candidates: out, cooledDown };
+  return { candidates: out, cooledDown, preconditionBlocked };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

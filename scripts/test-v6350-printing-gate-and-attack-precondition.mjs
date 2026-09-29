@@ -282,8 +282,10 @@ console.log('\n【E】ATTACK_USE_PRECONDITION 的中央性');
   chk('E1 ⭐engine 有且只有 2 個消費點（ATTACK handler ＋ getAvailableAttacks）', n === 2, `${n} 處`);
   chk('E2 ⭐掃描器正對照：樣本裡有這段字面時必須算得到',
     ('x ATTACK_USE_PRECONDITION.get( y'.split('ATTACK_USE_PRECONDITION.get(').length - 1) === 1);
-  chk('E3 ⭐目前只有 賽富豪|歡慶 登記（新增時必須連守衛一起加）',
-    [...ATTACK_USE_PRECONDITION.keys()].sort().join(',') === '賽富豪|歡慶',
+  // ⭐v6.438 新增 大奶罐|哞哞回轉（卡面「才可使用」）；吼叫尾ex|絕叫、甜甜螢|慢芬香 從 engine 私有集合搬進來
+  //   （守衛 test-v6438-moomoo-roll-precondition、test-v6103-second-player-first-turn）
+  chk('E3 ⭐目前只有 吼叫尾ex|絕叫、大奶罐|哞哞回轉、甜甜螢|慢芬香、賽富豪|歡慶 登記（新增時必須連守衛一起加）',
+    [...ATTACK_USE_PRECONDITION.keys()].sort().join(',') === ['吼叫尾ex|絕叫', '大奶罐|哞哞回轉', '甜甜螢|慢芬香', '賽富豪|歡慶'].sort().join(','),
     [...ATTACK_USE_PRECONDITION.keys()].join('、'));
 }
 

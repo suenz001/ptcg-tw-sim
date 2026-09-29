@@ -711,7 +711,10 @@ for (const f of files) {
     }
   }
   // leaf 純度鎖
-  for (const leaf of ['src/lib/game/effects/_shared.ts', 'src/lib/game/types.ts', 'src/lib/game/instance-flags.ts', 'src/lib/game/selection-filter.ts']) {
+  // ⭐v6.438（fable 審查建議）：借招家族的 leaf 也上鎖 —— copy-attack.ts 被 _shared.ts import，
+  //   它與它 import 的 player-attack-cooldown.ts／attack-use-precondition.ts 一旦 import effects／engine 就成環（TDZ）。
+  for (const leaf of ['src/lib/game/effects/_shared.ts', 'src/lib/game/types.ts', 'src/lib/game/instance-flags.ts', 'src/lib/game/selection-filter.ts',
+    'src/lib/game/copy-attack.ts', 'src/lib/game/player-attack-cooldown.ts', 'src/lib/game/attack-use-precondition.ts']) {
     const lf = files.find((x) => x.slice(ROOT.length).replace(/^[/\\]+/, '').split(sepChar).join('/') === leaf);
     if (!lf) continue;
     for (const line of readFileSync(lf, 'utf8').split('\n')) {

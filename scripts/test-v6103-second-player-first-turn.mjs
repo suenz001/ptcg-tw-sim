@@ -129,15 +129,24 @@ for (const attackName of ['絕叫', '慢芬香']) {
   });
 }
 
+// ⚠ Rule 40（v6.438）：判準從 engine 私有集合 SECOND_PLAYER_FIRST_TURN_ONLY（ATTACK handler／getAvailableAttacks 兩處判）
+//   搬進中央 ATTACK_USE_PRECONDITION（leaf attack-use-precondition.ts 的 secondPlayerFirstTurnOnlyBlock；
+//   engine 的兩個消費點＋借招候選共用同一份）。本條的意圖不變：「引擎端與 UI 端用同一個判準、判準用 turn 不用 isFirstTurn」
+//   ⇒ 改成驗：engine 不再有私有集合；兩張卡都登記同一支述詞；述詞用 turn、不用 isFirstTurn。
+//   （行為端的 UI 反白與引擎拒絕已由上方走真實 END_TURN 的案例覆蓋。）
 ok('引擎端與 UI 端用同一個判準（兩處必須同步改，否則會出現亮著卻送不出去）', () => {
-  const src = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8');
-  const hits = [...src.matchAll(/SECOND_PLAYER_FIRST_TURN_ONLY\.has\([^)]*\)/g)];
-  assert.ok(hits.length >= 2, '應有引擎端與 UI 端兩個消費點');
-  for (const h of hits) {
-    const window = src.slice(h.index, h.index + 400);
-    assert.ok(/state\.turn !== 1/.test(window), '消費點應改用 state.turn !== 1：\n' + window.slice(0, 200));
-    assert.ok(!/!\s*state\.isFirstTurn/.test(window), '消費點不得再用 !state.isFirstTurn（永遠 true）');
-  }
+  const strip = (t) => t.split('\n').filter((l) => !/^\s*(\/\/|\*)/.test(l)).join('\n');
+  const eng = strip(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'));
+  assert.ok(!/SECOND_PLAYER_FIRST_TURN_ONLY/.test(eng), 'engine.ts 不可再有私有集合（判準只能有一份，Rule 38）');
+  const leaf = strip(readFileSync(join(ROOT, 'src/lib/game/attack-use-precondition.ts'), 'utf8'));
+  const fn = leaf.match(/export function secondPlayerFirstTurnOnlyBlock\([\s\S]*?\n\}/);
+  assert.ok(fn, '找不到中央述詞 secondPlayerFirstTurnOnlyBlock');
+  assert.ok(/state\.turn === 1/.test(fn[0]), '述詞應用 state.turn 判：\n' + fn[0].slice(0, 300));
+  assert.ok(!/isFirstTurn/.test(fn[0]), '述詞不得用 isFirstTurn（輪到後攻方時永遠 false）');
+  const eff = strip(readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8'));
+  const v2750 = strip(readFileSync(join(ROOT, 'src/lib/game/effects/cards/v2750_h_wave2_full.ts'), 'utf8'));
+  assert.ok(/regAttackPrecondition\('吼叫尾ex\|絕叫',[^\n]*secondPlayerFirstTurnOnlyBlock\(/.test(eff), '吼叫尾ex|絕叫 未登記中央使用條件');
+  assert.ok(/regAttackPrecondition\('甜甜螢\|慢芬香',[^\n]*secondPlayerFirstTurnOnlyBlock\(/.test(v2750), '甜甜螢|慢芬香 未登記中央使用條件');
 });
 
 console.log(`\n=== v6.103 後攻最初回合限定招式：PASS ${pass} / FAIL ${fail} ===`);

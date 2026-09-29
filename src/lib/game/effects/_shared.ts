@@ -250,12 +250,10 @@ export function regPost(key: string, fn: AttackPostFn) { ATTACK_POST.set(key, fn
  * ⚠ 這是 **per-attack**。「這隻寶可夢的**所有**招式都不能用」那一型
  *   （力量抑制者／啟動限制／懶怠個性）走 engine 的 `selfAttackPreconditionBlock`，兩者不要混。
  */
-export type AttackUsePreconditionFn =
-  (state: GameState, aIdx: 0 | 1, pool: Map<string, Card>) => string | null;
-export const ATTACK_USE_PRECONDITION = new Map<string, AttackUsePreconditionFn>();
-export function regAttackPrecondition(key: string, fn: AttackUsePreconditionFn) {
-  ATTACK_USE_PRECONDITION.set(key, fn);
-}
+// ⭐v6.438：登記表搬到 leaf 模組 attack-use-precondition.ts（借招候選 copy-attack.ts 也要問同一份，
+//   而 copy-attack.ts 不可 import 本檔 ⇒ 會成環）。這裡原樣 re-export，既有 import 路徑不變。
+export { ATTACK_USE_PRECONDITION, regAttackPrecondition } from '../attack-use-precondition';
+export type { AttackUsePreconditionFn } from '../attack-use-precondition';
 
 /**
  * 招式宣告時需要玩家選擇丟棄能量的宣告表。見 effects.ts 原註解說明。

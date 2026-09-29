@@ -12,6 +12,7 @@ import {
   getOwnBenchLimit, countAttachedEnergyAsUnits, energyMatchesType,
   fireOnHandEnergyAttached, // v5.782 從手牌附能→對手反應
   findOwnFieldPokemon, attachEnergyToOwnPokemonByIid, // v6.165 互換後仍要附給本體 → 一律 iid 追蹤
+  regAttackPrecondition, // ⭐v6.438 per-attack 使用前提（engine ATTACK handler 與 getAvailableAttacks 共用同一份）
 } from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import { mandatoryTargetCount } from '../_shared'; // ⭐v6.305 卡面寫死目標隻數 → 強制選滿
@@ -23,6 +24,7 @@ import { openDeckViewReshuffle, revealTopCardsLog } from '../_shared';
 import { joinCardNames } from '../_shared';
 import { getBasicEnergyType } from '../../engine'; // v6.009 resolver 端 re-validate 基本能量屬性(防作弊)
 import { isBasicPokemonOnField } from '../../selection-filter'; // v6.250 場上【基礎】中央述詞（leaf，無循環）
+import { secondPlayerFirstTurnOnlyBlock } from '../../attack-use-precondition'; // ⭐v6.438 後攻最初回合限定（leaf）
 import { cellAwakeningStep } from './v2650_i_wave15_misc8'; // v5.983 收斂「進化全備戰」chain(與人造細胞卵|細胞覺醒共用)
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2'; // v6.165 從手牌附能→自方瑪機雅娜｜自動治癒
 import {
@@ -197,13 +199,25 @@ function lastSelfTurnUsedAttackPre(base: number, bonus: number, requiredAtkName:
   };
 }
 
-// 必須上回合用過 X 才能用（fail if not）
+// ⭐v6.438「這個招式必須在上個自己的回合這隻寶可夢使用了「X」才可使用。」（大奶罐｜哞哞回轉）
+//   卡面是**使用條件**（「才可使用」）——條件不成立時這一招**不能使用**（UI 反白＋引擎拒絕），
+//   不是「可以打出來但 0 傷害」。舊版只有 regPre 判斷 ⇒ 按鈕亮著、按下去宣告了招式卻 0 傷害
+//   （白白耗掉這回合的攻擊；AI 也會選到它）。
+//   ⇒ 判準只有這一份 `prevSelfAttackBlock`：
+//     ① 走中央 ATTACK_USE_PRECONDITION（engine 的 ATTACK handler 與 getAvailableAttacks 共用）；
+//     ② regPre 的防呆分支呼叫**同一支**（Rule 38），理論上不可達（gate 已先擋），
+//        只為 AI／伺服器繞過 gate 送出 ATTACK 時 fail-closed。
+//   卡面主詞是「**這隻寶可夢**」⇒ 讀出招那一隻的 per-instance `attackUsedLastSelfTurn`
+//   （與玩家層級冷卻「自己的寶可夢」不同，那一型走 player-attack-cooldown.ts）。
+function prevSelfAttackBlock(state: GameState, aIdx: 0 | 1, requiredAtkName: string, label: string): string | null {
+  const a = state.players[aIdx]?.active;
+  if (a?.attackUsedLastSelfTurn === requiredAtkName) return null;
+  return `${label}：上個自己的回合這隻寶可夢沒有使用「${requiredAtkName}」— 無法使用這個招式`;
+}
 function requirePrevAttackPre(base: number, requiredAtkName: string, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    const a = state.players[aIdx].active;
-    if (a?.attackUsedLastSelfTurn !== requiredAtkName) {
-      return { state: addLog(state, `${label}：上個自己回合未使用「${requiredAtkName}」 → 招式失敗`, aIdx), damage: 0 };
-    }
+    const why = prevSelfAttackBlock(state, aIdx, requiredAtkName, label);
+    if (why) return { state: addLog(state, why, aIdx), damage: 0 };
     return { state: addLog(state, `${label}：條件成立 → ${base}`, aIdx), damage: base };
   };
 }
@@ -1478,7 +1492,8 @@ regPre('鳳王|閃耀火焰', (state, aIdx, pool) => {
   return { state: addLog(state, '閃耀火焰：自方備戰無太晶 → 100', aIdx), damage: 100 };
 });
 
-// 大奶罐|哞哞回轉 100 — 必須上回合用過「滾動」
+// 大奶罐|哞哞回轉 100 — 必須上回合這隻寶可夢用過「滾動」才可使用（⭐v6.438 改成使用條件：反白＋拒絕）
+regAttackPrecondition('大奶罐|哞哞回轉', (state, aIdx) => prevSelfAttackBlock(state, aIdx, '滾動', '哞哞回轉'));
 regPre('大奶罐|哞哞回轉', requirePrevAttackPre(100, '滾動', '哞哞回轉'));
 
 // 阿羅拉 三地鼠|三賓果 120 — 自手牌 = 3 否則失敗
@@ -1832,7 +1847,8 @@ regR('h-wave2-bounce-opp-bench', (state, aIdx, iids, _params, pool) => {
 });
 
 // 甜甜螢|慢芬香 — 後攻第一回合限定，對手 1 備戰回對手牌庫
-//   需檢查 turn 與 currentPlayer，這裡簡化：直接使用，引擎方面的限制依現有 turn=1 邏輯
+//   ⭐v6.438 使用條件走中央登記表（ATTACK handler／UI 反白／借招候選共用；原 engine 私有集合 SECOND_PLAYER_FIRST_TURN_ONLY）
+regAttackPrecondition('甜甜螢|慢芬香', (s, aIdx, pool) => secondPlayerFirstTurnOnlyBlock(s, aIdx, pool, '慢芬香'));
 regPre('甜甜螢|慢芬香', (s) => ({ state: s, damage: 0 }));
 regPost('甜甜螢|慢芬香', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;

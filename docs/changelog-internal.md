@@ -1,5 +1,32 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.438：大奶罐｜哞哞回轉 改成使用條件（ATTACK_USE_PRECONDITION）
+
+BASE `25391a6a`（v6.437＋R4 守衛＋IRON_RULES Rule 71～73）。站長交辦「可以自己做的整理」三項：
+- ①特殊能量兩份表、②龐克頭盔／豪邁炸彈判準 —— 查證後**早已完成**（v6.401 `56eeca71`、v6.402 `4bb90b95`），長期記憶的維度總表過期，本版不動。
+- ③大奶罐｜哞哞回轉：卡面「這個招式必須在上個自己的回合這隻寶可夢使用了「滾動」才可使用。」＝使用條件。
+  舊版只有 regPre 判斷 ⇒ 按鈕亮著、宣告後 0 傷害（耗掉這回合攻擊）。改走 v6.350 中央 ATTACK_USE_PRECONDITION
+  （engine ATTACK handler 與 getAvailableAttacks 共用）；判準只有 `prevSelfAttackBlock` 一份，regPre 防呆分支呼叫同一支（Rule 38）。
+  H/I/J 全卡池掃「才可／只可在／無法使用這個招式」：其餘只有天仙石／渾沌匍匐（玩家層級冷卻）與絕叫／慢芬香（後攻最初回合），皆已 gate。
+- 守衛 `test-v6438-moomoo-roll-precondition.mjs`（15 條）：HEAD-FAIL 紅 M1、M3、M4、M4b、D1、D2、D3；
+  M7（AI 不選）在 BASE 已綠（AI 試打本來就看到 0 傷害）＝零回歸斷言。突變 4 個全殺（刪登記／判準恆放行／讀錯招式名／regPre 就地判斷）。
+- test-v6350 E3（登記清單棘輪）依其要求把新 key 一起加入（Rule 40：意圖＝新增必須連守衛一起加）。
+- ⭐ 站長裁定（2026-09-29）借招：「內容是寫 上個自己的回合這隻寶可夢使用了「滾動」才可使用。因此必須視為條件不符，不讓借」
+  ⇒ 使用條件登記表搬到 leaf `src/lib/game/attack-use-precondition.ts`（copy-attack.ts 不可 import _shared ⇒ 會成環；_shared 原樣 re-export），
+  `enumerateCopyAttacks` 問同一份（key＝被借那張卡的卡名｜招式名，述詞讀出招的借用方）；`copyAttackCooldownNote` 一併說明原因。
+  中央化的連帶：賽富豪｜歡慶被借時也照「手牌剛好 30 張」判（B5）。
+  守衛 B1～B6、D4～D6；HEAD-FAIL（copy-attack／_shared 換回 BASE）紅 B1、B3、B4、B5、D4、D5；突變 c1（key 少卡名）／c2（問錯方）／c3（紀錄不列原因）全殺。
+- fable 5.1 審查（必須修 3、建議 2，均已處理）：
+  ① 借招部分原本還在工作樹未進 commit、新 leaf 未追蹤 ⇒ 本版整顆重做成單一 commit（v6.438 尚未推送）；
+  ② changelog 與實作矛盾 ⇒ 首頁條目補【二】借招、內部紀錄更正；
+  ③ M7（AI 不選）是安慰劑：手上有能量時 AI 第一步是附能量、永遠看不到出招 ⇒ 改成手牌 0 張＋正對照 M7a（條件成立時選哞哞回轉）。
+     M7 在 BASE 仍綠（AI 試打本來就看到 0 傷害）＝零回歸斷言，如實標註。
+  ④（建議，同一原則）吼叫尾ex｜絕叫、甜甜螢｜慢芬香「只可在後攻玩家的最初回合使用」原本是 engine 私有集合 SECOND_PLAYER_FIRST_TURN_ONLY，
+     借招候選問不到（揮指任何回合都借得到絕叫）⇒ 搬進中央登記表（判準 secondPlayerFirstTurnOnlyBlock，leaf），engine 兩處改由 v6350 區塊統一判。
+     engine 還原器 engine-strip-v6438（3 組）接進 test-v6265（兩處）／test-v6375／test-v6371；test-v6103 靜態條依 Rule 40 改驗中央述詞（意圖不變）。
+  ⑤（建議）anti-pattern-lint Check O 的 leaf 純度鎖加入 copy-attack.ts／player-attack-cooldown.ts／attack-use-precondition.ts。
+- 守衛 C0～C5；全體 HEAD-FAIL（5 個 src 檔換回 BASE）紅 16 條；突變：拿掉絕叫登記 ⇒ C1、C3、C4、C5 紅；述詞不判 turn ⇒ C5 紅（＋test-v6103 三條紅）。
+
 ## v6.437：AI 不做「會讓這回合攻擊明顯變差」的訓練家／特性；特性函式就地改實體的中央修正（v6.436 列的兩個另案）
 
 BASE `b404a8f2`（v6.436）。站長：「這次新發現的兩個問題，請你想辦法解決」。

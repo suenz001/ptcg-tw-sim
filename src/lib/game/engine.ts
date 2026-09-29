@@ -5453,14 +5453,8 @@ function handlePlaying(
       //   正解用 turn：`newTurn` 只在**後攻方**結束回合時 +1（見 END_TURN 的 v?.? 註解），
       //   故「turn === 1 且行動者是後攻方」＝ 後攻玩家的最初回合。與 items_misc.ts v4.940
       //   幫忙鈴／悠哉尾草棒 的修法（改用 st.turn）同一慣例。
-      if (attackName && SECOND_PLAYER_FIRST_TURN_ONLY.has(attackName)) {
-        const isSecondPlayer = aIdx !== state.firstPlayerIdx;
-        if (state.turn !== 1 || !isSecondPlayer) {
-          return addLog(state,
-            `${atkName}：「${attackName}」只能在後攻方最初回合使用`,
-            aIdx);
-        }
-      }
+      // ⭐v6.438：判準搬進中央 ATTACK_USE_PRECONDITION（attack-use-precondition.ts 的 secondPlayerFirstTurnOnlyBlock），
+      //   由下方的 per-attack 使用前提統一判（借招候選也問同一份）。
       // >>> v6350-attack-precondition
       // ⭐⭐v6.350 中央 per-attack 使用前提（`ATTACK_USE_PRECONDITION`）。
       //   key 的組法與下方 `effectKey` **完全相同**（招式來源卡名｜招式名），
@@ -10059,7 +10053,8 @@ const BENCH_FILL_ATTACK_NAMES = new Set<string>([
 //   原本在 ATTACK handler 與 getAvailableAttacks 各 inline 一份相同 Set → 漂移風險
 //   (同 canRetreat/getRetreatBlockReason 各寫一份的反模式)。提升為模組級單一來源,
 //   引擎拒絕(ATTACK)與 UI 反白(getAvailableAttacks)永遠引用同一份,不會分歧。
-const SECOND_PLAYER_FIRST_TURN_ONLY = new Set<string>(['絕叫', '慢芬香']);
+// ⭐v6.438：集合移除 —— 改在卡片檔登記 regAttackPrecondition（判準 secondPlayerFirstTurnOnlyBlock，leaf 模組
+//   attack-use-precondition.ts），ATTACK handler／getAvailableAttacks／借招候選三處共用同一份。
 // ⭐v6.435 玩家層級招式冷卻（天仙石／渾沌匍匐）的集合與中央述詞搬到 leaf 模組 player-attack-cooldown.ts：
 //   借招家族的中央候選枚舉（copy-attack.ts）也要問同一個判準（站長裁定：借不到冷卻中的天仙石），
 //   而 copy-attack.ts 不可 import engine.ts（成環）。ATTACK handler 與 getAvailableAttacks 照舊呼叫同一個述詞。
@@ -10327,10 +10322,7 @@ export function getAvailableAttacks(
       // v2.219：後攻方最初回合限定招式（吼叫尾ex｜絕叫、甜甜螢｜慢芬香）— UI 層反白
       // ⭐ v6.103：判準與引擎端一起從 isFirstTurn 改為 turn === 1（原寫法永遠 false，見上方詳解）。
       //   兩端**必須同步改**，否則會出現「按鈕亮著但送出被擋」或反之。
-      if (SECOND_PLAYER_FIRST_TURN_ONLY.has(atk.name)) {
-        const isSecondPlayer = state.activePlayerIndex !== state.firstPlayerIdx;
-        if (state.turn !== 1 || !isSecondPlayer) return -1;
-      }
+      //   ⭐v6.438：判準搬進中央 ATTACK_USE_PRECONDITION（上方 v6350 區塊已判，借招候選也問同一份）。
       // v5.010：bench-fill 類招式（如「呼朋引伴」放基礎寶可夢到備戰）— 備戰滿時禁用
       //   原本只在 regPost 內做檢查（attack 已 fire、log「備戰區已滿」），
       //   但 UI 按鈕沒灰 → 玩家以為能用、點下去攻擊發動了但什麼也沒發生 → 困惑。

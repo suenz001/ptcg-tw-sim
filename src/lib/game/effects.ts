@@ -16,6 +16,7 @@ import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說�
 import { markDamageCounterMovedFrom } from './effects/_shared'; // v5.947 移動指示物非治療
 import { hasStatusInAnySlot, countSpecialConditions } from './effects/_shared'; // v5.834 跨三槽狀態讀取
 import { dispatchCopiedAttack } from './effects/_shared'; // ⭐v6.337 借招轉接唯一出口
+import { regAttackPrecondition, secondPlayerFirstTurnOnlyBlock } from './attack-use-precondition'; // ⭐v6.438 招式使用條件（leaf）
 // ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
 import { copyAttackCandidates, copyAttackCooldownNote, pickCopiedAttack } from './copy-attack';
 
@@ -15290,6 +15291,8 @@ regPre('青銅鐘|進化妨礙者', (s, _a, _p) => ({ state: s, damage: 30 }));
 regPost('青銅鐘|進化妨礙者', oppCantEvolveNextPost('進化妨礙者'));
 
 // 吼叫尾ex｜絕叫 0 + 下回合對手禁支援者
+// ⭐v6.438 使用條件走中央登記表（ATTACK handler／UI 反白／借招候選共用；原 engine 私有集合 SECOND_PLAYER_FIRST_TURN_ONLY）
+regAttackPrecondition('吼叫尾ex|絕叫', (s, aIdx, pool) => secondPlayerFirstTurnOnlyBlock(s, aIdx, pool, '絕叫'));
 regPre('吼叫尾ex|絕叫', (s, _a, _p) => ({ state: s, damage: 0 }));
 regPost('吼叫尾ex|絕叫', oppCantPlaySupporterNextPost('絕叫'));
 

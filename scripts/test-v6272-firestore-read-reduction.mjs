@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'b404a8f207d81fc03ca98765ab790b5b2797b619';   // v6.436（上一版）
+const PREV_SHA = '25391a6a250e49cb59ba26c041b39a39063f4dba';   // v6.437（上一版；含其後只動守衛／鐵律的兩顆 commit）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,21 +757,38 @@ const PREV_SHA = 'b404a8f207d81fc03ca98765ab790b5b2797b619';   // v6.436（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.437 前移：PREV_SHA 從 b404a8f2（v6.436）起算。
+  // ⚠⚠ v6.438 前移：PREV_SHA 從 25391a6a（v6.437＋R4 守衛＋IRON_RULES Rule 71～73）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.437：AI 不做會讓這回合攻擊明顯變差的訓練家／特性（ai-eval.ts actionWeakensAttackThisTurn；ai.ts 接線；
-  //   bestNowOutcome／clearlyBetterOutcome 從 ai-gust.ts 搬到 ai-eval.ts）；特性函式就地改實體的中央修正
-  //   （engine.ts USE_ABILITY、effects.ts resolve-play-ability-prompt 都把發動特性的那一隻換成新物件）。
-  'src/lib/game/ai-eval.ts',
-  'src/lib/game/ai-gust.ts',
-  'src/lib/game/ai.ts',
+  // ⭐v6.438：大奶罐｜哞哞回轉 改成使用條件（ATTACK_USE_PRECONDITION）；站長裁定借來用時條件不符不讓借 ⇒
+  //   登記表搬到 leaf attack-use-precondition.ts（新檔；_shared.ts 改 re-export），copy-attack.ts 候選枚舉問同一份；
+  //   絕叫／慢芬香 的後攻最初回合限定從 engine.ts 私有集合搬進登記表（effects.ts／v2750 登記）。
+  'src/lib/game/attack-use-precondition.ts',
+  'src/lib/game/copy-attack.ts',
   'src/lib/game/effects.ts',
+  'src/lib/game/effects/_shared.ts',
+  'src/lib/game/effects/cards/v2750_h_wave2_full.ts',
   'src/lib/game/engine.ts',
   'src/lib/version.ts',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// （⭐v6.438：歷史宣告只保留到 v6.420 —— 整段連續註解超過 200 行會觸發 strip-comments 護欄；更舊的見 git 歷史。）
+// ── 上一版（v6.437）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.437 前移：PREV_SHA 從 b404a8f2（v6.436）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.437：AI 不做會讓這回合攻擊明顯變差的訓練家／特性（ai-eval.ts actionWeakensAttackThisTurn；ai.ts 接線；
+//   bestNowOutcome／clearlyBetterOutcome 從 ai-gust.ts 搬到 ai-eval.ts）；特性函式就地改實體的中央修正
+//   （engine.ts USE_ABILITY、effects.ts resolve-play-ability-prompt 都把發動特性的那一隻換成新物件）。
+//   'src/lib/game/ai-eval.ts',
+//   'src/lib/game/ai-gust.ts',
+//   'src/lib/game/ai.ts',
+//   'src/lib/game/effects.ts',
+//   'src/lib/game/engine.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.436）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 //  ⭐v6.436：老大的指令的保留邏輯＋拉誰上來（新檔 ai-gust.ts；ai.ts 接線；ai-eval.ts 匯出 isInSimResolve）；
 //  借招冷卻的對戰紀錄說明（copy-attack.ts 的 copyAttackCooldownNote；8 張借招卡的出招處理各加一行）。
@@ -941,24 +958,6 @@ const PREV_ALLOWED = [
 //   (三) engine：取完獎賞的一方若自己沒有可上場的寶可夢 ⇒ 平手（站長裁定）。
 //   'src/lib/game/engine.ts',
 //   'src/lib/modal-drag.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'src/routes/game/MobilePortraitBattle.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.418）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-//   ⚠⚠ v6.418 前移：PREV_SHA 從 v6.417（eb20722d）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-//   ⭐⭐v6.418：(一) 對戰中也能查看獎賞卡（蓋著的仍然只顯示卡背，唯一防線是
-//   `_pvcard` 那道 faceUp 閘，由 test-v6190 的 B8／B9 守）——動 game/+page.svelte
-//   （prizeViewMode／openPrizeView／視窗本體／按鈕／CSS）與 MobilePortraitBattle.svelte
-//   （兩處 chip 從回放限定改成一律可點）。
-//   (二) 取獎賞的 picker 改走中央 withPending ⇒ 已有 pending 時排進 pendingChainQueue
-//   （原本自動取，會剝奪第二位玩家的指定權）——動 effects/_shared.ts（addPendingPrize）
-//   與 engine.ts（PENDING_REFRESH_ON_POP 登記）。
-//   'src/lib/game/effects/_shared.ts',
-//   'src/lib/game/engine.ts',
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
 //   'src/routes/game/MobilePortraitBattle.svelte',
