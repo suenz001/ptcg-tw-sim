@@ -11686,7 +11686,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {@const _chips = blueEnergyChips(inst)}
     {#if inst.damage > 0}<span class="bl-dmg" title="已受到 {inst.damage} 傷害">{inst.damage}</span>{/if}
     {#if _bt.length > 0}{@const _tc = getCard(_bt[0].cardId)}
-      <span class="bl-tool" title="寶可夢道具：{_bt.map((t) => getCard(t.cardId)?.name ?? '道具').join('、')}"><img use:retryImg={_tc?.imageUrl} src={_tc?.imageUrl} alt={_tc?.name ?? '道具'} /><i class="bl-tn">{_tc?.name ?? '道具'}</i>{#if _bt.length > 1}<b>+{_bt.length - 1}</b>{/if}</span>
+      <span class="bl-tool" title="寶可夢道具：{_bt.map((t) => getCard(t.cardId)?.name ?? '道具').join('、')}"><img use:retryImg={_tc?.imageUrl} src={_tc?.imageUrl} alt={_tc?.name ?? '道具'} onpointerenter={(e)=>enterAttCard(e, _bt[0].cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(_bt[0].cardId,null);}}} /><i class="bl-tn">{_tc?.name ?? '道具'}</i>{#if _bt.length > 1}<b>+{_bt.length - 1}</b>{/if}</span>
     {/if}
     {#if _chips.length > 0}
       <span class="bl-chips">{#each _chips as ch (ch.key)}<span class="bl-chip" title="{ch.key === 'special' ? '特殊能量' : ch.label + '能量'} × {ch.count}"><i class="bl-e" class:bl-sp={ch.key === 'special'} style={ch.color ? `background:${ch.color}` : undefined}>{ch.label}</i>{#if ch.count > 1}<b>×{ch.count}</b>{/if}</span>{/each}</span>
@@ -19959,5 +19959,22 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .battle-root:has(.playmat.layout-blue) .battle-header .stadium-chip{ display:none; }
   /* ⑥ 設置階段的蓋牌只顯示卡背，不畫「?」 */
   .playmat.layout-blue .card-back .card-back-mark{ display:none; }
+
+  /* ═══ v6.444 站長回饋三項 ═══ */
+  /* ① 備戰卡的名稱／HP 提示被戰鬥寶可夢框蓋住：Fable 規則的疊放順序是 備戰區 200 < 戰鬥區 210 ⇒ 滑鼠停在備戰區時把整列拉到上面 */
+  .playmat.layout-blue .opponent-row > .zone-bench:hover,
+  .playmat.layout-blue .my-row > .zone-bench:hover{ z-index:225; }
+  /* ② 寶可夢道具縮圖：滑鼠移上顯示放大預覽、點一下放大檢視（縮圖外框仍不吃滑鼠，只有圖本身吃） */
+  .playmat.layout-blue .bl-tool img{ pointer-events:auto; cursor:zoom-in; }
+  /* ③ 拖牌到我方戰鬥寶可夢：拖到外圍白框內任何位置都算（進化／附能量／附道具／設置換上場）。
+       做法：用 ::before 把 .active-card（data-drop-type 所在）的命中範圍撐滿整個白框；
+       z-index:-1 ⇒ 疊在白框底色之上、卡圖與右側按鈕之下，不擋任何按鈕。點框內空白處＝點卡片（選了能量時即附加）。 */
+  .playmat.layout-blue .my-row > .zone-active > .active-card::before{
+    content:''; position:absolute; z-index:-1;
+    top:-9px; left:-13px; right:calc(-1 * (var(--bl-scol) + 23px)); bottom:-28px; border-radius:11px;
+  }
+  /* 拖曳中：整個白框一起亮（可放＝藍色虛線、放開就成立＝黃色） */
+  .playmat.layout-blue .my-row > .zone-active:has(> .active-card.drop-zone){ outline:2px dashed rgba(136,204,255,.75); outline-offset:3px; }
+  .playmat.layout-blue .my-row > .zone-active:has(> .active-card.drop-hover){ outline:3px solid #ffd44a; outline-offset:3px; box-shadow:0 0 18px rgba(255,212,74,.6); }
   /* <<< v6441-blue-css */
 </style>
