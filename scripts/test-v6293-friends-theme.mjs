@@ -600,6 +600,9 @@ const V6441_BATTLE_EDITS = [
   ["onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(b)}{/if}", "onpointerleave={leaveAttCard}/>", 2],
   ["onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(oppPlayer.active)}{/if}", "onpointerleave={leaveAttCard}/>"],
   ["onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(myPlayer.active)}{/if}", "onpointerleave={leaveAttCard}/>"],
+  // ⭐v6.442 藍桌墊重製（Rule 40：意圖不變）：兩個棄牌堆各多一個「只在藍桌墊 render」的最上面那張正面（blueDiscTop，定義也在同一組哨兵內）。
+  ["<span class=\"pile-label\">棄牌</span>{#if battleLayout === 'blue'}{@render blueDiscTop(oppPlayer?.discard)}{/if}", "<span class=\"pile-label\">棄牌</span>"],
+  ["<span class=\"pile-label\">棄牌</span>{#if battleLayout === 'blue'}{@render blueDiscTop(myPlayer?.discard)}{/if}", "<span class=\"pile-label\">棄牌</span>"],
 ];
 function revertV6441(region) {
   const n0 = region.split('>>> ' + V6441_BLUE_TAG).length - 1;

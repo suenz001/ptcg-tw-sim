@@ -22,6 +22,10 @@
  *   [E 衛生] 雲端截圖用的暫時掛鉤不可以進 commit。
  *   ⭐ HEAD-FAIL：B／C／D 在 BASE 上必紅（BASE 沒有藍桌墊）。
  *
+ * ⭐v6.442 藍桌墊重製（IRON_RULES Rule 40：守的意圖不變 —— 其他版面零位元組變動、CSS 不外洩、卡面裁定）：
+ *   新增 ① blueDiscTop snippet（同一組哨兵內）＋兩個棄牌堆呼叫點 ② <1024 後備排版內的 v6442-blue-fallback 哨兵區塊
+ *   ③ HP 條位置改成固定 px（站長要求「版面永久固定」）。本版的新要求另由 test-v6442-blue-fixed-mat 守。
+ *
  * Run: node scripts/test-v6441-blue-layout.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -69,6 +73,7 @@ function strip(src) {
     /<!-- >>> v6441-blue-snippet -->\n[\s\S]*?<!-- <<< v6441-blue-snippet -->\n/,
     /  \/\* >>> v6441-blue-css \*\/[\s\S]*?  \/\* <<< v6441-blue-css \*\/\n/,
     /  \/\* >>> v6441-blue-geom \*\/[\s\S]*?  \/\* <<< v6441-blue-geom \*\/\n/,
+    /    \/\* >>> v6442-blue-fallback \*\/[\s\S]*?    \/\* <<< v6442-blue-fallback \*\/\n/,
     /  \/\/ ⭐v6\.441 藍桌墊（blue）＝[\s\S]*?  const isFableGeom = \$derived\(battleLayout === 'fable' \|\| battleLayout === 'blue'\);\n/,
   ];
   for (const re of blocks) { if (!re.test(s)) bad.push(String(re).slice(0, 40)); s = s.replace(re, ''); }
@@ -76,13 +81,18 @@ function strip(src) {
   const call = /\{#if battleLayout === 'blue'\}\{@render blueDeco\([^)]*\)\}\{\/if\}/g;
   const nCalls = (s.match(call) || []).length;
   s = s.replace(call, '');
+  // ②b v6.442 兩個棄牌堆呼叫點
+  const dcall = /\{#if battleLayout === 'blue'\}\{@render blueDiscTop\((?:oppPlayer|myPlayer)\?\.discard\)\}\{\/if\}/g;
+  const nDisc = (s.match(dcall) || []).length;
+  s = s.replace(dcall, '');
   // ③ 逐條還原
   for (const [a, b] of REVERT) { const c = count(s, a); if (c !== 1) bad.push(`還原條目命中 ${c} 次：${a.slice(0, 50)}`); s = s.split(a).join(b); }
-  return { s, bad, nCalls };
+  return { s, bad, nCalls, nDisc };
 }
 const st = strip(SRC);
 ok('[剝除器] 每一個哨兵區塊與還原條目都恰好命中（剝除器沒有過期）', st.bad.length === 0, st.bad.join(' ｜ '));
 ok('[剝除器] blueDeco 呼叫點恰好 4 個（對手備戰／對手戰鬥／我方戰鬥／我方備戰）', st.nCalls === 4, String(st.nCalls));
+ok('[剝除器] blueDiscTop 呼叫點恰好 2 個（對手棄牌／我方棄牌）', st.nDisc === 2, String(st.nDisc));
 ok('[剝除器] 剝除後真的有變（否則是靜默 no-op）', st.s !== SRC);
 {
   // ⭐ 剝除器只證明「哨兵外面」沒變 ⇒ 哨兵「裡面」要另外鎖內容，否則在哨兵裡夾帶任何東西都會全綠（fable 審查 M7／M8 實證）。
@@ -95,8 +105,11 @@ ok('[剝除器] 剝除後真的有變（否則是靜默 no-op）', st.s !== SRC)
     !!hb && !/\$effect|\$state|battleLayout|fableCardScale|setBattleLayout|\bgame\s*=/.test(code));
   const sb = /<!-- >>> v6441-blue-snippet -->\n([\s\S]*?)<!-- <<< v6441-blue-snippet -->/.exec(SRC);
   const sn = sb ? sb[1].replace(/<!--[\s\S]*?-->/g, '').trim() : '';
-  ok('★★[哨兵內容] snippet 區塊只有一個 blueDeco snippet，外面沒有夾帶任何 markup',
-    sn.startsWith('{#snippet blueDeco(') && sn.endsWith('{/snippet}') && count(sn, '{#snippet') === 1 && count(sn, '{/snippet}') === 1, sn.slice(0, 60) + ' … ' + sn.slice(-40));
+  // v6.442：哨兵內恰好兩個 snippet（blueDeco、blueDiscTop），snippet 與 snippet 之間沒有夾帶任何 markup
+  const between = sn.replace(/\{#snippet [\s\S]*?\{\/snippet\}/g, '').trim();
+  ok('★★[哨兵內容] snippet 區塊只有 blueDeco 與 blueDiscTop 兩個 snippet，外面沒有夾帶任何 markup',
+    sn.startsWith('{#snippet blueDeco(') && sn.endsWith('{/snippet}') && count(sn, '{#snippet') === 2 && count(sn, '{/snippet}') === 2
+      && sn.includes('{#snippet blueDiscTop(') && between === '', sn.slice(0, 60) + ' … ' + JSON.stringify(between.slice(0, 60)));
   const gb = /  \/\/ ⭐v6\.441 藍桌墊（blue）＝([\s\S]*?)  const isFableGeom = /.exec(SRC);
   ok('★[哨兵內容] isFableGeom 宣告前面只有註解行', !!gb && gb[1].split('\n').slice(1).filter((l) => l.trim()).every((l) => /^\s*\/\//.test(l)));
 }
@@ -134,8 +147,9 @@ ok('[正對照] 手機直式元件不讀 battleLayout（手機版面維持現況
 console.log('\nC) 範圍：藍桌墊的 CSS 不外洩');
 const m0 = /  \/\* >>> v6441-blue-css \*\/([\s\S]*?)  \/\* <<< v6441-blue-css \*\//.exec(SRC);
 const mg = /  \/\* >>> v6441-blue-geom \*\/([\s\S]*?)  \/\* <<< v6441-blue-geom \*\//.exec(SRC);
-const m = m0 && mg ? [null, m0[1] + '\n' + mg[1]] : null;
-ok('★★[HEAD-FAIL] 找得到藍桌墊 CSS 區塊（外觀＋幾何兩塊）', !!m);
+const mf = /    \/\* >>> v6442-blue-fallback \*\/([\s\S]*?)    \/\* <<< v6442-blue-fallback \*\//.exec(SRC);
+const m = m0 && mg && mf ? [null, m0[1] + '\n' + mg[1] + '\n' + mf[1]] : null;
+ok('★★[HEAD-FAIL] 找得到藍桌墊 CSS 區塊（外觀＋幾何＋<1024 後備三塊）', !!m);
 if (m) {
   ok('★★[媒體查詢] 藍桌墊的兩塊 CSS 一個 @media 都沒有（本頁 @media 數量被 v6187／v6195／v6199 釘住：不准新增媒體查詢當手機開關）', !/@media/.test(m[1]));
   const iG = SRC.indexOf('/* >>> v6441-blue-geom */');
@@ -189,10 +203,12 @@ if (m) {
   const css = m[1];
   const noPtr = (cls) => new RegExp('\\.playmat\\.layout-blue \\.' + cls + '\\{[^}]*pointer-events:none').test(css);
   ok('★★[不擋操作] 傷害黃圓／道具縮圖／能量列都不吃滑鼠事件（不擋點擊與拖放落點）', noPtr('bl-dmg') && noPtr('bl-tool') && noPtr('bl-chips'));
-  ok('★[裁定] 備戰卡名稱平常不顯示、滑鼠移上才顯示', /\.bench-slot \.bench-name,\s*\n\s*\.playmat\.layout-blue \.bench-slot \.bench-stat\{ display:none; \}/.test(css) && /\.bench-slot:hover \.bench-name\{/.test(css));
-  ok('★[裁定] 戰鬥寶可夢 HP 條在卡片下方', /\.active-card \.active-hpbar-bottom\{\s*\n\s*top:calc\(100% \+ clamp\(/.test(css));
+  ok('★[裁定] 備戰卡名稱平常不顯示、滑鼠移上才顯示',
+    /\.playmat\.layout-blue \.bench-slot \.bench-name,\s*\n\s*\.playmat\.layout-blue \.bench-slot \.bench-stat,[^{]*\{ display:none; \}/.test(css) && /\.bench-slot:hover \.bench-name\{/.test(css));
+  ok('★[裁定] 戰鬥寶可夢 HP 條在卡片下方（固定 px 間距）', /\.active-card \.active-hpbar-bottom\{\s*\n\s*top:calc\(100% \+ \d+px\)/.test(css));
 }
 ok('★[圖片重試] 道具縮圖的動態 <img> 有掛 use:retryImg', /<span class="bl-tool"[\s\S]{0,300}?<img use:retryImg=\{_tc\?\.imageUrl\}/.test(SRC));
+ok('★[圖片重試] 棄牌堆最上面那張的動態 <img> 有掛 use:retryImg', /<img class="bl-disc" use:retryImg=\{_dc\.imageUrl\}/.test(SRC));
 
 // ══════════════════════════════════════════════════════════════════════════
 // E. 衛生
