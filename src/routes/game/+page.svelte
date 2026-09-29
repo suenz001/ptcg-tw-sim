@@ -2347,6 +2347,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
     hoverAttCardId = cardId;
     hoverAttBelow = below;
     hoverAttAnchor = { x: rect.left + rect.width / 2, y };
+    // >>> v6443-blue-peek
+    // ⭐v6.443 站長回報：藍桌墊滑鼠移到備戰卡時，名稱／HP 提示（我方在卡片上方、對手在下方）被放大預覽蓋住。
+    //   藍桌墊改把預覽放在卡片左側（左邊放不下才放右側），垂直置中對齊卡片並夾在視窗內 ⇒ 卡片本身與上下提示都不會被蓋到。
+    //   其他版面不走這裡（行為與 v6.442 相同）。PW＝預覽寬 340＋框 4。
+    if (battleLayout === 'blue') {
+      const PW = 344, vw = (typeof window !== 'undefined') ? window.innerWidth : 1366;
+      const bx = rect.left - 14 - PW >= 8 ? rect.left - 14 - PW / 2 : Math.min(rect.right + 14 + PW / 2, vw - PW / 2 - 8);
+      const top = Math.min(Math.max(8, rect.top + rect.height / 2 - PH / 2), Math.max(8, vh - PH - 8));
+      hoverAttBelow = true;
+      hoverAttAnchor = { x: bx, y: top };
+    }
+    // <<< v6443-blue-peek
   }
   function leaveAttCard() {
     hoverAttCardId = null;
@@ -19928,5 +19940,24 @@ function _setupSelfPending(g: any, seat: number): string | null {
     background:repeating-linear-gradient(45deg,rgba(255,255,255,.14) 0 4px,transparent 4px 9px),radial-gradient(circle at 50% 45%,#7aa4ff 0 18%,#2a57c4 19% 100%);
   }
   .playmat.layout-blue .card-back .card-back-mark{ font-size:1.1rem; color:#fff; }
+
+  /* ═══ v6.443 站長回饋六項 ═══ */
+  /* ② 招式鈕不顯示能量需求圖示（只留招式名稱與傷害 ⇒ 名稱不再只剩「…」）；能量需求放大鏡／卡片放大仍看得到 */
+  .playmat.layout-blue .action-bar > .action-btns .btn-act.atk .cost-row .epip{ display:none; }
+  /* ③ 手牌不寫「拖曳使用」等提示（黃框已表示可用）⇒ 高度還給卡圖 */
+  .battle-root:has(.playmat.layout-blue) .hand-card .hand-hint{ display:none; }
+  .battle-root:has(.playmat.layout-blue) .hand-card img{ width:calc((var(--bl-hand-h) - 34px) / 1.4); }
+  .battle-root:has(.playmat.layout-blue) .hand-card{ width:calc((var(--bl-hand-h) - 34px) / 1.4 + 12px); }
+  /* ④ 備戰寶可夢用過特性：左上角「✨ 已用特性」標籤（與戰鬥寶可夢一致） */
+  .playmat.layout-blue .bench-slot .ab-used-chip.sm{
+    display:block; position:absolute; top:-8px; right:auto; left:calc(50% - var(--bl-bw) / 2 - 8px);
+    height:20px; margin:0; padding:0 7px; z-index:239; border-radius:999px; border:1.5px solid rgba(255,255,255,.85);
+    background:rgba(58,36,110,.95); color:#fff; font-size:0; line-height:0; pointer-events:none; box-shadow:0 1px 4px rgba(0,0,0,.55); white-space:nowrap;
+  }
+  .playmat.layout-blue .bench-slot .ab-used-chip.sm::after{ content:'✨已用特性'; font-size:var(--bl-flag); font-weight:700; line-height:17px; }
+  /* ⑤ 頁首不再顯示競技場卡（左側競技場框已有卡圖可點） */
+  .battle-root:has(.playmat.layout-blue) .battle-header .stadium-chip{ display:none; }
+  /* ⑥ 設置階段的蓋牌只顯示卡背，不畫「?」 */
+  .playmat.layout-blue .card-back .card-back-mark{ display:none; }
   /* <<< v6441-blue-css */
 </style>

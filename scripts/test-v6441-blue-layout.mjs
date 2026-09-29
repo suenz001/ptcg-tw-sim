@@ -74,6 +74,8 @@ function strip(src) {
     /  \/\* >>> v6441-blue-css \*\/[\s\S]*?  \/\* <<< v6441-blue-css \*\/\n/,
     /  \/\* >>> v6441-blue-geom \*\/[\s\S]*?  \/\* <<< v6441-blue-geom \*\/\n/,
     /    \/\* >>> v6442-blue-fallback \*\/[\s\S]*?    \/\* <<< v6442-blue-fallback \*\/\n/,
+    // v6.443：場上卡片放大預覽改放卡片旁邊（只在藍桌墊生效的一段 script，內容由 test-v6443 鎖）
+    /    \/\/ >>> v6443-blue-peek\n[\s\S]*?    \/\/ <<< v6443-blue-peek\n/,
     /  \/\/ ⭐v6\.441 藍桌墊（blue）＝[\s\S]*?  const isFableGeom = \$derived\(battleLayout === 'fable' \|\| battleLayout === 'blue'\);\n/,
   ];
   for (const re of blocks) { if (!re.test(s)) bad.push(String(re).slice(0, 40)); s = s.replace(re, ''); }
