@@ -2407,22 +2407,33 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
 
 ---
 
-## Rule 71（2026-09-28）：兩台電腦（leon-pc／wilson-pc）與換機交接的事實
+## Rule 71（2026-09-28 訂；2026-09-29 改回 leon-pc 主力、AI 可代做 git 同步）：兩台電腦（leon-pc／wilson-pc）與換機交接的事實
 
-- 站長命名：**舊電腦＝leon-pc**（2026-09 當機無法啟動），**目前這台＝wilson-pc**。leon-pc 修好後站長想改回由它處理 ⇒ 屆時照本條第 4 點重新核對一次。
-- wilson-pc 的 `E:\ptcg-tw-sim` 是從 GitHub **全新 clone**；remote `https://github.com/suenz001/ptcg-tw-sim.git` **不內嵌 token**，push 走 Windows 憑證管理員（`credential.helper=manager`）。
-  - leon-pc 的 remote 網址**內嵌 token** —— 站長會自己改成憑證管理員並 rotate，**AI 不要碰**。
-- **AI 不在站長電腦上做 git 寫入**（device_bash 只做唯讀 git：`log`／`ls-remote`／`rev-parse`）。交接流程：
+- 站長命名：**leon-pc**（Windows 主機名 `leon-nb-hp`；2026-09 當機、2026-09-29 修好）與 **wilson-pc**。
+  **2026-09-29 起改回由 leon-pc 維護（主力），wilson-pc 留作備援。** 再換機時照本條第 4 點與「換機核對」重新核對一次。
+- 兩台的 repo 都在 `E:\ptcg-tw-sim`，GitHub remote 都是 `https://github.com/suenz001/ptcg-tw-sim.git`。
+  - wilson-pc：全新 clone，remote **不內嵌 token**，push 走 Windows 憑證管理員（`credential.helper=manager`）。
+  - leon-pc：2026-09-29 檢查時 remote 網址**內嵌 token**、使用者層 `~/.gitconfig` 另設 `credential.helper=store`（明碼 `~/.git-credentials`）。
+    同日經站長同意由 AI 清掉：remote 改成無 token 網址、移除 `store` helper、刪掉 `.git-credentials`（只有 github 一行）⇒ 現在與 wilson-pc 相同走憑證管理員；
+    舊 token 由站長自己到 GitHub rotate。任何時候**不讀、不顯示 token**（回報 remote 一律遮成 `https://***@github.com/...`）。
+  - leon-pc 修好時落後 GitHub 17 個 commit（本機 `ed1b2ad3` vs `e0e4902e`），無分岔、追蹤檔無修改 ⇒ 2026-09-29 已 `git pull --ff-only` 追上。
+- **git 寫入（2026-09-29 站長改規則）**：站長同意後，AI 可以在站長電腦上**代做 git 同步與 push**（`pull --ff-only`、fetch bundle、`merge --ff-only`、`push origin main`）。
+  仍然禁止：`push --force`／`reset --hard`／`git add -A`／改寫歷史／動站長未 commit 的檔；merge 不是 fast-forward 就停下來回報。
+  push 前必 `git ls-remote origin main` 確認遠端還在 BASE。第一次 push 若憑證管理員跳登入視窗，要先告訴站長去點。交接流程：
   1. 雲端 clone 做好 commit（parent 寫死上一版 sha）→ `git bundle create ... <BASE>..main`；
   2. `SendUserFile` 取 file_uuid → `device_commit_files` 放到 `E:\ptcg-tw-sim\_transfer\`；
-  3. 站長在 cmd 貼三行：`git fetch _transfer\xxx.bundle main:refs/remotes/bundle/main`、`git merge --ff-only bundle/main`、`git push origin main`。
+  3. （AI 代做或站長在 cmd 貼）三行：`git fetch _transfer\xxx.bundle main:refs/remotes/bundle/main`、`git merge --ff-only bundle/main`、`git push origin main`。
+     ⚠ bundle 需要站長本機已有 BASE ⇒ 本機落後 GitHub 時先 `git pull --ff-only` 再 fetch bundle。
   4. 推之前先 `git ls-remote origin main` 確認遠端還在 BASE（站長可能正在跑 bat）。
-- **不在 git 裡、但部署必需**的檔（換機一定要從備份 `H:\我的雲端硬碟\遊戲開發\ptcg-tw-sim` 補）：
-  `oracle-admin/redeploy-oracle.bat`、`oracle-admin/oracle_admin_update.sh`（update-tournament.bat 會 scp 它上 VM）、
-  SSH 金鑰在 `D:\ai\ssh-key-2026-02-11.key`（**不在 repo**）。`firebase-admin-key.json` 只在 VM `/opt/ptcg/api/`，本機那份被 .gitignore 擋住、部署用不到。
-  補完後拿 `sha256sum` 與 VM 上那一份比對指紋一致才算數。
-- 部署：`E:\ptcg-tw-sim\oracle-admin\` 依序 `update-tournament.bat` → `redeploy-oracle.bat`（Rule 67；由站長自己跑，**AI 絕不代跑**）。
-- 查 CI：雲端 proxy 擋 GitHub API（403）⇒ 用 device_bash `curl -s https://api.github.com/repos/suenz001/ptcg-tw-sim/actions/runs?per_page=4`，
+- **不在 git 裡、但部署必需**的檔：`oracle-admin/redeploy-oracle.bat`、`oracle-admin/oracle_admin_update.sh`（update-tournament.bat 會 scp 它上 VM）。
+  leon-pc 本來就有原檔（2026-09-29 核對：redeploy-oracle.bat sha256 `fbe3f17f…`、oracle_admin_update.sh `0300f315…`）；
+  其他電腦要從備份 `H:\我的雲端硬碟\遊戲開發\ptcg-tw-sim\oracle-admin` 補，補完拿 `sha256sum` 與 VM 上那一份比對指紋一致才算數。
+  SSH 金鑰兩台都在 `D:\ai\ssh-key-2026-02-11.key`（**不在 repo**；兩支 bat 都 `cd /d D:\ai` 後使用）。
+  `firebase-admin-key.json` 只在 VM `/opt/ptcg/api/`，本機那份被 .gitignore 擋住、部署用不到。
+- 換機核對（唯讀）：`git log -1`／`git ls-remote origin main`／GitHub compare 算落後數、`git status -uno` 追蹤檔修改、remote 是否內嵌 token（遮住）、
+  `credential.helper` 各層設定、上述兩支部署檔與金鑰是否存在。
+- 部署：`E:\ptcg-tw-sim\oracle-admin\` 依序 `update-tournament.bat` → `redeploy-oracle.bat`（Rule 67；由站長自己跑，**AI 絕不代跑**——這條沒有因為 git 代做而放寬）。
+- 查 CI：雲端 proxy 擋 GitHub API（403）⇒ 在站長電腦上 `curl -s https://api.github.com/repos/suenz001/ptcg-tw-sim/actions/runs?per_page=4`，
   只看 build 與 deploy 的 `conclusion`；測試站／正式站版本用 curl 抓頁面 grep `ver-badge">v`。
 - 站長在 cmd 下指令的坑：`dir /s` 掃雲端硬碟會卡住、`robocopy` 大量輸出會卡住 ⇒ 給**非遞迴**的 `dir`、要整個 repo 就 `git clone`。
 - 隱私：`D:\ai` 有憑證檔（.p12／.pfx）與銀行帳單 —— 列目錄時只看需要的檔名，不讀、不回報內容。
