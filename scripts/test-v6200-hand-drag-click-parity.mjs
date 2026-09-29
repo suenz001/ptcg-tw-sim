@@ -355,11 +355,14 @@ chk('③桌機：空備戰格高亮也問中央 dragOpFor(bench-empty)',
 const handCardTplCount = (desk.match(/<div class="hand-card" class:action-busy=\{actionBusy\}/g) || []).length;
 chk('③版面：可操作手牌卡 template 只有一份（classic 與 fable 共用）',
     handCardTplCount === 1, String(handCardTplCount));
+// ⭐v6.441（Rule 40）：藍桌墊沿用 Fable 幾何 ⇒ 綁定改讀 isFableGeom（＝fable 或 blue），仍是 .playmat 上的純 CSS 版面。
 chk('③版面：fable 是 .playmat 上的純 CSS 版面',
-    /class:layout-fable=\{battleLayout === 'fable'\}/.test(desk));
+    /class:layout-fable=\{battleLayout === 'fable'\}/.test(desk)
+    || (/class:layout-fable=\{isFableGeom\}/.test(desk) && /const isFableGeom = \$derived\(battleLayout === 'fable' \|\| battleLayout === 'blue'\);/.test(desk)));
 chk('③版面：fable 沒有在手牌區塊裡另開分支', !!blk && !blk.includes('fable'));
-chk('③版面：battleLayout 三選一（classic / tabletop / fable）',
-    /battleLayout = \$state<'classic' \| 'tabletop' \| 'fable'>/.test(desk));
+// ⭐v6.441：新增第四種「藍桌墊」（blue）—— 同樣是 .playmat 上的純 CSS 版面，手牌區塊不另開分支（上一條在守）。
+chk('③版面：battleLayout 四選一（classic / tabletop / fable / blue）',
+    /battleLayout = \$state<'classic' \| 'tabletop' \| 'fable' \| 'blue'>/.test(desk));
 
 // 手機直式：沒有卡片拖曳；入口讀中央 gate；不硬編卡名
 chk('③手機直式：沒有手牌卡拖曳（走 sheet 選單）',

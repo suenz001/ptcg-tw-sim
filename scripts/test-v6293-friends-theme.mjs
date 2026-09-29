@@ -589,6 +589,30 @@ function revertV6425(region) {
   return r;
 }
 
+// ⭐⭐⭐v6.441（IRON_RULES Rule 40：守的意圖沒變）站長交辦新增桌機第四種版面「藍桌墊」。
+//   對戰版面分支內的改動只有三類：① playmat 的版面 class（多掛 layout-blue、layout-fable 改讀 isFableGeom）
+//   ② 四個卡位各多一個「只在藍桌墊 render」的 blueDeco 呼叫 ③ 用哨兵框住的 blueDeco snippet 定義。
+//   ⚠ 與 V6321／V6389／V6418／V6425 同一個機制：哨兵整塊剝掉＋逐條還原之後，其餘仍必須逐位元等於 BASE。
+//   （test-v6441-blue-layout 的 A 節另外對「整檔」做同樣的剝除比對，並鎖哨兵內容。）
+const V6441_BLUE_TAG = 'v6441-blue-snippet';
+const V6441_BATTLE_EDITS = [
+  ["class:layout-fable={isFableGeom} class:layout-blue={battleLayout === 'blue'}", "class:layout-fable={battleLayout === 'fable'}"],
+  ["onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(b)}{/if}", "onpointerleave={leaveAttCard}/>", 2],
+  ["onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(oppPlayer.active)}{/if}", "onpointerleave={leaveAttCard}/>"],
+  ["onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(myPlayer.active)}{/if}", "onpointerleave={leaveAttCard}/>"],
+];
+function revertV6441(region) {
+  const n0 = region.split('>>> ' + V6441_BLUE_TAG).length - 1;
+  assert.strictEqual(n0, 1, 'v6.441 blueDeco snippet 的哨兵必須恰出現一次（實際 ' + n0 + '）');
+  let r = stripSentinelBlocks(region, V6441_BLUE_TAG);
+  for (const [now, before, times = 1] of V6441_BATTLE_EDITS) {
+    const n = r.split(now).length - 1;
+    assert.strictEqual(n, times, 'v6.441 的合法改動必須恰出現 ' + times + ' 次（實際 ' + n + '）：' + now.slice(0, 70));
+    r = r.split(now).join(before);
+  }
+  return r;
+}
+
 // ⭐⭐⭐v6.420（IRON_RULES Rule 40）：勝負視窗原本有一份**自己的**拖曳（`gameoverPanelPos`），
 //   完全沒有夾制——而它是終局後唯一的出口，拖出畫面就只能重新整理（fable 5.1 審查列為阻擋級）。
 //   本版改掛中央 `use:modalDrag`、標題列掛 `modal-drag-handle`，其餘 markup 一個字都沒動。
@@ -644,7 +668,7 @@ function stripV6361DrawModal(src) {
 await T('E1 ⭐⭐⭐ 對戰版面分支區間（手機直式＋三種桌機版面）還原 v6.321 的合法改動後與 BASE **逐位元相同**；勝負 modal 區間剝掉 v6.361 平手視窗哨兵後同樣逐位元相同', () => {
   if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6293 E1 對戰版面分支逐位元比對', '需要歷史 commit；E1c 的結構斷言不需要歷史，仍在守'); skipped.push('E1（淺複製）'); return; }
   const baseSrc = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':src/routes/game/+page.svelte'], { maxBuffer: 1 << 28 }).toString('utf8');
-  assert.strictEqual(sha256(revertV6425(revertV6418(revertV6389(revertV6321(battleRegionOf(GAME)))))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
+  assert.strictEqual(sha256(revertV6441(revertV6425(revertV6418(revertV6389(revertV6321(battleRegionOf(GAME))))))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
   assert.strictEqual(sha256(revertV6420Gameover(gameoverRegionOf(stripV6361DrawModal(GAME)))), sha256(gameoverRegionOf(baseSrc)), '⚠⚠ 勝負結算 modal 被動到了');
 });
 await T('E1b ⭐ 正對照：把對戰版面分支改一個位元 ⇒ E1 的比對必須不同（不是恆真式）', () => {
@@ -681,6 +705,13 @@ await T('E1e ⭐⭐ 正對照：v6.418 的還原表少列一條 ⇒ revertV6418 
   // ② 合法改動不存在時必須大聲紅（不可以默默放行）
   assert.throws(() => revertV6418(r.replace(V6418_BATTLE_EDITS[0][0], V6418_BATTLE_EDITS[0][1])), /恰出現一次/,
     '合法改動不存在時 revertV6418 沒有紅');
+});
+await T('E1g ⭐⭐ 正對照：v6.441 的還原表不會洗掉無關改動；哨兵或呼叫點不見時必須紅', () => {
+  const r = battleRegionOf(GAME);
+  const mutated = GAME.replace(BATTLE_START, BATTLE_START + '<!-- v6441-probe -->');
+  assert.notStrictEqual(sha256(revertV6441(battleRegionOf(mutated))), sha256(revertV6441(r)), 'revertV6441 把無關改動洗掉了 ⇒ E1 恆真');
+  assert.throws(() => revertV6441(r.replace('>>> ' + V6441_BLUE_TAG, 'xxx')), /恰出現一次/, '哨兵消失時沒有紅');
+  assert.throws(() => revertV6441(r.replace(V6441_BATTLE_EDITS[2][0], V6441_BATTLE_EDITS[2][1])), /恰出現/, '呼叫點不見時沒有紅');
 });
 await T('E1f ⭐⭐ 正對照：v6.420 勝負視窗的還原表少列一條 ⇒ 必須紅（不是把改動洗掉）', () => {
   const r = gameoverRegionOf(stripV6361DrawModal(GAME));

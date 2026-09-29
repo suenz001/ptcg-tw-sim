@@ -122,7 +122,10 @@ check(SRC.includes('class="active-card opp-active card-back-active"'), '模板�
 check(SRC.includes('class="card-back card-back-lg"'), '模板：戰鬥位卡背內層 class 未改名');
 check(SRC.includes('class="bench-slot card-back-slot"'), '模板：備戰蓋牌槽 class 未改名');
 check(SRC.includes('class="card-back card-back-sm"'), '模板：備戰蓋牌內層 class 未改名');
-check(SRC.includes("class:layout-fable={battleLayout === 'fable'}"), '模板：.playmat 的 layout-fable class 綁定仍在');
+// ⭐v6.441（Rule 40：意圖不變）藍桌墊沿用 Fable 幾何 ⇒ 綁定改讀 isFableGeom（＝fable 或 blue）；對 fable 的真值不變。
+check(SRC.includes("class:layout-fable={battleLayout === 'fable'}")
+  || (SRC.includes('class:layout-fable={isFableGeom}') && SRC.includes("const isFableGeom = $derived(battleLayout === 'fable' || battleLayout === 'blue');")),
+  '模板：.playmat 的 layout-fable class 綁定仍在');
 
 // ───────────────────────【B】桌墊版 CSS 兩條 ───────────────────────
 console.log('【B】桌墊版高度自適應 CSS');

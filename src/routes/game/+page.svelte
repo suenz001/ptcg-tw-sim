@@ -1173,8 +1173,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   classic = 現有左對齊 active；tabletop = active 置中 + bench 對稱列
   //   localStorage 'ptcg_battle_layout' 跨 session 記憶；只動桌機
   //   v5.011：選項整合到既有 showSettingsModal 面板，移除獨立 popup
-  let battleLayout = $state<'classic' | 'tabletop' | 'fable'>('classic');
-  function setBattleLayout(v: 'classic' | 'tabletop' | 'fable'): void {
+  let battleLayout = $state<'classic' | 'tabletop' | 'fable' | 'blue'>('classic');
+  // ⭐v6.441 藍桌墊（blue）＝沿用 Fable 版的尺寸系統（--card-w 單一尺寸源、一頁鎖高、防跳動、按鈕固定槽），
+  //   外觀與格線另套 .layout-blue。凡是「Fable 版專屬的幾何行為」一律問 isFableGeom，不要再寫 === 'fable'。
+  //   ⚠ 手機直式走 MobilePortraitBattle 元件，不讀 battleLayout ⇒ 手機版面完全不受影響（站長裁定：手機維持現況）。
+  const isFableGeom = $derived(battleLayout === 'fable' || battleLayout === 'blue');
+  function setBattleLayout(v: 'classic' | 'tabletop' | 'fable' | 'blue'): void {
     battleLayout = v;
     try { localStorage.setItem('ptcg_battle_layout', v); } catch { /* quota ignore */ }
     recomputeZoom();
@@ -1972,7 +1976,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   function recomputeZoom() {
     if (typeof window === 'undefined') return;
-    if (battleLayout === 'fable') { gameZoom = 1; return; }  // fable 版自帶 clamp/vw/vh 尺寸,鎖 gameZoom=1 避免雙重縮放
+    if (battleLayout === 'fable' || battleLayout === 'blue') { gameZoom = 1; return; }  // fable／藍桌墊自帶 clamp/vw/vh 尺寸,鎖 gameZoom=1 避免雙重縮放
     const w = window.innerWidth;
     const h = window.innerHeight;
     if (resolutionMode === 'auto') {
@@ -2060,7 +2064,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // v5.009 桌墊版 layout — 初始化讀 localStorage（跟其他 settings 一起 init）
     try {
       const savedLayout = localStorage.getItem('ptcg_battle_layout');
-      if (savedLayout === 'tabletop' || savedLayout === 'classic' || savedLayout === 'fable') battleLayout = savedLayout;
+      if (savedLayout === 'tabletop' || savedLayout === 'classic' || savedLayout === 'fable' || savedLayout === 'blue') battleLayout = savedLayout;
       // v6.223 桌機預設版面改為 fable：只影響「從未選過」的玩家（上面 savedLayout 命中就依玩家上次選擇，絕不覆蓋）。
       //   窄視窗（<1024，含 iPad 直式）維持 classic 預設 —— fable 完整 grid 是 >=1024 才啟用（見下方 CSS media 分界）。
       //   ⚠ 這裡不寫 localStorage：預設值不算「玩家的選擇」，玩家實際切換才由 setBattleLayout 寫入。
@@ -5100,6 +5104,32 @@ function _setupSelfPending(g: any, seat: number): string | null {
       ...(type === 'Rainbow' ? { label: '彩' } : {}),
     }));
   }
+  // >>> v6441-blue-helper
+  // ⭐v6.441 藍桌墊：能量「同屬性合併 圖示×N」；特殊能量一律只顯示「特」（站長裁定 2026-09-29）。
+  //   ⚠ 只給藍桌墊的 blueDeco 用；其他版面仍走 energyPips（特殊能量依卡名折算屬性），兩者刻意不共用。
+  const BLUE_ZH_TYPE: Record<string, EnergyType> = {
+    草: 'Grass', 火: 'Fire', 水: 'Water', 雷: 'Lightning', 超: 'Psychic',
+    鬥: 'Fighting', 惡: 'Darkness', 鋼: 'Metal', 龍: 'Dragon', 無: 'Colorless',
+  };
+  function blueEnergyChips(inst: CardInstance): Array<{ key: string; label: string; count: number; color: string | null }> {
+    const basic = new Map<string, number>();
+    let special = 0;
+    for (const e of inst.energyAttached ?? []) {
+      const ec = getCard(e.cardId);
+      if (!ec) continue;
+      if (ec.subtype === 'Basic') {
+        const m = ec.name.match(/【(.+?)】/);
+        const t: string = ec.pokemonType || (m && BLUE_ZH_TYPE[m[1]]) || 'Colorless';
+        basic.set(t, (basic.get(t) ?? 0) + 1);
+      } else special++;
+    }
+    const out = [...basic.entries()].map(([t, n]) => ({
+      key: t, label: ENERGY_LABEL[t as EnergyType] ?? '無', count: n, color: ENERGY_COLOR[t as EnergyType] ?? null,
+    }));
+    if (special > 0) out.push({ key: 'special', label: '特', count: special, color: null });
+    return out;
+  }
+  // <<< v6441-blue-helper
   function hpColor(rem: number, tot: number): string {
     const p = tot > 0 ? rem/tot : 1;
     return p > 0.5 ? '#2c7a3c' : p > 0.25 ? '#e0a020' : '#c00';
@@ -11361,7 +11391,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
      正式對戰（Play Mat 佈局） — setup 和 playing 共用此畫面
   ══════════════════════════════════════════════════════════════════════ -->
 {:else}
-<div class="battle-root" class:tablet-layout={isTabletLayout && battleLayout !== 'fable'} class:zoomed={gameZoom !== 1} style="--game-zoom: {gameZoom};">
+<div class="battle-root" class:tablet-layout={isTabletLayout && !isFableGeom} class:zoomed={gameZoom !== 1} style="--game-zoom: {gameZoom};">
 
   <!-- v5.478 系統管理員廣播跑馬燈（桌面+手機共用；fixed 浮在最上方，跑一輪後自動收起）-->
   {#if broadcastMarquee}
@@ -11635,7 +11665,24 @@ function _setupSelfPending(g: any, seat: number): string | null {
   </div>
 {/if}
 
-<div class="playmat" class:trainer-drop-zone={dragOpFor('playmat')==='trainer'} class:has-stadium-bg={!!stadiumCard} class:layout-tabletop={battleLayout === 'tabletop'} class:layout-fable={battleLayout === 'fable'} class:log-collapsed={battleLayout !== 'classic' && !battleLogOpen} style="--card-scale:{fableCardScale}">
+<!-- >>> v6441-blue-snippet -->
+{#snippet blueDeco(inst: CardInstance | null | undefined)}
+  <!-- ⭐v6.441 藍桌墊專用：只在 battleLayout === 'blue' 時由四個卡位呼叫；其他版面不 render。
+       pointer-events:none（見 CSS）⇒ 不擋點擊、不擋拖放落點。 -->
+  {#if inst}
+    {@const _bt = [inst.toolAttached, ...(inst.extraTools ?? [])].filter((x): x is CardInstance => !!x)}
+    {@const _chips = blueEnergyChips(inst)}
+    {#if inst.damage > 0}<span class="bl-dmg" title="已受到 {inst.damage} 傷害">{inst.damage}</span>{/if}
+    {#if _bt.length > 0}{@const _tc = getCard(_bt[0].cardId)}
+      <span class="bl-tool" title="寶可夢道具：{_bt.map((t) => getCard(t.cardId)?.name ?? '道具').join('、')}"><img use:retryImg={_tc?.imageUrl} src={_tc?.imageUrl} alt={_tc?.name ?? '道具'} />{#if _bt.length > 1}<b>+{_bt.length - 1}</b>{/if}</span>
+    {/if}
+    {#if _chips.length > 0}
+      <span class="bl-chips">{#each _chips as ch (ch.key)}<span class="bl-chip" title="{ch.key === 'special' ? '特殊能量' : ch.label + '能量'} × {ch.count}"><i class="bl-e" class:bl-sp={ch.key === 'special'} style={ch.color ? `background:${ch.color}` : undefined}>{ch.label}</i>{#if ch.count > 1}<b>×{ch.count}</b>{/if}</span>{/each}</span>
+    {/if}
+  {/if}
+{/snippet}
+<!-- <<< v6441-blue-snippet -->
+<div class="playmat" class:trainer-drop-zone={dragOpFor('playmat')==='trainer'} class:has-stadium-bg={!!stadiumCard} class:layout-tabletop={battleLayout === 'tabletop'} class:layout-fable={isFableGeom} class:layout-blue={battleLayout === 'blue'} class:log-collapsed={battleLayout !== 'classic' && !battleLogOpen} style="--card-scale:{fableCardScale}">
     <!-- v5.012：桌墊版專用 battle log toggle 按鈕（漂在右邊） -->
     {#if battleLayout !== 'classic'}
       <button class="log-toggle-btn" onclick={toggleBattleLog}
@@ -11695,7 +11742,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 <div class="bench-name">{bc?.name}</div>
                 <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
                 <div class="bench-middle">
-                  <img use:retryImg={bc?.imageUrl} src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable" onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>
+                  <img use:retryImg={bc?.imageUrl} src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable" onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(b)}{/if}
                   <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
                   {#if battleLayout !== 'classic'}
                     {@const _attOB = attachedCardsOf(b)}
@@ -11756,7 +11803,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               class:status-glow-confused={oppPlayer.active.status === 'confused'}
               style={attackFx && oppPlayer.active && attackFx.defenderIid === oppPlayer.active.iid ? `--flash-color:${ENERGY_COLOR[attackFx.energyType]}` : undefined}
             >
-              <img use:retryImg={ac?.imageUrl} src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)} onpointerenter={(e)=>enterAttCard(e, oppPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>
+              <img use:retryImg={ac?.imageUrl} src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)} onpointerenter={(e)=>enterAttCard(e, oppPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(oppPlayer.active)}{/if}
               <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
               {#if battleLayout !== 'classic'}
                 {@const _attOA = attachedCardsOf(oppPlayer.active)}
@@ -12126,7 +12173,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <img use:retryImg={ac?.imageUrl} src={ac?.imageUrl} alt={ac?.name} class="active-img"
               class:zoomable={!selectedEnergyIid}
               onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}
-              onpointerenter={(e)=>enterAttCard(e, myPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>
+              onpointerenter={(e)=>enterAttCard(e, myPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(myPlayer.active)}{/if}
             <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
             {#if battleLayout !== 'classic'}
               {@const _attMA = attachedCardsOf(myPlayer.active)}
@@ -12228,7 +12275,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 <img use:retryImg={bc?.imageUrl} src={bc?.imageUrl} alt={bc?.name}
                   class:zoomable={!selectedEnergyIid}
                   onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}
-                  onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>
+                  onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(b)}{/if}
                 <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
                 {#if battleLayout !== 'classic'}
                   {@const _attMB = attachedCardsOf(b)}
@@ -14293,13 +14340,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <div class="setting-row">
             <label for="battle-layout">板面布局：</label>
             <select id="battle-layout" value={battleLayout}
-              onchange={(e) => setBattleLayout(e.currentTarget.value as 'classic' | 'tabletop' | 'fable')}>
+              onchange={(e) => setBattleLayout(e.currentTarget.value as 'classic' | 'tabletop' | 'fable' | 'blue')}>
               <option value="classic">經典版（Active 左對齊）</option>
               <option value="tabletop">🆕 桌墊版（仿實體 — Active 置中、bench 對稱列）</option>
               <option value="fable">✨ Fable 版（忠實桌墊 grid — 卡牌大小可調、紀錄入欄）</option>
+              <option value="blue">🟦 藍桌墊（格線分區 — 能量合併顯示）</option>
             </select>
           </div>
-          {#if battleLayout === 'fable'}
+          {#if isFableGeom}
             <div class="setting-row">
               <label for="fable-card-scale">卡牌大小：{Math.round(fableCardScale * 100)}%</label>
               <input id="fable-card-scale" type="range" min="0.7" max="1.4" step="0.05"
@@ -19438,6 +19486,24 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .battle-root:has(.playmat.layout-fable) .hand-strip{ padding:0 .7rem 0; }
   .battle-root:has(.playmat.layout-fable) .hand-strip .hand-label{ margin-bottom:0; font-size:.65rem; }
   .battle-root:has(.playmat.layout-fable) .hand-strip .hand-scroll{ padding:0 1rem 0; min-height:120px; }
+  /* >>> v6441-blue-geom */
+  /* ⭐v6.441 藍桌墊「幾何」：刻意插在 Fable 後備排版（max-width:1023px）**之前**、而且不包任何媒體查詢 ——
+     桌機（≥1024）時同特異度後者勝 ⇒ 覆寫 Fable 的 grid；<1024 時 Fable 後備排版在後 ⇒ 由它蓋回 none（與 Fable 行為一致）。
+     ⚠ 本頁媒體查詢的數量被 test-v6187／v6195／v6199 釘住（不准新增媒體查詢當手機開關）⇒ 矮螢幕的收縮一律用 clamp／dvh。 */
+  .playmat.layout-blue{
+    /* 高度預算：藍桌墊多了四個框的標題列與 HP 條下移 ⇒ 卡寬上限要多扣（矮螢幕扣少一點，由 clamp 自動過渡） */
+    --card-w-cap:calc((100dvh - clamp(382px, 47dvh, 410px)) / 6.05);
+    --bl-side:clamp(172px, calc(var(--card-w) * 2.2), 212px);
+    grid-template-columns:var(--bl-side) minmax(0, 1fr) var(--bl-side) var(--log-w);
+    grid-template-rows:auto minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-areas:
+      "pilesO   benchO   prizesO  log"
+      "stad     activeO  actions  log"
+      "stad     activeMe actions  log"
+      "prizesMe benchMe  pilesMe  log";
+    align-items:stretch;
+  }
+  /* <<< v6441-blue-geom */
   @media (max-width: 1023px){
     .playmat.layout-fable{ --card-w-cap:9999px; display:grid !important; grid-template-columns:none; grid-template-rows:none; grid-template-areas:none; }
     .playmat.layout-fable > .field-row,
@@ -19475,4 +19541,269 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .replay-hand-img.legend-half-r { aspect-ratio: 868 / 1212; height: auto; object-fit: cover; }
   .hand-card img.legend-half-l, .replay-hand-img.legend-half-l { object-position: 0% 50%; }
   .hand-card img.legend-half-r, .replay-hand-img.legend-half-r { object-position: 100% 50%; }
+  /* >>> v6441-blue-css */
+  /* ═══════════════════════════════════════════════════════════════════
+     ⭐v6.441 藍桌墊 — battleLayout === 'blue' → .playmat.layout-fable.layout-blue
+     站長 2026-09-29 定稿：深藍桌面＋每區白框格線、傷害黃圓、能量「圖示×N」合併（特殊能量只顯示「特」）、
+     備戰卡不顯示名稱（滑鼠移上才顯示）、HP 條在戰鬥寶可夢下方、寶可夢道具以白框縮圖貼卡片右下。
+     ⚠ 幾何全部沿用 Fable 版（--card-w 單一尺寸源、一頁鎖高、防跳動、行動鈕固定槽）——這裡只改：
+       ① grid 區位（牌堆／獎賞改到備戰列兩側，競技場／行動鈕在中場兩側）② 外觀。
+     ⚠ 全部 scope 在 .playmat.layout-blue（或 :has(.playmat.layout-blue)），classic／tabletop／fable 零影響；
+       手機直式走 MobilePortraitBattle，不吃這裡任何一條。
+     ⚠ 放在樣式區塊最尾端是刻意的：與 .playmat.layout-fable 同特異度時後者勝。
+     ═══════════════════════════════════════════════════════════════════ */
+  .battle-root:has(.playmat.layout-blue){
+    background:radial-gradient(1200px 700px at 42% 48%, #1a3d8f 0%, #14306f 45%, #0a1a44 100%);
+  }
+  .battle-root:has(.playmat.layout-blue) .battle-header{ background:rgba(3,10,30,.62); border-bottom:1px solid rgba(255,255,255,.2); }
+  .playmat.layout-blue{
+    --bl-line:rgba(255,255,255,.62);
+    --bl-soft:rgba(255,255,255,.22);
+    --bl-zone:rgba(255,255,255,.055);
+    --bl-zone-me:rgba(120,190,255,.075);
+    --bl-label:#cfe0ff;
+    --bl-gold:#ffd83d;
+    --bl-red:#e5484d;
+    background:transparent;
+  }
+  .playmat.layout-blue .stadium-bg-layer{ opacity:.18; }
+
+  /* ── 區域白框（格線的來源）：牌堆／獎賞／備戰／競技場／行動／戰鬥 ── */
+  .playmat.layout-blue .zone-pile,
+  .playmat.layout-blue .zone-prizes,
+  .playmat.layout-blue .zone-bench,
+  .playmat.layout-blue .action-bar > .stadium-display,
+  .playmat.layout-blue .action-bar > .action-btns{
+    position:relative;
+    border:1.5px solid var(--bl-line); border-radius:12px; background:var(--bl-zone);
+  }
+  .playmat.layout-blue .my-row > .zone-pile,
+  .playmat.layout-blue .my-row > .zone-prizes,
+  .playmat.layout-blue .my-row > .zone-bench{ background:var(--bl-zone-me); }
+  .playmat.layout-blue .zone-pile::before,
+  .playmat.layout-blue .zone-bench::before,
+  .playmat.layout-blue .action-bar > .action-btns::before{
+    position:absolute; top:2px; left:10px; font-size:11px; letter-spacing:.08em; color:var(--bl-label);
+    white-space:nowrap; pointer-events:none;
+  }
+  .playmat.layout-blue .opponent-row > .zone-pile::before{ content:'對手牌堆'; }
+  .playmat.layout-blue .my-row > .zone-pile::before{ content:'我方牌堆'; }
+  .playmat.layout-blue .opponent-row > .zone-bench::before{ content:'對手備戰區'; }
+  .playmat.layout-blue .my-row > .zone-bench::before{ content:'我方備戰區'; }
+  .playmat.layout-blue .action-bar > .action-btns::before{ content:'行動'; top:-17px; left:2px; }
+
+  /* 牌堆：牌庫／棄牌橫排，紅圓張數 */
+  .playmat.layout-blue .opponent-row > .zone-pile,
+  .playmat.layout-blue .my-row > .zone-pile{
+    align-self:stretch; justify-self:stretch; flex-direction:row; align-items:center; justify-content:center;
+    gap:10px; padding:18px 8px 8px;
+  }
+  .playmat.layout-blue .pile-slot{
+    position:relative; width:calc(var(--card-w) * .62); min-height:0; aspect-ratio:63/88; height:auto;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0;
+    border-radius:6px; border:2px solid #cfe0ff; box-shadow:0 2px 5px rgba(0,0,0,.45);
+    background:repeating-linear-gradient(45deg,rgba(255,255,255,.14) 0 4px,transparent 4px 9px),radial-gradient(circle at 50% 45%,#7aa4ff 0 18%,#2a57c4 19% 100%);
+  }
+  .playmat.layout-blue .pile-slot.disc-pile{ background:rgba(0,0,0,.35); border-style:dashed; cursor:pointer; }
+  .playmat.layout-blue .pile-slot .pile-icon{ display:none; }
+  .playmat.layout-blue .pile-slot .pile-count{
+    position:absolute; right:-9px; bottom:-8px; min-width:22px; height:20px; padding:0 5px; border-radius:999px;
+    background:var(--bl-red); border:2px solid #fff; color:#fff; font-weight:800; font-size:11.5px; line-height:16px; text-align:center; z-index:3;
+  }
+  .playmat.layout-blue .pile-slot .pile-label{ position:absolute; bottom:calc(-1 * clamp(14px, 1.6vh, 18px)); left:50%; transform:translateX(-50%); font-size:10.5px; color:var(--bl-label); white-space:nowrap; }
+
+  /* 獎賞：3×2，自創卡背 */
+  .playmat.layout-blue .opponent-row > .zone-prizes,
+  .playmat.layout-blue .my-row > .zone-prizes{
+    align-self:stretch; justify-self:stretch; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:20px 6px 6px;
+  }
+  .playmat.layout-blue .zone-prizes .prize-grid{ display:grid; grid-template-columns:repeat(3, auto); gap:6px; justify-content:center; }
+  .playmat.layout-blue .prize-card{
+    width:calc(var(--card-w) * .44); height:calc(var(--card-w) * .616); border-radius:5px;
+    border:1.5px solid #cfe0ff;
+    background:repeating-linear-gradient(45deg,rgba(255,255,255,.14) 0 4px,transparent 4px 9px),radial-gradient(circle at 50% 45%,#7aa4ff 0 20%,#2a57c4 21% 100%);
+  }
+  .playmat.layout-blue .prize-card.prize-gone{ background:transparent; border:1.5px dashed var(--bl-soft); opacity:1; }
+  .playmat.layout-blue .zone-prizes .prize-view-btn{
+    position:absolute; top:2px; left:8px; right:auto; margin:0; padding:0 2px; background:none; border:0;
+    font-size:11px; letter-spacing:.06em; color:var(--bl-label); cursor:pointer;
+  }
+
+  /* 備戰：填滿格子、每格之間虛線 */
+  .playmat.layout-blue .zone-bench{
+    align-self:stretch; justify-self:stretch; height:auto; min-height:calc(var(--card-h) + 34px);
+    padding:20px 10px 14px; align-content:center;
+    grid-template-columns:repeat(var(--bench-n, 5), minmax(0, 1fr));
+    gap:0;
+  }
+  .playmat.layout-blue .zone-bench .bench-slot,
+  .playmat.layout-blue .zone-bench .bench-empty{
+    height:var(--card-h); border-radius:0; border-left:1px dashed var(--bl-soft); padding:0 4px; background:transparent;
+  }
+  .playmat.layout-blue .zone-bench .bench-slot:first-child,
+  .playmat.layout-blue .zone-bench .bench-empty:first-child{ border-left:0; }
+  .playmat.layout-blue .zone-bench .bench-empty::after{
+    content:'空位'; position:absolute; inset:0 calc(50% - var(--card-w) * .5); border:1.5px dashed rgba(255,255,255,.28); border-radius:6px;
+    display:grid; place-items:center; color:rgba(255,255,255,.38); font-size:12px;
+  }
+  .playmat.layout-blue .zone-bench .bench-empty{ position:relative; }
+  .playmat.layout-blue .bench-slot .bench-middle{ left:4px; right:4px; }
+  .playmat.layout-blue .bench-slot .bench-middle img{ border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,.45); }
+  /* 備戰卡名稱／HP：平常不顯示，滑鼠移上才顯示（站長裁定） */
+  .playmat.layout-blue .bench-slot .bench-name,
+  .playmat.layout-blue .bench-slot .bench-stat{ display:none; }
+  .playmat.layout-blue .bench-slot:hover .bench-name{
+    display:block; top:auto; bottom:calc(100% + 16px); left:50%; right:auto; transform:translateX(-50%);
+    padding:3px 9px; border-radius:6px; background:#0b1633; border:1px solid var(--bl-line);
+    font-size:12px; overflow:visible; z-index:260; box-shadow:0 3px 10px rgba(0,0,0,.5);
+  }
+  .playmat.layout-blue .bench-slot:hover .bench-stat{
+    display:block; top:auto; bottom:calc(100% + 1px); left:50%; right:auto; transform:translateX(-50%);
+    padding:0 8px; border-radius:6px; background:#0b1633; border:1px solid var(--bl-soft); font-size:11px; white-space:nowrap; z-index:260;
+  }
+  .playmat.layout-blue .bench-slot > .hp-bar-wrap{ display:none; }
+
+  /* ── 戰鬥寶可夢：白框、HP 條在卡片下方 ── */
+  .playmat.layout-blue .opponent-row > .zone-active,
+  .playmat.layout-blue .my-row > .zone-active{
+    border:1.5px solid var(--bl-line); border-radius:12px; background:rgba(255,255,255,.07);
+    padding:clamp(15px, 2vh, 18px) 12px clamp(26px, 3.4vh, 30px); align-self:center;
+  }
+  .playmat.layout-blue .opponent-row > .zone-active{ align-self:end; }
+  .playmat.layout-blue .my-row > .zone-active{ align-self:start; border-color:#8ff0c6; box-shadow:0 0 0 3px rgba(95,208,160,.3), 0 0 22px rgba(95,208,160,.22); }
+  .playmat.layout-blue .opponent-row > .zone-active::before,
+  .playmat.layout-blue .my-row > .zone-active::before{ content:'戰鬥寶可夢'; position:absolute; top:2px; left:10px; font-size:11px; letter-spacing:.08em; color:var(--bl-label); }
+  .playmat.layout-blue .active-card{ background:transparent; border:0; }
+  .playmat.layout-blue .active-card .active-img{ border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.5); }
+  .playmat.layout-blue .active-card .active-hpbar-bottom{
+    top:calc(100% + clamp(11px, 1.5vh, 13px)); bottom:auto; left:0; right:0; padding:0; background:transparent;
+  }
+  .playmat.layout-blue .active-card .active-hpbar-bottom .hp-bar-wrap{ height:15px; border-radius:8px; background:rgba(0,0,0,.45); border:1px solid var(--bl-soft); }
+  .playmat.layout-blue .active-card .active-name-tt{ display:none; }
+  .playmat.layout-blue .active-card:hover .active-name-tt{ display:block; top:auto; bottom:calc(100% + 20px); background:#0b1633; border:1px solid var(--bl-line); width:max-content; max-width:calc(var(--active-w) * 1.6); }
+  .playmat.layout-blue .active-card .active-info{ top:calc(8% + 18px); left:-8px; }
+  .playmat.layout-blue .active-card .active-info .status-chip{
+    font-weight:700; border:1.5px solid rgba(255,255,255,.85); border-radius:6px; padding:1px 6px;
+  }
+  .playmat.layout-blue .att-card.att-energy,
+  .playmat.layout-blue .att-card.att-tool{ display:none; }
+  .playmat.layout-blue .tt-attach-overlay{ display:none; }
+
+  /* ── 藍桌墊卡面裝飾（blueDeco）：傷害黃圓／能量合併／道具縮圖。一律不吃滑鼠事件 ── */
+  .playmat.layout-blue .bl-dmg{
+    position:absolute; top:-7px; right:-7px; z-index:230; pointer-events:none;
+    min-width:28px; height:28px; padding:0 5px; border-radius:999px;
+    background:var(--bl-gold); color:#3a2a00; border:2px solid #fff6c2;
+    font-weight:800; font-size:13px; line-height:24px; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,.5);
+  }
+  .playmat.layout-blue .bl-tool{
+    position:absolute; right:-6px; bottom:16%; z-index:229; pointer-events:none;
+    width:calc(var(--card-w) * .34); aspect-ratio:63/88; border-radius:4px; overflow:visible;
+    border:2px solid #fff; box-shadow:0 2px 5px rgba(0,0,0,.6); background:#fff;
+  }
+  .playmat.layout-blue .active-card .bl-tool{ width:calc(var(--active-w) * .3); }
+  .playmat.layout-blue .bl-tool img{ display:block; width:100%; height:100%; object-fit:cover; border-radius:2px; }
+  .playmat.layout-blue .bl-tool b{ position:absolute; right:-6px; top:-8px; font-size:10px; padding:0 4px; border-radius:999px; background:#0b1633; border:1px solid #fff; }
+  .playmat.layout-blue .bl-chips{
+    position:absolute; left:50%; bottom:-10px; transform:translateX(-50%); z-index:228; pointer-events:none;
+    display:flex; gap:3px; white-space:nowrap;
+  }
+  .playmat.layout-blue .bl-chip{
+    display:inline-flex; align-items:center; gap:2px; height:20px; padding:0 5px 0 2px; border-radius:999px;
+    background:rgba(6,14,40,.9); border:1px solid rgba(255,255,255,.55); font-size:11px; color:#fff;
+  }
+  .playmat.layout-blue .bl-chip b{ font-weight:800; }
+  .playmat.layout-blue .bl-e{
+    width:15px; height:15px; border-radius:50%; display:inline-grid; place-items:center;
+    font-size:9.5px; font-weight:800; font-style:normal; color:#fff; border:1.5px solid rgba(255,255,255,.85);
+    background:#e6e6e6; text-shadow:0 1px 1px rgba(0,0,0,.6);
+  }
+  .playmat.layout-blue .bl-e.bl-sp{ background:linear-gradient(135deg,#f6d365,#fda085); color:#4a2400; text-shadow:none; }
+
+  /* ── 競技場／行動區 ── */
+  .playmat.layout-blue .action-bar > .stadium-display{
+    align-self:center; justify-self:stretch; width:auto; padding:20px 8px 10px; background:var(--bl-zone);
+  }
+  .playmat.layout-blue .action-bar > .stadium-display .stadium-display-label{ position:absolute; top:2px; left:10px; font-size:11px; letter-spacing:.08em; color:var(--bl-label); }
+  .playmat.layout-blue .action-bar > .stadium-display img{ width:var(--card-w); border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,.45); }
+  .playmat.layout-blue .action-bar > .action-btns{
+    padding:8px; width:calc(var(--bl-side) - 4px); background:var(--bl-zone); border-radius:12px;
+  }
+  .playmat.layout-blue .btn-act.atk.atk-ready{ background:linear-gradient(180deg,#e0472b,#b8321c); border-color:#ffb3a3; }
+  .playmat.layout-blue .btn-act.primary{ background:#2f9e6e; border-color:#9ff0c9; border-radius:999px; }
+  .playmat.layout-blue .btn-act.secondary,
+  .playmat.layout-blue .btn-act.btn-retreat-mirror{ background:rgba(255,255,255,.1); border:1.5px solid var(--bl-line); }
+
+  /* ── 對戰紀錄／手牌 ── */
+  .playmat.layout-blue .action-bar > .log-col{
+    background:rgba(3,10,30,.55); border:1px solid var(--bl-soft); border-radius:10px;
+  }
+  .playmat.layout-blue .log-toggle-btn{ background:#0b1633; border-color:var(--bl-line); color:var(--bl-label); }
+  .battle-root:has(.playmat.layout-blue) .hand-strip{
+    margin:0 10px 8px; border:1.5px solid var(--bl-line, rgba(255,255,255,.62)); border-radius:12px;
+    background:rgba(120,190,255,.075);
+  }
+
+  /* ── 第二輪微調 ── */
+  .playmat.layout-blue .opponent-row > .zone-pile,
+  .playmat.layout-blue .my-row > .zone-pile{ width:auto; min-width:0; padding:18px 8px 20px; gap:18px; }
+  .playmat.layout-blue .pile-slot .pile-label{ bottom:-17px; }
+  /* 先攻／後攻：改成橫式小標籤，貼在各自備戰框的右上角（不壓到牌堆框） */
+  .playmat.layout-blue .opponent-row > .turn-order-chip,
+  .playmat.layout-blue .my-row > .turn-order-chip{
+    writing-mode:horizontal-tb; left:auto; padding:1px 9px; border-radius:999px; font-size:11px; line-height:16px;
+    right:calc(var(--log-w) + var(--bl-side) + var(--mat-gap) * 2 + 22px);
+  }
+  .playmat.layout-blue .opponent-row > .turn-order-chip{ top:12px; bottom:auto; }
+  .playmat.layout-blue .my-row > .turn-order-chip{ top:auto; bottom:14px; }
+  /* 行動框：標題放框內 */
+  .playmat.layout-blue .action-bar > .action-btns{ padding:20px 8px 8px; }
+  .playmat.layout-blue .action-bar > .action-btns::before{ top:2px; left:10px; }
+  /* 手牌縮一號，把高度讓給場面 */
+  .battle-root:has(.playmat.layout-blue) .hand-card img{ width:76px; }
+  /* 此頁沒有全域 border-box：min-height 會再加上 padding ⇒ 備戰框多吃 34px（實測 179 vs 145）。 */
+  .playmat.layout-blue .zone-bench{ box-sizing:border-box; min-height:calc(var(--card-h) + clamp(28px, 4vh, 36px)); padding:clamp(16px, 2.2vh, 20px) 10px clamp(10px, 1.6vh, 14px); }
+  .playmat.layout-blue .action-bar > .action-btns{ box-sizing:border-box; }
+  .playmat.layout-blue .action-bar > .action-btns > .btn-act,
+  .playmat.layout-blue .action-bar > .action-btns > .atk-slot{ max-width:100%; box-sizing:border-box; }
+  /* 第三輪：先攻／後攻改成小藥丸；行動欄加寬到按鈕放得下；手牌依視窗高縮放 */
+  .playmat.layout-blue .opponent-row > .turn-order-chip,
+  .playmat.layout-blue .my-row > .turn-order-chip{ min-height:0; text-orientation:mixed; letter-spacing:.06em; }
+  .playmat.layout-blue .action-bar > .action-btns{ width:calc(var(--bl-side) - 2px); }
+  .playmat.layout-blue .action-bar > .action-btns > .atk-slot{ display:flex; gap:4px; width:100%; }
+  .playmat.layout-blue .action-bar > .action-btns > .atk-slot > .btn-act{ flex:1 1 auto; min-width:0; }
+  .battle-root:has(.playmat.layout-blue) .hand-card img{ width:clamp(56px, 8.6vh, 80px); }
+  .playmat.layout-blue .action-bar > .action-btns{ grid-template-columns:minmax(0, 1fr); }
+  .battle-root:has(.playmat.layout-blue) .hand-strip .hand-scroll{ min-height:0; }
+  /* 矮螢幕（≤820px 高，例如 1366×768）：框的標題列與內距收小，把高度還給卡片 */
+  /* 備戰格比卡寬時：卡面裝飾（傷害／道具／能量）與進化／特性鈕要貼著「卡」而不是貼著「格」 */
+  .playmat.layout-blue .bench-slot .bench-middle{ left:50%; right:auto; width:min(var(--card-w), 100%); transform:translateX(-50%); }
+  .playmat.layout-blue .bench-slot .ability-btn-sm,
+  .playmat.layout-blue .bench-slot .evo-btn-sm{
+    left:max(3%, calc(50% - var(--card-w) / 2 + 3px)); right:max(3%, calc(50% - var(--card-w) / 2 + 3px));
+  }
+  .playmat.layout-blue .bench-slot .ability-btn-sm,
+  .playmat.layout-blue .bench-slot .evo-btn-sm{ width:auto; }
+  /* 戰鬥卡的特性鈕改到卡片下半（左側是狀態標籤直排，不可以互相蓋住） */
+  .playmat.layout-blue .active-card .ability-btn{ top:auto; bottom:24%; left:10%; right:10%; width:auto; }
+  .playmat.layout-blue .active-card .evo-wrap{ top:auto; bottom:calc(24% + clamp(24px, calc(var(--card-w) * 0.32), 32px)); left:10%; right:10%; width:auto; }
+  /* 我方先攻／後攻標籤：貼在我方備戰框的標題列右端（不壓到第 5 張備戰卡） */
+  .playmat.layout-blue .my-row > .turn-order-chip{ bottom:calc(var(--card-h) + 20px); }
+  .playmat.layout-blue .action-bar > .stadium-display{ align-self:stretch; justify-content:center; }
+
+  /* ── v6.441 審查修正（fable 5.1 對抗性審查） ── */
+  /* 🔴 對手備戰的名稱／HP 往下顯示（往上會被頁首蓋住） */
+  .playmat.layout-blue .opponent-row .bench-slot:hover .bench-name{ top:calc(100% + 1px); bottom:auto; }
+  .playmat.layout-blue .opponent-row .bench-slot:hover .bench-stat{ top:calc(100% + 26px); bottom:auto; }
+  /* 對戰紀錄開關鈕移進紀錄欄左上角（原位置會蓋住對手獎賞第 6 格） */
+  .playmat.layout-blue:not(.log-collapsed) .log-toggle-btn{ right:calc(var(--log-w) - 40px); top:52px; }
+  /* 翻正面的獎賞保留黃框提示 */
+  .playmat.layout-blue .prize-card.prize-faceup{ overflow:hidden; border:2px solid #ffd23f; box-shadow:0 0 5px #ffd23f; background:#111; }
+  /* 狀態標籤外凸改只作用在狀態標籤本身（setup 卡背文字、附能提示不再凸出卡外） */
+  .playmat.layout-blue .active-card .active-info{ left:3%; }
+  .playmat.layout-blue .active-card .active-info .status-chip{ margin-left:calc(-3% - 12px); }
+  /* 多屬性能量在窄格時換行，不壓到鄰格 */
+  .playmat.layout-blue .bl-chips{ flex-wrap:wrap; justify-content:center; width:max-content; max-width:calc(100% + 14px); row-gap:2px; }
+  /* <<< v6441-blue-css */
 </style>

@@ -1,5 +1,32 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.441：桌機第四種對戰版面「藍桌墊」（battleLayout='blue'）
+
+BASE `3532ad45`（v6.440）。站長交辦（2026-09-29）：參考玩家分享的另一個自製模擬器（深藍桌面、白框格線、黃圓傷害），新增一種對戰版面，經典版／Fable 版保留，手機版維持現況。
+流程：示意圖第一版 → fable 5.1 審查＋對照版 → 站長選第一版為底並裁定 ① HP 條在戰鬥寶可夢下方 ② 備戰卡不顯示名稱（滑鼠移上才顯示）③ 特殊能量只顯示「特」→ 第二版示意圖確認 → 實作。
+- 設計：藍桌墊沿用 Fable 版幾何（playmat 同時掛 `layout-fable` 與 `layout-blue`；--card-w 單一尺寸源、一頁鎖高、防跳動、行動鈕固定槽全部照用）。
+  新增 `isFableGeom`（fable 或 blue）取代三處「=== 'fable'」的幾何判斷（gameZoom 鎖 1、平板絕緣、卡牌大小滑桿）。
+- 外觀只在 `.playmat.layout-blue`（與 `.battle-root:has(.playmat.layout-blue)`）底下：grid 區位改為「牌堆｜備戰｜獎賞」「競技場｜戰鬥｜行動」；每區白框＋標題（::before）；
+  沒有競技場時 playmat::before 畫空框、有競技場時隱藏（.has-stadium-bg）；對戰場中線 playmat::after；先攻／後攻改橫式小藥丸貼備戰框右上。
+- 新 markup 只在藍桌墊 render：snippet `blueDeco`（傷害黃圓、能量「圖示×N」、道具白框縮圖）四個呼叫點都包在 `battleLayout === 'blue'`；
+  能量分組 `blueEnergyChips` 刻意不共用 `energyPips`（後者把特殊能量依卡名折算屬性；站長裁定藍桌墊一律顯示「特」）。裝飾全部 pointer-events:none。
+- 高度預算：藍桌墊多了框標題與 HP 條下移 ⇒ --card-w-cap 扣 410px（≤820px 高的螢幕扣 372px 並收小內距）；此頁沒有全域 border-box，備戰框 min-height 要加 box-sizing（實測少算 34px）。
+- 實測（雲端 Playwright，本機 vs AI 對局＋注入中盤盤面）：1920×1080／1440×900／1366×768／1024×768（8 格備戰）一頁塞下、無橫向捲動；拖放附加能量（3→4）、點備戰卡放大正常。
+  ⚠ <1024 寬（例如 iPad 直式非手機介面）與 Fable 版相同走後備排版。
+- 守衛 `test-v6441-blue-layout.mjs`（28 條）：A 剝除器（哨兵區塊＋逐條還原）後與 BASE 逐位元相同 ⇒ 經典／桌墊／Fable／手機零位元組變動；
+  B 接線、C 每條 CSS 選擇器都 scope 在 layout-blue、D 站長裁定、E 截圖暫時掛鉤不得進 commit。HEAD-FAIL：換回 BASE 紅 13 條。
+- fable 5.1 對抗性審查（🔴1／🟡7，全部處理）：對手備戰 hover 名稱改往下（往上被頁首蓋住）；紀錄開關鈕移進紀錄欄（原位置蓋住對手第 6 張獎賞）；
+  翻正面獎賞保留黃框；狀態標籤外凸只作用在標籤本身（setup 卡背文字不再凸出）；多屬性能量窄格換行；設定選項拿掉「卡牌大小可調」字樣
+  （卡寬被一頁鎖高的上限夾住，放大幾乎無效，只有縮小有效）；守衛補「哨兵內容」檢查（helper 只准兩個識別字、snippet 外不准夾帶 markup）與
+  scope 正則（layout-blue-x 不算）。突變 M1～M11 全部翻紅。⚠ 觸控裝置沒有 hover ⇒ 備戰卡名稱要點卡片放大才看得到（站長裁定的取捨）。
+- 全套抓到的三件事（均依 Rule 40 處理，守護意圖不變）：
+  ① 本頁 @media 數量被 test-v6187／v6195／v6199 釘在 19（不准新增媒體查詢當手機開關）⇒ 藍桌墊改成**零 @media**：
+     幾何區塊（grid、卡寬上限）插在 Fable 後備排版（max-width:1023px）之前 ⇒ 桌機同特異度後者勝、<1024 由後備排版蓋回；
+     矮螢幕收縮改用 clamp／dvh；playmat::before（空競技場框）／::after（中線）因無法限定只在桌機出現而拿掉。
+  ② test-v6293 E1（對戰版面分支逐位元＝BASE，站長最高紅線）：比照 V6321／V6389／V6418／V6425 新增 V6441 還原表＋snippet 哨兵剝除，並補 E1g 正對照。
+  ③ test-v6200 ③、test-v6223【A】釘了 `class:layout-fable={battleLayout === 'fable'}` 與「三選一」字面 ⇒ 改成「或 isFableGeom（＝fable 或 blue）」與「四選一」。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## v6.440：首頁「權利人聯絡管道」改走意見回饋
 
 BASE `ae7d7cb3`（v6.439）。站長交辦（2026-09-29）：「點此來信」原本 mailto 到站長信箱，站長不常收信 ⇒
