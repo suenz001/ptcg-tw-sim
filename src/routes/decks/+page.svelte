@@ -2425,7 +2425,7 @@
        那樣既能點外面關閉，又不會多出 a11y 警告（警告數是版面沒被改壞的金絲雀）。 -->
 {#if statsDeckId}
   <div use:pageScrollLock class="pv-overlay">
-    <button class="ds-backdrop" onclick={closeDeckStats} aria-label="關閉戰績視窗"></button>
+    <button class="ds-backdrop" data-scroll-outside onclick={closeDeckStats} aria-label="關閉戰績視窗"></button>
     <div class="pv-inner deck-stats-modal">
       <button class="pv-close" onclick={closeDeckStats} aria-label="關閉">×</button>
       <h3 class="modal-title">🔍 牌組戰績</h3>

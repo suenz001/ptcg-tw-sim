@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.458：桌機彈出視窗「外面才捲整頁」（同一個 pageScrollLock）
+
+BASE `62ce6f9f`（v6.457）。站長 2026-09-30 裁定：「電腦版規則應該是『外面才捲整頁』」。v6.457 缺口：桌機 /cards 卡片詳情內容不夠長時，滑鼠在視窗上滾輪會捲到後面整頁（實測 scrollY 400→3400）。
+- 中央：`page-scroll-lock.ts` 新增 `shouldBlockWheel(overlay, target, dx, dy, ctrl)`（唯一判準）；`pageScrollLock` action 在非觸控裝置掛 passive:false 的 wheel 監聽：裡面沿祖先找「還捲得動」的元素，有就讓它捲、全都捲不動就 preventDefault；外面（遮罩本身／`data-scroll-outside`）不擋；Ctrl＋滾輪不擋。觸控裝置不掛（v6.457 已整頁鎖）。
+- 牌組編輯戰績視窗的透明背景鈕 `.ds-backdrop` 標 `data-scroll-outside`（它是「外面」）。
+- 實測（dev 真頁面 1366×657）：卡片詳情裡滾 ⇒ 整頁停在 400 不動；移到外面滾 ⇒ 400→700。手機行為重跑不變（背景不動、關閉回 485）。
+- IRON_RULES Rule 76 補桌機規則。
+- 守衛：新增 `test-v6458-desktop-wheel-outside.mjs`（S1～S3＋HEAD-FAIL 對 v6.457；D1 短視窗不捲整頁、D2 長視窗自己捲到底、D3 外面照捲、D4 data-scroll-outside、D5 正對照、D6 textarea／Ctrl、D7 觸控不掛）；突變（永不擋、不認 outside、裡面一律擋、觸控也掛）全紅。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## v6.457：手機彈出視窗不再捲到背景（中央 pageScrollLock）＋ 激流水泵 0 能量裁定釘住
 
 BASE `ec9c3fcf`（v6.456）。站長 2026-09-30：「手機版查詢卡片時，也會有捲動到背景的情況發生」。

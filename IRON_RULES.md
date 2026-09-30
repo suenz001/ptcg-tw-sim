@@ -2505,10 +2505,13 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
 - 與 v5.992 `optInPay`（付得出多少付多少、效果全額）是**兩型**：optInPay＝加傷／狀態型；optInThreshold＝「這個情況下」全有或全無型。新卡先分型再選管線。
 - 守衛教訓：只驗中央函式值是安慰劑（fable 抓到）——必須驗**消費點**（三端都呼叫、結果一致）＋ AI 行為（用單位不用張數、最小組合），並逐一突變確認會紅。
 
-## Rule 76（2026-09-30）：非對戰頁的彈出視窗一律 `use:pageScrollLock`（v6.457）
+## Rule 76（2026-09-30）：非對戰頁的彈出視窗一律 `use:pageScrollLock`（v6.457／v6.458）
 
 - 手機（觸控）上彈出視窗開著時，後面的整頁不可以被手指捲動：遮罩元素掛 `use:pageScrollLock`（`src/lib/page-scroll-lock.ts`）。
   body 改 fixed＋top 負捲動量、**引用計數**（視窗上再疊放大圖）、解鎖捲回原位；只在 `(hover: none) and (pointer: coarse)` 鎖。
-- 桌機不鎖（站長規則：視窗外滾輪照捲整頁）；可捲的視窗內容區加 `overscroll-behavior: contain`（捲到底不帶走整頁）。
-- 新增任何全畫面遮罩（首頁／卡牌資料庫／牌組編輯／牌組公布欄）都要掛；**禁止各頁自己改 body.style.position**。守衛 test-v6457（列舉遮罩 S2、S4、行為 D1～D3）。
+- 桌機（v6.458 站長裁定「**外面才捲整頁**」）：不鎖 body，改由同一個 action 掛 wheel 攔截——滑鼠在視窗**裡面**只捲裡面捲得動的東西，
+  全都捲不動（內容不夠長／已到底）就擋掉，**絕不**捲到後面；在**外面**（遮罩本身、或標 `data-scroll-outside` 的透明背景鈕）照捲整頁；Ctrl＋滾輪不擋。
+  判準唯一一份＝`shouldBlockWheel`。遮罩裡另有「點了會關」的透明背景元素時，一定要標 `data-scroll-outside`（例：牌組編輯戰績視窗 `.ds-backdrop`）。
+  可捲的視窗內容區仍加 `overscroll-behavior: contain`。守衛 test-v6458（D1～D7，突變：永不擋／不認 outside／裡面一律擋／觸控也掛 全紅）。
+- 新增任何全畫面遮罩（首頁／卡牌資料庫／牌組編輯／牌組公布欄）都要掛；**禁止各頁自己改 body.style.position、自己攔 wheel**。守衛 test-v6457（列舉遮罩 S2、S4、行為 D1～D3）。
 - 對戰頁手機直式另有 `body.mp-locked`（整個對戰畫面鎖死），不要混用。
