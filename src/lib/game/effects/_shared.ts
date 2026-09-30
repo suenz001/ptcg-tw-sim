@@ -299,6 +299,17 @@ export interface PreDiscardSpec {
    */
   countMode?: 'cards' | 'units';
   /**
+   * ⭐v6.456：「若希望，選擇 N 個這隻寶可夢身上附加的能量，放回／丟棄。**這個情況下**，〔追加效果〕」型——
+   *   全有或全無的 opt-in 門檻 N（能量單位）。玩家要嘛不付（0，不發動追加效果），要嘛付到門檻才發動。
+   *   ⚠⚠ 官方 Q&A（PTCG 搜判）：**身上不足 N 個時，把身上全部放回也算「這個情況下」**，追加效果照發動：
+   *     ・厄鬼椪 水井面具ex 附 2 能量＋璀璨結晶，放回 2 個 ⇒ 可以對備戰造成 120（PTCG_RULES §17.25.F）
+   *     ・狐大盜附 2 個惡能量用「技能大盜」借「激流水泵」⇒ 放回 2 個，備戰 120 照打（站長 2026-09-30 提供的搜判）
+   *   ⇒ 實際門檻一律由 `preDiscardOptInThreshold(spec, 可付單位)` = min(N, 可付單位) 算出，
+   *     **引擎、畫面、AI 三端共用這一支**（v6.455 以前三端各寫一份，畫面那份寫死「3，除非太晶＋璀璨結晶才 2」
+   *     ⇒ 借招的狐大盜只有 2 能量時「確認」永遠按不下去——玩家回報的 bug）。
+   */
+  optInThreshold?: number;
+  /**
    * v3.48：picker UI 顯示用動詞。預設 'discard'（保留多數招式的「丟棄」語意）。
    * 對少數「放回手牌 / 放回牌庫」類招式（忍者飛旋 / 叢林鞭打 / 時間爆炸 / 激流水泵）
    * 設為對應 verb，UI 標題與按鈕會顯示「放回手牌」/「放回牌庫」而非誤導的「丟棄」。
@@ -444,6 +455,18 @@ export function effectivePokemonTypesShared(
  */
 export function effectivePreDiscardMin(spec: PreDiscardSpec, availableUnits: number): number {
   return Math.min(spec.min, Math.max(0, availableUnits));
+}
+
+/**
+ * ⭐v6.456 中央述詞：「若希望，選擇 N 個能量…。這個情況下…」的實際 opt-in 門檻（能量單位）。
+ *   = min(spec.optInThreshold, 可付單位)；spec 沒宣告門檻 ⇒ undefined（不是這一型）。
+ *   官方：身上不足 N 個時放回全部也算「這個情況下」（見 PreDiscardSpec.optInThreshold 的註解）。
+ *   ⚠ availableUnits 要算「這一次實際出招的寶可夢」身上的能量（借招時＝借用者，不是原招式的持有者）。
+ *   ⚠ 引擎（regPre／regPost）、畫面（確認鈕門檻）、AI（自動付款）三端必須都呼叫這一支，禁就地再寫一次判準。
+ */
+export function preDiscardOptInThreshold(spec: PreDiscardSpec | undefined, availableUnits: number): number | undefined {
+  if (!spec || spec.optInThreshold === undefined) return undefined;
+  return Math.min(spec.optInThreshold, Math.max(0, availableUnits));
 }
 
 export function getEnergyDiscardUnits(

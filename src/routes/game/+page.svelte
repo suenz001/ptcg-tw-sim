@@ -70,7 +70,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   // ⭐⭐⭐v6.337 借招（複製他人招式）中央管線 —— 候選枚舉與規則層共用同一份，
   //   且提供「借到的招式本身也是借招卡」時要不要再開一段 picker 的判準。
   import { copyAttackCandidates, isCopyAttackKey, COPY_ATTACK_MAX_DEPTH, type CopyChoice } from '$lib/game/copy-attack';
-  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, effectivePreDiscardMin, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType, preDiscardEnergyEligible, OPTIN_NO_PAYMENT, damageCounterCount, stampClientVersion } from '$lib/game/effects'; // v5.992 若希望 opt-in sentinel / ⭐v6.349 preDiscardEnergyEligible
+  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, effectivePreDiscardMin, preDiscardOptInThreshold, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType, preDiscardEnergyEligible, OPTIN_NO_PAYMENT, damageCounterCount, stampClientVersion } from '$lib/game/effects'; // v5.992 若希望 opt-in sentinel / ⭐v6.349 preDiscardEnergyEligible
   import { JAMMING_TOWER_STADIUMS } from '$lib/game/effects/cards/stadiums';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
@@ -7499,8 +7499,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       dispatch(GameActions.attack(attackIndex));
       return;
     }
-    // v3.875：激流水泵 picker 用「全有或全無」UX — 偵測 璀璨結晶 → required = 2，否則 3
-    const exactRequired = _computeExactRequired(atk.name, activePlayer.active);
+    // v3.875：激流水泵 picker 用「全有或全無」UX；⭐v6.456 門檻改由中央 preDiscardOptInThreshold 算（見 _computeExactRequired）
+    const exactRequired = _computeExactRequired(spec);
     preAttackDiscard = {
       attackIndex,
       spec,
@@ -7510,22 +7510,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
     };
   }
 
-  // v3.875：計算「啟用 option 所需精確放回數」— 目前只 激流水泵 用
-  //   厄鬼椪 水井面具ex（太晶）+ 璀璨結晶 → 2；否則 3
-  //   非 激流水泵 → undefined（picker 走原邏輯）
-  function _computeExactRequired(attackName: string, att: CardInstance | null): number | undefined {
-    if (!att) return undefined;
-    if (attackName === '激流水泵') {
-      const card = getCard(att.cardId);
-      const isTera = card?.tags?.includes('太晶') ?? false;
-      if (!isTera) return 3;
-      const allTools = [att.toolAttached, ...(att.extraTools ?? [])].filter(Boolean) as CardInstance[];
-      const hasShinyCrystal = allTools.some(t => getCard(t.cardId)?.name === '璀璨結晶');
-      return hasShinyCrystal ? 2 : 3;
-    }
-    // v5.992：忍者飛旋 / 災難衝擊 改走 spec.optInPay 一般化二段流程（binary-yes-no），
-    //   不再由此處 hardcode exactRequired。
-    return undefined;
+  // v3.875：計算「啟用 option 所需精確放回數」（全有或全無的 opt-in 門檻）。
+  // ⭐⭐v6.456 玩家回報：狐大盜附 2 個惡能量用「技能大盜」借「激流水泵」，確認鈕按不下去（官方 Q&A：放回 2 個、備戰 120 照打）。
+  //   根因：這裡原本寫死「激流水泵＝3，只有太晶＋璀璨結晶才 2」，跟引擎（min(3, 身上能量)）是兩份判準：
+  //     ・借招者（狐大盜）只有 2 能量 ⇒ 畫面要 3、永遠湊不滿；
+  //     ・太晶＋璀璨結晶但身上有 3 能量 ⇒ 畫面放行 2、引擎要 3 ⇒ 按了確認卻只打 100（靜默吃掉追加效果）。
+  //   ⇒ 改呼叫中央 preDiscardOptInThreshold(spec, 這次出招者身上可付的單位)，與引擎／AI 同一支；不再認招式名。
+  function _computeExactRequired(spec: PreDiscardSpec): number | undefined {
+    return preDiscardOptInThreshold(spec, _maxDiscardAmount(spec));
   }
 
   // v2.119 copy-attack picker（目前僅用於 N的索羅亞克ex｜暗黑底牌）
@@ -7662,7 +7654,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (spec && head) {
       const atkName = terminalKey.slice(terminalKey.indexOf('|') + 1);
       const borrowerActive = game?.players[myIdx].active ?? null;
-      const exactRequired = _computeExactRequired(atkName, borrowerActive);
+      void borrowerActive;   // ⭐v6.456：門檻改由中央述詞依「這次出招者」身上的能量算（_maxDiscardAmount 讀的就是自己的戰鬥寶可夢）
+      const exactRequired = _computeExactRequired(spec);
       preAttackDiscard = {
         attackIndex: srcAttackIndex, spec, attackName: atkName,
         picked: new Set<string>(), copyAttackChoice: head, copyAttackChain: rest, exactRequired,
@@ -13637,12 +13630,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <div class="sel-footer">
           <button class="btn-act primary" disabled={!confirmEnabled} onclick={confirmPreAttackDiscard}>
             {#if req !== undefined}
-              啟用追加效果（需放回 {req} 個能量，目前 {pickedCount}/{req}）
+              <!-- ⭐v6.456（審查建議 5）：門檻是「能量單位」⇒ 目前值也用單位（燃火 1 張＝3 個時原本顯示 1/3 卻可按） -->
+              啟用追加效果（需放回 {req} 個能量，目前 {pickedAmount}/{req}）
             {:else}
               確定使用招式（{spec.verb === 'reveal' ? '給對手看' : (spec.verb === 'return-to-hand' || spec.verb === 'return-to-deck' ? '放回' : '丟')} {pickedCount} 張{isUnits ? `／${pickedAmount} 個能量` : ''}）
             {/if}
           </button>
-          {#if spec.min === 0}
+          <!-- ⭐v6.456（審查建議 3）：門檻為 0（身上沒有能量可放回）時，引擎規定追加效果照發動（站長 v5.992 裁定「0 可付照給」）
+               ⇒ 「不啟用」與「啟用」會得到同樣結果，不顯示這顆以免玩家以為可以不打備戰。 -->
+          {#if spec.min === 0 && req !== 0}
             <button class="btn-act secondary" onclick={() => { if (preAttackDiscard) { preAttackDiscard.picked = new Set(); confirmPreAttackDiscard(); } }}>
               {#if req !== undefined}
                 不啟用追加效果（不放回任何能量）

@@ -75,6 +75,7 @@ import {
   applyBenchPlaceSideEffects,
   getEnergyDiscardUnits,
   effectivePreDiscardMin,
+  preDiscardOptInThreshold,   // ⭐v6.456 若希望＋「這個情況下」全有或全無門檻（引擎／畫面／AI 共用）
   countAttachedEnergyAsUnits,
   triggerOakeyeMillIfApplicable,
   getOwnBenchLimit, joinCardNames,
@@ -87,7 +88,7 @@ export { applyBenchPlaceSideEffects };
 
 // 為 engine.ts / +page.svelte 的 import 路徑維持相容：re-export
 export { TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS, canPlayTrainer, clearActiveEffects };
-export { ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, ATTACK_PRE_DISCARD_CHOICE, getEnergyDiscardUnits, countAttachedEnergyAsUnits, effectivePreDiscardMin };
+export { ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, ATTACK_PRE_DISCARD_CHOICE, getEnergyDiscardUnits, countAttachedEnergyAsUnits, effectivePreDiscardMin, preDiscardOptInThreshold };
 export { ATTACK_USE_PRECONDITION };   // ⭐v6.350
 // v2.133 PASSIVE_PREVENT_KO 在本檔下方定義，匯出供 engine 使用
 // （直接在此先 forward-ref：宣告處放到 v2.133 區塊，之後會由 engine import）

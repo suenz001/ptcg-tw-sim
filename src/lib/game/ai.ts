@@ -22,6 +22,7 @@ import {
 } from './engine';
 // v4.949 Phase 2a：能量分配 role-aware
 import { findMainAttackers } from './ai-roles';
+import { ATTACK_PRE_DISCARD_CHOICE, getEnergyDiscardUnits, preDiscardOptInThreshold } from './effects/_shared';   // ⭐v6.456 若希望全有或全無門檻（與引擎／畫面同一支）
 // v6.202：「這隻場上寶可夢的這個特性此刻是否生效」中央述詞（v6.196 建立於 defense.ts）。
 //   ai.ts 已經 import engine（engine 也 import defense）⇒ 不是新的相依方向、無循環風險。
 import { hasEffectiveAbilityByInst } from './defense';
@@ -532,21 +533,30 @@ export function getAIAction(
       }
     }
     // v3.883：AI 對 PRE_DISCARD_CHOICE 招式自動填 discardedEnergyIids
-    //   目前只 special-case 激流水泵（厄鬼椪 水井面具ex）— 對手有 bench + 自身能量 ≥ required
-    //   時自動啟用 option（多 120 bench 傷害很值得）。
-    //   required: 璀璨結晶 attached → 2 否則 3。
+    //   目前只處理「若希望，選擇 N 個能量…。這個情況下…」的全有或全無型（spec.optInThreshold，例：激流水泵）——
+    //   對手有備戰時自動啟用（多一段備戰傷害很值得）。
+    //   ⭐v6.456：門檻改呼叫中央 preDiscardOptInThreshold（與引擎、畫面同一支）＝ min(N, 身上可付單位)；
+    //     原本這裡寫死「太晶＋璀璨結晶 2、否則 3」且用張數比，借招／特殊能量時與引擎不一致。
+    //     付款挑法：依序累加能量單位直到達門檻（單位 host-aware，與引擎 getEnergyDiscardUnits 同源）。
     let aiDiscardedEnergyIids: string[] | undefined;
     const bestAtk = eff[best]?.atk;
-    if (bestAtk?.name === '激流水泵' && player.active) {
+    if (bestAtk && player.active && !_copyChoice.get(best)) {
+      // ⭐v6.456（審查應修 2）：key 用 getEffectiveAttacks 給的 sourceCardName（工具招式時是工具名），與畫面同源
+      const _srcName = eff[best]?.sourceCardName ?? '';
+      const _spec = ATTACK_PRE_DISCARD_CHOICE.get(`${_srcName}|${bestAtk.name}`);
       const oppBench = state.players[(1 - myIdx) as 0 | 1].bench.length;
-      if (oppBench > 0) {
-        const atkCard = pool.get(player.active.cardId);
-        const isTera = atkCard?.tags?.includes('太晶') ?? false;
-        const allTools = [player.active.toolAttached, ...(player.active.extraTools ?? [])].filter(Boolean) as Array<{ cardId: string }>;
-        const hasShiny = allTools.some(t => pool.get(t.cardId)?.name === '璀璨結晶');
-        const required = (isTera && hasShiny) ? 2 : 3;
-        if (player.active.energyAttached.length >= required) {
-          aiDiscardedEnergyIids = player.active.energyAttached.slice(0, required).map(e => e.iid);
+      if (_spec?.optInThreshold !== undefined && oppBench > 0) {
+        const act = player.active;
+        const unitsOf = (e: CardInstance) => getEnergyDiscardUnits(e.cardId, act, pool, state, myIdx);
+        const avail = act.energyAttached.reduce((n, e) => n + unitsOf(e), 0);
+        const need = preDiscardOptInThreshold(_spec, avail) ?? 0;
+        if (need > 0) {
+          // ⭐v6.456（審查建議 6）：最小組合——由大到小累加到門檻，再拿掉「拿掉後仍達標」的多餘張（與畫面的最小組合規則一致）
+          const sorted = [...act.energyAttached].sort((x, y) => unitsOf(y) - unitsOf(x));
+          const picked: CardInstance[] = []; let got = 0;
+          for (const e of sorted) { if (got >= need) break; picked.push(e); got += unitsOf(e); }
+          for (let k = picked.length - 1; k >= 0; k--) { const u = unitsOf(picked[k]); if (got - u >= need) { got -= u; picked.splice(k, 1); } }
+          if (got >= need) aiDiscardedEnergyIids = picked.map((e) => e.iid);
         }
       }
     }

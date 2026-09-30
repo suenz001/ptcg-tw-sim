@@ -44,6 +44,7 @@ import {
   shuffle, addLog, withPending, updatePlayer,
   ATTACK_PRE_DISCARD_CHOICE,
   getAllAttachedTools, getEnergyDiscardUnits, clearActiveEffects, countAttachedEnergyAsUnits,
+  preDiscardOptInThreshold, type PreDiscardSpec,   // ⭐v6.456
 } from '../_shared';
 import {
   coinHeadsMultiplyPre,
@@ -525,19 +526,24 @@ regPost('洛奇亞ex|破壞潮旋', (state, aIdx, pool) => {
 //   玩家選 0 ~ 2 個 → 不執行 option（傷害 100，能量不動）
 //   玩家選滿 3 個 → 執行 option：棄 3 個指定能量回牌庫並洗 + 對手備戰 1 隻受 120
 // PRE 階段棄能量；POST 階段讀同一 action 觸發 hitBenchPickPost。
-ATTACK_PRE_DISCARD_CHOICE.set('厄鬼椪 水井面具ex|激流水泵', {
+// ⭐v6.456：spec 抽成常數並宣告 optInThreshold:3 —— 「若希望，選擇3個…。這個情況下…」的全有或全無門檻，
+//   實際門檻（不足 3 個＝全部）由中央 preDiscardOptInThreshold 算，引擎／畫面／AI 三端共用。
+const HYDRO_PUMP_SPEC: PreDiscardSpec = {
   min: 0, max: 3, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
   verb: 'return-to-deck', // 卡面：「將 3 個能量放回牌庫並重洗」
   countMode: 'units',  // v4.14：卡面「3 個」用 units 解讀，1 張燃火/新衝天等特殊能量可達標
-});
+  optInThreshold: 3,
+};
+ATTACK_PRE_DISCARD_CHOICE.set('厄鬼椪 水井面具ex|激流水泵', HYDRO_PUMP_SPEC);
 // v5.653 helper：啟用備戰 120 所需放回的「能量單位數」= min(3, 身上能量總單位)。
 //   卡面「選擇 3 個能量放回牌庫」；官方 QA：身上不足 3 個時放回「全部」也成立並觸發備戰 120
 //   （附 2 能量+璀璨結晶 → 放回 2 個可）。
 //   ⚠ 璀璨結晶只減「使用招式的費用」(太晶 -1)，不改本效果放回張數；2 個能成立是因「只有 2 個、放回全部」，
 //     並非「需求被 -1」。原 v3.875 特判「璀璨結晶→放回 2」會讓 crystal+3 能量者只放 2 留 1 仍觸發 120(錯)，
 //     故移除特判，改純 min(3, 原始總單位)。扮晶晶酒 借招者亦同此通則(依借者身上能量)。
+//   ⭐v6.456：改呼叫中央 preDiscardOptInThreshold（畫面與 AI 也呼叫同一支；原本三端各寫一份，畫面那份寫死 3 ⇒ 借招只 2 能量按不下確認）。
 function _hydroPumpRequired(totalUnits: number): number {
-  return Math.min(3, totalUnits);
+  return preDiscardOptInThreshold(HYDRO_PUMP_SPEC, totalUnits) ?? 3;
 }
 
 regPre('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, pool, action) => {

@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.456：「若希望，選擇 N 個能量…。這個情況下…」門檻中央化（狐大盜借激流水泵）
+
+BASE `d3797b79`（v6.455）。站長轉玩家回報（2026-09-30，附 PTCG 搜判）：狐大盜附 2 個惡能量用「技能大盜」借「激流水泵」，官方：放回 2 個、備戰 120 照打；本站確認鈕按不下去。
+- 重現（harness 完整流程 applyAction→RESOLVE_SELECTION）：**引擎在 v6.455 就是對的**（_hydroPumpRequired＝min(3, 身上單位)），bug 在畫面：`_computeExactRequired` 寫死「激流水泵＝3，只有太晶＋璀璨結晶才 2」⇒ 借招者 2 能量永遠湊不滿；反向另一個洞：太晶＋璀璨結晶＋3 能量時畫面放行 2、引擎要 3 ⇒ 按了確認只打 100。AI 也有第三份（寫死＋用張數比）。
+- 整體 audit（H/I/J、live）：卡面「若希望＋N 個能量付出」共 8 招——忍者飛旋／災難衝擊／金屬之錘已走 v5.992 optInPay（付得出多少付多少）；反轉之風／上搗角擊／水流清洗／付諸東流是拿對手能量，不是付出型；「……這個情況下，〔追加效果〕」全有或全無型只有激流水泵一招。其餘「選擇 N 個能量丟棄」必付型由 v5.998 effectivePreDiscardMin 處理。
+- 中央收斂：`PreDiscardSpec.optInThreshold`（卡片宣告門檻）＋`preDiscardOptInThreshold(spec, 可付單位)`＝min(N, 可付)（_shared.ts，effects.ts re-export）。引擎 `_hydroPumpRequired`、畫面 `_computeExactRequired(spec)`（兩個開窗點）、AI 自動付款（改讀 spec、host-aware 單位累加到門檻）三端都呼叫這一支；畫面不再認招式名。
+- 獨立審查（fable）後補強：AI 的 key 改用 getEffectiveAttacks 的 sourceCardName（與畫面同源）、AI 付款改最小組合（由大到小＋去多餘）；確認鈕「目前 x/需 y」改用能量單位；門檻為 0 時不顯示「不啟用」（兩鈕結果相同）。守衛補三個消費點判準與 AI 行為測（突變驗證：消費點寫死 3、AI 寫死 3、AI 還原 v6.455 三種都會紅）。
+- ⚠ 待站長確認：身上 0 個能量（理論上借招且費用被減到 0 才會發生）時，引擎沿用 v5.653 起的行為＝可以不放回任何能量而打備戰 120；官方搜判只講到「不足 3 個」。
+- 實測（雲端 Playwright）：狐大盜 2 惡能量 → 技能大盜 → 激流水泵 → 勾 2 張 → 「啟用追加效果（需放回 2 個能量，目前 2/2）」可按 → 開出對手備戰選擇、能量回牌庫。
+- 守衛：新增 `test-v6456-optin-threshold-central.mjs`（中央述詞值、引擎完整流程 3 情境、三端共用靜態判準 HEAD-FAIL 對 v6.455 逐條紅）；免疫網（damage／attack-effect）、selection-ui、v6174、optin-pay、prediscard-effective-min、hydro-pump-bench、v6337 借招鏈、v6407 付出時序、ts2304、lint 全綠。
+- 部署：玩家前端＋卡片效果＋AI ⇒ `redeploy-oracle.bat`；錦標賽伺服器引擎也打包這些檔案 ⇒ 建議一併 `update-tournament.bat`。
+
 ## v6.455：v6.454 複審（fable）建議三項
 
 BASE `b4472803`（v6.454）。複審結論：v6.454 通過可上線；三個建議級缺口，本版補齊並全部改用實際量測守：
