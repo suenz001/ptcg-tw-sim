@@ -14121,8 +14121,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   <!-- Retreat Menu（置中橫向 grid，支援放大鏡，避免撞到畫面頂部） -->
   {#if floatingRetreatMenu && myPlayer?.active}
-    <!-- ⭐v6.449：撤退選單是「要做決定」的視窗 ⇒ 點遮罩不關閉（統一規則；用下方「取消」鈕關閉） -->
-    <div class="selection-overlay">
+    <!-- ⭐v6.449：撤退選單是「要做決定」的視窗 ⇒ 桌機點遮罩不關閉（統一規則；用下方「取消」鈕關閉）
+         ⭐v6.454（審查 A）：手機直式的 .selection-overlay 是「可穿透」的（v4.969，給 pending picker 用）——
+           撤退選單不是 pending，開著時還能點到上面的手牌／結束回合 ⇒ 加 retreat-menu-overlay 讓手機直式擋住觸控，
+           並恢復手機「點外面就關」（原本手機自己的撤退 sheet 就是這樣；桌機維持不關）。 -->
+    <div class="selection-overlay retreat-menu-overlay" onclick={(e) => { if (isPortraitMobile && e.target === e.currentTarget) floatingRetreatMenu = null; }}>
       <div class="selection-modal retreat-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }} onclick={(e)=>e.stopPropagation()}>
         <div class="sel-header" title="拖曳視窗">
           <h3>🔄 選擇換入的寶可夢</h3>
@@ -17066,9 +17069,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
        .selection-modal／.prize-view-modal／.pv-inner，語意不同不收）＋
        非 vh 清單 4（.open-room-list 420px／.chat-messages 240px／.log-col 100%／
        .playmat.layout-fable .action-bar > .log-col none）＋ .scroll-list 自己 1。
-     ⚠ **遷移後**現況（守衛 C5 盯住這個數字，不是盯註解）：那 18 條會剩 **13 條** ＝
-       modal 容器 8（⭐v6.449 多了 v6449-picker-shell 的桌機 .selection-modal 外框：85dvh＋視窗內捲動；
-       ⭐v6.450 多了 v6450-picker-sheet 的手機棄牌區／獎賞 sheet .zoom-modal.discard-modal）＋
+     ⚠ **遷移後**現況（守衛 C5 盯住這個數字，不是盯註解）：那 18 條會剩 **14 條** ＝
+       modal 容器 9（⭐v6.449 多了 v6449-picker-shell 的桌機 .selection-modal 外框：85dvh＋視窗內捲動；
+       ⭐v6.450 多了 v6450-picker-sheet 的手機棄牌區／獎賞 sheet .zoom-modal.discard-modal；
+       ⭐v6.454 多了浮動進化選單 .float-evo-menu 的高度上限）＋
        非 vh 清單 4 ＋ 下面這條群組規則自己 1；被遷移的 7 個清單 class 一條都不在。
      ⚠⚠ 這段註解裡**永遠不可以**寫出樣式標籤的開頭字面（角括號 + style）——
        test-v6199／v6284／v6297／v6298／v6299／v6303／v6370 取樣式區塊用的是 lastIndexOf，
@@ -18429,6 +18433,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .discard-modal .sel-card img{ width:var(--pk-card); max-width:100%; height:auto; }
   .sel-card{ min-width:0; box-sizing:border-box; }
   .copy-attack-img{ width:var(--pk-card); }
+  /* ⭐v6.454（審查 F）：浮動進化選單選項很多時（≥5）在矮螢幕仍會超出頂端 ⇒ 高度上限＝(畫面高−16px)/1.05（配合 translate -105%），超出就捲動 */
+  .float-evo-menu{ max-height:calc((100vh - 16px) / 1.05); overflow-y:auto; }
   /* 純瀏覽的密集清單（牌庫剩餘全覽）小一級：72px */
   .full-deck-list{ grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); }
   .prize-view-cardback{ width:var(--pk-card); height:calc(var(--pk-card) * 1.397); max-width:100%; }
@@ -18439,6 +18445,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .sel-footer > .sel-hint-warn{ order:-4; flex:1 0 100%; margin-bottom:0; }
   /* ⭐v6.452：攻擊前視窗的「取消（不使用這個招式）」排在最左（「否」是招式的選項，排在它右邊） */
   .sel-footer > .btn-act.secondary.pre-attack-cancel{ order:-3; }
+  /* ⭐v6.454（審查 D）：「取消出招」和「否」原本同樣式緊鄰 ⇒ 誤按「否」會照樣出招。取消改成虛線透明鈕、與「否」之間留空 */
+  .sel-footer > .btn-act.secondary.pre-attack-cancel{ background:transparent; border:1px dashed rgba(255,255,255,.4); color:#c8d0dc; margin-right:auto; }
+  .sel-footer > .btn-act.secondary.pre-attack-cancel:hover:not(:disabled){ background:rgba(255,255,255,.08); border-color:#fff; color:#fff; }
   .sel-footer > :is(.btn-act.secondary, .btn-ghost, .btn-act:not(.primary)){ order:-1; }
   .selection-modal .btn-ghost:not(.stepper-btn),
   .zoom-modal .btn-ghost:not(.stepper-btn),
@@ -18782,7 +18791,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .selection-modal .sel-grid,
     .selection-modal .retreat-grid,
     .selection-modal .copy-attack-list,
-    .selection-modal .full-deck-list{ --scroll-list-max:none; }
+    .selection-modal .full-deck-list,
+    .selection-modal .rocket-command-scroll,
+    .selection-modal .reorder-deck-wrap{ --scroll-list-max:none; }
     .sel-grid{ grid-template-columns:repeat(4, minmax(0, 1fr)) !important; gap:.4rem; }
     .sel-grid.sel-grid-energy{ grid-template-columns:repeat(4, minmax(0, 1fr)) !important; gap:.4rem; }
     .sel-grid.sel-grid-energy .sel-card img{ width:100%; }
@@ -18790,7 +18801,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .retreat-pick{ min-width:0; padding:.35rem .2rem .4rem; font-size:.66rem; }
     .retreat-pick img{ width:100%; max-width:96px; }
     .full-deck-list{ grid-template-columns:repeat(5, minmax(0, 1fr)); }
-    .selection-modal > .sel-footer{ padding-top:.5rem; }
+    /* ⭐v6.454（審查 C／H）：按鈕列黏在 sheet 最底、自己吃掉底部安全區（iPhone home indicator）——
+       原本 bottom:0 黏在 padding 外緣，還沒捲到底時「確定」會壓在 home indicator 上；
+       撤退選單舊的 .retreat-modal .sel-footer（v6.122）背景與內距也一併對齊 sheet。 */
+    /* ⚠ 不可以用負的下邊距去抵 sheet 的內距：容器會以為內容比較短 ⇒ 內容溢出、黏底的按鈕列蓋住上面的提示文字（實測）。
+       ⇒ 有按鈕列的 sheet 把底部內距交給按鈕列自己吃（:has），沒有按鈕列的照舊。 */
+    .selection-modal:has(> .sel-footer){ padding-bottom:0; }
+    .selection-modal > .sel-footer{
+      bottom:0; padding:.5rem .85rem calc(.75rem + var(--safe-bottom, 0px));
+      margin:0 -.85rem;
+      background:inherit; box-shadow:0 -6px 12px rgba(0,0,0,.35);
+    }
+    /* ⭐v6.454（審查 A）：撤退選單不是 pending picker ⇒ 手機直式要擋住背後的觸控（其他選擇視窗照舊可穿透） */
+    .selection-overlay.retreat-menu-overlay{ pointer-events:auto; background:rgba(0,0,0,.55); }
     .sel-footer::before{ display:none; }
     .sel-footer > :is(button, .btn-act, .btn-primary, .btn-ghost){ flex:1 1 0; min-height:44px; justify-content:center; text-align:center; white-space:normal; box-sizing:border-box; }  /* ⭐v6.453：border-box */
     /* ⭐v6.453：flex-basis:0 時框線寬度不會被「平分」吃掉（次要鈕有 1px 框、主要鈕沒有 ⇒ 差 2px 不等寬，量測守衛抓到）⇒ 主要鈕補同寬的透明框 */
@@ -18803,6 +18826,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       padding:.75rem .85rem calc(.75rem + var(--safe-bottom, 0px));
     }
     .discard-modal .sel-grid{ --scroll-list-max:none; }
+    /* ⭐v6.454（審查 B）：sheet 本身捲動後 ✕ 會被捲走 ⇒ ✕ 黏在 sheet 右上角（不佔版面：負的下邊距） */
+    .zoom-modal.discard-modal > .zoom-close{ position:sticky; top:0; align-self:flex-end; flex-shrink:0; margin:0 0 -2.2rem auto; z-index:3; }
     /* <<< v6450-picker-sheet */
   }
 
@@ -20201,6 +20226,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .battle-root:has(.playmat.layout-blue) .reorder-section-title{ color:#fff; }
   /* ⭐v6.453：設定面板的標題也跟著新版桌墊（原本綠字＋綠線） */
   .battle-root:has(.playmat.layout-blue) .settings-title{ color:#fff; border-bottom-color:rgba(255,255,255,.3); }
+  /* ⭐v6.454：新版桌墊的次要鈕規則特異度較高，「取消出招」的虛線樣式要在這裡再說一次 */
+  .battle-root:has(.playmat.layout-blue) .sel-footer > .btn-act.secondary.pre-attack-cancel{ background:transparent; border:1px dashed rgba(255,255,255,.45); color:#cfe0ff; }
   .battle-root:has(.playmat.layout-blue) .full-deck-view{ background:rgba(3,10,30,.45); border-color:rgba(255,255,255,.22); }
   .battle-root:has(.playmat.layout-blue) .full-deck-view summary{ color:#cfe0ff; }
   .battle-root:has(.playmat.layout-blue) .reorder-pos{ color:#7aa4ff; }

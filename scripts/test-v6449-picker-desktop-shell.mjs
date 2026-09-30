@@ -86,9 +86,14 @@ const CHECKS = [
       && /minmax\(72px,1fr\)/.test(declsOf(c, '.full-deck-list'));
   }],
   ['★★[④遮罩] 檢視類遮罩改 .82（與選擇視窗一致）', true, (src) => /rgba\(0,0,0,\.82\)/.test(declsOf(shell(src), '.zoom-overlay'))],
-  ['★★★[④關閉] 撤退選單點遮罩不再關閉', true, (src) =>
-    !src.includes('<div class="selection-overlay" onclick={() => floatingRetreatMenu = null}>')
-    && /<div class="selection-overlay">\n      <div class="selection-modal retreat-modal" use:modalDrag=\{\{ resetKey: pendingSelection\?\.token \?\? pendingSelection\?\.effectKey \}\} onclick=\{\(e\)=>e\.stopPropagation\(\)\}>\n        <div class="sel-header" title="拖曳視窗">\n          <h3>🔄 選擇換入的寶可夢<\/h3>/.test(src)],
+  // ⭐v6.454（審查 A，Rule 40 意圖不變）：桌機仍「點遮罩不關」；手機直式因為撤退選單不是 pending picker、要擋住背後觸控，
+  //   改成「只有手機直式點外面才關」（原本手機自己的撤退 sheet 就是點外即關）——判準收緊成「非手機直式一律不關」。
+  ['★★★[④關閉] 撤退選單點遮罩不再關閉（桌機；手機直式例外見 test-v6454）', true, (src) => {
+    if (src.includes('<div class="selection-overlay" onclick={() => floatingRetreatMenu = null}>')) return false;
+    const tail = '\n      <div class="selection-modal retreat-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }} onclick={(e)=>e.stopPropagation()}>\n        <div class="sel-header" title="拖曳視窗">\n          <h3>🔄 選擇換入的寶可夢</h3>';
+    return src.includes('<div class="selection-overlay">' + tail)
+      || src.includes('<div class="selection-overlay retreat-menu-overlay" onclick={(e) => { if (isPortraitMobile && e.target === e.currentTarget) floatingRetreatMenu = null; }}>' + tail);
+  }],
   ['[④前提] 撤退選單仍有「取消」鈕可關閉', false, (src) => {
     const i = src.indexOf('<h3>🔄 選擇換入的寶可夢</h3>'); const j = src.indexOf('<div class="sel-footer">', i);
     return i > 0 && j > i && /floatingRetreatMenu\s*=\s*null/.test(src.slice(j, j + 400));

@@ -1,5 +1,19 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.454：v6.448～v6.453 獨立審查（fable）修正
+
+BASE `c16c9675`（v6.453）。站長要求「做完後要通過審查」⇒ 獨立審查結論：無阻擋級，應修 A～D、建議 E～J。本版處理：
+- A（應修）手機撤退選單可穿透：撤退遮罩加 `retreat-menu-overlay`，手機直式 `pointer-events:auto`＋暗底；手機直式點外面關（`isPortraitMobile && e.target === e.currentTarget`），桌機維持不關。test-v6449 ④ 判準收緊成「桌機不關、只有手機直式例外」。
+- B（應修）手機棄牌區 sheet 的 ✕ 被捲走：`.zoom-modal.discard-modal > .zoom-close` 改 sticky top:0（負下邊距不佔版面）。
+- C／H：審查說「確定」會壓到 home indicator——Chromium 實測不重現（sticky 邊界本來就扣掉 padding），當正對照守住；仍把按鈕列改成自己吃底部安全區，並對齊撤退選單舊 footer 的底色與內距。⚠ 第一版用負下邊距抵 sheet 內距，實測造成短視窗的按鈕列蓋住提示文字 ⇒ 改用 `.selection-modal:has(> .sel-footer){padding-bottom:0}`（量測守衛與突變驗證都有）。
+- D（應修）「取消出招」改虛線透明鈕＋`margin-right:auto` 與「否」隔開（新版桌墊另寫一條較高特異度）。
+- E 手機 sheet 的 `--scroll-list-max:none` 補 `.rocket-command-scroll`、`.reorder-deck-wrap`（test-v6390 F2 白名單同步）。
+- F `.float-evo-menu{max-height:calc((100vh - 16px)/1.05); overflow-y:auto}`（test-v6390 現查條數 13→14、mutcheck M9 同步）。
+- 未處理：I（桌機外框＋格子雙層捲動，需連動 v6390，留待觀察）、J（已知取捨：底部 sheet 蓋住手牌列）。
+- 環境註記：本機用 `PW_EXECUTABLE`（chromium-1194）跑時，test-v6297／v6303／v6304 的版面量測在 v6.447 原版就同樣紅（瀏覽器版本差），CI 的 chromium-headless-shell 不受影響。
+- 守衛：新增 `test-v6454-review-fixes.mjs`（字串 HEAD-FAIL 對 v6.453＋Playwright 量測：安全區 34px、短視窗不蓋提示、✕ 捲動後可見、撤退遮罩擋觸控）；bump 配套。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## v6.453：picker／UI 統一化剩餘項目＋實際量測守衛
 
 BASE `05817482`（v6.452）。站長交辦（2026-09-30）：「還沒做的進行處理」。

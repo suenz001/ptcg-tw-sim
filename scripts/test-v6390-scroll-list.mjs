@@ -71,7 +71,8 @@ const EXPECTED = [
   MEDIA_P + '|.sel-grid.sel-grid-energy',
   MEDIA_L + '|.sel-grid',
   // ⭐v6.450 v6450-picker-sheet（手機直式底部 sheet）：欄數＋取消格子自己的捲動（--scroll-list-max:none，由 sheet 捲）
-  MEDIA_P + '|.selection-modal .sel-grid, .selection-modal .retreat-grid, .selection-modal .copy-attack-list, .selection-modal .full-deck-list',
+  // ⭐v6.454（審查 E）：高傲指令、排序牌庫頂的清單也併進 sheet 的單層捲動
+  MEDIA_P + '|.selection-modal .sel-grid, .selection-modal .retreat-grid, .selection-modal .copy-attack-list, .selection-modal .full-deck-list, .selection-modal .rocket-command-scroll, .selection-modal .reorder-deck-wrap',
   MEDIA_P + '|.sel-grid',
   MEDIA_P + '|.sel-grid.sel-grid-energy',
   MEDIA_P + '|.retreat-grid',
