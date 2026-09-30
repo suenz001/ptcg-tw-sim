@@ -1,5 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.453：picker／UI 統一化剩餘項目＋實際量測守衛
+
+BASE `05817482`（v6.452）。站長交辦（2026-09-30）：「還沒做的進行處理」。
+- 手機撤退：MobilePortraitBattle 新增必填 prop `onOpenRetreat()` → 父層 `floatingRetreatMenu`（v6.451 起就是 promoteGrid；手機直式為底部 sheet、3 隻一列）；移除手機自己的 `pick-retreat-target` sheet 與 `retreatTo()`（附能／進化目標 sheet 照舊用 mp-pick-card）。test-v6293 E1 還原表加一行。
+- 宣告棄權確認：白底 → 深色系統視窗（#1a1a2e＋紅框），拿掉點遮罩關閉，「再等等」order:-1 靠左。
+- 設定面板：寫了沒生效的 500px 原規則保留（test-v6285 S3 釘住原樣），另在 v6449-picker-shell 加 `:where(.zoom-modal).settings-modal` 收進 M（760）；新版桌墊的 `.settings-title` 改白字。
+- 視窗層級：盤點 z-index 無倒置，把刻度表寫進 v6449-picker-shell 說明。
+- 手機直式按鈕列：flex-basis:0 時框線寬度不平分 ⇒ 主要鈕補 1px 透明框（實測 173 vs 175px → 等寬），並 border-box。
+- mutcheck-v6390 M16：切區塊判準已在 svelte-style-block.mjs，改突變那支（FILES 加 S）⇒ 35/35。
+- 新增實際量測守衛 `test-v6453-picker-measure.mjs`（Playwright，抽真實樣式＋最小 markup，1440×900／1366×657／390×844／844×390 量 S/M/L 寬、卡圖 96、每列張數、貼底、按鈕位置；HEAD-FAIL 餵 v6.447 至少 10/14 條不成立；無瀏覽器 ENV-SKIP）。
+- 守衛：新增 `test-v6453-picker-leftovers.mjs`（HEAD-FAIL 對 v6.452）＋上述量測守衛；bump 配套。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## v6.452：攻擊前數字／是否視窗補「取消出招」
 
 BASE `59b1a4fa`（v6.451）。站長裁定（2026-09-30）：第 4 項採用建議——補上取消。

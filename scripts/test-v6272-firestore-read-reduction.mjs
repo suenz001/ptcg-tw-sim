@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '59b1a4fa3e26fb8fa81a82a32934ceca4b3f70fb';   // v6.451（上一版）
+const PREV_SHA = '058174820badce141d22e589658450cfb97a9dab';   // v6.452（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,15 +757,25 @@ const PREV_SHA = '59b1a4fa3e26fb8fa81a82a32934ceca4b3f70fb';   // v6.451（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.452 前移：PREV_SHA 從 59b1a4fa（v6.451）起算。
+  // ⚠⚠ v6.453 前移：PREV_SHA 從 05817482（v6.452）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.452：攻擊前數字／是否視窗補「取消出招」（game/+page.svelte）；首頁 changelog 三步搬運。
+  // ⭐v6.453：picker 統一化剩餘項目（手機撤退改開父層撤退選單、棄權確認深色、設定 M 寬、層級刻度表、手機按鈕等寬；game/+page.svelte、MobilePortraitBattle.svelte）；首頁 changelog 三步搬運。
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
+  'src/routes/game/MobilePortraitBattle.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.452）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.452 前移：PREV_SHA 從 59b1a4fa（v6.451）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.452：攻擊前數字／是否視窗補「取消出招」（game/+page.svelte）；首頁 changelog 三步搬運。
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.451）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.451 前移：PREV_SHA 從 bf19000c（v6.450）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -901,7 +911,7 @@ const PREV_ALLOWED = [
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
-// （⭐v6.452：歷史宣告只保留到 v6.435 —— 整段連續註解超過 200 行會觸發 strip-comments 護欄；更舊的見 git 歷史。）
+// （⭐v6.453：歷史宣告只保留到 v6.436 —— 整段連續註解超過 200 行會觸發 strip-comments 護欄；更舊的見 git 歷史。）
 // ── 上一版（v6.437）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.437 前移：PREV_SHA 從 b404a8f2（v6.436）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -930,17 +940,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/effects/cards/slowking_lucario_deck.ts',
 //   'src/lib/game/effects/cards/v2680_i_wave18_copy_attacks.ts',
 //   'src/lib/game/effects/cards/v2760_h_wave3_complex.ts',
-//   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.435）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-//  ⭐v6.435：站長裁定「借招借不到冷卻中的天仙石」——冷卻判準搬到 leaf 模組 player-attack-cooldown.ts（新檔），
-//  engine.ts 改 import＋re-export、copy-attack.ts 的候選過濾、ai-slowking.ts 改用中央候選。
-//   'src/lib/game/ai-slowking.ts',
-//   'src/lib/game/copy-attack.ts',
-//   'src/lib/game/engine.ts',
-//   'src/lib/game/player-attack-cooldown.ts',
 //   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',

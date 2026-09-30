@@ -102,6 +102,8 @@
     onOpenPrizes?: () => void;
     // ⭐v6.451：棄牌區改用父層那一份檢視視窗（手機直式時它是底部 sheet，v6.450）——原本這裡自己做了一份棄牌 sheet。
     onOpenDiscard: (who: 'me' | 'opp') => void;
+    // ⭐v6.453：撤退改開父層那一份「選擇換入的寶可夢」（與補位同一種卡片格子；手機直式時是底部 sheet）——原本這裡自己做了一份。
+    onOpenRetreat: () => void;
     onOpenSettings: () => void;
     onLeave: () => void;
     // v5.194：手機版補悔棋按鈕（鏡射桌面版 performUndo）
@@ -127,6 +129,7 @@
     onAction, onInitiateAttack, onOpenZoom, onOpenSettings, onLeave,
     onOpenPrizes,   // v6.190（回放限定）
     onOpenDiscard,  // v6.451
+    onOpenRetreat,  // v6.453
     undoAvailable = false,
     onUndo,
     onResync,
@@ -351,7 +354,6 @@
     | { type: 'bench'; inst: CardInstance }
     | { type: 'pick-energy-target'; energyIid: string }
     | { type: 'pick-evolve-target'; evoIid: string; candidates: string[] }
-    | { type: 'pick-retreat-target' }  // v5.200 撤退改卡圖網格 picker
     | null;
   let sheet = $state<SheetState>(null);
   function closeSheet() { sheet = null; }
@@ -407,10 +409,6 @@
   async function evolveTo(fromIid: string, evoIid: string) {
     closeSheet();
     await onAction(GameActions.evolve(fromIid, evoIid));
-  }
-  async function retreatTo(benchIid: string) {
-    closeSheet();
-    await onAction(GameActions.retreat(benchIid));
   }
   async function useAbility(iid: string, abilityIndex: number) {
     closeSheet();
@@ -561,7 +559,7 @@
       const costLabel = currentRetreatCost !== null ? `（-${currentRetreatCost}）` : '';
       out.push({
         label: `🔄 撤退${costLabel}…`,
-        action: () => { sheet = { type: 'pick-retreat-target' }; },
+        action: () => { closeSheet(); onOpenRetreat(); },
         primary: true,
       });
     }
@@ -1200,33 +1198,6 @@
                 </button>
               </div>
             {/if}
-          {/each}
-        </div>
-      {:else if sheet.type === 'pick-retreat-target'}
-        <!-- v5.200：撤退選備戰改卡圖網格（鏡射桌面送新戰鬥位 modal）-->
-        <div class="mp-sheet-title mp-sheet-drag-handle" title="拖曳視窗位置">🔄 選擇換入的寶可夢{currentRetreatCost !== null ? `（撤退費 -${currentRetreatCost}）` : ''}</div>
-        <div class="mp-pick-grid">
-          {#each myPlayer.bench as b}
-            {@const bc = cardOf(b)}
-            {@const allTools = [...(b.toolAttached ? [b.toolAttached] : []), ...(b.extraTools ?? [])]}
-            {@const toolCnt = allTools.length}
-            <div class="mp-pick-card">
-              <button class="mp-pick-zoom" title="放大檢視：{bc?.name ?? '?'}"
-                onclick={(e) => { e.stopPropagation(); closeSheet(); onOpenZoom(b.cardId, b); }}>🔍</button>
-              <button class="mp-pick-btn" disabled={actionBusy} onclick={() => retreatTo(b.iid)}>
-                {#if bc?.imageUrl}<img use:retryImg={bc.imageUrl} src={bc.imageUrl} alt={bc.name} loading="lazy"/>{/if}
-                <div class="mp-pick-name">{bc?.name ?? '?'}</div>
-                <div class="mp-pick-meta">HP {hpRemaining(b)}/{hpMax(b)}</div>
-                <div class="mp-pick-pips">
-                {#each energyPips(b) as pip}
-                  <span class="mp-pip mp-pip-sm" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
-                {/each}
-                {#if b.energyAttached.length === 0}<span class="mp-pick-noenergy">無能量</span>{/if}
-              </div>
-              {#if toolCnt > 0}<div class="mp-pick-meta">🔧 {toolCnt}</div>{/if}
-                {#if b.status}<div class="mp-pick-status">⚠️ {b.status === 'poisoned' ? '☠️' : b.status === 'burned' ? '🔥' : b.status === 'asleep' ? '💤' : b.status === 'confused' ? '😵' : b.status === 'paralyzed' ? '⚡' : b.status}</div>{/if}
-              </button>
-            </div>
           {/each}
         </div>
       {/if}

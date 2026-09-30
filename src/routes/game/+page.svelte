@@ -11521,6 +11521,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       onOpenZoom={openZoom}
       onOpenPrizes={openPrizeView}
       onOpenDiscard={(who) => { viewDiscardFor = who === 'me' ? myIdx : oppIdx; }}
+      onOpenRetreat={() => { floatingRetreatMenu = { x: innerWidth / 2, y: innerHeight / 2 }; }}
       onOpenSettings={() => showSettingsModal = true}
       onLeave={() => {
         // v5.566：手機直式離開鈕也要走投降確認(原直接 leaveOnlineGame 漏了確認視窗)
@@ -12506,7 +12507,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   </div>
 {/if}
 {#if showForfeitConfirm}
-  <div class="forfeit-modal-backdrop" onclick={() => showForfeitConfirm = false} role="presentation">
+  <!-- ⭐v6.453：宣告對手棄權是「要做決定」的視窗 ⇒ 點遮罩不關閉（用「再等等」關；UI 統一化關閉規則） -->
+  <div class="forfeit-modal-backdrop" role="presentation">
     <div class="forfeit-modal" use:modalDrag onclick={(e) => e.stopPropagation()} role="dialog">
       <h3 class="forfeit-title modal-drag-handle">確定宣告對手棄權？</h3>
       <p class="forfeit-desc">對手已超過 {fmtMMSS(Math.min(300, Math.max(60, roomData?.idleTimeoutSec ?? 180)))} 無回應。確認後系統會立刻判定你獲勝，無法撤回。</p>
@@ -15307,29 +15309,33 @@ function _setupSelfPending(g: any, seat: number): string | null {
     align-items: center;
     justify-content: center;
   }
+  /* ⭐v6.453 UI 統一化：原本是全站唯一的白底視窗 ⇒ 改成與賽事通知／悔棋請求同一套深色系統視窗（強調色＝紅）；
+     按鈕列同其他視窗：主要（確定獲勝）在右、次要（再等等）在左。 */
   .forfeit-modal {
-    background: #fff;
+    background: #1a1a2e;
+    border: 2px solid #dc2626;
+    color: #e0e0e0;
     padding: 24px 28px;
-    border-radius: 8px;
+    border-radius: 12px;
     max-width: 420px;
     width: 90%;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 32px rgba(220, 38, 38, 0.3);
   }
   .forfeit-title {
     margin: 0 0 12px;
     font-size: 18px;
-    color: #1f1f1f;
+    color: #fca5a5;
   }
   .forfeit-desc {
     margin: 0 0 20px;
     font-size: 14px;
-    color: #4b5563;
+    color: #c3c8d0;
     line-height: 1.5;
   }
   .forfeit-actions {
     display: flex;
     gap: 12px;
-    justify-content: flex-end;
+    justify-content: space-between;
   }
   .forfeit-confirm {
     padding: 8px 16px;
@@ -15342,14 +15348,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   .forfeit-confirm:hover { background: #b91c1c; }
   .forfeit-cancel {
+    order: -1;
     padding: 8px 16px;
-    background: #e5e7eb;
-    color: #1f1f1f;
-    border: none;
+    background: #2a3a5a;
+    color: #ccddff;
+    border: 1px solid #4a5a8a;
     border-radius: 4px;
     cursor: pointer;
   }
-  .forfeit-cancel:hover { background: #d1d5db; }
+  .forfeit-cancel:hover { background: #34487a; }
   /* v2.144：html + body 背景色改由頂端 svelte:head 動態注入，避免污染其他頁面 */
 
   /* v2.164 reorder-deck-top — 排序牌庫頂 N 張 UI */
@@ -18390,6 +18397,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
        所以這裡的選擇器**刻意維持低特異度**（寬度用 :where() 包住變體 class），不可以隨手加長。
      ⚠ 本頁媒體查詢數量被 test-v6187／v6195／v6199 釘住 ⇒ 這裡不新增任何媒體查詢。
      ═══════════════════════════════════════════════════════════════════ */
+  /* ⭐v6.453 視窗層級（z-index）刻度——新視窗照這張表挑數字，不要再自創：
+       棋盤內元素（各版面自己的疊放，都關在 .playmat 自己的層級裡）＜ 50 浮動進化選單（50／51）
+       ＜ 100 選擇視窗（.selection-overlay，要做決定）＜ 200 檢視視窗（.zoom-overlay：放大／棄牌區／獎賞／設定）
+       ＜ 2000 宣告棄權確認 ＜ 9000～9999 動畫／提示／預覽（擲幣、飛卡、傷害數字、吐司、拖曳預覽、燈箱）
+       ＜ 10000 系統詢問（賽事通知、悔棋請求、版本閘）＜ 100000 名人堂全螢幕。
+     盤點（v6.453）：沒有「檢視視窗蓋不過選擇視窗」或「提示被視窗蓋住」的倒置。 */
   .selection-overlay, .zoom-overlay{ --pk-s:480px; --pk-m:760px; --pk-l:960px; --pk-card:96px; }
   .zoom-overlay{ background:rgba(0,0,0,.82); }
 
@@ -18402,6 +18415,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   :where(.selection-modal).pk-s,
   :where(.selection-modal).mulligan-modal:not(.mulligan-reveal-modal){ --pk-w:var(--pk-s); }
   :where(.zoom-modal).discard-modal{ --pk-w:var(--pk-l); box-sizing:border-box; width:100%; max-width:min(var(--pk-w), calc(100vw - 32px)); max-height:85dvh; }
+  /* ⭐v6.453：設定面板原本寫了 max-width:500px 但被 .zoom-modal 的 864px 蓋掉（從沒生效）⇒ 收進三級寬度的 M（760） */
+  :where(.zoom-modal).settings-modal{ --pk-w:var(--pk-m); box-sizing:border-box; width:100%; max-width:min(var(--pk-w), calc(100vw - 32px)); }
   /* 按鈕列黏在視窗底部（內容多到要捲動時仍看得到「確認」） */
   .selection-modal > .sel-footer{ position:sticky; bottom:0; z-index:2; background:inherit; padding-top:.35rem; }
 
@@ -18777,7 +18792,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .full-deck-list{ grid-template-columns:repeat(5, minmax(0, 1fr)); }
     .selection-modal > .sel-footer{ padding-top:.5rem; }
     .sel-footer::before{ display:none; }
-    .sel-footer > :is(button, .btn-act, .btn-primary, .btn-ghost){ flex:1 1 0; min-height:44px; justify-content:center; text-align:center; white-space:normal; }
+    .sel-footer > :is(button, .btn-act, .btn-primary, .btn-ghost){ flex:1 1 0; min-height:44px; justify-content:center; text-align:center; white-space:normal; box-sizing:border-box; }  /* ⭐v6.453：border-box */
+    /* ⭐v6.453：flex-basis:0 時框線寬度不會被「平分」吃掉（次要鈕有 1px 框、主要鈕沒有 ⇒ 差 2px 不等寬，量測守衛抓到）⇒ 主要鈕補同寬的透明框 */
+    .sel-footer > .btn-act.primary{ border:1px solid transparent; }
     /* 只看不選的棄牌區／獎賞檢視：也從底部升起 */
     .zoom-overlay:has(> .discard-modal){ align-items:flex-end; padding:0; padding-top:calc(var(--safe-top, 0px) + .4rem); }
     .zoom-modal.discard-modal{
@@ -20182,6 +20199,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .battle-root:has(.playmat.layout-blue) .dmg-progress-bar{ background:rgba(3,10,30,.6); border-color:rgba(255,255,255,.3); }
   .battle-root:has(.playmat.layout-blue) .discard-title,
   .battle-root:has(.playmat.layout-blue) .reorder-section-title{ color:#fff; }
+  /* ⭐v6.453：設定面板的標題也跟著新版桌墊（原本綠字＋綠線） */
+  .battle-root:has(.playmat.layout-blue) .settings-title{ color:#fff; border-bottom-color:rgba(255,255,255,.3); }
   .battle-root:has(.playmat.layout-blue) .full-deck-view{ background:rgba(3,10,30,.45); border-color:rgba(255,255,255,.22); }
   .battle-root:has(.playmat.layout-blue) .full-deck-view summary{ color:#cfe0ff; }
   .battle-root:has(.playmat.layout-blue) .reorder-pos{ color:#7aa4ff; }

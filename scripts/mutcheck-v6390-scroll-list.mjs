@@ -17,6 +17,8 @@ const GUARD = join(ROOT, 'scripts/test-v6390-scroll-list.mjs');
 const FILES = {
   P: join(ROOT, 'src/routes/game/+page.svelte'),
   L: join(ROOT, 'scripts/lib/css-cascade.mjs'),
+  // ⭐v6.453：v6.392 起切樣式區塊的判準收斂到 svelte-style-block.mjs（css-cascade 只是轉呼叫）⇒ M16 要突變這支才打得到
+  S: join(ROOT, 'scripts/lib/svelte-style-block.mjs'),
 };
 const ORIGS = Object.fromEntries(Object.entries(FILES).map(([k, f]) => [k, readFileSync(f, 'utf8')]));
 const P = FILES.P;
@@ -150,7 +152,8 @@ mut('M15 ⭐⭐ 加一條模擬器不支援的選擇器（:not）到 .sel-grid �
   (s) => s.replace('  .copy-attack-poke{', '  .selection-modal:not(.x) .sel-grid{ max-height:9vh; }' + EOL + '  .copy-attack-poke{'),
   ['F1 ⭐ 沒有一條規則用到本模擬器不支援的選擇器形態', 'F2 ⭐⭐ 影響這 8 個 class 的規則集合']);
 mut('M16 ⭐⭐ 把 lib 的 styleBlockOf 改回 indexOf（🔴-2 的回歸）',
-  { L: (s) => s.replace("const a = src.lastIndexOf('<' + 'style');", "const a = src.indexOf('<' + 'style');") },
+  // ⭐v6.453：切區塊已收斂到 svelte-style-block.mjs 的 styleTagIndex()（`s.lastIndexOf(OPEN)`），舊錨點失效 ⇒ 改突變那支
+  { S: (s) => s.replace('  const i = s.lastIndexOf(OPEN);', '  const i = s.indexOf(OPEN);') },
   ['F0 抓得到']);
 mut('M17 ⭐ 把 lib 的 cascadeEffective 退化成不理簡寫（🟡-4 的回歸）',
   { L: (s) => s.replace("  const sh = SHORTHAND_OF[prop];", "  const sh = undefined; void SHORTHAND_OF;") },
