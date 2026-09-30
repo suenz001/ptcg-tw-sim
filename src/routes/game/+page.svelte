@@ -13466,6 +13466,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
               dispatch(GameActions.attack(ai, iids, cc, ccChain));
             }}>確認（放 {currentN} 個）</button>
         </div>
+        <!-- ⭐v6.452 站長裁定（2026-09-30）：攻擊前的數字視窗補「取消」——按了回到出招前（這回合還能做別的事），
+             與攻擊前選能量的視窗一致；避免手滑按錯招式就非出不可。 -->
+        <div class="sel-footer">
+          <button class="btn-act secondary pre-attack-cancel" title="不使用這個招式，回到出招前（這回合還能做別的事）" onclick={cancelPreAttackDiscard}>取消出招</button>
+        </div>
       </div>
     </div>
   {/if}
@@ -13540,6 +13545,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
               preAttackDiscard = null;
               dispatch(GameActions.attack(ai, [], cc, ccChain));
             }}>{noLabel}</button>
+          <!-- ⭐v6.452 站長裁定：是否視窗也補「取消」（回到出招前；「否」是這個招式的一個選項，會照樣出招） -->
+          <button class="btn-act secondary pre-attack-cancel" title="不使用這個招式，回到出招前（這回合還能做別的事）" onclick={cancelPreAttackDiscard}>取消出招</button>
         </div>
       </div>
     </div>
@@ -18414,7 +18421,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   /* ③ 按鈕列：次要在左、主要在右（::before 當彈簧；警告文字獨佔第一行） */
   .sel-footer{ justify-content:flex-start; align-items:center; }
   .sel-footer::before{ content:''; flex:1 1 0; order:0; }
-  .sel-footer > .sel-hint-warn{ order:-2; flex:1 0 100%; margin-bottom:0; }
+  .sel-footer > .sel-hint-warn{ order:-4; flex:1 0 100%; margin-bottom:0; }
+  /* ⭐v6.452：攻擊前視窗的「取消（不使用這個招式）」排在最左（「否」是招式的選項，排在它右邊） */
+  .sel-footer > .btn-act.secondary.pre-attack-cancel{ order:-3; }
   .sel-footer > :is(.btn-act.secondary, .btn-ghost, .btn-act:not(.primary)){ order:-1; }
   .selection-modal .btn-ghost:not(.stepper-btn),
   .zoom-modal .btn-ghost:not(.stepper-btn),

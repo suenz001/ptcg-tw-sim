@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.452：攻擊前數字／是否視窗補「取消出招」
+
+BASE `59b1a4fa`（v6.451）。站長裁定（2026-09-30）：第 4 項採用建議——補上取消。
+- stepper 視窗新增 `.sel-footer` 放「取消出招」；是否視窗在同一個 `.sel-footer` 加一顆。兩顆都呼叫既有的 `cancelPreAttackDiscard`（只清 `preAttackDiscard`，不送動作；與攻擊前選能量視窗的取消同一支）。
+- 排序：`.sel-footer > .btn-act.secondary.pre-attack-cancel{order:-3}`（特異度要贏過 v6.449 次要鈕 `order:-1` 的 0,3,0）；警告列改 `order:-4` 仍獨佔第一行。
+- 實測（雲端 Playwright，d1440／m390）：兩個視窗都出現「取消出招」在最左，點下後選擇視窗消失。
+- 守衛：新增 `test-v6452-pre-attack-cancel.mjs`（HEAD-FAIL 對 v6.451）；bump 配套。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## v6.451：picker／UI 統一化第 5 步——重複的程式合併
 
 BASE `bf19000c`（v6.450）。站長裁定（2026-09-30）採用調查報告第 5 步。
