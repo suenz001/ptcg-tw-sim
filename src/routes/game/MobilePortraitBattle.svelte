@@ -43,8 +43,7 @@
     canRetreat as engineCanRetreat, getRetreatCost, getBenchLimit,
     getEffectiveHP,
     getHandActivatableAbilities,  // v6.080 手牌特性中央 gate（這裡只拿 abilityName/abilityIndex 當標籤用）
-    twoCardStadiumHalfIndex,      // v6.086 兩張合一競技場手牌裁半
-    isTwoCardStadiumName          // v6.091 棄牌區兩張合一不聚合判準
+    twoCardStadiumHalfIndex       // v6.086 兩張合一競技場手牌裁半（⭐v6.451 棄牌區併入父層後，isTwoCardStadiumName 不再需要）
   } from '$lib/game/engine';
   // ⭐⭐⭐v6.201：手牌「這張卡現在能做什麼」的唯一述詞（桌機 v6.200 已改讀它）。
   //   本檔原本自帶第三份 playable*Iids / aceCancelActiveLocal / handAbilityActivatableIids，
@@ -101,6 +100,8 @@
     // ⭐v6.190 回放限定：開啟「雙方獎賞卡」檢視視窗。視窗本體畫在父層（版面分支之外），
     //   這裡只負責觸發。⚠ 父層沒傳＝按鈕不出現（不會靜默變成點了沒反應）。
     onOpenPrizes?: () => void;
+    // ⭐v6.451：棄牌區改用父層那一份檢視視窗（手機直式時它是底部 sheet，v6.450）——原本這裡自己做了一份棄牌 sheet。
+    onOpenDiscard: (who: 'me' | 'opp') => void;
     onOpenSettings: () => void;
     onLeave: () => void;
     // v5.194：手機版補悔棋按鈕（鏡射桌面版 performUndo）
@@ -125,6 +126,7 @@
     attackEstimates = null, // v6.233
     onAction, onInitiateAttack, onOpenZoom, onOpenSettings, onLeave,
     onOpenPrizes,   // v6.190（回放限定）
+    onOpenDiscard,  // v6.451
     undoAvailable = false,
     onUndo,
     onResync,
@@ -350,25 +352,11 @@
     | { type: 'pick-energy-target'; energyIid: string }
     | { type: 'pick-evolve-target'; evoIid: string; candidates: string[] }
     | { type: 'pick-retreat-target' }  // v5.200 撤退改卡圖網格 picker
-    | { type: 'discard'; list: CardInstance[]; owner: string }
     | null;
   let sheet = $state<SheetState>(null);
   function closeSheet() { sheet = null; }
 
-  // ── 開啟棄牌區清單 sheet ──────────────────────────────────────────
-  function openDiscard(list: CardInstance[], owner: string) {
-    if (list.length === 0) return;
-    sheet = { type: 'discard', list: [...list].reverse(), owner };
-  }
 
-  // ── v5.128：棄牌區合併同名卡 helper（script 區 — 避開 {@const} 規則限制）─
-  //   同 cardId 視為同張卡（同名 + 同版本），count 累加；按數量降序排。
-  //   sheet.list 變動時 template 重新呼叫此函式，無 reactivity 問題。
-  //   v5.116~v5.120 曾用 template 內 IIFE / reduce 嘗試 5 次 build fail，
-  //   v5.121 才發現是另處 changelog raw {@const} 造成。本版用 script helper 最安全。
-  // v6.091：key ＝ each 的穩定 key（一般卡用 cardId、兩張合一競技場拆開後用 iid，
-  //   ⚠ 不改 key 會 each_key_duplicate 直接白屏）；half ＝ 左/右半。
-  type DiscardGroup = { cardId: string; inst: CardInstance; count: number; name: string; supertype: string | undefined; subtype: string | undefined; key: string; half?: 0 | 1 | null };
   // v5.606 防呆：依 iid 去重，避免瞬時重複 iid 讓 keyed {#each} 崩潰（each_key_duplicate 白屏）。
   function dedupeByIid<T extends { iid?: string }>(list: readonly T[] | null | undefined): T[] {
     if (!list) return [];
@@ -376,52 +364,6 @@
     for (const c of list) { const k = (c as any)?.iid; if (typeof k === 'string') { if (seen.has(k)) continue; seen.add(k); } out.push(c as T); }
     return out;
   }
-  function groupDiscardList(list: CardInstance[]): DiscardGroup[] {
-    const m = new Map<string, DiscardGroup>();
-    for (const inst of list) {
-      const c0 = pool.get(inst.cardId);
-      // v6.091「傳說」兩張合一競技場不聚合 —— 左右半各自一格（Wilson 裁定）。
-      if (isTwoCardStadiumName(c0?.name)) {
-        m.set(inst.iid, {
-          cardId: inst.cardId, inst, count: 1, key: inst.iid,
-          name: c0?.name ?? '?', supertype: c0?.supertype, subtype: c0?.subtype,
-          half: twoCardStadiumHalfIndex(list, inst.iid, pool),
-        });
-        continue;
-      }
-      const existing = m.get(inst.cardId);
-      if (existing) {
-        existing.count++;
-      } else {
-        m.set(inst.cardId, {
-          cardId: inst.cardId,
-          inst,
-          count: 1,
-          key: inst.cardId,
-          name: c0?.name ?? '?',
-          supertype: c0?.supertype,
-          subtype: c0?.subtype,
-        });
-      }
-    }
-    // v5.309: 排序 寶可夢→物品→支援者→場地→能量, 同類內 count desc
-    function typeRank(g: DiscardGroup): number {
-      if (g.supertype === 'Pokemon') return 1;
-      if (g.supertype === 'Trainer') {
-        if (g.subtype === 'Supporter') return 3;
-        if (g.subtype === 'Stadium') return 4;
-        return 2;
-      }
-      if (g.supertype === 'Energy') return 5;
-      return 9;
-    }
-    return [...m.values()].sort((a, b) => {
-      const ra = typeRank(a), rb = typeRank(b);
-      if (ra !== rb) return ra - rb;
-      return b.count - a.count;
-    });
-  }
-
   // ── Hand tap：依卡類型決定 sheet 內容 ──────────────────────────────
   function tapHand(inst: CardInstance) {
     sheet = { type: 'hand', inst };
@@ -893,7 +835,7 @@
       <span class="mp-chip">🎁 {oppPlayer.prizes.length}</span>
     {/if}
     <span class="mp-chip">📚 {oppPlayer.deck.length}</span>
-    <button class="mp-chip mp-clickable" onclick={() => openDiscard(oppPlayer.discard, '對手')} disabled={oppPlayer.discard.length === 0}>🗑 {oppPlayer.discard.length}</button>
+    <button class="mp-chip mp-clickable" onclick={() => onOpenDiscard('opp')} disabled={oppPlayer.discard.length === 0}>🗑 {oppPlayer.discard.length}</button>
     <span class="mp-chip">✋ {oppPlayer.hand.length}</span>
     {#if stadiumCard && game.activeStadium}
       <button class="mp-chip mp-clickable mp-stadium" onclick={() => onOpenZoom(game.activeStadium!.cardId, null)}>🏟 {stadiumCard.name}</button>
@@ -1061,7 +1003,7 @@
       <span class="mp-chip">🎁 {myPlayer.prizes.length}</span>
     {/if}
     <span class="mp-chip">📚 {myPlayer.deck.length}</span>
-    <button class="mp-chip mp-clickable" onclick={() => openDiscard(myPlayer.discard, '我方')} disabled={myPlayer.discard.length === 0}>🗑 {myPlayer.discard.length}</button>
+    <button class="mp-chip mp-clickable" onclick={() => onOpenDiscard('me')} disabled={myPlayer.discard.length === 0}>🗑 {myPlayer.discard.length}</button>
     <span class="mp-chip mp-mine">✋ {myPlayer.hand.length}</span>
     {#if canUseStadium && isMyTurn}
       <button class="mp-chip mp-clickable mp-stadium-btn" disabled={actionBusy} onclick={() => onAction(GameActions.useStadium())}>🏟 使用競技場</button>
@@ -1285,23 +1227,6 @@
                 {#if b.status}<div class="mp-pick-status">⚠️ {b.status === 'poisoned' ? '☠️' : b.status === 'burned' ? '🔥' : b.status === 'asleep' ? '💤' : b.status === 'confused' ? '😵' : b.status === 'paralyzed' ? '⚡' : b.status}</div>{/if}
               </button>
             </div>
-          {/each}
-        </div>
-      {:else if sheet.type === 'discard'}
-        <div class="mp-sheet-title mp-sheet-drag-handle" title="拖曳視窗位置">🗑 {sheet.owner}棄牌區（{sheet.list.length} 張）</div>
-        <!-- v5.129：改 grid 顯示「卡圖縮圖 + 右下角紅色數字」，更易檢索 -->
-        <div class="mp-discard-grid">
-          {#each groupDiscardList(sheet.list) as g (g.key)}
-            {@const gc = pool.get(g.cardId)}
-            <button class="mp-discard-cell" onclick={() => { closeSheet(); onOpenZoom(g.cardId, g.inst); }} title="放大查看 {g.name}">
-              {#if gc?.imageUrl}
-                <img use:retryImg={gc.imageUrl} src={gc.imageUrl} alt={g.name} class="mp-discard-img"
-                  class:legend-half-l={g.half === 0} class:legend-half-r={g.half === 1}/>
-              {:else}
-                <div class="mp-discard-placeholder">{g.name}</div>
-              {/if}
-              {#if g.half !== 0 && g.half !== 1}<span class="mp-discard-count">×{g.count}</span>{/if}
-            </button>
           {/each}
         </div>
       {/if}
@@ -2029,120 +1954,7 @@
     margin-top: 0.3rem;
   }
 
-  /* v5.129：棄牌區 grid（圖片 + 右下角數字 badge）— 取代既有 list 為主視覺
-     舊 .mp-discard-list 樣式保留為 fallback（罕用） */
-  .mp-discard-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
-    gap: 6px;
-    padding: 4px;
-    max-height: 60vh;
-    overflow-y: auto;
-  }
-  /* v5.304: aspect-ratio: 5/7 在 iOS Safari grid item 內 row height 計算偶發失準,
-     row 與 row 之間出現 vertical overlap (玩家截圖反應 — 棄牌區 25 張時最明顯).
-     改用 padding-bottom: 140% 老古典 trick (寬 100% → 高 100% × 7/5 = 140%),
-     內層 img/placeholder 改 absolute inset:0 鋪滿. */
-  .mp-discard-cell {
-    position: relative;
-    display: block;
-    width: 100%;
-    height: 0;
-    padding: 0 0 140% 0;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid #444;
-    border-radius: 6px;
-    overflow: hidden;
-    cursor: pointer;
-  }
-  .mp-discard-cell:active {
-    background: rgba(255, 255, 255, 0.15);
-  }
-  .mp-discard-img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
-  }
-  /* v6.091「傳說」兩張合一競技場：手機棄牌區也裁半。
-     cell 用 padding-bottom 固定直式框、img 絕對定位鋪滿 → 框比例與圖片無關，
-     只要改成 cover + object-position 就能精準取左/右半（預設 contain 不動）。 */
-  .mp-discard-img.legend-half-l, .mp-discard-img.legend-half-r { object-fit: cover; }
-  .mp-discard-img.legend-half-l { object-position: 0% 50%; }
-  .mp-discard-img.legend-half-r { object-position: 100% 50%; }
-  .mp-discard-placeholder {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    color: #ccc;
-    font-size: 0.7rem;
-    padding: 4px;
-    text-align: center;
-    box-sizing: border-box;
-  }
-  /* 右下角紅色大數字 badge */
-  .mp-discard-count {
-    position: absolute;
-    right: 4px;
-    bottom: 4px;
-    background: rgba(220, 38, 38, 0.95);
-    color: #fff;
-    font-size: 1rem;
-    font-weight: 800;
-    padding: 1px 8px;
-    border-radius: 10px;
-    border: 2px solid rgba(255, 255, 255, 0.9);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-    min-width: 28px;
-    text-align: center;
-    line-height: 1.1;
-  }
-
-  /* v2.297：棄牌區清單 sheet — 舊樣式保留 fallback */
-  .mp-discard-list {
-    display: flex; flex-direction: column;
-    gap: 2px;
-    max-height: 52vh;
-    overflow-y: auto;
-  }
-  .mp-discard-row {
-    display: flex; align-items: center; gap: 6px;
-    padding: 6px 8px;
-    border-radius: 6px;
-    background: rgba(0,0,0,0.3);
-    border: 1px solid rgba(255,255,255,0.08);
-  }
-  .mp-discard-row:nth-child(even) { background: rgba(255,255,255,0.04); }
-  .mp-discard-name {
-    flex: 1;
-    font-size: 0.86rem;
-    color: #e8e8e8;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .mp-discard-type {
-    font-size: 0.8rem;
-    flex-shrink: 0;
-  }
-  .mp-discard-zoom {
-    flex-shrink: 0;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 4px;
-    padding: 2px 6px;
-    font-size: 0.85rem;
-    cursor: pointer;
-    color: #fff;
-    transition: background 0.15s;
-  }
-  .mp-discard-zoom:active { background: rgba(255,255,255,0.2); }
+  /* ⭐v6.451：手機棄牌區 sheet 的樣式（.mp-discard-*）已移除 —— 棄牌區改用父層共用的檢視視窗 */
 
   /* v2.289：手牌可打出的訓練家/競技場 右上角小 badge */
   .mp-card-hint {

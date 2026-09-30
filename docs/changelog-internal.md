@@ -1,5 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.451：picker／UI 統一化第 5 步——重複的程式合併
+
+BASE `bf19000c`（v6.450）。站長裁定（2026-09-30）採用調查報告第 5 步。
+- 撤退選單改 `{@render promoteGrid(myPlayer.bench, null, …, actionBusy)}`；snippet 加 `busy: boolean = false` 參數（`.retreat-pick disabled={busy}`，補位行為不變）。test-v6122 的 render 次數 1→2。
+- 三套 stepper 合一：攻擊前 stepper（原 inline style＋btn-ghost）、重抽補抽（`.mulligan-stepper`）都改 `.modal-choice-stepper`＋`.stepper-btn`＋`.stepper-value`；`.mulligan-stepper` 三條 CSS 移除。
+- 攻擊前是否視窗：inline style 的 `.sel-actions` → 共用 `.sel-footer`（是＝btn-act primary、否＝btn-act secondary）；兩顆按鈕的送出內容不變。全頁已無 `sel-actions`／`btn-ghost`。
+- `.notify-prompt-*` 與 `.undo-*` 系統詢問視窗共用一份外框（`--sys-accent`／`--sys-glow` 只留配色差異）。
+- 手機棄牌區：MobilePortraitBattle 新增必填 prop `onOpenDiscard('me'|'opp')` → 父層 `viewDiscardFor`；移除手機自己的 discard sheet（SheetState 分支、groupDiscardList、`.mp-discard-*` CSS、`isTwoCardStadiumName` 匯入）。test-v6091 A3 改守「沒有第二份＋兩顆按鈕接父層」（切半由 A2 保證）。
+- 實測（雲端 Playwright）：攻擊前 stepper／是否（d1440）、重抽補抽（d1440／m390）、撤退（d1440／m390）、手機點 🗑 開出底部棄牌 sheet（4 張一列）。
+- 連帶守衛（Rule 40 意圖不變）：test-v6147 撤退送出點改認 `promoteGrid(…, actionBusy)`＋snippet 內 `disabled={busy}`；test-v6293 E1 對戰分支還原表加 `onOpenDiscard` 那一行；test-v6233／v6234 手機元件「未截斷」門檻 9 萬→8 萬字（移除棄牌 sheet 後約 8.7 萬）。
+- 守衛：新增 `test-v6451-picker-dedupe.mjs`（HEAD-FAIL 對 v6.450）；bump 配套。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## v6.450：picker／UI 統一化第 4 步——手機直式底部 sheet
 
 BASE `3e1930f7`（v6.449）。站長裁定（2026-09-30）：手機直式所有選擇視窗改成從底部升起。

@@ -34,13 +34,14 @@ const ok = (c, l) => { if (c) pass++; else { fail++; console.log('  FAIL:', l); 
   ok(/\{#if g\.half !== 0 && g\.half !== 1\}<span class="deck-cell-count">/.test(page),
     'A2 拆開後的半圖格不顯示 ×N 徽章');
 
-  // A3 手機棄牌區：key 必須改掉，否則 each_key_duplicate 白屏
-  ok(/groupDiscardList\(sheet\.list\) as g \(g\.key\)/.test(mpb),
-    '⭐ A3 手機棄牌區 each key 改成 g.key（沿用 g.cardId 會 each_key_duplicate 白屏）');
-  ok(/key: inst\.iid/.test(mpb) && /key: inst\.cardId/.test(mpb),
-    'A3 兩張合一用 iid 當 key、一般卡仍用 cardId');
-  ok(/\.mp-discard-img\.legend-half-l[^{]*\{[^}]*object-fit:\s*cover/.test(mpb),
-    '⭐ A3 手機棄牌半圖有覆蓋成 object-fit:cover（該處預設是 contain）');
+  // A3 手機棄牌區：原本是手機元件自己的一份棄牌 sheet（groupDiscardList，key 要用 g.key 否則 each_key_duplicate 白屏）。
+  //   ⭐v6.451（picker 統一化第 5 步）起手機改用父層共用的棄牌區視窗（上面 A2 那一份；手機直式時是底部 sheet），
+  //   手機元件不再有自己的棄牌清單 ⇒ 改守「沒有第二份」＋「手機的棄牌按鈕接到父層」（意圖不變：兩張合一在手機也正確顯示）。
+  ok(!/groupDiscardList|sheet\.type === 'discard'/.test(mpb),
+    '⭐ A3 手機元件沒有第二份棄牌清單（v6.451 起共用父層棄牌區視窗）');
+  ok(/onclick=\{\(\) => onOpenDiscard\('opp'\)\}/.test(mpb) && /onclick=\{\(\) => onOpenDiscard\('me'\)\}/.test(mpb)
+    && /onOpenDiscard=\{\(who\) => \{ viewDiscardFor = who === 'me' \? myIdx : oppIdx; \}\}/.test(page),
+    '⭐ A3 手機的兩顆棄牌按鈕都打開父層那一份棄牌區視窗（切半顯示由 A2 保證）');
 
   // A4 牌組編輯器
   // ⚠ v6.092：清單縮圖曾嘗試「依份數把左右半並排」，但 .entry 第一個 grid 欄固定 40px

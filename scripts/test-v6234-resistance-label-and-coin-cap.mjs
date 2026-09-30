@@ -155,7 +155,8 @@ chk('中性防守方存在：' + (NEUTRAL?.name ?? '—'), !!NEUTRAL);
 chk(`兩個大檔沒有被 mount 截斷（engine ${SRC.engine.length} / effects ${SRC.effects.length}）`,
     SRC.engine.length > 450000 && SRC.effects.length > 750000);
 chk(`兩個 svelte 沒有被截斷（page ${SRC.page.length} / mobile ${SRC.mob.length}）`,
-    SRC.page.length > 900000 && SRC.mob.length > 90000);
+    // ⭐v6.451：手機元件移除自己的棄牌 sheet（改用父層共用視窗）後約 8.7 萬字 ⇒ 門檻 9 萬→8 萬（仍遠高於截斷的量級）
+    SRC.page.length > 900000 && SRC.mob.length > 80000);
 
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n① 【A】卡面官方用語查證：官方寫的是「抵抗力」，不是「屬性相剋」');

@@ -114,7 +114,10 @@ console.log('④ 共用 markup（兩個 modal 不得再各抄一份卡片格子�
 T('⭐ 卡片格子收斂成單一 snippet', () => {
   ok(/\{#snippet promoteGrid\(/.test(PAGE), '沒有 promoteGrid snippet');
   const n = (PAGE.match(/@render promoteGrid\(/g) || []).length;
-  ok(n === 1, '@render promoteGrid 應為 1 次（v6.425 起只有一個 {#each} 區塊），實得 ' + n);
+  // ⭐v6.451：撤退選單也改用這份格子（原本各抄一份）⇒ 補位 1 次＋撤退 1 次＝2 次
+  ok(n === 2, '@render promoteGrid 應為 2 次（補位一個 {#each} 區塊＋撤退選單），實得 ' + n);
+  ok(/@render promoteGrid\(myPlayer\.bench, null, \(iid\) => \{ dispatch\(GameActions\.retreat\(iid\)\); floatingRetreatMenu = null; \}, actionBusy\)/.test(PAGE),
+    '撤退選單用 promoteGrid（送出中 actionBusy 時卡片不能按）');
 });
 
 console.log('\n=== v6.122 補位「選取→確定」兩段式 守衛：PASS ' + pass + ' / FAIL ' + fail + ' ===');

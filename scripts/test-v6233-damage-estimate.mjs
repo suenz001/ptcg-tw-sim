@@ -339,7 +339,8 @@ console.log('\n⑨ 接線（靜態）：只在休閒對戰、兩套 UI、一份�
   const MOB  = readFileSync(join(ROOT, 'src/routes/game/MobilePortraitBattle.svelte'), 'utf8');
   const MODSRC = readFileSync(join(ROOT, 'src/lib/game/damage-estimate.ts'), 'utf8');
   chk(`掃描器前提：兩個 svelte 都讀得到（未截斷）— ${PAGE.length}/${MOB.length} 字`,
-      PAGE.length > 900000 && MOB.length > 90000);
+      // ⭐v6.451：手機元件移除自己的棄牌 sheet 後約 8.7 萬字 ⇒ 門檻 9 萬→8 萬（仍遠高於截斷的量級）
+      PAGE.length > 900000 && MOB.length > 80000);
 
   // ⭐ 錦標賽 gate 用的是既有的中央述詞 isTournament，而且是 derived 的第一條
   const iDer = PAGE.indexOf('const damageEstimates = $derived.by');

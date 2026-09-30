@@ -11520,6 +11520,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       attackEstimates={damageEstimates}
       onOpenZoom={openZoom}
       onOpenPrizes={openPrizeView}
+      onOpenDiscard={(who) => { viewDiscardFor = who === 'me' ? myIdx : oppIdx; }}
       onOpenSettings={() => showSettingsModal = true}
       onLeave={() => {
         // v5.566：手機直式離開鈕也要走投降確認(原直接 leaveOnlineGame 漏了確認視窗)
@@ -13373,12 +13374,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <div>🖐 目前手牌：{myPlayer?.hand.length ?? 0} 張</div>
             <div>👉 確認後手牌變為：{(myPlayer?.hand.length ?? 0) + pickCount} 張</div>
           </div>
-          <div class="mulligan-stepper">
-            <button class="btn-ghost stepper-btn"
+          <!-- ⭐v6.451：三套 stepper 合一（原本 .mulligan-stepper 自己一套尺寸） -->
+          <div class="modal-choice-stepper">
+            <button class="stepper-btn stepper-minus"
               disabled={pickCount <= 0}
               onclick={() => { mulliganPickOverride = Math.max(0, pickCount - 1); }}>−</button>
             <div class="stepper-value">{pickCount}</div>
-            <button class="btn-ghost stepper-btn"
+            <button class="stepper-btn stepper-plus"
               disabled={pickCount >= nDraw}
               onclick={() => { mulliganPickOverride = Math.min(nDraw, pickCount + 1); }}>＋</button>
           </div>
@@ -13430,8 +13432,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
             {/if}
           </p>
         </div>
-        <div class="sel-actions" style="justify-content:center;gap:16px;padding:24px;align-items:center">
-          <button class="btn-ghost" style="padding:8px 18px;font-size:18px;font-weight:bold"
+        <!-- ⭐v6.451：三套 stepper 合一 ⇒ 與 modal-choice 的 stepper 同一套 class（原本整段 inline style） -->
+        <div class="modal-choice-stepper">
+          <button class="stepper-btn stepper-minus"
             disabled={currentN <= minN}
             onclick={() => {
               if (!preAttackDiscard) return;
@@ -13441,8 +13444,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
               if (first) picked.delete(first);
               preAttackDiscard = { ...preAttackDiscard, picked };
             }}>−</button>
-          <div style="font-size:32px;font-weight:bold;min-width:64px;text-align:center">{currentN}</div>
-          <button class="btn-ghost" style="padding:8px 18px;font-size:18px;font-weight:bold"
+          <div class="stepper-value">{currentN}</div>
+          <button class="stepper-btn stepper-plus"
             disabled={currentN >= maxN}
             onclick={() => {
               if (!preAttackDiscard) return;
@@ -13450,7 +13453,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               picked.add(`stepper-${picked.size}`);
               preAttackDiscard = { ...preAttackDiscard, picked };
             }}>+</button>
-          <button class="btn-primary" style="padding:12px 24px;font-size:16px;margin-left:24px"
+          <button class="btn-act primary stepper-confirm"
             onclick={() => {
               if (!preAttackDiscard) return;
               const ai = preAttackDiscard.attackIndex;
@@ -13478,8 +13481,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <h3>❓ {preAttackDiscard.attackName}</h3>
           <p class="sel-hint">{spec.choicePrompt ?? '是否觸發此選用效果？'}</p>
         </div>
-        <div class="sel-actions" style="justify-content:center;gap:24px;padding:24px">
-          <button class="btn-primary" style="padding:12px 32px;font-size:16px"
+        <!-- ⭐v6.451：原本 inline style 的置中大按鈕 ⇒ 共用按鈕列（主要在右、次要在左；手機等寬並排） -->
+        <div class="sel-footer">
+          <button class="btn-act primary"
             onclick={() => {
               // sentinel iid 'yes-token' — engine 端 regPre 看 length>=1 = yes
               // v3.35：closure 內 ts narrowing 不會穿過外層 #if，需 null guard
@@ -13526,7 +13530,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               preAttackDiscard = null;
               dispatch(GameActions.attack(ai, ['yes-token'], cc, ccChain));
             }}>{yesLabel}</button>
-          <button class="btn-ghost" style="padding:12px 32px;font-size:16px"
+          <button class="btn-act secondary"
             onclick={() => {
               // v3.35：closure 內 ts narrowing 不會穿過外層 #if，需 null guard
               if (!preAttackDiscard) return;
@@ -14115,32 +14119,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <h3>🔄 選擇換入的寶可夢</h3>
           <p class="sel-hint">挑選一隻備戰區的寶可夢上場；點放大鏡 🔍 查看詳情以區分同名卡身上的能量</p>
         </div>
-        <div class="retreat-grid">
-          {#each myPlayer.bench as b}{@const bc=getCard(b.cardId)}
-            {#if bc}
-              {@const eff=hpTotal(b)}
-              {@const rem=hpRemaining(b)}
-              <div class="retreat-card">
-                <button class="retreat-zoom" title="放大檢視：{bc.name}"
-                  onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
-                <button class="retreat-pick" disabled={actionBusy} onclick={(e)=>{e.stopPropagation();dispatch(GameActions.retreat(b.iid));floatingRetreatMenu=null;}}>
-                  <img use:retryImg={bc.imageUrl} src={bc.imageUrl} alt={bc.name}/>
-                  <div class="retreat-name">{bc.name}</div>
-                  <div class="retreat-hp">HP {rem}/{eff}</div>
-                  <div class="retreat-nrg" title="附加的能量">⚡ {energySummary(b)}</div>
-                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool" title="附加道具">🔧 道具：{tc?.name ?? '?'}</div>{/if}
-                  {#each (b.extraTools ?? []) as etRM}{@const tcRM=getCard(etRM.cardId)}<div class="retreat-tool" title="附加道具（多重轉接）">🔧 道具：{tcRM?.name ?? '?'}</div>{/each}
-                  {#if b.status}<div class="retreat-status" title="特殊狀態">
-                    ⚠️ 狀態：{b.status==='poisoned'?'☠️ 中毒':b.status==='burned'?'🔥 灼傷':b.status==='asleep'?'💤 睡眠':b.status==='confused'?'😵 混亂':b.status==='paralyzed'?'⚡ 麻痺':b.status}
-                  </div>{/if}
-                </button>
-              </div>
-            {/if}
-          {/each}
-          {#if myPlayer.bench.length===0}
-            <p class="sel-empty">（備戰區沒有可上場的寶可夢）</p>
-          {/if}
-        </div>
+        {@render promoteGrid(myPlayer.bench, null, (iid) => { dispatch(GameActions.retreat(iid)); floatingRetreatMenu = null; }, actionBusy)}
         <div class="sel-footer">
           <button class="btn-act secondary" onclick={()=>floatingRetreatMenu=null}>取消</button>
         </div>
@@ -14150,7 +14129,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   <!-- ⭐ v6.122 補位卡片格子：兩個 modal 共用同一份 markup（原本各抄一份、會漂移）。
        pick／onPick 由呼叫端各自傳入自己的 state —— 不共用（見 confirmSendNewActive 上方註解）。 -->
-  {#snippet promoteGrid(bench: any[], pick: string | null, onPick: (iid: string) => void)}
+  <!-- ⭐v6.451：撤退選單也用這份（原本各抄一份一模一樣的卡片格子）；busy＝送出中時卡片不能按（撤退用 actionBusy，補位固定 false） -->
+  {#snippet promoteGrid(bench: any[], pick: string | null, onPick: (iid: string) => void, busy: boolean = false)}
     <div class="retreat-grid">
       {#each bench as b (b.iid)}{@const bc=getCard(b.cardId)}
         {#if bc}
@@ -14160,7 +14140,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <div class="retreat-card" class:sel-picked={picked}>
             <button class="retreat-zoom" title="放大檢視：{bc.name}"
               onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
-            <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();onPick(b.iid);}}>
+            <button class="retreat-pick" disabled={busy} onclick={(e)=>{e.stopPropagation();onPick(b.iid);}}>
               <img use:retryImg={bc.imageUrl} src={bc.imageUrl} alt={bc.name}/>
               <div class="retreat-name">{bc.name}</div>
               <div class="retreat-hp">HP {rem}/{eff}</div>
@@ -18210,9 +18190,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
 
   /* v4.923：mulligan stepper — +/- 計數器 UI */
-  .mulligan-stepper{ display:flex; align-items:center; justify-content:center; gap:18px; padding:6px 0 2px; }
-  .mulligan-stepper .stepper-btn{ padding:8px 22px; font-size:22px; font-weight:bold; min-width:64px; border-radius:8px; }
-  .mulligan-stepper .stepper-value{ font-size:42px; font-weight:bold; min-width:80px; text-align:center; color:#ffd070; line-height:1; }
+  /* ⭐v6.451：.mulligan-stepper 併入 .modal-choice-stepper（三套 stepper 合一），原本的三條尺寸規則移除 */
 
   /* 撤退選單（置中橫向 grid） */
   .retreat-modal{ max-width:760px; }
@@ -19025,44 +19003,34 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   /* v4.75 對手請求悔棋 modal */
   /* v6.022 錦標賽通知：首次詢問視窗 */
-  .notify-prompt-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0, 0, 0, 0.65);
-    z-index: 10000;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .notify-prompt-modal {
-    background: #1a1a2e;
-    border: 2px solid #4a9eff;
-    border-radius: 12px;
-    padding: 24px 28px;
-    max-width: 460px;
-    width: 90vw;
-    color: #e0e0e0;
-    box-shadow: 0 8px 32px rgba(74, 158, 255, 0.3);
-  }
-  .notify-prompt-modal h3 { margin: 0 0 12px 0; color: #7cc4ff; font-size: 20px; }
-  .notify-prompt-modal p { margin: 8px 0; line-height: 1.6; }
-  .notify-prompt-modal .muted { color: #9aa3b0; font-size: 13px; }
-  .notify-prompt-modal .ios-hint { color: #e0a050; }
-  .notify-prompt-btns { display: flex; gap: 12px; margin-top: 18px; justify-content: flex-end; }
-
+  /* ⭐v6.451：賽事通知詢問與對手悔棋請求是同一種「系統詢問」視窗 ⇒ 共用一份外框，只留強調色不同（原本兩份幾乎一樣的規則） */
+  .notify-prompt-overlay,
   .undo-modal-overlay {
     position: fixed; inset: 0;
     background: rgba(0, 0, 0, 0.65);
     z-index: 10000;
     display: flex; align-items: center; justify-content: center;
   }
+  .notify-prompt-modal,
   .undo-request-modal {
+    --sys-accent: #4a9eff;
+    --sys-glow: rgba(74, 158, 255, 0.3);
     background: #1a1a2e;
-    border: 2px solid #f59e0b;
+    border: 2px solid var(--sys-accent);
     border-radius: 12px;
     padding: 24px 28px;
     max-width: 460px;
     width: 90vw;
     color: #e0e0e0;
-    box-shadow: 0 8px 32px rgba(245, 158, 11, 0.3);
+    box-shadow: 0 8px 32px var(--sys-glow);
   }
+  .undo-request-modal { --sys-accent: #f59e0b; --sys-glow: rgba(245, 158, 11, 0.3); }
+  .notify-prompt-modal h3 { margin: 0 0 12px 0; color: #7cc4ff; font-size: 20px; }
+  .notify-prompt-modal p { margin: 8px 0; line-height: 1.6; }
+  .notify-prompt-modal .muted { color: #9aa3b0; font-size: 13px; }
+  .notify-prompt-modal .ios-hint { color: #e0a050; }
+  .notify-prompt-btns { display: flex; gap: 12px; margin-top: 18px; justify-content: flex-end; }
+
   .undo-request-modal h3 {
     margin: 0 0 12px 0;
     color: #fbbf24;

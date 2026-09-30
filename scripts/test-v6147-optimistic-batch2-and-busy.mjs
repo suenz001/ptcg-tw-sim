@@ -158,7 +158,8 @@ T('⭐⭐所有會送出動作的關鍵按鈕都要綁 actionBusy（v6.137 的�
     ['招式鈕', /disabled=\{actionBusy\|\|!availableAttacks/],
     ['結束回合', /disabled=\{actionBusy\} onclick=\{\(\)=>dispatch\(GameActions\.endTurn\(\)\)\}>⏭/],
     ['使用場地', /stadium-btn" disabled=\{actionBusy\}/],
-    ['撤退送出', /retreat-pick" disabled=\{actionBusy\}/],
+    // ⭐v6.451：撤退選單改用 promoteGrid（busy 參數）⇒ 綁定在 render 呼叫端傳 actionBusy、snippet 內 disabled={busy}
+    ['撤退送出', /^(?=[\s\S]*retreat-pick" disabled=\{busy\})(?=[\s\S]*@render promoteGrid\(myPlayer\.bench, null, [^\n]*, actionBusy\)\})/],
     ['進化送出', /evo-choice wide-evo" disabled=\{actionBusy\}/],
     ['場上特性', /ability-btn" disabled=\{actionBusy\}/],
     ['備戰特性', /ability-btn-sm" disabled=\{actionBusy\}/],
