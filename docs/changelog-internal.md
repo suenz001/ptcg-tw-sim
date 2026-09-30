@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## server patch v1.51：tournamentClientDiag 真正的 7 天保留（TTL 索引從沒生效）
+
+BASE `eb493b80`（v6.458）。v6.287 查證時記下的另案：`TCDIAG.createIndex({ ts: 1 }, { expireAfterSeconds: 604800 })` 從來沒刪過任何一筆——MongoDB TTL 只認 BSON Date，寫入端存的是 `ts: Date.now()`（數字）⇒ 表只增不減。
+- 修法：錦標賽區塊**外**（插在 v6.170 連線韌性區塊之前，28 把 sha 鎖一把都不動）新增哨兵區塊 `v6459-clientdiag-sweep`：啟動 1 分鐘後一次、之後每小時，分批（每批 2000、批間讓路 200ms）刪 `ts` 早於 7 天前的列；in-flight 旗標；失敗只 warn；計時器 unref。
+- 為什麼不改寫入端加 expireAt：寫入端在錦標賽區塊內；清掃放區塊外就夠了。既有 {ts:1} 索引剛好讓範圍刪除走索引。
+- 讀取端（admin 📡 分頁 hours 上限 168、dump-client-monitor.cjs 上限 168 小時）⇒ 刪 7 天前的列不改變任何報表。
+- 全檔 TTL 審查：其餘兩支（私聊 tournamentChat、回放 tournamentReplayTurns）都是 `expireAt: new Date(...)`，正確。
+- 守衛：新增 `test-sap151-clientdiag-sweep.mjs`（實跑哨兵區塊：邊界兩側、分批、in-flight、錯誤只 warn、計時器；TTL 型別審查；HEAD-FAIL 對 v6.458）；突變（全刪、無旗標、不讓路、不排程）全紅。
+- 部署：只動伺服器補丁 ⇒ **`update-tournament.bat`**（Rule 67）。第一次上線會清掉累積幾個月的舊診斷列，pm2 log 會印一行「刪除 7 天前的診斷列 N 筆」。
+
 ## v6.458：桌機彈出視窗「外面才捲整頁」（同一個 pageScrollLock）
 
 BASE `62ce6f9f`（v6.457）。站長 2026-09-30 裁定：「電腦版規則應該是『外面才捲整頁』」。v6.457 缺口：桌機 /cards 卡片詳情內容不夠長時，滑鼠在視窗上滾輪會捲到後面整頁（實測 scrollY 400→3400）。

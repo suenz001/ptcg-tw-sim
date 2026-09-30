@@ -6818,6 +6818,49 @@ import('firebase-admin').then(async ({ default: admin }) => {
     }
     // ── v6.152 LONGPOLL BLOCK END ──
 
+    // >>> v6459-clientdiag-sweep
+    // ⭐server patch v1.51（2026-10-01）tournamentClientDiag 真正的 7 天保留（取代從未生效的 TTL 索引）
+    //   ⚠⚠ 事實：錦標賽區塊裡 TCDIAG 在 ts 上建的 TTL 索引（7 天）**從來沒刪過任何一筆**——
+    //     MongoDB 的 TTL 只認 BSON Date 型別，而寫入端存的是 `ts: Date.now()`（數字）⇒ 這張表只增不減。
+    //   ⇒ 這裡改用定時清掃：刪掉 ts 早於 7 天前的列。那支 {ts:1} 索引照樣存在，剛好讓範圍刪除走索引。
+    //   ⚠ 為什麼不改寫入端加 expireAt：寫入端在錦標賽區塊內（28 把 sha 鎖），而這個清掃放在區塊外就夠了（零把鎖要動）。
+    //   ⚠ 讀取端（admin 📡 分頁、dump-client-monitor.cjs）的時間範圍上限本來就是 168 小時 ⇒ 刪掉 7 天前的列，任何報表結果都不變。
+    //   ⚠ 分批刪（每批 2000 筆、批間讓路 200ms）：第一次上線要清的是累積了幾個月的舊列，一次 deleteMany 可能卡住 mongo。
+    //   ⚠ 失敗只 warn（這是清潔工，不可以影響任何玩家請求）；同時只跑一輪（in-flight 旗標）。
+    {
+      const CD_COLL = db.collection('tournamentClientDiag');
+      const CD_KEEP_MS = 7 * 24 * 3600 * 1000;
+      const CD_BATCH = 2000;
+      let _cdBusy = false;
+      const _cdSweep = async () => {
+        if (_cdBusy) return;
+        _cdBusy = true;
+        let total = 0;
+        try {
+          const cutoff = Date.now() - CD_KEEP_MS;
+          for (let round = 0; round < 500; round++) {
+            const ids = (await CD_COLL.find({ ts: { $lt: cutoff } }, { projection: { _id: 1 } }).limit(CD_BATCH).toArray()).map((d) => d._id);
+            if (!ids.length) break;
+            const r = await CD_COLL.deleteMany({ _id: { $in: ids } });
+            total += (r && r.deletedCount) || 0;
+            if (ids.length < CD_BATCH) break;
+            await new Promise((ok) => setTimeout(ok, 200));
+          }
+          if (total) console.log('[v6459-clientdiag-sweep] 刪除 7 天前的診斷列', total, '筆');
+        } catch (e) {
+          console.warn('[v6459-clientdiag-sweep] 清掃失敗（不影響服務）', e && e.message);
+        } finally {
+          _cdBusy = false;
+        }
+      };
+      const _cdT1 = setTimeout(_cdSweep, 60 * 1000);           // 啟動 1 分鐘後先清一次（避開開機尖峰）
+      const _cdT2 = setInterval(_cdSweep, 3600 * 1000);        // 之後每小時一次
+      if (_cdT1 && _cdT1.unref) _cdT1.unref();
+      if (_cdT2 && _cdT2.unref) _cdT2.unref();
+      app.locals = app.locals || {};
+      app.locals._clientDiagSweep = _cdSweep;                  // 守衛與 admin 手動觸發用
+    }
+    // <<< v6459-clientdiag-sweep
     // ── v6.170 CONNECTION RESILIENCE BLOCK BEGIN ──
     /**
      * ⭐⭐⭐v6.170【對手心跳】—— 「鏡像效應」的解藥。
