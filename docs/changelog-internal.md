@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.450：picker／UI 統一化第 4 步——手機直式底部 sheet
+
+BASE `3e1930f7`（v6.449）。站長裁定（2026-09-30）：手機直式所有選擇視窗改成從底部升起。
+- 新哨兵 `v6450-picker-sheet`，寫在最後一個手機直式媒體查詢區塊的尾端（不新增媒體查詢）：遮罩 `align-items:flex-end`；`.selection-modal` 100vw、上方 16px 圓角、85dvh、底部加 `--safe-bottom`；子元素 `flex-shrink:0`、格子 `--scroll-list-max:none` ⇒ 只有 sheet 捲動（原本格子 50vh 內捲＋外框捲＝雙層）。
+- 每列固定張數：`.sel-grid`／能量 4、`.retreat-grid` 3、牌庫全覽 5；卡圖 `width:100%`（寶可夢上限 96）。
+- 按鈕列：不用彈簧、按鈕 `flex:1 1 0`、min-height 44px。
+- 棄牌區／獎賞檢視（`.zoom-modal.discard-modal`）同樣底部 sheet；卡片放大維持置中。手機橫式 `.selection-modal` max-height 82vh→90dvh。
+- test-v6390：F2 白名單補 6 條手機規則；B9／B11 手機高度改 none（C2b 加第 6 欄登記 BASE 當時的高度，其餘情境仍須與 BASE 相同）；現查條數 12→13（多了手機 `.zoom-modal.discard-modal`）；mutcheck M6／M9 同步（M16 錨點失效是既有問題，非本版）。
+- 實測（雲端 Playwright，m390／m360 直式、844×390 橫式）：各視窗貼底全寬、卡片 4／寶可夢 3 一列、能量全丟 7 張只剩 sheet 捲動、按鈕等寬；橫式維持 580 置中。
+- 守衛：新增 `test-v6450-picker-mobile-sheet.mjs`（HEAD-FAIL 對 v6.449）；bump 配套。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## v6.449：picker／UI 統一化第 3 步——桌機外框收斂
 
 BASE `aeb36339`（v6.448）。站長裁定（2026-09-30）：桌機可選卡圖 96px、配色跟著對戰版面、要做決定的視窗點遮罩不關。

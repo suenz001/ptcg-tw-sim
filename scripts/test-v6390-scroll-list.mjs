@@ -70,6 +70,13 @@ const EXPECTED = [
   MEDIA_P + '|.sel-grid',
   MEDIA_P + '|.sel-grid.sel-grid-energy',
   MEDIA_L + '|.sel-grid',
+  // ⭐v6.450 v6450-picker-sheet（手機直式底部 sheet）：欄數＋取消格子自己的捲動（--scroll-list-max:none，由 sheet 捲）
+  MEDIA_P + '|.selection-modal .sel-grid, .selection-modal .retreat-grid, .selection-modal .copy-attack-list, .selection-modal .full-deck-list',
+  MEDIA_P + '|.sel-grid',
+  MEDIA_P + '|.sel-grid.sel-grid-energy',
+  MEDIA_P + '|.retreat-grid',
+  MEDIA_P + '|.full-deck-list',
+  MEDIA_P + '|.discard-modal .sel-grid',
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -215,10 +222,11 @@ const SCENES = [
   ['B6 .rocket-command-scroll（火箭隊指令 picker）', ctxOf(['rocket-command-scroll']), '60vh', GROUP_SEL, 'auto'],
   ['B7 .retreat-grid（桌機）', ctxOf(['retreat-grid']), '58vh', GROUP_SEL, 'auto'],
   ['B8 .discard-modal .sel-grid（棄牌區，桌機）', ctxOf(['sel-grid'], [['discard-modal']]), '72vh', GROUP_SEL, 'auto'],
-  ['B9 .sel-grid（手機直式）', ctxOf(['sel-grid'], [SEL_MODAL], [MEDIA_P]), '50vh', GROUP_SEL, 'auto'],
+  // ⭐v6.450：手機直式的選擇視窗改成底部 sheet、只有 sheet 捲動 ⇒ 格子的 --scroll-list-max 改 none（沒有雙層捲動）
+  ['B9 .sel-grid（手機直式）', ctxOf(['sel-grid'], [SEL_MODAL], [MEDIA_P]), 'none', GROUP_SEL, 'auto', '50vh'],
   ['B10 .sel-grid（橫式窄螢幕）', ctxOf(['sel-grid'], [SEL_MODAL], [MEDIA_L]), '46vh', GROUP_SEL, 'auto'],
-  // ⭐ 現況登記：手機直式下棄牌區仍是 72vh（.discard-modal .sel-grid 特異度 (0,2,0) 贏過 media 的 (0,1,0)）
-  ['B11 .discard-modal .sel-grid（手機直式仍是 72vh，特異度勝）', ctxOf(['sel-grid'], [['discard-modal']], [MEDIA_P]), '72vh', GROUP_SEL, 'auto'],
+  // ⭐v6.450：手機直式棄牌區也改成底部 sheet、由 sheet 本身捲動 ⇒ 格子 none（v6.449 以前是 72vh：特異度勝過 media 的 50vh）
+  ['B11 .discard-modal .sel-grid（手機直式：sheet 捲動，格子不限高）', ctxOf(['sel-grid'], [['discard-modal']], [MEDIA_P]), 'none', GROUP_SEL, 'auto', '72vh'],
 ];
 for (const [name, ctx, wantH, wantFrom, wantOy] of SCENES) {
   const r = computeFor(RULES, ctx);
@@ -319,10 +327,13 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
     //     高度必須 0/11 紅（正對照：這一版**不准**改到任何一個實際高度）。
     let sourceReds = 0, heightReds = 0;
     const heightDiff = [];
-    for (const [name, ctx, wantH] of SCENES) {
+    // ⭐v6.450：第 6 欄＝「BASE（v6.389a）當時的高度」——只有之後**刻意**改過高度的情境才填（B9／B11：手機 sheet 改由 sheet 捲動）；
+    //   沒填就代表 BASE 與現在必須相同（原本的正對照意圖不變）。
+    for (const [name, ctx, wantH, , , baseH] of SCENES) {
       const r = computeFor(BR, ctx);
+      const expectBase = baseH ?? wantH;
       if (!(r.mh?.fullSel === GROUP_SEL && r.mh?.value === VAR_MH)) sourceReds++;
-      if (r.resolved !== wantH) { heightReds++; heightDiff.push(name + ':' + r.resolved + '≠' + wantH); }
+      if (r.resolved !== expectBase) { heightReds++; heightDiff.push(name + ':' + r.resolved + '≠' + expectBase); }
     }
     chk('C2 ⭐⭐⭐ BASE 上「max-height 來自群組規則」這 ' + SCENES.length + ' 條**一條都不成立**',
       sourceReds === SCENES.length, String(sourceReds) + '/' + SCENES.length);

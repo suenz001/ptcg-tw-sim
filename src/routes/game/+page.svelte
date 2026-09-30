@@ -17072,8 +17072,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
        .selection-modal／.prize-view-modal／.pv-inner，語意不同不收）＋
        非 vh 清單 4（.open-room-list 420px／.chat-messages 240px／.log-col 100%／
        .playmat.layout-fable .action-bar > .log-col none）＋ .scroll-list 自己 1。
-     ⚠ **遷移後**現況（守衛 C5 盯住這個數字，不是盯註解）：那 18 條會剩 **12 條** ＝
-       modal 容器 7（⭐v6.449 多了 v6449-picker-shell 的桌機 .selection-modal 外框：85dvh＋視窗內捲動）＋
+     ⚠ **遷移後**現況（守衛 C5 盯住這個數字，不是盯註解）：那 18 條會剩 **13 條** ＝
+       modal 容器 8（⭐v6.449 多了 v6449-picker-shell 的桌機 .selection-modal 外框：85dvh＋視窗內捲動；
+       ⭐v6.450 多了 v6450-picker-sheet 的手機棄牌區／獎賞 sheet .zoom-modal.discard-modal）＋
        非 vh 清單 4 ＋ 下面這條群組規則自己 1；被遷移的 7 個清單 class 一條都不在。
      ⚠⚠ 這段註解裡**永遠不可以**寫出樣式標籤的開頭字面（角括號 + style）——
        test-v6199／v6284／v6297／v6298／v6299／v6303／v6370 取樣式區塊用的是 lastIndexOf，
@@ -18756,6 +18757,49 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
     /* 線上 lobby 房間相關元素 */
     .seat-area { grid-template-columns: 1fr !important; gap: 0.4rem; }
+
+    /* >>> v6450-picker-sheet */
+    /* ═════════════════════════════════════════════════════════════════
+       ⭐v6.450 手機直式的選擇視窗一律「從底部升起的 sheet」（站長 2026-09-30 裁定；和手機的撤退／附能 sheet 同一套）
+         ・全寬、上方圓角、最高 85dvh、只有 sheet 本身捲動（格子不再自己捲 ⇒ 沒有雙層捲動）、按鈕列黏在 sheet 底部
+         ・每列固定張數：卡片（含能量）4 張、寶可夢 3 隻、牌庫全覽 5 張；卡圖寬＝格寬（永遠不會疊）
+         ・按鈕列的按鈕等寬並排、至少 44px 高（拇指好按）；次要在左、主要在右（沿用 v6.449）
+         ・只看不選的棄牌區／獎賞檢視也改成底部 sheet；卡片放大維持置中
+       ⚠ 寫在這個既有的媒體查詢區塊尾端（本頁媒體查詢數量被 test-v6187／v6195／v6199 釘住，不可新增）。
+       ═════════════════════════════════════════════════════════════════ */
+    .selection-overlay{ align-items:flex-end; padding-top:calc(var(--safe-top, 0px) + .4rem); padding-bottom:0; }
+    .selection-modal{
+      width:100vw; max-width:100vw; max-height:85dvh; margin:0;
+      border-radius:16px 16px 0 0; border-bottom:none;
+      padding:.75rem .85rem calc(.75rem + var(--safe-bottom, 0px));
+    }
+    .selection-overlay .selection-modal{ box-shadow:0 -6px 24px rgba(0,0,0,.55); }
+    /* 子元素不縮（否則會被 flex 壓扁、變成格子自己在捲 ⇒ 雙層捲動） */
+    .selection-modal > *,
+    .zoom-modal.discard-modal > *{ flex-shrink:0; }
+    .selection-modal .sel-grid,
+    .selection-modal .retreat-grid,
+    .selection-modal .copy-attack-list,
+    .selection-modal .full-deck-list{ --scroll-list-max:none; }
+    .sel-grid{ grid-template-columns:repeat(4, minmax(0, 1fr)) !important; gap:.4rem; }
+    .sel-grid.sel-grid-energy{ grid-template-columns:repeat(4, minmax(0, 1fr)) !important; gap:.4rem; }
+    .sel-grid.sel-grid-energy .sel-card img{ width:100%; }
+    .retreat-grid{ grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.4rem; }
+    .retreat-pick{ min-width:0; padding:.35rem .2rem .4rem; font-size:.66rem; }
+    .retreat-pick img{ width:100%; max-width:96px; }
+    .full-deck-list{ grid-template-columns:repeat(5, minmax(0, 1fr)); }
+    .selection-modal > .sel-footer{ padding-top:.5rem; }
+    .sel-footer::before{ display:none; }
+    .sel-footer > :is(button, .btn-act, .btn-primary, .btn-ghost){ flex:1 1 0; min-height:44px; justify-content:center; text-align:center; white-space:normal; }
+    /* 只看不選的棄牌區／獎賞檢視：也從底部升起 */
+    .zoom-overlay:has(> .discard-modal){ align-items:flex-end; padding:0; padding-top:calc(var(--safe-top, 0px) + .4rem); }
+    .zoom-modal.discard-modal{
+      width:100vw; max-width:100vw; max-height:85dvh; margin:0; margin-top:auto; overflow-y:auto;
+      border-radius:16px 16px 0 0; border-bottom:none;
+      padding:.75rem .85rem calc(.75rem + var(--safe-bottom, 0px));
+    }
+    .discard-modal .sel-grid{ --scroll-list-max:none; }
+    /* <<< v6450-picker-sheet */
   }
 
   @media (max-width: 950px) and (orientation: landscape) {
@@ -18830,7 +18874,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .btn-act.atk .atk-name{ font-size:0.66rem; }
     .btn-act.atk .atk-dmg{ font-size:0.7rem; font-weight:700; }
     /* ── 選擇 modal ── */
-    .selection-modal{ max-width:580px; width:96vw; max-height:82vh; padding:0.6rem; gap:0.4rem; }
+    /* ⭐v6.450：手機橫式的選擇視窗維持置中，高度上限放寬到 90dvh（統一化建議；原本 82vh） */
+    .selection-modal{ max-width:580px; width:96vw; max-height:90dvh; padding:0.6rem; gap:0.4rem; }
     .sel-header h3{ font-size:0.86rem; }
     .sel-hint{ font-size:0.66rem; }
     .sel-grid{ grid-template-columns:repeat(auto-fill, minmax(52px, 1fr)); gap:0.25rem; --scroll-list-max:46vh; }

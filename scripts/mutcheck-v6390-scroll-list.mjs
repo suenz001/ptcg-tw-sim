@@ -95,8 +95,8 @@ mut('M5 刪掉 .prize-view-modal .sel-grid 那一條覆寫',
 // ── M6：覆寫的高度被改掉 ────────────────────────────────────────────────
 mut('M6 .discard-modal .sel-grid 的 72vh 改成 99vh',
   (s) => s.replace('gap:.55rem; --scroll-list-max:72vh;', 'gap:.55rem; --scroll-list-max:99vh;'),
-  ['B8 .discard-modal .sel-grid（棄牌區，桌機） → max-height 解析為 72vh',
-    'B11 .discard-modal .sel-grid（手機直式仍是 72vh，特異度勝） → max-height 解析為 72vh']);
+  // ⭐v6.450：手機直式棄牌區改由 sheet 捲動（B11＝none，不再吃 72vh）⇒ 只剩桌機 B8 會翻紅
+  ['B8 .discard-modal .sel-grid（棄牌區，桌機） → max-height 解析為 72vh']);
 
 // ── M7：@media 覆寫改回寫死（群組規則在該情境下變死碼）──────────────────
 mut('M7 手機直式的 --scroll-list-max: 50vh 改回 max-height: 50vh',
@@ -111,8 +111,9 @@ mut('M8 ⭐⭐ 群組規則之後新增 .sel-grid{max-height:99vh}（死規則�
 
 // ── M9：註解裡的現查數字被改掉（Rule 46 制度化那一條）────────────────────
 // ⭐v6.449：v6449-picker-shell 的桌機 .selection-modal 外框（85dvh＋捲動）讓現查數字變 12 ⇒ 突變改成 13
-mut('M9 註解宣稱「剩 12 條」被改成 13',
-  (s) => s.replace('那 18 條會剩 **12 條**', '那 18 條會剩 **13 條**'),
+// ⭐v6.450：手機 sheet 的 .zoom-modal.discard-modal（85dvh＋捲動）再加 1 ⇒ 13；突變改成 14
+mut('M9 註解宣稱「剩 13 條」被改成 14',
+  (s) => s.replace('那 18 條會剩 **13 條**', '那 18 條會剩 **14 條**'),
   ['A4 ⭐⭐ 註解宣稱的']);
 
 // ── M10：!important 被拿掉（v5.299 的雙層滑捲衝突會回來）─────────────────
