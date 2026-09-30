@@ -19512,14 +19512,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
        桌機（≥1024）同特異度後者勝 ⇒ 覆寫 Fable 的 grid；<1024 時 Fable 後備排版在後 ⇒ 由它蓋回（與 Fable 行為一致）。
      ⚠ 本頁媒體查詢的數量被 test-v6187／v6195／v6199 釘住 ⇒ 矮螢幕的收縮一律用 clamp／dvh。 */
   .playmat.layout-blue{
-    /* 卡寬上限＝由視窗高反推：頁首約 35px＋手牌列＋各框標題列／內距／HP 條與格線間距（合計約 224px），
+    /* 卡寬上限＝由視窗高反推：頁首約 35px＋手牌列＋各框標題列／內距／HP 條與格線間距（合計約 240px），
        其餘高度＝兩排備戰（1.4×）＋兩張戰鬥卡（1.2×1.4×）≈ 6.2 個卡寬 ⇒ 任何滑桿倍率都撐不破一頁。 */
-    --card-w-cap:calc((100dvh - 224px - var(--bl-hand-h, 140px)) / 6.2);
+    --card-w-cap:calc((100dvh - 240px - var(--bl-hand-h, 140px)) / 6.2);
     --active-w:calc(var(--card-w) * 1.2);
     --active-h:calc(var(--active-w) * 1.397);
     --bl-side:clamp(152px, 12.5vw, 210px);
     --bl-scol:70px;
-    --bl-bench-h:calc(var(--card-w) * 1.397 + 32px);
+    --bl-bench-h:calc(var(--card-w) * 1.397 + 40px);
     grid-template-columns:var(--bl-side) minmax(0, 1fr) var(--bl-side) var(--log-w);
     grid-template-rows:var(--bl-bench-h) minmax(0, 1fr) minmax(0, 1fr) var(--bl-bench-h);
     grid-template-areas:
@@ -19698,7 +19698,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
      --bl-bw＝這一格實際的卡寬（格子比卡寬窄時跟著縮）；用容器單位 cqw ⇒ 任何高度計算都不必依賴內容。 */
   .playmat.layout-blue .zone-bench{
     display:grid !important; grid-template-columns:repeat(var(--bench-n, 5), minmax(0, 1fr)); gap:0;
-    padding:17px 6px 13px; align-content:stretch; overflow:visible !important;
+    padding:25px 6px 13px; align-content:stretch; overflow:visible !important;
     --bl-bw:min(var(--card-w), 100cqw - 14px);
   }
   .playmat.layout-blue .zone-bench .bench-slot,
@@ -19788,7 +19788,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     box-sizing:border-box; border:1.5px dashed rgba(255,255,255,.3); border-radius:8px; color:rgba(255,255,255,.55); text-align:center;
   }
   /* 左側一欄：異常狀態（文字標籤直排，外凸出卡片左緣） */
-  .playmat.layout-blue .active-card .active-info{ left:-10px; top:calc(8% + 18px); max-width:none; gap:3px; }
+  .playmat.layout-blue .active-card .active-info{ left:-10px; top:6px; max-width:none; gap:2px; z-index:231; }
   .playmat.layout-blue .active-card .active-info .status-chip,
   .playmat.layout-blue .active-card .active-info .ab-used-chip{
     font-weight:700; border:1.5px solid rgba(255,255,255,.85); border-radius:6px; padding:1px 6px; margin:0; white-space:nowrap;
@@ -19817,22 +19817,25 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   .playmat.layout-blue .active-card .ability-btn,
   .playmat.layout-blue .active-card .evo-wrap{
-    position:absolute; left:calc(100% + 10px); right:auto; bottom:auto !important; width:var(--bl-scol); margin:0; z-index:220;
+    position:absolute; left:calc(100% + 10px); right:auto; bottom:auto !important; width:var(--bl-scol); margin:0; z-index:232;
   }
-  .playmat.layout-blue .active-card .ability-btn{ top:calc(var(--active-w) * .42 * 1.397 + 24px); }
-  .playmat.layout-blue .active-card .ability-btn + .ability-btn{ top:calc(var(--active-w) * .42 * 1.397 + 88px); }
-  .playmat.layout-blue .active-card .evo-wrap{ top:calc(var(--active-w) * .42 * 1.397 + 56px); }
+  /* v6.445（fable 審查 🟡3）：槽位改從白框底部往上排（進化貼框底、特性在它上面、第二個特性再上面）——
+       舊寫法從道具縮圖往下疊固定 px，矮螢幕（1366×657）第二個特性會掉出白框、壓進備戰區。
+       白框底＝卡片底下 28px（框高 active-h＋36、上內距 8） ⇒ 進化佔卡片底下 2～26px，永遠在框內。 */
+  .playmat.layout-blue .active-card .evo-wrap{ top:calc(100% + 2px); }
+  .playmat.layout-blue .active-card .ability-btn{ top:calc(100% - 26px); }
+  .playmat.layout-blue .active-card .ability-btn + .ability-btn{ top:calc(100% - 54px); }
   .playmat.layout-blue .active-card .ability-btn,
   .playmat.layout-blue .active-card .evo-wrap .evo-btn{
-    box-sizing:border-box; height:26px; padding:0 6px !important; border-radius:999px; border:1.5px solid #fff;
+    box-sizing:border-box; height:24px; padding:0 6px !important; border-radius:999px; border:1.5px solid #fff;
     font-size:0 !important; line-height:0; color:#fff; text-align:center; box-shadow:0 1px 4px rgba(0,0,0,.55); cursor:pointer;
   }
   .playmat.layout-blue .active-card .ability-btn{ background:#6b4de6; }
   .playmat.layout-blue .active-card .ability-btn:hover{ background:#8466ff; }
   .playmat.layout-blue .active-card .evo-wrap .evo-btn{ width:100% !important; background:#1f8fe0; }
   .playmat.layout-blue .active-card .evo-wrap .evo-btn:hover{ background:#43a8ff; }
-  .playmat.layout-blue .active-card .ability-btn::after{ content:'✦ 特性'; font-size:11.5px; font-weight:800; line-height:23px; }
-  .playmat.layout-blue .active-card .evo-wrap .evo-btn::after{ content:'▲ 進化'; font-size:11.5px; font-weight:800; line-height:23px; }
+  .playmat.layout-blue .active-card .ability-btn::after{ content:'✦ 特性'; font-size:11.5px; font-weight:800; line-height:21px; }
+  .playmat.layout-blue .active-card .evo-wrap .evo-btn::after{ content:'▲ 進化'; font-size:11.5px; font-weight:800; line-height:21px; }
 
   /* ── 7. 不顯示：進化前的卡（進化堆）、能量／道具小卡、舊能量欄 ── */
   .playmat.layout-blue .att-card-stack,
@@ -19856,7 +19859,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .playmat.layout-blue .bl-tool b{ position:absolute; right:-6px; top:-8px; font-size:10px; padding:0 4px; border-radius:999px; background:#0b1633; border:1px solid #fff; color:#fff; }
   .playmat.layout-blue .bl-tool .bl-tn{ display:none; }
   .playmat.layout-blue .bl-chips{
-    position:absolute; left:50%; bottom:-10px; transform:translateX(-50%); z-index:228; pointer-events:none;
+    position:absolute; left:50%; bottom:-7px; transform:translateX(-50%); z-index:228; pointer-events:none;
     display:flex; flex-wrap:wrap; justify-content:center; gap:2px 3px; width:max-content; max-width:calc(100% + 14px); white-space:nowrap;
   }
   .playmat.layout-blue .bl-chip{
@@ -19884,7 +19887,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .playmat.layout-blue .action-bar > .action-btns{
     position:relative; left:auto; top:auto; transform:none;
     grid-template-columns:minmax(0, 1fr); align-content:center;
-    padding:22px 9px 9px; overflow-y:auto; overflow-x:visible;
+    padding:22px 9px 9px; overflow:visible; z-index:215; align-content:safe center;
   }
   .playmat.layout-blue .action-bar > .action-btns > .btn-act,
   .playmat.layout-blue .action-bar > .action-btns > .atk-slot{ max-width:100%; box-sizing:border-box; }
@@ -19976,5 +19979,38 @@ function _setupSelfPending(g: any, seat: number): string | null {
   /* 拖曳中：整個白框一起亮（可放＝藍色虛線、放開就成立＝黃色） */
   .playmat.layout-blue .my-row > .zone-active:has(> .active-card.drop-zone){ outline:2px dashed rgba(136,204,255,.75); outline-offset:3px; }
   .playmat.layout-blue .my-row > .zone-active:has(> .active-card.drop-hover){ outline:3px solid #ffd44a; outline-offset:3px; box-shadow:0 0 18px rgba(255,212,74,.6); }
+
+  /* ═══ v6.445 fable 5.1 審查修正 ═══ */
+  /* 🔴1 行動框不可以裁掉招式的預估傷害浮層（v6.444 的 overflow-y:auto 讓兩軸都裁）⇒ 改 overflow:visible（上方已改）；
+       固定列縮一點，矮螢幕多出悔棋列也不會溢出太多（safe center：放不下時從上往下排、不往上凸） */
+  .playmat.layout-blue .action-bar > .action-btns{ grid-template-rows:34px 34px 34px 30px 30px; grid-auto-rows:30px; }
+  .playmat.layout-blue .action-bar > .action-btns > .btn-act,
+  .playmat.layout-blue .action-bar > .action-btns > .atk-slot > .btn-act{ padding:.2rem .6rem; }
+  /* 🟡2 招式名稱被截斷：放大鏡改成招式鈕右上角的小圓鈕（不佔寬），招式名稱不再設 120px 上限 */
+  .playmat.layout-blue .action-bar > .action-btns > .atk-slot > .dmg-est-toggle{
+    position:absolute; top:-7px; right:-7px; width:22px; height:22px; margin:0; z-index:3;
+    border-radius:50%; font-size:11px; background:#0b1633; border:1.5px solid #cfe0ff;
+  }
+  .playmat.layout-blue .action-bar > .action-btns .btn-act.atk .atk-name{ max-width:none; flex:1 1 auto; min-width:0; text-align:left; }
+  /* 🟡5 備戰框標題與第一格卡片的旗標／傷害黃圓重疊 ⇒ 備戰框上內距加大（上方已改 17→25px；--bl-bench-h 同步 +8） */
+  /* 🟡6 8 格備戰＋窄視窗（每格 ≤64px）：卡面裝飾跟著縮小（容器查詢：容器＝備戰格本身，不是媒體查詢） */
+  @container (max-width: 64px){
+    .playmat.layout-blue .bench-slot .bl-dmg{ min-width:21px; height:21px; top:-6px; right:-6px; padding:0 3px; font-size:10.5px; line-height:17px; }
+    .playmat.layout-blue .bench-slot .bl-chip{ height:16px; padding:0 3px 0 1px; font-size:9.5px; gap:1px; }
+    .playmat.layout-blue .bench-slot .bl-e{ width:12px; height:12px; font-size:7.5px; border-width:1px; }
+    .playmat.layout-blue .bench-slot .ability-btn-sm{ height:17px; padding:0 4px !important; }
+    .playmat.layout-blue .bench-slot .ability-btn-sm::after{ font-size:9px; line-height:14px; }
+    .playmat.layout-blue .bench-slot .ab-used-chip.sm{ height:17px; padding:0 4px; }
+    .playmat.layout-blue .bench-slot .ab-used-chip.sm::after{ content:'✨已用'; font-size:9px; line-height:14px; }
+    .playmat.layout-blue .bench-slot .evo-btn-sm{ height:18px; padding:0 5px !important; top:calc(var(--bl-bw) * 1.397 * .22 + 12px); }
+    .playmat.layout-blue .bench-slot .evo-btn-sm::after{ font-size:9.5px; line-height:15px; }
+  }
+  /* 🟡7 選了能量時戰鬥卡的「⚡ 點此附加」在矮螢幕被擠到底部、壓到能量／HP ⇒ 藍桌墊改成整個白框亮黃色虛線（點框內任何地方都會附加） */
+  .playmat.layout-blue .active-card .active-info .attach-hint{ display:none; }
+  .playmat.layout-blue .my-row > .zone-active:has(> .active-card.energy-clickable){ outline:2px dashed #ffeb3b; outline-offset:3px; }
+  /* ⚪ 同一隻備戰「已用特性」又有另一個可用特性：已用標籤往下錯開，不與「特性」旗標疊在一起 */
+  .playmat.layout-blue .bench-slot:has(.ability-btn-sm) .ab-used-chip.sm{ top:16px; }
+  /* ⚪ 紀錄欄收合時保留一條窄欄給開關鈕（原本壓在獎賞框／行動框右上角） */
+  .playmat.layout-blue.log-collapsed{ --log-w:34px; }
   /* <<< v6441-blue-css */
 </style>

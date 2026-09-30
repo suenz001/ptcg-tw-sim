@@ -123,11 +123,13 @@ const CHECKS = [
       && /display:block/.test(declsOf(css, '.playmat.layout-blue .active-card .bl-tool .bl-tn'))
       && /<i class="bl-tn">\{_tc\?\.name \?\? '道具'\}<\/i>/.test(src);
   }],
-  ['★★[⑤戰鬥右欄] 右欄是固定槽位：特性在道具縮圖下方、進化再下方（按鈕有無都不位移）', true, (src) => {
+  // ⭐v6.445（Rule 40：意圖不變——固定槽位、特性在上進化在下）fable 審查 🟡3：槽位改從白框底部往上排（矮螢幕第二個特性不再掉出白框）。
+  ['★★[⑤戰鬥右欄] 右欄是固定槽位：進化貼白框底（卡片底下 2px 起）、特性在它上面（按鈕有無都不位移、不掉出白框）', true, (src) => {
     const css = blueCss(src);
-    const t = (sel) => { const m = /(?:^|;)\s*top:calc\(var\(--active-w\) \* \.42 \* 1\.397 \+ (\d+)px\)/.exec(declsOf(css, sel)); return m ? +m[1] : null; };
+    const t = (sel) => { const m = /(?:^|;)\s*top:calc\(100% ([+-]) (\d+)px\)/.exec(declsOf(css, sel)); return m ? (m[1] === '+' ? 1 : -1) * +m[2] : null; };
     const ab = t('.playmat.layout-blue .active-card .ability-btn'), ev = t('.playmat.layout-blue .active-card .evo-wrap');
-    return ab !== null && ev !== null && ev > ab;
+    const ab2 = t('.playmat.layout-blue .active-card .ability-btn + .ability-btn');
+    return ab !== null && ev !== null && ab2 !== null && ev > ab && ab > ab2 && ev + 24 <= 28;
   }],
   ['★[⑤狀態] 異常狀態是卡片左側一欄（外凸出卡片左緣）', true, (src) => /left:-10px/.test(declsOf(blueCss(src), '.playmat.layout-blue .active-card .active-info'))],
   // ⑦ 設置階段

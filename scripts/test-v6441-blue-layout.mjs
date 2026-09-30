@@ -204,7 +204,8 @@ if (h) {
 if (m) {
   const css = m[1];
   const noPtr = (cls) => new RegExp('\\.playmat\\.layout-blue \\.' + cls + '\\{[^}]*pointer-events:none').test(css);
-  ok('★★[不擋操作] 傷害黃圓／道具縮圖／能量列都不吃滑鼠事件（不擋點擊與拖放落點）', noPtr('bl-dmg') && noPtr('bl-tool') && noPtr('bl-chips'));
+  // v6.445（fable 審查語意漂移）：v6.444 起道具縮圖的 <img> 本身吃滑鼠（hover 預覽／點開），外框 .bl-tool 仍不吃；拖放判定走 closest(data-drop-type) 不受影響。
+  ok('★★[不擋操作] 傷害黃圓／能量列／道具縮圖外框不吃滑鼠事件（縮圖 img 本身例外：v6.444 hover 預覽）', noPtr('bl-dmg') && noPtr('bl-tool') && noPtr('bl-chips'));
   ok('★[裁定] 備戰卡名稱平常不顯示、滑鼠移上才顯示',
     /\.playmat\.layout-blue \.bench-slot \.bench-name,\s*\n\s*\.playmat\.layout-blue \.bench-slot \.bench-stat,[^{]*\{ display:none; \}/.test(css) && /\.bench-slot:hover \.bench-name\{/.test(css));
   ok('★[裁定] 戰鬥寶可夢 HP 條在卡片下方（固定 px 間距）', /\.active-card \.active-hpbar-bottom\{\s*\n\s*top:calc\(100% \+ \d+px\)/.test(css));
