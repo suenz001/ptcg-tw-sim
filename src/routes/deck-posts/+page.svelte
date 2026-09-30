@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）
   // 牌組公布欄（v6.139 批次 2：讀 ＋ 匯入）。
   //
   // 設計定案：docs/牌組公布欄-設計定案.md。後端是 v6.138 批次 1。
@@ -883,7 +884,7 @@
 </main>
 
 {#if openPost || detailLoading || detailError}
-  <div class="modal-backdrop" role="presentation" onclick={closeDetail}>
+  <div use:pageScrollLock class="modal-backdrop" role="presentation" onclick={closeDetail}>
     <div class="modal" role="dialog" aria-modal="true" aria-label="牌組明細" onclick={(e) => e.stopPropagation()}>
       {#if detailLoading}
         <p class="empty">載入中…</p>
@@ -1017,7 +1018,7 @@
 {/if}
 
 {#if postOpen}
-  <div class="modal-backdrop" role="presentation" onclick={closePostModal}>
+  <div use:pageScrollLock class="modal-backdrop" role="presentation" onclick={closePostModal}>
     <div class="modal narrow" role="dialog" aria-modal="true" aria-label="投稿牌組" onclick={(e) => e.stopPropagation()}>
       <header class="modal-head">
         <h2>投稿牌組</h2>
@@ -1130,6 +1131,7 @@
     max-width: 720px; width: 100%;
     max-height: calc(100vh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 32px);
     overflow-y: auto; padding: 16px 18px 18px;
+    overscroll-behavior: contain; /* ⭐v6.457 捲到底不把整頁帶走 */
   }
   :global(html.dark) .modal { background: #1c1f24; }
   .modal-head { display: flex; align-items: center; gap: 12px; }

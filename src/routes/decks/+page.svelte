@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
   import type { Card, EnergyType } from '$lib/cards/types';
@@ -2129,7 +2130,7 @@
   {@const pvSameName = active && !isBasicEnergy(pv) && !isAceSpec(pv) ? sameNameTotal(active, pv.name, poolById) : 0}
   {@const pvRemaining = active ? remainingCapacity(active, pv, poolById) : maxCopies(pv)}
   {@const pvMax = pvCount + (pvRemaining === Infinity ? 0 : pvRemaining)}
-  <div class="pv-overlay" role="dialog" aria-modal="true" aria-label="卡片詳情"
+  <div use:pageScrollLock class="pv-overlay" role="dialog" aria-modal="true" aria-label="卡片詳情"
     onclick={closePreview}>
     <div class="pv-inner" onclick={(e) => e.stopPropagation()}>
       <button class="pv-close" onclick={closePreview} aria-label="關閉">×</button>
@@ -2307,7 +2308,7 @@
 
 <!-- ── Auth modal ───────────────────────────────────────────────────────── -->
 {#if showAuthModal}
-  <div class="pv-overlay" onclick={() => { showAuthModal = false; }}>
+  <div use:pageScrollLock class="pv-overlay" onclick={() => { showAuthModal = false; }}>
     <div class="pv-inner auth-modal" onclick={(e) => e.stopPropagation()}>
       <button class="pv-close" onclick={() => { showAuthModal = false; }} aria-label="關閉">×</button>
 
@@ -2373,7 +2374,7 @@
 
 <!-- ── v3.92 Change Password modal ───────────────────────────────────────── -->
 {#if showChangePasswordModal}
-  <div class="pv-overlay" onclick={() => { showChangePasswordModal = false; }}>
+  <div use:pageScrollLock class="pv-overlay" onclick={() => { showChangePasswordModal = false; }}>
     <div class="pv-inner auth-modal" onclick={(e) => e.stopPropagation()}>
       <button class="pv-close" onclick={() => { showChangePasswordModal = false; }} aria-label="關閉">×</button>
       <h3 class="modal-title">🔑 更改密碼</h3>
@@ -2401,7 +2402,7 @@
 <!-- ── v4.974：匯出官網代碼成功 modal ───────────────────────────────────── -->
 <!-- 取代 v4.973 的 alert，提供大字代碼顯示 + 複製按鈕 + 官網連結 -->
 {#if showExportCodeModal}
-  <div class="pv-overlay" onclick={closeExportCodeModal}>
+  <div use:pageScrollLock class="pv-overlay" onclick={closeExportCodeModal}>
     <div class="pv-inner export-code-modal" onclick={(e) => e.stopPropagation()}>
       <button class="pv-close" onclick={closeExportCodeModal} aria-label="關閉">×</button>
       <h3 class="modal-title">✅ 匯出成功 — 官網代碼</h3>
@@ -2423,7 +2424,7 @@
      ⚠ 點背景關閉用的是一顆**透明按鈕**（不是在 div 上掛 onclick）——
        那樣既能點外面關閉，又不會多出 a11y 警告（警告數是版面沒被改壞的金絲雀）。 -->
 {#if statsDeckId}
-  <div class="pv-overlay">
+  <div use:pageScrollLock class="pv-overlay">
     <button class="ds-backdrop" onclick={closeDeckStats} aria-label="關閉戰績視窗"></button>
     <div class="pv-inner deck-stats-modal">
       <button class="pv-close" onclick={closeDeckStats} aria-label="關閉">×</button>
@@ -2516,7 +2517,7 @@
 
 <!-- ── Text format modal ────────────────────────────────────────────────── -->
 {#if showTextModal}
-  <div class="pv-overlay" onclick={() => { showTextModal = false; }}>
+  <div use:pageScrollLock class="pv-overlay" onclick={() => { showTextModal = false; }}>
     <div class="pv-inner text-modal" onclick={(e) => e.stopPropagation()}>
       <button class="pv-close" onclick={() => { showTextModal = false; }} aria-label="關閉">×</button>
 
@@ -2589,7 +2590,7 @@
 <!-- v2.129 全螢幕卡牌放大（鏡射 /cards lightbox 樣式）─────────────────────── -->
 {#if lightboxUrl}
   <div
-    class="lightboxOverlay"
+    class="lightboxOverlay" use:pageScrollLock
     role="dialog"
     aria-modal="true"
     aria-label="放大卡牌圖片"
@@ -3445,6 +3446,7 @@
     cursor: zoom-out;
   }
   .pv-inner {
+    overscroll-behavior: contain; /* ⭐v6.457 捲到底不把整頁帶走（桌機滾輪／手機手指都是） */
     background: #fff;
     border-radius: 12px;
     max-width: 1170px;

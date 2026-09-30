@@ -109,7 +109,20 @@ console.log('\nA) 手機（≤600px）實際勝出的宣告');
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\nB) 桌機與其他內容逐字未動');
 const STRIP_RE = /\n  \/\* >>> v6439-cards-mobile \*\/[\s\S]*?\/\* <<< v6439-cards-mobile \*\//;
-const stripped = SRC.replace(STRIP_RE, '');
+// ⭐ LATER（IRON_RULES Rule 40：之後版本的合法改動逐字登記、逐字還原，鎖不變鬆）
+//   v6.457：彈出視窗整頁捲動鎖（Rule 76）—— import 一行、兩個遮罩掛 use:pageScrollLock、.modalInner 加 overscroll-behavior:contain。
+const LATER = [
+  ["  import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）\n", ''],
+  ['<div use:pageScrollLock class="modal" role="dialog"', '<div class="modal" role="dialog"'],
+  ['      class="lightboxOverlay" use:pageScrollLock\n', '      class="lightboxOverlay"\n'],
+  ['    overscroll-behavior: contain; /* ⭐v6.457 捲到底不把整頁帶走（桌機滾輪／手機手指都是） */\n', ''],
+];
+let stripped = SRC.replace(/\r\n/g, '\n').replace(STRIP_RE, '');
+for (const [a, b] of LATER) {
+  const n = stripped.split(a).length - 1;
+  ok('[LATER 前提] 登記的後續改動恰好出現一次：' + a.trim().slice(0, 50), n === 1, 'n=' + n);
+  stripped = stripped.replace(a, b);
+}
 ok('[剝除器] 找得到 v6439 哨兵區塊（剝除後真的有變；哨兵被刪＝剝除器靜默 no-op）', stripped !== SRC);
 ok('[剝除器] 哨兵區塊恰好一個', (SRC.match(/>>> v6439-cards-mobile/g) || []).length === 1 && (SRC.match(/<<< v6439-cards-mobile/g) || []).length === 1);
 let BASE_SRC = null;

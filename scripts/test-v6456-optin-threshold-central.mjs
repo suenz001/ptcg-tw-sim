@@ -83,6 +83,24 @@ ok('★★[B2] 同盤面選「不啟用」（送 []）⇒ 不打備戰、能量�
 const r3 = play({ attacker: FOX, attackerEnergies: [I(DARK), I(DARK), I(DARK)], discard: (a) => a.energyAttached.slice(0, 2).map((e) => e.iid), copy: true });
 ok('★★[B3] 身上 3 個卻只放回 2 個 ⇒ 不成立（有 3 個就要放回 3 個）、能量不動', !r3.benchPicker && !r3.hitBench && r3.left === 3, JSON.stringify(r3));
 
+// 站長 2026-09-30 裁定：身上 0 個能量時「不用放回也照打備戰 120」要維持——比照呆呆王「耀閃挑戰」借巨金怪「金屬之錘」的官方 QA
+//   （付出與追加效果是獨立事件：身上 0 個鋼能量也 +150，見 effects.ts 金屬之錘段落、v5.992 optInPay）。
+//   ⚠ 狐大盜「技能大盜」要【無】【無】，走 applyAction 會先被費用擋下；0 能量只在費用被減到 0 時才會出現，
+//     所以這裡直接呼叫激流水泵已註冊的 PRE／POST（引擎出招時也是呼叫這兩支），驗「門檻 0 ⇒ 追加效果照發動」。
+{
+  const PRE = M.SH?.ATTACK_PRE?.get('厄鬼椪 水井面具ex|激流水泵'), POST = M.SH?.ATTACK_POST?.get('厄鬼椪 水井面具ex|激流水泵');
+  const ob0 = I(FOX), act0 = I(FOX, []);
+  const st0 = { phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 0, turn: 5, isFirstTurn: false, log: [], pendingSelection: undefined, setupDone: [true, true],
+    players: [{ name: 'A', active: act0, bench: [], hand: [], deck: [I(FOX)], discard: [], prizes: [I(FOX)] },
+      { name: 'B', active: I(PUMP, [I(WATER)]), bench: [ob0], hand: [], deck: [I(FOX)], discard: [], prizes: [I(FOX)] }] };
+  const a0 = { type: 'ATTACK', attackIndex: 0, actorIdx: 0, discardedEnergyIids: [] };
+  let pre0 = null, post0 = null;
+  try { pre0 = PRE(st0, 0, pool, a0); post0 = POST(pre0.state, 0, pool, a0); } catch (e) { pre0 = { err: String(e) }; }
+  const r0 = { dmg: pre0?.damage, benchPicker: post0?.pendingSelection?.type === 'opp-bench-choose' || (post0?.players?.[1]?.bench?.[0]?.damage ?? 0) >= 100 };
+  ok('★★★[B4] 站長裁定：身上 0 個能量出激流水泵 ⇒ 門檻 0、不用放回也打備戰 120（比照耀閃挑戰借金屬之錘判例）', typeof PRE === 'function' && typeof POST === 'function' && r0.dmg === 100 && r0.benchPicker, JSON.stringify(r0));
+}
+if (typeof T === 'function' && SPEC) ok('★★[B4] 中央述詞：身上 0 個 ⇒ 門檻 0（不是 undefined、不是 3）', T(SPEC, 0) === 0);
+
 console.log('\nC) 三端共用同一支（靜態；HEAD-FAIL 對 v6.455）');
 function uiThresholdFn(src) {
   const i = src.indexOf('  function _computeExactRequired('); if (i < 0) return '';

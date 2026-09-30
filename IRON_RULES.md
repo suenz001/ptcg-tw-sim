@@ -2476,3 +2476,39 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
   - 突變 runner：**工具鏈錯誤（語法錯、esbuild 失敗）不算殺**。
   - HEAD-FAIL 還原腳本動檔前**先整檔備份**（曾把 ai-gust.ts 截成空檔）。
 - 全套 `npm test` 在 CPU 競爭下 `test-evolve-iid-regression` 會 exit 124 ⇒ 單獨重跑確認，不是守衛壞。
+
+---
+
+## Rule 74（2026-09-30）：選擇視窗（picker）統一化的規格與踩坑（v6.448～v6.455）
+
+- 規格一律只寫在兩個哨兵區塊裡，不在各視窗 class 上各寫一份：
+  - 桌機 `/* >>> v6449-picker-shell */`（尺寸 token `--pk-s/m/l` = 480／760／960、卡圖 `--pk-card` 96、85dvh 視窗內捲、按鈕列黏底、次要在左主要在右）；
+  - 手機直式 `/* >>> v6450-picker-sheet */`（在最後一個 `@media (max-width: 600px) and (orientation: portrait)` 區塊尾端：底部 sheet 100vw／85dvh、一列 4／3／5、按鈕等寬 ≥44px）。
+  - **不可以新增 `@media`**（整頁媒體查詢數量被守衛釘住）；新版桌墊主題寫在 `v6441-blue-css` 第 13 節，選擇器**拆開寫、不用 `:is()`**（test-v6441 的範圍檢查以逗號切）。
+- Svelte scoped CSS 特異度坑：`.btn-act.secondary` 是 (0,3,0)，單一 class 覆寫會輸 ⇒ 寫 `.btn-act.secondary.pre-attack-cancel`。
+  flex 的「彈簧」`::before` 會先吃光剩餘空間，`margin-right:auto` 是死宣告 ⇒ 用 `:has(> .x)::before{order:-2}` 把彈簧排到想要的位置。
+- 負 margin 會把內容區縮小（按鈕列蓋到說明文字）⇒ 用 `:has(> .sel-footer){padding-bottom:0}`；flex-basis 0 的等寬按鈕，框線 1px 不會均分 ⇒ 主按鈕補透明 1px 框線。
+- **版面類判準一律用 Playwright 實際量測**（位置、寬度、間距、pointer-events），字串判準只當輔助；fable 複審抓到的三個缺口（間距是死宣告、拖開透明被蓋、max-height 是 content-box）字串守衛全部守不到。
+- 捲動規則（站長 2026-09-30）：**滑鼠停在卡片區滾動只捲卡片，移到卡片區外面才捲得動整個視窗** ⇒ 所有清單走群組規則
+  （`.scroll-list, .sel-grid, … { overscroll-behavior:contain; max-height:var(--scroll-list-max) }`），要調高度只改 `--scroll-list-max`。守衛 test-v6457 D4。
+- 環境：雲端要跑 PW 守衛設 `PW_EXECUTABLE=/opt/pw-browsers/chromium-1194/chrome-linux/chrome`；此時 test-v6297／v6303／v6304（與 v6370 A5）在 v6.447 原版就紅（瀏覽器版本差），不是改壞；
+  沒設時這些守衛 ENV-SKIP（CI 的 headless-shell 照跑）。test-v6441 的 LATER 清單用 `/tmp/pw/regen_later.py` 重產（錨點延長到唯一、藍桌墊哨兵內略過）。
+
+## Rule 75（2026-09-30）：「若希望，選擇 N 個能量…。這個情況下，〔追加效果〕」門檻只有一份（v6.456／v6.457）
+
+- 門檻由卡片 spec 宣告 `PreDiscardSpec.optInThreshold`，實際值一律 `preDiscardOptInThreshold(spec, 這次出招者可付單位)` = min(N, 可付)。
+  **引擎（regPre／regPost）、畫面（`_computeExactRequired`）、AI（自動付款）三端都呼叫這一支**；畫面不可以認招式名、不可以寫死 3。
+- 可付單位算「這一次實際出招的寶可夢」（借招時＝借用者），用 `getEnergyDiscardUnits`（能量單位，不是張數）。
+- 官方：身上不足 N 個時放回全部也算「這個情況下」（PTCG_RULES §17.25.F；狐大盜借激流水泵 2 能量 ⇒ 放回 2、備戰 120）。
+- **站長裁定（2026-09-30）：身上 0 個能量 ⇒ 門檻 0，不用放回也照打追加效果，維持這樣**。判例＝呆呆王「耀閃挑戰」借巨金怪「金屬之錘」的官方 QA
+  （付出與效果是獨立事件，0 個鋼能量也 +150；v4.46／v5.992 optInPay）。守衛 test-v6456 B4（突變「門檻至少 1」會紅）。
+- 與 v5.992 `optInPay`（付得出多少付多少、效果全額）是**兩型**：optInPay＝加傷／狀態型；optInThreshold＝「這個情況下」全有或全無型。新卡先分型再選管線。
+- 守衛教訓：只驗中央函式值是安慰劑（fable 抓到）——必須驗**消費點**（三端都呼叫、結果一致）＋ AI 行為（用單位不用張數、最小組合），並逐一突變確認會紅。
+
+## Rule 76（2026-09-30）：非對戰頁的彈出視窗一律 `use:pageScrollLock`（v6.457）
+
+- 手機（觸控）上彈出視窗開著時，後面的整頁不可以被手指捲動：遮罩元素掛 `use:pageScrollLock`（`src/lib/page-scroll-lock.ts`）。
+  body 改 fixed＋top 負捲動量、**引用計數**（視窗上再疊放大圖）、解鎖捲回原位；只在 `(hover: none) and (pointer: coarse)` 鎖。
+- 桌機不鎖（站長規則：視窗外滾輪照捲整頁）；可捲的視窗內容區加 `overscroll-behavior: contain`（捲到底不帶走整頁）。
+- 新增任何全畫面遮罩（首頁／卡牌資料庫／牌組編輯／牌組公布欄）都要掛；**禁止各頁自己改 body.style.position**。守衛 test-v6457（列舉遮罩 S2、S4、行為 D1～D3）。
+- 對戰頁手機直式另有 `body.mp-locked`（整個對戰畫面鎖死），不要混用。

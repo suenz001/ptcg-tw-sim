@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）
   import { base } from '$app/paths';
   import { retryImg } from '$lib/img-retry';
   import type { Card, SetSummary, EnergyType } from '$lib/cards/types';
@@ -662,7 +663,7 @@
   {/if}
 
   {#if selected}
-    <div class="modal" role="dialog" aria-modal="true" onclick={closeModal}>
+    <div use:pageScrollLock class="modal" role="dialog" aria-modal="true" onclick={closeModal}>
       <div class="modalInner" onclick={(e) => e.stopPropagation()} role="document">
         <button class="close" onclick={closeModal} aria-label="關閉">×</button>
         <!-- v4.989: 左右導航按鈕（同名變體 cycle）— 鍵盤 ←/→ 也可用 -->
@@ -820,7 +821,7 @@
 
   {#if lightbox}
     <div
-      class="lightboxOverlay"
+      class="lightboxOverlay" use:pageScrollLock
       role="dialog"
       aria-modal="true"
       aria-label="放大卡牌圖片"
@@ -1242,6 +1243,7 @@
     margin: auto;
     overflow-y: auto;
     overflow-x: hidden; /* v4.999: 明確阻擋水平 scrollbar — modal-nav transform 在某些瀏覽器仍算進 overflow extent */
+    overscroll-behavior: contain; /* ⭐v6.457 捲到底不把整頁帶走（桌機滾輪／手機手指都是） */
     position: relative;
     padding: 1.5rem;
     font-family: system-ui, 'Microsoft JhengHei', sans-serif;

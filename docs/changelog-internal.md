@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.457：手機彈出視窗不再捲到背景（中央 pageScrollLock）＋ 激流水泵 0 能量裁定釘住
+
+BASE `ec9c3fcf`（v6.456）。站長 2026-09-30：「手機版查詢卡片時，也會有捲動到背景的情況發生」。
+- 重現（Playwright 390×844 觸控、CDP 手指拖曳，/cards?set=M6 點卡）：詳情視窗滑到底再滑 ⇒ 背景 scrollY 485 → 2191；遮罩上滑、放大圖上滑也捲背景。牌組編輯 /decks 的卡片詳情同型。
+- 中央：`src/lib/page-scroll-lock.ts`（`use:pageScrollLock`：body fixed＋top 負捲動量、引用計數、解鎖捲回原位；只在 `(hover: none) and (pointer: coarse)` 鎖）。掛在首頁回饋、卡牌資料庫詳情＋放大圖、牌組編輯 6 個遮罩＋放大圖、牌組公布欄 2 個遮罩；可捲內容區（.modalInner／.pv-inner／deck-posts .modal）加 overscroll-behavior:contain。實測修後：背景不動、內容區照捲、關閉回到 485。
+- 桌機維持站長規則（2026-09-30）：「滑鼠停在卡片區滾動只捲卡片，移到外面才捲整個視窗」——對戰頁選擇視窗現行就是這樣（群組規則 overscroll-behavior:contain），本版以守衛 D4 釘住；桌機 /cards 視窗內容不夠長時，滾輪仍會捲後面整頁（與 v6.456 相同，未改）。
+- 站長裁定（2026-09-30）：激流水泵身上 0 個能量 ⇒ 門檻 0、不用放回也打備戰 120，維持；判例＝呆呆王「耀閃挑戰」借巨金怪「金屬之錘」的官方 QA（0 個鋼能量也 +150）。test-v6456 補 B4（直接呼叫已註冊的 PRE／POST；突變「門檻至少 1」會紅）；_shared.ts 註解與 v6.456 內部紀錄改為已裁定。
+- IRON_RULES 新增 Rule 74（picker 統一化規格與踩坑）、Rule 75（若希望門檻三端一份＋0 能量裁定）、Rule 76（非對戰頁遮罩一律 pageScrollLock）。
+- 守衛：新增 `test-v6457-page-scroll-lock.mjs`（S1～S4 靜態＋HEAD-FAIL 對 v6.456；D0 正對照、D1 鎖住拖曳不動、D2 兩層引用計數與捲回原位、D3 桌機不鎖、D4 桌機卡片區只捲卡片）；突變（拿掉 decks 詳情的 action、不固定 body、引用計數壞、桌機也鎖、不捲回、拿掉群組 contain）全紅。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## v6.456：「若希望，選擇 N 個能量…。這個情況下…」門檻中央化（狐大盜借激流水泵）
 
 BASE `d3797b79`（v6.455）。站長轉玩家回報（2026-09-30，附 PTCG 搜判）：狐大盜附 2 個惡能量用「技能大盜」借「激流水泵」，官方：放回 2 個、備戰 120 照打；本站確認鈕按不下去。
@@ -7,7 +18,7 @@ BASE `d3797b79`（v6.455）。站長轉玩家回報（2026-09-30，附 PTCG 搜�
 - 整體 audit（H/I/J、live）：卡面「若希望＋N 個能量付出」共 8 招——忍者飛旋／災難衝擊／金屬之錘已走 v5.992 optInPay（付得出多少付多少）；反轉之風／上搗角擊／水流清洗／付諸東流是拿對手能量，不是付出型；「……這個情況下，〔追加效果〕」全有或全無型只有激流水泵一招。其餘「選擇 N 個能量丟棄」必付型由 v5.998 effectivePreDiscardMin 處理。
 - 中央收斂：`PreDiscardSpec.optInThreshold`（卡片宣告門檻）＋`preDiscardOptInThreshold(spec, 可付單位)`＝min(N, 可付)（_shared.ts，effects.ts re-export）。引擎 `_hydroPumpRequired`、畫面 `_computeExactRequired(spec)`（兩個開窗點）、AI 自動付款（改讀 spec、host-aware 單位累加到門檻）三端都呼叫這一支；畫面不再認招式名。
 - 獨立審查（fable）後補強：AI 的 key 改用 getEffectiveAttacks 的 sourceCardName（與畫面同源）、AI 付款改最小組合（由大到小＋去多餘）；確認鈕「目前 x/需 y」改用能量單位；門檻為 0 時不顯示「不啟用」（兩鈕結果相同）。守衛補三個消費點判準與 AI 行為測（突變驗證：消費點寫死 3、AI 寫死 3、AI 還原 v6.455 三種都會紅）。
-- ⚠ 待站長確認：身上 0 個能量（理論上借招且費用被減到 0 才會發生）時，引擎沿用 v5.653 起的行為＝可以不放回任何能量而打備戰 120；官方搜判只講到「不足 3 個」。
+- ✅ 站長 2026-09-30 裁定：身上 0 個能量（理論上借招且費用被減到 0 才會發生）時維持現行＝不用放回也照打備戰 120，比照呆呆王「耀閃挑戰」借巨金怪「金屬之錘」的官方 QA（身上 0 個鋼能量也 +150）。v6.457 守衛 B4 釘住。
 - 實測（雲端 Playwright）：狐大盜 2 惡能量 → 技能大盜 → 激流水泵 → 勾 2 張 → 「啟用追加效果（需放回 2 個能量，目前 2/2）」可按 → 開出對手備戰選擇、能量回牌庫。
 - 守衛：新增 `test-v6456-optin-threshold-central.mjs`（中央述詞值、引擎完整流程 3 情境、三端共用靜態判準 HEAD-FAIL 對 v6.455 逐條紅）；免疫網（damage／attack-effect）、selection-ui、v6174、optin-pay、prediscard-effective-min、hydro-pump-bench、v6337 借招鏈、v6407 付出時序、ts2304、lint 全綠。
 - 部署：玩家前端＋卡片效果＋AI ⇒ `redeploy-oracle.bat`；錦標賽伺服器引擎也打包這些檔案 ⇒ 建議一併 `update-tournament.bat`。

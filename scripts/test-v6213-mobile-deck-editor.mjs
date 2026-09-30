@@ -334,10 +334,19 @@ console.log('\n4) ★★★正對照：桌機 CSS 逐字未動');
   //     ⇒ 「桌機只多了那一段、其餘一個宣告都沒動」仍然是逐字證明。
   const DESKTOP_SHA_V6212 = '6ac52437ce962826';   // v6.212 ＝ v6.213 ＝ … ＝ v6.266（bare.length = 25315）
   const DESKTOP_SHA_V6267 = '4a2669f933bf118e';   // v6.267 ＝ … ＝ v6.270（bare.length = 26776）
-  const DESKTOP_SHA = '26605e17e71776c4';   // v6.271（bare.length = 26937）
+  const DESKTOP_SHA_V6271 = '26605e17e71776c4';   // v6.271 ＝ … ＝ v6.456（bare.length = 26937）
+  const DESKTOP_SHA = '916300b6bf8a7cd7';   // v6.457（bare.length = 26967）
   const bareSha = createHash('sha256').update(bare).digest('hex').slice(0, 16);
   ok('★★★[正對照／逐字證明] 桌機（非 @media）CSS 的 sha256 指紋沒有變 —— 只有本版刻意做的那幾處',
-    bareSha === DESKTOP_SHA && bare.length === 26937, bareSha + ' / len=' + bare.length);
+    bareSha === DESKTOP_SHA && bare.length === 26967, bareSha + ' / len=' + bare.length);
+  // ⭐⭐⭐ v6.457 刻意改桌機一處（IRON_RULES Rule 40：更新指紋但不變鬆）：卡片詳情 .pv-inner 加 overscroll-behavior:contain
+  //   （捲到底不把整頁帶走；站長 2026-09-30 的捲動規則，Rule 76）。把這一處逐字拿掉 ⇒ 必須逐字回到 v6.271 的指紋。
+  const V6457_ADD = '.pv-inner { overscroll-behavior: contain; background: #fff;';   // 註解在取指紋前已剝掉
+  ok('[前提] v6.457 登記的那一處桌機編輯在桌機 CSS 裡恰好出現一次', bare.split(V6457_ADD).length - 1 === 1);
+  const REV_V6457 = bare.replace(V6457_ADD, '.pv-inner { background: #fff;');
+  const rev457Sha = createHash('sha256').update(REV_V6457).digest('hex').slice(0, 16);
+  ok('★★★[正對照／逐字證明] 把 v6.457 那一處拿掉之後，桌機 CSS 逐字回到 v6.271',
+    rev457Sha === DESKTOP_SHA_V6271 && REV_V6457.length === 26937, rev457Sha + ' / len=' + REV_V6457.length);
   // ⭐⭐⭐ v6.271 刻意改桌機（左欄 220→260px、牌組名稱改兩行）。為了讓這把鎖**不因為更新而變鬆**，
   //   這裡不是「換一個新指紋就算了」，而是把本版**逐字的四處宣告編輯**做**反向還原**，
   //   還原後必須逐字回到 v6.267 的指紋 ⇒「桌機除了這四處，一個宣告都沒動」仍然是逐字證明。
@@ -352,7 +361,7 @@ console.log('\n4) ★★★正對照：桌機 CSS 逐字未動');
     ['.deck-size { color: #888; font-size: 0.75rem; line-height: 1.15; flex-shrink: 0; white-space: nowrap; }',
      '.deck-size { color: #888; font-size: 0.8rem; flex-shrink: 0; white-space: nowrap; }'],
   ];
-  let REV_V6271 = bare, _allOne = true;
+  let REV_V6271 = REV_V6457, _allOne = true;
   for (const [a, b] of V6271_REVERSALS) {
     const n = REV_V6271.split(a).length - 1;
     if (n !== 1) { _allOne = false; console.log('    這一處在桌機 CSS 裡出現 ' + n + ' 次（應為 1）：' + a.slice(0, 60)); }

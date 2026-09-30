@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）
   import { onMount } from 'svelte';
 
 
@@ -453,7 +454,7 @@
   {#if showFeedbackModal}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div class="modal-overlay" onclick={() => { if(!feedbackSubmitting) showFeedbackModal = false; }} role="dialog">
+    <div use:pageScrollLock class="modal-overlay" onclick={() => { if(!feedbackSubmitting) showFeedbackModal = false; }} role="dialog">
       <div class="modal-content fb-modal" onclick={e => e.stopPropagation()}>
         <h3>💬 意見回饋</h3>
 
