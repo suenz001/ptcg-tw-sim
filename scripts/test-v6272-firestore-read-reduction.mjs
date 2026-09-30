@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'bca98712f9e0ddb3f8d7b5922c2d3586c8e23575';   // v6.444（上一版）
+const PREV_SHA = 'b71059425a5dc31be165d46d78722c7e049ebdd7';   // v6.445（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,15 +757,24 @@ const PREV_SHA = 'bca98712f9e0ddb3f8d7b5922c2d3586c8e23575';   // v6.444（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.445 前移：PREV_SHA 從 bca98712（v6.444）起算。
+  // ⚠⚠ v6.446 前移：PREV_SHA 從 b7105942（v6.445）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.445：藍桌墊 fable 5.1 審查修正（game/+page.svelte；其他版面零位元組變動由 test-v6441 A 剝除器守）；首頁 changelog 三步搬運。
+  // ⭐v6.446：新版桌墊（原藍桌墊）正名＋改為桌機預設版面（game/+page.svelte）；首頁 changelog 三步搬運。
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.445）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.445 前移：PREV_SHA 從 bca98712（v6.444）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.445：藍桌墊 fable 5.1 審查修正（game/+page.svelte；其他版面零位元組變動由 test-v6441 A 剝除器守）；首頁 changelog 三步搬運。
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.444）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.444 前移：PREV_SHA 從 f6a12bf4（v6.443）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -837,7 +846,7 @@ const PREV_ALLOWED = [
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
-// （⭐v6.445：歷史宣告只保留到 v6.428 —— 整段連續註解超過 200 行會觸發 strip-comments 護欄；更舊的見 git 歷史。）
+// （⭐v6.446：歷史宣告只保留到 v6.429 —— 整段連續註解超過 200 行會觸發 strip-comments 護欄；更舊的見 git 歷史。）
 // ── 上一版（v6.437）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.437 前移：PREV_SHA 從 b404a8f2（v6.436）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -931,15 +940,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/deck-top-known.ts',
 //   'src/lib/game/effects/cards/slowking_lucario_deck.ts',
 //   'src/lib/game/effects/cards/stadiums.ts',
-//   'src/lib/game/types.ts',
-//   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.428）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-//  ⚠⚠ v6.428 前移：PREV_SHA 從 2f4e3801（v6.427 之後 main 上最新一顆）起算。
-//  ⭐v6.428：玩家層級招式冷卻（天仙石／渾沌匍匐）收斂成中央述詞＋遊戲層級招式紀錄（engine.ts、types.ts）。
-//   'src/lib/game/engine.ts',
 //   'src/lib/game/types.ts',
 //   'src/lib/version.ts',
 //   'static/changelog-archive.html',

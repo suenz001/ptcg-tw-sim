@@ -2069,7 +2069,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //   窄視窗（<1024，含 iPad 直式）維持 classic 預設 —— fable 完整 grid 是 >=1024 才啟用（見下方 CSS media 分界）。
       //   ⚠ 這裡不寫 localStorage：預設值不算「玩家的選擇」，玩家實際切換才由 setBattleLayout 寫入。
       //   ⚠ 手機直式不受影響：isPortraitMobile 走 MobilePortraitBattle 元件，該元件不讀 battleLayout。
-      else if (typeof window !== 'undefined' && window.innerWidth >= 1024) battleLayout = 'fable';
+      // >>> v6446-default-blue
+      // ⭐v6.446 站長裁定（2026-09-30）：桌機預設版面改為「新版桌墊」（程式代號 blue，原名藍桌墊）。
+      //   與 v6.223 同一規則：只影響從未選過版面的玩家（localStorage 沒有 ptcg_battle_layout）；
+      //   已選過 fable／classic／tabletop 的玩家維持原選擇；窄視窗（<1024）仍是 classic；不寫 localStorage。
+      // <<< v6446-default-blue
+      else if (typeof window !== 'undefined' && window.innerWidth >= 1024) battleLayout = 'blue';
     } catch { /* SSR / quota / private mode：保持預設 classic */ }
     // v5.012：battle log side panel 開關狀態（桌墊版用）
     try {
@@ -14360,7 +14365,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               <option value="classic">經典版（Active 左對齊）</option>
               <option value="tabletop">🆕 桌墊版（仿實體 — Active 置中、bench 對稱列）</option>
               <option value="fable">✨ Fable 版（忠實桌墊 grid — 卡牌大小可調、紀錄入欄）</option>
-              <option value="blue">🟦 藍桌墊（格線分區 — 能量合併顯示）</option>
+              <option value="blue">🟦 新版桌墊（預設 — 固定格線、能量合併顯示）</option>
             </select>
           </div>
           {#if isFableGeom}

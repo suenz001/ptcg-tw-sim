@@ -61,7 +61,9 @@ const REVERT = [
   ["class:tablet-layout={isTabletLayout && !isFableGeom}", "class:tablet-layout={isTabletLayout && battleLayout !== 'fable'}"],
   ["class:layout-fable={isFableGeom} class:layout-blue={battleLayout === 'blue'}", "class:layout-fable={battleLayout === 'fable'}"],
   ["setBattleLayout(e.currentTarget.value as 'classic' | 'tabletop' | 'fable' | 'blue')}>", "setBattleLayout(e.currentTarget.value as 'classic' | 'tabletop' | 'fable')}>"],
-  ["              <option value=\"blue\">🟦 藍桌墊（格線分區 — 能量合併顯示）</option>\n", ""],
+  ["              <option value=\"blue\">🟦 新版桌墊（預設 — 固定格線、能量合併顯示）</option>\n", ""],  // v6.446 正名「新版桌墊」
+  // v6.446 站長裁定：桌機預設版面改為新版桌墊（說明註解在 v6446-default-blue 哨兵內，由剝除器拿掉）
+  ["      else if (typeof window !== 'undefined' && window.innerWidth >= 1024) battleLayout = 'blue';\n", "      else if (typeof window !== 'undefined' && window.innerWidth >= 1024) battleLayout = 'fable';\n"],
   ["          {#if isFableGeom}\n            <div class=\"setting-row\">\n              <label for=\"fable-card-scale\">", "          {#if battleLayout === 'fable'}\n            <div class=\"setting-row\">\n              <label for=\"fable-card-scale\">"],
 ];
 function strip(src) {
@@ -76,6 +78,8 @@ function strip(src) {
     /    \/\* >>> v6442-blue-fallback \*\/[\s\S]*?    \/\* <<< v6442-blue-fallback \*\/\n/,
     // v6.443：場上卡片放大預覽改放卡片旁邊（只在藍桌墊生效的一段 script，內容由 test-v6443 鎖）
     /    \/\/ >>> v6443-blue-peek\n[\s\S]*?    \/\/ <<< v6443-blue-peek\n/,
+    // v6.446：預設版面改新版桌墊的說明註解（哨兵內只准註解，下方另驗）
+    /      \/\/ >>> v6446-default-blue\n[\s\S]*?      \/\/ <<< v6446-default-blue\n/,
     /  \/\/ ⭐v6\.441 藍桌墊（blue）＝[\s\S]*?  const isFableGeom = \$derived\(battleLayout === 'fable' \|\| battleLayout === 'blue'\);\n/,
   ];
   for (const re of blocks) { if (!re.test(s)) bad.push(String(re).slice(0, 40)); s = s.replace(re, ''); }
@@ -139,7 +143,13 @@ ok('★★[HEAD-FAIL] 藍桌墊吃 Fable 幾何：playmat 同時掛 layout-fable
 ok('★★[HEAD-FAIL] 藍桌墊鎖 gameZoom=1（避免與 --card-w 雙重縮放）', SRC.includes("if (battleLayout === 'fable' || battleLayout === 'blue') { gameZoom = 1; return; }"));
 ok('★[HEAD-FAIL] 藍桌墊與平板縮放絕緣', SRC.includes('class:tablet-layout={isTabletLayout && !isFableGeom}'));
 ok('★[HEAD-FAIL] 藍桌墊也有卡牌大小滑桿', SRC.includes('{#if isFableGeom}\n            <div class="setting-row">\n              <label for="fable-card-scale">'));
-ok('[正對照] 桌機新玩家的預設版面仍是 Fable（不因新增藍桌墊而改變）', SRC.includes("battleLayout = 'fable';") && !SRC.includes("battleLayout = 'blue';"));
+// ⭐v6.446 站長裁定（Rule 40：原本守「預設仍是 Fable」，站長改判預設＝新版桌墊）：只影響從未選過版面的桌機玩家（行為另由 test-v6223【C】實跑）。
+ok('★[站長裁定 v6.446] 桌機新玩家的預設版面是新版桌墊（blue），而且只寫在「從未選過」的分支', SRC.includes("      else if (typeof window !== 'undefined' && window.innerWidth >= 1024) battleLayout = 'blue';\n") && !SRC.includes("battleLayout = 'fable';"));
+{
+  const db = /      \/\/ >>> v6446-default-blue\n([\s\S]*?)      \/\/ <<< v6446-default-blue\n/.exec(SRC);
+  ok('★[哨兵內容] v6446-default-blue 哨兵內只有註解', !!db && db[1].split('\n').filter((l) => l.trim()).every((l) => /^\s*\/\//.test(l)));
+}
+ok('[正名] 設定選項顯示「新版桌墊」，不再出現「藍桌墊」字樣', SRC.includes('<option value="blue">🟦 新版桌墊') && !/<option[^>]*>[^<]*藍桌墊/.test(SRC));
 ok('[正對照] 手機直式元件不讀 battleLayout（手機版面維持現況）',
   !readFileSync(join(ROOT, 'src/routes/game/MobilePortraitBattle.svelte'), 'utf8').includes('battleLayout'));
 

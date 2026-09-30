@@ -2,7 +2,7 @@
 // v6.223 版面三修守衛：
 //   【A】fable 卡背同源尺寸（CSS cascade 事實 + DOM 接線）
 //   【B】桌墊版/經典版高度自適應（recomputeZoom 抽出「實際執行」斷言 zoom 數值）
-//   【C】桌機預設版面 fable（localStorage 分支抽出執行；已選過者不被覆蓋＝正對照）
+//   【C】桌機預設版面（v6.223 起 fable；v6.446 站長改為新版桌墊 blue）（localStorage 分支抽出執行；已選過者不被覆蓋＝正對照）
 // 設計原則：能行為就行為（真的執行抽出的函式），不能行為的 CSS 斷言到
 // 「規則存在 + cascade 順序在被蓋規則之後 + specificity 高於對手」三個可驗證事實，
 // 並另斷言 DOM 模板端的 class 接線（擋「規則在但沒接上」）。
@@ -82,7 +82,10 @@ if (clM) {
     check(runDefault('classic', 1920) === 'classic', '已選 classic 的玩家 → 維持 classic（絕不覆蓋＝正對照）');
     check(runDefault('tabletop', 1920) === 'tabletop', '已選 tabletop 的玩家 → 維持 tabletop');
     check(runDefault('fable', 820) === 'fable', '已選 fable 的玩家（窄視窗）→ 維持 fable');
-    check(runDefault(null, 1920) === 'fable', '從未選過＋桌機寬 → 預設 fable（BASE 上是 classic＝HEAD-FAIL）');
+    // ⭐v6.446 站長裁定（Rule 40：守的是「預設只給從未選過的桌機玩家、已選者不覆蓋、不落盤」，預設值本身由站長改為新版桌墊 blue）
+    check(runDefault(null, 1920) === 'blue', '從未選過＋桌機寬 → 預設新版桌墊 blue（v6.446 站長裁定；v6.223～v6.445 是 fable）');
+    check(runDefault('fable', 1920) === 'fable', '已選 fable 的玩家（桌機寬）→ 維持 fable（改預設不覆蓋玩家的選擇）');
+    check(runDefault('blue', 820) === 'blue', '已選新版桌墊的玩家 → 維持 blue');
     check(runDefault(null, 820) === 'classic', '從未選過＋窄視窗(<1024) → 維持 classic 預設');
     let threw = false;
     try { runDefault(null, 1920); } catch { threw = true; }

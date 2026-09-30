@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.446：新版桌墊（原藍桌墊）正名＋改為桌機預設版面
+
+BASE `b7105942`（v6.445）。站長裁定（2026-09-30）：「新版我覺得修得很漂亮了，直接幫我改成預設桌面，並且把藍桌墊名稱正名為【新版桌墊】」。
+- 設定選項文字：「🟦 藍桌墊（格線分區 — 能量合併顯示）」→「🟦 新版桌墊（預設 — 固定格線、能量合併顯示）」。程式代號維持 `'blue'`（localStorage 值、class `.layout-blue`、哨兵名稱都不改 ⇒ 已選過藍桌墊的玩家設定照舊）。
+- 桌機預設：onMount 初始化 `else if (innerWidth >= 1024) battleLayout = 'fable'` → `'blue'`（說明註解在哨兵 `v6446-default-blue`）。
+  與 v6.223 同規則：只影響 localStorage 沒有 `ptcg_battle_layout` 的玩家；已選過 fable／classic／tabletop 的維持原選擇；<1024 仍 classic；初始化不落盤；手機直式不讀 battleLayout。
+- 守衛（Rule 40）：`test-v6223`【C】預設值改驗 blue，並補「已選 fable 的桌機玩家維持 fable」「已選 blue 維持」；
+  `test-v6441` B 原「預設仍是 Fable」改為站長裁定的「預設＝新版桌墊」＋哨兵只准註解＋選項正名；剝除器多還原預設行與剝 v6446 哨兵。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## v6.445：藍桌墊 fable 5.1 對抗性審查修正
 
 BASE `bca98712`（v6.444）。站長要求請 fable 5.1 再審一輪（2026-09-30）。fable 實測 1024～1920 各尺寸、8 格備戰、setup、拖放、滑桿、紀錄欄收合，
