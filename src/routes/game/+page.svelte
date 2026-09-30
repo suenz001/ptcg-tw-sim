@@ -12539,7 +12539,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {@const energyPlaced = (pendingSelection.params?.placedCount as number | undefined) ?? 0}
     {@const energyTypeName = (pendingSelection.params?.energyTypeName as string | undefined) ?? ''}
     <div class="selection-overlay">
-      <div class="selection-modal" class:retreat-modal={isPokePicker || isDmgDist || isEnergyDist} use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
+      <div class="selection-modal" class:retreat-modal={isPokePicker || isDmgDist || isEnergyDist} class:pk-s={pendingSelection.type === 'modal-choice'} use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
         <div class="sel-header" title="拖曳視窗">
           <h3>{selectionTitle(pendingSelection.type)}</h3>
           {#if isDmgDist}
@@ -13419,7 +13419,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {@const estDmg = spec.baseDamage + currentN * spec.damagePerEnergy}
     {@const estSelfDmg = currentN * (spec.selfDamagePerCounter ?? 0)}
     <div class="selection-overlay">
-      <div class="selection-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
+      <div class="selection-modal pk-s" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
         <div class="sel-header" title="拖曳視窗">
           <h3>🔢 {preAttackDiscard.attackName}</h3>
           <p class="sel-hint">{spec.choicePrompt ?? `選擇放置幾個傷害指示物（${minN}~${maxN}）`}</p>
@@ -13473,7 +13473,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {@const yesLabel = spec.choiceYesLabel ?? '是'}
     {@const noLabel = spec.choiceNoLabel ?? '否'}
     <div class="selection-overlay">
-      <div class="selection-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
+      <div class="selection-modal pk-s" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
         <div class="sel-header" title="拖曳視窗">
           <h3>❓ {preAttackDiscard.attackName}</h3>
           <p class="sel-hint">{spec.choicePrompt ?? '是否觸發此選用效果？'}</p>
@@ -14108,7 +14108,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   <!-- Retreat Menu（置中橫向 grid，支援放大鏡，避免撞到畫面頂部） -->
   {#if floatingRetreatMenu && myPlayer?.active}
-    <div class="selection-overlay" onclick={() => floatingRetreatMenu = null}>
+    <!-- ⭐v6.449：撤退選單是「要做決定」的視窗 ⇒ 點遮罩不關閉（統一規則；用下方「取消」鈕關閉） -->
+    <div class="selection-overlay">
       <div class="selection-modal retreat-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }} onclick={(e)=>e.stopPropagation()}>
         <div class="sel-header" title="拖曳視窗">
           <h3>🔄 選擇換入的寶可夢</h3>
@@ -17071,8 +17072,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
        .selection-modal／.prize-view-modal／.pv-inner，語意不同不收）＋
        非 vh 清單 4（.open-room-list 420px／.chat-messages 240px／.log-col 100%／
        .playmat.layout-fable .action-bar > .log-col none）＋ .scroll-list 自己 1。
-     ⚠ **遷移後**現況（守衛 C5 盯住這個數字，不是盯註解）：那 18 條會剩 **11 條** ＝
-       modal 容器 6 ＋ 非 vh 清單 4 ＋ 下面這條群組規則自己 1；被遷移的 7 個清單 class 一條都不在。
+     ⚠ **遷移後**現況（守衛 C5 盯住這個數字，不是盯註解）：那 18 條會剩 **12 條** ＝
+       modal 容器 7（⭐v6.449 多了 v6449-picker-shell 的桌機 .selection-modal 外框：85dvh＋視窗內捲動）＋
+       非 vh 清單 4 ＋ 下面這條群組規則自己 1；被遷移的 7 個清單 class 一條都不在。
      ⚠⚠ 這段註解裡**永遠不可以**寫出樣式標籤的開頭字面（角括號 + style）——
        test-v6199／v6284／v6297／v6298／v6299／v6303／v6370 取樣式區塊用的是 lastIndexOf，
        註解裡出現一次就會把區塊起點往後推，7 支守衛一起翻紅（IRON_RULES Rule 48）。
@@ -18385,6 +18387,67 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .prize-view-cardback{ width:64px; height:89px; }
   .prize-view-btn{ background:rgba(255,210,63,.14); border:1px solid #a8842a; border-radius:6px; color:#ffd23f; cursor:pointer; font:inherit; padding:1px 7px; }
   .prize-view-btn:hover{ background:rgba(255,210,63,.28); }
+
+  /* >>> v6449-picker-shell */
+  /* ═══════════════════════════════════════════════════════════════════
+     ⭐v6.449 選擇視窗（picker）桌機統一化 —— 站長 2026-09-30 採用 claude/UI統一化-picker調查報告.md 的建議
+       ① 外框只有三級寬度：S 480（是否／數字／選項）、M 760（選卡、選寶可夢；預設）、L 960（棄牌區、獎賞檢視）
+          一律 min(尺寸, 100vw − 32px)、box-sizing:border-box（寬度就是看到的寬度）；高度上限 85dvh，超出時視窗內捲動、
+          按鈕列黏在底部永遠看得到（1366×657 筆電先前會被切掉最後一列）。
+       ② 可選的卡圖一律 96px（牌庫／手牌／棄牌搜尋原本 64、能量 88、棄牌區 108、暗黑底牌 80）；卡圖不超過格子寬
+          ⇒ 任何寬度都不會疊到隔壁張。
+       ③ 按鈕列：主要動作（確認）在右、次要動作（取消／跳過／放棄）在左；沒有樣式的 btn-ghost 與不帶 primary 的 btn-act
+          一律用「次要」樣式（原本是瀏覽器預設灰鈕）。
+       ④ 遮罩深淺統一 .82（放大檢視類原本 .88）。
+     ⚠ 這一段放在所有桌機 picker 規則之後、手機直式／手機橫式媒體查詢之前：
+       同特異度時桌機由這裡決定；手機兩個媒體查詢在後面，照舊由它們蓋回（手機改版是 v6.450 的事）。
+       所以這裡的選擇器**刻意維持低特異度**（寬度用 :where() 包住變體 class），不可以隨手加長。
+     ⚠ 本頁媒體查詢數量被 test-v6187／v6195／v6199 釘住 ⇒ 這裡不新增任何媒體查詢。
+     ═══════════════════════════════════════════════════════════════════ */
+  .selection-overlay, .zoom-overlay{ --pk-s:480px; --pk-m:760px; --pk-l:960px; --pk-card:96px; }
+  .zoom-overlay{ background:rgba(0,0,0,.82); }
+
+  /* ① 外框寬度：以 --pk-w 決定，變體只改 --pk-w */
+  .selection-modal{
+    --pk-w:var(--pk-m);
+    box-sizing:border-box; width:100%; max-width:min(var(--pk-w), calc(100vw - 32px));
+    max-height:85dvh; overflow-y:auto; overscroll-behavior:contain;
+  }
+  :where(.selection-modal).pk-s,
+  :where(.selection-modal).mulligan-modal:not(.mulligan-reveal-modal){ --pk-w:var(--pk-s); }
+  :where(.zoom-modal).discard-modal{ --pk-w:var(--pk-l); box-sizing:border-box; width:100%; max-width:min(var(--pk-w), calc(100vw - 32px)); max-height:85dvh; }
+  /* 按鈕列黏在視窗底部（內容多到要捲動時仍看得到「確認」） */
+  .selection-modal > .sel-footer{ position:sticky; bottom:0; z-index:2; background:inherit; padding-top:.35rem; }
+
+  /* ② 卡圖 96px、不超過格子 */
+  .sel-grid{ grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:.5rem; }
+  .sel-grid.sel-grid-energy{ grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); }
+  .discard-modal .sel-grid{ grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); }
+  .sel-card img,
+  .sel-grid.sel-grid-energy .sel-card img,
+  .discard-modal .sel-card img{ width:var(--pk-card); max-width:100%; height:auto; }
+  .sel-card{ min-width:0; box-sizing:border-box; }
+  .copy-attack-img{ width:var(--pk-card); }
+  /* 純瀏覽的密集清單（牌庫剩餘全覽）小一級：72px */
+  .full-deck-list{ grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); }
+  .prize-view-cardback{ width:var(--pk-card); height:calc(var(--pk-card) * 1.397); max-width:100%; }
+
+  /* ③ 按鈕列：次要在左、主要在右（::before 當彈簧；警告文字獨佔第一行） */
+  .sel-footer{ justify-content:flex-start; align-items:center; }
+  .sel-footer::before{ content:''; flex:1 1 0; order:0; }
+  .sel-footer > .sel-hint-warn{ order:-2; flex:1 0 100%; margin-bottom:0; }
+  .sel-footer > :is(.btn-act.secondary, .btn-ghost, .btn-act:not(.primary)){ order:-1; }
+  .selection-modal .btn-ghost:not(.stepper-btn),
+  .zoom-modal .btn-ghost:not(.stepper-btn),
+  .sel-footer > .btn-act:not(.primary):not(.secondary){
+    background:#2a3a5a; color:#ccddff; border:1px solid #4a5a8a; border-radius:6px; font:inherit; font-weight:600; cursor:pointer;
+  }
+  .selection-modal .btn-ghost:not(.stepper-btn):hover:not(:disabled),
+  .zoom-modal .btn-ghost:not(.stepper-btn):hover:not(:disabled),
+  .sel-footer > .btn-act:not(.primary):not(.secondary):hover:not(:disabled),
+  .sel-footer > .btn-act.secondary:hover:not(:disabled){ background:#34487a; border-color:#6a7ab0; }
+  .selection-modal .btn-ghost:disabled{ opacity:.4; cursor:not-allowed; }
+  /* <<< v6449-picker-shell */
 
   /* ── Tool + Stadium ── */
   /* v3.9996：玩家回報自己戰鬥場道具標示看不清楚 — 字太小 + 對比低 */
@@ -20057,5 +20120,50 @@ function _setupSelfPending(g: any, seat: number): string | null {
     background:repeating-linear-gradient(45deg,rgba(255,255,255,.14) 0 4px,transparent 4px 9px),radial-gradient(circle at 50% 45%,#7aa4ff 0 18%,#2a57c4 19% 100%);
   }
   .battle-root:has(.playmat.layout-blue) .card-back .card-back-mark{ display:none; }
+
+  /* ── 13. ⭐v6.449 選擇視窗／檢視視窗跟著新版桌墊配色（深藍底＋白框線；其他版面維持原本深綠）——站長 2026-09-30 裁定 ── */
+  .battle-root:has(.playmat.layout-blue) .selection-modal,
+  .battle-root:has(.playmat.layout-blue) .zoom-modal{ background:#0f2250; border:1.5px solid rgba(255,255,255,.55); color:#eef3ff; box-shadow:0 18px 50px rgba(0,0,0,.6); }
+  .battle-root:has(.playmat.layout-blue) .sel-header h3{ color:#fff; }
+  .battle-root:has(.playmat.layout-blue) .selection-modal .sel-hint,
+  .battle-root:has(.playmat.layout-blue) .zoom-modal .sel-hint{ color:#cfe0ff; }
+  .battle-root:has(.playmat.layout-blue) .sel-card,
+  .battle-root:has(.playmat.layout-blue) .retreat-card{ background:rgba(3,10,30,.55); border-color:rgba(255,255,255,.22); color:#dbe6ff; }
+  .battle-root:has(.playmat.layout-blue) .sel-card:hover,
+  .battle-root:has(.playmat.layout-blue) .retreat-card:hover{ border-color:#7aa4ff; }
+  .battle-root:has(.playmat.layout-blue) .sel-card.sel-picked,
+  .battle-root:has(.playmat.layout-blue) .sel-card-wrap.sel-picked .sel-card,
+  .battle-root:has(.playmat.layout-blue) .retreat-card.sel-picked{ border-color:#ffd83d; box-shadow:0 0 8px rgba(255,216,61,.55); }
+  .battle-root:has(.playmat.layout-blue) .selection-modal .btn-act.primary,
+  .battle-root:has(.playmat.layout-blue) .zoom-modal .btn-act.primary{ background:#2f9e6e; border:1px solid #9ff0c9; border-radius:999px; }
+  .battle-root:has(.playmat.layout-blue) .selection-modal .btn-act.primary:hover:not(:disabled),
+  .battle-root:has(.playmat.layout-blue) .zoom-modal .btn-act.primary:hover:not(:disabled){ background:#38b27d; }
+  .battle-root:has(.playmat.layout-blue) .selection-modal .btn-act.secondary,
+  .battle-root:has(.playmat.layout-blue) .selection-modal .btn-ghost:not(.stepper-btn),
+  .battle-root:has(.playmat.layout-blue) .zoom-modal .btn-act.secondary,
+  .battle-root:has(.playmat.layout-blue) .zoom-modal .btn-ghost:not(.stepper-btn),
+  .battle-root:has(.playmat.layout-blue) .sel-footer > .btn-act:not(.primary):not(.secondary){ background:rgba(255,255,255,.1); border:1.5px solid rgba(255,255,255,.62); color:#fff; border-radius:999px; }
+  .battle-root:has(.playmat.layout-blue) .selection-modal .btn-act.secondary:hover:not(:disabled),
+  .battle-root:has(.playmat.layout-blue) .selection-modal .btn-ghost:not(.stepper-btn):hover:not(:disabled),
+  .battle-root:has(.playmat.layout-blue) .zoom-modal .btn-act.secondary:hover:not(:disabled),
+  .battle-root:has(.playmat.layout-blue) .zoom-modal .btn-ghost:not(.stepper-btn):hover:not(:disabled),
+  .battle-root:has(.playmat.layout-blue) .sel-footer > .btn-act:not(.primary):not(.secondary):hover:not(:disabled){ background:rgba(255,255,255,.2); border-color:#fff; }
+  .battle-root:has(.playmat.layout-blue) .btn-act.modal-choice-btn{ background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.4); color:#fff; }
+  .battle-root:has(.playmat.layout-blue) .btn-act.modal-choice-btn:hover:not(:disabled){ background:rgba(122,164,255,.25); border-color:#7aa4ff; }
+  .battle-root:has(.playmat.layout-blue) .stepper-btn{ background:#14306f; border-color:rgba(255,255,255,.55); }
+  .battle-root:has(.playmat.layout-blue) .stepper-btn:hover:not(:disabled){ background:#1f4396; border-color:#fff; }
+  .battle-root:has(.playmat.layout-blue) .stepper-value{ background:rgba(3,10,30,.6); border-color:rgba(255,255,255,.3); color:#fff; }
+  .battle-root:has(.playmat.layout-blue) .copy-attack-poke,
+  .battle-root:has(.playmat.layout-blue) .reorder-item{ background:rgba(3,10,30,.45); border-color:rgba(255,255,255,.22); }
+  .battle-root:has(.playmat.layout-blue) .copy-attack-btn{ background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.35); color:#fff; }
+  .battle-root:has(.playmat.layout-blue) .copy-attack-btn:hover{ background:rgba(122,164,255,.25); border-color:#7aa4ff; }
+  .battle-root:has(.playmat.layout-blue) .dmg-progress-bar{ background:rgba(3,10,30,.6); border-color:rgba(255,255,255,.3); }
+  .battle-root:has(.playmat.layout-blue) .discard-title,
+  .battle-root:has(.playmat.layout-blue) .reorder-section-title{ color:#fff; }
+  .battle-root:has(.playmat.layout-blue) .full-deck-view{ background:rgba(3,10,30,.45); border-color:rgba(255,255,255,.22); }
+  .battle-root:has(.playmat.layout-blue) .full-deck-view summary{ color:#cfe0ff; }
+  .battle-root:has(.playmat.layout-blue) .reorder-pos{ color:#7aa4ff; }
+  .battle-root:has(.playmat.layout-blue) .reorder-btn{ background:rgba(255,255,255,.1); border-color:rgba(255,255,255,.45); }
+  .battle-root:has(.playmat.layout-blue) .reorder-btn:hover:not(:disabled){ background:rgba(122,164,255,.3); }
   /* <<< v6441-blue-css */
 </style>

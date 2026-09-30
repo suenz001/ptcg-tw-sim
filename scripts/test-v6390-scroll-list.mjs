@@ -61,6 +61,11 @@ const EXPECTED = [
   '|.retreat-grid',
   '|.discard-modal .sel-grid',
   '|.prize-view-modal .sel-grid',
+  // ⭐v6.449 v6449-picker-shell（桌機 picker 統一化）：只改格子欄寬／間距，不碰 max-height／overflow（群組規則照舊生效）
+  '|.sel-grid',
+  '|.sel-grid.sel-grid-energy',
+  '|.discard-modal .sel-grid',
+  '|.full-deck-list',
   MEDIA_P + '|.retreat-grid',
   MEDIA_P + '|.sel-grid',
   MEDIA_P + '|.sel-grid.sel-grid-energy',
