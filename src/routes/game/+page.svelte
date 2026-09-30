@@ -3025,7 +3025,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   function openFloatingEvo(fromIid: string, evoOpts: CardInstance[], e: MouseEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    floatingEvoMenu = { fromIid, evoOpts, x: rect.left + rect.width / 2, y: rect.top };
+    // ⭐v6.448：選單是 translate(-50%,-105%) 往上長 ⇒ 按鈕靠近畫面上緣、選項又多時會超出畫面頂端
+    //   （modalDrag 的 clamp:'contain' 只管拖曳，不管初始位置）。依選項數估高度，把錨點往下推到放得下為止；
+    //   左右也夾在視窗內。估值：標題列＋內距約 60px＋每個選項約 125px（70px 寬卡圖＋名稱＋間距；實測 2 個選項＝293px）。
+    const estH = 60 + evoOpts.length * 125;
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1366;
+    const vh = typeof window !== 'undefined' ? window.innerHeight : 768;
+    const y = Math.min(Math.max(rect.top, estH * 1.05 + 8), vh - 8);
+    const x = Math.min(Math.max(rect.left + rect.width / 2, 90), vw - 90);
+    floatingEvoMenu = { fromIid, evoOpts, x, y };
   }
   function openFloatingRetreat(e: MouseEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -12567,6 +12575,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 · 點目標 +1、右鍵 -1 · 全部分配完後按「確認」一次套用
               </p>
             </div>
+          {:else if pendingSelection.type === 'modal-choice'}
+            <!-- ⭐v6.448：modal-choice 是選「選項／數字」不是選卡 ⇒ 不顯示「選 1 張 · 已選 0」 -->
+            <p class="sel-hint">{pendingSelection.params?.stepper ? '用 ＋／－ 選好數字後按「確認」' : '點一下要執行的選項'}</p>
           {:else}
             <p class="sel-hint">
               選 {pendingSelection.minCount===pendingSelection.maxCount?`${pendingSelection.minCount}`:`${pendingSelection.minCount}～${pendingSelection.maxCount}`} 張
@@ -12771,7 +12782,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {/if}
             {/each}
             <!-- v5.208：加 type gate 避免在 modal-choice（如道具拆除器）誤顯示「沒有符合條件」-->
-            {#if selectionItems.length===0 && pendingSelection.type !== 'modal-choice'}<p class="sel-empty">（沒有符合條件的卡牌）</p>{/if}
+            <!-- ⭐v6.448：排序牌庫頂（reorder-deck-top）的卡片清單畫在下方的排序區，這裡本來就是空的 ⇒ 不可以顯示「沒有符合條件」（站長回報的 UI 調查） -->
+            {#if selectionItems.length===0 && pendingSelection.type !== 'modal-choice' && pendingSelection.type !== 'reorder-deck-top'}<p class="sel-empty">（沒有符合條件的卡牌）</p>{/if}
           </div>
         {/if}
 
@@ -17955,6 +17967,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
   /* v5.191 modal-choice 行內放大鏡（道具拆除器等需查看寶可夢的場景） */
   .modal-choice-row{ display:flex; align-items:stretch; gap:.35rem; width:100%; }
   .modal-choice-btn-flex{ flex:1; }
+  /* ⭐v6.448 站長回報的 UI 調查：選項清單與選項按鈕原本**沒有任何樣式**（瀏覽器預設白色按鈕、橫排擠成一列）
+     ⇒ 改成整列可點的清單按鈕（一個選項一列、文字可換行、停用時變暗）。 */
+  .modal-choice-list{ display:flex; flex-direction:column; gap:.45rem; margin:.4rem 0 .2rem; }
+  .modal-choice-row{ display:flex; gap:.45rem; align-items:stretch; }
+  .btn-act.modal-choice-btn{
+    width:100%; justify-content:flex-start; text-align:left; white-space:normal; line-height:1.35;
+    padding:.6rem .9rem; background:#243a5a; color:#e6eeff; border:1px solid #4a6a9a; border-radius:8px;
+  }
+  .btn-act.modal-choice-btn:hover:not(:disabled){ background:#2f4c76; border-color:#7aa4ff; }
+  .btn-act.modal-choice-btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .btn-act.modal-choice-inspect{ flex:0 0 auto; padding:.4rem .7rem; background:#12202e; border:1px solid #3a5a7a; border-radius:8px; }
   .modal-choice-inspect{
     flex: 0 0 auto;
     padding: .35rem .55rem;
@@ -18619,6 +18642,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .sel-grid.sel-grid-energy .sel-card img{ width:60px; }
     .sel-grid.sel-grid-energy .sel-name{ font-size:0.6rem; }
     .sel-grid.sel-grid-energy .sel-energy-source{ font-size:0.62rem; }
+    /* ⭐v6.448：手機格子被壓到 54px 起跳，但卡圖原本固定 64px（棄牌區 108px）⇒ 撐破格子、疊到隔壁張（站長回報的 UI 調查）。
+       卡圖改成跟著格子縮（能量 picker 的 60px 特異度較高、不受影響）。 */
+    .sel-grid .sel-card{ min-width:0; }
+    .sel-grid .sel-card img,
+    .discard-modal .sel-grid .sel-card img{ width:100%; max-width:100%; height:auto; }
+    /* 手機不顯示「💡 按住標題列可拖曳」提示（手機少有拖曳需求，省一行高度） */
+    .selection-overlay .selection-modal::after{ display:none; }
 
     /* zoom-modal（卡牌詳細 / 放大）— v3.885 重新啟用 lightbox 點圖 */
     .zoom-modal {

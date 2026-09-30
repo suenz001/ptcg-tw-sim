@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.448：picker／UI 統一化第 1 步——先修錯誤
+
+BASE `5b77a3f6`（v6.447）。站長裁定（2026-09-30）：採用 `claude/UI統一化-picker調查報告.md` 的建議，從第 1 步修錯誤開始連續作業。
+- modal-choice：`.modal-choice-list`／`.modal-choice-btn` 原本零樣式 ⇒ 直向清單、整列按鈕、停用變暗；提示改為選項／數字專用（不再「選 1 張 · 已選 0」）。
+- reorder-deck-top：清單畫在下方排序區，上方 sel-grid 本來就空 ⇒ `sel-empty` 排除此型別。
+- 手機直向：`.sel-card img` 固定 64px（棄牌區 108px）撐破 54px 格子 ⇒ `width:100%`＋`min-width:0`；手機隱藏「按住標題列可拖曳」提示。
+- openFloatingEvo：依選項數估高度（60＋n×125），初始錨點夾在視窗內（modalDrag 的 contain 只管拖曳）。
+- 實測（雲端 Playwright，m390／d1440）：modal-choice 清單、手機牌庫搜尋、排序、進化選單皆正常。
+- 守衛：新增 `test-v6448-picker-bugfixes.mjs`（HEAD-FAIL 對 v6.447）；bump 配套。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## v6.447：新版桌墊內所有卡背統一成藍色
 
 BASE `63b95489`（v6.446）。站長回報（2026-09-30）：「發牌的動畫是紅色卡背，但我們的新版是使用藍色卡背」。

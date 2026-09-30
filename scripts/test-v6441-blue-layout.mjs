@@ -66,6 +66,18 @@ const REVERT = [
   ["      else if (typeof window !== 'undefined' && window.innerWidth >= 1024) battleLayout = 'blue';\n", "      else if (typeof window !== 'undefined' && window.innerWidth >= 1024) battleLayout = 'fable';\n"],
   ["          {#if isFableGeom}\n            <div class=\"setting-row\">\n              <label for=\"fable-card-scale\">", "          {#if battleLayout === 'fable'}\n            <div class=\"setting-row\">\n              <label for=\"fable-card-scale\">"],
 ];
+// ⭐v6.448 起：站長裁定的「選擇視窗（picker）全版面統一化」會**刻意**改到所有版面（不是藍桌墊的東西）。
+//   為了讓本支【A】繼續守「藍桌墊的程式只活在哨兵裡」這個原意（IRON_RULES Rule 40：改守衛要保留意圖），
+//   這些後續版本的改動在這裡逐條還原（每條恰好命中 1 次；內容正確性由各版自己的守衛鎖：test-v6448…）。
+//   ⚠ 只准放「非藍桌墊」的全版面改動；藍桌墊的改動一律寫進哨兵。
+const LATER = [
+  // v6.448 起 picker 統一化的全版面改動（相對 v6.447，由工具逐段產生；內容由 test-v6448／v6449… 各自鎖）
+  ["    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();\n    // ⭐v6.448：選單是 translate(-50%,-105%) 往上長 ⇒ 按鈕靠近畫面上緣、選項又多時會超出畫面頂端\n    //   （modalDrag 的 clamp:'contain' 只管拖曳，不管初始位置）。依選項數估高度，把錨點往下推到放得下為止；\n    //   左右也夾在視窗內。估值：標題列＋內距約 60px＋每個選項約 125px（70px 寬卡圖＋名稱＋間距；實測 2 個選項＝293px）。\n    const estH = 60 + evoOpts.length * 125;\n    const vw = typeof window !== 'undefined' ? window.innerWidth : 1366;\n    const vh = typeof window !== 'undefined' ? window.innerHeight : 768;\n    const y = Math.min(Math.max(rect.top, estH * 1.05 + 8), vh - 8);\n    const x = Math.min(Math.max(rect.left + rect.width / 2, 90), vw - 90);\n    floatingEvoMenu = { fromIid, evoOpts, x, y };\n", "    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();\n    floatingEvoMenu = { fromIid, evoOpts, x: rect.left + rect.width / 2, y: rect.top };\n"],
+  ["            </div>\n          {:else if pendingSelection.type === 'modal-choice'}\n            <!-- ⭐v6.448：modal-choice 是選「選項／數字」不是選卡 ⇒ 不顯示「選 1 張 · 已選 0」 -->\n            <p class=\"sel-hint\">{pendingSelection.params?.stepper ? '用 ＋／－ 選好數字後按「確認」' : '點一下要執行的選項'}</p>\n", "            </div>\n"],
+  ["            <!-- v5.208：加 type gate 避免在 modal-choice（如道具拆除器）誤顯示「沒有符合條件」-->\n            <!-- ⭐v6.448：排序牌庫頂（reorder-deck-top）的卡片清單畫在下方的排序區，這裡本來就是空的 ⇒ 不可以顯示「沒有符合條件」（站長回報的 UI 調查） -->\n            {#if selectionItems.length===0 && pendingSelection.type !== 'modal-choice' && pendingSelection.type !== 'reorder-deck-top'}<p class=\"sel-empty\">（沒有符合條件的卡牌）</p>{/if}\n", "            <!-- v5.208：加 type gate 避免在 modal-choice（如道具拆除器）誤顯示「沒有符合條件」-->\n            {#if selectionItems.length===0 && pendingSelection.type !== 'modal-choice'}<p class=\"sel-empty\">（沒有符合條件的卡牌）</p>{/if}\n"],
+  ["  .modal-choice-btn-flex{ flex:1; }\n  /* ⭐v6.448 站長回報的 UI 調查：選項清單與選項按鈕原本**沒有任何樣式**（瀏覽器預設白色按鈕、橫排擠成一列）\n     ⇒ 改成整列可點的清單按鈕（一個選項一列、文字可換行、停用時變暗）。 */\n  .modal-choice-list{ display:flex; flex-direction:column; gap:.45rem; margin:.4rem 0 .2rem; }\n  .modal-choice-row{ display:flex; gap:.45rem; align-items:stretch; }\n  .btn-act.modal-choice-btn{\n    width:100%; justify-content:flex-start; text-align:left; white-space:normal; line-height:1.35;\n    padding:.6rem .9rem; background:#243a5a; color:#e6eeff; border:1px solid #4a6a9a; border-radius:8px;\n  }\n  .btn-act.modal-choice-btn:hover:not(:disabled){ background:#2f4c76; border-color:#7aa4ff; }\n  .btn-act.modal-choice-btn:disabled{ opacity:.45; cursor:not-allowed; }\n  .btn-act.modal-choice-inspect{ flex:0 0 auto; padding:.4rem .7rem; background:#12202e; border:1px solid #3a5a7a; border-radius:8px; }\n", "  .modal-choice-btn-flex{ flex:1; }\n"],
+  ["    .sel-grid.sel-grid-energy .sel-energy-source{ font-size:0.62rem; }\n    /* ⭐v6.448：手機格子被壓到 54px 起跳，但卡圖原本固定 64px（棄牌區 108px）⇒ 撐破格子、疊到隔壁張（站長回報的 UI 調查）。\n       卡圖改成跟著格子縮（能量 picker 的 60px 特異度較高、不受影響）。 */\n    .sel-grid .sel-card{ min-width:0; }\n    .sel-grid .sel-card img,\n    .discard-modal .sel-grid .sel-card img{ width:100%; max-width:100%; height:auto; }\n    /* 手機不顯示「💡 按住標題列可拖曳」提示（手機少有拖曳需求，省一行高度） */\n    .selection-overlay .selection-modal::after{ display:none; }\n", "    .sel-grid.sel-grid-energy .sel-energy-source{ font-size:0.62rem; }\n"],
+];
 function strip(src) {
   let s = src;
   const bad = [];
@@ -92,7 +104,7 @@ function strip(src) {
   const nDisc = (s.match(dcall) || []).length;
   s = s.replace(dcall, '');
   // ③ 逐條還原
-  for (const [a, b] of REVERT) { const c = count(s, a); if (c !== 1) bad.push(`還原條目命中 ${c} 次：${a.slice(0, 50)}`); s = s.split(a).join(b); }
+  for (const [a, b] of [...LATER, ...REVERT]) { const c = count(s, a); if (c !== 1) bad.push(`還原條目命中 ${c} 次：${a.slice(0, 50)}`); s = s.split(a).join(b); }
   return { s, bad, nCalls, nDisc };
 }
 const st = strip(SRC);

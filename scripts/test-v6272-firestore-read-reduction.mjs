@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '63b9548910c4296c5a95c669f2552e626f14b597';   // v6.446（上一版）
+const PREV_SHA = '5b77a3f6e4708346b672b5f8e0e8c32d8d4a0d50';   // v6.447（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,15 +757,24 @@ const PREV_SHA = '63b9548910c4296c5a95c669f2552e626f14b597';   // v6.446（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.447 前移：PREV_SHA 從 63b95489（v6.446）起算。
+  // ⚠⚠ v6.448 前移：PREV_SHA 從 5b77a3f6（v6.447）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.447：新版桌墊內所有卡背（發牌／取獎賞動畫等）統一藍色（game/+page.svelte）；首頁 changelog 三步搬運。
+  // ⭐v6.448：picker 調查找到的錯誤修正（modal-choice 樣式／提示、排序誤顯示空訊息、手機卡圖重疊、進化選單出界；game/+page.svelte）；首頁 changelog 三步搬運。
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.447）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.447 前移：PREV_SHA 從 63b95489（v6.446）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.447：新版桌墊內所有卡背（發牌／取獎賞動畫等）統一藍色（game/+page.svelte）；首頁 changelog 三步搬運。
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.446）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.446 前移：PREV_SHA 從 b7105942（v6.445）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -855,7 +864,7 @@ const PREV_ALLOWED = [
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
-// （⭐v6.447：歷史宣告只保留到 v6.430 —— 整段連續註解超過 200 行會觸發 strip-comments 護欄；更舊的見 git 歷史。）
+// （⭐v6.448：歷史宣告只保留到 v6.431 —— 整段連續註解超過 200 行會觸發 strip-comments 護欄；更舊的見 git 歷史。）
 // ── 上一版（v6.437）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.437 前移：PREV_SHA 從 b404a8f2（v6.436）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -927,14 +936,6 @@ const PREV_ALLOWED = [
 //   'static/changelog.html',
 // ── 上一版（v6.431）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 //  ⭐v6.431：撤退換人的估值改用 evaluateAttack 3 次平均（ai-eval.ts；ai.ts 只補註解）。
-//   'src/lib/game/ai-eval.ts',
-//   'src/lib/game/ai.ts',
-//   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.430）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-//  ⭐v6.430：AI 對戰強化 批次 C「打不動」偵測＋試打遮蔽對手手牌／獎賞卡（ai-eval.ts、ai.ts）。
 //   'src/lib/game/ai-eval.ts',
 //   'src/lib/game/ai.ts',
 //   'src/lib/version.ts',
