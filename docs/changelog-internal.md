@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.455：v6.454 複審（fable）建議三項
+
+BASE `b4472803`（v6.454）。複審結論：v6.454 通過可上線；三個建議級缺口，本版補齊並全部改用實際量測守：
+- 取消出招留空：v6.454 的 `margin-right:auto` 是死宣告（桌機 `.sel-footer::before{flex:1 1 0}` 彈簧先吃光剩餘空間，實測取消↔否只有 gap 12px）⇒ 拿掉，改 `.sel-footer:has(> .pre-attack-cancel)::before{order:-2}` 把彈簧排到取消與否之間（取消｜——｜否 是）；手機不用彈簧、三顆等寬。
+- 手機撤退遮罩 `.retreat-menu-overlay` 的擋觸控規則蓋掉了 v6.425 的 `.selection-overlay.dragged` 透明化（同特異度、較後）⇒ 補 `.selection-overlay.retreat-menu-overlay.dragged{pointer-events:none;background:transparent}`。
+- 浮動進化選單 `max-height` 原本是 content-box，內距＋框線多 8px，6 個選項在 1366×657 top=−8 ⇒ `box-sizing:border-box`。
+- 守衛：新增 `test-v6455-review-followups.mjs`（字串 HEAD-FAIL 對 v6.454＋Playwright 量測：取消↔否 ≥24px（綠底／新版桌墊）、手機三顆等寬、拖開時 pointer-events:none、進化選單 top≥0；HEAD-FAIL 量測在 v6.454 三項都量得出來）；test-v6454 [D] 判準移除已拿掉的死宣告字面；bump 配套。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## v6.454：v6.448～v6.453 獨立審查（fable）修正
 
 BASE `c16c9675`（v6.453）。站長要求「做完後要通過審查」⇒ 獨立審查結論：無阻擋級，應修 A～D、建議 E～J。本版處理：

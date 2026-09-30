@@ -55,9 +55,10 @@ const CHECKS = [
     return /padding:\.5rem \.85rem calc\(\.75rem \+ var\(--safe-bottom, 0px\)\)/.test(d) && /margin:0 -\.85rem;/.test(d + ';') && /bottom:0/.test(d)
       && /padding-bottom:0/.test(declsOf(c, '.selection-modal:has(> .sel-footer)'));
   }],
-  ['★★[D] 「取消出招」虛線透明、與「否」之間留空', true, (s) => {
+  ['★★[D] 「取消出招」虛線透明（留空改由 v6.455 的彈簧排序，test-v6455 量間距）', true, (s) => {
     const d = declsOf(shell(s), '.sel-footer > .btn-act.secondary.pre-attack-cancel');
-    return /background:transparent/.test(d) && /dashed/.test(d) && /margin-right:auto/.test(d);
+    // ⭐v6.455：margin-right:auto 是死宣告（複審量到間距只有 gap）⇒ 改由 v6.455 的彈簧排序做「留空」，這裡只守樣式；間距由 test-v6455 量
+    return /background:transparent/.test(d) && /dashed/.test(d);
   }],
   ['★★[E] 手機 sheet：高傲指令與排序牌庫頂的清單也取消內捲', true, (s) => {
     const c = sheet(s);

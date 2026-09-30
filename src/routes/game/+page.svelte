@@ -18434,7 +18434,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .sel-card{ min-width:0; box-sizing:border-box; }
   .copy-attack-img{ width:var(--pk-card); }
   /* ⭐v6.454（審查 F）：浮動進化選單選項很多時（≥5）在矮螢幕仍會超出頂端 ⇒ 高度上限＝(畫面高−16px)/1.05（配合 translate -105%），超出就捲動 */
-  .float-evo-menu{ max-height:calc((100vh - 16px) / 1.05); overflow-y:auto; }
+  .float-evo-menu{ max-height:calc((100vh - 16px) / 1.05); overflow-y:auto; box-sizing:border-box; }  /* ⭐v6.455：border-box（內距＋框線原本多出 8px，1366×657 仍超出頂端，複審量到） */
   /* 純瀏覽的密集清單（牌庫剩餘全覽）小一級：72px */
   .full-deck-list{ grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); }
   .prize-view-cardback{ width:var(--pk-card); height:calc(var(--pk-card) * 1.397); max-width:100%; }
@@ -18446,7 +18446,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
   /* ⭐v6.452：攻擊前視窗的「取消（不使用這個招式）」排在最左（「否」是招式的選項，排在它右邊） */
   .sel-footer > .btn-act.secondary.pre-attack-cancel{ order:-3; }
   /* ⭐v6.454（審查 D）：「取消出招」和「否」原本同樣式緊鄰 ⇒ 誤按「否」會照樣出招。取消改成虛線透明鈕、與「否」之間留空 */
-  .sel-footer > .btn-act.secondary.pre-attack-cancel{ background:transparent; border:1px dashed rgba(255,255,255,.4); color:#c8d0dc; margin-right:auto; }
+  .sel-footer > .btn-act.secondary.pre-attack-cancel{ background:transparent; border:1px dashed rgba(255,255,255,.4); color:#c8d0dc; }
+  /* ⭐v6.455（複審）：v6.454 寫的 margin-right:auto 是死宣告（彈簧 ::before 先吃光剩餘空間）⇒ 改成把彈簧排到「取消出招」與「否」之間：
+     取消在最左、否／是靠右（桌機）；手機不用彈簧，三顆等寬。 */
+  .sel-footer:has(> .pre-attack-cancel)::before{ order:-2; }
   .sel-footer > .btn-act.secondary.pre-attack-cancel:hover:not(:disabled){ background:rgba(255,255,255,.08); border-color:#fff; color:#fff; }
   .sel-footer > :is(.btn-act.secondary, .btn-ghost, .btn-act:not(.primary)){ order:-1; }
   .selection-modal .btn-ghost:not(.stepper-btn),
@@ -18814,6 +18817,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     }
     /* ⭐v6.454（審查 A）：撤退選單不是 pending picker ⇒ 手機直式要擋住背後的觸控（其他選擇視窗照舊可穿透） */
     .selection-overlay.retreat-menu-overlay{ pointer-events:auto; background:rgba(0,0,0,.55); }
+    /* ⭐v6.455（複審）：上一條會蓋掉 .selection-overlay.dragged 的透明化（同特異度、較後）⇒ 拖開視窗時照舊透明、可點到下面 */
+    .selection-overlay.retreat-menu-overlay.dragged{ pointer-events:none; background:transparent; }
     .sel-footer::before{ display:none; }
     .sel-footer > :is(button, .btn-act, .btn-primary, .btn-ghost){ flex:1 1 0; min-height:44px; justify-content:center; text-align:center; white-space:normal; box-sizing:border-box; }  /* ⭐v6.453：border-box */
     /* ⭐v6.453：flex-basis:0 時框線寬度不會被「平分」吃掉（次要鈕有 1px 框、主要鈕沒有 ⇒ 差 2px 不等寬，量測守衛抓到）⇒ 主要鈕補同寬的透明框 */

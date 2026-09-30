@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'c16c9675c7a9a6c3192768ee70bfb5ed9211e16b';   // v6.453（上一版）
+const PREV_SHA = 'b44728035355dc18b4312980b01ef966343ca47b';   // v6.454（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,15 +757,24 @@ const PREV_SHA = 'c16c9675c7a9a6c3192768ee70bfb5ed9211e16b';   // v6.453（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.454 前移：PREV_SHA 從 c16c9675（v6.453）起算。
+  // ⚠⚠ v6.455 前移：PREV_SHA 從 b4472803（v6.454）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.454：v6.448～v6.453 獨立審查（fable）修正 A～F、H（game/+page.svelte）；首頁 changelog 三步搬運。
+  // ⭐v6.455：v6.454 複審建議三項（取消出招留空、撤退遮罩拖開透明、進化選單 border-box；game/+page.svelte）；首頁 changelog 三步搬運。
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.454）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.454 前移：PREV_SHA 從 c16c9675（v6.453）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.454：v6.448～v6.453 獨立審查（fable）修正 A～F、H（game/+page.svelte）；首頁 changelog 三步搬運。
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.453）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.453 前移：PREV_SHA 從 05817482（v6.452）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -920,22 +929,7 @@ const PREV_ALLOWED = [
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
-// （⭐v6.454：歷史宣告只保留到 v6.437 —— 整段連續註解超過 200 行會觸發 strip-comments 護欄；更舊的見 git 歷史。）
-// ── 上一版（v6.437）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.437 前移：PREV_SHA 從 b404a8f2（v6.436）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.437：AI 不做會讓這回合攻擊明顯變差的訓練家／特性（ai-eval.ts actionWeakensAttackThisTurn；ai.ts 接線；
-//   bestNowOutcome／clearlyBetterOutcome 從 ai-gust.ts 搬到 ai-eval.ts）；特性函式就地改實體的中央修正
-//   （engine.ts USE_ABILITY、effects.ts resolve-play-ability-prompt 都把發動特性的那一隻換成新物件）。
-//   'src/lib/game/ai-eval.ts',
-//   'src/lib/game/ai-gust.ts',
-//   'src/lib/game/ai.ts',
-//   'src/lib/game/effects.ts',
-//   'src/lib/game/engine.ts',
-//   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
+// （⭐v6.455：歷史宣告只保留到 v6.438 —— 整段連續註解超過 200 行會觸發 strip-comments 護欄；更舊的見 git 歷史。）
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + [...PREV_ALLOWED].sort().join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }
   // ⚠⚠ v6.378 C-7：舊寫法是「對**工作樹位元組**算 blob sha1，再跟 BASE tree 的 sha 比」。
