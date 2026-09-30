@@ -20017,5 +20017,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .playmat.layout-blue .bench-slot:has(.ability-btn-sm) .ab-used-chip.sm{ top:16px; }
   /* ⚪ 紀錄欄收合時保留一條窄欄給開關鈕（原本壓在獎賞框／行動框右上角） */
   .playmat.layout-blue.log-collapsed{ --log-w:34px; }
+
+  /* ═══ v6.447 站長回報：發牌動畫是紅色卡背 ═══
+     新版桌墊裡「所有」卡背（抽牌／發牌飛卡、取獎賞動畫、獎賞檢視、觀戰手牌、setup 蓋牌）統一成藍色卡背、不畫「?」。
+     這些浮層在 .battle-root 裡但不在 .playmat 裡 ⇒ 用 .battle-root:has(.playmat.layout-blue) 範圍；
+     特異度高於 .draw-fly-back／.prize-pick-back 各自的紅色背景規則。其他版面仍是 v6.420 的紅色圓形卡背。 */
+  .battle-root:has(.playmat.layout-blue) .card-back{
+    box-sizing:border-box; border:2px solid #cfe0ff; border-radius:6px; box-shadow:0 2px 6px rgba(0,0,0,.45);
+    background:repeating-linear-gradient(45deg,rgba(255,255,255,.14) 0 4px,transparent 4px 9px),radial-gradient(circle at 50% 45%,#7aa4ff 0 18%,#2a57c4 19% 100%);
+  }
+  .battle-root:has(.playmat.layout-blue) .card-back .card-back-mark{ display:none; }
   /* <<< v6441-blue-css */
 </style>

@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.447：新版桌墊內所有卡背統一成藍色
+
+BASE `63b95489`（v6.446）。站長回報（2026-09-30）：「發牌的動畫是紅色卡背，但我們的新版是使用藍色卡背」。
+- 根因：發牌／抽牌飛卡（`.draw-fly-back`）、取獎賞動畫（`.prize-pick-back`）、獎賞檢視（`.prize-view-cardback`）、觀戰手牌都是站內唯一那份紅色 `.card-back`（v6.420 站長裁定），
+  而且這些浮層在 `.battle-root` 裡、不在 `.playmat` 裡 ⇒ v6.442 的 `.playmat.layout-blue .card-back` 蓋不到。
+- 修法：`.battle-root:has(.playmat.layout-blue) .card-back`（特異度 0,4,0 > 各自的紅色背景 0,1,0）改藍色卡背、`.card-back-mark` 不顯示。其他版面不動（`.card-back` 仍只定義一次，test-v6420 F2 照綠）。
+- 實測（雲端 Playwright）：開局發牌時 `.draw-fly-card .card-back` 在 .battle-root 內，背景＝藍色條紋、?＝display:none。
+- 守衛：新增 `test-v6447-blue-card-back-everywhere.mjs`（HEAD-FAIL 對 v6.446）；bump 配套（v6272 歷史只留到 v6.430）。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## v6.446：新版桌墊（原藍桌墊）正名＋改為桌機預設版面
 
 BASE `b7105942`（v6.445）。站長裁定（2026-09-30）：「新版我覺得修得很漂亮了，直接幫我改成預設桌面，並且把藍桌墊名稱正名為【新版桌墊】」。
