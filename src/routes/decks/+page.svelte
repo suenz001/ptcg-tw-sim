@@ -5,6 +5,7 @@
   import { base } from '$app/paths';
   import type { Card, EnergyType } from '$lib/cards/types';
   import { retryImg } from '$lib/img-retry';
+  import { cardThumb } from '$lib/cards/thumb'; // v6.464 小尺寸顯示改用縮圖（失敗由 retryImg 立刻退回官方原圖）
   import { getEvolutionChainNames, getEvolutionChainGrouped } from '$lib/cards/evolutionChain';
   import { isMegaExCard } from '$lib/game/selection-filter'; // v6.210：Mega ex 判定收斂中央述詞
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
@@ -1952,7 +1953,7 @@
                        是固定 40px（:2621），塞 N 張 40px 圖會被壓成細條或整排溢出蓋到卡名 →
                        撤回成單張、固定顯示左半（與下方卡片選擇區一致）。
                        牌組清單要怎麼呈現「左 N 張／右 N 張」需要重新設計版面，待 Wilson 拍板。 -->
-                  <img use:retryImg={card.imageUrl} src={card.imageUrl} alt={card.name} loading="lazy"
+                  <img use:retryImg={card.imageUrl} src={cardThumb(card.imageUrl)} alt={card.name} loading="lazy"
                     class:legend-half-l={twoCardStadiumSide(card.id) === 0}
                     class:legend-half-r={twoCardStadiumSide(card.id) === 1} />
                 </button>
@@ -2097,7 +2098,7 @@
               <button class="pick-thumb" onclick={() => openPreview(card)} title="查看詳情">
                 <!-- v6.091：選擇區每張卡只出現一次、沒有「第幾份」概念 → 固定顯示左半
                      （左半含完整卡名框，代表性最高；點縮圖開 preview 仍看得到整張橫圖）。 -->
-                <img use:retryImg={card.imageUrl} src={card.imageUrl} alt={card.name} loading="lazy"
+                <img use:retryImg={card.imageUrl} src={cardThumb(card.imageUrl)} alt={card.name} loading="lazy"
                   class:legend-half-l={twoCardStadiumSide(card.id) === 0}
                   class:legend-half-r={twoCardStadiumSide(card.id) === 1} />
               </button>

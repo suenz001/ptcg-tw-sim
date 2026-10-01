@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
   import { retryImg } from '$lib/img-retry';
+  import { cardThumb } from '$lib/cards/thumb'; // v6.464 小尺寸顯示改用縮圖（失敗由 retryImg 立刻退回官方原圖）
   import { modalDrag } from '$lib/modal-drag';   // ⭐v6.420：全站視窗拖曳＋邊界夾制的唯一來源
   import { promoteModalSeats, promoteAlerts, preDiscardModalKind } from '$lib/game/modal-slots';   // ⭐v6.425：「該開哪個視窗」的唯一判準
 import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式清單上限（單一來源，UI 與守衛共用）
@@ -11714,7 +11715,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {@const _chips = blueEnergyChips(inst)}
     {#if inst.damage > 0}<span class="bl-dmg" title="已受到 {inst.damage} 傷害">{inst.damage}</span>{/if}
     {#if _bt.length > 0}{@const _tc = getCard(_bt[0].cardId)}
-      <span class="bl-tool" title="寶可夢道具：{_bt.map((t) => getCard(t.cardId)?.name ?? '道具').join('、')}"><img use:retryImg={_tc?.imageUrl} src={_tc?.imageUrl} alt={_tc?.name ?? '道具'} onpointerenter={(e)=>enterAttCard(e, _bt[0].cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(_bt[0].cardId,null);}}} /><i class="bl-tn">{_tc?.name ?? '道具'}</i>{#if _bt.length > 1}<b>+{_bt.length - 1}</b>{/if}</span>
+      <span class="bl-tool" title="寶可夢道具：{_bt.map((t) => getCard(t.cardId)?.name ?? '道具').join('、')}"><img use:retryImg={_tc?.imageUrl} src={cardThumb(_tc?.imageUrl)} alt={_tc?.name ?? '道具'} onpointerenter={(e)=>enterAttCard(e, _bt[0].cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(_bt[0].cardId,null);}}} /><i class="bl-tn">{_tc?.name ?? '道具'}</i>{#if _bt.length > 1}<b>+{_bt.length - 1}</b>{/if}</span>
     {/if}
     {#if _chips.length > 0}
       <span class="bl-chips">{#each _chips as ch (ch.key)}<span class="bl-chip" title="{ch.key === 'special' ? '特殊能量' : ch.label + '能量'} × {ch.count}"><i class="bl-e" class:bl-sp={ch.key === 'special'} style={ch.color ? `background:${ch.color}` : undefined}>{ch.label}</i>{#if ch.count > 1}<b>×{ch.count}</b>{/if}</span>{/each}</span>
@@ -11723,7 +11724,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
 {/snippet}
 {#snippet blueDiscTop(pile: CardInstance[] | null | undefined)}
   <!-- ⭐v6.442 藍桌墊：棄牌堆最上面那張正面朝上（示意圖 v2）；pointer-events:none ⇒ 點擊仍由外層開棄牌檢視。 -->
-  {#if pile && pile.length > 0}{@const _dc = getCard(pile[pile.length - 1].cardId)}{#if _dc}<img class="bl-disc" use:retryImg={_dc.imageUrl} src={_dc.imageUrl} alt={_dc.name} />{/if}{/if}
+  {#if pile && pile.length > 0}{@const _dc = getCard(pile[pile.length - 1].cardId)}{#if _dc}<img class="bl-disc" use:retryImg={_dc.imageUrl} src={cardThumb(_dc.imageUrl)} alt={_dc.name} />{/if}{/if}
 {/snippet}
 <!-- <<< v6441-blue-snippet -->
 <div class="playmat" class:trainer-drop-zone={dragOpFor('playmat')==='trainer'} class:has-stadium-bg={!!stadiumCard} class:layout-tabletop={battleLayout === 'tabletop'} class:layout-fable={isFableGeom} class:layout-blue={battleLayout === 'blue'} class:log-collapsed={battleLayout !== 'classic' && !battleLogOpen} style="--card-scale:{fableCardScale}">
@@ -11740,7 +11741,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <!-- v4.22 場地卡在場時的背景圖層（只抓上半藝術圖區 + 低調透明度） -->
     {#if stadiumCard}
       <div class="stadium-bg-layer" aria-hidden="true">
-        <img use:retryImg={stadiumCard.imageUrl} src={stadiumCard.imageUrl} alt="" />
+        <img use:retryImg={stadiumCard.imageUrl} src={cardThumb(stadiumCard.imageUrl)} alt="" />
       </div>
     {/if}
 
@@ -11786,7 +11787,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 <div class="bench-name">{bc?.name}</div>
                 <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
                 <div class="bench-middle">
-                  <img use:retryImg={bc?.imageUrl} src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable" onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(b)}{/if}
+                  <img use:retryImg={bc?.imageUrl} src={cardThumb(bc?.imageUrl)} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable" onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(b)}{/if}
                   <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
                   {#if battleLayout !== 'classic'}
                     {@const _attOB = attachedCardsOf(b)}
@@ -11796,7 +11797,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                       {@const _stepOB = Math.max(12, 32 - _attOB.length * 3)}
                       <!-- v5.098：對手 bench 堆疊方向改往下（top 正值），玩家回報 -->
                       <div class="att-card-stack">
-                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="top:{(i+1) * _stepOB}px;z-index:{110-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="top:{(i+1) * _stepOB}px;z-index:{110-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={cardThumb(_c.imageUrl)} alt={_c.name} title={_c.name}/>{/if}{/each}
                       </div>
                       <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
                       <div class="tt-attach-overlay">{#each energyPips(b) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if b.toolAttached || (b.extraTools && b.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{b.extraTools && b.extraTools.length > 0 ? `×${1 + b.extraTools.length}` : ''}</span>{/if}</div>
@@ -11847,13 +11848,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
               class:status-glow-confused={oppPlayer.active.status === 'confused'}
               style={attackFx && oppPlayer.active && attackFx.defenderIid === oppPlayer.active.iid ? `--flash-color:${ENERGY_COLOR[attackFx.energyType]}` : undefined}
             >
-              <img use:retryImg={ac?.imageUrl} src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)} onpointerenter={(e)=>enterAttCard(e, oppPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(oppPlayer.active)}{/if}
+              <img use:retryImg={ac?.imageUrl} src={cardThumb(ac?.imageUrl)} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)} onpointerenter={(e)=>enterAttCard(e, oppPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(oppPlayer.active)}{/if}
               <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
               {#if battleLayout !== 'classic'}
                 {@const _attOA = attachedCardsOf(oppPlayer.active)}
                 {#if _attOA.length > 0}
                   <div class="att-card-stack">
-                    {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="left:calc(var(--fan-step, 32px) * {i+1});z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                    {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="left:calc(var(--fan-step, 32px) * {i+1});z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={cardThumb(_c.imageUrl)} alt={_c.name} title={_c.name}/>{/if}{/each}
                   </div>
                   <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
                   <div class="tt-attach-overlay">{#each energyPips(oppPlayer.active) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if oppPlayer.active.toolAttached || (oppPlayer.active.extraTools && oppPlayer.active.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{oppPlayer.active.extraTools && oppPlayer.active.extraTools.length > 0 ? `×${1 + oppPlayer.active.extraTools.length}` : ''}</span>{/if}</div>
@@ -11909,7 +11910,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <div class="zone-prizes">
         {#key prizeAnimKey[oppIdx]}
           <div class="prize-grid">
-            {#each Array(6) as _, i (i)}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}
+            {#each Array(6) as _, i (i)}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={cardThumb(_pc.imageUrl)} alt={_pc.name}
               class:legend-half-l={twoCardStadiumHalfIndex(oppPlayer?.prizes, _pz?.iid ?? '', pool) === 0}
               class:legend-half-r={twoCardStadiumHalfIndex(oppPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           </div>
@@ -12132,7 +12133,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         {@const stadiumIid = game.activeStadium.cardId}
         <div class="stadium-display" title="場地卡 — 點擊查看詳情" onclick={()=>openZoom(stadiumIid, null)} onkeydown={(e)=>{if(e.key==='Enter')openZoom(stadiumIid, null);}} role="button" tabindex="0">
           <div class="stadium-display-label">🏟 場地</div>
-          <img use:retryImg={stadiumCard.imageUrl} src={stadiumCard.imageUrl} alt={stadiumCard.name} />
+          <img use:retryImg={stadiumCard.imageUrl} src={cardThumb(stadiumCard.imageUrl)} alt={stadiumCard.name} />
           <div class="stadium-display-name">{stadiumCard.name} 🔍</div>
         </div>
       {/if}
@@ -12170,7 +12171,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           title={isTReplay ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 獎賞 {myPlayer?.prizes.length??0}張 🔍</button>
         <div class="prize-grid">
           {#key prizeAnimKey[myIdx]}
-            {#each Array(6) as _, i (i)}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}
+            {#each Array(6) as _, i (i)}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={cardThumb(_pc.imageUrl)} alt={_pc.name}
               class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.prizes, _pz?.iid ?? '', pool) === 0}
               class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           {/key}
@@ -12214,7 +12215,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             data-drop-iid={myPlayer.active.iid}
             out:scale={{ duration: 360, start: 0.55, opacity: 0 }}
             onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(myPlayer!.active!.iid)}>
-            <img use:retryImg={ac?.imageUrl} src={ac?.imageUrl} alt={ac?.name} class="active-img"
+            <img use:retryImg={ac?.imageUrl} src={cardThumb(ac?.imageUrl)} alt={ac?.name} class="active-img"
               class:zoomable={!selectedEnergyIid}
               onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}
               onpointerenter={(e)=>enterAttCard(e, myPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(myPlayer.active)}{/if}
@@ -12223,7 +12224,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {@const _attMA = attachedCardsOf(myPlayer.active)}
               {#if _attMA.length > 0}
                 <div class="att-card-stack">
-                  {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="left:calc(var(--fan-step, 32px) * {i+1});z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                  {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="left:calc(var(--fan-step, 32px) * {i+1});z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={cardThumb(_c.imageUrl)} alt={_c.name} title={_c.name}/>{/if}{/each}
                 </div>
                 <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
                 <div class="tt-attach-overlay">{#each energyPips(myPlayer.active) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if myPlayer.active.toolAttached || (myPlayer.active.extraTools && myPlayer.active.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{myPlayer.active.extraTools && myPlayer.active.extraTools.length > 0 ? `×${1 + myPlayer.active.extraTools.length}` : ''}</span>{/if}</div>
@@ -12316,7 +12317,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               <!-- v2.51：加寬 slot + 能量 pip 改為垂直排列在圖片右側，避免能量超過 2 個時撐高
                    v2.53：bench-nrg 條件渲染 — 沒能量就不 render 右側欄，讓 img 置中填滿 slot -->
               <div class="bench-middle">
-                <img use:retryImg={bc?.imageUrl} src={bc?.imageUrl} alt={bc?.name}
+                <img use:retryImg={bc?.imageUrl} src={cardThumb(bc?.imageUrl)} alt={bc?.name}
                   class:zoomable={!selectedEnergyIid}
                   onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}
                   onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(b)}{/if}
@@ -12327,7 +12328,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     <!-- v5.038：疊牌動態間距 — 越多張疊得越密（同對手 bench 邏輯） -->
                     {@const _stepMB = Math.max(12, 32 - _attMB.length * 3)}
                     <div class="att-card-stack">
-                      {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="top:{-(i+1) * _stepMB}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                      {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="top:{-(i+1) * _stepMB}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={cardThumb(_c.imageUrl)} alt={_c.name} title={_c.name}/>{/if}{/each}
                     </div>
                     <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
                     <div class="tt-attach-overlay">{#each energyPips(b) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if b.toolAttached || (b.extraTools && b.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{b.extraTools && b.extraTools.length > 0 ? `×${1 + b.extraTools.length}` : ''}</span>{/if}</div>
@@ -12411,7 +12412,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {#if !game || game.phase !== 'setup' || coinFlipStage === 'done'}
       {#if isTReplay}
         <!-- v5.940 回放:攤開行動方真手牌(面朝上,唯讀,點擊放大) -->
-        {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}{@const _rc=getCard(inst.cardId)}<div class="hand-card spectator-hand-face" title={_rc?.name ?? ''} onclick={() => openZoom(inst.cardId, inst)} onkeydown={(e)=>{if(e.key==='Enter')openZoom(inst.cardId, inst);}} role="button" tabindex="0">{#if _rc?.imageUrl}<img use:retryImg={_rc.imageUrl} class="replay-hand-img" src={_rc.imageUrl} alt={_rc.name} class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 0} class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 1}/>{:else}<div class="card-back card-back-sm"><span class="card-back-mark">?</span></div>{/if}</div>{/each}
+        {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}{@const _rc=getCard(inst.cardId)}<div class="hand-card spectator-hand-face" title={_rc?.name ?? ''} onclick={() => openZoom(inst.cardId, inst)} onkeydown={(e)=>{if(e.key==='Enter')openZoom(inst.cardId, inst);}} role="button" tabindex="0">{#if _rc?.imageUrl}<img use:retryImg={_rc.imageUrl} class="replay-hand-img" src={cardThumb(_rc.imageUrl)} alt={_rc.name} class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 0} class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 1}/>{:else}<div class="card-back card-back-sm"><span class="card-back-mark">?</span></div>{/if}</div>{/each}
       {:else if isTournSpectator}
         {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}<div class="hand-card spectator-hand-back"><div class="card-back card-back-sm"><span class="card-back-mark">?</span></div></div>{/each}
       {:else}
@@ -12481,7 +12482,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                  手牌依 Wilson 裁定顯示成**兩張直立的卡** → 同一張圖裁左半／右半（零新圖片資源）。
                  ⚠ 這裡不能用 {@const}（Svelte 5 限定它只能是 #if/#each 等的直接子節點），
                    直接寫成 class: 的表達式；手牌張數很少，重複呼叫成本可忽略。 -->
-            <img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}
+            <img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name}
               class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 0}
               class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 1}/>
             <span class="hand-name">{c.name}</span>
@@ -12631,7 +12632,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
                   <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();toggleSelection(item.iid);}}>
                     {#if isActivePoke}{@render activeSpotBadge(isOppPicker)}{/if}
-                    <img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}/>
+                    <img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name}/>
                     <div class="retreat-name">{c.name}</div>
                     <div class="retreat-hp">HP {rem}/{eff}</div>
                     <div class="retreat-nrg">{energySummary(item)}</div>
@@ -12671,7 +12672,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     oncontextmenu={(e)=>{e.preventDefault();decrementCount(item.iid);}}
                     onclick={(e)=>{e.stopPropagation();incrementCount(item.iid);}}>
                     {#if isActivePoke}{@render activeSpotBadge(true)}{/if}
-                    <img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}/>
+                    <img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name}/>
                     <div class="retreat-name">{c.name}</div>
                     <div class="retreat-hp">HP {rem}/{eff}</div>
                     <div class="retreat-nrg">{energySummary(item)}</div>
@@ -12710,7 +12711,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     oncontextmenu={(e)=>{e.preventDefault();decrementCount(item.iid);}}
                     onclick={(e)=>{e.stopPropagation();incrementCount(item.iid);}}>
                     {#if isActivePoke}{@render activeSpotBadge(false)}{/if}
-                    <img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}/>
+                    <img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name}/>
                     <div class="retreat-name">{c.name}</div>
                     <div class="retreat-hp">HP {rem}/{eff}</div>
                     <div class="retreat-nrg">{energySummary(item)}</div>
@@ -12776,7 +12777,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                       <div class="sel-card-back"><div class="sel-card-back-icon">🎴</div><div class="sel-card-back-q">?</div></div>
                       <span class="sel-name">???</span>
                     {:else}
-                      <img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name} loading="lazy"
+                      <img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name} loading="lazy"
                         class:legend-half-l={twoCardStadiumHalfIndex(selectionItems, item.iid, pool) === 0}
                         class:legend-half-r={twoCardStadiumHalfIndex(selectionItems, item.iid, pool) === 1}/><span class="sel-name">{c.name}</span>
                       {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
@@ -12837,7 +12838,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {#each deckGrouped as entry}{@const _dc=getCard(entry.cardId)}
                 <button class="deck-cell" title="{entry.half === 0 || entry.half === 1 ? entry.name : entry.count + '× ' + entry.name} — 點擊放大"
                   onclick={(e)=>{e.stopPropagation();openZoom(entry.cardId);}}>
-                  {#if _dc?.imageUrl}<img use:retryImg={_dc.imageUrl} src={_dc.imageUrl} alt={entry.name} class="deck-cell-img" loading="lazy"
+                  {#if _dc?.imageUrl}<img use:retryImg={_dc.imageUrl} src={cardThumb(_dc.imageUrl)} alt={entry.name} class="deck-cell-img" loading="lazy"
                     class:legend-half-l={entry.half === 0} class:legend-half-r={entry.half === 1}/>
                   {:else}<div class="deck-cell-fallback">{entry.name}</div>{/if}
                   <!-- v6.095：兩張合一競技場已拆成一格一張，×1 徽章會誤讀成聚合 -->
@@ -12883,7 +12884,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   {#if c}
                     <button class="deck-cell" title="{c.name} — 點擊放大"
                       onclick={(e)=>{e.stopPropagation();openZoom(inst.cardId, inst);}}>
-                      {#if c.imageUrl}<img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name} class="deck-cell-img" loading="lazy"
+                      {#if c.imageUrl}<img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name} class="deck-cell-img" loading="lazy"
                         class:legend-half-l={twoCardStadiumHalfIndex(peekedOthers, inst.iid, pool) === 0}
                         class:legend-half-r={twoCardStadiumHalfIndex(peekedOthers, inst.iid, pool) === 1}/>
                       {:else}<div class="deck-cell-fallback">{c.name}</div>{/if}
@@ -12918,7 +12919,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   {#if c}
                     <button class="deck-cell" title="{c.name} — 點擊放大"
                       onclick={(e)=>{e.stopPropagation();openZoom(inst.cardId, inst);}}>
-                      {#if c.imageUrl}<img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name} class="deck-cell-img" loading="lazy"
+                      {#if c.imageUrl}<img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name} class="deck-cell-img" loading="lazy"
                         class:legend-half-l={twoCardStadiumHalfIndex(otherHand, inst.iid, pool) === 0}
                         class:legend-half-r={twoCardStadiumHalfIndex(otherHand, inst.iid, pool) === 1}/>
                       {:else}<div class="deck-cell-fallback">{c.name}</div>{/if}
@@ -13158,7 +13159,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <div class="float-evo-title modal-drag-handle">選擇進化</div>
       {#each floatingEvoMenu.evoOpts as evo}{@const ec=getCard(evo.cardId)}
         <button class="evo-choice wide-evo" disabled={actionBusy} onclick={(e)=>{e.stopPropagation();dispatch(GameActions.evolve(floatingEvoMenu!.fromIid,evo.iid));floatingEvoMenu=null;}}>
-          <img use:retryImg={ec?.imageUrl} src={ec?.imageUrl} alt={ec?.name}/><span>{ec?.name}</span>
+          <img use:retryImg={ec?.imageUrl} src={cardThumb(ec?.imageUrl)} alt={ec?.name}/><span>{ec?.name}</span>
         </button>
       {/each}
     </div>
@@ -13173,7 +13174,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <div class="hand-preview-float"
           style="left:{hoverHandAnchor.x}px; top:{hoverHandAnchor.y - 8}px;"
           in:fade={{ duration: 120 }} aria-hidden="true">
-          <img use:retryImg={pc.imageUrl} src={pc.imageUrl} alt={pc.name}/>
+          <img use:retryImg={pc.imageUrl} src={cardThumb(pc.imageUrl)} alt={pc.name}/>
         </div>
       {/if}
     {/if}
@@ -13187,7 +13188,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <div class="hand-preview-float att-preview-float" class:att-preview-below={hoverAttBelow}
         style="left:{hoverAttAnchor.x}px; top:{hoverAttAnchor.y - (hoverAttBelow ? 0 : 8)}px;"
         in:fade={{ duration: 120 }} aria-hidden="true">
-        <img use:retryImg={ac.imageUrl} src={ac.imageUrl} alt={ac.name}/>
+        <img use:retryImg={ac.imageUrl} src={cardThumb(ac.imageUrl)} alt={ac.name}/>
       </div>
     {/if}
   {/if}
@@ -13222,7 +13223,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   <!-- Floating Drag Preview -->
   {#if dragging && dragging.moved}
     <div class="drag-preview" style="left:{dragging.x / gameZoom}px;top:{dragging.y / gameZoom}px;" aria-hidden="true">
-      <img use:retryImg={dragging.imageUrl} src={dragging.imageUrl} alt=""/>
+      <img use:retryImg={dragging.imageUrl} src={cardThumb(dragging.imageUrl)} alt=""/>
       <!-- ⚠ 這裡的 dragging.kind 只是**拖曳中的文字標籤**（外觀），它本身由中央
            handCardDragKind(ops) 產生。可用性、釋放區判斷一律不准用 kind —— 用
            dragOpFor()/handOpForDropTarget()。守衛 test-v6200 只放行這個 drag-preview 區塊。 -->
@@ -13271,7 +13272,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {@const hcc = pool.get(hc.cardId)}
               <div class="mulligan-reveal-card" class:opening-burst={canBeInitialActiveCard(hcc)}>
                 {#if hcc?.imageUrl}
-                  <img use:retryImg={hcc.imageUrl} src={hcc.imageUrl} alt={hcc.name} onclick={() => openZoom(hc.cardId, null)} class="zoomable"
+                  <img use:retryImg={hcc.imageUrl} src={cardThumb(hcc.imageUrl)} alt={hcc.name} onclick={() => openZoom(hc.cardId, null)} class="zoomable"
                     class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.hand, hc.iid, pool) === 0}
                     class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.hand, hc.iid, pool) === 1} />
                 {:else}
@@ -13334,7 +13335,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {@const cc = pool.get(cid)}
               <div class="mulligan-reveal-card">
                 {#if cc?.imageUrl}
-                  <img use:retryImg={cc.imageUrl} src={cc.imageUrl} alt={cc.name} onclick={() => openZoom(cid, null)} class="zoomable"
+                  <img use:retryImg={cc.imageUrl} src={cardThumb(cc.imageUrl)} alt={cc.name} onclick={() => openZoom(cid, null)} class="zoomable"
                     class:legend-half-l={twoCardStadiumSide(cid) === 0}
                     class:legend-half-r={twoCardStadiumSide(cid) === 1} />
                 {:else}
@@ -13635,7 +13636,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     onclick={(e2) => { e2.stopPropagation(); openZoom(e.hostInst.cardId, e.hostInst); }}>🔍</button>
                 {/if}
                 <button class="sel-card" class:sel-picked={picked} onclick={() => togglePreAttackEnergy(e.iid)}>
-                  <img use:retryImg={ec.imageUrl} src={ec.imageUrl} alt={ec.name}/>
+                  <img use:retryImg={ec.imageUrl} src={cardThumb(ec.imageUrl)} alt={ec.name}/>
                   <span class="sel-name">{ec.name}{isUnits && eUnits > 1 ? `（${eUnits}個）` : ''}</span>
                   <span class="sel-hp">{isHandDiscard ? '在手牌中' : `附於 ${e.ownerName}`}</span>
                   {#if picked}<span class="sel-check">✓</span>{/if}
@@ -13685,7 +13686,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {#each copyAttackPicker.candidates as cand (cand.inst.iid)}
             {#if cand.card}
               <div class="copy-attack-poke">
-                <img use:retryImg={cand.card.imageUrl} src={cand.card.imageUrl} alt={cand.card.name} class="copy-attack-img"/>
+                <img use:retryImg={cand.card.imageUrl} src={cardThumb(cand.card.imageUrl)} alt={cand.card.name} class="copy-attack-img"/>
                 <div class="copy-attack-col">
                   <div class="copy-attack-name">{cand.card.name}</div>
                   <div class="copy-attack-atks">
@@ -13775,7 +13776,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         </div>
         <div class="copy-attack-list">
           <div class="copy-attack-poke">
-            <img use:retryImg={op.card.imageUrl} src={op.card.imageUrl} alt={op.card.name} class="copy-attack-img"/>
+            <img use:retryImg={op.card.imageUrl} src={cardThumb(op.card.imageUrl)} alt={op.card.name} class="copy-attack-img"/>
             <div class="copy-attack-col">
               <div class="copy-attack-name">{op.card.name}（對手戰鬥場）</div>
               <div class="copy-attack-atks">
@@ -13816,7 +13817,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         </div>
         <div class="copy-attack-list">
           <div class="copy-attack-poke">
-            <img use:retryImg={tp.card.imageUrl} src={tp.card.imageUrl} alt={tp.card.name} class="copy-attack-img"/>
+            <img use:retryImg={tp.card.imageUrl} src={cardThumb(tp.card.imageUrl)} alt={tp.card.name} class="copy-attack-img"/>
             <div class="copy-attack-col">
               <div class="copy-attack-name">{tp.card.name}（牌庫頂）</div>
               <div class="copy-attack-atks">
@@ -13868,7 +13869,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <div class="copy-attack-list rocket-command-scroll" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:.5rem">
             {#each rocketCommandPicker.top10All as p (p.inst.iid)}
               <div class="copy-attack-poke" style="flex-direction:column;align-items:center;text-align:center">
-                <img use:retryImg={p.card.imageUrl} src={p.card.imageUrl} alt={p.card.name} class="copy-attack-img" style="max-width:110px"/>
+                <img use:retryImg={p.card.imageUrl} src={cardThumb(p.card.imageUrl)} alt={p.card.name} class="copy-attack-img" style="max-width:110px"/>
                 <div class="copy-attack-name" style="font-size:.78rem">{p.card.name}</div>
               </div>
             {/each}
@@ -13877,7 +13878,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <div class="copy-attack-list rocket-command-scroll">
           {#each rocketCommandPicker.pokeList as p (p.inst.iid)}
             <div class="copy-attack-poke">
-              <img use:retryImg={p.card.imageUrl} src={p.card.imageUrl} alt={p.card.name} class="copy-attack-img"/>
+              <img use:retryImg={p.card.imageUrl} src={cardThumb(p.card.imageUrl)} alt={p.card.name} class="copy-attack-img"/>
               <div class="copy-attack-col">
                 <div class="copy-attack-name">{p.card.name}</div>
                 <div class="copy-attack-atks">
@@ -13921,7 +13922,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 {#each _peekedOthers as p (p.inst.iid)}
                   <button class="deck-cell" title="{p.card.name} — 點擊放大"
                     onclick={(e)=>{e.stopPropagation();openZoom(p.inst.cardId, p.inst);}}>
-                    {#if p.card.imageUrl}<img use:retryImg={p.card.imageUrl} src={p.card.imageUrl} alt={p.card.name} class="deck-cell-img" loading="lazy"
+                    {#if p.card.imageUrl}<img use:retryImg={p.card.imageUrl} src={cardThumb(p.card.imageUrl)} alt={p.card.name} class="deck-cell-img" loading="lazy"
                       class:legend-half-l={twoCardStadiumSide(p.inst.cardId) === 0}
                       class:legend-half-r={twoCardStadiumSide(p.inst.cardId) === 1}/>
                     {:else}<div class="deck-cell-fallback">{p.card.name}</div>{/if}
@@ -14028,7 +14029,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 <div class="opp-turn-action-item" class:discard={act.type === 'discard'}
                   title={(_c?.name ?? '?') + (act.extra ? ' / ' + act.extra : '') + (act.type === 'discard' ? '（被丟棄）' : '')}>
                   {#if _c?.imageUrl}
-                    <img use:retryImg={_c.imageUrl} class="opp-turn-card-img" src={_c.imageUrl} alt={_c?.name ?? '?'}
+                    <img use:retryImg={_c.imageUrl} class="opp-turn-card-img" src={cardThumb(_c.imageUrl)} alt={_c?.name ?? '?'}
                       class:legend-half-l={twoCardStadiumSide(act.cardId) === 0}
                       class:legend-half-r={twoCardStadiumSide(act.cardId) === 1}
                       onclick={() => openZoom(act.cardId, null)} />
@@ -14169,7 +14170,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <button class="retreat-zoom" title="放大檢視：{bc.name}"
               onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
             <button class="retreat-pick" disabled={busy} onclick={(e)=>{e.stopPropagation();onPick(b.iid);}}>
-              <img use:retryImg={bc.imageUrl} src={bc.imageUrl} alt={bc.name}/>
+              <img use:retryImg={bc.imageUrl} src={cardThumb(bc.imageUrl)} alt={bc.name}/>
               <div class="retreat-name">{bc.name}</div>
               <div class="retreat-hp">HP {rem}/{eff}</div>
               <div class="retreat-nrg" title="附加的能量">⚡ {energySummary(b)}</div>
@@ -14255,7 +14256,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {#each discardGrouped as g}{@const c=getCard(g.cardId)}
             {#if c}
               <button class="sel-card" onclick={() => openZoom(g.cardId)}>
-                <img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name} loading="lazy"
+                <img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name} loading="lazy"
                   class:legend-half-l={g.half === 0} class:legend-half-r={g.half === 1}/><span class="sel-name">{c.name}</span>
                 <!-- v6.091：兩張合一競技場已拆成一格一張，×1 徽章反而容易誤讀成聚合，故不顯示 -->
                 {#if g.half !== 0 && g.half !== 1}<span class="deck-cell-count">×{g.count}</span>{/if}
@@ -14573,7 +14574,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {#each dedupeByIid(_pvp?.prizes) as _pvc (_pvc.iid)}{@const _pvcard = (prizeViewMode === 'replay' || _pvc.faceUp) ? getCard(_pvc.cardId) : null}
                 {#if _pvcard}
                   <button class="sel-card" onclick={() => openZoom(_pvc.cardId, _pvc)}>
-                    <img use:retryImg={_pvcard.imageUrl} src={_pvcard.imageUrl} alt={_pvcard.name} loading="lazy"
+                    <img use:retryImg={_pvcard.imageUrl} src={cardThumb(_pvcard.imageUrl)} alt={_pvcard.name} loading="lazy"
                       class:legend-half-l={twoCardStadiumHalfIndex(_pvp?.prizes, _pvc.iid, pool) === 0}
                       class:legend-half-r={twoCardStadiumHalfIndex(_pvp?.prizes, _pvc.iid, pool) === 1}/><span class="sel-name">{_pvcard.name}</span>
                   </button>
@@ -14776,7 +14777,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           ">
           <!-- v5.137：對手取獎賞只顯示卡背，不暴露對手手牌（PTCG 隱私規則） -->
           {#if p.isMine && pc?.imageUrl}
-            <img use:retryImg={pc.imageUrl} src={pc.imageUrl} alt={pc.name}/>
+            <img use:retryImg={pc.imageUrl} src={cardThumb(pc.imageUrl)} alt={pc.name}/>
           {:else}
             <div class="card-back prize-pick-back"><span class="card-back-mark">?</span></div>
           {/if}

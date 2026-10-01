@@ -36,6 +36,7 @@
 <script lang="ts">
   import type { GameState, CardInstance, PendingSelection } from '$lib/game/types';
   import { retryImg } from '$lib/img-retry';
+  import { cardThumb } from '$lib/cards/thumb'; // v6.464 小尺寸顯示改用縮圖（失敗由 retryImg 立刻退回官方原圖）
   import { modalDrag } from '$lib/modal-drag';   // ⭐v6.420：與桌機版共用同一份拖曳＋邊界夾制
   import type { Card } from '$lib/cards/types';
   import {
@@ -806,7 +807,7 @@
           </div>
         {:else}
           <button class="mp-slot mp-opp-slot" onclick={() => onOpenZoom(inst.cardId, inst)}>
-            {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}/>{/if}
+            {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name}/>{/if}
             <span class="mp-slot-hp">{hpRemaining(inst)}</span>
             {#if inst.energyAttached.length > 0}
               <span class="mp-slot-eg">
@@ -865,7 +866,7 @@
         </div>
       {:else}
         <button class="mp-active mp-active-opp mp-status-{inst.status ?? 'none'}" onclick={() => onOpenZoom(inst.cardId, inst)}>
-          {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}/>{/if}
+          {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name}/>{/if}
           <div class="mp-active-info">
             <div class="mp-active-name">{c?.name ?? '?'}</div>
             <div class="mp-hp {hpClass(inst)}">
@@ -941,7 +942,7 @@
       <button class="mp-active mp-active-mine mp-status-{inst.status ?? 'none'}"
         class:mp-actionable={isPlaying && isMyTurn && isMainPhase && !pendingSelection}
         onclick={() => sheet = { type: 'active' }}>
-        {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}/>{/if}
+        {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name}/>{/if}
         <div class="mp-active-info">
           <div class="mp-active-name">{c?.name ?? '?'}</div>
           <div class="mp-hp {hpClass(inst)}">
@@ -1032,7 +1033,7 @@
         <button class="mp-slot mp-my-slot"
           class:mp-actionable={hasUsableAbility || isEvoTarget}
           onclick={() => sheet = { type: 'bench', inst }}>
-          {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}/>{/if}
+          {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name}/>{/if}
           <span class="mp-slot-hp">{hpRemaining(inst)}</span>
           {#if inst.energyAttached.length > 0}
             <span class="mp-slot-eg">
@@ -1060,7 +1061,7 @@
       {#each dedupeByIid(myPlayer.hand) as inst (inst.iid)}
         {@const c = cardOf(inst)}
         <button class="mp-hand-card mp-hand-replay" onclick={() => onOpenZoom(inst.cardId, inst)} title={c?.name} aria-label={c?.name ?? '手牌'}>
-          {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}
+          {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name}
             class:legend-half-l={twoCardStadiumHalfIndex(myPlayer.hand, inst.iid, pool) === 0}
             class:legend-half-r={twoCardStadiumHalfIndex(myPlayer.hand, inst.iid, pool) === 1}/>{:else}<div class="mp-card-back mp-hand-back-fill"><span class="mp-card-back-mark">?</span></div>{/if}
         </button>
@@ -1081,7 +1082,7 @@
         <!-- v6.086「兩張合一」競技場：手牌顯示成兩張直立的卡（同一張合併橫圖裁左半／右半） -->
         {@const _half = twoCardStadiumHalfIndex(myPlayer.hand, inst.iid, pool)}
         <button class="mp-hand-card" class:mp-playable={playable} disabled={actionBusy} onclick={() => tapHand(inst)} title={c?.name}>
-          {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}
+          {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name}
             class:legend-half-l={_half === 0} class:legend-half-r={_half === 1}/>{/if}
           {#if isPlayableTrainer && isMyTurn}
             <div class="mp-card-hint">{c?.subtype === 'Stadium' ? '🏟' : c?.subtype === 'Supporter' ? '👤' : '🎴'}</div>
@@ -1154,7 +1155,7 @@
               <button class="mp-pick-zoom" title="放大檢視：{c?.name ?? '?'}"
                 onclick={(e) => { e.stopPropagation(); closeSheet(); onOpenZoom(tinst.cardId, tinst); }}>🔍</button>
               <button class="mp-pick-btn" disabled={actionBusy} onclick={() => attachEnergy(sheet!.type === 'pick-energy-target' ? sheet!.energyIid : '', tinst.iid)}>
-                {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name} loading="lazy"/>{/if}
+                {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name} loading="lazy"/>{/if}
                 <div class="mp-pick-name">{c?.name ?? '?'}</div>
                 <div class="mp-pick-meta">HP {hpRemaining(tinst)}/{hpMax(tinst)}</div>
                 <div class="mp-pick-pips">
@@ -1184,7 +1185,7 @@
                 <button class="mp-pick-zoom" title="放大檢視：{ic?.name ?? '?'}"
                   onclick={(e) => { e.stopPropagation(); closeSheet(); onOpenZoom(inst.cardId, inst); }}>🔍</button>
                 <button class="mp-pick-btn" disabled={actionBusy} onclick={() => evolveTo(fromIid, (sheet as { evoIid: string }).evoIid)}>
-                  {#if ic?.imageUrl}<img use:retryImg={ic.imageUrl} src={ic.imageUrl} alt={ic.name} loading="lazy"/>{/if}
+                  {#if ic?.imageUrl}<img use:retryImg={ic.imageUrl} src={cardThumb(ic.imageUrl)} alt={ic.name} loading="lazy"/>{/if}
                   <div class="mp-pick-name">{ic?.name ?? '?'}</div>
                   <div class="mp-pick-meta">HP {hpRemaining(inst)}/{hpMax(inst)}</div>
                   <div class="mp-pick-pips">

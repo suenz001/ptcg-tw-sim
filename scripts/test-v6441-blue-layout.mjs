@@ -129,9 +129,15 @@ const LATER = [
   ["  }\n  .undo-request-modal { --sys-accent: #f59e0b; --sys-glow: rgba(245, 158, 11, 0.3); }\n", "  }\n"],
   ["  .notify-prompt-btns { display: flex; gap: 12px; margin-top: 18px; justify-content: flex-end; }\n\n", "  .notify-prompt-btns { display: flex; gap: 12px; margin-top: 18px; justify-content: flex-end; }\n\n  .undo-modal-overlay {\n    position: fixed; inset: 0;\n    background: rgba(0, 0, 0, 0.65);\n    z-index: 10000;\n    display: flex; align-items: center; justify-content: center;\n  }\n  .undo-request-modal {\n    background: #1a1a2e;\n    border: 2px solid #f59e0b;\n    border-radius: 12px;\n    padding: 24px 28px;\n    max-width: 460px;\n    width: 90vw;\n    color: #e0e0e0;\n    box-shadow: 0 8px 32px rgba(245, 158, 11, 0.3);\n  }\n"],
 ];
+// ⭐v6.464 起：改動也碰到藍桌墊哨兵內的 <img>（全版面一致改用縮圖），無法放進 LATER（哨兵先被剝掉、條目會命中 0 次）
+//   ⇒ 在 strip() 的**最前面**先把本版改動整段還原成 v6.463（IRON_RULES Rule 40：保留「藍桌墊只活在哨兵裡」的原意）。
+//   difflib 產生、當場驗證逐位元還原 v6.463；內容正確性由 test-v6464-card-thumbs 鎖。之後的版本若同樣跨哨兵，照這個模式往這裡加。
+import { V6464_GAME_PAIRS } from './lib/revert-v6464-thumbs.mjs';
+const PRE = V6464_GAME_PAIRS;
 function strip(src) {
   let s = src;
   const bad = [];
+  for (const [a, b] of PRE) { const c = s.split(a).length - 1; if (c !== 1) bad.push(`PRE 條目命中 ${c} 次：${a.slice(0, 50)}`); s = s.split(a).join(b); }
   // ① 哨兵區塊（helper／snippet／CSS）與 isFableGeom 宣告
   const blocks = [
     /\n  \/\/ >>> v6441-blue-helper\n[\s\S]*?\n  \/\/ <<< v6441-blue-helper/,

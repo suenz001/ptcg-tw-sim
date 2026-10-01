@@ -29,6 +29,7 @@
  *
  * Run: node scripts/test-v6439-cards-mobile-no-hscroll.mjs
  */
+import { V6464_CARDS_PAIRS, revertPairs } from './lib/revert-v6464-thumbs.mjs';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -117,7 +118,8 @@ const LATER = [
   ['      class="lightboxOverlay" use:pageScrollLock\n', '      class="lightboxOverlay"\n'],
   ['    overscroll-behavior: contain; /* ⭐v6.457 捲到底不把整頁帶走（桌機滾輪／手機手指都是） */\n', ''],
 ];
-let stripped = SRC.replace(/\r\n/g, '\n').replace(STRIP_RE, '');
+// ⭐v6.464（Rule 40）：本版把資料庫格子的卡圖改用縮圖（src={cardThumb(…)}＋import），先用共用還原表還原成 v6.463 再剝哨兵；其餘仍須逐位元等於 BASE。
+let stripped = revertPairs(SRC.replace(/\r\n/g, '\n'), V6464_CARDS_PAIRS).replace(STRIP_RE, '');
 for (const [a, b] of LATER) {
   const n = stripped.split(a).length - 1;
   ok('[LATER 前提] 登記的後續改動恰好出現一次：' + a.trim().slice(0, 50), n === 1, 'n=' + n);

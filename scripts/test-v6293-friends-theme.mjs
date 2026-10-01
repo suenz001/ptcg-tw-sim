@@ -26,6 +26,7 @@ import assert from 'node:assert';
 import { hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
 import { markupSections } from './lib/strip-markup-sections.mjs';   // ⭐v6.320 中央 helper（護欄①～⑨）
 import { execFileSync } from 'node:child_process';
+import { V6464_GAME_PAIRS, revertPairs } from './lib/revert-v6464-thumbs.mjs';
 import { createHash } from 'node:crypto';
 import { styleEndIndex, styleTagIndex } from './lib/svelte-style-block.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
@@ -673,7 +674,8 @@ function stripV6361DrawModal(src) {
 await T('E1 ⭐⭐⭐ 對戰版面分支區間（手機直式＋三種桌機版面）還原 v6.321 的合法改動後與 BASE **逐位元相同**；勝負 modal 區間剝掉 v6.361 平手視窗哨兵後同樣逐位元相同', () => {
   if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6293 E1 對戰版面分支逐位元比對', '需要歷史 commit；E1c 的結構斷言不需要歷史，仍在守'); skipped.push('E1（淺複製）'); return; }
   const baseSrc = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':src/routes/game/+page.svelte'], { maxBuffer: 1 << 28 }).toString('utf8');
-  assert.strictEqual(sha256(revertV6441(revertV6425(revertV6418(revertV6389(revertV6321(battleRegionOf(GAME))))))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
+  // ⭐v6.464（Rule 40）：卡圖縮圖改了對戰區的 <img src>（全版面一致）⇒ 先用共用還原表把整檔還原成 v6.463，再走原本的還原鏈；其餘仍須逐位元等於 BASE。
+  assert.strictEqual(sha256(revertV6441(revertV6425(revertV6418(revertV6389(revertV6321(battleRegionOf(revertPairs(GAME, V6464_GAME_PAIRS)))))))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
   assert.strictEqual(sha256(revertV6420Gameover(gameoverRegionOf(stripV6361DrawModal(GAME)))), sha256(gameoverRegionOf(baseSrc)), '⚠⚠ 勝負結算 modal 被動到了');
 });
 await T('E1b ⭐ 正對照：把對戰版面分支改一個位元 ⇒ E1 的比對必須不同（不是恆真式）', () => {

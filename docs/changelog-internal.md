@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.464：卡圖小尺寸顯示改用縮圖 repo（suenz001/ptcg-tw-sim-img，GitHub Pages）
+
+BASE `4155077a`（v6.463）。站長 2026-10-01 同意、並依建議另開 repo（不放 Oracle 主機）。
+- 實測：官方 PNG 868×1212 平均 427KB，CloudFront 對台灣每次 Miss（0.4～1.2 秒／張）；450px WebP q80 平均 53KB（40 張樣本）；GitHub Pages 經 Fastly 新加坡命中約 0.07 秒，我們的站經 CF SJC 即使 HIT 也約 0.43 秒（且會跟對戰 API 搶隧道）。一局約 46 張不同卡：19.6MB → 2.4MB。解碼時間 PNG／WebP 差不多（15～18ms，CPU 1/4），效益在下載不在解碼。
+- 架構：`src/lib/cards/thumb.ts`（cardThumb／isCardThumb／THUMB_PATTERN）；只轉 asia.pokemon-card.com 的 /tw/、/hk/ PNG。四頁 52 處小尺寸 `<img>` 改 `src={cardThumb(X)}`，`use:retryImg={X}` 仍傳官方網址；`img-retry.ts` 縮圖失敗 ⇒ 0 延遲改官方原圖（官方原圖失敗照舊退避）。zoom／lightbox／詳情大圖／預覽／卡片 SEO 頁仍用官方原圖。手機版場地背景（background-image）沒有退路，刻意維持官方原圖。
+- 產生器：`scripts/gen-card-thumbs.py`（冪等、只抓缺的；THUMB_RE 必須等於 THUMB_PATTERN）。站長電腦：`python scripts\gen-card-thumbs.py --out E:\ptcg-tw-sim-img` 後在 E:\ptcg-tw-sim-img commit＋push。**補新卡包後要跑一次**（沒跑也不會壞，只是新卡走官方原圖）。
+- 守衛：新增 test-v6464-card-thumbs（轉換規則、產生器／轉換器判準一致、52 處接線＋掃描器正對照、img-retry 行為、HEAD-FAIL、兩個突變）；test-v6441／v6293／v6439 改用共用還原表 scripts/lib/revert-v6464-thumbs.mjs（本版改動跨藍桌墊哨兵與對戰版面區，必須先還原成 v6.463 再走原本的逐位元比對）。
+
 ## v6.463：build 後處理 route-preload —— ssr=false 路由殼補上該頁的 modulepreload
 
 BASE `2b4b3988`（v6.462）。fable 5.1 審查第 5 項。

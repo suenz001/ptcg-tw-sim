@@ -34,6 +34,8 @@
  * ⚠ 這裡**不換成卡背圖**：卡背代表「未揭曉的牌」，用在載入失敗會誤導玩家判讀盤面。
  */
 
+import { isCardThumb } from './cards/thumb';
+
 const MAX_RETRY = 4;
 const BACKOFF_MS = [1000, 3000, 8000, 20000];
 /** 一般盤面／手牌小圖的代理寬度；放大檢視要更清晰，由呼叫端傳 width 覆寫。 */
@@ -98,7 +100,11 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
     if (disposed) return;
     node.setAttribute('data-img-retrying', '1');
     clear();
-    timer = setTimeout(attempt, BACKOFF_MS[Math.min(tries, BACKOFF_MS.length - 1)]);
+    // v6.464：失敗的是本站縮圖（新卡還沒產生縮圖／GitHub Pages 掛掉）⇒ **立刻**改官方原圖，不等退避；
+    //   attempt() 第一次（n=0）設的就是官方原圖（original 永遠是呼叫端傳入的官方網址）。
+    //   ⚠ 只在縮圖失敗時 0 延遲：官方原圖本身失敗照舊走退避（不可對官方 CDN 連發）。
+    const failedThumb = isCardThumb(node.currentSrc || node.src) && !isCardThumb(original);
+    timer = setTimeout(attempt, failedThumb ? 0 : BACKOFF_MS[Math.min(tries, BACKOFF_MS.length - 1)]);
   };
   const onLoad = () => {
     node.removeAttribute('data-img-retrying');

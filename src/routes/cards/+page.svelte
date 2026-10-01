@@ -2,6 +2,7 @@
   import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）
   import { base } from '$app/paths';
   import { retryImg } from '$lib/img-retry';
+  import { cardThumb } from '$lib/cards/thumb'; // v6.464 小尺寸顯示改用縮圖（失敗由 retryImg 立刻退回官方原圖）
   import type { Card, SetSummary, EnergyType } from '$lib/cards/types';
   import { getEvolutionChainNames, getEvolutionChainGrouped } from '$lib/cards/evolutionChain';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
@@ -647,7 +648,7 @@
   <div class="grid">
     {#each shown as card (card.id)}
       <button class="cardBtn" onclick={() => (selected = card)} aria-label={card.name}>
-        <img use:retryImg={card.imageUrl} src={card.imageUrl} alt={card.name} loading="lazy" />
+        <img use:retryImg={card.imageUrl} src={cardThumb(card.imageUrl)} alt={card.name} loading="lazy" />
         <span class="cardLabel">
           <span class="num">
             {#if data.setCode === 'ALL'}<span class="setPrefix">{card.setCode}</span>{' '}{/if}{card.collectorNumber}
