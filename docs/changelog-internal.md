@@ -1,5 +1,20 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.459：進對戰／錦標賽頁加速（卡池預熱與登入並行、預組選到才載）
+
+BASE `eb493b80`（v6.458）。站長 2026-10-01：玩家反應進入網站或錦標賽頁面會延遲、比賽途中也有些延遲。
+- 量測（站長電腦、台灣網路、Playwright 冷快取）：首頁 FCP 0.72 秒、各路徑 TTFB 約 0.3 秒（cf-ray 落 SJC；node 內 0.2ms）。
+  /tournament：主程式 chunk 528KB、**卡池預熱排在 /api/auth/anonymous 回來之後才開始**，card-set-map.json 在 CDN 是 DYNAMIC（每次回源），
+  然後抓 37 個卡包——因為舊寫法把 PRESET_DECKS 也算進「本機牌組」。
+- 修法（game/+page.svelte onMount，哨兵 `v6459-pool-warm-parallel`）：預熱 IIFE 在 `await oracleAuth()` 之前發出、只算 `decks`；
+  沒有自己的牌組 ⇒ 先抓 card-set-map；`poolReady = true` 前 `await _poolWarm`（語意不變）。預組改「選到才載」，靠既有三張網：
+  選牌組 $effect、startLocalGame forceComplete、tAdopt 的 ensurePoolForStateIds。
+- 本機對照（舊／新兩份 oracle build、同一個人造延遲 150／320ms、10Mbps、CPU 1/4）：/game 卡池就緒 8.4→4.5 秒（無自有牌組）、8.5→6.0 秒（4 副、7 個卡包）。
+- 另查（未改）：伺服器自 9/28 起每分鐘 :16 秒附近有一次約 1 CPU 秒的忙碌（本機探針 0.3～1.2 秒、node CPU tick 尖峰），來源未定位；
+  要定位需對正式 node 行程做 CPU 取樣，等站長同意。長輪詢目前關閉（admin 旗標），等對手時輪詢 0.8 秒。
+- 守衛：新增 `test-v6459-pool-warm-parallel.mjs`（S1～S4＋HEAD-FAIL 對 v6.458；B1～B4 抽出哨兵區塊實跑；N1～N3 安全網）；突變（改回 allDecks、拿掉 catch、poolReady 不等預熱）全紅，只改註解不紅。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## server patch v1.51：tournamentClientDiag 真正的 7 天保留（TTL 索引從沒生效）
 
 BASE `eb493b80`（v6.458）。v6.287 查證時記下的另案：`TCDIAG.createIndex({ ts: 1 }, { expireAfterSeconds: 604800 })` 從來沒刪過任何一筆——MongoDB TTL 只認 BSON Date，寫入端存的是 `ts: Date.now()`（數字）⇒ 表只增不減。

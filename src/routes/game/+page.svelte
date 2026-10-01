@@ -16,7 +16,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { base } from '$app/paths';
   import { goto } from '$app/navigation';   // v6.284 修：initNotifyNav 的回呼一直呼叫 goto 卻沒 import（ReferenceError 被 try/catch 吞掉 ⇒ 通知點擊導頁靜默失效）
   import type { Card } from '$lib/cards/types';
-  import { loadAllSets, buildCardIndex, loadDeckSets, deckEntriesAllInPool } from '$lib/cards/pool';
+  import { loadAllSets, buildCardIndex, loadDeckSets, deckEntriesAllInPool, loadCardSetMap } from '$lib/cards/pool';
   import { getBroadcastConfig, type BroadcastConfig } from '$lib/game/broadcast';
   import { loadDecks, saveDecks, sortDecks } from '$lib/decks/storage';
   // v4.925：雲端 sync — 同帳號切換時 game 頁需重載牌組
@@ -4820,6 +4820,30 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   line 2534 並行觸發兩個 signInAnonymously，產生兩個不同 anonymous user
     //   互相覆蓋 → firebaseUser 反覆 toggle → 「匿名 建立帳號」auth pill 閃爍循環。
     //   callback 內 sign-in 已 cover 所有情境（first visit / 登出後 / admin spy gate）。
+    // >>> v6459-pool-warm-parallel
+    // ⭐v6.459 進站加速（站長 2026-10-01：玩家反應進對戰／錦標賽頁會延遲）。
+    //   實測（站長電腦、台灣網路、冷快取，進 /tournament）：卡池載入排在 Oracle 登入**之後**才開始
+    //   （/api/auth/anonymous 回來的那一刻才去抓 card-set-map.json），而 card-set-map.json 在 CDN 是
+    //   DYNAMIC（每次都回源，約 0.3～0.5 秒），之後才再抓卡包 ⇒ 三段往返**串在一起**。
+    //   而且舊寫法把**內建預組**（PRESET_DECKS，幾十副）也算進「本機牌組」⇒ 一進頁就把 37 個卡包
+    //   （約 550KB 壓縮後、數 MB 原始 JSON）全抓下來解析，手機上最明顯；「載入卡池中…」也要等它全部結束。
+    //   改法：
+    //     ① 卡池預熱改成**先發**、與 Oracle 登入並行（卡池不依賴登入身分），最後才一起等。
+    //     ② 預熱只算**玩家自己的牌組**（decks）。預組改成「選到才載」：既有的 $effect（p1DeckObj／
+    //        p2DeckObj 變動 → ensurePoolForDeckEntries）本來就會補；本機開局前 startLocalGame 也有
+    //        forceComplete 兜底；線上／錦標賽盤面有 ensurePoolForStateIds 依盤面補載。
+    //   ⚠ poolReady 的語意不變：仍然是「初始預熱結束（成功或失敗）」之後才設 true。
+    const _poolWarm: Promise<void> = (async () => {
+      try {
+        const _localEntries: { cardId: string }[] = [];
+        for (const d of decks) for (const e of d.entries) _localEntries.push({ cardId: String(e.cardId) });
+        if (_localEntries.length > 0) await ensurePoolForDeckEntries([_localEntries]);
+        // 沒有自己的牌組 ⇒ 至少先把「卡號 → 卡包」對照表抓好（約 9KB），之後進對戰／錦標賽盤面時
+        //   ensurePoolForStateIds 就少一段串行往返。失敗無妨（之後照原路重抓）。
+        else await loadCardSetMap().catch(() => undefined);
+      } catch (e) { console.error('[pool] 初始按牌組載入失敗', e); }
+    })();
+    // <<< v6459-pool-warm-parallel
     // Oracle build 額外初始化 — 取 Oracle JWT 給房間 API
     if (ORACLE_MODE) {
       // ⭐⭐⭐v6.197 myUid 舊寫法只在這裡取一次：如果這一發 oracleAuth() 失敗（網路/儲存空間
@@ -4839,12 +4863,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     }
 
     // v5.894：不再一次全載 40 個卡包（4.6MB）。改按牌組只載雙方用到的卡包（完整性 fallback 缺卡則全載兜底）。
-    //   先把本機已存牌組（allDecks）用到的卡包載入，讓本機/AI lobby 驗牌立即可用；線上對手卡包於開局前補齊。
-    try {
-      const _localEntries: { cardId: string }[] = [];
-      for (const d of allDecks) for (const e of d.entries) _localEntries.push({ cardId: String(e.cardId) });
-      if (_localEntries.length > 0) await ensurePoolForDeckEntries([_localEntries]);
-    } catch (e) { console.error('[pool] 初始按牌組載入失敗', e); }
+    //   ⭐v6.459：預熱已在上面與 Oracle 登入並行發出（只算玩家自己的牌組），這裡等它結束。
+    await _poolWarm;
     poolReady = true;
     // v5.991：對戰頁載入後抽測特性註冊完整性(黑夜魔靈咒詛炸彈等核心特性),miss=版本載入異常→顯性提示
     try { const _chk = selfCheckAbilityRegistry(); if (!_chk.ok) { abilityRegBroken = true; console.warn('[PTCG] 特性註冊自檢失敗,建議重新整理:', _chk.missing); } } catch (_e) {}
