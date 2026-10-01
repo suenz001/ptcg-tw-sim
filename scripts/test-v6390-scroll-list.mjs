@@ -73,6 +73,8 @@ const EXPECTED = [
   // ⭐v6.450 v6450-picker-sheet（手機直式底部 sheet）：欄數＋取消格子自己的捲動（--scroll-list-max:none，由 sheet 捲）
   // ⭐v6.454（審查 E）：高傲指令、排序牌庫頂的清單也併進 sheet 的單層捲動
   MEDIA_P + '|.selection-modal .sel-grid, .selection-modal .retreat-grid, .selection-modal .copy-attack-list, .selection-modal .full-deck-list, .selection-modal .rocket-command-scroll, .selection-modal .reorder-deck-wrap',
+  // ⭐v6.461（玩家回報：手機卡片區滑不動）：sheet 裡的清單不是捲動盒（overflow:visible＋overscroll-behavior:auto），只有 sheet 捲
+  MEDIA_P + '|.selection-modal .sel-grid, .selection-modal .retreat-grid, .selection-modal .copy-attack-list, .selection-modal .full-deck-list, .selection-modal .rocket-command-scroll, .selection-modal .reorder-deck-wrap, .zoom-modal.discard-modal .sel-grid',
   MEDIA_P + '|.sel-grid',
   MEDIA_P + '|.sel-grid.sel-grid-energy',
   MEDIA_P + '|.retreat-grid',
@@ -214,6 +216,8 @@ function computeFor(rules, ctx) {
 
 // [名稱, ctx, 期望高度, 期望 max-height 來源 fullSel, 期望 overflow-y]
 const SEL_MODAL = ['selection-modal'];
+// ⭐v6.461：手機直式 sheet 裡清單的 overflow-y 改由這一條決定（第 7 欄＝overflow-y 的期望來源；沒填＝與 max-height 同來源）。
+const SHEET_SEL = '.selection-modal .sel-grid, .selection-modal .retreat-grid, .selection-modal .copy-attack-list, .selection-modal .full-deck-list, .selection-modal .rocket-command-scroll, .selection-modal .reorder-deck-wrap, .zoom-modal.discard-modal .sel-grid';
 const SCENES = [
   ['B1 .mlog-list（桌機）', ctxOf(['mlog-list']), '62vh', GROUP_SEL, 'auto'],
   ['B2 .reorder-deck-wrap', ctxOf(['reorder-deck-wrap']), '60vh', GROUP_SEL, 'auto'],
@@ -224,19 +228,22 @@ const SCENES = [
   ['B7 .retreat-grid（桌機）', ctxOf(['retreat-grid']), '58vh', GROUP_SEL, 'auto'],
   ['B8 .discard-modal .sel-grid（棄牌區，桌機）', ctxOf(['sel-grid'], [['discard-modal']]), '72vh', GROUP_SEL, 'auto'],
   // ⭐v6.450：手機直式的選擇視窗改成底部 sheet、只有 sheet 捲動 ⇒ 格子的 --scroll-list-max 改 none（沒有雙層捲動）
-  ['B9 .sel-grid（手機直式）', ctxOf(['sel-grid'], [SEL_MODAL], [MEDIA_P]), 'none', GROUP_SEL, 'auto', '50vh'],
+  // ⭐v6.461（Rule 40：判準往上移，不放寬）：v6.450 的本意是「只有 sheet 捲」，但格子仍是 overflow:auto 的捲動盒 ⇒ 部分手機在格子裡滑不動。
+  //   現在格子的 overflow-y 必須是 visible、而且來自 v6.461 那一條（不是群組規則）；max-height 仍由群組規則決定（none）。
+  ['B9 .sel-grid（手機直式）', ctxOf(['sel-grid'], [SEL_MODAL], [MEDIA_P]), 'none', GROUP_SEL, 'visible', '50vh', SHEET_SEL],
   ['B10 .sel-grid（橫式窄螢幕）', ctxOf(['sel-grid'], [SEL_MODAL], [MEDIA_L]), '46vh', GROUP_SEL, 'auto'],
   // ⭐v6.450：手機直式棄牌區也改成底部 sheet、由 sheet 本身捲動 ⇒ 格子 none（v6.449 以前是 72vh：特異度勝過 media 的 50vh）
-  ['B11 .discard-modal .sel-grid（手機直式：sheet 捲動，格子不限高）', ctxOf(['sel-grid'], [['discard-modal']], [MEDIA_P]), 'none', GROUP_SEL, 'auto', '72vh'],
+  // ⭐v6.461：祖先改成真實 DOM 的 .zoom-modal.discard-modal（v6.461 那一條寫的是這個複合選擇器）；同 B9，格子不再是捲動盒。
+  ['B11 .discard-modal .sel-grid（手機直式：sheet 捲動，格子不限高）', ctxOf(['sel-grid'], [['zoom-modal', 'discard-modal']], [MEDIA_P]), 'none', GROUP_SEL, 'visible', '72vh', SHEET_SEL],
 ];
-for (const [name, ctx, wantH, wantFrom, wantOy] of SCENES) {
+for (const [name, ctx, wantH, wantFrom, wantOy, , oyFrom] of SCENES) {
   const r = computeFor(RULES, ctx);
   chk(name + ' → ⭐ 沒有任何相關規則是模擬器不支援的形態（fail-closed）', r.unsupported.length === 0, JSON.stringify(r.unsupported));
   chk(name + ' → max-height 解析為 ' + wantH, r.resolved === wantH, JSON.stringify({ got: r.resolved, mh: r.mh?.value }));
   chk(name + ' → ⭐ 勝出的 max-height 來自**群組規則**（不是個別規則，否則群組是死碼）',
     r.mh?.fullSel === wantFrom && r.mh?.value === VAR_MH, JSON.stringify({ from: r.mh?.fullSel, value: r.mh?.value }));
-  chk(name + ' → overflow-y 勝出值 ' + wantOy + ' 且來自群組規則',
-    r.oy?.value === wantOy && r.oy?.fullSel === wantFrom, JSON.stringify({ v: r.oy?.value, from: r.oy?.fullSel }));
+  chk(name + ' → overflow-y 勝出值 ' + wantOy + ' 且來自' + (oyFrom ? ' v6.461 的 sheet 規則' : '群組規則'),
+    r.oy?.value === wantOy && r.oy?.fullSel === (oyFrom ?? wantFrom), JSON.stringify({ v: r.oy?.value, from: r.oy?.fullSel }));
 }
 
 // B12／B13：兩條刻意保留不動的高特異度覆寫，**必須仍然贏**

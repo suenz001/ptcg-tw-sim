@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.461：手機選擇視窗 sheet 裡的清單不再是捲動盒（「卡片區滑不動、只有右邊縫隙滑得動」）
+
+BASE `540e0540`（v6.460）。兩位玩家回報手機牌庫搜尋滑不動（第二位：標題列＝拖動視窗、卡片區沒反應、右邊縫隙可以滑），站長本人的手機正常。
+- 根因：v6.450 在 sheet 裡只寫 `--scroll-list-max:none`（拿掉高度上限），清單仍是群組規則的 `overflow-y:auto; overscroll-behavior:contain` ⇒ 捲不動的捲動盒擋在真正會捲的 sheet 前面。
+  Chrome 會跳過它（所以雲端 Chromium 與站長手機都正常）；WebKit（iPhone 所有瀏覽器）／較舊 WebView 會把它當捲動邊界 ⇒ 手勢停在格子裡。右邊縫隙在格子外面 ⇒ 落在 sheet 上 ⇒ 可以滑。
+- 修法：`v6450-picker-sheet` 區塊加一條，sheet 裡的清單（sel-grid／retreat-grid／copy-attack-list／full-deck-list／rocket-command-scroll／reorder-deck-wrap、棄牌區的 sel-grid）`overflow:visible; overscroll-behavior:auto` ⇒ sheet 裡只剩 sheet 一個捲動盒。桌機不受影響（在手機媒體查詢內）。
+- 雲端只有 Chromium、重現不了 WebKit 行為 ⇒ 守衛改量**結構**：新增 `test-v6461-sheet-single-scroller.mjs`（M1～M3 sheet 裡唯一的捲動盒、M4 真手指正對照、M5 HEAD-FAIL 對 v6.460、D1 桌機照舊）；突變 2 種紅、1 種等價（已註明）。
+- test-v6441 LATER 補 v6.461 還原對。部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## v6.460：牌組編輯器「我的牌組」拖曳排序（玩家建議）
 
 BASE `4af2070e`（v6.459＋server patch v1.52）。站長 2026-10-01 轉述玩家建議：按住整個牌組方塊拉到想放的位置。

@@ -18813,6 +18813,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .selection-modal .full-deck-list,
     .selection-modal .rocket-command-scroll,
     .selection-modal .reorder-deck-wrap{ --scroll-list-max:none; }
+    /* ⭐v6.460（兩位玩家回報：手機牌庫搜尋「卡片區滑不動，只有右邊縫隙滑得動」，站長本人的手機正常）：
+       上一條只拿掉高度上限，清單本身仍是 overflow-y:auto＋overscroll-behavior:contain 的「捲動盒」——
+       內容沒有溢出、捲不動，卻擋在真正會捲的 sheet 前面。Chrome 會跳過這種捲不動的盒子把手勢交給 sheet；
+       部分瀏覽器（iPhone 上所有瀏覽器的 WebKit、較舊的 Android WebView）把它當成捲動邊界、手勢就停在這裡 ⇒「黃色區沒反應」。
+       ⇒ sheet 裡的清單一律不是捲動盒，只有 sheet 本身捲（v6.450「只有 sheet 捲」的本意）。桌機不受影響（不在這個媒體查詢裡）。 */
+    .selection-modal .sel-grid,
+    .selection-modal .retreat-grid,
+    .selection-modal .copy-attack-list,
+    .selection-modal .full-deck-list,
+    .selection-modal .rocket-command-scroll,
+    .selection-modal .reorder-deck-wrap,
+    .zoom-modal.discard-modal .sel-grid{ overflow:visible; overscroll-behavior:auto; }
     .sel-grid{ grid-template-columns:repeat(4, minmax(0, 1fr)) !important; gap:.4rem; }
     .sel-grid.sel-grid-energy{ grid-template-columns:repeat(4, minmax(0, 1fr)) !important; gap:.4rem; }
     .sel-grid.sel-grid-energy .sel-card img{ width:100%; }
