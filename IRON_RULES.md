@@ -2536,3 +2536,22 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
 - **`firebase-admin-key.json` 搬到 `D:\ai\`**：日常部署不需要它（伺服器讀 VM 上 `/opt/ptcg/api/` 那一份）；只有第一次架設 VM 的 `oracle_admin_install.sh` 要它放在同一個資料夾。
 - **git 倉庫**：2026-10-01 在 leon-pc 刪 tmp_obj 殘檔＋`git gc`，`.git` 約 670MB → 64MB。之後若又累積（`git count-objects -vH` 的 garbage／loose 很多），在沒有推送的空檔再跑一次。
 - Windows Defender 已排除 `E:\ptcg-tw-sim`（站長自己設定）。
+
+## Rule 78（2026-10-01）：網站速度的站長裁定與三項架構（v6.462～v6.464）
+
+- **站長裁定（不要再提案）**：①長輪詢（admin 📡 旗標）維持關閉——站長以前測過沒用、甚至更慢；②**不改 VM 的 nginx、也不改 Cloudflare 規則**來做效能（太麻煩）。
+  ⇒ 效能改善只能從前端程式、build 後處理、伺服器程式（server_admin_patch.js）與獨立的靜態 repo 下手。
+- **量測事實**：台灣 HiNet 到 www.ptcg-tw-sim.com 走 Cloudflare SJC，每個請求約 0.3～0.43 秒（即使 CF HIT）；node 內處理 0.2ms ⇒ 瓶頸是**請求次數與序列等待**，不是伺服器 CPU。
+- **v6.462 SW**：前端用 `?v=${VERSION}` 抓的資料檔（`/cards/*.json`、`/card-set-map.json`、`/changelog.html`、`/ai-playbooks/*.json`）**不在 install 預快取**，
+  改執行期 cache-first（`VERSIONED_DATA` ＋ 必須有 `v` 參數）。Cache API match 預設連 query 比，無 query 的預快取永遠不會命中。新增帶 `?v=` 的資料檔要加進 `VERSIONED_DATA`。守衛 test-v6462。
+- **v6.463 route-preload**：`package.json` build 在 seo-prerender-meta 之後跑 `scripts/route-preload.mjs`，替 tournament／cards／decks／deck-posts／friends.html 補該頁的 modulepreload。
+  **不碰 index.html／404.html**（可能是 fallback）、**不預載 CSS**（量到會重複下載）、冪等、不丟例外。新增 ssr=false 的頁面要加進 `ROUTE_HTML`。守衛 test-v6463。
+- **v6.464 卡圖縮圖**：縮圖放在**獨立 repo `suenz001/ptcg-tw-sim-img`（GitHub Pages）**，`w450/<tw|hk 檔名>.webp`（450px、WebP q80，平均約 53KB；官方 PNG 平均 427KB）。
+  - **不放 Oracle 主機**：走 CF SJC 慢（約 0.43 秒），且會跟對戰 API 搶隧道；GitHub Pages 經 Fastly 新加坡命中約 0.07 秒。
+  - 判準唯一一份：`src/lib/cards/thumb.ts`（`cardThumb`／`isCardThumb`／`THUMB_PATTERN`）＝ `scripts/gen-card-thumbs.py` 的 `THUMB_RE`（守衛逐字比對）。
+  - **小尺寸 `<img>` 一律 `src={cardThumb(X)} use:retryImg={X}`**（X＝官方網址）；`img-retry.ts` 遇縮圖失敗 **0 延遲**改官方原圖。少了 `use:retryImg` 就沒有退路（新卡沒縮圖會破圖）。
+  - **放大檢視（zoom-img／lightbox／detailImg／pv-img）與卡片 SEO 頁 `/card/[id]` 用官方原圖**；手機場地背景（background-image，沒有退路）也維持官方原圖。
+  - **補新卡包後**在站長電腦跑 `python scripts\gen-card-thumbs.py --out E:\ptcg-tw-sim-img`（冪等，只抓缺的），再到 `E:\ptcg-tw-sim-img` commit＋push。沒跑不會壞，只是新卡走官方原圖。
+  - 改對戰頁／資料庫頁的 `<img>` 時：test-v6441／v6293／v6439 會用 `scripts/lib/revert-v6464-thumbs.mjs` 先還原本版改動；那張表是 v6.463 的快照，**之後版本的改動不要加進那張表**，照各守衛原本的 LATER／還原鏈處理。
+  - 守衛 test-v6464（轉換規則、產生器／轉換器一致、52 處接線＋掃描器正對照、img-retry 行為、HEAD-FAIL、突變）。
+- **評估後刻意不做**：`/match/enter` 回應直接附盤面（要在第二個端點重寫 /state 的遮蔽與身分判定，分歧＝盤面外洩或隱形手牌）；大廳 /event 與 /bracket 並行（只早 0.3 秒、牽動亂序守衛）；AI 模組動態 import（gzip 只省 16KB）。
