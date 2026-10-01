@@ -1,5 +1,12 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.465：一般對戰／線上座位／錦標賽報名的牌組錯誤提示（走 validateDeck、列出原因）
+
+BASE `413b382e`（v6.464＋Rule 78）。站長回報：一般對戰介面選了不合法牌組不會像牌組編輯器一樣提示。
+- 查證：本機／AI 大廳 60 張但沒有基礎寶可夢等 ⇒ 顯示「✓ 60 張」、開始鈕灰、不說原因；**線上座位 hasValidDeck 只看 60 張＋不能使用的卡 ⇒ 不合法牌組可以按準備**；**錦標賽四個入口（報名／補報名／發起社群賽／測試房）前端只檢查 60 張**（伺服器也只檢查 60 張，server_admin_patch.js 註解已記載「錦標賽合法性仍靠前端，要不要加伺服器端由站長裁示」）。
+- 修法：`v6465-deck-issues` 區塊新增中央 `deckIssuesNow`（validateDeck；卡包未載齊回 null 不誤判）、`issuesExceptCount`、p1/p2/tDeckIssues；本機大廳與自己座位列原因，對手座位只顯示「牌組不符合規則」（不洩漏對手牌組）；線上 hasValidDeck 改為 60 張且 seatIssues 為空；錦標賽四入口在 60 張檢查後 `tDeckSubmitError`（ensurePoolForDeckEntries 強制載齊＋loadCardPolicyOnce 後驗）。
+- 守衛：新增 test-v6465-lobby-deck-issues（結構 S1～S5、HEAD-FAIL、兩個突變、真瀏覽器 E1～E4）；test-v6441 LATER 補還原對；test-v6340 C11 game 頁政策載入呼叫 2→3（Once 快取，不多打網路）。
+
 ## v6.464：卡圖小尺寸顯示改用縮圖 repo（suenz001/ptcg-tw-sim-img，GitHub Pages）
 
 BASE `4155077a`（v6.463）。站長 2026-10-01 同意、並依建議另開 repo（不放 Oracle 主機）。

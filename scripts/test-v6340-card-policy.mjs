@@ -331,7 +331,7 @@ const CRITERIA = {
   const EXPECT_LOADER = {
     'src/routes/decks/+page.svelte': 1,
     'src/routes/cards/+page.svelte': 1,
-    'src/routes/game/+page.svelte': 2,       // $effect 一次 ＋ 開戰前 await 一次
+    'src/routes/game/+page.svelte': 3,       // $effect 一次 ＋ 開戰前 await 一次 ＋ v6.465 錦標賽報名送出前 await 一次（tDeckSubmitError；Once 快取，不會多打網路）
     'src/routes/deck-posts/+page.svelte': 1,
   };
   /**

@@ -176,33 +176,33 @@ function runEnroll(gpSrc, deck = DECK) {
   const js = ts2js(extractFn(gpSrc, '  async function tournEnroll(eventId: string) {', 300, 'tournEnroll'));
   const calls = [];
   const fn = new Function('tNickname', 'tError', 'allDecks', 'tDeckId', 'tBusy', 'tCoinPref',
-    'tRegFormEventId', 'tApi', 'saveCoinPref', 'tournLoadEvent', 'calls',
+    'tRegFormEventId', 'tApi', 'saveCoinPref', 'tournLoadEvent', 'calls', 'tDeckSubmitError',   // v6.465（Rule 40）：報名前的完整牌組驗證；本支只守請求體，驗證一律放行（行為由 test-v6465 守）
     js + '\n;return tournEnroll;')(
     '暱稱', '', [deck], deck.id, false, 'first', '',
     async (route, payload) => { calls.push([route, payload]); return {}; },
-    () => {}, async () => {}, calls);
+    () => {}, async () => {}, calls, async () => null);
   return fn('EV1').then(() => calls);
 }
 function runLateJoin(gpSrc, deck = DECK) {
   const js = ts2js(extractFn(gpSrc, '  async function tLateJoin(eventId: string) {', 300, 'tLateJoin'));
   const calls = [];
   const fn = new Function('tNickname', 'tError', 'allDecks', 'tDeckId', 'tBusy', 'tCoinPref',
-    'tRegFormEventId', 'tCheckinErrId', 'VERSION', 'tApi', 'saveCoinPref', 'tournLoadEvent', 'calls',
+    'tRegFormEventId', 'tCheckinErrId', 'VERSION', 'tApi', 'saveCoinPref', 'tournLoadEvent', 'calls', 'tDeckSubmitError',   // v6.465（Rule 40）：報名前的完整牌組驗證；本支只守請求體，驗證一律放行（行為由 test-v6465 守）
     js + '\n;return tLateJoin;')(
     '暱稱', '', [deck], deck.id, false, 'first', '', '', VER,
     async (route, payload) => { calls.push([route, payload]); return {}; },
-    () => {}, async () => {}, calls);
+    () => {}, async () => {}, calls, async () => null);
   return fn('EV1').then(() => calls);
 }
 function runPropose(gpSrc, deck = DECK) {
   const js = ts2js(extractFn(gpSrc, '  async function tPropose() {', 300, 'tPropose'));
   const calls = [];
   const fn = new Function('tNickname', 'tError', 'allDecks', 'tDeckId', 'tBusy', 'tCoinPref',
-    'tProposeName', 'tProposeFormat', 'tProposeRally', 'tProposeOpen', 'tApi', 'tournLoadEvent', 'calls',
+    'tProposeName', 'tProposeFormat', 'tProposeRally', 'tProposeOpen', 'tApi', 'tournLoadEvent', 'calls', 'tDeckSubmitError',   // v6.465（Rule 40）：報名前的完整牌組驗證；本支只守請求體，驗證一律放行（行為由 test-v6465 守）
     js + '\n;return tPropose;')(
     '暱稱', '', [deck], deck.id, false, 'first', '社群賽X', 'swiss-then-cut', 30, true,
     async (route, payload) => { calls.push([route, payload]); return {}; },
-    async () => {}, calls);
+    async () => {}, calls, async () => null);
   return fn().then(() => calls);
 }
 // ⭐ BASE(v6.276) 的三個請求體快照（**內嵌＝history-free**，淺複製的 CI 也照守）。

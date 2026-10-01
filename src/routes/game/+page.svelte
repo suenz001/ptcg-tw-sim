@@ -1278,6 +1278,36 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!p2DeckObj || !deckEntriesAllInPool(p2DeckObj.entries, pool)) return p2DeckCount === 60;
     return validateDeck(p2DeckObj, pool).issues.length === 0;
   });
+  // >>> v6465-deck-issues
+  // ⭐v6.465（站長回報 2026-10-01：一般對戰選了不合法的牌組，不會像牌組編輯器一樣說哪裡不合法）
+  //   原本本機／AI 大廳只顯示張數與「含有不能使用的卡」：60 張但沒有基礎寶可夢、同名超過 4 張、ACE SPEC 超過 1 張時
+  //   仍顯示「✓ 60 張」、開始鈕卻是灰的（不說原因）；線上座位與錦標賽報名更只檢查 60 張，這些牌組可以直接按準備／報名。
+  //   ⇒ 全部改走牌組編輯器同一支 validateDeck（唯一判準），並把 issues 原文列出來。
+  //   回傳 null ＝ 這副牌的卡包還沒載完（判斷不出來；卡包由各處既有的 ensurePoolForDeckEntries 補載）。
+  function deckIssuesNow(deck: Deck | undefined | null): string[] | null {
+    void cardPolicyGen;   // 政策到貨要重算（同 v6.340）
+    if (!deck) return null;
+    if (!deckEntriesAllInPool(deck.entries, pool)) return null;
+    return validateDeck(deck, pool).issues;
+  }
+  /** 張數那一行已經另外顯示，清單裡就不再重複「需要恰好 60 張」。 */
+  const issuesExceptCount = (issues: string[] | null): string[] => (issues ?? []).filter((x) => !/^牌組需要恰好 60 張/.test(x));
+  const p1DeckIssues = $derived(deckIssuesNow(p1DeckObj));
+  const p2DeckIssues = $derived(deckIssuesNow(p2DeckObj));
+  // 錦標賽報名（三個入口＋測試房共用 tDeckId）
+  const tDeckObj = $derived(allDecks.find((d) => d.id === tDeckId));
+  const tDeckIssues = $derived(deckIssuesNow(tDeckObj));
+  $effect(() => { if (tDeckObj) ensurePoolForDeckEntries([tDeckObj.entries]); });
+  /** 送出報名前的最後一道：先把卡包與卡牌政策載齊再驗（同本機開局 startLocalGame 的做法），回傳錯誤文字或 null。 */
+  async function tDeckSubmitError(deck: Deck): Promise<string | null> {
+    try {
+      await ensurePoolForDeckEntries([deck.entries], true);
+      await loadCardPolicyOnce();
+    } catch { return null; }   // 載不到卡包時不擋（伺服器仍會檢查 60 張；與原本行為相同）
+    const issues = validateDeck(deck, pool).issues;
+    return issues.length ? '牌組不符合規則：' + issues.join('；') : null;
+  }
+  // <<< v6465-deck-issues
   // v5.216：deck-count-info UI 用 — 判定是否有 G 標違規（依 validateDeck issue 字串「為 X 標」匹配）
   //   含 G/F/E 等任何非 H/I/J 標卡（剔除基本能量與 reprint exception 名單後）— 全部歸類「含 G 標」訊息
   const p1DeckHasIllegalMark = $derived.by(() => {
@@ -5774,6 +5804,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!deck) { tError = '請先選擇牌組'; return; }
     const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
+    { const bad = await tDeckSubmitError(deck); if (bad) { tError = bad; return; } }   // ⭐v6.465 完整驗證
     tError = ''; tBusy = true;
     // ⭐⭐v6.277 套牌戰績（P3b）：報名時把這副牌的 `Deck.id` 一起送出（伺服器 v6.276 起收）。
     //   ⚠⚠ 純 additive —— 請求體除了**多這一個 key** 之外逐位元不變（守衛 test-v6277 逐字證明），
@@ -5792,6 +5823,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!deck) { tError = '請先選擇牌組'; tCheckinErrId = eventId; return; }
     const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; tCheckinErrId = eventId; return; }
+    { const bad = await tDeckSubmitError(deck); if (bad) { tError = bad; tCheckinErrId = eventId; return; } }   // ⭐v6.465 完整驗證
     tError = ''; tCheckinErrId = ''; tBusy = true;
     try {
       // ⭐⭐v6.277：補報到也要帶 deckId（三個報名入口一個都不能漏，否則那些場次永遠算不進戰績）。
@@ -5825,6 +5857,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!deck) { tError = '請先選擇牌組'; return; }
     const total = deck.entries.reduce((sum: number, e: any) => sum + (e.count || 0), 0);
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
+    { const bad = await tDeckSubmitError(deck); if (bad) { tError = bad; return; } }   // ⭐v6.465 完整驗證
     tError = ''; tBusy = true;
     try {
       // ⭐⭐v6.277：發起社群賽＝發起者自動報名，同樣要帶 deckId（第三個入口）。
@@ -6921,6 +6954,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!deck) { tError = '請先選擇牌組'; return; }
     const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
+    { const bad = await tDeckSubmitError(deck); if (bad) { tError = bad; return; } }   // ⭐v6.465 完整驗證
     tError = ''; tBusy = true; tStep = 'waiting'; tActiveRoom = T_ROOM; tVersion = -1;   // ⭐v6.180 進場＝合法的版本重置（同 tEnterMatch）
     try {
       const nm = (myName && myName.trim()) || '玩家';
@@ -10260,6 +10294,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 {#if PRESET_DECKS.length > 0}<optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>{/if}
               </select>
             </label>
+            {#if (tDeckIssues?.length ?? 0) > 0}<ul class="deck-issue-list">{#each tDeckIssues ?? [] as iss}<li>{iss}</li>{/each}</ul>{/if}
             <label class="tourn-field">硬幣勝出時，你要：
               <select class="deck-select" bind:value={tCoinPref}><option value="random">隨機（不指定）</option><option value="first">先攻</option><option value="second">後攻</option></select>
             </label>
@@ -10289,6 +10324,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     {/if}
                   </select>
                 </label>
+                {#if (tDeckIssues?.length ?? 0) > 0}<ul class="deck-issue-list">{#each tDeckIssues ?? [] as iss}<li>{iss}</li>{/each}</ul>{/if}
                 <label class="tourn-field">硬幣勝出時，你要：
                   <select class="deck-select" bind:value={tCoinPref}>
                     <option value="random">隨機（不指定）</option>
@@ -10924,12 +10960,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <!-- v5.216：60 張到位但含不能使用的卡 → 黃字警告
                  ⚠ v6.340：文字不再寫死「G 標」——現在也包含「卡包未開放」與「無標收藏卡」 -->
             <div class="deck-count-info bad">⚠ 含有不能使用的卡</div>
+          {:else if p1DeckCount === 60 && (p1DeckIssues?.length ?? 0) > 0}
+            <div class="deck-count-info bad">⚠ 牌組不符合規則</div>
           {:else if p1DeckCount === 60}
             <div class="deck-count-info ok">✓ 60 張</div>
           {:else if p1DeckCount < 60}
             <div class="deck-count-info bad">⚠ 不足 60 張（目前 {p1DeckCount} 張）</div>
           {:else}
             <div class="deck-count-info bad">⚠ 超過 60 張（目前 {p1DeckCount} 張）</div>
+          {/if}
+          {#if issuesExceptCount(p1DeckIssues).length > 0}
+            <ul class="deck-issue-list">{#each issuesExceptCount(p1DeckIssues) as iss}<li>{iss}</li>{/each}</ul>
           {/if}
         {/if}
         <!-- v3.75：先後攻偏好 -->
@@ -10973,12 +11014,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <!-- v5.216：60 張到位但含不能使用的卡 → 黃字警告
                  ⚠ v6.340：文字不再寫死「G 標」——現在也包含「卡包未開放」與「無標收藏卡」 -->
             <div class="deck-count-info bad">⚠ 含有不能使用的卡</div>
+          {:else if p2DeckCount === 60 && (p2DeckIssues?.length ?? 0) > 0}
+            <div class="deck-count-info bad">⚠ 牌組不符合規則</div>
           {:else if p2DeckCount === 60}
             <div class="deck-count-info ok">✓ 60 張</div>
           {:else if p2DeckCount < 60}
             <div class="deck-count-info bad">⚠ 不足 60 張（目前 {p2DeckCount} 張）</div>
           {:else}
             <div class="deck-count-info bad">⚠ 超過 60 張（目前 {p2DeckCount} 張）</div>
+          {/if}
+          {#if issuesExceptCount(p2DeckIssues).length > 0}
+            <ul class="deck-issue-list">{#each issuesExceptCount(p2DeckIssues) as iss}<li>{iss}</li>{/each}</ul>
           {/if}
         {/if}
         <!-- v3.75：P2 先後攻偏好（AI 模式不顯示，因為由 P1 的偏好直接決定） -->
@@ -11279,7 +11325,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 <!-- ⭐ v6.340：改走中央述詞 —— 原本的 /為 [A-Z]+ 標/ 認不得「卡包未開放」與「無標」，
                      站長鎖起來的卡包在線上房完全擋不住（本機／AI 有擋，只有這裡漏） -->
                 {@const seatHasIllegalMark = hasIneligibleCardIssue(seatIssues)}
-                {@const hasValidDeck = myDeckCount === 60 && !seatHasIllegalMark}
+                <!-- ⭐v6.465：準備鈕改看完整驗證（沒有基礎寶可夢／同名超過 4 張／ACE SPEC 超過 1 張也擋；判斷不出來時照舊只看張數） -->
+                {@const hasValidDeck = myDeckCount === 60 && seatIssues.length === 0}
                 <div class="seat battle-seat {s.uid ? 'taken' : 'empty'} {isMine ? 'mine' : ''} {s.ready ? 'ready' : ''}">
                   <div class="seat-label">對戰玩家 {i + 1}</div>
                   {#if s.uid}
@@ -11305,6 +11352,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
                       {:else if myDeckCount === 60 && seatHasIllegalMark}
                         <!-- v5.217：60 張到位但含不能使用的卡 → 黃字警告（v6.340 文字不再寫死 G 標） -->
                         <div class="seat-deck-info" style="color:#ff8866;">⚠ 含有不能使用的卡</div>
+                      {:else if myDeckCount === 60 && seatIssues.length > 0}
+                        <div class="seat-deck-info" style="color:#ff8866;">⚠ 牌組不符合規則</div>
+                        <ul class="deck-issue-list">{#each seatIssues as iss}<li>{iss}</li>{/each}</ul>
                       {:else if myDeckId && myDeckCount === 0}
                         <div class="seat-deck-info" style="color:#ffcc66;">套用中⋯</div>
                       {:else if myDeckId && myDeckCount < 60}
@@ -11334,6 +11384,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
                       {:else if myDeckCount === 60 && seatHasIllegalMark}
                         <!-- v5.217：60 張到位但含不能使用的卡 → 黃字警告（v6.340 文字不再寫死 G 標） -->
                         <div class="seat-deck-info" style="color:#ff8866;">⚠ 牌組含有不能使用的卡</div>
+                      {:else if myDeckCount === 60 && seatIssues.length > 0}
+                        <!-- v6.465：對手那一側只說「不符合規則」，不列細節（細節會透露對手的牌組內容） -->
+                        <div class="seat-deck-info" style="color:#ff8866;">⚠ 牌組不符合規則</div>
                       {:else if myDeckCount > 0 && myDeckCount < 60}
                         <div class="seat-deck-info" style="color:#ff8866;">⚠ 牌組不足 60 張（{myDeckCount} 張）</div>
                       {:else if myDeckCount > 60}
@@ -17728,6 +17781,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .deck-count-info { font-size:.78rem; margin-top:.4rem; padding:.25rem .5rem; border-radius:4px; display:inline-block; font-weight:500; }
   .deck-count-info.ok { color:#9f9; background:rgba(60,140,60,.15); border:1px solid rgba(80,180,80,.3); }
   .deck-count-info.bad { color:#fc8; background:rgba(170,80,80,.18); border:1px solid rgba(210,110,110,.4); }
+  /* v6.465 牌組不合法的原因清單（文字直接取自 validateDeck，與牌組編輯器相同） */
+  .deck-issue-list { margin:.35rem 0 0; padding-left:1.2rem; font-size:.76rem; line-height:1.45; color:#fc8; text-align:left; }
+  .deck-issue-list li { margin:.1rem 0; }
   /* v2.189 化石丟棄按鈕 — 棕色系與撤退按鈕區分 */
   .btn-fossil-discard{ background:#5a3a2a; border-color:#aa6a4a; color:#fc8; margin-left:.3rem; }
   .btn-fossil-discard:hover{ background:#7a4a3a; }
