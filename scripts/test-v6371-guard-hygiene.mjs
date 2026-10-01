@@ -100,29 +100,7 @@ import assert from 'node:assert';
 import { createHash } from 'node:crypto';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from ${JSON.stringify(libDir + 'base-blob.mjs')};
 import { eolFind, normEol } from ${JSON.stringify(libDir + 'eol-agnostic.mjs')};
-// ⚠ v6.394：engine.ts 的還原器收斂到 lib（test-v6265 F4c 與 test-v6375 F0b 共用同一份）
-//   ⇒ 探針的模組層相依也要提供它，否則 F4c 會紅在「stripV6394Engine is not defined」。
-import { stripV6394Engine } from ${JSON.stringify(libDir + 'engine-strip-v6394.mjs')};
-  import { stripV6398Engine } from ${JSON.stringify(libDir + 'engine-strip-v6398.mjs')};
-  import { stripV6400Engine } from ${JSON.stringify(libDir + 'engine-strip-v6400.mjs')};
-  import { stripV6402Engine } from ${JSON.stringify(libDir + 'engine-strip-v6402.mjs')};
-  import { stripV6403Engine } from ${JSON.stringify(libDir + 'engine-strip-v6403.mjs')};
-  import { stripV6438Engine } from ${JSON.stringify(libDir + 'engine-strip-v6438.mjs')};
-  import { stripV6437Engine } from ${JSON.stringify(libDir + 'engine-strip-v6437.mjs')};
-  import { stripV6435Engine } from ${JSON.stringify(libDir + 'engine-strip-v6435.mjs')};
-  import { stripV6428Engine } from ${JSON.stringify(libDir + 'engine-strip-v6428.mjs')};
-  import { stripV6427Engine } from ${JSON.stringify(libDir + 'engine-strip-v6427.mjs')};
-  import { stripV6422Engine } from ${JSON.stringify(libDir + 'engine-strip-v6422.mjs')};
-  import { stripV6421Engine } from ${JSON.stringify(libDir + 'engine-strip-v6421.mjs')};
-  import { stripV6420Engine } from ${JSON.stringify(libDir + 'engine-strip-v6420.mjs')};
-  import { stripV6419Engine } from ${JSON.stringify(libDir + 'engine-strip-v6419.mjs')};
-  import { stripV6418Engine } from ${JSON.stringify(libDir + 'engine-strip-v6418.mjs')};
-  import { stripV6414Engine } from ${JSON.stringify(libDir + 'engine-strip-v6414.mjs')};
-  import { stripV6413Engine } from ${JSON.stringify(libDir + 'engine-strip-v6413.mjs')};
-  import { stripV6410Engine } from ${JSON.stringify(libDir + 'engine-strip-v6410.mjs')};
-  import { stripV6408Engine } from ${JSON.stringify(libDir + 'engine-strip-v6408.mjs')};
-  import { stripV6407Engine } from ${JSON.stringify(libDir + 'engine-strip-v6407.mjs')};
-  import { stripV6401Engine } from ${JSON.stringify(libDir + 'engine-strip-v6401.mjs')};
+// ⚠ 2026-10-01：test-v6265 的 F4c（engine.ts 整檔位元組釘）依站長裁定退休，engine 還原器 lib 一併移除 ⇒ 探針不再需要匯入它們。
 const ROOT = ${JSON.stringify(ROOT)};
 ${consts.map(([k, v]) => `const ${k} = ${JSON.stringify(v)};`).join('\n')}
 const __reads = [];
@@ -134,6 +112,7 @@ const readFileSync = (p, enc) => {
   let real = p;
   if (/server_admin_patch\\.js$/.test(s) && process.env.V6371_SAP) real = process.env.V6371_SAP;
   else if (/\\/engine\\.ts$/.test(s) && process.env.V6371_ENG) real = process.env.V6371_ENG;
+  else if (/\\/oracle-client\\.ts$/.test(s) && process.env.V6371_OC) real = process.env.V6371_OC;
   const out = _rfs(real, enc);
   return typeof out === 'string' ? out.replace(/\\r\\n/g, '\\n') : out;
 };
@@ -149,6 +128,7 @@ const T = async (name, fn) => {
 console.log('__V6371_PROBE__' + JSON.stringify({
   results: __results,
   engineReads: __reads.filter((x) => /\\/engine\\.ts$/.test(x)).length,
+  ocReads: __reads.filter((x) => /\\/oracle-client\\.ts$/.test(x)).length,
   sapReads: __reads.filter((x) => /server_admin_patch\\.js$/.test(x)).length,
 }));
 `;
@@ -185,13 +165,14 @@ const SAP_MUT = join(MUTDIR, 'server_admin_patch.js');
   chk('A0 前提：突變只動了錦標賽區塊（前半段逐字不變）',
       normEol(readFileSync(SAP_MUT, 'utf8')).slice(0, ti) === SAP_REAL.slice(0, ti));
 }
-const ENG_REAL = normEol(readRel('src/lib/game/engine.ts'));
-const ENG_MUT = join(MUTDIR, 'engine.ts');
+// ⭐ 2026-10-01：F4c（engine.ts 位元組釘）退休後，「另一條位元組釘」的角色由 F4d（oracle-client.ts）擔任。
+const OC_REAL = normEol(readRel('src/lib/game/oracle-client.ts'));
+const OC_MUT = join(MUTDIR, 'oracle-client.ts');
 {
-  // engine.ts 改**一個位元組**（在一段不帶任何 v63xx 哨兵的既有註解裡）⇒ F4c 必紅
-  const r = eolReplaceOnce(ENG_REAL, 'export function applyAction(', 'export function applyAction (');
-  chk('A0 前提：engine.ts 的 applyAction 宣告恰好一處（反對照的突變錨點）', r.ok, 'count=' + r.count);
-  writeFileSync(ENG_MUT, r.out, 'utf8');
+  // oracle-client.ts 改**一個位元組**（v6.270 剝除範圍之外的既有常數宣告）⇒ F4d 必紅
+  const r = eolReplaceOnce(OC_REAL, 'export const ORACLE_API_TIMEOUT_MS = 30000;', 'export const ORACLE_API_TIMEOUT_MS = 30001;');
+  chk('A0 前提：oracle-client.ts 的 ORACLE_API_TIMEOUT_MS 宣告恰好一處（反對照的突變錨點）', r.ok, 'count=' + r.count);
+  writeFileSync(OC_MUT, r.out, 'utf8');
 }
 
 const probeHead = buildF4Probe(readRel(V6265), 'head');
@@ -202,11 +183,11 @@ const HAS_BASE = hasBaseCommit(ROOT, BASE_SHA);
 if (probeHead) {
   // ── A1 基準：什麼都沒動 ⇒ F4a~F4e 全綠 ──
   const base = runProbe(probeHead);
-  chk('A1 ⭐ 基準：F4 家族抽出來獨立執行，五條都在（F4a~F4e）',
-      base.data && ['F4a', 'F4b', 'F4c', 'F4d', 'F4e'].every((k) => one(base.data, k)),
+  chk('A1 ⭐ 基準：F4 家族抽出來獨立執行，四條都在（F4a／F4b／F4d／F4e；F4c 已於 2026-10-01 退休）',
+      base.data && ['F4a', 'F4b', 'F4d', 'F4e'].every((k) => one(base.data, k)),
       base.out.slice(-400));
-  chk('A1 ⭐⭐ 基準：五條全部綠',
-      base.data && base.data.results.length === 5 && base.data.results.every((x) => x.ok),
+  chk('A1 ⭐⭐ 基準：四條全部綠',
+      base.data && base.data.results.length === 4 && base.data.results.every((x) => x.ok),
       base.data ? JSON.stringify(base.data.results.filter((x) => !x.ok)) : base.out.slice(-400));
 
   // ── A2 ⭐⭐⭐（甲）本題：sha 那一條紅，其他條仍然各自判定 ──
@@ -214,10 +195,7 @@ if (probeHead) {
   chk('A2 ⭐⭐⭐ server_admin_patch.js 被改一個字元 ⇒ F4b（sha）必紅',
       mutSap.data && one(mutSap.data, 'F4b') && one(mutSap.data, 'F4b').ok === false,
       mutSap.data ? JSON.stringify(res(mutSap.data, 'F4b')) : mutSap.out.slice(-400));
-  chk('A2 ⭐⭐⭐ 同一次執行裡 F4c（engine.ts 位元組釘）**仍然有跑而且是綠的**（修前：根本不會執行）',
-      mutSap.data && one(mutSap.data, 'F4c') && one(mutSap.data, 'F4c').ok === true,
-      mutSap.data ? JSON.stringify(res(mutSap.data, 'F4c')) : mutSap.out.slice(-400));
-  chk('A2 ⭐⭐ 同一次執行裡 F4d（oracle-client.ts 位元組釘）也仍然有跑而且是綠的',
+  chk('A2 ⭐⭐⭐ 同一次執行裡 F4d（oracle-client.ts 位元組釘）**仍然有跑而且是綠的**（修前：根本不會執行）',
       mutSap.data && one(mutSap.data, 'F4d') && one(mutSap.data, 'F4d').ok === true,
       mutSap.data ? JSON.stringify(res(mutSap.data, 'F4d')) : mutSap.out.slice(-400));
   // ⭐⭐v6.372：F4c 的位元組釘本身就是「需要歷史」的斷言（拿不到 BASE blob 時它自己 shallowSkip）
@@ -226,36 +204,33 @@ if (probeHead) {
   //   ⚠ 這不是放寬：F4c／F4d「仍然有跑而且是綠的」那兩條在淺複製下照樣守（它們驗的是
   //   「有沒有被短路掉」，不需要歷史）；這裡只把「需要真的做位元組比對」的兩條大聲宣告跳過。
   if (!HAS_BASE) {
-    shallowSkip('v6.371【A2】engine.ts 真的被讀取過（位元組釘需要 BASE blob）',
-                'F4c/F4d「沒有被短路」那兩條不需要歷史，仍在守');
+    shallowSkip('v6.371【A2】oracle-client.ts 真的被讀取過（位元組釘需要 BASE blob）',
+                'F4d「沒有被短路」那一條不需要歷史，仍在守');
   } else {
-    chk('A2 ⭐⭐ 行為層佐證：engine.ts 在這一次執行裡**真的被讀取過**（不是靠名字判斷有沒有跑）',
-        mutSap.data && mutSap.data.engineReads >= 1, mutSap.data ? String(mutSap.data.engineReads) : '?');
+    chk('A2 ⭐⭐ 行為層佐證：oracle-client.ts 在這一次執行裡**真的被讀取過**（不是靠名字判斷有沒有跑）',
+        mutSap.data && mutSap.data.ocReads >= 1, mutSap.data ? String(mutSap.data.ocReads) : '?');
   }
   chk('A2 ★ 其餘三條（F4a/F4e）不受影響、仍然綠',
       mutSap.data && ['F4a', 'F4e'].every((k) => one(mutSap.data, k) && one(mutSap.data, k).ok === true),
       mutSap.data ? JSON.stringify(mutSap.data.results.map((x) => x.name + '=' + x.ok)) : '');
 
-  // ── A3 反對照：engine.ts 改一個位元組 ⇒ F4c 必紅、F4b 仍綠（兩條各自獨立） ──
-  const mutEng = runProbe(probeHead, { V6371_ENG: ENG_MUT });
+  // ── A3 反對照：oracle-client.ts 改一個位元組 ⇒ F4d 必紅、F4b 仍綠（兩條各自獨立） ──
+  const mutOc = runProbe(probeHead, { V6371_OC: OC_MUT });
   if (!HAS_BASE) {
-    shallowSkip('v6.371【A3】engine.ts 改一個位元組 ⇒ F4c 必紅（需要 BASE blob 才做得了位元組比對）',
-                '下面兩條「F4b／F4d 不被反向污染」不需要歷史，仍在守');
+    shallowSkip('v6.371【A3】oracle-client.ts 改一個位元組 ⇒ F4d 必紅（需要 BASE blob 才做得了位元組比對）',
+                '下面「F4b 不被反向污染」不需要歷史，仍在守');
   } else {
-    chk('A3 ⭐⭐⭐ 反對照：engine.ts 改一個位元組 ⇒ F4c 必紅（證明 A2 的「綠」不是恆真）',
-        mutEng.data && one(mutEng.data, 'F4c') && one(mutEng.data, 'F4c').ok === false,
-        mutEng.data ? JSON.stringify(res(mutEng.data, 'F4c')) : mutEng.out.slice(-400));
+    chk('A3 ⭐⭐⭐ 反對照：oracle-client.ts 改一個位元組 ⇒ F4d 必紅（證明 A2 的「綠」不是恆真）',
+        mutOc.data && one(mutOc.data, 'F4d') && one(mutOc.data, 'F4d').ok === false,
+        mutOc.data ? JSON.stringify(res(mutOc.data, 'F4d')) : mutOc.out.slice(-400));
   }
-  chk('A3 ⭐⭐ 反對照：同一次執行裡 F4b（sha）仍然綠（engine 的紅不會反向污染 sha 那一條）',
-      mutEng.data && one(mutEng.data, 'F4b') && one(mutEng.data, 'F4b').ok === true,
-      mutEng.data ? JSON.stringify(res(mutEng.data, 'F4b')) : '');
-  chk('A3 ⭐⭐ 反對照：F4d（oracle-client.ts）也仍然綠（兩個位元組釘互不影響）',
-      mutEng.data && one(mutEng.data, 'F4d') && one(mutEng.data, 'F4d').ok === true,
-      mutEng.data ? JSON.stringify(res(mutEng.data, 'F4d')) : '');
+  chk('A3 ⭐⭐ 反對照：同一次執行裡 F4b（sha）仍然綠（位元組釘的紅不會反向污染 sha 那一條）',
+      mutOc.data && one(mutOc.data, 'F4b') && one(mutOc.data, 'F4b').ok === true,
+      mutOc.data ? JSON.stringify(res(mutOc.data, 'F4b')) : '');
 
   // ── A4 ⭐⭐ HEAD-FAIL：對 BASE(v6.370) 的 test-v6265 做同一件事 ──
   if (!HAS_BASE) {
-    shallowSkip('v6.371【A4】HEAD-FAIL：BASE(v6.370) 的 F4 在 sha 紅掉時根本不會讀 engine.ts',
+    shallowSkip('v6.371【A4】HEAD-FAIL：BASE(v6.370) 的 F4 在 sha 紅掉時根本不會讀 oracle-client.ts',
                 'A1~A3 是本版現況的行為端，不需要歷史，仍在守');
   } else {
     const b = readBaseBlob(ROOT, BASE_SHA, V6265);
@@ -286,11 +261,11 @@ if (probeHead) {
       chk('A4 ⭐⭐⭐ HEAD-FAIL：BASE 版在同一個突變下**只有一條**判定結果，而且是紅的',
           bm.data && bm.data.results.length === 1 && bm.data.results[0].ok === false,
           bm.data ? JSON.stringify(bm.data.results) : bm.out.slice(-400));
-      chk('A4 ⭐⭐⭐ HEAD-FAIL：BASE 版在同一個突變下 engine.ts 的讀取次數是 **0**（＝位元組釘被短路掉，一次都沒跑）',
-          bm.data && bm.data.engineReads === 0, bm.data ? String(bm.data.engineReads) : '?');
-      chk('A4 ★ 對照組：BASE 版**沒有**突變時 engine.ts 讀得到（證明上一條不是因為 BASE 本來就不讀）',
+      chk('A4 ⭐⭐⭐ HEAD-FAIL：BASE 版在同一個突變下 oracle-client.ts 的讀取次數是 **0**（＝位元組釘被短路掉，一次都沒跑）',
+          bm.data && bm.data.ocReads === 0, bm.data ? String(bm.data.ocReads) : '?');
+      chk('A4 ★ 對照組：BASE 版**沒有**突變時 oracle-client.ts 讀得到（證明上一條不是因為 BASE 本來就不讀）',
           bSap.ok && (() => { const bb = runProbe(probeBase, { V6371_SAP: SAP_BASE });
-            return !!bb.data && bb.data.engineReads >= 1; })());
+            return !!bb.data && bb.data.ocReads >= 1; })());
     }
   }
 }
@@ -298,10 +273,12 @@ if (probeHead) {
 // ── A5 結構（補充；#28：旗標層只能當補充）──────────────────────────────────
 {
   const s = readRel(V6265);
-  for (const k of ['F4a', 'F4b', 'F4c', 'F4d', 'F4e']) {
+  for (const k of ['F4a', 'F4b', 'F4d', 'F4e']) {
     chk('A5 test-v6265 裡 `await T(\'' + k + '` 恰好一次', s.split("await T('" + k + " ").length === 2,
         String(s.split("await T('" + k + " ").length - 1));
   }
+  chk('A5 ⭐ F4c（engine.ts 整檔位元組釘）已退休（2026-10-01 站長裁定），不得以任何形式留著',
+      s.split("await T('F4c ").length - 1 === 0);
   chk('A5 ⭐ 舊的合併版 F4 已經不存在（不得同時留兩份判準）',
       !s.includes("await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑"));
   chk('A5 ★ 負對照：同樣的拆解法對不存在的條目要回 0', s.split("await T('F4z ").length - 1 === 0);

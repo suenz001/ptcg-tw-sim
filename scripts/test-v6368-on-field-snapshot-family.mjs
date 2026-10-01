@@ -441,14 +441,8 @@ console.log('\n【E】中央性：新機制只有一份，而且接在既有形�
   //   stripV6368Engine」的斷言在下一版必然假性翻紅。改成只釘本版該負責的兩件事 ——
   //   ① v6.368 那一層還在；② 它緊貼在 v6.367 外面；③ 它真的被接在 s0 那條鏈上。
   //   「誰是最外層」由**當版**的守衛自己釘（v6.369 起是 test-v6369 的 D10 ＋ __m6a/stripcheck369v2.mjs）。
-  chk('E9 ⭐test-v6265 的剝除鏈裡 v6.368 那一層還在，且緊貼在 v6.367 外面、確實接在 s0 鏈上',
-    (() => {
-      const t = readFileSync(join(ROOT, 'scripts/test-v6265-phantom-start-race.mjs'), 'utf8');
-      const s0line = (t.split(/\r?\n/).find(l => l.includes('const s0 = strip')) ?? '');
-      return count(t, 'const stripV6368Engine = (src) =>') === 1
-        && /stripV6368Engine\(stripV6367Engine\(/.test(t)
-        && s0line.includes('stripV6368Engine(');
-    })());
+  // ⭐ 2026-10-01：本條原本釘「test-v6265 engine.ts 剝除鏈裡有本版那一層」。站長裁定（瘦身計畫 C2）退休 engine.ts
+  //   整檔位元組釘（test-v6265 F4c／test-v6375 F0b）與整條剝除鏈 ⇒ 本條沒有可守的對象，一併移除（不是放寬本版的行為判準）。
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

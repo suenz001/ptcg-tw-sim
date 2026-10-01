@@ -1768,6 +1768,13 @@ v6.398 push 完、我通知站長跑 `update-tournament.bat` / `update-admin-ful
 
 ## Rule 54（v6.401）：engine.ts 的還原器鏈，**剝除順序必須由新到舊**
 
+> ⛔ **2026-10-01 已退休**（站長裁定，瘦身計畫 C2）：test-v6265 F4c 與 test-v6375 F0b 的 engine.ts 整檔位元組釘、
+> `scripts/lib/engine-strip-v6394～v6438`（v6419／v6421 除外，見下）與兩支守衛裡的 v63xx 剝除器全部移除。
+> 理由：v6.265、v6.375 **都沒有改 engine.ts 任何一個函式**，那兩條只是當時的範圍鎖；之後變成「每改一次 engine.ts 就要多寫一支還原器」。
+> **以後改 engine.ts 不需要再寫還原器**；每一版改動仍由該版自己的行為守衛＋函式級判準守。
+> 仍保留：`engine-strip-v6419.mjs`、`engine-strip-v6421.mjs`（test-v6361／test-v6369 用來釘它們自己的區段，本來就是函式級）。
+> 以下內容只留作歷史紀錄。
+
 ### 病灶
 `test-v6265` F4c／`test-v6375` F0b 對 `engine.ts` 做位元組釘：把每一版的合法改動逐一還原，
 最後必須逐字等於 BASE blob。這條鏈長期以來是「舊 → 新」排的：
@@ -2381,8 +2388,8 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
 
 ## Rule 69（2026-09-23）：engine.ts 改動的配套與「不受對手特性效果影響」的唯一判準（v6.427）
 
-- `scripts/lib/engine-strip-vNNNN.mjs` 一律用 difflib 從 HEAD vs 工作樹**自動產生** pairs（每組命中恰 1 次、當場驗 strip(新) === HEAD），不手打；
-  接線：test-v6265 兩處（新版排最前）、test-v6375 最內層、test-v6371 prelude import。
+- ~~engine-strip 還原器~~：**2026-10-01 起不再需要**（Rule 54 退休說明）。改 engine.ts 只要補該版自己的行為守衛；
+  若碰到 test-v6361／test-v6369 釘的區段，才更新 `engine-strip-v6419／v6421`。
 - 化隱／光之翼（「不會受到對手的…特性的效果的影響」）只問 defense.ts 的 `isImmuneToOppAbilityEffect`／`oppAbilityEffectBlockReason`
   （底層 `canApplyEffectToTarget(kind='ability-effect')`），**禁止再寫死 `'光之翼'`**；擋下的 log 走 `blockedRetaliationNames`／`blockedRetaliationLog` 一份。
 - `source='ability'` 的效果昏厥（耿鬼ex｜死亡宣告）也要問中央判準（legacy 表只登記化隱）。
@@ -2515,3 +2522,17 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
   可捲的視窗內容區仍加 `overscroll-behavior: contain`。守衛 test-v6458（D1～D7，突變：永不擋／不認 outside／裡面一律擋／觸控也掛 全紅）。
 - 新增任何全畫面遮罩（首頁／卡牌資料庫／牌組編輯／牌組公布欄）都要掛；**禁止各頁自己改 body.style.position、自己攔 wheel**。守衛 test-v6457（列舉遮罩 S2、S4、行為 D1～D3）。
 - 對戰頁手機直式另有 `body.mp-locked`（整個對戰畫面鎖死），不要混用。
+
+---
+
+## Rule 77（2026-10-01）：瘦身計畫的站長裁定與目前狀態
+
+- **engine.ts 整檔位元組釘退休**（C2，見 Rule 54 開頭）：改 engine.ts 不用再寫 engine-strip 還原器。
+- **最久的測試不分快慢兩條**（A5）：每次都跑完整版；平行工具 `scripts/run-tests.mjs` 約 10 分鐘。
+- **`npm test` 不改**：平行工具與 `npm test` 字串並存（132 支守衛檢查自己在 `scripts.test` 裡）。
+- **雜檔退出版控**（E2）：根目錄 `music/`、`deck_picture/`、一次性 `*.cjs` 等改 gitignore；leon-pc 原檔仍在，另有備份 `E:\ptcg-tw-sim-local\retired-20261001\`。
+- **`__m6a/` 工作資料夾已搬到 `E:\ptcg-tw-sim-local\__m6a\`**（13,541 檔）。repo 內註解與舊 skill 提到的 `__m6a/…` 一律指這個新位置；
+  需要暫存檔時放 `E:\ptcg-tw-sim-local\`，**不要**在 repo 裡重建 `__m6a/`。`scripts/run-tests.mjs` 的舊耗時紀錄只是備援，找不到不影響。
+- **`firebase-admin-key.json` 搬到 `D:\ai\`**：日常部署不需要它（伺服器讀 VM 上 `/opt/ptcg/api/` 那一份）；只有第一次架設 VM 的 `oracle_admin_install.sh` 要它放在同一個資料夾。
+- **git 倉庫**：2026-10-01 在 leon-pc 刪 tmp_obj 殘檔＋`git gc`，`.git` 約 670MB → 64MB。之後若又累積（`git count-objects -vH` 的 garbage／loose 很多），在沒有推送的空檔再跑一次。
+- Windows Defender 已排除 `E:\ptcg-tw-sim`（站長自己設定）。

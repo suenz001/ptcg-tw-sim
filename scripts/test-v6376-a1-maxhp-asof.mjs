@@ -560,12 +560,8 @@ const listBody = (src, name) => {
     && count(engSrc, '// ⭐v6376-samba-as-of') === 1,
     JSON.stringify({ open: count(engSrc, '>>> v6376-'), close: count(engSrc, '<<< v6376-') }));
 }
-chk('D7 ⭐ test-v6265 的剝除鏈最外層已經是 stripV6376Engine',
-  (() => {
-    const t = readFileSync(join(ROOT, 'scripts/test-v6265-phantom-start-race.mjs'), 'utf8');
-    return t.includes('const stripV6376Engine = (src) => {')
-      && count(t, 'const s0 = stripV6376Engine(stripV6373Engine(') === 2;
-  })(), 'ok');
+// ⭐ 2026-10-01：本條原本釘「test-v6265 engine.ts 剝除鏈裡有本版那一層」。站長裁定（瘦身計畫 C2）退休 engine.ts
+//   整檔位元組釘（test-v6265 F4c／test-v6375 F0b）與整條剝除鏈 ⇒ 本條沒有可守的對象，一併移除（不是放寬本版的行為判準）。
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 【E】HEAD-FAIL 對 BASE（hasBaseCommit 保護、淺複製 shallowSkip）

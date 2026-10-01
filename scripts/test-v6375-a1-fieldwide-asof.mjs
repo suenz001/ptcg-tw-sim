@@ -29,27 +29,6 @@
 //   【F】HEAD-FAIL 對 BASE(80bb55ab ＝ v6.374)，hasBaseCommit 保護、淺複製 shallowSkip
 //
 // ⛔ 本守衛不寫任何東西進 src/；合成盤面只在記憶體裡。
-import { stripV6394Engine } from './lib/engine-strip-v6394.mjs';
-import { stripV6398Engine } from './lib/engine-strip-v6398.mjs';
-import { stripV6400Engine } from './lib/engine-strip-v6400.mjs';
-import { stripV6402Engine } from './lib/engine-strip-v6402.mjs';
-import { stripV6403Engine } from './lib/engine-strip-v6403.mjs';   // ⭐v6.403 ex 判準收斂（12 組）
-import { stripV6408Engine } from './lib/engine-strip-v6408.mjs';   // ⭐v6.408 攻擊方加成收斂成一份（2 組）
-import { stripV6438Engine } from './lib/engine-strip-v6438.mjs';   // ⭐v6.438（3 組）
-import { stripV6437Engine } from './lib/engine-strip-v6437.mjs';   // ⭐v6.437（2 組）
-import { stripV6435Engine } from './lib/engine-strip-v6435.mjs';   // ⭐v6.435（4 組）
-import { stripV6428Engine } from './lib/engine-strip-v6428.mjs';   // ⭐v6.428（5 組）
-import { stripV6427Engine } from './lib/engine-strip-v6427.mjs';   // ⭐v6.427（12 組）
-import { stripV6422Engine } from './lib/engine-strip-v6422.mjs';   // ⭐v6.422（2 組）
-import { stripV6421Engine } from './lib/engine-strip-v6421.mjs';   // ⭐v6.421（5 組）
-import { stripV6420Engine } from './lib/engine-strip-v6420.mjs';   // ⭐v6.420 取完獎賞但自己沒寶可夢⇒平手（1 組）
-import { stripV6419Engine } from './lib/engine-strip-v6419.mjs';   // ⭐v6.419 同時取完⇒平手＋終局不浮 picker（2 組）
-import { stripV6418Engine } from './lib/engine-strip-v6418.mjs';   // ⭐v6.418 取獎賞 picker 排隊 refresher（1 組）
-import { stripV6414Engine } from './lib/engine-strip-v6414.mjs';   // ⭐v6.414 招式限定加傷／覆寫（4 組）
-import { stripV6413Engine } from './lib/engine-strip-v6413.mjs';   // ⭐v6.413 招致削傷本次攻擊快照重置（1 組）
-import { stripV6410Engine } from './lib/engine-strip-v6410.mjs';   // ⭐v6.410 祭典樂舞判準收斂成一份（5 組）
-import { stripV6407Engine } from './lib/engine-strip-v6407.mjs';   // ⭐v6.407 自身能量付出延後（5 組）
-import { stripV6401Engine } from './lib/engine-strip-v6401.mjs';
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, mkdtempSync, cpSync, rmSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -630,111 +609,10 @@ if (!hasBaseCommit(ROOT, BASE)) {
   cpSync(join(ROOT, 'src'), baseSrc, { recursive: true });
   const r = restoreBaseSubtree(ROOT, BASE, baseSrc, 'src');
   if (chk('F0 BASE 樹重建成功（整個 src/ 子樹）', r.ok, r.reason ?? ('replaced=' + r.replaced + ' removed=' + r.removed))) {
-    const bEng = readBaseBlob(ROOT, BASE, 'src/lib/game/engine.ts');
-    // ⭐⭐v6.376 更新（既有守衛因為**下一版的合法改動**而紅，不是回歸）：
-    //   v6.375 本身確實一個字都沒動 engine.ts；但 v6.376 把 樂天河童｜生機森巴（**最大 HP** 型）
-    //   接進同一個中央述詞，必須動 engine.ts 兩處：
-    //     ① getEffectiveHP 裡生機森巴的持有者判準（哨兵區塊 ＋ 兩行 swap 還原）
-    //     ② _attackTimeHolders 的 clear 位置搬到 sanityKOSweep **之後**
-    //        （最大 HP 型會被 sanityKOSweep 重算，clear 排在它前面 ⇒ 剛救活的又被殺掉）
-    //   ⇒ 這一條改成「**剝掉 v6.376 的合法改動之後**仍與 BASE 逐位元組相同」：
-    //     v6.375 的守備力一點沒少（v6.376 以外的任何改動照樣紅），
-    //     而且剝除器一過期（哨兵不在／swap 字面對不上）也會立刻紅（下面第二個條件）。
-    const _v6376StripBlocks = (src, tag) => {
-      let t = src;
-      for (let guard = 0; ; guard++) {
-        if (guard > 50) throw new Error('哨兵剝除迴圈：' + tag);
-        const a = t.indexOf('>>> ' + tag);
-        if (a < 0) return t;
-        const b = t.indexOf('<<< ' + tag, a);
-        if (b < 0) throw new Error('哨兵不成對（只有 >>>）：' + tag);
-        const ls = t.lastIndexOf('\n', a) + 1;
-        const le = t.indexOf('\n', b) + 1;
-        if (le <= 0) throw new Error('哨兵收尾行沒有換行：' + tag);
-        t = t.slice(0, ls) + t.slice(le);
-      }
-    };
-    const _v6376Strip = (src) => {
-      // ⭐⭐ v6.408 必須排在**整條鏈的最前面**（Rule 54 的極端情形）：它刪掉的那一整段
-      //   inline 加成裡，含有 v6.368／v6.402／v6.403／v6.407 的哨兵與字面。晚於它們剝除的話，
-      //   那幾支會在「已經被刪掉的內容」上找不到自己的錨點（命中 0 次）。
-      //   ⇒ 先把 v6.408 換回 v6.407a 的 185 行，後面的剝除器才看得到自己的錨點。
-      //   ⭐ Rule 54（由新到舊）：v6.410 排在 v6.408 之前（理由同 test-v6265 F4c）。
-      let t = _v6376StripBlocks(stripV6408Engine(stripV6410Engine(stripV6413Engine(stripV6414Engine(stripV6418Engine(stripV6419Engine(stripV6420Engine(stripV6421Engine(stripV6422Engine(stripV6427Engine(stripV6428Engine(stripV6435Engine(stripV6437Engine(stripV6438Engine(src)))))))))))))), 'v6376-');
-      // ⚠ v6.376 把 v6.373 的 clear 區塊從「太古防壁快照清除」旁邊**搬到** sanityKOSweep 之後
-      //   （最大 HP 型會被 sanityKOSweep 重算 ⇒ clear 排在它前面等於白救）。上一行已經把
-      //   新位置那一塊（v6376- 哨兵）剝掉，這裡要把它**插回原位置**，否則會比 BASE 少一整段。
-      const _anchorV6373 = "    delete cleared._attackTimeAttackerEnergyUnits;\n    next = cleared;\n  }\n";
-      const _v6373Clear = "  // >>> v6373-as-of-declaration-holders-clear\n"
-        + "  // ⭐v6.373：持有者 iid 快照的 clear **只有這一處**（applyActionImpl 尾段，比照 v6.357／v6.368）。\n"
-        + "  //   pendingSelection 還在時保留給 resolver（比照花之帷幔／平穩境地）。\n"
-        + "  if (next._attackTimeHolders !== undefined && !next.pendingSelection) {\n"
-        + "    const cleared = { ...next };\n"
-        + "    delete cleared._attackTimeHolders;\n"
-        + "    next = cleared;\n"
-        + "  }\n"
-        + "  // <<< v6373-as-of-declaration-holders-clear\n";
-      if (t.split(_anchorV6373).length - 1 !== 1) throw new Error('v6376 剝除器：找不到唯一的 v6.373 clear 原位置錨點');
-      t = t.split(_anchorV6373).join(_anchorV6373 + _v6373Clear);
-      t = t.split("    for (let _v6376k = 0 as 0 | 1; _v6376k <= 1; _v6376k = (_v6376k + 1) as 0 | 1) {   // ⭐v6376-samba-side-index\n")
-        .join("    for (const p of state.players) {\n");
-      t = t.split("      const hasSamba = _v6376HolderIids(state, _v6376k, '生機森巴', _v6376Live).length > 0;   // ⭐v6376-samba-as-of\n")
-        .join("      const hasSamba = allP.some(c => {\n"
-          + "        const cc = pool.get(c.cardId);\n"
-          + "        if (!cc?.abilities?.some(a => a.name === '生機森巴')) return false;\n"
-          + "        return hpAbilityEffective(c, cc, '生機森巴');\n"
-          + "      });\n");
-      // ⭐v6.385b（既有守衛因**更後面那一版的合法改動**而紅，不是回歸）：
-      //   v6.385b 把 getEffectiveHP 裡 修建老匠｜大師工藝 的【鬥】能量計數改走中央述詞
-      //   countEnergyTypeHostAware（Rule 38），並在既有的 v6347- import 區塊內加一行 import。
-      //   兩處都逐字換回 BASE 的樣子；字面一對不上，F0b 的第二個條件照樣會紅。
-      t = t.split("  countEnergyTypeHostAware,                   // \u2b50v6.385b \u5927\u5e2b\u5de5\u85dd\uff1a\u3010\u9b25\u3011\u80fd\u91cf**\u500b\u6578**\uff08\u540c\u4e00\u652f\u4e2d\u592e\u8ff0\u8a5e\uff09\n").join('');
-      t = t.split(
-        "    // \u2b50\u2b50v6.385b\uff08Fable 5 \u8907\u5be9 \ud83d\udfe17\uff09\uff1a\u539f\u672c inline \u5224\u300c\u57fa\u672c\u3010\u9b25\u3011\u6216 pokemonType===Fighting\u300d\uff0c\n"
-        + "    //   \u6f0f\u6389 host-aware \u7684\u7279\u6b8a\u80fd\u91cf \u2014\u2014 \u786c\u5ca9\u3010\u9b25\u3011\u80fd\u91cf\uff08Special\uff0cpokemonType \u53ef\u80fd\u662f null\uff09\u3001\n"
-        + "    //   \u53e4\u820a\u80fd\u91cf\uff08\u8996\u70ba\u63d0\u4f9b\u6240\u6709\u5c6c\u6027\uff09\u3001\u65b0\u885d\u5929\u80fd\u91cf\uff08\u9644 2 \u968e\u9032\u5316\u8996\u70ba 2 \u500b\uff09\u3002\u5be6\u6e2c\u90fd\u7b97 0 \u500b\u3002\n"
-        + "    //   \u21d2 \u8d70\u8207\u300c\u4e00\u9577\u518d\u9577\u300d\u300c\u6728\u4e4b\u91cd\u58d3\u300d\u540c\u4e00\u652f\u4e2d\u592e\u8ff0\u8a5e\uff08Rule 38\uff09\u3002\n"
-        + "    const fightingCount = countEnergyTypeHostAware(inst, 'Fighting', pool,\n"
-        + "      { state: state ?? null, ownerIdx: _v6206OwnerIdx ?? null });\n"
-      ).join(
-        "    let fightingCount = 0;\n"
-        + "    for (const e of inst.energyAttached) {\n"
-        + "      const ec = pool.get(e.cardId);\n"
-        + "      if (!ec || ec.supertype !== 'Energy') continue;\n"
-        + "      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Fighting' || /\u3010\u9b25\u3011/.test(ec.name))) fightingCount++;\n"
-        + "      else if (ec.pokemonType === 'Fighting') fightingCount++;\n"
-        + "    }\n"
-      );
-      // ⭐⭐ Rule 54（由新到舊）：v6.402 動到了 v6.394 型別清理過的那一段
-      //   ⇒ stripV6402Engine 必須排在 stripV6394Engine **之前**。
-      // ⭐v6.403：ex 判準收斂對 engine.ts 的 12 組合法改動（與 test-v6265 F4c 共用同一份）。
-      //   Rule 54 由新到舊 ⇒ 排在 stripV6402Engine 之前。
-      // ⭐v6.407：自身能量付出延後（與 test-v6265 F4c 共用同一份）。Rule 54 由新到舊 ⇒ 排最前。
-      t = stripV6407Engine(t);
-      t = stripV6403Engine(t);
-      // ⭐v6.402：判準收斂對 engine.ts 的 11 組合法改動（與 test-v6265 F4c 共用同一份）
-      t = stripV6402Engine(t);
-      // ⭐v6.394：型別清理（站長裁示 ④）對 engine.ts 的 8 組合法改動 ——
-      //   還原內容與 test-v6265 F4c **共用同一份** scripts/lib/engine-strip-v6394.mjs（Rule 38）。
-      t = stripV6394Engine(t);
-    // ⭐⭐ v6.398／v6.400／v6.401 動到同一段 ⇒ 剝除必須**由新到舊**（順序寫反會 throw）。
-    // ⭐v6.401：能量單位收斂對 engine.ts 的 8 組合法改動（與 test-v6265 F4c 共用同一份）
-    t = stripV6401Engine(t);
-    // ⭐v6.400：特殊能量表收斂對 engine.ts 的 2 組合法改動（與 test-v6265 F4c 共用同一份）
-    t = stripV6400Engine(t);
-    // ⭐v6.398：host-aware 能量卡述詞收斂對 engine.ts 的 3 組合法改動（與 test-v6265 F4c 共用同一份）
-    t = stripV6398Engine(t);
-      return t;
-    };
-    const _engHeadLf = engSrc.replace(/\r\n/g, '\n');
-    const _engStripped = _v6376Strip(_engHeadLf);
-    chk('F0b ⭐⭐engine.ts 除了 **v6.376／v6.385b 的合法改動**（三個 v6376- 哨兵區塊 ＋ 兩行 swap 還原 ＋ v6.385b 大師工藝兩處逐字還原）'
-      + '之外一個字都沒有動（剝除後與 BASE 逐位元組相同）—— v6.375 本身刻意不碰它，理由見【D】；'
-      + '剝除器若過期（哨兵不在／swap 字面對不上）這一條同樣會紅',
-      bEng.ok && _engStripped !== _engHeadLf
-      && bEng.out.replace(/\r\n/g, '\n') === _engStripped,
-      bEng.ok ? ('len base=' + bEng.out.length + ' head=' + engSrc.length + ' stripped=' + _engStripped.length
-        + ' strippedChanged=' + (_engStripped !== _engHeadLf)) : 'readBaseBlob failed');
+    // ⭐⭐ F0b（engine.ts 整檔逐字比對 v6.374）已於 2026-10-01 依站長裁定（瘦身計畫 C2）退休：
+    //   v6.375 **沒有改 engine.ts 任何一個函式**（見檔頭與【D】），F0b 只是當時證明「本版沒碰 engine」的範圍鎖；
+    //   之後每改一次 engine.ts 就要多寫一支還原器（累積 21 支）。「只比對當時那一版真正改到的函式」＝沒有可比對的函式。
+    //   本版真正要守的「戰鬥位路徑今天無可觸發情境」仍由【D】資料驅動地守（卡池一變就紅）。
     const BMOD = await bundleFrom(baseSrc, 'base');
     const B = matrix(BMOD);
     chk('F1 哨兵：BASE bundle 是活的（哨兵情境照樣綠，不是整支爆掉造成的「全紅」）',

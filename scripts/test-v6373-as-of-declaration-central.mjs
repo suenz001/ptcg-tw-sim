@@ -464,10 +464,8 @@ chk('G2 ⭐改正後逐字：與 v6.367 的平行註解一致（「旗標蓋章�
   && engSrc.includes('PTCG 招式費用**不支付**、能量留在身上'));
 chk('G3 ⭐事實複驗：engine.ts 全檔確實沒有任何「攻擊費用扣除」的實作（證偽的依據）',
   count(engSrc, 'payAttackCost') === 0 && count(engSrc, 'payCost') === 0);
-const t6265 = readFileSync(join(ROOT, 'scripts/test-v6265-phantom-start-race.mjs'), 'utf8');
-chk('G4 ⭐test-v6265 剝除鏈**最外層**是 stripV6373Engine（本版動到 engine.ts 的 BASE 既有行）',
-  count(t6265, 'const stripV6373Engine = (src) =>') === 1
-  && /stripV6373Engine\(stripV6369Engine\(/.test(t6265), String(count(t6265, 'const stripV6373Engine = (src) =>')));
+// ⭐ 2026-10-01：本條原本釘「test-v6265 engine.ts 剝除鏈裡有本版那一層」。站長裁定（瘦身計畫 C2）退休 engine.ts
+//   整檔位元組釘（test-v6265 F4c／test-v6375 F0b）與整條剝除鏈 ⇒ 本條沒有可守的對象，一併移除（不是放寬本版的行為判準）。
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 【H】HEAD-FAIL 對 BASE
