@@ -409,7 +409,7 @@ await T('C5 .auth-user 的 CSS 逐字未動（新增節點只靠既有 flex-wrap
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【D】錦標賽區塊 sha256');
 const TOURN_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
-const TOURN_SHA = 'ebee9891421e33226965ee1afe63fb22878f433939b5771b355a8e5ace926dd8';   // 與 test-v6278 I1／test-v6282 A2 同一把（凍結區塊）
+const TOURN_SHA = '1267b66df436d9b98f4b67688a1e42080447531ec59652b6bd553c7aae9def04';   // 與 test-v6278 I1／test-v6282 A2 同一把（凍結區塊）
 await T('D1 ⚠⚠ 錦標賽區塊（錨點至檔尾）sha256 未變', () => {
   const i = SRV.indexOf(TOURN_ANCHOR);
   assert.ok(i > 0, '找不到錦標賽區塊錨點');

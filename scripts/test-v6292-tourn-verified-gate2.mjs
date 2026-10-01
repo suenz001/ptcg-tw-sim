@@ -51,10 +51,10 @@ import {
 // ⭐⭐⭐v6.365 站長裁定 六-2（錦標賽平手＝雙敗）：區塊又多了三段，全部以 // >>> v6365-xxx 哨兵宣告。
 //   本檔的 revert-diff 從此再串一節（先還原 v6.365 的三段，再往後退），一律串接、不放水。
 import {
-  NEW_TAIL_SHA_V150 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V150 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V150 as NEW_TEV_LEN_CUR,
-  revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365, stripDeclaredBlocksNewerThan,
-} from './lib/tourn-revert-v150.mjs';
-const revertV6384 = (b) => _rv6384(revertV150(b));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）
+  NEW_TAIL_SHA_V152 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V152 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V152 as NEW_TEV_LEN_CUR,
+  revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365, stripDeclaredBlocksNewerThan,
+} from './lib/tourn-revert-v152.mjs';
+const revertV6384 = (b) => _rv6384(revertV150(revertV152(b)));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
 const revertV6365 = (b) => _rv6365(revertV6381(b));   // ⭐v6.381 鏈又長一節（別名：既有呼叫點一個字都不必改）
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
@@ -301,7 +301,7 @@ await T('B6 ⚠⚠ 那 14 把鎖仍然「在守」：sha 比對式與自算 sha 
   // ⭐v6.365：鏈又延長一節 —— 三支都必須从同一份 lib 串接 revertV6365，掉了任一支鏈就斷了。
   const SELF = normEol(readFileSync(join(ROOT, 'scripts/test-v6292-tourn-verified-gate2.mjs'), 'utf8'));
   for (const [f2, s2] of [['test-v6276', v76], ['test-v6291', v91], ['test-v6292（本檔）', SELF]]) {
-    assert.ok(s2.includes("from './lib/tourn-revert-v150.mjs'") && s2.includes('revertV6381('),
+    assert.ok(s2.includes("from './lib/tourn-revert-v152.mjs'") && s2.includes('revertV6381('),
       f2 + ' 沒有串接 v6.381 的還原器（它的 revert-diff 會被停用）');
     assert.ok(s2.includes('revertV6365('), f2 + ' 掉了 v6.365 那一節（鏈斷了）');
   }

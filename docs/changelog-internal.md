@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## server patch v1.52：/api/tournament/bracket 只讀用得到的欄位＋in-flight 合併（每分鐘 :16 秒卡頓的真因）
+
+BASE `8bd9453f`（v6.459／server patch v1.51）。站長 2026-10-01 同意對正式 node 行程做 80 秒 CPU 取樣（SIGUSR1 開本機 inspector、Profiler、取完 `_debugEnd` 關閉，已確認 9229 不再監聽）。
+- 現象：9/28 起本機探針（每分鐘 3 發、打 401 端點）每小時 2～21 筆 >0.3 秒、最慢 1.2 秒，幾乎全在每分鐘 :16 秒；高解析探針確認那一秒 node CPU tick 暴增。
+- 取樣：尖峰 0.6 秒內 98% 忙碌，幾乎全是 BSON `deserializeObject`（深度 4～6 層）←`toArray`。存取紀錄 :15～17 秒的 `/bracket`、`/event`、`/chat` 是平常的 2～4 倍（一群大廳玩家的輪詢被同步到同一秒）。
+- 真因：`/bracket` 快取（3 秒 TTL）過期時 `TMATCH.find({ eventId })` 沒有 projection，打完的對戰紀錄含 `finalState`＋`finalLog`（整份最終盤面與對戰紀錄）；同步的輪詢讓好幾發同時過期、各自去讀。
+- 修法（錦標賽區塊）：哨兵 `v152-bracket-light`（兩個投影常數＋`bracketFindShared` in-flight 合併）＋兩行行內改動（TMATCH／TREGS 查詢改走合併＋投影）。回應內容逐欄位不變；推進輪次、歸檔等寫入路徑不動。
+- 28 把鎖重釘：新增 `scripts/lib/sap-revert-admin-v152.mjs`、`scripts/lib/tourn-revert-v152.mjs`；五支消費者鏈多一節；test-v6379 D3 納入 v1.50 舊值、LIB_DECL 8；17 支守衛換新指紋。
+- 守衛：新增 `test-sap152-bracket-light.mjs`（真 handler×假 DB：B1 與 v1.51 回應逐欄位相同、B2 投影、B3 6 發並行只讀 1 次（v1.51 6 次正對照）、B4 過期重讀、B5 失敗清 in-flight；D 組重釘）；突變五種全紅在預期條目。
+- 部署：只動伺服器補丁 ⇒ **`update-tournament.bat`**。
+
 ## v6.459：進對戰／錦標賽頁加速（卡池預熱與登入並行、預組選到才載）
 
 BASE `eb493b80`（v6.458）。站長 2026-10-01：玩家反應進入網站或錦標賽頁面會延遲、比賽途中也有些延遲。

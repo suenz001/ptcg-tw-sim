@@ -9059,6 +9059,28 @@ import('firebase-admin').then(async ({ default: admin }) => {
       if (m.size === 0) _specHeartbeat.delete(room);
       return n;
     }
+    // >>> v152-bracket-light
+    // ⭐⭐⭐server patch v1.52（2026-10-01 實測，站長同意對正式 node 行程做 80 秒 CPU 取樣）：
+    //   9/28 起本機探針每分鐘第 16 秒附近慢 0.3～1.2 秒。取樣抓到那一刻整整 0.6 秒都在解 MongoDB 的 BSON，
+    //   來源是本端點快取過期時的 `TMATCH.find({ eventId })` —— **沒有 projection**。打完的對戰紀錄裡存著
+    //   `finalState`（整份最終盤面）與 `finalLog`（整份對戰紀錄，見 handleFinished 的 updateOne），
+    //   賽程表卻只用到十幾個小欄位 ⇒ 每 3 秒一次把幾十局的完整盤面從 DB 解出來再丟掉。
+    //   再加上一群停在大廳的玩家輪詢被同步到同一秒（存取紀錄 :15～17 秒的 /bracket 是平常的 3～4 倍），
+    //   快取同時過期時好幾發各自去讀 ⇒ 疊成一次明顯的卡頓（同一秒的出牌動作被拖慢）。
+    //   修法：① 只讀賽程表與排名真的用到的欄位（回應內容逐欄位不變）；② 同一份查詢正在路上時，後到的直接
+    //   等同一個 Promise（in-flight 合併），結果一律唯讀共用（下面只做 filter／map，不改陣列與元素）。
+    //   ⚠ 只用在 /bracket；推進輪次、歸檔等寫入路徑照舊讀完整文件。
+    const BRACKET_MATCH_PROJ_V152 = Object.freeze({ round: 1, idx: 1, phase: 1, p1uid: 1, p2uid: 1, p1name: 1, p2name: 1, winnerName: 1, winnerUid: 1, status: 1, bye: 1, roomId: 1 });
+    const BRACKET_REG_PROJ_V152 = Object.freeze({ uid: 1, name: 1, dropped: 1 });
+    const _bracketInflightV152 = new Map();
+    function bracketFindShared(key, run) {
+      const _p0 = _bracketInflightV152.get(key);
+      if (_p0) return _p0;
+      const _p = Promise.resolve().then(run).finally(() => { if (_bracketInflightV152.get(key) === _p) _bracketInflightV152.delete(key); });
+      _bracketInflightV152.set(key, _p);
+      return _p;
+    }
+    // <<< v152-bracket-light
     const BRACKET_TTL_MS = 3000;
     app.get('/api/tournament/bracket', async (req, res) => {
       try {
@@ -9069,12 +9091,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const _now = Date.now();
         let _cache = _bracketCache.get(ev._id);
         if (!_cache || (_now - _cache.at) > BRACKET_TTL_MS || _cache.round !== ev.currentRound || _cache.status !== ev.status) {
-          const matches = await TMATCH.find({ eventId: ev._id }).sort({ round: 1, idx: 1 }).toArray();
+          const matches = await bracketFindShared('m:' + ev._id, () => TMATCH.find({ eventId: ev._id }, { projection: BRACKET_MATCH_PROJ_V152 }).sort({ round: 1, idx: 1 }).toArray());   // ⭐v1.52 只讀用得到的欄位＋同時過期只讀一次
           // v0.48：瑞士制賽事附即時排名表(由 swiss 階段對戰紀錄重建 → computeStandings)。
           let standingsRaw = null;
           if (ev.format === 'swiss-then-cut') {
             try {
-              const regs = await TREGS.find({ eventId: ev._id, checkedIn: true }).toArray();
+              const regs = await bracketFindShared('r:' + ev._id, () => TREGS.find({ eventId: ev._id, checkedIn: true }, { projection: BRACKET_REG_PROJ_V152 }).toArray());   // ⭐v1.52 同上（報名文件含 60 張牌表）
               const players = TENG.buildSwissPlayersFromMatches(
                 matches.filter((m) => m.phase === 'swiss').map((m) => ({ round: m.round, p1uid: m.p1uid, p2uid: m.p2uid, winnerUid: m.winnerUid, bye: !!m.bye, status: m.status })),
                 regs.map((r) => ({ uid: r.uid, name: r.name || '玩家', dropped: !!r.dropped })),

@@ -412,7 +412,9 @@ await T('C4 ⭐⭐ 行內改動有 revert 宣告，而且 test-v6303 真的接�
   try { rev = normEol(readFileSync(join(ROOT, 'scripts/lib/sap-revert-admin-v150.mjs'), 'utf8')); }
   catch (e) { ok(false, '找不到 scripts/lib/sap-revert-admin-v150.mjs（BASE 上本來就沒有）'); }
   ok(/ADMIN_V150_INLINE_PAIRS/.test(rev) && /insertTournamentEvent\(b, id\)/.test(rev), 'revert 宣告內容不對');
-  ok(/revertAdminV150\(SAP_RAW\)/.test(V6303), 'test-v6303 沒有接上 revertAdminV150');
+  // ⭐v1.52（Rule 40，意圖不變）：還原鏈由新到舊又多一節 ⇒ revertAdminV150 的引數可以是「更新版本的還原器包著 SAP_RAW」，
+  //   但 revertAdminV150 一定要在鏈上、最內層一定是 SAP_RAW。
+  ok(/revertAdminV150\((revertAdminV\d+\()*SAP_RAW\)/.test(V6303), 'test-v6303 沒有接上 revertAdminV150');
 });
 await T('C5 ⭐ 本守衛進了 package.json 的 test chain；admin 版本標示前後一致（不比對字面版本號）', () => {
   ok(PKG.includes('scripts/test-admin-v177-daily-tournament.mjs'), '沒有進 npm test chain');
@@ -456,9 +458,12 @@ console.log('\n【D】錦標賽區塊的 revert-diff 與 28 把鎖重釘（動�
   const RV = await import('./lib/tourn-revert-v150.mjs');
   const RV84 = await import('./lib/tourn-revert-v6384.mjs');
   const sha = (x) => createHash('sha256').update(x, 'utf8').digest('hex');
-  const tail = PATCH.slice(PATCH.indexOf(RV.TAIL_ANCHOR));
-  const tev = PATCH.slice(PATCH.indexOf(RV.TEV_ANCHOR));
-  await T('D1 ⭐⭐ 現行區塊指紋 ＝ v1.50 的新值（tail／tev／長度）', () => {
+  // ⭐v1.52（Rule 40，意圖不變）：錦標賽區塊之後又被 v1.52（/bracket 只讀用得到的欄位）合法改過。
+  //   本節守的是「v1.50 那一版的區塊」⇒ 先用 v1.52 的還原器剝掉更新的改動，再做原本的 D1～D3（判準一個字都不放寬）。
+  const RV152 = await import('./lib/tourn-revert-v152.mjs');
+  const tail = RV152.revertV152(PATCH.slice(PATCH.indexOf(RV.TAIL_ANCHOR)));
+  const tev = RV152.revertV152(PATCH.slice(PATCH.indexOf(RV.TEV_ANCHOR)));
+  await T('D1 ⭐⭐ 現行區塊（剝掉 v1.52 之後）指紋 ＝ v1.50 的新值（tail／tev／長度）', () => {
     ok(sha(tail) === RV.NEW_TAIL_SHA_V150 && sha(tev) === RV.NEW_TEV_SHA_V150 && tev.length === RV.NEW_TEV_LEN_V150,
       'tail=' + sha(tail) + ' tev=' + sha(tev) + ' len=' + tev.length);
   });
@@ -474,7 +479,7 @@ console.log('\n【D】錦標賽區塊的 revert-diff 與 28 把鎖重釘（動�
   await T('D4 ⭐⭐ v6.384 的舊指紋零殘留：28 把區塊鎖全部重釘（漏一把這裡就紅）', async () => {
     const { readdirSync, statSync } = await import('node:fs');
     const stale = [];
-    const EXEMPT = new Set(['scripts/lib/tourn-revert-v6384.mjs', 'scripts/lib/tourn-revert-v150.mjs']);
+    const EXEMPT = new Set(['scripts/lib/tourn-revert-v6384.mjs', 'scripts/lib/tourn-revert-v150.mjs', 'scripts/lib/tourn-revert-v152.mjs']);
     const walk = (dir) => { for (const n of readdirSync(dir)) { const fp = join(dir, n);
       if (statSync(fp).isDirectory()) { walk(fp); continue; }
       if (!n.endsWith('.mjs')) continue;
@@ -492,7 +497,8 @@ console.log('\n【D】錦標賽區塊的 revert-diff 與 28 把鎖重釘（動�
     for (const f of ['test-v6276-deck-tournament-stats', 'test-v6291-tourn-verified-gate',
       'test-v6292-tourn-verified-gate2', 'test-v6303-ui-batch', 'test-v6381-archive-gamedraw-and-swiss-note']) {
       const src = normEol(readFileSync(join(ROOT, 'scripts/' + f + '.mjs'), 'utf8'));
-      ok(src.includes("from './lib/tourn-revert-v150.mjs'") && /revertV150\(/.test(src), f + ' 沒有串上 v1.50');
+      // ⭐v1.52：消費者改從最新一節（tourn-revert-v152）import，v1.50 那一節由它 re-export；鏈上仍必須呼叫 revertV150(。
+      ok(/from '\.\/lib\/tourn-revert-v1\d\d\.mjs'/.test(src) && /revertV150\(/.test(src), f + ' 沒有串上 v1.50');
     }
   });
 }
