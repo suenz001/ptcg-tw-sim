@@ -87,3 +87,14 @@ __m6a/
 .svelte-kit-staging/
 tournament-dumps/
 __*/
+
+# 2026-10-01 站長同意「雜檔退出版控」（瘦身計畫 E2）：git 歷史保留，之後不再追蹤
+#   本機原檔備份在 E:\ptcg-tw-sim-local\retired-20261001\（leon-pc）
+/music/
+/deck_picture/
+/*.cjs
+/.tmp-H-classify.json
+/recover.txt
+/search_result.txt
+/svelte-errors.txt
+/test.tmp
