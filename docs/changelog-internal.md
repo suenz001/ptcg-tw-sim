@@ -1,5 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.460：牌組編輯器「我的牌組」拖曳排序（玩家建議）
+
+BASE `4af2070e`（v6.459＋server patch v1.52）。站長 2026-10-01 轉述玩家建議：按住整個牌組方塊拉到想放的位置。
+- 歷史：v5.311～v5.319 九版拖曳都失敗、v5.320 改成 ▲▼。逐版 commit 訊息歸納的根因：**拖曳途中即時重排陣列** ⇒ keyed each 把手指底下的 <li> 搬走、
+  pointer capture 掉、放手事件送不到（stuck／「黃線出現但放不下」）；手機 pointer 事件被捲動吃掉（pointercancel）。
+- 新中央模組 `src/lib/deck-sort-drag.ts`（Svelte action，事件委派）：拖曳途中清單 **0 個 DOM 變動**（原列變淡＋浮起複本＋插入線），放手才呼叫一次 onMove；
+  滑鼠走 pointer（按住移動 ≥5px 才算拖）、觸控走 touch（長按 300ms 不動才拿起；之前移動 >8px 視為捲動放棄；啟動後 touchmove preventDefault 擋捲動）；
+  畫面上下 56px 自動捲動；Esc／touchcancel／blur／切分頁／卸載一律收尾；只吞「放手產生的那一下 click」（滑鼠到下一個 macrotask、觸控 80ms）。
+- decks 頁：`<aside class="rail" use:deckSortDrag>`、列帶 `data-deck-sort-item data-deck-id`、`moveDeckTo` 走 `persistDeckOrder`（與 ▲▼ 同一條存檔／雲端同步路）；▲▼ 保留當備援；頁面 CSS 一個字都沒動。
+- 實測（dev server 真頁面、Playwright 桌機滑鼠＋手機 CDP 觸控）：桌機拖 A 到 D 下 ⇒ BCDA…且存檔；點一下照常選牌組；手機快滑捲動不改順序；長按拖 E 到最上 ⇒ EABCD…；拖到底緣自動捲動。
+- 守衛：新增 `test-v6460-deck-sort-drag.mjs`（S1～S3＋HEAD-FAIL 對 v6.459、U1～U3 純函式、D1～D8 真滑鼠／手指）；突變六種（途中即時重排、吞 click 600ms、不擋捲動、不需長按、Esc 不取消、不排除小按鈕）全紅。
+- 部署：只動玩家前端 ⇒ `redeploy-oracle.bat`。
+
 ## server patch v1.52：/api/tournament/bracket 只讀用得到的欄位＋in-flight 合併（每分鐘 :16 秒卡頓的真因）
 
 BASE `8bd9453f`（v6.459／server patch v1.51）。站長 2026-10-01 同意對正式 node 行程做 80 秒 CPU 取樣（SIGUSR1 開本機 inspector、Profiler、取完 `_debugEnd` 關閉，已確認 9229 不再監聽）。

@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'eb493b80f35dac2e7058c2ac5f6e88f72822ee1e';   // v6.458（上一版）
+const PREV_SHA = '4af2070e8af219c75e1f9e233cc690ac73b8986c';   // v6.459＋server patch v1.52（上一版；src/static 與 v6.459 相同）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,15 +757,25 @@ const PREV_SHA = 'eb493b80f35dac2e7058c2ac5f6e88f72822ee1e';   // v6.458（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.459 前移：PREV_SHA 從 eb493b80（v6.458）起算。
+  // ⚠⚠ v6.460 前移：PREV_SHA 從 4af2070e（v6.459＋server patch v1.52）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.459：進對戰／錦標賽頁加速：卡池預熱與 Oracle 登入並行、只預熱玩家自己的牌組（預組選到才載）；首頁 changelog 三步搬運。
+  // ⭐v6.460：牌組編輯器拖曳排序（新中央模組 deck-sort-drag.ts＋decks 頁接線）；首頁 changelog 三步搬運。
+  'src/lib/deck-sort-drag.ts',
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
+  'src/routes/decks/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.459）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.459 前移：PREV_SHA 從 eb493b80（v6.458）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.459：進對戰／錦標賽頁加速：卡池預熱與 Oracle 登入並行、只預熱玩家自己的牌組（預組選到才載）；首頁 changelog 三步搬運。
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.458）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.458 前移：PREV_SHA 從 62ce6f9f（v6.457）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。

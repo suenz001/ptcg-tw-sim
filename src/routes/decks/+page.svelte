@@ -1,5 +1,6 @@
 <script lang="ts">
   import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）
+  import { deckSortDrag, moveIdTo } from '$lib/deck-sort-drag';   // ⭐v6.460 牌組拖曳排序（唯一來源）
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
   import type { Card, EnergyType } from '$lib/cards/types';
@@ -131,6 +132,13 @@
     persistDeckOrder([created, ...all.filter(x => x.id !== d.id)]);
   }
 
+  // ⭐v6.460：拖曳排序放手時呼叫一次（deck-sort-drag.ts）。拖曳途中清單不動，只有這裡改順序，
+  //   存檔與雲端同步沿用 persistDeckOrder（與 ▲▼ 同一條路）。
+  function moveDeckTo(deckId: string, toIndex: number) {
+    const arr = moveIdTo(decks, deckId, toIndex);
+    if (arr === decks) return;
+    persistDeckOrder([...arr]);
+  }
   function moveDeckUp(deckId: string) {
     const i = decks.findIndex(d => d.id === deckId);
     if (i <= 0) return;
@@ -1784,7 +1792,7 @@
 
   <div class="layout">
     <!-- ── Deck list (left rail) ────────────────────────────────────── -->
-    <aside class="rail">
+    <aside class="rail" use:deckSortDrag={{ itemSelector: 'ul.deck-list:not(.preset-list) > li[data-deck-sort-item]', exclude: '.deck-reorder-btn, .icon', onMove: moveDeckTo }}>
       <div class="rail-head">
         <strong>我的牌組</strong>
         <div class="rail-actions">
@@ -1795,8 +1803,9 @@
       </div>
       <ul class="deck-list">
         {#each decks as d (d.id)}
-          <li class:active={d.id === activeId}>
-            <!-- v5.320: 改 ⬆️⬇️ 按鈕排序 (取代 v5.311~v5.319 拖曳, 跨裝置 100% 可靠) -->
+          <li class:active={d.id === activeId} data-deck-sort-item data-deck-id={d.id}>
+            <!-- v5.320: 改 ⬆️⬇️ 按鈕排序 (取代 v5.311~v5.319 拖曳, 跨裝置 100% 可靠)
+                 ⭐v6.460：另外可以按住整列拖曳（電腦按住拖、手機長按 0.3 秒再拖；見 deck-sort-drag.ts）。▲▼ 保留當備援。 -->
             <div class="deck-reorder-col">
               <button class="deck-reorder-btn" title="上移"
                 disabled={decks[0]?.id === d.id}
