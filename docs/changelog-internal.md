@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.463：build 後處理 route-preload —— ssr=false 路由殼補上該頁的 modulepreload
+
+BASE `2b4b3988`（v6.462）。fable 5.1 審查第 5 項。
+- 事實：根 layout ssr=false ⇒ tournament.html 等只預載殼層 chunk；layout 節點＋路由節點＋1.9MB 對戰主程式要等 start/app 下載執行完、路由解析後才抓。
+- 修法：scripts/route-preload.mjs（package.json build 在 seo-prerender-meta 之後）讀 Vite manifest 與 .svelte-kit/generated 節點檔，對 tournament／cards／decks／deck-posts／friends.html 插入靜態 import 閉包的 modulepreload；不碰 index.html／404.html（可能是 fallback）；CSS 不預載（本機量到 preload as=style 會被重複下載）；冪等、絕不丟例外、只寫 build 裡存在的檔。
+- 量測（本機，300ms RTT、50Mbps、CPU 1/2、無 SW）：/tournament「錦標賽對戰」出現 3.15→2.78 秒（4 輪平均）；deck-posts JS 完成 2.62→2.32 秒；cards／decks／friends 持平；五頁零 pageerror。
+- 守衛：test-v6463-route-preload（單元 U1～U7、接線 HEAD-FAIL、真 build B1、兩個突變；U4 冪等在開發中實際抓到一個重跑多一個 tab 的 bug）。
+- 附帶（v6.462 內）：test-v6272 歷史宣告只留最近 12 版（連續註解超過 strip-comments 200 行護欄）。
+
 ## v6.462：SW install 不再預快取帶 ?v= 的資料檔（卡包 JSON／card-set-map／changelog.html／ai-playbooks）
 
 BASE `1a01b4a5`（v6.461）。站長要求「再找讓網站更快、更順、但不能產生新 bug」；fable 5.1 獨立審查第 1 項＋本機 Playwright 實測。
