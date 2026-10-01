@@ -36,7 +36,23 @@ const HEAVY_MEDIA = (u: string) => u.includes('/covers/') || u.includes('/music/
 //   使用者重抓整包（GitHub Pages max-age=600 幫不上忙）。這些卡片頁改走 fetch handler 的 network-first
 //   （用到才快取），SEO 爬蟲也是直接抓、不需預快取。install 從 ~82MB 降到 ~9MB。
 const IS_CARD_PAGE = (u: string) => u.includes('/card/');
-const PRECACHE: string[] = [...build, ...files.filter(f => !HEAVY_MEDIA(f)), ...prerendered.filter(p => !IS_CARD_PAGE(p))];
+// >>> v6462-sw-versioned-runtime
+// v6.462：「帶 ?v=版本 抓的資料檔」不再於 install 預快取（fable 5.1 審查＋本機 Playwright 實測，2026-10-01）。
+//   前端一律用 `?v=${VERSION}` 抓這些檔（pool.ts／cards/+page.ts／+page.svelte／ai-playbook.ts），
+//   而 Cache API 的 match 預設**連 query 一起比** ⇒ install 存的「無 query」那份**從來沒被用過**
+//   （實測：precache 有 /cards/M2.json，fetch /cards/M2.json?v=6.461 照樣打回伺服器）。
+//   代價卻是每次出新版 install 都要抓 48 個卡包＋對照表（5.1MB／gzip 約 551KB），跟進站搶頻寬；
+//   超過一天沒來的玩家（HTTP 快取 max-age=86400 已過期）是真的整包重下載。
+//   改法：install 不抓；這些路徑在 fetch 時照舊走「cache-first（完整 URL 含 ?v=）→ 沒有才 network 並寫入」
+//   —— 與 v6.461 以前玩家實際得到的行為**完全相同**（實測第二次 fetch 0 個伺服器請求），只是少了 install 那包白工。
+//   ⚠ 只認「有 v 參數」的請求才 cache-first：版本號變了 URL 就變，不會拿到舊版資料（與現況相同的保證）。
+const VERSIONED_DATA = (u: string) =>
+  (u.startsWith('/cards/') && u.endsWith('.json')) ||
+  u === '/card-set-map.json' ||
+  u === '/changelog.html' ||
+  (u.startsWith('/ai-playbooks/') && u.endsWith('.json'));
+// <<< v6462-sw-versioned-runtime
+const PRECACHE: string[] = [...build, ...files.filter(f => !HEAVY_MEDIA(f) && !VERSIONED_DATA(f)), ...prerendered.filter(p => !IS_CARD_PAGE(p))];
 
 // v6.222 根治「強制更新後又退回舊版」（站長手機實測：按強制更新→6.221→關 App 重開→退回 6.219）。
 //   真因鏈（實測 www.ptcg-tw-sim.com 回應標頭）：`/` 等 HTML **沒有 Cache-Control** ⇒ 瀏覽器套
@@ -138,7 +154,8 @@ sw.addEventListener('fetch', (event) => {
     }
 
     // build/files/prerendered 走 cache-first（資源不變、最快）
-    if (PRECACHE.includes(url.pathname)) {
+    //   v6.462：帶 ?v= 的版本化資料檔同樣 cache-first（以完整 URL 比對；第一次 miss 會由下面 network-first 寫入）。
+    if (PRECACHE.includes(url.pathname) || (VERSIONED_DATA(url.pathname) && url.searchParams.has('v'))) {
       const cached = await cache.match(event.request);
       if (cached) return cached;
     }

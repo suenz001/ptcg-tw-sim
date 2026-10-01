@@ -39,7 +39,7 @@ const TMP = mkdtempSync(join(tmpdir(), 'v6264-'));
 //   （BASE 裡沒有 v6.271~v6.273 的條目）。自 v6.275 起：**不動 changelog 的版本**（admin-only）
 //   由下方的 F0 短路涵蓋（三檔與 BASE 逐位元相同即無損成立），pin 只需在**動了 changelog**
 //   的版本前移到上一版。
-const BASE_SHA = '540e05401b3e6e8aa32de20db0db359f86679482'; // v6.460（上一版；v6.461 動了首頁 changelog ⇒ pin 必須前移，【F】才驗得到本版的搬運）
+const BASE_SHA = '1a01b4a5687ada08a2a16706ce958b1ec7839a86'; // v6.461（上一版；v6.462 動了首頁 changelog ⇒ pin 必須前移，【F】才驗得到本版的搬運）
 // ⚠⚠ BASE_SHA 必須是**留在 main 上的那一顆**（git branch -a --contains <sha> 要印得出 main）——
 //    amend／rebase 前的中途 sha 是懸空的，本機 git gc 後就消失，整個【F】會靜默退化成 SKIP。IRON_RULES Rule 45。
 //   所以 v6.383 動 changelog 時**刻意不把 pin 往前挪**：留在 v6.381 才能讓【F】真的跑一次逐字還原比對，挪到 v6.382 結果一樣但沒有多守到東西）
@@ -485,12 +485,16 @@ async function runSW(bundlePath, { store = new Map(), online = true, requests = 
 const swBundle = await bundleSW(SW, 'main', 'v6264');
 const fresh = await runSW(swBundle);
 await T('D1 首次安裝：changelog-bodies.html **不得**被預快取（否則等於把省下的位元組搬回 install）', () => {
-  assert.ok(fresh.installed.length >= 5, 'install 只抓了 ' + fresh.installed.length + ' 個 → harness 壞了');
+  // v6.462（Rule 40 調整）：changelog.html 改由執行期快取（帶 ?v= 抓，install 存的無 query 鍵從沒命中）⇒ install 少一個，下限 5→4。
+  assert.ok(fresh.installed.length >= 4, 'install 只抓了 ' + fresh.installed.length + ' 個 → harness 壞了');
   assert.ok(!fresh.installed.includes('/changelog-bodies.html'),
     'install 抓了 /changelog-bodies.html —— 必須加進 service-worker.ts 的 HEAVY_MEDIA');
 });
-await T('D2 首次安裝：changelog.html 仍照舊預快取（正對照，本版沒有順手改壞既有策略）', () => {
-  assert.ok(fresh.installed.includes('/changelog.html'), 'changelog.html 反而不被預快取了');
+// v6.462（Rule 40 調整）：changelog.html 自 v6.462 起**刻意**不預快取（前端一律帶 ?v= 抓，無 query 的預快取從沒命中；
+//   執行期 cache-first 由 test-v6462-sw-versioned-runtime 守）。其餘既有策略的正對照照舊。
+await T('D2 首次安裝：既有策略沒有被順手改壞（changelog.html 依 v6.462 改由執行期快取）', () => {
+  assert.ok(!fresh.installed.includes('/changelog.html'), 'v6.462：changelog.html 不該在 install 被抓');
+  assert.ok(fresh.installed.includes('/manifest.json'), '一般 static 檔反而不被預快取了');
   assert.ok(!fresh.installed.includes('/changelog-archive.html'), 'v6.100 的封存頁策略被改壞');
   assert.ok(!fresh.installed.includes('/covers/big.png') && !fresh.installed.includes('/music/bgm.mp3'), 'v5.365 重媒體策略被改壞');
   assert.ok(!fresh.installed.includes('/card/1/'), 'v5.966 卡片頁策略被改壞');

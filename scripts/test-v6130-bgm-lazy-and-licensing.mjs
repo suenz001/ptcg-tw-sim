@@ -94,7 +94,7 @@ const PAGE = stripComments(PAGE_RAW);
   // SW 預快取排除
   ok(/HEAVY_MEDIA\s*=\s*\(u: string\)\s*=>[^;]*\/music\//.test(SW),
     'service-worker 的 HEAVY_MEDIA 必須仍包含 /music/（把音樂排除在安裝預快取外）');
-  ok(/files\.filter\(f\s*=>\s*!HEAVY_MEDIA\(f\)\)/.test(SW),
+  ok(/files\.filter\(f\s*=>\s*!HEAVY_MEDIA\(f\)/.test(SW), // v6.462（Rule 40）：後面可再接 && !VERSIONED_DATA(f)
     'PRECACHE 必須用 HEAVY_MEDIA 過濾 static 檔案，否則音樂會回到安裝預快取');
 
   // fetch handler 早退（音樂不進 SW 快取；理由見該處註解）

@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.462：SW install 不再預快取帶 ?v= 的資料檔（卡包 JSON／card-set-map／changelog.html／ai-playbooks）
+
+BASE `1a01b4a5`（v6.461）。站長要求「再找讓網站更快、更順、但不能產生新 bug」；fable 5.1 獨立審查第 1 項＋本機 Playwright 實測。
+- 事實：前端一律用 `?v=${VERSION}` 抓這些檔；Cache API match 預設連 query 比 ⇒ install 存的無 query 鍵**從沒命中**（實測 fetch `/cards/M2.json?v=6.461` 照樣回源）；第二次同 URL 0 請求（執行期寫入命中）。
+- 代價：每版 install 抓 48 卡包＋對照表（5.1MB／gzip 約 551KB），跟進站搶頻寬；超過一天沒來的玩家（max-age=86400 過期）真的整包重下載。
+- 修法：`VERSIONED_DATA` 排出 PRECACHE；cache-first 條件加 `VERSIONED_DATA(path) && searchParams.has('v')` ⇒ 執行期行為與 v6.461 完全相同。
+- 守衛：新增 test-v6462-sw-versioned-runtime（行為級、HEAD-FAIL、兩個突變）；Rule 40 調整 test-v6222（cards→manifest 正對照）、test-v6264 D1/D2（changelog.html 改執行期）、test-v6130（regex 放寬）。
+
 ## v6.461：手機選擇視窗 sheet 裡的清單不再是捲動盒（「卡片區滑不動、只有右邊縫隙滑得動」）
 
 BASE `540e0540`（v6.460）。兩位玩家回報手機牌庫搜尋滑不動（第二位：標題列＝拖動視窗、卡片區沒反應、右邊縫隙可以滑），站長本人的手機正常。

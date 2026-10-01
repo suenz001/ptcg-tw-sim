@@ -165,10 +165,13 @@ T('⭐build（hash 不可變）不得強制回源 —— 保留 HTTP 快取、in
   assert.equal(main.store.get('/_app/immutable/entry/app.abc123.js'), 'IMMUTABLE_JS');
 });
 
-T('⭐files（cards JSON 等）沿用預設語義 —— 不因本修而多抓 ~4MB', () => {
-  const hit = main.fetchLog.find((e) => e.path === '/cards/data.json');
-  assert.ok(hit, '/cards/data.json 沒被預快取');
+// v6.462（IRON_RULES Rule 40 調整）：cards JSON 自 v6.462 起完全不在 install 預快取（帶 ?v= 的資料檔改由執行期快取，
+//   見 test-v6462-sw-versioned-runtime）⇒ 「不強制回源」的意圖改用仍會預快取的 files（manifest.json）驗。
+T('⭐files（manifest 等）沿用預設語義 —— 不因本修而強制回源', () => {
+  const hit = main.fetchLog.find((e) => e.path === '/manifest.json');
+  assert.ok(hit, '/manifest.json 沒被預快取');
   assert.notEqual(hit.cacheMode, 'reload');
+  assert.ok(!main.fetchLog.some((e) => e.path === '/cards/data.json'), 'v6.462：cards JSON 不該在 install 被抓');
 });
 
 T('⭐/sitemap-cards.xml（563KB 爬蟲用）不得強制回源 —— install 不多抓 563KB', () => {
