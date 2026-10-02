@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## server patch v1.53：錦標賽報名的牌組改在伺服器端也跑完整規則（站長 2026-10-02 核准）
+
+BASE `2149920b`（v6.466／server patch v1.52）。v6.465 前端已改走 validateDeck，但伺服器 /register、/register-and-checkin、/propose 只檢查 60 張 ⇒ 改過的前端或舊快取可用不合法牌組報名。
+- 站長評估：三個風險（只擋新報名、伺服器重開 60 秒內卡牌政策未同步、補新卡包要記得跑 update-tournament.bat）站長裁定都可接受、由他控制。
+- 修法：哨兵 `v153-tourn-deck-validate`（`tournDeckIssue`，放在 TAIL_ANCHOR 之前）走引擎 bundle 的 `TENG.validateDeck`＋`TPOOL`（規則只有一份，與牌組編輯器／前端 tDeckSubmitError／dpValidateDeck 同一支）；三支端點在 60 張檢查之後、任何寫入之前各一行呼叫。錯誤字首「牌組不符合規則：」與前端相同。卡片不存在一律擋；舊 bundle 沒有 validateDeck 或驗證器丟例外 ⇒ 不擋（fail-open）。
+- 不動：報到、開戰（makeGame）、已報名的人、牌組公布欄錦標賽投稿的豁免。效能：純記憶體計算（validateDeck 掃一次卡池約 5000 筆），只在報名類端點各跑一次，對戰路徑不經過。
+- 卡牌政策區塊（v6340-card-policy）裡「錦標賽只檢查 60 張」的說明註解改寫成現況。
+- 28 把鎖重釘：新增 `scripts/lib/sap-revert-admin-v153.mjs`（三行呼叫＋一段註解）、`scripts/lib/tourn-revert-v153.mjs`；五支消費者鏈多一節（test-v6303 的 H3 已用 revertAdminV153 逐字還原，wrapper 不串 revertV153）；test-v6379 D3 納入 v1.52 舊值、LIB_DECL 9；17 支守衛換新指紋；test-sap152／test-admin-v177 依 Rule 40 先剝 v1.53。
+- 實跑 handler 的舊守衛（v6188、v6276、v6291）harness 補 `tournDeckIssue` 替身（它們守的是補報名流程／deckId／身分閘）。
+- 守衛：新增 `test-sap153-tourn-deck-validate.mjs`（結構 S1～S4b、真 handler×假 DB×真 validateDeck×真卡池 B1～B6 含 HEAD-FAIL、D 組重釘）。
+- 部署：只動伺服器補丁 ⇒ **`update-tournament.bat`**。
+
 ## v6.466：新版桌墊在 iPad／12～17 吋筆電的顯示調校
 
 BASE `7d1450a0`（v6.465＋卡表守衛）。站長要求確認 iPad Pro 13／12.9／11、Air 13、iPad 10.5、mini 8.3 與 12～17 吋筆電。

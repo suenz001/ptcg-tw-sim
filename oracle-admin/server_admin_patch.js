@@ -4135,11 +4135,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
     }
     // >>> v6340-card-policy
     // ⭐⭐⭐ v6.340 卡牌政策：伺服器端與玩家端讀**同一份** Firestore `config/cardPolicy`。
-    //   ⚠ 目前吃到這份政策的伺服器端路徑：**牌組公布欄的一般投稿**（dpValidateDeck）。
-    //     ⚠⚠ 錦標賽的報名（/register、/register-and-checkin）與開戰（makeGame）**目前只檢查 60 張**、
-    //       完全沒有跑 validateDeck（`const bad = tournament ? null : dpValidateDeck(...)` 明確跳過），
-    //       所以錦標賽那一側的合法性目前仍靠前端。要不要把 dpValidateDeck 加到報名端點
-    //       由站長裁示（會影響已報名的玩家）。**不要**把這段註解寫成「錦標賽已經擋住了」。
+    //   ⚠ 目前吃到這份政策的伺服器端路徑：**牌組公布欄的一般投稿**（dpValidateDeck）、
+    //     以及 server patch v1.53 起的**錦標賽報名**（/register、/register-and-checkin、/propose，走 tournDeckIssue，
+    //     見 v153-tourn-deck-validate 區塊；站長 2026-10-02 核准）。
+    //     ⚠ 只擋「新的報名」：報到與開戰（makeGame）仍只看 60 張，已報名的人不受影響；
+    //       牌組公布欄的錦標賽投稿（`const bad = tournament ? null : dpValidateDeck(...)`）也維持跳過。
     //   ⚠ fail-closed：讀不到／格式壞掉 ⇒ 維持 bundle 內建的預設值（H/I/J ＋ M6a 鎖住），
     //     **絕不放寬**。舊 bundle 沒有 setCardPolicy ⇒ 直接跳過（跑 update-tournament.bat 即可）。
     //   ⚠ 跨 IIFE：adminDb 在 firebase-admin 的 then-callback 內（另一個 closure），這裡拿不到
@@ -6978,6 +6978,33 @@ import('firebase-admin').then(async ({ default: admin }) => {
       return { kind: 'applied', gs: newGs, version: nv, prevGs: doc.gameState };
     }
     // ── v6.170 CONNECTION RESILIENCE BLOCK END ──
+    // >>> v153-tourn-deck-validate
+    // ⭐⭐ server patch v1.53（2026-10-02，站長核准）：錦標賽報名的牌組改在伺服器端也跑完整規則。
+    //   以前 /register、/register-and-checkin、/propose 只檢查 60 張 ⇒ 改過的前端或很舊的快取版本
+    //   可以用「沒有基礎寶可夢／同名超過 4 張／ACE SPEC 超過 1 張／不能使用的卡」報名。
+    //   ⚠ 規則**只有一份**：引擎 bundle 匯出的 validateDeck（src/lib/decks/validation.ts，與牌組編輯器、
+    //     前端 v6.465 的 tDeckSubmitError、牌組公布欄 dpValidateDeck 同一支）；卡牌政策沿用 v6.340 的同步（TENG.setCardPolicy）。
+    //   ⚠ 只擋「新的報名」：已經報名的人、報到、開戰（makeGame）一律不動（站長：不可讓人比賽中途被判出局）。
+    //   ⚠ 純記憶體計算（60 張、不讀 DB），只在報名類端點各跑一次；對戰路徑完全不經過這裡。
+    //   ⚠ 舊 bundle 沒有 validateDeck ⇒ 只檢查卡片存在（同 dpValidateDeck 的 fail-open）；驗證器本身丟例外 ⇒ 不擋。
+    //   回傳 null ＝ 合法；否則回傳給玩家看的錯誤字串（格式與前端 tDeckSubmitError 一致）。
+    function tournDeckIssue(entries, deckName) {
+      if (!Array.isArray(entries)) return null;   // 60 張檢查在呼叫端（deckCount）
+      const norm = [];
+      for (const e of entries) {
+        const cid = String(e && e.cardId != null ? e.cardId : '');
+        if (!TPOOL.get(cid)) return '牌組含有本站沒有的卡片（id ' + cid + '）';
+        norm.push({ cardId: cid, count: Number(e.count) || 0 });
+      }
+      if (!TENG || typeof TENG.validateDeck !== 'function') return null;
+      try {
+        const r = TENG.validateDeck({ id: 'treg', name: String(deckName || '牌組'), entries: norm, createdAt: 0, updatedAt: 0 }, TPOOL);
+        // ⚠ 欄位名是 legal（不是 valid）—— 寫錯會恆為 undefined ⇒ 整條靜默失效（dpValidateDeck 同一個坑）
+        if (r && r.legal === false && Array.isArray(r.issues) && r.issues.length) return '牌組不符合規則：' + r.issues.join('；');
+      } catch (_e) { /* 驗證器本身出錯不擋報名 */ }
+      return null;
+    }
+    // <<< v153-tourn-deck-validate
 
     app.get('/api/tournament/state', async (req, res) => {
       try {
@@ -7591,6 +7618,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (ev.status !== 'registration') return res.status(409).json({ error: '目前不在報名階段' });
         const deckEntries = req.body && req.body.deckEntries;
         if (deckCount(deckEntries) !== 60) return res.status(400).json({ error: '牌組需為 60 張' });
+        { const _deckBad = tournDeckIssue(deckEntries, req.body && req.body.deckName); if (_deckBad) return res.status(400).json({ error: _deckBad }); }   // ⭐v1.53 完整規則（/register）
         const nickname = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 16);
         if (!nickname) return res.status(400).json({ error: '請填寫錦標賽暱稱' });
         const regId = ev._id + '__' + id.uid;
@@ -7640,6 +7668,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         // ── 驗證：與 /register 逐條相同 ──
         const deckEntries = req.body && req.body.deckEntries;
         if (deckCount(deckEntries) !== 60) return res.status(400).json({ error: '牌組需為 60 張' });
+        { const _deckBad = tournDeckIssue(deckEntries, req.body && req.body.deckName); if (_deckBad) return res.status(400).json({ error: _deckBad }); }   // ⭐v1.53 完整規則（/register-and-checkin）
         const nickname = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 16);
         if (!nickname) return res.status(400).json({ error: '請填寫錦標賽暱稱' });
         const deckName = String((req.body && req.body.deckName) || '').slice(0, 40);
@@ -7696,6 +7725,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const now = Date.now();
         const deckEntries = b.deckEntries;
         if (deckCount(deckEntries) !== 60) return res.status(400).json({ error: '牌組需為 60 張' });
+        { const _deckBad = tournDeckIssue(deckEntries, b.deckName); if (_deckBad) return res.status(400).json({ error: _deckBad }); }   // ⭐v1.53 完整規則（/propose）
         const nickname = String(b.nickname || '').replace(/\s+/g, ' ').trim().slice(0, 16);
         if (!nickname) return res.status(400).json({ error: '請填寫錦標賽暱稱' });
         const fmt = (b.format === 'swiss' || b.format === 'swiss-then-cut') ? 'swiss-then-cut' : 'single-elim';

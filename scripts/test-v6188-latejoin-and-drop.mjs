@@ -159,6 +159,7 @@ function makeServer(uid, email) {
     app, handlers, TEVENTS, TREGS, TMATCH, TROOMS, TCHAT, TARCHIVE, TCHAMPS, TENG, console,
     TMINVER_RE: /^\d+(\.\d+)?$/,
     deckCount: (entries) => { if (!Array.isArray(entries)) return -1; let n = 0; for (const e of entries) n += (e && e.count) || 0; return n; },
+    tournDeckIssue: () => null,   // ⭐v1.53：牌組完整規則 helper（本守衛守補報名流程；規則由 test-sap153 守）
     tournIdentity: async () => ident,
     resolveEventFromReq: async (req) => {
       const eid = (req.body && req.body.eventId) || null;

@@ -26,6 +26,8 @@ import {
   TAIL_ANCHOR, TEV_ANCHOR, revertV152,
   NEW_TAIL_SHA_V152, NEW_TEV_SHA_V152, NEW_TEV_LEN_V152, OLD_TAIL_SHA_V150, OLD_TEV_SHA_V150, OLD_TEV_LEN_V150,
 } from './lib/tourn-revert-v152.mjs';
+// ⭐v1.53（Rule 40，意圖不變）：錦標賽區塊之後又被 v1.53（報名牌組完整規則）合法改過 ⇒ D 節先剝 v1.53 再比對 v1.52 的值。
+import { revertV153 } from './lib/tourn-revert-v153.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.459（server patch v1.51）。
@@ -185,8 +187,8 @@ for (const format of ['single-elim', 'swiss-then-cut']) {
 
 console.log('\n【D】錦標賽區塊 28 把鎖重釘');
 {
-  const tail = CUR.slice(CUR.indexOf(TAIL_ANCHOR)), tev = CUR.slice(CUR.indexOf(TEV_ANCHOR));
-  ok('D1 現行區塊指紋 ＝ NEW_*_V152（tail／tev／len）', sha(tail) === NEW_TAIL_SHA_V152 && sha(tev) === NEW_TEV_SHA_V152 && tev.length === NEW_TEV_LEN_V152);
+  const tail = revertV153(CUR.slice(CUR.indexOf(TAIL_ANCHOR))), tev = revertV153(CUR.slice(CUR.indexOf(TEV_ANCHOR)));
+  ok('D1 現行區塊（剝掉 v1.53 之後）指紋 ＝ NEW_*_V152（tail／tev／len）', sha(tail) === NEW_TAIL_SHA_V152 && sha(tev) === NEW_TEV_SHA_V152 && tev.length === NEW_TEV_LEN_V152);
   const rt = revertV152(tail), rv = revertV152(tev);
   ok('D2 revertV152 之後逐位元回到 v1.50／v1.51 的值', sha(rt) === OLD_TAIL_SHA_V150 && sha(rv) === OLD_TEV_SHA_V150 && rv.length === OLD_TEV_LEN_V150);
   const mut = tail.replace('BRACKET_TTL_MS = 3000', 'BRACKET_TTL_MS = 3001');
@@ -197,9 +199,9 @@ console.log('\n【D】錦標賽區塊 28 把鎖重釘');
   }
   const CONSUMERS = ['scripts/test-v6276-deck-tournament-stats.mjs', 'scripts/test-v6291-tourn-verified-gate.mjs', 'scripts/test-v6292-tourn-verified-gate2.mjs',
     'scripts/test-v6303-ui-batch.mjs', 'scripts/test-v6381-archive-gamedraw-and-swiss-note.mjs'];
-  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(s.includes("from './lib/tourn-revert-v152.mjs'") && s.includes('revertV152(')); });
+  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(/from '\.\/lib\/tourn-revert-v15\d\.mjs'/.test(s) && s.includes('revertV152(')); });
   ok('D5 五支消費者都 import 新 lib 且呼叫 revertV152(', bad.length === 0, bad.join(', '));
-  ok('D5b test-v6303 的 SAP 還原鏈最內層是 revertAdminV152', /revertAdminV150\(revertAdminV152\(SAP_RAW\)\)/.test(rd('scripts/test-v6303-ui-batch.mjs')));
+  ok('D5b test-v6303 的 SAP 還原鏈最內層是 revertAdminV152', /revertAdminV150\(revertAdminV152\((?:SAP_RAW|revertAdminV15\d\()/.test(rd('scripts/test-v6303-ui-batch.mjs')));
 }
 if (!BASE) shallowSkip('sap152 B1／B3 正對照／D3b', '需要 v6.459 commit');
 
