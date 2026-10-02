@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.466：新版桌墊在 iPad／12～17 吋筆電的顯示調校
+
+BASE `7d1450a0`（v6.465＋卡表守衛）。站長要求確認 iPad Pro 13／12.9／11、Air 13、iPad 10.5、mini 8.3 與 12～17 吋筆電。
+- 實測方法：Playwright 跑 build、固定 Math.random 種子開一局 AI 對戰，28 種視窗（iPad 橫直向扣 Safari 列、筆電扣瀏覽器列）量頁首溢出、區塊重疊／出畫面、捲軸、📜 收合鈕與紀錄重疊。
+- 問題 ①：頁首 `.battle-header` nowrap＋overflow-x:auto、總寬約 1250px，blue／fable 鎖 gameZoom=1 ⇒ <1250 右邊被切（iPad 直向連設定／全螢幕都看不到）。修：頁首設具名容器 `blhdr`（只在 layout-blue），三段 `@container`（<1280 收 res-st／P1P2 時間；<1100 收 res-lb；<900 收版本／總時間／房號／階段），turn-info 可縮（省略號）、hand-counts flex-shrink .05。不新增 @media（v6187／v6195 釘數量）。
+- 問題 ②：📜 收合鈕固定在紀錄欄左上、58px 高，蓋住紀錄（所有尺寸）。修：橫向小鈕、紀錄欄 margin-top:32px（紀錄是捲動容器，padding 捲一下就被蓋，必須用外距）。
+- 問題 ③：<1024 後備直排 `.action-bar` 沿用基礎 height:180px，紀錄溢出蓋到我方列；戰鬥框 width:auto 沒留道具欄。修（v6442-blue-fallback 內）：action-bar height:auto、紀錄 margin-top:0、zone-active padding-right 0.42×active-w＋20px、先後攻小標浮到角落。
+- Fable 版共用頁首與後備排版、有同樣的頁首溢出與後備紀錄重疊問題，本版未動（只改新版桌墊）。
+- 守衛：新增 test-v6466-blue-ipad-layouts（S1～S6、HEAD-FAIL、真瀏覽器 E1～E5 十種視窗＋兩個自驗突變）；test-v6441 剝除器加 v6466 區塊、尾端順序檢查允許 v6466 區塊（Rule 40）。
+
 ## v6.465：一般對戰／線上座位／錦標賽報名的牌組錯誤提示（走 validateDeck、列出原因）
 
 BASE `413b382e`（v6.464＋Rule 78）。站長回報：一般對戰介面選了不合法牌組不會像牌組編輯器一樣提示。

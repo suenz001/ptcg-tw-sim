@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '413b382e808808fafb0ab2acba1d7b7495c40702';   // v6.464（上一版）
+const PREV_SHA = '7d1450a0d';   // v6.465（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,15 +757,24 @@ const PREV_SHA = '413b382e808808fafb0ab2acba1d7b7495c40702';   // v6.464（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.465 前移：PREV_SHA 從 413b382e（v6.464）起算。
+  // ⚠⚠ v6.466 前移：PREV_SHA 從 7d1450a0（v6.465）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.465：一般對戰／線上座位／錦標賽報名改走完整 validateDeck 並列出原因（v6465-deck-issues）；首頁 changelog 三步搬運。
+  // ⭐v6.466：新版桌墊 iPad／小筆電調校：頁首具名容器 blhdr＋三段 @container、📜 收合鈕讓位（v6466-blue-ipad）；<1024 後備直排的行動列高度、道具欄、先後攻小標（v6442-blue-fallback）；首頁 changelog 三步搬運。
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.465）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.465 前移：PREV_SHA 從 413b382e（v6.464）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.465：一般對戰／線上座位／錦標賽報名改走完整 validateDeck 並列出原因（v6465-deck-issues）；首頁 changelog 三步搬運。
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.464）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.464 前移：PREV_SHA 從 4155077a（v6.463）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -877,16 +886,6 @@ const PREV_ALLOWED = [
 // ⭐v6.454：v6.448～v6.453 獨立審查（fable）修正 A～F、H（game/+page.svelte）；首頁 changelog 三步搬運。
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.453）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.453 前移：PREV_SHA 從 05817482（v6.452）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.453：picker 統一化剩餘項目（手機撤退改開父層撤退選單、棄權確認深色、設定 M 寬、層級刻度表、手機按鈕等寬；game/+page.svelte、MobilePortraitBattle.svelte）；首頁 changelog 三步搬運。
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'src/routes/game/MobilePortraitBattle.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

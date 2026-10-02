@@ -161,6 +161,8 @@ function strip(src) {
     /  \/\* >>> v6441-blue-css \*\/[\s\S]*?  \/\* <<< v6441-blue-css \*\/\n/,
     /  \/\* >>> v6441-blue-geom \*\/[\s\S]*?  \/\* <<< v6441-blue-geom \*\/\n/,
     /    \/\* >>> v6442-blue-fallback \*\/[\s\S]*?    \/\* <<< v6442-blue-fallback \*\/\n/,
+    // v6.466：新版桌墊在 iPad／小筆電的調校（頁首具名容器 blhdr＋三段 @container、📜 收合鈕讓位）；只作用在新版桌墊，內容由 test-v6466-blue-ipad-layouts 鎖
+    /  \/\* >>> v6466-blue-ipad \*\/[\s\S]*?  \/\* <<< v6466-blue-ipad \*\/\n/,
     // v6.443：場上卡片放大預覽改放卡片旁邊（只在藍桌墊生效的一段 script，內容由 test-v6443 鎖）
     /    \/\/ >>> v6443-blue-peek\n[\s\S]*?    \/\/ <<< v6443-blue-peek\n/,
     // v6.446：預設版面改新版桌墊的說明註解（哨兵內只准註解，下方另驗）
@@ -279,7 +281,8 @@ if (m) {
   const iBlue = SRC.indexOf('/* >>> v6441-blue-css */');
   const iEnd = styleEndIndex(SRC, REL);
   ok('★[順序] 藍桌墊 CSS 在 Fable 規則之後、樣式區塊最尾端（同特異度後者勝）',
-    iBlue > SRC.indexOf('.playmat.layout-fable{') && SRC.slice(SRC.indexOf('/* <<< v6441-blue-css */'), iEnd).trim() === '/* <<< v6441-blue-css */');
+    // v6.466（Rule 40，意圖不變）：尾端之後只允許再接一段同樣只作用在新版桌墊的 v6466-blue-ipad 哨兵區塊（內容由 test-v6466 鎖）
+    iBlue > SRC.indexOf('.playmat.layout-fable{') && SRC.slice(SRC.indexOf('/* <<< v6441-blue-css */'), iEnd).replace(/  \/\* >>> v6466-blue-ipad \*\/[\s\S]*?  \/\* <<< v6466-blue-ipad \*\/\n/, '').trim() === '/* <<< v6441-blue-css */');
 }
 const calls = SRC.match(/\{@render blueDeco\([^)]*\)\}/g) || [];
 const guarded = SRC.match(/\{#if battleLayout === 'blue'\}\{@render blueDeco\([^)]*\)\}\{\/if\}/g) || [];

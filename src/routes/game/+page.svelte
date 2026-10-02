@@ -19815,6 +19815,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .playmat.layout-blue.layout-fable .opponent-row > .zone-active,
     .playmat.layout-blue.layout-fable .my-row > .zone-active{ width:auto; height:auto; padding:10px 12px 30px; margin:0; }
     .playmat.layout-blue.layout-fable .action-bar > .action-btns{ overflow:visible; }
+    /* ⭐v6.466：直排時行動列的高度跟著內容走（基礎樣式的 height:180px 裝不下「行動鈕＋滿寬紀錄」，紀錄會蓋到我方那一列）；
+       收合鈕在直排是隱藏的 ⇒ 還原 v6466-blue-ipad 給收合鈕讓出的紀錄上外距。 */
+    .playmat.layout-blue.layout-fable > .action-bar{ height:auto; }
+    .playmat.layout-blue.layout-fable:not(.log-collapsed) > .action-bar > .log-col{ margin-top:0; }
+    /* ⭐v6.466：戰鬥框右側那一欄（道具縮圖寬＝0.42 個戰鬥卡寬，left:100%+10px）在直排也要留位置，否則道具卡會伸出框外、蓋到旁邊的獎賞／備戰框。
+       先攻／後攻小標改成浮在牌堆框左下角（原本在列首佔一整欄約 55px，直向 iPad 的備戰卡被擠到剩 40px 上下）。 */
+    .playmat.layout-blue.layout-fable .opponent-row > .zone-active,
+    .playmat.layout-blue.layout-fable .my-row > .zone-active{ padding-right:calc(var(--active-w) * .42 + 20px); }
+    .playmat.layout-blue.layout-fable > .field-row{ position:relative; }
+    .playmat.layout-blue.layout-fable .opponent-row > .turn-order-chip,
+    .playmat.layout-blue.layout-fable .my-row > .turn-order-chip{ position:absolute; top:auto; right:auto; left:18px; bottom:14px; z-index:5; }
     /* <<< v6442-blue-fallback */
   }
 
@@ -20324,4 +20335,41 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .battle-root:has(.playmat.layout-blue) .reorder-btn{ background:rgba(255,255,255,.1); border-color:rgba(255,255,255,.45); }
   .battle-root:has(.playmat.layout-blue) .reorder-btn:hover:not(:disabled){ background:rgba(122,164,255,.3); }
   /* <<< v6441-blue-css */
+  /* >>> v6466-blue-ipad */
+  /* ⭐v6.466 新版桌墊在 iPad／小筆電的調校（站長 2026-10-02：請確認各尺寸 iPad 與 12～17 吋筆電能不能正常顯示）。
+     實測（Playwright 真的開一局，28 種視窗：iPad 13／12.9／11／10.5／mini 橫直向扣掉 Safari 列，筆電 1280×632～1920×1090）：
+       ① 頁首一整排不換行、總寬約 1250px ⇒ 視窗 <1250（iPad 11、10.5、mini 橫向、所有 iPad 直向）右邊被切掉：
+          「填能／支援者／撤退」看不到，直向時連「⚙️ 設定」「⛶ 全螢幕」都在畫面外（頁首只能橫向滑，沒人會發現）。
+       ② 對戰紀錄開著時，📜 收合鈕（固定在紀錄欄左上角、58px 高）蓋住紀錄最上面兩三行。
+       ③ <1024 後備直排時，.action-bar 沿用基礎樣式 height:180px，但裡面「行動鈕＋滿寬紀錄（最高 220px）」比 180 高
+          ⇒ 紀錄溢出、蓋到「我方」那一列（後者見 v6442-blue-fallback 區塊）。
+     做法（不新增媒體查詢：本頁媒體查詢數量被 test-v6187／v6195／v6449 釘住；改用「頁首寬度」的容器查詢，只有新版桌墊的頁首是容器）：
+       ・頁首設成具名容器 blhdr；回合文字（含先手提示）先縮、超出用「…」；手牌張數幾乎不縮（張數是重點，只在最後關頭才縮）；其餘維持不縮。
+       ・頁首 <1280：「可用／已用」字樣收掉（綠＝可用、紅＋刪除線＝已用，顏色本來就在表達這件事）、P1／P2 累計時間收掉（總時間與本回合時間保留）。
+       ・頁首 <1100：資源只留圖示（⚡📋🔄🏟，已用的變灰）。
+       ・頁首 <900（只有直向後備會到）：版本、總時間、房號、階段（主階段）收掉。
+       ・設定與全螢幕永遠不收。 */
+  .battle-root:has(.playmat.layout-blue) .battle-header{ container:blhdr / inline-size; }
+  .battle-root:has(.playmat.layout-blue) .battle-header > .turn-info{ flex:1 4 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .battle-root:has(.playmat.layout-blue) .battle-header > .hand-counts{ flex:0 .05 auto; min-width:0; overflow:hidden; }
+  .battle-root:has(.playmat.layout-blue) .battle-header .hand-count-chip{ flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .battle-root:has(.playmat.layout-blue) .battle-header .res-item.res-used .res-lb{ text-decoration:line-through; }
+  @container blhdr (max-width: 1279px){
+    .res-st{ display:none; }
+    .timer-p1, .timer-p2{ display:none; }
+  }
+  @container blhdr (max-width: 1099px){
+    .res-lb{ display:none; }
+    .res-item{ padding:.15rem .3rem; }
+    .res-item.res-used .res-ic{ filter:grayscale(1); }
+  }
+  @container blhdr (max-width: 899px){
+    .version-chip, .timer-total, .room-chip, .phase-tag{ display:none; }
+  }
+  /* ② 📜 收合鈕改成橫向小鈕（約 26px 高），紀錄欄整塊往下讓出 32px（用外距：紀錄欄是捲動容器，內距捲一下就跑掉、照樣被蓋）⇒ 收合鈕浮在紀錄欄上方，不再蓋字（<1024 後備時收合鈕本來就隱藏，見 v6442-blue-fallback 還原外距） */
+  .playmat.layout-blue:not(.log-collapsed) .log-toggle-btn{ top:calc(44px + var(--safe-top, 0px)); right:calc(var(--log-w) - 52px); flex-direction:row; gap:4px; padding:3px 8px; border-radius:6px; }
+  .playmat.layout-blue:not(.log-collapsed) .log-toggle-btn .log-toggle-icon{ font-size:14px; }
+  .playmat.layout-blue:not(.log-collapsed) .log-toggle-btn .log-toggle-arrow{ font-size:12px; }
+  .playmat.layout-blue:not(.log-collapsed) .action-bar > .log-col{ margin-top:32px; }
+  /* <<< v6466-blue-ipad */
 </style>
