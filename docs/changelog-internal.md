@@ -1,5 +1,12 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.473：站長兩條獎賞裁定（2026-10-04）
+
+BASE v6.472（edeadf8b）。
+- 裁定 1（維持、鎖住）：多餘花粉的寶可夢被中毒／灼傷檢查或揚沙擊倒不 +N ——「揚沙、中毒、灼傷的昏厥，是在寶可夢檢查階段，不屬於任何回合」。現行 prizesForKO 路徑本來就不加，守衛 D／E 鎖住。
+- 裁定 2（修正）：脆弱蛻殼歸 0 時古舊能量不算生效 ——「那是觸發脫殼忍者的特性，而不是觸發古舊能量效果」。engine 主傷害 KO 分支 newAncientFlags 改 `ancientEnergyJustUsed && !preventPrizeAll`；effects.koPrizesAdjusted 早 return 本來就不寫旗標 ⇒ 兩管線一致。
+- 守衛：新增 test-v6473-ko-prize-rulings（實跑本版與 BASE 引擎；HEAD-FAIL A）。
+
 ## v6.472：後台一鍵切換全站卡圖來源
 
 BASE v6.471（c98ffbf2）。站長：體感縮圖站（GitHub WebP）比官方原圖慢，要在 admin 監控頁一鍵切回試；選「全站一起切」。

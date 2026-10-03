@@ -39,7 +39,7 @@ const TMP = mkdtempSync(join(tmpdir(), 'v6264-'));
 //   （BASE 裡沒有 v6.271~v6.273 的條目）。自 v6.275 起：**不動 changelog 的版本**（admin-only）
 //   由下方的 F0 短路涵蓋（三檔與 BASE 逐位元相同即無損成立），pin 只需在**動了 changelog**
 //   的版本前移到上一版。
-const BASE_SHA = 'c98ffbf2ed9305afa3476fd80e46b524a1daedb5'; // v6.471（上一版；v6.472 動了首頁 changelog ⇒ pin 必須前移，【F】才驗得到本版的搬運）
+const BASE_SHA = 'edeadf8bee1d9a04f0d545a2b14afdfb680e3cd7'; // v6.472（上一版；v6.473 動了首頁 changelog ⇒ pin 必須前移，【F】才驗得到本版的搬運）
 // ⚠⚠ BASE_SHA 必須是**留在 main 上的那一顆**（git branch -a --contains <sha> 要印得出 main）——
 //    amend／rebase 前的中途 sha 是懸空的，本機 git gc 後就消失，整個【F】會靜默退化成 SKIP。IRON_RULES Rule 45。
 //   所以 v6.383 動 changelog 時**刻意不把 pin 往前挪**：留在 v6.381 才能讓【F】真的跑一次逐字還原比對，挪到 v6.382 結果一樣但沒有多守到東西）
@@ -615,6 +615,9 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
         + `首頁 ${Buffer.byteLength(baseHome.out, 'utf8')} → ${Buffer.byteLength(HOME, 'utf8')} bytes`);
     });
   } else {
+    const PUBLIC_REWORDS = [
+      ['v6.472', "<summary><span class=\"ver-badge\">v6.472</span> <b>卡圖載入的內部維護</b><br>小卡圖載入方式的內部調整，畫面與操作都不變。</summary>\n        <div class=\"log-body\">・小卡圖載入方式的內部調整，畫面與操作都不變。</div>", "<summary><span class=\"ver-badge\">v6.472</span> <b>卡圖來源可由站方切換</b><br>站方可以在後台切換小卡圖的載入來源（縮圖站或官方原圖），用來比較哪一種在大家的網路下比較快。</summary>\n        <div class=\"log-body\">・盤面、手牌、牌組與卡牌資料庫的小卡圖，現在可以由站方在後台切換成「縮圖站」或「官方原圖」。預設維持縮圖站，玩家這邊不用做任何設定。<br>・切換後最慢約 10 分鐘，重新整理頁面就會套用。放大檢視卡片一律是官方原圖，不受影響。</div>"],
+    ];
     T('F1 ⭐ 首頁：除了最新那一則以外，每一則都能逐位元組還原回 BASE（搬運沒有動到內文）', () => {
       assert.ok(baseHome.ok, '讀不到 BASE 的 changelog.html');
       const bm = new Map(baseHomeSplit.entries.map((e) => [e.ver, e.text]));
@@ -633,6 +636,9 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
         }
         assert.ok(!(origLazy && !e.dataVer), e.ver + ' 從懶載入變回內嵌 —— 搬運方向反了');
         if (/^<details open>/.test(orig)) rebuilt = rebuilt.replace(/^<details(?: open)?>/, '<details open>');
+        // ⭐v6.473（Rule 40，意圖不變＝搬運不可動到內文）：站長 2026-10-04 指示「admin 的任何功能更新都不要寫在 changelog」，
+        //   v6.472 那則刻意改寫成不提後台。逐字列出改寫前後（只在 BASE 還是舊字樣時套用；BASE 前移後自動失效），還原後仍必須與 BASE 逐位元相同；多動一個字照樣紅。
+        for (const [ver, from, to] of PUBLIC_REWORDS) if (e.ver === ver && orig.includes(to)) rebuilt = rebuilt.split(from).join(to);
         assert.strictEqual(rebuilt, orig, e.ver + ' 還原後與 BASE 不同');
         checked++;
       }

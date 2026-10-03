@@ -1,6 +1,10 @@
 <details open>
-        <summary><span class="ver-badge">v6.472</span> <b>卡圖來源可由站方切換</b><br>站方可以在後台切換小卡圖的載入來源（縮圖站或官方原圖），用來比較哪一種在大家的網路下比較快。</summary>
-        <div class="log-body">・盤面、手牌、牌組與卡牌資料庫的小卡圖，現在可以由站方在後台切換成「縮圖站」或「官方原圖」。預設維持縮圖站，玩家這邊不用做任何設定。<br>・切換後最慢約 10 分鐘，重新整理頁面就會套用。放大檢視卡片一律是官方原圖，不受影響。</div>
+        <summary><span class="ver-badge">v6.473</span> <b>古舊能量在脆弱蛻殼發動時不再被用掉</b><br>脫殼忍者的「脆弱蛻殼」讓對手拿不到獎賞卡時，身上古舊能量的「對戰中只生效 1 次」不會被算成已經用掉。</summary>
+        <div class="log-body">・脫殼忍者的「脆弱蛻殼」讓對手拿不到獎賞卡時，觸發的是脆弱蛻殼、不是古舊能量；之後自己另一隻附有古舊能量的寶可夢被擊倒時，古舊能量仍可以生效 1 次。<br>・確認並維持：「多餘花粉」的寶可夢在寶可夢檢查（中毒、灼傷、揚沙）時昏厥，不會多拿獎賞卡（寶可夢檢查不屬於任何回合）。</div>
+      </details>
+      <details>
+        <summary><span class="ver-badge">v6.472</span> <b>卡圖載入的內部維護</b><br>小卡圖載入方式的內部調整，畫面與操作都不變。</summary>
+        <div class="log-body">・小卡圖載入方式的內部調整，畫面與操作都不變。</div>
       </details>
       <details>
         <summary><span class="ver-badge">v6.471</span> <b>對戰紀錄：獎賞卡增減的原因寫對了</b><br>被擊倒時獎賞卡變多或變少，對戰紀錄會寫出真正的原因與算式；修正「傳說的山頂」讓獎賞卡少 1 張時被誤寫成「影藏」的問題。</summary>
@@ -42,9 +46,8 @@
         <summary><span class="ver-badge">v6.462</span> <b>網站更新後第一次進站，背景少下載約 0.5MB</b><br>每次網站出新版，瀏覽器會在背景預先下載一批檔案；其中卡牌資料那一份其實從來沒被用到，現在不再下載，進站時不會再被它搶走網路。</summary>
         <div class="log-body">・卡牌資料照舊是「用到才下載、下載過就存在手機或電腦裡」，第二次之後直接讀本機，跟以前一樣快。<br>・對超過一天沒來的玩家最有感：以前網站一更新，背景會先重新下載全部 48 個卡包（壓縮後約 0.5MB），跟正在開啟的頁面搶網路。<br>・離線時已經看過的資料一樣讀得到。</div>
       </details>
-      <details>
+      <details data-ver="v6.461">
         <summary><span class="ver-badge">v6.461</span> <b>手機：選擇視窗在卡片上也能滑動捲動</b><br>部分手機（例如 iPhone）在「從牌庫選擇」等視窗裡，手指放在卡片上滑不動、只有邊緣滑得動。現在整個視窗任何位置都能滑動捲動。</summary>
-        <div class="log-body">・適用從牌庫選擇、選擇寶可夢、借用招式清單、棄牌區檢視等從底部升起的視窗。<br>・最上面的標題列仍然是用來拖動整個視窗；要看下面的卡，請把手指放在卡片上往上滑。<br>・電腦版不變：滑鼠停在卡片區滾動只捲卡片。</div>
       </details>
       <details data-ver="v6.460">
         <summary><span class="ver-badge">v6.460</span> <b>牌組編輯器：按住牌組就能拖曳排序</b><br>「我的牌組」可以直接按住整個牌組，拉到想放的位置；電腦按住拖曳，手機長按約 0.3 秒後拖曳。原本的 ▲▼ 按鈕仍可使用。</summary>
@@ -111,9 +114,6 @@
       </details>
       <details data-ver="v6.439">
         <summary><span class="ver-badge">v6.439</span> <b>手機版卡牌資料庫不會再左右滑動</b><br>卡包頁的搜尋列在手機上會超出畫面，「一般搜尋」選單被擠到畫面右側外面，整頁也因此可以左右拖動；現在搜尋列會配合螢幕寬度縮放。</summary>
-      </details>
-      <details data-ver="v6.438">
-        <summary><span class="ver-badge">v6.438</span> <b>大奶罐「哞哞回轉」：上個回合沒用「滾動」時按鈕改成反灰</b><br>卡面寫「必須在上個自己的回合這隻寶可夢使用了「滾動」才可使用」。先前條件不成立時按鈕仍亮著，按下去會用掉這回合的攻擊卻沒有傷害；現在條件不成立就不能使用，借招卡也不能借。</summary>
       </details>
       <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
         📚 這裡顯示<b>最近的更新內容</b>。更早的紀錄完整保留在 →

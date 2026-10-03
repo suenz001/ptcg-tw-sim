@@ -6448,7 +6448,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       }
       defPlayers[dIdx] = defenderState;
       // v2.260 Bug #4：若古舊能量這次有 -1，per-player flag 設為 true（之後不再 -1）
-      const newAncientFlags: [boolean, boolean] = ancientEnergyJustUsed
+      // ⭐v6.473 站長裁定（2026-10-04）：脫殼忍者「脆弱蛻殼」讓對手拿不到獎賞卡時，觸發的是脆弱蛻殼、不是古舊能量的效果
+      //   ⇒ 古舊能量的「每場 1 次」**不算用掉**（原本照樣寫成已生效；effects 側 koPrizesAdjusted 本來就不寫，兩條管線從此一致）。
+      const newAncientFlags: [boolean, boolean] = (ancientEnergyJustUsed && !preventPrizeAll)
         ? (() => {
             const f = [...(newState.ancientEnergyMinusOneUsed ?? [false, false])] as [boolean, boolean];
             f[dIdx] = true;
