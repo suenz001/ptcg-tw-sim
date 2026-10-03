@@ -1,5 +1,19 @@
 # 內部改版紀錄（不打包進網站）
 
+## server patch v1.54：全站 audit 伺服器端降載六項（輸出逐位元不變、只少做事）
+
+BASE `53491588`（v6.468／server v1.53）。子代理審查 server_admin_patch.js，以下各項自行查證＋真 handler 對照 v1.53 實跑。
+- 大廳列表 `GET /api/rooms?status=lobby,playing`（休閒大廳每人每 2 秒）：同時抵達的請求共用一次 DB 查詢＋digest＋email 剝除（`v154-rooms-inflight`，不加 TTL ⇒ 不會更舊）。
+- 休閒 GET log 增量：鏈雜湊改可接續（`v154-log-chain-resume`），相符時前段不再 stringify 兩遍。
+- `/api/tournament/event`（每人每 3 秒）：原本 `TREGS.find({uid})` 整批讀本人歷屆報名（只增不減）＋再補查一次 deckEntries；改主鍵 `${eventId}__${uid}` 取開放賽事那幾筆（帶 deckEntries）＋`{uid, name:{$nin:[null,'']}}` 投影 name／registeredAt `sort(-1).limit(1)` 取暱稱，兩發並行（`v154-event-myregs`）。
+- `getEventShared`：3 秒快取過期時 in-flight 合併、內部 listOpenEvents∥running、各場 count 並行（`v154-event-shared-inflight`）。
+- `/api/tournament/chat`：chatMeta 改記憶體值，/admin/chat/clear 寫回同一個值、60 秒 TTL 保險（`v154-chat-meta-cache`）。
+- `/api/tournament/bracket`：v1.52 只合併查詢，同時醒來的請求各自再算一次排名 ⇒ 查詢＋computeStandings＋寫快取整段用 bracketFindShared('c:…') 合併。
+- 28 把鎖重釘：新增 `sap-revert-admin-v154.mjs`（difflib 18 條、整份還原逐位元＝v1.53）、`tourn-revert-v154.mjs`；五支消費者、test-v6379（LIB_DECL 10）、17 支守衛換新指紋；sap152／sap153／admin-v177 依 Rule 40 先剝 v1.54；test-v6119 /event 判準接受 v1.54 形狀（更嚴：不准再有整批讀歷屆報名的查詢）。
+- 守衛：新增 `test-sap154-audit-load.mjs`（R／L／E／C／B 五組都與 v1.53 同輸入實跑：回應逐欄位相同、DB 查詢／計算次數 v1.54 < v1.53；D 組重釘）。
+- 評估後未做：sweepCasualIdle 改 aggregate（MongoDB 版本未確認）、觀戰盤面快取、/champions 快取（失效點多）、verifyIdToken 快取（沒有量測證據）、/state 包含式 projection（收益小）。
+- 部署：只動伺服器補丁 ⇒ **`update-tournament.bat`**。
+
 ## v6.468：全站 audit 第二批（介面）
 
 BASE v6.467。子代理以 Playwright 量 /、/cards、/card、/decks、/deck-posts、/friends、/tournament、/game 大廳 × 360／390／1366／1920。

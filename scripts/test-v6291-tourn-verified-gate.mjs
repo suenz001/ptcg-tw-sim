@@ -47,10 +47,10 @@ import {
 //   本檔的 revert-diff 從此再串一節：先還原 v6.365 的三段，再往後退。
 //   ⚠ 站長明文禁止把鎖拿掉／改成不驗／只比片段 ⇒ 一律串接，不放水。
 import {
-  NEW_TAIL_SHA_V153 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V153 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V153 as NEW_TEV_LEN_CUR,
-  revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365, stripDeclaredBlocksNewerThan,
-} from './lib/tourn-revert-v153.mjs';
-const revertV6384 = (b) => _rv6384(revertV150(revertV152(revertV153(b))));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）；⭐v1.53 再長一節（報名牌組完整規則）
+  NEW_TAIL_SHA_V154 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V154 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V154 as NEW_TEV_LEN_CUR,
+  revertV154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365, stripDeclaredBlocksNewerThan,
+} from './lib/tourn-revert-v154.mjs';
+const revertV6384 = (b) => _rv6384(revertV150(revertV152(revertV153(revertV154(b)))));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）；⭐v1.53 再長一節（報名牌組完整規則）；⭐v1.54 再長一節（全站 audit 降載）
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
 const revertV6365 = (b) => _rv6365(revertV6381(b));   // ⭐v6.381 鏈又長一節（別名：既有呼叫點一個字都不必改）
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位

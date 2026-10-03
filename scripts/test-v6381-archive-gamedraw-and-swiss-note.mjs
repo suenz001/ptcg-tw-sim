@@ -19,11 +19,11 @@ import { createHash } from 'node:crypto';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
 import {
-  TAIL_ANCHOR, TEV_ANCHOR, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertToV6292, revertToV6291,
-  NEW_TAIL_SHA_V153 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V153 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V153 as NEW_TEV_LEN_CUR,
+  TAIL_ANCHOR, TEV_ANCHOR, revertV154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertToV6292, revertToV6291,
+  NEW_TAIL_SHA_V154 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V154 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V154 as NEW_TEV_LEN_CUR,
   OLD_TAIL_SHA_V6365, OLD_TEV_SHA_V6365, OLD_TEV_LEN_V6365,
-} from './lib/tourn-revert-v153.mjs';
-const revertV6384 = (b) => _rv6384(revertV150(revertV152(revertV153(b))));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）；⭐v1.53 再長一節（報名牌組完整規則）
+} from './lib/tourn-revert-v154.mjs';
+const revertV6384 = (b) => _rv6384(revertV150(revertV152(revertV153(revertV154(b)))));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）；⭐v1.53 再長一節（報名牌組完整規則）；⭐v1.54 再長一節（全站 audit 降載）
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
 import { NEW_TAIL_SHA_V6292, NEW_TEV_SHA_V6292, NEW_TEV_LEN_V6292 } from './lib/tourn-revert-v6292.mjs';
 import { NEW_TAIL_SHA_V6291, NEW_TEV_SHA_V6291 } from './lib/tourn-revert-v6291.mjs';

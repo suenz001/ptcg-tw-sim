@@ -5070,6 +5070,24 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (!_has) return room;
         return { ...room, seats: room.seats.map((s) => (s && typeof s === 'object' && s.email != null) ? { ...s, email: null } : s) };
       };
+      // >>> v154-rooms-inflight
+      // ⭐server v1.54（全站 audit 2026-10-03）：大廳列表的查詢對**所有人都一樣**，原本每個請求各查一次 DB、
+      //   各解 100 間房的 BSON、各算一次 digest、各剝一次 email。改成「同時抵達的請求共用同一次查詢」
+      //   （in-flight 合併，不加任何 TTL 快取 ⇒ 結果不會比原本舊；查完就丟，下一個請求重新查）。
+      //   ⚠ 失敗時這一批都拿到同一個錯誤 ⇒ 照原本的 catch → next() 走核心端點（fail-open 不變）。
+      let _roomsCombinedInflight = null;
+      const _roomsCombinedShared = () => {
+        if (_roomsCombinedInflight) return _roomsCombinedInflight;
+        _roomsCombinedInflight = (async () => {
+          const _rooms = await db.collection('rooms')
+            .find({ status: { $in: ['lobby', 'playing'] } }, { projection: { 'seats.deckEntries': 0, gameState: 0 } })
+            .limit(100).sort({ updatedAt: -1 }).toArray();
+          return { dg: _roomsListDigest(_rooms), rooms: _rooms.map(_stripSeatEmails17) };
+        })();
+        _roomsCombinedInflight.then(() => { _roomsCombinedInflight = null; }, () => { _roomsCombinedInflight = null; });
+        return _roomsCombinedInflight;
+      };
+      // <<< v154-rooms-inflight
       const _roomsCombinedMw = async (req, res, next) => {
         try {
           if (String((req && req.method) || '').toUpperCase() !== 'GET') return next();
@@ -5088,12 +5106,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
           // 對所有匿名登入者開放,這裡只擋「連 header 都沒有」的裸請求,語義與核心端點一致)。
           const _auth = String((req && req.headers && req.headers.authorization) || '');
           if (_auth.indexOf('Bearer ') !== 0) return next();
-          const _rooms = await db.collection('rooms')
-            .find({ status: { $in: ['lobby', 'playing'] } }, { projection: { 'seats.deckEntries': 0, gameState: 0 } })
-            .limit(100).sort({ updatedAt: -1 }).toArray();
-          const _dg = _roomsListDigest(_rooms);
+          const { dg: _dg, rooms: _out } = await _roomsCombinedShared();   // ⭐v1.54 見 v154-rooms-inflight
           if (_h && _h === _dg) return res.status(204).end();  // 內容沒變 → 零 body
-          return res.status(200).json({ rooms: _rooms.map(_stripSeatEmails17), combined: true, h: _dg });
+          return res.status(200).json({ rooms: _out, combined: true, h: _dg });
         } catch (_e) { return next(); }  // 任何錯誤 → fail-open 走核心端點
       };
       app.use(_roomsCombinedMw);
@@ -5151,9 +5166,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
       // 混入分隔符)。⚠ 與 client 端 oracle-client.ts 的 logChainHash **逐字元同演算法**,
       // 守衛用同一份資料實跑兩端比對輸出;JSON round-trip(stringify→parse→stringify)保序保值,
       // 所以兩端對同一份 log 必得同雜湊,差一個字元就整包退回全量。
-      const _logChainHash = (log, n) => {
-        let h1 = 0x811c9dc5 >>> 0, h2 = 0xcbf29ce4 >>> 0;
-        for (let i = 0; i < n; i++) {
+      // >>> v154-log-chain-resume
+      // ⭐server v1.54（全站 audit 2026-10-03）：鏈雜湊改成「可以從中間狀態接著算」。
+      //   原本增量判斷先算 _logChainHash(log, logSince)、相符後再從頭算一次 _logChainHash(log, log.length)
+      //   ⇒ 前 logSince 則被 JSON.stringify＋逐字雜湊兩遍。FNV 鏈是累加的，第二遍完全是第一遍的延伸，
+      //   改成接著第一遍的狀態算剩下的幾則 ⇒ 輸出逐位元相同、CPU 少一半。
+      const _logChainRun = (log, from, to, st) => {
+        let h1 = st.h1, h2 = st.h2;
+        for (let i = from; i < to; i++) {
           const s = JSON.stringify(log[i]) ?? 'null';
           for (let j = 0; j < s.length; j++) {
             const c = s.charCodeAt(j);
@@ -5163,8 +5183,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
           h1 = Math.imul(h1 ^ 10, 16777619) >>> 0;
           h2 = Math.imul(h2 ^ 10, 16777619) >>> 0;
         }
-        return h1.toString(16) + '-' + h2.toString(16) + '-' + n;
+        return { h1, h2 };
       };
+      const _logChainFmt = (st, n) => st.h1.toString(16) + '-' + st.h2.toString(16) + '-' + n;
+      // <<< v154-log-chain-resume
+      const _logChainHash = (log, n) => _logChainFmt(_logChainRun(log, 0, n, { h1: 0x811c9dc5 >>> 0, h2: 0xcbf29ce4 >>> 0 }), n);
       // 純函式:對「即將送出的 body」做轉換。任何路徑都回傳完整合法 body;
       // 增量條件不滿足=只剝 email、log 原樣全量。
       const _transformRoomsBody = (body, kind, logSince, logh) => {
@@ -5179,9 +5202,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (kind === 'get' && logSince !== null && typeof logh === 'string' && logh !== '') {
           const gs = room.gameState;
           const log = gs && Array.isArray(gs.log) ? gs.log : null;
-          if (log && Number.isInteger(logSince) && logSince > 0 && logSince <= log.length
-              && _logChainHash(log, logSince) === logh) {
-            delta = { since: logSince, total: log.length, fh: _logChainHash(log, log.length) };
+          const _st0 = (log && Number.isInteger(logSince) && logSince > 0 && logSince <= log.length) ? _logChainRun(log, 0, logSince, { h1: 0x811c9dc5 >>> 0, h2: 0xcbf29ce4 >>> 0 }) : null;   // ⭐v1.54 見 v154-log-chain-resume
+          if (_st0 && _logChainFmt(_st0, logSince) === logh) {
+            delta = { since: logSince, total: log.length, fh: _logChainFmt(_logChainRun(log, logSince, log.length, _st0), log.length) };
             room = { ...room, gameState: { ...gs, log: log.slice(logSince) } };
           }
         }
@@ -7511,15 +7534,27 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //   取代 N+1 findOne。使用者自身狀態(registered/checkedIn/myMatch)仍每請求新鮮,只有聚合(清單/count)快取 ≤3s。
     let _eventShared = { at: 0, openList: [], regCounts: {}, runningEvents: [] };
     const EVENT_SHARED_TTL_MS = 3000;
+    // >>> v154-event-shared-inflight
+    // ⭐server v1.54（全站 audit 2026-10-03）：3 秒快取過期的那一刻，同時抵達的請求原本**各自**重填一次
+    //   （listOpenEvents ＋ 每場一次 countDocuments ＋ running 清單，全部序列）。改成：
+    //   ① 同時抵達的共用同一次重填（in-flight 合併；TTL 與快取內容完全不變）；
+    //   ② 重填內部改並行：running 清單與 listOpenEvents 同時發、各場 count 同時發。
+    //   ⚠ 失敗時這一批拿到同一個錯誤（原本是各自失敗）；下一個請求重新嘗試。
+    let _eventSharedInflight = null;
+    // <<< v154-event-shared-inflight
     async function getEventShared() {
       const now = Date.now();
       if (_eventShared.at && (now - _eventShared.at) <= EVENT_SHARED_TTL_MS) return _eventShared;
-      const openList = await listOpenEvents();
-      const regCounts = {};
-      for (const _e of openList) regCounts[_e._id] = await TREGS.countDocuments({ eventId: _e._id });
-      const runningEvents = await TEVENTS.find({ status: 'running' }).toArray();
-      _eventShared = { at: now, openList, regCounts, runningEvents };
-      return _eventShared;
+      if (_eventSharedInflight) return _eventSharedInflight;   // ⭐v1.54
+      _eventSharedInflight = (async () => {   // ⭐v1.54
+        const [openList, runningEvents] = await Promise.all([listOpenEvents(), TEVENTS.find({ status: 'running' }).toArray()]);   // ⭐v1.54 並行
+        const regCounts = {};
+        const _counts = await Promise.all(openList.map((_e) => TREGS.countDocuments({ eventId: _e._id })));   // ⭐v1.54 並行
+        openList.forEach((_e, _i) => { regCounts[_e._id] = _counts[_i]; });
+        _eventShared = { at: now, openList, regCounts, runningEvents };
+        return _eventShared;
+      })();
+      try { return await _eventSharedInflight; } finally { _eventSharedInflight = null; }
     }
     app.get('/api/tournament/event', async (req, res) => {
       try {
@@ -7544,18 +7579,26 @@ import('firebase-admin').then(async ({ default: admin }) => {
         //   registeredAt，**只有「當前賽事那一筆」需要 deckEntries**（算 deckCount）。
         //   老玩家累積數十筆報名 ≈ 每 3 秒白拉上百 KB。改成 projection 掉 deckEntries，
         //   需要的那一筆再用 _id 點查補回（走主鍵，極便宜）。
-        const myRegs = await TREGS.find({ uid: id.uid }, { projection: { deckEntries: 0 } }).toArray();
+        // >>> v154-event-myregs
+        // ⭐server v1.54（全站 audit 2026-10-03）：原本每 3 秒把本人**全部歷屆報名**整批讀回來（TREGS 只增不減，
+        //   老玩家數百筆、隨時間線性變大），實際只用到「開放中賽事（＋這次查的那場）」的幾筆，和「最近一次的暱稱」。
+        //   改成兩發並行：① 用主鍵 `${eventId}__${uid}`（三支報名端點都用這個 _id）只取那幾筆，順便帶回 deckEntries
+        //   （省掉原本的 _regDeck 補查）；② 取最近一次有暱稱的那一筆（只投影 name／registeredAt、limit 1）。
+        //   ⚠ 輸出欄位與原本逐一相同；同一 registeredAt 的極端並列時暱稱取哪一筆可能不同（原本也沒有定義）。
+        const _myRegIds = [...new Set([...shared.openList.map((_e) => _e._id), ...(ev ? [ev._id] : [])])].map((_eid) => String(_eid) + '__' + id.uid);
+        const [myRegs, _lastRegs] = await Promise.all([
+          _myRegIds.length ? TREGS.find({ _id: { $in: _myRegIds } }).toArray() : Promise.resolve([]),
+          TREGS.find({ uid: id.uid, name: { $nin: [null, ''] } }, { projection: { name: 1, registeredAt: 1 } }).sort({ registeredAt: -1 }).limit(1).toArray(),
+        ]);
+        // <<< v154-event-myregs
         const myRegBy = new Map(myRegs.map((r) => [r.eventId, r]));
         let me = { registered: false, checkedIn: false };
         if (ev) {
           const reg = myRegBy.get(ev._id);
-          // v6.119：deckEntries 已被 projection 掉，這一筆單獨補查（_id 點查）。
-          //   ⚠ deckCount(undefined) 會回 -1（非 0），前端會誤顯示 → 一定要補回來。
-          const _regDeck = reg ? await TREGS.findOne({ _id: reg._id }, { projection: { deckEntries: 1 } }) : null;
-          if (reg) me = { registered: true, checkedIn: !!reg.checkedIn, deckCount: deckCount(_regDeck && _regDeck.deckEntries), name: reg.name, deckName: reg.deckName || null, autoRemovedConflict: !!reg.autoRemovedConflict, dropped: !!reg.dropped, lateJoin: !!reg.lateJoin };
+          if (reg) me = { registered: true, checkedIn: !!reg.checkedIn, deckCount: deckCount(reg.deckEntries), name: reg.name, deckName: reg.deckName || null, autoRemovedConflict: !!reg.autoRemovedConflict, dropped: !!reg.dropped, lateJoin: !!reg.lateJoin };   // ⭐v1.54 deckEntries 隨主鍵查詢一起回來
         }
-        // v0.84 預填暱稱:附「最近一次報名的暱稱」供前端未報名任何賽事時預填(從已抓的 myRegs 取最新,無額外查詢);從沒報過退帳號顯示名 id.name
-        const _lastReg = myRegs.filter((r) => r.name).sort((a, b) => (b.registeredAt || 0) - (a.registeredAt || 0))[0];
+        // v0.84 預填暱稱:附「最近一次報名的暱稱」供前端未報名任何賽事時預填;從沒報過退帳號顯示名 id.name
+        const _lastReg = _lastRegs[0];   // ⭐v1.54 改由資料庫排序取最新一筆
         me.lastName = (_lastReg && _lastReg.name) || id.name || null;
         let regCount = 0;
         if (ev) regCount = (shared.regCounts[ev._id] != null) ? shared.regCounts[ev._id] : await TREGS.countDocuments({ eventId: ev._id });
@@ -8334,12 +8377,25 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (r.deletedCount) console.log('[chat-prune] 大廳聊天修剪 ' + r.deletedCount + ' 則（保留最近 ' + KEEP + '）');
       }
     }
+    // >>> v154-chat-meta-cache
+    // ⭐server v1.54（全站 audit 2026-10-03）：/chat 每人每 3 秒一發，原本每發都先讀一次 TCONFIG chatMeta、
+    //   **讀完才查**聊天（兩段序列 DB 往返）。clearedAt 唯一的寫入點是同一個行程裡的 /admin/chat/clear
+    //   （pm2 單一 fork）⇒ 改成記憶體值：清除時同步更新（零延遲生效），讀取 60 秒才回 DB 確認一次（保險：
+    //   萬一有人從 mongo shell 直接改）。
+    let _chatMeta = { at: 0, clearedAt: 0 };
+    const CHAT_META_TTL_MS = 60 * 1000;
+    async function chatClearedAt() {
+      if (_chatMeta.at && (Date.now() - _chatMeta.at) <= CHAT_META_TTL_MS) return _chatMeta.clearedAt;
+      const cfg = await TCONFIG.findOne({ _id: 'chatMeta' });
+      _chatMeta = { at: Date.now(), clearedAt: (cfg && cfg.clearedAt) || 0 };
+      return _chatMeta.clearedAt;
+    }
+    // <<< v154-chat-meta-cache
     app.get('/api/tournament/chat', async (req, res) => {
       try {
         const since = Number(req.query.since) || 0;
         const before = Number(req.query.before) || 0; // v0.66 懶載入：before>0=上滑載更舊；since=before=0=初始載「最新」一頁
-        const cfg = await TCONFIG.findOne({ _id: 'chatMeta' });
-        const clearedAt = (cfg && cfg.clearedAt) || 0;
+        const clearedAt = await chatClearedAt();   // ⭐v1.54 見 v154-chat-meta-cache
         let docs, hasMore;
         if (since > 0) {
           // 增量輪詢：只回比 since 新的訊息（升序），高頻輪詢低流量。
@@ -8398,7 +8454,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
         if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
         await TCHAT.deleteMany({ room: 'lobby' });
-        await TCONFIG.updateOne({ _id: 'chatMeta' }, { $set: { clearedAt: Date.now() } }, { upsert: true });
+        const _clearedAt = Date.now();   // ⭐v1.54 同一個值寫 DB 與記憶體
+        await TCONFIG.updateOne({ _id: 'chatMeta' }, { $set: { clearedAt: _clearedAt } }, { upsert: true });
+        _chatMeta = { at: Date.now(), clearedAt: _clearedAt };   // ⭐v1.54 見 v154-chat-meta-cache
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -9121,6 +9179,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const _now = Date.now();
         let _cache = _bracketCache.get(ev._id);
         if (!_cache || (_now - _cache.at) > BRACKET_TTL_MS || _cache.round !== ev.currentRound || _cache.status !== ev.status) {
+          // ⭐server v1.54（全站 audit）：v1.52 只合併了「查詢」；同時醒來的 k 個請求原本各自再做一次排名計算
+          //   （buildSwissPlayersFromMatches＋computeStandings）與整理 ⇒ 連「查詢＋計算＋寫快取」整段一起合併，等待者直接拿成品（輸出逐位元相同）。
+          _cache = await bracketFindShared('c:' + ev._id + ':' + ev.currentRound + ':' + ev.status, async () => {   // ⭐v1.54
           const matches = await bracketFindShared('m:' + ev._id, () => TMATCH.find({ eventId: ev._id }, { projection: BRACKET_MATCH_PROJ_V152 }).sort({ round: 1, idx: 1 }).toArray());   // ⭐v1.52 只讀用得到的欄位＋同時過期只讀一次
           // v0.48：瑞士制賽事附即時排名表(由 swiss 階段對戰紀錄重建 → computeStandings)。
           let standingsRaw = null;
@@ -9141,10 +9202,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
             } catch (e) { standingsRaw = null; }
           }
           const matchesRaw = matches.map((m) => ({ round: m.round, idx: m.idx, phase: m.phase || null, p1uid: m.p1uid, p2uid: m.p2uid, p1name: m.p1name, p2name: m.p2name, winnerName: m.winnerName, winnerUid: m.winnerUid, status: m.status, bye: m.bye, roomId: m.roomId || null }));
-          _cache = { at: _now, round: ev.currentRound, status: ev.status, matchesRaw, standingsRaw };
-          _bracketCache.set(ev._id, _cache);
+          const _built = { at: _now, round: ev.currentRound, status: ev.status, matchesRaw, standingsRaw };   // ⭐v1.54 原本直接寫 _cache
+          _bracketCache.set(ev._id, _built);
           // v0.69：上限 20 個 event(防歷史/社群賽 eventId 累積漏記憶體);超過刪最舊(插入序)。
           if (_bracketCache.size > 20) { const _oldest = _bracketCache.keys().next().value; if (_oldest !== ev._id) _bracketCache.delete(_oldest); }
+          return _built;   // ⭐v1.54
+          });   // ⭐v1.54
         }
         res.json({
           event: { _id: ev._id, name: ev.name, status: ev.status, currentRound: ev.currentRound, rounds: ev.rounds, championName: ev.championName || null, format: ev.format || 'single-elim', phase: ev.phase || null, swissRounds: ev.swissRounds || null, topCut: ev.topCut || null },

@@ -34,6 +34,9 @@ import {
   NEW_TAIL_SHA_V153, NEW_TEV_SHA_V153, NEW_TEV_LEN_V153, OLD_TAIL_SHA_V152, OLD_TEV_SHA_V152, OLD_TEV_LEN_V152,
 } from './lib/tourn-revert-v153.mjs';
 import { revertAdminV153 } from './lib/sap-revert-admin-v153.mjs';
+// ⭐v1.54（Rule 40，意圖不變）：之後的 server patch 又合法改過這份檔 ⇒ 位元組比對類判準先剝掉更新的版本。
+import { revertAdminV154 } from './lib/sap-revert-admin-v154.mjs';
+import { revertV154 } from './lib/tourn-revert-v154.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.466（server patch v1.52）。
@@ -107,7 +110,7 @@ ok('★★[S1] helper 在哨兵內、且在 TAIL_ANCHOR 之前（不進錦標賽
     // 開戰（makeGame）與報到的程式碼在 v1.52 → v1.53 之間逐位元沒變
     const strip = (s) => s.replace(/[ \t]*\/\/ >>> v153-tourn-deck-validate\n[\s\S]*?[ \t]*\/\/ <<< v153-tourn-deck-validate\n/, '');
     ok('★[S4b] 剝掉本版哨兵、三行呼叫與一段說明註解後，整份 server patch 與 v1.52 逐位元相同（沒有夾帶其他改動）',
-      strip(revertAdminV153(CUR)) === BASE);
+      strip(revertAdminV153(revertAdminV154(CUR))) === BASE);
   }
 }
 
@@ -207,8 +210,8 @@ if (BASE) {
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n【D】錦標賽區塊 28 把鎖重釘');
 {
-  const tail = CUR.slice(CUR.indexOf(TAIL_ANCHOR)), tev = CUR.slice(CUR.indexOf(TEV_ANCHOR));
-  ok('★★[D1] 現行區塊指紋 ＝ NEW_*_V153（tail／tev／len）', sha(tail) === NEW_TAIL_SHA_V153 && sha(tev) === NEW_TEV_SHA_V153 && tev.length === NEW_TEV_LEN_V153);
+  const tail = revertV154(CUR.slice(CUR.indexOf(TAIL_ANCHOR))), tev = revertV154(CUR.slice(CUR.indexOf(TEV_ANCHOR)));
+  ok('★★[D1] 現行區塊（剝掉 v1.54 之後）指紋 ＝ NEW_*_V153（tail／tev／len）', sha(tail) === NEW_TAIL_SHA_V153 && sha(tev) === NEW_TEV_SHA_V153 && tev.length === NEW_TEV_LEN_V153);
   const rt = revertV153(tail), rv = revertV153(tev);
   ok('★★★[D2] revertV153 之後逐位元回到 v1.52 的值', sha(rt) === OLD_TAIL_SHA_V152 && sha(rv) === OLD_TEV_SHA_V152 && rv.length === OLD_TEV_LEN_V152);
   const mut = tail.replace('⭐v1.53 完整規則（/register）', '⭐v1.53 完整規則（/registeR）');
@@ -228,9 +231,9 @@ console.log('\n【D】錦標賽區塊 28 把鎖重釘');
   ok('★★[D4] v1.52 的舊指紋零殘留（28 把鎖全部重釘）', OLD_TAIL_SHA_V152 !== NEW_TAIL_SHA_V153 && stale.length === 0, stale.join(', '));
   const CONSUMERS = ['scripts/test-v6276-deck-tournament-stats.mjs', 'scripts/test-v6291-tourn-verified-gate.mjs', 'scripts/test-v6292-tourn-verified-gate2.mjs',
     'scripts/test-v6303-ui-batch.mjs', 'scripts/test-v6381-archive-gamedraw-and-swiss-note.mjs'];
-  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(s.includes("from './lib/tourn-revert-v153.mjs'") && /revert(?:Admin)?V153\(/.test(s)); });
+  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(/from '\.\/lib\/tourn-revert-v15\d\.mjs'/.test(s) && /revert(?:Admin)?V153\(/.test(s)); });
   ok('★★[D5] 五支消費者都 import 新 lib 且呼叫 v1.53 的還原器', bad.length === 0, bad.join(', '));
-  ok('★[D5b] test-v6303 的 SAP 還原鏈最內層是 revertAdminV153', /revertAdminV152\(revertAdminV153\(SAP_RAW\)\)/.test(rd('scripts/test-v6303-ui-batch.mjs')));
+  ok('★[D5b] test-v6303 的 SAP 還原鏈最內層是 revertAdminV153', /revertAdminV152\(revertAdminV153\((?:SAP_RAW|revertAdminV15\d\()/.test(rd('scripts/test-v6303-ui-batch.mjs')));
 }
 
 console.log(`\n=== server patch v1.53 錦標賽報名牌組完整規則: ${pass} PASS / ${fail} FAIL ===`);

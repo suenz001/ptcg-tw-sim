@@ -28,6 +28,7 @@ import {
 } from './lib/tourn-revert-v152.mjs';
 // ⭐v1.53（Rule 40，意圖不變）：錦標賽區塊之後又被 v1.53（報名牌組完整規則）合法改過 ⇒ D 節先剝 v1.53 再比對 v1.52 的值。
 import { revertV153 } from './lib/tourn-revert-v153.mjs';
+import { revertV154 } from './lib/tourn-revert-v154.mjs';   // ⭐v1.54（Rule 40）：再先剝一節
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.459（server patch v1.51）。
@@ -187,7 +188,7 @@ for (const format of ['single-elim', 'swiss-then-cut']) {
 
 console.log('\n【D】錦標賽區塊 28 把鎖重釘');
 {
-  const tail = revertV153(CUR.slice(CUR.indexOf(TAIL_ANCHOR))), tev = revertV153(CUR.slice(CUR.indexOf(TEV_ANCHOR)));
+  const tail = revertV153(revertV154(CUR.slice(CUR.indexOf(TAIL_ANCHOR)))), tev = revertV153(revertV154(CUR.slice(CUR.indexOf(TEV_ANCHOR))));
   ok('D1 現行區塊（剝掉 v1.53 之後）指紋 ＝ NEW_*_V152（tail／tev／len）', sha(tail) === NEW_TAIL_SHA_V152 && sha(tev) === NEW_TEV_SHA_V152 && tev.length === NEW_TEV_LEN_V152);
   const rt = revertV152(tail), rv = revertV152(tev);
   ok('D2 revertV152 之後逐位元回到 v1.50／v1.51 的值', sha(rt) === OLD_TAIL_SHA_V150 && sha(rv) === OLD_TEV_SHA_V150 && rv.length === OLD_TEV_LEN_V150);

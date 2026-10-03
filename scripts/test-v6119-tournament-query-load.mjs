@@ -93,6 +93,15 @@ T('⭐ 未進場判負的防呆探測只看 phase → 必須帶 projection', () 
 });
 
 T('⭐ /event 不得把本人所有歷屆報名的完整牌表拉回來', () => {
+  // ⭐server v1.54（Rule 40，意圖不變且更嚴）：改成只用主鍵取「開放中賽事」那幾筆（可帶 deckEntries，筆數有上限），
+  //   暱稱改由資料庫取最新一筆（只投影 name／registeredAt、limit 1）⇒ 根本不再整批讀歷屆報名。
+  if (/TREGS\.find\(\{ _id: \{ \$in: _myRegIds \} \}\)/.test(P)) {
+    ok(/TREGS\.find\(\{ uid: id\.uid, name: \{ \$nin: \[null, ''\] \} \}, \{ projection: \{ name: 1, registeredAt: 1 \} \}\)\.sort\(\{ registeredAt: -1 \}\)\.limit\(1\)/.test(P),
+      'v1.54 形狀：暱稱查詢必須只投影 name／registeredAt 且 limit 1');
+    ok(!/TREGS\.find\(\{ uid: id\.uid \}/.test(P), 'v1.54 形狀：不可以再有整批讀本人歷屆報名的查詢');
+    ok(/deckCount: deckCount\(reg\.deckEntries\)/.test(P), 'deckCount 沒有改讀主鍵查回來的那筆');
+    return;
+  }
   ok(/TREGS\.find\(\{ uid: id\.uid \}, \{ projection: \{ deckEntries: 0 \} \}\)/.test(P),
     'myRegs 仍拉完整 doc —— 老玩家數十筆報名 × 每 3 秒 = 白拉上百 KB');
   ok(/const _regDeck = reg \? await TREGS\.findOne\(\{ _id: reg\._id \}, \{ projection: \{ deckEntries: 1 \} \}\) : null;/.test(P),

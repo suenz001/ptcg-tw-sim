@@ -31,10 +31,10 @@ import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
-import { revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381 } from './lib/tourn-revert-v153.mjs';
+import { revertV154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381 } from './lib/tourn-revert-v154.mjs';
 const revertV6384 = (b) => _rv6384(revertV150(revertV152(b)));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）
 //   ⭐v1.53 只有行內改動（沒有錦標賽區塊內的哨兵）⇒ 本檔唯一的呼叫點 H3 已先用 revertAdminV153 逐字還原，這裡不再串 revertV153（串了會「一處都沒還原到」而 throw）。
-void revertV153;
+void revertV153; void revertV154;   // ⭐v1.54 同理：H3 已先用 revertAdminV154 整份還原
 // ⭐admin v1.75／server patch v1.46（Rule 40）：回應物件多一個 archScan 欄位是行內改動、無法用哨兵框 ⇒
 //   由 scripts/lib/sap-revert-admin-v146.mjs 逐字宣告、逐字還原（命中不是恰好 1 次就 throw），H3 的逐位元比對一個字都沒放寬。
 import { revertAdminV146 } from './lib/sap-revert-admin-v146.mjs';
@@ -42,6 +42,7 @@ import { revertCasualIdleV147 } from './lib/sap-revert-casual-idle-v147.mjs';
 import { revertAdminV150 } from './lib/sap-revert-admin-v150.mjs';   // ⭐server v1.50／admin v1.77（Rule 54：由新到舊）
 import { revertAdminV152 } from './lib/sap-revert-admin-v152.mjs';   // ⭐server v1.52（/bracket 只讀用得到的欄位）
 import { revertAdminV153 } from './lib/sap-revert-admin-v153.mjs';   // ⭐server v1.53（報名牌組完整規則）
+import { revertAdminV154 } from './lib/sap-revert-admin-v154.mjs';   // ⭐server v1.54（全站 audit 降載）
 import { revertAdminV148 } from './lib/sap-revert-admin-v148.mjs';   // ⭐admin v1.76／server v1.48（Rule 54：由新到舊）   // ⭐v6.425 鏈又長一節（Rule 54：由新到舊）
 import { styleBlockOf } from './lib/svelte-style-block.mjs';
 import { pwUsable } from './lib/pw.mjs';
@@ -508,7 +509,7 @@ await T('H3 ⭐ 沒有動到不該動的檔：oracle-admin/server_admin_patch.js
   //   沒辦法用 `// >>> …` 哨兵框住 ⇒ 沿用 v6.292 的形狀，由
   //   scripts/lib/tourn-revert-v6381.mjs 逐字還原（它對「命中次數不合理」「還原後仍有
   //   v6381 痕跡」一律 throw ⇒ 這不是放寬，是把改動搬到宣告端）。
-  const SAP_REVERTED = revertV6381(revertAdminV146(revertCasualIdleV147(revertAdminV148(revertAdminV150(revertAdminV152(revertAdminV153(SAP_RAW)))))));   // 由新到舊（Rule 54）
+  const SAP_REVERTED = revertV6381(revertAdminV146(revertCasualIdleV147(revertAdminV148(revertAdminV150(revertAdminV152(revertAdminV153(revertAdminV154(SAP_RAW))))))));   // 由新到舊（Rule 54）
   assert.ok(SAP_REVERTED !== SAP_RAW, '⚠ v6.381 的還原器對 server_admin_patch.js 是 no-op（宣告端過期了）');
   const SAP_STRIPPED = SAP_REVERTED.replace(/[ \t]*\/\/ >>> v\d+-[\w-]+[\s\S]*?\/\/ <<< v\d+-[\w-]+\n/g, '');
   assert.ok(SAP_STRIPPED !== SAP_REVERTED,

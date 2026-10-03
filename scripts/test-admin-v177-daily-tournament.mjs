@@ -463,8 +463,9 @@ console.log('\n【D】錦標賽區塊的 revert-diff 與 28 把鎖重釘（動�
   //   ⭐v1.53（同上）：再先剝 v1.53（錦標賽報名的牌組改在伺服器端也跑完整規則）。
   const RV152 = await import('./lib/tourn-revert-v152.mjs');
   const RV153 = await import('./lib/tourn-revert-v153.mjs');
-  const tail = RV152.revertV152(RV153.revertV153(PATCH.slice(PATCH.indexOf(RV.TAIL_ANCHOR))));
-  const tev = RV152.revertV152(RV153.revertV153(PATCH.slice(PATCH.indexOf(RV.TEV_ANCHOR))));
+  const RV154 = await import('./lib/tourn-revert-v154.mjs');   // ⭐v1.54 再先剝一節
+  const tail = RV152.revertV152(RV153.revertV153(RV154.revertV154(PATCH.slice(PATCH.indexOf(RV.TAIL_ANCHOR)))));
+  const tev = RV152.revertV152(RV153.revertV153(RV154.revertV154(PATCH.slice(PATCH.indexOf(RV.TEV_ANCHOR)))));
   await T('D1 ⭐⭐ 現行區塊（剝掉 v1.52 之後）指紋 ＝ v1.50 的新值（tail／tev／長度）', () => {
     ok(sha(tail) === RV.NEW_TAIL_SHA_V150 && sha(tev) === RV.NEW_TEV_SHA_V150 && tev.length === RV.NEW_TEV_LEN_V150,
       'tail=' + sha(tail) + ' tev=' + sha(tev) + ' len=' + tev.length);
@@ -481,7 +482,7 @@ console.log('\n【D】錦標賽區塊的 revert-diff 與 28 把鎖重釘（動�
   await T('D4 ⭐⭐ v6.384 的舊指紋零殘留：28 把區塊鎖全部重釘（漏一把這裡就紅）', async () => {
     const { readdirSync, statSync } = await import('node:fs');
     const stale = [];
-    const EXEMPT = new Set(['scripts/lib/tourn-revert-v6384.mjs', 'scripts/lib/tourn-revert-v150.mjs', 'scripts/lib/tourn-revert-v152.mjs', 'scripts/lib/tourn-revert-v153.mjs']);
+    const EXEMPT = new Set(['scripts/lib/tourn-revert-v6384.mjs', 'scripts/lib/tourn-revert-v150.mjs', 'scripts/lib/tourn-revert-v152.mjs', 'scripts/lib/tourn-revert-v153.mjs', 'scripts/lib/tourn-revert-v154.mjs']);
     const walk = (dir) => { for (const n of readdirSync(dir)) { const fp = join(dir, n);
       if (statSync(fp).isDirectory()) { walk(fp); continue; }
       if (!n.endsWith('.mjs')) continue;
