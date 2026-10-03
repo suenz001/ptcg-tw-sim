@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.468：全站 audit 第二批（介面）
+
+BASE v6.467。子代理以 Playwright 量 /、/cards、/card、/decks、/deck-posts、/friends、/tournament、/game 大廳 × 360／390／1366／1920。
+- /game 本機設定：手機 `.player-setup{grid-template-columns:1fr}`，1fr 最小寬＝內容寬，被牌組下拉長選項撐到 461px ⇒ 改 minmax(0,1fr)＋`.setup-card{min-width:0}`、下拉 min-width:0（實測 360／390 不再溢出）。
+- 觸控：`@media (pointer: coarse)` 放大 .back／.crumb a（padding 10px 8px＋等量負 margin，版面不動）；/decks ▲▼ 30×26、button.icon 34×34。
+- 首頁 `.changelog-outer > summary::before{content:none}`（雙箭頭）；/deck-posts、/friends 的 main 補 font-family；公布欄 .row2 日期 nowrap、作者省略號。
+- aria-label：本機設定名稱／牌組、登入 email／密碼、牌組頁三欄、公布欄搜尋；灰字：首頁 .disclaimer #666、.version #5a5566、/card .foot #666、/cards .setDate #6b7280；/decks 空狀態「左側」→「牌組清單」。
+- 守衛：新增 test-v6468-site-audit-ui（S、HEAD-FAIL、真瀏覽器 E）；test-v6441 LATER。
+- 未做、待站長決定：/cards?set=ALL 捲到底 DOM 31k／記憶體 1.1GB（需改虛擬清單或分頁）；全站 `user-scalable=no`（WCAG）。
+
 ## v6.467：全站 audit 第一批（網路／系統）
 
 BASE `926729af`（v6.466＋server v1.53）。站長要求全站 audit、不可造成延遲。三支子代理（伺服器端點、前端網路、介面）報告，全部自行查證。

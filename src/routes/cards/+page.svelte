@@ -926,7 +926,7 @@
      用 tabular-nums 讓每片 tile 的日期在同一列對齊。 */
   .setDate {
     font-size: 0.72rem;
-    color: #9ca3af;
+    color: #6b7280;   /* ⭐v6.468 #9ca3af 對白底對比 2.5，小字看不清 */
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.02em;
     margin-bottom: 0.1rem;
@@ -1613,4 +1613,10 @@
     .modeSelect { font-size: 16px; }
   }
   /* <<< v6439-cards-mobile */
+
+  /* ⭐v6.468（全站 audit）：觸控裝置上「← 首頁」只有 16～21px 高、很難點。用 padding＋等量負 margin 放大可點範圍，
+     版面位置一點都不動（不影響載入、不影響桌機滑鼠）。 */
+  @media (pointer: coarse) {
+    .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
+  }
 </style>

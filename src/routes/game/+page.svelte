@@ -10225,10 +10225,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {:else if isAnonymous}
       <p class="tourn-gate">🔒 錦標賽需要 email 帳號（不開放匿名）。請登入，或註冊新帳號：</p>
       <label class="tourn-field">Email
-        <input class="name-input" type="email" bind:value={authEmail} placeholder="you@example.com" />
+        <input class="name-input" type="email" aria-label="Email" bind:value={authEmail} placeholder="you@example.com" />
       </label>
       <label class="tourn-field">密碼
-        <input class="name-input" type="password" bind:value={authPassword} placeholder="密碼（至少 6 碼）" onkeydown={(e) => e.key === 'Enter' && tournLogin()} />
+        <input class="name-input" type="password" aria-label="密碼" bind:value={authPassword} placeholder="密碼（至少 6 碼）" onkeydown={(e) => e.key === 'Enter' && tournLogin()} />
       </label>
       {#if authError}<p class="warn">{authError}</p>{/if}
       <div class="tourn-auth-btns">
@@ -10961,8 +10961,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <div class="player-setup">
       <div class="setup-card">
         <h2>玩家 1</h2>
-        <input class="name-input" placeholder="玩家名稱" bind:value={p1Name} />
-        <select bind:value={p1DeckId} onchange={() => { p1DeckId = resolveDeckSelection(p1DeckId); }}>
+        <input class="name-input" placeholder="玩家名稱" aria-label="玩家 1 名稱" bind:value={p1Name} />
+        <select aria-label="玩家 1 牌組" bind:value={p1DeckId} onchange={() => { p1DeckId = resolveDeckSelection(p1DeckId); }}>
           <option value="">— 選擇牌組 —</option>
           <option value="__random__" disabled={decks.length === 0}>🎲 隨機牌組（從「我的牌組」抽選）{decks.length === 0 ? '— 尚無我的牌組' : ''}</option>
           {#if decks.length > 0}
@@ -11014,9 +11014,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
           </label>
         </div>
         {#if aiPlayerIndex !== 1}
-          <input class="name-input" placeholder="玩家名稱" bind:value={p2Name} />
+          <input class="name-input" placeholder="玩家名稱" aria-label="玩家 2 名稱" bind:value={p2Name} />
         {/if}
-        <select bind:value={p2DeckId} onchange={() => { p2DeckId = resolveDeckSelection(p2DeckId); }}>
+        <select aria-label="玩家 2 牌組" bind:value={p2DeckId} onchange={() => { p2DeckId = resolveDeckSelection(p2DeckId); }}>
           <option value="">— 選擇牌組 —</option>
           <option value="__random__" disabled={decks.length === 0}>🎲 隨機牌組（從「我的牌組」抽選）{decks.length === 0 ? '— 尚無我的牌組' : ''}</option>
           {#if decks.length > 0}
@@ -11109,7 +11109,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <div class="online-form lobby-unified">
         <label class="name-row">
           <span class="name-label">玩家名稱</span>
-          <input class="name-input" placeholder="輸入你的名稱" bind:value={myName} />
+          <input class="name-input" placeholder="輸入你的名稱" aria-label="你的名稱" bind:value={myName} />
         </label>
 
         <!-- 建立新房間：折疊式 inline 表單（預設收合，點按鈕展開）-->
@@ -15560,6 +15560,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .setup-card-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
   .setup-card-header h2 { margin: 0; }
   .name-input,.setup-card select{ padding:0.45rem 0.6rem; border:1px solid #4a6a4a; border-radius:6px; background:#1a2a1a; color:#f0f0f0; font:inherit; }
+  /* ⭐v6.468：卡片與下拉選單可以比選項文字窄（選項本身照常完整顯示在下拉清單裡） */
+  .setup-card{ min-width:0; }
+  .name-input,.setup-card select{ min-width:0; max-width:100%; box-sizing:border-box; }
   .vs-badge{ font-size:1.5rem; font-weight:700; color:#f0b040; text-align:center; }
 
   /* 線上 Lobby */
@@ -18846,7 +18849,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
     /* v2.288：本機雙人對戰 lobby — 手機直式改上下排（避免左右超出） */
     .player-setup {
-      grid-template-columns: 1fr !important;
+      /* ⭐v6.468：1fr 的最小寬＝內容寬 ⇒ 牌組下拉的長選項文字（例「🎲 隨機牌組（從「我的牌組」抽選）— 尚無我的牌組」）
+         把卡片撐到 461px，360／390 寬手機出現橫向捲軸、「由 AI 控制」被推到畫面外。minmax(0,1fr) 讓欄寬跟著畫面。 */
+      grid-template-columns: minmax(0, 1fr) !important;
       gap: 0.6rem !important;
     }
     .vs-badge { font-size: 1.2rem !important; padding: 0.2rem 0; }

@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '926729afdaa3987fd782ef1c07215167ac9f978e';   // v6.466（上一版）
+const PREV_SHA = 'd6acb6e8ee5d40f41bf6b87fd4e36867bfbe6796';   // v6.467（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,22 +757,37 @@ const PREV_SHA = '926729afdaa3987fd782ef1c07215167ac9f978e';   // v6.466（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.467 前移：PREV_SHA 從 926729af（v6.466）起算。
+  // ⚠⚠ v6.468 前移：PREV_SHA 從 d6acb6e8（v6.467）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.467：全站 audit 第一批（網路／系統）：殘留計時器、SW 爬蟲檔、preconnect、休閒背景降頻、loadIndex 合併、ALL 頁政策並行；首頁 changelog 三步搬運。
-  'src/app.html',
-  'src/lib/cards/pool.ts',
-  'src/lib/game/room-oracle.ts',
-  'src/lib/notify.ts',
+  // ⭐v6.468：全站 audit 第二批（介面）：本機設定頁手機溢出、觸控點擊範圍、首頁雙箭頭、字型、日期換行、aria-label、對比；首頁 changelog 三步搬運。
   'src/lib/version.ts',
-  'src/routes/cards/+page.ts',
+  'src/routes/+page.svelte',
+  'src/routes/card/[id]/+page.svelte',
+  'src/routes/cards/+page.svelte',
+  'src/routes/deck-posts/+page.svelte',
+  'src/routes/decks/+page.svelte',
+  'src/routes/friends/+page.svelte',
   'src/routes/game/+page.svelte',
-  'src/service-worker.ts',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
-  'static/sounds/ready-go.wav',   // 刪除
 ];
+// ── 上一版（v6.467）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.467 前移：PREV_SHA 從 926729af（v6.466）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.467：全站 audit 第一批（網路／系統）：殘留計時器、SW 爬蟲檔、preconnect、休閒背景降頻、loadIndex 合併、ALL 頁政策並行；首頁 changelog 三步搬運。
+//   'src/app.html',
+//   'src/lib/cards/pool.ts',
+//   'src/lib/game/room-oracle.ts',
+//   'src/lib/notify.ts',
+//   'src/lib/version.ts',
+//   'src/routes/cards/+page.ts',
+//   'src/routes/game/+page.svelte',
+//   'src/service-worker.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/sounds/ready-go.wav',   // 刪除
 // ── 上一版（v6.466）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.466 前移：PREV_SHA 從 7d1450a0（v6.465）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -882,15 +897,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/effects.ts',
 //   'src/lib/game/effects/_shared.ts',
 //   'src/lib/game/effects/cards/v155_attacks.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.455）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.455 前移：PREV_SHA 從 b4472803（v6.454）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.455：v6.454 複審建議三項（取消出招留空、撤退遮罩拖開透明、進化選單 border-box；game/+page.svelte）；首頁 changelog 三步搬運。
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',

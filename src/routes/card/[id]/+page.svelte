@@ -133,6 +133,12 @@
   .dmg { margin-left: auto; font-weight: 800; color: #c0392b; }
   .links { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 26px; font-size: 14px; }
   .links a { color: #c0392b; text-decoration: none; }
-  .foot { margin-top: 18px; font-size: 12px; color: #999; text-align: center; }
-  .foot a { color: #888; }
+  .foot { margin-top: 18px; font-size: 12px; color: #666; text-align: center; }   /* ⭐v6.468 #999 對比 2.6 太淡 */
+  .foot a { color: #555; }
+
+  /* ⭐v6.468（全站 audit）：觸控裝置上「← 首頁」只有 16～21px 高、很難點。用 padding＋等量負 margin 放大可點範圍，
+     版面位置一點都不動（不影響載入、不影響桌機滑鼠）。 */
+  @media (pointer: coarse) {
+    .crumb a { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
+  }
 </style>

@@ -561,7 +561,7 @@
   .hard-refresh-btn:active { transform: scale(0.98); }
   .hard-refresh-btn:disabled { opacity: .55; cursor: wait; }
 
-  .version { font-size: 0.75rem; font-weight: 400; color: #888; font-family: monospace; vertical-align: middle; margin-left: 0.3rem; background: #e8e4ee; padding: 0.1rem 0.4rem; border-radius: 3px; }
+  .version { font-size: 0.75rem; font-weight: 400; color: #5a5566; font-family: monospace; vertical-align: middle; margin-left: 0.3rem; background: #e8e4ee; padding: 0.1rem 0.4rem; border-radius: 3px; }
   main {
     max-width: 680px;
     margin: calc(2rem + var(--safe-top, 0px)) auto 2rem;
@@ -709,6 +709,9 @@
   details[open] summary::before {
     transform: rotate(90deg);
   }
+  /* ⭐v6.468：「版本更新記錄」外層標題自己有 ▶／▼（見 .changelog-outer > summary h2::before），
+     通用的 summary::before 也套上來 ⇒ 原本顯示成「▸ ▶ 📋 版本更新記錄」兩個箭頭。 */
+  .changelog-outer > summary::before { content: none; }
   .ver-badge {
     font-family: ui-monospace, 'Cascadia Code', monospace;
     font-size: 0.78rem;
@@ -770,7 +773,7 @@
     border-top: 1px solid #ddd;
     font-size: 0.8rem;
     line-height: 1.7;
-    color: #888;
+    color: #666;   /* ⭐v6.468 #888 對 #f4f4f6 對比只有 3.2（小字要 4.5 以上） */
   }
   .disclaimer p {
     margin: 0.3rem 0;

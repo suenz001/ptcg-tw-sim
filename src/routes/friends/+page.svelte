@@ -119,6 +119,8 @@
   /* ⚠ 色碼一律不寫在這裡：--fr-* 的單一來源在 $lib/friends/FriendsPanel.svelte 的樣式區塊最上面
      （守衛 test-v6293 B1／B2 逐條比對錦標賽的同一條規則）。本檔只留版面。 */
   main {
+    /* ⭐v6.468：本頁原本沒有指定字型 ⇒ 顯示成瀏覽器預設的襯線體（Windows 繁中是新細明體），與其他頁不一致 */
+    font-family: system-ui, -apple-system, 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
     max-width: 760px;
     margin: 0 auto;
     padding: calc(12px + var(--safe-top, 0px))
@@ -159,5 +161,11 @@
                40px
                max(12px, var(--safe-left, 0px));
     }
+  }
+
+  /* ⭐v6.468（全站 audit）：觸控裝置上「← 首頁」只有 16～21px 高、很難點。用 padding＋等量負 margin 放大可點範圍，
+     版面位置一點都不動（不影響載入、不影響桌機滑鼠）。 */
+  @media (pointer: coarse) {
+    .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
   }
 </style>

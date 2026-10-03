@@ -803,6 +803,7 @@
       <div class="search">
         <input
           type="search"
+          aria-label="搜尋牌組"
           placeholder="搜尋：牌組名／作者／說明／留言／卡名（空白分隔＝都要有）"
           bind:value={searchQ}
           oninput={onSearchInput}
@@ -1065,6 +1066,8 @@
      比照 /cards（1rem）、/decks（1.5rem）、首頁（2rem）的全站標準 —— 沒加的話
      「← 首頁」會被動態島蓋住按不到。左右也補，處理橫向瀏海。 */
   main {
+    /* ⭐v6.468：本頁原本沒有指定字型 ⇒ 顯示成瀏覽器預設的襯線體（Windows 繁中是新細明體），與其他頁不一致 */
+    font-family: system-ui, -apple-system, 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
     max-width: 900px;
     margin: 0 auto;
     padding: calc(12px + var(--safe-top, 0px))
@@ -1103,6 +1106,9 @@
   .row1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .deck-name { font-weight: 600; }
   .row2 { display: flex; align-items: center; gap: 6px; font-size: .8rem; opacity: .75; margin-top: 4px; }
+  /* ⭐v6.468：作者名稱很長時日期被折成「2026-10-」「03」兩行 ⇒ 日期不換行、作者名稱用省略號 */
+  .row2 .date { white-space: nowrap; flex-shrink: 0; }
+  .row2 .author { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .spacer { flex: 1; }
   .stat { white-space: nowrap; }
   .dot { opacity: .5; }
@@ -1230,5 +1236,11 @@
                max(12px, var(--safe-left, 0px));
     }
     .to-decks { margin-left: 0; }
+  }
+
+  /* ⭐v6.468（全站 audit）：觸控裝置上「← 首頁」只有 16～21px 高、很難點。用 padding＋等量負 margin 放大可點範圍，
+     版面位置一點都不動（不影響載入、不影響桌機滑鼠）。 */
+  @media (pointer: coarse) {
+    .back, .to-decks { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
   }
 </style>
