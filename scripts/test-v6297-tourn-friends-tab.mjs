@@ -606,6 +606,9 @@ await T('G1 ⭐⭐ `/friends` 這條獨立路由與 DmPanel.svelte **逐位元�
       //   會讓 21 支守衛的 lastIndexOf 把「樣式區塊起點」推到註解那一行（切歪），
       //   症狀是一整批守衛同時報「抽不到 CSS 規則」。這裡把字面改寫成中文敘述。
       ['FriendsPanel.svelte 的 ' + OPEN_STYLE + ' 最上面', 'FriendsPanel.svelte 的樣式區塊最上面'],
+      // v6.468 全站 audit：main 補無襯線字型（原本顯示成新細明體）、「← 首頁」可點範圍放大（版面不動）。difflib 產生、當場驗證逐位元前進到現況。
+      ["  main {\n    max-width: 760px;\n", "  main {\n    /* ⭐v6.468：本頁原本沒有指定字型 ⇒ 顯示成瀏覽器預設的襯線體（Windows 繁中是新細明體），與其他頁不一致 */\n    font-family: system-ui, -apple-system, 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;\n    max-width: 760px;\n"],
+      ["  }\n</style>\n", "  }\n\n  /* ⭐v6.468（全站 audit）：「← 首頁」只有 16～21px 高，手機上很難點。用 padding＋等量負 margin 放大可點範圍，\n     版面位置一點都不動（純文字連結、沒有底色或框線 ⇒ 桌機看起來也完全一樣）。\n     ⚠ 刻意不包 @media：本頁的 @media 數量有守衛在釘（手機／桌機不靠斷點切版），而這條在桌機也無害。 */\n  .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }\n</style>\n"],
     ],
   };
   for (const [p, rel] of [[P_FRPAGE, 'src/routes/friends/+page.svelte'], [P_DMPANEL, 'src/routes/friends/DmPanel.svelte']]) {

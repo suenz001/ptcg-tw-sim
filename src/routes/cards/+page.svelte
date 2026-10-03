@@ -1614,9 +1614,8 @@
   }
   /* <<< v6439-cards-mobile */
 
-  /* ⭐v6.468（全站 audit）：觸控裝置上「← 首頁」只有 16～21px 高、很難點。用 padding＋等量負 margin 放大可點範圍，
-     版面位置一點都不動（不影響載入、不影響桌機滑鼠）。 */
-  @media (pointer: coarse) {
-    .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
-  }
+  /* ⭐v6.468（全站 audit）：「← 首頁」只有 16～21px 高，手機上很難點。用 padding＋等量負 margin 放大可點範圍，
+     版面位置一點都不動（純文字連結、沒有底色或框線 ⇒ 桌機看起來也完全一樣）。
+     ⚠ 刻意不包 @media：本頁的 @media 數量有守衛在釘（手機／桌機不靠斷點切版），而這條在桌機也無害。 */
+  .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
 </style>

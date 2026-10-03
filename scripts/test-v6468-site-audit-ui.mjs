@@ -33,7 +33,7 @@ const FILES = {
 function load(getter) { const o = {}; for (const [k, p] of Object.entries(FILES)) { try { o[k] = getter(p); } catch { o[k] = ''; } } return o; }
 const CUR = load(rd);
 const css = (src) => { const i = src.lastIndexOf('<' + 'style'); return i < 0 ? '' : src.slice(i).replace(/\/\*[\s\S]*?\*\//g, ''); };
-const COARSE_BACK = /@media \(pointer: coarse\) \{\s*([^{}]+)\{ display: inline-block; padding: 10px 8px; margin: -10px -8px; \}/;
+const COARSE_BACK = /\n  ([^{}\n]+) \{ display: inline-block; padding: 10px 8px; margin: -10px -8px; \}/;
 
 const CHECKS = [
   ['★★★[①] 手機版本機設定 grid 用 minmax(0, 1fr)；卡片與下拉可以比選項文字窄', true, (S) =>
@@ -44,8 +44,10 @@ const CHECKS = [
     [S.dp, S.fr].every((s) => /main \{\s*font-family: system-ui, -apple-system, 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;/.test(css(s)))],
   ['★[④] /deck-posts 列表日期不換行、作者名稱省略號', true, (S) =>
     /\.row2 \.date \{ white-space: nowrap; flex-shrink: 0; \}/.test(css(S.dp)) && /\.row2 \.author \{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/.test(css(S.dp))],
-  ['★★[⑤] 觸控裝置放大「← 首頁」可點範圍（五頁）且不移動版面（padding 與負 margin 等量）', true, (S) =>
-    [['cards', '.back'], ['decks', '.back'], ['dp', '.back, .to-decks'], ['fr', '.back'], ['card', '.crumb a']].every(([k, sel]) => { const m = COARSE_BACK.exec(css(S[k])); return !!m && m[1].trim() === sel; })],
+  ['★★[⑤] 放大「← 首頁」可點範圍（五頁）且不移動版面（padding 與負 margin 等量；不包 @media）', true, (S) =>
+    [['cards', '.back'], ['dp', '.back, .to-decks'], ['fr', '.back'], ['card', '.crumb a']].every(([k, sel]) => { const m = COARSE_BACK.exec(css(S[k])); return !!m && m[1].trim() === sel; })
+    // /decks 的桌機 CSS 有逐字指紋守衛（test-v6213）⇒ 這條只放在觸控分支
+    && /@media \(pointer: coarse\) \{[^@]*\n    \.back \{ display: inline-block; padding: 10px 8px; margin: -10px -8px; \}\n  \}/.test(css(S.decks))],
   ['★★[⑤b] /decks 觸控裝置：▲▼ 至少 30×26、＋／−／☆ 至少 34×34（含手機版特異度較高的那條）', true, (S) =>
     /@media \(pointer: coarse\) \{\s*\.deck-reorder-btn \{ min-width: 30px; min-height: 26px; font-size: 0\.75rem; \}\s*button\.icon, \.picker-list li button\.icon \{ min-width: 34px; min-height: 34px; \}/.test(css(S.decks))],
   ['★[⑥] 表單欄位有 aria-label（本機設定的名稱與牌組、登入、牌組頁、公布欄搜尋）', true, (S) =>

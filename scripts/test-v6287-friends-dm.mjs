@@ -200,7 +200,10 @@ await T('C1 ⭐⭐ pruneLobbyChat（出貨碼抽出來實跑）：lobby 900 → 
   assert.strictEqual(countRoom(db, (r) => String(r).startsWith('dm:')), 300, '⚠⚠ 修剪排程刪到私聊了');
 });
 await T('C2 ⭐⭐ POST /api/tournament/admin/chat/clear（出貨碼抽出來實跑）：lobby 全清、dm:* 一筆不少；非 admin 403 零刪除', async () => {
-  const src = handlerSrc(PATCH, "app.post('/api/tournament/admin/chat/clear'");
+  // ⭐server v1.54（Rule 40，意圖不變）：清除端點會把新的 clearedAt 同步寫進記憶體值（v154-chat-meta-cache 區塊宣告）
+  //   ⇒ 抽出來實跑時要連那個區塊一起帶上（沒有那個區塊的舊版本就是空字串，行為照舊）。
+  const _cm = (() => { const i = PATCH.indexOf('    // >>> v154-chat-meta-cache'), j = PATCH.indexOf('    // <<< v154-chat-meta-cache'); return i >= 0 && j > i ? PATCH.slice(i, j) : ''; })();
+  const src = _cm + '\n' + handlerSrc(PATCH, "app.post('/api/tournament/admin/chat/clear'");
   const run = async (hsrc, headers) => {
     const db = makeFakeDb(Object.assign(chatSeed(50, 300), { tournamentConfig: [] }));
     const app = makeFakeApp({});

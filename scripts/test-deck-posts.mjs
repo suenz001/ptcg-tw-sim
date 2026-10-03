@@ -357,7 +357,10 @@ T('⭐⭐⭐ 顯示名稱有中央來源，不得再各自 inline 查 TREGS', ()
   ok(/getLastRegisteredNick/.test(section(SAP, 'let chatName;', 'await TCHAT.insertOne')),
     '聊天室還在用自己那份 inline 查詢 —— 這正是公布欄沒接到、顯示成 email 前綴的原因');
   // 全站不得有第三份「查最近一次報名暱稱」的 inline 實作
-  const inlineCopies = (SAP.match(/TREGS\.find\(\{ uid[^)]*\}[^)]*\)\s*\n?\s*\.sort\(\{ registeredAt: -1 \}\)/g) || []).length;
+  // ⭐server v1.54（Rule 40，意圖不變）：/event 的「預填暱稱」自 v0.84 就有自己的語義（跳過空白暱稱、不吃 5 分鐘快取，
+  //   剛報名完立刻要看到新暱稱），v1.54 只是把同一個 JS 端計算搬進資料庫（`name: { $nin: [null, ''] }`）。
+  //   它不是「另一份聊天／公布欄顯示名稱」，所以不算進 inline 副本；其餘判準不變。
+  const inlineCopies = (SAP.match(/TREGS\.find\(\{ uid[^)]*\}[^)]*\)\s*\n?\s*\.sort\(\{ registeredAt: -1 \}\)/g) || []).filter((m) => !m.includes("name: { $nin: [null, ''] }")).length;
   ok(inlineCopies <= 1, '出現 ' + inlineCopies + ' 份 inline 的「最近一次報名暱稱」查詢，應收斂成 1 份');
 });
 

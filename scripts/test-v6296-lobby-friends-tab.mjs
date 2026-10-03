@@ -224,8 +224,13 @@ await T('D1 ⭐⭐⭐ 匿名玩家的大廳（把 {#if} 依「匿名」求值剪
   const _bg = readBaseBlob(ROOT, BASE_SHA, 'src/routes/game/+page.svelte');
   assert.ok(_bg.ok, '讀不到 BASE 的 src/routes/game/+page.svelte');
   BASE_GAME = _bg.out;
+  // ⭐v6.468（Rule 40，意圖不變）：全站 audit 替大廳的「你的名稱」輸入框補了給螢幕閱讀器用的 aria-label（純屬性、畫面不變）。
+  //   逐字還原這一個屬性再比；必須恰好出現一次（多了或少了都代表登記過期）。
+  const _AL = ' aria-label="你的名稱"';
+  assert.strictEqual(GAME.split(_AL).length - 1, 1, 'v6.468 登記的 aria-label 不是恰好一處');
+  const GAME_D1 = GAME.replace(_AL, '');
   for (const pm of [false, true]) {
-    const a = asAnon(GAME, pm), b = asAnon(BASE_GAME, pm);
+    const a = asAnon(GAME_D1, pm), b = asAnon(BASE_GAME, pm);
     assert.ok(a.length > 3000, '剪枝後只剩 ' + a.length + ' 字元 ⇒ 剪枝器把東西吃掉了');
     if (a !== b) {
       const la = a.split('\n'), lb = b.split('\n');

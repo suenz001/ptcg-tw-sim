@@ -4056,16 +4056,12 @@
     .bm-code,
     .auth-form input { font-size: 16px; }
   }
-
-  /* ⭐v6.468（全站 audit）：觸控裝置上「← 首頁」只有 16～21px 高、很難點。用 padding＋等量負 margin 放大可點範圍，
-     版面位置一點都不動（不影響載入、不影響桌機滑鼠）。 */
-  @media (pointer: coarse) {
-    .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
-  }
   /* ⭐v6.468（全站 audit）：觸控裝置上牌組排序 ▲▼（原 18×14px）與卡片 ＋／−／☆／×（原 26px）放大到手指點得到。
      只在 pointer:coarse 生效 ⇒ 桌機滑鼠的版面不變。 */
   @media (pointer: coarse) {
     .deck-reorder-btn { min-width: 30px; min-height: 26px; font-size: 0.75rem; }
     button.icon, .picker-list li button.icon { min-width: 34px; min-height: 34px; }
+    /* 「← 首頁」可點範圍放大（padding＋等量負 margin，版面不動）。⚠ 本頁的桌機 CSS 有逐字指紋守衛（test-v6213）⇒ 只放在觸控分支 */
+    .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
   }
 </style>

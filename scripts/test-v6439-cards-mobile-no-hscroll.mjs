@@ -117,6 +117,9 @@ const LATER = [
   ['<div use:pageScrollLock class="modal" role="dialog"', '<div class="modal" role="dialog"'],
   ['      class="lightboxOverlay" use:pageScrollLock\n', '      class="lightboxOverlay"\n'],
   ['    overscroll-behavior: contain; /* ⭐v6.457 捲到底不把整頁帶走（桌機滾輪／手機手指都是） */\n', ''],
+  // ⭐v6.468 全站 audit：發售日灰字調深、「← 首頁」可點範圍放大（版面不動）——difflib 產生、逐位元還原 v6.467
+  ["    font-size: 0.72rem;\n    color: #6b7280;   /* ⭐v6.468 #9ca3af 對白底對比 2.5，小字看不清 */\n    font-variant-numeric: tabular-nums;\n", "    font-size: 0.72rem;\n    color: #9ca3af;\n    font-variant-numeric: tabular-nums;\n"],
+  ["\n  /* ⭐v6.468（全站 audit）：「← 首頁」只有 16～21px 高，手機上很難點。用 padding＋等量負 margin 放大可點範圍，\n     版面位置一點都不動（純文字連結、沒有底色或框線 ⇒ 桌機看起來也完全一樣）。\n     ⚠ 刻意不包 @media：本頁的 @media 數量有守衛在釘（手機／桌機不靠斷點切版），而這條在桌機也無害。 */\n  .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }\n</style>", "</style>"],
 ];
 // ⭐v6.464（Rule 40）：本版把資料庫格子的卡圖改用縮圖（src={cardThumb(…)}＋import），先用共用還原表還原成 v6.463 再剝哨兵；其餘仍須逐位元等於 BASE。
 let stripped = revertPairs(SRC.replace(/\r\n/g, '\n'), V6464_CARDS_PAIRS).replace(STRIP_RE, '');
