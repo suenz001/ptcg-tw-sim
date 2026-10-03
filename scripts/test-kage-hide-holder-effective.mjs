@@ -36,7 +36,8 @@ const inst = (cid, e = {}) => ({ iid: 'i' + (++nn), cardId: String(cid), damage:
 
 // state：P0=攻擊方 active=attackerCid；P1=防守方 active=狃拉(被KO) + bench=超級耿鬼ex(影藏)
 function mk(attackerCid) {
-  return { ancientEnergyMinusOneUsed: [false, false], players: [
+  // v6.471（Rule 40）：koPrizesAdjusted 會寫獎賞修正的 log ⇒ 盤面補 log 陣列（真實盤面一律有）
+  return { log: [], ancientEnergyMinusOneUsed: [false, false], players: [
     { active: inst(attackerCid), bench: [], discard: [], hand: [], deck: [], prizes: [] },
     { active: inst(SNEASEL), bench: [inst(GENGAR)], discard: [], hand: [], deck: [], prizes: [] },
   ] };

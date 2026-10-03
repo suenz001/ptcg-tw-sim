@@ -1162,6 +1162,111 @@ export function koPrizeCount(card: Card): number {
   return isEx ? 2 : 1;
 }
 
+// >>> v6471-ko-prize-modifiers
+/**
+ * ⭐⭐⭐ v6.471 中央管線：KO 獎賞的「防守方側」修正 —— **算張數與寫 log 是同一份資料**。
+ *
+ * 站長回報：傳說的山頂讓獎賞卡少拿 1 張時，對戰紀錄寫成「『影藏』啟動」。
+ *   根因：engine 主傷害 KO 分支把影藏與傳說的山頂累加進同一個 `prizeAdjust`，
+ *   log 卻只看 `prizeAdjust < 0` 就一律印「影藏」（兩者疊加時還會寫成「減少 1 張」、實際少 2 張）；
+ *   effects.ts 側的 koPrizesAdjusted（狙擊／指示物／多目標等 KO 路徑）則**完全不寫**這些修正的 log。
+ *   ⇒ 每一個來源各自回傳 { 名稱, 張數, log }，張數由這份清單加總、log 由同一份清單印出，
+ *     「算的」與「說的」從結構上不可能再分岔；新增修正來源只要加在這裡，兩條管線同時生效。
+ *
+ * 涵蓋（皆為卡面「受到對手的寶可夢招式的傷害而【昏厥】時」⇒ 呼叫端只在招式傷害 KO 時呼叫）：
+ *   ・寶可夢道具（TOOL_PRIZE_BONUS：豪華斗篷 +1／莉莉艾的珍珠 −1）— 逐張列出道具名
+ *   ・古舊能量（ACE SPEC，每場每方 1 次）
+ *   ・傳說的山頂（競技場：【無】寶可夢）
+ *   ・影藏（超級耿鬼ex 的特性：【惡】寶可夢被寶可夢【ex】的招式擊倒）
+ *   （被 KO 者自身特性「鬆口氣」走 koVictimAbilityPrizeAdjust，自帶 log；攻擊方側加成各自有 log。）
+ *
+ * ⚠ 判準與 v6.470 以前**逐項相同**（只把散落各處的計算搬進來並補上正確的 log）：
+ *   各項檢查用的盤面／實體由呼叫端給，engine 主分支沿用原本各自用的那一份（見 engine 呼叫點註解）。
+ */
+export interface KoPrizeModifier {
+  /** 來源名稱（用於加總算式，例如「影藏」「傳說的山頂」「莉莉艾的珍珠」） */
+  label: string;
+  /** 對獎賞張數的修正量（−1／+1…） */
+  delta: number;
+  /** 寫進對戰紀錄的一行（古舊能量的寫法：來源（種類）：誰 → 誰的獎賞卡 ±N 張） */
+  log: string;
+}
+export function koDefenderSidePrizeModifiers(args: {
+  /** 判定影藏持有者、傳說的山頂、有效屬性用的盤面 */
+  boardState: GameState;
+  /** 被 KO 的場上實體（讀道具、判【無】屬性） */
+  koInst: CardInstance | null | undefined;
+  koCard: Card;
+  /** 傳說的山頂判【無】屬性用的實體（engine 主分支沿用造成傷害前的快照；預設同 koInst） */
+  typeInst?: CardInstance | null;
+  /** 古舊能量讀的實體與「已用過」旗標所在的盤面（engine 主分支沿用 KO 前快照；預設同上） */
+  ancientInst?: CardInstance | null;
+  ancientFlagsState?: GameState;
+  defenderIdx: 0 | 1;
+  atkCard: Card | null | undefined;
+  /** 取得獎賞的玩家名稱（log 用） */
+  takerName: string;
+  toolsJammed: boolean;
+  pool: Map<string, Card>;
+}): { mods: KoPrizeModifier[]; ancientJustUsed: boolean } {
+  const { boardState, koInst, koCard, defenderIdx, atkCard, takerName, toolsJammed, pool } = args;
+  const mods: KoPrizeModifier[] = [];
+  const koName = koCard.name;
+  const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+  // ① 寶可夢道具（阻礙之塔在場時道具效果失效）
+  if (!toolsJammed && koInst) {
+    for (const t of getAllAttachedTools(koInst)) {
+      const tool = pool.get(t.cardId);
+      const fn = tool ? TOOL_PRIZE_BONUS.get(tool.name) : undefined;
+      if (!tool || !fn) continue;
+      const d = fn(koCard);
+      if (d === 0) continue;
+      mods.push({ label: tool.name, delta: d,
+        log: `🔧 ${tool.name}（寶可夢道具）：${koName} 附有「${tool.name}」 → ${takerName} 獲得的獎賞卡 ${signed(d)} 張` });
+    }
+  }
+  // ② 古舊能量（ACE SPEC）— 卡面「對戰中，自己的『古舊能量』的這個效果只生效 1 次」（per 防守方）
+  let ancientJustUsed = false;
+  const aInst = args.ancientInst === undefined ? koInst : args.ancientInst;
+  const flags = (args.ancientFlagsState ?? boardState).ancientEnergyMinusOneUsed ?? [false, false];
+  if (aInst && !flags[defenderIdx] && aInst.energyAttached.some(e => pool.get(e.cardId)?.name === '古舊能量')) {
+    ancientJustUsed = true;
+    mods.push({ label: '古舊能量', delta: -1,
+      log: `⚡ 古舊能量（ACE SPEC）：${koName} 附有「古舊能量」 → ${takerName} 獲得的獎賞卡 -1 張（這個效果每場對戰只生效 1 次）` });
+  }
+  // ③ 傳說的山頂（競技場）—【無】寶可夢（化石等依場上有效屬性）
+  if (legendPeakPrizeReduction(boardState, args.typeInst === undefined ? koInst : args.typeInst, koCard, defenderIdx, pool, true) < 0) {
+    mods.push({ label: '傳說的山頂', delta: -1,
+      log: `🏔️ 傳說的山頂（競技場）：${koName} 是【無】寶可夢，受到對手的寶可夢招式的傷害而昏厥 → ${takerName} 獲得的獎賞卡 -1 張` });
+  }
+  // ④ 影藏（超級耿鬼ex 的特性）—【惡】寶可夢被寶可夢【ex】的招式傷害 KO；持有者須處於有效狀態（§17.42.B）
+  if (isPokemonExCard(atkCard ?? undefined) && koCard.pokemonType === 'Darkness') {
+    // 是否生效一律問中央 hasEffectiveKageHide（§17.42.B 持有者有效狀態）；持有者卡名只用於敘述
+    if (hasEffectiveKageHide(boardState, defenderIdx, pool)) {
+      const _p = boardState.players[defenderIdx];
+      const holder = [_p.active, ..._p.bench].find(x => !!x && _v6196HasEffAbilByInst(boardState, defenderIdx, x, pool, '影藏'));
+      const holderName = (holder && pool.get(holder.cardId)?.name) || '超級耿鬼ex';
+      mods.push({ label: '影藏', delta: -1,
+        log: `👻 影藏（${holderName} 的特性）：${koName} 是【惡】寶可夢，被寶可夢【ex】的招式傷害擊倒 → ${takerName} 獲得的獎賞卡 -1 張` });
+    }
+  }
+  return { mods, ancientJustUsed };
+}
+
+/**
+ * ⭐v6.471：獎賞張數算式（有任何修正時才印）——每一項都標出處，疊加時也看得懂。
+ *   例：「🧮 獎賞卡：基本 1 張 -1（傳說的山頂）= 0 張」
+ *   ⚠ 總和低於 0 時以 0 計（卡面「減少」不會讓對手倒扣獎賞），算式後註明。
+ */
+export function koPrizeFormulaLog(base: number, terms: ReadonlyArray<{ label: string; delta: number }>, final: number): string | null {
+  const t = terms.filter(x => x.delta !== 0);
+  if (t.length === 0) return null;
+  const raw = base + t.reduce((a, x) => a + x.delta, 0);
+  const parts = t.map(x => `${x.delta > 0 ? '+' : '-'}${Math.abs(x.delta)}（${x.label}）`).join(' ');
+  return `🧮 獎賞卡：基本 ${base} 張 ${parts} = ${final} 張` + (raw < final ? '（最少 0 張）' : '');
+}
+// <<< v6471-ko-prize-modifiers
+
 /**
  * v5.404：KO 獎賞「防守方側」調整 — effects.ts 的指示物/狙擊/手動 KO 路徑原本只用 base koPrizeCount，
  *   漏掉 engine 主傷害流程有的調整：莉莉艾的珍珠 -1 / 豪華斗篷 +1 / 古舊能量 -1(每場每方僅1次) / 影藏 -1
@@ -1189,6 +1294,7 @@ export function koPrizesAdjusted(
   const atkActive = s.players[attackerIdx].active;
   const atkCard = atkActive ? pool.get(atkActive.cardId) : undefined;
   let adjust = 0;
+  const terms: { label: string; delta: number }[] = [];   // ⭐v6.471 算式 log 用
   // v5.506：以下獎賞調整卡面皆明寫「受到對手寶可夢招式的【傷害】而昏厥時」→ 只在傷害KO生效。
   //   效果KO（放傷害指示物：多龍巴魯托ex|幻影奇襲、咒詛炸彈、悄聲加害 等 attack-effect；
   //   或深淵之瞳式效果昏厥）koByAttackDamage=false → 一律不套。
@@ -1203,43 +1309,37 @@ export function koPrizesAdjusted(
       const _ppLoc: 'active' | 'bench' = s.players[defenderIdx].bench.some(x => x.iid === koInst.iid) ? 'bench' : 'active';
       if (!isAbilityHolderEffective(s, koInst, koCard, (1 - attackerIdx) as 0 | 1, ab.name, _ppLoc, pool)) continue; // v5.655 被KO者特性被暗夜羽擊/初始化等壓制→脆弱蛻殼失效
       const fnPP = PASSIVE_PREVENT_PRIZE.get(ab.name);
-      if (fnPP && atkCard && fnPP(atkCard)) return { prizes: 0, state: s };
-    }
-    // 道具：莉莉艾的珍珠 -1 / 豪華斗篷 +1（阻礙之塔在場時道具效果失效）
-    if (!isToolsJammed(s, pool)) {  // v5.761：改用中央 isToolsJammed（原硬寫'阻礙之塔'字面）
-      for (const t of getAllAttachedTools(koInst)) {
-        const tool = pool.get(t.cardId);
-        const fn = tool ? TOOL_PRIZE_BONUS.get(tool.name) : undefined;
-        if (fn) adjust += fn(koCard);
+      if (fnPP && atkCard && fnPP(atkCard)) {
+        // ⭐v6.471：補 log（與 engine 主傷害 KO 分支同一句；原本這條路徑靜默歸 0）
+        s = addLog(s, `「${ab.name}」啟動：${koCard.name} 被 ${atkCard.name} KO，但對手無法獲得獎賞卡`, null);
+        return { prizes: 0, state: s };
       }
     }
-    // 古舊能量 -1（per-game once，per 防守方）
-    const usedFlags = s.ancientEnergyMinusOneUsed ?? [false, false];
-    if (!usedFlags[defenderIdx]
-        && koInst.energyAttached.some(e => pool.get(e.cardId)?.name === '古舊能量')) {
-      adjust -= 1;
-      const f = [...usedFlags] as [boolean, boolean];
+    // ⭐v6.471：道具／古舊能量／傳說的山頂／影藏 收斂到中央 koDefenderSidePrizeModifiers（張數與 log 同一份資料）。
+    //   順序與 v6.470 相同：道具 → 古舊能量 → 傳說的山頂 → 鬆口氣（被 KO 者自身特性）→ 影藏。
+    const _mods = koDefenderSidePrizeModifiers({
+      boardState: s, koInst, koCard, defenderIdx, atkCard,
+      takerName: s.players[attackerIdx].name, toolsJammed: isToolsJammed(s, pool), pool,
+    });
+    if (_mods.ancientJustUsed) {
+      const f = [...(s.ancientEnergyMinusOneUsed ?? [false, false])] as [boolean, boolean];
       f[defenderIdx] = true;
       s = { ...s, ancientEnergyMinusOneUsed: f };
     }
-    // 影藏（超級耿鬼ex）：惡寶可夢被【ex】攻擊方招式傷害 KO → -1
-    // v5.768：影藏持有者須「處於有效狀態」(§17.42.B) — 收斂中央 hasEffectiveKageHide
-    //   （原只查特性名，漏 isAbilityHolderEffective → 鐵荊棘ex｜初始化消除超級耿鬼ex特性時仍誤 -1）。
-    const isExAttacker = isPokemonExCard(atkCard);   // ⭐v6.403 卡面「寶可夢【ex】」唯一判準
-    // v6.077 M6 傳說的山頂 —【無】寶可夢被對手招式傷害 KO → 獎賞 −1。與影藏同型、可疊加。
-    //   ⭐ 接在本中央函式＝一次涵蓋註解自述的 18+ 條 KO 路徑（狙擊／指示物／手動 KO…）。
-    //   ⚠ 已在 koByAttackDamage gate 內 → 效果KO／checkup KO 自動不觸發，符合卡面。
-    adjust += legendPeakPrizeReduction(s, koInst, koCard, defenderIdx, pool, true);
+    for (const m of _mods.mods) { adjust += m.delta; terms.push(m); }
     // ⭐⭐⭐ v6.259 中央收斂：「被 KO 時**修改獎賞卡張數**」的被 KO 者自身特性
     //   （願增猿ex｜鬆口氣）—— 見 PASSIVE_KO_PRIZE_ADJUST 的註解。
     const _v6259 = koVictimAbilityPrizeAdjust(s, koInst, koCard, defenderIdx, pool, true);
     adjust += _v6259.adjust;
+    if (_v6259.adjust !== 0) terms.push({ label: _v6259.names.join('、'), delta: _v6259.adjust });
+    for (const m of _mods.mods) s = addLog(s, m.log, defenderIdx);
     for (const _line of _v6259.logs) s = addLog(s, _line, defenderIdx);
-    if (isExAttacker && koCard.pokemonType === 'Darkness' && hasEffectiveKageHide(s, defenderIdx, pool)) {
-      adjust -= 1;
-    }
   }
-  return { prizes: Math.max(0, base + adjust + deferredBonus), state: s };
+  if (deferredBonus > 0) terms.push({ label: '多餘花粉', delta: deferredBonus });
+  const _prizes = Math.max(0, base + adjust + deferredBonus);
+  const _formula = koPrizeFormulaLog(base, terms, _prizes);
+  if (_formula) s = addLog(s, _formula, null);
+  return { prizes: _prizes, state: s };
 }
 
 /**
@@ -18367,8 +18467,8 @@ export function koVictimAbilityPrizeAdjust(
   dIdx: 0 | 1,
   pool: Map<string, Card>,
   koByAttackDamage: boolean,
-): { adjust: number; logs: string[] } {
-  if (!koByAttackDamage || !koInst || !koCard?.abilities) return { adjust: 0, logs: [] };
+): { adjust: number; logs: string[]; names: string[] } {
+  if (!koByAttackDamage || !koInst || !koCard?.abilities) return { adjust: 0, logs: [], names: [] };
   // ⭐ 位置：純粹是為了問「這個特性此刻還算不算數」（熔岩洞/初始化/監視塔…），
   //   不是卡面的發動條件 —— 鬆口氣卡面沒有「在戰鬥場」。
   //   呼叫點都在「被 KO 者還在場上」時，找不到就退回 'active'（主管線的情形）。
@@ -18377,6 +18477,7 @@ export function koVictimAbilityPrizeAdjust(
     _p.bench.some(b => b.iid === koInst.iid) ? 'bench' : 'active';
   let adjust = 0;
   const logs: string[] = [];
+  const names: string[] = [];   // ⭐v6.471 獎賞算式 log 標出處用
   for (const ab of koCard.abilities) {
     const fn = PASSIVE_KO_PRIZE_ADJUST.get(ab.name);
     if (!fn) continue;
@@ -18384,9 +18485,10 @@ export function koVictimAbilityPrizeAdjust(
     const r = fn(state, koInst, koCard, dIdx, pool);
     if (r.adjust === 0) continue;
     adjust += r.adjust;
+    names.push(ab.name);
     if (r.log) logs.push(r.log);
   }
-  return { adjust, logs };
+  return { adjust, logs, names };
 }
 
 /** 受招式傷害時的廣義 hook(造成 ≥1 傷害即觸發，不需 KO) */

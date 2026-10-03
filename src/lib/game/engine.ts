@@ -31,6 +31,7 @@ import {
   PASSIVE_DAMAGE_REDUCE_COND, passiveReduceAppliesAtLocation,
   PASSIVE_DAMAGE_REDUCE_BY_ATTACKER, PASSIVE_COIN_AVOID, PASSIVE_KO_RETALIATION, PASSIVE_ON_KO,
   koVictimAbilityPrizeAdjust,  // ⭐v6.259 被 KO 者自身特性的獎賞張數修正（願增猿ex｜鬆口氣）
+  koDefenderSidePrizeModifiers, koPrizeFormulaLog,  // ⭐v6.471 KO 獎賞防守方側修正中央管線（張數與 log 同一份資料）
   PASSIVE_ON_DAMAGED, PASSIVE_PREVENT_PRIZE, PASSIVE_ATTACKER_BUFF,
   // >>> v6407-engine-imports
   flushAttackEnergyPayment,                   // ⭐⭐⭐v6.407 自身能量付出：登記後的單點執行
@@ -6111,21 +6112,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     // 有效 HP = 基礎 HP + 道具加成（英雄斗篷/勇氣護符/豪華斗篷/驅勁能量古代）
     const defenderHP = getEffectiveHP(defenderState.active, pool, state);
 
-    // 被動特性：影藏（超級耿鬼ex）— 惡寶可夢被 ex 擊倒時，獎賞卡 -1
-    let prizeAdjust = 0;
-    if (baseDamage > 0 && newDamage >= defenderHP) {
-      const isExAttacker = isPokemonExCard(attackerCard);   // ⭐v6.403 卡面「寶可夢【ex】」唯一判準
-      const isDefenderDark = defenderCard.pokemonType === 'Darkness';
-      // v5.768：影藏持有者須「處於有效狀態」(§17.42.B) — 收斂中央 hasEffectiveKageHide
-      //   （原只查特性名存在，漏 isAbilityHolderEffective → 鐵荊棘ex｜初始化消除超級耿鬼ex特性時仍誤 -1）。
-      if (isExAttacker && isDefenderDark && hasEffectiveKageHide(state, dIdx, pool)) {
-        prizeAdjust = -1;
-      }
-      // v6.077 M6 傳說的山頂 —「雙方的【無】寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，
-      //   被獲得的獎賞卡減少1張。」與影藏同段可疊加；總式已有 Math.max(0,…) 下限。
-      //   ⚠ 這裡已在「baseDamage > 0 且 newDamage >= defenderHP」的招式傷害 KO 分支內。
-      prizeAdjust += legendPeakPrizeReduction(state, defenderState.active, defenderCard, dIdx, pool, true);
-    }
+    // ⭐v6.471：影藏／傳說的山頂的獎賞修正改由中央 koDefenderSidePrizeModifiers 計算（見下方 KO 分支）；
+    //   這裡只留下「造成傷害前」的被攻擊實體快照 —— 傳說的山頂判【無】屬性沿用原本讀的這一份。
+    const _v6471PeakTypeInst = defenderState.active;
 
     // v2.160：把實際造成傷害寫入 state.lastDealtDamage，供 POST 讀取
     //   （朽木妖｜終極吸取 heal=實際傷害量 等招式依賴此值）
@@ -6289,17 +6278,20 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //     ⇒ 同一次傷害，特性有反應、道具沒反應，本來就自相矛盾。
     const defenderSurvivedAttack = !wouldBeKO || preventedKO;
     if (!preventedKO && wouldBeKO) {
-      // 道具：被 KO 時獎賞加成（豪華斗篷 +1 / 莉莉艾的珍珠 -1 等）— 阻礙之塔時失效
-      let prizeTool = 0;
-      if (!toolsJammed && defenderState.active) {
-        // v3.20 多重轉接：iterate 所有道具
-        for (const t of getAllAttachedTools(defenderState.active)) {
-          const tool = pool.get(t.cardId);
-          if (!tool) continue;
-          const fn = TOOL_PRIZE_BONUS.get(tool.name);
-          if (fn) prizeTool += fn(defenderCard);
-        }
-      }
+      // >>> v6471-engine-prize-mods
+      // ⭐⭐⭐v6.471 中央管線：道具（豪華斗篷 +1／莉莉艾的珍珠 −1）／古舊能量／傳說的山頂／影藏
+      //   一次算完、各自帶正確的 log（原本影藏與傳說的山頂共用 prizeAdjust、log 一律寫「影藏」）。
+      //   ⚠ 各項讀的盤面／實體與 v6.470 逐項相同：
+      //     道具 ← 此刻的 defenderState.active；古舊能量 ← KO 前快照 state.players[dIdx].active＋state 的已用旗標；
+      //     傳說的山頂 ← 造成傷害前的快照；影藏持有者 ← state（攻擊前盤面）。
+      const _v6471Mods = defenderState.active ? koDefenderSidePrizeModifiers({
+        boardState: state, koInst: defenderState.active, koCard: defenderCard,
+        typeInst: _v6471PeakTypeInst,
+        ancientInst: state.players[dIdx].active, ancientFlagsState: state,
+        defenderIdx: dIdx, atkCard: attackerCard, takerName: attacker.name, toolsJammed, pool,
+      }) : { mods: [], ancientJustUsed: false };
+      const _v6471ModSum = _v6471Mods.mods.reduce((a, m) => a + m.delta, 0);
+      // <<< v6471-engine-prize-mods
 
       // ⚠⚠ defenderState.active 的型別是 `CardInstance | null`。spread 一個可能是 null 的值，
       //   會讓 TS 把展開後的**每一個欄位**都變成 optional —— 這一行曾經是 10 條 tsc 錯誤的單一源頭。
@@ -6383,22 +6375,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           && isBasicPokemonOnField(updatedActive, defenderCard)) {
         greedyGourmetBonus = 1;
       }
-      // v2.103 古舊能量（ACE SPEC）— 附有此能量的寶可夢被 KO 時，對方獎賞 -1
-      // v2.260 Bug #4：卡面「對戰中，自己的『古舊能量』的這個效果只生效 1 次」
-      //   per-player flag ancientEnergyMinusOneUsed[dIdx]：dIdx 玩家的古舊能量已生效則不再 -1
-      let ancientEnergyAdjust = 0;
-      let ancientEnergyJustUsed = false;
+      // v2.103 古舊能量（ACE SPEC）／v2.260 每場每方 1 次 —— ⭐v6.471 起在上方 koDefenderSidePrizeModifiers 計算
+      //   （判準不變：KO 前快照的實體＋state 的已用旗標）；這裡只取「這次是否用掉」以便寫回旗標。
+      const ancientEnergyJustUsed = _v6471Mods.ancientJustUsed;
       const koInst = state.players[dIdx].active;
-      if (koInst) {
-        const usedFlags = state.ancientEnergyMinusOneUsed ?? [false, false];
-        if (!usedFlags[dIdx]) {
-          const hasAncient = koInst.energyAttached.some(e => pool.get(e.cardId)?.name === '古舊能量');
-          if (hasAncient) {
-            ancientEnergyAdjust = -1;
-            ancientEnergyJustUsed = true;
-          }
-        }
-      }
       // v2.992 PASSIVE_PREVENT_PRIZE（脫殼忍者 脆弱蛻殼）— 若攻擊方符合 predicate 則獎賞改 0
       let preventPrizeAll = false;
       if (defenderCard.abilities) {
@@ -6421,7 +6401,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         newState = flipResultMK.state;
         if (flipResultMK.heads === 1) {
           togekissBonus = 1;
-          newState = addLog(newState, `「奇跡之吻」啟動：硬幣正面 → 多獲得 1 張獎賞卡`, aIdx);
+          // ⭐v6.471：脆弱蛻殼等「對手無法獲得獎賞卡」時，擲幣照舊（亂數序不變），敘述改寫成實際結果
+          newState = addLog(newState, preventPrizeAll
+            ? `「奇跡之吻」啟動：硬幣正面，但這次對手無法獲得獎賞卡 → 不增加獎賞卡`
+            : `「奇跡之吻」啟動：硬幣正面 → 多獲得 1 張獎賞卡`, aIdx);
         } else {
           newState = addLog(newState, `「奇跡之吻」啟動：硬幣反面 → 不增加獎賞卡`, aIdx);
         }
@@ -6434,21 +6417,34 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       // 獎賞卡下限 0（影藏等特性可將獎賞減到 0 張；實務上對手 KO 一隻 1 獎賞的惡寶可夢時效果才會觸發歸零）
       const basePrizes = prizesForKO(defenderCard);
       const prizes = preventPrizeAll ? 0
-        : Math.max(0, basePrizes + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + bagonElenaBonus + greedyGourmetBonus + ancientEnergyAdjust + togekissBonus + _v6259Victim.adjust);
-      if (!preventPrizeAll) for (const _line of _v6259Victim.logs) newState = addLog(newState, _line, dIdx);
-      // v3.76：揭示 prize 調整來源（讓玩家了解為何獎賞數與預期不同）
-      // - prizeTool: 莉莉艾的珍珠 -1 / 豪華斗篷 +1
-      // - prizeAdjust: 影藏（惡寶可夢被 ex KO 時 -1）
-      // - ancientEnergyAdjust: 古舊能量 -1
-      // - deferredBonus / whiteLilyBonus / bagonElenaBonus / greedyGourmetBonus / togekissBonus 已各自有 log
-      if (!preventPrizeAll && prizeTool !== 0) {
-        newState = addLog(newState, `🔧 道具調整獎賞卡：${prizeTool >= 0 ? '+' : ''}${prizeTool}（如莉莉艾的珍珠 -1 / 豪華斗篷 +1）`, null);
-      }
-      if (!preventPrizeAll && ancientEnergyAdjust !== 0) {
-        // v3.77：明確 log 古舊能量 ACE SPEC 效果，附 KO 寶可夢名 + 計算式
-        newState = addLog(newState,
-          `⚡ 古舊能量（ACE SPEC）：${defenderCard.name} 附有「古舊能量」 → 對手獎賞卡 ${ancientEnergyAdjust >= 0 ? '+' : ''}${ancientEnergyAdjust} 張（${basePrizes} ${ancientEnergyAdjust < 0 ? '-' : '+'} ${Math.abs(ancientEnergyAdjust)} = ${prizes}）`,
-          null);
+        : Math.max(0, basePrizes + _v6471ModSum + deferredBonus + whiteLilyBonus + bagonElenaBonus + greedyGourmetBonus + togekissBonus + _v6259Victim.adjust);
+      // ⭐v6.471：每一個防守方側修正各印一行（來源＝真正的卡名），再印一行標出處的算式。
+      //   攻擊方側加成（多餘花粉／白蕾雅／巴貝娜與荷蓮娜／奇跡之吻）原本就各自有 log；貪婪食客原本沒有 → 補上。
+      if (!preventPrizeAll) {
+        for (const m of _v6471Mods.mods) newState = addLog(newState, m.log, dIdx);
+        for (const _line of _v6259Victim.logs) newState = addLog(newState, _line, dIdx);
+        if (deferredBonus > 0) {
+          newState = addLog(newState, `${defenderCard.name} 因「多餘花粉」遺留效果，+${deferredBonus} 張獎賞卡`, null);
+        }
+        if (whiteLilyBonus > 0) {
+          newState = addLog(newState, `「白蕾雅」效果發動：太晶寶可夢的招式 KO 對手戰鬥位 +${whiteLilyBonus} 張獎賞卡`, aIdx);
+        }
+        if (bagonElenaBonus > 0) {
+          newState = addLog(newState, `「巴貝娜與荷蓮娜」效果發動：「N 的」寶可夢招式 KO 對手戰鬥位 +${bagonElenaBonus} 張獎賞卡`, aIdx);
+        }
+        if (greedyGourmetBonus > 0) {
+          newState = addLog(newState, `「貪婪食客」啟動：${attackerCard.name} 的招式擊倒了對手的【基礎】寶可夢 → ${attacker.name} 多獲得 ${greedyGourmetBonus} 張獎賞卡`, aIdx);
+        }
+        const _formula = koPrizeFormulaLog(basePrizes, [
+          ..._v6471Mods.mods,
+          { label: _v6259Victim.names.join('、'), delta: _v6259Victim.adjust },
+          { label: '多餘花粉', delta: deferredBonus },
+          { label: '白蕾雅', delta: whiteLilyBonus },
+          { label: '巴貝娜與荷蓮娜', delta: bagonElenaBonus },
+          { label: '貪婪食客', delta: greedyGourmetBonus },
+          { label: '奇跡之吻', delta: togekissBonus },
+        ], prizes);
+        if (_formula) newState = addLog(newState, _formula, null);
       }
       defPlayers[dIdx] = defenderState;
       // v2.260 Bug #4：若古舊能量這次有 -1，per-player flag 設為 true（之後不再 -1）
@@ -6517,18 +6513,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         newState = firePassiveOnKoAfterPrize(newState, dIdx, aIdx, pool, koInst, true, true);
       }
       // <<< v6355-ko-after-prize-enqueue
-      if (deferredBonus > 0) {
-        newState = addLog(newState, `${defenderCard.name} 因「多餘花粉」遺留效果，+${deferredBonus} 張獎賞卡`, null);
-      }
-      if (whiteLilyBonus > 0) {
-        newState = addLog(newState, `「白蕾雅」效果發動：太晶寶可夢的招式 KO 對手戰鬥位 +${whiteLilyBonus} 張獎賞卡`, aIdx);
-      }
-      if (bagonElenaBonus > 0) {
-        newState = addLog(newState, `「巴貝娜與荷蓮娜」效果發動：「N 的」寶可夢招式 KO 對手戰鬥位 +${bagonElenaBonus} 張獎賞卡`, aIdx);
-      }
-      if (prizeAdjust < 0) {
-        newState = addLog(newState, `「影藏」啟動：${attacker.name} 取得的獎賞卡減少 1 張`, null);
-      }
+      // ⭐v6.471：多餘花粉／白蕾雅／巴貝娜與荷蓮娜 的「+N 張」log 搬到上方 !preventPrizeAll 區塊、算式之前
+      //   （原本在這裡無條件印 ⇒ 脆弱蛻殼歸 0 時仍寫「+2 張獎賞卡」、接著又寫「無法取得任何獎賞卡」，敘述與實際不符；
+      //    且算式先出現「+1（白蕾雅）」、來源說明在後）。
       if (prizes > 0) {
         newState = addLog(newState, `${cardLink(koInst?.iid, defenderCard.name)} 被擊倒！${attacker.name} 取得 ${prizes} 張獎賞卡。`, null);
       } else {

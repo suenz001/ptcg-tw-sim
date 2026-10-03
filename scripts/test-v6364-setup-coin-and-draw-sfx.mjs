@@ -111,7 +111,8 @@ console.log('── A3. 全站網：engine.ts 沒有任何 log 同時含「擲�
 //   `msg.includes('擲硬幣') && msg.includes('先手')`。只要有人未來寫出同時含兩者的 log，
 //   這條就會紅 —— 提醒他「開局擲幣視覺不是靠 log 的」。
 const allTpls = grabTemplates(ENGINE).flatMap(render);
-chk(`A3a 哨兵：engine.ts 抓到的 log 樣板夠多（實際 ${allTpls.length} 條；抓不到就是空真）`, allTpls.length >= 120, String(allTpls.length));
+chk(`A3a 哨兵：engine.ts 抓到的 log 樣板夠多（實際 ${allTpls.length} 條；抓不到就是空真）`, allTpls.length >= 100, String(allTpls.length));
+// v6.471（Rule 40，意圖不變＝防「一條都沒抓到」的空真）：KO 獎賞修正的 log 收斂到 effects.ts 中央管線，engine.ts 樣板數 120→115 ⇒ 門檻改 100
 const both = allTpls.filter((l) => l.includes('擲硬幣') && l.includes('先手'));
 chk('A3b ⭐⭐ 沒有任何 log 同時含「擲硬幣」與「先手」（舊死碼的進入條件永遠不成立）',
   both.length === 0, JSON.stringify(both.slice(0, 5)));

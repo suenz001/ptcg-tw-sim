@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.471：KO 獎賞修正的紀錄來源（站長回報：傳說的山頂被寫成影藏）
+
+BASE v6.470（0e0f00a9）。
+- 根因：engine 主傷害 KO 分支把影藏與傳說的山頂累加進同一個 prizeAdjust，log 只看 prizeAdjust<0 一律印「『影藏』啟動」（疊加時還寫減少 1 張）；effects.koPrizesAdjusted 對道具／古舊能量／山頂／影藏完全不寫 log。
+- 中央：effects.ts 新增 koDefenderSidePrizeModifiers（道具逐張／古舊能量／傳說的山頂／影藏，各回傳 {label, delta, log}）與 koPrizeFormulaLog（🧮 算式，<0 註明最少 0 張）；koVictimAbilityPrizeAdjust 多回傳 names。engine 各項讀的盤面／實體與 v6.470 逐項相同（_v6471PeakTypeInst、ancientInst/ancientFlagsState）。
+- 同型修正（Fable 審查）：脆弱蛻殼歸 0 時多餘花粉／白蕾雅／巴貝娜與荷蓮娜的「+N 張」log 不再印（移到 !preventPrizeAll 區塊、算式之前）；奇跡之吻正面在歸 0 時改寫實際結果（擲幣照舊、亂數序不變）；koPrizesAdjusted 的脆弱蛻殼補 log；貪婪食客補 log。
+- 驗證：Fable 自建 36 情境（engine 27＋effects 9）與 v6.470 張數、古舊能量旗標 0 差異。
+- 守衛：新增 test-v6471-ko-prize-log-source（實跑本版與 BASE 引擎）；test-v6260 logCount 排除 🧮 行、test-kage-hide-holder-effective 盤面補 log（Rule 40）。
+- 待站長裁定（未改）：① 多餘花粉在中毒／灼傷 checkup、揚沙等不經 koPrizesAdjusted 的 KO 不 +N；② 脆弱蛻殼歸 0 時 engine 主分支會消耗古舊能量旗標、koPrizesAdjusted 不會。
+
 ## v6.470：Fable 版 iPad／筆電調校（比照 v6.466）
 
 BASE v6.469（4e1d2429）。Playwright 固定種子開一局、28 種視窗量測。

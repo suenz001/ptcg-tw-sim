@@ -90,7 +90,8 @@ const mk = (p0over = {}, p1over = {}, over = {}) => ({
   ], ...over,
 });
 const pickers = (s) => [...(s.pendingSelection ? [s.pendingSelection] : []), ...(s.pendingChainQueue ?? [])];
-const logCount = (s, kw) => s.log.filter(l => (l.message ?? '').includes(kw)).length;
+// v6.471（Rule 40，意圖不變）：獎賞算式那一行（🧮）會標出處、也含特性名 ⇒ 不算「觸發了幾次」
+const logCount = (s, kw) => s.log.filter(l => (l.message ?? '').includes(kw) && !(l.message ?? '').startsWith('🧮')).length;
 
 console.log('── A 組：備戰被對手招式傷害 KO ⇒ 卡面無「在戰鬥場」的效果應觸發 ──');
 
