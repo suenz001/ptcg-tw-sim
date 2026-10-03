@@ -69,7 +69,9 @@ const NEVER_HIDE = ['settings-chip', 'fs-chip', 'timer-turn', 'hand-count', 'tur
 const CHECKS = [
   ['★★★[S1] 頁首是具名容器 blhdr，只在新版桌墊宣告', true, (src) => {
     const b = blockOf(src); const decl = rulesOf(b).filter((r) => /container\s*:\s*blhdr\s*\/\s*inline-size/.test(r.body));
-    const everywhere = (stripCss(cssOf(src, REL)).match(/container(?:-name)?\s*:\s*blhdr\b/g) || []).length;
+    // v6.470（Rule 40，意圖不變）：Fable 版比照宣告的那一份只准出現在 v6470-fable-ipad 哨兵內、選擇器限 .battle-root:has(.playmat.layout-fable) .battle-header（內容由 test-v6470 鎖），其餘地方仍只准一份
+    const css0 = cssOf(src, REL).replace(/  \/\* >>> v6470-fable-ipad \*\/[\s\S]*?  \/\* <<< v6470-fable-ipad \*\/\n/, '');
+    const everywhere = (stripCss(css0).match(/container(?:-name)?\s*:\s*blhdr\b/g) || []).length;
     return decl.length === 1 && decl[0].sels.every((s) => s.includes('.layout-blue') && /\.battle-header$/.test(s)) && everywhere === 1;
   }],
   ['★★★[S2a] 三段 @container blhdr：<1280 收「可用／已用」與 P1／P2 累計時間', true, (src) => {

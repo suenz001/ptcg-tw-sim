@@ -19807,6 +19807,23 @@ function _setupSelfPending(g: any, seat: number): string | null {
     align-items:stretch;
   }
   /* <<< v6441-blue-geom */
+  /* >>> v6470-fable-side */
+  /* ⭐v6.470 Fable 版（不含新版桌墊）左右兩欄在矮視窗被擠爆：中場兩列各只有「剩餘高度對半」，
+     實測 1366×768 筆電（視窗 657 高）每列 116px，但牌庫＋棄牌疊起來 143px、獎賞（標題＋3 列卡）139px
+     ⇒ 對手的棄牌蓋到我方的「獎賞 6張」標題、我方牌庫蓋到對手的獎賞（1280×632 重疊到 21px）。
+     做法（不新增媒體查詢：本頁數量被守衛釘住）：
+       ・牌堆欄撐滿該列高度並設成尺寸容器 flpile；容器矮於 150px 時才把牌堆圖示收掉（張數與文字保留）。
+         （兩格完整高度約 143px，門檻留幾 px 給不同平台的字體行高。）寬度＝牌堆格外寬（0.82 卡寬＋內距 8px＋框線 2px；原本固定 72px 比格子窄、格子左右各凸出 3px）
+         ⇒ 這一欄會跟著卡寬變寬或變窄幾 px（1920×1080 約 +3px、1280×632 約 −19px，中場跟著微移），其餘不變。
+       ・獎賞欄撐滿該列高度、內容置中；獎賞卡格子設成尺寸容器 flprize（寬＝兩張卡＋框線＋間距），卡高＝min(原本 0.56 卡寬, (格子高度－框線與間距 12px)÷3)、卡寬等比例
+         ⇒ 放得下時與原本完全相同，放不下時才等比例縮小。
+       ・<1024 後備直排在 v6470-fable-fallback 還原（那裡沒有固定列高）。 */
+  .playmat.layout-fable:not(.layout-blue) .field-row > .zone-pile{ align-self:stretch; justify-content:center; container:flpile / size; width:calc(var(--card-w) * 0.82 + 10px); }
+  @container flpile (max-height: 150px){ .pile-slot .pile-icon{ display:none; } }
+  .playmat.layout-fable:not(.layout-blue) .field-row > .zone-prizes{ align-self:stretch; justify-content:center; }
+  .playmat.layout-fable:not(.layout-blue) .zone-prizes > .prize-grid{ flex:1 1 0; min-height:0; container:flprize / size; width:calc(var(--card-w) * 0.8 + 7px); align-content:center; justify-content:center; }
+  .playmat.layout-fable:not(.layout-blue) .zone-prizes .prize-card{ height:min(calc(var(--card-w) * 0.56), calc((100cqh - 12px) / 3)); width:min(calc(var(--card-w) * 0.4), calc((100cqh - 12px) / 3 * 0.714)); }
+  /* <<< v6470-fable-side */
   @media (max-width: 1023px){
     .playmat.layout-fable{ --card-w-cap:9999px; display:grid !important; grid-template-columns:none; grid-template-rows:none; grid-template-areas:none; }
     .playmat.layout-fable > .field-row,
@@ -19850,6 +19867,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .playmat.layout-blue.layout-fable .opponent-row > .turn-order-chip,
     .playmat.layout-blue.layout-fable .my-row > .turn-order-chip{ position:absolute; top:auto; right:auto; left:18px; bottom:14px; z-index:5; }
     /* <<< v6442-blue-fallback */
+    /* >>> v6470-fable-fallback */
+    /* ⭐v6.470 Fable 版在 <1024 後備直排（直向 iPad）：行動列沿用基礎樣式的固定 180px 高，
+       裝不下「行動鈕＋滿寬紀錄（最高 220px）」⇒ 紀錄溢出、蓋到我方場地（v6.466 只修了新版桌墊）。改成跟著內容長高。 */
+    .playmat.layout-fable > .action-bar{ height:auto; }
+    /* 還原 v6470-fable-side（直排沒有固定列高，牌堆／獎賞照原本依內容排） */
+    .playmat.layout-fable:not(.layout-blue) .field-row > .zone-pile{ align-self:center; justify-content:normal; container:none; width:72px; }
+    .playmat.layout-fable:not(.layout-blue) .field-row > .zone-prizes{ align-self:center; justify-content:normal; }
+    .playmat.layout-fable:not(.layout-blue) .zone-prizes > .prize-grid{ flex:0 1 auto; min-height:auto; container:none; width:auto; align-content:normal; justify-content:normal; }
+    .playmat.layout-fable:not(.layout-blue) .zone-prizes .prize-card{ width:calc(var(--card-w) * 0.4); height:calc(var(--card-w) * 0.56); }
+    /* <<< v6470-fable-fallback */
   }
 
 
@@ -20395,4 +20422,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .playmat.layout-blue:not(.log-collapsed) .log-toggle-btn .log-toggle-arrow{ font-size:12px; }
   .playmat.layout-blue:not(.log-collapsed) .action-bar > .log-col{ margin-top:32px; }
   /* <<< v6466-blue-ipad */
+  /* >>> v6470-fable-ipad */
+  /* ⭐v6.470 Fable 版比照 v6.466：Fable 版與新版桌墊共用同一條頁首（一整排不換行、總寬約 1250px），
+     視窗 <1250 時右邊的「填能／支援者／撤退」被切掉，直向 iPad 連「設定」「全螢幕」都在畫面外。
+     ⇒ Fable 版的頁首也設成同一個具名容器 blhdr，沿用 v6466-blue-ipad 的三段收合規則（<1280／<1100／<900），
+       回合文字可縮、超出用「…」，手牌張數幾乎不縮；設定與全螢幕永遠不收。
+     （新版桌墊本身也帶 .layout-fable，這幾條對它是重複宣告、值相同，不改變任何樣式。） */
+  .battle-root:has(.playmat.layout-fable) .battle-header{ container:blhdr / inline-size; }
+  .battle-root:has(.playmat.layout-fable) .battle-header > .turn-info{ flex:1 4 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .battle-root:has(.playmat.layout-fable) .battle-header > .hand-counts{ flex:0 .05 auto; min-width:0; overflow:hidden; }
+  .battle-root:has(.playmat.layout-fable) .battle-header .hand-count-chip{ flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .battle-root:has(.playmat.layout-fable) .battle-header .res-item.res-used .res-lb{ text-decoration:line-through; }
+  /* <<< v6470-fable-ipad */
 </style>

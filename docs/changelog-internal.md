@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.470：Fable 版 iPad／筆電調校（比照 v6.466）
+
+BASE v6.469（4e1d2429）。Playwright 固定種子開一局、28 種視窗量測。
+- 頁首：新增 v6470-fable-ipad 區塊，`.battle-root:has(.playmat.layout-fable) .battle-header` 也宣告 container blhdr，沿用 v6466 三段收合（新版桌墊同時有 .layout-fable，值相同、重複宣告無影響）。
+- 矮視窗側欄（v6470-fable-side，只作用在 `.layout-fable:not(.layout-blue)`、放在 v6441-blue-geom 之後、後備媒體查詢之前）：牌堆欄 stretch＋container flpile/size，寬 0.82 卡寬＋10px（格子外寬，含框線；Fable 第 1／5 欄因此隨卡寬差幾 px）；容器 <150px 才收 .pile-icon（兩格約 143px，留字體差餘裕）。獎賞欄 stretch 置中；.prize-grid 設 container flprize/size（寬 0.8 卡寬＋7px），獎賞卡高＝min(0.56cw, (100cqh−12px)/3)、寬等比。實測 1366×657 中場列 116px（牌堆 143、獎賞 139 ⇒ 重疊 17～21px）→ 0 重疊；1920×970 圖示照常、卡尺寸不變。
+- 後備直排（v6470-fable-fallback，在 max-width:1023px 內）：`.playmat.layout-fable > .action-bar{height:auto}`；側欄全部還原成 v6.469 計算值（實測直向 834／744 計算樣式逐項相同）。
+- 不動：備戰格比備戰區高 4px（padding 2px×2 的 content-box 差，Fable 備戰區無框線，看不到）。
+- 量測：Fable 28 視窗 issues 只剩該 4px；新版桌墊 28 視窗維持 0。
+- 守衛：新增 test-v6470-fable-ipad-layouts（S、HEAD-FAIL、@media 數、真瀏覽器 E1～E7＋三個自驗突變）；test-v6441 LATER 三個整塊還原＋兩條順序判準（Rule 40）；test-v6466 S1 排除 v6470 區塊（Rule 40）。
+
 ## v6.469：雙指放大只在對戰畫面禁止＋舊協定回前景補抓
 
 BASE v6.468（aed34895）。站長核准 audit 三件建議。
