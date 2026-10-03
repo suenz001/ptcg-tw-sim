@@ -148,7 +148,23 @@ else if (chromium) {
       await pg.waitForTimeout(1500);
       const pathGame2 = await pg.evaluate(() => location.pathname); const vGame2 = await vp(pg);
       ok('★★★[E1] Android：/cards 可縮放、/game 鎖定', vCards === 'width=device-width, initial-scale=1, viewport-fit=cover' && vGame === LOCKED_APP, JSON.stringify({ vCards, vGame }));
+      ok('★★[E2a] Android：從 /game 站內回到其他頁會放開縮放', pathAfter !== '/game' && vHomeClient === 'width=device-width, initial-scale=1, viewport-fit=cover', JSON.stringify({ pathAfter, vHomeClient }));
       ok('★★[E2] Android：首頁可縮放；站內點進 /game 後重新鎖回', vHome === 'width=device-width, initial-scale=1, viewport-fit=cover' && /\/game$/.test(pathGame2) && vGame2 === LOCKED_APP, JSON.stringify({ vHome, pathGame2, vGame2, pathAfter, vHomeClient }));
+      // 真的兩指放大 2.5 倍後站內進 /game：縮放必須夾回 1 倍（站長真正在意的行為，不只是 meta 字串）
+      const cdp = await ctx.newCDPSession(pg);
+      await pg.goto(`http://localhost:${port}/cards`, { waitUntil: 'load' }); await pg.waitForTimeout(1200);
+      await cdp.send('Input.synthesizePinchGesture', { x: 100, y: 150, scaleFactor: 2.5, relativeSpeed: 800 });
+      await pg.waitForTimeout(600);
+      const zoomed = await pg.evaluate(() => visualViewport.scale);
+      await pg.evaluate(() => { const a = [...document.querySelectorAll('a')].find((x) => /(^|\/)\.?\/?$|\/$/.test(x.getAttribute('href') || '') || x.getAttribute('href') === '..'); if (a) a.click(); });
+      await pg.waitForTimeout(1200);
+      await pg.evaluate(() => { const a = [...document.querySelectorAll('a')].find((x) => /\/game$/.test(x.getAttribute('href') || '')); if (a) a.click(); });
+      await pg.waitForTimeout(1500);
+      const z2 = await pg.evaluate(() => ({ path: location.pathname, scale: visualViewport.scale }));
+      await cdp.send('Input.synthesizePinchGesture', { x: 100, y: 150, scaleFactor: 2.5, relativeSpeed: 800 });
+      await pg.waitForTimeout(600);
+      const z3 = await pg.evaluate(() => visualViewport.scale);
+      ok('★★★[E5] Android：/cards 可真的放大；放大狀態站內進 /game 後縮放回 1 倍，且 /game 上捏合無效', zoomed > 1.5 && /\/game$/.test(z2.path) && Math.abs(z2.scale - 1) < 0.01 && Math.abs(z3 - 1) < 0.01, JSON.stringify({ zoomed, z2, z3 }));
       await ctx.close();
       const IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
       const ctx2 = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: IOS });
