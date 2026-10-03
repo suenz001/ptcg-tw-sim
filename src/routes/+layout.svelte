@@ -2,6 +2,12 @@
   import { onMount } from 'svelte';
   import { initTracking } from '$lib/tracking';
   import { isChunkLoadError } from '$lib/sw-policy';
+  import { afterNavigate } from '$app/navigation';
+  import { base } from '$app/paths';
+  import { applyViewportFor } from '$lib/viewport-zoom';   // ⭐v6.469 只在對戰畫面禁止雙指放大（規則見該檔）
+
+  // ⭐v6.469：每次導頁（含第一次載入）後依路由套用 viewport；對戰頁維持禁縮放，其他頁（非 iOS）可兩指放大。
+  afterNavigate((nav) => { try { applyViewportFor((nav.to && nav.to.url && nav.to.url.pathname) || location.pathname, base); } catch { /* 套不了就維持 app.html 原樣 */ } });
 
   let { children } = $props();
 

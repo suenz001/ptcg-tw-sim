@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.469：雙指放大只在對戰畫面禁止＋舊協定回前景補抓
+
+BASE v6.468（aed34895）。站長核准 audit 三件建議。
+- viewport：app.html 原文不動（test-v6213 釘原文；JS 掛掉＝舊行為）。新增 src/lib/viewport-zoom.ts，layout afterNavigate 套用：/game、/tournament 維持 `maximum-scale=1, user-scalable=no`；其他頁非 iOS 改 `width=device-width, initial-scale=1, viewport-fit=cover`。iOS 一律不動（Safari 無視 user-scalable=no；maximum-scale=1 在 iOS 的作用是點輸入框不自動放大，拿掉反而退步）。
+- room-oracle：legacyTick 也記 _inFlight；回前景若 _combinedMode===false 改呼叫 legacyTick（v6.467 只補抓合併模式，舊協定最多晚 10 秒）。
+- 撤回：/cards?set=ALL 遠處卡片卸圖。實測（快速網路模擬、5222 張全載入）renderer RSS 1141→1030MB，記憶體壓力後 659→548MB（只省約 17%；Chromium 在壓力下本來就會釋放解碼圖），DOM 不變 31k；代價是跳回頂端時圖片要重抓（快取 100～300ms 空白、網路壅塞時更久）⇒ 違反「不可變慢」，不上線。audit 報告的「1.1GB」大部分是可回收的解碼快取。
+- 守衛：新增 test-v6469-zoom-and-legacy-poll（純函式、抽函式實跑、HEAD-FAIL、真瀏覽器 Android／iOS）。
+
 ## server patch v1.54：全站 audit 伺服器端降載六項（輸出逐位元不變、只少做事）
 
 BASE `53491588`（v6.468／server v1.53）。子代理審查 server_admin_patch.js，以下各項自行查證＋真 handler 對照 v1.53 實跑。

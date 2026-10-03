@@ -868,6 +868,7 @@ export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: 
   let _lastAll: OracleRoom[] | null = null;
   const legacyTick = async () => {
     if (!alive) return;
+    _inFlight = true;   // ⭐v6.469 舊協定也記在途（回前景補抓才不會疊發；Fable 審查 v6.467 第 3 點）
     try {
       const [lobbyRes, playingRes] = await Promise.all([
         oracleListRooms('lobby').catch(() => null),
@@ -880,6 +881,7 @@ export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: 
       // 從來沒有成功過（兩邊都還是 null）⇒ 這一發沒有任何可顯示的資料，不 callback，
       //   讓畫面維持既有的「載入中／空狀態」，而不是被填成假的「目前沒有公開房間」。
       if (lobby === null && playing === null) {
+        _inFlight = false;
         if (alive) timer = setTimeout(legacyTick, _hidden() ? 10000 : 2000);
         return;
       }
@@ -888,6 +890,7 @@ export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: 
       console.warn('[subscribeOpenRooms]', err);
       onError?.(err as Error);
     }
+    _inFlight = false;
     if (alive) timer = setTimeout(legacyTick, _hidden() ? 10000 : 2000);
   };
   const tick = async () => {
@@ -926,10 +929,12 @@ export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: 
   };
   tick();
   // ⭐v6.467 回前景：在途就不動（它回來後會用前景節奏排下一發）；否則取消排好的那發、立刻補抓。
-  //   舊協定（legacyTick）不追蹤在途 ⇒ 只在合併模式補抓，舊協定維持原本的排程（最多晚一拍 2 秒）。
+  //   ⭐v6.469：舊協定（伺服器不支援合併時的退路）原本不補抓，隱藏時排好的 10 秒那發會讓列表最多晚 10 秒
+  //     （Fable 審查指出）⇒ legacyTick 也記在途，回前景同樣取消排程、立刻補抓。
   const _offVis = _onVisible(() => {
-    if (!alive || _inFlight || _combinedMode === false || !timer) return;
-    clearTimeout(timer); timer = null; void tick();
+    if (!alive || _inFlight || !timer) return;
+    clearTimeout(timer); timer = null;
+    if (_combinedMode === false) void legacyTick(); else void tick();
   });
   return () => {
     alive = false;
