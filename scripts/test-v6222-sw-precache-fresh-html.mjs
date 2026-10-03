@@ -176,8 +176,10 @@ T('⭐files（manifest 等）沿用預設語義 —— 不因本修而強制回�
 
 T('⭐/sitemap-cards.xml（563KB 爬蟲用）不得強制回源 —— install 不多抓 563KB', () => {
   const hit = main.fetchLog.find((e) => e.path === '/sitemap-cards.xml');
-  assert.ok(hit, 'sitemap 應照舊被預快取（維持 v6.221 行為）');
-  assert.notEqual(hit.cacheMode, 'reload', 'sitemap 不是 app 殼層，強制回源只是白花流量');
+  // ⭐v6.467（Rule 40，意圖不變＝「install 不為 sitemap 多花流量」）：爬蟲專用檔整個移出預快取（CRAWLER_ONLY），
+  //   比「預快取但不強制回源」更省；仍然預快取的話，絕不能是強制回源。
+  if (hit) assert.notEqual(hit.cacheMode, 'reload', 'sitemap 不是 app 殼層，強制回源只是白花流量');
+  else assert.ok(/CRAWLER_ONLY/.test(SRC), 'sitemap 沒被預快取，但也不是 v6.467 的爬蟲檔排除造成的');
 });
 
 T('⭐v5.966／v5.365／v6.100 策略不可破壞：/card/、covers、music、changelog-archive 不預快取', () => {

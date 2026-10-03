@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.467：全站 audit 第一批（網路／系統）
+
+BASE `926729af`（v6.466＋server v1.53）。站長要求全站 audit、不可造成延遲。三支子代理（伺服器端點、前端網路、介面）報告，全部自行查證。
+- ⭐ 真 bug：/game 元件的四支 setInterval（tEventPollTimer、tTickTimer、tAlertPollTimer、tAlertTickTimer）建在 $effect 裡、只在 else 分支清，卸載時 else 不會跑 ⇒ SPA 離開 /tournament 後背景持續打 /event、/chat、/bracket；殭屍 tTickTimer 看門狗 6 秒後呼叫 startTournamentPoll() 復活對戰輪詢；每進出一次多一份。Playwright 實測 v6.466：首頁 1 支 → 進出 /tournament 三次 4 支；v6.467 維持 1 支。修：onDestroy 統一清（含回房倒數、取獎計時器）、`_gameDestroyed` 擋 startTournamentPoll、initNotifyNav 回傳移除函式。刻意不在 $effect return 清（effect 重跑會先清再首抓 5 支）。
+- SW：CRAWLER_ONLY（og-image、*.xml、robots、google*.html）不預快取；刪 static/sounds/ready-go.wav（310KB，無程式載入，實際播 start-the-game-already.mp3）。
+- preconnect：suenz001.github.io（不帶 crossorigin）、securetoken.googleapis.com。
+- room-oracle：subscribeOpenRooms／subscribeMessages 分頁隱藏時 10 秒／5 秒，visibilitychange 回前景立刻補抓（在途就不動）；前景 2000／1500 不變。helper 寫在函式內（多支舊守衛抽函式原文實跑）。
+- pool.loadIndex 加在途合併；cards ALL 的 loadCardPolicyOnce 與 index.json 並行。
+- 守衛：新增 test-v6467-site-audit-net（S、實跑函式 B、HEAD-FAIL、真瀏覽器 E 計時器數量）；Rule 40 調整 test-v6118（間隔 regex 接受「隱藏 ? 背景 : 前景」）、test-v6222（sitemap 移出預快取）、test-v6441 LATER。
+
 ## server patch v1.53：錦標賽報名的牌組改在伺服器端也跑完整規則（站長 2026-10-02 核准）
 
 BASE `2149920b`（v6.466／server patch v1.52）。v6.465 前端已改走 validateDeck，但伺服器 /register、/register-and-checkin、/propose 只檢查 60 張 ⇒ 改過的前端或舊快取可用不合法牌組報名。

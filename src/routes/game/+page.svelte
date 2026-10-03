@@ -813,6 +813,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let tAlertDismissedId = $state('');
   let tAlertPollTimer: ReturnType<typeof setInterval> | null = null;
   let tAlertTickTimer: ReturnType<typeof setInterval> | null = null;
+  // ⭐v6.467 元件卸載旗標＋通知導頁監聽的移除函式（見 onDestroy 的 v6467-destroy-timers）
+  let _gameDestroyed = false;
+  let _unsubNotifyNav: (() => void) | null = null;
   const tAlertReady = $derived(
     !isTournament
     && !!tAlertMatch && !tAlertMatch.entered
@@ -4905,6 +4908,20 @@ function _setupSelfPending(g: any, seat: number): string | null {
   });
 
   onDestroy(() => {
+    // >>> v6467-destroy-timers
+    // ⭐v6.467（全站 audit 2026-10-03）：錦標賽大廳／倒數／跨房提醒這四支 setInterval 建在 $effect 裡、
+    //   只在 effect 的 else 分支清除 —— 元件卸載時 effect 直接銷毀、else 永遠不會跑 ⇒ 用站內連結或返回鍵
+    //   離開 /tournament、/game 之後，它們還在背景每 1～3 秒打 /event、/chat、/bracket；
+    //   殭屍的 tTickTimer 看門狗甚至會在 6 秒後呼叫 startTournamentPoll() 把對戰輪詢「復活」。
+    //   再進一次頁面又掛一份 ⇒ 來回幾次就是幾倍請求。
+    //   ⚠ 刻意不改成在那些 $effect 裡 return 清除函式：effect 每次重跑都會先執行清除，
+    //     接著 `!tEventPollTimer` 成立就會重新「首抓 5 支」⇒ 反而多發請求。只在這裡收尾。
+    _gameDestroyed = true;
+    for (const _t of [tEventPollTimer, tTickTimer, tAlertPollTimer, tAlertTickTimer, restartCountdownTimer, returnRoomCountdownTimer]) { if (_t) clearInterval(_t); }
+    tEventPollTimer = null; tTickTimer = null; tAlertPollTimer = null; tAlertTickTimer = null; restartCountdownTimer = null; returnRoomCountdownTimer = null;
+    if (takePrizeTimerId !== null) { clearInterval(takePrizeTimerId); takePrizeTimerId = null; }
+    _unsubNotifyNav?.(); _unsubNotifyNav = null;
+    // <<< v6467-destroy-timers
     stopHeartbeat();
     window.removeEventListener('pointerdown', unlockBgmOnGesture);   // v6.130 BGM 手勢解鎖
     closeAudio();  // v4.928: 釋放 AudioContext + 停所有 in-flight oscillators
@@ -7033,6 +7050,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     return 1200;
   }
   function startTournamentPoll() {
+    if (_gameDestroyed) return;   // ⭐v6.467 元件已卸載（離開頁面）⇒ 在途的非同步呼叫不可以把對戰輪詢重新開起來
     if (tPollTimer) clearInterval(tPollTimer);
     const gen = ++tPollGen;
     let _lastChatAt = 0;       // v6.148 大廳聊天改時間判準（原本綁輪詢輪數，節奏一變就漂移）
@@ -7955,7 +7973,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     notifyCommunity = getNotifyCommunity();
     notifyPerm = getNotifyPermission();
     notifyIOSNeedsInstall = isIOSNeedsInstall();
-    initNotifyNav((url) => { try { if (!location.href.startsWith(url)) goto(url); } catch { /* 導頁失敗不影響對戰 */ } });
+    _unsubNotifyNav = initNotifyNav((url) => { try { if (!location.href.startsWith(url)) goto(url); } catch { /* 導頁失敗不影響對戰 */ } });   // ⭐v6.467 卸載時移除（原本每次進頁面都多疊一個 SW 訊息監聽）
   });
   // 首次進錦標賽大廳時詢問一次（Wilson 決策：不是一進站、也不是報名時）
   $effect(() => {

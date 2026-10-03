@@ -835,6 +835,19 @@ export function filterAndSortOpenRooms(all: OracleRoom[]): Room[] {
 export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: (err: Error) => void): () => void {
   let alive = true;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let _inFlight = false;   // ⭐v6.467 回前景補抓時不可以跟在途的那一發重疊
+  // >>> v6467-hidden-poll
+  // ⭐v6.467（全站 audit 2026-10-03）：分頁**隱藏**時降頻，回到前景**立刻補抓一發**（前景節奏一個字都不改）。
+  //   原本背景照打（Chrome 要隱藏滿 5 分鐘才會自己節流）。回前景立刻補抓 ⇒ 玩家看到的畫面不會比原本晚。
+  //   ⚠ 寫在函式裡面（不抽成模組層 helper）：多支舊守衛是把這支函式原文抽出來實跑的；沒有 document 時一律當前景。
+  const _hidden = (): boolean => { try { return typeof document !== 'undefined' && document.visibilityState === 'hidden'; } catch { return false; } };
+  const _onVisible = (poke: () => void): (() => void) => {
+    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return () => {};
+    const h = () => { if (!_hidden()) poke(); };
+    document.addEventListener('visibilitychange', h);
+    return () => { try { document.removeEventListener('visibilitychange', h); } catch { /* ignore */ } };
+  };
+  // <<< v6467-hidden-poll
   // ⭐⭐⭐v6.177 同一條「載入時不要清空已顯示資料」的紀律（與錦標賽賽程同型）：
   //   舊寫法 `.catch(() => [])` 把「請求失敗」偽裝成「伺服器說沒有房間」——
   //   callback([]) 之後大廳的房間列表整個消失，還顯示成「目前沒有公開房間」
@@ -867,7 +880,7 @@ export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: 
       // 從來沒有成功過（兩邊都還是 null）⇒ 這一發沒有任何可顯示的資料，不 callback，
       //   讓畫面維持既有的「載入中／空狀態」，而不是被填成假的「目前沒有公開房間」。
       if (lobby === null && playing === null) {
-        if (alive) timer = setTimeout(legacyTick, 2000);
+        if (alive) timer = setTimeout(legacyTick, _hidden() ? 10000 : 2000);
         return;
       }
       callback(filterAndSortOpenRooms([...(lobby ?? []), ...(playing ?? [])] as OracleRoom[]));
@@ -875,11 +888,12 @@ export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: 
       console.warn('[subscribeOpenRooms]', err);
       onError?.(err as Error);
     }
-    if (alive) timer = setTimeout(legacyTick, 2000);
+    if (alive) timer = setTimeout(legacyTick, _hidden() ? 10000 : 2000);
   };
   const tick = async () => {
     if (!alive) return;
     if (_combinedMode === false) { void legacyTick(); return; }  // 防禦:切換後 tick 不該再被排到
+    _inFlight = true;
     try {
       const r = await oracleListRoomsCombined(_lastH);
       if (r === ROOMS_COMBINED_UNSUPPORTED) {
@@ -907,11 +921,19 @@ export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: 
       onError?.(err as Error);
       if (_lastAll !== null) callback(filterAndSortOpenRooms(_lastAll));
     }
-    if (alive) timer = setTimeout(tick, 2000);
+    _inFlight = false;
+    if (alive) timer = setTimeout(tick, _hidden() ? 10000 : 2000);
   };
   tick();
+  // ⭐v6.467 回前景：在途就不動（它回來後會用前景節奏排下一發）；否則取消排好的那發、立刻補抓。
+  //   舊協定（legacyTick）不追蹤在途 ⇒ 只在合併模式補抓，舊協定維持原本的排程（最多晚一拍 2 秒）。
+  const _offVis = _onVisible(() => {
+    if (!alive || _inFlight || _combinedMode === false || !timer) return;
+    clearTimeout(timer); timer = null; void tick();
+  });
   return () => {
     alive = false;
+    _offVis();
     if (timer) clearTimeout(timer);
   };
 }
@@ -1006,8 +1028,22 @@ export function subscribeMessages(roomCode: string, callback: (msgs: ChatMessage
   //   ⚠ 同一毫秒兩則訊息時 $gt 可能暫時漏掉後寫入的那則——下一則新訊息出現時的全量回應
   //     會自動補回,且既有 oraclePollMessages 本就同樣以 > 判新,非本版新增的邊界。
   let lastTs = 0;
+  let _inFlight = false;   // ⭐v6.467 見 v6467-hidden-poll
+  // >>> v6467-hidden-poll-chat
+  // ⭐v6.467（全站 audit 2026-10-03）：分頁**隱藏**時降頻，回到前景**立刻補抓一發**（前景節奏一個字都不改）。
+  //   原本背景照打（Chrome 要隱藏滿 5 分鐘才會自己節流）。回前景立刻補抓 ⇒ 玩家看到的畫面不會比原本晚。
+  //   ⚠ 寫在函式裡面（不抽成模組層 helper）：多支舊守衛是把這支函式原文抽出來實跑的；沒有 document 時一律當前景。
+  const _hidden = (): boolean => { try { return typeof document !== 'undefined' && document.visibilityState === 'hidden'; } catch { return false; } };
+  const _onVisible = (poke: () => void): (() => void) => {
+    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return () => {};
+    const h = () => { if (!_hidden()) poke(); };
+    document.addEventListener('visibilitychange', h);
+    return () => { try { document.removeEventListener('visibilitychange', h); } catch { /* ignore */ } };
+  };
+  // <<< v6467-hidden-poll-chat
   const tick = async () => {
     if (!alive) return;
+    _inFlight = true;
     try {
       const messages = lastTs > 0
         ? await oracleListMessages(code, MESSAGES_LIMIT, lastTs)
@@ -1026,11 +1062,17 @@ export function subscribeMessages(roomCode: string, callback: (msgs: ChatMessage
     } catch (err) {
       console.warn('[subscribeMessages]', err);
     }
-    if (alive) timer = setTimeout(tick, 1500);
+    _inFlight = false;
+    if (alive) timer = setTimeout(tick, _hidden() ? 5000 : 1500);
   };
   tick();
+  const _offVis = _onVisible(() => {
+    if (!alive || _inFlight || !timer) return;
+    clearTimeout(timer); timer = null; void tick();
+  });
   return () => {
     alive = false;
+    _offVis();
     if (timer) clearTimeout(timer);
   };
 }

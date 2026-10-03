@@ -16,16 +16,23 @@ import { migrateCardId } from '$lib/decks/cardIdMigration';
 
 const setCache = new Map<string, Card[]>();
 let indexCache: SetSummary[] | null = null;
+let indexInflight: Promise<SetSummary[]> | null = null;
 const inflight = new Map<string, Promise<Card[]>>();
 
 export async function loadIndex(
   fetchFn: typeof fetch = fetch
 ): Promise<SetSummary[]> {
   if (indexCache) return indexCache;
-  const res = await fetchFn(`${base}/cards/index.json?v=${VERSION}`);
-  if (!res.ok) throw new Error(`Failed to load index.json: HTTP ${res.status}`);
-  indexCache = (await res.json()) as SetSummary[];
-  return indexCache;
+  // ⭐v6.467：同時呼叫只抓一次（比照 loadSet）—— 牌組頁冷進站會兩處同時呼叫，原本各抓一份 index.json。
+  //   失敗時清掉在途記錄，下一次呼叫照舊重試（與原本行為相同）。
+  if (indexInflight) return indexInflight;
+  indexInflight = (async () => {
+    const res = await fetchFn(`${base}/cards/index.json?v=${VERSION}`);
+    if (!res.ok) throw new Error(`Failed to load index.json: HTTP ${res.status}`);
+    indexCache = (await res.json()) as SetSummary[];
+    return indexCache;
+  })();
+  try { return await indexInflight; } finally { indexInflight = null; }
 }
 
 export async function loadSet(

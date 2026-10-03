@@ -32,6 +32,11 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
   // This is heavy (~4k+ cards), but card images are always lazy-loaded and
   // the filter/search is O(n) which is still fine at that size.
   if (setCode === 'ALL') {
+    // ⭐v6.467：卡牌政策（Firestore，快取過期時要先動態載入 firebase、初始化登入、再 getDoc）
+    //   改成與 index.json **同時**開始，不再排在 index 之後才起跑；判斷邏輯與結果完全不變。
+    //   （先掛一個空 catch：index 先失敗時不要冒出未處理的 rejection；下面照舊 await 原本那個 promise。）
+    const policyP = loadCardPolicyOnce();
+    policyP.catch(() => {});
     const indexRes = await fetch(`${base}/cards/index.json?v=${VERSION}`);
     if (!indexRes.ok) throw new Error(`Failed to load sets index: HTTP ${indexRes.status}`);
     const sets: SetSummary[] = applyHiddenCountsToSets(await indexRes.json());
@@ -44,7 +49,7 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
     //   否則賽季換了之後「全部」虛擬卡包還是舊的 H/I/J，K 標卡包一張都進不來。
     //   ⚠ loader 自己擋 SSR（伺服器端／預先渲染時直接回程式內建值），所以這裡 await 是安全的，
     //     而且整個分頁只會真的讀一次（10 分鐘 TTL ＋ 負快取）。
-    await loadCardPolicyOnce();
+    await policyP;
     const standardSets = sets.filter((s) => isCardMarkStandardLegal(s.regulationMark));
     const results = await Promise.all(
       standardSets.map(async (s) => {

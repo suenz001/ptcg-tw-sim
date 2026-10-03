@@ -474,13 +474,16 @@ export async function unsubscribePush(api: (path: string, body?: unknown) => Pro
  * 掛 Service Worker 訊息監聽：使用者點擊通知後 SW 會 postMessage 過來，由前端用 SPA 導頁
  * （不整頁 reload，避免重載整個 app 資源）。
  */
-export function initNotifyNav(onNavigate: (url: string) => void): void {
-  if (!hasWindow() || !navigator.serviceWorker) return;
+export function initNotifyNav(onNavigate: (url: string) => void): () => void {
+  if (!hasWindow() || !navigator.serviceWorker) return () => {};
   loadSeen();
+  // ⭐v6.467 回傳移除函式：對戰頁每次掛載都會呼叫一次，不移除就會一直疊（點一次通知導頁好幾次）。
+  const handler = (ev: MessageEvent) => {
+    const d = ev.data as { type?: string; url?: string } | null;
+    if (d && d.type === 'ptcg-notify-nav' && d.url) onNavigate(d.url);
+  };
   try {
-    navigator.serviceWorker.addEventListener('message', (ev: MessageEvent) => {
-      const d = ev.data as { type?: string; url?: string } | null;
-      if (d && d.type === 'ptcg-notify-nav' && d.url) onNavigate(d.url);
-    });
-  } catch { /* 忽略 */ }
+    navigator.serviceWorker.addEventListener('message', handler);
+  } catch { return () => {}; }
+  return () => { try { navigator.serviceWorker.removeEventListener('message', handler); } catch { /* 忽略 */ } };
 }

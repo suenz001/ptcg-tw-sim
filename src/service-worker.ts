@@ -52,7 +52,15 @@ const VERSIONED_DATA = (u: string) =>
   u === '/changelog.html' ||
   (u.startsWith('/ai-playbooks/') && u.endsWith('.json'));
 // <<< v6462-sw-versioned-runtime
-const PRECACHE: string[] = [...build, ...files.filter(f => !HEAVY_MEDIA(f) && !VERSIONED_DATA(f)), ...prerendered.filter(p => !IS_CARD_PAGE(p))];
+// >>> v6467-sw-crawler-only
+// ⭐v6.467（全站 audit 2026-10-03）：只給搜尋引擎／社群爬蟲用的檔不必在每位玩家的 install 預快取
+//   （og-image.png 約 100KB、sitemap-cards.xml 約 580KB、sitemap.xml、robots.txt、Google 驗證頁）。
+//   幾乎每天出版 ⇒ 超過一天沒來的玩家每次 install 都重抓、跟進站搶頻寬。玩家的畫面從來不會載入它們；
+//   萬一被請求，fetch handler 照舊 network-first（用到才快取）。
+//   ⚠ 用 endsWith：測試站（GitHub Pages）的路徑前面帶 base path。
+const CRAWLER_ONLY = (u: string) => u.endsWith('/og-image.png') || u.endsWith('.xml') || u.endsWith('/robots.txt') || /\/google[0-9a-f]+\.html$/.test(u);
+// <<< v6467-sw-crawler-only
+const PRECACHE: string[] = [...build, ...files.filter(f => !HEAVY_MEDIA(f) && !VERSIONED_DATA(f) && !CRAWLER_ONLY(f)), ...prerendered.filter(p => !IS_CARD_PAGE(p) && !CRAWLER_ONLY(p))];
 
 // v6.222 根治「強制更新後又退回舊版」（站長手機實測：按強制更新→6.221→關 App 重開→退回 6.219）。
 //   真因鏈（實測 www.ptcg-tw-sim.com 回應標頭）：`/` 等 HTML **沒有 Cache-Control** ⇒ 瀏覽器套

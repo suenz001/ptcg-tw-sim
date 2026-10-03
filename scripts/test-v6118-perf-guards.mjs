@@ -65,9 +65,11 @@ T('⭐ 輪詢間隔沒有被偷偷調快（大廳 2 秒是刻意的下限）', (
   //   兩條的間隔都不得 < 2000(守衛範圍擴大到整個函式,兩個計時器都要抓到)。
   const j = ro.indexOf('\n// ── Heartbeat', i);
   const body = ro.slice(i, j > i ? j : i + 6000);
-  const ms = [...body.matchAll(/setTimeout\((?:tick|legacyTick),\s*(\d+)\)/g)];
+  // ⭐v6.467（Rule 40，意圖不變）：間隔改成「分頁隱藏 ? 背景值 : 前景值」⇒ 兩個數字都要抓到、都不得 < 2000
+  //   （背景值只會更慢；前景值仍是 2 秒下限）。
+  const ms = [...body.matchAll(/setTimeout\((?:tick|legacyTick),\s*(?:_hidden\(\)\s*\?\s*(\d+)\s*:\s*)?(\d+)\)/g)];
   ok(ms.length >= 2, '找不到輪詢間隔(tick/legacyTick 至少各一,實際 ' + ms.length + ' 個)');
-  for (const m of ms) ok(Number(m[1]) >= 2000, '大廳輪詢間隔被調成 ' + m[1] + 'ms（< 2000），會放大伺服器負載');
+  for (const m of ms) for (const v of [m[1], m[2]].filter(Boolean)) ok(Number(v) >= 2000, '大廳輪詢間隔被調成 ' + v + 'ms（< 2000），會放大伺服器負載');
 });
 
 T('正對照：判準抓得到「沒有 gate」的樣本', () => {

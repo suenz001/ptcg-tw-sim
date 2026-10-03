@@ -14,6 +14,10 @@
     <!-- v5.968 firebase 網域 preconnect：提前建立連線，縮短首頁初始化(auth/firestore)等待 -->
     <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
     <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin />
+    <!-- v6.467：登入狀態過期（>1 小時）時 Firebase 會先到 securetoken 換新 token，錦標賽大廳的第一發要等它 -->
+    <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin />
+    <!-- v6.467：卡圖縮圖站（v6.464）。⚠ 圖片是 no-cors 請求 ⇒ 這一條**不可以**加 crossorigin，否則開好的連線不會被圖片沿用 -->
+    <link rel="preconnect" href="https://suenz001.github.io" />
 
     <!-- ── Open Graph / Facebook / LINE 預覽 ── -->
     <meta property="og:type" content="website" />
