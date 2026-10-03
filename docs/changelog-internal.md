@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.472：後台一鍵切換全站卡圖來源
+
+BASE v6.471（c98ffbf2）。站長：體感縮圖站（GitHub WebP）比官方原圖慢，要在 admin 監控頁一鍵切回試；選「全站一起切」。
+- 設定：Firestore config/cardPolicy.thumbSource（'official'＝官方原圖，其餘＝縮圖）。掛在卡牌政策同一份文件 ⇒ 玩家端零額外讀取／請求（policy-loader 已讀這份，10 分鐘 localStorage 快取）。
+- thumb.ts：模組載入時同步讀 localStorage 'ptcg_thumb_src_v1' ⇒ 第一張圖就用對的來源；setThumbSourcePref 由 policy-loader 在讀到文件（或確認不存在）時呼叫。cardThumb 在 official 時原樣回傳，其餘邏輯（img-retry 退路、THUMB_PATTERN）不變。
+- admin.html：📡 監控頁新增「🖼️ 卡圖來源（全站）」兩顆按鈕（monSetThumbSrc，setDoc merge 只寫 thumbSource）；卡牌政策「儲存／清除」兩個 setDoc 改 merge:true（否則會洗掉 thumbSource）。伺服器讀 cardPolicy 只取 allowedMarks／lockedSets，不受影響。
+- 生效：最慢 10 分鐘＋重新整理。只影響有載入卡牌政策的頁（對戰、牌組、卡牌資料庫、牌組公布欄）＝所有用 cardThumb 的頁。
+- 守衛：新增 test-v6472-thumb-source-switch（thumb.ts 實跑、monSetThumbSrc 假 setDoc 實跑、HEAD-FAIL）。
+- 部署：玩家端 redeploy-oracle.bat；後台 admin.html 走 update-tournament.bat。
+
 ## v6.471：KO 獎賞修正的紀錄來源（站長回報：傳說的山頂被寫成影藏）
 
 BASE v6.470（0e0f00a9）。

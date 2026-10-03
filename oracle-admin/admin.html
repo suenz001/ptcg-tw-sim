@@ -2075,7 +2075,7 @@ async function loadCardPolicyAdmin() {
       + '\n\n（玩家端最慢 10 分鐘、伺服器端最慢 60 秒生效）')) { st.textContent = ''; return; }
     st.textContent = '儲存中…'; st.style.color = '#aaa';
     try {
-      await setDoc(doc(dbF, 'config', 'cardPolicy'), { allowedMarks: marks, lockedSets: lockedSets, updatedAt: Date.now() });
+      await setDoc(doc(dbF, 'config', 'cardPolicy'), { allowedMarks: marks, lockedSets: lockedSets, updatedAt: Date.now() }, { merge: true });   // ⭐v6.472 merge：保留同文件的 thumbSource（卡圖來源開關）
       st.textContent = '✅ 已儲存（玩家端最慢 10 分鐘、錦標賽伺服器最慢 60 秒生效）'; st.style.color = '#5c5';
       // ⚠ 存檔成功後把「目前值」對齊：不然連按兩次儲存時，第二次的差異表會**重複列出**
       //   同一批變更（站長會以為自己又改了一次）。
@@ -2090,7 +2090,7 @@ async function loadCardPolicyAdmin() {
     st.textContent = '清除中…'; st.style.color = '#aaa';
     try {
       // ⚠ 寫 null 而不是刪文件：兩端都只認「陣列」，其餘一律退回程式內建值 ⇒ 語意等同清除。
-      await setDoc(doc(dbF, 'config', 'cardPolicy'), { allowedMarks: null, lockedSets: null, updatedAt: Date.now() });
+      await setDoc(doc(dbF, 'config', 'cardPolicy'), { allowedMarks: null, lockedSets: null, updatedAt: Date.now() }, { merge: true });   // ⭐v6.472 merge：保留同文件的 thumbSource（卡圖來源開關）
       st.textContent = '✅ 已清除（恢復程式內建）'; st.style.color = '#5c5';
     } catch (e) { st.textContent = '❌ ' + (e.message || e); st.style.color = '#f66'; }
   };
@@ -3514,8 +3514,14 @@ async function loadMonitor() {
     api('/api/friends/admin/config'),
     // ⭐v6.287 好友私聊子開關（伺服器 v1.38 起才有；舊伺服器 404 ⇒ 經 _ok() 變 null ⇒ 畫「讀不到」，不當成關閉）。
     api('/api/friends/admin/dm-config'),
+    // ⭐v6.472 卡圖來源（Firestore config/cardPolicy.thumbSource；讀不到回 null ⇒ 畫「讀不到」）
+    (async function () {
+      try { const snap = await getDoc(doc(dbF, 'config', 'cardPolicy')); return (snap.exists() && snap.data().thumbSource === 'official') ? 'official' : 'thumb'; }
+      catch (e) { return null; }
+    })(),
   ]);
   const lp = _ok(_r[0]), rd = _ok(_r[1]), dg = _ok(_r[2]), mv = _ok(_r[3]), ns = _ok(_r[4]), cg = _ok(_r[5]), fc = _ok(_r[6]), fd = _ok(_r[7]);
+  const thumbSrc = _r[8];
   const btnS = 'padding:6px 14px;border:1px solid #a5d6a7;background:#eaf7ea;color:#2e7d32;border-radius:6px;cursor:pointer;font-weight:600;';
   const btnW = 'padding:6px 14px;border:1px solid #e0c56a;background:#fff8e1;color:#8a6d00;border-radius:6px;cursor:pointer;font-weight:600;';
   let html = '<div style="max-width:900px;padding:16px;"><h2 style="margin-top:0;">📡 對戰連線監控</h2>';
@@ -3644,6 +3650,19 @@ async function loadMonitor() {
       + '<div id="mon-dm-thread" style="margin-top:10px;"></div>';
   }
   html += '</div>';
+  // ⭐v6.472 全站卡圖來源（站長：體感縮圖站反而比較慢，要能一鍵切回官方原圖比較）
+  html += '<div id="mon-thumb-src" style="border-top:1px dashed #e3e8ef;padding-top:12px;margin-top:12px;">'
+    + '<div style="font-weight:700;margin-bottom:4px;">🖼️ 卡圖來源（全站）　'
+    + (thumbSrc === 'official' ? '<span id="mon-thumb-src-state" style="color:#8a6d00;">官方原圖</span>'
+      : thumbSrc === 'thumb' ? '<span id="mon-thumb-src-state" style="color:#2e7d32;">縮圖站（GitHub WebP）</span>'
+      : '<span id="mon-thumb-src-state" style="color:#c62828;">讀不到</span>')
+    + '</div>'
+    + '<p class="small muted" style="margin:2px 0 8px;">盤面、手牌、牌組、卡牌資料庫的小卡圖要從哪裡載入。'
+    + '「縮圖站」＝ suenz001.github.io 的 450px WebP（每張約 53KB）；「官方原圖」＝ asia.pokemon-card.com 的 PNG（每張約 427KB）。放大檢視一律是官方原圖，不受影響。'
+    + '<br>⚠ 玩家端有 10 分鐘快取：切換後最慢 10 分鐘＋重新整理頁面才生效。設定存在卡牌政策同一份文件（不會多一次讀取）。</p>'
+    + '<button style="' + btnS + '" onclick="monSetThumbSrc(\'thumb\', this)">用縮圖站</button> '
+    + '<button style="' + btnW + '" onclick="monSetThumbSrc(\'official\', this)">用官方原圖</button>'
+    + '</div>';
   html += '</div>';
 
   // ── ② 玩家端異常指紋 ────────────────────────────────────────────────
@@ -3811,7 +3830,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.471';
+window.SITE_VERSION_HINT = '6.472';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -3859,6 +3878,19 @@ window.monSetFriends = async function (enabled, btn) {
     headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !!enabled }) });
   // 失敗路徑一定要還原按鈕文字（v1.68 的教訓），否則永遠停在「處理中…」
   if (!r || r.error) { alert('設定失敗：' + ((r && r.error) || '?')); if (btn) { btn.disabled = false; btn.textContent = _t0; } return; }
+  await loadMonitor();
+};
+// ⭐v6.472 全站卡圖來源：寫 config/cardPolicy.thumbSource（merge，不動 allowedMarks／lockedSets）
+window.monSetThumbSrc = async function (src, btn) {
+  const _t0 = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '處理中…'; }
+  try {
+    await setDoc(doc(dbF, 'config', 'cardPolicy'), { thumbSource: (src === 'official' ? 'official' : 'thumb') }, { merge: true });
+  } catch (e) {
+    alert('設定失敗：' + ((e && e.message) || e));
+    if (btn) { btn.disabled = false; btn.textContent = _t0; }
+    return;
+  }
   await loadMonitor();
 };
 // ⭐v6.287 好友私聊子開關（守衛 test-v6287 實跑：斷言它打 POST /api/friends/admin/dm-config 且 body 只有 {dm}）。

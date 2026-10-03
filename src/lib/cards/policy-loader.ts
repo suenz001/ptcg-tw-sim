@@ -20,6 +20,7 @@
  *   不會出現「前端說不合法、伺服器說合法」的分裂。
  */
 import { setCardPolicy, DEFAULT_CARD_POLICY, type CardPolicy } from './regulation';
+import { setThumbSourcePref } from './thumb';   // ⭐v6.472 卡圖來源開關跟著同一份文件讀（不多一次讀取）
 
 /** localStorage 快取的 key；⚠ 改政策的欄位語意時要換 key，免得吃到舊格式。 */
 const CACHE_KEY = 'ptcg_card_policy_v1';
@@ -91,8 +92,10 @@ export function loadCardPolicyOnce(): Promise<void> {
         import('firebase/firestore'),
       ]);
       const snap = await getDoc(doc(db, 'config', 'cardPolicy'));
-      if (!snap.exists()) { writeCache(null); return; }   // ⭐ 負快取：沒有設定也記下來（這是「查到了，就是沒有」）
-      const data = snap.data() as Partial<CardPolicy> | undefined;
+      if (!snap.exists()) { setThumbSourcePref(undefined); writeCache(null); return; }   // ⭐ 負快取：沒有設定也記下來（這是「查到了，就是沒有」）
+      const data = snap.data() as (Partial<CardPolicy> & { thumbSource?: unknown }) | undefined;
+      // ⭐v6.472 卡圖來源（與合法性無關；不經 setCardPolicy 驗證，讀到什麼記什麼，非 'official' 一律＝縮圖）
+      setThumbSourcePref(data?.thumbSource);
       const policy: CardPolicy = {
         allowedMarks: Array.isArray(data?.allowedMarks) ? data!.allowedMarks : DEFAULT_CARD_POLICY.allowedMarks,
         lockedSets: Array.isArray(data?.lockedSets) ? data!.lockedSets : DEFAULT_CARD_POLICY.lockedSets,
