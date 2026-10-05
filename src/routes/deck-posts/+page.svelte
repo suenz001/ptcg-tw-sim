@@ -13,6 +13,8 @@
   //   ・所有欄位都走 Svelte 的預設 escape，全頁不得出現 {@html}（投稿內容是玩家自由輸入）。
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
+  import { replaceState } from '$app/navigation';
+  import { postIdFromSearch, postShareUrl, withPostParam } from '$lib/deck-posts/share-link';   // ⭐v6.484 每篇投稿有自己的網址
   import type { Card } from '$lib/cards/types';
   import { loadDeckSets, buildCardIndex } from '$lib/cards/pool';
   import { migrateDeck, migrateCardId } from '$lib/decks/cardIdMigration';
@@ -177,8 +179,30 @@
       else { eligible = []; myPosts = []; }
     });
     void fetchList();
+    // ⭐v6.484 網址帶 ?post=<id> ⇒ 直接打開那一篇（玩家在 LINE 群分享的連結）
+    const sharedId = postIdFromSearch(location.search);
+    if (sharedId) void openDetail(sharedId);
     return () => { un(); if (searchTimer) clearTimeout(searchTimer); };
   });
+
+  // ⭐v6.484 開著哪一篇就把 post 參數寫進網址（replaceState：不新增瀏覽紀錄、不重新載入）；關掉就拿掉。
+  //   ⚠ 用 urlPostId（openDetail 一開始就設）而不是 openPost：載入中重新整理也要能回到同一篇。
+  let urlPostId = $state<string | null>(null);
+  $effect(() => {
+    const id = urlPostId;
+    try {
+      const next = withPostParam(location.search, id);
+      if (next !== location.search) replaceState(location.pathname + next + location.hash, {});
+    } catch { /* 路由還沒準備好：不寫網址 */ }
+  });
+  let shareCopied = $state(false);
+  async function copyShareLink() {
+    if (!openPost) return;
+    try {
+      await navigator.clipboard.writeText(postShareUrl(location.origin + base, openPost.id));
+      shareCopied = true; setTimeout(() => { shareCopied = false; }, 1500);
+    } catch { shareCopied = false; }
+  }
 
   const canPost = $derived(!!firebaseUser && !firebaseUser.isAnonymous);
 
@@ -266,6 +290,7 @@
 
   async function openDetail(id: string) {
     const seq = ++detailSeq;
+    urlPostId = id;   // ⭐v6.484
     detailLoading = true; detailError = ''; importMsg = ''; importWarn = '';
     openPost = null; detailCards = new Map(); detailMissing = [];
     // 留言區重置：⚠ 用 commentSeq 讓上一篇還在飛的留言回應作廢，否則會把 A 篇的留言畫在 B 篇上。
@@ -294,6 +319,7 @@
   /** ⚠ 一定要遞增 detailSeq 並清掉 detailLoading，否則載入中的 modal 關不掉。 */
   function closeDetail() {
     detailSeq++;
+    urlPostId = null;   // ⭐v6.484
     commentSeq++;                       // 還在飛的留言回應作廢（不然關掉後才到的會寫進下一篇）
     openPost = null; detailLoading = false; detailError = ''; importMsg = ''; importWarn = ''; likeError = '';
     comments = []; commentsLoading = false; commentError = ''; commentText = '';
@@ -949,6 +975,7 @@
             <span class="stat" title="登入 email 帳號後可以按讚">♥ {openPost.likeCount}</span>
           {/if}
           <button class="primary" onclick={doImport}>匯入到我的牌組</button>
+          <button class="share-btn" onclick={copyShareLink} title="複製這篇投稿的網址（可以貼到 LINE 群）">{shareCopied ? '✓ 已複製' : '🔗 複製連結'}</button>
           <a class="linkbtn" href="{base}/decks">前往牌組編輯器</a>
           <button onclick={closeDetail}>關閉</button>
         </div>

@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '91965609b61d2573313f6b9b0053080d937dd47b';   // v6.482（上一版）
+const PREV_SHA = '0e74051c1e8f23920a2ca43b56f11010b2d32e90';   // v6.483（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,17 +757,27 @@ const PREV_SHA = '91965609b61d2573313f6b9b0053080d937dd47b';   // v6.482（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.483 前移：PREV_SHA 從 91965609（v6.482）起算。
+  // ⚠⚠ v6.484 前移：PREV_SHA 從 0e74051c（v6.483）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.483：卡牌資料庫搜尋／篩選條件寫進網址（$lib/cards/url-state）＋卡片視窗單卡頁連結（$lib/cards/card-page）；首頁 changelog 三步搬運。
-  'src/lib/cards/card-page.ts',
-  'src/lib/cards/url-state.ts',
+  // ⭐v6.484：牌組公布欄投稿網址（?post=）與複製連結（$lib/deck-posts/share-link）；首頁 changelog 三步搬運。
+  'src/lib/deck-posts/share-link.ts',
   'src/lib/version.ts',
-  'src/routes/cards/+page.svelte',
+  'src/routes/deck-posts/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.483）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.483 前移：PREV_SHA 從 91965609（v6.482）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.483：卡牌資料庫搜尋／篩選條件寫進網址（$lib/cards/url-state）＋卡片視窗單卡頁連結（$lib/cards/card-page）；首頁 changelog 三步搬運。
+//   'src/lib/cards/card-page.ts',
+//   'src/lib/cards/url-state.ts',
+//   'src/lib/version.ts',
+//   'src/routes/cards/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.482）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.482 前移：PREV_SHA 從 4c887e8a（v6.481）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -887,16 +897,6 @@ const PREV_ALLOWED = [
 // ⭐v6.472：後台一鍵切換全站卡圖來源（config/cardPolicy.thumbSource）；卡牌政策儲存改 merge；首頁 changelog 三步搬運。
 //   'src/lib/cards/policy-loader.ts',
 //   'src/lib/cards/thumb.ts',
-//   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.471）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.471 前移：PREV_SHA 從 0e0f00a9（v6.470）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.471：KO 獎賞修正中央管線 koDefenderSidePrizeModifiers＋koPrizeFormulaLog（engine 主傷害 KO 分支與 effects.koPrizesAdjusted 共用）；首頁 changelog 三步搬運。
-//   'src/lib/game/effects.ts',
-//   'src/lib/game/engine.ts',
 //   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',

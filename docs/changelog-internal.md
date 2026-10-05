@@ -1,5 +1,12 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.484：牌組公布欄每篇投稿有網址＋複製連結（2026-10-05，站長同意的建議 #2）
+
+BASE v6.483（0e74051c）。
+- $lib/deck-posts/share-link：postIdFromSearch（格式白名單 ^[A-Za-z0-9_-]{1,64}$，伺服器 id 為 dp_<base36>_<亂數>）、withPostParam（保留其他參數）、postShareUrl。
+- 公布欄頁：onMount 讀 ?post= ⇒ openDetail；openDetail／closeDetail 設定 urlPostId，$effect 以 SvelteKit replaceState 同步網址（不新增瀏覽紀錄）；詳情 modal-foot 加「🔗 複製連結」。頁面是 ssr=false ⇒ 貼到 LINE 沒有預覽縮圖。
+- 新增 test-v6484-deck-post-share-link（S0 HEAD-FAIL、L1～L3、假 API 真瀏覽器 E1～E4）。
+
 ## v6.483：卡牌資料庫條件寫進網址＋卡片視窗連到單卡頁（2026-10-05，站長同意的建議 #1）
 
 BASE v6.482（91965609）。
