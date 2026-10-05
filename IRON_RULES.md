@@ -2555,3 +2555,30 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
   - 改對戰頁／資料庫頁的 `<img>` 時：test-v6441／v6293／v6439 會用 `scripts/lib/revert-v6464-thumbs.mjs` 先還原本版改動；那張表是 v6.463 的快照，**之後版本的改動不要加進那張表**，照各守衛原本的 LATER／還原鏈處理。
   - 守衛 test-v6464（轉換規則、產生器／轉換器一致、52 處接線＋掃描器正對照、img-retry 行為、HEAD-FAIL、突變）。
 - **評估後刻意不做**：`/match/enter` 回應直接附盤面（要在第二個端點重寫 /state 的遮蔽與身分判定，分歧＝盤面外洩或隱形手牌）；大廳 /event 與 /bracket 並行（只早 0.3 秒、牽動亂序守衛）；AI 模組動態 import（gzip 只省 16KB）。
+
+## Rule 79（2026-10-05）：「效果對、敘述錯」——累加變數的 log 必須跟著來源走（v6.471～v6.473）
+
+- **站長回報（2026-10-03）**：傳說的山頂讓獎賞卡少 1 張，對戰紀錄卻寫「『影藏』啟動」。根因：engine 主傷害 KO 分支把影藏與傳說的山頂加進同一個 `prizeAdjust`，
+  log 只看 `prizeAdjust < 0` 就一律寫影藏（兩者疊加時還寫「減少 1 張」、實際少 2 張）；effects 側 `koPrizesAdjusted` 則完全不寫這些修正。
+- ⭐ **通則**：多個來源累加到同一個變數，就**不可以**再用單一名稱寫 log。一律做成「{來源名稱, 數值, log}」清單：
+  加總由這份清單算、log 由同一份清單印，疊加時再印一行標出處的算式。新增來源只加在清單裡，兩條管線同時生效。
+- **KO 獎賞的唯一出口**：`effects.ts` 的 `koDefenderSidePrizeModifiers`（道具逐張／古舊能量／傳說的山頂／影藏）＋ `koPrizeFormulaLog`（🧮 算式行），
+  engine 主傷害 KO 分支與 `koPrizesAdjusted` 都呼叫它。log 寫法比照古舊能量（站長指定範本）：「來源（種類）：誰 → 誰獲得的獎賞卡 ±N 張」。
+- **「對手拿不到獎賞」（脆弱蛻殼）時**：攻擊方加成（多餘花粉／白蕾雅／巴貝娜與荷蓮娜）的「+N 張」log 一律不印；奇跡之吻照擲（亂數序不變）但寫實際結果；
+  古舊能量的「每場 1 次」**不算用掉**（站長裁定：「那是觸發脫殼忍者的特性，而不是觸發古舊能量效果」，v6.473）。
+- **寶可夢檢查階段的昏厥不屬於任何回合**（站長裁定）：多餘花粉的寶可夢被中毒／灼傷檢查或揚沙擊倒，不多拿獎賞（v6.473 守衛鎖住）。
+- 只改敘述的版本：用新舊兩份引擎跑同一批盤面，**逐案比對張數與旗標相同**（守衛 test-v6471／v6473 的做法：`git archive BASE src` 解到暫存目錄另外打包）。
+- 舊守衛連帶影響：用字串計數 log 的守衛要排除算式行（test-v6260）；最小盤面要有 `log: []`；effects.ts 從卡片模組多 import 新符號會被 anti-pattern-lint O 擋 ⇒ 用既有安全 import；
+  特性名字面比對會被 test-v6202 20d 擋 ⇒ 走 `hasEffectiveAbilityByInst`。
+
+## Rule 80（2026-10-05）：對外 changelog、量測撤回、雲端推送的三條紀律（v6.469～v6.473）
+
+- **admin（後台）的任何功能更新都不寫進對外 changelog**（站長 2026-10-04：「這些事情不需要讓玩家知道」）。只寫 `docs/changelog-internal.md`；
+  若該版仍需 bump，對外只寫中性的內部維護字樣。改寫已出版的條目 ⇒ test-v6264 F1 用 `PUBLIC_REWORDS` 逐字登記（只在 BASE 仍是舊字樣時套用）。
+- bump spec 的 `files` 只列 `src/`、`static/`（test-v6272 ⑩ 只比這兩處；列 `oracle-admin/` 會紅）；`prev_sha` 一律完整 40 碼。
+- **效能改動要先量「真的省多少」再上**：/cards 全部卡牌遠處卸圖實測只省約 17%（記憶體壓力下 Chromium 本來就會釋放解碼圖），
+  卻讓跳回頂端時圖片空白 ⇒ 撤回。量記憶體：本地固定回應模擬快速網路、`Memory.simulatePressureNotification` 後再量、新舊 build 同腳本對照。
+- **雲端 clone 推送**：commit 前 `git branch --show-current`（detached HEAD 上 amend、再從 main 打 bundle ⇒ 推上去的是舊 commit）；
+  bundle 後 `git bundle list-heads` 核對 sha；已推送的 commit 不 amend，另補一顆。
+- **重大修正每版送 Fable 5.1 獨立審查**（站長 2026-10-03），已推送未部署的伺服器改動也要補審；小事不送（節約 token）。
+- 給站長在 VM 跑的指令必須是可直接貼進 bash 的一行；VM 沒有 mongosh ⇒ 查 Mongo 用 `cd /opt/ptcg/api && node -e '…require("mongodb")…'`（URI 從 `.env` 取）。
