@@ -19901,6 +19901,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .hand-card img.legend-half-r, .replay-hand-img.legend-half-r { object-position: 100% 50%; }
   /* >>> v6477-lobby-light */
   /* ⭐v6.477 網頁版（≥1024px）淺色主題：對戰大廳、錦標賽大廳（站長：「深色和淺色主題只影響第一個頁面」）。
+     ⭐v6.478：大廳狀態下會開出來的四個視窗（錦標賽／休閒版本提醒、棄賽確認、登入／改密碼）也納入產生器。
      ・條件全部寫在前綴 html[data-ui-wide][data-theme='light']:not([data-battle-view])：
        data-ui-wide＝網頁版（layout 依 matchMedia(min-width:1024px) 掛；⚠ 本頁**不能**再加 媒體查詢——媒體查詢 數量被多支守衛釘死）、
        淺色主題、而且**不是牌桌畫面** ⇒ 牌桌（對戰／觀戰／回放）、深色主題、手機都完全不變。
@@ -19969,6 +19970,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .tourn-still-here { background: rgba(248,245,245,0.97); color: #1f0000; border: 2px solid #e55f5f; }
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .tourn-still-here .tsh-title { color: #650000; }
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .tourn-still-here .tsh-body strong { color: #a57900; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .tourn-vergate { background: #f2f3f5; color: #090f17; border: 2px solid #7aaee4; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .tourn-vergate .tvg-title { color: #003770; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .tourn-vergate .tvg-body strong { color: #a57900; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .tourn-vergate .tvg-note { color: #3a4c61; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .tourn-vergate .tvg-ghost { color: #2f4458; border: 1px solid #93a4ba; }
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .tourn-still-here .tsh-note { color: #a57900; }
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .tourn-coin-hint { color: #626274; }
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .tourn-chat-input { border-top: 1px solid #b5cab5; }
@@ -20084,9 +20090,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .spectator-toggle { color: #102234; }
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .idle-timeout-head { color: #102234; }
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .idle-timeout-head strong { color: #d6b500; }
-    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .lobby .small { border: 1px solid #a5a5a5; background: #f2f2f2; color: #222222; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .small { border: 1px solid #a5a5a5; background: #f2f2f2; color: #222222; }
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .lobby .small.danger { color: #770000; border-color: #c05959; }
-    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .lobby .small.primary { background: #e8efe8; color: #004455; border-color: #73b773; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .small.primary { background: #e8efe8; color: #004455; border-color: #73b773; }
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .lobby .log-line { color: #466646; border-bottom: 1px solid rgba(173,210,173,0.40); }
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .lobby .log-sys { color: #005522; }
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .lobby .log-line .log-card-link { color: #00407f; }
@@ -20120,6 +20126,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .lobby .auth-user button.small:hover { background: #eaecea; }
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .lobby .auth-user button.small.danger { background: #f5f0f0; border-color: #c6a4a4; color: #4f0000; }
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .lobby .auth-user button.small.danger:hover { background: #f0ebeb; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .pv-inner { background: #fbfbfb; color: #222222; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .pv-close { border: 1px solid #626262; color: #222222; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .modal-title { color: #222222; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .auth-tabs { border-bottom: 2px solid #515151; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .auth-tabs button { color: #6b6b6b; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .auth-tabs button.active { border-bottom-color: #3399ff; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .auth-desc { color: #555555; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .auth-form input { border: 1px solid #626262; color: #222222; background: #fbfbfb; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .auth-form button.small { border: 1px solid #737373; color: #222222; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .auth-link { color: #1963b9; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .auth-link:hover { color: #2561b1; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .auth-success { color: #2b8f3c; background: #ebf2ec; border: 1px solid #43a256; }
+    :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .auth-error { color: #cc0000; }
     /* ── 手調（不是產生器產生的）：選模式的兩張大卡改成白卡＋陰影，跟其他頁的卡片一致 ── */
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .mode-card { background: var(--ui-bg-elev); box-shadow: var(--ui-shadow); }
     :global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .mode-card:hover:not(:disabled) { background: var(--ui-bg-elev); box-shadow: var(--ui-shadow-hover); }

@@ -95,6 +95,10 @@
       #app-splash .app-splash-text{font-size:.95rem;color:#666;line-height:1.6}
       #app-splash button{margin-top:1rem;padding:.5rem 1.4rem;font-size:.95rem;color:#fff;background:#e0242b;border:none;border-radius:6px;font-weight:700;cursor:pointer}
       @keyframes app-splash-spin{to{transform:rotate(360deg)}}
+      /* v6.478 網頁版（≥1024px）選了深色主題（或沒選過、系統是深色）時，載入畫面改墨綠底，免得每次進站先閃一下白（手機不變） */
+      #app-splash.dark{background:#162816;color:#e6efe9}
+      #app-splash.dark .app-splash-text{color:#a3bba5}
+      #app-splash.dark .app-splash-spinner{border-color:rgba(255,255,255,.15);border-top-color:#e0242b}
     </style>
     <script>
       (function(){
@@ -102,6 +106,12 @@
         if (!s) return;
         // SEO 卡片頁(/card/*)是 server-rendered、本身就有內容,不要用 splash 蓋住(否則傷 LCP/SEO)
         if (location.pathname.indexOf('/card/') !== -1) { s.remove(); return; }
+        // v6.478 深色載入畫面：規則與 $lib/site-theme.ts 相同（玩家選過用玩家的，否則跟系統；只在網頁版 ≥1024px）
+        try {
+          var t = null; try { t = localStorage.getItem('ptcg_ui_theme'); } catch (e) {}
+          var dark = t === 'dark' || (t !== 'light' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark && window.matchMedia && matchMedia('(min-width: 1024px)').matches) s.classList.add('dark');
+        } catch (e) {}
         // 失效保險:12 秒仍未被 app 移除(通常是 chunk 載入失敗/版本不一致),改成錯誤態+重新整理鈕,
         //   而不是直接移除變全白(讓使用者能自救)。
         setTimeout(function(){

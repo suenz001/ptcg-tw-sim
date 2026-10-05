@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.478：網頁版主題第五步——大廳外視窗淺色、深色統一墨綠、深色載入畫面（2026-10-05）
+
+BASE v6.477（52483ddb）。
+- scripts/gen-lobby-light.py 新增 MODAL_STARTS：錦標賽版本閘、棄權確認、休閒版本閘、帳號管理、改密碼五段 {#if} 區塊從「牌桌」集合移出併入大廳集合；只屬於這些視窗的 class 不加 .lobby 祖先（視窗是 .lobby 的兄弟節點）。重新產生對戰頁 v6477-lobby-light 的產生段（S5 一致性守衛照舊）。
+- layout 深色色票改成墨綠 #162816 系（--ui-bg／bg-elev／bg-sunken／border／text-muted／hero／topbar／input），與對戰大廳 <svelte:head> 的墨綠一致。
+- app.html：#app-splash 在 ≥1024px 且深色（玩家選的，或沒選過時跟系統）掛 .dark 墨綠底；判準與 site-theme.ts 相同；手機、淺色維持白底。
+- 守衛：test-v6474 E2／E4 深色底期望值改 rgb(22, 40, 22)（原意「深色底色生效」不變，Rule 40）。新增 test-v6478-modals-dark-unify（S0 HEAD-FAIL、真瀏覽器 E1～E7：載入畫面三種情境、版本閘視窗淺／深／手機）。
+
 ## v6.477：網頁版主題第四步——對戰大廳、錦標賽大廳、好友頁淺色（2026-10-05）
 
 BASE v6.476（51bc47db）。

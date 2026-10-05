@@ -229,12 +229,13 @@
     --ui-chip-active-text: #ffffff;
   }
   :global(html[data-theme='dark']) {
-    --ui-bg: #0f1f17;
-    --ui-bg-elev: #17291f;
-    --ui-bg-sunken: #0b1811;
-    --ui-border: #2a3f33;
+    /* ⭐v6.478 深色主題全站統一成對戰大廳／牌桌的墨綠 #162816（原本首頁等頁是 #0f1f17，切頁看得出色差；Fable 5.1 建議） */
+    --ui-bg: #162816;
+    --ui-bg-elev: #1e3521;
+    --ui-bg-sunken: #102010;
+    --ui-border: #31503a;
     --ui-text: #e6efe9;
-    --ui-text-muted: #9db0a5;
+    --ui-text-muted: #a3bba5;
     --ui-accent: #3dbb7a;
     --ui-accent-contrast: #06261a;
     --ui-accent-soft: rgba(61, 187, 122, 0.14);
@@ -243,8 +244,8 @@
     --ui-cta-text: #f0f7f2;
     --ui-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.35);
     --ui-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.45);
-    --ui-hero-bg: radial-gradient(circle at 88% 0%, rgba(61, 187, 122, 0.16), transparent 55%), linear-gradient(135deg, #163a28 0%, #12261b 60%, #0f1f17 100%);
-    --ui-topbar-bg: #0b1811;
+    --ui-hero-bg: radial-gradient(circle at 88% 0%, rgba(61, 187, 122, 0.16), transparent 55%), linear-gradient(135deg, #1f4a2c 0%, #1a321c 60%, #162816 100%);
+    --ui-topbar-bg: #0f1f10;
     --ui-topbar-text: #e6efe9;
     --ui-topbar-muted: rgba(230, 239, 233, 0.78);
     --ui-topbar-hover: rgba(255, 255, 255, 0.08);
@@ -253,7 +254,7 @@
     --ui-cta-border: #2f6a4a;
     --ui-cta-desc: rgba(230, 239, 233, 0.78);
     --ui-cta-icon-bg: rgba(255, 255, 255, 0.1);
-    --ui-input-bg: #0b1811;
+    --ui-input-bg: #102010;
     --ui-chip-active-bg: #3dbb7a;
     --ui-chip-active-text: #06261a;
   }

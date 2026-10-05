@@ -8,6 +8,17 @@ b=s.index('<div class="battle-root"')
 lob=s[a:b]
 st_i=s.rindex('\n<style')+1   # 行首的 <style（避免註解文字裡的字樣）
 bat=s[b:st_i]
+# ⭐v6.478：大廳之外、但在大廳狀態下會開出來的四個視窗（版本提醒×2、棄賽確認、登入／改密碼）也一起轉。
+#   這幾段從 bat 裡拿掉再算「牌桌用到的 class」；它們用到的共用 class（例如 pv-inner）在非牌桌狀態下只會出現在這些視窗，
+#   而前綴本身已排除牌桌畫面 ⇒ 不加 .lobby 祖先也不會染到牌桌。
+MODAL_STARTS=["{#if isTournament && !isTournSpectator && tVerModalEventId}","{#if isTournament && !isTournSpectator && tDropConfirmEventId}",
+              "{#if !isTournament && casualVerModalKey}","{#if showAuthModal}","{#if showChangePasswordModal}"]
+mods=[]
+for ms in MODAL_STARTS:
+    i0=s.index(ms); i1=s.index('\n{/if}',i0)+6
+    mods.append(s[i0:i1])
+    bat=bat.replace(s[i0:i1],'')
+MOD='\n'.join(mods)
 def classes(mk):
     out=set()
     for m in re.finditer(r'class="([^"]*)"',mk):
@@ -15,7 +26,8 @@ def classes(mk):
             if c and re.match(r'^[A-Za-z_][\w-]*$',c): out.add(c)
     for m in re.finditer(r'class:([A-Za-z_][\w-]*)',mk): out.add(m.group(1))
     return out
-L=classes(lob); B=classes(bat)
+L0=classes(lob); M=classes(MOD); B=classes(bat)
+L=L0|M
 only=L-B; shared=L&B
 css=s[st_i:]
 css=css[css.index('>')+1:css.rindex('</style>')]
@@ -90,7 +102,7 @@ for sel,body in rules:
         if re.search(r'(^|[\s>+~])(body|html)\b',x): continue
         if x in SKIP_UNUSED: continue   # 原檔本來就是 Svelte 回報的未使用選擇器
         pre = ':global(html[data-ui-wide][data-theme=\'light\']:not([data-battle-view]))'
-        newsels.append(pre+(' ' if cs<=only else ' .lobby ')+x)
+        newsels.append(pre+(' ' if (cs<=only or cs<=M) else ' .lobby ')+x)
     if not newsels: continue
     if keep_rule(body): continue
     decls=[]
@@ -105,5 +117,5 @@ for sel,body in rules:
         if nv!=v: decls.append(f'{k}: {nv};')
     if decls:
         out.append('    '+', '.join(newsels)+' { '+' '.join(decls)+' }')
-print(len(rules),'rules;',len(out),'overrides; lobby-only',len(only),'shared',len(shared), file=sys.stderr)
+print(len(rules),'rules;',len(out),'overrides; lobby-only',len(only),'shared',len(shared),'modal-classes',len(M), file=sys.stderr)
 print('\n'.join(out))

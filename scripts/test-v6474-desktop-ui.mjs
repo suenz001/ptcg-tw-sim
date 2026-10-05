@@ -225,7 +225,7 @@ else if (chromium) {
       await pg.click('.stb-theme'); await pg.waitForTimeout(300);
       const afterClick = await pg.evaluate(() => ({ t: document.documentElement.getAttribute('data-theme'), s: localStorage.getItem('ptcg_ui_theme'), bg: getComputedStyle(document.body).backgroundColor }));
       await ctx.close();
-      ok('★★★[E2] 按切換鈕：立刻變深色（底色 #0f1f17）並記住', afterClick.t === 'dark' && afterClick.s === 'dark' && afterClick.bg === 'rgb(15, 31, 23)', JSON.stringify(afterClick));
+      ok('★★★[E2] 按切換鈕：立刻變深色（底色 #162816；v6.478 起全站統一墨綠，原 #0f1f17）並記住', afterClick.t === 'dark' && afterClick.s === 'dark' && afterClick.bg === 'rgb(22, 40, 22)', JSON.stringify(afterClick));
       // 沒選過 ⇒ 跟作業系統（模擬深色系統）
       {
         const ctx2 = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
@@ -238,7 +238,7 @@ else if (chromium) {
       // /cards（v6.475 已接主題）：有頂端列、active＝卡牌資料庫、有切換鈕、深色底色生效
       ({ ctx, pg } = await open(1440, 900, 'dark', '/cards'));
       const C = await probe(pg); await ctx.close();
-      ok('★★[E4] /cards：有頂端列、目前頁＝卡牌資料庫、有切換鈕、深色底色生效', C.stb?.disp === 'block' && C.active.join() === '卡牌資料庫' && C.toggle && C.body === 'rgb(15, 31, 23)', JSON.stringify(C));
+      ok('★★[E4] /cards：有頂端列、目前頁＝卡牌資料庫、有切換鈕、深色底色生效', C.stb?.disp === 'block' && C.active.join() === '卡牌資料庫' && C.toggle && C.body === 'rgb(22, 40, 22)', JSON.stringify(C));
       // 首頁 → 站內點進 /friends（v6.477 起已接主題）：淺色主題下好友頁的墨綠底（頁面 <svelte:head> 以 !important 注入）被淺底蓋過
       ({ ctx, pg } = await open(1440, 900, 'light', '/'));
       // 站內導頁（SvelteKit 攔截 <a> 點擊做客戶端路由；頂端列沒有好友連結 ⇒ 臨時插一個再點）
