@@ -6,7 +6,8 @@
   import { base } from '$app/paths';
   import type { Card, EnergyType } from '$lib/cards/types';
   import { retryImg } from '$lib/img-retry';
-  import OpeningHandSim from '$lib/decks/OpeningHandSim.svelte';   // ⭐v6.485 🎲 測抽（獨立元件、自己的樣式）
+  import OpeningHandSim from '$lib/decks/OpeningHandSim.svelte';
+  import DeckNotes from '$lib/decks/DeckNotes.svelte';   // ⭐v6.486 牌組備註欄（獨立元件、自己的樣式）   // ⭐v6.485 🎲 測抽（獨立元件、自己的樣式）
   import { cardThumb } from '$lib/cards/thumb'; // v6.464 小尺寸顯示改用縮圖（失敗由 retryImg 立刻退回官方原圖）
   import { getEvolutionChainNames, getEvolutionChainGrouped } from '$lib/cards/evolutionChain';
   import { isMegaExCard } from '$lib/game/selection-filter'; // v6.210：Mega ex 判定收斂中央述詞
@@ -865,6 +866,14 @@
     return v === null ? '—' : (v * 100).toFixed(1) + '%';
   }
 
+  /** ⭐v6.486 牌組備註（存在牌組的 notes 欄位；本機與雲端同步都是整份牌組，不必另外處理）。 */
+  function setActiveNotes(notes: string) {
+    if (!active || isPresetActive) return;
+    const updated = { ...active, notes };
+    decks = upsertDeck(updated);
+    setDirty(updated.id);
+  }
+
   function renameActive(name: string) {
     if (!active || isPresetActive) return;
     const updated = { ...active, name };
@@ -930,9 +939,10 @@
     setDirty(updated.id);  // v5.114
   }
 
-  /** 從內建預組複製一份到使用者牌組（可編輯） */
+  /** 從內建預組複製一份到使用者牌組（可編輯）。
+   *  ⭐v6.486（站長同意的建議 #4）：自己的牌組也能「複製一份」做變體（A／B 版），不用再匯出 JSON 再匯入。 */
   function copyPresetToMine() {
-    if (!active || !isPresetActive) return;
+    if (!active) return;
     const copy: Deck = {
       ...newDeck(`${active.name}（複製）`),
       entries: active.entries.map((e) => ({ ...e })),
@@ -1872,6 +1882,7 @@
               <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>🖼️ 匯出文字/圖片</button>
               <button class="small" onclick={exportJson}>💾 匯出 JSON</button>
             {:else}
+              <button class="small" onclick={copyPresetToMine} title="複製一份這副牌組（做 A／B 版用）">📋 複製一份</button>
               <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>🖼️ 匯出文字/圖片</button>
               <button class="small" onclick={openTextImport} disabled={!poolReady} title="貼上 PTCG 文字格式（包含官方訓練家網站可透過下方書籤工具一鍵匯入）">📝 匯入文字</button>
               <!-- v3.83: 提供顯眼的官方匯入入口，避免玩家找不到（書籤教學原本藏在「匯入文字」modal 摺疊區內） -->
@@ -1908,6 +1919,11 @@
             {/if}
           </div>
         {/if}
+
+        <!-- ⭐v6.486 牌組備註（換牌組時重建元件 ⇒ 展開狀態跟著那副牌） -->
+        {#key active.id}
+          <DeckNotes value={active.notes ?? ''} readonly={isPresetActive} onchange={setActiveNotes} />
+        {/key}
 
         <!-- Deck stats bar -->
         <div class="stats-bar">

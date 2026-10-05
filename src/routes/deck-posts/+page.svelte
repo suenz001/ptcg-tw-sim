@@ -487,13 +487,20 @@
 
   // ── 投稿 ──────────────────────────────────────────────────────────
   function openPostModal() {
-    postOpen = true; postError = ''; postOk = ''; postNotes = '';
+    postOpen = true; postError = ''; postOk = ''; postNotes = ''; postNotesTouched = false;
     myDecks = loadDecks();
     pickDeckId = myDecks.length ? myDecks[0].id : '';
   }
   function closePostModal() { postOpen = false; }
 
   const pickedDeck = $derived(myDecks.find((d) => d.id === pickDeckId) ?? null);
+  // ⭐v6.486 投稿說明預填牌組的「備註」（牌組編輯器 v6.486 新增的欄位）；玩家自己改過就不再覆蓋。說明欄上限 200 字。
+  let postNotesTouched = $state(false);
+  $effect(() => {
+    const d = pickedDeck;
+    if (!postOpen || postNotesTouched) return;
+    postNotes = String(d?.notes ?? '').slice(0, 200);
+  });
   const pickedIssue = $derived.by(() => {
     const d = pickedDeck;
     if (!d) return '';
@@ -1069,7 +1076,7 @@
         {/if}
         <label class="field">
           <span>說明（選填，最多 200 字）</span>
-          <textarea bind:value={postNotes} maxlength="200" rows="3"
+          <textarea bind:value={postNotes} oninput={() => (postNotesTouched = true)} maxlength="200" rows="3"
                     placeholder="這副牌的打法重點、對局思路…"></textarea>
         </label>
         <p class="hint small-note">

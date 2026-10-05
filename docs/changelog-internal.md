@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.486：自己的牌組可複製一份＋牌組備註欄（2026-10-05，站長同意的建議 #4）
+
+BASE v6.485（307270cf）。
+- copyPresetToMine 拿掉「只限預組」；自己的牌組動作列加「📋 複製一份」（同一支函式，名稱加（複製）、addDeckOnTop＋setDirty）。
+- $lib/decks/DeckNotes.svelte（獨立元件、自己的樣式，不動 test-v6213 指紋）：<details> 收合，開牌組時有內容才展開（untrack 只取初值，{#key active.id} 換牌組重建）；maxlength 1000；預組唯讀。setActiveNotes 寫回 deck.notes＋setDirty（本機與雲端都是整份牌組）。
+- 牌組公布欄投稿：說明欄預填所選牌組的 notes（截 200 字）；玩家在說明欄打過字（postNotesTouched）就不再覆蓋。
+- 新增 test-v6486-deck-copy-notes（S0 HEAD-FAIL、S1～S3、真瀏覽器桌機＋手機 E1～E3）。
+
 ## v6.485：牌組編輯器「🎲 測抽」（2026-10-05，站長同意的建議 #3）
 
 BASE v6.484（529fe726）。
