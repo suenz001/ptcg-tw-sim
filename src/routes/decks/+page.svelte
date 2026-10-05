@@ -4064,12 +4064,124 @@
     /* 「← 首頁」可點範圍放大（padding＋等量負 margin，版面不動）。⚠ 本頁的桌機 CSS 有逐字指紋守衛（test-v6213）⇒ 只放在觸控分支 */
     .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
   }
+  /* >>> v6476-desktop-theme */
+  /* ══ v6.476 網頁版（≥1024px）：淺色／深色主題＋版面優化 ══════════════════════════════
+     ・顏色一律讀 layout 的 --ui-* 色票；整頁底色由 layout 依 THEMED_ROUTES 掛 data-ui-themed。
+     ・全部在 min-width:1024px 內 ⇒ 手機不變；而且 test-v6213 的「桌機 CSS 指紋」只取 @media 以外的部分
+       ⇒ 上方原本的桌機樣式一個宣告都沒動（指紋不變）。
+     ・網頁版有全站頂端列 ⇒ 頁首的「← 首頁」收起；頁首變成一張卡片，三欄面板加圓角與陰影。
+     ・所有視窗（卡片詳情、帳號、匯出、套牌戰績）共用 .pv-inner ⇒ 一起換色。 */
+  @media (min-width: 1024px) {
+    main { max-width: 1280px; margin-top: 24px; color: var(--ui-text); }
+    .page-head {
+      padding: 16px 22px;
+      background: var(--ui-hero-bg);
+      border: 1px solid var(--ui-border);
+      border-radius: 16px;
+      box-shadow: var(--ui-shadow);
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .page-head > .back { display: none; }
+    .page-head h1 { color: var(--ui-text); font-size: 1.5rem; }
+    .hint, .muted, .deck-size, .entry-sub, .pick-sub, .empty, .small-note { color: var(--ui-text-muted); }
+    .version-tag { background: var(--ui-accent-soft); color: var(--ui-link); }
+    .back, .auth-sub, .auth-link { color: var(--ui-link); }
+    .to-board { color: var(--ui-link); border-color: var(--ui-border); background: var(--ui-bg-elev); }
+    .layout { gap: 18px; }
+    .rail, .deck-pane, .picker {
+      background: var(--ui-bg-elev);
+      border: 1px solid var(--ui-border);
+      border-radius: 14px;
+      box-shadow: var(--ui-shadow);
+    }
+    .rail-head > strong, .preset-section > .preset-summary { color: var(--ui-text); }
+    .preset-section { border-top-color: var(--ui-border); }
+    .preset-count { background: var(--ui-bg-sunken); color: var(--ui-text-muted); }
+    .deck-list li:hover { background: var(--ui-bg-sunken); }
+    .deck-list li.active { background: var(--ui-accent-soft); box-shadow: inset 3px 0 0 var(--ui-accent); }
+    .deck-pick { color: var(--ui-text); }
+    .deck-reorder-btn { border-color: var(--ui-border); color: var(--ui-accent); }
+    .deck-title, .pk-search, .pk-mode-select, .pk-set-select, .text-area, .bm-code, .auth-form input {
+      background: var(--ui-input-bg);
+      color: var(--ui-text);
+      border-color: var(--ui-border);
+    }
+    .pk-mode-select.keyword { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+    .pk-mode-select:hover:not(.keyword) { background: var(--ui-bg-sunken); }
+    .count { background: var(--ui-accent-soft); border-color: var(--ui-border); color: var(--ui-link); }
+    .count.bad { background: rgba(224, 83, 63, 0.14); border-color: #e0533f; color: #e0533f; }
+    .validation { background: rgba(245, 166, 35, 0.14); color: var(--ui-text); border: 1px solid rgba(245, 166, 35, 0.45); }
+    .validation.ok { background: var(--ui-accent-soft); color: var(--ui-text); border-color: var(--ui-accent); }
+    .entry { background: var(--ui-bg-sunken); border-radius: 8px; }
+    .entry-name, .pick-name { color: var(--ui-text); }
+    .picker-list li:hover { background: var(--ui-bg-sunken); }
+    .picker-list li.previewing { background: var(--ui-accent-soft); outline-color: var(--ui-accent); }
+    .pk-label { color: var(--ui-text-muted); }
+    .pk-chip {
+      background: var(--ui-bg-elev);
+      color: var(--ui-text);
+      border-color: var(--ui-border);
+      border-radius: 999px;
+    }
+    .pk-chip:hover:not(.active) { background: var(--ui-bg-sunken); border-color: var(--ui-accent); }
+    .pk-chip.active { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+    .pk-chip-tag, .pk-chip-type { color: var(--ui-text); }
+    .pk-chip-tag.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+    .pk-chip-type.active { background: var(--type-bg, #6366f1); border-color: var(--type-bg, #6366f1); color: #fff; }
+    .pk-chip-stage { border-color: #8a77aa; }
+    .pk-chip-stage.active { background: #6c5a8a; border-color: #6c5a8a; color: #fff; }
+    .pk-chip-mark { border-color: #6f8f9f; }
+    .pk-chip-mark.active { background: #5a7a8a; border-color: #5a7a8a; color: #fff; }
+    button.small, label.file, button.icon {
+      background: var(--ui-bg-elev);
+      color: var(--ui-text);
+      border-color: var(--ui-border);
+    }
+    button.small:hover, button.icon:hover:not(:disabled) { background: var(--ui-bg-sunken); }
+    button.small.danger { color: #e0533f; border-color: rgba(224, 83, 63, 0.45); }
+    button.small.primary { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+    button.small.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--ui-chip-active-bg); }
+    .stat-track { background: var(--ui-bg-sunken); }
+    .auth-btn { background: var(--ui-bg-elev); border-color: var(--ui-border); color: var(--ui-text); }
+    .auth-btn:hover { background: var(--ui-accent-soft); }
+    .auth-email { color: var(--ui-text-muted); }
+    /* 視窗 */
+    .pv-inner { background: var(--ui-bg-elev); color: var(--ui-text); border: 1px solid var(--ui-border); }
+    .pv-close { background: var(--ui-bg-sunken); border-color: var(--ui-border); color: var(--ui-text); }
+    .pv-close:hover { background: var(--ui-accent-soft); }
+    .pv-variant-counter, .pv-top-counter { background: var(--ui-bg-sunken); border-color: var(--ui-border); color: var(--ui-text-muted); }
+    .pv-top-count-label, .pv-evo-chain-label, .evo-card-link { color: var(--ui-link); }
+    .pv-evolve, .pv-setinfo, .pv-wrc, .evo-arrow, .evo-or { color: var(--ui-text-muted); }
+    .pv-rules, .ab-effect, .atk-effect { color: var(--ui-text); }
+    .pv-section, .pv-counter { border-top-color: var(--ui-border); }
+    .pv-evo-chain { background: var(--ui-accent-soft); border-left-color: var(--ui-accent); }
+    .evo-card-link { background: var(--ui-bg-elev); border-color: var(--ui-border); }
+    .evo-card-link:hover { background: var(--ui-accent-soft); }
+    .evo-card-link.current { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+    .sub-badge { background: var(--ui-bg-sunken); color: var(--ui-text); }
+    .auth-tabs { border-bottom-color: var(--ui-border); }
+    .auth-tabs button { color: var(--ui-text-muted); }
+    .auth-tabs button.active { color: var(--ui-link); border-bottom-color: var(--ui-accent); }
+    .auth-desc, .ds-msg, .ds-sub, .ds-card-h, .ds-notes, .ds-pending { color: var(--ui-text-muted); }
+    .ds-card { background: var(--ui-bg-sunken); border-color: var(--ui-border); }
+    .ds-table th, .ds-table td { border-bottom-color: var(--ui-border); }
+    .ds-table thead th { background: var(--ui-bg-elev); color: var(--ui-text-muted); }
+    .exported-code-display, .official-import-help, .fallback-help { background: var(--ui-bg-sunken); border-color: var(--ui-border); color: var(--ui-text); }
+    .exported-actions .button-like { background: var(--ui-bg-elev); border-color: var(--ui-border); color: var(--ui-link); }
+    .exported-actions .button-like:hover { background: var(--ui-accent-soft); }
+    .official-import-help summary, .official-import-help a { color: var(--ui-link); }
+    .official-import-help kbd, code { background: var(--ui-bg-sunken); border-color: var(--ui-border); color: var(--ui-text); }
+  }
+  /* <<< v6476-desktop-theme */
   /* >>> v6475-desktop-theme */
   /* ⭐v6.475：卡片詳情的左右箭頭與卡牌資料庫那一組必須逐字相同（test-v6303 F1／F3：兩頁箭頭同一套）⇒ 網頁版主題的箭頭配色兩頁一起改。
-     只在 min-width:1024px（test-v6213 的桌機指紋只取 @media 以外 ⇒ 不受影響）。 */
+     只在 min-width:1024px（test-v6213 的桌機指紋只取 @media 以外 ⇒ 不受影響）。
+     ⚠ v6.476 修正：站長 v6.303 裁定箭頭是「半透明底＋半透明框」（test-v6303 G C③ 在 CI 量 1366 寬）⇒ 只換字色、hover 用半透明綠，
+       不可以蓋成不透明的底色或框線（v6.475 這樣寫，CI 紅）。 */
   @media (min-width: 1024px) {
-    .pv-nav { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
-    .pv-nav:hover { background: var(--ui-accent-soft); }
+    .pv-nav { color: var(--ui-text); }
+    .pv-nav:hover { background: rgba(61, 187, 122, 0.22); }
   }
   /* <<< v6475-desktop-theme */
 </style>

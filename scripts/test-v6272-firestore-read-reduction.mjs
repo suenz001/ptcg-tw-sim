@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '70cbb85de0f76ce45245c0ae0187fb312c0eaf90';   // v6.474（上一版）
+const PREV_SHA = '37b8db6aa6fb3a8de892b04dddb56263c77593b5';   // v6.475（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,22 +757,34 @@ const PREV_SHA = '70cbb85de0f76ce45245c0ae0187fb312c0eaf90';   // v6.474（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.475 前移：PREV_SHA 從 70cbb85d（v6.474）起算。
+  // ⚠⚠ v6.476 前移：PREV_SHA 從 37b8db6a（v6.475）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.475：網頁版主題第二步：頂端列／首頁 CTA 改讀 --ui-topbar-*／--ui-cta-*；/game、/tournament 大廳顯示頂端列（對戰頁掛 data-battle-view 收起）；/cards、/card/[id] 接主題＋≥1024 版面；首頁 changelog 三步搬運。
-  'src/lib/SiteTopBar.svelte',
+  // ⭐v6.476：網頁版主題第三步：/decks、/deck-posts 接主題（THEMED_ROUTES）＋≥1024 版面，規則各包在 v6476-desktop-theme 哨兵；首頁 changelog 三步搬運。
   'src/lib/site-theme.ts',
   'src/lib/version.ts',
-  'src/routes/+layout.svelte',
-  'src/routes/+page.svelte',
-  'src/routes/card/[id]/+page.svelte',
-  'src/routes/cards/+page.svelte',
-  'src/routes/decks/+page.svelte',   // v6.475：網頁版箭頭配色與卡牌頁同一套（test-v6303 F1／F3）
-  'src/routes/game/+page.svelte',
+  'src/routes/cards/+page.svelte',   // v6.476：箭頭改回半透明（v6.475 蓋成不透明，CI 的 test-v6303 G 紅）
+  'src/routes/deck-posts/+page.svelte',
+  'src/routes/decks/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.475）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.475 前移：PREV_SHA 從 70cbb85d（v6.474）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.475：網頁版主題第二步：頂端列／首頁 CTA 改讀 --ui-topbar-*／--ui-cta-*；/game、/tournament 大廳顯示頂端列（對戰頁掛 data-battle-view 收起）；/cards、/card/[id] 接主題＋≥1024 版面；首頁 changelog 三步搬運。
+//   'src/lib/SiteTopBar.svelte',
+//   'src/lib/site-theme.ts',
+//   'src/lib/version.ts',
+//   'src/routes/+layout.svelte',
+//   'src/routes/+page.svelte',
+//   'src/routes/card/[id]/+page.svelte',
+//   'src/routes/cards/+page.svelte',
+//   'src/routes/decks/+page.svelte',   // v6.475：網頁版箭頭配色與卡牌頁同一套（test-v6303 F1／F3）
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.474）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.474 前移：PREV_SHA 從 2fae442b（v6.473）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -894,14 +906,6 @@ const PREV_ALLOWED = [
 //   'src/routes/decks/+page.svelte',
 //   'src/routes/game/+page.svelte',
 //   'src/routes/game/MobilePortraitBattle.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.463）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.463 前移：PREV_SHA 從 2b4b3988（v6.462）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.463：build 後處理 route-preload（scripts/，不在 src/static）；首頁 changelog 三步搬運。
-//   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

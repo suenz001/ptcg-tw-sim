@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.476：網頁版主題第三步（2026-10-05）
+
+BASE v6.475（37b8db6a）。
+- /decks：頁首卡片、三欄面板圓角陰影、按鈕／篩選／輸入框／所有 .pv-inner 視窗（卡片詳情、帳號、匯出、套牌戰績）讀 --ui-*；驗證框深色版。全部在 v6476-desktop-theme 哨兵＋min-width:1024px 內 ⇒ test-v6213 桌機指紋（只取 @media 以外）不動。v6.475 那條 .pv-nav 箭頭規則維持在 v6475 哨兵（與卡牌頁 .modal-nav 逐字同一套，test-v6303 F1／F3）。
+- /deck-posts：本頁原本就用半透明灰＋color:inherit，只接頁面文字、卡片面、視窗面；投稿列表兩欄（grid 只排卡片）。
+- THEMED_ROUTES 加 /decks、/deck-posts。
+- 守衛：test-v6474 調整（Rule 40：M5 突變改成插在陣列開頭、E5 改導到還沒接主題的 /friends）；新增 test-v6476-decks-posts-theme（HEAD-FAIL S0＋真瀏覽器 E1～E4）。手機 390、平板 1000 新舊截圖除版本號與同步狀態文字外相同。
+- ⚠ v6.475 的 CI 紅（Deploy 沒上）：test-v6303 G（CI 有瀏覽器、本機全套 ENV-SKIP）量到卡片詳情箭頭在 1366 寬「邊框不透明」——站長 v6.303 裁定箭頭是半透明底＋半透明框，v6.475 的網頁版規則蓋成 var(--ui-border) 不透明。修法：兩頁箭頭只換字色、hover 用 rgba 半透明綠。
+- ⭐ 教訓：本機全套會 ENV-SKIP 的瀏覽器段（23 支，含 spawn measure-*.mjs 的），推送前必須用 PW_EXECUTABLE＋PLAYWRIGHT_MODULE 替身（把 channel 換成 executablePath）逐支實跑；本版已全部實跑通過。
+
 ## v6.475：網頁版主題第二步（2026-10-05，站長驗收 v6.474 的五點回饋）
 
 BASE v6.474（70cbb85d）。站長指示 v6.475～v6.477 連續做完再一起驗收。

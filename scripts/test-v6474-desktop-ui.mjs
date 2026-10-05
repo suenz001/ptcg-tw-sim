@@ -103,7 +103,7 @@ const muts = [
   ['M2 卡牌比對拿掉單數 card', (s) => s.replace("match: /^\\/cards?(?:\\/|$)/", "match: /^\\/cards(?:\\/|$)/"), 'A2'],
   ['M3 牌組比對拿掉邊界', (s) => s.replace("match: /^\\/decks(?:\\/|$)/", "match: /^\\/deck/"), 'A2'],
   ['M4 主題無視玩家選擇', (s) => s.replace("return stored ?? (systemPrefersDark ? 'dark' : 'light');", "return systemPrefersDark ? 'dark' : 'light';"), 'A4'],
-  ['M5 對戰頁也算已接主題', (s) => s.replace('/^\\/card\\/[^/]+$/];', '/^\\/card\\/[^/]+$/, /^\\/game$/];'), 'A3'],
+  ['M5 對戰頁也算已接主題', (s) => s.replace('THEMED_ROUTES: readonly RegExp[] = [', 'THEMED_ROUTES: readonly RegExp[] = [/^\\/game$/, '), 'A3'],
   ['M6 牌桌判準不分錦標賽', (s) => s.replace("return tournament ? tStep === 'playing' : hasGame;", 'return hasGame;'), 'A8'],
   ['M7 牌桌判準不限對戰路由', (s) => s.replace('if (!isBattleRoute(pathname, base)) return false;', ''), 'A8'],
 ];
@@ -237,12 +237,14 @@ else if (chromium) {
       ({ ctx, pg } = await open(1440, 900, 'dark', '/cards'));
       const C = await probe(pg); await ctx.close();
       ok('★★[E4] /cards：有頂端列、目前頁＝卡牌資料庫、有切換鈕、深色底色生效', C.stb?.disp === 'block' && C.active.join() === '卡牌資料庫' && C.toggle && C.body === 'rgb(15, 31, 23)', JSON.stringify(C));
-      // 首頁 → 站內點進還沒接主題的 /decks：主題底色要跟著移除
+      // 首頁 → 站內點進還沒接主題的頁面：主題底色要跟著移除（v6.476 起 /decks 已接主題 ⇒ 改從首頁導到 /friends；/friends 自己的墨綠底由頁面 <svelte:head> 注入）
       ({ ctx, pg } = await open(1440, 900, 'dark', '/'));
-      await pg.click('.stb-link[href$="/decks"]'); await pg.waitForTimeout(1500);
+      // 站內導頁（SvelteKit 攔截 <a> 點擊做客戶端路由；頂端列沒有好友連結 ⇒ 臨時插一個再點）
+      await pg.evaluate(() => { const a = document.createElement('a'); a.href = (document.querySelector('.stb-brand')?.getAttribute('href') || '/').replace(/\/$/, '') + '/friends'; a.textContent = 'go'; document.body.appendChild(a); a.click(); });
+      await pg.waitForTimeout(1500);
       const nav = await pg.evaluate(() => ({ path: location.pathname, bg: getComputedStyle(document.body).backgroundColor, act: [...document.querySelectorAll('.stb-link.active')].map((a) => a.textContent).join(), themed: document.documentElement.hasAttribute('data-ui-themed') }));
       await ctx.close();
-      ok('★★★[E5] 首頁（深色）站內點到還沒接主題的 /decks：主題底色不殘留、active 跟著換', /\/decks$/.test(nav.path) && nav.bg === 'rgb(244, 244, 246)' && nav.act === '牌組編輯器' && !nav.themed, JSON.stringify(nav));
+      ok('★★★[E5] 首頁（深色）站內點到還沒接主題的 /friends：data-ui-themed 拿掉、底色是該頁自己的墨綠、沒有 active', /\/friends$/.test(nav.path) && nav.bg === 'rgb(22, 40, 22)' && nav.act === '' && !nav.themed, JSON.stringify(nav));
       // /game 大廳：有頂端列（active＝對戰演練）；掛上 data-battle-view（牌桌畫面）時收起
       ({ ctx, pg } = await open(1440, 900, 'light', '/game'));
       const G = await probe(pg);

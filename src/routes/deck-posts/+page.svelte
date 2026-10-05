@@ -1242,4 +1242,52 @@
      版面位置一點都不動（純文字連結、沒有底色或框線 ⇒ 桌機看起來也完全一樣）。
      ⚠ 刻意不包 @media：本頁的 @media 數量有守衛在釘（手機／桌機不靠斷點切版），而這條在桌機也無害。 */
   .back, .to-decks { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
+
+  /* >>> v6476-desktop-theme */
+  /* ══ v6.476 網頁版（≥1024px）：淺色／深色主題＋版面優化 ══════════════════════════════
+     ・本頁原本就大量用半透明灰與 color:inherit（不寫死深淺）⇒ 只要把頁面底色、文字色、卡片面、視窗面接上 --ui-*。
+     ・全部在 min-width:1024px 內 ⇒ 手機不變。網頁版有全站頂端列 ⇒ 頁首「← 首頁」收起，頁首變卡片。
+     ・投稿列表改兩欄（每則都是獨立的一張卡，grid 只排卡片、不排文字 ⇒ 不會重演 v6.030 的爆版）。 */
+  @media (min-width: 1024px) {
+    main { max-width: 1200px; padding-top: 24px; color: var(--ui-text); }
+    .page-head {
+      padding: 16px 22px;
+      background: var(--ui-hero-bg);
+      border: 1px solid var(--ui-border);
+      border-radius: 16px;
+      box-shadow: var(--ui-shadow);
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .page-head > .back { display: none; }
+    .page-head h1 { font-size: 1.5rem; color: var(--ui-text); }
+    .to-decks, .notice a { color: var(--ui-link); opacity: 1; }
+    .hint { color: var(--ui-text-muted); opacity: 1; }
+    .toolbar {
+      padding: 14px 18px;
+      background: var(--ui-bg-elev);
+      border: 1px solid var(--ui-border);
+      border-radius: 14px;
+      box-shadow: var(--ui-shadow);
+      margin-bottom: 16px;
+    }
+    .sorts button, .pager button, .tabs > button { color: var(--ui-text); border-color: var(--ui-border); }
+    .sorts button.active { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+    .search input { background: var(--ui-input-bg); border-color: var(--ui-border); }
+    .post-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .post-card {
+      height: 100%;
+      box-sizing: border-box;
+      background: var(--ui-bg-elev);
+      border-color: var(--ui-border);
+      border-radius: 14px;
+      box-shadow: var(--ui-shadow);
+      padding: 14px 16px;
+      overflow-wrap: anywhere;
+    }
+    .post-card:hover { background: var(--ui-bg-elev); border-color: var(--ui-accent); box-shadow: var(--ui-shadow-hover); }
+    .modal { background: var(--ui-bg-elev); color: var(--ui-text); border: 1px solid var(--ui-border); }
+    .tourn-banner { background: var(--ui-accent-soft); border-color: var(--ui-border); }
+  }
+  /* <<< v6476-desktop-theme */
 </style>

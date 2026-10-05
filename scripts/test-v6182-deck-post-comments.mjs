@@ -714,7 +714,14 @@ T('⭐⭐ 未登入顯示「登入後可留言」，而不是壞掉的輸入框'
 
 T('⭐⭐ 手機直式：留言區靠 flex-wrap / 100% 寬自適應，沒有新增 @media 當手機開關', () => {
   // ⭐ v6.317：改走中央 helper（先剝 HTML 註解、開頭標籤限行首）再剝 CSS 區塊註解；原本用「第一個樣式標籤字面」切，會被更前面的字面騙
-  const css = sectionInner(RAW, 'style', { label: 'deck-posts css', minSections: 1 }).replace(/\/\*[\s\S]*?\*\//g, '');
+  // ⭐v6.476（Rule 40）：網頁版主題＋版面整塊在 v6476-desktop-theme 哨兵裡，而且只能是一個 min-width:1024px（只在桌機加樣式、不是手機開關）
+  //   ⇒ 先把哨兵整塊拿掉再數 @media（本條的原意「留言區不靠 @media 切手機版」不變）；哨兵必須恰好一塊、內容必須是 min-width:1024px。
+  const cssRaw = sectionInner(RAW, 'style', { label: 'deck-posts css', minSections: 1 });
+  const RE6476 = /\n  \/\* >>> v6476-desktop-theme \*\/\n[\s\S]*?\n  \/\* <<< v6476-desktop-theme \*\/\n/g;
+  const blk6476 = cssRaw.match(RE6476) || [];
+  ok(blk6476.length === 1 && blk6476[0].replace(/\/\*[\s\S]*?\*\//g, '').trim().startsWith('@media (min-width: 1024px) {') && (blk6476[0].match(/@media/g) || []).length === 1,
+    'v6.476 網頁版哨兵必須恰好一塊、而且只能是 min-width:1024px 的單一 @media');
+  const css = cssRaw.replace(RE6476, '\n').replace(/\/\*[\s\S]*?\*\//g, '');
   ok(/\.cmt-form textarea \{[^}]*width: 100%/.test(css), '留言輸入框沒有 width:100%（手機會爆版）');
   ok(/\.cmt-form textarea \{[^}]*box-sizing: border-box/.test(css), '留言輸入框沒有 box-sizing:border-box');
   ok(/\.cmt-head \{[^}]*flex-wrap: wrap/.test(css), '留言表頭沒有 flex-wrap（手機窄螢幕會被擠出去）');

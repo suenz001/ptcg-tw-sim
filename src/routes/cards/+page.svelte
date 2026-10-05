@@ -1716,8 +1716,8 @@
     .modalInner { background: var(--ui-bg-elev); color: var(--ui-text); border: 1px solid var(--ui-border); }
     .close { background: var(--ui-bg-sunken); color: var(--ui-text); }
     .close:hover { background: var(--ui-accent-soft); color: var(--ui-text); }
-    .modal-nav { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
-    .modal-nav:hover { background: var(--ui-accent-soft); }
+    .modal-nav { color: var(--ui-text); }
+    .modal-nav:hover { background: rgba(61, 187, 122, 0.22); }
     .modal-variant-counter { color: var(--ui-link); background: var(--ui-accent-soft); border-color: var(--ui-border); }
     .detailInfo h2, .detailInfo h3 { color: var(--ui-text); }
     .tag, .evo, .stats strong, .foot, .footSet { color: var(--ui-text-muted); }

@@ -20,7 +20,7 @@ export type UiTheme = 'light' | 'dark';
 export const THEME_KEY = 'ptcg_ui_theme';
 
 /** 目前已接上 --ui-* 色票的頁面（去掉 base 之後的路徑，整條比對）。後續階段在這裡加。 */
-export const THEMED_ROUTES: readonly RegExp[] = [/^\/$/, /^\/cards$/, /^\/card\/[^/]+$/];
+export const THEMED_ROUTES: readonly RegExp[] = [/^\/$/, /^\/cards$/, /^\/card\/[^/]+$/, /^\/decks$/, /^\/deck-posts$/];
 
 /** 去掉 base path，統一成以 / 開頭、不帶結尾斜線（根目錄除外）。 */
 export function stripBase(pathname: string, base = ''): string {
