@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.483：卡牌資料庫條件寫進網址＋卡片視窗連到單卡頁（2026-10-05，站長同意的建議 #1）
+
+BASE v6.482（91965609）。
+- $lib/cards/url-state：q／m／s／cat／tag／type／stage／mark／card 參數讀寫；讀回逐項白名單驗證（亂改網址只會被忽略）；預設條件不寫參數；set 參數保留給 +page.ts load。
+- 卡牌頁：script 初始化時讀一次網址（含 card ⇒ 直接打開那張卡）；條件或開著的卡一變，延遲 300ms 用 SvelteKit replaceState 寫回（不新增瀏覽紀錄、不重新 load）；寫回用 query 而非 debouncedQuery（否則還原的搜尋字會先被洗掉）。
+- $lib/cards/card-page：hasCardPage＝未下架＋**預設政策**的標準標記（建置期預渲染用的是預設政策，執行期判準在後台改政策時會連到不存在的頁）；test-v6483 P1 對全部真實卡逐張比對預渲染範圍。卡片視窗加「📄 單卡頁」與「🔗 複製連結」（有單卡頁就複製單卡頁網址，否則複製目前資料庫網址）。
+- 守衛：test-v6439 LATER 登記卡牌頁 4 段改動（Rule 40，difflib 產生、驗證逐位元還原）。新增 test-v6483-cards-url-state（S0 HEAD-FAIL、L1～L4、P1～P3、真瀏覽器桌機＋手機 E1～E5）。
+
 ## v6.482：視窗折疊後標題列留在原地（2026-10-05，站長回報）
 
 BASE v6.481（4c887e8a）。

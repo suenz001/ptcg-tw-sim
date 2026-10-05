@@ -14,6 +14,9 @@
   import { loadCardPolicyOnce } from '$lib/cards/policy-loader';
   import { isMegaExCard } from '$lib/game/selection-filter'; // v6.210：Mega ex 判定收斂中央述詞
   import CardsMiniBar from '$lib/cards/CardsMiniBar.svelte';   // ⭐v6.480 網頁版：篩選面板捲出畫面後浮出迷你搜尋列
+  import { replaceState } from '$app/navigation';
+  import { readCardsUrlState, writeCardsUrlSearch } from '$lib/cards/url-state';   // ⭐v6.483 搜尋／篩選條件寫進網址
+  import { cardPageHref } from '$lib/cards/card-page';   // ⭐v6.483 卡片視窗連到單卡頁
 
   /** Resolve a coverImageUrl that is either an absolute https:// URL (external
    *  archive art) or a relative path like "covers/SV5a.jpg" (self-hosted). */
@@ -297,6 +300,51 @@
   }
 
   const setCards = $derived(data.mode === 'set' ? data.cards : []);
+
+  // ⭐v6.483 搜尋／篩選條件寫進網址（$lib/cards/url-state）：進頁時讀回一次，之後條件一變就（延遲 300ms）
+  //   用 replaceState 改網址 ⇒ 重新整理、按返回再回來、把網址傳給別人都會是同一組條件；不新增瀏覽紀錄。
+  //   ⚠ 只在卡片列表（data.mode==='set'）做；卡包列表頁（沒有 ?set=）不寫。
+  //   ⚠ 寫網址用 query（不是 debouncedQuery）：進頁還原的搜尋字要 150ms 後才進 debouncedQuery，用它會先把 q 洗掉。
+  let _urlRestored = false;
+  function restoreFromUrl() {
+    if (_urlRestored || data.mode !== 'set' || typeof location === 'undefined') return;
+    _urlRestored = true;
+    const st = readCardsUrlState(location.search, {
+      cat: CATEGORY_ORDER, tag: TAG_ORDER, type: ENERGY_ORDER, stage: STAGE_ORDER, mark: regMarkFilterKeys(),
+    });
+    query = st.q; debouncedQuery = st.q;
+    searchMode = st.mode; keywordScope = st.scope;
+    selectedCategories = new Set(st.cat as CategoryKey[]);
+    selectedTags = new Set(st.tag as TagKey[]);
+    selectedTypes = new Set(st.type as EnergyType[]);
+    selectedStages = new Set(st.stage as StageKey[]);
+    selectedRegMarks = new Set(st.mark as RegMarkKey[]);
+    if (st.card) { const c = setCards.find((x) => String(x.id) === st.card); if (c) selected = c; }
+  }
+  restoreFromUrl();
+  $effect(() => {
+    if (data.mode !== 'set') return;
+    const st = {
+      q: query, mode: searchMode, scope: keywordScope,
+      cat: [...selectedCategories], tag: [...selectedTags], type: [...selectedTypes],
+      stage: [...selectedStages], mark: [...selectedRegMarks], card: selected ? String(selected.id) : null,
+    };
+    const id = setTimeout(() => {
+      try {
+        const next = writeCardsUrlSearch(location.search, st);
+        if (next !== location.search) replaceState(location.pathname + next + location.hash, {});
+      } catch { /* 路由還沒準備好等情況：不寫網址，不影響畫面 */ }
+    }, 300);
+    return () => clearTimeout(id);
+  });
+  // ⭐v6.483 卡片視窗的「單卡頁」連結與複製連結
+  const selectedPageHref = $derived(selected ? cardPageHref(base, selected) : null);
+  let linkCopied = $state(false);
+  async function copyCardLink() {
+    const url = selectedPageHref ? location.origin + selectedPageHref : location.href;
+    try { await navigator.clipboard.writeText(url); linkCopied = true; setTimeout(() => { linkCopied = false; }, 1500); }
+    catch { linkCopied = false; }
+  }
 
   // v2.184：setCode → 中文卡包名 對照（給 modal foot「出自於卡包【XXX】」用）
   const setNameByCode = $derived.by(() => {
@@ -794,6 +842,11 @@
             {#if setNameByCode[selected.setCode]}
               <p class="footSet">出自於卡包【{setNameByCode[selected.setCode]}】</p>
             {/if}
+            <!-- ⭐v6.483 單卡頁連結＋複製連結（沒有單卡頁的卡：複製的是目前這個資料庫網址，開起來一樣會打開這張卡） -->
+            <p class="footLinks">
+              {#if selectedPageHref}<a class="cardPageLink" href={selectedPageHref}>📄 單卡頁</a>{/if}
+              <button type="button" class="copyLinkBtn" onclick={copyCardLink}>{linkCopied ? '✓ 已複製' : '🔗 複製連結'}</button>
+            </p>
           </div>
         </div>
       </div>
@@ -1538,6 +1591,11 @@
     color: #888;
   }
   /* v2.184: 顯示出自卡包中文名稱 */
+  /* ⭐v6.483 單卡頁連結＋複製連結 */
+  .footLinks { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.9rem; margin: 0.6rem 0 0; font-size: 0.95rem; }
+  .cardPageLink { font-weight: 700; color: #2563eb; text-decoration: none; }
+  .cardPageLink:hover { text-decoration: underline; }
+  .copyLinkBtn { padding: 0.3rem 0.8rem; border-radius: 999px; border: 1px solid #cbd5e1; background: #f8fafc; color: #334155; font-size: 0.9rem; cursor: pointer; }
   .footSet {
     margin: 0.25rem 0 0;
     font-size: 1.1rem;
@@ -1716,6 +1774,8 @@
     .tagChip { background: var(--ui-accent-soft); color: var(--ui-link); }
     .skill { background: var(--ui-bg-sunken); border-left-color: var(--ui-accent); }
     .stats, .foot { border-top-color: var(--ui-border); }
+    .cardPageLink { color: var(--ui-link); }   /* ⭐v6.483 */
+    .copyLinkBtn { background: var(--ui-bg-sunken); color: var(--ui-text); border-color: var(--ui-border); }
   }
   @media (min-width: 1024px) and (prefers-reduced-motion: reduce) {
     .setTile, .setTile:hover, .filter { transition: none; transform: none; }
