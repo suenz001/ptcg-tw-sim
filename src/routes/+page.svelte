@@ -1268,17 +1268,18 @@
     .hm-arrow { color: var(--ui-text-muted); }
     .hm-card:hover .hm-arrow { color: var(--ui-accent); }
     .hm-card-cards .hm-icon, .hm-card-decks .hm-icon { background: var(--ui-accent-soft); }
-    /* 對戰／錦標賽＝主要動作：深綠底（兩種主題都是），跟對戰頁同一個氣氛 */
+    /* 對戰／錦標賽＝主要動作：淡綠（淺色主題）／深綠（深色主題）的漸層卡＋綠框，比上排三格醒目。
+       ⭐v6.475（站長：「對戰演練和錦標賽在淺色主題還是深綠色的」）⇒ 顏色全部讀 --ui-cta-*，跟著主題變。 */
     .hm-card-game, .hm-card-tourn {
       background: var(--ui-cta-bg);
-      border-color: transparent;
+      border-color: var(--ui-cta-border);
     }
     .hm-card-game .hm-title, .hm-card-tourn .hm-title { color: var(--ui-cta-text); font-size: 1.15rem; }
-    .hm-card-game .hm-desc, .hm-card-tourn .hm-desc { color: rgba(230, 239, 233, 0.78); }
-    .hm-card-game .hm-arrow, .hm-card-tourn .hm-arrow { color: rgba(230, 239, 233, 0.7); }
-    .hm-card-game:hover .hm-arrow, .hm-card-tourn:hover .hm-arrow { color: #fff; }
-    .hm-card-game .hm-icon, .hm-card-tourn .hm-icon { background: rgba(255, 255, 255, 0.1); }
-    .hm-card-game:hover, .hm-card-tourn:hover { border-color: #3dbb7a; }
+    .hm-card-game .hm-desc, .hm-card-tourn .hm-desc { color: var(--ui-cta-desc); }
+    .hm-card-game .hm-arrow, .hm-card-tourn .hm-arrow { color: var(--ui-cta-desc); }
+    .hm-card-game:hover .hm-arrow, .hm-card-tourn:hover .hm-arrow { color: var(--ui-accent); }
+    .hm-card-game .hm-icon, .hm-card-tourn .hm-icon { background: var(--ui-cta-icon-bg); }
+    .hm-card-game:hover, .hm-card-tourn:hover { border-color: var(--ui-accent); }
     .hm-card:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
 
     /* ── 最新影片（HomeVideo 元件；從這裡用 :global 改外觀，元件本身不動） ── */

@@ -41,7 +41,7 @@ function loadTheme(src) {
   if (!src) return null;
   try {
     const body = ts2js(VZ.replace(/^export /gm, '') + '\n' + src.replace(/^import[^\n]*\n/gm, '').replace(/^export /gm, ''));
-    return new Function(body + '\n;return { THEME_KEY, THEMED_ROUTES, NAV_ITEMS, stripBase, showTopBar, isThemedRoute, activeNavHref, parseStoredTheme, resolveTheme };')();
+    return new Function(body + '\n;return { THEME_KEY, THEMED_ROUTES, NAV_ITEMS, stripBase, showTopBar, isThemedRoute, activeNavHref, parseStoredTheme, resolveTheme, isBattleView: typeof isBattleView === "function" ? isBattleView : null };')();
   } catch (e) { return null; }
 }
 
@@ -50,14 +50,22 @@ function judge(M) {
   const r = {};
   if (!M) return { A0: false };
   r.A0 = true;
-  const hidden = [['/game', ''], ['/game/', ''], ['/tournament', ''], ['/tournament/x', ''], ['/admin', ''], ['/admin/feedbacks', ''], ['/b/game', '/b'], ['/b/admin/feedbacks', '/b']];
-  const shown = [['/', ''], ['/cards', ''], ['/card/19378/', ''], ['/decks', ''], ['/deck-posts', ''], ['/friends', ''], ['/gamer', ''], ['/administrator', ''], ['/b/', '/b'], ['/b/cards', '/b']];
+  // ⭐v6.475 起：/game、/tournament 的大廳也顯示頂端列（牌桌畫面另由 data-battle-view 收起，見 A8）
+  const hidden = [['/admin', ''], ['/admin/feedbacks', ''], ['/b/admin/feedbacks', '/b']];
+  const shown = [['/', ''], ['/cards', ''], ['/card/19378/', ''], ['/decks', ''], ['/deck-posts', ''], ['/friends', ''], ['/game', ''], ['/tournament', ''], ['/administrator', ''], ['/b/', '/b'], ['/b/cards', '/b'], ['/b/game', '/b']];
   r.A1 = hidden.every(([p, b]) => M.showTopBar(p, b) === false) && shown.every(([p, b]) => M.showTopBar(p, b) === true);
   r.A2 = M.activeNavHref('/cards', '') === '/cards' && M.activeNavHref('/card/19378/', '') === '/cards'
     && M.activeNavHref('/deck-posts', '') === '/deck-posts' && M.activeNavHref('/decks', '') === '/decks'
     && M.activeNavHref('/', '') === '' && M.activeNavHref('/friends', '') === '' && M.activeNavHref('/b/tournament', '/b') === '/tournament'
     && M.activeNavHref('/cardsx', '') === '';
-  r.A3 = M.isThemedRoute('/', '') && M.isThemedRoute('/b/', '/b') && M.isThemedRoute('/b', '/b') && !M.isThemedRoute('/cards', '') && !M.isThemedRoute('/game', '');
+  // 已接主題的頁面（v6.475：首頁＋卡牌資料庫＋單卡頁）；對戰頁永遠不在清單裡（牌桌樣式不動）
+  r.A3 = M.isThemedRoute('/', '') && M.isThemedRoute('/b/', '/b') && M.isThemedRoute('/b', '/b') && M.isThemedRoute('/cards', '') && M.isThemedRoute('/card/19378/', '')
+    && !M.isThemedRoute('/cardsx', '') && !M.isThemedRoute('/game', '') && !M.isThemedRoute('/tournament', '');
+  // 牌桌畫面判準：只在對戰路由；錦標賽看 tStep、休閒看有沒有盤面
+  r.A8 = !!M.isBattleView && M.isBattleView('/game', '', false, 'lobby', true) === true && M.isBattleView('/game', '', false, 'lobby', false) === false
+    && M.isBattleView('/tournament', '', true, 'playing', false) === true && M.isBattleView('/tournament', '', true, 'lobby', true) === false
+    && M.isBattleView('/tournament', '', true, 'waiting', true) === false && M.isBattleView('/b/game', '/b', false, 'lobby', true) === true
+    && M.isBattleView('/cards', '', false, 'lobby', true) === false;
   r.A4 = M.parseStoredTheme('dark') === 'dark' && M.parseStoredTheme('light') === 'light' && M.parseStoredTheme('Dark') === null
     && M.parseStoredTheme(null) === null && M.parseStoredTheme('') === null
     && M.resolveTheme(null, true) === 'dark' && M.resolveTheme(null, false) === 'light'
@@ -73,10 +81,11 @@ const J = judge(M);
 ok('★★★[A0] 規則模組存在且可執行', J.A0);
 ok('★★★[A1] 頂端列：對戰頁（含 base、子路徑）與後台不顯示；其他頁顯示（/gamer、/administrator 不誤判）', !!J.A1);
 ok('★★[A2] 目前所在頁：/card/123 算卡牌資料庫、/deck-posts 不誤判成 /decks、首頁沒有 active', !!J.A2);
-ok('★★[A3] 第一階段只有首頁接上主題（其他頁不顯示切換鈕）', !!J.A3);
+ok('★★[A3] 已接主題：首頁、卡牌資料庫、單卡頁；對戰／錦標賽不在清單（牌桌樣式不動）', !!J.A3);
+ok('★★★[A8] 牌桌畫面判準：休閒＝有盤面、錦標賽＝tStep playing；非對戰路由一律否', !!J.A8);
 ok('★★[A4] 主題：玩家選過用玩家的、沒選過跟作業系統、壞值當沒選過', !!J.A4);
 ok('★[A5] 導覽項目＝首頁五個入口、同順序', !!J.A5);
-ok('★★[A6] 頂端列判準沿用 viewport-zoom 的 isBattleRoute（不另寫一份）', /import \{ isBattleRoute \} from '\$lib\/viewport-zoom'/.test(ST) && /if \(isBattleRoute\(pathname, base\)\) return false;/.test(ST));
+ok('★★[A6] 牌桌畫面判準沿用 viewport-zoom 的 isBattleRoute（不另寫一份）', /import \{ isBattleRoute \} from '\$lib\/viewport-zoom'/.test(ST) && /if \(!isBattleRoute\(pathname, base\)\) return false;/.test(ST));
 
 // HEAD-FAIL：同一份判準餵 BASE 必須紅（BASE 沒有這套規則）
 if (hasBaseCommit(ROOT, BASE_SHA)) {
@@ -94,8 +103,9 @@ const muts = [
   ['M2 卡牌比對拿掉單數 card', (s) => s.replace("match: /^\\/cards?(?:\\/|$)/", "match: /^\\/cards(?:\\/|$)/"), 'A2'],
   ['M3 牌組比對拿掉邊界', (s) => s.replace("match: /^\\/decks(?:\\/|$)/", "match: /^\\/deck/"), 'A2'],
   ['M4 主題無視玩家選擇', (s) => s.replace("return stored ?? (systemPrefersDark ? 'dark' : 'light');", "return systemPrefersDark ? 'dark' : 'light';"), 'A4'],
-  ['M5 卡牌頁也算已接主題', (s) => s.replace("THEMED_ROUTES: readonly string[] = ['/'];", "THEMED_ROUTES: readonly string[] = ['/', '/cards'];"), 'A3'],
-  ['M6 頂端列不排除對戰頁', (s) => s.replace('if (isBattleRoute(pathname, base)) return false;', ''), 'A1'],
+  ['M5 對戰頁也算已接主題', (s) => s.replace('/^\\/card\\/[^/]+$/];', '/^\\/card\\/[^/]+$/, /^\\/game$/];'), 'A3'],
+  ['M6 牌桌判準不分錦標賽', (s) => s.replace("return tournament ? tStep === 'playing' : hasGame;", 'return hasGame;'), 'A8'],
+  ['M7 牌桌判準不限對戰路由', (s) => s.replace('if (!isBattleRoute(pathname, base)) return false;', ''), 'A8'],
 ];
 for (const [name, f, key] of muts) {
   const s2 = f(ST);
@@ -117,7 +127,7 @@ ok('★★★[S1] 頂端列預設 display:none，只在 min-width:1024px 才 dis
   && (tbStyle.match(/\.stb \{[^}]*display: block/g) || []).length === 1
   && tbStyle.indexOf('.stb { display: none; }') < tbStyle.indexOf('@media'));
 ok('★★★[S2] 頂端列沒有 {#each}、props 沒有預設值（否則 Svelte 執行期被拆成新 chunk 進第一批預載）',
-  !/\{#each/.test(tbMarkup) && /let \{ pathname, base, version, themed, theme, ontoggle \}: \{/.test(tbMarkup) && !/let \{[^}]*=[^}]*\} = \$props\(\)/.test(tbMarkup));
+  !/\{#each/.test(tbMarkup) && /let \{ pathname, base, version, theme, ontoggle \}: \{/.test(tbMarkup) && !/let \{[^}]*=[^}]*\} = \$props\(\)/.test(tbMarkup));
 // 頂端列逐條寫出的連結必須與 NAV_ITEMS 一致（單一來源的另一半）
 const links = [...tbMarkup.matchAll(/class="stb-link" class:active=\{active === '([^']+)'\} href="\{base\}([^"]+)" aria-current=\{active === '([^']+)' \? 'page' : undefined\}>([^<]+)<\/a>/g)];
 const navOk = M && links.length === M.NAV_ITEMS.length && links.every((m, i) => m[1] === M.NAV_ITEMS[i].href && m[2] === M.NAV_ITEMS[i].href && m[3] === M.NAV_ITEMS[i].href && m[4] === M.NAV_ITEMS[i].label);
@@ -127,7 +137,7 @@ ok('★★[S4] logo 用 app.html 載入畫面同一個 URL（瀏覽器已有，�
 ok('★★★[S5] layout 在初始化就套主題（不在 onMount 裡）、頂端列在 children 之前、只在 topBarOn 時渲染',
   /let uiTheme = \$state<UiTheme>\(typeof document !== 'undefined' \? applyTheme\(\) : 'light'\);/.test(LAYOUT)
   && LAYOUT.indexOf('applyTheme()') < LAYOUT.indexOf('onMount(')
-  && /\{#if topBarOn\}\n  <SiteTopBar pathname=\{curPath\} \{base\} version=\{VERSION\} themed=\{themedOn\} theme=\{uiTheme\} ontoggle=\{toggleUiTheme\} \/>\n\{\/if\}\n\n\{@render children\(\)\}/.test(LAYOUT));
+  && /\{#if topBarOn\}\n  <SiteTopBar pathname=\{curPath\} \{base\} version=\{VERSION\} theme=\{uiTheme\} ontoggle=\{toggleUiTheme\} \/>\n\{\/if\}\n\n\{@render children\(\)\}/.test(LAYOUT));
 ok('★[S6] layout 不新增 {#each}（每頁必載節點）', !/\{#each/.test(LAYOUT));
 ok('★★[S12] 頂端列避開 iOS 安全區：讀全站唯一來源 --safe-top（不自己寫 env()）', /padding-top: var\(--safe-top, 0px\);/.test(tbStyle) && !/env\(safe-area/.test(tbStyle));
 // 首頁：v6.474 的版面規則全部在 min-width:1024px 區塊內
@@ -223,20 +233,24 @@ else if (chromium) {
         await ctx2.close();
         ok('★★[E3] 沒選過主題、作業系統是深色 ⇒ 深色', t === 'dark', String(t));
       }
-      // /cards：有頂端列、active＝卡牌資料庫、沒有切換鈕；底色維持原本 #f4f4f6（還沒接上主題）
+      // /cards（v6.475 已接主題）：有頂端列、active＝卡牌資料庫、有切換鈕、深色底色生效
       ({ ctx, pg } = await open(1440, 900, 'dark', '/cards'));
       const C = await probe(pg); await ctx.close();
-      ok('★★[E4] /cards：有頂端列、目前頁＝卡牌資料庫、沒有切換鈕、底色不受深色影響', C.stb?.disp === 'block' && C.active.join() === '卡牌資料庫' && !C.toggle && C.body === 'rgb(244, 244, 246)', JSON.stringify(C));
-      // 首頁 → 站內點進 /cards：首頁的深色底色要跟著移除
+      ok('★★[E4] /cards：有頂端列、目前頁＝卡牌資料庫、有切換鈕、深色底色生效', C.stb?.disp === 'block' && C.active.join() === '卡牌資料庫' && C.toggle && C.body === 'rgb(15, 31, 23)', JSON.stringify(C));
+      // 首頁 → 站內點進還沒接主題的 /decks：主題底色要跟著移除
       ({ ctx, pg } = await open(1440, 900, 'dark', '/'));
-      await pg.click('.stb-link[href$="/cards"]'); await pg.waitForTimeout(1500);
-      const nav = await pg.evaluate(() => ({ path: location.pathname, bg: getComputedStyle(document.body).backgroundColor, act: [...document.querySelectorAll('.stb-link.active')].map((a) => a.textContent).join() }));
+      await pg.click('.stb-link[href$="/decks"]'); await pg.waitForTimeout(1500);
+      const nav = await pg.evaluate(() => ({ path: location.pathname, bg: getComputedStyle(document.body).backgroundColor, act: [...document.querySelectorAll('.stb-link.active')].map((a) => a.textContent).join(), themed: document.documentElement.hasAttribute('data-ui-themed') }));
       await ctx.close();
-      ok('★★★[E5] 首頁（深色）站內點到 /cards：首頁底色不殘留、active 跟著換', /\/cards$/.test(nav.path) && nav.bg === 'rgb(244, 244, 246)' && nav.act === '卡牌資料庫', JSON.stringify(nav));
-      // /game：沒有頂端列
+      ok('★★★[E5] 首頁（深色）站內點到還沒接主題的 /decks：主題底色不殘留、active 跟著換', /\/decks$/.test(nav.path) && nav.bg === 'rgb(244, 244, 246)' && nav.act === '牌組編輯器' && !nav.themed, JSON.stringify(nav));
+      // /game 大廳：有頂端列（active＝對戰演練）；掛上 data-battle-view（牌桌畫面）時收起
       ({ ctx, pg } = await open(1440, 900, 'light', '/game'));
-      const G = await probe(pg); await ctx.close();
-      ok('★★★[E6] /game 不渲染頂端列', G.stb === null, JSON.stringify(G.stb));
+      const G = await probe(pg);
+      const gAttr = await pg.evaluate(() => document.documentElement.hasAttribute('data-battle-view'));
+      await pg.evaluate(() => document.documentElement.setAttribute('data-battle-view', ''));
+      const gHidden = await pg.evaluate(() => getComputedStyle(document.querySelector('.stb')).display);
+      await ctx.close();
+      ok('★★★[E6] /game 大廳顯示頂端列、還沒開局時沒有 data-battle-view；牌桌畫面（data-battle-view）時收起', G.stb?.disp === 'block' && G.active.join() === '對戰演練' && !gAttr && gHidden === 'none', JSON.stringify({ stb: G.stb, gAttr, gHidden }));
       // 手機 390：頂端列不佔空間、首頁仍是 680 單欄、logo 不顯示
       ({ ctx, pg } = await open(390, 844, 'dark', '/', true));
       const Mo = await probe(pg); await ctx.close();

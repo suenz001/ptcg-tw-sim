@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.475：網頁版主題第二步（2026-10-05，站長驗收 v6.474 的五點回饋）
+
+BASE v6.474（70cbb85d）。站長指示 v6.475～v6.477 連續做完再一起驗收。
+- ① 首頁對戰／錦標賽卡改讀 --ui-cta-*（淺色＝淡綠漸層深字、深色＝深綠漸層淺字）。
+- ② 頂端列顏色全部改讀 --ui-topbar-*（淺色白底、深色 #0b1811），切換鈕每頁都有。
+- ③ /game、/tournament 大廳也顯示頂端列：site-theme 新增 isBattleView（休閒＝有盤面、錦標賽＝tStep playing，沿用 isBattleRoute）＋setBattleViewAttr；對戰頁用 $derived 布林＋$effect 寫 <html data-battle-view>、onDestroy 拿掉；SiteTopBar 在 data-battle-view 時 display:none ⇒ 牌桌空間不變。
+- ④ THEMED_ROUTES 改成 RegExp 陣列，加入 /cards、/card/*；兩頁的主題與版面規則各集中在一個 min-width:1024px 區塊（手機 390、平板 1000 新舊截圖逐像素相同；/cards 卡片格只有卡圖解碼的次像素差）。
+- 守衛：test-v6474 依新規則調整（Rule 40：頂端列不再排除對戰頁、已接主題清單擴大、E5 改點到 /decks、E6 改驗大廳顯示＋牌桌收起；新增 A8／M6／M7 突變）；新增 test-v6475-theme-pages（HEAD-FAIL S0＋真瀏覽器 E1～E9）。
+- 全套第一輪抓到的四件（已修）：①對戰頁 onDestroy 寫成 `{ … }` 會被 test-v6297 當成私聊接線區塊的結尾錨點（它取檔案裡第一個 `onDestroy(() => {…});`）⇒ 改成不帶大括號的箭頭函式；②test-v6441 逐位元零回歸 ⇒ 本版兩處對戰頁改動登記進 LATER；③test-v6439 /cards 逐位元比對＋v6.468 那條 LATER 要求 `.back{…}` 緊接 </style> ⇒ 本版卡牌頁規則包進 v6475-desktop-theme 哨兵、放在 v6.468 規則之前，守衛加哨兵剝除（必須恰好一塊）；④test-v6303 F1／F3 要求卡牌頁 .modal-nav 與牌組頁 .pv-nav 逐字同一套 ⇒ 牌組頁同步加一條同樣的網頁版箭頭配色（同一個哨兵名）。
+
 ## v6.474：網頁版（≥1024px）介面強化第一階段（2026-10-05）
 
 BASE 2fae442b（v6.473＋LICENSE）。站長參考「野球之旅」網頁版，要求在不增加延遲下強化 Windows 網頁版；主色調「淺色＋深色兩種都做」。設計方向諮詢 Fable 5.1（競技場深綠＋屬性色環彩線、--ui-* 色票、頂端列與首頁兩欄規格）。

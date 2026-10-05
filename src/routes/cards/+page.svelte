@@ -1614,6 +1614,128 @@
   }
   /* <<< v6439-cards-mobile */
 
+  /* >>> v6475-desktop-theme */
+  /* ══ v6.475 網頁版（≥1024px）：淺色／深色主題＋版面優化 ══════════════════════════════
+     站長：「深色和淺色主題只影響第一個頁面」「除了首頁以外的選項應該也要可以優化」。
+     ・顏色一律讀 layout 的 --ui-* 色票（淺色＝:root、深色＝html[data-theme='dark']）；整頁底色由 layout 依
+       THEMED_ROUTES 掛 data-ui-themed 處理（$lib/site-theme.ts）。
+     ・只在 min-width:1024px ⇒ 手機與平板直向一個像素都不變（上方原本的樣式一個字都沒改）。
+     ・網頁版有全站頂端列 ⇒「← 首頁」收起（「← 卡包列表」保留：那是回上一層，不是回首頁）。 */
+  @media (min-width: 1024px) {
+    header, .markSection, .controls, .grid, .moreSentinel { color: var(--ui-text); }
+    header {
+      margin: 24px auto 20px;
+      padding: 20px 24px;
+      background: var(--ui-hero-bg);
+      border: 1px solid var(--ui-border);
+      border-radius: 16px;
+      box-shadow: var(--ui-shadow);
+      max-width: 1200px;
+      box-sizing: border-box;   /* 與下方卡包格線（1200 寬、左右 1rem 內距）的內容邊緣對齊 */
+    }
+    .back { color: var(--ui-link); }
+    .back:hover { color: var(--ui-text); }
+    .back[href$="/"] { display: none; }
+    h1 { color: var(--ui-text); font-size: 1.75rem; }
+    .setTitleName, .meta, .hint { color: var(--ui-text-muted); }
+
+    /* 卡包列表 */
+    .markHeader { color: var(--ui-text); font-weight: 700; }
+    .setGrid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 18px; }
+    .setTile {
+      background: var(--ui-bg-elev);
+      border: 1px solid var(--ui-border);
+      border-radius: 14px;
+      box-shadow: var(--ui-shadow);
+      color: var(--ui-text);
+      transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+    }
+    .setTile:hover { border-color: var(--ui-accent); box-shadow: var(--ui-shadow-hover); }
+    .setTile img { background: var(--ui-bg-sunken); border-radius: 8px; }
+    .setCode, .setCount, .setDate { color: var(--ui-text-muted); }
+    .setTileAll {
+      background:
+        linear-gradient(var(--ui-bg-elev), var(--ui-bg-elev)) padding-box,
+        linear-gradient(135deg, #3b82f6, #8b5cf6, #f59e0b) border-box;
+      border: 2px solid transparent;
+    }
+    .setTileAll .setCode { color: #8b5cf6; }
+
+    /* 卡片列表：搜尋與篩選收進一張面板 */
+    .controls {
+      margin: 0 auto 20px;
+      max-width: 1200px;
+      box-sizing: border-box;
+      padding: 16px 20px;
+      background: var(--ui-bg-elev);
+      border: 1px solid var(--ui-border);
+      border-radius: 16px;
+      box-shadow: var(--ui-shadow);
+    }
+    input[type='search'], .modeSelect {
+      background: var(--ui-input-bg);
+      color: var(--ui-text);
+      border-color: var(--ui-border);
+    }
+    input[type='search']:focus, .modeSelect:focus { outline: 2px solid var(--ui-accent); outline-offset: 1px; }
+    .modeSelect.keyword { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+    .modeSelect:hover:not(.keyword) { background: var(--ui-bg-sunken); }
+    .filter {
+      background: var(--ui-bg-elev);
+      color: var(--ui-text);
+      border-color: var(--ui-border);
+      border-radius: 999px;
+      transition: background-color 0.12s, border-color 0.12s;
+    }
+    .filter:hover:not(.active) { border-color: var(--ui-accent); }
+    .filter.active { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+    .filter-tag, .filter-type { color: var(--ui-text); }
+    .filter-tag.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+    .filter-type.active { background: var(--type-bg, #6366f1); border-color: var(--type-bg, #6366f1); color: #fff; }
+    .filter-stage { border-color: #8a77aa; }
+    .filter-stage.active { background: #6c5a8a; border-color: #6c5a8a; color: #fff; }
+    .filter-mark { border-color: #6f8f9f; }
+    .filter-mark.active { background: #5a7a8a; border-color: #5a7a8a; color: #fff; }
+    .tagLabel { color: var(--ui-text-muted); }
+
+    .grid { gap: 16px; }
+    .cardBtn {
+      background: var(--ui-bg-elev);
+      border: 1px solid var(--ui-border);
+      border-radius: 12px;
+      box-shadow: var(--ui-shadow);
+    }
+    .cardBtn:hover { border-color: var(--ui-accent); box-shadow: var(--ui-shadow-hover); }
+    .cardBtn img { background: var(--ui-bg-sunken); }
+    .cardLabel .num { color: var(--ui-text-muted); }
+    .cardLabel .name { color: var(--ui-text); }
+    .setPrefix { background: var(--ui-accent-soft); color: var(--ui-link); }
+    .moreSentinel { color: var(--ui-text-muted); }
+
+    /* 卡片詳情視窗 */
+    .modalInner { background: var(--ui-bg-elev); color: var(--ui-text); border: 1px solid var(--ui-border); }
+    .close { background: var(--ui-bg-sunken); color: var(--ui-text); }
+    .close:hover { background: var(--ui-accent-soft); color: var(--ui-text); }
+    .modal-nav { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+    .modal-nav:hover { background: var(--ui-accent-soft); }
+    .modal-variant-counter { color: var(--ui-link); background: var(--ui-accent-soft); border-color: var(--ui-border); }
+    .detailInfo h2, .detailInfo h3 { color: var(--ui-text); }
+    .tag, .evo, .stats strong, .foot, .footSet { color: var(--ui-text-muted); }
+    .rules { color: var(--ui-text); }
+    .pv-evo-chain { background: var(--ui-accent-soft); border-left-color: var(--ui-accent); }
+    .pv-evo-chain-label { color: var(--ui-link); }
+    .evo-arrow, .evo-or { color: var(--ui-text-muted); }
+    .evo-card-link { background: var(--ui-bg-elev); color: var(--ui-link); border-color: var(--ui-border); }
+    .evo-card-link:hover { background: var(--ui-accent-soft); border-color: var(--ui-accent); }
+    .evo-card-link.current { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+    .tagChip { background: var(--ui-accent-soft); color: var(--ui-link); }
+    .skill { background: var(--ui-bg-sunken); border-left-color: var(--ui-accent); }
+    .stats, .foot { border-top-color: var(--ui-border); }
+  }
+  @media (min-width: 1024px) and (prefers-reduced-motion: reduce) {
+    .setTile, .setTile:hover, .filter { transition: none; transform: none; }
+  }
+  /* <<< v6475-desktop-theme */
   /* ⭐v6.468（全站 audit）：「← 首頁」只有 16～21px 高，手機上很難點。用 padding＋等量負 margin 放大可點範圍，
      版面位置一點都不動（純文字連結、沒有底色或框線 ⇒ 桌機看起來也完全一樣）。
      ⚠ 刻意不包 @media：本頁的 @media 數量有守衛在釘（手機／桌機不靠斷點切版），而這條在桌機也無害。 */

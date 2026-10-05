@@ -140,4 +140,45 @@
      版面位置一點都不動（純文字連結、沒有底色或框線 ⇒ 桌機看起來也完全一樣）。
      ⚠ 刻意不包 @media：本頁的 @media 數量有守衛在釘（手機／桌機不靠斷點切版），而這條在桌機也無害。 */
   .crumb a { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
+
+  /* ══ v6.475 網頁版（≥1024px）：淺色／深色主題＋版面優化（站長：「除了首頁以外的選項應該也要可以優化」）══
+     ・只在 min-width:1024px ⇒ 手機一個像素都不變；上方原本的樣式一個字都沒改（v6.468 守衛釘的 .crumb a 那條也在原位）。
+     ・顏色讀 layout 的 --ui-* 色票；整頁底色由 layout 依 THEMED_ROUTES 掛 data-ui-themed。
+     ・版面：760 → 1080 寬；卡圖放大到 340px、右側資料表變卡片，招式／特性區塊吃同一組卡片樣式。 */
+  @media (min-width: 1024px) {
+    .card-page { max-width: 1080px; padding: 24px 24px 56px; color: var(--ui-text); }
+    .crumb { color: var(--ui-text-muted); }
+    .crumb a, .links a { color: var(--ui-link); }
+    h1 { font-size: 26px; color: var(--ui-text); margin: 6px 0 20px; }
+    .body {
+      display: grid;
+      grid-template-columns: 340px minmax(0, 1fr);
+      gap: 28px;
+      padding: 24px;
+      background: var(--ui-bg-elev);
+      border: 1px solid var(--ui-border);
+      border-radius: 16px;
+      box-shadow: var(--ui-shadow);
+    }
+    .img { width: 340px; border-radius: 14px; box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22); }
+    .info { min-width: 0; font-size: 15px; border-radius: 10px; overflow: hidden; }
+    .info th, .info td { border-color: var(--ui-border); padding: 9px 14px; }
+    .info th { background: var(--ui-bg-sunken); color: var(--ui-text-muted); width: 110px; }
+    .info td { color: var(--ui-text); }
+    .sec {
+      margin-top: 24px;
+      padding: 20px 24px;
+      background: var(--ui-bg-elev);
+      border: 1px solid var(--ui-border);
+      border-radius: 16px;
+      box-shadow: var(--ui-shadow);
+    }
+    .sec h2 { margin-top: 0; border-left-color: var(--ui-accent); color: var(--ui-text); }
+    .sec p, .block p { color: var(--ui-text); }
+    .block { background: var(--ui-bg-sunken); border-radius: 10px; padding: 12px 16px; }
+    .cost { background: var(--ui-accent-soft); color: var(--ui-link); }
+    .dmg { color: #e0533f; }
+    .foot { color: var(--ui-text-muted); }
+    .foot a { color: var(--ui-link); }
+  }
 </style>

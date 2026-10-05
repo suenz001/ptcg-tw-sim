@@ -4064,4 +4064,12 @@
     /* 「← 首頁」可點範圍放大（padding＋等量負 margin，版面不動）。⚠ 本頁的桌機 CSS 有逐字指紋守衛（test-v6213）⇒ 只放在觸控分支 */
     .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
   }
+  /* >>> v6475-desktop-theme */
+  /* ⭐v6.475：卡片詳情的左右箭頭與卡牌資料庫那一組必須逐字相同（test-v6303 F1／F3：兩頁箭頭同一套）⇒ 網頁版主題的箭頭配色兩頁一起改。
+     只在 min-width:1024px（test-v6213 的桌機指紋只取 @media 以外 ⇒ 不受影響）。 */
+  @media (min-width: 1024px) {
+    .pv-nav { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+    .pv-nav:hover { background: var(--ui-accent-soft); }
+  }
+  /* <<< v6475-desktop-theme */
 </style>

@@ -123,6 +123,14 @@ const LATER = [
 ];
 // ⭐v6.464（Rule 40）：本版把資料庫格子的卡圖改用縮圖（src={cardThumb(…)}＋import），先用共用還原表還原成 v6.463 再剝哨兵；其餘仍須逐位元等於 BASE。
 let stripped = revertPairs(SRC.replace(/\r\n/g, '\n'), V6464_CARDS_PAIRS).replace(STRIP_RE, '');
+// ⭐v6.475（Rule 40）：網頁版主題＋版面整塊包在 v6475-desktop-theme 哨兵裡（全部在 min-width:1024px 內，手機不變）
+//   ⇒ 整塊拿掉即逐位元還原 v6.474；內容由 test-v6475-theme-pages 鎖。哨兵必須恰好一塊（被刪＝剝除器靜默 no-op ⇒ 紅）。
+{
+  const RE6475 = /\n  \/\* >>> v6475-desktop-theme \*\/[\s\S]*?\/\* <<< v6475-desktop-theme \*\//g;
+  const n6475 = (stripped.match(RE6475) || []).length;
+  ok('[LATER 前提] v6.475 網頁版主題哨兵恰好一塊', n6475 === 1, 'n=' + n6475);
+  stripped = stripped.replace(RE6475, '');
+}
 for (const [a, b] of LATER) {
   const n = stripped.split(a).length - 1;
   ok('[LATER 前提] 登記的後續改動恰好出現一次：' + a.trim().slice(0, 50), n === 1, 'n=' + n);

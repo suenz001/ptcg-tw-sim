@@ -4,11 +4,11 @@
 // layout 與 SiteTopBar 只呼叫這裡，守衛也直接 import 這裡驗行為。
 //
 // 規則：
-//   ・頂端列：對戰畫面（/game、/tournament，判準沿用 viewport-zoom.ts 的 isBattleRoute，不另寫一份）
-//     與後台（/admin）不顯示；其他頁都顯示。是否「只在網頁版顯示」由 CSS 的 @media (min-width:1024px) 決定，
+//   ・頂端列：後台（/admin）不顯示；其他頁都顯示。是否「只在網頁版顯示」由 CSS 的 @media (min-width:1024px) 決定，
 //     ⇒ 手機（<1024px）版面一個像素都不變。
-//   ・主題：只有列在 THEMED_ROUTES 的頁面真的吃 --ui-* 色票；其他頁在後續階段才接上。
-//     切換鈕也只在這些頁面出現（在還沒接上主題的頁面按了沒反應，只會讓玩家困惑）。
+//     ⭐v6.475（站長：「對戰演練和錦標賽沒有用到上方的表頭」）：/game、/tournament 的**大廳**也顯示；
+//     真正進入牌桌（對戰／觀戰／回放）時由對戰頁在 <html> 掛 data-battle-view，CSS 把頂端列收起來 ⇒ 牌桌空間不變。
+//   ・主題：只有列在 THEMED_ROUTES 的頁面整頁吃 --ui-* 色票；頂端列本身兩種主題都跟著變，切換鈕每頁都有。
 //   ・玩家沒選過 ⇒ 跟著作業系統的深色／淺色設定；選過 ⇒ 記在 localStorage。
 //     ⚠ 讀寫 localStorage 一律包 try/catch（Safari 無痕模式 setItem 會丟例外）。
 //   ・<html data-theme="light|dark"> 永遠是「實際生效的主題」⇒ CSS 只需要一種選擇器，不必再寫 prefers-color-scheme。
@@ -19,8 +19,8 @@ export type UiTheme = 'light' | 'dark';
 
 export const THEME_KEY = 'ptcg_ui_theme';
 
-/** 目前已接上 --ui-* 色票的頁面（去掉 base 之後的路徑）。後續階段在這裡加。 */
-export const THEMED_ROUTES: readonly string[] = ['/'];
+/** 目前已接上 --ui-* 色票的頁面（去掉 base 之後的路徑，整條比對）。後續階段在這裡加。 */
+export const THEMED_ROUTES: readonly RegExp[] = [/^\/$/, /^\/cards$/, /^\/card\/[^/]+$/];
 
 /** 去掉 base path，統一成以 / 開頭、不帶結尾斜線（根目錄除外）。 */
 export function stripBase(pathname: string, base = ''): string {
@@ -31,16 +31,30 @@ export function stripBase(pathname: string, base = ''): string {
   return p;
 }
 
-/** 這一頁要不要顯示頂端列（網頁版）。 */
+/** 這一頁要不要渲染頂端列（網頁版）。對戰頁的牌桌另由 data-battle-view 收起（見 battleViewAttr）。 */
 export function showTopBar(pathname: string, base = ''): boolean {
-  if (isBattleRoute(pathname, base)) return false;
   const p = stripBase(pathname, base);
   return !/^\/admin(?:\/|$)/.test(p);
 }
 
+/** 對戰頁（/game、/tournament）目前是不是「牌桌畫面」：錦標賽看 tStep、休閒看有沒有盤面。
+ *  判準沿用 viewport-zoom 的 isBattleRoute（不是對戰路由一律 false）。 */
+export function isBattleView(pathname: string, base: string, tournament: boolean, tStep: string, hasGame: boolean): boolean {
+  if (!isBattleRoute(pathname, base)) return false;
+  return tournament ? tStep === 'playing' : hasGame;
+}
+
+/** 對戰頁呼叫：把「是不是牌桌畫面」寫到 <html data-battle-view>（頂端列據此收起）。 */
+export function setBattleViewAttr(on: boolean): void {
+  if (typeof document === 'undefined') return;
+  if (on) document.documentElement.setAttribute('data-battle-view', '');
+  else document.documentElement.removeAttribute('data-battle-view');
+}
+
 /** 這一頁是否已接上主題色票。 */
 export function isThemedRoute(pathname: string, base = ''): boolean {
-  return THEMED_ROUTES.includes(stripBase(pathname, base));
+  const p = stripBase(pathname, base);
+  return THEMED_ROUTES.some((re) => re.test(p));
 }
 
 /** 頂端列的導覽項目。match 用「路徑前綴」判斷目前所在頁（/card/123 也算卡牌資料庫）。 */

@@ -15,6 +15,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { fly, scale, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { base } from '$app/paths';
+  import { isBattleView, setBattleViewAttr } from '$lib/site-theme';   // ⭐v6.475 網頁版頂端列在牌桌畫面收起
   import { goto } from '$app/navigation';   // v6.284 修：initNotifyNav 的回呼一直呼叫 goto 卻沒 import（ReferenceError 被 try/catch 吞掉 ⇒ 通知點擊導頁靜默失效）
   import type { Card } from '$lib/cards/types';
   import { loadAllSets, buildCardIndex, loadDeckSets, deckEntriesAllInPool, loadCardSetMap } from '$lib/cards/pool';
@@ -1047,6 +1048,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
 
   let game = $state<GameState | null>(null);
+  // ⭐v6.475 網頁版頂端列：大廳顯示、進入牌桌（對戰／觀戰／回放）時收起 ⇒ 牌桌空間不變。
+  //   判準在 $lib/site-theme.ts（isBattleView）；用 $derived 布林 ⇒ 盤面每次更新不會重寫 <html> 屬性，只有真的切換才寫。
+  const _v6475BattleView = $derived(isBattleView(typeof location !== 'undefined' ? location.pathname : '/game', base, isTournament, tStep, !!game));
+  $effect(() => { setBattleViewAttr(_v6475BattleView); });
+  // ⚠ 刻意寫成不帶大括號的箭頭函式：test-v6297 用「檔案裡第一個 `onDestroy(() => {…});`」當私聊接線區塊的結尾錨點，
+  //   這一行在它前面，若寫成 `{ … }` 形式就會被誤抓成錨點（v6.475 全套當場踩到）。
+  onDestroy(() => setBattleViewAttr(false));
 
   // ⭐⭐⭐v6.214【①】「我剛剛在看的那一局」——用來分辨「重整後想看終局盤」與「跳回舊局」。
   //   站長回報：早就結束的對局會突然跳回去。真因是 sync-guards 第 9 步無條件 adopt

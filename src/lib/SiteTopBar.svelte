@@ -7,11 +7,10 @@
 
   // ⚠ props 刻意「不給預設值」：給了預設值 Svelte 會用 $.prop() 執行期，它跟 app 入口共用 ⇒ 被拆成一個新 chunk
   //   塞進每一頁的第一批預載（HTTP/1.1 下實測冷進站多一輪往返）。呼叫端只有 layout 一處，一律全部傳入。
-  let { pathname, base, version, themed, theme, ontoggle }: {
+  let { pathname, base, version, theme, ontoggle }: {
     pathname: string;
     base: string;
     version: string;
-    themed: boolean;
     theme: UiTheme;
     ontoggle: () => void;
   } = $props();
@@ -37,11 +36,9 @@
     </nav>
     <div class="stb-tools">
       {#if version}<span class="stb-ver">v{version}</span>{/if}
-      {#if themed}
-        <button class="stb-theme" type="button" onclick={ontoggle}
-          aria-label={theme === 'dark' ? '切換成淺色主題' : '切換成深色主題'}
-          title={theme === 'dark' ? '切換成淺色主題' : '切換成深色主題'}>{theme === 'dark' ? '☀️' : '🌙'}</button>
-      {/if}
+      <button class="stb-theme" type="button" onclick={ontoggle}
+        aria-label={theme === 'dark' ? '切換成淺色主題' : '切換成深色主題'}
+        title={theme === 'dark' ? '切換成淺色主題' : '切換成深色主題'}>{theme === 'dark' ? '☀️' : '🌙'}</button>
     </div>
   </div>
 </header>
@@ -56,14 +53,17 @@
       position: sticky;
       top: 0;
       z-index: 50;
-      background: #0f2a1c;                 /* 兩種主題都用深綠：延伸對戰頁的氣氛 */
+      /* ⭐v6.475（站長：「上方表頭在淺色主題依然是深色的」）：顏色全部讀 layout 的 --ui-topbar-*，跟著主題變 */
+      background: var(--ui-topbar-bg);
       /* ⭐ iPad 橫向（≥1024）加入主畫面以 PWA 開啟時，狀態列會疊在頁面最上方（app.html 有 viewport-fit=cover）
          ⇒ 讀全站安全區唯一來源 --safe-top（v6.187／v6.195），桌機瀏覽器是 0px、版面不變。 */
       padding-top: var(--safe-top, 0px);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
+      border-bottom: 1px solid var(--ui-topbar-border);
+      box-shadow: var(--ui-topbar-shadow);
       font-family: system-ui, -apple-system, 'Microsoft JhengHei', sans-serif;
     }
+    /* ⭐v6.475：進入牌桌（對戰頁在 <html> 掛 data-battle-view）時收起 ⇒ 牌桌空間與改版前相同 */
+    :global(html[data-battle-view]) .stb { display: none; }
     /* 屬性色環的 18 色細線，壓在頂端列下緣（呼應 logo；只有 2px，不搶卡圖的顏色） */
     .stb::after {
       content: '';
@@ -91,53 +91,53 @@
       flex-shrink: 0;
     }
     .stb-logo { width: 28px; height: 28px; border-radius: 7px; display: block; }
-    .stb-name { color: #e6efe9; font-size: 15px; font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; }
+    .stb-name { color: var(--ui-topbar-text); font-size: 15px; font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; }
     .stb-nav { display: flex; align-items: center; gap: 4px; min-width: 0; }
     .stb-link {
       position: relative;
       padding: 6px 12px;
       border-radius: 8px;
-      color: rgba(230, 239, 233, 0.78);
+      color: var(--ui-topbar-muted);
       font-size: 14px;
       font-weight: 500;
       text-decoration: none;
       white-space: nowrap;
       transition: background-color 0.12s, color 0.12s;
     }
-    .stb-link:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
-    .stb-link.active { color: #fff; font-weight: 700; }
+    .stb-link:hover { background: var(--ui-topbar-hover); color: var(--ui-topbar-text); }
+    .stb-link.active { color: var(--ui-topbar-text); font-weight: 700; }
     .stb-link.active::after {
       content: '';
       position: absolute;
       left: 12px; right: 12px; bottom: -11px;
       height: 3px;
       border-radius: 3px 3px 0 0;
-      background: #3dbb7a;
+      background: var(--ui-accent);
     }
     .stb-link:focus-visible, .stb-brand:focus-visible, .stb-theme:focus-visible {
-      outline: 2px solid #3dbb7a;
+      outline: 2px solid var(--ui-accent);
       outline-offset: 2px;
     }
     .stb-tools { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
     .stb-ver {
       font-family: ui-monospace, 'Cascadia Code', monospace;
       font-size: 12px;
-      color: rgba(230, 239, 233, 0.75);
-      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: var(--ui-topbar-muted);
+      border: 1px solid var(--ui-topbar-border);
       border-radius: 999px;
       padding: 2px 8px;
     }
     .stb-theme {
       width: 36px; height: 36px;
       border-radius: 50%;
-      border: 1px solid rgba(255, 255, 255, 0.18);
+      border: 1px solid var(--ui-topbar-border);
       background: transparent;
       font-size: 16px;
       line-height: 1;
       cursor: pointer;
       transition: background-color 0.12s;
     }
-    .stb-theme:hover { background: rgba(255, 255, 255, 0.1); }
+    .stb-theme:hover { background: var(--ui-topbar-hover); }
   }
   /* 1024～1200：導覽項縮一點，避免擠到換行 */
   @media (min-width: 1024px) and (max-width: 1199px) {
