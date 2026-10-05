@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.485：牌組編輯器「🎲 測抽」（2026-10-05，站長同意的建議 #3）
+
+BASE v6.484（529fe726）。
+- $lib/decks/opening-hand：expandDeck、shuffled（Fisher–Yates）、dealOpening（7＋6）、drawOne、classifyOpening（與引擎 classifyOpeningHand 同三態）、basicInOpeningProb（1−C(N−B,7)/C(N,7)）、canStartActive／isBasicOf。基礎判準直接呼叫中央 isBasicPokemonCard；「可放戰鬥場」不 import 引擎（避免整個引擎打包進牌組編輯器），由 test-v6485 C1 對全部真實卡逐張比對 engine.canBeInitialActiveCard。
+- $lib/decks/OpeningHandSim.svelte：獨立元件、自己的樣式（牌組編輯器桌機 CSS 有 test-v6213 逐字指紋，放在元件裡不影響）；背景用透明按鈕關閉（與牌組戰績視窗同做法）＋pageScrollLock；卡圖 cardThumb＋use:retryImg。
+- 牌組編輯器：統計列加「🎲 測抽」（牌組 ≥7 張才出現）。
+- 守衛：test-v6101 FILES 加 OpeningHandSim（新檔案有卡圖必須掛 retryImg）。新增 test-v6485-opening-hand-sim（S0、L1～L6 含暴力枚舉對照、C1～C3、真瀏覽器桌機＋手機）。
+
 ## v6.484：牌組公布欄每篇投稿有網址＋複製連結（2026-10-05，站長同意的建議 #2）
 
 BASE v6.483（0e74051c）。

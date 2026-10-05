@@ -6,6 +6,7 @@
   import { base } from '$app/paths';
   import type { Card, EnergyType } from '$lib/cards/types';
   import { retryImg } from '$lib/img-retry';
+  import OpeningHandSim from '$lib/decks/OpeningHandSim.svelte';   // ⭐v6.485 🎲 測抽（獨立元件、自己的樣式）
   import { cardThumb } from '$lib/cards/thumb'; // v6.464 小尺寸顯示改用縮圖（失敗由 retryImg 立刻退回官方原圖）
   import { getEvolutionChainNames, getEvolutionChainGrouped } from '$lib/cards/evolutionChain';
   import { isMegaExCard } from '$lib/game/selection-filter'; // v6.210：Mega ex 判定收斂中央述詞
@@ -1714,6 +1715,8 @@
   // Entries paired with their Card for display. Filter out unresolved ids.
   // v3.35：把 typeof active.entries[number] 抽出 type alias，避免在 narrow 後的 type-position
   // 仍因「type expression 不走 control-flow narrowing」被 ts 警告 active 可能 null。
+  // ⭐v6.485 🎲 測抽視窗
+  let showOpeningSim = $state(false);
   const activeEntries = $derived.by(() => {
     type DeckEntry = { cardId: string; count: number };
     if (!active) return [] as { entry: DeckEntry; card: Card }[];
@@ -1911,6 +1914,7 @@
           <span class="stat pokemon">寶可夢 {deckStats.Pokemon}</span>
           <span class="stat trainer">訓練家 {deckStats.Trainer}</span>
           <span class="stat energy">能量 {deckStats.Energy}</span>
+          {#if totalCount >= 7}<button class="small" onclick={() => (showOpeningSim = true)} title="洗牌抽 7 張起手、擺 6 張獎賞，看看手感">🎲 測抽</button>{/if}
           {#if totalCount > 0}
             <div class="stat-track" title="寶可夢 / 訓練家 / 能量">
               {#if deckStats.Pokemon > 0}
@@ -2419,6 +2423,9 @@
 <!-- ── v6.267 套牌戰績 modal（🔍）─────────────────────────────────────────
      ⚠ 點背景關閉用的是一顆**透明按鈕**（不是在 div 上掛 onclick）——
        那樣既能點外面關閉，又不會多出 a11y 警告（警告數是版面沒被改壞的金絲雀）。 -->
+{#if showOpeningSim && active}
+  <OpeningHandSim entries={activeEntries.map((x) => ({ card: x.card, count: x.entry.count }))} onclose={() => (showOpeningSim = false)} />
+{/if}
 {#if statsDeckId}
   <div use:pageScrollLock class="pv-overlay">
     <button class="ds-backdrop" data-scroll-outside onclick={closeDeckStats} aria-label="關閉戰績視窗"></button>
