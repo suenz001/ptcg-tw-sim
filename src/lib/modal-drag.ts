@@ -327,6 +327,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
       if (opts.stopPropagation) e.stopPropagation();
       try { node.releasePointerCapture?.(e.pointerId); } catch { /* 同上 */ }
       if (moved) {
+        if (collapsed) offBeforeCollapse = null;   // ⭐v6.482 折疊狀態下拖過 ⇒ 展開時不回到舊位置
         swallowClick = true;
         // 萬一這次沒有產生 click（例如在元素外放開），不可以把「下一次真正的點擊」吃掉
         setTimeout(() => { swallowClick = false; }, 0);
@@ -373,9 +374,60 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
     while (c && c.parentElement !== node) c = c.parentElement;
     return c;
   }
-  function setCollapsed(v: boolean) {
+  /** ⭐v6.482 折疊前的位移：展開時回到原位（折疊時為了讓標題列留在原地而調整過位移）。 */
+  let offBeforeCollapse: ModalOffset | null = null;
+  /** 量標題列（把手）目前在畫面上的左上角；量不到回 null。 */
+  function anchorPos(): { x: number; y: number } | null {
+    const a = handleEl() ?? collapseBtn;
+    if (!a) return null;
+    try { const r = a.getBoundingClientRect(); return { x: r.left, y: r.top }; } catch { return null; }
+  }
+  /**
+   * ⭐v6.482（站長回報）：折疊後視窗會「跳走」——視窗是被遮罩用 flex 置中的，折疊後高度變小就被重新置中，
+   *   標題列（＝玩家剛按的折疊鈕）往下掉；在視窗下半部捲動後再按，甚至整個掉出畫面。
+   *   ⇒ 玩家按折疊鈕時：先記下標題列在畫面上的位置，切換後再量一次，把差距補進位移 ⇒ 標題列留在原地
+   *     （最後照常夾制：上緣不出畫面、下緣至少露出把手）。展開時回到折疊前的位移（視窗回到原本的樣子）。
+   *   ⚠ 只在玩家按鈕時做（anchor=true）；換內容（resetKey）時的強制展開不做。
+   *   ⚠ margin 模式下位移與畫面位置不一定 1:1（置中容器裡 margin 的效果會打折）⇒ 量兩次逐步逼近。
+   */
+  function keepAnchor(before: { x: number; y: number }) {
+    const { vw, vh } = view();
+    for (let i = 0; i < 2; i++) {
+      const now = anchorPos();
+      if (!now) return;
+      const dx = before.x - now.x, dy = before.y - now.y;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) break;
+      off = { x: off.x + dx, y: off.y + dy };
+      apply();
+    }
+    base = measure();
+    safeB = safeBottomPx();
+    minVisW = measureMinVisible();
+    off = clampModalOffset(base, off, vw, vh, opts.clamp ?? 'reachable', safeB, minVisW);
+    apply();
+  }
+  function setCollapsed(v: boolean, anchor = false) {
+    const before = anchor && v !== collapsed ? anchorPos() : null;
+    if (anchor && v && !collapsed) offBeforeCollapse = { x: off.x, y: off.y };
     collapsed = v;
     node.classList.toggle(COLLAPSED_CLASS, v);
+    if (before) {
+      if (v) keepAnchor(before);
+      else if (!offBeforeCollapse) keepAnchor(before);   // 折疊期間被拖走過 ⇒ 展開時標題列一樣留在原地
+      else {
+        // 展開：回到折疊前的位置
+        off = { x: offBeforeCollapse.x, y: offBeforeCollapse.y };
+        apply();
+        const { vw, vh } = view();
+        base = measure();
+        safeB = safeBottomPx();
+        minVisW = measureMinVisible();
+        off = clampModalOffset(base, off, vw, vh, opts.clamp ?? 'reachable', safeB, minVisW);
+        apply();
+      }
+      if (!v) offBeforeCollapse = null;
+      opts.onEnd?.({ x: off.x, y: off.y });
+    }
     if (collapseBtn) {
       collapseBtn.textContent = v ? '▸' : '▾';
       const label = v ? '展開視窗' : '折疊視窗（只留標題列，看得到下面的對戰畫面）';
@@ -406,7 +458,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
     b.type = 'button';
     b.className = COLLAPSE_BTN_CLASS;
     b.setAttribute('data-no-drag', '');
-    b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); setCollapsed(!collapsed); });
+    b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); setCollapsed(!collapsed, true); });
     // 放在標題列（把手）最前面、float:left ⇒ 標題文字自然排在它右邊，不會疊在一起。
     //   ⚠ 只插進把手元素；Svelte 的 {#if}/{#each} 以自己的錨點插入，不受前面多一個節點影響。
     h.insertBefore(b, h.firstChild);
