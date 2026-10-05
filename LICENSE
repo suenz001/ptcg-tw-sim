@@ -1,0 +1,46 @@
+Copyright (c) 2026 suenz001 (Wilson). All rights reserved.
+
+保留所有權利。
+
+本儲存庫（ptcg-tw-sim，網站 https://www.ptcg-tw-sim.com）中的原始碼、伺服器程式、
+後台程式、測試、文件、版面設計與其他內容，著作權均屬上述著作權人所有。
+
+公開本儲存庫僅供瀏覽，並不代表授權。未經著作權人事先書面同意，禁止：
+
+  1. 重製、修改、散布本儲存庫的全部或任何部分；
+  2. 以本儲存庫的程式碼或其衍生作品架設、營運任何網站或服務（不論是否營利）；
+  3. 將本儲存庫的內容用於商業用途，或再授權給第三人。
+
+GitHub 服務條款允許的範圍（在 GitHub 上瀏覽與 fork）不在此限，
+但 fork 不代表取得上述任何權利。
+
+寶可夢卡牌的名稱、卡圖、卡面文字與相關商標，屬於其各自權利人
+（The Pokémon Company、任天堂、Creatures Inc.、GAME FREAK inc.）所有，
+不在本授權聲明的主張範圍內。
+
+如需授權，請聯絡著作權人。
+
+--------------------------------------------------------------------------------
+
+Copyright (c) 2026 suenz001 (Wilson). All rights reserved.
+
+The source code, server code, admin tools, tests, documentation, layouts and all
+other content in this repository (ptcg-tw-sim, https://www.ptcg-tw-sim.com) are
+the property of the copyright holder named above.
+
+This repository is publicly visible for viewing only. No license is granted.
+Without the prior written permission of the copyright holder, you may NOT:
+
+  1. copy, modify or distribute this repository, in whole or in part;
+  2. use this code or any derivative work to host or operate any website or
+     service, whether commercial or not;
+  3. use the contents for commercial purposes or sublicense them to others.
+
+Viewing and forking on GitHub, to the extent permitted by the GitHub Terms of
+Service, are excepted; a fork does not grant any of the rights above.
+
+Pokémon card names, images, card text and related trademarks belong to their
+respective owners (The Pokémon Company, Nintendo, Creatures Inc., GAME FREAK
+inc.) and are not claimed by this notice.
+
+For licensing enquiries, please contact the copyright holder.
