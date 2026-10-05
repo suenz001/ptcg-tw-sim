@@ -352,6 +352,9 @@
        ⚠強制更新鈕改放 hero 右上（原切換鈕的位置）—— 它是 iOS PWA 卡在舊版時
          玩家唯一的自救管道，必須一進站在最上面就看得到，不能藏在頁尾。 -->
   <div class="hm-hero">
+    <!-- ⭐v6.474 網頁版 hero 的 logo（手機版 display:none，版面不變）。
+         ⚠ 刻意用 app.html 載入畫面「同一個 URL」（含 ?v=）⇒ 瀏覽器早就有這張圖，不多發請求、也不增加 SW 預快取。 -->
+    <img class="hm-logo" src="{base}/icons/icon-192.png?v=6.183" alt="" width="72" height="72" />
     <div class="hm-hero-text">
       <h1>PTCG 實體賽事演練 <span class="version">v{VERSION}</span></h1>
       <p class="subtitle">免費線上・寶可夢集換式卡牌對戰模擬器 ｜ Pokémon TCG Simulator</p>
@@ -1117,5 +1120,209 @@
     .hm-icon { width: 42px; height: 42px; font-size: 1.3rem; }
     .hm-title { font-size: .98rem; }
     .hm-desc { font-size: .78rem; }
+  }
+
+  /* hero 的 logo：手機與平板不顯示（版面不變），網頁版才出現。 */
+  .hm-logo { display: none; }
+
+  /* ══ v6.474 網頁版（≥1024px）首頁：兩欄＋淺色／深色主題 ══════════════════════════
+     站長：「網頁版為了迎合手機版而顯得簡陋」⇒ 只在 min-width:1024px 生效，手機版一個像素都不變。
+     色票是 layout 的 --ui-*（淺色＝:root、深色＝html[data-theme='dark']），這裡不寫死顏色。
+     版面（Fable 5.1 規劃、我實作時修正）：
+       ┌──────── hero（logo＋標題＋強制更新鈕）────────┐
+       │ 功能入口（3＋2 格）          │ 最新影片          │
+       │ 玩家社群（QR 與按鈕橫排）     │ 意見回饋（跨兩列） │
+       │ 版本更新記錄                  │                   │
+       └──────────── 免責聲明 ─────────────────────────┘
+     ⚠ 用 grid-template-areas 擺位置、**不改 DOM 順序** ⇒ 手機版的區塊順序不變（DOM 順序就是手機順序）。
+     ⚠ 欄寬用 minmax(0,1fr)：grid item 預設 min-width:auto，changelog 長行會把欄撐爆。
+     ⚠ grid 只裝「整張區塊卡片」；裝整段文字的容器（changelog 的 details／summary）維持 block（v6.030 爆版教訓）。 */
+  @media (min-width: 1024px) {
+    main {
+      max-width: 1200px;
+      margin: 28px auto 0;
+      padding: 0 24px 48px;
+      color: var(--ui-text);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      grid-template-areas:
+        'hero hero'
+        'nav  vid'
+        'comm fb'
+        'log  fb'
+        'foot foot';
+      grid-template-rows: auto auto auto 1fr auto;
+      column-gap: 24px;
+      row-gap: 24px;
+      align-items: start;
+    }
+    .hm-hero { grid-area: hero; }
+    .hm-grid { grid-area: nav; align-self: stretch; }
+    main > :global(.hv-section) { grid-area: vid; }
+    .community-section { grid-area: comm; }
+    .changelog-section { grid-area: log; }
+    .feedback-section { grid-area: fb; }
+    .disclaimer { grid-area: foot; }
+
+    /* 區塊卡片通則 */
+    /* ⚠ 要把有自己底色的區塊（社群＝淡綠、回饋＝淡藍、紀錄＝淡灰）一起列出來：
+       base 規則是 class 選擇器，只寫 section（型別選擇器）權重比較低、蓋不掉。 */
+    section, .community-section, .changelog-section, .feedback-section, main > :global(.hv-section) {
+      margin: 0;
+      padding: 20px 22px;
+      background: var(--ui-bg-elev);
+      border: 1px solid var(--ui-border);
+      border-radius: 14px;
+      box-shadow: var(--ui-shadow);
+    }
+    h2 { font-size: 1.05rem; color: var(--ui-text); }
+    a, .link-btn { color: var(--ui-link); }
+
+    /* ── hero ── */
+    .hm-hero {
+      align-items: center;
+      gap: 22px;
+      margin: 0;
+      padding: 28px 32px;
+      border-radius: 18px;
+      background: var(--ui-hero-bg);
+      border: 1px solid var(--ui-border);
+      box-shadow: var(--ui-shadow);
+      position: relative;
+      overflow: hidden;
+    }
+    /* 屬性色環的 18 色細線（與頂端列同一組顏色），壓在 hero 下緣 */
+    .hm-hero::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #7AC74C, #EE8130, #6390F0, #F7D02C, #A33EA1, #A8B820, #C22E28, #705746, #B7B7CE, #F95587, #A98FF3, #6F35FC, #E2BF65, #96D9D6, #735797, #B6A136, #A6B91A, #A8A77A);
+      opacity: 0.9;
+    }
+    .hm-logo {
+      display: block;
+      width: 72px; height: 72px;
+      border-radius: 18px;
+      flex-shrink: 0;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+    }
+    .hm-hero-text { flex: 1; }
+    .hm-hero-text h1 { font-size: 1.9rem; color: var(--ui-text); letter-spacing: 0.5px; }
+    .subtitle { color: var(--ui-text); opacity: 0.88; }
+    .tagline { color: var(--ui-text-muted); }
+    .version {
+      background: var(--ui-accent-soft);
+      color: var(--ui-link);
+      border: 1px solid var(--ui-border);
+      border-radius: 999px;
+      padding: 0.1rem 0.55rem;
+    }
+    .hard-refresh-btn {
+      background: var(--ui-bg-elev);
+      color: var(--ui-text);
+      border: 1px solid var(--ui-border);
+      border-radius: 10px;
+      padding: 0.55rem 1rem;
+    }
+    .hard-refresh-btn:hover {
+      background: var(--ui-accent-soft);
+      border-color: var(--ui-accent);
+      color: var(--ui-text);
+    }
+
+    /* ── 功能入口：上排三格（卡牌／牌組／公布欄）、下排兩格主要動作（對戰／錦標賽） ── */
+    .hm-grid {
+      margin: 0;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      grid-auto-rows: 1fr;
+      gap: 16px;
+    }
+    .hm-card { grid-column: span 2; }
+    .hm-card-game, .hm-card-tourn { grid-column: span 3; }
+    /* 上排三格改直式（圖示在上、箭頭在右上）：欄寬只有約 250px，橫排會把說明擠成三行 */
+    .hm-card-cards, .hm-card-decks {
+      position: relative;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: flex-start;
+      gap: 12px;
+    }
+    .hm-card-cards .hm-arrow, .hm-card-decks .hm-arrow { position: absolute; top: 18px; right: 18px; margin: 0; }
+    .hm-card {
+      padding: 18px 18px;
+      border-radius: 14px;
+      background: var(--ui-bg-elev);
+      border: 1px solid var(--ui-border);
+      box-shadow: var(--ui-shadow);
+      transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+    }
+    .hm-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--ui-accent);
+      box-shadow: var(--ui-shadow-hover);
+      text-decoration: none;
+    }
+    .hm-title { color: var(--ui-text); font-size: 1.05rem; }
+    .hm-desc { color: var(--ui-text-muted); }
+    .hm-arrow { color: var(--ui-text-muted); }
+    .hm-card:hover .hm-arrow { color: var(--ui-accent); }
+    .hm-card-cards .hm-icon, .hm-card-decks .hm-icon { background: var(--ui-accent-soft); }
+    /* 對戰／錦標賽＝主要動作：深綠底（兩種主題都是），跟對戰頁同一個氣氛 */
+    .hm-card-game, .hm-card-tourn {
+      background: var(--ui-cta-bg);
+      border-color: transparent;
+    }
+    .hm-card-game .hm-title, .hm-card-tourn .hm-title { color: var(--ui-cta-text); font-size: 1.15rem; }
+    .hm-card-game .hm-desc, .hm-card-tourn .hm-desc { color: rgba(230, 239, 233, 0.78); }
+    .hm-card-game .hm-arrow, .hm-card-tourn .hm-arrow { color: rgba(230, 239, 233, 0.7); }
+    .hm-card-game:hover .hm-arrow, .hm-card-tourn:hover .hm-arrow { color: #fff; }
+    .hm-card-game .hm-icon, .hm-card-tourn .hm-icon { background: rgba(255, 255, 255, 0.1); }
+    .hm-card-game:hover, .hm-card-tourn:hover { border-color: #3dbb7a; }
+    .hm-card:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+
+    /* ── 最新影片（HomeVideo 元件；從這裡用 :global 改外觀，元件本身不動） ── */
+    main > :global(.hv-section) :global(.hv-title) { color: var(--ui-text); }
+    main > :global(.hv-section) :global(.hv-hint) { color: var(--ui-text-muted); }
+    main > :global(.hv-section) :global(.hv-hint a) { color: var(--ui-link); }
+
+    /* ── 玩家社群（左欄，寬度夠 ⇒ QR 與按鈕維持橫排）── */
+    .community-desc, .link-label { color: var(--ui-text); }
+    .community-hint { color: var(--ui-text-muted); }
+    .qr-block { background: #fff; }              /* ⚠ 深色主題 QR 底也必須是白的，否則掃不到 */
+    .qr-caption { color: #555; }
+
+    /* ── 版本更新記錄 ── */
+    .changelog-outer > summary h2::before { color: var(--ui-text-muted); }
+    details { background: var(--ui-bg-elev); border-color: var(--ui-border); }
+    details[open] { background: var(--ui-accent-soft); border-color: var(--ui-accent); }
+    summary { color: var(--ui-text); }
+    summary::before { color: var(--ui-text-muted); }
+    .changelog-outer { border: 0; background: transparent; }
+    .changelog-outer[open] { background: transparent; }
+    .changelog-list :global(details) { background: var(--ui-bg-elev); border-color: var(--ui-border); overflow-wrap: anywhere; }
+    .changelog-list :global(details[open]) { background: var(--ui-accent-soft); border-color: var(--ui-accent); }
+    .changelog-list :global(summary) { color: var(--ui-text); }
+    .changelog-list :global(summary::before) { color: var(--ui-text-muted); }
+    .changelog-list :global(.ver-badge) { background: var(--ui-bg-sunken); color: var(--ui-link); }
+    .changelog-list :global(details[open] .ver-badge) { background: var(--ui-bg-elev); color: var(--ui-link); }
+    .changelog-list :global(details ul) { color: var(--ui-text); }
+    .changelog-list :global(.log-body) { color: var(--ui-text-muted); }
+    .changelog-list :global(.changelog-archive-link) { color: var(--ui-link); }
+    .hint { color: var(--ui-text-muted); }
+
+    /* ── 免責聲明 ── */
+    .disclaimer {
+      margin: 24px 0 0;
+      padding: 24px 4px 0;
+      border-top: 1px solid var(--ui-border);
+      color: var(--ui-text-muted);
+    }
+    .disclaimer-title { color: var(--ui-text); border-bottom-color: var(--ui-border); }
+    .disclaimer-section { color: var(--ui-text); opacity: 0.85; }
+    .disclaimer a { color: var(--ui-link); }
+  }
+  @media (min-width: 1024px) and (prefers-reduced-motion: reduce) {
+    .hm-card, .hm-card:hover, .hm-arrow { transition: none; transform: none; }
   }
 </style>

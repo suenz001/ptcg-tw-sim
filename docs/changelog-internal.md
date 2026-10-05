@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.474：網頁版（≥1024px）介面強化第一階段（2026-10-05）
+
+BASE 2fae442b（v6.473＋LICENSE）。站長參考「野球之旅」網頁版，要求在不增加延遲下強化 Windows 網頁版；主色調「淺色＋深色兩種都做」。設計方向諮詢 Fable 5.1（競技場深綠＋屬性色環彩線、--ui-* 色票、頂端列與首頁兩欄規格）。
+- 新增 src/lib/site-theme.ts（頂端列顯示規則沿用 viewport-zoom 的 isBattleRoute、/admin 排除；THEMED_ROUTES 目前只有首頁；主題＝玩家選過用玩家的，否則跟作業系統；<html data-theme> 永遠是實際生效值）與 SiteTopBar.svelte（≥1024 才 display:block）。
+- layout：初始化就套主題（不放 onMount ⇒ 不閃）、--ui-* 淺深兩套色票。
+- 首頁：≥1024 用 grid-template-areas 兩欄（不改 DOM 順序 ⇒ 手機順序不變）；底色用 <svelte:head> 的 <style>（離開首頁會移除）。
+- 效能：layout 是每頁必載節點，頂端列不可用 {#each}、props 不可給預設值（會讓 Svelte 執行期拆出新 chunk 塞進第一批預載，HTTP/1.1 下實測多一輪往返 +300ms）；修正後 300ms RTT 冷進站中位 2019→2042ms（雜訊範圍）。logo 用 app.html 載入畫面同一個 URL。
+- 驗收：390／1000 寬首頁、390 寬 /cards 新舊截圖逐像素相同。
+- 守衛：新增 test-v6474-desktop-ui（純函式實跑＋6 刀突變＋HEAD-FAIL＋真瀏覽器 E1～E9）。
+- 後續階段：卡牌資料庫／單卡頁 → 牌組編輯器／公布欄／好友頁接上主題（THEMED_ROUTES 加入即顯示切換鈕）。
+
 ## v6.473：站長兩條獎賞裁定（2026-10-04）
 
 BASE v6.472（edeadf8b）。

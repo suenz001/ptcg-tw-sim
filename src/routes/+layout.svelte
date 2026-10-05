@@ -5,9 +5,30 @@
   import { afterNavigate } from '$app/navigation';
   import { base } from '$app/paths';
   import { applyViewportFor } from '$lib/viewport-zoom';   // ⭐v6.469 只在對戰畫面禁止雙指放大（規則見該檔）
+  import SiteTopBar from '$lib/SiteTopBar.svelte';          // ⭐v6.474 網頁版（≥1024px）全站頂端列
+  import { VERSION } from '$lib/version';
+  import { showTopBar, isThemedRoute, applyTheme, setTheme, followSystemTheme, type UiTheme } from '$lib/site-theme';
+
+  // ⭐v6.474：主題在 layout 初始化時（hydrate 之前、載入畫面還蓋著）就寫到 <html data-theme>，
+  //   不放 onMount ⇒ 不會先畫淺色再跳深色。規則單一來源見 $lib/site-theme.ts。
+  let uiTheme = $state<UiTheme>(typeof document !== 'undefined' ? applyTheme() : 'light');
+  let curPath = $state(typeof location !== 'undefined' ? location.pathname : '/');
+  const topBarOn = $derived(showTopBar(curPath, base));
+  const themedOn = $derived(isThemedRoute(curPath, base));
+  function toggleUiTheme() { uiTheme = setTheme(uiTheme === 'dark' ? 'light' : 'dark'); }
+  // ⭐v6.474：已接上主題的頁面在 <html> 掛 data-ui-themed ⇒ 網頁版整頁底色跟著主題走（CSS 在下方 <style>）。
+  //   ⚠ 不用頁面自己的 <svelte:head><style>：test-lib-strip-markup-sections 的範圍級裁判只容許 friends 一個例外；
+  //     而且由 layout 依路由統一切換，後續階段只要把路徑加進 THEMED_ROUTES 就生效，離開頁面時自動拿掉。
+  $effect(() => {
+    if (typeof document === 'undefined') return;
+    if (themedOn) document.documentElement.setAttribute('data-ui-themed', '');
+    else document.documentElement.removeAttribute('data-ui-themed');
+  });
 
   // ⭐v6.469：每次導頁（含第一次載入）後依路由套用 viewport；對戰頁維持禁縮放，其他頁（非 iOS）可兩指放大。
   afterNavigate((nav) => { try { applyViewportFor((nav.to && nav.to.url && nav.to.url.pathname) || location.pathname, base); } catch { /* 套不了就維持 app.html 原樣 */ } });
+  // ⭐v6.474：頂端列的「目前所在頁」與要不要顯示，跟著導頁更新。
+  afterNavigate((nav) => { try { curPath = (nav.to && nav.to.url && nav.to.url.pathname) || location.pathname; } catch { /* 維持原值 */ } });
 
   let { children } = $props();
 
@@ -68,6 +89,8 @@
         tryChunkReload(String((r && r.message) || r || ''));
       });
     }
+    // ⭐v6.474：沒選過主題的玩家，作業系統切換深淺色時跟著變（選過就不再跟）。
+    followSystemTheme((t) => { uiTheme = t; });
     showMigrationBanner = shouldShowMigrationBanner();
     // v5.034：BETA 偵測 — 同 migration banner 條件（github.io），不可 dismiss
     if (typeof window !== 'undefined' && /github\.io/.test(window.location.hostname)) {
@@ -99,6 +122,10 @@
       <button class="migration-close" onclick={dismissBanner} aria-label="關閉" title="7 天內不再顯示">✕</button>
     </div>
   </div>
+{/if}
+
+{#if topBarOn}
+  <SiteTopBar pathname={curPath} {base} version={VERSION} themed={themedOn} theme={uiTheme} ontoggle={toggleUiTheme} />
 {/if}
 
 {@render children()}
@@ -163,6 +190,52 @@
       --safe-left: env(safe-area-inset-left, 0px);
       --safe-right: env(safe-area-inset-right, 0px);
     }
+  }
+
+  /* ⭐v6.474 網頁版介面色票（--ui-*）：淺色＝:root，深色＝html[data-theme='dark']。
+     data-theme 永遠是「實際生效的主題」（由 $lib/site-theme.ts 寫入，玩家沒選過就跟作業系統）。
+     ⚠ 只有已接上主題的頁面會讀這些變數（目前只有首頁的網頁版）；對戰／錦標賽頁完全不讀 ⇒ 不受影響。
+     ⚠ 用 --ui- 前綴，避免撞到對戰頁既有的自訂屬性。文字對比都 ≥ 4.5:1（Fable 5.1 規劃時已算過）。 */
+  :global(:root) {
+    --ui-bg: #f3f5f4;
+    --ui-bg-elev: #ffffff;
+    --ui-bg-sunken: #e8ecea;
+    --ui-border: #d6ddd9;
+    --ui-text: #1a2320;
+    --ui-text-muted: #5b6762;
+    --ui-accent: #1d7a4a;
+    --ui-accent-contrast: #ffffff;
+    --ui-accent-soft: #e3f3ea;
+    --ui-link: #15663d;
+    --ui-cta-bg: #0f2a1c;
+    --ui-cta-text: #e6efe9;
+    --ui-shadow: 0 1px 2px rgba(16, 36, 26, 0.06), 0 4px 12px rgba(16, 36, 26, 0.06);
+    --ui-shadow-hover: 0 2px 4px rgba(16, 36, 26, 0.08), 0 10px 24px rgba(16, 36, 26, 0.12);
+    --ui-hero-bg: radial-gradient(circle at 88% 0%, rgba(61, 187, 122, 0.14), transparent 55%), linear-gradient(135deg, #e9f4ee 0%, #f7f9f8 55%, #eef1f8 100%);
+  }
+  :global(html[data-theme='dark']) {
+    --ui-bg: #0f1f17;
+    --ui-bg-elev: #17291f;
+    --ui-bg-sunken: #0b1811;
+    --ui-border: #2a3f33;
+    --ui-text: #e6efe9;
+    --ui-text-muted: #9db0a5;
+    --ui-accent: #3dbb7a;
+    --ui-accent-contrast: #06261a;
+    --ui-accent-soft: rgba(61, 187, 122, 0.14);
+    --ui-link: #6cd39c;
+    --ui-cta-bg: #1f4a33;
+    --ui-cta-text: #f0f7f2;
+    --ui-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.35);
+    --ui-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.45);
+    --ui-hero-bg: radial-gradient(circle at 88% 0%, rgba(61, 187, 122, 0.16), transparent 55%), linear-gradient(135deg, #163a28 0%, #12261b 60%, #0f1f17 100%);
+  }
+
+  /* ⭐v6.474：已接上主題的頁面（<html data-ui-themed>，由上方 $effect 依 THEMED_ROUTES 切換），網頁版整頁底色跟著主題。
+     ⚠ 只在 min-width:1024px ⇒ 手機與平板直向的底色完全不變。 */
+  @media (min-width: 1024px) {
+    :global(html[data-ui-themed] body) { background: var(--ui-bg); }
+    :global(html[data-ui-themed][data-theme='dark']) { color-scheme: dark; }
   }
 
   /* v5.034：BETA 標記 banner — 黃色細條，github.io 才顯示，不可 dismiss */
