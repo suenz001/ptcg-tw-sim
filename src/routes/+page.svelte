@@ -21,6 +21,8 @@
   import { loadHomeChangelogOverride, parseOverrideGen } from '$lib/home-changelog-cache';
   import HomeVideo from '$lib/HomeVideo.svelte';    // v6.166 首頁最新影片（lazy facade，點擊前不建 iframe）
   import homeVideoData from '$lib/home-video.json';  // v6.166 建置時寫入的最新影片（見 scripts/fetch-latest-video.mjs）
+  // ⭐v6.479 網頁版右欄「錦標賽動態」小卡（免登入摘要端點；抓不到就整張不顯示）
+  import { fetchHomeTournSummary, homeTournStatusLabel, homeTournCountLabel, formatHmTW, type HomeTournEvent } from '$lib/home-tourn';
 
   // v2.53 我的回饋歷史 + admin 回覆顯示
   interface FeedbackHistoryItem {
@@ -93,7 +95,19 @@
   let fbMod: typeof import('$lib/firebase') | null = null;
   let fsMod: typeof import('firebase/firestore') | null = null;
 
+  // ⭐v6.479 錦標賽動態：null＝沒抓／抓不到（不顯示）；陣列＝伺服器回的開放中賽事（空陣列也不顯示）
+  let homeTourn = $state<HomeTournEvent[] | null>(null);
+
   onMount(() => {
+    // ⭐v6.479 只在網頁版（≥1024px，與 layout／SiteTopBar 同一斷點）抓 ⇒ 手機一發都不多、DOM 也完全不變。
+    //   放在首屏畫完之後（setTimeout 0）⇒ 不跟首屏資源搶，也不擋任何東西；失敗一律安靜地不顯示。
+    let _tournTimer: ReturnType<typeof setTimeout> | null = null;
+    let _tournGone = false;   // 離開首頁後才回來的回應不寫入（Fable 審查建議）
+    try {
+      if (typeof matchMedia === 'function' && matchMedia('(min-width: 1024px)').matches) {
+        _tournTimer = setTimeout(() => { void fetchHomeTournSummary().then((evs) => { if (!_tournGone) homeTourn = evs; }); }, 0);
+      }
+    } catch { /* matchMedia 不可用 ⇒ 不顯示 */ }
     // v5.969：內建 changelog 改由 static/changelog.html 執行時載入(不再編譯進 bundle,縮小首頁)。override(Firestore)仍優先。
     // v6.100：changelog.html 只留最近 50 則(173KB→33KB)，更早的移到 static/changelog-archive.html。
     //   ⚠ 該檔是靜態片段、用 {@html} 插入，裡面寫不了 svelte 的 {base}；因此連結先寫成
@@ -166,7 +180,7 @@
       );
       if (disposed) u(); else unsub = u;
     })();
-    return () => { disposed = true; unsub?.(); clSection?.removeEventListener('toggle', onChangelogToggle, true); };
+    return () => { _tournGone = true; if (_tournTimer) clearTimeout(_tournTimer); disposed = true; unsub?.(); clSection?.removeEventListener('toggle', onChangelogToggle, true); };
   });
 
   // 意見回饋相關狀態
@@ -345,7 +359,7 @@
   }
 </script>
 
-<main>
+<main class:hm-has-evt={!!(homeTourn && homeTourn.length > 0)}>
   <!-- ══ v6.044 首頁（單一版面）══════════════════════════════════════════
        v6.042 曾同時提供新舊兩版與切換鈕；Wilson 實測後認為兩版差異不大，
        決定**只保留新版**並移除切換機制（少一套版面就少一份日後的維護與漂移）。
@@ -437,6 +451,26 @@
   <!-- v6.166 最新影片（站長指定位置：玩家社群 QR Code 之下、版本更新記錄之上）。
        ⚠沒有影片設定時整個元件不渲染，這一段就完全不存在。 -->
   <HomeVideo videoId={homeVideoId} title={homeVideoTitle} />
+
+  <!-- ⭐v6.479 網頁版右欄「錦標賽動態」：只有網頁版才會抓資料，有開放中的賽事才渲染（手機永遠不存在）。 -->
+  {#if homeTourn && homeTourn.length > 0}
+    <section class="hm-evt" aria-label="錦標賽動態">
+      <h2>🏆 錦標賽動態</h2>
+      <ul class="hm-evt-list">
+        {#each homeTourn as ev, i (i)}
+          <li class="hm-evt-item">
+            <div class="hm-evt-name">{#if ev.community}<span class="hm-evt-tag">社群</span>{/if}{ev.name}</div>
+            <div class="hm-evt-meta">
+              <span class="hm-evt-st" class:live={ev.status === 'running'} class:open={ev.status === 'registration' || ev.status === 'checkin'}>{homeTournStatusLabel(ev)}</span>
+              <span>{homeTournCountLabel(ev)}</span>
+              {#if ev.status === 'registration' && ev.registrationCloseAt}<span>報名至 {formatHmTW(ev.registrationCloseAt)}</span>{/if}
+            </div>
+          </li>
+        {/each}
+      </ul>
+      <a class="hm-evt-go" href="{base}/tournament">前往錦標賽 →</a>
+    </section>
+  {/if}
 
   <section class="changelog-section" bind:this={changelogSectionEl}>
     <details class="changelog-outer">
@@ -1137,6 +1171,8 @@
      ⚠ 用 grid-template-areas 擺位置、**不改 DOM 順序** ⇒ 手機版的區塊順序不變（DOM 順序就是手機順序）。
      ⚠ 欄寬用 minmax(0,1fr)：grid item 預設 min-width:auto，changelog 長行會把欄撐爆。
      ⚠ grid 只裝「整張區塊卡片」；裝整段文字的容器（changelog 的 details／summary）維持 block（v6.030 爆版教訓）。 */
+  /* ⭐v6.479 錦標賽動態卡：手機不顯示（手機也不會去抓資料；這條只防「網頁版抓到後把視窗縮窄」） */
+  .hm-evt { display: none; }
   @media (min-width: 1024px) {
     main {
       max-width: 1200px;
@@ -1163,6 +1199,30 @@
     .changelog-section { grid-area: log; }
     .feedback-section { grid-area: fb; }
     .disclaimer { grid-area: foot; }
+    /* ⭐v6.479 有錦標賽動態卡時：右欄改成「影片 → 錦標賽動態 → 意見回饋」。
+       錦標賽卡跨「社群＋紀錄上半」兩列、紀錄跨兩列 ⇒ 左欄社群與紀錄之間不會因為右欄比較高而空出一截。 */
+    main.hm-has-evt {
+      grid-template-areas:
+        'hero hero'
+        'nav  vid'
+        'comm evt'
+        'log  evt'
+        'log  fb'
+        'foot foot';
+      grid-template-rows: auto auto auto auto 1fr auto;
+    }
+    .hm-evt { display: block; grid-area: evt; }
+    .hm-evt h2 { margin: 0 0 12px; }
+    .hm-evt-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+    .hm-evt-item { padding: 10px 12px; border-radius: 10px; background: var(--ui-bg-sunken); border: 1px solid var(--ui-border); }
+    .hm-evt-name { font-weight: 700; color: var(--ui-text); line-height: 1.4; overflow-wrap: anywhere; }
+    .hm-evt-tag { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 6px; font-size: 0.72rem; font-weight: 700; vertical-align: 1px; background: var(--ui-accent-soft); color: var(--ui-link); }
+    .hm-evt-meta { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.85rem; color: var(--ui-text-muted); }
+    .hm-evt-st { font-weight: 700; color: var(--ui-text); }
+    .hm-evt-st.live { color: #d9433a; }
+    .hm-evt-st.open { color: var(--ui-link); }
+    .hm-evt-go { font-weight: 700; text-decoration: none; }
+    .hm-evt-go:hover { text-decoration: underline; }
 
     /* 區塊卡片通則 */
     /* ⚠ 要把有自己底色的區塊（社群＝淡綠、回饋＝淡藍、紀錄＝淡灰）一起列出來：

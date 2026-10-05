@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.479：首頁網頁版「錦標賽動態」＋伺服器 v1.55 免登入摘要端點（2026-10-05）
+
+BASE v6.478（2ea0b766）。
+- 伺服器 v1.55：新增 GET /api/home/tourn-summary（哨兵 v155-home-tourn-summary），放在錦標賽區塊（TAIL_ANCHOR）之前、路徑不帶錦標賽前綴 ⇒ 28 把鎖不動。資料只取 getEventShared()（與 /event 共用 3 秒快取＋在途合併，不增加查詢型態），逐欄挑選公開欄位（名稱、階段、報名人數／上限、報名截止、目前輪次、是否社群賽），不回 _id／uid／提案人／牌組；回哨兵 homeTournApi:1；Cache-Control no-store；失敗回 500 且不帶錯誤訊息。
+- 首頁不載 Firebase Auth ⇒ 不能用要身分的 /api/tournament/event，所以另開免登入端點。
+- 前端：$lib/home-tourn（形狀驗證、排序 running→checkin→bracket_ready→registration、最多 3 場、6 秒逾時、非 JSON 回應不解析）；首頁只在 ≥1024px、onMount 後 setTimeout 0 才抓一次 ⇒ 手機零請求、DOM 不變；有資料才渲染卡片並以 main.hm-has-evt 換 grid 版面（錦標賽卡跨社群＋紀錄上半，避免左欄空一截）。舊伺服器（404）／測試站（沒有 API）⇒ 不顯示。
+- 還原鏈：scripts/lib/sap-revert-admin-v155.mjs（python 切出、驗證逐位元還原 v1.54）；test-v6303 H3 鏈最內層加 revertAdminV155；test-sap153 S4b、test-sap154 D5b／D6 先剝 v1.55（Rule 40／54）。
+- 新增 test-v6479-home-tourn-card（S0 HEAD-FAIL、handler 抽出實跑含欄位白名單、純函式、真瀏覽器 E1～E3）。
+- 部署：update-tournament.bat（伺服器）＋ redeploy-oracle.bat（前端）。
+
 ## v6.478：網頁版主題第五步——大廳外視窗淺色、深色統一墨綠、深色載入畫面（2026-10-05）
 
 BASE v6.477（52483ddb）。
