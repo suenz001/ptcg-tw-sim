@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.481：卡片搜尋語法——多關鍵字交叉搜尋＋正規表示式（2026-10-05，玩家提議）
+
+BASE v6.480（bd4db145）。
+- 新增 $lib/cards/search-query.ts（唯一實作）：tokenizeQuery（空白含全形分隔；"…"、「…」、/…/ 內不拆；開頭 - 或 － 排除）、compileCardQuery（空白＝AND、|＝OR、-＝NOT、/…/＝正規表示式一律加 i 旗標、寫錯退回文字並標 regexError、長度上限 120）、cardSearchFields（一般／關鍵字三範圍的比對欄位，與舊內嵌邏輯逐欄相同）、SEARCH_SYNTAX_HINT。
+- /cards 與 /decks 的 filter 尾段改呼叫共用實作（舊的兩份內嵌 haystack 刪除）；查詢只在字串改變時編譯一次（$derived）；搜尋框加 title 語法說明（不改版面）。進化鏈模式不變。
+- 行為差異只有一處：一般搜尋的卡號改成不分大小寫（舊版打 sv 找不到 SV-P 卡號），只多不少；test-v6481 C1 以全部真實卡資料（5386 張 × 15 詞 × 4 範圍）比對單一詞結果，除此例外逐張相同。
+- 守衛：test-v6439 LATER 登記卡牌頁四處改動（Rule 40）。新增 test-v6481-card-search-syntax（S0 HEAD-FAIL、語法 L1～L9、相容性 C1～C3、真瀏覽器 E1～E3）。
+
 ## v6.480：卡牌資料庫懸停放大＋浮動搜尋列、牌組編輯器找卡面板固定（2026-10-05）
 
 BASE v6.479（b14950dc）。

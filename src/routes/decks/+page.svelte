@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { compileCardQuery, cardSearchFields, SEARCH_SYNTAX_HINT } from '$lib/cards/search-query';   // ⭐v6.481 搜尋語法（兩頁共用）
   import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）
   import { deckSortDrag, moveIdTo } from '$lib/deck-sort-drag';   // ⭐v6.460 牌組拖曳排序（唯一來源）
   import { onMount } from 'svelte';
@@ -448,6 +449,8 @@
     if (!q) return new Set<string>();
     return getEvolutionChainNames(q, pool);
   });
+  // ⭐v6.481 搜尋字串只在改變時編譯一次（不是每張卡各編譯一次）
+  const compiledQuery = $derived(compileCardQuery(search));
   const filteredPool = $derived.by(() => {
     // ⭐ v6.340：讀政策的判準散在下面的 filter callback 裡，必須在**本體第一行**登記依賴 ——
     //   寫在 callback 內時，只要 early-return（poolReady 還沒好）那一次求值就不會登記。
@@ -492,29 +495,9 @@
       if (searchMode === 'evolution') {
         return chainNames.has(c.name);
       }
-      // v4.954：keyword 模式下依 keywordScope 細分搜尋範圍
-      if (searchMode === 'keyword') {
-        let haystack: string[];
-        if (keywordScope === 'attacks') {
-          haystack = (c.attacks ?? []).flatMap(a => [a.name, a.effect ?? '']);
-        } else if (keywordScope === 'abilities') {
-          haystack = (c.abilities ?? []).flatMap(a => [a.label ?? '', a.name, a.effect ?? '']);
-        } else {
-          // 'all' — 原 keyword 全文搜尋行為
-          haystack = [
-            c.name, c.collectorNumber, c.evolvesFrom ?? '', c.rulesText ?? '',
-            ...(c.attacks ?? []).flatMap(a => [a.name, a.effect ?? '']),
-            ...(c.abilities ?? []).flatMap(a => [a.label ?? '', a.name, a.effect ?? '']),
-          ];
-        }
-        return haystack.some(s => s && s.toLowerCase().includes(q));
-      }
-      return (
-        c.name.toLowerCase().includes(q) ||
-        c.collectorNumber.includes(q) ||
-        (c.attacks ?? []).some((a) => a.name.toLowerCase().includes(q)) ||
-        (c.abilities ?? []).some((a) => a.name.toLowerCase().includes(q))
-      );
+      // ⭐v6.481 搜尋語法（空白＝而且、|＝或、-＝排除、引號、/正規表示式/）：唯一實作在 $lib/cards/search-query.ts，
+      //   與牌組編輯器共用；只打一個詞時結果與改版前逐張相同（唯一例外：卡號改不分大小寫，只多不少；test-v6481 C1 用全部真實卡資料比對）。
+      return compiledQuery.test(cardSearchFields(c, searchMode, keywordScope));
     });
   });
 
@@ -1988,6 +1971,7 @@
           <input
             class="pk-search"
             aria-label="搜尋卡牌"
+            title={SEARCH_SYNTAX_HINT}
             placeholder={searchMode === 'normal'
               ? '搜尋卡名、招式名、特性名、卡號...'
               : keywordScope === 'attacks'

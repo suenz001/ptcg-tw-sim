@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { compileCardQuery, cardSearchFields, SEARCH_SYNTAX_HINT } from '$lib/cards/search-query';   // ⭐v6.481 搜尋語法（兩頁共用）
   import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）
   import { base } from '$app/paths';
   import { retryImg } from '$lib/img-retry';
@@ -337,6 +338,8 @@
     const card = setCards.find(c => c.name === name);
     if (card) selected = card;
   }
+  // ⭐v6.481 搜尋字串只在改變時編譯一次（不是每張卡各編譯一次）
+  const compiledQuery = $derived(compileCardQuery(debouncedQuery));
   const filtered = $derived.by(() => {
     if (data.mode !== 'set') return [];
     // ⭐ v6.340：cardRegMarkFilterKey 會讀政策（【已退標】＝不在容許清單裡），
@@ -377,36 +380,9 @@
       if (searchMode === 'evolution') {
         return chainNames.has(c.name);
       }
-      // v2.184：兩種搜尋模式；v4.954：keyword 模式再細分 scope
-      if (searchMode === 'keyword') {
-        // v4.954：依 keywordScope 限定搜尋範圍
-        let haystack: string[];
-        if (keywordScope === 'attacks') {
-          // 只搜招式名 + 招式效果敘述
-          haystack = (c.attacks ?? []).flatMap(a => [a.name, a.effect ?? '']);
-        } else if (keywordScope === 'abilities') {
-          // 只搜特性 label（種類）+ 特性名 + 特性效果敘述
-          haystack = (c.abilities ?? []).flatMap(a => [a.label ?? '', a.name, a.effect ?? '']);
-        } else {
-          // 'all' — 全文搜尋：卡名 / 卡號 / 招式 / 特性 / rulesText / evolvesFrom（原行為）
-          haystack = [
-            c.name,
-            c.collectorNumber,
-            c.evolvesFrom ?? '',
-            c.rulesText ?? '',
-            ...(c.attacks ?? []).flatMap(a => [a.name, a.effect ?? '']),
-            ...(c.abilities ?? []).flatMap(a => [a.label ?? '', a.name, a.effect ?? '']),
-          ];
-        }
-        return haystack.some(s => s && s.toLowerCase().includes(q));
-      }
-      // normal 模式（原行為）：只搜卡名 / 卡號 / 招式名 / 特性名
-      return (
-        c.name.toLowerCase().includes(q) ||
-        c.collectorNumber.includes(q) ||
-        (c.attacks ?? []).some((a) => a.name.toLowerCase().includes(q)) ||
-        (c.abilities ?? []).some((a) => a.name.toLowerCase().includes(q))
-      );
+      // ⭐v6.481 搜尋語法（空白＝而且、|＝或、-＝排除、引號、/正規表示式/）：唯一實作在 $lib/cards/search-query.ts，
+      //   與牌組編輯器共用；只打一個詞時結果與改版前逐張相同（唯一例外：卡號改不分大小寫，只多不少；test-v6481 C1 用全部真實卡資料比對）。
+      return compiledQuery.test(cardSearchFields(c, searchMode, keywordScope));
     });
   });
   const shown = $derived(filtered.slice(0, visibleCount));
@@ -524,6 +500,7 @@
       <input
         type="search"
         bind:value={query}
+        title={SEARCH_SYNTAX_HINT}
         placeholder={searchMode === 'normal'
           ? '搜尋卡名、招式名、特性名、卡號...'
           : keywordScope === 'attacks'

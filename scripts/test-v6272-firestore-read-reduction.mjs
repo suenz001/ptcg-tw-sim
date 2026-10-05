@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'b14950dc82b05d1788ed61cd84d87c40dcd54f8c';   // v6.479（上一版）
+const PREV_SHA = 'bd4db145e6a7425ef73d9f24dda3df8c8c54237e';   // v6.480（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,10 +757,10 @@ const PREV_SHA = 'b14950dc82b05d1788ed61cd84d87c40dcd54f8c';   // v6.479（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.480 前移：PREV_SHA 從 b14950dc（v6.479）起算。
+  // ⚠⚠ v6.481 前移：PREV_SHA 從 bd4db145（v6.480）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.480：網頁版：卡牌資料庫懸停放大（v6475 區塊內）＋迷你搜尋列元件 CardsMiniBar；牌組編輯器找卡面板 sticky（v6476 區塊內）；首頁 changelog 三步搬運。
-  'src/lib/cards/CardsMiniBar.svelte',
+  // ⭐v6.481：卡片搜尋語法（AND／OR／排除／引號／正規表示式）唯一實作 $lib/cards/search-query，卡牌資料庫與牌組編輯器共用；首頁 changelog 三步搬運。
+  'src/lib/cards/search-query.ts',
   'src/lib/version.ts',
   'src/routes/cards/+page.svelte',
   'src/routes/decks/+page.svelte',
@@ -768,6 +768,17 @@ const PREV_ALLOWED = [
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.480）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.480 前移：PREV_SHA 從 b14950dc（v6.479）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.480：網頁版：卡牌資料庫懸停放大（v6475 區塊內）＋迷你搜尋列元件 CardsMiniBar；牌組編輯器找卡面板 sticky（v6476 區塊內）；首頁 changelog 三步搬運。
+//   'src/lib/cards/CardsMiniBar.svelte',
+//   'src/lib/version.ts',
+//   'src/routes/cards/+page.svelte',
+//   'src/routes/decks/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.479）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.479 前移：PREV_SHA 從 2ea0b766（v6.478）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -887,21 +898,6 @@ const PREV_ALLOWED = [
 //   'src/lib/version.ts',
 //   'src/lib/viewport-zoom.ts',
 //   'src/routes/+layout.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.468）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.468 前移：PREV_SHA 從 d6acb6e8（v6.467）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.468：全站 audit 第二批（介面）：本機設定頁手機溢出、觸控點擊範圍、首頁雙箭頭、字型、日期換行、aria-label、對比；首頁 changelog 三步搬運。
-//   'src/lib/version.ts',
-//   'src/routes/+page.svelte',
-//   'src/routes/card/[id]/+page.svelte',
-//   'src/routes/cards/+page.svelte',
-//   'src/routes/deck-posts/+page.svelte',
-//   'src/routes/decks/+page.svelte',
-//   'src/routes/friends/+page.svelte',
-//   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
