@@ -93,6 +93,9 @@ export function shouldBlockWheel(overlay: Element, target: Element | null, dx: n
 /** Svelte action：掛在彈出視窗的遮罩上。 */
 export function pageScrollLock(node: HTMLElement) {
   const release = lockPageScroll();
+  // ⭐v6.487 可及性：記下打開視窗前的焦點（通常是剛按的那顆按鈕），視窗關掉時還給它 ⇒ 鍵盤使用者不會被丟回頁面最上方。
+  //   ⚠ 原本的焦點是輸入框時（例：搜尋框）、而且是觸控裝置 ⇒ 不還（還焦點會把手機鍵盤彈出來）。
+  const prevFocus = (typeof document !== 'undefined' ? document.activeElement : null) as HTMLElement | null;
   // 桌機才掛滾輪攔截（觸控裝置整頁已鎖，不需要）；passive:false 才能 preventDefault
   let onWheel: ((e: WheelEvent) => void) | null = null;
   if (typeof window !== 'undefined' && !shouldLockPageScroll()) {
@@ -105,8 +108,22 @@ export function pageScrollLock(node: HTMLElement) {
     destroy() {
       release();
       if (onWheel) node.removeEventListener('wheel', onWheel);
+      restoreFocusAfterModal(prevFocus, node);
     },
   };
+}
+
+/** ⭐v6.487 視窗關閉後把焦點還給打開它的元素（純判斷＋動作，守衛直接測）。回傳有沒有還。 */
+export function restoreFocusAfterModal(prev: HTMLElement | null, modal: HTMLElement | null): boolean {
+  if (typeof document === 'undefined' || !prev || prev === document.body || !prev.isConnected) return false;
+  if (modal && modal.contains(prev)) return false;
+  const now = document.activeElement as HTMLElement | null;
+  // 焦點已經被別的東西接走（不在 body、不在剛關掉的視窗裡、而且還在頁面上）⇒ 不搶
+  if (now && now !== document.body && now.isConnected && !(modal && modal.contains(now))) return false;
+  const tag = prev.tagName;
+  if ((tag === 'INPUT' || tag === 'TEXTAREA' || prev.isContentEditable) && shouldLockPageScroll()) return false;
+  try { prev.focus({ preventScroll: true }); } catch { return false; }
+  return document.activeElement === prev;
 }
 
 /** 測試用：目前的鎖數。 */

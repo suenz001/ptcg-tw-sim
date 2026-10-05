@@ -376,4 +376,10 @@
     .migration-icon { display: none; }
     .migration-text { width: 100%; margin-bottom: 4px; }
   }
+  /* ⭐v6.487 可及性：全站鍵盤焦點框（只在用鍵盤 Tab 時出現，滑鼠點擊與手機觸控不會出現）。
+     :where() 特異度為 0 ⇒ 各頁自己寫的 outline 一律優先，不會蓋掉既有樣式。 */
+  :global(:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible) {
+    outline: 2px solid var(--ui-accent, #3dbb7a);
+    outline-offset: 2px;
+  }
 </style>

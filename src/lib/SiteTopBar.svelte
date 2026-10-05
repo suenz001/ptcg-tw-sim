@@ -3,7 +3,7 @@
   //   ⚠ 只在 @media (min-width:1024px) 才顯示 ⇒ 手機版面完全不變（DOM 在，但 display:none 不佔空間）。
   //   ⚠ logo 刻意用 app.html 載入畫面「同一個 URL」（含 ?v=），瀏覽器已經有它 ⇒ 不多發任何請求。
   //   ⚠ 不加 backdrop-filter／blur（低階筆電捲動會掉幀）；陰影只畫一次。
-  import { activeNavHref, type UiTheme } from '$lib/site-theme';
+  import { activeNavHref, focusMainContent, type UiTheme } from '$lib/site-theme';
 
   // ⚠ props 刻意「不給預設值」：給了預設值 Svelte 會用 $.prop() 執行期，它跟 app 入口共用 ⇒ 被拆成一個新 chunk
   //   塞進每一頁的第一批預載（HTTP/1.1 下實測冷進站多一輪往返）。呼叫端只有 layout 一處，一律全部傳入。
@@ -19,6 +19,9 @@
 </script>
 
 <header class="stb" aria-label="網站導覽">
+  <!-- ⭐v6.487 可及性：鍵盤使用者按 Tab 第一個停在這裡，Enter 直接跳過頂端列到頁面內容（平常看不到）。 -->
+  <!--   ⚠ 用 button 不用 <a href="#…">：預渲染會檢查每個錨點的 id 是否存在（各頁沒有統一的 id）。 -->
+  <button class="stb-skip" type="button" onclick={() => focusMainContent()}>跳到主要內容</button>
   <div class="stb-inner">
     <a class="stb-brand" href="{base}/" aria-label="回首頁">
       <img class="stb-logo" src="{base}/icons/icon-192.png?v=6.183" alt="" width="28" height="28" />
@@ -46,6 +49,9 @@
 <style>
   /* 預設（手機與平板 <1024px）：完全不顯示，不佔任何空間。 */
   .stb { display: none; }
+  /* ⭐v6.487 跳到主要內容：平常移出畫面，Tab 聚焦時才出現在左上角 */
+  .stb-skip { position: absolute; left: 8px; top: -60px; z-index: 60; padding: 8px 14px; border-radius: 8px; background: var(--ui-accent, #3dbb7a); color: #fff; font-weight: 700; font: inherit; font-weight: 700; border: 0; cursor: pointer; }
+  .stb-skip:focus { top: calc(var(--safe-top, 0px) + 8px); }
 
   @media (min-width: 1024px) {
     .stb {

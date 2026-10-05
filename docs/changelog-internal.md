@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.487：可及性基礎補強（2026-10-06，站長同意的建議 #6）
+
+BASE v6.486（ecbc90fd）。
+- layout：`:global(:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible)` 綠色外框；:where 特異度 0 ⇒ 各頁自己的 outline 一律優先。
+- SiteTopBar：第一個子元素「跳到主要內容」（button，不用 <a href="#…">：預渲染會檢查錨點 id）；平常 top:-60px，聚焦時出現；site-theme.ts 新增 focusMainContent（main／role=main／第一個 h1，補 tabindex=-1 後聚焦）。
+- 中央 page-scroll-lock：記下開視窗前的焦點，destroy 時 restoreFocusAfterModal（焦點已被別處接走不搶、元素已不在頁面不還、觸控裝置上原本是輸入框不還＝不彈鍵盤）。全站所有用 pageScrollLock 的視窗一次到位。
+- 新增 test-v6487-a11y-focus（S0 HEAD-FAIL、L1～L3 桌機／觸控、真站 E1～E4）。
+
 ## v6.486：自己的牌組可複製一份＋牌組備註欄（2026-10-05，站長同意的建議 #4）
 
 BASE v6.485（307270cf）。

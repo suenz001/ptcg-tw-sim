@@ -132,3 +132,14 @@ export function trackWideAttr(): () => void {
     return () => mq.removeEventListener('change', apply);
   } catch { return () => {}; }
 }
+
+/** ⭐v6.487 可及性：頂端列「跳到主要內容」（只在鍵盤 Tab 到時才看得到）。
+ *  找頁面主要內容（<main>／role=main，沒有就第一個 <h1>），讓它可聚焦並把焦點移過去；找不到回 false。
+ *  ⚠ 不改任何頁面的 DOM 結構（各頁不一定有 id），所以用查詢的、不用 #錨點。 */
+export function focusMainContent(doc: Document = document): boolean {
+  const el = doc.querySelector<HTMLElement>('main, [role="main"]') ?? doc.querySelector<HTMLElement>('h1');
+  if (!el) return false;
+  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+  try { el.focus({ preventScroll: false }); } catch { el.focus(); }
+  return doc.activeElement === el;
+}
