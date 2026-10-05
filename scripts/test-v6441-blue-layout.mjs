@@ -71,6 +71,10 @@ const REVERT = [
 //   這些後續版本的改動在這裡逐條還原（每條恰好命中 1 次；內容正確性由各版自己的守衛鎖：test-v6448…）。
 //   ⚠ 只准放「非藍桌墊」的全版面改動；藍桌墊的改動一律寫進哨兵。
 const LATER = [
+  // ⭐v6.488（Rule 40）：電腦版鍵盤快捷鍵（非藍桌墊）——import 兩行、onGlobalKey 第一行、設定視窗多一個元件；邏輯在 $lib/game/kbd-shortcuts，內容由 test-v6488 鎖
+  ["  import { isBattleView, setBattleViewAttr } from '$lib/site-theme';   // ⭐v6.475 網頁版頂端列在牌桌畫面收起\n  import { runKbdShortcut } from '$lib/game/kbd-shortcuts';   // ⭐v6.488 電腦版鍵盤快捷鍵（預設關閉）\n  import KbdShortcutsSetting from '$lib/game/KbdShortcutsSetting.svelte';\n  import { goto } from '$app/navigation';   // v6.284 修：initNotifyNav 的回呼一直呼叫 goto 卻沒 import（ReferenceError 被 try/catch 吞掉 ⇒ 通知點擊導頁靜默失效）\n", "  import { isBattleView, setBattleViewAttr } from '$lib/site-theme';   // ⭐v6.475 網頁版頂端列在牌桌畫面收起\n  import { goto } from '$app/navigation';   // v6.284 修：initNotifyNav 的回呼一直呼叫 goto 卻沒 import（ReferenceError 被 try/catch 吞掉 ⇒ 通知點擊導頁靜默失效）\n"],
+  ["  function onGlobalKey(e: KeyboardEvent) {\n    if (runKbdShortcut(e)) return;   // ⭐v6.488 鍵盤快捷鍵（設定裡打開才生效；只按畫面上唯一一顆能按的按鈕）\n    if (e.key === 'Escape') {\n", "  function onGlobalKey(e: KeyboardEvent) {\n    if (e.key === 'Escape') {\n"],
+  ["        {/if}\n        <KbdShortcutsSetting />\n      </div>\n", "        {/if}\n      </div>\n"],
   // ⭐v6.475 網頁版頂端列在牌桌畫面收起（非藍桌墊、所有版面共用）——逐位元還原 v6.474；內容由 test-v6475-theme-pages 鎖
   ["  import { isBattleView, setBattleViewAttr } from '$lib/site-theme';   // ⭐v6.475 網頁版頂端列在牌桌畫面收起\n", ""],
   ["  // ⭐v6.475 網頁版頂端列：大廳顯示、進入牌桌（對戰／觀戰／回放）時收起 ⇒ 牌桌空間不變。\n  //   判準在 $lib/site-theme.ts（isBattleView）；用 $derived 布林 ⇒ 盤面每次更新不會重寫 <html> 屬性，只有真的切換才寫。\n  const _v6475BattleView = $derived(isBattleView(typeof location !== 'undefined' ? location.pathname : '/game', base, isTournament, tStep, !!game));\n  $effect(() => { setBattleViewAttr(_v6475BattleView); });\n  // ⚠ 刻意寫成不帶大括號的箭頭函式：test-v6297 用「檔案裡第一個 `onDestroy(() => {…});`」當私聊接線區塊的結尾錨點，\n  //   這一行在它前面，若寫成 `{ … }` 形式就會被誤抓成錨點（v6.475 全套當場踩到）。\n  onDestroy(() => setBattleViewAttr(false));\n", ""],

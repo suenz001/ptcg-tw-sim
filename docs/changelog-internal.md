@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.488：電腦版牌桌鍵盤快捷鍵（2026-10-06，站長同意的建議 #7）
+
+BASE v6.487（63b7e9fc）。
+- $lib/game/kbd-shortcuts：預設關閉（localStorage ptcg_kbd_shortcuts=1 才生效）、只在 hover:hover＋pointer:fine 的裝置生效；kbdActionFor（Enter＝confirm、L＝log；輸入框／下拉／可編輯區、修飾鍵、長按重複、焦點在 button／a／summary 的 Enter 一律不攔）；runKbdShortcut 只「替玩家按畫面上唯一一顆、看得到、能按的按鈕」（確定＝.sel-footer button.btn-act.primary、紀錄＝.log-toggle-btn），0 顆或多顆都不按 ⇒ 按鈕自己的停用條件全部沿用，不另寫遊戲邏輯。
+- 刻意不做：攻擊、結束回合（對戰頁的結束回合鈕沒有確認步驟，按錯收不回）。
+- 對戰頁：import 兩行、onGlobalKey 第一行 runKbdShortcut、設定視窗加 <KbdShortcutsSetting />（獨立元件、自己的樣式）。test-v6441 LATER 登記這三處（Rule 40）。
+- 新增 test-v6488-kbd-shortcuts（S0 HEAD-FAIL、L1～L4、真瀏覽器模擬按鈕 H1～H5）。
+
 ## v6.487：可及性基礎補強（2026-10-06，站長同意的建議 #6）
 
 BASE v6.486（ecbc90fd）。

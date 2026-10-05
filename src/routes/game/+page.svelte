@@ -16,6 +16,8 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { cubicOut } from 'svelte/easing';
   import { base } from '$app/paths';
   import { isBattleView, setBattleViewAttr } from '$lib/site-theme';   // ⭐v6.475 網頁版頂端列在牌桌畫面收起
+  import { runKbdShortcut } from '$lib/game/kbd-shortcuts';   // ⭐v6.488 電腦版鍵盤快捷鍵（預設關閉）
+  import KbdShortcutsSetting from '$lib/game/KbdShortcutsSetting.svelte';
   import { goto } from '$app/navigation';   // v6.284 修：initNotifyNav 的回呼一直呼叫 goto 卻沒 import（ReferenceError 被 try/catch 吞掉 ⇒ 通知點擊導頁靜默失效）
   import type { Card } from '$lib/cards/types';
   import { loadAllSets, buildCardIndex, loadDeckSets, deckEntriesAllInPool, loadCardSetMap } from '$lib/cards/pool';
@@ -3172,6 +3174,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
 
   function onGlobalKey(e: KeyboardEvent) {
+    if (runKbdShortcut(e)) return;   // ⭐v6.488 鍵盤快捷鍵（設定裡打開才生效；只按畫面上唯一一顆能按的按鈕）
     if (e.key === 'Escape') {
       // v2.129：lightbox 最上層，Esc 先關 lightbox
       if (lightboxUrl) { closeLightboxImg(); return; }
@@ -14569,6 +14572,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           </div>
         </details>
         {/if}
+        <KbdShortcutsSetting />
       </div>
     </div>
   {/if}
