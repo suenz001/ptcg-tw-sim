@@ -12,6 +12,7 @@
   // ⭐ v6.340：賽季鈕要跟著後台政策走 ⇒ 這一頁也要載入政策（同一個分頁只會真的讀一次）
   import { loadCardPolicyOnce } from '$lib/cards/policy-loader';
   import { isMegaExCard } from '$lib/game/selection-filter'; // v6.210：Mega ex 判定收斂中央述詞
+  import CardsMiniBar from '$lib/cards/CardsMiniBar.svelte';   // ⭐v6.480 網頁版：篩選面板捲出畫面後浮出迷你搜尋列
 
   /** Resolve a coverImageUrl that is either an absolute https:// URL (external
    *  archive art) or a relative path like "covers/SV5a.jpg" (self-hosted). */
@@ -60,6 +61,7 @@
   }
 
   let query = $state('');
+  let controlsEl = $state<HTMLElement | null>(null);   // ⭐v6.480 迷你搜尋列用來判斷篩選面板是否捲出畫面
   /**
    * v6.118：搜尋改吃「延遲 150ms 的查詢字串」。
    * 「所有卡牌」有 4930 張，每敲一個字就對全部重跑 filter＋做 4930 節點的 keyed diff，
@@ -517,7 +519,7 @@
     <p class="meta">共 {setCards.length} 張卡 · 顯示 {filtered.length} 張</p>
   </header>
 
-  <div class="controls">
+  <div class="controls" bind:this={controlsEl}>
     <div class="searchRow">
       <input
         type="search"
@@ -645,6 +647,7 @@
     </div>
   </div>
 
+  <CardsMiniBar bind:query count={filtered.length} target={controlsEl} placeholder="搜尋卡名、招式名、特性名、卡號（與上方搜尋框同步）" />
   <div class="grid">
     {#each shown as card (card.id)}
       <button class="cardBtn" onclick={() => (selected = card)} aria-label={card.name}>
@@ -1706,6 +1709,11 @@
       box-shadow: var(--ui-shadow);
     }
     .cardBtn:hover { border-color: var(--ui-accent); box-shadow: var(--ui-shadow-hover); }
+    /* ⭐v6.480（站長：「依你的建議處理」第 6 項）滑鼠停在卡上 0.25 秒後放大 1.2 倍，不用點開就看得清卡面。
+       ⚠ 1.2 倍：1024 寬時最左／最右一欄外擴約 15px，小於格線左右各 1rem 的內距 ⇒ 不會冒出橫向捲軸。
+       ⚠ 只有滑鼠停住才放大（transition-delay），快速掃過不會一直閃。 */
+    .cardBtn { position: relative; transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease; }
+    .cardBtn:hover { z-index: 3; transform: scale(1.2); transition-delay: 0.25s; }
     .cardBtn img { background: var(--ui-bg-sunken); }
     .cardLabel .num { color: var(--ui-text-muted); }
     .cardLabel .name { color: var(--ui-text); }
@@ -1734,6 +1742,7 @@
   }
   @media (min-width: 1024px) and (prefers-reduced-motion: reduce) {
     .setTile, .setTile:hover, .filter { transition: none; transform: none; }
+    .cardBtn, .cardBtn:hover { transition: none; transform: none; }   /* ⭐v6.480 減少動態：不放大 */
   }
   /* <<< v6475-desktop-theme */
   /* ⭐v6.468（全站 audit）：「← 首頁」只有 16～21px 高，手機上很難點。用 padding＋等量負 margin 放大可點範圍，

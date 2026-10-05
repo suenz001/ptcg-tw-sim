@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.480：卡牌資料庫懸停放大＋浮動搜尋列、牌組編輯器找卡面板固定（2026-10-05）
+
+BASE v6.479（b14950dc）。
+- 卡牌資料庫：.cardBtn 懸停 0.25 秒後 scale(1.2)（規則放在 v6475-desktop-theme 的 min-width:1024px 內；1.2 倍在 1024 寬最邊欄外擴約 15px＜格線內距 16px ⇒ 無橫向捲軸；減少動態時不放大）。
+- 卡牌資料庫：新元件 $lib/cards/CardsMiniBar.svelte：IntersectionObserver 看篩選面板（rootMargin 扣頂端列），面板整個捲到上方才浮出 fixed 浮動搜尋列（同一個 query，$bindable）；只在 ≥1024 建觀察器、CSS 基底不顯示。不把整個篩選面板 sticky：網頁版面板約 250px 高，會吃掉太多卡圖空間。
+- 牌組編輯器：.picker sticky（top＝頂端列＋15px）、max-height＝視窗扣頂端列、overflow-y:auto；.picker-list 改 flex 吃剩餘高度、至少 240px（規則在 v6476-desktop-theme 內，test-v6213 的桌機指紋不受影響）。
+- 牌組比例條（寶可夢／訓練家／能量）原本就有（stats-bar），本版不重做。
+- 守衛：test-v6439 LATER 登記本版四處卡牌頁改動（import、controlsEl、bind:this、元件一行，Rule 40）。新增 test-v6480-cards-decks-desktop（S0 HEAD-FAIL、真瀏覽器 E1～E6）。
+
 ## v6.479：首頁網頁版「錦標賽動態」＋伺服器 v1.55 免登入摘要端點（2026-10-05）
 
 BASE v6.478（2ea0b766）。

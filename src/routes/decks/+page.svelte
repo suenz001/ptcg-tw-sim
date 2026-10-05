@@ -4089,6 +4089,19 @@
     .back, .auth-sub, .auth-link { color: var(--ui-link); }
     .to-board { color: var(--ui-link); border-color: var(--ui-border); background: var(--ui-bg-elev); }
     .layout { gap: 18px; }
+    /* ⭐v6.480（站長：「依你的建議處理」第 7 項）找卡面板黏在頂端列下方：牌組很長、往下捲去調張數時，
+       右邊的搜尋與卡片清單一直看得到，不用捲回最上面。面板高度＝視窗高度扣頂端列，清單吃剩下的空間自己捲。
+       ⚠ 只有面板自己 align-self:start（其他兩欄維持等高）。
+       ⚠ 矮螢幕：清單至少留 240px，放不下時整個面板自己捲（overflow-y:auto），不會有看不到的部分。 */
+    .picker {
+      position: sticky;
+      top: calc(var(--safe-top, 0px) + 72px);
+      align-self: start;
+      max-height: calc(100vh - var(--safe-top, 0px) - 88px);
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+    .picker-list { max-height: none; flex: 1 1 auto; min-height: 240px; }
     .rail, .deck-pane, .picker {
       background: var(--ui-bg-elev);
       border: 1px solid var(--ui-border);

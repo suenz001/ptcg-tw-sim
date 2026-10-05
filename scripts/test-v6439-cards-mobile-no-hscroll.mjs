@@ -113,6 +113,11 @@ const STRIP_RE = /\n  \/\* >>> v6439-cards-mobile \*\/[\s\S]*?\/\* <<< v6439-car
 // ⭐ LATER（IRON_RULES Rule 40：之後版本的合法改動逐字登記、逐字還原，鎖不變鬆）
 //   v6.457：彈出視窗整頁捲動鎖（Rule 76）—— import 一行、兩個遮罩掛 use:pageScrollLock、.modalInner 加 overscroll-behavior:contain。
 const LATER = [
+  // ⭐v6.480（Rule 40）：網頁版迷你搜尋列（元件在 $lib/cards/CardsMiniBar.svelte，手機不顯示）——import、狀態、bind:this、元件一行
+  ["  import CardsMiniBar from '$lib/cards/CardsMiniBar.svelte';   // ⭐v6.480 網頁版：篩選面板捲出畫面後浮出迷你搜尋列\n", ""],
+  ["  let controlsEl = $state<HTMLElement | null>(null);   // ⭐v6.480 迷你搜尋列用來判斷篩選面板是否捲出畫面\n", ""],
+  ["<div class=\"controls\" bind:this={controlsEl}>", "<div class=\"controls\">"],
+  ["  <CardsMiniBar bind:query count={filtered.length} target={controlsEl} placeholder=\"搜尋卡名、招式名、特性名、卡號（與上方搜尋框同步）\" />\n", ""],
   ["  import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）\n", ''],
   ['<div use:pageScrollLock class="modal" role="dialog"', '<div class="modal" role="dialog"'],
   ['      class="lightboxOverlay" use:pageScrollLock\n', '      class="lightboxOverlay"\n'],
