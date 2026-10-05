@@ -189,6 +189,8 @@ function strip(src) {
     // v6.446：預設版面改新版桌墊的說明註解（哨兵內只准註解，下方另驗）
     /      \/\/ >>> v6446-default-blue\n[\s\S]*?      \/\/ <<< v6446-default-blue\n/,
     /  \/\/ ⭐v6\.441 藍桌墊（blue）＝[\s\S]*?  const isFableGeom = \$derived\(battleLayout === 'fable' \|\| battleLayout === 'blue'\);\n/,
+    // ⭐v6.477（Rule 40）：大廳淺色主題整塊在 v6477-lobby-light 哨兵（非藍桌墊、只碰大廳顏色）——整塊拿掉即逐位元還原；內容由 test-v6477-lobby-light 鎖
+    /  \/\* >>> v6477-lobby-light \*\/\n[\s\S]*?  \/\* <<< v6477-lobby-light \*\/\n/,
   ];
   for (const re of blocks) { if (!re.test(s)) bad.push(String(re).slice(0, 40)); s = s.replace(re, ''); }
   // ② 四個呼叫點

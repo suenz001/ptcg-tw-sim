@@ -58,9 +58,11 @@ function judge(M) {
     && M.activeNavHref('/deck-posts', '') === '/deck-posts' && M.activeNavHref('/decks', '') === '/decks'
     && M.activeNavHref('/', '') === '' && M.activeNavHref('/friends', '') === '' && M.activeNavHref('/b/tournament', '/b') === '/tournament'
     && M.activeNavHref('/cardsx', '') === '';
-  // 已接主題的頁面（v6.475：首頁＋卡牌資料庫＋單卡頁）；對戰頁永遠不在清單裡（牌桌樣式不動）
+  // 已接主題的頁面（v6.477 起全站：首頁、卡牌、單卡、牌組、公布欄、對戰大廳、錦標賽大廳、好友）；後台不在清單；
+  //   牌桌畫面另由 data-battle-view 排除（見 test-v6477-lobby-light）
   r.A3 = M.isThemedRoute('/', '') && M.isThemedRoute('/b/', '/b') && M.isThemedRoute('/b', '/b') && M.isThemedRoute('/cards', '') && M.isThemedRoute('/card/19378/', '')
-    && !M.isThemedRoute('/cardsx', '') && !M.isThemedRoute('/game', '') && !M.isThemedRoute('/tournament', '');
+    && M.isThemedRoute('/game', '') && M.isThemedRoute('/tournament', '') && M.isThemedRoute('/friends', '')
+    && !M.isThemedRoute('/cardsx', '') && !M.isThemedRoute('/admin', '') && !M.isThemedRoute('/admin/feedbacks', '');
   // 牌桌畫面判準：只在對戰路由；錦標賽看 tStep、休閒看有沒有盤面
   r.A8 = !!M.isBattleView && M.isBattleView('/game', '', false, 'lobby', true) === true && M.isBattleView('/game', '', false, 'lobby', false) === false
     && M.isBattleView('/tournament', '', true, 'playing', false) === true && M.isBattleView('/tournament', '', true, 'lobby', true) === false
@@ -81,7 +83,7 @@ const J = judge(M);
 ok('★★★[A0] 規則模組存在且可執行', J.A0);
 ok('★★★[A1] 頂端列：對戰頁（含 base、子路徑）與後台不顯示；其他頁顯示（/gamer、/administrator 不誤判）', !!J.A1);
 ok('★★[A2] 目前所在頁：/card/123 算卡牌資料庫、/deck-posts 不誤判成 /decks、首頁沒有 active', !!J.A2);
-ok('★★[A3] 已接主題：首頁、卡牌資料庫、單卡頁；對戰／錦標賽不在清單（牌桌樣式不動）', !!J.A3);
+ok('★★[A3] 已接主題：全站（含對戰／錦標賽大廳、好友）；後台不在清單', !!J.A3);
 ok('★★★[A8] 牌桌畫面判準：休閒＝有盤面、錦標賽＝tStep playing；非對戰路由一律否', !!J.A8);
 ok('★★[A4] 主題：玩家選過用玩家的、沒選過跟作業系統、壞值當沒選過', !!J.A4);
 ok('★[A5] 導覽項目＝首頁五個入口、同順序', !!J.A5);
@@ -103,7 +105,7 @@ const muts = [
   ['M2 卡牌比對拿掉單數 card', (s) => s.replace("match: /^\\/cards?(?:\\/|$)/", "match: /^\\/cards(?:\\/|$)/"), 'A2'],
   ['M3 牌組比對拿掉邊界', (s) => s.replace("match: /^\\/decks(?:\\/|$)/", "match: /^\\/deck/"), 'A2'],
   ['M4 主題無視玩家選擇', (s) => s.replace("return stored ?? (systemPrefersDark ? 'dark' : 'light');", "return systemPrefersDark ? 'dark' : 'light';"), 'A4'],
-  ['M5 對戰頁也算已接主題', (s) => s.replace('THEMED_ROUTES: readonly RegExp[] = [', 'THEMED_ROUTES: readonly RegExp[] = [/^\\/game$/, '), 'A3'],
+  ['M5 後台也算已接主題', (s) => s.replace('THEMED_ROUTES: readonly RegExp[] = [', 'THEMED_ROUTES: readonly RegExp[] = [/^\\/admin$/, '), 'A3'],
   ['M6 牌桌判準不分錦標賽', (s) => s.replace("return tournament ? tStep === 'playing' : hasGame;", 'return hasGame;'), 'A8'],
   ['M7 牌桌判準不限對戰路由', (s) => s.replace('if (!isBattleRoute(pathname, base)) return false;', ''), 'A8'],
 ];
@@ -237,14 +239,14 @@ else if (chromium) {
       ({ ctx, pg } = await open(1440, 900, 'dark', '/cards'));
       const C = await probe(pg); await ctx.close();
       ok('★★[E4] /cards：有頂端列、目前頁＝卡牌資料庫、有切換鈕、深色底色生效', C.stb?.disp === 'block' && C.active.join() === '卡牌資料庫' && C.toggle && C.body === 'rgb(15, 31, 23)', JSON.stringify(C));
-      // 首頁 → 站內點進還沒接主題的頁面：主題底色要跟著移除（v6.476 起 /decks 已接主題 ⇒ 改從首頁導到 /friends；/friends 自己的墨綠底由頁面 <svelte:head> 注入）
-      ({ ctx, pg } = await open(1440, 900, 'dark', '/'));
+      // 首頁 → 站內點進 /friends（v6.477 起已接主題）：淺色主題下好友頁的墨綠底（頁面 <svelte:head> 以 !important 注入）被淺底蓋過
+      ({ ctx, pg } = await open(1440, 900, 'light', '/'));
       // 站內導頁（SvelteKit 攔截 <a> 點擊做客戶端路由；頂端列沒有好友連結 ⇒ 臨時插一個再點）
       await pg.evaluate(() => { const a = document.createElement('a'); a.href = (document.querySelector('.stb-brand')?.getAttribute('href') || '/').replace(/\/$/, '') + '/friends'; a.textContent = 'go'; document.body.appendChild(a); a.click(); });
       await pg.waitForTimeout(1500);
       const nav = await pg.evaluate(() => ({ path: location.pathname, bg: getComputedStyle(document.body).backgroundColor, act: [...document.querySelectorAll('.stb-link.active')].map((a) => a.textContent).join(), themed: document.documentElement.hasAttribute('data-ui-themed') }));
       await ctx.close();
-      ok('★★★[E5] 首頁（深色）站內點到還沒接主題的 /friends：data-ui-themed 拿掉、底色是該頁自己的墨綠、沒有 active', /\/friends$/.test(nav.path) && nav.bg === 'rgb(22, 40, 22)' && nav.act === '' && !nav.themed, JSON.stringify(nav));
+      ok('★★★[E5] 首頁（淺色）站內點到 /friends：仍是已接主題、底色淺色（蓋過頁面自己的墨綠 !important）、沒有 active', /\/friends$/.test(nav.path) && nav.bg === 'rgb(243, 245, 244)' && nav.act === '' && nav.themed, JSON.stringify(nav));
       // /game 大廳：有頂端列（active＝對戰演練）；掛上 data-battle-view（牌桌畫面）時收起
       ({ ctx, pg } = await open(1440, 900, 'light', '/game'));
       const G = await probe(pg);

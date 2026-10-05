@@ -20,7 +20,8 @@ export type UiTheme = 'light' | 'dark';
 export const THEME_KEY = 'ptcg_ui_theme';
 
 /** 目前已接上 --ui-* 色票的頁面（去掉 base 之後的路徑，整條比對）。後續階段在這裡加。 */
-export const THEMED_ROUTES: readonly RegExp[] = [/^\/$/, /^\/cards$/, /^\/card\/[^/]+$/, /^\/decks$/, /^\/deck-posts$/];
+// ⭐v6.477：對戰大廳、錦標賽大廳、好友頁也接上（牌桌畫面另由 data-battle-view 排除，牌桌樣式不動）
+export const THEMED_ROUTES: readonly RegExp[] = [/^\/$/, /^\/cards$/, /^\/card\/[^/]+$/, /^\/decks$/, /^\/deck-posts$/, /^\/game$/, /^\/tournament$/, /^\/friends$/];
 
 /** 去掉 base path，統一成以 / 開頭、不帶結尾斜線（根目錄除外）。 */
 export function stripBase(pathname: string, base = ''): string {
@@ -113,5 +114,21 @@ export function followSystemTheme(onChange: (t: UiTheme) => void): () => void {
     const h = () => { if (readStoredTheme() === null) onChange(applyTheme()); };
     mq.addEventListener('change', h);
     return () => mq.removeEventListener('change', h);
+  } catch { return () => {}; }
+}
+
+/** ⭐v6.477：網頁版（≥1024px）旗標寫到 <html data-ui-wide>。
+ *  用途：對戰頁的大廳淺色規則**不能用 @media**（對戰頁的 @media 數量被多支守衛釘死：手機／桌機不靠斷點切版，
+ *  test-v6199／v6448～v6450／v6466／v6470），改用這個屬性當桌機條件；斷點與 SiteTopBar／各頁的 min-width:1024px 相同。
+ *  回傳取消監聽的函式。 */
+export const WIDE_QUERY = '(min-width: 1024px)';
+export function trackWideAttr(): () => void {
+  try {
+    if (typeof document === 'undefined' || typeof matchMedia !== 'function') return () => {};
+    const mq = matchMedia(WIDE_QUERY);
+    const apply = () => { if (mq.matches) document.documentElement.setAttribute('data-ui-wide', ''); else document.documentElement.removeAttribute('data-ui-wide'); };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
   } catch { return () => {}; }
 }

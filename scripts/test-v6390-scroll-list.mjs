@@ -85,7 +85,12 @@ const EXPECTED = [
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('【0】fixture');
 // ═══════════════════════════════════════════════════════════════════════════
-const sb = styleBlockOf(SRC);
+const sb0 = styleBlockOf(SRC);
+// ⭐v6.477（Rule 40）：大廳淺色主題整塊在 v6477-lobby-light 哨兵（只換顏色、前綴 html[data-ui-wide][data-theme=light]，
+//   本模擬器不支援那種選擇器形態），本支守的是捲動串接 ⇒ 先剝掉哨兵；哨兵必須恰好一塊、只碰顏色（內容由 test-v6477-lobby-light 鎖）。
+const RE6477 = /\n  \/\* >>> v6477-lobby-light \*\/\n[\s\S]*?\n  \/\* <<< v6477-lobby-light \*\/\n/g;
+chk('F0-6477 v6477-lobby-light 哨兵恰好一塊', !!sb0 && (sb0.css.match(RE6477) || []).length === 1);
+const sb = sb0 ? { ...sb0, css: sb0.css.replace(RE6477, '\n') } : sb0;
 chk('F0 抓得到 <style> 區塊', !!sb && sb.css.length > 100000, String(sb ? sb.css.length : -1));
 const RULES = parseCss(sb.css);
 // ⚠⚠ 這個門檻原本寫 3000，是**安慰劑**（v6.391 審查者 🔴-2）：當時 styleBlockOf 用 indexOf

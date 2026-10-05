@@ -297,7 +297,12 @@ function assertTargetTable(game) {
 }
 await T('C4 ⭐ friendsBattleTarget 推導實跑：正式賽 mr_ 前綴 → matchId；測試房／只剩前綴／觀戰／本機／沒房號 ⇒ null；休閒 ⇒ roomCode', () => assertTargetTable(GAME));
 await T('C5 style 區零 friend（v6.296 的分頁列 CSS 一律 lobby- 前綴）；.auth-user 的 CSS 逐字未動；.auth-user 仍三份；⭐ 分頁列 CSS 在且只碰 .lobby-tab*', () => {
-  const css = styleBlockOf(GAME);
+  // ⭐v6.477（Rule 40）：大廳淺色主題整塊在 v6477-lobby-light 哨兵（機械產生、每條都帶淺色前綴，內容由 test-v6477-lobby-light 鎖）
+  //   ⇒ 先拿掉再檢查「分頁列 CSS 只碰 .lobby-tab*」（本條原意：分頁列不得改到既有 selector）；哨兵必須恰好一塊。
+  const RE6477 = /\n  \/\* >>> v6477-lobby-light \*\/\n[\s\S]*?\n  \/\* <<< v6477-lobby-light \*\/\n/g;
+  const css0 = styleBlockOf(GAME);
+  assert.strictEqual((css0.match(RE6477) || []).length, 1, 'v6477-lobby-light 哨兵應恰好一塊');
+  const css = css0.replace(RE6477, '\n');
   assert.strictEqual((css.match(/friend/gi) || []).length, 0, 'style 區出現 friend');
   // v6.296：分頁列確實有自己的 CSS，但只准碰 .lobby-tab／.lobby-tabs／.lobby-tab-panel（不得改到既有 selector）
   const newRules = css.split('\n').filter((l) => /\.lobby-tab/.test(l));

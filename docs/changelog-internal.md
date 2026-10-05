@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.477：網頁版主題第四步——對戰大廳、錦標賽大廳、好友頁淺色（2026-10-05）
+
+BASE v6.476（51bc47db）。
+- 對戰頁大廳樣式約 240 條含色規則，手寫淺色版不實際 ⇒ 新增 scripts/gen-lobby-light.py：從對戰頁 <style> 抽「只出現在大廳標記裡的 class」的規則，只轉顏色（深底→淡底、淺字→深字，HSL 亮度反轉；飽和實心按鈕維持；半透明黑遮罩／陰影不動），每條加前綴 :global(html[data-theme='light']:not([data-battle-view]))，整塊放 v6477-lobby-light 哨兵＋min-width:1024px；另有兩條手調（模式卡白卡＋陰影）。守衛 S5 比對哨兵內產生段＝產生器輸出（改大廳配色要重跑產生器）。
+- 好友面板所有顏色本來就讀 --fr-* ⇒ 淺色只換一套色票（v6477-friends-light 哨兵）。
+- layout：淺色＋非牌桌時以 !important 蓋過大廳／好友頁 <svelte:head> 的墨綠 !important（特異度較高）；牌桌（data-battle-view）與深色主題不套。
+- THEMED_ROUTES 加 /game、/tournament、/friends（全站除了後台）。
+- 守衛（Rule 40）：test-v6441 剝除器加 v6477 哨兵、本版區塊放在藍桌墊 CSS 之前（藍桌墊必須在樣式尾端）；test-v6284 C5 先剝 v6477 哨兵再查分頁列 selector；test-v6293 先剝 v6477-friends-light 再抽預設色票；test-v6474 A3／M5／E5 依「全站已接主題」調整。新增 test-v6477-lobby-light（S0 HEAD-FAIL、M1／M2 突變、真瀏覽器 E1～E5）。
+- 本機另外以 PW_EXECUTABLE＋PLAYWRIGHT_MODULE 替身實跑 23 支「本機全套會 ENV-SKIP 的瀏覽器段」守衛（v6.475 CI 紅的教訓）。
+- Fable 5.1 審查（v6.475～v6.477）阻擋兩項已修：①錦標賽排名表等 9 種行內 style 字色產生器掃不到（#9ab、#ffd56b 在淺底 1.5～2.3:1）⇒ 手調區用 `.lobby [style*="color:#xxx"]` 加 !important 轉深色（守衛 S6 逐種比對）；②深色 color-scheme 也套到牌桌 ⇒ 加 :not([data-battle-view])（S7）。另手調錦標賽「進場」鈕實心綠底白字。產生器定位樣式區改成行首 `<style`（手調註解寫到「<style」字樣時曾讓產生器抓錯區段）。data-battle-view 時序 Fable 逐條追過：無殘留路徑。
+- 全套抓到：對戰頁的 @media 數量被 test-v6199／v6448～v6450／v6466／v6470 釘死（手機／桌機不靠斷點切版的規矩）⇒ 大廳淺色區塊**不用 @media**，改由 layout 依 matchMedia(min-width:1024px) 掛 <html data-ui-wide>（site-theme.trackWideAttr，初始化就掛），前綴改成 html[data-ui-wide][data-theme='light']:not([data-battle-view])；哨兵註解也不可出現「@media」字樣（v6449／v6450 是含註解計數）。test-v6390 捲動模擬器不支援該選擇器形態 ⇒ Rule 40 先剝 v6477 哨兵。
+
 ## v6.476：網頁版主題第三步（2026-10-05）
 
 BASE v6.475（37b8db6a）。

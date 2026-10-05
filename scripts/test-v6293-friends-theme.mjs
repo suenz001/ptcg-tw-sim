@@ -44,7 +44,12 @@ const P_PKG = join(ROOT, 'package.json');
 const rd = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 const PAGE = rd(P_PAGE);
 const PANEL = rd(P_PANEL);
-const FRP = rd(P_FRP);
+// ⭐v6.477（Rule 40）：網頁版淺色主題的 --fr-* 第二套色票整塊在 v6477-friends-light 哨兵裡（只在淺色主題＋min-width:1024px），
+//   本支守的是「預設（深色）色票＝錦標賽配色」⇒ 先把哨兵拿掉再抽色票；淺色那套的內容由 test-v6477-lobby-light 鎖。
+const FRP_RAW = rd(P_FRP);
+const RE6477F = /\n  \/\* >>> v6477-friends-light \*\/\n[\s\S]*?\n  \/\* <<< v6477-friends-light \*\/\n/g;
+if ((FRP_RAW.match(RE6477F) || []).length !== 1) { console.log('  FAIL [前提] FriendsPanel 的 v6477-friends-light 哨兵應恰好一塊'); process.exitCode = 1; }
+const FRP = FRP_RAW.replace(RE6477F, '\n');
 const GAME = rd(P_GAME);
 const API = rd(P_API);
 const PKG = rd(P_PKG);

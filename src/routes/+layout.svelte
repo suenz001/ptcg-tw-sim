@@ -7,11 +7,13 @@
   import { applyViewportFor } from '$lib/viewport-zoom';   // ⭐v6.469 只在對戰畫面禁止雙指放大（規則見該檔）
   import SiteTopBar from '$lib/SiteTopBar.svelte';          // ⭐v6.474 網頁版（≥1024px）全站頂端列
   import { VERSION } from '$lib/version';
-  import { showTopBar, isThemedRoute, applyTheme, setTheme, followSystemTheme, type UiTheme } from '$lib/site-theme';
+  import { showTopBar, isThemedRoute, applyTheme, setTheme, followSystemTheme, trackWideAttr, type UiTheme } from '$lib/site-theme';
 
   // ⭐v6.474：主題在 layout 初始化時（hydrate 之前、載入畫面還蓋著）就寫到 <html data-theme>，
   //   不放 onMount ⇒ 不會先畫淺色再跳深色。規則單一來源見 $lib/site-theme.ts。
   let uiTheme = $state<UiTheme>(typeof document !== 'undefined' ? applyTheme() : 'light');
+  // ⭐v6.477：<html data-ui-wide>＝網頁版（≥1024px），對戰頁大廳淺色規則用它當桌機條件（該頁不能再加 @media）。
+  if (typeof document !== 'undefined') trackWideAttr();
   let curPath = $state(typeof location !== 'undefined' ? location.pathname : '/');
   const topBarOn = $derived(showTopBar(curPath, base));
   const themedOn = $derived(isThemedRoute(curPath, base));
@@ -260,7 +262,12 @@
      ⚠ 只在 min-width:1024px ⇒ 手機與平板直向的底色完全不變。 */
   @media (min-width: 1024px) {
     :global(html[data-ui-themed] body) { background: var(--ui-bg); }
-    :global(html[data-ui-themed][data-theme='dark']) { color-scheme: dark; }
+    /* 牌桌畫面（data-battle-view）不套：牌桌的原生控件外觀維持改版前（Fable 5.1 審查） */
+    :global(html[data-ui-themed][data-theme='dark']:not([data-battle-view])) { color-scheme: dark; }
+    /* ⭐v6.477：對戰大廳／錦標賽大廳／好友頁自己用 <svelte:head> 以 !important 鋪墨綠底；淺色主題且不是牌桌畫面時改鋪淺底。
+       ⚠ 牌桌畫面（data-battle-view）不套 ⇒ 牌桌永遠是原本的墨綠；深色主題也不套 ⇒ 大廳維持墨綠。 */
+    :global(html[data-ui-themed][data-theme='light']:not([data-battle-view])),
+    :global(html[data-ui-themed][data-theme='light']:not([data-battle-view]) body) { background-color: var(--ui-bg) !important; }
   }
 
   /* v5.034：BETA 標記 banner — 黃色細條，github.io 才顯示，不可 dismiss */
