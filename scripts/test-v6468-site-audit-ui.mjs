@@ -48,8 +48,11 @@ const CHECKS = [
     [['cards', '.back'], ['dp', '.back, .to-decks'], ['fr', '.back'], ['card', '.crumb a']].every(([k, sel]) => { const m = COARSE_BACK.exec(css(S[k])); return !!m && m[1].trim() === sel; })
     // /decks 的桌機 CSS 有逐字指紋守衛（test-v6213）⇒ 這條只放在觸控分支
     && /@media \(pointer: coarse\) \{[^@]*\n    \.back \{ display: inline-block; padding: 10px 8px; margin: -10px -8px; \}\n  \}/.test(css(S.decks))],
-  ['★★[⑤b] /decks 觸控裝置：▲▼ 至少 30×26、＋／−／☆ 至少 34×34（含手機版特異度較高的那條）', true, (S) =>
-    /@media \(pointer: coarse\) \{\s*\.deck-reorder-btn \{ min-width: 30px; min-height: 26px; font-size: 0\.75rem; \}\s*button\.icon, \.picker-list li button\.icon \{ min-width: 34px; min-height: 34px; \}/.test(css(S.decks))],
+  // ⭐v6.497（Rule 40）：站長手機清單第 5 項再放大到 36×36／40×40 ⇒ 判準改成「至少」（數字往上合法、往下才紅），意圖不變
+  ['★★[⑤b] /decks 觸控裝置：▲▼ 至少 30×26、＋／−／☆ 至少 34×34（含手機版特異度較高的那條）', true, (S) => {
+    const m = /@media \(pointer: coarse\) \{[\s\S]*?\.deck-reorder-btn \{ min-width: (\d+)px; min-height: (\d+)px; font-size: 0\.75rem; \}\s*button\.icon, \.picker-list li button\.icon \{ min-width: (\d+)px; min-height: (\d+)px; \}/.exec(css(S.decks));
+    return !!m && +m[1] >= 30 && +m[2] >= 26 && +m[3] >= 34 && +m[4] >= 34;
+  }],
   ['★[⑥] 表單欄位有 aria-label（本機設定的名稱與牌組、登入、牌組頁、公布欄搜尋）', true, (S) =>
     ['aria-label="玩家 1 名稱"', 'aria-label="玩家 2 名稱"', 'aria-label="玩家 1 牌組"', 'aria-label="玩家 2 牌組"', 'aria-label="Email"', 'aria-label="密碼"'].every((a) => S.game.includes(a))
     && ['aria-label="牌組名稱"', 'aria-label="搜尋卡牌"', 'aria-label="卡包篩選"'].every((a) => S.decks.includes(a)) && S.dp.includes('aria-label="搜尋牌組"')],

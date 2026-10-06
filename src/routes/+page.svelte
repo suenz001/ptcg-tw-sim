@@ -1154,6 +1154,23 @@
     .hm-icon { width: 42px; height: 42px; font-size: 1.3rem; }
     .hm-title { font-size: .98rem; }
     .hm-desc { font-size: .78rem; }
+    /* >>> v6497-mobile-home-grid */
+    /* ⭐v6.497 手機首頁（站長手機清單第 7 項：首頁很長、五張功能卡約兩個螢幕）：
+       功能卡改兩欄小方塊（圖示＋標題＋一行說明），最後一張（第 5 張）橫跨兩欄；箭頭在小方塊裡省略。 */
+    .hm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+    .hm-card { flex-direction: column; align-items: flex-start; gap: .45rem; min-height: 0; padding: .8rem .85rem; }
+    .hm-card:last-child:nth-child(odd) { grid-column: 1 / -1; flex-direction: row; align-items: center; }
+    .hm-arrow { display: none; }
+    .hm-icon { width: 38px; height: 38px; font-size: 1.2rem; }
+    .hm-desc { font-size: .74rem; line-height: 1.4; }
+    /* <<< v6497-mobile-home-grid */
+    /* >>> v6497-mobile-tap */
+    /* ⭐v6.497 手機觸控目標（站長手機清單第 5 項：連結約 17px 高）——至少 40px 高；
+       行內連結用 padding＋等量負 margin 放大可點範圍、版面不動。 */
+    .hard-refresh-btn { min-height: 40px; }
+    .link-btn { padding: 10px 4px; margin: -10px -4px; }
+    .changelog-list :global(.changelog-archive-link a) { display: inline-block; padding: 10px 6px; margin: -10px -6px; }
+    /* <<< v6497-mobile-tap */
   }
 
   /* hero 的 logo：手機與平板不顯示（版面不變），網頁版才出現。 */

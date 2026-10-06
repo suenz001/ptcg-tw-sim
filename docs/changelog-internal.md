@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.497：手機版優化（2026-10-06，站長清單）
+
+BASE v6.496（fd98a5f2）。站長：「下一步是手機版優化」；清單順序 2 → 3 → 1 → 5 → 4 → 7，深色主題（6）留到下一版。
+- 2／3 篩選收合：新增 $lib/mobile-filters.ts（斷點 max-width: 600px、countActiveFilters、filterToggleLabel）。兩頁用 svelte/reactivity 的 MediaQuery 決定是否渲染篩選列與按鈕（不新增桌機 CSS：/decks 有桌機 CSS 指紋守衛 test-v6213、/cards 有 @media 數量守衛；/decks 不可新增 $effect）。/decks 賽季預設（全部容許的標）不算已選。實測 390×844：/cards 卡片起點約 950px → 236px。
+- 1 底部導覽列：$lib/SiteBottomNav.svelte（<1024px，NAV_ITEMS 同一份；html[data-battle-view] 收起；body 預留 56px＋--safe-bottom；對戰／錦標賽大廳深色）。layout 掛在 topBarOn 條件內（admin 不顯示）。實測 7 頁 scrollWidth＝390、牌桌畫面 display:none／padding 0、1280 寬不顯示。
+- 5 觸控目標：/cards 篩選鈕 36px；/decks 篩選鈕 36px、按鈕與輸入框 40px、pointer:coarse 分支排序鈕 36px／卡片小鈕 40px（原 30／34，那個分支排在後面會蓋掉 600px 區塊）；DeckNotes 摺疊標題、首頁強制更新鈕與行內連結（padding＋負 margin）。
+- 4 /cards 一排三張卡號 9.7→12px、卡名 10.9→12.5px、最多兩行。
+- 7 首頁 ≤720px 功能卡兩欄小方塊（奇數張最後一張橫跨兩欄）。手機版「錦標賽動態」精簡卡沒做：會讓手機首頁每次多打一次賽事摘要端點（v6.479 刻意只在網頁版抓），等站長決定。
+- Rule 40：test-v6439 登記 v6.497 的 import／哨兵（每段恰好一次）。
+- test-v6497（19 條，HEAD 紅 18）。
+
 ## v6.496：Fable 審查 v6.493／v6.494 後的修正（2026-10-06）
 
 BASE v6.495（a4519f5d）。Fable 5.1 獨立審查（20 個盤面實測）：v6.493 奇跡之吻／昏厥管線、as-of-declaration、USE_ABILITY 豁免移除、收回終局中間狀態皆無問題。

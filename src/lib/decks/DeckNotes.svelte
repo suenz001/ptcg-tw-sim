@@ -29,6 +29,8 @@
 <style>
   .dn { margin: 0.35rem 0 0.5rem; }
   .dn-sum { cursor: pointer; font-size: 0.85rem; color: var(--ui-text-muted, #666); user-select: none; }
+  /* ⭐v6.497 手機觸控目標：摺疊標題上下各加 10px 可點範圍（原本約 18px 高） */
+  @media (max-width: 600px) { .dn-sum { padding: 10px 0; } }
   .dn-len { margin-left: 0.2rem; }
   .dn-text {
     display: block; width: 100%; box-sizing: border-box; margin-top: 0.35rem; padding: 0.5rem 0.6rem;

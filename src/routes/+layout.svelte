@@ -6,6 +6,7 @@
   import { base } from '$app/paths';
   import { applyViewportFor } from '$lib/viewport-zoom';   // ⭐v6.469 只在對戰畫面禁止雙指放大（規則見該檔）
   import SiteTopBar from '$lib/SiteTopBar.svelte';          // ⭐v6.474 網頁版（≥1024px）全站頂端列
+  import SiteBottomNav from '$lib/SiteBottomNav.svelte';    // ⭐v6.497 手機／平板（<1024px）全站底部導覽列
   import { VERSION } from '$lib/version';
   import { showTopBar, isThemedRoute, applyTheme, setTheme, followSystemTheme, trackWideAttr, type UiTheme } from '$lib/site-theme';
 
@@ -128,6 +129,7 @@
 
 {#if topBarOn}
   <SiteTopBar pathname={curPath} {base} version={VERSION} theme={uiTheme} ontoggle={toggleUiTheme} />
+  <SiteBottomNav pathname={curPath} {base} />
 {/if}
 
 {@render children()}

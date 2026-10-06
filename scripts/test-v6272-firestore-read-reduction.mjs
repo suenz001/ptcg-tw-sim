@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'a4519f5d48e643320f7c10b3a43132ba712e23d9';   // v6.495（上一版）
+const PREV_SHA = 'fd98a5f2cfb10820149421d88c59b002a35ce6bf';   // v6.496（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,19 +757,34 @@ const PREV_SHA = 'a4519f5d48e643320f7c10b3a43132ba712e23d9';   // v6.495（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.496 前移：PREV_SHA 從 a4519f5d（v6.495）起算。
+  // ⚠⚠ v6.497 前移：PREV_SHA 從 fd98a5f2（v6.496）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.496：Fable 審查 v6.493／v6.494 的修正：上場時特性改以「每一次放置」為單位（promoteAbilityAsked）；急進開關三條出口補詢問；守衛補負對照與奇跡之吻擲幣次數；首頁 changelog 三步搬運。
-  'src/lib/game/effects/_shared.ts',
-  'src/lib/game/effects/cards/items_misc.ts',
-  'src/lib/game/engine.ts',
-  'src/lib/game/instance-flags.ts',
-  'src/lib/game/types.ts',
+  // ⭐v6.497：站長手機清單 1／2／3／4／5／7 項：底部導覽列、篩選收合（MediaQuery，桌機不渲染按鈕）、觸控目標、卡名字級、首頁兩欄；首頁 changelog 三步搬運。
+  'src/lib/SiteBottomNav.svelte',
+  'src/lib/decks/DeckNotes.svelte',
+  'src/lib/mobile-filters.ts',
   'src/lib/version.ts',
+  'src/routes/+layout.svelte',
+  'src/routes/+page.svelte',
+  'src/routes/cards/+page.svelte',
+  'src/routes/decks/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.496）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.496 前移：PREV_SHA 從 a4519f5d（v6.495）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.496：Fable 審查 v6.493／v6.494 的修正：上場時特性改以「每一次放置」為單位（promoteAbilityAsked）；急進開關三條出口補詢問；守衛補負對照與奇跡之吻擲幣次數；首頁 changelog 三步搬運。
+//   'src/lib/game/effects/_shared.ts',
+//   'src/lib/game/effects/cards/items_misc.ts',
+//   'src/lib/game/engine.ts',
+//   'src/lib/game/instance-flags.ts',
+//   'src/lib/game/types.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.495）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.495 前移：PREV_SHA 從 7474db9d（v6.494）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -894,16 +909,6 @@ const PREV_ALLOWED = [
 //   'src/lib/decks/opening-hand.ts',
 //   'src/lib/version.ts',
 //   'src/routes/decks/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.484）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.484 前移：PREV_SHA 從 0e74051c（v6.483）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.484：牌組公布欄投稿網址（?post=）與複製連結（$lib/deck-posts/share-link）；首頁 changelog 三步搬運。
-//   'src/lib/deck-posts/share-link.ts',
-//   'src/lib/version.ts',
-//   'src/routes/deck-posts/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

@@ -146,6 +146,21 @@ let stripped = revertPairs(SRC.replace(/\r\n/g, '\n'), V6464_CARDS_PAIRS).replac
   ok('[LATER 前提] v6.475 網頁版主題哨兵恰好一塊', n6475 === 1, 'n=' + n6475);
   stripped = stripped.replace(RE6475, '');
 }
+// ⭐v6.497（Rule 40）：手機篩選收合（站長手機清單第 2 項）——import 兩行、狀態哨兵、按鈕與 {#if} 開頭哨兵、{/if} 結尾；
+//   CSS 在 v6439 哨兵區塊內（上面已整塊剝掉）。內容由 test-v6497-mobile-optimizations 鎖；每一段都必須恰好出現一次。
+{
+  const V6497 = [
+    ["  import { MediaQuery } from 'svelte/reactivity';\n  import { MOBILE_FILTER_QUERY, countActiveFilters, filterToggleLabel } from '$lib/mobile-filters';   // ⭐v6.497 手機篩選收合\n", ''],
+    [/\n  \/\/ >>> v6497-mobile-filter-fold\n[\s\S]*?  \/\/ <<< v6497-mobile-filter-fold/, ''],
+    [/    <!-- >>> v6497-mobile-filter-toggle -->\n[\s\S]*?<!-- <<< v6497-mobile-filter-toggle -->\n/, ''],
+    ['    {/if}<!-- v6497-mobile-filter-toggle -->\n', ''],
+  ];
+  for (const [a, b] of V6497) {
+    const n = typeof a === 'string' ? stripped.split(a).length - 1 : (stripped.match(new RegExp(a.source, 'g')) || []).length;
+    ok('[LATER 前提] v6.497 手機篩選收合恰好一段：' + String(a).slice(0, 40), n === 1, 'n=' + n);
+    stripped = stripped.replace(a, b);
+  }
+}
 for (const [a, b] of LATER) {
   const n = stripped.split(a).length - 1;
   ok('[LATER 前提] 登記的後續改動恰好出現一次：' + a.trim().slice(0, 50), n === 1, 'n=' + n);

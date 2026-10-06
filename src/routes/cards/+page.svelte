@@ -17,6 +17,8 @@
   import { replaceState } from '$app/navigation';
   import { readCardsUrlState, writeCardsUrlSearch } from '$lib/cards/url-state';   // ⭐v6.483 搜尋／篩選條件寫進網址
   import { cardPageHref } from '$lib/cards/card-page';   // ⭐v6.483 卡片視窗連到單卡頁
+  import { MediaQuery } from 'svelte/reactivity';
+  import { MOBILE_FILTER_QUERY, countActiveFilters, filterToggleLabel } from '$lib/mobile-filters';   // ⭐v6.497 手機篩選收合
 
   /** Resolve a coverImageUrl that is either an absolute https:// URL (external
    *  archive art) or a relative path like "covers/SV5a.jpg" (self-hosted). */
@@ -218,6 +220,14 @@
   });
   const STANDARD_CARD_COUNT = $derived(STANDARD_SETS.reduce((n, s) => n + s.cardCount, 0));
   let selectedRegMarks = $state<Set<RegMarkKey>>(new Set());
+  // >>> v6497-mobile-filter-fold
+  // ⭐v6.497 手機版：篩選列預設收起，只留搜尋列＋「篩選（已選 N 項）」按鈕（站長手機清單第 2 項）。
+  //   桌機（>600px）永遠展開，與原本完全相同。
+  const narrowView = new MediaQuery(MOBILE_FILTER_QUERY, false);
+  let filtersOpen = $state(false);
+  const activeFilterCount = $derived(countActiveFilters([selectedCategories, selectedTags, selectedTypes, selectedStages, selectedRegMarks]));
+  const showFilters = $derived(!narrowView.current || filtersOpen);
+  // <<< v6497-mobile-filter-fold
 
   /** 取得寶可夢的階段。v2.75 起 JSON 有 `stage` 欄位（由 migration 補齊），
    *  直接用即可，不再需要 runtime 推斷。
@@ -583,6 +593,13 @@
         <option value="evolution">🌱 進化鏈搜尋</option>
       </select>
     </div>
+    <!-- >>> v6497-mobile-filter-toggle -->
+    {#if narrowView.current}
+      <button type="button" class="filterToggle" class:hasActive={activeFilterCount > 0}
+        aria-expanded={filtersOpen} onclick={() => (filtersOpen = !filtersOpen)}>{filterToggleLabel(activeFilterCount, filtersOpen)}</button>
+    {/if}
+    {#if showFilters}
+    <!-- <<< v6497-mobile-filter-toggle -->
     <div class="filters" role="group" aria-label="卡片分類篩選（可複選，再點一次取消）">
       <button
         class="filter"
@@ -670,6 +687,7 @@
         >{regMarkFilterLabel(m)}</button>
       {/each}
     </div>
+    {/if}<!-- v6497-mobile-filter-toggle -->
   </div>
 
   <CardsMiniBar bind:query count={filtered.length} target={controlsEl} placeholder="搜尋卡名、招式名、特性名、卡號（與上方搜尋框同步）" />
@@ -1649,6 +1667,21 @@
     .modeSelect { min-width: 0; flex: 0 1 auto; max-width: 40%; }
     input[type='search'],
     .modeSelect { font-size: 16px; }
+    /* >>> v6497-mobile-filter-css */
+    /* ⭐v6.497 手機篩選收合鈕（按鈕只在 ≤600px 渲染，見 $lib/mobile-filters）：滿寬、44px 高（觸控目標） */
+    .filterToggle {
+      flex: 1 1 100%; min-height: 44px; box-sizing: border-box;
+      border: 1px solid #ccc; border-radius: 8px; background: #fff; color: #333;
+      font: inherit; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+    }
+    .filterToggle.hasActive { border-color: #4f46e5; color: #4f46e5; background: #eef2ff; }
+    /* 展開後的篩選鈕至少 36px 高（原本約 27～30px，站長手機清單第 5 項） */
+    .filter { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; }
+    /* 一排三張時卡號／卡名放大（原本 9.7px／10.9px，站長手機清單第 4 項）；長卡名最多兩行 */
+    .cardLabel { font-size: 12.5px; line-height: 1.3; }
+    .cardLabel .num { font-size: 12px; }
+    .cardLabel .name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+    /* <<< v6497-mobile-filter-css */
   }
   /* <<< v6439-cards-mobile */
 

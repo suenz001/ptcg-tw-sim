@@ -139,7 +139,8 @@ ok('★★[S4] logo 用 app.html 載入畫面同一個 URL（瀏覽器已有，�
 ok('★★★[S5] layout 在初始化就套主題（不在 onMount 裡）、頂端列在 children 之前、只在 topBarOn 時渲染',
   /let uiTheme = \$state<UiTheme>\(typeof document !== 'undefined' \? applyTheme\(\) : 'light'\);/.test(LAYOUT)
   && LAYOUT.indexOf('applyTheme()') < LAYOUT.indexOf('onMount(')
-  && /\{#if topBarOn\}\n  <SiteTopBar pathname=\{curPath\} \{base\} version=\{VERSION\} theme=\{uiTheme\} ontoggle=\{toggleUiTheme\} \/>\n\{\/if\}\n\n\{@render children\(\)\}/.test(LAYOUT));
+  // ⭐v6.497（Rule 40）：同一個 {#if topBarOn} 區塊內另掛手機／平板的底部導覽列（<1024px 才顯示，見 test-v6497 D）；意圖（頂端列在 children 之前、只在 topBarOn 渲染）不變
+  && /\{#if topBarOn\}\n  <SiteTopBar pathname=\{curPath\} \{base\} version=\{VERSION\} theme=\{uiTheme\} ontoggle=\{toggleUiTheme\} \/>\n(?:  <SiteBottomNav pathname=\{curPath\} \{base\} \/>\n)?\{\/if\}\n\n\{@render children\(\)\}/.test(LAYOUT));
 ok('★[S6] layout 不新增 {#each}（每頁必載節點）', !/\{#each/.test(LAYOUT));
 ok('★★[S12] 頂端列避開 iOS 安全區：讀全站唯一來源 --safe-top（不自己寫 env()）', /padding-top: var\(--safe-top, 0px\);/.test(tbStyle) && !/env\(safe-area/.test(tbStyle));
 // 首頁：v6.474 的版面規則全部在 min-width:1024px 區塊內

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { compileCardQuery, cardSearchFields, SEARCH_SYNTAX_HINT } from '$lib/cards/search-query';   // ⭐v6.481 搜尋語法（兩頁共用）
+  import { MediaQuery } from 'svelte/reactivity';
+  import { MOBILE_FILTER_QUERY, countActiveFilters, filterToggleLabel } from '$lib/mobile-filters';   // ⭐v6.497 手機篩選收合
   import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）
   import { deckSortDrag, moveIdTo } from '$lib/deck-sort-drag';   // ⭐v6.460 牌組拖曳排序（唯一來源）
   import { onMount } from 'svelte';
@@ -287,6 +289,24 @@
   });
   // v4.9：預設選全部容許的標（標準賽全範圍），玩家可自行點選縮小範圍
   let selectedRegMarks = $state<Set<RegMarkKey>>(new Set(DEFAULT_CARD_POLICY.allowedMarks));
+  // >>> v6497-mobile-filter-fold
+  // ⭐v6.497 手機版找卡區：篩選列（分類～卡包）預設收起，只留搜尋列＋「篩選（已選 N 項）」按鈕（站長手機清單第 3 項）。
+  //   桌機（>600px）永遠展開，與原本完全相同。⚠ 本頁不可新增 $effect／onMount（見上方註解）——
+  //   MediaQuery 是 svelte/reactivity 的響應式值，不是在本頁註冊 effect。
+  //   賽季：預設就是「全部容許的標」⇒ 只有跟預設不同（且不是清成空＝不限）時才算進已選項數。
+  const narrowView = new MediaQuery(MOBILE_FILTER_QUERY, false);
+  let filtersOpen = $state(false);
+  const regMarksNarrowed = $derived.by((): Set<RegMarkKey> => {
+    const all = new Set(REG_MARK_ORDER);
+    const same = selectedRegMarks.size === all.size && [...selectedRegMarks].every((m) => all.has(m));
+    return same ? new Set() : selectedRegMarks;
+  });
+  const activeFilterCount = $derived(countActiveFilters(
+    [selectedCategories, selectedTags, selectedTypes, selectedStages, regMarksNarrowed],
+    [favoritesOnly, setFilter !== ''],
+  ));
+  const showFilters = $derived(!narrowView.current || filtersOpen);
+  // <<< v6497-mobile-filter-fold
   // ⚠⚠ 這一頁**不可以**新增 `$effect`／`onMount`／計時器／fetch ——
   //   v6.267 D0、v6.271、v6.277 C6 三支效能守衛都把「/decks 的載入路徑只有 $state 初始化」
   //   當成量測口徑，多一個就等於把那三支的結論作廢。
@@ -2027,6 +2047,13 @@
             <option value="evolution">🌱 進化鏈搜尋</option>
           </select>
         </div>
+        <!-- >>> v6497-mobile-filter-toggle -->
+        {#if narrowView.current}
+          <button type="button" class="pk-filter-toggle" class:has-active={activeFilterCount > 0}
+            aria-expanded={filtersOpen} onclick={() => (filtersOpen = !filtersOpen)}>{filterToggleLabel(activeFilterCount, filtersOpen)}</button>
+        {/if}
+        {#if showFilters}
+        <!-- <<< v6497-mobile-filter-toggle -->
         <div class="pk-chip-row" role="group" aria-label="分類">
           <span class="pk-label">分類：</span>
           <button class="pk-chip" class:active={selectedCategories.size === 0}
@@ -2092,6 +2119,7 @@
             {/each}
           </select>
         </div>
+        {/if}<!-- v6497-mobile-filter-toggle -->
       </div>
 
       {#if !poolReady}
@@ -4062,12 +4090,28 @@
     .text-area,
     .bm-code,
     .auth-form input { font-size: 16px; }
+    /* >>> v6497-mobile-filter-css */
+    /* ⭐v6.497 手機篩選收合鈕（只在 ≤600px 渲染，見 $lib/mobile-filters）：44px 高（觸控目標） */
+    .pk-filter-toggle {
+      min-height: 44px; width: 100%; box-sizing: border-box;
+      border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: #374151;
+      font: inherit; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+    }
+    .pk-filter-toggle.has-active { border-color: #4f46e5; color: #4f46e5; background: #eef2ff; }
+    /* 觸控目標（站長手機清單第 5 項）：篩選鈕 36px、其餘按鈕與輸入框 40px 高；摺疊標題用上下內距放大可點範圍 */
+    .pk-chip { min-height: 36px; box-sizing: border-box; }
+    .to-board, .auth-btn, button.small, .deck-title, .pk-search, .pk-set-select { min-height: 40px; box-sizing: border-box; }
+    .to-board { display: inline-flex; align-items: center; }
+    .preset-section > .preset-summary { padding-top: 10px; padding-bottom: 10px; }
+    /* （排序 ▲▼ 與卡片 ＋／☆ 的尺寸在下方 pointer:coarse 區塊，那裡排在後面、同權重會蓋過這裡） */
+    /* <<< v6497-mobile-filter-css */
   }
   /* ⭐v6.468（全站 audit）：觸控裝置上牌組排序 ▲▼（原 18×14px）與卡片 ＋／−／☆／×（原 26px）放大到手指點得到。
      只在 pointer:coarse 生效 ⇒ 桌機滑鼠的版面不變。 */
   @media (pointer: coarse) {
-    .deck-reorder-btn { min-width: 30px; min-height: 26px; font-size: 0.75rem; }
-    button.icon, .picker-list li button.icon { min-width: 34px; min-height: 34px; }
+    /* ⭐v6.497：再放大到 36／40px（站長手機清單第 5 項：觸控目標 36～44px） */
+    .deck-reorder-btn { min-width: 36px; min-height: 36px; font-size: 0.75rem; }
+    button.icon, .picker-list li button.icon { min-width: 40px; min-height: 40px; }
     /* 「← 首頁」可點範圍放大（padding＋等量負 margin，版面不動）。⚠ 本頁的桌機 CSS 有逐字指紋守衛（test-v6213）⇒ 只放在觸控分支 */
     .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
   }
