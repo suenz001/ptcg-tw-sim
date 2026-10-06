@@ -181,4 +181,31 @@
     .foot { color: var(--ui-text-muted); }
     .foot a { color: var(--ui-link); }
   }
+  /* >>> v6498-mobile-dark */
+  /* ⭐v6.498 手機／平板深色主題（站長手機清單第 6 項：深色主題原本只有網頁版 ≥1024px）。
+     ・條件：<html data-theme='dark'> 且不是網頁版（沒有 data-ui-wide）⇒ 手機淺色（預設）一個像素都不變，網頁版也不變。
+     ・內容：本頁網頁版主題區塊（min-width:1024px）裡「只跟顏色有關」的宣告，原樣換成上面的條件（線寬、版面、尺寸一律不帶）；
+       框線簡寫只取顏色（border-color），不會替手機版多出原本沒有的框。顏色讀 layout 的 --ui-* 深色色票。
+     ・不用 @media（本頁的 @media 數量／桌機 CSS 指紋有守衛在釘）。 */
+  :global(html[data-theme='dark']:not([data-ui-wide])) .card-page { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .crumb { color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .crumb a,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .links a { color: var(--ui-link); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) h1 { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .body { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .img { box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .info th,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .info td { border-color: var(--ui-border); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .info th { background: var(--ui-bg-sunken); color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .info td { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .sec { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .sec h2 { border-left-color: var(--ui-accent); color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .sec p,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .block p { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .block { background: var(--ui-bg-sunken); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .cost { background: var(--ui-accent-soft); color: var(--ui-link); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .dmg { color: #e0533f; }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .foot { color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .foot a { color: var(--ui-link); }
+  /* <<< v6498-mobile-dark */
 </style>

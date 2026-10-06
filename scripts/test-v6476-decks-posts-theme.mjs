@@ -88,14 +88,24 @@ else if (chromium) {
       const P = { body: await css(pg, 'body', 'backgroundColor'), head: await css(pg, '.page-head', 'borderTopLeftRadius'), back: await css(pg, '.page-head > .back', 'display') };
       await ctx.close();
       ok('★★[E2] /deck-posts 淺色：主題底色、頁首卡片、「← 首頁」收起', lum(P.body) > 230 && P.head === '16px' && P.back === 'none', JSON.stringify(P));
-      ({ ctx, pg } = await open(390, 844, 'dark', '/decks', true));
-      const M = { body: await css(pg, 'body', 'backgroundColor'), rail: await css(pg, '.rail', 'backgroundColor'), radius: await css(pg, '.rail', 'borderTopLeftRadius'), back: await css(pg, '.page-head > .back', 'display') };
-      await ctx.close();
-      ok('★★★[E3] 手機 390 深色：/decks 維持舊樣式（白面板、8px 圓角、「← 首頁」在）', M.body === 'rgb(244, 244, 246)' && M.rail === 'rgb(255, 255, 255)' && M.radius === '8px' && M.back !== 'none', JSON.stringify(M));
-      ({ ctx, pg } = await open(390, 844, 'dark', '/deck-posts', true));
-      const MP = { body: await css(pg, 'body', 'backgroundColor'), back: await css(pg, '.page-head > .back', 'display'), head: await css(pg, '.page-head', 'borderTopLeftRadius') };
-      await ctx.close();
-      ok('★★[E4] 手機 390：/deck-posts 維持舊樣式', MP.body === 'rgb(244, 244, 246)' && MP.back !== 'none' && MP.head === '0px', JSON.stringify(MP));
+      // ⭐v6.498（Rule 40，站長手機清單第 6 項「深色主題目前只有電腦版：手機沒有切換鈕、系統深色時仍是淺色」）：
+      //   手機深色改成吃主題色 ⇒ 原本「手機深色也維持舊樣式」的判準拆成兩條：淺色＝顏色與版面全部維持舊樣式；深色＝版面維持、顏色吃主題。
+      const md = async (scheme) => {
+        ({ ctx, pg } = await open(390, 844, scheme, '/decks', true));
+        const r = { body: await css(pg, 'body', 'backgroundColor'), rail: await css(pg, '.rail', 'backgroundColor'), radius: await css(pg, '.rail', 'borderTopLeftRadius'), back: await css(pg, '.page-head > .back', 'display') };
+        await ctx.close(); return r;
+      };
+      const M = await md('light'), MD = await md('dark');
+      ok('★★★[E3] 手機 390 淺色：/decks 維持舊樣式（白面板、8px 圓角、「← 首頁」在）', M.body === 'rgb(244, 244, 246)' && M.rail === 'rgb(255, 255, 255)' && M.radius === '8px' && M.back !== 'none', JSON.stringify(M));
+      ok('★★[E3b] 手機 390 深色：/decks 版面維持（8px 圓角、「← 首頁」在），顏色吃深色主題', MD.body === 'rgb(22, 40, 22)' && MD.rail === 'rgb(30, 53, 33)' && MD.radius === '8px' && MD.back !== 'none', JSON.stringify(MD));
+      const mp = async (scheme) => {
+        ({ ctx, pg } = await open(390, 844, scheme, '/deck-posts', true));
+        const r = { body: await css(pg, 'body', 'backgroundColor'), back: await css(pg, '.page-head > .back', 'display'), head: await css(pg, '.page-head', 'borderTopLeftRadius') };
+        await ctx.close(); return r;
+      };
+      const MP = await mp('light'), MPD = await mp('dark');
+      ok('★★[E4] 手機 390 淺色：/deck-posts 維持舊樣式', MP.body === 'rgb(244, 244, 246)' && MP.back !== 'none' && MP.head === '0px', JSON.stringify(MP));
+      ok('★★[E4b] 手機 390 深色：/deck-posts 版面維持，底色吃深色主題', MPD.body === 'rgb(22, 40, 22)' && MPD.back !== 'none' && MPD.head === '0px', JSON.stringify(MPD));
       ok('[E9] 以上頁面沒有 JS 例外', errs.length === 0, errs.slice(0, 3).join(' | '));
     } finally { await browser.close(); srv.close(); }
   }

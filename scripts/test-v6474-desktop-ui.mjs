@@ -140,7 +140,7 @@ ok('★★★[S5] layout 在初始化就套主題（不在 onMount 裡）、頂�
   /let uiTheme = \$state<UiTheme>\(typeof document !== 'undefined' \? applyTheme\(\) : 'light'\);/.test(LAYOUT)
   && LAYOUT.indexOf('applyTheme()') < LAYOUT.indexOf('onMount(')
   // ⭐v6.497（Rule 40）：同一個 {#if topBarOn} 區塊內另掛手機／平板的底部導覽列（<1024px 才顯示，見 test-v6497 D）；意圖（頂端列在 children 之前、只在 topBarOn 渲染）不變
-  && /\{#if topBarOn\}\n  <SiteTopBar pathname=\{curPath\} \{base\} version=\{VERSION\} theme=\{uiTheme\} ontoggle=\{toggleUiTheme\} \/>\n(?:  <SiteBottomNav pathname=\{curPath\} \{base\} \/>\n)?\{\/if\}\n\n\{@render children\(\)\}/.test(LAYOUT));
+  && /\{#if topBarOn\}\n  <SiteTopBar pathname=\{curPath\} \{base\} version=\{VERSION\} theme=\{uiTheme\} ontoggle=\{toggleUiTheme\} \/>\n(?:  <SiteBottomNav pathname=\{curPath\} \{base\}[^\n]*\/>\n)?\{\/if\}\n\n\{@render children\(\)\}/.test(LAYOUT));
 ok('★[S6] layout 不新增 {#each}（每頁必載節點）', !/\{#each/.test(LAYOUT));
 ok('★★[S12] 頂端列避開 iOS 安全區：讀全站唯一來源 --safe-top（不自己寫 env()）', /padding-top: var\(--safe-top, 0px\);/.test(tbStyle) && !/env\(safe-area/.test(tbStyle));
 // 首頁：v6.474 的版面規則全部在 min-width:1024px 區塊內
@@ -257,9 +257,14 @@ else if (chromium) {
       await ctx.close();
       ok('★★★[E6] /game 大廳顯示頂端列、還沒開局時沒有 data-battle-view；牌桌畫面（data-battle-view）時收起', G.stb?.disp === 'block' && G.active.join() === '對戰演練' && !gAttr && gHidden === 'none', JSON.stringify({ stb: G.stb, gAttr, gHidden }));
       // 手機 390：頂端列不佔空間、首頁仍是 680 單欄、logo 不顯示
-      ({ ctx, pg } = await open(390, 844, 'dark', '/', true));
+      // ⭐v6.498（Rule 40，站長手機清單第 6 項「深色主題目前只有電腦版：手機沒有切換鈕、系統深色時仍是淺色」）：
+      //   手機深色改成吃主題色 ⇒ 原本「手機深色也維持舊樣式」的判準拆成兩條：淺色＝顏色與版面全部維持舊樣式；深色＝版面維持、顏色吃主題。
+      ({ ctx, pg } = await open(390, 844, 'light', '/', true));
       const Mo = await probe(pg); await ctx.close();
-      ok('★★★[E7] 手機 390：頂端列 display:none、main 是 block 680 上限、logo 不顯示、底色維持 #f4f4f6', Mo.stb?.disp === 'none' && Mo.mainDisp === 'block' && Mo.maxW === '680px' && Mo.logo === 'none' && Mo.body === 'rgb(244, 244, 246)', JSON.stringify(Mo));
+      ok('★★★[E7] 手機 390 淺色：頂端列 display:none、main 是 block 680 上限、logo 不顯示、底色維持 #f4f4f6', Mo.stb?.disp === 'none' && Mo.mainDisp === 'block' && Mo.maxW === '680px' && Mo.logo === 'none' && Mo.body === 'rgb(244, 244, 246)', JSON.stringify(Mo));
+      ({ ctx, pg } = await open(390, 844, 'dark', '/', true));
+      const MoD = await probe(pg); await ctx.close();
+      ok('★★[E7b] 手機 390 深色：版面同上（頂端列不顯示、680 單欄），底色改吃深色主題', MoD.stb?.disp === 'none' && MoD.mainDisp === 'block' && MoD.maxW === '680px' && MoD.logo === 'none' && MoD.body === 'rgb(22, 40, 22)', JSON.stringify(MoD));
       // 平板 1000：同手機（臨界值以下不變）
       ({ ctx, pg } = await open(1000, 800, 'dark', '/'));
       const T = await probe(pg); await ctx.close();

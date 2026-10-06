@@ -95,7 +95,7 @@ const NAV = rd('src/lib/SiteBottomNav.svelte');
 const LAYOUT = rd('src/routes/+layout.svelte');
 const THEME = rd('src/lib/site-theme.ts');
 T('D1 layout 在頂端列同一個條件下掛底部導覽列（admin 不顯示）', () => {
-  assert.match(LAYOUT, /\{#if topBarOn\}\n  <SiteTopBar[^\n]*\/>\n  <SiteBottomNav pathname=\{curPath\} \{base\} \/>\n\{\/if\}/);
+  assert.match(LAYOUT, /\{#if topBarOn\}\n  <SiteTopBar[^\n]*\/>\n  <SiteBottomNav pathname=\{curPath\} \{base\}[^\n]*\/>\n\{\/if\}/);   // ⭐v6.498 起多傳主題切換（Rule 40）
 });
 const css = /<style>([\s\S]*?)<\/style>/.exec(NAV)?.[1] ?? '';
 T('D2 只在 <1024px 顯示（網頁版有頂端列）', () => {

@@ -5,9 +5,10 @@
   //   ・⚠ 只在 @media (max-width:1023px) 顯示 ⇒ 網頁版一個像素都不變（DOM 在，但 display:none）。
   //   ・頁面底部預留空間由 layout 的全域規則處理（同一個條件），內容不會被導覽列蓋住。
   //   ・⚠ 比照 SiteTopBar：props 不給預設值、逐條寫出不用 {#each}（layout 是每一頁的第一批預載，見該檔註解）。
-  import { activeNavHref } from '$lib/site-theme';
+  import { activeNavHref, type UiTheme } from '$lib/site-theme';
 
-  let { pathname, base }: { pathname: string; base: string } = $props();
+  // ⭐v6.498：手機沒有頂端列 ⇒ 深色／淺色切換鈕放在底部導覽列最右邊（與網頁版頂端列同一個切換函式）
+  let { pathname, base, theme, ontoggle }: { pathname: string; base: string; theme: UiTheme; ontoggle: () => void } = $props();
   const active = $derived(activeNavHref(pathname, base));
 </script>
 
@@ -18,6 +19,8 @@
   <a class="sbn-link" class:active={active === '/deck-posts'} href="{base}/deck-posts" aria-current={active === '/deck-posts' ? 'page' : undefined}><span class="sbn-ico" aria-hidden="true">📋</span><span class="sbn-lb">公布欄</span></a>
   <a class="sbn-link" class:active={active === '/game'} href="{base}/game" aria-current={active === '/game' ? 'page' : undefined}><span class="sbn-ico" aria-hidden="true">⚔️</span><span class="sbn-lb">對戰</span></a>
   <a class="sbn-link" class:active={active === '/tournament'} href="{base}/tournament" aria-current={active === '/tournament' ? 'page' : undefined}><span class="sbn-ico" aria-hidden="true">🏆</span><span class="sbn-lb">錦標賽</span></a>
+  <button class="sbn-link sbn-theme" type="button" onclick={ontoggle}
+    aria-label={theme === 'dark' ? '切換成淺色主題' : '切換成深色主題'}><span class="sbn-ico" aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span><span class="sbn-lb">{theme === 'dark' ? '淺色' : '深色'}</span></button>
 </nav>
 
 <style>
@@ -63,5 +66,11 @@
     .sbn.dark { background: rgba(16, 32, 22, 0.97); border-top-color: #2f4a37; box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.35); }
     .sbn.dark .sbn-link { color: #a9bdb0; }
     .sbn.dark .sbn-link.active { color: #7ee2a8; }
+    /* ⭐v6.498 深色主題時整條導覽列都用深色 */
+    :global(html[data-theme='dark']) .sbn { background: rgba(16, 32, 22, 0.97); border-top-color: #2f4a37; box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.35); }
+    :global(html[data-theme='dark']) .sbn .sbn-link { color: #a9bdb0; }
+    :global(html[data-theme='dark']) .sbn .sbn-link.active { color: #7ee2a8; }
+    .sbn-theme { background: none; border: 0; padding: 0; font-family: inherit; cursor: pointer; }
+    .sbn-link.sbn-theme { flex: 0.8 1 0; }
   }
 </style>

@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'fd98a5f2cfb10820149421d88c59b002a35ce6bf';   // v6.496（上一版）
+const PREV_SHA = '4004845ea555208fc13bd105a909f11f297c5a7f';   // v6.497（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,21 +757,36 @@ const PREV_SHA = 'fd98a5f2cfb10820149421d88c59b002a35ce6bf';   // v6.496（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.497 前移：PREV_SHA 從 fd98a5f2（v6.496）起算。
+  // ⚠⚠ v6.498 前移：PREV_SHA 從 4004845e（v6.497）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.497：站長手機清單 1／2／3／4／5／7 項：底部導覽列、篩選收合（MediaQuery，桌機不渲染按鈕）、觸控目標、卡名字級、首頁兩欄；首頁 changelog 三步搬運。
+  // ⭐v6.498：站長手機清單第 6 項：各頁 v6498-mobile-dark 哨兵（網頁版主題區塊的顏色宣告，條件 html[data-theme=dark]:not([data-ui-wide])）、layout 深色底色、底部導覽列主題切換；首頁 changelog 三步搬運。
   'src/lib/SiteBottomNav.svelte',
-  'src/lib/decks/DeckNotes.svelte',
-  'src/lib/mobile-filters.ts',
   'src/lib/version.ts',
   'src/routes/+layout.svelte',
   'src/routes/+page.svelte',
+  'src/routes/card/[id]/+page.svelte',
   'src/routes/cards/+page.svelte',
+  'src/routes/deck-posts/+page.svelte',
   'src/routes/decks/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.497）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.497 前移：PREV_SHA 從 fd98a5f2（v6.496）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.497：站長手機清單 1／2／3／4／5／7 項：底部導覽列、篩選收合（MediaQuery，桌機不渲染按鈕）、觸控目標、卡名字級、首頁兩欄；首頁 changelog 三步搬運。
+//   'src/lib/SiteBottomNav.svelte',
+//   'src/lib/decks/DeckNotes.svelte',
+//   'src/lib/mobile-filters.ts',
+//   'src/lib/version.ts',
+//   'src/routes/+layout.svelte',
+//   'src/routes/+page.svelte',
+//   'src/routes/cards/+page.svelte',
+//   'src/routes/decks/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.496）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.496 前移：PREV_SHA 從 a4519f5d（v6.495）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -897,17 +912,6 @@ const PREV_ALLOWED = [
 //   'src/lib/decks/DeckNotes.svelte',
 //   'src/lib/version.ts',
 //   'src/routes/deck-posts/+page.svelte',
-//   'src/routes/decks/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.485）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.485 前移：PREV_SHA 從 529fe726（v6.484）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.485：牌組編輯器 🎲 測抽（$lib/decks/opening-hand 純函式＋OpeningHandSim 元件）；首頁 changelog 三步搬運。
-//   'src/lib/decks/OpeningHandSim.svelte',
-//   'src/lib/decks/opening-hand.ts',
-//   'src/lib/version.ts',
 //   'src/routes/decks/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',

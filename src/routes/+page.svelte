@@ -1403,4 +1403,87 @@
   @media (min-width: 1024px) and (prefers-reduced-motion: reduce) {
     .hm-card, .hm-card:hover, .hm-arrow { transition: none; transform: none; }
   }
+  /* >>> v6498-mobile-dark */
+  /* ⭐v6.498 手機／平板深色主題（站長手機清單第 6 項：深色主題原本只有網頁版 ≥1024px）。
+     ・條件：<html data-theme='dark'> 且不是網頁版（沒有 data-ui-wide）⇒ 手機淺色（預設）一個像素都不變，網頁版也不變。
+     ・內容：本頁網頁版主題區塊（min-width:1024px）裡「只跟顏色有關」的宣告，原樣換成上面的條件（線寬、版面、尺寸一律不帶）；
+       框線簡寫只取顏色（border-color），不會替手機版多出原本沒有的框。顏色讀 layout 的 --ui-* 深色色票。
+     ・不用 @media（本頁的 @media 數量／桌機 CSS 指紋有守衛在釘）。 */
+  :global(html[data-theme='dark']:not([data-ui-wide])) main { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-evt-item { background: var(--ui-bg-sunken); border-color: var(--ui-border); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-evt-name { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-evt-tag { background: var(--ui-accent-soft); color: var(--ui-link); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-evt-meta { color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-evt-st { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-evt-st.live { color: #d9433a; }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-evt-st.open { color: var(--ui-link); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) section,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .community-section,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .changelog-section,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .feedback-section,
+  :global(html[data-theme='dark']:not([data-ui-wide])) main > :global(.hv-section) { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) h2 { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) a,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .link-btn { color: var(--ui-link); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-hero { background: var(--ui-hero-bg); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-hero::after { background: linear-gradient(90deg, #7AC74C, #EE8130, #6390F0, #F7D02C, #A33EA1, #A8B820, #C22E28, #705746, #B7B7CE, #F95587, #A98FF3, #6F35FC, #E2BF65, #96D9D6, #735797, #B6A136, #A6B91A, #A8A77A); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-logo { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-hero-text h1 { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .subtitle { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .tagline { color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .version { background: var(--ui-accent-soft); color: var(--ui-link); border-color: var(--ui-border); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hard-refresh-btn { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hard-refresh-btn:hover { background: var(--ui-accent-soft); border-color: var(--ui-accent); color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card:hover { border-color: var(--ui-accent); box-shadow: var(--ui-shadow-hover); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-title { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-desc { color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-arrow { color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card:hover .hm-arrow { color: var(--ui-accent); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-cards .hm-icon,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-decks .hm-icon { background: var(--ui-accent-soft); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-game,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-tourn { background: var(--ui-cta-bg); border-color: var(--ui-cta-border); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-game .hm-title,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-tourn .hm-title { color: var(--ui-cta-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-game .hm-desc,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-tourn .hm-desc { color: var(--ui-cta-desc); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-game .hm-arrow,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-tourn .hm-arrow { color: var(--ui-cta-desc); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-game:hover .hm-arrow,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-tourn:hover .hm-arrow { color: var(--ui-accent); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-game .hm-icon,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-tourn .hm-icon { background: var(--ui-cta-icon-bg); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-game:hover,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hm-card-tourn:hover { border-color: var(--ui-accent); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) main > :global(.hv-section) :global(.hv-title) { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) main > :global(.hv-section) :global(.hv-hint) { color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) main > :global(.hv-section) :global(.hv-hint a) { color: var(--ui-link); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .community-desc,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .link-label { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .community-hint { color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .qr-block { background: #fff; }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .qr-caption { color: #555; }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .changelog-outer > summary h2::before { color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) details { background: var(--ui-bg-elev); border-color: var(--ui-border); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) details[open] { background: var(--ui-accent-soft); border-color: var(--ui-accent); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) summary { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) summary::before { color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .changelog-outer { background: transparent; }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .changelog-outer[open] { background: transparent; }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .changelog-list :global(details) { background: var(--ui-bg-elev); border-color: var(--ui-border); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .changelog-list :global(details[open]) { background: var(--ui-accent-soft); border-color: var(--ui-accent); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .changelog-list :global(summary) { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .changelog-list :global(summary::before) { color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .changelog-list :global(.ver-badge) { background: var(--ui-bg-sunken); color: var(--ui-link); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .changelog-list :global(details[open] .ver-badge) { background: var(--ui-bg-elev); color: var(--ui-link); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .changelog-list :global(details ul) { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .changelog-list :global(.log-body) { color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .changelog-list :global(.changelog-archive-link) { color: var(--ui-link); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hint { color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .disclaimer { border-top-color: var(--ui-border); color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .disclaimer-title { color: var(--ui-text); border-bottom-color: var(--ui-border); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .disclaimer-section { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .disclaimer a { color: var(--ui-link); }
+  /* <<< v6498-mobile-dark */
 </style>

@@ -129,7 +129,7 @@
 
 {#if topBarOn}
   <SiteTopBar pathname={curPath} {base} version={VERSION} theme={uiTheme} ontoggle={toggleUiTheme} />
-  <SiteBottomNav pathname={curPath} {base} />
+  <SiteBottomNav pathname={curPath} {base} theme={uiTheme} ontoggle={toggleUiTheme} />
 {/if}
 
 {@render children()}
@@ -272,6 +272,13 @@
     :global(html[data-ui-themed][data-theme='light']:not([data-battle-view])),
     :global(html[data-ui-themed][data-theme='light']:not([data-battle-view]) body) { background-color: var(--ui-bg) !important; }
   }
+
+  /* >>> v6498-mobile-dark-base */
+  /* ⭐v6.498 手機／平板深色主題（站長手機清單第 6 項）：已接上主題的頁面在深色時整頁底色跟著主題。
+     條件與各頁的手機深色區塊相同（data-theme='dark' 且不是網頁版 data-ui-wide）⇒ 手機淺色與網頁版都不變；牌桌畫面不套。 */
+  :global(html[data-ui-themed][data-theme='dark']:not([data-ui-wide]):not([data-battle-view]) body) { background: var(--ui-bg); color: var(--ui-text); }
+  :global(html[data-ui-themed][data-theme='dark']:not([data-ui-wide]):not([data-battle-view])) { color-scheme: dark; }
+  /* <<< v6498-mobile-dark-base */
 
   /* v5.034：BETA 標記 banner — 黃色細條，github.io 才顯示，不可 dismiss */
   /* v5.070：padding-top 加安全區 — 避開 iOS 動態島 / 瀏海。

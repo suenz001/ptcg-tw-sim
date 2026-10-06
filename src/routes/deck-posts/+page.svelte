@@ -1324,4 +1324,29 @@
     .tourn-banner { background: var(--ui-accent-soft); border-color: var(--ui-border); }
   }
   /* <<< v6476-desktop-theme */
+  /* >>> v6498-mobile-dark */
+  /* ⭐v6.498 手機／平板深色主題（站長手機清單第 6 項：深色主題原本只有網頁版 ≥1024px）。
+     ・條件：<html data-theme='dark'> 且不是網頁版（沒有 data-ui-wide）⇒ 手機淺色（預設）一個像素都不變，網頁版也不變。
+     ・內容：本頁網頁版主題區塊（min-width:1024px）裡「只跟顏色有關」的宣告，原樣換成上面的條件（線寬、版面、尺寸一律不帶）；
+       框線簡寫只取顏色（border-color），不會替手機版多出原本沒有的框。顏色讀 layout 的 --ui-* 深色色票。
+     ・不用 @media（本頁的 @media 數量／桌機 CSS 指紋有守衛在釘）。 */
+  :global(html[data-theme='dark']:not([data-ui-wide])) main { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .page-head { background: var(--ui-hero-bg); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .page-head h1 { color: var(--ui-text); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .to-decks,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .notice a { color: var(--ui-link); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .hint { color: var(--ui-text-muted); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .toolbar { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .sorts button,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .pager button,
+  :global(html[data-theme='dark']:not([data-ui-wide])) .tabs > button { color: var(--ui-text); border-color: var(--ui-border); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .sorts button.active { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .search input { background: var(--ui-input-bg); border-color: var(--ui-border); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .post-card { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .post-card:hover { background: var(--ui-bg-elev); border-color: var(--ui-accent); box-shadow: var(--ui-shadow-hover); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .modal { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
+  :global(html[data-theme='dark']:not([data-ui-wide])) .tourn-banner { background: var(--ui-accent-soft); border-color: var(--ui-border); }
+  /* 網頁版收起的「← 首頁」（上面抽不到） */
+  :global(html[data-theme='dark']:not([data-ui-wide])) .back { color: var(--ui-link); }
+  /* <<< v6498-mobile-dark */
 </style>

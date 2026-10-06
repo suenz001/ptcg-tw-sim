@@ -124,15 +124,25 @@ else if (chromium) {
       await ctx.close();
       ok('★★[E5] 單卡頁深色：資料卡深色、表格文字淺色、卡圖 340px、兩欄 grid', lum(K.body) < 40 && lum(K.box) < 50 && lum(K.td) > 200 && K.img === '340px' && K.disp === 'grid', JSON.stringify(K));
       // 手機：卡牌頁與單卡頁完全沿用舊樣式（不吃主題）
-      ({ ctx, pg } = await open(390, 844, 'dark', '/cards?set=M6', true));
-      await pg.waitForTimeout(800);
-      const MC = { body: await css(pg, 'body', 'backgroundColor'), radius: await css(pg, '.controls', 'borderTopLeftRadius'), panel: await css(pg, '.controls', 'backgroundColor') };
-      await ctx.close();
-      ok('★★★[E6] 手機 390 深色：/cards 底色與篩選區維持舊樣式（不吃主題）', MC.body === 'rgb(244, 244, 246)' && MC.radius === '0px' && MC.panel === 'rgba(0, 0, 0, 0)', JSON.stringify(MC));
-      ({ ctx, pg } = await open(390, 844, 'dark', '/card/19378/', true));
-      const MK = { box: await css(pg, '.body', 'backgroundColor'), disp: await css(pg, '.body', 'display'), page: await css(pg, '.card-page', 'maxWidth') };
-      await ctx.close();
-      ok('★★[E7] 手機 390：單卡頁維持舊版面（flex、760 上限、無底色）', MK.disp === 'flex' && MK.page === '760px' && MK.box === 'rgba(0, 0, 0, 0)', JSON.stringify(MK));
+      // ⭐v6.498（Rule 40，站長手機清單第 6 項「深色主題目前只有電腦版：手機沒有切換鈕、系統深色時仍是淺色」）：
+      //   手機深色改成吃主題色 ⇒ 原本「手機深色也維持舊樣式」的判準拆成兩條：淺色＝顏色與版面全部維持舊樣式；深色＝版面維持、顏色吃主題。
+      const mc = async (scheme) => {
+        ({ ctx, pg } = await open(390, 844, scheme, '/cards?set=M6', true));
+        await pg.waitForTimeout(800);
+        const r = { body: await css(pg, 'body', 'backgroundColor'), radius: await css(pg, '.controls', 'borderTopLeftRadius'), panel: await css(pg, '.controls', 'backgroundColor') };
+        await ctx.close(); return r;
+      };
+      const MC = await mc('light'), MCD = await mc('dark');
+      ok('★★★[E6] 手機 390 淺色：/cards 底色與篩選區維持舊樣式（不吃主題）', MC.body === 'rgb(244, 244, 246)' && MC.radius === '0px' && MC.panel === 'rgba(0, 0, 0, 0)', JSON.stringify(MC));
+      ok('★★[E6b] 手機 390 深色：/cards 版面維持（篩選區 0 圓角），顏色吃深色主題', MCD.body === 'rgb(22, 40, 22)' && MCD.radius === '0px' && MCD.panel === 'rgb(30, 53, 33)', JSON.stringify(MCD));
+      const mk = async (scheme) => {
+        ({ ctx, pg } = await open(390, 844, scheme, '/card/19378/', true));
+        const r = { box: await css(pg, '.body', 'backgroundColor'), disp: await css(pg, '.body', 'display'), page: await css(pg, '.card-page', 'maxWidth') };
+        await ctx.close(); return r;
+      };
+      const MK = await mk('light'), MKD = await mk('dark');
+      ok('★★[E7] 手機 390 淺色：單卡頁維持舊版面（flex、760 上限、無底色）', MK.disp === 'flex' && MK.page === '760px' && MK.box === 'rgba(0, 0, 0, 0)', JSON.stringify(MK));
+      ok('★★[E7b] 手機 390 深色：單卡頁版面維持（flex、760 上限），顏色吃深色主題', MKD.disp === 'flex' && MKD.page === '760px' && MKD.box === 'rgb(30, 53, 33)', JSON.stringify(MKD));
       // 錦標賽大廳也有頂端列（active＝錦標賽）
       ({ ctx, pg } = await open(1440, 900, 'light', '/tournament'));
       const T = { disp: await css(pg, '.stb', 'display'), act: await pg.evaluate(() => [...document.querySelectorAll('.stb-link.active')].map((a) => a.textContent).join()), bv: await pg.evaluate(() => document.documentElement.hasAttribute('data-battle-view')) };
