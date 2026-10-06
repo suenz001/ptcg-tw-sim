@@ -3,6 +3,7 @@
   import { retryImg } from '$lib/img-retry';
   import { cardThumb } from '$lib/cards/thumb'; // v6.464 小尺寸顯示改用縮圖（失敗由 retryImg 立刻退回官方原圖）
   import { modalDrag } from '$lib/modal-drag';   // ⭐v6.420：全站視窗拖曳＋邊界夾制的唯一來源
+  import { panelResize } from '$lib/panel-resize';   // ⭐v6.495：浮動視窗自訂大小＋記住設定（聊天視窗）
   import { promoteModalSeats, promoteAlerts, preDiscardModalKind } from '$lib/game/modal-slots';   // ⭐v6.425：「該開哪個視窗」的唯一判準
 import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式清單上限（單一來源，UI 與守衛共用）
   // ⭐⭐⭐v6.177「抓取中／抓取失敗不清空已顯示資料」的唯一中央述詞（stale-while-revalidate）。
@@ -1647,6 +1648,22 @@ function _setupSelfPending(g: any, seat: number): string | null {
     oppTurnViewIndex = 0;
   }
   let chatPanelPos = $state({ x: 0, y: 0 });
+  // >>> v6495-chat-panel-remember
+  // ⭐v6.495 站長需求：聊天視窗大小可由玩家調整並記住（尺寸由 use:panelResize 自己存讀）；
+  //   位置也一併記住（桌機與手機直式各一份，因為兩者的錨點與拖曳模式不同）。
+  const chatPanelPosKey = (mobile: boolean) => mobile ? 'ptcg_chat_panel_pos_m' : 'ptcg_chat_panel_pos';
+  function loadChatPanelPos(mobile: boolean): { x: number; y: number } {
+    try {
+      const v = JSON.parse(localStorage.getItem(chatPanelPosKey(mobile)) ?? 'null');
+      if (typeof v?.x === 'number' && typeof v?.y === 'number' && isFinite(v.x) && isFinite(v.y)) return { x: v.x, y: v.y };
+    } catch { /* 無痕模式／格式錯誤 ⇒ 預設位置 */ }
+    return { x: 0, y: 0 };
+  }
+  function saveChatPanelPos(p: { x: number; y: number }) {
+    chatPanelPos = p;
+    try { localStorage.setItem(chatPanelPosKey(isPortraitMobile), JSON.stringify(p)); } catch { /* 不記住也照常可用 */ }
+  }
+  // <<< v6495-chat-panel-remember
   let lastSeenChatCount = $state(0);
   const unreadChatCount = $derived(Math.max(0, chatMessages.length - lastSeenChatCount));
   let tLastSeenChat = $state(0); // v5.577 錦標賽對戰中浮動聊天(接大廳)已讀數
@@ -14150,8 +14167,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {:else}
       <!-- 展開：floating panel（桌機）/ 全螢幕 modal（手機 portrait CSS @media） -->
       <div class="chat-panel"
+        use:panelResize={{ storageKey: isPortraitMobile ? 'ptcg_chat_panel_size_m' : 'ptcg_chat_panel_size', grip: isPortraitMobile ? 'br' : 'tl' }}
         use:modalDrag={{ clamp: 'contain', handle: '.chat-panel-header', overlay: false, mode: isPortraitMobile ? 'margin' : 'translate',
-          initial: chatPanelPos, onEnd: (o) => { chatPanelPos = o; } }}>
+          initial: loadChatPanelPos(isPortraitMobile), onEnd: saveChatPanelPos }}>
         <div class="chat-panel-header"
           title="拖曳此處移動聊天視窗（手機版固定全螢幕）">
           <span>{isTournament ? '💬 大廳聊天室' : '💬 聊天室'}</span>
@@ -16642,6 +16660,25 @@ function _setupSelfPending(g: any, seat: number): string | null {
     position: relative; z-index: 100;
   }
   .chat-panel-close:hover { color: #fff; }
+  /* >>> v6495-chat-resize-css */
+  /* ⭐v6.495 聊天視窗大小拉把（use:panelResize 動態加入；桌機在左上、手機直式在右下） */
+  .chat-panel :global(.panel-resize-grip) {
+    position: absolute; width: 18px; height: 18px; z-index: 120;
+    touch-action: none; cursor: nwse-resize; opacity: .75;
+  }
+  .chat-panel :global(.panel-resize-grip[data-grip="tl"]) {
+    top: 0; left: 0; border-top-left-radius: 8px;
+    background: linear-gradient(135deg, #8a8ab0 0 22%, transparent 22% 38%, #8a8ab0 38% 48%, transparent 48%);
+  }
+  .chat-panel :global(.panel-resize-grip[data-grip="br"]) {
+    bottom: 0; right: 0; border-bottom-right-radius: 10px;
+    background: linear-gradient(315deg, #8a8ab0 0 22%, transparent 22% 38%, #8a8ab0 38% 48%, transparent 48%);
+  }
+  .chat-panel :global(.panel-resize-grip:hover) { opacity: 1; }
+  :global(.chat-panel.panel-resizing) { user-select: none; }
+  /* 左上角拉把蓋在標題列上 ⇒ 標題文字往右讓一點，避免拉把擋到 */
+  .chat-panel-header { padding-left: 1.2rem; }
+  /* <<< v6495-chat-resize-css */
   .chat-panel-messages {
     flex: 1; min-height: 0; overflow-y: auto; padding: .5rem .8rem;
     display: flex; flex-direction: column; gap: .4rem;

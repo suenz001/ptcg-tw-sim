@@ -169,6 +169,10 @@ const LATER = [
   ["    color: #e0e0e0;\n    box-shadow: 0 8px 32px var(--sys-glow);\n", "    color: #e0e0e0;\n    box-shadow: 0 8px 32px rgba(74, 158, 255, 0.3);\n"],
   ["  }\n  .undo-request-modal { --sys-accent: #f59e0b; --sys-glow: rgba(245, 158, 11, 0.3); }\n", "  }\n"],
   ["  .notify-prompt-btns { display: flex; gap: 12px; margin-top: 18px; justify-content: flex-end; }\n\n", "  .notify-prompt-btns { display: flex; gap: 12px; margin-top: 18px; justify-content: flex-end; }\n\n  .undo-modal-overlay {\n    position: fixed; inset: 0;\n    background: rgba(0, 0, 0, 0.65);\n    z-index: 10000;\n    display: flex; align-items: center; justify-content: center;\n  }\n  .undo-request-modal {\n    background: #1a1a2e;\n    border: 2px solid #f59e0b;\n    border-radius: 12px;\n    padding: 24px 28px;\n    max-width: 460px;\n    width: 90vw;\n    color: #e0e0e0;\n    box-shadow: 0 8px 32px rgba(245, 158, 11, 0.3);\n  }\n"],
+  // ⭐v6.495（Rule 40）：聊天視窗掛 use:panelResize、位置改讀寫 localStorage（只動聊天視窗這一個標籤與一行 import）
+  ["  import { panelResize } from '$lib/panel-resize';   // ⭐v6.495：浮動視窗自訂大小＋記住設定（聊天視窗）\n", ""],
+  ["        use:panelResize={{ storageKey: isPortraitMobile ? 'ptcg_chat_panel_size_m' : 'ptcg_chat_panel_size', grip: isPortraitMobile ? 'br' : 'tl' }}\n", ""],
+  ["          initial: loadChatPanelPos(isPortraitMobile), onEnd: saveChatPanelPos }}>", "          initial: chatPanelPos, onEnd: (o) => { chatPanelPos = o; } }}>"],
 ];
 // ⭐v6.464 起：改動也碰到藍桌墊哨兵內的 <img>（全版面一致改用縮圖），無法放進 LATER（哨兵先被剝掉、條目會命中 0 次）
 //   ⇒ 在 strip() 的**最前面**先把本版改動整段還原成 v6.463（IRON_RULES Rule 40：保留「藍桌墊只活在哨兵裡」的原意）。
@@ -195,6 +199,9 @@ function strip(src) {
     /  \/\/ ⭐v6\.441 藍桌墊（blue）＝[\s\S]*?  const isFableGeom = \$derived\(battleLayout === 'fable' \|\| battleLayout === 'blue'\);\n/,
     // ⭐v6.477（Rule 40）：大廳淺色主題整塊在 v6477-lobby-light 哨兵（非藍桌墊、只碰大廳顏色）——整塊拿掉即逐位元還原；內容由 test-v6477-lobby-light 鎖
     /  \/\* >>> v6477-lobby-light \*\/\n[\s\S]*?  \/\* <<< v6477-lobby-light \*\/\n/,
+    // ⭐v6.495（Rule 40）：聊天視窗可調整大小（非藍桌墊、只碰聊天視窗）——位置記憶與拉把 CSS 各在自己的哨兵；內容由 test-v6495-chat-panel-resize 鎖
+    /  \/\/ >>> v6495-chat-panel-remember\n[\s\S]*?  \/\/ <<< v6495-chat-panel-remember\n/,
+    /  \/\* >>> v6495-chat-resize-css \*\/\n[\s\S]*?  \/\* <<< v6495-chat-resize-css \*\/\n/,
   ];
   for (const re of blocks) { if (!re.test(s)) bad.push(String(re).slice(0, 40)); s = s.replace(re, ''); }
   // ② 四個呼叫點

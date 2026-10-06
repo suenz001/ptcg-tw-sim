@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.495：聊天視窗可調整大小並記住（2026-10-06，站長需求）
+
+BASE v6.494（7474db9d）。
+- 站長逐字：「玩家建議聊天視窗寬度可以對齊步驟對話框，我覺得乾脆讓聊天氣泡的視窗，可以讓玩家自己調整大小長寬好了，並且讓瀏覽器網頁記住玩家的設定」。
+- 新增 src/lib/panel-resize.ts：clampPanelSize／resizeByGrip（純函式）＋ action panelResize（拉把在錨點對角：桌機錨右下 ⇒ 左上拉把；手機直式錨左上 ⇒ 右下拉把；inline width/height＋max-height none；pointerup 存 localStorage；雙擊清除；window resize 重夾；localStorage 一律 try/catch）。位置夾制仍由 use:modalDrag（ResizeObserver 會重夾）。
+- 對戰頁：chat-panel 掛 use:panelResize（key ptcg_chat_panel_size／_m）；位置 ptcg_chat_panel_pos／_m（loadChatPanelPos／saveChatPanelPos）。
+- test-v6495：A 純函式、B 接線、C Playwright 實拉（本機沙盒只有完整 chromium，用 executablePath 實跑 11/11；全套走 pw 中央閘，沙盒 ENV-SKIP、CI 會跑）。突變 3 個全殺（第一個突變寫錯造成語法錯誤，重做後才算）。
+
 ## v6.494：特性時機與擲幣型特性 gate（2026-10-06，站長裁定 3、4）
 
 BASE v6.493（1d85cacf）。

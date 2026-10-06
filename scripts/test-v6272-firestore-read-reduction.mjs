@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '1d85cacf85c784375bc3442ab24f9e97c19c86df';   // v6.493（上一版）
+const PREV_SHA = '7474db9d6751b76db96bc6784b68d86fee38a0a9';   // v6.494（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,18 +757,28 @@ const PREV_SHA = '1d85cacf85c784375bc3442ab24f9e97c19c86df';   // v6.493（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.494 前移：PREV_SHA 從 1d85cacf（v6.493）起算。
+  // ⚠⚠ v6.495 前移：PREV_SHA 從 7474db9d（v6.494）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.494：站長裁定 3／4：上場時特性只在放置當下詢問（tryPromptPromoteActive 每次放置都問、資源 gate promoteAbilityReady、SEND_NEW_ACTIVE 自己回合也問、getUsableAbilities 不給按鈕）；擲幣型特性中央 coinAbilityHeadsHasTarget；USE_ABILITY 不再豁免觸發型特性；isManuallyActivatableAbilityText 排除「可使用…招式」被動；首頁 changelog 三步搬運。
-  'src/lib/game/ability-activation.ts',
-  'src/lib/game/effects.ts',
-  'src/lib/game/effects/_shared.ts',
-  'src/lib/game/engine.ts',
+  // ⭐v6.495：新增中央 action use:panelResize（拉把、夾制、localStorage 記住、雙擊重設）；對戰頁聊天視窗接上並記住位置；首頁 changelog 三步搬運。
+  'src/lib/panel-resize.ts',
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.494）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.494 前移：PREV_SHA 從 1d85cacf（v6.493）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.494：站長裁定 3／4：上場時特性只在放置當下詢問（tryPromptPromoteActive 每次放置都問、資源 gate promoteAbilityReady、SEND_NEW_ACTIVE 自己回合也問、getUsableAbilities 不給按鈕）；擲幣型特性中央 coinAbilityHeadsHasTarget；USE_ABILITY 不再豁免觸發型特性；isManuallyActivatableAbilityText 排除「可使用…招式」被動；首頁 changelog 三步搬運。
+//   'src/lib/game/ability-activation.ts',
+//   'src/lib/game/effects.ts',
+//   'src/lib/game/effects/_shared.ts',
+//   'src/lib/game/engine.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.493）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.493 前移：PREV_SHA 從 a7020a59（v6.492）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -892,15 +902,6 @@ const PREV_ALLOWED = [
 //   'src/lib/cards/url-state.ts',
 //   'src/lib/version.ts',
 //   'src/routes/cards/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.482）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.482 前移：PREV_SHA 從 4c887e8a（v6.481）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.482：視窗折疊時標題列定位（中央 modal-drag.ts）；首頁 changelog 三步搬運。
-//   'src/lib/modal-drag.ts',
-//   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
