@@ -110,5 +110,25 @@ T('R7 中央 helper：沒有反擊增加的傷害 ⇒ 不動（自傷造成的�
   assert.equal(6 - s2.players[1].prizes.length, 2, '1＋奇跡之吻 1');
 });
 
+// ⭐v6.493 補：postFn 之後的共用反擊尾段（特性型受傷反擊：磨牙彩皮魚｜反擊 放 3 個指示物）
+const BITE = need('11042', '磨牙彩皮魚');
+T('R8 特性反擊（磨牙彩皮魚｜反擊，對手沒昏厥 ⇒ 共用反擊尾段）把攻擊方打昏 ＋ 波克基斯 正面 ⇒ 1＋1', () => withHeads(() => {
+  const atk = inst(CACNEA, { damage: 80, energyAttached: [inst(GRASS), inst(GRASS)] });   // 再吃 30 就昏厥
+  let s = board({ active: atk }, { active: inst(BITE), bench: [inst(KISS)] });
+  s = applyAction(s, { type: 'ATTACK', attackIndex: STAB }, pool);
+  assert.ok(s.players[0].discard.some(c => c.iid === atk.iid), '前置：攻擊方已昏厥');
+  assert.ok(s.log.some(l => /奇跡之吻/.test(l.message)), '應擲奇跡之吻');
+  assert.equal(takenB(s), 2);
+  assert.ok(!s.log.some(l => /系統擊倒檢查/.test(l.message)), '不可再走 sanityKOSweep 的簡化版');
+}));
+T('R9 特性反擊在昏厥分支（雙方同時昏厥）＋ 波克基斯 正面 ⇒ 攻擊方 1、防守方 1＋1', () => withHeads(() => {
+  const atk = inst(CACNEA, { damage: 80, energyAttached: [inst(GRASS), inst(GRASS)] });
+  let s = board({ active: atk }, { active: inst(BITE, { damage: 70 }), bench: [inst(KISS)] });
+  s = applyAction(s, { type: 'ATTACK', attackIndex: STAB }, pool);
+  assert.equal(takenA(s), 1);
+  assert.ok(s.players[0].discard.some(c => c.iid === atk.iid), '攻擊方也昏厥');
+  assert.equal(takenB(s), 2);
+}));
+
 console.log(`\nv6492 攻擊方被反擊打昏走中央結算：PASS ${pass} / FAIL ${fail}`);
 process.exit(fail ? 1 : 0);
