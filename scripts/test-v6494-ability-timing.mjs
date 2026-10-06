@@ -34,6 +34,7 @@ const need = (id, name) => { assert.equal(pool.get(id)?.name, name, `fixture：$
 const YANMEGA = need('14663', '遠古巨蜓ex'), SWITCH = need('18587', '寶可夢交替'), KOKO = need('12116', '卡璞・鳴鳴ex');
 const CARVANHA = need('14422', '利牙魚'), DEF = '13163';
 const TALONFLAME = need('17991', '烈箭鷹'), LILIGANT_LIKE = need('10899', '搖籃百合'), FROSMOTH_LIKE = need('14668', '毒粉蛾');
+const BOSS = need('14124', '老大的指令'), RUSH = need('11275', '急進開關');
 const NIDOQUEEN = need('19593', '尼多后'), TINK = need('14005', '小鍛匠'), TINKATUFF = need('14006', '巧鍛匠');
 const basicE = (t) => String([...pool.values()].find(c => c.supertype === 'Energy' && c.subtype === 'Basic' && c.name === `基本【${t}】能量`)?.id);
 const GRASS = basicE('草'), DARK = basicE('惡');
@@ -167,6 +168,56 @@ T('U1 巧鍛匠進化時選「不使用」⇒ 之後送 USE_ABILITY 無效（錯
   const r = withHeadsU(() => applyAction(s, { type: 'USE_ABILITY', iid: evolved.iid, abilityIndex: 0 }, pool));
   assert.ok(!r.log.slice(s.log.length).some(l => /臨場之錘/.test(l.message)), '不可以發動');
   assert.equal(r.players[1].active.energyAttached.length, 1);
+});
+
+console.log('── Q 同一次放置只問一次（v6.496，Fable 審查發現 1／3）──');
+// 打出「老大的指令」：選對手備戰換上來（自方戰鬥位不變）
+function doBoss(s) {
+  const card = inst(BOSS);
+  s = { ...s, players: [{ ...s.players[0], hand: [...s.players[0].hand, card] }, s.players[1]] };
+  s = applyAction(s, { type: 'PLAY_TRAINER', iid: card.iid }, pool);
+  assert.ok(s.pendingSelection && !isPrompt(s), '前置：老大的指令應開對手備戰選擇');
+  return applyAction(s, { type: 'RESOLVE_SELECTION', senderIdx: 0, actorIdx: 0, effectKey: s.pendingSelection.effectKey, selectedIids: [s.players[1].bench[0].iid] }, pool);
+}
+const sixGrass = () => Array.from({ length: 6 }, () => inst(GRASS));
+T('Q1 用過振翅高飛之後打老大的指令（只換對手）⇒ 不可以再問、能量不會變兩倍', () => {
+  const y = inst(YANMEGA), x = inst(KOKO);
+  let s = board({ active: x, bench: [y], deck: sixGrass() }, { active: inst(KOKO), bench: [inst(KOKO)] });
+  s = doSwitch(s, y.iid);
+  assert.ok(isPrompt(s));
+  s = answer(s, true);
+  if (s.pendingSelection) s = applyAction(s, { type: 'RESOLVE_SELECTION', senderIdx: 0, actorIdx: 0, effectKey: s.pendingSelection.effectKey,
+    selectedIids: s.players[0].deck.filter(c => c.cardId === GRASS).map(c => c.iid).slice(0, 3) }, pool);
+  const n = s.players[0].active.energyAttached.length;
+  assert.equal(n, 3, '前置：第一次附 3 張');
+  s = doBoss(s);
+  assert.ok(!isPrompt(s), '自方戰鬥位沒有換 ⇒ 不是新的放置 ⇒ 不可以再問');
+  assert.equal(s.players[0].active.energyAttached.length, n);
+});
+T('Q2 詢問時選「不使用」之後打老大的指令 ⇒ 不再問（錯過就不能用）', () => {
+  const y = inst(YANMEGA), x = inst(KOKO);
+  let s = board({ active: x, bench: [y], deck: sixGrass() }, { active: inst(KOKO), bench: [inst(KOKO)] });
+  s = doSwitch(s, y.iid);
+  s = answer(s, false);
+  s = doBoss(s);
+  assert.ok(!isPrompt(s));
+});
+T('Q3 選「不使用」之後換下再換上 ⇒ 新的一次放置 ⇒ 再問', () => {
+  const y = inst(YANMEGA), x = inst(KOKO);
+  let s = board({ active: x, bench: [y], deck: sixGrass() }, {});
+  s = doSwitch(s, y.iid); s = answer(s, false);
+  s = doSwitch(s, x.iid); s = doSwitch(s, y.iid);
+  assert.ok(isPrompt(s));
+});
+T('Q4 急進開關：舊戰鬥寶可夢沒有能量也要詢問（原本這條出口漏掉）', () => {
+  const y = inst(YANMEGA), x = inst(KOKO);
+  let s = board({ active: x, bench: [y], deck: sixGrass() }, {});
+  const card = inst(RUSH);
+  s = { ...s, players: [{ ...s.players[0], hand: [card] }, s.players[1]] };
+  s = applyAction(s, { type: 'PLAY_TRAINER', iid: card.iid }, pool);
+  s = applyAction(s, { type: 'RESOLVE_SELECTION', senderIdx: 0, actorIdx: 0, effectKey: s.pendingSelection.effectKey, selectedIids: [y.iid] }, pool);
+  assert.equal(s.players[0].active?.iid, y.iid);
+  assert.ok(isPrompt(s));
 });
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} v6.494 特性時機：${pass} 通過、${fail} 失敗`);

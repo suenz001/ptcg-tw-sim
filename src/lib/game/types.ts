@@ -272,6 +272,12 @@ export interface CardInstance {
    */
   movedToActiveThisTurn?: boolean;
   /**
+   * ⭐v6.496：這一次「從備戰區放置於戰鬥場」已經詢問過上場時特性（振翅高飛／金屬之路／潔淨支援）。
+   *   tryPromptPromoteActive 詢問時設 true；離開戰鬥場（CLEAR_ON_EXIT_FLAGS）與回合結束（clearTurnFlags）清除。
+   *   ⇒ 同一次放置只問一次（選「不使用」也不再問）；換下再換上會再問（站長裁定 3）。
+   */
+  promoteAbilityAsked?: boolean;
+  /**
    * 跨回合「下個對手（設此旗標的攻擊方）回合本卡受到招式傷害 +N」。
    * 例：超音波幼蟲｜刺耳聲 → 對手下個自己回合，打這隻 +50。
    * - 攻擊方在 ATTACK_POST 設於對手的 active（若仍存在）

@@ -2051,11 +2051,12 @@ function emptyPlayer(name: string): PlayerState {
 
 /** 清除 CardInstance 上的回合旗標（於擁有者 END_TURN 執行） */
 function clearTurnFlags(c: CardInstance): CardInstance {
-  if (!c.justPlaced && !c.evolvedThisTurn && !c.movedToActiveThisTurn && !c.playedFromHand && !c.healedThisTurn) return c;
+  if (!c.justPlaced && !c.evolvedThisTurn && !c.movedToActiveThisTurn && !c.playedFromHand && !c.healedThisTurn && !c.promoteAbilityAsked) return c;
   const n = { ...c };
   delete n.justPlaced;
   delete n.evolvedThisTurn;
   delete n.movedToActiveThisTurn;
+  delete n.promoteAbilityAsked;   // ⭐v6.496 與 movedToActiveThisTurn 同生命週期
   delete n.playedFromHand;
   delete n.healedThisTurn;  // v4.43：擁有者 END_TURN 時清除「本回合回過血」旗標
   return n;

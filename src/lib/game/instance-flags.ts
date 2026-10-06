@@ -49,6 +49,8 @@ export const CLEAR_ON_EXIT_FLAGS: readonly (keyof CardInstance)[] = [
   'endTurnOnOppAttachEnergyThisTurn', 'abilityNullifiedNextTurn', 'abilityNullifiedThisTurn',
   // TRACK 移到戰鬥場標記
   'movedToActiveThisTurn',
+  // ⭐v6.496：「這一次放上戰鬥場」已經詢問過上場時特性（離場清除 ⇒ 下一次放上戰鬥場會再問）
+  'promoteAbilityAsked',
 ];
 
 /**

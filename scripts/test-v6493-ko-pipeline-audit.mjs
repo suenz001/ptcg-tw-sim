@@ -42,6 +42,8 @@ const GRASS = basicE('草'), WATERE = basicE('水'), DARK = basicE('惡'), FIGHT
 const withRandoms = (seq, fn) => { const o = Math.random; let k = 0; Math.random = () => (k < seq.length ? seq[k++] : 0.1); try { return fn(); } finally { Math.random = o; } };
 const takenBy = (s, i) => 6 - s.players[i].prizes.length;
 const kissed = (s) => s.log.some(l => /奇跡之吻/.test(l.message));
+// ⭐v6.496（Fable 審查 f）：只看「有沒有」防不到重複擲 ⇒ 另計擲幣行數，關鍵案例斷言恰好幾次
+const kissCount = (s) => s.log.filter(l => /波克基斯｜奇跡之吻/.test(l.message)).length;
 const atkIdx = (id, name) => pool.get(id).attacks.findIndex(a => a.name === name);
 const withHeads = (fn) => { const o = Math.random; Math.random = () => 0.1; try { return fn(); } finally { Math.random = o; } };
 const PHANTOM = pool.get(DRAGA).attacks.findIndex(a => a.name === '幻影奇襲');
@@ -115,6 +117,7 @@ T('B2a 自己場上有波克基斯 ⇒ 擲奇跡之吻（正面）⇒ 1＋1＝2 
   const s = painMemory([inst(KISS)], [inst(KOKO)]);
   assert.ok(s.players[1].discard.some(c => c.cardId === CACNEA), '前置：沙鈴仙人掌應已昏厥');
   assert.ok(s.log.some(l => /奇跡之吻/.test(l.message)), '應擲奇跡之吻');
+  assert.equal(kissCount(s), 1);
   assert.equal(taken(s), 2);
 });
 T('B2b 正對照：沒有波克基斯 ⇒ 1 張、沒有奇跡之吻', () => {
@@ -143,7 +146,7 @@ T('B3a 斧擊在地 打昏戰鬥位 ⇒ 奇跡之吻（原本手刻漏掉）⇒ 
                 { active: inst(CACNEA, { energyAttached: [inst(REVERSE)] }), bench: [inst(KOKO)] });
   s = withHeads(() => applyAction(s, { type: 'ATTACK', attackIndex: atkIdx(HAXO, '斧擊在地') }, pool));
   assert.ok(s.players[1].discard.some(c => c.cardId === CACNEA), '前置：應已昏厥');
-  assert.ok(kissed(s)); assert.equal(taken(s), 2);
+  assert.ok(kissed(s)); assert.equal(kissCount(s), 1); assert.equal(taken(s), 2);
 });
 T('B3b 藍柱石 打昏戰鬥位（唯一候選）⇒ 奇跡之吻 ⇒ 2 張', () => {
   let s = board({ active: inst(GLACE, { energyAttached: [inst(GRASS), inst(WATERE), inst(DARK)] }), bench: [inst(KISS)] },
@@ -151,7 +154,7 @@ T('B3b 藍柱石 打昏戰鬥位（唯一候選）⇒ 奇跡之吻 ⇒ 2 張', (
   s = withHeads(() => applyAction(s, { type: 'ATTACK', attackIndex: atkIdx(GLACE, '藍柱石') }, pool));
   if (s.pendingSelection) s = withHeads(() => applyAction(s, { type: 'RESOLVE_SELECTION', senderIdx: 0, actorIdx: 0, effectKey: s.pendingSelection.effectKey, selectedIids: [s.players[1].active.iid] }, pool));
   assert.ok(s.players[1].discard.some(c => c.cardId === CACNEA), '前置：應已昏厥');
-  assert.ok(kissed(s)); assert.equal(taken(s), 2);
+  assert.ok(kissed(s)); assert.equal(kissCount(s), 1); assert.equal(taken(s), 2);
 });
 const mutual = (p0bench, p1bench) => {
   const s = board({ active: inst(MANKEY, { energyAttached: [inst(FIGHTE), inst(FIGHTE)] }), bench: p0bench },
@@ -163,6 +166,7 @@ T('B3c 同命戰鬥：雙方各有波克基斯 ⇒ 兩邊都擲（裁定 2：對
   assert.equal(s.phase, 'playing');
   assert.equal(takenBy(s, 0), 2, '攻擊方：沙鈴仙人掌 1＋奇跡之吻 1');
   assert.equal(takenBy(s, 1), 2, '對手：棄世猴 1＋奇跡之吻 1');
+  assert.equal(kissCount(s), 2, '兩邊各擲一次');
 });
 T('B3d 同命戰鬥：雙方都沒有備戰 ⇒ 平手（官方 L622；原本判對手獲勝）', () => {
   const s = mutual([], []);
@@ -183,7 +187,7 @@ const roaring = (p0bench, p1bench) => {
 };
 T('B3g 瘋癲攻擊：對手昏厥＋自己反噬昏厥 ⇒ 攻擊方奇跡之吻 1＋1、對手 轟鳴月ex 2＋奇跡之吻 1', () => {
   const s = roaring([inst(KISS)], [inst(KISS)]);
-  assert.equal(takenBy(s, 0), 2); assert.equal(takenBy(s, 1), 3);
+  assert.equal(takenBy(s, 0), 2); assert.equal(takenBy(s, 1), 3); assert.equal(kissCount(s), 2);
 });
 T('B3h 瘋癲攻擊：雙方都沒有備戰 ⇒ 平手（原本先判攻擊方獲勝，跳過反噬）', () => {
   const s = roaring([], []);
@@ -237,14 +241,14 @@ T('K2 裁定 2：對手的戰鬥寶可夢混亂自傷昏厥 ⇒ 擲奇跡之吻'
                 { active: inst(KOKO), bench: [inst(KISS)] });
   s = withRandoms([0.9, 0.1], () => applyAction(s, { type: 'ATTACK', attackIndex: 0 }, pool));
   assert.ok(s.players[0].discard.some(c => c.cardId === CACNEA), '前置：混亂自傷應昏厥');
-  assert.ok(kissed(s)); assert.equal(takenBy(s, 1), 2);
+  assert.ok(kissed(s)); assert.equal(kissCount(s), 1); assert.equal(takenBy(s, 1), 2);
 });
 T('K3 裁定 2：反噬（這隻寶可夢也受到傷害）讓自己昏厥 ⇒ 對手擲奇跡之吻', () => {
   let s = board({ active: inst(CARVANHA, { damage: hpOf(CARVANHA) - 10, energyAttached: [inst(DARK)] }), bench: [inst(KOKO)] },
                 { active: inst(KOKO), bench: [inst(KISS)] });
   s = withHeads(() => applyAction(s, { type: 'ATTACK', attackIndex: atkIdx(CARVANHA, '突擊') }, pool));
   assert.ok(s.players[0].discard.some(c => c.cardId === CARVANHA), '前置：反噬應昏厥');
-  assert.ok(kissed(s)); assert.equal(takenBy(s, 1), 2);
+  assert.ok(kissed(s)); assert.equal(kissCount(s), 1); assert.equal(takenBy(s, 1), 2);
 });
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} v6.493 中央昏厥管線稽核：${pass} 通過、${fail} 失敗`);

@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.496：Fable 審查 v6.493／v6.494 後的修正（2026-10-06）
+
+BASE v6.495（a4519f5d）。Fable 5.1 獨立審查（20 個盤面實測）：v6.493 奇跡之吻／昏厥管線、as-of-declaration、USE_ABILITY 豁免移除、收回終局中間狀態皆無問題。
+- 發現 1（高，v6.494 回歸，已重現）：movedToActiveThisTurn 是整回合旗標；v6.494 拿掉 abilityUsedThisTurn 後，gust-opp（老大的指令／寶可夢捕捉器／反擊捕捉器／坂木／母親的誘引…）在自方戰鬥位沒換時也呼叫 tryPromptPromoteActive ⇒ 同回合再問再用（振翅高飛 3→6 張）。修：CardInstance.promoteAbilityAsked（詢問時記在戰鬥位實體；CLEAR_ON_EXIT_FLAGS 離場清、clearTurnFlags 回合結束清），tryPromptPromoteActive 以它擋（bench watcher 潔淨支援也記在上場的那一隻）。同時補上「選不使用後再遇 gust-opp 仍會問」（BASE 既有）。
+- 發現 3（低，既有）：急進開關「舊戰鬥寶可夢無能量」「選 0 張」「沒有可轉移」三條出口補 tryPromptPromoteActive。
+- 守衛：test-v6494 補 Q1～Q4（BASE 紅 Q1/Q2/Q4，Q3 為正對照）；test-v6493 加 kissCount 斷言擲幣恰好次數（6 處）；test-opp-debuff-immunity 新旗標歸類為 SELF_OR_BUFF。
+- 其餘待辦（既有、非本次）：寶可夢檢查中對手中毒昏厥後，同一次檢查的冰冷之帳整段沒跑（審查 exp1c）。
+
 ## v6.495：聊天視窗可調整大小並記住（2026-10-06，站長需求）
 
 BASE v6.494（7474db9d）。

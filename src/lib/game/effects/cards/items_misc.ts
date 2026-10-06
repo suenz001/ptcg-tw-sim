@@ -148,7 +148,8 @@ regR('rush-switch-pick-bench', (st, idx, iids, _params, pool) => {
   const newP = s.players[idx];
   const prevOnBench = newP.bench.find(c => c.iid === prevActiveIid);
   if (!prevOnBench || prevOnBench.energyAttached.length === 0 || !newP.active) {
-    return addLog(s, '急進開關：原戰鬥寶可夢身上無能量可轉移', idx);
+    // ⭐v6.496（Fable 審查發現 3）：這條出口原本沒有詢問上場時特性 ⇒ 換上遠古巨蜓ex 時永遠不問振翅高飛
+    return tryPromptPromoteActive(addLog(s, '急進開關：原戰鬥寶可夢身上無能量可轉移', idx), idx, pool);
   }
   // 開 picker：選 0~N 張能量轉移
   const eCount = prevOnBench.energyAttached.length;
@@ -171,7 +172,7 @@ regR('rush-switch-energy-transfer', (st, idx, iids, params, pool) => {
   const toIid = params?.newActiveIid as string | undefined;
   if (!fromIid || !toIid) return st;
   if (iids.length === 0) {
-    return addLog(st, '急進開關：未轉移任何能量', idx);
+    return tryPromptPromoteActive(addLog(st, '急進開關：未轉移任何能量', idx), idx, pool);   // ⭐v6.496 同上
   }
   const p = st.players[idx];
   const src = p.bench.find(c => c.iid === fromIid);
@@ -180,7 +181,7 @@ regR('rush-switch-energy-transfer', (st, idx, iids, params, pool) => {
   }
   const energySet = new Set(iids);
   const toMove = src.energyAttached.filter(e => energySet.has(e.iid));
-  if (toMove.length === 0) return st;
+  if (toMove.length === 0) return tryPromptPromoteActive(st, idx, pool);   // ⭐v6.496 同上
   const fromName = pool.get(src.cardId)?.name ?? '?';
   const toName = pool.get(p.active.cardId)?.name ?? '?';
   const s = addLog(st, `急進開關：從 ${fromName} 轉移 ${toMove.length} 張能量到 ${toName}`, idx);

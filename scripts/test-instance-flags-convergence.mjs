@@ -20,8 +20,10 @@ const T=(n,fn)=>{try{fn();console.log('PASS',n);pass++;}catch(e){console.log('FA
 //   （damageBonus{Pending,ThisTurn}AttackName、damageOverride{Pending,ThisTurn}
 //    與其 AttackName）。⚠ 這個數字是**刻意 pin 死**的：新增旗標必須回來這裡有意識地
 //   確認它該不該在離場時清除（②會逐一驗證每一個都真的被 clearActiveEffects 清掉）。
-T('① CLEAR_ON_EXIT_FLAGS=70、BENCH_SCRUB_LOCK_FLAGS=10 且為子集',()=>{
-  assert.equal(CLEAR_ON_EXIT_FLAGS.length,70,'CLEAR_ON_EXIT 應 70，實際'+CLEAR_ON_EXIT_FLAGS.length);
+// ⭐v6.496：70 → 71。新增 promoteAbilityAsked（這一次放上戰鬥場已詢問過上場時特性）——
+//   離場一定要清（下一次放上戰鬥場要重新詢問，站長裁定 3），②會驗證 clearActiveEffects 真的清掉它。
+T('① CLEAR_ON_EXIT_FLAGS=71、BENCH_SCRUB_LOCK_FLAGS=10 且為子集',()=>{
+  assert.equal(CLEAR_ON_EXIT_FLAGS.length,71,'CLEAR_ON_EXIT 應 71，實際'+CLEAR_ON_EXIT_FLAGS.length);
   assert.equal(BENCH_SCRUB_LOCK_FLAGS.length,10,'SCRUB 應 10');
   for(const k of BENCH_SCRUB_LOCK_FLAGS) assert(CLEAR_ON_EXIT_FLAGS.includes(k),'子集破壞 '+k);
 });

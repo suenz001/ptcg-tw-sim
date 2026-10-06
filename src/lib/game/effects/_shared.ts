@@ -2841,6 +2841,14 @@ regR('resolve-promote-active-ability-prompt', (state, actorIdx, selectedIids, pa
  *
  * Caller 必須在 active 已 set 完 + movedToActiveThisTurn=true 後呼叫。
  */
+/** ⭐v6.496 在 pIdx 的戰鬥位實體記下「這一次放置已詢問」（新物件，不改傳入的 state）。 */
+function markPromoteAsked(state: GameState, pIdx: 0 | 1): GameState {
+  const act = state.players[pIdx].active;
+  if (!act) return state;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[pIdx] = { ...players[pIdx], active: { ...act, promoteAbilityAsked: true } };
+  return { ...state, players };
+}
 export function tryPromptPromoteActive(
   state: GameState,
   pIdx: 0 | 1,
@@ -2856,6 +2864,13 @@ export function tryPromptPromoteActive(
   //     所以**不再**用 abilityUsedThisTurn 擋（那是上一次放置用掉的）。手動按鈕已移除（getUsableAbilities）。
   if (!actInst) return state;
   // <<< v6494-promote-retrigger
+  // >>> v6496-promote-asked-once
+  // ⭐v6.496（Fable 審查發現 1）：v6.494 只拿掉 abilityUsedThisTurn，但 movedToActiveThisTurn 是「整回合」旗標 ——
+  //   自方戰鬥位沒換、只換對手（老大的指令／寶可夢捕捉器等共用 gust-opp）也會呼叫本 helper ⇒ 同一回合再問、再用。
+  //   ⇒ 改以「這一次放置」為單位：詢問時在戰鬥位實體記 promoteAbilityAsked，離場／回合結束清除。
+  //     同一次放置只問一次（含選「不使用」＝錯過就不能用）；換下再換上（新的一次放置）會再問。
+  if (actInst.promoteAbilityAsked) return state;
+  // <<< v6496-promote-asked-once
   // v5.244：嚴格遵守卡面「從備戰區將這隻寶可夢放置於戰鬥場時」— 必須剛上場才觸發
   if (!actInst.movedToActiveThisTurn) return state;
   const actCard = pool.get(actInst.cardId);
@@ -2873,7 +2888,7 @@ export function tryPromptPromoteActive(
     if (_abilityHolderEffectiveFn && !_abilityHolderEffectiveFn(state, actInst, actCard, pIdx, ab.name, pool)) continue;
     // ⭐v6.494：沒有事可做（牌庫 0、場上沒有可改附的能量…）⇒ 不詢問（站長裁定 4 的同一原則）
     if (_promoteAbilityReadyFn && !_promoteAbilityReadyFn(state, pIdx, actInst, ab.name, pool)) continue;
-    return askUsePromoteActiveAbility(state, pIdx, actInst, ab.name, abilityKey, actCard.name);
+    return askUsePromoteActiveAbility(markPromoteAsked(state, pIdx), pIdx, actInst, ab.name, abilityKey, actCard.name);
   }
   // v5.908：備戰持有者觸發型(潔淨支援：超級拉帝亞斯ex 上場時,holder 拉帝歐斯在備戰)。
   for (const [benchAbName, requiredActive] of ON_ACTIVE_PROMOTE_BENCH_WATCHER) {
@@ -2886,7 +2901,8 @@ export function tryPromptPromoteActive(
       if (!hasAbilityFn(bCard.name, benchAbName, bi)) continue;
       if (_abilityHolderEffectiveFn && !_abilityHolderEffectiveFn(state, b, bCard, pIdx, benchAbName, pool)) continue;
       if (_promoteAbilityReadyFn && !_promoteAbilityReadyFn(state, pIdx, b, benchAbName, pool)) continue;
-      return askUsePromoteActiveAbility(state, pIdx, b, benchAbName, `${bCard.name}|${bi}`, bCard.name);
+      // 觸發的是「超級拉帝亞斯ex 這一次放上戰鬥場」⇒ 記在上場的那一隻（戰鬥位）身上
+      return askUsePromoteActiveAbility(markPromoteAsked(state, pIdx), pIdx, b, benchAbName, `${bCard.name}|${bi}`, bCard.name);
     }
   }
   return state;
