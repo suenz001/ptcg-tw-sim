@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.489：被動特性不給按鈕＋悉心治癒改放置觸發（2026-10-06，站長回報 bug 1／2）
+
+BASE v6.488（9ee0cac1）。
+- 根因：早年為了稽核命中，替被動特性註冊 noop regA；getUsableAbilities 只問 hasAbilityFn ⇒ 給按鈕、按下去寫內部說明 log 並吃掉特性權。全卡池稽核（已註冊 140 個）卡面無「可使用」字樣者恰為 4 個：狙擊手之眼／光之翼／整人擊落／雙重屬性。
+- 修法：刪除 4 個 noop regA；新增 leaf `ability-activation.ts` 的 `isManuallyActivatableAbilityText`（/可(不限次數)?使用|可以使用/，剝零寬字元），getUsableAbilities 在 hasAbilityFn 之後呼叫（哨兵 v6489-passive-ability-no-button）；USE_ABILITY 以該清單為準（v6.181）⇒ 後端一併擋住。
+- 同族稽核：愛管侍｜悉心治癒是「從手牌放置於備戰區時可使用1次」卻被做成主動按鈕（註解自承簡化）⇒ 加入 ON_PLAY_FROM_HAND_ABILITIES，promptPlayAbilities 以 canHealOrCureActive 為閘（官方判準①）。
+- 新中央 `healActiveAndCureOneCondition`（effects.ts，哨兵 v6489-heal-cure-one-condition）：回 N HP；1 個狀態直接恢復，≥2 個開 modal-choice（effectKey v6489-cure-one-condition）讓玩家選。密阿雷格雷派餅改走同一支（原依槽位優先序自動清）。
+- 新增 test-v6489（A 判準單元、B 全卡池掃描含下限與正對照、C 守衛自行注入 noop regA 的反安慰劑、D/E 悉心治癒、F 派餅）；BASE 11 紅、5 個突變全殺。
+- 粉碎箭「先丟能量才判昏厥」（bug 3）另案：已諮詢 Fable，方案為殭屍模式＋抽出中央 KO 函式＋_pendingAttackKo 延後，下一版處理。
+
 ## v6.488：電腦版牌桌鍵盤快捷鍵（2026-10-06，站長同意的建議 #7）
 
 BASE v6.487（63b7e9fc）。

@@ -335,10 +335,8 @@ regR('koala-feeble-charge', (state, aIdx, iids, _params, pool) => {
 //    攻擊方有此特性 → 免疫毒刺/灼熱之軀/反擊/尖刺盔甲等對手反擊特性。
 // 3. （未來補）對手主動特性對此寶可夢造成效果（如咒詛炸彈、整人擊落等）也應 skip。
 // ══════════════════════════════════════════════════════════════════════════════
-// noop regA：被動特性，無互動 UI；保留 reg 讓 audit 命中。
-regA('超級皮可西ex', 0, (st, idx) => {
-  return addLog(st, '光之翼：被動效果（不受對手特性影響）由 engine.ts hook 自動套用', idx);
-});
+// ⭐v6.489 移除原本的 noop regA（站長回報同類問題：被動特性不該有「使用特性」按鈕，
+//   按下去只會寫一行內部說明 log、還把本回合特性權吃掉）。光之翼是純被動，實作全在上述 hook。
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 小碎鑽｜雙重屬性（v2.388 真實裝 — engine.ts hook）
@@ -351,9 +349,7 @@ regA('超級皮可西ex', 0, (st, idx) => {
 // 對手側查「對【鬥】/【超】寶可夢」類效果，後續可在 PASSIVE_DAMAGE_REDUCE 等
 // 對 holder.pokemonType 查詢處用同 helper 加 short-circuit。
 // ══════════════════════════════════════════════════════════════════════════════
-regA('小碎鑽', 0, (st, idx) => {
-  return addLog(st, '雙重屬性：被動效果（場上時改為【鬥】+【超】2 種屬性）— 已實裝於 engine.ts 弱點/抵抗計算（v2.388）', idx);
-});
+// ⭐v6.489 移除原本的 noop regA（被動特性不該有「使用特性」按鈕；見下方狙擊手之眼的說明）。
 
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -363,9 +359,12 @@ regA('小碎鑽', 0, (st, idx) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 狙射樹梟ex｜狙擊手之眼 — 對手手牌 4 張時，無【無】能量 cost
-//   實裝：effects.ts:12479 getDecidueyeSnipeEffectiveCost + engine.ts:946 canAffordAttack 鉤住（v2.385）
-regA('狙射樹梟ex', 0, (st, idx) => addLog(st,
-  '狙擊手之眼：被動效果（對手手牌 4 張時消【無】cost）— 已實裝於 engine.ts canAffordAttack（v2.385）', idx));
+//   實裝：effects.ts ABILITY_COLORLESS_COST_ZERO + engine.ts canAffordAttack（與月月熊 赫月ex｜老練招式同一條 cost 修正管線）。
+//   ⭐v6.489（站長回報）：原本這裡有一個 noop regA ⇒ 對戰畫面出現「使用特性」按鈕，按下去寫出
+//     「狙擊手之眼：被動效果（…）— 已實裝於 engine.ts canAffordAttack（v2.385）」這種內部說明 log，
+//     還把本回合的特性權吃掉。被動特性比照老練招式：**不註冊 regA**。
+//   ⚠ 中央防線：getUsableAbilities 另以 isManuallyActivatableAbilityText（卡面沒有「可使用」字樣 ⇒ 不給按鈕）擋住，
+//     日後就算又有人為了「讓 audit 命中」補 noop regA，也不會再長出按鈕（守衛 test-v6489）。
 
 // 勒克貓｜鬥志戰吼 — 純被動特性（passive）：對手戰鬥場是【ex】寶可夢時，
 //   勒克貓 bypass isFirstTurn / justPlaced / evolvedThisTurn 進化成倫琴貓。
@@ -379,9 +378,8 @@ regA('狙射樹梟ex', 0, (st, idx) => addLog(st,
 //           比照 v3.56 移除鬥志戰吼錯誤 regA）。無限之影是被動,不需任何主動 regA。
 
 // 堅果啞鈴｜整人擊落 — 對手效果使此卡從牌庫丟棄時，對手牌庫頂 8 張丟棄
-//   實裝：_shared.ts:382 triggerOakeyeMillIfApplicable + v2360 mill trigger 點呼叫（v2.388）
-regA('堅果啞鈴', 0, (st, idx) => addLog(st,
-  '整人擊落：被動效果（對手 mill 此卡時，對手牌庫頂 8 張丟棄）— 已實裝於 _shared.ts triggerOakeyeMillIfApplicable（v2.388）', idx));
+//   實裝：_shared.ts triggerOakeyeMillIfApplicable + v2360 mill trigger 點呼叫（v2.388）
+//   ⭐v6.489 移除原本的 noop regA（觸發條件是「從牌庫被丟棄時」，在場上按按鈕沒有任何意義）。
 
 // v2.384 真實裝 — 勾帕路翁ex｜金屬之路：本回合從備戰上戰鬥場時，可使用 1 次。
 // 選擇場上自己其他寶可夢身上的任意數量【鋼】能量卡，改附於這隻寶可夢身上。

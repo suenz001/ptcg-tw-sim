@@ -41,6 +41,7 @@ import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferr
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.985 傳「被回手卡持有者」idx
 import type { EffectFn } from '../_shared';
 import { flipCoinsWithLog } from '../../effects';
+import { healActiveAndCureOneCondition, canHealOrCureActive } from '../../effects'; // ⭐v6.489 恢復HP＋特殊狀態恢復1個（玩家選）
 import { applyOppActiveReturnedToBenchTriggers } from '../../engine'; // v5.831
 import type { CardInstance, GameState } from '../../types';
 import type { Card } from '$lib/cards/types'; // v5.861 重新啟動箱逐張分配 chain 型別
@@ -670,43 +671,10 @@ reg('派帕的三明治', (st, idx, pool) => {
 
 // ── 密阿雷格雷派餅（Item / M3）─────────────────────────────────────────────
 // 卡面：將自己的戰鬥寶可夢恢復「20」HP，特殊狀態也恢復 1 個。
-// 「特殊狀態恢復 1 個」依 v2.163 約定：先清 status 主格，否則清 secondaryStatus。
-regG('密阿雷格雷派餅', (st, idx) => {
-  const a = st.players[idx].active;
-  if (!a) return false;
-  return a.damage > 0 || !!a.status || !!a.secondaryStatus || !!a.tertiaryStatus;
-});
-reg('密阿雷格雷派餅', (st, idx, pool) => {
-  if (!st.players[idx].active) return st;
-  const a = st.players[idx].active!;
-  const name = pool.get(a.cardId)?.name ?? '?';
-  // v5.296: 三槽清除 (中毒+灼傷+混亂可共存, 萬靈藥類只清 1 個依優先順序)
-  let clearedLabel = '';
-  let nextStatus = a.status;
-  let nextSecondary = a.secondaryStatus;
-  let nextTertiary = a.tertiaryStatus;
-  if (a.status) { clearedLabel = a.status; nextStatus = undefined; }
-  else if (a.secondaryStatus) { clearedLabel = a.secondaryStatus; nextSecondary = undefined; }
-  else if (a.tertiaryStatus) { clearedLabel = a.tertiaryStatus; nextTertiary = undefined; }
-  const heal = Math.min(20, a.damage);
-  const bits: string[] = [];
-  if (heal > 0) bits.push(`恢復 ${heal} HP`);
-  if (clearedLabel) bits.push(`解除 ${clearedLabel}`);
-  st = addLog(st, `密阿雷格雷派餅：${name}${bits.length ? '：' + bits.join('，') : ''}`, idx);
-  return updatePlayer(st, idx, p => {
-    if (!p.active) return p;
-    return {
-      ...p,
-      active: {
-        ...p.active,
-        damage: Math.max(0, p.active.damage - 20),
-        status: nextStatus,
-        secondaryStatus: nextSecondary,
-        tertiaryStatus: nextTertiary,
-      },
-    };
-  });
-});
+// ⭐v6.489 改走中央 healActiveAndCureOneCondition（與愛管侍｜悉心治癒同一份）：
+//   原本「依槽位優先序自動清 1 個」是簡化 —— 身上有 2 個以上特殊狀態時改由玩家選要恢復哪一個。
+regG('密阿雷格雷派餅', (st, idx) => canHealOrCureActive(st, idx as 0 | 1));
+reg('密阿雷格雷派餅', (st, idx, pool) => healActiveAndCureOneCondition(st, idx as 0 | 1, pool, 20, '密阿雷格雷派餅'));
 
 // ── 能量硬幣（Item / MC）────────────────────────────────────────────────────
 // 卡面：擲 2 次硬幣，若全部為正面，則從自己的牌庫選 1 張基本能量卡，附於自己的寶可夢身上。並重洗牌庫。

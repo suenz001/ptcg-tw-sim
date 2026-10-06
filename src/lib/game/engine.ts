@@ -1067,6 +1067,7 @@ import { firePassiveOnKoAfterPrize, drainOnKoAfterPrize } from './effects';
 // >>> v6361-lift-import
 // ⭐v6.361 站長裁定 D-10：把「已判出的終局」暫時收回，讓 on-KO 特性先結算完再重判（含平手）。
 import { liftEndgameForOnKoV6361 } from './effects';
+import { isManuallyActivatableAbilityText } from './ability-activation';   // ⭐v6.489 被動特性不給按鈕
 // <<< v6361-lift-import
 // >>> v6362-return-hand-import
 // ⭐ v6.362 站長裁定 A-1：跨 take-prize-choose picker 之後補跑「將手牌全部放回牌庫並重洗」。
@@ -10944,6 +10945,12 @@ export function getUsableAbilities(
       // 只列出在 ABILITY_EFFECTS 中有登錄的主動特性
       // v4.4995：用 helper（by-name 優先 fallback by-index）
       if (!hasAbilityFn(card.name, ab.name, abIdx)) return;
+      // >>> v6489-passive-ability-no-button
+      // ⭐v6.489（站長回報：狙擊手之眼是被動，不該有發動按鈕）：卡面沒有「可使用」字樣 ⇒ 被動特性 ⇒ 不給按鈕。
+      //   有註冊 regA 不代表能按（早年為了稽核命中替被動特性註冊過 noop regA）。
+      //   USE_ABILITY 以本清單為準（v6.181），所以這一行同時擋住按鈕與後端。
+      if (!isManuallyActivatableAbilityText(ab.effect)) return;
+      // <<< v6489-passive-ability-no-button
       // v2.320：已改為自動提示的特性，不在手動清單中顯示
       if (ON_PLAY_FROM_HAND_ABILITIES.has(ab.name) || ON_EVOLVE_FROM_HAND_ABILITIES.has(ab.name)) return;
       // v4.498：ON_RETREAT_TO_BENCH 類特性（海豚俠 全能變身 / 鋼炮臂蝦 返回重載）

@@ -6576,19 +6576,83 @@ regA('吉雉雞ex', 0, (st, idx) => {
   });
 });
 
-// 愛管侍 悉心治癒 — 放置到備戰時可用，戰鬥寶可夢回 30 + 解除 1 個特殊狀態
-// 我們沒「放置觸發」機制；改為主動（正常回合可用）
-regA('愛管侍', 0, (st, idx) => {
-  return updatePlayer(addLog(st, '愛管侍 悉心治癒：戰鬥寶可夢回 30 HP + 解除異常狀態', idx), idx, p => {
-    if (!p.active) return p;
-    const newActive = {
-      ...p.active,
-      damage: Math.max(0, p.active.damage - 30),
-      status: undefined,
-    };
-    return { ...p, active: newActive };
+// >>> v6489-heal-cure-one-condition
+// ⭐v6.489 中央：「將自己的戰鬥寶可夢恢復「N」HP，特殊狀態也恢復1個。」
+//   卡面：愛管侍｜悉心治癒（H 標 SV8 11238／SV-P-H 12267）、密阿雷格雷派餅（物品）。
+//   ・「恢復1個」＝ 玩家選哪一個（站長原則：絕不簡化成「自動挑第一個」）。
+//     身上只有 1 個特殊狀態 ⇒ 直接恢復；有 2 個以上（中毒＋灼傷＋混亂可並存，三槽）⇒ 開選單讓玩家選。
+//   ・原本愛管侍是「status 主格整個清掉、且是主動按鈕」，派餅是「依槽位優先序自動清 1 個」—— 兩份寫法各自簡化。
+const COND_ZH_V6489: Record<SpecialCondition, string> = {
+  poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
+};
+type CondSlotV6489 = 'status' | 'secondaryStatus' | 'tertiaryStatus';
+const COND_SLOTS_V6489: readonly CondSlotV6489[] = ['status', 'secondaryStatus', 'tertiaryStatus'];
+/** 這隻寶可夢身上目前的特殊狀態（依槽位，略過空槽）。 */
+export function activeConditionSlots(inst: CardInstance | null | undefined): Array<{ slot: CondSlotV6489; cond: SpecialCondition }> {
+  if (!inst) return [];
+  const out: Array<{ slot: CondSlotV6489; cond: SpecialCondition }> = [];
+  for (const slot of COND_SLOTS_V6489) {
+    const c = inst[slot];
+    if (c) out.push({ slot, cond: c });
+  }
+  return out;
+}
+/** 效果是否「有事可做」（官方：效果完全無法執行時特性／物品不能使用）：有傷害可回復，或有特殊狀態可恢復。 */
+export function canHealOrCureActive(st: GameState, idx: 0 | 1): boolean {
+  const a = st.players[idx].active;
+  return !!a && (a.damage > 0 || activeConditionSlots(a).length > 0);
+}
+export function healActiveAndCureOneCondition(
+  st: GameState, idx: 0 | 1, pool: Map<string, Card>, heal: number, label: string,
+): GameState {
+  const a = st.players[idx].active;
+  if (!a) return addLog(st, `${label}：沒有戰鬥寶可夢`, idx);
+  const name = pool.get(a.cardId)?.name ?? '?';
+  const healed = Math.min(heal, a.damage);
+  let s = st;
+  if (healed > 0) {
+    s = updatePlayer(s, idx, p => (p.active ? { ...p, active: { ...p.active, damage: Math.max(0, p.active.damage - heal) } } : p));
+    s = addLog(s, `${label}：${name} 恢復 ${healed} HP`, idx);
+  }
+  const conds = activeConditionSlots(s.players[idx].active);
+  if (conds.length === 0) return healed > 0 ? s : addLog(s, `${label}：${name} 沒有需要恢復的傷害或特殊狀態`, idx);
+  if (conds.length === 1) return cureConditionSlotV6489(s, idx, conds[0].slot, label, name);
+  return withPending(addLog(s, `${label}：選擇要恢復的特殊狀態`, idx), {
+    type: 'modal-choice',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'v6489-cure-one-condition',
+    params: {
+      label: `${label}：選擇要恢復的特殊狀態（1 個）`,
+      options: conds.map(c => ({ id: c.slot, text: `恢復【${COND_ZH_V6489[c.cond]}】` })),
+      targetIid: s.players[idx].active!.iid,
+      srcLabel: label,
+    },
   });
+}
+function cureConditionSlotV6489(st: GameState, idx: 0 | 1, slot: CondSlotV6489, label: string, name: string): GameState {
+  const a = st.players[idx].active;
+  const cond = a?.[slot];
+  if (!a || !cond) return st;
+  const s = updatePlayer(st, idx, p => (p.active ? { ...p, active: { ...p.active, [slot]: undefined } } : p));
+  return addLog(s, `${label}：${name} 的【${COND_ZH_V6489[cond]}】恢復了`, idx);
+}
+regR('v6489-cure-one-condition', (st, idx, iids, params, pool) => {
+  const slot = iids[0] as CondSlotV6489 | undefined;
+  const a = st.players[idx].active;
+  // 選單開出後戰鬥寶可夢換人（理論上不會）⇒ 不改任何東西
+  if (!a || a.iid !== params?.targetIid) return st;
+  if (!slot || !(COND_SLOTS_V6489 as readonly string[]).includes(slot)) return st;
+  return cureConditionSlotV6489(st, idx, slot, (params?.srcLabel as string) ?? '恢復', pool.get(a.cardId)?.name ?? '?');
 });
+// <<< v6489-heal-cure-one-condition
+
+// 愛管侍｜悉心治癒 — 卡面：「在自己的回合，從手牌將這張卡放置於備戰區時，可使用1次。
+//   將自己的戰鬥寶可夢恢復「30」HP，特殊狀態也恢復1個。」
+// ⭐v6.489：原本註解寫「我們沒『放置觸發』機制；改為主動」⇒ 變成任何回合都能按的按鈕。
+//   放置觸發機制早已存在（ON_PLAY_FROM_HAND_ABILITIES ＋ promptPlayAbilities 彈窗）⇒ 改回卡面時機，
+//   效果走中央 healActiveAndCureOneCondition（「恢復1個」由玩家選）。
+regA('愛管侍', 0, (st, idx, pool) => healActiveAndCureOneCondition(st, idx as 0 | 1, pool, 30, '悉心治癒'));
 
 // 普隆隆姆 轟鳴引擎 — 丟 1 能量 → 抽至手牌 6 張
 // v2.234 升級為玩家自選（之前簡化為固定丟手牌第 1 張能量）
@@ -19570,6 +19634,7 @@ export const ON_PLAY_FROM_HAND_ABILITIES = new Set([
   '突然削退',     // 鐵蟻ex — 丟對手牌庫頂
   '臨場背負',     // v2.998 大蔥鴨 — 牌庫搜寶可夢道具附身 + 重洗
   '霸者咆哮',     // v6.081 M6 超級烈空坐ex — 牌庫上方4張選1基本能量附於自己，其餘重洗放牌庫下方
+  '悉心治癒',     // ⭐v6.489 愛管侍 — 放置於備戰區時：戰鬥寶可夢恢復30HP＋特殊狀態恢復1個（原誤作主動按鈕）
 ]);
 
 /** 「從手牌進化時」可發動 1 次的特性名稱 */
@@ -19817,6 +19882,8 @@ export function promptPlayAbilities(
       if (ab.name === '殺手鐧捕捉') {
         if (state.players[aIdx].abilityNamesUsedThisTurn?.includes('殺手鐧捕捉')) continue;
       }
+      // ⭐v6.489 悉心治癒：戰鬥寶可夢沒有傷害也沒有特殊狀態 ⇒ 效果完全無法執行 ⇒ 不能使用（官方判準①）
+      if (ab.name === '悉心治癒' && !canHealOrCureActive(state, aIdx)) continue;
       if (ab.name === '突然削退') {
         const oppIdx = (1 - aIdx) as 0 | 1;
         if (state.players[oppIdx].deck.length === 0) continue; // 對手牌庫空 → 確實無法丟
