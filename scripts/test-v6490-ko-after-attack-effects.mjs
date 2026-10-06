@@ -176,18 +176,18 @@ T('G8 推倒 打死附幸運頭盔／凸凸頭盔的對手（換到備戰後才�
     assert.equal(taken(s), 1);
   }
 });
-T('G9 索羅亞克｜欺詐 借 鐵臂膀ex｜感激放大 打昏 ⇒ 多獲得 1 張（借來的 ATTACK_AFTER_KO 也要跑）', () => {
+T('G9 索羅亞克｜欺詐 借 未知圖騰｜神秘信號（J）打昏 ⇒ 多獲得 1 張（借來的 ATTACK_AFTER_KO 也要跑）', () => {
   const zoro = [...pool.values()].find(c => c.name === '索羅亞克' && c.attacks?.some(a => a.name === '欺詐'));
-  const iron = [...pool.values()].find(c => c.name === '鐵臂膀ex' && c.attacks?.some(a => a.name === '感激放大'));
-  assert.ok(zoro && iron, 'fixture');
+  const unown = [...pool.values()].find(c => c.name === '未知圖騰' && c.regulationMark === 'J' && c.attacks?.some(a => a.name === '神秘信號'));
+  assert.ok(zoro && unown, 'fixture');
   const ai = zoro.attacks.findIndex(a => a.name === '欺詐');
   const en = ['草', '火', '水', '雷', '超', '鬥', '惡', '鋼'].map(anyBasicEnergy).filter(Boolean).flatMap(id => [inst(id), inst(id), inst(id)]);
-  let s = board({ active: inst(zoro.id, { energyAttached: en }) }, { active: inst(iron.id, { damage: Number(iron.hp) - 120 }) });
-  s = applyAction(s, { type: 'ATTACK', attackIndex: ai, copyAttackChoice: { pokeIid: s.players[1].active.iid, attackIndex: iron.attacks.findIndex(a => a.name === '感激放大') } }, pool);
+  let s = board({ active: inst(zoro.id, { energyAttached: en }) }, { active: inst(unown.id, { damage: Number(unown.hp) - 10 }) });
+  s = applyAction(s, { type: 'ATTACK', attackIndex: ai, copyAttackChoice: { pokeIid: s.players[1].active.iid, attackIndex: unown.attacks.findIndex(a => a.name === '神秘信號') } }, pool);
   for (let g = 0; g < 4 && s.pendingSelection; g++) s = resolve(s, s.pendingSelection.actorIdx ?? 0, (s.pendingSelection.params?.validIids ?? []).slice(0, 1));
   noLinger(s, 'G9');
-  assert.ok(s.log.some(l => /感激放大：擊倒對手/.test(l.message)), '應有感激放大加碼');
-  assert.equal(taken(s), 3);
+  assert.ok(s.log.some(l => /神秘信號：擊倒對手/.test(l.message)), '應有神秘信號加碼');
+  assert.equal(taken(s), 2);
 });
 T('G10 鐵面忍者｜急速折返 打死 耿鬼ex（死亡宣告正面）⇒ 被昏厥的是鐵面忍者，不是換上來的那隻', () => {
   const gengar = [...pool.values()].find(c => c.name === '耿鬼ex' && c.abilities?.some(a => a.name === '死亡宣告'));
@@ -203,6 +203,42 @@ T('G10 鐵面忍者｜急速折返 打死 耿鬼ex（死亡宣告正面）⇒ �
   const p0 = s.players[0];
   assert.ok(p0.discard.some(c => c.iid === atk.iid), '鐵面忍者應被死亡宣告昏厥');
   assert.ok([p0.active, ...p0.bench].some(c => c?.iid === mate.iid), '換上來的那隻應還在場上');
+});
+
+console.log('── G11／G12 站長追問（2026-10-06）──');
+const CUTROT = need('10901', '切割洛托姆'), DOLL = need('18467', '念力土偶'), PIG2 = need('13369', '炒炒豬'), PIG1 = need('13368', '暖暖豬');
+T('G11 切割洛托姆｜割除衝刺「在造成傷害前」丟掉古舊能量再打昏 ⇒ 獎賞不減少（原本當場結算讀攻擊前快照，照樣 −1）', () => {
+  const anc = inst(ANC);
+  let s = board({ active: inst(CUTROT, { energyAttached: [inst(FIGHT)] }) }, { active: inst(CACNEA, { damage: 80, energyAttached: [anc] }) });
+  s = applyAction(s, { type: 'ATTACK', attackIndex: 0 }, pool);
+  assert.ok(s.players[1].discard.some(c => c.iid === anc.iid), '前置：古舊能量已丟棄');
+  assert.equal(taken(s), 1);
+  assert.equal((s.ancientEnergyMinusOneUsed ?? [false, false])[1], false);
+});
+T('G12 念力土偶｜退化光線 50：傷害當下沒昏厥、退化後不夠 HP ⇒ 照「受到招式的傷害而昏厥」完整結算（古舊能量 −1）', () => {
+  for (const withAnc of [true, false]) {
+    const en = withAnc ? [inst(ANC)] : [];
+    let s = board({ active: inst(DOLL, { energyAttached: [inst(FIGHT)] }) },
+                  { active: inst(PIG2, { damage: 30, energyAttached: en, evolvedFromStack: [inst(PIG1)] }) });
+    s = applyAction(s, { type: 'ATTACK', attackIndex: 0 }, pool);
+    for (let g = 0; g < 3 && s.pendingSelection; g++) s = resolve(s, s.pendingSelection.actorIdx ?? 0, (s.pendingSelection.params?.validIids ?? []).slice(0, 1));
+    noLinger(s, 'G12');
+    assert.equal(s.players[1].active, null, '退化後的暖暖豬應昏厥');
+    assert.equal(taken(s), withAnc ? 0 : 1, withAnc ? '古舊能量 −1 ⇒ 0 張' : '基本 1 張');
+    assert.ok(!s.log.some(l => /系統擊倒檢查/.test(l.message)), '不可再走 sanityKOSweep 的簡化版');
+  }
+});
+
+T('G13 有招式效果的致死一擊（吼叫尾ex｜咬碎，延後結算）打昏 沙鈴仙人掌｜炸裂針 ⇒ 攻擊方 +60（延後結算時 gate 曾讀到已移出場的盤面 ⇒ 永遠不觸發）', () => {
+  const SPIKE = need('12468', '沙鈴仙人掌');
+  const water = inst(W);
+  let s = board({ active: inst(ROAR, { energyAttached: [inst(PSY), inst(PSY), inst(PSY)] }) },
+                { active: inst(SPIKE, { damage: 0, energyAttached: [water] }) });
+  s = applyAction(s, { type: 'ATTACK', attackIndex: 1 }, pool);
+  if (s.pendingSelection) s = resolve(s, 0, [water.iid]);
+  noLinger(s, 'G13');
+  assert.equal(taken(s), 1, '前置：已擊倒');
+  assert.equal(s.players[0].active.damage, 60, '炸裂針：攻擊方 +60');
 });
 
 console.log(`\nv6490 招式效果結束後才判定昏厥：PASS ${pass} / FAIL ${fail}`);

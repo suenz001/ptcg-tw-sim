@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.491：v6.490 追修（2026-10-06，站長追問）
+
+BASE v6.490（592c61f3）。
+- 站長裁定：退化光線造成的招式傷害讓退化後的寶可夢昏厥 ⇒ 古舊能量等加減照算。⇒ ctx（_pendingAttackKo）建構搬到 KO／存活兩分支之前；存活分支有招式效果且傷害 >0 時也記，drainPendingAttackKo 發現受害者已達昏厥就走 resolveAttackActiveKo 完整結算（原本落到 sanityKOSweep 的簡化版）。退化沿用原 iid（_devo_ 前綴只給回手的進化卡）。
+- 當場結算（沒有招式效果）不再讀攻擊前快照：切割洛托姆｜割除衝刺 PRE 丟掉古舊能量後打昏，原本照快照 −1（v6.471 起就有，審查時發現）。legacy 參數只剩 deferredToolFires／toolsJammed。
+- ⚠ v6.490 回歸：resolveAttackActiveKo 的炸裂針 gate 讀 `defender.active`，延後模式下 defender＝結算中的 defenderState（active 已設 null）⇒ 永遠不觸發；免疫網 test-v6427 F2 在本版抓到（v6.490 的網沒抓到是因為當時 legacy 讀攻擊前快照遮住了）。改讀 cur.players[dIdx]。
+- 站長：G 標一律不處理（感激放大是 G 標）；test-v6490 G9 改用 J 標 未知圖騰｜神秘信號。
+- 拆道具招式稽核：H/I/J 帶傷害的拆對手道具招式 9 招全是「在造成傷害前」且實作在 regPre ⇒ 不受 v6.490 影響。
+- test-v6490 補 G11（割除衝刺）、G12（退化光線，有／無古舊）、G13（延後結算 × 炸裂針）；v6.490 上 G11／G12／G13 紅。突變：拿掉存活分支 ctx、resolveAttackActiveKo 讀錯快照皆紅。
+
 ## v6.490：招式效果全部結算完才判定昏厥（2026-10-06，站長回報 bug 3：粉碎箭 × 古舊能量）
 
 BASE v6.489（96dcb74b）。設計經 Fable 5 諮詢（殭屍模式＋抽出中央 KO 函式＋跨選擇視窗延後），實作後再送 Fable 對抗審查，抓到 4 個真 bug 已於本版修掉。

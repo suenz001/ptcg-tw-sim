@@ -3181,6 +3181,15 @@ function koSweepLogLine(
 //   ⚠ 沒有招式效果的招式（ATTACK_POST／ATTACK_AFTER_KO 都沒有登記）照舊當場結算 —— 呼叫的是同一支函式。
 export type AttackKoCtx = NonNullable<GameState['_pendingAttackKo']>;
 
+/**
+ * ⭐v6.490 這隻場上寶可夢是不是 _pendingAttackKo 記的那一隻（依 iid）。
+ *   退化（退化光線…）走中央 buildDevolvedInstance，退化後的實體**沿用原本的 iid**（`_devo_` 前綴只給被移回手牌的進化卡）
+ *   ⇒ 退化後才不夠 HP 的情形也認得出來（test-v6490 G12）。
+ */
+function isAttackKoVictim(inst: CardInstance | null | undefined, victimIid: string): boolean {
+  return !!inst && inst.iid === victimIid;
+}
+
 /** 使用招式的寶可夢（依攻擊當下的 iid 找；可能已被自己的招式效果換到備戰區）。 */
 function attackerOnField(s: GameState, aIdx: 0 | 1, iid: string | undefined): { where: 'active' | 'bench'; inst: CardInstance } | null {
   const p = s.players[aIdx];
@@ -3201,15 +3210,19 @@ function resolveAttackActiveKo(
   cur: GameState,
   ctx: AttackKoCtx,
   pool: Map<string, Card>,
-  legacy?: { preState: GameState; deferredToolFires: Array<{ name: string; run: (s: GameState) => GameState }>; toolsJammed: boolean },
+  legacy?: { deferredToolFires: Array<{ name: string; run: (s: GameState) => GameState }>; toolsJammed: boolean },
 ): GameState {
   const { aIdx, dIdx } = ctx;
-  const state = legacy?.preState ?? cur;
+  // ⭐v6.490：一律讀當下盤面（含「當場結算」）。原本當場結算讀攻擊前快照 ⇒ 切割洛托姆｜割除衝刺
+  //   「在造成傷害前」丟掉古舊能量再打昏，仍照快照 −1（審查時實測）。
+  const state = cur;
   let newState: GameState = cur;
   const defPlayers = [...newState.players] as [PlayerState, PlayerState];
   const defenderState = { ...defPlayers[dIdx] };
-  if (!defenderState.active || defenderState.active.iid !== ctx.victimIid) return cur;
-  const defender = legacy ? state.players[dIdx] : defenderState;
+  if (!defenderState.active || !isAttackKoVictim(defenderState.active, ctx.victimIid)) return cur;
+  // ⚠ 下面的炸裂針 gate 讀 `defender.active`（被擊倒的那一隻）—— 必須是**還沒移出場**的盤面（cur），
+  //   不可以用 defenderState（結算途中 active 會被設成 null ⇒ gate 永遠失敗、炸裂針永遠不觸發；免疫網 test-v6427 F2 抓到）。
+  const defender = cur.players[dIdx];
   const defenderCard = pool.get(defenderState.active.cardId)!;
   const attackerCard = pool.get(ctx.attackerCardId)!;
   const attacker = newState.players[aIdx];
@@ -3527,14 +3540,14 @@ export function drainPendingAttackKo(state: GameState, pool: Map<string, Card>):
   let koHappened = false;
   if (s.phase === 'playing') {
     const d = s.players[ctx.dIdx];
-    if (d.active?.iid === ctx.victimIid) {
+    if (d.active && isAttackKoVictim(d.active, ctx.victimIid)) {
       if (isZombieKO(d.active, pool, s)) {
         koHappened = true;
         s = resolveAttackActiveKo(s, ctx, pool);
       }
     } else {
       // 被招式效果換到備戰區（推倒類）⇒ 在備戰區昏厥（官方 L1132-1133）；放回手牌／牌庫 ⇒ 找不到 ⇒ 不昏厥
-      const vb = d.bench.find(b => b.iid === ctx.victimIid);
+      const vb = d.bench.find(b => isAttackKoVictim(b, ctx.victimIid));
       if (vb && isZombieKO(vb, pool, s)) {
         koHappened = true;
         s = koTargetAfterAttackDamage(s, ctx.aIdx, vb, pool, { label: '招式', onDamagedFired: true, attackerIid: ctx.attackerIid });
@@ -3570,7 +3583,7 @@ function isZombieKO(inst: CardInstance, pool: Map<string, Card>, s: GameState): 
   // >>> v6490-zombie-pending-exempt
   // ⭐v6.490：招式效果還沒結束的致死受害者（_pendingAttackKo）不是殭屍 —— 它的昏厥由 drainPendingAttackKo 完整結算，
   //   不可以被 sanityKOSweep 先用簡化版（沒有古舊能量等獎賞修正）掃掉。
-  if (s._pendingAttackKo?.victimIid === inst.iid) return false;
+  if (s._pendingAttackKo && isAttackKoVictim(inst, s._pendingAttackKo.victimIid)) return false;
   // <<< v6490-zombie-pending-exempt
   const hp = getEffectiveHP(inst, pool, s);
   return hp > 0 && inst.damage >= hp;
@@ -6677,19 +6690,24 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //     被動型（PASSIVE_RETALIATION／PASSIVE_ON_DAMAGED）反而有跑（走下方共用尾段）
     //     ⇒ 同一次傷害，特性有反應、道具沒反應，本來就自相矛盾。
     const defenderSurvivedAttack = !wouldBeKO || preventedKO;
+    // >>> v6490-attack-ko-ctx
+    // ⭐v6.490：延後昏厥的資料（純資料、可序列化）。昏厥分支與存活分支共用：
+    //   存活分支也要記 —— 招式效果之後才不夠 HP（退化光線退化、拆掉加 HP 的道具）時，
+    //   這一下招式的傷害仍是「受到招式的傷害而昏厥」，要走完整結算（古舊能量等獎賞修正），不是 sanityKOSweep 的簡化版。
+    const _v6490Ctx: AttackKoCtx = {
+      aIdx, dIdx, victimIid: defenderState.active!.iid, attackerIid: _attackerIidSnapshot,
+      attackerCardId: String(attackerCard.id), baseDamage,
+      peakTypeInst: _v6471PeakTypeInst ?? null, effectKey,
+      // 借招：PRE 已把借來的各層 key push 進 pendingCopyAttackKeys（POST 才逐層 shift）⇒ 此刻是完整的鏈
+      afterKoKeys: [effectKey, ...(newState.pendingCopyAttackKeys ?? [])],
+    };
+    const _v6490Defer = (_v6490Ctx.afterKoKeys ?? [effectKey]).some(k => ATTACK_POST.has(k) || ATTACK_AFTER_KO.has(k));
+    // <<< v6490-attack-ko-ctx
     if (!preventedKO && wouldBeKO) {
       // >>> v6490-attack-ko-branch
       // ⭐⭐⭐v6.490：昏厥結算搬到模組層級的 resolveAttackActiveKo（見該函式註解）。
       //   有招式效果（ATTACK_POST／ATTACK_AFTER_KO）⇒ 先把致死傷害寫上去、記下 _pendingAttackKo，
       //   等效果（含選擇視窗鏈）全部結束再由 drainPendingAttackKo 結算；沒有效果 ⇒ 當場結算（行為不變）。
-      const _v6490Ctx: AttackKoCtx = {
-        aIdx, dIdx, victimIid: defenderState.active!.iid, attackerIid: _attackerIidSnapshot,
-        attackerCardId: String(attackerCard.id), baseDamage,
-        peakTypeInst: _v6471PeakTypeInst ?? null, effectKey,
-        // 借招：PRE 已把借來的各層 key push 進 pendingCopyAttackKeys（POST 才逐層 shift）⇒ 此刻是完整的鏈
-        afterKoKeys: [effectKey, ...(newState.pendingCopyAttackKeys ?? [])],
-      };
-      const _v6490Defer = (_v6490Ctx.afterKoKeys ?? [effectKey]).some(k => ATTACK_POST.has(k) || ATTACK_AFTER_KO.has(k));
       const koInst = state.players[dIdx].active;
       const updatedActive: CardInstance = { ...defenderState.active!, damage: newDamage };
       const onKOToolNames = getAllAttachedTools(updatedActive).map(t => pool.get(t.cardId)).filter((c): c is import('$lib/cards/types').Card => !!c);
@@ -6720,7 +6738,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         // 原 KO 分支的 updatedActive／棄牌堆實體都帶「含這一下」的傷害（fable 審查：抽出後曾讀成攻擊前的 damage）
         defPlayers[dIdx] = { ...defenderState, active: { ...defenderState.active!, damage: newDamage } };
         newState = resolveAttackActiveKo({ ...newState, players: defPlayers }, _v6490Ctx, pool,
-          { preState: state, deferredToolFires: _deferredToolFires, toolsJammed });
+          { deferredToolFires: _deferredToolFires, toolsJammed });
       }
       const _v456KoMagicalShine = isImmuneToOppAbilityEffect(newState, dIdx, newState.players[aIdx].active, pool, true);
       // <<< v6490-attack-ko-branch
@@ -6874,6 +6892,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       defenderState.active = withAttackDamageTaken(defenderState.active!, _damageBeforeThisAttack, _survivedDamage, 'attack-damage');
       defPlayers[dIdx] = defenderState;
       newState = { ...newState, players: defPlayers, turnPhase: 'end' };
+      // ⭐v6.490（站長裁定 2026-10-06：退化光線 50 點傷害、退化後昏厥 ⇒ 古舊能量的加減照算）：
+      //   有招式效果時也記下這一隻；效果結束後若它已達昏厥，由 drainPendingAttackKo 完整結算（不是 sanityKOSweep 的簡化版）。
+      if (_v6490Defer && baseDamage > 0) newState = { ...newState, _pendingAttackKo: _v6490Ctx };
 
       // v3.751：抓取攻擊方在 ON_DAMAGED hooks 觸發前的傷害值 — 用於判斷反傷有實際生效
       const atkDamageBeforeRetaliation = newState.players[aIdx].active?.damage ?? 0;
