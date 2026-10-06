@@ -1263,8 +1263,10 @@
   @media (max-width: 600px) {
     /* ⚠ 這裡只縮小基礎邊距，env() 那一項**必須保留** —— 直接寫 `padding: 10px 12px 40px`
        會把上面的 safe-area 整條覆蓋掉，動態島機種就又會按不到「← 首頁」。 */
+    /* ⭐v6.503（站長回報：手機底部導覽列按「公布欄」時畫面往上跳一下）：本頁手機頂端只留 10px，標題比牌組編輯器（24px）、
+       卡牌資料庫高一截 ⇒ 在頁籤間切換時看起來像整頁往上跳。改成與牌組編輯器相同的 24px。 */
     main {
-      padding: calc(10px + var(--safe-top, 0px))
+      padding: calc(24px + var(--safe-top, 0px))
                max(12px, var(--safe-right, 0px))
                40px
                max(12px, var(--safe-left, 0px));
