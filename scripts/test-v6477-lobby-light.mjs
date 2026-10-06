@@ -26,7 +26,9 @@ const BASE_SHA = '51bc47db';
 const rd = (r) => readFileSync(join(ROOT, r), 'utf8').replace(/\r\n/g, '\n');
 let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c) { pass++; console.log('  PASS ' + n); } else { fail++; console.log('  FAIL ' + n + (x !== undefined ? ' — ' + x : '')); } };
-const PRE = ":global(html[data-ui-wide][data-theme='light']:not([data-battle-view]))";   // 大廳（對戰頁不能加 @media ⇒ 用 data-ui-wide 當桌機條件）
+// ⭐v6.499（Rule 40）：站長回報手機淺色主題的對戰／錦標賽大廳仍是深綠 ⇒ 大廳淺色改成手機也套，前綴拿掉 data-ui-wide。
+//   本支原本的意圖（只碰顏色、非牌桌、深色不變、產生器一致）不變；「手機維持墨綠」那條（E5）依站長新要求反轉。
+const PRE = ":global(html[data-theme='light']:not([data-battle-view]))";   // 大廳（對戰頁不能加 @media）
 const PRE_FR = ":global(html[data-theme='light']:not([data-battle-view]))";                // 好友面板（本身在 min-width:1024px 內）
 const COLOR_PROPS = /^(color|background|background-color|border|border-color|border-(top|bottom|left|right)(-color)?|outline-color|box-shadow)$/;
 
@@ -50,7 +52,8 @@ function judge(get) {
   const fb = FP.match(/\n  \/\* >>> v6477-friends-light \*\/\n([\s\S]*?)\n  \/\* <<< v6477-friends-light \*\//);
   const fbody = fb ? fb[1].replace(/\/\*[\s\S]*?\*\//g, '') : '';
   const decls = [...fbody.matchAll(/\n\s+(--[\w-]+|[\w-]+): /g)].map((x) => x[1]);
-  r.S3 = !!fb && fbody.includes('@media (min-width: 1024px) {') && fbody.includes(PRE_FR + ' .fr-panel {') && decls.length >= 15 && decls.every((d) => d.startsWith('--fr-'));
+  // ⭐v6.499（Rule 40）：好友面板淺色色票改成手機也套 ⇒ 不再包 min-width:1024px（哨兵內不可有 @media）
+  r.S3 = !!fb && !fbody.includes('@media') && fbody.includes(PRE_FR + ' .fr-panel {') && decls.length >= 15 && decls.every((d) => d.startsWith('--fr-'));
   const LAYOUT = get('src/routes/+layout.svelte');
   r.S4 = /:global\(html\[data-ui-themed\]\[data-theme='light'\]:not\(\[data-battle-view\]\)\),\n    :global\(html\[data-ui-themed\]\[data-theme='light'\]:not\(\[data-battle-view\]\) body\) \{ background-color: var\(--ui-bg\) !important; \}/.test(LAYOUT);
   return r;
@@ -58,11 +61,11 @@ function judge(get) {
 console.log('【S】靜態');
 const C = judge(rd);
 ok('★★★[S1] THEMED_ROUTES 含 /game、/tournament、/friends', C.S1);
-ok('★★★[S2] 對戰頁大廳淺色哨兵：一塊、零 @media（本頁 @media 數量被釘死）、每條都帶「寬螢幕＋淺色＋非牌桌」前綴、只碰顏色屬性、≥150 條', C.S2);
+ok('★★★[S2] 對戰頁大廳淺色哨兵：一塊、零 @media（本頁 @media 數量被釘死）、每條都帶「淺色＋非牌桌」前綴、只碰顏色屬性、≥150 條', C.S2);
 ok('★★★[S2b] layout 依 matchMedia(min-width:1024px) 掛 <html data-ui-wide>（初始化就掛、斷點與頂端列一致）',
   /export const WIDE_QUERY = '\(min-width: 1024px\)';/.test(rd('src/lib/site-theme.ts')) && /if \(typeof document !== 'undefined'\) trackWideAttr\(\);/.test(rd('src/routes/+layout.svelte'))
   && rd('src/routes/+layout.svelte').indexOf('trackWideAttr();') < rd('src/routes/+layout.svelte').indexOf('onMount('));
-ok('★★[S3] 好友面板淺色：只換 --fr-* 色票、同一前綴、min-width:1024px', C.S3);
+ok('★★[S3] 好友面板淺色：只換 --fr-* 色票、同一前綴（v6.499 起手機也套，不包 @media）', C.S3);
 ok('★★★[S4] layout：淺色且非牌桌時以 !important 蓋過大廳／好友頁的墨綠底', C.S4);
 // 行內 style 的字色：產生器只掃樣式區 ⇒ 大廳標記裡每一種行內 `color:#xxx` 都必須有手調覆寫（錦標賽排名表；Fable 5.1 審查阻擋項）
 {
@@ -95,7 +98,7 @@ if (hasBaseCommit(ROOT, BASE_SHA)) {
 // 突變：前綴少了 :not([data-battle-view]) ⇒ S2 必紅（牌桌會被染成淺色）
 {
   const G = rd('src/routes/game/+page.svelte');
-  const mut = G.replace(":global(html[data-ui-wide][data-theme='light']:not([data-battle-view])) .tourn-tab {", ":global(html[data-ui-wide][data-theme='light']) .tourn-tab {");
+  const mut = G.replace(PRE + ' .tourn-tab {', ":global(html[data-theme='light']) .tourn-tab {");   // ⭐v6.499：改讀 PRE（前綴已不含 data-ui-wide）
   const J = judge((p) => (p === 'src/routes/game/+page.svelte' ? mut : rd(p)));
   ok('★★[M1] 突變：任一條拿掉「非牌桌」條件 ⇒ S2 翻紅', mut !== G && J.S2 === false);
   const mut2 = G.replace(/(\.mode-card \{ background: var\(--ui-bg-elev\);)/, '$1 padding: 0;');
@@ -150,7 +153,8 @@ else if (chromium) {
       ({ ctx, pg } = await open(390, 844, 'light', '/game', true));
       const M = { body: await css(pg, 'body', 'backgroundColor'), card: await css(pg, '.mode-card', 'backgroundColor') };
       await ctx.close();
-      ok('★★★[E5] 手機 390 淺色：/game 大廳維持原本墨綠（不吃主題）', M.body === 'rgb(22, 40, 22)' && M.card !== 'rgb(255, 255, 255)', JSON.stringify(M));
+      // ⭐v6.499（Rule 40）：站長要求手機淺色也是淺底 ⇒ 反轉成淺底白卡
+      ok('★★★[E5] 手機 390 淺色：/game 大廳也是淺底、白色模式卡（v6.499）', M.body === 'rgb(243, 245, 244)' && M.card === 'rgb(255, 255, 255)', JSON.stringify(M));
       ok('[E9] 以上頁面沒有 JS 例外', errs.length === 0, errs.slice(0, 3).join(' | '));
     } finally { await browser.close(); srv.close(); }
   }

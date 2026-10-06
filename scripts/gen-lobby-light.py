@@ -101,7 +101,7 @@ for sel,body in rules:
         if not cs or not cs<=L: continue
         if re.search(r'(^|[\s>+~])(body|html)\b',x): continue
         if x in SKIP_UNUSED: continue   # 原檔本來就是 Svelte 回報的未使用選擇器
-        pre = ':global(html[data-ui-wide][data-theme=\'light\']:not([data-battle-view]))'
+        pre = ':global(html[data-theme=\'light\']:not([data-battle-view]))'   # ⭐v6.499 手機也套（拿掉 data-ui-wide）
         newsels.append(pre+(' ' if (cs<=only or cs<=M) else ' .lobby ')+x)
     if not newsels: continue
     if keep_rule(body): continue

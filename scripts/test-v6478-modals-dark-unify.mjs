@@ -22,7 +22,8 @@ const rd = (r) => readFileSync(join(ROOT, r), 'utf8').replace(/\r\n/g, '\n');
 let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c) { pass++; console.log('  PASS ' + n); } else { fail++; console.log('  FAIL ' + n + (x !== undefined ? ' — ' + x : '')); } };
 
-const PRE = ":global(html[data-ui-wide][data-theme='light']:not([data-battle-view]))";
+// ⭐v6.499（Rule 40）：大廳淺色前綴拿掉 data-ui-wide（手機也套），意圖（視窗淺底、不掛 .lobby 祖先）不變
+const PRE = ":global(html[data-theme='light']:not([data-battle-view]))";
 function judge(get) {
   const r = {};
   const G = get('src/routes/game/+page.svelte');
@@ -109,7 +110,8 @@ else if (chromium) {
       ok('★★[E5] 1440 深色：版本閘視窗維持原本深藍（#1e2530）', V2?.bg === 'rgb(30, 37, 48)', JSON.stringify(V2));
       ({ ctx, pg } = await open(390, 844, 'light', '/game', { mobile: true }));
       const V3 = await vergate(pg); await ctx.close();
-      ok('★★★[E6] 手機 390 淺色：版本閘視窗維持原樣（手機不變）', V3?.bg === 'rgb(30, 37, 48)', JSON.stringify(V3));
+      // ⭐v6.499（Rule 40）：站長要求手機淺色大廳也是淺底 ⇒ 大廳狀態下的視窗跟網頁版一樣是淺底深字
+      ok('★★★[E6] 手機 390 淺色：版本閘視窗也是淺底深字（v6.499 起與網頁版一致）', !!V3 && lum(V3.bg) > 220 && lum(V3.title) < 80, JSON.stringify(V3));
       ({ ctx, pg } = await open(1440, 900, 'dark', '/cards'));
       const body = await pg.evaluate(() => getComputedStyle(document.body).backgroundColor); await ctx.close();
       ok('★★[E7] 1440 深色 /cards：底色與對戰大廳同為 #162816', body === 'rgb(22, 40, 22)', body);

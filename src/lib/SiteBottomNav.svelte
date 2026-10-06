@@ -12,8 +12,8 @@
   const active = $derived(activeNavHref(pathname, base));
 </script>
 
-<!-- 對戰演練／錦標賽大廳是深色底 ⇒ 導覽列跟著換深色，不要一條白邊 -->
-<nav class="sbn" class:dark={active === '/game' || active === '/tournament'} aria-label="主要功能">
+<!-- ⭐v6.499：對戰演練／錦標賽大廳在手機也跟著主題（淺色＝淺底）⇒ 導覽列不再對這兩頁強制深色，只看主題 -->
+<nav class="sbn" aria-label="主要功能">
   <a class="sbn-link" class:active={active === '/cards'} href="{base}/cards" aria-current={active === '/cards' ? 'page' : undefined}><span class="sbn-ico" aria-hidden="true">🃏</span><span class="sbn-lb">卡牌</span></a>
   <a class="sbn-link" class:active={active === '/decks'} href="{base}/decks" aria-current={active === '/decks' ? 'page' : undefined}><span class="sbn-ico" aria-hidden="true">🧩</span><span class="sbn-lb">牌組</span></a>
   <a class="sbn-link" class:active={active === '/deck-posts'} href="{base}/deck-posts" aria-current={active === '/deck-posts' ? 'page' : undefined}><span class="sbn-ico" aria-hidden="true">📋</span><span class="sbn-lb">公布欄</span></a>
@@ -63,9 +63,6 @@
     .sbn-lb { white-space: nowrap; }
     .sbn-link.active { color: #2563eb; font-weight: 700; }
     .sbn-link.active .sbn-ico { transform: translateY(-1px); }
-    .sbn.dark { background: rgba(16, 32, 22, 0.97); border-top-color: #2f4a37; box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.35); }
-    .sbn.dark .sbn-link { color: #a9bdb0; }
-    .sbn.dark .sbn-link.active { color: #7ee2a8; }
     /* ⭐v6.498 深色主題時整條導覽列都用深色 */
     :global(html[data-theme='dark']) .sbn { background: rgba(16, 32, 22, 0.97); border-top-color: #2f4a37; box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.35); }
     :global(html[data-theme='dark']) .sbn .sbn-link { color: #a9bdb0; }

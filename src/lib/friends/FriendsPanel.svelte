@@ -518,30 +518,29 @@
   }
   .fr-panel.embed { background: transparent; }
   /* >>> v6477-friends-light */
-  /* ⭐v6.477 網頁版（≥1024px）淺色主題：好友頁／大廳好友分頁換一套淺色色票（本面板所有顏色都讀 --fr-*，換色票即可）。
-     ・只在 <html data-theme="light"> 且不是牌桌畫面時生效；深色主題與手機完全不變。 */
-  @media (min-width: 1024px) {
-    :global(html[data-theme='light']:not([data-battle-view])) .fr-panel {
-      --fr-bg: #f3f5f4;
-      --fr-fg: #1a2320;
-      --fr-label: #2c3e33;
-      --fr-dim: #5b6762;
-      --fr-card-bg: #ffffff;
-      --fr-card-bd: #d6ddd9;
-      --fr-tab-bg: #ffffff;
-      --fr-tab-bd: #c5d3cb;
-      --fr-tab-fg: #1d5c3a;
-      --fr-tab-hover-bg: #eef3f0;
-      --fr-tab-on-from: #e3f3ea;
-      --fr-tab-on-to: #d5ecdf;
-      --fr-tab-on-fg: #0f3a24;
-      --fr-tab-on-bd: #3dbb7a;
-      --fr-gold: #8a5d00;
-      --fr-ok: #1a7f44;
-      --fr-danger: #c0392b;
-      --fr-bubble-them: #eef3f0;
-      --fr-bubble-me: #d5ecdf;
-    }
+  /* ⭐v6.477 淺色主題：好友頁／大廳好友分頁換一套淺色色票（本面板所有顏色都讀 --fr-*，換色票即可）。
+     ・只在 <html data-theme="light"> 且不是牌桌畫面時生效；深色主題完全不變。
+     ・⭐v6.499：手機／平板也套（原本包在 min-width:1024px 裡；大廳在手機改淺底後，好友分頁要跟著換）。 */
+  :global(html[data-theme='light']:not([data-battle-view])) .fr-panel {
+    --fr-bg: #f3f5f4;
+    --fr-fg: #1a2320;
+    --fr-label: #2c3e33;
+    --fr-dim: #5b6762;
+    --fr-card-bg: #ffffff;
+    --fr-card-bd: #d6ddd9;
+    --fr-tab-bg: #ffffff;
+    --fr-tab-bd: #c5d3cb;
+    --fr-tab-fg: #1d5c3a;
+    --fr-tab-hover-bg: #eef3f0;
+    --fr-tab-on-from: #e3f3ea;
+    --fr-tab-on-to: #d5ecdf;
+    --fr-tab-on-fg: #0f3a24;
+    --fr-tab-on-bd: #3dbb7a;
+    --fr-gold: #8a5d00;
+    --fr-ok: #1a7f44;
+    --fr-danger: #c0392b;
+    --fr-bubble-them: #eef3f0;
+    --fr-bubble-me: #d5ecdf;
   }
   /* <<< v6477-friends-light */
 

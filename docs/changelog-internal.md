@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.499：手機淺色主題的對戰／錦標賽大廳（2026-10-06）
+
+BASE v6.498（097b5850）。站長回報：「手機版的淺色主題，在對戰和錦標賽的時候，背景依然是深綠色」。
+- 原因：v6.477 的大廳淺色規則前綴是 html[data-ui-wide]（只網頁版），layout 蓋墨綠底的 !important 規則也在 min-width:1024px 裡；底部導覽列對 /game、/tournament 強制深色。
+- 做法：gen-lobby-light.py 前綴改 html[data-theme='light']:not([data-battle-view]) 並重跑（哨兵內 245 處）；FriendsPanel 淺色色票拿掉 @media；site-theme 新增 LOBBY_ROUTES／isLobbyRoute，layout 在 <html> 掛 data-ui-lobby，淺色＋非牌桌時 !important 蓋回 --ui-bg（只對大廳三頁，其他頁手機淺色底色不變）；底部導覽列移除 .dark。
+- 第一版把 layout 規則整條搬出 @media，結果其他頁手機淺色底色也變了（test-v6474 E7、v6475 E6、v6476 E3/E4 翻紅）⇒ 改成 data-ui-lobby 限定，守衛全綠。
+- 實測 390×844：淺色大廳首頁、本機雙人、線上房間、錦標賽登入畫面截圖確認；手機 @media 內設定顏色的大廳規則只有轉向提示（刻意深色遮罩）。
+- Rule 40：test-v6477 S2 前綴、S3 好友不再要求 @media、E5 手機改斷言淺底、M1 突變改讀 PRE；test-v6478 PRE、E6 手機改斷言淺底深字。
+- test-v6499（15 條，HEAD 紅 6 條靜態）。
+
 ## v6.498：手機深色主題（2026-10-06，站長清單第 6 項）
 
 BASE v6.497（4004845e）。

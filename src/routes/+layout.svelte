@@ -8,7 +8,7 @@
   import SiteTopBar from '$lib/SiteTopBar.svelte';          // ⭐v6.474 網頁版（≥1024px）全站頂端列
   import SiteBottomNav from '$lib/SiteBottomNav.svelte';    // ⭐v6.497 手機／平板（<1024px）全站底部導覽列
   import { VERSION } from '$lib/version';
-  import { showTopBar, isThemedRoute, applyTheme, setTheme, followSystemTheme, trackWideAttr, type UiTheme } from '$lib/site-theme';
+  import { showTopBar, isThemedRoute, isLobbyRoute, applyTheme, setTheme, followSystemTheme, trackWideAttr, type UiTheme } from '$lib/site-theme';
 
   // ⭐v6.474：主題在 layout 初始化時（hydrate 之前、載入畫面還蓋著）就寫到 <html data-theme>，
   //   不放 onMount ⇒ 不會先畫淺色再跳深色。規則單一來源見 $lib/site-theme.ts。
@@ -18,6 +18,7 @@
   let curPath = $state(typeof location !== 'undefined' ? location.pathname : '/');
   const topBarOn = $derived(showTopBar(curPath, base));
   const themedOn = $derived(isThemedRoute(curPath, base));
+  const lobbyOn = $derived(isLobbyRoute(curPath, base));   // ⭐v6.499 墨綠底大廳（手機淺色主題要蓋回淺底）
   function toggleUiTheme() { uiTheme = setTheme(uiTheme === 'dark' ? 'light' : 'dark'); }
   // ⭐v6.474：已接上主題的頁面在 <html> 掛 data-ui-themed ⇒ 網頁版整頁底色跟著主題走（CSS 在下方 <style>）。
   //   ⚠ 不用頁面自己的 <svelte:head><style>：test-lib-strip-markup-sections 的範圍級裁判只容許 friends 一個例外；
@@ -26,6 +27,12 @@
     if (typeof document === 'undefined') return;
     if (themedOn) document.documentElement.setAttribute('data-ui-themed', '');
     else document.documentElement.removeAttribute('data-ui-themed');
+  });
+  // ⭐v6.499：墨綠底大廳在 <html> 掛 data-ui-lobby（CSS 見下方 v6499-mobile-light-lobby）；離開這幾頁自動拿掉。
+  $effect(() => {
+    if (typeof document === 'undefined') return;
+    if (lobbyOn) document.documentElement.setAttribute('data-ui-lobby', '');
+    else document.documentElement.removeAttribute('data-ui-lobby');
   });
 
   // ⭐v6.469：每次導頁（含第一次載入）後依路由套用 viewport；對戰頁維持禁縮放，其他頁（非 iOS）可兩指放大。
@@ -272,6 +279,13 @@
     :global(html[data-ui-themed][data-theme='light']:not([data-battle-view])),
     :global(html[data-ui-themed][data-theme='light']:not([data-battle-view]) body) { background-color: var(--ui-bg) !important; }
   }
+  /* >>> v6499-mobile-light-lobby */
+  /* ⭐v6.499 手機／平板淺色主題（站長：「手機版的淺色主題，在對戰和錦標賽的時候，背景依然是深綠色」）：
+     墨綠底大廳（data-ui-lobby，路由清單見 $lib/site-theme.ts 的 LOBBY_ROUTES）在淺色且不是牌桌畫面時改鋪淺底。
+     只對這幾頁 ⇒ 其他頁手機淺色的底色維持原樣；牌桌（data-battle-view）與深色主題不套。網頁版上方那條本來就成立，這條等同重複、無影響。 */
+  :global(html[data-ui-lobby][data-theme='light']:not([data-battle-view])),
+  :global(html[data-ui-lobby][data-theme='light']:not([data-battle-view]) body) { background-color: var(--ui-bg) !important; }
+  /* <<< v6499-mobile-light-lobby */
 
   /* >>> v6498-mobile-dark-base */
   /* ⭐v6.498 手機／平板深色主題（站長手機清單第 6 項）：已接上主題的頁面在深色時整頁底色跟著主題。

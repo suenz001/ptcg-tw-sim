@@ -23,6 +23,16 @@ export const THEME_KEY = 'ptcg_ui_theme';
 // ⭐v6.477：對戰大廳、錦標賽大廳、好友頁也接上（牌桌畫面另由 data-battle-view 排除，牌桌樣式不動）
 export const THEMED_ROUTES: readonly RegExp[] = [/^\/$/, /^\/cards$/, /^\/card\/[^/]+$/, /^\/decks$/, /^\/deck-posts$/, /^\/game$/, /^\/tournament$/, /^\/friends$/];
 
+/** ⭐v6.499 自己用 <svelte:head> 以 !important 鋪墨綠底的頁面（對戰大廳、錦標賽大廳、好友頁）。
+ *  layout 在 <html> 掛 data-ui-lobby ⇒ 手機／平板淺色主題時只對這幾頁蓋回淺底（其他頁的手機淺色底色維持原樣）。 */
+export const LOBBY_ROUTES: readonly RegExp[] = [/^\/game$/, /^\/tournament$/, /^\/friends$/];
+
+/** ⭐v6.499 這一頁是不是 LOBBY_ROUTES（墨綠底大廳）。 */
+export function isLobbyRoute(pathname: string, base = ''): boolean {
+  const p = stripBase(pathname, base);
+  return LOBBY_ROUTES.some((re) => re.test(p));
+}
+
 /** 去掉 base path，統一成以 / 開頭、不帶結尾斜線（根目錄除外）。 */
 export function stripBase(pathname: string, base = ''): string {
   let p = String(pathname || '/');
