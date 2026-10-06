@@ -35,6 +35,8 @@
       牌組 {deck.length} 張・基礎寶可夢 {basicCount} 張・起手有基礎寶可夢的機率 <strong>{pct(prob)}</strong>
       {#if rounds > 1}<span class="ohs-round">（第 {rounds} 次）</span>{/if}
     </p>
+    <!-- ⭐v6.501 手機：標題列與按鈕列固定，只有中間這一段（手牌＋獎賞卡）可以捲 ⇒ 按鈕永遠在同一個位置 -->
+    <div class="ohs-body">
     {#if kind === 'none'}
       <p class="ohs-warn">⚠ 起手沒有基礎寶可夢：實戰要把手牌洗回去重抽（對手可以多抽 1 張）。</p>
     {:else if kind === 'burst-only'}
@@ -55,7 +57,7 @@
       獎賞卡（{st.prizes.length} 張）
       <button class="ohs-link" onclick={() => (showPrizes = !showPrizes)}>{showPrizes ? '蓋回去' : '翻開看看'}</button>
     </h4>
-    <div class="ohs-grid">
+    <div class="ohs-grid ohs-prizes">
       {#each st.prizes as p (p.key)}
         <figure class="ohs-card" title={showPrizes ? p.card.name : '獎賞卡'}>
           {#if showPrizes}
@@ -68,9 +70,11 @@
       {/each}
     </div>
 
+    </div>
+
     <div class="ohs-actions">
-      <button class="ohs-btn primary" onclick={deal}>🔄 重新洗牌再抽</button>
-      <button class="ohs-btn" onclick={draw} disabled={st.deck.length === 0}>➕ 再抽 1 張（牌庫剩 {st.deck.length}）</button>
+      <button class="ohs-btn primary" onclick={deal}>🔄 重新洗牌<span class="ohs-long">再抽</span></button>
+      <button class="ohs-btn" onclick={draw} disabled={st.deck.length === 0}>➕ 再抽 1 張<span class="ohs-sub">（牌庫剩 {st.deck.length}）</span></button>
       <button class="ohs-btn" onclick={onclose}>關閉</button>
     </div>
   </div>
@@ -105,8 +109,30 @@
   .ohs-btn { padding: 0.55rem 1rem; border-radius: 8px; border: 1px solid var(--ui-border, #ccc); background: var(--ui-bg-sunken, #f4f4f4); color: inherit; font: inherit; font-size: 0.92rem; cursor: pointer; }
   .ohs-btn.primary { background: #3dbb7a; border-color: #3dbb7a; color: #fff; font-weight: 700; }
   .ohs-btn:disabled { opacity: 0.5; cursor: default; }
+  /* ⭐v6.501 手機（玩家回報）：視窗高度原本跟著內容變，抽到第 8 張、出現提示時按鈕位置就跳，要捲動才按得到。
+     ⇒ 視窗固定佔滿整個手機畫面（高度不隨內容變），標題列與按鈕列固定，只有中間的手牌／獎賞卡區可以捲；
+       三顆按鈕排成一列、固定高度，可以一直連按；卡圖與提示字縮小。 */
   @media (max-width: 600px) {
-    .ohs-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-    .ohs-btn { flex: 1 1 100%; font-size: 16px; }
+    .ohs-overlay { padding: 0; align-items: stretch; overflow: hidden; }
+    .ohs-inner {
+      height: 100vh; height: 100dvh; max-width: none; border-radius: 0; border: 0;
+      display: flex; flex-direction: column;
+      padding: calc(var(--safe-top, 0px) + 0.6rem) 0.75rem calc(var(--safe-bottom, 0px) + 0.6rem);
+    }
+    .ohs-close { top: calc(var(--safe-top, 0px) + 0.45rem); right: 0.6rem; width: 2.2rem; height: 2.2rem; }
+    .ohs-title { font-size: 1rem; margin-bottom: 0.25rem; }
+    .ohs-meta { font-size: 0.78rem; margin-bottom: 0.35rem; line-height: 1.4; }
+    .ohs-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+    .ohs-warn, .ohs-note { font-size: 0.78rem; padding: 0.35rem 0.6rem; margin-bottom: 0.4rem; }
+    .ohs-h { font-size: 0.85rem; margin: 0.4rem 0 0.3rem; }
+    .ohs-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+    .ohs-card figcaption { font-size: 0.62rem; }
+    .ohs-prizes { grid-template-columns: repeat(6, minmax(0, 1fr)); }   /* 6 張獎賞排成一列 */
+    .ohs-actions { flex: 0 0 auto; flex-wrap: nowrap; gap: 0.4rem; margin-top: 0.5rem; }
+    .ohs-btn { flex: 1 1 0; min-width: 0; height: 52px; padding: 0 0.3rem; font-size: 14px; line-height: 1.2;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    .ohs-btn.primary { flex-grow: 1.2; }
+    .ohs-long { display: none; }
+    .ohs-sub { font-size: 11px; font-weight: 400; opacity: 0.85; }
   }
 </style>

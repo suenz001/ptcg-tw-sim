@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '25ecb09740ca16e5749d63a292af0b067b668bad';   // v6.499（上一版）
+const PREV_SHA = 'c8c3b33ea14c01021eb4318f862b961014d98ffb';   // v6.500（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,17 +757,26 @@ const PREV_SHA = '25ecb09740ca16e5749d63a292af0b067b668bad';   // v6.499（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.500 前移：PREV_SHA 從 25ecb097（v6.499）起算。
+  // ⚠⚠ v6.501 前移：PREV_SHA 從 c8c3b33e（v6.500）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.500：站長裁定：中毒／灼傷昏厥後同一次檢查的冰冷之帳照常結算（engine 狀態區只記昏厥、特性區跑完才等補位；SEND_NEW_ACTIVE 等雙方補完；END_TURN 擋等補位中的重送）＋補位提示（modal-slots checkupPromoteWait）；首頁 changelog 三步搬運。
-  'src/lib/game/engine.ts',
-  'src/lib/game/modal-slots.ts',
+  // ⭐v6.501：玩家回報手機測抽視窗高度跳動、要捲動才按得到按鈕：手機 @media 改成 100dvh 直式 flex、中間 .ohs-body 可捲、按鈕列固定；首頁 changelog 三步搬運。
+  'src/lib/decks/OpeningHandSim.svelte',
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.500）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.500 前移：PREV_SHA 從 25ecb097（v6.499）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.500：站長裁定：中毒／灼傷昏厥後同一次檢查的冰冷之帳照常結算（engine 狀態區只記昏厥、特性區跑完才等補位；SEND_NEW_ACTIVE 等雙方補完；END_TURN 擋等補位中的重送）＋補位提示（modal-slots checkupPromoteWait）；首頁 changelog 三步搬運。
+//   'src/lib/game/engine.ts',
+//   'src/lib/game/modal-slots.ts',
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.499）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.499 前移：PREV_SHA 從 097b5850（v6.498）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -903,17 +912,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/effects/cards/v2380_j_abilities_batch.ts',
 //   'src/lib/game/engine.ts',
 //   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.488）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.488 前移：PREV_SHA 從 63b7e9fc（v6.487）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.488：電腦版鍵盤快捷鍵（$lib/game/kbd-shortcuts＋設定元件），對戰頁只多 import、onGlobalKey 一行、設定視窗一個元件；首頁 changelog 三步搬運。
-//   'src/lib/game/KbdShortcutsSetting.svelte',
-//   'src/lib/game/kbd-shortcuts.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
