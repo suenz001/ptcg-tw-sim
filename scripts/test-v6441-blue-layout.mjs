@@ -173,6 +173,8 @@ const LATER = [
   ["  import { panelResize } from '$lib/panel-resize';   // ⭐v6.495：浮動視窗自訂大小＋記住設定（聊天視窗）\n", ""],
   ["        use:panelResize={{ storageKey: isPortraitMobile ? 'ptcg_chat_panel_size_m' : 'ptcg_chat_panel_size', grip: isPortraitMobile ? 'br' : 'tl' }}\n", ""],
   ["          initial: loadChatPanelPos(isPortraitMobile), onEnd: saveChatPanelPos }}>", "          initial: chatPanelPos, onEnd: (o) => { chatPanelPos = o; } }}>"],
+  // ⭐v6.500（Rule 40）：補位提示多傳 checkupPromoteWait（寶可夢檢查後雙方等補位；非藍桌墊）——內容由 test-v6500 F12 鎖
+  ["    turnPhase: game.turnPhase, checkupPromoteWait: game.endTurnContinueAfterKO != null,   // ⭐v6.500\n", "    turnPhase: game.turnPhase,\n"],
 ];
 // ⭐v6.464 起：改動也碰到藍桌墊哨兵內的 <img>（全版面一致改用縮圖），無法放進 LATER（哨兵先被剝掉、條目會命中 0 次）
 //   ⇒ 在 strip() 的**最前面**先把本版改動整段還原成 v6.463（IRON_RULES Rule 40：保留「藍桌墊只活在哨兵裡」的原意）。

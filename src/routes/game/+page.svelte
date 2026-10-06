@@ -3865,7 +3865,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   const promoteAlert = $derived(game ? promoteAlerts({
     phase: game.phase, players: game.players, hasPendingSelection: !!pendingSelection,
     defenderIdx: dIdx, myIdx, oppIdx, defenderTurnMine: isMyDefenderTurn(), isMyTurn: isMyTurn(),
-    turnPhase: game.turnPhase,
+    turnPhase: game.turnPhase, checkupPromoteWait: game.endTurnContinueAfterKO != null,   // ⭐v6.500
   }) : { mine: false, waitSeat: null });
 
   const selectionItemsRaw = $derived.by(() => {

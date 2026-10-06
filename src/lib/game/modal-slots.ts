@@ -67,6 +67,9 @@ export interface PromoteAlertInput extends PromoteInput {
   isMyTurn: boolean;
   oppIdx: Seat;
   turnPhase: string | undefined | null;
+  /** ⭐v6.500：寶可夢檢查後雙方都要補位（game.endTurnContinueAfterKO != null）。這時 turnPhase 還是 'end'，
+   *  先補完的一方也要看到「等待對手送出」提示（Fable 審查 E）。 */
+  checkupPromoteWait?: boolean;
 }
 
 /**
@@ -81,7 +84,7 @@ export function promoteAlerts(v: PromoteAlertInput): { mine: boolean; waitSeat: 
   const opp = v.players[v.oppIdx];
   const mine = (activeEmpty(def) && v.defenderTurnMine) || (activeEmpty(me) && benchCount(me) > 0);
   const waitDef = activeEmpty(def) && !v.defenderTurnMine && v.isMyTurn;
-  const waitOpp = activeEmpty(opp) && v.turnPhase !== 'end' && benchCount(opp) > 0;
+  const waitOpp = activeEmpty(opp) && (v.turnPhase !== 'end' || v.checkupPromoteWait === true) && benchCount(opp) > 0;   // ⭐v6.500 檢查後等補位
   const waitSeat: Seat | null = waitDef ? v.defenderIdx : (waitOpp ? v.oppIdx : null);
   return { mine, waitSeat };
 }

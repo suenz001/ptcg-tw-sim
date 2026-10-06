@@ -7408,6 +7408,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   原 !== undefined 對 null 為真 → 誤入 self-KO continue 分支、把 activePlayerIndex 設成 null →
     //   重跑 END_TURN 時 players[null].active 崩潰「Cannot read properties of undefined (reading active)」。
     if (state.endTurnContinueAfterKO != null) {
+      // >>> v6500-checkup-ko-defer-promote
+      // ⭐v6.500：同一次寶可夢檢查可能雙方都有戰鬥寶可夢昏厥（例：對手中毒昏厥＋冰冷之帳打倒我方戰鬥寶可夢）
+      //   ⇒ 另一方還有備戰、但戰鬥場還空著時，先等它也補完，才 re-dispatch 收尾（否則換回合時有一方沒有戰鬥寶可夢）。
+      const _v6500Other = newState.players[(1 - sendingIdx) as 0 | 1];
+      if (_v6500Other.active === null && _v6500Other.bench.length > 0) return newState;
+      // <<< v6500-checkup-ko-defer-promote
       const continueIdx = state.endTurnContinueAfterKO;
       let cleared: GameState = {
         ...newState,
@@ -7435,6 +7441,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
   if (action.type === 'END_TURN') {
     if (hasAnyPendingPrize(state)) return state;  // 取獎賞前不能結束
     if (defender.active === null) return state; // 對手必須先送出寶可夢
+    // >>> v6500-checkup-ko-defer-promote
+    // ⭐v6.500（Fable 審查 A）：寶可夢檢查後正在等補位時，重送／殘留的 END_TURN 不可以再跑一次檢查
+    //   （中毒會再扣一次、回合快照被歸零）。只在真的有一方戰鬥場還空著時擋，補位後的 re-dispatch 已先清掉旗標，不受影響。
+    if (state.endTurnContinueAfterKO != null && (players[0].active === null || players[1].active === null)) return state;
+    // <<< v6500-checkup-ko-defer-promote
 
     // 勝利條件：對手備戰區也空了（雙重保險）
     if (defender.bench.length === 0 && defender.active === null) {
@@ -7518,6 +7529,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       };
     }
 
+    // >>> v6500-checkup-ko-defer-promote
+    // ⭐v6.500 站長裁定：「對手中毒（或灼傷）昏厥後，同一次檢查的冰冷之帳照常對其他還在場上、有特性的寶可夢各放 1 個指示物，
+    //   已經昏厥的那隻就略過」。原本狀態區一有昏厥就先 return 等補位，冰冷之帳／揚沙要等補完、re-dispatch 才放
+    //   ⇒ 同一次檢查裡對戰圓形競技場保護的備戰被補上戰鬥場後吃到對手的指示物、會被冰冷之帳打倒的備戰被先派上場等。
+    //   改成：狀態區只記下「有昏厥」，放指示物特性區（下方）照常在同一次檢查跑完，再統一停下來等補位。
+    let _v6500StatusKO = false;
+    // <<< v6500-checkup-ko-defer-promote
     // v2.124：把所有寶可夢 checkup（中毒/灼傷/睡眠/麻痺/雪妖女）包在 skipCheckup gate 內。
     // 第一次 END_TURN 跑 checkup；若 self-KO，設 endTurnContinueAfterKO + return；
     // SEND_NEW_ACTIVE 補完戰鬥位後 re-dispatch END_TURN 並設 endTurnSkipCheckup=true，
@@ -7736,7 +7754,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   (skipCheckup) 續跑冰冷之帳/揚沙並換回合。無 faceUp 時 addPendingPrize 自動取、pendingSelection 為 null,
     //   走原流程。故此處毋須額外 pendingSelection 分支(加了反而 return 時漏 endTurnContinueAfterKO 斷掉續跑)。
     if (state.players[aIdx].active === null || state.players[dIdx].active === null) {
-      return { ...state, endTurnContinueAfterKO: aIdx };
+      // >>> v6500-checkup-ko-defer-promote
+      // ⭐v6.500：取獎賞卡的選擇視窗（正面朝上獎賞）還開著 ⇒ 維持舊行為先停下來（放指示物特性區補完位後才跑），
+      //   避免冰冷之帳／揚沙再發一次獎賞時蓋掉這個視窗。沒有視窗（絕大多數情況）⇒ 先跑完同一次檢查的特性區再停。
+      if (state.pendingSelection) return { ...state, endTurnContinueAfterKO: aIdx };
+      _v6500StatusKO = true;
+      // <<< v6500-checkup-ko-defer-promote
     }
     } // v5.426：status 區（中毒/灼傷/睡眠/麻痺）到此結束（endTurnSkipCheckup gate）。
 
@@ -8026,6 +8049,14 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     }
 
     } // v5.426：end of checkup 放指示物特性區（endTurnCheckupAbilitiesDone gate）
+
+    // >>> v6500-checkup-ko-defer-promote
+    // ⭐v6.500：狀態區有寶可夢昏厥 ⇒ 特性區跑完後才停下來等補位（雙方都可能要補；SEND_NEW_ACTIVE 會等兩邊都補完才續跑）。
+    //   re-dispatch 帶 endTurnSkipCheckup＋endTurnCheckupAbilitiesDone ⇒ 兩區都不重跑，直接進入下方收尾。
+    if (_v6500StatusKO) {
+      return { ...state, players, endTurnContinueAfterKO: aIdx };
+    }
+    // <<< v6500-checkup-ko-defer-promote
 
     // ── v2.247 力之沙漏（PokemonTool）— 回合結束時，若戰鬥場寶可夢附有此 Tool，
     //   可以從棄牌區將 1 張基本能量附於該寶可夢。改為玩家選擇而非自動附能量。
