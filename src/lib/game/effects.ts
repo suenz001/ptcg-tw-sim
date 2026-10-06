@@ -44,7 +44,7 @@ import { mandatoryTargetCount } from './effects/_shared'; // ⭐v6.305 卡面寫
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
 import { copyAttackPostDispatch } from './effects/_shared';
 import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from './effects/_shared'; // v5.774 KO 對手戰鬥位 pre-KO 快照中央存取
-import { openDeckViewReshuffle, setBloomEffectiveFn, setAbilityHolderEffectiveFn, setAbilityHolderEffectiveAtFn, setEffectivePokemonTypesFn, abilityUsedAfterSwap } from './effects/_shared';
+import { openDeckViewReshuffle, setBloomEffectiveFn, setAbilityHolderEffectiveFn, setAbilityHolderEffectiveAtFn, setEffectivePokemonTypesFn, abilityUsedAfterSwap, setPromoteAbilityReadyFn } from './effects/_shared';
 import {
   // Maps
   TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS,
@@ -8939,6 +8939,57 @@ export function hasBloomOnField(state: GameState, ownerIdx: 0 | 1, pool: Map<str
 }
 // v5.601：把 nullification-aware 的繁茂判定注入 _shared（getEnergyDiscardUnits 等 units/cost 路徑共用單一來源）。
 setBloomEffectiveFn(hasBloomOnField);
+// >>> v6494-coin-ability-heads-target
+/**
+ * ⭐⭐v6.494 站長裁定 4（2026-10-06，逐字）：「烈箭鷹｜穹天狩獵這類，如果正面也沒事可做，那就統一設成『不能按』」
+ *   ＝「擲硬幣若為正面，則…」型特性的**唯一**判準（Rule 38）：正面時有沒有對象可以處理。
+ *   手動按鈕（engine.getUsableAbilities）與觸發型詢問（進化時：臨場之錘／使壞之尾）都只問這一支。
+ *   只看公開／已知資訊（對手手牌與牌庫只看**張數**）；防守方的免疫不算（站長裁定 2026-08-07）。
+ * @returns null ＝ 不是這一類特性；true／false ＝ 正面時有沒有事可做
+ */
+export function coinAbilityHeadsHasTarget(
+  state: GameState, ownerIdx: 0 | 1, _holder: CardInstance, abilityName: string, _pool: Map<string, Card>,
+): boolean | null {
+  const me = state.players[ownerIdx];
+  const opp = state.players[(1 - ownerIdx) as 0 | 1];
+  switch (abilityName) {
+    // 「選擇1個對手的戰鬥寶可夢身上附加的能量，丟棄／放回手牌」
+    case '微風吹拂': case '破壞頭錘': case '臨場之錘':
+      return !!opp.active && opp.active.energyAttached.length > 0;
+    // 「選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換」
+    case '母親的誘引': case '媚惑引誘':
+      return !!opp.active && opp.bench.length > 0;
+    // 「從對手的手牌選擇…」（張數是公開資訊）
+    case '穹天狩獵': case '使壞之尾':
+      return opp.hand.length > 0;
+    // 「從自己的牌庫選擇1張寶可夢卡」（帶條件搜尋，牌庫有牌就能宣告找不到）
+    case '指引之舞':
+      return me.deck.length > 0;
+    // 「從【中毒】・【灼傷】・【混亂】中選擇1種」——三種都已經是了 ⇒ 正面也無事可做（官方 L2321 危險光線同判準）
+    case '任選黏液':
+      return !!opp.active && !(['poisoned', 'burned', 'confused'] as const).every(c => hasStatusInAnySlot(opp.active, c));
+    default:
+      return null;
+  }
+}
+// <<< v6494-coin-ability-heads-target
+// >>> v6494-promote-ability-ready
+/**
+ * ⭐v6.494「從備戰區放置於戰鬥場時，可使用1次」特性此刻有沒有事可做 —— 全站唯一一份（原本寫在 getUsableAbilities 的按鈕 gate）。
+ *   站長裁定 3：這類特性只在放置當下詢問，沒有手動按鈕 ⇒ gate 搬到詢問端。
+ *   ・振翅高飛：牌庫有牌（帶條件搜尋，找不到可以宣告找不到）
+ *   ・金屬之路：自己的備戰寶可夢身上有【鋼】能量（host-aware）
+ *   ・潔淨支援：自己的備戰寶可夢身上有能量卡
+ */
+export function promoteAbilityReady(state: GameState, ownerIdx: 0 | 1, _holder: CardInstance, abilityName: string, pool: Map<string, Card>): boolean {
+  const p = state.players[ownerIdx];
+  if (abilityName === '振翅高飛') return p.deck.length > 0;
+  if (abilityName === '金屬之路') return p.bench.some(b => b.energyAttached.some(e => energyProvidesType(b, e, 'Metal', pool)));
+  if (abilityName === '潔淨支援') return p.bench.some(b => b.energyAttached.length > 0);
+  return true;
+}
+setPromoteAbilityReadyFn(promoteAbilityReady);
+// <<< v6494-promote-ability-ready
 // v5.753：注入「active 位特性是否有效」給 _shared.tryPromptPromoteActive(上場時特性 gate 暗夜羽擊等)。
 // ⭐ v6.202：原本把 location 寫死 'active'，但呼叫端 tryPromptPromoteActive 有一條餵的是
 //   **備戰**持有者（潔淨支援：超級拉帝亞斯ex 上場、holder 拉帝歐斯在備戰）→ 那條的
@@ -19675,7 +19726,7 @@ export const ON_RETREAT_TO_BENCH_ABILITIES = new Set([
 ]);
 
 // v5.243：set 搬到 _shared.ts（leaf module）避免 circular import；此檔 re-export 對外 API
-export { ON_PROMOTE_TO_ACTIVE_ABILITIES, tryPromptPromoteActive, askUsePromoteActiveAbility } from './effects/_shared';
+export { ON_PROMOTE_TO_ACTIVE_ABILITIES, tryPromptPromoteActive, askUsePromoteActiveAbility, isPromoteTriggerAbility } from './effects/_shared';
 
 /**
  * v3.07 Deferred Wave D — 「從手牌將 1 張指定卡丟棄則觸發場上特性」的 trigger holder 名稱
@@ -19888,6 +19939,7 @@ export function promptPlayAbilities(
         const oppIdx = (1 - aIdx) as 0 | 1;
         if (state.players[oppIdx].deck.length === 0) continue; // 對手牌庫空 → 確實無法丟
       }
+      if (coinAbilityHeadsHasTarget(state, aIdx, inst, ab.name, pool) === false) continue;   // ⭐v6.494 站長裁定 4
       return askUsePlayAbility(state, aIdx, pool, inst, ab.name, key);
     }
 
@@ -19918,6 +19970,8 @@ export function promptPlayAbilities(
       }
       // v5.588 增長繭（甲殼繭）：備戰已滿無法放置 → 不提示（牌庫是否有目標屬隱藏資訊，不查）
       if (ab.name === '增長繭' && state.players[aIdx].bench.length >= getOwnBenchLimit(state, aIdx, pool)) continue;
+      // ⭐v6.494 站長裁定 4：臨場之錘（對手戰鬥位沒有能量）／使壞之尾（對手手牌 0 張）⇒ 不詢問
+      if (coinAbilityHeadsHasTarget(state, aIdx, inst, ab.name, pool) === false) continue;
       return askUsePlayAbility(state, aIdx, pool, inst, ab.name, key);
     }
   }

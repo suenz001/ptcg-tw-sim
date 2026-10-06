@@ -432,6 +432,17 @@ export function setAbilityHolderEffectiveFn(fn: (state: GameState, inst: CardIns
  * 兩支都轉接到同一個中央述詞 isAbilityHolderEffective（不是第五份實作）。
  */
 let _abilityHolderEffectiveFnLoc: ((state: GameState, inst: CardInstance, card: Card, ownerIdx: 0 | 1, abilityName: string, location: 'active' | 'bench', pool: Map<string, Card>) => boolean) | null = null;
+// >>> v6494-promote-ability-ready-inject
+/**
+ * ⭐v6.494：「上場時可使用1次」特性此刻有沒有事可做（資源 gate）。判準只有 effects.ts 的
+ *   promoteAbilityReady 一份，載入時注入（_shared 是 leaf，不能 import engine 的 energyProvidesType）。
+ *   未注入時視為可用（向後相容）。
+ */
+let _promoteAbilityReadyFn: ((state: GameState, ownerIdx: 0 | 1, holder: CardInstance, abilityName: string, pool: Map<string, Card>) => boolean) | null = null;
+export function setPromoteAbilityReadyFn(fn: (state: GameState, ownerIdx: 0 | 1, holder: CardInstance, abilityName: string, pool: Map<string, Card>) => boolean): void {
+  _promoteAbilityReadyFn = fn;
+}
+// <<< v6494-promote-ability-ready-inject
 export function setAbilityHolderEffectiveAtFn(fn: (state: GameState, inst: CardInstance, card: Card, ownerIdx: 0 | 1, abilityName: string, location: 'active' | 'bench', pool: Map<string, Card>) => boolean): void {
   _abilityHolderEffectiveFnLoc = fn;
 }
@@ -2738,11 +2749,16 @@ export const ON_PROMOTE_TO_ACTIVE_ABILITIES = new Set([
 
 // v5.908：備戰持有者「當『特定寶可夢』從備戰上場時」觸發型 auto-prompt(holder 在【備戰】,非上場那隻)。
 //   拉帝歐斯｜潔淨支援：超級拉帝亞斯ex 上場時觸發,持有者拉帝歐斯留在備戰。Map: 備戰特性名 → 需上場的卡名。
-//   ⚠只在「玩家主動把備戰放上戰鬥場」(撤退/換場效果,會呼叫 tryPromptPromoteActive)時彈;KO 補場
-//   (SEND_NEW_ACTIVE)不呼叫本 helper→不觸發(卡面「在自己的回合...放置時」,KO 被動補場不算)。
+//   ⚠ v6.494 更正：官方 L2464「落雷獸自己昏厥後，從備戰區將超級拉帝亞斯ex放置於戰鬥場 ⇒ 可以使用潔淨支援」、
+//     L2113（振翅高飛同型）⇒ **自己的回合**內的補場也算；SEND_NEW_ACTIVE（自己回合）現在也會呼叫本 helper。
+//     對手回合被打倒後的補場、寶可夢檢查（不屬於任何回合）後的補場不算。
 export const ON_ACTIVE_PROMOTE_BENCH_WATCHER = new Map<string, string>([
   ['潔淨支援', '超級拉帝亞斯ex'],
 ]);
+/** ⭐v6.494 這個特性是不是「（某隻）從備戰區放置於戰鬥場時，可使用1次」的觸發型（只會在放置當下詢問，沒有手動按鈕）。 */
+export function isPromoteTriggerAbility(name: string): boolean {
+  return ON_PROMOTE_TO_ACTIVE_ABILITIES.has(name) || ON_ACTIVE_PROMOTE_BENCH_WATCHER.has(name);
+}
 
 /**
  * 詢問玩家是否使用「從備戰區放置於戰鬥場時」的特性。
@@ -2832,7 +2848,14 @@ export function tryPromptPromoteActive(
 ): GameState {
   if (state.pendingSelection) return state;
   const actInst = state.players[pIdx].active;
-  if (!actInst || actInst.abilityUsedThisTurn) return state;
+  // >>> v6494-promote-retrigger
+  // ⭐v6.494 站長裁定 3（2026-10-06，逐字）：「上場時可使用 1 次」錯過時機「錯過就不能用」，
+  //   「但如果遠古巨蜓ex上場後，玩家又用寶可夢交替將其換下場，然後又再用寶可夢交替將遠古巨蜓ex換上戰鬥場，
+  //    則又會再觸發一次特性，因此應該再詢問一次要不要使用」
+  //   ⇒ 每一次「從備戰區放置於戰鬥場」都是一次新的觸發；本 helper 只在放置的當下被呼叫（各換位路徑各呼叫一次），
+  //     所以**不再**用 abilityUsedThisTurn 擋（那是上一次放置用掉的）。手動按鈕已移除（getUsableAbilities）。
+  if (!actInst) return state;
+  // <<< v6494-promote-retrigger
   // v5.244：嚴格遵守卡面「從備戰區將這隻寶可夢放置於戰鬥場時」— 必須剛上場才觸發
   if (!actInst.movedToActiveThisTurn) return state;
   const actCard = pool.get(actInst.cardId);
@@ -2848,18 +2871,21 @@ export function tryPromptPromoteActive(
     // v5.753：對手戰鬥場有振翼髮｜暗夜羽擊(或初始化/黏著束縛)消除我方戰鬥位特性時，
     //   上場時特性(金屬之路 等)也不可發動 — 同 v5.751 on-evolve/on-play 的 isAbilityHolderEffective gate。
     if (_abilityHolderEffectiveFn && !_abilityHolderEffectiveFn(state, actInst, actCard, pIdx, ab.name, pool)) continue;
+    // ⭐v6.494：沒有事可做（牌庫 0、場上沒有可改附的能量…）⇒ 不詢問（站長裁定 4 的同一原則）
+    if (_promoteAbilityReadyFn && !_promoteAbilityReadyFn(state, pIdx, actInst, ab.name, pool)) continue;
     return askUsePromoteActiveAbility(state, pIdx, actInst, ab.name, abilityKey, actCard.name);
   }
   // v5.908：備戰持有者觸發型(潔淨支援：超級拉帝亞斯ex 上場時,holder 拉帝歐斯在備戰)。
   for (const [benchAbName, requiredActive] of ON_ACTIVE_PROMOTE_BENCH_WATCHER) {
     if (actCard.name !== requiredActive) continue;
     for (const b of state.players[pIdx].bench) {
-      if (b.abilityUsedThisTurn) continue;
+      // ⭐v6.494 站長裁定 3：每次超級拉帝亞斯ex 被放上戰鬥場都是新的觸發 ⇒ 不用 abilityUsedThisTurn 擋
       const bCard = pool.get(b.cardId);
       const bi = bCard?.abilities?.findIndex(a => a.name === benchAbName) ?? -1;
       if (!bCard || bi < 0) continue;
       if (!hasAbilityFn(bCard.name, benchAbName, bi)) continue;
       if (_abilityHolderEffectiveFn && !_abilityHolderEffectiveFn(state, b, bCard, pIdx, benchAbName, pool)) continue;
+      if (_promoteAbilityReadyFn && !_promoteAbilityReadyFn(state, pIdx, b, benchAbName, pool)) continue;
       return askUsePromoteActiveAbility(state, pIdx, b, benchAbName, `${bCard.name}|${bi}`, bCard.name);
     }
   }

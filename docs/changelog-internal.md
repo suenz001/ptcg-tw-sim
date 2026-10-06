@@ -1,5 +1,19 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.494：特性時機與擲幣型特性 gate（2026-10-06，站長裁定 3、4）
+
+BASE v6.493（1d85cacf）。
+- 裁定 3（逐字）：振翅高飛「上場時可使用 1 次」「錯過就不能用」，換下再換上「應該再詢問一次要不要使用」。
+  - _shared.tryPromptPromoteActive 不再以 abilityUsedThisTurn 擋（每次放置各呼叫一次）；新增 isPromoteTriggerAbility、注入點 setPromoteAbilityReadyFn。
+  - effects.promoteAbilityReady（振翅高飛 牌庫>0／金屬之路 備戰有鋼／潔淨支援 備戰有能量）＝原 getUsableAbilities 三段 gate 搬過來（Rule 38，engine 舊 gate 刪除）。
+  - getUsableAbilities 排除上場時特性 ⇒ 按鈕與 USE_ABILITY 同時關閉。
+  - SEND_NEW_ACTIVE 自己回合補場也詢問（官方 L2113／L2464；寶可夢檢查後補場走 endTurnContinueAfterKO 分支，不問）。_shared 舊註解「KO 補場不算」已更正。
+- 裁定 4（逐字）：「烈箭鷹｜穹天狩獵這類，如果正面也沒事可做，那就統一設成『不能按』」。
+  - effects.coinAbilityHeadsHasTarget 唯一判準：微風吹拂／破壞頭錘／臨場之錘（對手戰鬥位有能量）、母親的誘引／媚惑引誘（對手有備戰）、穹天狩獵／使壞之尾（對手手牌>0）、指引之舞（牌庫>0）、任選黏液（三種狀態未全）。engine 原四段 gate 收斂；promptPlayAbilities 兩分支也問同一支。
+- USE_ABILITY 移除觸發型特性豁免：三類觸發型的「使用」全走各自 resolver，全站沒有程式為它們送 USE_ABILITY；豁免讓「選不使用後補用」成為可能（U1）。
+- Fable C：ability-activation 正則加否定前瞻，排除「可使用…招式」9 個被動（全卡池比對只差這 9 個），test-v6489 A6～A12。
+- test-v6494（10 條）BASE 紅 8；突變 7 個全殺。
+
 ## v6.493：中央昏厥管線稽核修正＋奇跡之吻裁定（2026-10-06）
 
 BASE v6.492（a7020a59）＋wip 60bebd44（test-v6492 補 R8/R9）。

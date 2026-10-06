@@ -34,10 +34,22 @@ T('合金建造 evolvedThisTurn=false → USE_ABILITY 應被拒(無效果)[驗HE
   assert(!out.pendingSelection, '非剛進化不該開能量附加 picker');
   assert(!out.players[0].active.abilityUsedThisTurn, '非剛進化不該標記已用特性');
 });
-T('對照:合金建造 evolvedThisTurn=true → USE_ABILITY 生效(開 picker)', ()=>{
+// ⭐v6.494（Rule 40）：觸發型特性的「使用」只走進化當下的詢問（resolve-play-ability-prompt），
+//   USE_ABILITY 不再為它們開後門（站長裁定 3「錯過就不能用」）。本檔的意圖（剛進化才可用、可用時開 picker）不變，
+//   正對照改走真實流程：從手牌進化 ⇒ 詢問 ⇒ 選使用 ⇒ 開能量附加 picker。
+T('對照:合金建造 從手牌進化 ⇒ 詢問 ⇒ 選使用 ⇒ 開 picker', ()=>{
+  const {st}=mk(false);
+  const base=inst('12158'), evo=inst(DURALUDON);
+  const s0={...st, players:[{...st.players[0], bench:[base], hand:[evo]}, st.players[1]]};
+  let out=applyAction(s0,{type:'EVOLVE',fromIid:base.iid,toIid:evo.iid},pool);
+  assert(out.pendingSelection?.effectKey==='resolve-play-ability-prompt', '剛進化應詢問是否使用合金建造');
+  out=applyAction(out,{type:'RESOLVE_SELECTION',senderIdx:0,actorIdx:0,effectKey:out.pendingSelection.effectKey,selectedIids:['yes']},pool);
+  assert(out.pendingSelection, '選使用後應開能量附加 picker');
+});
+T('v6.494:剛進化(evolvedThisTurn=true)也不可以用 USE_ABILITY 補用(只能在詢問時用)', ()=>{
   const {st,aIid}=mk(true);
   const out=applyAction(st,{type:'USE_ABILITY',iid:aIid,abilityIndex:0},pool);
-  assert(out.pendingSelection, '剛進化應開能量附加 picker');
+  assert(!out.pendingSelection, 'USE_ABILITY 不可以開 picker');
 });
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail?1:0);

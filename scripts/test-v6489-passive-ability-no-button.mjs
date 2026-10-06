@@ -55,6 +55,15 @@ T('A2「可使用1次」⇒ true', () => assert.equal(isAct('在自己的回合�
 T('A3「可不限次數使用」⇒ true', () => assert.equal(isAct('在自己的回合時，可不限次數使用。選擇1個…'), true));
 T('A4 零寬字元夾在字中間仍判得出來', () => assert.equal(isAct('在自己的回合時，可​使用1次。'), true));
 T('A5 undefined／null ⇒ false', () => { assert.equal(isAct(undefined), false); assert.equal(isAct(null), false); });
+// ⭐v6.494 負對照：「可使用…招式」型被動特性（卡面逐字，static/cards 台灣官方）
+T('A6 被動「潛入記憶」⇒ false', () => assert.equal(isAct('只要這隻寶可夢在場上，自己的所有進化寶可夢，可使用進化前持有的所有招式。[需要有足夠使用招式的能量。]'), false));
+T('A7 被動「力量抑制者」⇒ false', () => assert.equal(isAct('只有在自己的場上的「火箭隊的寶可夢」數量為4隻以上時，這隻寶可夢才可使用招式。'), false));
+T('A8 被動「啟動限制」⇒ false', () => assert.equal(isAct('只有在自己的手牌為10張以上時，這隻寶可夢才可使用招式。'), false));
+T('A9 被動「記憶螺旋」⇒ false', () => assert.equal(isAct('這隻寶可夢可使用自己的備戰寶可夢持有的所有招式。[需要有足夠使用招式的能量。]'), false));
+T('A10 被動「出道演出」⇒ false', () => assert.equal(isAct('這隻寶可夢在先攻玩家的最初回合也可使用招式。'), false));
+T('A11 被動「祭典樂舞」⇒ false', () => assert.equal(isAct('若場上有「祭典會場」，則這隻寶可夢可使用持有的招式2次。（若對手的戰鬥寶可夢因第1次的招式而【昏厥】了，則在下一隻寶可夢放置後，使用第2次的招式。）'), false));
+T('A12 正對照：「可使用1次。」之後另一句提到招式 ⇒ 仍是 true', () => assert.equal(isAct('在自己的回合時可使用1次。這個回合，這隻寶可夢無法使用招式。'), true));
+
 
 console.log('── B. 全卡池掃描 ──');
 const seen = new Map();

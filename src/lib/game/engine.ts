@@ -1149,7 +1149,7 @@ import { asOfDeclarationHolderIids as _v6376HolderIids } from './as-of-declarati
 import { ON_RETREAT_TO_BENCH_ABILITIES, isBenchProtected, applyStatusToOppActive } from './effects';
 import { askUseRetreatToBenchAbility } from './effects/cards/v3050_deferred_wave_a';
 // v5.243：tryPromptPromoteActive 從 _shared.ts (leaf) 經 effects.ts re-export
-import { tryPromptPromoteActive } from './effects';
+import { tryPromptPromoteActive, isPromoteTriggerAbility, coinAbilityHeadsHasTarget } from './effects';
 
 // v3.07 Deferred Wave D — 3 張需要手牌 UI 元件層 hook 的特性
 //   ON_DISCARD_FROM_HAND_ABILITIES: trigger holder 卡名 → effect fn
@@ -5425,15 +5425,17 @@ function handlePlaying(
     //     它們刻意被排除在手動清單之外（由 promptPlayAbilities / askUseRetreatToBenchAbility
     //     彈 modal 詢問），但確認後仍是走 USE_ABILITY 派發 ⇒ 不能拿手動清單來判它們。
     //     它們的 gate 留在本 handler 上方（evolvedThisTurn / playedFromHand 等）。
-    const _isTriggerOnlyAbility = ON_PLAY_FROM_HAND_ABILITIES.has(ability.name)
-      || ON_EVOLVE_FROM_HAND_ABILITIES.has(ability.name)
-      || ON_RETREAT_TO_BENCH_ABILITIES.has(ability.name);
-    if (!_isTriggerOnlyAbility) {
-      const _usableNow = getUsableAbilities(state, pool);
-      if (!_usableNow.some(u => u.iid === action.iid && u.abilityIndex === action.abilityIndex)) {
-        return state;   // 拒絕 = 完全 no-op（連 log 都不留，因為 UI 根本不該給這顆按鈕）
-      }
+    // >>> v6494-use-ability-trigger-only-closed
+    // ⭐⭐v6.494（稽核＋站長裁定 3「錯過就不能用」）：上面「例外」的說法已過時 —— 三類觸發型特性的「確認使用」
+    //   全部走各自的 resolver（resolve-play-ability-prompt／resolve-retreat-to-bench-ability-prompt／
+    //   resolve-promote-active-ability-prompt）直接呼叫特性函式，全站沒有任何程式為它們送 USE_ABILITY。
+    //   原本的豁免反而讓「詢問時選了不使用」之後還能用 USE_ABILITY 補用（甚至用過再用一次）。
+    //   ⇒ 不再豁免：USE_ABILITY 一律以手動清單為準，觸發型特性不在清單裡 ⇒ 一律拒絕。
+    const _usableNow = getUsableAbilities(state, pool);
+    if (!_usableNow.some(u => u.iid === action.iid && u.abilityIndex === action.abilityIndex)) {
+      return state;   // 拒絕 = 完全 no-op（連 log 都不留，因為 UI 根本不該給這顆按鈕）
     }
+    // <<< v6494-use-ability-trigger-only-closed
 
     // 查找 ABILITY_EFFECTS
     // v4.4995：先查 by-name (新)，fallback by-index (舊)
@@ -7419,7 +7421,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     }
 
     // 勝利條件：對手無法送出寶可夢（在送出前就要先檢查，這裡是送出後）
-    return tryPromoteToMainForFestival(newState, pool);
+    // >>> v6494-send-new-active-promote-prompt
+    // ⭐v6.494：官方 L2113（振翅高飛）／L2464（潔淨支援）——自己的寶可夢在**自己的回合**昏厥後，從備戰區放上戰鬥場
+    //   ⇒ 可以使用「放置於戰鬥場時」的特性。原本只靠手動按鈕（招式後 turnPhase 已是 end，按鈕根本不出現）。
+    //   對手回合被打倒後的補場不設 movedToActiveThisTurn ⇒ tryPromptPromoteActive 自然不詢問。
+    //   ⚠ 寶可夢檢查後補場（endTurnContinueAfterKO）不屬於任何回合，上面那個分支已先 return，走不到這裡。
+    return tryPromptPromoteActive(tryPromoteToMainForFestival(newState, pool), sendingIdx, pool);
+    // <<< v6494-send-new-active-promote-prompt
   }
 
   // ── 結束回合 ──────────────────────────────────────────────────────────────
@@ -11159,6 +11167,13 @@ export function getUsableAbilities(
       //   卡面：「從戰鬥場回到備戰區時，可使用 1 次」— 只能透過撤退觸發 modal（v3.05 ask… hook）
       //   不該出現在手動「使用特性」清單中，避免玩家在 active 位誤點。
       if (ON_RETREAT_TO_BENCH_ABILITIES.has(ab.name)) return;
+      // >>> v6494-promote-no-button
+      // ⭐v6.494 站長裁定 3：「從備戰區放置於戰鬥場時，可使用1次」（振翅高飛／金屬之路／潔淨支援…）
+      //   只在放置的當下詢問（tryPromptPromoteActive），錯過就不能用 ⇒ 不給手動按鈕；
+      //   USE_ABILITY 以本清單為準，所以後端同時擋下。原本的 movedToActiveThisTurn＋資源 gate
+      //   搬到 effects.promoteAbilityReady（詢問端）。
+      if (isPromoteTriggerAbility(ab.name)) return;
+      // <<< v6494-promote-no-button
       // v4.4995：怨影使者已實裝（regAByName）+ 用 by-name dispatch — 不再撞 key
       // v4.76 修正（Rule 15 違反）：卡面「在這個回合，若從手牌使出了『阿杏的秘招』，則在自己的回合時可使用 1 次」
       //   **沒寫戰鬥場限制**。原 v4.4995 腦補加了 active gate，導致叉字蝠在備戰位時按鈕消失。
@@ -11179,7 +11194,7 @@ export function getUsableAbilities(
           && !m6aWingAbilityReady(state, state.activePlayerIndex as 0 | 1, ab.name, pool).ok) return;
       // ⭐v6.347 彩粉蝶｜指引之舞 — 牌庫為空時整個效果無事可做（同 頸傘發電／惡棍衝天 v6.132 裁定；
       //   只判**張數**這個公開資訊，不掃牌庫內容）。
-      if (ab.name === '指引之舞' && player.deck.length === 0) return;
+      // （v6.494：指引之舞 的牌庫 gate 收斂到下方中央 coinAbilityHeadsHasTarget）
       // ⭐v6.347 索爾迦雷歐｜日出 — 卡面「若這隻寶可夢**在備戰區**，則…可使用1次」＋牌庫非空。
       if (ab.name === '日出') {
         if (player.active?.iid === pk.iid) return;   // 在戰鬥場不可使用
@@ -11224,15 +11239,7 @@ export function getUsableAbilities(
         if (!activeName.startsWith('青木的')) return;
         if (!player.hand.some(c => pool.get(c.cardId)?.supertype === 'Energy')) return;
       }
-      // P0：勾帕路翁ex | 金屬之路 — 戰鬥場 + movedToActiveThisTurn + 備戰有【鋼】能量
-      if (ab.name === '金屬之路') {
-        if (player.active?.iid !== pk.iid) return;
-        if (!player.active.movedToActiveThisTurn) return;
-        // v5.702：host-aware energyProvidesType（與發動 handler 一致）→ 古舊/稜鏡等視為鋼的特殊能量也算
-        const hasMetalOnBench = player.bench.some(b =>
-          b.energyAttached.some(e => energyProvidesType(b, e, 'Metal', pool)));
-        if (!hasMetalOnBench) return;
-      }
+      // （v6.494：金屬之路的按鈕 gate 已移除 —— 上場時特性不給按鈕，資源 gate 在 effects.promoteAbilityReady）
       // P0：麻麻鰻 | 電氣發電機 — 棄牌區有基本【雷】+ 備戰非空
       if (ab.name === '電氣發電機') {
         const hasBasicLight = player.discard.some(c => {
@@ -11339,22 +11346,9 @@ export function getUsableAbilities(
       }
       // v2.133 古劍豹｜沉雪、鐵斑葉ex｜迅速游標、喵喵ex｜殺手鐧捕捉 — 同 playedFromHand gate
       if ((ab.name === '沉雪' || ab.name === '迅速游標' || ab.name === '殺手鐧捕捉') && !pk.playedFromHand) return;
-      // v2.93b 拉帝歐斯｜潔淨支援 — 觸發 gate：active 必須是「超級拉帝亞斯ex」+ 本回合移到戰鬥場
-      //   且自方備戰至少 1 隻有附加能量。
-      if (ab.name === '潔淨支援') {
-        if (!player.active) return;
-        const activeCard = pool.get(player.active.cardId);
-        if (activeCard?.name !== '超級拉帝亞斯ex') return;
-        if (!player.active.movedToActiveThisTurn) return;
-        if (!player.bench.some(b => b.energyAttached.length > 0)) return;
-      }
+      // （v6.494：潔淨支援的按鈕 gate 已移除 —— 同上）
       // ─── v2.96 補 5 個既實裝但缺 gate 的特性（按下才跳「無法使用」是壞 UX） ─────
-      // 振翅高飛（遠古巨蜓ex）：戰鬥場 + 本回合移到戰鬥場 + 牌庫不空
-      if (ab.name === '振翅高飛') {
-        if (player.active?.iid !== pk.iid) return;
-        if (!player.active.movedToActiveThisTurn) return;
-        if (player.deck.length === 0) return;
-      }
+      // （v6.494：振翅高飛的按鈕 gate 已移除 —— 同上）
       // 夜間工作（叉字蝠）：在戰鬥場 + 牌庫不空
       if (ab.name === '夜間工作') {
         if (player.active?.iid !== pk.iid) return;
@@ -11863,8 +11857,7 @@ export function getUsableAbilities(
       //     四張要一起改，不可只改一張）。
       if (ab.name === '破壞頭錘') {
         if (player.active?.iid !== pk.iid) return;
-        const oppA = state.players[(1 - state.activePlayerIndex) as 0 | 1].active;
-        if (!oppA || oppA.energyAttached.length === 0) return;
+        // 對手戰鬥位要有能量 ⇒ v6.494 起由下方中央 coinAbilityHeadsHasTarget 判（站長裁定 4，四張一起）
       }
       // 弱丁魚ex｜大洋增輝 — 卡面「若這隻寶可夢**在戰鬥場上**，…將這隻寶可夢恢復「50」HP。」
       //   damage === 0 時完全無事可做 → 同站內既定的治癒類 gate（飛葉治癒／甜點之禮／激動治癒）。
@@ -11875,11 +11868,7 @@ export function getUsableAbilities(
       // 尼多后｜母親的誘引 / 花潔夫人｜媚惑引誘 — 卡面「擲1次硬幣若為正面，則選擇1隻
       //   **對手的備戰寶可夢**，與戰鬥寶可夢互換。」對手備戰是公開資訊；沒有備戰寶可夢時
       //   正面也無事可做（同 毒粉蛾｜微風吹拂 的既有 gate，那張同樣是「擲幣→對手戰鬥位」型）。
-      if (ab.name === '母親的誘引' || ab.name === '媚惑引誘') {
-        const oppP = state.players[(1 - state.activePlayerIndex) as 0 | 1];
-        if (!oppP.active) return;
-        if (oppP.bench.length === 0) return;
-      }
+      // （v6.494：母親的誘引／媚惑引誘 的 gate 收斂到下方中央 coinAbilityHeadsHasTarget）
       // 鴨嘴炎獸｜拍檔提升 — 卡面「從自己的手牌選擇『基本【火】能量』卡與『基本【雷】能量』卡
       //   最多各1張，以任意方式附於自己的『電擊魔獸』或者『鴨嘴炎獸』身上。」（手牌／自場＝已知區）
       if (ab.name === '拍檔提升') {
@@ -11918,13 +11907,11 @@ export function getUsableAbilities(
       //     那是對的（不能看**內容**），但**張數**是公開資訊，regA 端也早就寫了「牌庫為空」的拒絕。
       if ((ab.name === '王者呼聲' || ab.name === '金屬信號' || ab.name === '天空抽出')
           && player.deck.length === 0) return;
-      // 毒粉蛾｜微風吹拂：對手戰鬥位有能量
-      if (ab.name === '微風吹拂') {
-        const oppIdx = (1 - state.activePlayerIndex) as 0 | 1;
-        const opp = state.players[oppIdx];
-        if (!opp.active) return;
-        if (opp.active.energyAttached.length === 0) return;
-      }
+      // >>> v6494-coin-ability-gate
+      // ⭐⭐v6.494 站長裁定 4：「擲硬幣若為正面，則…」型特性，正面也沒事可做 ⇒ 不能按（唯一判準在 effects）
+      //   （微風吹拂／破壞頭錘／母親的誘引／媚惑引誘／指引之舞 原本各自的 gate 已收斂進來，新增 穹天狩獵／任選黏液）
+      if (coinAbilityHeadsHasTarget(state, state.activePlayerIndex as 0 | 1, pk, ab.name, pool) === false) return;
+      // <<< v6494-coin-ability-gate
       result.push({ iid: pk.iid, abilityIndex: abIdx, pokemonName: card.name, abilityName: ab.name });
     });
   }

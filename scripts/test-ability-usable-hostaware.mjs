@@ -10,9 +10,9 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S=join(ROOT,'.stub-au.js'); writeFileSync(S,'export const base="";export const assets="";');
 const E=join(ROOT,'.ent-au.ts'); const O=join(ROOT,'.ent-au.mjs');
 process.on('exit',()=>{for(const p of[S,E,O]){try{unlinkSync(p)}catch{}}});
-writeFileSync(E,`export { createGame, getUsableAbilities } from './src/lib/game/engine';\nimport './src/lib/game/effects';`);
+writeFileSync(E,`export { createGame, getUsableAbilities } from './src/lib/game/engine';\nexport { promoteAbilityReady } from './src/lib/game/effects';\nimport './src/lib/game/effects';`);
 await build({entryPoints:[E],outfile:O,bundle:true,format:'esm',platform:'node',target:'node20',alias:{'$lib':join(ROOT,'src/lib'),'$app/paths':S},logLevel:'error'});
-const { createGame, getUsableAbilities } = await import(pathToFileURL(O).href);
+const { createGame, getUsableAbilities, promoteAbilityReady } = await import(pathToFileURL(O).href);
 const dir=join(ROOT,'static/cards');
 const live=new Set(JSON.parse(readFileSync(join(dir,'index.json'),'utf8')).map(e=>e.code));
 const pool=new Map();
@@ -49,13 +49,23 @@ T('沖刷host-aware反向:備戰無任何水來源 → 沖刷不可用', ()=>{
   const st=mk(inst(WALREIN), [inst(BUD,[en(metalE)])]); // 只有鋼,無水
   assert(!has(st,'沖刷'),'無水能量時沖刷不該可用');
 });
+// ⭐v6.494（Rule 40）：站長裁定 3 ——「上場時可使用1次」特性只在放上戰鬥場當下詢問、不再有手動按鈕，
+//   原本寫在 getUsableAbilities 的「備戰有【鋼】能量」gate 搬到 effects.promoteAbilityReady（詢問端，唯一一份）。
+//   本檔要守的意圖（host-aware：古舊能量視為鋼）不變，觀測點改成那一支；另補「只有水 ⇒ 不詢問」反對照。
+const ready=(st)=>promoteAbilityReady(st,0,st.players[0].active,'金屬之路',pool);
 T('金屬之路:備戰古舊能量(提供鋼) → 可用[驗HEAD FAIL]', ()=>{
   const st=mk(inst(KOBALON,[],{movedToActiveThisTurn:true}), [inst(BUD,[en(ANCIENT)])]);
-  assert(has(st,'金屬之路'),'金屬之路應可用(備戰古舊能量視為鋼)');
+  assert(ready(st),'金屬之路應可用(備戰古舊能量視為鋼)');
+  assert(!has(st,'金屬之路'),'v6.494：上場時特性不可以有手動按鈕');
 });
 T('金屬之路對照:備戰基本鋼能量 → 可用[HEAD亦PASS]', ()=>{
   const st=mk(inst(KOBALON,[],{movedToActiveThisTurn:true}), [inst(BUD,[en(metalE)])]);
-  assert(has(st,'金屬之路'),'金屬之路應可用(基本鋼)');
+  assert(ready(st),'金屬之路應可用(基本鋼)');
+});
+T('金屬之路反對照:備戰只有水能量 → 不詢問', ()=>{
+  const waterE=[...pool.values()].find(c=>c.supertype==='Energy'&&c.subtype==='Basic'&&c.name==='基本【水】能量').id;
+  const st=mk(inst(KOBALON,[],{movedToActiveThisTurn:true}), [inst(BUD,[en(waterE)])]);
+  assert(!ready(st),'沒有鋼能量時不該詢問');
 });
 // 發酵果汁(壺壺,草,卡面非基本)：需身上【草】能量 + 場上有受傷寶可夢(engine 8796 gate)
 let POTTLE; for(const[id,cc]of pool){if(cc.name==='壺壺'&&(cc.abilities||[]).some(a=>a.name==='發酵果汁')){POTTLE=id;break;}}

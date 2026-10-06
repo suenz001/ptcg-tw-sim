@@ -25,15 +25,27 @@ const RADIAS='14069', LATIOS='14070', FIRE='18518', PSY='11177', GRASS='14319', 
 let nn=0; const inst=(cid,ex={})=>({iid:'i'+(++nn),cardId:String(cid),damage:0,energyAttached:[],status:null,secondaryStatus:null,tertiaryStatus:null,...ex});
 let pass=0,fail=0;
 const T=(n,f)=>{try{f();console.log('  PASS',n);pass++;}catch(e){console.log('  FAIL',n,'::',e.message);fail++;}};
+// ⭐v6.494（Rule 40）：「放置於戰鬥場時可使用1次」只在放上戰鬥場當下詢問（站長裁定 3），USE_ABILITY 不再接受。
+//   本檔的意圖（選能量實例 picker、一次搬多張）不變，入口改成真實流程：打出寶可夢交替 ⇒ 詢問 ⇒ 選使用。
+const SWITCH='18587';
+function viaSwitch(st, benchIid){
+  const sw=inst(SWITCH);
+  let r={...st,players:[{...st.players[0],hand:[...st.players[0].hand,sw]},st.players[1]]};
+  r=applyAction(r,{type:'PLAY_TRAINER',iid:sw.iid},pool);
+  if(r.pendingSelection&&r.pendingSelection.effectKey!=='resolve-promote-active-ability-prompt')
+    r=applyAction(r,{type:'RESOLVE_SELECTION',selectedIids:[benchIid],actorIdx:0,effectKey:r.pendingSelection.effectKey},pool);
+  assert.equal(r.pendingSelection?.effectKey,'resolve-promote-active-ability-prompt','放上戰鬥場應詢問');
+  return applyAction(r,{type:'RESOLVE_SELECTION',selectedIids:['yes'],actorIdx:0,effectKey:r.pendingSelection.effectKey},pool);
+}
 const base={id:'t',phase:'playing',turnPhase:'main',activePlayerIndex:0,firstPlayerIdx:0,turn:5,isFirstTurn:false,log:[],pendingSelection:null,setupDone:[true,true],pendingPrizes:[0,0]};
 
 T('① 潔淨支援：備戰 2火2超 → 可選 1火1超改附戰鬥寶可夢', () => {
   const em=inst(GRASS,{energyAttached:[inst(FIRE),inst(FIRE),inst(PSY),inst(PSY)]});
   const st={...base,players:[
-    {name:'P0',active:inst(RADIAS,{movedToActiveThisTurn:true}),bench:[inst(LATIOS),em],hand:[],deck:[inst(GRASS)],discard:[],prizes:[inst(GRASS)]},
+    {name:'P0',active:inst(GRASS),bench:[inst(LATIOS),em,inst(RADIAS)],hand:[],deck:[inst(GRASS)],discard:[],prizes:[inst(GRASS)]},
     {name:'P1',active:inst(GRASS),bench:[],hand:[],deck:[inst(GRASS)],discard:[],prizes:[inst(GRASS)]}]};
-  const latiosIid=st.players[0].bench[0].iid;
-  let r=applyAction(st,{type:'USE_ABILITY',iid:latiosIid,abilityIndex:0},pool);
+  let r=viaSwitch(st, st.players[0].bench[2].iid);
+  assert.equal(r.players[0].active.cardId, RADIAS, '前置：超級拉帝亞斯ex 應在戰鬥場');
   assert(r.pendingSelection,'應開 picker');
   assert.equal(r.pendingSelection.type,'active-energy-discard','應為能量實例 picker(HEAD=bench-choose→FAIL)');
   assert.equal(r.pendingSelection.effectKey,'swiftcursor-energy-pick','應共用 swiftcursor(HEAD=cleansing-support-pick-bench)');
@@ -50,10 +62,10 @@ T('① 潔淨支援：備戰 2火2超 → 可選 1火1超改附戰鬥寶可夢',
 T('② 金屬之路：備戰 2鋼 → 一次搬 2 鋼到勾帕路翁ex(非只1張)', () => {
   const em=inst(GRASS,{energyAttached:[inst(METAL),inst(METAL)]});
   const st={...base,players:[
-    {name:'P0',active:inst(COBALION,{movedToActiveThisTurn:true}),bench:[em],hand:[],deck:[inst(GRASS)],discard:[],prizes:[inst(GRASS)]},
+    {name:'P0',active:inst(GRASS),bench:[em,inst(COBALION)],hand:[],deck:[inst(GRASS)],discard:[],prizes:[inst(GRASS)]},
     {name:'P1',active:inst(GRASS),bench:[],hand:[],deck:[inst(GRASS)],discard:[],prizes:[inst(GRASS)]}]};
-  const cobIid=st.players[0].active.iid;
-  let r=applyAction(st,{type:'USE_ABILITY',iid:cobIid,abilityIndex:0},pool);
+  let r=viaSwitch(st, st.players[0].bench[1].iid);
+  assert.equal(r.players[0].active.cardId, COBALION, '前置：勾帕路翁ex 應在戰鬥場');
   assert(r.pendingSelection,'應開 picker');
   assert.equal(r.pendingSelection.type,'active-energy-discard','應為能量實例 picker(HEAD=heal-target→FAIL)');
   assert.equal(r.pendingSelection.effectKey,'swiftcursor-energy-pick','應共用 swiftcursor(HEAD=cobalion-metal-path)');

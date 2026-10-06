@@ -12,7 +12,10 @@
 //
 // ⚠ 這只是「能不能給按鈕」的必要條件，不是充分條件 —— 觸發型（放置／進化／回備戰時可使用1次）
 //   另有自己的集合與提示流程，getUsableAbilities 原本就會排除，不受這支影響。
-const ACTIVATABLE_TEXT = /可(?:不限次數)?使用|可以使用/;
+// ⭐v6.494（Fable 審查 C）：「可使用」後面同一句（到「。」為止）講的是**招式**的被動特性
+//   （潛入記憶／記憶螺旋「可使用…招式」、力量抑制者／啟動限制「才可使用招式」、出道演出、祭典樂舞）不是發動條件
+//   ⇒ 以否定前瞻排除。全卡池比對：與舊判準只差這 9 個被動特性（test-v6489 A6～A14 釘住）。
+const ACTIVATABLE_TEXT = /可(?:不限次數)?使用(?![^。]*招式)|可以使用(?![^。]*招式)/;
 
 /** 卡面文字顯示這是「玩家可主動使用」的特性（被動特性回傳 false）。 */
 export function isManuallyActivatableAbilityText(effect: string | null | undefined): boolean {
