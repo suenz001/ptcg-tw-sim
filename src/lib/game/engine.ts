@@ -1068,7 +1068,7 @@ import { firePassiveOnKoAfterPrize, drainOnKoAfterPrize } from './effects';
 // >>> v6361-lift-import
 // ⭐v6.361 站長裁定 D-10：把「已判出的終局」暫時收回，讓 on-KO 特性先結算完再重判（含平手）。
 import { liftEndgameForOnKoV6361 } from './effects';
-import { koTargetAfterAttackDamage } from './effects';   // ⭐v6.490 備戰昏厥共用（受害者被效果換到備戰區後才昏厥）
+import { koTargetAfterAttackDamage, koAttackerAfterRetaliation } from './effects';   // ⭐v6.490 備戰昏厥共用（受害者被效果換到備戰區後才昏厥）
 import { isManuallyActivatableAbilityText } from './ability-activation';   // ⭐v6.489 被動特性不給按鈕
 // <<< v6361-lift-import
 // >>> v6362-return-hand-import
@@ -6704,6 +6704,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     const _v6490Defer = (_v6490Ctx.afterKoKeys ?? [effectKey]).some(k => ATTACK_POST.has(k) || ATTACK_AFTER_KO.has(k));
     // <<< v6490-attack-ko-ctx
     if (!preventedKO && wouldBeKO) {
+      // ⭐v6.492 這一擊的反擊（含當場結算時 TOOL_ON_KO 鏡射的凸凸頭盔等）之前，攻擊方身上的傷害
+      const _v6492AtkDmgBeforeKoHooks = newState.players[aIdx].active?.damage ?? 0;
       // >>> v6490-attack-ko-branch
       // ⭐⭐⭐v6.490：昏厥結算搬到模組層級的 resolveAttackActiveKo（見該函式註解）。
       //   有招式效果（ATTACK_POST／ATTACK_AFTER_KO）⇒ 先把致死傷害寫上去、記下 _pendingAttackKo，
@@ -6852,6 +6854,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         newState = fireFieldWideRetaliation(newState, dIdx, pool, koInst);   // ⭐v6352-field-wide-retal-ko
       }
 
+      // >>> v6492-retal-ko-ko-branch
+      // ⭐v6.492：上面這批反擊（豪邁炸彈／龐克頭盔／毒刺／頭蓋尖刺／扣殺能量／怨恨旋渦…）把攻擊方打昏
+      //   ⇒ 中央 koAttackerAfterRetaliation（原本留給 sanityKOSweep 簡化處理：沒有奇跡之吻與算式紀錄）
+      newState = koAttackerAfterRetaliation(newState, aIdx, _v6492AtkDmgBeforeKoHooks, pool);
+      if (newState.phase === 'game-over') return newState;
+      // <<< v6492-retal-ko-ko-branch
       // 無備戰寶可夢 → 直接終局，不需送出新寶可夢（⭐v6.490：延後結算時改由 drainPendingAttackKo 判斷）
       if (!_v6490Defer && !newState.players[dIdx].active && newState.players[dIdx].bench.length === 0) {
         const _ds = newState.players[dIdx];
@@ -6933,46 +6941,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       //   1. 改用 getEffectiveHP（夠讚狗｜腎上腺力量 等特性把 HP 推高，原本用 card.hp 會誤判）
       //   2. 加 gate：只在 ON_DAMAGED hooks 實際把傷害推到攻擊方身上時才觸發
       //      （否則之前的「攻擊方進攻時自己被 KO」會誤掛上「反彈傷害」標籤）
-      {
-        const retaliatedAtk = newState.players[aIdx].active;
-        if (retaliatedAtk && retaliatedAtk.damage > atkDamageBeforeRetaliation) {
-          const retAtkCard = pool.get(retaliatedAtk.cardId);
-          const retAtkEffHP = getEffectiveHP(retaliatedAtk, pool, newState);
-          if (retAtkEffHP > 0 && retaliatedAtk.damage >= retAtkEffHP) {
-            const retKoDiscard: CardInstance[] = [
-              retaliatedAtk,
-              ...retaliatedAtk.energyAttached,
-              ...getAllAttachedTools(retaliatedAtk),
-              ...(retaliatedAtk.evolvedFromStack ?? []),
-            ];
-            const retKOPrizes = prizesForKO(retAtkCard!);
-            const retPlayers = [...newState.players] as [PlayerState, PlayerState];
-            retPlayers[aIdx] = {
-              ...retPlayers[aIdx],
-              active: null,
-              discard: [...retPlayers[aIdx].discard, ...retKoDiscard],
-            };
-            newState = addLog(
-              addPendingPrize({ ...newState, players: retPlayers }, dIdx, retKOPrizes, pool),
-              `${retAtkCard!.name} 被反彈傷害擊倒！${newState.players[dIdx].name} 取得 ${retKOPrizes} 張獎賞卡。`,
-              null,
-            );
-            // 攻擊方沒有備戰寶可夢 → 直接終局
-            if (retPlayers[aIdx].bench.length === 0) {
-              return {
-                ...newState,
-                phase: 'game-over',
-                winner: dIdx,
-                winReason: `${retPlayers[aIdx].name} 沒有可上場的寶可夢`,
-                log: [
-                  ...newState.log,
-                  { turn: newState.turn, playerIndex: null as null, message: `${retPlayers[aIdx].name} 沒有可上場的寶可夢，${newState.players[dIdx].name} 獲勝！` },
-                ],
-              };
-            }
-          }
-        }
-      }
+      // >>> v6492-retal-ko-survive
+      // ⭐v6.492：攻擊方被反擊打昏 ⇒ 中央 koAttackerAfterRetaliation（補奇跡之吻與算式紀錄；終局照舊）
+      newState = koAttackerAfterRetaliation(newState, aIdx, atkDamageBeforeRetaliation, pool);
+      if (newState.phase === 'game-over') return newState;
+      // <<< v6492-retal-ko-survive
     }
 
     // ── 龐克頭盔反彈 40：在防守方狀態已提交後套用，避免被覆蓋 ──────────────────
@@ -6981,7 +6954,6 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       const atkP = { ...refPlayers[aIdx] };
       if (atkP.active) {
         const atkNewDmg = atkP.active.damage + punkReflectDamage;
-        const atkCardForKO = pool.get(atkP.active.cardId);
         const updatedAtk = { ...atkP.active, damage: atkNewDmg };
         atkP.active = updatedAtk;
         refPlayers[aIdx] = atkP;
@@ -6992,42 +6964,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         );
         // v2.300 Bug fix：反彈傷害打死攻擊方時，需立即 KO 處理（sanityKOSweep 只掃 dIdx，不掃 aIdx）
         // v3.751：改用 getEffectiveHP（同 line 4297 修法）
-        const atkEffHP = getEffectiveHP(updatedAtk, pool, newState);
-        if (atkEffHP > 0 && atkNewDmg >= atkEffHP) {
-          const deadAtk = atkP.active;
-          const koDiscard: CardInstance[] = [
-            deadAtk,
-            ...deadAtk.energyAttached,
-            ...getAllAttachedTools(deadAtk),
-            ...(deadAtk.evolvedFromStack ?? []),
-          ];
-          const punkKOPrizes = prizesForKO(atkCardForKO!);
-          const punkRefPlayers2 = [...newState.players] as [PlayerState, PlayerState];
-          punkRefPlayers2[aIdx] = {
-            ...punkRefPlayers2[aIdx],
-            active: null,
-            discard: [...punkRefPlayers2[aIdx].discard, ...koDiscard],
-          };
-          // 防守方（dIdx）得到獎賞卡（放進 pendingPrizes 讓 UI 取牌）
-          newState = addLog(
-            addPendingPrize({ ...newState, players: punkRefPlayers2 }, dIdx, punkKOPrizes, pool),
-            `${attackerCard.name} 被龐克頭盔的反彈傷害擊倒！${newState.players[dIdx].name} 取得 ${punkKOPrizes} 張獎賞卡。`,
-            null,
-          );
-          // 若攻擊方場上空了（無備戰）→ 直接終局
-          if (punkRefPlayers2[aIdx].bench.length === 0) {
-            return {
-              ...newState,
-              phase: 'game-over',
-              winner: dIdx,
-              winReason: `${punkRefPlayers2[aIdx].name} 沒有可上場的寶可夢`,
-              log: [
-                ...newState.log,
-                { turn: newState.turn, playerIndex: null as null, message: `${punkRefPlayers2[aIdx].name} 沒有可上場的寶可夢，${newState.players[dIdx].name} 獲勝！` },
-              ],
-            };
-          }
-        }
+        // >>> v6492-retal-ko-punk
+        // ⭐v6.492：被龐克頭盔打昏 ⇒ 中央 koAttackerAfterRetaliation（補奇跡之吻與算式紀錄；終局照舊）
+        newState = koAttackerAfterRetaliation(newState, aIdx, atkNewDmg - punkReflectDamage, pool, '龐克頭盔');
+        if (newState.phase === 'game-over') return newState;
+        // <<< v6492-retal-ko-punk
       }
     }
       return null;
@@ -7232,6 +7173,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     // ⭐v6.427：改問中央 isImmuneToOppAbilityEffect（光之翼＋化隱…；原本寫死只認光之翼）
     const attackerHasMagicalShine = isImmuneToOppAbilityEffect(newState, dIdx, newState.players[aIdx].active, pool, true);
     const _v5113RanInKoBranch = wouldBeKO && !preventedKO;
+    const _v6492AtkDmgBeforeTail = newState.players[aIdx].active?.damage ?? 0;   // ⭐v6.492 下方共用反擊之前
     if (!_v5113RanInKoBranch && baseDamage > 0 && defenderCard.abilities && !attackerHasMagicalShine) {
       for (const ab of defenderCard.abilities) {
         if (!isAbilityHolderEffective(newState, newState.players[dIdx].active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.656 非KO分支反擊/受傷觸發 gate
@@ -7302,6 +7244,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       }
     }
 
+    // >>> v6492-retal-ko-tail
+    // ⭐v6.492：上面的共用反擊（毒刺／灼熱之軀／頭蓋尖刺／警備濁霧以外的受傷反擊／反擊旗標）把攻擊方打昏
+    //   ⇒ 中央 koAttackerAfterRetaliation（原本留給 sanityKOSweep 簡化處理）。終局時不再往下（與招式效果造成終局同型）。
+    if (newState.phase === 'playing') newState = koAttackerAfterRetaliation(newState, aIdx, _v6492AtkDmgBeforeTail, pool);
+    // <<< v6492-retal-ko-tail
     // v2.132：sanity sweep — 雙方 active/bench 任何 damage ≥ HP 卻仍在場上者，強制 KO。
     //   觸發點：Leon 用幻影奇襲 200 點打 70HP 土龍弟弟，土龍弟弟被觀察到「damage 200 仍在備戰」。
     //   理論上 KO 流程已在上方處理，但 postFn / 反擊 / 多目標 resolver 可能漏處理某條 path。

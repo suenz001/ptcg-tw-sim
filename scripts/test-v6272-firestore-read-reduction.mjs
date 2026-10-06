@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '592c61f31c864c843795ecaacc863e47492afe70';   // v6.490（上一版）
+const PREV_SHA = 'da855ce34f942a5d92ae0322e99c132518821f20';   // v6.491（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,15 +757,25 @@ const PREV_SHA = '592c61f31c864c843795ecaacc863e47492afe70';   // v6.490（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.491 前移：PREV_SHA 從 592c61f3（v6.490）起算。
+  // ⚠⚠ v6.492 前移：PREV_SHA 從 da855ce3（v6.491）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.491：招式效果後才不夠 HP 的昏厥也完整結算、當場結算讀當下盤面、炸裂針 gate 修正；首頁 changelog 三步搬運。
+  // ⭐v6.492：攻擊方被反擊打昏走中央 koAttackerAfterRetaliation（engine 存活分支／龐克頭盔／昏厥分支反擊／共用反擊尾段、effects fireDefenderOnDamaged）；首頁 changelog 三步搬運。
+  'src/lib/game/effects.ts',
   'src/lib/game/engine.ts',
   'src/lib/version.ts',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.491）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.491 前移：PREV_SHA 從 592c61f3（v6.490）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.491：招式效果後才不夠 HP 的昏厥也完整結算、當場結算讀當下盤面、炸裂針 gate 修正；首頁 changelog 三步搬運。
+//   'src/lib/game/engine.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.490）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.490 前移：PREV_SHA 從 96dcb74b（v6.489）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -888,16 +898,6 @@ const PREV_ALLOWED = [
 //   'src/lib/version.ts',
 //   'src/routes/cards/+page.svelte',
 //   'src/routes/decks/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.479）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.479 前移：PREV_SHA 從 2ea0b766（v6.478）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.479：首頁網頁版右欄「錦標賽動態」：$lib/home-tourn（解析／排序／逾時）＋首頁卡片與版面（main.hm-has-evt）；伺服器 v1.55 免登入摘要端點 /api/home/tourn-summary；首頁 changelog 三步搬運。
-//   'src/lib/home-tourn.ts',
-//   'src/lib/version.ts',
-//   'src/routes/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

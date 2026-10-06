@@ -9253,29 +9253,8 @@ export function fireDefenderOnDamaged(
     }
   }
   // <<< v6402-punk-helmet-effects
-  // 反傷反殺攻擊方（含 game-over）
-  const retaliatedAtk = s.players[aIdx].active;
-  if (retaliatedAtk && retaliatedAtk.damage > atkDamageBefore) {
-    const retAtkCard = pool.get(retaliatedAtk.cardId);
-    const retAtkEffHP = effectiveHPInline(retaliatedAtk, pool, s);
-    if (retAtkCard && retAtkEffHP > 0 && retaliatedAtk.damage >= retAtkEffHP) {
-      const retKoDiscard: CardInstance[] = [
-        retaliatedAtk,
-        ...retaliatedAtk.energyAttached,
-        ...getAllAttachedTools(retaliatedAtk),
-        ...(retaliatedAtk.evolvedFromStack ?? []),
-      ];
-      // v5.469 還原：反彈/反擊道具傷害擊倒攻擊方，非「受到對手招式傷害」(攻擊方是自己撞上反傷) → 保留 base。
-      const retKOPrizes = prizesForKOLocal(retAtkCard);
-      const retPlayers = [...s.players] as [PlayerState, PlayerState];
-      retPlayers[aIdx] = { ...retPlayers[aIdx], active: null, discard: [...retPlayers[aIdx].discard, ...retKoDiscard] };
-      s = addLog(addPendingPrize({ ...s, players: retPlayers }, dIdx, retKOPrizes, pool),
-        `${retAtkCard.name} 被反彈傷害擊倒！${s.players[dIdx].name} 取得 ${retKOPrizes} 張獎賞卡。`, null);
-      if (retPlayers[aIdx].bench.length === 0) {
-        return { ...s, phase: 'game-over', winner: dIdx, winReason: `${retPlayers[aIdx].name} 沒有可上場的寶可夢` };
-      }
-    }
-  }
+  // 反傷反殺攻擊方（含 game-over）——⭐v6.492 改走中央 koAttackerAfterRetaliation（補奇跡之吻與算式紀錄）
+  s = koAttackerAfterRetaliation(s, aIdx, atkDamageBefore, pool);
   return s;
 }
 
@@ -9857,6 +9836,36 @@ export function koTargetAfterAttackDamage(
   return addPendingPrize(s, actorIdx, p, pool);
 }
 // <<< v6490-ko-target-after-attack-damage
+
+// >>> v6492-attacker-retaliation-ko
+/**
+ * ⭐v6.492（站長裁定 2026-10-06：攻擊方被反擊打昏也改走中央的昏厥結算）
+ *   攻擊方被「受到傷害時」的反擊（凸凸頭盔／龐克頭盔／奢華炸彈／豪邁炸彈／毒刺／扣殺能量／炸裂針…）打昏時，
+ *   原本三處各自就地處理（engine 兩處、本檔 fireDefenderOnDamaged 一處），只給基本獎賞張數：
+ *   ・沒有擲 波克基斯｜奇跡之吻（卡面「對手的戰鬥寶可夢昏厥時」不限原因）；
+ *   ・沒有 🧮 獎賞卡算式那一行。
+ *   ⇒ 一律交給 koTargetAfterAttackDamage（kind='ability-effect' ＝ 不是「受到對手招式的傷害」）：
+ *   古舊能量／莉莉艾的珍珠／傳說的山頂／影藏／希望護身符等卡面寫「招式的傷害」的，照舊**不**套用。
+ * @param damageBefore 這一輪反擊之前攻擊方身上的傷害；只有反擊真的讓它變多才處理
+ *                     （避免把「自己招式的自傷」造成的昏厥誤當成反擊，那條由 v6.421 的終局流程負責）。
+ */
+export function koAttackerAfterRetaliation(
+  st: GameState, atkIdx: 0 | 1, damageBefore: number, pool: Map<string, Card>, label: string = '反彈傷害',
+): GameState {
+  const a = st.players[atkIdx].active;
+  if (!a || a.damage <= damageBefore) return st;
+  const hp = effectiveHPInline(a, pool, st);
+  if (!(hp > 0 && a.damage >= hp)) return st;
+  const takerIdx = (1 - atkIdx) as 0 | 1;
+  const loserName = st.players[atkIdx].name;
+  let s = koTargetAfterAttackDamage(st, takerIdx, a, pool, { kind: 'ability-effect', label, onDamagedFired: false });
+  if (s.phase === 'game-over' && st.phase !== 'game-over' && s.winner === takerIdx
+      && !s.players[atkIdx].active && s.players[atkIdx].bench.length === 0) {
+    s = addLog(s, `${loserName} 沒有可上場的寶可夢，${s.players[takerIdx].name} 獲勝！`, null);
+  }
+  return s;
+}
+// <<< v6492-attacker-retaliation-ko
 
 export function dealAttackDamageToTarget(
   st: GameState,

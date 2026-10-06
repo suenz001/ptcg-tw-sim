@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.492：攻擊方被反擊打昏走中央結算（2026-10-06，站長裁定）
+
+BASE v6.491（da855ce3）。
+- 原本三處就地處理（engine 存活分支「被反彈傷害擊倒」、龐克頭盔、effects.fireDefenderOnDamaged），只給 prizesForKO；昏厥分支的反擊與 postFn 後的共用反擊尾段則留給 sanityKOSweep 簡化版。全部沒有奇跡之吻（卡面「對手的戰鬥寶可夢昏厥時」不限原因）、沒有 🧮 算式。
+- 新增 effects `koAttackerAfterRetaliation(st, atkIdx, damageBefore, pool, label)`（哨兵 v6492-attacker-retaliation-ko）：只有反擊讓攻擊方傷害增加且達 HP 才處理 ⇒ koTargetAfterAttackDamage(kind='ability-effect')；終局時補「沒有可上場的寶可夢，X 獲勝！」。
+- engine 五個接點：v6492-retal-ko-survive／-punk／-ko-branch（反擊前傷害記在 KO 分支開頭，含當場結算時 TOOL_ON_KO 鏡射的凸凸頭盔）／-tail（postFn 後共用反擊）。
+- 古舊能量等「受到對手招式的傷害」修正不套（R3）。
+- ⚠ 時機：昏厥分支的反擊打昏攻擊方改為當下結算（原本由招式效果之後的 sanityKOSweep 掃），與存活分支一致。
+- 站長指正：v6.491 說割除衝刺「沒有招式效果」是錯誤說法——它有效果，只是實作在 ATTACK_PRE（造成傷害前），所以走當場結算路徑。
+- 新增 test-v6492（R1～R7）；BASE 紅 4 條；三個接點逐一拔掉各自翻紅。
+
 ## v6.491：v6.490 追修（2026-10-06，站長追問）
 
 BASE v6.490（592c61f3）。
