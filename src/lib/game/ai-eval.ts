@@ -177,7 +177,9 @@ export function simulateAttack(
       const after = resolveOwnPendingsInSim(after0, actorIdx, pool);
       const now = after.players[oppIdx].active;
       // 擊倒判定用 iid：被擊倒後戰鬥位會變空或換上別隻，兩種都算擊倒
-      const ko = !now || now.iid !== before.iid;
+      // ⭐v6.490：昏厥在招式效果全部結束後才結算 ⇒ 試打停在「對手要做的選擇」時，受害者以 HP≤0 暫留戰鬥場
+      //   （after._pendingAttackKo）—— 那一下已經是致死傷害，照樣算擊倒（否則必殺會被當成重傷）。
+      const ko = !now || now.iid !== before.iid || after._pendingAttackKo?.victimIid === now.iid;
       return {
         ok: true,
         ko,
@@ -596,7 +598,7 @@ function evaluateAttackOnce(
 
       const gameWon = after.phase === 'game-over' && after.winner === actorIdx;
       const oppNow = after.players[oppIdx].active;
-      const ko = !oppNow || oppNow.iid !== beforeOppActive.iid;
+      const ko = !oppNow || oppNow.iid !== beforeOppActive.iid || after._pendingAttackKo?.victimIid === oppNow.iid;   // ⭐v6.490 同上
       const prizes = Math.max(0, (after.pendingPrizes?.[actorIdx] ?? 0) - beforePending)
         + Math.max(0, beforePrizeStack - after.players[actorIdx].prizes.length);
       const oppDamage = oppEffectiveDamage(state, after, oppIdx, pool);

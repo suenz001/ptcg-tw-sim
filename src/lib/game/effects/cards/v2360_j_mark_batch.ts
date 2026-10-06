@@ -23,7 +23,7 @@ import type { GameState, CardInstance } from '../../types';
 import {
   addLog,
   regA,
-  regPost,
+  regPost, regAfterKO,
   regPre,
   regR,
   canEvolveOnto,
@@ -143,10 +143,8 @@ regPost('代歐奇希斯|精神防護', (state, aIdx) => {
 // KO 判斷：regPost 執行時 defender.active === null 表示已被 KO。
 // 免疫判斷在 engine.ts 攻擊管線：immuneToAllAttackThisTurn 旗標（baseDamage=0 + skipDefEffects）。
 // 旗標生命週期：post 設 NextTurn → END_TURN promote → ThisTurn → 對手 END_TURN 清除。
-regPost('具甲武者|要害斬', (state, aIdx) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  // 若對手戰鬥位寶可夢未被 KO（active 仍存在），則無效果
-  if (state.players[dIdx].active !== null) return state;
+// ⭐v6.490：昏厥改在招式效果全部結束後才結算 ⇒ 改登記 ATTACK_AFTER_KO（引擎只在這一招真的讓對手昏厥後才呼叫）。
+regAfterKO('具甲武者|要害斬', (state, aIdx) => {
   // 對手被 KO → 在自身 active 設 immuneToAllAttackNextTurn 旗標
   let s = updatePlayer(state, aIdx, p => {
     if (!p.active) return p;

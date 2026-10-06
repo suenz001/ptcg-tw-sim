@@ -236,6 +236,14 @@ export function dispatchCopiedAttack(
 
 export function regPre(key: string, fn: AttackPreFn)   { ATTACK_PRE.set(key, fn); }
 export function regPost(key: string, fn: AttackPostFn) { ATTACK_POST.set(key, fn); }
+/**
+ * ⭐v6.490「這個招式讓對手昏厥了」才會發生的效果（瑪夏多｜暗影側踢、具甲武者｜要害斬、
+ *   鐵臂膀ex｜感激放大、未知圖騰｜神秘信號）。昏厥改在招式效果全部結束後才結算 ⇒ 這類效果
+ *   不能再放在 ATTACK_POST（那時對手還沒昏厥），改由 engine 在昏厥結算之後呼叫。
+ *   招式沒有讓對手昏厥時也會呼叫 ⇒ 函式自己判斷（讀 oppDamageKOdMeThisTurn 或對手戰鬥場）。
+ */
+export const ATTACK_AFTER_KO = new Map<string, AttackPostFn>();
+export function regAfterKO(key: string, fn: AttackPostFn) { ATTACK_AFTER_KO.set(key, fn); }
 
 /**
  * ⭐⭐ v6.350 中央：**per-attack** 的「這一招現在能不能使用」述詞。

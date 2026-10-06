@@ -19,6 +19,8 @@ const CID={dama:'14688',oki:'16695',regi:'16662',muma:'14728',mary:'15991',ubo:'
 let iid=0;const inst=(cid,e={})=>({iid:`t${++iid}`,cardId:String(cid),damage:0,energyAttached:[],...e});
 const base=()=>createGame({name:'P1',entries:[{cardId:CID.def,count:1}]},{name:'P2',entries:[{cardId:CID.def,count:1}]},pool);
 const atkIdx=(cid,nm)=>pool.get(cid).attacks.findIndex(a=>a.name===nm);
+// ⭐v6.490：受害者已昏厥，或以 HP≤0 暫留戰鬥場等招式效果結束後結算（_pendingAttackKo）
+const koOrPending=(n)=>n.players[1].active===null||(!!n._pendingAttackKo&&n._pendingAttackKo.victimIid===n.players[1].active?.iid);
 let pass=0,fail=0;const T=(n,f)=>{try{f();console.log('  ✅',n);pass++;}catch(e){console.log('  ❌',n+':',e.message);fail++;}};
 function mk(atkCid,energy,defActiveExtra={}){
   const s=base();
@@ -33,11 +35,13 @@ function checkPicker(name,atkCid,atkName,energy,effectKey,defExtra={},needDiscar
     const atkAction={type:'ATTACK',attackIndex:atkIdx(atkCid,atkName)};
     if(needDiscardEnergy) atkAction.discardedEnergyIids=st.players[0].active.energyAttached.map(e=>e.iid);
     let n=applyAction(st,atkAction,pool);
-    assert.equal(n.players[1].active,null,'防守方active被KO');
+    // ⭐v6.490（Rule 40）：昏厥改在招式效果（含選擇視窗）全部結束後才結算 ⇒ 視窗開著時受害者以 HP≤0 暫留戰鬥場。
+    //   本守衛的意圖（視窗開著時對手不可以補位、全部傷害結算完才補位）不變，只把「已被 KO」改成「已被 KO 或待結算」。
+    assert.ok(koOrPending(n),'防守方active被KO（或待招式效果結束後結算）');
     assert.equal(n.pendingSelection?.effectKey,effectKey,`bench picker(${effectKey})已開 實際`+(n.pendingSelection?.effectKey??'-'));
     const b0=n.players[1].bench[0].iid;
     const blocked=applyAction(n,{type:'SEND_NEW_ACTIVE',iid:b0,senderIdx:1},pool);
-    assert.equal(blocked.players[1].active,null,'pending時補位被擋(仍null)');
+    assert.ok(blocked.players[1].active?.iid!==b0,'pending時補位被擋（備戰那隻沒有被換上來）');
     let r=applyAction(n,{type:'RESOLVE_SELECTION',effectKey,selectedIids:[b0],actorIdx:0},pool);
     assert.ok(!r.pendingSelection,'解picker後無殘留pending');
     const bench=r.players[1].bench[0]?.iid;
@@ -54,12 +58,12 @@ function checkGated(name,atkCid,atkName,energy){
   T(`${name}：active KO 後若有 picker 則 gate 對手補位`, ()=>{
     const st=mk(atkCid,energy);
     let n=applyAction(st,{type:'ATTACK',attackIndex:atkIdx(atkCid,atkName)},pool);
-    assert.equal(n.players[1].active,null,'active被KO');
+    assert.ok(koOrPending(n),'active被KO（或待招式效果結束後結算，v6.490）');
     if(n.pendingSelection){
       const ek=n.pendingSelection.effectKey;
       const b0=n.players[1].bench[0].iid;
       const blocked=applyAction(n,{type:'SEND_NEW_ACTIVE',iid:b0,senderIdx:1},pool);
-      assert.equal(blocked.players[1].active,null,`${ek} pending時補位被擋`);
+      assert.ok(blocked.players[1].active?.iid!==b0,`${ek} pending時補位被擋`);
       let r=applyAction(n,{type:'RESOLVE_SELECTION',effectKey:ek,selectedIids:[b0],actorIdx:0},pool);
       // 解完後(可能再有連鎖pending就再解一次)
       let guard=0;while(r.pendingSelection&&r.pendingSelection.effectKey===ek&&guard++<8){const bb=r.players[1].bench[0]?.iid;if(!bb)break;r=applyAction(r,{type:'RESOLVE_SELECTION',effectKey:ek,selectedIids:[bb],actorIdx:0},pool);}

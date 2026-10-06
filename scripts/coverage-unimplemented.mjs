@@ -24,12 +24,13 @@ const SHIM = join(ROOT, '.tmp-cov-shim.mjs');
 process.on('exit', () => { for (const p of [ENTRY, OUT, SHIM]) { try { unlinkSync(p); } catch {} } });
 
 writeFileSync(SHIM, 'export const base="";export const assets="";');
-writeFileSync(ENTRY, `export { ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE } from './src/lib/game/effects';`);
+// ⭐v6.490：「這個招式讓對手昏厥」才發生的效果改登記在 ATTACK_AFTER_KO（昏厥在招式效果之後才結算）⇒ 也算已實裝；用 namespace 匯出，BASE 沒有這張表時讀成空的（Rule 41）
+writeFileSync(ENTRY, `export { ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE } from './src/lib/game/effects';\nexport * as SHV6490 from './src/lib/game/effects/_shared';`);
 await build({ entryPoints: [ENTRY], outfile: OUT, bundle: true, format: 'esm', platform: 'node', target: 'node20',
   alias: { '$lib': join(ROOT, 'src/lib'), '$app/paths': SHIM }, logLevel: 'error' });
-const { ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE } = await import(pathToFileURL(OUT).href);
+const { ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, SHV6490 } = await import(pathToFileURL(OUT).href);
 
-const registered = new Set([...ATTACK_PRE.keys(), ...ATTACK_POST.keys(), ...ATTACK_PRE_DISCARD_CHOICE.keys()]);
+const registered = new Set([...ATTACK_PRE.keys(), ...ATTACK_POST.keys(), ...ATTACK_PRE_DISCARD_CHOICE.keys(), ...(SHV6490?.ATTACK_AFTER_KO?.keys() ?? [])]);
 // 每張卡已註冊的招式名（給 edit-distance 錯字偵測）
 const cardAtks = new Map();
 for (const k of registered) { const i = k.indexOf('|'); if (i < 0) continue; const c = k.slice(0, i), a = k.slice(i + 1); if (!cardAtks.has(c)) cardAtks.set(c, []); cardAtks.get(c).push(a); }

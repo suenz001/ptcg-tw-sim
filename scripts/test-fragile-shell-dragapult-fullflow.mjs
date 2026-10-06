@@ -39,7 +39,9 @@ T('① 脫殼忍者在備戰被幻影奇襲6指示物KO(效果) → 對手拿 1 
 T('② 脫殼忍者在戰鬥位被幻影奇襲200傷害(ex招式傷害)KO → 對手 0 張獎賞', () => {
   let r=applyAction(mk(SHED,[GRASS]),{type:'ATTACK',attackIndex:1},pool); // active=脫殼忍者(HP60)被200打死
   // 幻影奇襲同時放6指示物到備戰(走路草),需 RESOLVE
-  if(r.pendingSelection){ const b=r.players[1].bench[0]?.iid; r=applyAction(r,{type:'RESOLVE_SELECTION',effectKey:r.pendingSelection.effectKey,selectedIids:b?[b]:[],actorIdx:0},pool); }
+  // ⭐v6.490（Rule 40）：昏厥改在招式效果（含 6 個指示物的分配視窗）全部結束後才結算 ⇒ 要把分配解完
+  //   （原本只送 1 個指示物、視窗其實還開著，舊引擎因為先昏厥才看得到結果）。意圖（脆弱蛻殼 ⇒ 0 張）不變。
+  for(let g=0;g<4&&r.pendingSelection;g++){ const b=r.players[1].bench[0]?.iid; const n=r.pendingSelection.maxCount??6; r=applyAction(r,{type:'RESOLVE_SELECTION',effectKey:r.pendingSelection.effectKey,selectedIids:b?Array(n).fill(b):[],actorIdx:0},pool); }
   assert(!r.players[1].active || r.players[1].active.cardId!==SHED,'脫殼忍者(active)應被200傷害KO');
   // active 脫殼忍者被 ex 招式傷害 KO → 脆弱蛻殼擋 → 該 KO 不給獎賞(備戰走路草若也死另計,故只驗脫殼忍者這份)
   // 用 log 驗:不應有「脫殼忍者 被擊倒 A 取得 X 張」的獎賞(脆弱蛻殼=0)

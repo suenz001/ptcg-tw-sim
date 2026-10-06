@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.490：招式效果全部結算完才判定昏厥（2026-10-06，站長回報 bug 3：粉碎箭 × 古舊能量）
+
+BASE v6.489（96dcb74b）。設計經 Fable 5 諮詢（殭屍模式＋抽出中央 KO 函式＋跨選擇視窗延後），實作後再送 Fable 對抗審查，抓到 4 個真 bug 已於本版修掉。
+- 官方依據：PTCG_RULES L389、L2290、L1594-1595（咬碎丟古舊 ⇒ 不減少）、L1132-1133（激動森巴：換到備戰後在備戰昏厥）、L608、L889-892。
+- engine：原 resolveKnockouts 昏厥分支的結算段抽成模組層級 `resolveAttackActiveKo(cur, ctx, pool, legacy?)`；有招式效果（ATTACK_POST／ATTACK_AFTER_KO，含借招鏈 afterKoKeys）的致死一擊 ⇒ 寫入傷害、受害者以 HP≤0 留場、記 `state._pendingAttackKo`；「受到傷害時」hooks（含 TOOL_ON_DAMAGED 迴圈）在傷害當下跑；`drainPendingAttackKo` 於 ATTACK 末端／RESOLVE_SELECTION 末端／applyActionImpl 尾段（v6361 延後之前）結算：在戰鬥場 ⇒ resolveAttackActiveKo（讀當下盤面，跳過已觸發的鏡射道具）、在備戰 ⇒ effects `koTargetAfterAttackDamage`、找不到 ⇒ 不昏厥；之後跑 ATTACK_AFTER_KO、最後判無備戰終局。沒有招式效果 ⇒ legacy 當場結算（讀與 v6.489 相同的快照）。
+- isZombieKO 對 _pendingAttackKo 受害者回 false（哨兵 v6490-zombie-pending-exempt，engine-strip-v6421 先剝它）。
+- 「使用招式的寶可夢」一律依攻擊當下 iid 認（attackerOnField）：炸裂針、白蕾雅／巴貝娜／貪婪食客、光之翼、TOOL_ON_KO、死亡宣告（firePassiveOnKoAfterPrize／fireDefenderOnKO 新增 attackerIid 參數）。
+- 暗影側踢／要害斬／感激放大／神秘信號 改 regAfterKO；覆蓋率守衛（coverage-unimplemented、v6333、v6382）納入 ATTACK_AFTER_KO。ai-eval 把待結算受害者視同擊倒。
+- Rule 40 調整：test-multi-target-promote-order、test-fragile-shell-dragapult-fullflow、test-v6215（B2 順序、L 段改用警備濁霧造排隊）、test-v6375／v6376（搬移 harness；A8 獎賞 3→2）、engine-strip-v6421。
+- 新增 test-v6490（G1～G10）；BASE 紅 5 條、修正前版本紅 4 條；突變：isZombieKO 例外、延後恆 false、讀錯快照、7226 反擊旗標閘、鏡射道具跳過、借招 afterKoKeys 皆殺；_v6490AtkInst 改回讀戰鬥位存活（卡池目前沒有「自換＋白蕾雅／巴貝娜／貪婪食客／光之翼」組合，屬目前不可觸發）。
+- 已知未做：退化光線「傷害當下未致死、退化後才致死」仍由 sanityKOSweep 結算（簡化獎賞，與 v6.489 相同）；攻擊方被反彈 KO 仍用簡化獎賞（既有）。
+
 ## v6.489：被動特性不給按鈕＋悉心治癒改放置觸發（2026-10-06，站長回報 bug 1／2）
 
 BASE v6.488（9ee0cac1）。

@@ -222,6 +222,12 @@ function dmgCase(MOD, opts) {
   // 「被主動移除」：把昏厥進棄牌區的持有者改搬到手牌／牌庫（純 harness 操作，不碰 src）
   if (opts.move) {
     const dp = { ...r.players[1] };
+    // ⭐v6.490（Rule 40）：昏厥改在招式效果（含選擇視窗）全部結束後才結算 ⇒ 視窗開著時持有者以 HP≤0 暫留戰鬥場、
+    //   還沒進棄牌區。意圖（「被效果主動移除」的持有者不生效）不變 ⇒ 兩種位置都照樣搬（戰鬥場的直接搬走）。
+    if (dp.active && String(dp.active.cardId) === String(opts.moveCardId) && !dp.discard.some(c => String(c.cardId) === String(opts.moveCardId))) {
+      dp.discard = [...dp.discard, dp.active];
+      dp.active = null;
+    }
     const i = dp.discard.findIndex(c => String(c.cardId) === String(opts.moveCardId));
     if (i >= 0) {
       const moved = dp.discard[i];
@@ -264,6 +270,12 @@ function confuseCase(MOD, opts) {
   if (r?.__err) return { confused: -999, err: r.__err };
   if (opts.move) {
     const dp = { ...r.players[1] };
+    // ⭐v6.490（Rule 40）：昏厥改在招式效果（含選擇視窗）全部結束後才結算 ⇒ 視窗開著時持有者以 HP≤0 暫留戰鬥場、
+    //   還沒進棄牌區。意圖（「被效果主動移除」的持有者不生效）不變 ⇒ 兩種位置都照樣搬（戰鬥場的直接搬走）。
+    if (dp.active && String(dp.active.cardId) === String(MUMA.id) && !dp.discard.some(c => String(c.cardId) === String(MUMA.id))) {
+      dp.discard = [...dp.discard, dp.active];
+      dp.active = null;
+    }
     const i = dp.discard.findIndex(c => String(c.cardId) === String(MUMA.id));
     if (i >= 0) {
       const moved = dp.discard[i];

@@ -48,6 +48,10 @@ const V6421_PAIRS = [
  */
 export function stripV6421Engine(src) {
   let t = String(src);
+  // ⭐v6.490（Rule 40）：v6.490 在 isZombieKO（本版的哨兵區塊內）合法插了一段「_pendingAttackKo 受害者不算殭屍」，
+  //   由自己的哨兵 v6490-zombie-pending-exempt 框住、由 test-v6490 守。先把它剝掉，第 1 組錨點才比得到 v6.421 的原樣。
+  //   只認這一個哨兵名、整段（含哨兵行）移除；不存在時不動（不讓本還原器綁死在 v6.490）。
+  t = t.replace(/  \/\/ >>> v6490-zombie-pending-exempt\n[\s\S]*?  \/\/ <<< v6490-zombie-pending-exempt\n/, '');
   for (let i = 0; i < V6421_PAIRS.length; i++) {
     const [cur, base] = V6421_PAIRS[i];
     const hits = t.split(cur).length - 1;

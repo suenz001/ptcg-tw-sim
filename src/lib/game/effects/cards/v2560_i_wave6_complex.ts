@@ -18,7 +18,7 @@
 import type { CardInstance, PlayerState } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
 import {
-  regPre, regPost, regR,
+  regPre, regPost, regR, regAfterKO,
   addLog, updatePlayer, withPending,
 } from '../_shared';
 import { joinCardNames } from '../_shared';
@@ -32,19 +32,13 @@ import { coinHeadsDiscardOppEnergyPost } from '../../effects'; // ⭐v6.388a 擲
 // 1. 瑪夏多|暗影側踢 60 + 若 KO 對手 → 下回合免疫招式
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('瑪夏多|暗影側踢', (s) => ({ state: s, damage: 60 }));
-regPost('瑪夏多|暗影側踢', (state, aIdx, _pool) => {
-  // 在 ATTACK_POST 階段，傷害已套用；判斷對手 active 是否變成 KO（damage >= effective HP）
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  if (!def) {
-    // 對手 active 已被 KO 移除（傷害足夠擊倒）
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const att = { ...players[aIdx] };
-    if (att.active) att.active = { ...att.active, immuneToAllAttackNextTurn: true };
-    players[aIdx] = att;
-    return addLog({ ...state, players }, '暗影側踢：成功擊倒對手 → 下回合免疫招式傷害', aIdx);
-  }
-  return state;
+// ⭐v6.490：昏厥改在招式效果全部結束後才結算 ⇒ 改登記 ATTACK_AFTER_KO（引擎只在這一招真的讓對手昏厥後才呼叫）。
+regAfterKO('瑪夏多|暗影側踢', (state, aIdx, _pool) => {
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const att = { ...players[aIdx] };
+  if (att.active) att.active = { ...att.active, immuneToAllAttackNextTurn: true };
+  players[aIdx] = att;
+  return addLog({ ...state, players }, '暗影側踢：成功擊倒對手 → 下回合免疫招式傷害', aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

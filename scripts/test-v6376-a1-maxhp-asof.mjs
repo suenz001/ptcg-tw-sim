@@ -242,6 +242,12 @@ function sambaPick(MOD, o) {
   // 「被主動移除」：把昏厥進棄牌區的持有者改搬到手牌／牌庫（純 harness 操作，不碰 src）
   if (o.move) {
     const dp = { ...r.players[1] };
+    // ⭐v6.490（Rule 40）：昏厥改在招式效果（含選擇視窗）全部結束後才結算 ⇒ 持有者可能還以 HP≤0 暫留戰鬥場；
+    //   意圖（被效果主動移除的持有者不算數）不變 ⇒ 戰鬥場的也照樣搬走。
+    if (dp.active && String(dp.active.cardId) === String(SAMBA.id) && !dp.discard.some(c => String(c.cardId) === String(SAMBA.id))) {
+      dp.discard = [...dp.discard, dp.active];
+      dp.active = null;
+    }
     const i = dp.discard.findIndex(c => String(c.cardId) === String(SAMBA.id));
     if (i >= 0) {
       const moved = dp.discard[i];
@@ -424,8 +430,11 @@ chk('A6c ⭐⭐**數值鎖**：持有者被同一招打死時，救回來的是�
 chk('A7 ⭐⭐零變更（v6.375 的教訓）：兩隻持有者、只死一隻（另一隻還活著）⇒ live 那一半本來就成立 '
   + '⇒ 備戰 2 隻存活、獎賞 1 張',
   H.sb_dup_ko === B2(2, 1), 'got=' + H.sb_dup_ko + ' want=' + B2(2, 1));
-chk('A8 ⭐⭐主動移除反對照：持有者被搬到**手牌／牌庫** ⇒ **不**算數（備戰全滅、獎賞 3 張）',
-  H.sb_hand === B2(0, 3) && H.sb_deck === B2(0, 3), JSON.stringify([H.sb_hand, H.sb_deck]));
+// ⭐v6.490（Rule 40）：昏厥改在招式效果全部結束後才結算 ⇒ 持有者在昏厥結算前就被效果搬走（手牌／牌庫）時，
+//   它根本沒有昏厥 ⇒ 少了它那 1 張獎賞（3 → 2，與官方 L889-892「效果先、昏厥後」一致）。
+//   本條的意圖（被主動移除的持有者**不**算數 ⇒ 備戰全滅）不變，照樣斷言備戰 0 隻。
+chk('A8 ⭐⭐主動移除反對照：持有者被搬到**手牌／牌庫** ⇒ **不**算數（備戰全滅；持有者沒有昏厥 ⇒ 獎賞 2 張）',
+  H.sb_hand === B2(0, 2) && H.sb_deck === B2(0, 2), JSON.stringify([H.sb_hand, H.sb_deck]));
 chk('A9 ⭐⭐特性消除反對照：【傳說的熔岩洞】消除進化寶可夢特性（樂天河童是 2 階）⇒ **不**生效；'
   + '持有者活著時同樣不生效',
   H.sb_cave === B2(0, 3) && H.sh_cave === B2(0, 2) && H.sb_cave_stay === B2(1, 1),
@@ -612,7 +621,8 @@ if (!hasBaseCommit(ROOT, BASE)) {
       && B.sb_amt_ko === H.sb_amt_ko,
       JSON.stringify([B.sb_alive_active, B.sb_stay_bench, B.sb_none, B.sh_alive, B.sh_none]));
     chk('E8 ⭐⭐零變更：被主動移除（手牌／牌庫）與特性被消除（熔岩洞）⇒ BASE 與 HEAD 都不生效',
-      B.sb_hand === H.sb_hand && B.sb_deck === H.sb_deck && B.sb_cave === H.sb_cave
+      // ⭐v6.490（Rule 40）：手牌／牌庫兩案只比「備戰隻數」（獎賞張數因昏厥時機改變而合法不同，見 A8）
+      Math.floor(B.sb_hand / 100) === Math.floor(H.sb_hand / 100) && Math.floor(B.sb_deck / 100) === Math.floor(H.sb_deck / 100) && B.sb_cave === H.sb_cave
       && B.sh_cave === H.sh_cave && B.sb_cave_stay === H.sb_cave_stay,
       JSON.stringify([B.sb_hand, B.sb_deck, B.sb_cave, B.sh_cave, B.sb_cave_stay]));
     chk('E9 ⭐⭐⭐零變更：(甲) 加傷 8 張的**每一個**情境 BASE 與 HEAD 逐條相同'

@@ -59,6 +59,7 @@ import {
   // Register functions
   reg, regR, regG,
   regPre, regPost, regA,
+  regAfterKO,   // ⭐v6.490
   // Public
   canPlayTrainer,
   // Helpers
@@ -122,6 +123,7 @@ export {
   TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD,
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_FIRE_AFTER_ATTACK_EFFECT,     // v6.215
+  TOOL_ON_KO_MIRRORED_FROM_DAMAGED,  // ⭐v6.490 engine 延後昏厥時跳過鏡射道具（已在傷害當下觸發）
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   TOOL_ATTACH_GATE, TOOL_END_TURN_DISCARD,
 };
@@ -9294,6 +9296,9 @@ export function fireDefenderOnKO(
   //   （卡面寫「受到…傷害時」，見 TOOL_ON_KO_MIRRORED_FROM_DAMAGED），
   //   不跳過就會同一次傷害觸發兩次。預設 false＝維持既有呼叫端行為。
   onDamagedAlreadyFired: boolean = false,
+  // ⭐v6.490：使用招式的寶可夢（攻擊當下的 iid）。昏厥改在招式效果之後結算時，攻擊方可能已被自己的招式換到備戰區
+  //   （急速折返類）⇒ 不可以再用「此刻的戰鬥位」認人。沒給時維持原行為（此刻的戰鬥位）。
+  attackerIid?: string,
 ): GameState {
   // v5.573：收斂「戰鬥位被招式 KO」時的防守方 on-KO 機制——原本只有引擎主管線觸發，
   //   走中央 helper dealAttackDamageToTarget / inline 傷害 resolver 的招式 KO 戰鬥位時會漏。
@@ -9356,7 +9361,7 @@ export function fireDefenderOnKO(
       // ⭐ v6.260：備戰被 KO 時只觸發卡面沒有「在戰鬥場」的道具（目前僅希望護身符）。
       if (!isActive && !TOOL_ON_KO_BENCH_ALSO.has(tool.name)) continue;
       const fn = TOOL_ON_KO.get(tool.name);
-      if (fn) s = fn(s, dIdx, aIdx, pool, koInst, s.players[aIdx].active?.iid);  // v6.215 攻擊方 iid 快照
+      if (fn) s = fn(s, dIdx, aIdx, pool, koInst, attackerIid ?? s.players[aIdx].active?.iid);  // v6.215 攻擊方 iid 快照（⭐v6.490 優先用呼叫端給的）
     }
   }
   if (koByAttackDamage) {
@@ -9408,7 +9413,7 @@ export function fireDefenderOnKO(
   //   ⚠ **刻意放在「if (koByAttackDamage)」區塊外面**：卡面條件「受到…**傷害**而昏厥」的 gate
   //     全站只留 firePassiveOnKoAfterPrize 裡那一份（與 engine 主管線共用同一支）。
   //     放在區塊裡的話那道 gate 會變成到不了的死碼 ＝ 安慰劑（__m6a/mutcheck_v6355.mjs M8 釘住）。
-  s = firePassiveOnKoAfterPrize(s, dIdx, aIdx, pool, koInst, isActive, koByAttackDamage);
+  s = firePassiveOnKoAfterPrize(s, dIdx, aIdx, pool, koInst, isActive, koByAttackDamage, attackerIid);
   return s;
 }
 
@@ -9803,6 +9808,56 @@ export function applyPreventKOToVictim(   // ⭐v6.260 export：mega_decks olive
   return { prevented: false, state: workState };
 }
 
+// >>> v6490-ko-target-after-attack-damage
+/**
+ * ⭐v6.490 「受到招式的傷害、已達昏厥」的寶可夢做昏厥結算（獎賞修正、無限之影、TOOL_ON_KO／on-KO 特性、奇跡之吻、終局）。
+ *   原本是 dealAttackDamageToTarget 內聯的一段；抽出後 dealAttackDamageToTarget 與
+ *   engine.drainPendingAttackKo（受害者被招式效果換到備戰區後才昏厥）共用同一份（Rule 38）。
+ * @param targetNow 受害者實體（damage 已是含這一下的最終值）；必須在 actorIdx 的對手場上（戰鬥場或備戰區）。
+ */
+export function koTargetAfterAttackDamage(
+  st: GameState, actorIdx: 0 | 1, targetNow: CardInstance, pool: Map<string, Card>,
+  opts: { kind?: DamageKind; label: string; suffix?: string; onDamagedFired: boolean; attackerIid?: string },
+): GameState {
+  const kind = opts.kind ?? 'attack-damage';
+  const label = opts.label;
+  const _fSuffix = opts.suffix ?? '';
+  const _onDamagedFired = opts.onDamagedFired;
+  const dIdx = (1 - actorIdx) as 0 | 1;
+  const defenderNow = st.players[dIdx];
+  const targetIid = targetNow.iid;
+  const isActive = defenderNow.active?.iid === targetIid;
+  if (!isActive && !defenderNow.bench.some(c => c.iid === targetIid)) return st;
+  const targetCard = pool.get(targetNow.cardId);
+  const newDmg = targetNow.damage;
+  // v5.934 無限之影中央收斂：受【對手】招式【傷害】KO(kind==='attack-damage' && dIdx!==actorIdx) → 本體+進化鏈回手;放指示物(attack-effect)/自傷不觸發
+  const _isk = resolveInfiniteShadowKo(targetNow, pool, kind === 'attack-damage' && dIdx !== actorIdx && !_calmGroundBlocks(st, dIdx, pool), st, dIdx, isActive ? 'active' : 'bench');
+  const ko: CardInstance[] = _isk.toDiscard;
+  const _ko = koPrizesAdjusted(st, targetNow, targetCard, actorIdx, dIdx, pool, kind === 'attack-damage');
+  st = _ko.state;
+  const p = _ko.prizes;
+  const players = [...st.players] as [PlayerState, PlayerState];
+  const newDefender = { ...defenderNow, discard: [...defenderNow.discard, ...ko] };
+  if (_isk.toHand.length > 0) newDefender.hand = [...defenderNow.hand, ..._isk.toHand];
+  if (isActive) newDefender.active = null;
+  else newDefender.bench = defenderNow.bench.filter(c => c.iid !== targetIid);
+  players[dIdx] = newDefender;
+  let s = addLog({ ...st, players }, `${label}：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。${_fSuffix}`, null);
+  if (_isk.toHand.length > 0) s = addLog(s, `無限之影：${targetCard?.name ?? '?'} 因對手招式的傷害【昏厥】→ 本體與進化來源卡放回手牌（附加能量/道具丟棄）`, dIdx);
+  s = recordOppKO(s, dIdx, targetCard, 'attack', kind === 'attack-damage');
+  // v5.495：被 KO 觸發附加道具 TOOL_ON_KO（沉重接力棒移能量 / 希望護身符抽牌）——
+  //   中央 helper 原漏呼叫，導致狙擊/分配招式 KO 帶接力棒的寶可夢時能量直接消失。
+  s = fireDefenderOnKO(s, dIdx, actorIdx, pool, targetNow, isActive, kind === 'attack-damage', _onDamagedFired, opts.attackerIid);
+  if (s.phase === 'game-over') return s;
+  // v5.830：對手戰鬥位被狙擊/延後傷害 KO → 攻擊方「奇跡之吻」擲幣+1(卡面「對手戰鬥寶可夢昏厥時」不分主傷害/狙擊)。
+  if (isActive) s = applyMiracleKissOnOppActiveKO(s, actorIdx, pool);
+  if (isActive && newDefender.bench.length === 0) {
+    return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defenderNow.name} 沒有可上場的寶可夢` };
+  }
+  return addPendingPrize(s, actorIdx, p, pool);
+}
+// <<< v6490-ko-target-after-attack-damage
+
 export function dealAttackDamageToTarget(
   st: GameState,
   actorIdx: 0 | 1,
@@ -10063,31 +10118,9 @@ export function dealAttackDamageToTarget(
       const _pk = applyPreventKOToVictim(st, targetNow, targetCard, dIdx, effDmg, pool, kind);
       if (_pk.prevented) return _pk.state;
     }
-    // v5.934 無限之影中央收斂：受【對手】招式【傷害】KO(kind==='attack-damage' && dIdx!==actorIdx) → 本體+進化鏈回手;放指示物(attack-effect)/自傷不觸發
-    const _isk = resolveInfiniteShadowKo({ ...targetNow, damage: newDmg }, pool, kind === 'attack-damage' && dIdx !== actorIdx && !_calmGroundBlocks(st, dIdx, pool), st, dIdx, isActive ? 'active' : 'bench');
-    const ko: CardInstance[] = _isk.toDiscard;
-    const _ko = koPrizesAdjusted(st, targetNow, targetCard, actorIdx, dIdx, pool, kind === 'attack-damage');
-    st = _ko.state;
-    const p = _ko.prizes;
-    const players = [...st.players] as [PlayerState, PlayerState];
-    const newDefender = { ...defenderNow, discard: [...defenderNow.discard, ...ko] };
-    if (_isk.toHand.length > 0) newDefender.hand = [...defenderNow.hand, ..._isk.toHand];
-    if (isActive) newDefender.active = null;
-    else newDefender.bench = defenderNow.bench.filter(c => c.iid !== targetIid);
-    players[dIdx] = newDefender;
-    let s = addLog({ ...st, players }, `${label}：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。${_fSuffix}`, null);
-    if (_isk.toHand.length > 0) s = addLog(s, `無限之影：${targetCard?.name ?? '?'} 因對手招式的傷害【昏厥】→ 本體與進化來源卡放回手牌（附加能量/道具丟棄）`, dIdx);
-    s = recordOppKO(s, dIdx, targetCard, 'attack', kind === 'attack-damage');
-    // v5.495：被 KO 觸發附加道具 TOOL_ON_KO（沉重接力棒移能量 / 希望護身符抽牌）——
-    //   中央 helper 原漏呼叫，導致狙擊/分配招式 KO 帶接力棒的寶可夢時能量直接消失。
-    s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive, kind === 'attack-damage', _onDamagedFired);
-    if (s.phase === 'game-over') return s;
-    // v5.830：對手戰鬥位被狙擊/延後傷害 KO → 攻擊方「奇跡之吻」擲幣+1(卡面「對手戰鬥寶可夢昏厥時」不分主傷害/狙擊)。
-    if (isActive) s = applyMiracleKissOnOppActiveKO(s, actorIdx, pool);
-    if (isActive && newDefender.bench.length === 0) {
-      return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defenderNow.name} 沒有可上場的寶可夢` };
-    }
-    return addPendingPrize(s, actorIdx, p, pool);
+    // ⭐v6.490：昏厥結算段抽成 koTargetAfterAttackDamage（引擎延後結算「被效果換到備戰區的受害者」共用同一支）
+    return koTargetAfterAttackDamage(st, actorIdx, { ...targetNow, damage: newDmg }, pool,
+      { kind, label, suffix: _fSuffix, onDamagedFired: _onDamagedFired });
   }
   const players = [...st.players] as [PlayerState, PlayerState];
   const newDefender = { ...defenderNow };
@@ -13086,7 +13119,8 @@ regPost('大電海燕|風力充能', setSelfDamageBonusPendingPost(120, '風力�
 function bonusPrizeIfKOPost(bonus: number, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
-    if (state.players[dIdx].active !== null) return state;
+    // ⭐v6.490：改由 ATTACK_AFTER_KO 呼叫（只在這一招真的讓對手昏厥後）⇒ 不再用「對手戰鬥場是空的」判斷
+    //   （受害者可能是被效果換到備戰區後才昏厥，戰鬥場另有其人）。
     // ⭐⭐v6.346 修正「自 v5.466 起的死碼」：原條件是「待取獎賞數 <= 0 就 return」，
     //   但 v5.466「自動給獎賞」之後 pendingPrizes **恆為 0**（獎賞在 KO 當下就直接進手牌）
     //   ⇒ 這個 helper 從那時起完全不生效（實測 鐵臂膀ex｜感激放大 KO 後只取 1 張，應為 2）。
@@ -13131,7 +13165,8 @@ function defCantAttackIfSubtypePost(
 }
 
 // 鐵臂膀ex｜感激放大 — 120 傷害，若 KO → +1 獎賞卡
-regPost('鐵臂膀ex|感激放大', bonusPrizeIfKOPost(1, '感激放大'));
+// ⭐v6.490：改登記 ATTACK_AFTER_KO（昏厥在招式效果全部結束後才結算；引擎只在真的昏厥後呼叫）
+regAfterKO('鐵臂膀ex|感激放大', bonusPrizeIfKOPost(1, '感激放大'));
 // ⭐v6.346 M6a 060/103 未知圖騰｜神秘信號 [P,P] 40 —— 卡面與 感激放大 逐字相同：
 //   「若對手的寶可夢因這個招式的傷害而【昏厥】了，則多獲得1張獎賞卡。」
 //   ⚠⚠ 條件是「因這個招式的**傷害**而昏厥」—— 招式**效果**造成的昏厥不算
@@ -13140,7 +13175,7 @@ regPost('鐵臂膀ex|感激放大', bonusPrizeIfKOPost(1, '感激放大'));
 //     就是這條判準 —— 效果 KO（例如放指示物打死）不加碼。
 //   ⚠ 取獎賞一律走中央 addPendingPrize（helper 內），禁自己動 prizes 陣列。
 //   ⚠ 40 點傷害由引擎讀卡面，不寫 regPre。
-regPost('未知圖騰|神秘信號', bonusPrizeIfKOPost(1, '神秘信號'));
+regAfterKO('未知圖騰|神秘信號', bonusPrizeIfKOPost(1, '神秘信號'));   // ⭐v6.490 同上
 
 // 鐵包袱｜冷卻噴射 — 80 傷害，若對手為進化寶可夢 → 下回合無法使用招式
 regPost('鐵包袱|冷卻噴射', defCantAttackIfSubtypePost('evolved', '冷卻噴射'));
@@ -18364,6 +18399,7 @@ export function firePassiveOnKoAfterPrize(
   koInst: CardInstance,
   isActive: boolean,
   koByAttackDamage: boolean,
+  attackerIid?: string,   // ⭐v6.490 使用招式的寶可夢（攻擊當下的 iid）；沒給時＝此刻的戰鬥位（原行為）
 ): GameState {
   // >>> v6416-onko-gate-diagnostics
   // ⭐⭐⭐v6.416（站長裁示）：這四道 gate 原本**一個字都不寫 log**。
@@ -18405,7 +18441,7 @@ export function firePassiveOnKoAfterPrize(
     }
     queued.push({
       ability: ab.name, dIdx, aIdx, koInst,
-      attackerIid: state.players[aIdx].active?.iid,
+      attackerIid: attackerIid ?? state.players[aIdx].active?.iid,
     });
   }
   // <<< v6416-onko-gate-diagnostics

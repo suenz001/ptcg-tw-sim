@@ -220,11 +220,13 @@ console.log('\n【D】M6a 的 H/I/J 卡：有效果的招式未實裝必須是 0
   let missing = [], scanned = 0, regSize = 0;
   try {
     writeFileSync(E3, "export { ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE }"
-      + " from './src/lib/game/effects/_shared';\nimport './src/lib/game/effects';\n");
+      + " from './src/lib/game/effects/_shared';\nimport './src/lib/game/effects';\n"
+      // ⭐v6.490：ATTACK_AFTER_KO（「這個招式讓對手昏厥」才發生的效果）也算已實裝；namespace 匯出 ⇒ BASE 沒有時讀成空的（Rule 41）
+      + "export * as SHV6490 from './src/lib/game/effects/_shared';\n");
     await build({ entryPoints: [E3], outfile: O3, bundle: true, format: 'esm', platform: 'node',
       target: 'node20', alias: { $lib: join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'silent' });
     const R = await import(pathToFileURL(O3).href + '?t=' + Date.now());
-    const ak = new Set([...R.ATTACK_PRE.keys(), ...R.ATTACK_POST.keys(),
+    const ak = new Set([...R.ATTACK_PRE.keys(), ...R.ATTACK_POST.keys(), ...(R.SHV6490?.ATTACK_AFTER_KO?.keys() ?? []),
       ...(R.ATTACK_PRE_DISCARD_CHOICE ? R.ATTACK_PRE_DISCARD_CHOICE.keys() : [])]);
     regSize = ak.size;
     for (const c of M6A) {

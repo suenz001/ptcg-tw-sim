@@ -1019,6 +1019,18 @@ export interface GameState {
   /** v5.678：招式以 picker 收尾時，跨 RESOLVE_SELECTION 保留回力鏢/燃料火 revive 快照。 */
   _pendingAttackEnergyRevive?: { aIdx: 0 | 1; boomIids: string[]; boomActiveIid: string; fuelIids: string[] };
   /**
+   * ⭐⭐⭐v6.490「招式效果全部結束後才判定昏厥」：致死傷害已寫在 victimIid 身上、它以 HP≤0 暫留場上，
+   *   等招式效果（ATTACK_POST 與它開出的選擇視窗鏈）全部結束，由 engine.drainPendingAttackKo 結算昏厥。
+   *   存在期間 isZombieKO 對 victimIid 回 false（sanityKOSweep 等收斂點不會先用簡化版把它掃掉）。
+   *   純資料（Firestore 可序列化、無巢狀陣列）。peakTypeInst＝造成傷害前的被攻擊實體（傳說的山頂判【無】沿用）。
+   */
+  _pendingAttackKo?: {
+    aIdx: 0 | 1; dIdx: 0 | 1; victimIid: string; attackerIid?: string; attackerCardId: string;
+    baseDamage: number; peakTypeInst: CardInstance | null; effectKey: string;
+    /** 借招鏈（欺詐／揮指…）：使用者自己的 key ＋ 借來的各層 key；昏厥後逐一查 ATTACK_AFTER_KO（純字串陣列，非巢狀）。 */
+    afterKoKeys?: string[];
+  };
+  /**
    * ⭐⭐ v6.362 站長裁定 A-1：賽富豪｜歡慶
    * 「若自己的手牌為30張，則獲得2張自己的獎賞卡。**然後**，將自己的手牌全部放回牌庫並重洗。」
    * 取獎時場上若有**正面朝上**的獎賞卡（克雷色利亞｜弦月光芒 翻的／火箭隊的妨礙機器人 換的），

@@ -122,7 +122,9 @@ console.log('── B) 批1 幸運頭盔 × 磨庫招式（KO 分支）───
   st = mod.applyAction(st, { type: 'ATTACK', attackIndex: 0, actorIdx: 0 }, pool);
   ok(st.log.some(l => l.message.includes('被擊倒')), 'B0 確實走 KO 分支');
   eq(ids(st.players[1].hand), 'dkD,dkE', 'B1 KO 分支也是「先磨庫、後抽牌」');
-  ok(ids(st.players[1].discard).endsWith('dkA,dkB,dkC'), `B2 KO 分支棄牌尾端為 A,B,C｜實際=${ids(st.players[1].discard)}`);
+  // ⭐v6.490（Rule 40）：昏厥改在招式效果之後才結算 ⇒ 棄牌順序變成「先磨庫 A,B,C、後被擊倒的寶可夢與道具」
+  //   （原本 KO 先進棄牌區，所以 A,B,C 在尾端）。意圖（A,B,C 是磨庫丟的、沒有被抽走）不變。
+  ok(ids(st.players[1].discard).startsWith('dkA,dkB,dkC,'), `B2 KO 分支：先磨庫 A,B,C、後才是被擊倒的寶可夢｜實際=${ids(st.players[1].discard)}`);
   const li = st.log.map(l => l.message);
   ok(li.findIndex(m => m.includes('粉碎頭：對手牌庫頂')) < li.findIndex(m => m.includes('幸運頭盔：抽 2 張')),
      'B3 KO 分支 log 順序：招式效果先於幸運頭盔');
@@ -427,7 +429,9 @@ console.log('── M) 批2 手持循環扇在 KO 分支也要延後、也要帶
               P('P1', { active: mon(C.koupa, 'def', { toolAttached: { iid: 'tool1', cardId: C.fan } }),
                         bench: [mon(C.hydre, 'db1')], deck: DECK5() }));
   st = mod.applyAction(st, { type: 'ATTACK', attackIndex: 0, actorIdx: 0 }, pool);
-  ok(st.log.some(l => l.message.includes('被擊倒')), 'M1 確實走 KO 分支');
+  // ⭐v6.490（Rule 40）：昏厥改在招式效果（含延後觸發的受傷道具視窗）全部結束後才結算 ⇒ 此刻受害者是「待結算」，
+  //   手持循環扇的視窗解完才被擊倒（M6）。意圖（KO 情境也延後、也帶 iid 快照）不變。
+  ok(st.log.some(l => l.message.includes('被擊倒')) || st._pendingAttackKo?.victimIid === 'def', 'M1 確實是致死一擊（已擊倒或待招式效果結束後結算）');
   eq(st.pendingSelection?.effectKey ?? null, 'cycle-fan-step1-pick-energy', 'M2 KO 分支也會觸發手持循環扇');
   eq(st.pendingSelection?.params?.attackerIid ?? null, 'atk', 'M3 ⭐ KO 分支的觸發也帶攻擊當下的 iid 快照');
   const li = st.log.map(l => l.message);
@@ -436,33 +440,36 @@ console.log('── M) 批2 手持循環扇在 KO 分支也要延後、也要帶
   st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: ['ae1'], token: st.pendingSelection?.token }, pool);
   st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: ['ab1'], token: st.pendingSelection?.token }, pool);
   eq(ids(st.players[0].bench[0]?.energyAttached), 'ae1', 'M5 能量確實改附到攻擊方備戰');
+  ok(st.log.some(l => l.message.includes('被擊倒')) && !st._pendingAttackKo, 'M6 ⭐v6.490 視窗解完後才被擊倒（不殘留待結算）');
 }
 
 console.log('── L) 沒登記 refresher 的排隊 picker 必須照常浮上來（正對照）───────');
 {
   // ⚠ engine 的 pop 迴圈裡 `if (!_refresh) { _picked = cand; break; }` 若寫成 continue，
   //   所有**沒登記 refresher** 的排隊 picker 都會被無聲吃掉。這一段就是那條分支的正對照。
-  // 盤面：防守方帶【希望護身符】（TOOL_ON_KO、**不在**延後名單）被 KO ⇒ 它先開 deck-search；
-  //   攻擊方的招式 POST（君主蛇ex｜青草命令）再 withPending ⇒ 排到隊尾，且該 effectKey 沒登記 refresher。
+  // ⭐v6.490（Rule 40）：原盤面是「防守方帶【希望護身符】被 KO ⇒ 它先開 deck-search、招式 POST 排隊尾」。
+  //   昏厥改在招式效果全部結束後才結算 ⇒ 希望護身符改在招式的視窗解完之後才觸發，那個盤面不會再排隊。
+  //   意圖（沒登記 refresher 的排隊 picker 必須浮上來）不變 ⇒ 換成「傷害當下就開視窗」的來源：
+  //   防守方 火箭隊的瓦斯彈｜警備濁霧（受到傷害時從自己的牌庫找「瓦斯彈」放備戰）先開，招式 POST 排隊尾。
   let SERP = null, si = -1;
   for (const [id, c] of pool) {
     const i = (c.attacks ?? []).findIndex(a => a.name === '青草命令');
     if (c.name === '君主蛇ex' && i >= 0) { SERP = id; si = i; break; }
   }
-  const CHARM = [...pool].find(([, c]) => c.name === '希望護身符')?.[0] ?? null;
-  ok(SERP !== null && CHARM !== null, 'L0 fixture：君主蛇ex｜青草命令 ＋ 希望護身符');
-  if (SERP && CHARM) {
+  const GAS = [...pool].find(([, c]) => (c.abilities ?? []).some(a => a.name === '警備濁霧'))?.[0] ?? null;
+  ok(SERP !== null && GAS !== null, 'L0 fixture：君主蛇ex｜青草命令 ＋ 火箭隊的瓦斯彈｜警備濁霧');
+  if (SERP && GAS) {
     const GRASS2 = eName('基本【草】能量');
     let st = ST(P('P0', { active: mon(SERP, 'atk', { energyAttached: [en(GRASS2, 'g1'), en(GRASS2, 'g2'), en(GRASS2, 'g3'), en(GRASS2, 'g4')] }),
                           bench: [mon(C.hydre, 'ab1')], deck: [en(DARK, 'sd1'), en(DARK, 'sd2'), en(DARK, 'sd3')] }),
-                P('P1', { active: mon(C.koupa, 'def', { toolAttached: { iid: 'charm1', cardId: CHARM } }),
-                          bench: [mon(C.hydre, 'db1')], deck: [en(DARK, 'dd1'), en(DARK, 'dd2')] }));
+                P('P1', { active: mon(GAS, 'def'),
+                          bench: [mon(C.hydre, 'db1')], deck: [mon(GAS, 'gd1'), en(DARK, 'dd2')] }));
     st = mod.applyAction(st, { type: 'ATTACK', attackIndex: si, actorIdx: 0 }, pool);
-    ok(st.log.some(l => l.message.includes('被擊倒')), 'L1 確實 KO（走 KO 分支）');
-    eq(st.pendingSelection?.effectKey ?? null, 'search-to-hand-reshuffle', 'L2 希望護身符（未延後）先開');
+    const first = st.pendingSelection?.effectKey ?? null;
+    ok(first !== null && first !== 'wave9-take-any-from-deck', `L1 警備濁霧（傷害當下）先開｜實際=${first}`);
     eq((st.pendingChainQueue ?? []).map(q => q.effectKey).join(','), 'wave9-take-any-from-deck',
        'L3 招式自己的 picker 排在隊尾，且該 effectKey **沒有**登記 refresher');
-    st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: [], token: st.pendingSelection?.token }, pool);
+    st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: [], token: st.pendingSelection?.token, actorIdx: 1, senderIdx: 1 }, pool);
     eq(st.pendingSelection?.effectKey ?? null, 'wave9-take-any-from-deck',
        'L4 ⭐ 沒登記 refresher 的排隊 picker 必須照常浮上來（不得被 pop 迴圈吃掉）');
   }

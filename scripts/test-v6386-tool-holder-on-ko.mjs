@@ -158,7 +158,7 @@ const DARK5 = () => [1, 2, 3, 4, 5].map(i => en(DARK, 'ae' + i));
  * @param def   防守方（holder）卡 id
  * @param tool  holder 身上的道具 id（null ⇒ 不帶道具）
  */
-function hit(M, atk, def, tool) {
+function hit(M, atk, def, tool, ai = 0) {
   const st = ST(
     PL('P0', { active: mon(atk, 'atk', { energyAttached: DARK5() }), bench: [mon(String(HYD.id), 'ab1')], deck: DECK5() }),
     PL('P1', {
@@ -167,7 +167,7 @@ function hit(M, atk, def, tool) {
     }),
   );
   try {
-    const s = M.applyAction(st, { type: 'ATTACK', attackIndex: 0, actorIdx: 0 }, pool);
+    const s = M.applyAction(st, { type: 'ATTACK', attackIndex: ai, actorIdx: 0 }, pool);
     const a = s.players[0].active;
     return {
       ko: s.log.some(l => String(l.message ?? '').includes('被擊倒')),
@@ -367,19 +367,29 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
     cpSync(join(ROOT, 'src'), baseSrc, { recursive: true });
     writeFileSync(join(baseSrc, 'lib/game/effects/cards/tools.ts'), bBlob.out);
     const B = await bundleFrom(baseSrc, 'base');
-    const bA_ko = hit(B, String(HYD.id), String(MEW.id), ID.HYPNO);
+    // ⭐v6.490（Rule 40）：昏厥改在招式效果之後才結算後，**有招式效果**的致死一擊（粉碎頭有磨庫效果）會在
+    //   傷害當下就跑 TOOL_ON_DAMAGED（holder 還在戰鬥場）⇒ 走不到本守衛要驗的 TOOL_ON_KO（koInst）路徑。
+    //   意圖（BASE 的 TOOL_ON_KO 把 koInst 丟掉 ⇒ KO 情境不觸發）不變 ⇒ F2／F3 改用**沒有招式效果**的致死一擊：
+    //   三首惡龍｜漆黑之牙 140（卡面無效果文字）×弱點 2 = 280 ≥ 280，當場結算、走 TOOL_ON_KO。
+    const FANG = byId('19693');
+    chk('F0b fixture：三首惡龍｜漆黑之牙 140、無效果文字（attackIndex 1）',
+      FANG?.attacks?.[1]?.name === '漆黑之牙' && String(FANG.attacks[1].damage) === '140' && !(FANG.attacks[1].effect ?? '').trim(),
+      JSON.stringify(FANG?.attacks?.[1] ?? null));
+    const hA_ko2 = hit(HEAD, String(FANG.id), String(MEW.id), ID.HYPNO, 1);
+    const hB_ko2 = hit(HEAD, String(FANG.id), String(MEW.id), ID.INSUR, 1);
+    const bA_ko = hit(B, String(FANG.id), String(MEW.id), ID.HYPNO, 1);
     const bA_nk = hit(B, String(KOU.id), String(MEW.id), ID.HYPNO);
-    const bB_ko = hit(B, String(HYD.id), String(MEW.id), ID.INSUR);
+    const bB_ko = hit(B, String(FANG.id), String(MEW.id), ID.INSUR, 1);
     const bB_nk = hit(B, String(KOU.id), String(MEW.id), ID.INSUR);
     chk('F1 哨兵：BASE bundle 是活的（非 KO 情境照樣綠，不是整支爆掉造成的「全紅」）',
       bA_nk.atkStatus === 'asleep' && bB_nk.defHand === 3,
       JSON.stringify({ st: bA_nk.atkStatus, hand: bB_nk.defHand, e1: bA_nk.err, e2: bB_nk.err }));
     chk('F2 ⭐⭐⭐ BASE 一定要紅：火箭隊的催眠裝置在 KO 情境**不觸發**（HEAD 觸發）',
-      bA_ko.atkStatus !== 'asleep' && A_ko.atkStatus === 'asleep',
-      'BASE=' + String(bA_ko.atkStatus) + ' HEAD=' + String(A_ko.atkStatus));
+      bA_ko.ko === true && bA_ko.atkStatus !== 'asleep' && hA_ko2.atkStatus === 'asleep',
+      'BASE=' + String(bA_ko.atkStatus) + ' HEAD=' + String(hA_ko2.atkStatus));
     chk('F3 ⭐⭐⭐ BASE 一定要紅：逆境保險在 KO 情境**不抽牌**（HEAD 抽 3）',
-      bB_ko.defHand === 0 && B_ko.defHand === 3,
-      'BASE=' + String(bB_ko.defHand) + ' HEAD=' + String(B_ko.defHand));
+      bB_ko.ko === true && bB_ko.defHand === 0 && hB_ko2.defHand === 3,
+      'BASE=' + String(bB_ko.defHand) + ' HEAD=' + String(hB_ko2.defHand));
     chk('F4 ⭐⭐ BASE 的 tools.ts 確實把 koInst 丟掉了（根因逐字）',
       /_koInst/.test(bBlob.out) && !/koInst \?\? null/.test(bBlob.out),
       (bBlob.out.match(/TOOL_ON_KO\.set\(name,[^\n]*/) ?? ['(找不到)'])[0]);
