@@ -346,7 +346,9 @@ const ALLOW = [
   //   本白名單條目因此變成死條目 ⇒ 依 E3 必須刪掉。
   //   ⭐ 剩餘每一條白名單的**行為端**證明見 scripts/test-v6258-passive-attack-subject.mjs 的 W1~W4。
   // 願增猿ex｜鬆口氣 卡面：「若自己的場上有『桃歹郎ex』」— 條件是卡名。
-  "return c?.name === '桃歹郎ex' || (c?.name === '桃歹郎' && c?.subtype === 'ex');",   // ⭐ 行為端證明：test-v6258 W3
+  // ⭐v6.493（Rule 40）：改走「宣告當時」家族（asOfDeclarationHolderIids），仍是依**卡名**判定，白名單理由逐字不變。
+  //   （全卡池「桃歹郎ex」只有一種寫法；原本的「桃歹郎＋subtype ex」分支在資料裡不存在。）
+  ".filter(inst => pool.get(inst.cardId)?.name === '桃歹郎ex').map(inst => inst.iid);",   // ⭐ 行為端證明：test-v6258 W3；test-v6493 B1a/B1c
   // 爆炸頭水牛｜捲牆 卡面：「只要這隻寶可夢**與自己的其他「爆炸頭水牛」**在場上…」——
   //   partner 的條件是**卡名**（卡面沒有要求 partner 也帶特性），所以
   //   SV8 087/106（abilities=null）確實算數量。持有者那一端的 gate 在同函式下方

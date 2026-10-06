@@ -143,7 +143,7 @@ import { declarationHolderStillCounts, isEffectiveAsOfDeclaration } from './as-o
 // >>> v6375-as-of-declaration-import
 // ⭐v6.375 站長裁定 A-1／A-3：凍原堡壘／垃圾洩氣的「宣告當時」判準一律走中央述詞。
 //   ⛔ 禁止在本檔自寫 `|| state._attackTime…`（v6.373 守衛 F1 的掃描器會抓）。
-import { asOfDeclarationHolderIids } from './as-of-declaration';
+import { asOfDeclarationHolderIids, asOfDeclarationCardNameKey } from './as-of-declaration';
 // <<< v6375-as-of-declaration-import
 export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS };
 // v6.059：傳說競技場 fail-closed 述詞下沉 _shared(leaf) 以免底層反向 import 卡檔(lint Check O)
@@ -1284,7 +1284,7 @@ export function koPrizesAdjusted(
   defenderIdx: 0 | 1,
   pool: Map<string, Card>,
   koByAttackDamage: boolean = true,  // v5.506：是否「受到招式傷害」昏厥（效果KO=false）
-): { prizes: number; state: GameState } {
+): { prizes: number; state: GameState; preventPrizeAll?: boolean } {
   let s = state;
   if (!koCard) return { prizes: 1, state: s };
   const base = koPrizeCount(koCard);
@@ -1314,7 +1314,8 @@ export function koPrizesAdjusted(
       if (fnPP && atkCard && fnPP(atkCard)) {
         // ⭐v6.471：補 log（與 engine 主傷害 KO 分支同一句；原本這條路徑靜默歸 0）
         s = addLog(s, `「${ab.name}」啟動：${koCard.name} 被 ${atkCard.name} KO，但對手無法獲得獎賞卡`, null);
-        return { prizes: 0, state: s };
+        // ⭐v6.493（稽核 B6）：帶出「對手無法獲得獎賞卡」⇒ 呼叫端的奇跡之吻照擲但不加獎賞（與 engine 主傷害分支一致）
+        return { prizes: 0, state: s, preventPrizeAll: true };
       }
     }
     // ⭐v6.471：道具／古舊能量／傳說的山頂／影藏 收斂到中央 koDefenderSidePrizeModifiers（張數與 log 同一份資料）。
@@ -8622,6 +8623,11 @@ export function applyDamageToAllOpp(
       defender = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
       s = addLog(s, `${label}：${defCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
       s = recordOppKO(s, dIdx, defCard, 'attack', false);
+      // >>> v6493-b2-all-opp-miracle-kiss
+      // ⭐v6.493（稽核 B2）：v5.830 宣告了這個旗標卻從來沒有設成 true ⇒ 痛楚記憶／侵蝕之風／覆雪 打昏
+      //   對手戰鬥寶可夢時，波克基斯｜奇跡之吻 永遠不擲（卡面「每次當對手的戰鬥寶可夢【昏厥】時」不限原因）。
+      _miracleActiveKO = true;
+      // <<< v6493-b2-all-opp-miracle-kiss
       // ⭐v6.260：效果 KO ⇒ koByAttackDamage=false（TOOL_ON_KO/PASSIVE_ON_KO/潛者捕捉卡面
       //   皆要求「傷害而昏厥」；BASE bug：帶希望護身符被痛楚記憶 KO 誤開 picker）。
       s = fireDefenderOnKO(s, dIdx, (1 - dIdx) as 0 | 1, pool, koDiscard[0], true, false);
@@ -8672,7 +8678,8 @@ export function applyDamageToAllOpp(
   players[dIdx] = defender;
   s = { ...s, players };
   // v5.830：對手戰鬥位被 KO → 攻擊方奇跡之吻擲幣+1
-  if (_miracleActiveKO) s = applyMiracleKissOnOppActiveKO(s, aIdx, pool);
+  //   ⚠v6.493：走中央入口 miracleKissOnActiveFaint —— 對手已經沒有可上場的寶可夢（下面直接判勝負）時不擲。
+  if (_miracleActiveKO) s = miracleKissOnActiveFaint(s, dIdx, pool);   // ⭐v6.493 中央入口（勝負已定時不擲）
   // v4.52 Phase 3：擋下的 bench targets 補一條 log
   if (blockedBenchNames.length > 0) {
     s = addLog(s, `${label}：${blockedBenchNames.join('、')} 未受影響`, aIdx);
@@ -9829,7 +9836,8 @@ export function koTargetAfterAttackDamage(
   s = fireDefenderOnKO(s, dIdx, actorIdx, pool, targetNow, isActive, kind === 'attack-damage', _onDamagedFired, opts.attackerIid);
   if (s.phase === 'game-over') return s;
   // v5.830：對手戰鬥位被狙擊/延後傷害 KO → 攻擊方「奇跡之吻」擲幣+1(卡面「對手戰鬥寶可夢昏厥時」不分主傷害/狙擊)。
-  if (isActive) s = applyMiracleKissOnOppActiveKO(s, actorIdx, pool);
+  //   ⭐v6.493：走中央入口；脆弱蛻殼讓獎賞為 0 時照擲但不加（B6）
+  if (isActive) s = miracleKissOnActiveFaint(s, dIdx, pool, _ko.preventPrizeAll === true);
   if (isActive && newDefender.bench.length === 0) {
     return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defenderNow.name} 沒有可上場的寶可夢` };
   }
@@ -11124,36 +11132,20 @@ registerSelfDiscardMultiply('電擊魔獸|電壓錘', '電壓錘', 0, 60, 99, 'b
 // 棄世猴|同命戰鬥 — 雙方戰鬥寶可夢 KO
 regPre('棄世猴|同命戰鬥', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
+  // >>> v6493-b3-mutual-faint
+  // ⭐⭐v6.493（稽核 B3＋站長裁定 2026-10-06）：卡面「將雙方的戰鬥寶可夢【昏厥】」＝同時昏厥。
+  //   ① 對手那一隻走中央 koTargetByAttackEffect（原本手刻一份、漏奇跡之吻）；
+  //   ② 自己那一隻：對手取獎賞＋對手的奇跡之吻（裁定 2「自己把自己弄昏厥」也要擲）；
+  //   ③ 勝負不在這裡判 —— 原本「自己沒有備戰 ⇒ 對手獲勝」在雙方都沒有備戰時是錯的（官方 L622：平手）。
+  //      任一步若已判出終局就先收回，交給 applyActionImpl 末端的中央判定（含「雙方同時取完獎賞」）。
   const dIdx = (1 - aIdx) as 0 | 1;
   let s = state;
-  let players = [...s.players] as [PlayerState, PlayerState];
-  let selfPrizes = 0;
-  // 先 KO 對手出場
-  const def = players[dIdx];
-  if (def.active) {
-    const card = pool.get(def.active.cardId);
-    // v2.92 招式效果免疫檢查（KO 屬招式效果，被擋則跳過 KO 對手；自己仍照常 KO）
-    const guardKO = canApplyAttackEffectToTarget(s, aIdx, def.active, card, pool);
-    if (guardKO.blocked) {
-      s = addLog(s, `同命戰鬥：${card?.name ?? '?'}｜${guardKO.reason}（不昏厥對手）`, aIdx);
-    } else {
-      const ko: CardInstance[] = [
-        { ...def.active, damage: (card?.hp ?? 0) },
-        ...def.active.energyAttached,
-        ...getAllAttachedTools(def.active),
-        ...(def.active.evolvedFromStack ?? []),
-      ];
-      players[dIdx] = { ...def, active: null, discard: [...def.discard, ...ko] };
-      const _ko = koPrizesAdjusted(s, def.active, card, (1 - dIdx) as 0 | 1, dIdx, pool, false); // 同命戰鬥=效果KO,古舊能量等不減
-      s = _ko.state;
-      selfPrizes += _ko.prizes;
-      s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 被擊倒！+${selfPrizes} 張獎賞卡`, null);
-      s = recordOppKO(s, dIdx, card, 'attack', false);
-    }
+  const defActive = s.players[dIdx].active;
+  if (defActive) {
+    s = koTargetByAttackEffect(s, aIdx, defActive, true, pool, '同命戰鬥', 'attack', true);
+    s = liftEndgameForOnKoV6361(s);
   }
-  // 再 KO 自己出場（不算獎賞卡給對手，直接丟棄 — 但 PTCG 規則對方獲得獎賞）
-  players = [...s.players] as [PlayerState, PlayerState];
-  const att = players[aIdx];
+  const att = s.players[aIdx];
   if (att.active) {
     const card = pool.get(att.active.cardId);
     const ko: CardInstance[] = [
@@ -11162,23 +11154,17 @@ regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
       ...getAllAttachedTools(att.active),
       ...(att.active.evolvedFromStack ?? []),
     ];
+    const players = [...s.players] as [PlayerState, PlayerState];
     players[aIdx] = { ...att, active: null, discard: [...att.discard, ...ko] };
-    // v5.469 還原：此處為自損 KO（同命戰鬥犧牲自己 active），非「受到對手招式傷害」→ 古舊能量等不觸發，保留 base。
+    // v5.469：自損昏厥（不是「受到對手招式傷害」）⇒ 古舊能量等不觸發，維持基本張數。
     const oppPrizes = card ? (prizesForKOLocal(card)) : 1;
     s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 也被擊倒，對手待取 ${oppPrizes} 張獎賞卡`, null);
-    // v3.792 Rule 10：改用 addPendingPrize（移除直接 prize→hand），讓玩家點「取得」按鈕。
-    s = addPendingPrize({ ...s, players }, dIdx, oppPrizes, pool);
-    if (players[aIdx].bench.length === 0) {
-      return { ...s, phase: 'game-over', winner: dIdx, winReason: `${att.name} 沒有可上場的寶可夢` };
-    }
-  }
-  // v3.9998 修：原 v2.98 註解錯誤 + 用錯 idx。selfPrizes 變數名誤導 — 實際是
-  //   「攻擊方擊倒對手取得的獎賞」（上方累加在 KO 對手出場時）→ 應給攻擊方 (aIdx)。
-  //   line 6521 已處理「對手取攻擊方自 KO 的獎賞」(dIdx, oppPrizes)，這裡是另一邊。
-  if (selfPrizes > 0) {
-    s = addPendingPrize(s, aIdx, selfPrizes, pool);
+    s = addPendingPrize(s, dIdx, oppPrizes, pool);
+    s = miracleKissOnActiveFaint(s, aIdx, pool);
+    s = liftEndgameForOnKoV6361(s);
   }
   return s;
+  // <<< v6493-b3-mutual-faint
 });
 
 // 雙斧戰龍|斧擊在地 — 若對手戰鬥寶可夢身上附有特殊能量卡，則將那隻寶可夢 KO
@@ -11192,30 +11178,10 @@ regPost('雙斧戰龍|斧擊在地', (state, aIdx, pool) => {
     return c?.supertype === 'Energy' && c.subtype === 'Special';
   });
   if (!hasSpecial) return addLog(state, '斧擊在地：對手戰鬥寶可夢無特殊能量，無效', aIdx);
-  // 直接 KO
-  const card = pool.get(def.active.cardId);
-  // v2.92 招式效果免疫檢查（KO 屬招式效果）
-  const guardAxe = canApplyAttackEffectToTarget(state, aIdx, def.active, card, pool);
-  if (guardAxe.blocked) {
-    return addLog(state, `斧擊在地：${card?.name ?? '?'}｜${guardAxe.reason}（不昏厥）`, aIdx);
-  }
-  const ko: CardInstance[] = [
-    { ...def.active, damage: (card?.hp ?? 0) },
-    ...def.active.energyAttached,
-    ...getAllAttachedTools(def.active),
-    ...(def.active.evolvedFromStack ?? []),
-  ];
-  const _ko = koPrizesAdjusted(state, def.active, card, (1 - dIdx) as 0 | 1, dIdx, pool, false); // 斧擊在地=條件效果KO
-  state = _ko.state;
-  const prizes = _ko.prizes;
-  const players = [...state.players] as [PlayerState, PlayerState];
-  players[dIdx] = { ...def, active: null, discard: [...def.discard, ...ko] };
-  let s = addLog({ ...state, players }, `斧擊在地：${card?.name ?? '?'} 被特殊能量反噬 KO！+${prizes} 張獎賞卡`, null);
-  s = recordOppKO(s, dIdx, card, 'attack', false);
-  if (players[dIdx].bench.length === 0) {
-    return { ...s, phase: 'game-over', winner: aIdx, winReason: `${def.name} 沒有可上場的寶可夢` };
-  }
-  return addPendingPrize(s, aIdx, prizes, pool);
+  // >>> v6493-b3-axe-central
+  // ⭐v6.493（稽核 B3）：原本手刻的效果昏厥流程漏了奇跡之吻 ⇒ 收斂到中央 koTargetByAttackEffect。
+  return koTargetByAttackEffect(state, aIdx, def.active, true, pool, '斧擊在地');
+  // <<< v6493-b3-axe-central
 });
 
 // ── damage-counter bench ────────────────────────────────────────────────
@@ -13195,37 +13161,20 @@ regPost('帕底亞 肯泰羅|障礙踩踏', defCantAttackIfSubtypePost('basic', 
 // 轟鳴月ex｜瘋癲攻擊 — KO 對手戰鬥寶可夢，然後自己受 200 傷害
 regPre('轟鳴月ex|瘋癲攻擊', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('轟鳴月ex|瘋癲攻擊', (state, aIdx, pool) => {
+  // >>> v6493-b3-roaring-moon
+  // ⭐⭐v6.493（稽核 B3＋站長裁定 2026-10-06）：同命戰鬥同型 ——
+  //   對手那一隻走中央 koTargetByAttackEffect（補奇跡之吻）；自己反噬昏厥時對手也擲奇跡之吻；
+  //   勝負交給 applyActionImpl 末端的中央判定（原本先判「對手沒備戰 ⇒ 自己獲勝」就 return，
+  //   跳過了自己的 200 反噬；雙方都沒有備戰時應為平手，L622）。
   const dIdx = (1 - aIdx) as 0 | 1;
   let s = state;
-  // (1) KO 對手戰鬥寶可夢（如果還在）
-  const def = s.players[dIdx];
-  if (def.active) {
-    const defCard = pool.get(def.active.cardId);
-    // v2.92 招式效果免疫檢查（KO 屬招式效果，被擋則跳過 KO；自己仍照常受 200）
-    const guardThund = canApplyAttackEffectToTarget(s, aIdx, def.active, defCard, pool);
-    if (guardThund.blocked) {
-      s = addLog(s, `瘋癲攻擊：${defCard?.name ?? '?'}｜${guardThund.reason}（不昏厥對手）`, aIdx);
-    } else {
-      const ko: CardInstance[] = [
-        { ...def.active, damage: defCard?.hp ?? 0 },
-        ...def.active.energyAttached,
-        ...getAllAttachedTools(def.active),
-        ...(def.active.evolvedFromStack ?? []),
-      ];
-      const _ko = koPrizesAdjusted(s, def.active, defCard, (1 - dIdx) as 0 | 1, dIdx, pool, false); // 瘋癲攻擊=效果KO
-      s = _ko.state;
-      const prizes = _ko.prizes;
-      const players = [...s.players] as [PlayerState, PlayerState];
-      players[dIdx] = { ...def, active: null, discard: [...def.discard, ...ko] };
-      s = addLog({ ...s, players }, `瘋癲攻擊：${defCard?.name ?? '?'} 被擊倒！+${prizes} 張獎賞卡`, null);
-      s = recordOppKO(s, dIdx, defCard, 'attack', false);
-      s = addPendingPrize(s, aIdx, prizes, pool);
-      if (players[dIdx].bench.length === 0) {
-        return { ...s, phase: 'game-over', winner: aIdx, winReason: `${def.name} 沒有可上場的寶可夢` };
-      }
-    }
+  // (1) 將對手的戰鬥寶可夢昏厥（效果昏厥）
+  const defActive = s.players[dIdx].active;
+  if (defActive) {
+    s = koTargetByAttackEffect(s, aIdx, defActive, true, pool, '瘋癲攻擊', 'attack', true);
+    s = liftEndgameForOnKoV6361(s);
   }
-  // (2) 自己受 200 傷害（若超過 HP → 自爆 KO，對方取獎）
+  // (2) 自己受 200 傷害（若達 HP → 反噬昏厥，對手取獎）
   const players2 = [...s.players] as [PlayerState, PlayerState];
   const att = { ...players2[aIdx] };
   if (att.active) {
@@ -13233,7 +13182,6 @@ regPost('轟鳴月ex|瘋癲攻擊', (state, aIdx, pool) => {
     const newDmg = att.active.damage + 200;
     const hp = effectiveHPInline(att.active, pool, s);
     if (hp > 0 && newDmg >= hp) {
-      // 自爆 KO
       const ko: CardInstance[] = [
         { ...att.active, damage: newDmg },
         ...att.active.energyAttached,
@@ -13245,11 +13193,9 @@ regPost('轟鳴月ex|瘋癲攻擊', (state, aIdx, pool) => {
       players2[aIdx] = att;
       const prizes = attCard ? koPrizeCount(attCard) : 1;
       s = addLog({ ...s, players: players2 }, `瘋癲攻擊：${attCard?.name ?? '?'} 反噬昏厥！對手將取得 ${prizes} 張獎賞卡`, null);
-      // v2.98：累計到 pendingPrizes，由對手 (dIdx) 透過 TAKE_PRIZES 各自取走
       s = addPendingPrize(s, dIdx, prizes, pool);
-      if (att.bench.length === 0) {
-        return { ...s, phase: 'game-over', winner: dIdx, winReason: `${att.name} 沒有可上場的寶可夢` };
-      }
+      s = miracleKissOnActiveFaint(s, aIdx, pool);
+      s = liftEndgameForOnKoV6361(s);
     } else {
       att.active = { ...att.active, damage: newDmg };
       players2[aIdx] = att;
@@ -13257,6 +13203,7 @@ regPost('轟鳴月ex|瘋癲攻擊', (state, aIdx, pool) => {
     }
   }
   return s;
+  // <<< v6493-b3-roaring-moon
 });
 
 // 冰伊布ex｜藍柱石 — 選 1 隻身上放有 ≥6 傷害指示物的對手寶可夢（含出場）→ KO
@@ -13303,34 +13250,11 @@ function resolveLanzhushi(
   isActive: boolean,
   pool: Map<string, Card>,
 ): GameState {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx];
-  const card = pool.get(target.cardId);
-  // v2.92 招式效果免疫檢查（KO 屬招式效果）
-  const guardLanz = canApplyAttackEffectToTarget(state, aIdx, target, card, pool);
-  if (guardLanz.blocked) {
-    return addLog(state, `藍柱石：${card?.name ?? '?'}｜${guardLanz.reason}（不昏厥）`, aIdx);
-  }
-  const ko: CardInstance[] = [
-    { ...target, damage: (card?.hp ?? 0) },
-    ...target.energyAttached,
-    ...getAllAttachedTools(target),
-    ...(target.evolvedFromStack ?? []),
-  ];
-  const _ko = koPrizesAdjusted(state, target, card, (1 - dIdx) as 0 | 1, dIdx, pool, false); // 藍柱石=依指示物效果KO
-  state = _ko.state;
-  const prizes = _ko.prizes;
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const newDef = { ...def, discard: [...def.discard, ...ko] };
-  if (isActive) newDef.active = null;
-  else newDef.bench = def.bench.filter(b => b.iid !== target.iid);
-  players[dIdx] = newDef;
-  let s = addLog({ ...state, players }, `藍柱石：${card?.name ?? '?'} 被擊倒！+${prizes} 張獎賞卡`, null);
-  s = recordOppKO(s, dIdx, card, 'attack', false);
-  if (isActive && newDef.bench.length === 0) {
-    return { ...s, phase: 'game-over', winner: aIdx, winReason: `${def.name} 沒有可上場的寶可夢` };
-  }
-  return addPendingPrize(s, aIdx, prizes, pool);
+  // >>> v6493-b3-lanzhushi-central
+  // ⭐v6.493（稽核 B3）：原本手刻一份與 koTargetByAttackEffect 逐行相同的流程，只少了奇跡之吻
+  //   ⇒ 收斂到中央（免疫判定、效果昏厥獎賞、補位終局、奇跡之吻 同一份）。
+  return koTargetByAttackEffect(state, aIdx, target, isActive, pool, '藍柱石');
+  // <<< v6493-b3-lanzhushi-central
 }
 
 // v5.485：招式效果「使昏厥」中央 helper（仿 深淵之瞳 / 藍柱石）。
@@ -13342,7 +13266,7 @@ function resolveLanzhushi(
 //   ⚠ 只用於「對手」effect-KO；自損昏厥(高速破壞)用 markFaintByEffect；狀態延遲KO(浸蝕污泥)維持 getEffectiveHP。
 // v5.707：對手戰鬥位被 KO(任何方式) → 攻擊方「波克基斯|奇跡之吻」擲幣,正面多 1 獎賞(不重複)。
 //   原僅 engine 招式傷害 KO 主管線觸發,效果 KO(放指示物/koTargetByAttackEffect)漏 → 抽共用 helper。
-export function applyMiracleKissOnOppActiveKO(state: GameState, attackerIdx: 0 | 1, pool: Map<string, Card>): GameState {
+export function applyMiracleKissOnOppActiveKO(state: GameState, attackerIdx: 0 | 1, pool: Map<string, Card>, preventPrizeAll = false): GameState {
   const owner = state.players[attackerIdx];
   // ⭐ v6.196：原本沒 gate，而同一張卡的招式-KO 路徑(canTogekissMiracleKissTrigger)有 gate
   //   → 熔岩洞在場時「誰把對手 KO 的」會得到不同答案（split-brain，直接影響獎賞卡數）。
@@ -13352,7 +13276,10 @@ export function applyMiracleKissOnOppActiveKO(state: GameState, attackerIdx: 0 |
   if (!has) return state;
   const r = flipCoinsWithLog(state, 1, '波克基斯｜奇跡之吻', attackerIdx);
   let s = r.state;
-  if (r.heads === 1) {
+  if (r.heads === 1 && preventPrizeAll) {
+    // ⭐v6.493（B6）：脆弱蛻殼等「對手無法獲得獎賞卡」⇒ 擲幣照舊（亂數序不變），不加獎賞；句子與 engine 主傷害分支相同
+    s = addLog(s, `「奇跡之吻」啟動：硬幣正面，但這次對手無法獲得獎賞卡 → 不增加獎賞卡`, attackerIdx);
+  } else if (r.heads === 1) {
     s = addLog(s, `「奇跡之吻」啟動：硬幣正面 → 多獲得 1 張獎賞卡`, attackerIdx);
     s = addPendingPrize(s, attackerIdx, 1, pool);
   } else {
@@ -13361,6 +13288,24 @@ export function applyMiracleKissOnOppActiveKO(state: GameState, attackerIdx: 0 |
   return s;
 }
 
+// >>> v6493-miracle-kiss-on-active-faint
+/**
+ * ⭐⭐v6.493「某一方的戰鬥寶可夢昏厥了」⇒ 它的**對手**擲 波克基斯｜奇跡之吻（全站唯一入口）。
+ *   卡面「每次當對手的戰鬥寶可夢【昏厥】時」不限原因。站長裁定（2026-10-06，逐字）：
+ *     1.「奇跡之吻在寶可夢檢查階段，當對手的戰鬥寶可夢昏厥時，要擲幣」
+ *     2.「奇跡之吻在對手的戰鬥寶可夢『自己把自己弄昏厥』時，要擲幣」
+ *   ⇒ 招式傷害／招式效果／特性／寶可夢檢查（中毒、灼傷、冰冷之帳、揚沙）／混亂自傷／自爆／反擊 一律走這裡。
+ * @param faintedIdx 戰鬥寶可夢昏厥的那一方（擲幣的是 1 - faintedIdx）
+ *   ⚠ 對局已經結束，或昏厥方已經沒有任何寶可夢（勝負已定）⇒ 不擲（與 koTargetByAttackEffect 原本的順序相同）。
+ */
+export function miracleKissOnActiveFaint(state: GameState, faintedIdx: 0 | 1, pool: Map<string, Card>, preventPrizeAll = false): GameState {
+  if (state.phase === 'game-over') return state;
+  const fp = state.players[faintedIdx];
+  if (!fp.active && fp.bench.length === 0) return state;
+  return applyMiracleKissOnOppActiveKO(state, (1 - faintedIdx) as 0 | 1, pool, preventPrizeAll);
+}
+// <<< v6493-miracle-kiss-on-active-faint
+
 export function koTargetByAttackEffect(
   state: GameState, attackerIdx: 0 | 1, target: CardInstance, isActive: boolean,
   pool: Map<string, Card>, label: string,
@@ -13368,6 +13313,9 @@ export function koTargetByAttackEffect(
   //   （耿鬼ex｜死亡宣告）。預設 'attack' ⇒ 既有 9 個呼叫端行為逐字不變。
   //   ⚠ 這裡**只**透傳，不做任何判斷 —— 判準只有 EFFECT_SOURCE_IMMUNITY 一份。
   source: EffectSource = 'attack',
+  // ⭐v6.493：同一個效果還要讓「自己」也昏厥（同命戰鬥／瘋癲攻擊）⇒ 不在這裡判勝負，
+  //   交給 applyActionImpl 末端的中央判定（L622：雙方都無法放置 ⇒ 平手）。
+  deferVerdict = false,
 ): GameState {
   const dIdx = (1 - attackerIdx) as 0 | 1;
   const def = state.players[dIdx];
@@ -13394,12 +13342,12 @@ export function koTargetByAttackEffect(
   players[dIdx] = newDef;
   s = addLog({ ...s, players }, `${label}：${card?.name ?? '?'} 被昏厥！+${prizes} 張獎賞卡`, attackerIdx);
   s = recordOppKO(s, dIdx, card, 'attack', false);
-  if (isActive && newDef.bench.length === 0) {
+  if (!deferVerdict && isActive && newDef.bench.length === 0) {
     return { ...s, phase: 'game-over', winner: attackerIdx, winReason: `${def.name} 沒有可上場的寶可夢` };
   }
   s = addPendingPrize(s, attackerIdx, prizes, pool);
   // v5.707：對手戰鬥位被效果KO → attacker 奇跡之吻(卡面「對手戰鬥寶可夢昏厥時」不分傷害/效果)
-  if (isActive) s = applyMiracleKissOnOppActiveKO(s, attackerIdx, pool);
+  if (isActive) s = miracleKissOnActiveFaint(s, dIdx, pool);   // ⭐v6.493 中央入口
   return s;
 }
 
@@ -15586,6 +15534,10 @@ export function selfKOInstance(
   //   就會顯示「取得」按鈕給對手點，與「攻擊方點」是兩件事 — Rule 10 已釐清。
   //   勝負條件（取得所有獎賞卡）改由 TAKE_PRIZES handler 在玩家點按鈕後檢查。
   s = addPendingPrize(s, dIdx, prizes, pool);
+  // >>> v6493-self-ko-miracle-kiss
+  // ⭐v6.493 站長裁定 2：「對手的戰鬥寶可夢『自己把自己弄昏厥』時，要擲幣」（咒詛炸彈等在戰鬥場自爆）
+  if (isActive) s = miracleKissOnActiveFaint(s, aIdx, pool);
+  // <<< v6493-self-ko-miracle-kiss
   // 自身是否無後繼（這條與獎賞無關，保留）
   if (isActive && newP.bench.length === 0) {
     return { ...s, phase: 'game-over', winner: dIdx, winReason: `${p.name} 沒有可上場的寶可夢` };
@@ -15680,7 +15632,7 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
     // v2.246：對手主動特性 KO 對手寶可夢（從 dIdx victim 視角是「對手特性 KO 我方」）
     s = recordOppKO(s, dIdx, targetCard, 'ability');
     // v5.830：對手戰鬥位被特性(咒詛炸彈)放指示物 KO → 攻擊方「奇跡之吻」擲幣+1(卡面「昏厥時」不分招式/特性)。
-    if (isActive) s = applyMiracleKissOnOppActiveKO(s, actorIdx, pool);
+    if (isActive) s = miracleKissOnActiveFaint(s, dIdx, pool);   // ⭐v6.493 中央入口
     if (isActive && newDefender.bench.length === 0) {
       return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
     }
@@ -18550,12 +18502,15 @@ export type KoPrizeAdjustFn = (
 ) => { adjust: number; log?: string };
 export const PASSIVE_KO_PRIZE_ADJUST = new Map<string, KoPrizeAdjustFn>([
   ['鬆口氣', (state, _koInst, _koCard, dIdx, pool) => {
+    // >>> v6493-b1-relief-as-of-declaration
+    // ⭐⭐v6.493：「場上有桃歹郎ex」改以宣告當時判定（官方 L1664-1665：多龍巴魯托ex｜幻影奇襲 同一招
+    //   打昏備戰的桃歹郎ex 與戰鬥位的願增猿ex ⇒ 對手獲得 3 張，鬆口氣仍生效）。
+    //   live ＝ 此刻場上卡名「桃歹郎ex」的 iid；宣告當時那一半交給 asOfDeclarationHolderIids（唯一判準）。
     const me = state.players[dIdx];
-    const all = [...(me.active ? [me.active] : []), ...me.bench];
-    const hasMomotaroEx = all.some(inst => {
-      const c = pool.get(inst.cardId);
-      return c?.name === '桃歹郎ex' || (c?.name === '桃歹郎' && c?.subtype === 'ex');
-    });
+    const liveIids = [...(me.active ? [me.active] : []), ...me.bench]
+      .filter(inst => pool.get(inst.cardId)?.name === '桃歹郎ex').map(inst => inst.iid);
+    const hasMomotaroEx = asOfDeclarationHolderIids(state, dIdx, asOfDeclarationCardNameKey('桃歹郎ex'), liveIids).length > 0;
+    // <<< v6493-b1-relief-as-of-declaration
     if (!hasMomotaroEx) return { adjust: 0 };
     return { adjust: -1, log: '「鬆口氣」啟動：場上有桃歹郎ex → 對手獲得的獎賞卡減少 1 張' };
   }],

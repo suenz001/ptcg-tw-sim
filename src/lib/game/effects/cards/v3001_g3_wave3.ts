@@ -637,15 +637,12 @@ export function hasEffectiveKageHide(
   pool: Map<string, Card> | undefined,
 ): boolean {
   if (!state || ownerIdx == null || !pool) return false;
-  const p = state.players[ownerIdx];
-  const ok = (inst: CardInstance | null | undefined, loc: 'active' | 'bench'): boolean => {
-    if (!inst) return false;
-    const c = pool.get(inst.cardId);
-    if (!c?.abilities?.some(ab => ab.name === '影藏')) return false;
-    return isAbilityHolderEffective(state, inst, c, ownerIdx, '影藏', loc, pool);
-  };
-  if (ok(p.active, 'active')) return true;
-  return p.bench.some(b => ok(b, 'bench'));
+  // >>> v6493-b1-kage-hide-as-of-declaration
+  // ⭐⭐v6.493：改走「宣告當時」家族的唯一入口（現在生效的持有者 ∪ 宣告當時生效且因這一招昏厥離場的持有者）。
+  //   v6.490 起戰鬥位受害者延後到招式效果結束才結算 ⇒ 同一招先打昏備戰的超級耿鬼ex 時，
+  //   live 判斷會漏掉影藏（全站稽核 A9）。非 ATTACK 路徑沒有快照 ⇒ 結果與 live 逐字相同。
+  return asOfDeclarationEffectiveHolderIids(state, ownerIdx, pool, '影藏').length > 0;
+  // <<< v6493-b1-kage-hide-as-of-declaration
 }
 
 /** 玩家 idx 備戰是否有指定 ability holder。 */

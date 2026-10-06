@@ -33,7 +33,7 @@ import {
   selfKOInstance,
   koPrizeCount,
   isBenchProtected,
-  applyMiracleKissOnOppActiveKO
+  miracleKissOnActiveFaint
 } from '../../effects';
 import { getEffectiveHP } from '../../engine';  // v5.091
 import { addPendingPrize } from '../_shared';
@@ -291,7 +291,7 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
     // v2.246：腎上腺腦力是「對手主動特性 KO」
     s = recordOppKO(s, dIdx, targetCard, 'ability');
     // v5.709：對手戰鬥位被特性效果KO → 攻擊方奇跡之吻擲幣+1(卡面「對手戰鬥寶可夢昏厥時」含特性KO)
-    if (isActive) s = applyMiracleKissOnOppActiveKO(s, actorIdx, pool);
+    if (isActive) s = miracleKissOnActiveFaint(s, dIdx, pool);   // ⭐v6.493 中央入口
     if (isActive && newDefender.bench.length === 0) {
       return { ...s, phase: 'game-over', winner: actorIdx,
         winReason: `${defender.name} 沒有可上場的寶可夢` };

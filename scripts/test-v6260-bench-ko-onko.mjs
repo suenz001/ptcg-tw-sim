@@ -402,7 +402,10 @@ T('D4 靜態守衛：傷害 KO 且會移除寶可夢的路徑必須接 fireDefen
       if (!after.includes('fireDefenderOnKO')) misses.push(f + ' @' + args.slice(0, 60));
     }
   }
-  assert.ok(scanned >= 10, `掃描器下限：呼叫點應 ≥10，實掃 ${scanned}（掃描器壞了？）`);
+  // ⭐v6.493（Rule 40，A 類：收斂就會掉）：斧擊在地／藍柱石／同命戰鬥／瘋癲攻擊 四處手刻的效果昏厥
+  //   改走中央 koTargetByAttackEffect（它們原本都是 `, false)` 效果 KO，本來就不需接 fireDefenderOnKO），
+  //   呼叫點 13 → 9。下限 10 → 7（slack 2）；守的意圖（傷害 KO 路徑都接 fireDefenderOnKO、掃描器沒壞）不變。
+  assert.ok(scanned >= 7, `掃描器下限：呼叫點應 ≥7，實掃 ${scanned}（掃描器壞了？）`);
   assert.strictEqual(misses.length, 0, '傷害 KO 路徑漏接 fireDefenderOnKO：\n' + misses.join('\n'));
 });
 

@@ -82,6 +82,13 @@ export const AS_OF_DECLARATION_ABILITIES: readonly string[] = [
   //     非空就 +40 一次 ⇒ 收緊之後「不重複」語意天生成立，不必另外 dedup。
   '生機森巴',    // 樂天河童（MC 16648／SV9 12485，標 I）— 自己場上所有寶可夢最大 HP +40（不重複）
   // <<< v6376-a1-max-hp
+  // >>> v6493-b1-prize-holders
+  // ⭐⭐v6.493（v6.490 回歸修正）：獎賞張數型。v6.490 起「戰鬥位受害者」改在招式效果全部結束後才結算，
+  //   同一招的效果若先把持有者打昏（多龍巴魯托ex｜幻影奇襲 把指示物放到備戰的持有者身上），
+  //   結算戰鬥位受害者時持有者已經離場 ⇒ 獎賞修正消失。官方 PTCG_RULES.md L1664-1665（鬆口氣）答 3 張。
+  //   ⇒ 比照花之帷幔：宣告當時生效、且是因為這一招昏厥離場 ⇒ 對這一招仍然算數。
+  '影藏',        // 超級耿鬼ex（MC 14131／15978／15988，標 I）—【惡】寶可夢被【ex】招式傷害擊倒 ⇒ 獎賞 -1
+  // <<< v6493-b1-prize-holders
 ];
 
 // >>> v6375-active-only-and-counted-card-names
@@ -110,6 +117,9 @@ export const AS_OF_DECLARATION_ACTIVE_ONLY_ABILITIES: readonly string[] = [
  */
 export const AS_OF_DECLARATION_COUNTED_CARD_NAMES: readonly string[] = [
   '爆炸頭水牛',  // 捲牆的「與自己的其他『爆炸頭水牛』在場上」
+  // >>> v6493-b1-momotaro-name
+  '桃歹郎ex',    // ⭐v6.493 願增猿ex｜鬆口氣「若自己的場上有『桃歹郎【ex】』」（卡名條件，不看特性；官方 L1664-1665）
+  // <<< v6493-b1-momotaro-name
 ];
 
 /** 依卡名記錄時使用的快照 key。⚠ Firestore map key 不可含 '.'／'/'／'['／']'／'*'；'@' 安全。 */

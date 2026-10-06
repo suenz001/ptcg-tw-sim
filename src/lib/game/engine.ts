@@ -1068,7 +1068,8 @@ import { firePassiveOnKoAfterPrize, drainOnKoAfterPrize } from './effects';
 // >>> v6361-lift-import
 // ⭐v6.361 站長裁定 D-10：把「已判出的終局」暫時收回，讓 on-KO 特性先結算完再重判（含平手）。
 import { liftEndgameForOnKoV6361 } from './effects';
-import { koTargetAfterAttackDamage, koAttackerAfterRetaliation } from './effects';   // ⭐v6.490 備戰昏厥共用（受害者被效果換到備戰區後才昏厥）
+import { koTargetAfterAttackDamage, koAttackerAfterRetaliation } from './effects';
+import { miracleKissOnActiveFaint } from './effects';   // ⭐v6.493 奇跡之吻唯一入口（任何原因的戰鬥寶可夢昏厥）   // ⭐v6.490 備戰昏厥共用（受害者被效果換到備戰區後才昏厥）
 import { isManuallyActivatableAbilityText } from './ability-activation';   // ⭐v6.489 被動特性不給按鈕
 // <<< v6361-lift-import
 // >>> v6362-return-hand-import
@@ -3626,6 +3627,7 @@ function sanityKOSweep(
   let s = state;
   let prizesAcc = 0;
   let anyKO = false;
+  let _v6493ActiveSwept = false;   // ⭐v6.493 戰鬥寶可夢在這裡被結算 ⇒ 奇跡之吻
   // 只掃對手 — 自己 KO（咒詛炸彈等）有專屬流程，不該被這個 fallback 干擾
   const player = { ...s.players[dIdx] };
   // active
@@ -3651,6 +3653,7 @@ function sanityKOSweep(
       s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterA);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack', !ko._faintByEffect);
+      _v6493ActiveSwept = true;
     }
   }
   // bench
@@ -3684,6 +3687,11 @@ function sanityKOSweep(
   const players = [...s.players] as [PlayerState, PlayerState];
   players[dIdx] = player;
   s = addPendingPrize({ ...s, players }, attackerIdx, prizesAcc, pool);
+  // >>> v6493-kiss-sweep
+  // ⭐v6.493：殭屍昏厥（自傷反噬、markFaintByEffect、指示物溢出…）也是「戰鬥寶可夢昏厥」⇒ 擲奇跡之吻
+  //   （站長裁定 2 的「自己把自己弄昏厥」大多在這裡結算）。
+  if (_v6493ActiveSwept) s = miracleKissOnActiveFaint(s, dIdx, pool);
+  // <<< v6493-kiss-sweep
   // 對手 active+bench 都空 → 直接終局
   if (player.active === null && player.bench.length === 0) {
     s = {
@@ -5805,6 +5813,11 @@ function handlePlaying(
             `${atkNameForStatus} 陷入混亂，自身受到 30 傷害並昏厥！`, aIdx);
           s = addPendingPrize(s, dIdx, koPrizes, pool);
           if (s.phase === 'game-over') return s;  // addPendingPrize 內部已判「取完所有獎賞獲勝」
+          // >>> v6493-kiss-confusion
+          // ⭐v6.493 站長裁定 2：對手的戰鬥寶可夢自己把自己弄昏厥（混亂自傷）⇒ 對手擲奇跡之吻
+          s = miracleKissOnActiveFaint(s, aIdx, pool);
+          if (s.phase === 'game-over') return s;
+          // <<< v6493-kiss-confusion
           if (newAttacker.bench.length === 0) {
             return { ...s, phase: 'game-over', winner: dIdx, winReason: `${newAttacker.name} 沒有可上場的寶可夢` };
           }
@@ -7560,6 +7573,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         if (poisonPlayer.bench.length === 0) {
           return { ...poisonState, phase: 'game-over', winner: oIdx, winReason: `${poisonPlayer.name} 沒有可上場的寶可夢` };
         }
+        // >>> v6493-kiss-poison
+        // ⭐v6.493 站長裁定 1：寶可夢檢查階段對手的戰鬥寶可夢昏厥 ⇒ 擲奇跡之吻
+        poisonState = miracleKissOnActiveFaint(poisonState, tIdx, pool);
+        players[0] = poisonState.players[0]; players[1] = poisonState.players[1];
+        if (poisonState.phase === 'game-over') return poisonState;
+        // <<< v6493-kiss-poison
         // SEND_NEW_ACTIVE 由被毒死方（tIdx）補；re-dispatch END_TURN 仍以 aIdx 為 activePlayerIndex
         // v5.764：不 early-return — 設 state 後繼續跑完剩餘 checkup(對手中毒/灼傷、雙方睡眠醒幣、
         //   麻痺解除)。§11 規則:寶可夢檢查須完整結算雙方所有特殊狀態;補位延到狀態區結尾統一處理。
@@ -7615,6 +7634,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         if (burnedPlayer.bench.length === 0) {
           return { ...burnState, phase: 'game-over', winner: oIdx, winReason: `${burnedPlayer.name} 沒有可上場的寶可夢` };
         }
+        // >>> v6493-kiss-burn
+        burnState = miracleKissOnActiveFaint(burnState, tIdx, pool);   // ⭐v6.493 站長裁定 1
+        players[0] = burnState.players[0]; players[1] = burnState.players[1];
+        if (burnState.phase === 'game-over') return burnState;
+        // <<< v6493-kiss-burn
         // v5.764：同上 — 不 early-return,繼續跑完剩餘 checkup,補位延到狀態區結尾統一處理。
         state = burnState;
       } else {
@@ -7868,6 +7892,15 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         //   會用 stale players 覆蓋掉剛發的獎賞 → 玩家「冰冷之帳/揚沙 KO 對手卻沒拿到獎賞」。同步回來。
         players[0] = state.players[0]; players[1] = state.players[1];
       }
+      // >>> v6493-kiss-frost-tent
+      // ⭐v6.493 站長裁定 1：冰冷之帳（寶可夢檢查）讓戰鬥寶可夢昏厥 ⇒ 該方的對手擲奇跡之吻
+      for (const i of [0, 1] as const) {
+        if (!activeDiedByOwner[i]) continue;
+        state = miracleKissOnActiveFaint({ ...state, players }, i, pool);
+        players[0] = state.players[0]; players[1] = state.players[1];
+        if (state.phase === 'game-over') return state;
+      }
+      // <<< v6493-kiss-frost-tent
       // 勝利條件：任一方戰鬥寶可夢被擊倒 + 備戰已空 → 對手勝
       for (const i of [0, 1] as const) {
         if (activeDiedByOwner[i] && players[i].bench.length === 0 && players[i].active === null) {
@@ -7967,6 +8000,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         //   會用 stale players 覆蓋掉剛發的獎賞 → 玩家「冰冷之帳/揚沙 KO 對手卻沒拿到獎賞」。同步回來。
         players[0] = state.players[0]; players[1] = state.players[1];
         }
+        // >>> v6493-kiss-sandstorm
+        if (sandstormActiveDied) {   // ⭐v6.493 站長裁定 1：揚沙（寶可夢檢查）
+          state = miracleKissOnActiveFaint({ ...state, players }, oppIdx, pool);
+          players[0] = state.players[0]; players[1] = state.players[1];
+          if (state.phase === 'game-over') return state;
+        }
+        // <<< v6493-kiss-sandstorm
         if (sandstormActiveDied && players[oppIdx].bench.length === 0 && players[oppIdx].active === null) {
           return {
             ...state, phase: 'game-over',

@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.493：中央昏厥管線稽核修正＋奇跡之吻裁定（2026-10-06）
+
+BASE v6.492（a7020a59）＋wip 60bebd44（test-v6492 補 R8/R9）。
+- 站長裁定（逐字）：1.「奇跡之吻在寶可夢檢查階段，當對手的戰鬥寶可夢昏厥時，要擲幣」 2.「奇跡之吻在對手的戰鬥寶可夢『自己把自己弄昏厥』時，要擲幣」。
+- B1（v6.490 回歸）：鬆口氣的「場上有桃歹郎ex」與影藏持有者改走 as-of-declaration（AS_OF_DECLARATION_ABILITIES 加影藏、COUNTED_CARD_NAMES 加桃歹郎ex；hasEffectiveKageHide → asOfDeclarationEffectiveHolderIids）。官方 L1665：3 張（HEAD 4 張）。
+- B2：applyDamageToAllOpp 的 _miracleActiveKO 自 v5.830 從未設 true。
+- B3：斧擊在地／藍柱石 → koTargetByAttackEffect；同命戰鬥／瘋癲攻擊 → koTargetByAttackEffect(deferVerdict) ＋ liftEndgameForOnKoV6361，勝負交 applyActionImpl 末端中央判定。
+- B6：koPrizesAdjusted 回傳 preventPrizeAll；奇跡之吻正面不加獎賞（句子與 engine 主傷害分支相同）。
+- 新增唯一入口 effects `miracleKissOnActiveFaint(state, faintedIdx, pool, preventPrizeAll?)`；接點：koTargetByAttackEffect／koTargetAfterAttackDamage／applyDamageToAllOpp／selfKOInstance／腎上腺腦力／特性放指示物 KO／engine 混亂自傷、中毒、灼傷、冰冷之帳、揚沙、sanityKOSweep 戰鬥位。
+- B5（sweep byDamage 預設）未改：沒有找到 sweep 收到招式傷害殭屍的實例證據，改預設可能讓復仇家族漏算，留待證據。
+- 新增 test-v6493（25 條）；BASE 紅 12 條；突變 8 個殺 8 個，1 個等價（瘋癲攻擊第一個 lift，第二個 lift 會收回同一個終局）。
+
 ## v6.492：攻擊方被反擊打昏走中央結算（2026-10-06，站長裁定）
 
 BASE v6.491（da855ce3）。
