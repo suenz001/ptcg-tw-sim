@@ -14,7 +14,7 @@
 // F4 灼傷昏厥同樣：冰冷之帳在補位之前放
 // F5 昏厥的那隻略過（棄牌區那張的傷害不變）
 // F6 正對照：沒有狀態昏厥 ⇒ 冰冷之帳照常、不停下來等補位
-// F7 正面朝上獎賞的取獎視窗開著時維持舊流程（視窗不被蓋掉；補完位後冰冷之帳放一次）
+// F7 正面朝上獎賞的取獎視窗：取完、補完位後冰冷之帳恰好一次並換回合（v6.502 起冰冷之帳在視窗開著時就已放，順序由 test-v6502 鎖）
 // F8 冰冷之帳把昏厥方最後一隻備戰打倒 ⇒ 直接判勝負，不卡在等補位
 // F9～F12：Fable 審查補充（結束回合方自己昏厥、0 先補、等補位時重送 END_TURN、等待提示）
 // HEAD-FAIL：同一批案例餵 v6.499 的引擎（git archive）逐條列紅（Rule 41）。
@@ -140,7 +140,8 @@ function makeCases({ createGame, applyAction }) {
     let s = endTurn(board({ active: inst(KOKO), bench: [inst(FROS), inst(KISS)], prizes },
                           { active: inst(CACNEA, { status: 'poisoned', damage: hp(CACNEA) - 10 }), bench: [inst(KOKO)] }));
     assert.equal(s.pendingSelection?.effectKey, 'take-prize-choose', '前置：有正面朝上獎賞 ⇒ 開取獎視窗');
-    assert.equal(tentLogs(s).length, 0, '視窗開著時維持舊流程（不在這時候放，避免蓋掉視窗）');
+    // ⭐v6.502（Rule 40）：站長裁定這條例外也要修 ⇒ 視窗開著時冰冷之帳也已在同一次檢查放好（順序由 test-v6502 鎖）；
+    //   本條只守兩版共通的結果：取獎視窗正常、補完位後冰冷之帳恰好一次、換回合。
     s = tails(() => applyAction(s, { type: 'RESOLVE_SELECTION', senderIdx: 0, actorIdx: 0, effectKey: 'take-prize-choose',
       selectedIids: [s.pendingSelection.params?.options?.[0]?.id ?? 'random'] }, pool));
     assert.equal(s.pendingSelection ?? null, null, '取獎視窗應已結束');
@@ -200,7 +201,7 @@ const NAMES = {
   F4: '灼傷昏厥後，冰冷之帳同樣在補位之前放（log 順序正確）',
   F5: '已昏厥的那隻略過',
   F6: '正對照：沒有狀態昏厥 ⇒ 冰冷之帳照常、直接換回合',
-  F7: '正面朝上獎賞的取獎視窗開著時維持舊流程，補完位後放一次',
+  F7: '正面朝上獎賞的取獎視窗：取完、補完位後冰冷之帳恰好一次並換回合',
   F8: '冰冷之帳打倒昏厥方最後一隻備戰 ⇒ 直接判勝負（由出口的中央終局判定判出）',
   F9: '結束回合的一方自己中毒昏厥：對手的冰冷之帳在補位前放',
   F10: '雙方都要補，0 先補也正確',

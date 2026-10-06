@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.502：寶可夢檢查三個舊缺口＋Opus 審查（2026-10-07）
+
+BASE v6.501（8730eacb）。站長：「審查到的這三個舊問題都要修」。
+- C：特性區之後停等條件改為任一方戰鬥場空（不只狀態昏厥）⇒ 冰冷之帳／揚沙單獨打倒也先補位再換回合。
+- B：拿掉 v6.500 的取獎視窗例外（取獎視窗後開的視窗依 v6.418 排進 pendingChainQueue）。
+- D：中毒／灼傷／冰冷之帳／揚沙四處「沒有備戰當下判負」拿掉，交給 applyAction 出口的 judgeEndgameV6361（雙方皆無 ⇒ 平手）。
+- Opus 5.5 審查（站長改用 Opus）：①停等時 turnPhase 未改 ⇒ 結束回合的一方等待時還能附能量、出牌（錦標賽伺服器 canSeatAct 也放行）⇒ 停等 return 加 turnPhase:'end'；②同一盤面依誰結束回合、有無正面朝上獎賞會判出三種結果 ⇒ 檢查中 addPendingPrize／奇跡之吻之後改 liftEndgameForOnKoV6361（不提早返回），停等時任一方沒有寶可夢或待重判就帶 _v6361NeedsVerdict，出口先結清排隊取獎再判（四種組合都平手）；③力之沙漏會給檢查後才補上場的寶可夢 ⇒ 新欄位 endTurnActiveIidAtEnd（第一次 END_TURN 記下，收尾清除），不同 iid 不問。
+- 停等時的待重判旗標走 effects.ts 新 helper requestEndgameVerdictV6361（test-v6361 H9：engine 不得自己組 _v6361NeedsVerdict）。
+- 撤回：SEND_NEW_ACTIVE 在停等時不標 movedToActiveThisTurn 的改動（收尾本來就清，突變存活＝等價）。
+- test-v6502（17 條；HEAD 紅 G1～G5b、G8、G9a～c、G9e；G9d／G10 由突變證明）；突變 11 個殺 9、2 個等價（停等條件已含戰鬥場空、旗標收尾就清）。test-v6500 F7 依 Rule 40 改成只守兩版共通結果。
+
 ## v6.501：測抽視窗手機版固定版面（2026-10-06，玩家回報）
 
 BASE v6.500（c8c3b33e）。玩家：手機上測抽彈窗高度隨內容變、按鈕要捲動才按得到；站長：「按鈕都在固定的位置讓玩家可以一直按」。

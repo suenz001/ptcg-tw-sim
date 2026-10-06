@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'c8c3b33ea14c01021eb4318f862b961014d98ffb';   // v6.500（上一版）
+const PREV_SHA = '8730eacb6648440a095ab494e3eca2ff63f24035';   // v6.501（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,15 +757,26 @@ const PREV_SHA = 'c8c3b33ea14c01021eb4318f862b961014d98ffb';   // v6.500（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.501 前移：PREV_SHA 從 c8c3b33e（v6.500）起算。
+  // ⚠⚠ v6.502 前移：PREV_SHA 從 8730eacb（v6.501）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.501：玩家回報手機測抽視窗高度跳動、要捲動才按得到按鈕：手機 @media 改成 100dvh 直式 flex、中間 .ohs-body 可捲、按鈕列固定；首頁 changelog 三步搬運。
-  'src/lib/decks/OpeningHandSim.svelte',
+  // ⭐v6.502：站長裁定修 v6.500 審查的三個舊問題（冰冷之帳／揚沙單獨打倒也停等補位、取獎視窗例外拿掉、檢查中同時判負交給中央判定）＋ Opus 審查三項（停等 turnPhase=end、取完獎賞收回待重判、力之沙漏只給回合結束當下的戰鬥寶可夢）；首頁 changelog 三步搬運。
+  'src/lib/game/effects.ts',
+  'src/lib/game/engine.ts',
+  'src/lib/game/types.ts',
   'src/lib/version.ts',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.501）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.501 前移：PREV_SHA 從 c8c3b33e（v6.500）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.501：玩家回報手機測抽視窗高度跳動、要捲動才按得到按鈕：手機 @media 改成 100dvh 直式 flex、中間 .ohs-body 可捲、按鈕列固定；首頁 changelog 三步搬運。
+//   'src/lib/decks/OpeningHandSim.svelte',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.500）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.500 前移：PREV_SHA 從 25ecb097（v6.499）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -898,19 +909,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/effects/cards/v2560_i_wave6_complex.ts',
 //   'src/lib/game/engine.ts',
 //   'src/lib/game/types.ts',
-//   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.489）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.489 前移：PREV_SHA 從 9ee0cac1（v6.488）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.489：被動特性不給按鈕（中央卡面判準 ability-activation）＋悉心治癒放置觸發＋恢復1個特殊狀態中央 helper；首頁 changelog 三步搬運。
-//   'src/lib/game/ability-activation.ts',
-//   'src/lib/game/effects.ts',
-//   'src/lib/game/effects/cards/items_misc.ts',
-//   'src/lib/game/effects/cards/v2380_j_abilities_batch.ts',
-//   'src/lib/game/engine.ts',
 //   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',

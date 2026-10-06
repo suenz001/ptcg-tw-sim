@@ -18487,6 +18487,18 @@ export function liftEndgameForOnKoV6361(state: GameState): GameState {
   return s;
 }
 // <<< v6361-lift-endgame
+// >>> v6502-request-verdict
+/**
+ * ⭐v6.502：寶可夢檢查停下來等補位時，若有一方已經完全沒有寶可夢（或檢查中有人取完獎賞），
+ *   請 applyActionImpl 末端的中央重判點「先結清排隊中的取獎視窗（v6.419）、再依獎賞＋放置規則判」。
+ *   與 liftEndgameForOnKoV6361 同一組暫存旗標、同一處清除；這裡不是收回終局（沒有 Lifted* 還原值），
+ *   只用在「依放置規則一定會判出終局」的盤面（重判不成立的 fail-safe 不會走到）。engine 不得自己組這個旗標。
+ */
+export function requestEndgameVerdictV6361(state: GameState): GameState {
+  if (state.phase !== 'playing' || state._v6361NeedsVerdict === true) return state;
+  return { ...state, _v6361NeedsVerdict: true };
+}
+// <<< v6502-request-verdict
 export function drainOnKoAfterPrize(state: GameState, pool: Map<string, Card>): GameState {
   const q = state._onKoAfterPrize;
   if (!q || q.length === 0) return state;

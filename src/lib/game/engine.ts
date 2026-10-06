@@ -1067,7 +1067,7 @@ import { firePassiveOnKoAfterPrize, drainOnKoAfterPrize } from './effects';
 // <<< v6355-ko-after-prize-import
 // >>> v6361-lift-import
 // ⭐v6.361 站長裁定 D-10：把「已判出的終局」暫時收回，讓 on-KO 特性先結算完再重判（含平手）。
-import { liftEndgameForOnKoV6361 } from './effects';
+import { liftEndgameForOnKoV6361, requestEndgameVerdictV6361 } from './effects';
 import { koTargetAfterAttackDamage, koAttackerAfterRetaliation } from './effects';
 import { miracleKissOnActiveFaint } from './effects';   // ⭐v6.493 奇跡之吻唯一入口（任何原因的戰鬥寶可夢昏厥）   // ⭐v6.490 備戰昏厥共用（受害者被效果換到備戰區後才昏厥）
 import { isManuallyActivatableAbilityText } from './ability-activation';   // ⭐v6.489 被動特性不給按鈕
@@ -7469,6 +7469,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       const newMainEnd: [number, number] = [prevMainEnd[0], prevMainEnd[1]];
       // 從「對手」視角看：剛結束回合的玩家 aIdx = 對手；對手獎賞 = players[aIdx].prizes.length
       newMainEnd[oppIdx] = players[aIdx].prizes.length;
+      // ⭐v6.502（Opus 審查 3）：記下「回合結束當下」的戰鬥寶可夢（力之沙漏卡面：在自己的回合結束時、附在戰鬥場的寶可夢）
+      state = { ...state, endTurnActiveIidAtEnd: players[aIdx].active?.iid ?? null };   // v6502-checkup-simultaneous-verdict
       // (b) rocket-poke-in-discard snapshot（從即將進入新回合的玩家視角看自己的棄牌堆）
       const countRocket = (pl: PlayerState): number =>
         pl.discard.filter(c => {
@@ -7596,15 +7598,18 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         let poisonState = addLog({ ...state, players }, `${poisonedCard?.name ?? '?'} 被中毒傷害擊倒！`, null);
         poisonState = addPendingPrize(poisonState, oIdx, poisonPrizes, pool);
         players[0] = poisonState.players[0]; players[1] = poisonState.players[1];  // 同步(避免後續 {...state,players} 用 stale players 覆蓋獎賞)
-        if (poisonState.phase === 'game-over') return poisonState;  // addPendingPrize 內部已判「取完所有獎賞獲勝」
-        if (poisonPlayer.bench.length === 0) {
-          return { ...poisonState, phase: 'game-over', winner: oIdx, winReason: `${poisonPlayer.name} 沒有可上場的寶可夢` };
-        }
+        // ⭐v6.502（Opus 審查 2）：取完獎賞也不在這裡結束——另一方的中毒／灼傷、冰冷之帳還沒結算（同時取完獎賞又沒有寶可夢
+        //   要依 v6.420 判平手）⇒ 收回成「待重判」繼續跑，出口的中央判定（含排隊中的取獎結清）一次判。
+        poisonState = liftEndgameForOnKoV6361(poisonState);   // v6502-checkup-simultaneous-verdict
+        // >>> v6502-checkup-simultaneous-verdict
+        // ⭐v6.502（Fable 審查 D，站長裁定修）：原本「中毒昏厥且沒有備戰」當下就判對手勝 ⇒ 雙方同時中毒昏厥、
+        //   雙方都沒備戰時，先結算的那一方被判輸（應為平手，官方 L1460／v6.361 裁定）。
+        //   ⇒ 不在這裡判；整個寶可夢檢查跑完後，由 applyAction 出口的中央 judgeEndgameV6361 一次判（雙方皆無 ⇒ 平手）。
+        // <<< v6502-checkup-simultaneous-verdict
         // >>> v6493-kiss-poison
         // ⭐v6.493 站長裁定 1：寶可夢檢查階段對手的戰鬥寶可夢昏厥 ⇒ 擲奇跡之吻
-        poisonState = miracleKissOnActiveFaint(poisonState, tIdx, pool);
+        poisonState = liftEndgameForOnKoV6361(miracleKissOnActiveFaint(poisonState, tIdx, pool));   // v6.502：同上
         players[0] = poisonState.players[0]; players[1] = poisonState.players[1];
-        if (poisonState.phase === 'game-over') return poisonState;
         // <<< v6493-kiss-poison
         // SEND_NEW_ACTIVE 由被毒死方（tIdx）補；re-dispatch END_TURN 仍以 aIdx 為 activePlayerIndex
         // v5.764：不 early-return — 設 state 後繼續跑完剩餘 checkup(對手中毒/灼傷、雙方睡眠醒幣、
@@ -7657,14 +7662,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         let burnState = addLog({ ...state, players }, `${burnedCard?.name ?? '?'} 被燒傷傷害擊倒！`, null);
         burnState = addPendingPrize(burnState, oIdx, burnPrizes, pool);
         players[0] = burnState.players[0]; players[1] = burnState.players[1];
-        if (burnState.phase === 'game-over') return burnState;
-        if (burnedPlayer.bench.length === 0) {
-          return { ...burnState, phase: 'game-over', winner: oIdx, winReason: `${burnedPlayer.name} 沒有可上場的寶可夢` };
-        }
+        burnState = liftEndgameForOnKoV6361(burnState);   // ⭐v6.502（Opus 審查 2）：同中毒那一格
+        // >>> v6502-checkup-simultaneous-verdict
+        // ⭐v6.502：同中毒那一格——沒有備戰也不在這裡判，交給出口的中央終局判定（雙方同時 ⇒ 平手）。
+        // <<< v6502-checkup-simultaneous-verdict
         // >>> v6493-kiss-burn
-        burnState = miracleKissOnActiveFaint(burnState, tIdx, pool);   // ⭐v6.493 站長裁定 1
+        burnState = liftEndgameForOnKoV6361(miracleKissOnActiveFaint(burnState, tIdx, pool));   // ⭐v6.493 站長裁定 1；v6.502 不提早返回
         players[0] = burnState.players[0]; players[1] = burnState.players[1];
-        if (burnState.phase === 'game-over') return burnState;
         // <<< v6493-kiss-burn
         // v5.764：同上 — 不 early-return,繼續跑完剩餘 checkup,補位延到狀態區結尾統一處理。
         state = burnState;
@@ -7755,9 +7759,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   走原流程。故此處毋須額外 pendingSelection 分支(加了反而 return 時漏 endTurnContinueAfterKO 斷掉續跑)。
     if (state.players[aIdx].active === null || state.players[dIdx].active === null) {
       // >>> v6500-checkup-ko-defer-promote
-      // ⭐v6.500：取獎賞卡的選擇視窗（正面朝上獎賞）還開著 ⇒ 維持舊行為先停下來（放指示物特性區補完位後才跑），
-      //   避免冰冷之帳／揚沙再發一次獎賞時蓋掉這個視窗。沒有視窗（絕大多數情況）⇒ 先跑完同一次檢查的特性區再停。
-      if (state.pendingSelection) return { ...state, endTurnContinueAfterKO: aIdx };
+      // ⭐v6.502（Fable 審查 B，站長裁定修）：v6.500 在「正面朝上獎賞的取獎視窗開著」時維持舊流程（先補位才放冰冷之帳）。
+      //   取獎視窗之後再開的視窗會排進 pendingChainQueue（v6.418），不會被蓋掉 ⇒ 拿掉例外，兩條路徑一致：
+      //   特性區照常在同一次檢查跑完，再帶著還沒解完的視窗停下來等補位（視窗解完前引擎不收 SEND_NEW_ACTIVE）。
       _v6500StatusKO = true;
       // <<< v6500-checkup-ko-defer-promote
     }
@@ -7918,7 +7922,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         state = addLog({ ...state, players },
           `冰冷之帳：${players[i].name} 有寶可夢被擊倒，${winner.name} 將取得 ${owed} 張獎賞卡。`,
           null);
-        state = addPendingPrize(state, winnerIdx, owed, pool);
+        state = liftEndgameForOnKoV6361(addPendingPrize(state, winnerIdx, owed, pool));   // v6.502：取完獎賞也跑完整個檢查
         // v5.498：addPendingPrize 把獎賞發在 state.players，但本地 players 變數會 stale；
         //   後續 checkup 區塊(力之沙漏/道具自棄)與 finalize(clearTurnFlags) 的 {...state, players}
         //   會用 stale players 覆蓋掉剛發的獎賞 → 玩家「冰冷之帳/揚沙 KO 對手卻沒拿到獎賞」。同步回來。
@@ -7928,21 +7932,14 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       // ⭐v6.493 站長裁定 1：冰冷之帳（寶可夢檢查）讓戰鬥寶可夢昏厥 ⇒ 該方的對手擲奇跡之吻
       for (const i of [0, 1] as const) {
         if (!activeDiedByOwner[i]) continue;
-        state = miracleKissOnActiveFaint({ ...state, players }, i, pool);
+        state = liftEndgameForOnKoV6361(miracleKissOnActiveFaint({ ...state, players }, i, pool));   // v6.502 不提早返回
         players[0] = state.players[0]; players[1] = state.players[1];
-        if (state.phase === 'game-over') return state;
       }
       // <<< v6493-kiss-frost-tent
-      // 勝利條件：任一方戰鬥寶可夢被擊倒 + 備戰已空 → 對手勝
-      for (const i of [0, 1] as const) {
-        if (activeDiedByOwner[i] && players[i].bench.length === 0 && players[i].active === null) {
-          const winnerIdx = (1 - i) as 0 | 1;
-          return {
-            ...state, phase: 'game-over',
-            winner: winnerIdx, winReason: `${players[i].name} 沒有可上場的寶可夢`,
-          };
-        }
-      }
+      // >>> v6502-checkup-simultaneous-verdict
+      // ⭐v6.502：原本「任一方戰鬥寶可夢被打倒＋備戰已空 ⇒ 對手勝」在這裡依座位順序先判 ⇒ 雙方同時沒有寶可夢時判錯，
+      //   而且揚沙被跳過。改由 applyAction 出口的中央 judgeEndgameV6361 在整個檢查結算完後一次判。
+      // <<< v6502-checkup-simultaneous-verdict
     }
 
     // v3.01 Wave 3 — 火箭隊的班基拉斯｜揚沙（寶可夢檢查時放指示物）
@@ -8026,7 +8023,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           state = addLog({ ...state, players },
             `揚沙：${players[oppIdx].name} 有寶可夢被擊倒，${players[ownerIdx].name} 將取得 ${sandstormPrizes} 張獎賞卡。`,
             ownerIdx);
-          state = addPendingPrize(state, ownerIdx, sandstormPrizes, pool);
+          state = liftEndgameForOnKoV6361(addPendingPrize(state, ownerIdx, sandstormPrizes, pool));   // v6.502 同冰冷之帳
         // v5.498：addPendingPrize 把獎賞發在 state.players，但本地 players 變數會 stale；
         //   後續 checkup 區塊(力之沙漏/道具自棄)與 finalize(clearTurnFlags) 的 {...state, players}
         //   會用 stale players 覆蓋掉剛發的獎賞 → 玩家「冰冷之帳/揚沙 KO 對手卻沒拿到獎賞」。同步回來。
@@ -8034,17 +8031,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         }
         // >>> v6493-kiss-sandstorm
         if (sandstormActiveDied) {   // ⭐v6.493 站長裁定 1：揚沙（寶可夢檢查）
-          state = miracleKissOnActiveFaint({ ...state, players }, oppIdx, pool);
+          state = liftEndgameForOnKoV6361(miracleKissOnActiveFaint({ ...state, players }, oppIdx, pool));   // v6.502 不提早返回
           players[0] = state.players[0]; players[1] = state.players[1];
-          if (state.phase === 'game-over') return state;
         }
         // <<< v6493-kiss-sandstorm
-        if (sandstormActiveDied && players[oppIdx].bench.length === 0 && players[oppIdx].active === null) {
-          return {
-            ...state, phase: 'game-over',
-            winner: ownerIdx, winReason: `${players[oppIdx].name} 沒有可上場的寶可夢`,
-          };
-        }
+        // ⭐v6.502（v6502-checkup-simultaneous-verdict）：揚沙打倒最後一隻也不在這裡判，交給出口的中央終局判定。
       }
     }
 
@@ -8053,8 +8044,16 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     // >>> v6500-checkup-ko-defer-promote
     // ⭐v6.500：狀態區有寶可夢昏厥 ⇒ 特性區跑完後才停下來等補位（雙方都可能要補；SEND_NEW_ACTIVE 會等兩邊都補完才續跑）。
     //   re-dispatch 帶 endTurnSkipCheckup＋endTurnCheckupAbilitiesDone ⇒ 兩區都不重跑，直接進入下方收尾。
-    if (_v6500StatusKO) {
-      return { ...state, players, endTurnContinueAfterKO: aIdx };
+    // ⭐v6.502（Fable 審查 C，站長裁定修）：冰冷之帳／揚沙單獨打倒戰鬥寶可夢（沒有狀態昏厥）時，原本照常換回合、
+    //   被打倒的一方在下一個回合中才補位（還被標成「本回合才放上戰鬥場」）⇒ 改成同樣停下來等補位，補完才換回合。
+    //   ⚠ 用本地 players 判（特性區的結果還沒寫回 state 的可能）；re-dispatch 時兩區都不跑、雙方都已補完 ⇒ 不會再停。
+    //   ⭐Opus 審查 1：停等時 turnPhase 設 'end'（否則結束回合的一方在等對手補位時還能附能量、出牌，AI 也會繼續出牌）。
+    //   ⭐Opus 審查 2：檢查中有人取完獎賞（已收回成待重判）或有一方完全沒有寶可夢 ⇒ 帶 _v6361NeedsVerdict，
+    //     讓出口先結清排隊中的取獎視窗、再依獎賞＋放置規則一次判（同時成立 ⇒ 平手，v6.420）。
+    const _v6502NoMon = [0, 1].some((i) => players[i as 0 | 1].active === null && players[i as 0 | 1].bench.length === 0);
+    if (_v6500StatusKO || players[0].active === null || players[1].active === null || state._v6361NeedsVerdict === true) {
+      const _v6502Stop: GameState = { ...state, players, endTurnContinueAfterKO: aIdx, turnPhase: 'end' };
+      return _v6502NoMon ? requestEndgameVerdictV6361(_v6502Stop) : _v6502Stop;   // 待重判（已收回者）原樣帶著
     }
     // <<< v6500-checkup-ko-defer-promote
 
@@ -8068,7 +8067,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       // v3.20 多重轉接：力之沙漏可在 toolAttached 或 extraTools
       const _hasLouTool = active && !toolsJammedET
         && getAllAttachedTools(active).some(t => pool.get(t.cardId)?.name === '力之沙漏');
-      if (_hasLouTool && !aPlayer.lourisToolUsedThisTurn) {
+      // ⭐v6.502：寶可夢檢查後才補上場的寶可夢不是「回合結束時在戰鬥場」⇒ 不問（原本那隻在、或開始時本來就空著才照舊）
+      const _v6502StartIid = state.endTurnActiveIidAtEnd;
+      const _v6502SameActive = !_v6502StartIid || active?.iid === _v6502StartIid;
+      if (_hasLouTool && !aPlayer.lourisToolUsedThisTurn && _v6502SameActive) {
         const hasPending = (state as any).pendingSelection;
         if (!hasPending) {
           const hasBasic = aPlayer.discard.some(c => {
@@ -8898,6 +8900,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         // v2.124：finalize 結束時清掉 endTurnSkipCheckup（避免下次 endTurn 也跳過 checkup）
         endTurnSkipCheckup: undefined,
         endTurnCheckupAbilitiesDone: undefined,  // v5.426 清除特性區旗標
+        endTurnActiveIidAtEnd: undefined,  // ⭐v6.502 清除「回合結束當下的戰鬥寶可夢」
         _pendingAttackEnergyRevive: undefined,  // v5.678 安全清除跨picker revive快照
         // >>> v6362-clear-return-hand
         _pendingReturnHandToDeck: undefined,  // ⭐v6.362 A-1 安全清除跨picker「手牌洗回牌庫」待辦
