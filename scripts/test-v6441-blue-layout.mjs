@@ -175,6 +175,10 @@ const LATER = [
   ["          initial: loadChatPanelPos(isPortraitMobile), onEnd: saveChatPanelPos }}>", "          initial: chatPanelPos, onEnd: (o) => { chatPanelPos = o; } }}>"],
   // ⭐v6.500（Rule 40）：補位提示多傳 checkupPromoteWait（寶可夢檢查後雙方等補位；非藍桌墊）——內容由 test-v6500 F12 鎖
   ["    turnPhase: game.turnPhase, checkupPromoteWait: game.endTurnContinueAfterKO != null,   // ⭐v6.500\n", "    turnPhase: game.turnPhase,\n"],
+  // ⭐v6.505（Rule 40）：全站版面統一第 2 步——大廳樣式放在獨立元件 $lib/LobbyUnify.svelte（只有 :global 樣式、全部帶 :not([data-battle-view])），
+  //   對戰頁只多 import 一行與一個標籤；內容由 test-v6505 鎖
+  ["  import LobbyUnify from '$lib/LobbyUnify.svelte';   // ⭐v6.505 全站版面統一：大廳頁首與模式卡片（只有樣式，牌桌不受影響）\n", ""],
+  ["</svelte:head>\n<LobbyUnify />\n", "</svelte:head>\n"],
 ];
 // ⭐v6.464 起：改動也碰到藍桌墊哨兵內的 <img>（全版面一致改用縮圖），無法放進 LATER（哨兵先被剝掉、條目會命中 0 次）
 //   ⇒ 在 strip() 的**最前面**先把本版改動整段還原成 v6.463（IRON_RULES Rule 40：保留「藍桌墊只活在哨兵裡」的原意）。

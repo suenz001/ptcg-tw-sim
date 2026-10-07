@@ -34,6 +34,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { loadCardPolicyOnce } from '$lib/cards/policy-loader';
   import { friendsEntryVisible, friendsBattleEntryVisible, requestFriendFromBattle, friendsRequestReplyText, type FriendsBattleTarget, type FriendRow } from '$lib/friends/friends-api';   // v6.283 線上大廳「👥 好友」入口（純函式、零請求）；v6.284 賽後／設定「將對手加為好友」
   import FriendsPanel from '$lib/friends/FriendsPanel.svelte';   // ⭐ v6.296 大廳第二個分頁「👥 好友名單」；與 /friends 頁**共用同一份**（不要兩份漂移）
+  import LobbyUnify from '$lib/LobbyUnify.svelte';   // ⭐v6.505 全站版面統一：大廳頁首與模式卡片（只有樣式，牌桌不受影響）
   import { friendsCtxFromAuth } from '$lib/friends/auth-ctx';   // ⭐ v6.297 私聊內嵌：取身分的中央出口（匿名回 null ⇒ 一發請求都不發）
   // ⚠⚠ v6.297 私聊只引用**型別**（import type 編譯後完全消失）；實作（dm-session / dm-poller / DmPanel）一律走動態 import()，
   //   對戰頁的主 chunk 一個位元組都不會多（守衛 test-v6297【D】用**靜態 import 相依圖**證明）。
@@ -10147,6 +10148,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
 <svelte:head>
   {@html '<style>html, body { margin: 0; background-color: #162816 !important; min-height: 100vh; }</style>'}
 </svelte:head>
+<LobbyUnify />
 
 <svelte:window onkeydown={onGlobalKey} onpointermove={onWindowPointerMove} onpointerup={onWindowPointerUp} />
 
