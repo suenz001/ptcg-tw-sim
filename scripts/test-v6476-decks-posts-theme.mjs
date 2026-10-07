@@ -69,7 +69,11 @@ else if (chromium) {
     await new Promise((r) => srv.listen(0, r));
     const port = srv.address().port;
     const errs = [];
-    const lum = (rgb) => { const m = String(rgb).match(/\d+/g); if (!m) return -1; const [r, g, b] = m.map(Number); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    // ⭐v6.507（Rule 40）：頁首改用共用元件 PageHeader，「← 首頁」不是藏起來而是從標記拿掉了 ⇒ 原本量 `.page-head > .back` 的 display
+//   會拿到 null。意圖不變（頁首裡看不到回首頁的連結）⇒ 改成「頁首裡有沒有看得見、指向首頁的連結」：沒有 ⇒ 'none'。
+const homeLinkInHead = (pg) => pg.evaluate(() => [...document.querySelectorAll('.page-head a')]
+  .some((a) => /^\/?$/.test(a.getAttribute('href') || '') && getComputedStyle(a).display !== 'none' && a.getBoundingClientRect().width > 0) ? 'shown' : 'none');
+const lum = (rgb) => { const m = String(rgb).match(/\d+/g); if (!m) return -1; const [r, g, b] = m.map(Number); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
     const open = async (w, h, theme, path, mobile = false) => {
       const ctx = await browser.newContext({ serviceWorkers: 'block', viewport: { width: w, height: h }, isMobile: mobile, hasTouch: mobile });
       await ctx.route(/googleapis|firebase|gstatic|pokemon-card|github\.io|youtube|ytimg/, (r) => r.abort());
@@ -81,18 +85,18 @@ else if (chromium) {
     const css = (pg, sel, prop) => pg.evaluate(([s, p]) => { const e = document.querySelector(s); return e ? getComputedStyle(e)[p] : null; }, [sel, prop]);
     try {
       let { ctx, pg } = await open(1440, 900, 'dark', '/decks');
-      const D = { body: await css(pg, 'body', 'backgroundColor'), rail: await css(pg, '.rail', 'backgroundColor'), picker: await css(pg, '.picker', 'backgroundColor'), h1: await css(pg, '.page-head h1', 'color'), back: await css(pg, '.page-head > .back', 'display'), chip: await css(pg, '.pk-chip:not(.active)', 'color') };
+      const D = { body: await css(pg, 'body', 'backgroundColor'), rail: await css(pg, '.rail', 'backgroundColor'), picker: await css(pg, '.picker', 'backgroundColor'), h1: await css(pg, '.page-head h1', 'color'), back: await homeLinkInHead(pg), chip: await css(pg, '.pk-chip:not(.active)', 'color') };
       await ctx.close();
       ok('★★★[E1] /decks 深色：底色、三欄面板深色，標題與篩選文字淺色，「← 首頁」收起', lum(D.body) < 40 && lum(D.rail) < 50 && lum(D.picker) < 50 && lum(D.h1) > 200 && lum(D.chip) > 200 && D.back === 'none', JSON.stringify(D));
       ({ ctx, pg } = await open(1440, 900, 'light', '/deck-posts'));
-      const P = { body: await css(pg, 'body', 'backgroundColor'), head: await css(pg, '.page-head', 'borderTopLeftRadius'), back: await css(pg, '.page-head > .back', 'display') };
+      const P = { body: await css(pg, 'body', 'backgroundColor'), head: await css(pg, '.page-head', 'borderTopLeftRadius'), back: await homeLinkInHead(pg) };
       await ctx.close();
       ok('★★[E2] /deck-posts 淺色：主題底色、頁首卡片、「← 首頁」收起', lum(P.body) > 230 && P.head === '16px' && P.back === 'none', JSON.stringify(P));
       // ⭐v6.498（Rule 40，站長手機清單第 6 項「深色主題目前只有電腦版：手機沒有切換鈕、系統深色時仍是淺色」）：
       //   手機深色改成吃主題色 ⇒ 原本「手機深色也維持舊樣式」的判準拆成兩條：淺色＝顏色與版面全部維持舊樣式；深色＝版面維持、顏色吃主題。
       const md = async (scheme) => {
         ({ ctx, pg } = await open(390, 844, scheme, '/decks', true));
-        const r = { body: await css(pg, 'body', 'backgroundColor'), rail: await css(pg, '.rail', 'backgroundColor'), radius: await css(pg, '.rail', 'borderTopLeftRadius'), back: await css(pg, '.page-head > .back', 'display') };
+        const r = { body: await css(pg, 'body', 'backgroundColor'), rail: await css(pg, '.rail', 'backgroundColor'), radius: await css(pg, '.rail', 'borderTopLeftRadius'), back: await homeLinkInHead(pg) };
         await ctx.close(); return r;
       };
       const M = await md('light'), MD = await md('dark');
@@ -101,7 +105,7 @@ else if (chromium) {
       ok('★★[E3b] 手機 390 深色：/decks 8px 圓角不變、顏色吃深色主題、「← 首頁」收起（v6.504）', MD.body === 'rgb(22, 40, 22)' && MD.rail === 'rgb(30, 53, 33)' && MD.radius === '8px' && MD.back === 'none', JSON.stringify(MD));
       const mp = async (scheme) => {
         ({ ctx, pg } = await open(390, 844, scheme, '/deck-posts', true));
-        const r = { body: await css(pg, 'body', 'backgroundColor'), back: await css(pg, '.page-head > .back', 'display'), head: await css(pg, '.page-head', 'borderTopLeftRadius') };
+        const r = { body: await css(pg, 'body', 'backgroundColor'), back: await homeLinkInHead(pg), head: await css(pg, '.page-head', 'borderTopLeftRadius') };
         await ctx.close(); return r;
       };
       const MP = await mp('light'), MPD = await mp('dark');

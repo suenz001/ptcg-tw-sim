@@ -30,7 +30,9 @@ function judge(get) {
     && blk('src/routes/decks/+page.svelte').includes(P + ' .page-head > .back { display: none; }')
     && blk('src/routes/decks/+page.svelte').includes(':global(html) .version-tag { display: none; }')
     && blk('src/routes/deck-posts/+page.svelte').includes(P + ' .page-head > .back { display: none; }')
-    && blk('src/routes/friends/+page.svelte').includes('.page-head > .back, .version-tag { display: none; }');
+    // ⭐v6.507（Rule 40）：好友頁的「← 首頁」與版本號已隨全站頁首統一從標記拿掉（不是藏起來）⇒ 收起規則沒有對象、刪除；
+    //   改驗好友頁標記裡沒有這兩樣（意圖：好友頁不顯示 ← 首頁與版本號）。HEAD-FAIL（v6.503 兩樣都有、也沒收起）照樣紅。
+    && ((f) => { const g = get(f); return g.length > 0 && (blk(f).includes('.page-head > .back, .version-tag { display: none; }') || (!/class="back"/.test(g) && !/version-tag/.test(g) && /<PageHeader title="👥 好友"/.test(g))); })('src/routes/friends/+page.svelte');
   r.S3 = get('src/routes/+layout.svelte').includes(":global(html[data-ui-themed][data-theme='light']:not([data-ui-wide]):not([data-battle-view]) body) { background: var(--ui-bg); color: var(--ui-text); }");
   return r;
 }

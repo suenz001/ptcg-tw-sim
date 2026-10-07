@@ -448,7 +448,12 @@ console.log('\n⑨ 【B】三種桌機版面：unused CSS 警告集合必須與�
   const BASELINE = [
     '.battle-root textarea', '.mini-poke-btn img', '.online-form h2', '.online-form select',
     '.preset-toggle-row input', '.settings-section h4', '.setup-screen h2',
+    // ⭐v6.507（Rule 40）：全站頁首統一把大廳的 h1 與三份 .auth-user 換成共用元件 PageHeader／AccountBar（刻意的結構改動，不是失聯）
+    //   ⇒ 這 6 條舊樣式沒有對象。本條原意（防止「意外」失聯）不變，逐條登記；之後清理對戰頁樣式時一起刪掉並從這裡移除。
+    '.auth-user button.small', '.auth-user button.small.danger', '.auth-user button.small.danger:hover', '.auth-user button.small:hover',
+    '.lobby h1', '.lobby h1',
   ];
+  BASELINE.sort();
   const r = compile(PAGE, { filename: 'game/+page.svelte', generate: 'client' });
   const got = r.warnings.filter(w => w.code === 'css_unused_selector')
     .map(w => (/Unused CSS selector "(.*)"/.exec(w.message) ?? [])[1])

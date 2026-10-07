@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.507：全站頁首結構統一＋手機首頁鈕（2026-10-07）
+
+BASE v6.506／admin v1.78（64cf7c50）。
+- 新元件 $lib/ui/PageHeader.svelte：header.ph > .ph-row(h1.ph-title＋.ph-actions) → .ph-sub → .ph-account；樣式全在元件裡、讀 --ui-*；標題列 min-height＝捷徑高度（34／40px）⇒ 有無捷徑標題都同高。
+- 新元件 $lib/ui/AccountBar.svelte：同步狀態文字唯一一份（原本 decks 與 game 各抄）；保留 sync-pill／auth-email／auth-btn anon 類別。
+- 套用：/decks、/deck-posts、/cards（列表＋卡包頁）、/friends、/game 模式選擇／本機／線上（lobbyAccount snippet 共用）、錦標賽（tournAccount，條件＝舊 tourn-who：tStep!=='waiting' && !isAnonymous）。
+- 拿掉：頁內 ← 首頁、錦標賽 tourn-topbar、三份 auth-dashboard、tourn-who；LobbyUnify 刪掉失效的 h1／back 規則，網頁版 main.lobby margin-top 0（頁首距頂端列 24px，與其他頁一致）；好友頁網頁版 main padding-top 24px。
+- 底部導覽列：🏠 首頁（stripBase(pathname)==='/' 亮起）；body min-height:100vh（公布欄載入中頁面太短 ⇒ 網址列伸縮 ⇒ 導覽列跳；本機模擬器無法重現，需站長手機確認）。
+- gen-lobby-light.py 重跑（少 15 條已無對象的規則）。
+- Rule 40：test-v6505（探針改 main.lobby .ph；E5 改看模式卡片）、test-v6476／v6475（回首頁連結改量「頁首裡看得見、指向首頁的連結」）、test-v6297 B5 正對照、G1 BASE_MIGRATIONS、test-v6293 C4、test-v6441／v6439 LATER（difflib）。
+- test-v6507（23 條；HEAD 紅 S1～S5；突變：帳號列移到最上 ⇒ S1／R6 紅、未存檔判準改 >5 ⇒ R3 紅）。
+
 ## admin v1.78／server patch v1.56：牌組原型「序位」（2026-10-07，admin 專用，不寫對外 changelog）
 
 BASE v6.506（bb07efc6）。站長：「多個牌組有相同的牌的時候，會以設定的牌的多寡來分類，例如有兩套牌組都設定了同一張超級袋獸ex，卻有可能是不同的牌組…比較高的只要有符合內容就優先判定，比較低的要完全吻合，且高序位的牌組都未判定，才判定為本牌組」。

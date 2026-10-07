@@ -243,7 +243,8 @@ function lobbyEntryConds(game) {
   assert.strictEqual(conds.length, 3, '線上大廳內與好友分頁有關的 {#if} 不是恰 3 個（分頁列／online 分頁／friends 分頁）：' + JSON.stringify(conds.map((c) => c.cond)));
   return {
     seg, conds,
-    h1: seg.indexOf('<h1>🌐 線上連線對戰</h1>'),
+    // ⭐v6.507（Rule 40）：大廳頁首改用共用元件 PageHeader（標題在 title 屬性）；意圖（分頁列在標題之後）不變
+    h1: seg.indexOf('<PageHeader title="🌐 線上連線對戰"'),
     form: seg.indexOf('<div class="online-form lobby-unified">'),
     formEnd: seg.indexOf("{#if onlineError && !showCreateForm}<p class=\"warn\">{onlineError}</p>{/if}\n      </div>"),
   };
@@ -309,7 +310,10 @@ await T('C5 style 區零 friend（v6.296 的分頁列 CSS 一律 lobby- 前綴�
   assert.ok(newRules.length >= 4, '分頁列的 CSS 只有 ' + newRules.length + ' 行 —— 掃描器壞了？');
   for (const l of newRules) assert.ok(/^\s*(\/\*|\*|\.lobby-tabs|\.lobby-tab\b|\.lobby-tab[.:]|\.lobby-tab-panel)/.test(l.replace(/\{[\s\S]*$/, '').length ? l : l), '分頁列 CSS 碰到別的 selector：' + l.trim().slice(0, 120));
   assert.ok(css.includes('  .auth-user {\n    display: flex;\n    align-items: center;\n    gap: 0.5rem;\n    flex-wrap: wrap;\n  }\n'), '.auth-user 的 CSS 變了');
-  assert.strictEqual((GAME.match(/class="auth-user"/g) || []).length, 3, '.auth-user 份數變了');
+  // ⭐v6.507（Rule 40）：三份 .auth-user（模式選擇／本機／線上的帳號區）由站長要求的全站頁首統一收成共用元件 AccountBar
+  //   （lobbyAccount snippet 三畫面共用）⇒ 標記裡 0 份、帳號列接線恰 3 處。本條原意（分頁列沒有動到帳號區）由上面的 CSS 逐字比對繼續守。
+  assert.strictEqual((GAME.match(/class="auth-user"/g) || []).length, 0, '.auth-user 份數變了（v6.507 起應為 0，改用 AccountBar）');
+  assert.strictEqual((GAME.match(/account=\{firebaseUser \? lobbyAccount : undefined\}/g) || []).length, 3, '大廳帳號列（lobbyAccount）不是恰 3 處');
 });
 await T('C6 三種桌機對戰版面共用同一份勝負 modal：CSS 內所有含 gameover-modal 的規則都沒有 tablet-layout／tabletop／fable／classic；modal 是 fixed＋max-height＋overflow-y:auto', () => {
   const css = styleBlockOf(GAME);

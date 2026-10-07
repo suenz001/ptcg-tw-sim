@@ -111,7 +111,9 @@ T('D4 連結與網頁版頂端列同一份 NAV_ITEMS（五個、順序相同）'
   const navHrefs = [...THEME.matchAll(/\{ href: '([^']+)', label:/g)].map((m) => m[1]);
   const got = [...NAV.matchAll(/href="\{base\}([^"]+)"/g)].map((m) => m[1]);
   assert.equal(navHrefs.length, 5);
-  assert.deepEqual(got, navHrefs);
+  // ⭐v6.507（Rule 40）：站長要求手機要能回首頁 ⇒ 最左邊多一顆首頁（不在 NAV_ITEMS：網頁版頂端列由 logo 回首頁）；其餘五個仍與 NAV_ITEMS 同序
+  assert.equal(got[0], '/', '第一顆應為首頁');
+  assert.deepEqual(got.slice(1), navHrefs);
 });
 T('D5 安全區讀全站唯一來源 --safe-bottom（不自己寫 env()）', () => {
   assert.ok(!/env\(safe-area/.test(css));

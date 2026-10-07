@@ -116,7 +116,8 @@ else if (chromium) {
       await ctx.close();
       ok('★★★[E3] /cards?set= 深色：底色、篩選面板、卡片格都是深色，文字淺色；「← 卡包列表」仍在', lum(C.body) < 40 && lum(C.panel) < 50 && lum(C.tile) < 50 && lum(C.h1) > 200 && lum(C.name) > 200 && C.back !== 'none', JSON.stringify(C));
       ({ ctx, pg } = await open(1440, 900, 'light', '/cards'));
-      const CI = { body: await css(pg, 'body', 'backgroundColor'), set: await css(pg, '.setTile:not(.setTileAll)', 'backgroundColor'), home: await css(pg, '.back', 'display') };
+      const CI = { body: await css(pg, 'body', 'backgroundColor'), set: await css(pg, '.setTile:not(.setTileAll)', 'backgroundColor'), home: await pg.evaluate(() => [...document.querySelectorAll('header.ph a')].some((a) => /^\/?$/.test(a.getAttribute('href') || '') && getComputedStyle(a).display !== 'none' && a.getBoundingClientRect().width > 0) ? 'shown' : 'none') };
+      // ⭐v6.507（Rule 40）：頁首改用共用元件，「← 首頁」從標記拿掉（不是藏起來）⇒ 改量「頁首裡看得見、指向首頁的連結」；意圖不變。
       await ctx.close();
       ok('★★[E4] /cards 卡包列表淺色：白卡；網頁版「← 首頁」收起', lum(CI.body) > 230 && lum(CI.set) > 245 && CI.home === 'none', JSON.stringify(CI));
       ({ ctx, pg } = await open(1440, 900, 'dark', '/card/19378/'));

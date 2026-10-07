@@ -201,8 +201,12 @@ await T('B5 ⭐⭐ 匿名玩家看不到整列分頁：分頁列整段落在 `{#
   const elseBranch = GAME.indexOf('{:else}', gate);
   const tabs = GAME.indexOf('<div class="tourn-tabs" role="tablist">');
   assert.ok(elseBranch > gate && tabs > elseBranch, '⚠⚠ 分頁列不在「已登入」那個分支裡：' + JSON.stringify({ gate, elseBranch, tabs }));
-  // 正對照：登入閘與分頁列之間就是那一行「已登入：…」
-  assert.ok(GAME.slice(elseBranch, tabs).includes('class="tourn-who"'), '「已登入」那一行不見了 ⇒ 錨點抓錯');
+  // 正對照：{:else} 與分頁列之間沒有夾別的區塊（分頁列就是 {:else} 分支的第一個內容）
+  //   ⭐v6.507（Rule 40）：原本這裡夾著一行「已登入：email 登出」（class="tourn-who"），v6.507 全站頁首統一把它搬進頁首卡片底部的帳號列
+  //   （PageHeader 的 account，條件同樣是 tStep !== 'waiting' && !isAnonymous）⇒ 正對照改成「中間沒有別的分支／區塊」，意圖（錨點沒抓錯）不變。
+  const between = GAME.slice(elseBranch + '{:else}'.length, tabs);
+  assert.ok(!/\{[#:/]/.test(between) && between.length < 400, '{:else} 與分頁列之間夾了別的區塊 ⇒ 錨點抓錯：' + JSON.stringify(between.slice(0, 120)));
+  assert.ok(GAME.includes("account={tStep !== 'waiting' && !isAnonymous && firebaseUser ? tournAccount : undefined}"), '錦標賽頁首的帳號列條件不見了（匿名／等待進場時不可以顯示）');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -611,6 +615,13 @@ await T('G1 ⭐⭐ `/friends` 這條獨立路由與 DmPanel.svelte **逐位元�
       ["  }\n</style>\n", "  }\n\n  /* ⭐v6.468（全站 audit）：「← 首頁」只有 16～21px 高，手機上很難點。用 padding＋等量負 margin 放大可點範圍，\n     版面位置一點都不動（純文字連結、沒有底色或框線 ⇒ 桌機看起來也完全一樣）。\n     ⚠ 刻意不包 @media：本頁的 @media 數量有守衛在釘（手機／桌機不靠斷點切版），而這條在桌機也無害。 */\n  .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }\n</style>\n"],
       // v6.504 全站版面統一（站長選定以電腦版綠色系為基準、拿掉頁面內的 ← 首頁、版本號只留首頁與頂端列）：頁首改成卡片、收起 ← 首頁與版本號（整段在 v6504-unify 哨兵）。
       ["  .back:hover { text-decoration: underline; }\n", "  .back:hover { text-decoration: underline; }\n  /* >>> v6504-unify */\n  /* ⭐v6.504 全站版面統一（站長選「以電腦版現有綠色系為基準」「拿掉頁面內的 ← 首頁」「版本號只留首頁與頂端列」）：\n     頁首改成與卡牌資料庫／牌組編輯器同一種卡片（--ui-* 色票，深淺主題都跟著變），「← 首頁」與版本號收起（手機有底部導覽列、網頁版有頂端列）。 */\n  .page-head {\n    padding: 12px 16px;\n    background: var(--ui-hero-bg);\n    border: 1px solid var(--ui-border);\n    border-radius: 14px;\n    box-shadow: var(--ui-shadow);\n    align-items: center;\n  }\n  .page-head h1 { color: var(--ui-text); font-size: 1.3rem; }\n  .page-head > .back, .version-tag { display: none; }\n  :global(html:not([data-ui-wide])) main { padding-top: calc(12px + var(--safe-top, 0px)); }   /* 手機頁首卡片頂端與其他頁一致（12px） */\n  /* <<< v6504-unify */\n"],
+      // v6.507 全站頁首統一（站長：「帳號和標題的順序」各頁不一致，選定三層頁首規劃）：頁首改用共用元件 PageHeader（拿掉 ← 首頁與版本號標記）。difflib 產生、當場驗證逐位元前進到現況。
+      ["  //   ・全頁零 {@html}（暱稱／備註名都是玩家自由輸入）。\n  import { onMount } from 'svelte';\n", "  //   ・全頁零 {@html}（暱稱／備註名都是玩家自由輸入）。\n  import PageHeader from '$lib/ui/PageHeader.svelte';   // ⭐v6.507 全站頁首統一\n  import { onMount } from 'svelte';\n"],
+      ["{#snippet head()}\n  <header class=\"page-head\">\n    <a href=\"{base}/\" class=\"back\">← 首頁</a>\n    <h1>👥 好友 <span class=\"version-tag\">v{VERSION}</span></h1>\n  </header>\n\n", "{#snippet head()}\n  <!-- ⭐v6.507 全站頁首統一（PageHeader 共用元件）；分頁列接在卡片正下方 -->\n  <PageHeader title=\"👥 好友\" sub=\"用 email 加好友、管理邀請，並可私訊好友\" cls=\"page-head\" />\n\n"],
+      ["  }\n  .page-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }\n  .page-head h1 { font-size: 1.35rem; margin: 0; }\n  .version-tag { font-size: .7rem; color: var(--fr-dim); font-weight: 400; }\n  .back { font-size: .85rem; text-decoration: none; color: var(--fr-tab-fg); }\n  .back:hover { text-decoration: underline; }\n  /* >>> v6504-unify */\n", "  }\n  /* >>> v6504-unify */\n"],
+      ["     頁首改成與卡牌資料庫／牌組編輯器同一種卡片（--ui-* 色票，深淺主題都跟著變），「← 首頁」與版本號收起（手機有底部導覽列、網頁版有頂端列）。 */\n  .page-head {\n    padding: 12px 16px;\n    background: var(--ui-hero-bg);\n    border: 1px solid var(--ui-border);\n    border-radius: 14px;\n    box-shadow: var(--ui-shadow);\n    align-items: center;\n  }\n  .page-head h1 { color: var(--ui-text); font-size: 1.3rem; }\n  .page-head > .back, .version-tag { display: none; }\n  :global(html:not([data-ui-wide])) main { padding-top: calc(12px + var(--safe-top, 0px)); }   /* 手機頁首卡片頂端與其他頁一致（12px） */\n", "     頁首改成與卡牌資料庫／牌組編輯器同一種卡片（--ui-* 色票，深淺主題都跟著變），「← 首頁」與版本號收起（手機有底部導覽列、網頁版有頂端列）。 */\n  /* ⭐v6.507 全站頁首統一：頁首改用共用元件 $lib/ui/PageHeader.svelte（卡片樣式在元件裡、「← 首頁」與版本號已從標記拿掉）\n     ⇒ 本頁原本的頁首、← 首頁、版本號樣式都沒有對象了，刪除（含 v6.468 放大「← 首頁」可點範圍那條）。本區只留 main 的上內距。 */\n  :global(html:not([data-ui-wide])) main { padding-top: calc(12px + var(--safe-top, 0px)); }   /* 手機頁首卡片頂端與其他頁一致（12px） */\n"],
+      ["  :global(html:not([data-ui-wide])) main { padding-top: calc(12px + var(--safe-top, 0px)); }   /* 手機頁首卡片頂端與其他頁一致（12px） */\n  /* <<< v6504-unify */\n", "  :global(html:not([data-ui-wide])) main { padding-top: calc(12px + var(--safe-top, 0px)); }   /* 手機頁首卡片頂端與其他頁一致（12px） */\n  :global(html[data-ui-wide]) main { padding-top: 24px; }   /* ⭐v6.507 網頁版：頁首卡片離頂端列 24px（與牌組編輯器、卡牌資料庫、公布欄一致） */\n  /* <<< v6504-unify */\n"],
+      ["  }\n\n  /* ⭐v6.468（全站 audit）：「← 首頁」只有 16～21px 高，手機上很難點。用 padding＋等量負 margin 放大可點範圍，\n     版面位置一點都不動（純文字連結、沒有底色或框線 ⇒ 桌機看起來也完全一樣）。\n     ⚠ 刻意不包 @media：本頁的 @media 數量有守衛在釘（手機／桌機不靠斷點切版），而這條在桌機也無害。 */\n  .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }\n</style>\n", "  }\n</style>\n"],
     ],
   };
   for (const [p, rel] of [[P_FRPAGE, 'src/routes/friends/+page.svelte'], [P_DMPANEL, 'src/routes/friends/DmPanel.svelte']]) {

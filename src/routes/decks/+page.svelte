@@ -1,6 +1,8 @@
 <script lang="ts">
   import { compileCardQuery, cardSearchFields, SEARCH_SYNTAX_HINT } from '$lib/cards/search-query';   // ⭐v6.481 搜尋語法（兩頁共用）
   import { MediaQuery } from 'svelte/reactivity';
+  import PageHeader from '$lib/ui/PageHeader.svelte';   // ⭐v6.507 全站頁首統一
+  import AccountBar from '$lib/ui/AccountBar.svelte';
   import { MOBILE_FILTER_QUERY, countActiveFilters, filterToggleLabel } from '$lib/mobile-filters';   // ⭐v6.497 手機篩選收合
   import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）
   import { deckSortDrag, moveIdTo } from '$lib/deck-sort-drag';   // ⭐v6.460 牌組拖曳排序（唯一來源）
@@ -1778,30 +1780,21 @@
 <svelte:window onkeydown={onKeydown} />
 
 <main>
-  <header class="page-head">
-    <a href="{base}/" class="back">← 首頁</a>
-    <h1>牌組編輯器 <span class="version-tag">v{VERSION}</span></h1>
-    <span class="hint">Standard · {REG_MARK_ORDER.join(' / ')} 標</span>
-    <!-- v6.139：牌組公布欄入口（批次 2 只有瀏覽與匯入，投稿在批次 3） -->
-    <a href="{base}/deck-posts" class="to-board">📋 牌組公布欄</a>
-    <span class="sync-pill sync-{dirtyDeckIds.size > 0 ? 'unsaved' : syncStatus}" title={dirtyDeckIds.size > 0 ? `有 ${dirtyDeckIds.size} 個牌組未存檔（按 💾 存檔 推到雲端）` : (syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : '')}>
-      {#if dirtyDeckIds.size > 0}📝 未存檔 ({dirtyDeckIds.size}){:else if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
-    </span>
-    <!-- Auth status -->
-    {#if firebaseUser}
-      {#if isAnonymous}
-        <button class="auth-btn anon" onclick={openAuthModal} title="建立帳號以跨裝置保存牌組">
-          👤 匿名　<span class="auth-sub">建立帳號</span>
-        </button>
+  <!-- ⭐v6.507 全站頁首統一：標題＋捷徑 → 副標 → 帳號列（PageHeader／AccountBar 共用元件） -->
+  <PageHeader title="🧩 牌組編輯器" sub={`Standard · ${REG_MARK_ORDER.join(' / ')} 標`} cls="page-head">
+    {#snippet actions()}
+      <!-- v6.139：牌組公布欄入口 -->
+      <a href="{base}/deck-posts" class="to-board">📋 牌組公布欄</a>
+    {/snippet}
+    {#snippet account()}
+      {#if firebaseUser}
+        <AccountBar email={firebaseUser.email} anonymous={isAnonymous} {syncStatus} {syncError} unsaved={dirtyDeckIds.size}
+          onCreateAccount={openAuthModal} onChangePassword={openChangePasswordModal} onSignOut={handleSignOut} />
       {:else}
-        <div class="auth-user">
-          <span class="auth-email">✉️ {firebaseUser.email}</span>
-          <button class="small" onclick={openChangePasswordModal} title="更改密碼">🔑 更改密碼</button>
-          <button class="small danger" onclick={handleSignOut}>登出</button>
-        </div>
+        <AccountBar {syncStatus} {syncError} unsaved={dirtyDeckIds.size} />
       {/if}
-    {/if}
-  </header>
+    {/snippet}
+  </PageHeader>
 
   {#if poolError}
     <p class="error">載入卡池失敗：{poolError}</p>

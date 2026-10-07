@@ -24,7 +24,7 @@
 //        5-2 ⭐ 每支 .svelte 用 svelte/compiler parse() 當裁判（v6.320 改**範圍級**）：helper 每一段的 start/end/innerStart/innerEnd
 //        必須與 Svelte 的 instance／module／css 逐位相同，helper 每一個 HTML 註解的 start/end 必須與 AST Comment 節點逐位相同
 //        （⛔-1 範圍不同、⛔-2 註解位移不同 ⇒ 都紅；比段數的舊裁判對 ⛔-1 是綠的）。
-//        唯一已知偏差：friends/+page.svelte 的 <svelte:head><style>（helper 多一段 style，釘死 LF 位移 3607–3704）——
+//        唯一已知偏差：friends/+page.svelte 的 <svelte:head><style>（helper 多一段 style，釘死 LF 位移 3681–3778（v6.507 重釘；原 3607–3704））——
 //        Svelte 當 <svelte:head> 底下的模板元素（AST 裡是 RegularElement name=style、範圍同一個），helper 當區段；
 //        行為端證明：test-v6293 A1 就是要抽這一段當「注入 head 的樣式」，沒有守衛拿 friends 頁的模板層或 style 內文守「不存在」。
 //        5-3 ⭐ 把 ⛔-1 植入真檔（MobilePortraitBattle 的 <style> 之後）⇒ 範圍裁判必紅、比段數的舊裁判必綠（反面對照）
@@ -528,7 +528,8 @@ T('5-2 ⭐ 每支 .svelte 用 svelte/compiler parse() 當**範圍級**裁判：h
   //   style 內文去斷言「不存在」⇒ helper 多認這一段不會讓任何反向斷言假綠。位移或檔案一變，這條就紅，屆時重釘或拿掉。
   //   ⚠ 位移以 LF 計（站長本機 autocrlf=true、工作樹是 CRLF ⇒ 先正規化再比，裁判兩邊吃同一份字串）。
   const KNOWN_DEVIATION = {
-    'src/routes/friends/+page.svelte': { extraHelper: [{ tag: 'style', start: 3607, end: 3704, innerStart: 3614, innerEnd: 3696 }], svelteHeadStyleText: '<style>html, body { margin: 0; background-color: #162816 !important; min-height: 100vh; }</style>' },
+    // ⭐v6.507（Rule 40）：好友頁 script 多一行 import PageHeader（74 字元）⇒ 那段 <svelte:head><style> 整體往後移 74；偏差本身（形狀、內容）不變，只重釘位移。
+    'src/routes/friends/+page.svelte': { extraHelper: [{ tag: 'style', start: 3681, end: 3778, innerStart: 3688, innerEnd: 3770 }], svelteHeadStyleText: '<style>html, body { margin: 0; background-color: #162816 !important; min-height: 100vh; }</style>' },
   };
   const files = listTracked().filter((f) => f.endsWith('.svelte'));
   assert.ok(files.length >= 12, '只列到 ' + files.length + ' 支 .svelte（v6.319 有 14 支）');

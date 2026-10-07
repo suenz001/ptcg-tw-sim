@@ -343,7 +343,8 @@ await T('C3 ⭐⭐ 大廳分頁列（v6.296 取代 v6.283／v6.284 的兩個舊�
   assert.strictEqual((GAME.slice(sm, smEnd).match(/\{#if friendsEntryOn\}/g) || []).length, 1, '設定 modal 內的 {#if friendsEntryOn} 不是恰一處');
   // 位置：線上 Lobby 區塊 → h1 → 分頁列 → 統一大廳表單
   const lobby = GAME.indexOf('<!-- ─── 線上 Lobby ─── -->');
-  const h1 = GAME.indexOf('<h1>🌐 線上連線對戰</h1>');
+  // ⭐v6.507（Rule 40）：大廳頁首改用共用元件 PageHeader（標題在 title 屬性）；意圖（分頁列在標題之後）不變
+  const h1 = GAME.indexOf('<PageHeader title="🌐 線上連線對戰"');
   const tabs = GAME.indexOf("{#if friendsEntryOn && onlineStep !== 'room'}");
   const form = GAME.indexOf('<div class="online-form lobby-unified">');
   assert.ok(lobby > 0 && h1 > lobby, '找不到線上 Lobby／h1 錨點');
@@ -365,9 +366,12 @@ await T('C3 ⭐⭐ 大廳分頁列（v6.296 取代 v6.283／v6.284 的兩個舊�
   assert.ok(tTabsAt > scriptEnd && tEndAt > tTabsAt && tEndAt < lobby, '錦標賽分頁區間的錨點不對：' + JSON.stringify({ scriptEnd, tTabsAt, tEndAt, lobby }));
   assert.ok((GAME.slice(tTabsAt, tEndAt).match(/friend/gi) || []).length >= 3, '正對照：錦標賽分頁區間應該有好友字樣（第 4 顆分頁＋分頁內容）');
   const markupBefore = GAME.slice(scriptEnd, tTabsAt) + GAME.slice(tEndAt, lobby);
-  assert.ok(markupBefore.includes('class="auth-user"'), '主選單／本機那兩份 .auth-user 不在 </script>～lobby 之間？錨點抓錯');
-  assert.strictEqual((markupBefore.match(/friend/gi) || []).length, 0, 'lobby 之前的 markup 多出不明的 friend 字樣（主選單／本機那兩份 .auth-user 不該有入口）');
-  assert.strictEqual((GAME.match(/class="auth-user"/g) || []).length, 3, '.auth-user 份數變了');
+  // ⭐v6.507（Rule 40）：三份 .auth-user 由全站頁首統一收成共用元件 AccountBar（lobbyAccount snippet，定義在模式選擇區塊之前）
+  //   ⇒ 正對照改成「帳號列 snippet 在 </script>～lobby 之間」；意圖（帳號區不可以長出好友入口）改由「AccountBar 元件零 friend」＋原本的零 friend 掃描一起守。
+  assert.ok(markupBefore.includes('{#snippet lobbyAccount()}'), '大廳帳號列 snippet 不在 </script>～lobby 之間？錨點抓錯');
+  assert.strictEqual((markupBefore.match(/friend/gi) || []).length, 0, 'lobby 之前的 markup 多出不明的 friend 字樣（主選單／本機的帳號區不該有入口）');
+  assert.strictEqual((readFileSync(join(ROOT, 'src/lib/ui/AccountBar.svelte'), 'utf8').match(/friend/gi) || []).length, 0, '帳號列元件 AccountBar 出現 friend 字樣（帳號區不該有好友入口）');
+  assert.strictEqual((GAME.match(/class="auth-user"/g) || []).length, 0, '.auth-user 份數變了（v6.507 起應為 0，改用 AccountBar）');
 });
 /** 把 `const lobbyTab = $derived(…);` 的運算式抽出來求值（不比字面）。 */
 function lobbyTabOf(game, friendsEntryOn, raw) {

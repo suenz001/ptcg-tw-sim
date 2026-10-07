@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '$lib/ui/PageHeader.svelte';   // ⭐v6.507 全站頁首統一
   import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）
   // 牌組公布欄（v6.139 批次 2：讀 ＋ 匯入）。
   //
@@ -706,12 +707,10 @@
 </svelte:head>
 
 <main>
-  <header class="page-head">
-    <a href="{base}/" class="back">← 首頁</a>
-    <h1>牌組公布欄 <span class="version-tag">v{VERSION}</span></h1>
-    <span class="hint">玩家分享的牌組，可直接匯入</span>
-    <a href="{base}/decks" class="to-decks">我的牌組 →</a>
-  </header>
+  <!-- ⭐v6.507 全站頁首統一（PageHeader 共用元件） -->
+  <PageHeader title="📋 牌組公布欄" sub="玩家分享的牌組，可直接匯入" cls="page-head">
+    {#snippet actions()}<a href="{base}/decks" class="to-decks">🧩 我的牌組</a>{/snippet}
+  </PageHeader>
 
   {#if apiUnavailable}
     <p class="notice">

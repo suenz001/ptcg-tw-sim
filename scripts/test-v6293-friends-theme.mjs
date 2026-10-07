@@ -271,7 +271,8 @@ await T('C4 ⭐ v6.296 版面組法：頁首＋分頁列包在 `head` snippet �
   const iSnip = src.indexOf('{#snippet head()}'), iSnipEnd = src.indexOf('{/snippet}', iSnip);
   assert.ok(iSnip > 0 && iSnipEnd > iSnip, '/friends 頁沒有 head snippet');
   const seg = src.slice(iSnip, iSnipEnd);
-  const iHead = seg.indexOf('<header class="page-head">'), iNav = seg.indexOf('<nav class="fr-tabs"');
+  // ⭐v6.507（Rule 40）：頁首改用共用元件 <PageHeader …>（它渲染出來仍是 <header class="ph page-head">）；意圖（頁首在分頁列之前）不變。
+  const iHead = seg.indexOf('<PageHeader '), iNav = seg.indexOf('<nav class="fr-tabs"');
   assert.ok(iHead >= 0 && iNav > iHead, 'head snippet 內的順序不是「頁首 → 分頁列」：' + [iHead, iNav].join(','));
   // 頁面把兩個 snippet 都接給共用元件
   assert.ok(/<FriendsPanel \{head\} \{foot\}/.test(src), '/friends 頁沒有把 head／foot 接給共用元件');
@@ -297,12 +298,13 @@ const LAYOUT_BASELINE = 'body { margin: 0; background: #f4f4f6; }';   // ＝ src
 const NAV_HTML = (pageSrc) => tabsOf(pageSrc).nav.replace(/\{base\}/g, '');
 // ⭐ v6.296：實際 DOM 結構是 main > .fr-panel > (head snippet / 四區 / foot snippet)
 //   —— fixture 照著擺，才量得到「色票靠繼承傳給頁首、分頁列與 position:fixed 的私聊面板」。
+// ⭐v6.507（Rule 40）：頁首改用共用元件 PageHeader（樣式在元件裡、「← 首頁」與版本號已從標記拿掉）⇒ fixture 的頁首只留標題；
+//   「← 首頁」的對比度量測隨之移除（連結不存在了），其餘量測不變。
 const FIXTURE_BODY = (pageSrc) => `
 <main>
  <div class="fr-panel">
   <header class="page-head" id="x-head">
-    <a href="/" class="back" id="x-back">← 首頁</a>
-    <h1 id="x-h1">👥 好友 <span class="version-tag">v6.293</span></h1>
+    <h1 id="x-h1">👥 好友</h1>
   </header>
   ${NAV_HTML(pageSrc)}
   <section class="add" id="x-add">
@@ -378,7 +380,7 @@ if (!chromium) {
           docScrollW: document.documentElement.scrollWidth, docClientW: document.documentElement.clientWidth,
           rects: {}, colors: {},
         };
-        for (const id of ['x-head', 'x-add', 'x-group', 'x-row', 'x-notice', 'x-dm-panel', 'x-back', 'x-primary', 'x-input', 'x-danger']) {
+        for (const id of ['x-head', 'x-add', 'x-group', 'x-row', 'x-notice', 'x-dm-panel', 'x-primary', 'x-input', 'x-danger']) {
           const el = document.getElementById(id); o.rects[id] = R(el);
           o.colors[id] = { bg: cs(el).backgroundColor, fg: cs(el).color, bd: cs(el).borderTopColor, bgImg: cs(el).backgroundImage };
         }
@@ -458,7 +460,6 @@ if (!chromium) {
           name + ' 對比度只有 ' + contrast(fg, bg).toFixed(2) + ':1（需 ≥ ' + min + '）fg=' + fg + ' bg=' + bg);
         check('正文', on.mainColor, pageBg, 4.5);
         check('暱稱', on.colors['x-nick'].fg, cardBg, 4.5);
-        check('「← 首頁」', on.colors['x-back'].fg, pageBg, 4.5);
         check('未選中分頁鈕', on.tabs[0].fg, on.tabs[0].bg, 4.5);
         check('已選中分頁鈕', on.tabs[1].fg, hex2rgb(V.get('--fr-tab-on-to')), 4.5);
         check('錯誤訊息', on.colors['x-err'].fg, cardBg, 4.5);

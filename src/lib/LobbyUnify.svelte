@@ -12,27 +12,8 @@
     ・模式卡片的選擇器加 body、類別重複三次（body .mode-card.mode-card.mode-card）：要蓋過 v6.477 產生器那兩條
       html[data-theme='light']:not([data-battle-view]) .mode-card／.mode-card.online（含 Svelte 範圍類別，特異度到 0,5,1）。
   ⚠ 說明寫在樣式區塊的註解裡（不用 HTML 註解）：模板層若只有註解，test-v6297 的中央剝除器護欄會判定「註解吃掉了整個模板」。 */
-  /* 頁面內的「← 首頁」與錦標賽的「← 回到首頁」收起（手機用底部導覽列、網頁版用頂端列） */
-  :global(html:not([data-battle-view]) .lobby > a.back[href$="/"]) { display: none; }
-  :global(html:not([data-battle-view]) .tourn-lobby > .tourn-topbar) { display: none; }
-
-  /* 頁首：與卡牌資料庫／牌組編輯器同一種卡片 */
-  :global(html:not([data-battle-view]) main.lobby > h1) {
-    margin: 0 0 1rem;
-    padding: 14px 18px;
-    background: var(--ui-hero-bg);
-    border: 1px solid var(--ui-border);
-    border-radius: 16px;
-    box-shadow: var(--ui-shadow);
-    color: var(--ui-text);
-    font-size: 1.5rem;
-    text-align: left;
-  }
-  :global(html:not([data-battle-view]):not([data-ui-wide]) main.lobby > h1) {
-    padding: 12px 14px;
-    border-radius: 14px;
-    font-size: 1.3rem;
-  }
+  /* ⭐v6.507：頁首改用共用元件 $lib/ui/PageHeader.svelte（卡片樣式在元件裡；「← 首頁」「← 回到首頁」已從標記拿掉）
+     ⇒ 原本這裡「收起 ← 首頁」與「h1 變卡片」四條規則已經沒有對象，刪除。 */
   /* 手機：頁首卡片頂端與其他頁一致（12px＋安全區） */
   :global(html:not([data-battle-view]):not([data-ui-wide]) main.lobby) {
     margin-top: var(--safe-top, 0px);
@@ -40,6 +21,8 @@
   }
   :global(html:not([data-battle-view]) main.tourn-lobby) { margin-top: calc(1rem + var(--safe-top, 0px)); }
   :global(html:not([data-battle-view]):not([data-ui-wide]) main.tourn-lobby) { margin-top: var(--safe-top, 0px); }
+  /* ⭐v6.507 網頁版：頁首卡片離頂端列 24px（與牌組編輯器、卡牌資料庫、公布欄一致；main 本身已有 24px 上內距） */
+  :global(html:not([data-battle-view])[data-ui-wide] main.lobby) { margin-top: 0; }
 
   /* 模式選擇卡片：與首頁功能卡同一種白卡（深色主題時是深色卡） */
   :global(html:not([data-battle-view]) body .lobby .mode-card.mode-card.mode-card) {

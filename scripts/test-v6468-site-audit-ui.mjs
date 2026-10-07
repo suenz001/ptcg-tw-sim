@@ -45,7 +45,10 @@ const CHECKS = [
   ['★[④] /deck-posts 列表日期不換行、作者名稱省略號', true, (S) =>
     /\.row2 \.date \{ white-space: nowrap; flex-shrink: 0; \}/.test(css(S.dp)) && /\.row2 \.author \{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/.test(css(S.dp))],
   ['★★[⑤] 放大「← 首頁」可點範圍（五頁）且不移動版面（padding 與負 margin 等量；不包 @media）', true, (S) =>
-    [['cards', '.back'], ['dp', '.back, .to-decks'], ['fr', '.back'], ['card', '.crumb a']].every(([k, sel]) => { const m = COARSE_BACK.exec(css(S[k])); return !!m && m[1].trim() === sel; })
+    // ⭐v6.507（Rule 40）：好友頁的「← 首頁」連結已隨全站頁首統一從標記拿掉（PageHeader 不放回首頁連結）⇒ 那條放大規則沒有對象、刪除；
+    //   改驗好友頁標記裡確實沒有 class="back" 的連結（意圖：頁面上不存在難點的小連結）。
+    [['cards', '.back'], ['dp', '.back, .to-decks'], ['card', '.crumb a']].every(([k, sel]) => { const m = COARSE_BACK.exec(css(S[k])); return !!m && m[1].trim() === sel; })
+    && (S.fr === '' || (!/class="back"/.test(S.fr.replace(/<style>[\s\S]*?<\/style>/g, '')) && !COARSE_BACK.test(css(S.fr))))
     // /decks 的桌機 CSS 有逐字指紋守衛（test-v6213）⇒ 這條只放在觸控分支
     && /@media \(pointer: coarse\) \{[^@]*\n    \.back \{ display: inline-block; padding: 10px 8px; margin: -10px -8px; \}\n  \}/.test(css(S.decks))],
   // ⭐v6.497（Rule 40）：站長手機清單第 5 項再放大到 36×36／40×40 ⇒ 判準改成「至少」（數字往上合法、往下才紅），意圖不變

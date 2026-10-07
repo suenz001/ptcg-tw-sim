@@ -228,7 +228,11 @@ await T('D1 ⭐⭐⭐ 匿名玩家的大廳（把 {#if} 依「匿名」求值剪
   //   逐字還原這一個屬性再比；必須恰好出現一次（多了或少了都代表登記過期）。
   const _AL = ' aria-label="你的名稱"';
   assert.strictEqual(GAME.split(_AL).length - 1, 1, 'v6.468 登記的 aria-label 不是恰好一處');
-  const GAME_D1 = GAME.replace(_AL, '');
+  // ⭐v6.507（Rule 40，意圖不變）：站長要求的全站頁首統一把線上大廳的「← 返回＋帳號區＋h1」換成共用元件 PageHeader（帳號列 AccountBar）。
+  //   逐字還原這一段再比（必須恰好出現一次）；其餘匿名大廳仍須與 BASE 逐字相同。新頁首的內容由 test-v6507 鎖。
+  const _V6507 = ["    <!-- ⭐v6.507 全站頁首統一：「← 返回」放右上捷徑（在房間裡不顯示，理由同上） -->\n    <PageHeader title=\"🌐 線上連線對戰\" sub=\"建立或加入房間，與其他玩家即時對戰\" account={firebaseUser ? lobbyAccount : undefined}>\n      {#snippet actions()}\n        {#if onlineStep !== 'room'}\n          <button class=\"back-btn\" onclick={() => { mode=null; onlineStep='join'; showCreateForm=false; onlineError=''; }}>← 返回</button>\n        {/if}\n      {/snippet}\n    </PageHeader>\n", "    {#if onlineStep !== 'room'}\n      <button class=\"back-btn\" onclick={() => { mode=null; onlineStep='join'; showCreateForm=false; onlineError=''; }}>← 返回</button>\n    {/if}\n    <!-- v4.918 登入狀態 dashboard（同 v4.913 模式選擇畫面；v4.924 開放 Oracle build） -->\n    {#if firebaseUser}\n      <div class=\"auth-dashboard\">\n        <span class=\"sync-pill sync-{syncStatus}\" title={syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : ''}>\n          {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}\n        </span>\n        {#if isAnonymous}\n          <button class=\"auth-btn anon\" onclick={openAuthModal} title=\"建立帳號以跨裝置保存牌組\">\n            👤 匿名　<span class=\"auth-sub\">建立帳號</span>\n          </button>\n        {:else}\n          <div class=\"auth-user\">\n            <span class=\"auth-email\">✉️ {firebaseUser.email}</span>\n            <button class=\"small\" onclick={openChangePasswordModal} title=\"更改密碼\">🔑 更改密碼</button>\n            <button class=\"small danger\" onclick={handleSignOut}>登出</button>\n          </div>\n        {/if}\n      </div>\n    {/if}\n    <h1>🌐 線上連線對戰</h1>\n"];
+  assert.strictEqual(GAME.split(_V6507[0]).length - 1, 1, 'v6.507 登記的線上大廳頁首不是恰好一處');
+  const GAME_D1 = GAME.replace(_AL, '').replace(_V6507[0], _V6507[1]);
   for (const pm of [false, true]) {
     const a = asAnon(GAME_D1, pm), b = asAnon(BASE_GAME, pm);
     assert.ok(a.length > 3000, '剪枝後只剩 ' + a.length + ' 字元 ⇒ 剪枝器把東西吃掉了');

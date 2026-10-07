@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '$lib/ui/PageHeader.svelte';   // ⭐v6.507 全站頁首統一
   import { compileCardQuery, cardSearchFields, SEARCH_SYNTAX_HINT } from '$lib/cards/search-query';   // ⭐v6.481 搜尋語法（兩頁共用）
   import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）
   import { base } from '$app/paths';
@@ -492,14 +493,8 @@
     return d ? `${m} 標 · ${count} 個卡包 (自 ${d})` : `${m} 標 · ${count} 個卡包`;
   }}
 
-  <header>
-    <a class="back" href="{base}/">← 首頁</a>
-    <h1>卡牌資料庫</h1>
-    <p class="meta">
-      {STANDARD_SETS.length} 個標準卡包 · 共 {STANDARD_CARD_COUNT} 張卡
-      <span class="hint">（標準賽 {MARKS_LABEL} 標，繁體中文）</span>
-    </p>
-  </header>
+  <!-- ⭐v6.507 全站頁首統一（PageHeader 共用元件） -->
+  <PageHeader title="🃏 卡牌資料庫" sub={`${STANDARD_SETS.length} 個標準卡包 · 共 ${STANDARD_CARD_COUNT} 張卡（標準賽 ${MARKS_LABEL} 標，繁體中文）`} cls="cards-ph" />
 
   <!-- ═══════════════ ALL (virtual aggregator) ═══════════════ -->
   {@const totalAllCards = STANDARD_CARD_COUNT}
@@ -545,13 +540,10 @@
   {/each}
 {:else}
   <!-- ═══════════════════════ Card grid ═══════════════════════ -->
-  <header>
-    <a class="back" href="{base}/cards">← 卡包列表</a>
-    <h1>
-      {data.setCode}{#if data.setName}<span class="setTitleName">{data.setName}</span>{/if}
-    </h1>
-    <p class="meta">共 {setCards.length} 張卡 · 顯示 {filtered.length} 張</p>
-  </header>
+  <!-- ⭐v6.507 全站頁首統一：「← 卡包列表」放到右上捷徑 -->
+  <PageHeader title={`📦 ${data.setCode}${data.setName ? '　' + data.setName : ''}`} sub={`共 ${setCards.length} 張卡 · 顯示 ${filtered.length} 張`} cls="cards-ph">
+    {#snippet actions()}<a class="back" href="{base}/cards">← 卡包列表</a>{/snippet}
+  </PageHeader>
 
   <div class="controls" bind:this={controlsEl}>
     <div class="searchRow">
@@ -1827,7 +1819,6 @@
      ・內容：本頁網頁版主題區塊（min-width:1024px）裡「只跟顏色有關」的宣告，原樣換成上面的條件（線寬、版面、尺寸一律不帶）；
        框線簡寫只取顏色（border-color），不會替手機版多出原本沒有的框。顏色讀 layout 的 --ui-* 深色色票。
      ・不用 @media（本頁的 @media 數量／桌機 CSS 指紋有守衛在釘）。 */
-  :global(html:not([data-ui-wide])) header,
   :global(html:not([data-ui-wide])) .markSection,
   :global(html:not([data-ui-wide])) .controls,
   :global(html:not([data-ui-wide])) .grid,
@@ -1921,5 +1912,9 @@
   :global(html:not([data-ui-wide])) h1 { font-size: 1.3rem; margin: 0.1rem 0 0.25rem; }
   /* ⭐v6.506 全站版面統一 第 3 步：卡片視窗的「單卡頁」連結改用主題連結色（原本藍色）——所有寬度 */
   :global(html) .cardPageLink { color: var(--ui-link); }
+  /* ⭐v6.507 全站頁首統一：本頁內容不在有內距的容器裡 ⇒ 頁首卡片的外距由本頁補（沿用 v6.504 本頁頁首的外距：
+     網頁版與下方 1200px 卡包格線同寬置中；手機左右各 12px、頂端讓出瀏海安全區）。類別重複兩次以蓋過元件的預設外距。 */
+  :global(html[data-ui-wide] .ph.cards-ph.cards-ph) { max-width: 1200px; margin: 24px auto 20px; }
+  :global(html:not([data-ui-wide]) .ph.cards-ph.cards-ph) { margin: calc(12px + var(--safe-top, 0px)) 12px 14px; }
   /* <<< v6504-unify */
 </style>

@@ -60,7 +60,10 @@ else if (chromium) {
     const errs = [];
     const probe = (pg) => pg.evaluate(() => {
       const vis = (e) => !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0;
-      const h = document.querySelector('main.lobby > h1'); const cs = h ? getComputedStyle(h) : null;
+      // ⭐v6.507（Rule 40）：頁首改用共用元件 PageHeader（<header class="ph">，不再是 main.lobby 的直接子 h1）。
+      //   意圖不變：頁首是卡片、手機頂端 12px。E5（牌桌畫面）改看模式卡片：牌桌時大廳根本不渲染，頁首元件也沒有牌桌樣式可言，
+      //   LobbyUnify「只在非牌桌生效」的意圖由模式卡片的顏色規則承擔（見 E5）。
+      const h = document.querySelector('main.lobby .ph'); const cs = h ? getComputedStyle(h) : null;
       const mc = document.querySelector('.mode-card'); const ms = mc ? getComputedStyle(mc) : null;
       return { top: h ? Math.round(h.getBoundingClientRect().top) : null, radius: cs?.borderTopLeftRadius, border: cs?.borderTopWidth,
         home: [...document.querySelectorAll('a')].filter((a) => /^\/?$/.test(a.getAttribute('href') || '') && a.closest('main') && vis(a)).length,
@@ -88,7 +91,7 @@ else if (chromium) {
               const BD = theme === 'light' ? 'rgb(214, 221, 217)' : 'rgb(49, 80, 58)';
               ok(`★★[E4] ${tag}：模式卡片是 --ui-bg-elev 底＋--ui-border 框、14px 圓角`, A.card && A.card[0] === BG && A.card[1] === BD && A.card[2] === '14px', JSON.stringify(A.card));
             }
-            ok(`★★★[E5] ${tag}：掛上 data-battle-view（牌桌）⇒ 頁首不是卡片`, B.radius === '0px', JSON.stringify(B));
+            if (path === '/game') ok(`★★★[E5] ${tag}：掛上 data-battle-view（牌桌）⇒ LobbyUnify 的模式卡片樣式不成立`, !!B.card && B.card[2] !== '14px', JSON.stringify(B.card));
           }
         }
       }

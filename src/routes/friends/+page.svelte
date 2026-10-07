@@ -16,6 +16,7 @@
   //   ・手機／桌機是 **JS 量視窗**（Math.min(innerWidth, innerHeight) <= 600，與 game/+page.svelte 的
   //     isPortraitMobile 同一條），⚠⚠ 禁用 @media 當手機開關。
   //   ・全頁零 {@html}（暱稱／備註名都是玩家自由輸入）。
+  import PageHeader from '$lib/ui/PageHeader.svelte';   // ⭐v6.507 全站頁首統一
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
   import { VERSION } from '$lib/version';
@@ -90,10 +91,8 @@
 <!-- ⭐ 頁首與分頁列：用 snippet 傳進 FriendsPanel **裡面**渲染 ⇒ 吃得到面板宣告的 --fr-* 色票。
      （這些元素寫在本檔 ⇒ Svelte 的 scoping class 也掛在本檔，底下的 <style> 一樣管得到。） -->
 {#snippet head()}
-  <header class="page-head">
-    <a href="{base}/" class="back">← 首頁</a>
-    <h1>👥 好友 <span class="version-tag">v{VERSION}</span></h1>
-  </header>
+  <!-- ⭐v6.507 全站頁首統一（PageHeader 共用元件）；分頁列接在卡片正下方 -->
+  <PageHeader title="👥 好友" sub="用 email 加好友、管理邀請，並可私訊好友" cls="page-head" />
 
   <!-- ⭐⭐ v6.293 假分頁列：外觀與錦標賽的 .tourn-tabs／.tourn-tab 一致（站長：視覺一致性），
        但這裡是**連結**不是真分頁（真分頁在大廳那一邊，v6.296 已上）⇒ 用 <a> 不是 <button>，
@@ -128,25 +127,13 @@
              48px
              max(16px, var(--safe-left, 0px));
   }
-  .page-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-  .page-head h1 { font-size: 1.35rem; margin: 0; }
-  .version-tag { font-size: .7rem; color: var(--fr-dim); font-weight: 400; }
-  .back { font-size: .85rem; text-decoration: none; color: var(--fr-tab-fg); }
-  .back:hover { text-decoration: underline; }
   /* >>> v6504-unify */
   /* ⭐v6.504 全站版面統一（站長選「以電腦版現有綠色系為基準」「拿掉頁面內的 ← 首頁」「版本號只留首頁與頂端列」）：
      頁首改成與卡牌資料庫／牌組編輯器同一種卡片（--ui-* 色票，深淺主題都跟著變），「← 首頁」與版本號收起（手機有底部導覽列、網頁版有頂端列）。 */
-  .page-head {
-    padding: 12px 16px;
-    background: var(--ui-hero-bg);
-    border: 1px solid var(--ui-border);
-    border-radius: 14px;
-    box-shadow: var(--ui-shadow);
-    align-items: center;
-  }
-  .page-head h1 { color: var(--ui-text); font-size: 1.3rem; }
-  .page-head > .back, .version-tag { display: none; }
+  /* ⭐v6.507 全站頁首統一：頁首改用共用元件 $lib/ui/PageHeader.svelte（卡片樣式在元件裡、「← 首頁」與版本號已從標記拿掉）
+     ⇒ 本頁原本的頁首、← 首頁、版本號樣式都沒有對象了，刪除（含 v6.468 放大「← 首頁」可點範圍那條）。本區只留 main 的上內距。 */
   :global(html:not([data-ui-wide])) main { padding-top: calc(12px + var(--safe-top, 0px)); }   /* 手機頁首卡片頂端與其他頁一致（12px） */
+  :global(html[data-ui-wide]) main { padding-top: 24px; }   /* ⭐v6.507 網頁版：頁首卡片離頂端列 24px（與牌組編輯器、卡牌資料庫、公布欄一致） */
   /* <<< v6504-unify */
 
   /* ⭐⭐ 假分頁列：外觀比照 game/+page.svelte 的 .tourn-tabs／.tourn-tab（逐條對齊，含 active 的
@@ -177,9 +164,4 @@
                max(12px, var(--safe-left, 0px));
     }
   }
-
-  /* ⭐v6.468（全站 audit）：「← 首頁」只有 16～21px 高，手機上很難點。用 padding＋等量負 margin 放大可點範圍，
-     版面位置一點都不動（純文字連結、沒有底色或框線 ⇒ 桌機看起來也完全一樣）。
-     ⚠ 刻意不包 @media：本頁的 @media 數量有守衛在釘（手機／桌機不靠斷點切版），而這條在桌機也無害。 */
-  .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
 </style>

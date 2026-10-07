@@ -19,6 +19,8 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { isBattleView, setBattleViewAttr } from '$lib/site-theme';   // ⭐v6.475 網頁版頂端列在牌桌畫面收起
   import { runKbdShortcut } from '$lib/game/kbd-shortcuts';   // ⭐v6.488 電腦版鍵盤快捷鍵（預設關閉）
   import KbdShortcutsSetting from '$lib/game/KbdShortcutsSetting.svelte';
+  import PageHeader from '$lib/ui/PageHeader.svelte';   // ⭐v6.507 全站頁首統一
+  import AccountBar from '$lib/ui/AccountBar.svelte';
   import { goto } from '$app/navigation';   // v6.284 修：initNotifyNav 的回呼一直呼叫 goto 卻沒 import（ReferenceError 被 try/catch 吞掉 ⇒ 通知點擊導頁靜默失效）
   import type { Card } from '$lib/cards/types';
   import { loadAllSets, buildCardIndex, loadDeckSets, deckEntriesAllInPool, loadCardSetMap } from '$lib/cards/pool';
@@ -10236,8 +10238,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
 {#if isTournament && tStep !== 'playing'}
   <main class="lobby tourn-lobby">
-    <div class="tourn-topbar"><a class="tourn-home-btn" href="{base}/">← 回到首頁</a></div>
-    <h1 class="lobby-title">🏆 錦標賽對戰</h1>
+    <!-- ⭐v6.507 全站頁首統一：「← 回到首頁」拿掉（手機底部導覽列／網頁版頂端列都有首頁）；
+         「已登入：email 登出」改成卡片底部的帳號列（等待進場、未登入時不顯示，與原本一樣） -->
+    <PageHeader title="🏆 錦標賽對戰" sub="賽事報名與對戰、排行榜、個人戰績"
+      account={tStep !== 'waiting' && !isAnonymous && firebaseUser ? tournAccount : undefined} />
+    {#snippet tournAccount()}
+      <AccountBar email={firebaseUser?.email ?? null} busy={tBusy} onChangePassword={openChangePasswordModal} onSignOut={tournLogout} />
+    {/snippet}
     {#if tStep === 'waiting'}
       <!-- v5.597：waiting 畫面依情境分流。原本寫死「測試房」文案＋重置鈕，進真實對戰(tActiveRoom='mr_…')
            時 tEnterMatch 先設 waiting 就會閃這個錯畫面；若進場競態卡住更會困在此(重置鈕對真實對戰無用、
@@ -10266,7 +10273,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <button class="btn-secondary" onclick={tournRegister} disabled={tBusy}>註冊新帳號</button>
       </div>
     {:else}
-      <p class="tourn-who">已登入：<b>{firebaseUser?.email}</b> <button class="tourn-logout" onclick={tournLogout} disabled={tBusy}>登出</button></p>
       <div class="tourn-tabs" role="tablist">
         <button class="tourn-tab" class:active={tTab === 'events'} role="tab" aria-selected={tTab === 'events'} onclick={() => tSwitchTab('events')}>🏆 賽事</button>
         <button class="tourn-tab" class:active={tTab === 'leaderboard'} role="tab" aria-selected={tTab === 'leaderboard'} onclick={() => tSwitchTab('leaderboard')}>📊 排行</button>
@@ -10923,30 +10929,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <div class="admin-spy-banner">🔒 ADMIN 隱身觀戰中（房間 {roomCode}） · 玩家不會看到你</div>
   {/if}
 
+  <!-- ⭐v6.507 大廳帳號列（模式選擇／本機／線上三個畫面共用一份） -->
+  {#snippet lobbyAccount()}
+    <AccountBar email={firebaseUser?.email ?? null} anonymous={isAnonymous} {syncStatus} {syncError}
+      onCreateAccount={openAuthModal} onChangePassword={openChangePasswordModal} onSignOut={handleSignOut} />
+  {/snippet}
   {#if mode === null}
   <!-- ─── 模式選擇 ─── -->
   <main class="lobby">
-    <a href="{base}/" class="back">← 首頁</a>
-    <!-- v4.913 登入狀態 dashboard（port 自牌組編輯器；v4.924 開放 Oracle build） -->
-    {#if firebaseUser}
-      <div class="auth-dashboard">
-        <span class="sync-pill sync-{syncStatus}" title={syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : ''}>
-          {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
-        </span>
-        {#if isAnonymous}
-          <button class="auth-btn anon" onclick={openAuthModal} title="建立帳號以跨裝置保存牌組">
-            👤 匿名　<span class="auth-sub">建立帳號</span>
-          </button>
-        {:else}
-          <div class="auth-user">
-            <span class="auth-email">✉️ {firebaseUser.email}</span>
-            <button class="small" onclick={openChangePasswordModal} title="更改密碼">🔑 更改密碼</button>
-            <button class="small danger" onclick={handleSignOut}>登出</button>
-          </div>
-        {/if}
-      </div>
-    {/if}
-    <h1>⚔️ 開始對戰</h1>
+    <!-- ⭐v6.507 全站頁首統一：標題 → 副標 → 帳號列（PageHeader／AccountBar 共用元件；帳號列見下方 lobbyAccount） -->
+    <PageHeader title="⚔️ 開始對戰" sub="選擇對戰方式" account={firebaseUser ? lobbyAccount : undefined} />
     {#if !poolReady}<p class="muted">載入卡池中…</p>{/if}
     <div class="mode-cards">
       <button class="mode-card" onclick={() => mode='local'} disabled={!poolReady}>
@@ -10965,28 +10957,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {:else if mode === 'local'}
   <!-- ─── 本機 Lobby ─── -->
   <main class="lobby">
-    <button class="back-btn" onclick={() => mode=null}>← 返回</button>
-    <!-- v4.918 登入狀態 dashboard（同 v4.913 模式選擇畫面；v4.924 開放 Oracle build） -->
-    {#if firebaseUser}
-      <div class="auth-dashboard">
-        <span class="sync-pill sync-{syncStatus}" title={syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : ''}>
-          {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
-        </span>
-        {#if isAnonymous}
-          <button class="auth-btn anon" onclick={openAuthModal} title="建立帳號以跨裝置保存牌組">
-            👤 匿名　<span class="auth-sub">建立帳號</span>
-          </button>
-        {:else}
-          <div class="auth-user">
-            <span class="auth-email">✉️ {firebaseUser.email}</span>
-            <button class="small" onclick={openChangePasswordModal} title="更改密碼">🔑 更改密碼</button>
-            <button class="small danger" onclick={handleSignOut}>登出</button>
-          </div>
-        {/if}
-      </div>
-    {/if}
-    <h1>🖥️ 本機雙人對戰</h1>
-    <p class="lobby-subtitle">遊戲開始時會擲硬幣決定先後手</p>
+    <!-- ⭐v6.507 全站頁首統一：「← 返回」放右上捷徑 -->
+    <PageHeader title="🖥️ 本機雙人對戰" sub="遊戲開始時會擲硬幣決定先後手" account={firebaseUser ? lobbyAccount : undefined}>
+      {#snippet actions()}<button class="back-btn" onclick={() => mode=null}>← 返回</button>{/snippet}
+    </PageHeader>
     <!-- v5.051: 移除預組 toggle — Android Chrome select bug 改永遠顯示 -->
     <div class="player-setup">
       <div class="setup-card">
@@ -11099,29 +11073,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
   <main class="lobby">
     <!-- v2.276：'room' step 不顯示返回鈕（避免使用者跳離但沒呼叫 leaveRoom，造成空房殘留）；
          在房間內要走右上「離開房間」按鈕（onclick=leaveOnlineGame）才會清座位 -->
-    {#if onlineStep !== 'room'}
-      <button class="back-btn" onclick={() => { mode=null; onlineStep='join'; showCreateForm=false; onlineError=''; }}>← 返回</button>
-    {/if}
-    <!-- v4.918 登入狀態 dashboard（同 v4.913 模式選擇畫面；v4.924 開放 Oracle build） -->
-    {#if firebaseUser}
-      <div class="auth-dashboard">
-        <span class="sync-pill sync-{syncStatus}" title={syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : ''}>
-          {#if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
-        </span>
-        {#if isAnonymous}
-          <button class="auth-btn anon" onclick={openAuthModal} title="建立帳號以跨裝置保存牌組">
-            👤 匿名　<span class="auth-sub">建立帳號</span>
-          </button>
-        {:else}
-          <div class="auth-user">
-            <span class="auth-email">✉️ {firebaseUser.email}</span>
-            <button class="small" onclick={openChangePasswordModal} title="更改密碼">🔑 更改密碼</button>
-            <button class="small danger" onclick={handleSignOut}>登出</button>
-          </div>
+    <!-- ⭐v6.507 全站頁首統一：「← 返回」放右上捷徑（在房間裡不顯示，理由同上） -->
+    <PageHeader title="🌐 線上連線對戰" sub="建立或加入房間，與其他玩家即時對戰" account={firebaseUser ? lobbyAccount : undefined}>
+      {#snippet actions()}
+        {#if onlineStep !== 'room'}
+          <button class="back-btn" onclick={() => { mode=null; onlineStep='join'; showCreateForm=false; onlineError=''; }}>← 返回</button>
         {/if}
-      </div>
-    {/if}
-    <h1>🌐 線上連線對戰</h1>
+      {/snippet}
+    </PageHeader>
     <!-- ⭐⭐ v6.296 大廳分頁列（外觀沿用錦標賽的 .tourn-tabs／.tourn-tab）。
          ⚠ 只在 onlineStep !== 'room' 時顯示：進了等待室就不該再有分頁列。
          ⚠⚠ friendsEntryOn 為 false（匿名／伺服器不支援／尚未開放）時整條不渲染，
@@ -19956,7 +19915,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-field .deck-select, :global(html[data-theme='light']:not([data-battle-view])) .tourn-field .name-input { border: 1px solid #94b694; background: #f5f8f5; color: #0a150a; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-wait { color: #a57900; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-gate { color: #a57900; }
-    :global(html[data-theme='light']:not([data-battle-view])) .tourn-who { color: #216223; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-tab { border: 1px solid #a4c6a4; background: #f7f9f7; color: #216223; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-tab:hover { background: #f2f6f3; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby .tourn-tab.active { background: linear-gradient(180deg,#e8efea,#eef4f0); color: #001500; border-color: #90cc9c; }
@@ -19996,7 +19954,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-nt-adv { border-top: 1px dashed #b3ccb3; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-nt-adv summary { color: #5c7a5c; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-nt-diag { color: #4e5866; }
-    :global(html[data-theme='light']:not([data-battle-view])) .tourn-logout { border: 1px solid #b7b7b7; background: #f2f2f2; color: #222222; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-event { border: 1px solid #94b694; background: #f5f8f5; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-evstat { color: #163116; }
     :global(html[data-theme='light']:not([data-battle-view])) .reg-ok { color: #00861f; }
@@ -20054,10 +20011,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-cdbox-time { color: #a57900; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-cdbox.urgent { border-color: #ff5432; background: rgba(237,207,201,0.14); }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-cdbox.urgent .tourn-cdbox-time { color: #911e00; }
-    :global(html[data-theme='light']:not([data-battle-view])) .tourn-home-btn { background: #ebeef0; color: #061831; border: 1px solid #7395b7; }
-    :global(html[data-theme='light']:not([data-battle-view])) .tourn-home-btn:active, :global(html[data-theme='light']:not([data-battle-view])) .tourn-home-btn:hover { background: #e6e9ec; }
-    :global(html[data-theme='light']:not([data-battle-view])) .lobby-subtitle { color: #556666; }
-    :global(html[data-theme='light']:not([data-battle-view])) .back { color: #004477; }
     :global(html[data-theme='light']:not([data-battle-view])) .back-btn { color: #004477; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby .muted { color: #555555; }
     :global(html[data-theme='light']:not([data-battle-view])) .warn { color: #c3800b; }
@@ -20134,7 +20087,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .idle-timeout-head { color: #102234; }
     :global(html[data-theme='light']:not([data-battle-view])) .idle-timeout-head strong { color: #d6b500; }
     :global(html[data-theme='light']:not([data-battle-view])) .small { border: 1px solid #a5a5a5; background: #f2f2f2; color: #222222; }
-    :global(html[data-theme='light']:not([data-battle-view])) .lobby .small.danger { color: #770000; border-color: #c05959; }
     :global(html[data-theme='light']:not([data-battle-view])) .small.primary { background: #e8efe8; color: #004455; border-color: #73b773; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby .log-line { color: #466646; border-bottom: 1px solid rgba(173,210,173,0.40); }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby .log-sys { color: #005522; }
@@ -20161,14 +20113,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .open-room-row.room-full { border-left: 3px solid #26dffe; }
     :global(html[data-theme='light']:not([data-battle-view])) .open-room-row.room-full.practice-room { border-left: 3px solid #26dffe; }
     :global(html[data-theme='light']:not([data-battle-view])) .check-row { background: rgba(236,224,203,0.08); border: 1px solid rgba(253,207,129,0.25); }
-    :global(html[data-theme='light']:not([data-battle-view])) .auth-btn { background: #f3f2ef; border: 1px solid #e1cb93; color: #40380e; }
-    :global(html[data-theme='light']:not([data-battle-view])) .auth-btn:hover { background: #efedeb; }
-    :global(html[data-theme='light']:not([data-battle-view])) .auth-sub { color: #004477; }
-    :global(html[data-theme='light']:not([data-battle-view])) .auth-email { color: #333333; }
-    :global(html[data-theme='light']:not([data-battle-view])) .lobby .auth-user button.small { background: #eff1ef; border: 1px solid #a5b5a5; color: #0f0f0f; }
-    :global(html[data-theme='light']:not([data-battle-view])) .lobby .auth-user button.small:hover { background: #eaecea; }
-    :global(html[data-theme='light']:not([data-battle-view])) .lobby .auth-user button.small.danger { background: #f5f0f0; border-color: #c6a4a4; color: #4f0000; }
-    :global(html[data-theme='light']:not([data-battle-view])) .lobby .auth-user button.small.danger:hover { background: #f0ebeb; }
     :global(html[data-theme='light']:not([data-battle-view])) .pv-inner { background: #fbfbfb; color: #222222; }
     :global(html[data-theme='light']:not([data-battle-view])) .pv-close { border: 1px solid #626262; color: #222222; }
     :global(html[data-theme='light']:not([data-battle-view])) .modal-title { color: #222222; }
