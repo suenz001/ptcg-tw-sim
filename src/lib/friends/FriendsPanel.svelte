@@ -561,6 +561,8 @@
   .group { margin-bottom: 16px; }
   .count { font-size: .78rem; color: var(--fr-dim); font-weight: 400; margin-left: 6px; }
   .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  /* ⭐v6.508 網頁版（≥1024px，layout 的 data-ui-wide）：名單排成多欄卡片，善用寬螢幕（手機不變） */
+  :global(html[data-ui-wide]) .rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
   .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--fr-card-bg); border: 1px solid var(--fr-card-bd); border-radius: 8px; padding: 8px 10px; }
   /* ⚠ 暱稱／備註名都是玩家自由輸入：一定要斷字，否則一長串英數字會把列撐爆（手機直式先爆）。 */
   .nick { font-weight: 600; color: var(--fr-fg); overflow-wrap: anywhere; word-break: break-word; }

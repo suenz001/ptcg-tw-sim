@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.508：網頁版善用版面（2026-10-07）
+
+BASE admin v1.79（e648de89903d6bb8acd71a01919122422a931475）。站長：「對戰演練（包含線上連線對戰）、錦標賽的 windows 網頁版，仍然沒有有效利用版面，仍然是手機版的風格」；先在正式站（站長帳號、只在自己開的分頁注入樣式）做預覽圖，站長回「可以」。
+- 全部是樣式、全部在 $lib/LobbyUnify.svelte，前綴 html:not([data-battle-view])[data-ui-wide] ⇒ 手機／平板直向／牌桌不動；對戰頁標記與樣式一個字都沒改（不必登記 v6441／v6477）。
+- main.lobby 1200px；線上大廳 .online-form.lobby-unified 用 float 分左右欄（name-row、create-room-block 左 380px，其他 margin-left 404px）、房間清單 auto-fill minmax(300px) 不限高；等待室 .battle-seats 兩欄。
+- 錦標賽：.tourn-lobby > .tourn-chat 右浮動 360px（聊天室只在賽事分頁 ⇒ ~ 兄弟就是賽事內容，margin-right 384px，排除 .hof-modal-backdrop）、聊天高度 min(60vh,560px)；.tourn-lb-grid 四欄；.tourn-pf-events 兩欄（標題跨欄）。
+- 好友頁網頁版 main 1200px（v6297 G1 BASE_MIGRATIONS 補一條）；FriendsPanel .rows 網頁版 auto-fill minmax(380px)。
+- 盤點：首頁、卡牌資料庫、牌組編輯器、牌組公布欄、單卡頁網頁版已用滿，不動。
+- test-v6508（12 條；錦標賽登入後才有的元素在真頁面放同類別元素量測；390 手機與 data-battle-view 反面對照）。
+
 ## admin v1.79／server patch v1.57：序位預設 50＋用最新規則重新判定（2026-10-07，admin 專用，不寫對外 changelog）
 
 BASE v6.507（7c756222）。站長：「請幫我先把預設的序位設為 50」「之前已經設定好的…也幫我改一下預設為50」；歷屆賽事冠軍牌型、牌組公布欄的牌型要能一鍵用最新規則重新判定。

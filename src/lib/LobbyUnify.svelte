@@ -48,4 +48,40 @@
   :global(html:not([data-battle-view]) body .lobby .btn-secondary.btn-secondary.btn-secondary:hover:not(:disabled)) { background: var(--ui-accent-soft); border-color: var(--ui-accent); }
   :global(html:not([data-battle-view]) body .lobby .name-input.name-input.name-input),
   :global(html:not([data-battle-view]) body .lobby .deck-select.deck-select.deck-select) { background: var(--ui-input-bg); color: var(--ui-text); border: 1px solid var(--ui-border); border-radius: 8px; }
+
+  /* ⭐v6.508 網頁版（≥1024px）善用版面（站長 2026-10-07：「對戰演練（包含線上連線對戰）、錦標賽的 windows 網頁版，仍然沒有有效利用版面，
+     仍然是手機版的風格」）。全部帶 html:not([data-battle-view])[data-ui-wide] ⇒ 手機、平板直向、牌桌畫面一個像素都不動。
+     ・寬度：大廳由 700px（錦標賽 640px）放寬到 1200px，與卡牌資料庫／牌組公布欄同寬。
+     ・模式選擇：兩張模式卡片加高、圖示放大。本機對戰：玩家卡片吃滿兩側。
+     ・線上大廳：左欄「玩家名稱＋建立房間」、右欄「等待中／對戰中的房間＋用房號加入」（左欄用 float，不改標記）；
+       房間清單在右欄排成多欄卡片、不再限高 420px。等待室：兩個座位左右並排。
+     ・錦標賽「賽事」分頁：聊天室在右側欄（360px、加高），賽事卡片與賽程在左側；「排行」四個榜單一列；「個人」參賽紀錄兩欄。
+     ・好友名單（好友頁、大廳與錦標賽的好友分頁）由 FriendsPanel 自己排多欄；好友頁本身放寬到 1200px。
+     ⚠ 只用樣式、不改對戰頁標記（對戰頁有逐位元比對與產生器守衛）。 */
+  :global(html:not([data-battle-view])[data-ui-wide] main.lobby.lobby) { max-width: 1200px; }
+  /* 模式選擇 */
+  :global(html:not([data-battle-view])[data-ui-wide] body .lobby .mode-cards) { gap: 20px; margin: 20px 0; }
+  :global(html:not([data-battle-view])[data-ui-wide] body .lobby .mode-card.mode-card.mode-card) { min-height: 200px; justify-content: center; padding: 28px 24px; }
+  :global(html:not([data-battle-view])[data-ui-wide] body .lobby .mode-card .mode-icon) { font-size: 3rem; }
+  :global(html:not([data-battle-view])[data-ui-wide] body .lobby .mode-card .mode-title) { font-size: 1.25rem; }
+  :global(html:not([data-battle-view])[data-ui-wide] body .lobby .mode-card .mode-desc) { font-size: 0.95rem; }
+  /* 本機對戰：兩張玩家卡片等寬吃滿 */
+  :global(html:not([data-battle-view])[data-ui-wide] body .lobby .player-setup) { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 24px; align-items: stretch; }
+  /* 線上大廳（尚未進房） */
+  :global(html:not([data-battle-view])[data-ui-wide] body .lobby .online-form.lobby-unified) { display: flow-root; max-width: none; }
+  :global(html:not([data-battle-view])[data-ui-wide] body .lobby .online-form.lobby-unified > :is(.name-row, .create-room-block)) { float: left; clear: left; width: 380px; box-sizing: border-box; margin: 0 0 12px; }
+  :global(html:not([data-battle-view])[data-ui-wide] body .lobby .online-form.lobby-unified > :not(.name-row):not(.create-room-block)) { margin: 0 0 12px 404px; }
+  :global(html:not([data-battle-view])[data-ui-wide] body .lobby .online-form.lobby-unified .open-room-list) { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; max-height: none; overflow: visible; }
+  :global(html:not([data-battle-view])[data-ui-wide] body .lobby :is(.lobby-tabs, .lobby-tab-panel)) { max-width: none; }
+  /* 等待室：兩個座位左右並排 */
+  :global(html:not([data-battle-view])[data-ui-wide] body .lobby .battle-seats) { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  /* 錦標賽「賽事」分頁：聊天室在右側欄（聊天室只出現在賽事分頁 ⇒ 它後面的兄弟元素就是賽事分頁的內容） */
+  :global(html:not([data-battle-view])[data-ui-wide] body .tourn-lobby > .tourn-chat) { float: right; width: 360px; margin: 0 0 16px 24px; }
+  :global(html:not([data-battle-view])[data-ui-wide] body .tourn-lobby > .tourn-chat .tourn-chat-msgs) { height: min(60vh, 560px); }
+  :global(html:not([data-battle-view])[data-ui-wide] body .tourn-lobby > .tourn-chat ~ :not(.hof-modal-backdrop)) { margin-right: 384px; }
+  :global(html:not([data-battle-view])[data-ui-wide] body .tourn-lobby) { display: flow-root; }
+  /* 錦標賽「排行」分頁：四個榜單一列排滿（原本 auto-fit 230px 在 1200 寬會留一格空白）；「個人」分頁：參賽紀錄排兩欄 */
+  :global(html:not([data-battle-view])[data-ui-wide] body .tourn-lobby .tourn-lb-grid) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  :global(html:not([data-battle-view])[data-ui-wide] body .tourn-lobby .tourn-pf-events) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; }
+  :global(html:not([data-battle-view])[data-ui-wide] body .tourn-lobby .tourn-pf-events > :not(.tourn-pf-evrow)) { grid-column: 1 / -1; }
 </style>

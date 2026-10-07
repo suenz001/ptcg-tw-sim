@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '64cf7c50f433e37905c22af52ffa7cdf9a3dce8f';   // v6.506（上一版）
+const PREV_SHA = 'e648de89903d6bb8acd71a01919122422a931475';   // v6.507（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,23 +757,34 @@ const PREV_SHA = '64cf7c50f433e37905c22af52ffa7cdf9a3dce8f';   // v6.506（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.507 前移：PREV_SHA 從 64cf7c50（v6.506）起算。
+  // ⚠⚠ v6.508 前移：PREV_SHA 從 e648de89（v6.507）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.507：全站頁首統一：新增共用元件 $lib/ui/PageHeader.svelte（三層頁首）與 AccountBar.svelte（帳號列唯一一份），九個頁首改用它；手機底部導覽列加首頁鈕與 body min-height；首頁 changelog 三步搬運。
+  // ⭐v6.508：網頁版善用版面：LobbyUnify 加 data-ui-wide 寬版規則（大廳 1200、線上大廳兩欄、錦標賽聊天室側欄、排行四欄、個人兩欄、等待室座位並排）、好友頁 1200、好友名單多欄；首頁 changelog 三步搬運。
   'src/lib/LobbyUnify.svelte',
-  'src/lib/SiteBottomNav.svelte',
-  'src/lib/ui/AccountBar.svelte',
-  'src/lib/ui/PageHeader.svelte',
+  'src/lib/friends/FriendsPanel.svelte',
   'src/lib/version.ts',
-  'src/routes/cards/+page.svelte',
-  'src/routes/deck-posts/+page.svelte',
-  'src/routes/decks/+page.svelte',
   'src/routes/friends/+page.svelte',
-  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.507）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.507 前移：PREV_SHA 從 64cf7c50（v6.506）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.507：全站頁首統一：新增共用元件 $lib/ui/PageHeader.svelte（三層頁首）與 AccountBar.svelte（帳號列唯一一份），九個頁首改用它；手機底部導覽列加首頁鈕與 body min-height；首頁 changelog 三步搬運。
+//   'src/lib/LobbyUnify.svelte',
+//   'src/lib/SiteBottomNav.svelte',
+//   'src/lib/ui/AccountBar.svelte',
+//   'src/lib/ui/PageHeader.svelte',
+//   'src/lib/version.ts',
+//   'src/routes/cards/+page.svelte',
+//   'src/routes/deck-posts/+page.svelte',
+//   'src/routes/decks/+page.svelte',
+//   'src/routes/friends/+page.svelte',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.506）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.506 前移：PREV_SHA 從 c3bfb348（v6.505）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -904,16 +915,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/instance-flags.ts',
 //   'src/lib/game/types.ts',
 //   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.495）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.495 前移：PREV_SHA 從 7474db9d（v6.494）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.495：新增中央 action use:panelResize（拉把、夾制、localStorage 記住、雙擊重設）；對戰頁聊天視窗接上並記住位置；首頁 changelog 三步搬運。
-//   'src/lib/panel-resize.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

@@ -134,6 +134,7 @@
      ⇒ 本頁原本的頁首、← 首頁、版本號樣式都沒有對象了，刪除（含 v6.468 放大「← 首頁」可點範圍那條）。本區只留 main 的上內距。 */
   :global(html:not([data-ui-wide])) main { padding-top: calc(12px + var(--safe-top, 0px)); }   /* 手機頁首卡片頂端與其他頁一致（12px） */
   :global(html[data-ui-wide]) main { padding-top: 24px; }   /* ⭐v6.507 網頁版：頁首卡片離頂端列 24px（與牌組編輯器、卡牌資料庫、公布欄一致） */
+  :global(html[data-ui-wide]) main { max-width: 1200px; }   /* ⭐v6.508 網頁版：與卡牌資料庫／牌組公布欄／對戰大廳同寬（原本 760px 是手機風格的窄欄） */
   /* <<< v6504-unify */
 
   /* ⭐⭐ 假分頁列：外觀比照 game/+page.svelte 的 .tourn-tabs／.tourn-tab（逐條對齊，含 active 的
