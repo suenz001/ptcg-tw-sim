@@ -1349,6 +1349,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let _unsubAuth: (() => void) | null = null;
   // v4.913 port 牌組編輯器的登入 dashboard 到模式選擇畫面
   let firebaseUser = $state<User | null>(null);
+  // ⭐v6.509（玩家回報 2026-10-07：手機按下錦標賽後「畫面停在登入畫面，要等一段時間才會進入錦標賽」，幾乎每次）：
+  //   Firebase 開頁時要先從手機儲存區讀回帳號、再連 Google 驗證一次（accounts:lookup，實測 0.4 秒起跳，手機更久），
+  //   這段期間 firebaseUser 還是 null ⇒ isAnonymous 為 true ⇒ 錦標賽顯示「請登入」表單，看起來像沒登入。
+  //   ⇒ 第一次收到登入狀態之前顯示「確認登入狀態中」，不再先閃登入表單。
+  let tAuthResolved = $state(false);
   let syncStatus = $state<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   let syncError = $state<string | null>(null);
   // Auth modal state
@@ -4767,8 +4772,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   修法：Firebase auth 永遠初始化（給 dashboard 用 firebaseUser）；
     //   Oracle build 額外取 Oracle JWT（給房間 API 用）。myUid 在 ORACLE_MODE
     //   下仍走 Oracle JWT uid，避免房間 memberUid 比對失敗。
+    // ⭐v6.509 保險：8 秒內都沒收到登入狀態（例：網路擋掉 Google 登入服務）⇒ 照舊顯示登入表單，不讓玩家卡在「確認中」
+    setTimeout(() => { if (!tAuthResolved) tAuthResolved = true; }, 8000);
     _unsubAuth = onAuthStateChanged(auth, async u => {   // ⭐v6.307 存退訂函式（onDestroy 解除）
       firebaseUser = u;
+      tAuthResolved = true;   // ⭐v6.509 第一次收到登入狀態（含「沒登入」）⇒ 錦標賽才決定要不要顯示登入表單
       // Oracle build 下 myUid 必須走 Oracle JWT uid（房間 API 簽 JWT 用），
       // 不能被 Firebase uid 蓋掉 → 加 gate 阻擋 callback 覆寫 myUid。
       if (!ORACLE_MODE) {
@@ -10259,6 +10267,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <p class="tourn-wait">⏳ 進場中，正在載入對戰…</p>
         <button class="btn-secondary" onclick={tLeaveMatch} disabled={tBusy}>返回賽事大廳</button>
       {/if}
+    {:else if !tAuthResolved}
+      <!-- ⭐v6.509 還在讀回登入狀態：不先顯示登入表單（玩家回報「停在登入畫面」） -->
+      <p class="tourn-wait">⏳ 正在確認登入狀態…</p>
     {:else if isAnonymous}
       <p class="tourn-gate">🔒 錦標賽需要 email 帳號（不開放匿名）。請登入，或註冊新帳號：</p>
       <label class="tourn-field">Email

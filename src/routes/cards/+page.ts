@@ -1,7 +1,7 @@
 import { base } from '$app/paths';
 import type { Card, SetSummary } from '$lib/cards/types';
 // v4.956：fetch URL 帶版本參數，繞過 Cloudflare 邊緣 cache
-import { VERSION } from '$lib/version';
+import { cardDataUrl } from '$lib/cards/data-url';   // ⭐v6.509 卡包資料用內容雜湊當快取依據
 // v6.194：已對玩家下架的卡不得出現在卡牌資料庫（唯一述詞，見 $lib/cards/visibility）。
 import { filterPlayerSelectable, applyHiddenCountsToSets } from '$lib/cards/visibility';
 // ⭐⭐ v6.340：「標準環境」不再寫死 H/I/J，改由後台政策決定（見 $lib/cards/regulation）。
@@ -21,7 +21,7 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
   const setCode = url.searchParams.get('set');
 
   if (!setCode) {
-    const res = await fetch(`${base}/cards/index.json?v=${VERSION}`);
+    const res = await fetch(cardDataUrl(base, 'cards/index.json'));
     if (!res.ok) throw new Error(`Failed to load sets index: HTTP ${res.status}`);
     // v6.194：卡包磚的張數要扣掉下架卡，否則「92 張」點進去只有 90 張。
     const sets: SetSummary[] = applyHiddenCountsToSets(await res.json());
@@ -37,7 +37,7 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
     //   （先掛一個空 catch：index 先失敗時不要冒出未處理的 rejection；下面照舊 await 原本那個 promise。）
     const policyP = loadCardPolicyOnce();
     policyP.catch(() => {});
-    const indexRes = await fetch(`${base}/cards/index.json?v=${VERSION}`);
+    const indexRes = await fetch(cardDataUrl(base, 'cards/index.json'));
     if (!indexRes.ok) throw new Error(`Failed to load sets index: HTTP ${indexRes.status}`);
     const sets: SetSummary[] = applyHiddenCountsToSets(await indexRes.json());
 
@@ -54,7 +54,7 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
     const results = await Promise.all(
       standardSets.map(async (s) => {
         try {
-          const r = await fetch(`${base}/cards/${s.code}.json?v=${VERSION}`);
+          const r = await fetch(cardDataUrl(base, `cards/${s.code}.json`));
           if (!r.ok) return [] as Card[];
           return (await r.json()) as Card[];
         } catch {
@@ -83,8 +83,8 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
   // Fetch the cards AND the index in parallel — we need the Chinese set name
   // (e.g. "超級交響樂" for M1S) for the header display.
   const [cardsRes, indexRes] = await Promise.all([
-    fetch(`${base}/cards/${setCode}.json?v=${VERSION}`),
-    fetch(`${base}/cards/index.json?v=${VERSION}`)
+    fetch(cardDataUrl(base, `cards/${setCode}.json`)),
+    fetch(cardDataUrl(base, 'cards/index.json'))
   ]);
   if (!cardsRes.ok) throw new Error(`Set ${setCode} not found (HTTP ${cardsRes.status})`);
   // v6.194：單一卡包檢視同樣濾掉下架卡（與 ALL 檢視共用同一份述詞）。

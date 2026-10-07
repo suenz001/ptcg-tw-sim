@@ -2,6 +2,22 @@
 
 const CACHE_PREFIX = 'ptcg-tw-sim-';
 
+/**
+ * ⭐v6.509 卡包資料（/cards/*.json、/card-set-map.json）的專用快取：不跟著網站版本走。
+ *   網址的 ?v= 是檔案內容雜湊（見 $lib/cards/data-url.ts）⇒ 內容沒變網址就不變，新版上線也不必重抓。
+ *   同一個檔換了新雜湊時，舊的那一筆由 staleCardDataUrls 挑出來刪掉（不會無限長大）。
+ */
+export const CARD_DATA_CACHE = 'ptcg-tw-sim-carddata';
+/** 這個路徑是不是卡包資料檔（測試站帶 base path ⇒ 用結尾判斷）。 */
+export function isCardDataPath(pathname: string): boolean {
+  return /\/cards\/[^/]+\.json$/.test(pathname) || pathname.endsWith('/card-set-map.json');
+}
+/** 存進新的一筆時，同一個檔（同路徑、不同 ?v=）的舊網址要刪掉。 */
+export function staleCardDataUrls(cachedUrls: string[], newUrl: string): string[] {
+  const n = new URL(newUrl);
+  return cachedUrls.filter((u) => { try { const x = new URL(u); return x.pathname === n.pathname && x.search !== n.search; } catch { return false; } });
+}
+
 function cacheSuffixNum(key: string, prefix = CACHE_PREFIX): number {
   if (!key.startsWith(prefix)) return -1;
   const n = Number(key.slice(prefix.length));
@@ -15,7 +31,8 @@ function cacheSuffixNum(key: string, prefix = CACHE_PREFIX): number {
  *       不會 404 白屏(version-skew)。只保留 1 個舊版，避免 cache 無限成長。
  */
 export function cachesToDelete(allKeys: string[], current: string, prefix = CACHE_PREFIX): string[] {
-  const others = allKeys.filter((k) => k !== current);
+  // ⭐v6.509 卡包資料快取（CARD_DATA_CACHE）跨版本保留：裡面的網址帶內容雜湊，卡片沒變就一直沿用
+  const others = allKeys.filter((k) => k !== current && k !== CARD_DATA_CACHE);
   const prevMostRecent = others
     .filter((k) => cacheSuffixNum(k, prefix) >= 0)
     .sort((a, b) => cacheSuffixNum(b, prefix) - cacheSuffixNum(a, prefix))[0];

@@ -82,7 +82,9 @@ const CHECKS = [
     /<link rel="preconnect" href="https:\/\/suenz001\.github\.io" \/>/.test(S.app) && /<link rel="preconnect" href="https:\/\/securetoken\.googleapis\.com" crossorigin \/>/.test(S.app)],
   ['★[⑥] /cards ALL：卡牌政策在 index.json 之前就開始載入，之後 await 同一個 promise', true, (S) => {
     const i = S.cards.indexOf("if (setCode === 'ALL') {"); const blk = S.cards.slice(i, i + 3000);
-    const iP = blk.indexOf('const policyP = loadCardPolicyOnce();'), iF = blk.indexOf('await fetch(`${base}/cards/index.json');
+    // ⭐v6.509（Rule 40）：index.json 改走中央 cardDataUrl（內容雜湊）⇒ 兩種寫法擇一；意圖（政策先開始載入）不變
+    const iP = blk.indexOf('const policyP = loadCardPolicyOnce();');
+    const iF = Math.max(blk.indexOf('await fetch(`${base}/cards/index.json'), blk.indexOf("await fetch(cardDataUrl(base, 'cards/index.json')"));
     return iP > 0 && iF > iP && /await policyP;/.test(blk) && !/await loadCardPolicyOnce\(\)/.test(blk);
   }],
 ];
@@ -146,13 +148,14 @@ async function runChat(src, { hidden }) {
 }
 {
   // ⑤ loadIndex 同時呼叫只抓一次；失敗後可以重試
+  //   ⭐v6.509（Rule 40）：pool.ts 改 import 中央 cardDataUrl（卡包內容雜湊）⇒ 剝 import 後補一個替身；意圖不變
   const js = ts2js(CUR.pool.replace(/^import[^\n]*\n/gm, ''));
-  const mod = new Function('base', 'VERSION', 'migrateCardId', js.replace(/export /g, '') + '\n;return { loadIndex };')('', 'T', (x) => x);
+  const mod = new Function('base', 'VERSION', 'migrateCardId', 'cardDataUrl', js.replace(/export /g, '') + '\n;return { loadIndex };')('', 'T', (x) => x, (b, r) => `${b}/${r}?v=T`);
   let n = 0;
   const fetchFn = async () => { n++; await new Promise((r) => setTimeout(r, 10)); return { ok: true, json: async () => [{ code: 'X' }] }; };
   const [a, b] = await Promise.all([mod.loadIndex(fetchFn), mod.loadIndex(fetchFn)]);
   ok('★★[⑤] loadIndex 同時呼叫只抓一次 index.json、兩邊拿到同一份', n === 1 && a === b && a.length === 1, String(n));
-  const mod2 = new Function('base', 'VERSION', 'migrateCardId', js.replace(/export /g, '') + '\n;return { loadIndex };')('', 'T', (x) => x);
+  const mod2 = new Function('base', 'VERSION', 'migrateCardId', 'cardDataUrl', js.replace(/export /g, '') + '\n;return { loadIndex };')('', 'T', (x) => x, (b, r) => `${b}/${r}?v=T`);
   let m = 0;
   const flaky = async () => { m++; if (m === 1) return { ok: false, status: 500 }; return { ok: true, json: async () => [] }; };
   let threw = false; try { await mod2.loadIndex(flaky); } catch { threw = true; }

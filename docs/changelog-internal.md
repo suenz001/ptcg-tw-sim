@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.509：錦標賽登入閘＋卡包內容快取（2026-10-07）
+
+BASE v6.508（6e130e6674adcc700ab1b4035e8a1c162b5fe47c）。玩家回報（手機）：「按下錦標賽後畫面停在登入畫面，要等一段時間才會進入錦標賽」，幾乎每次。站長另要求：「卡包資料改用內容當快取依據：卡片資料沒變就不用重新下載。以後只有補新卡包時才會重抓」。
+- 根因（Chrome 網路時序實測）：開頁時 Firebase 從 IndexedDB 讀回使用者後要先打 identitytoolkit accounts:lookup（電腦約 0.4 秒、手機更久）才觸發 onAuthStateChanged；這段期間 firebaseUser＝null ⇒ isAnonymous＝true ⇒ 錦標賽顯示登入表單。不是 v6.5xx 的回歸（冷掛載阻塞 v6.460→v6.508 不變）。
+- 修法：game/+page.svelte 新增 tAuthResolved（第一次 onAuthStateChanged 或 8 秒保險後才為 true），錦標賽在 isAnonymous 判斷之前先顯示「正在確認登入狀態」；layout onMount 以 requestIdleCallback 預熱 import('$lib/firebase')。
+- 卡包快取：vite.config.js cardDataHashes()（static/cards/*.json＋card-set-map.json 的 sha1 前 10 碼）→ __CARD_DATA_HASHES__；$lib/cards/data-url.ts cardDataUrl() 產生 ?v=c<雜湊>（沒有雜湊退回 VERSION）；pool.ts 與卡牌資料庫改用它。SW：卡包資料走 CARD_DATA_CACHE（cache-first、200 才存、刪同路徑不同 ?v=、離線 ignoreSearch 後備），cachesToDelete 不刪它。
+- vite build.rollupOptions.output.experimentalMinChunkSize 1500：v6.507 起首頁第一批 modulepreload 12→13（test-v6474 E0 只在有 build/ 時跑、CI 跳過，所以 v6.507/508 沒擋到）；合併後回到 12，本機 300ms 延遲量測首頁 1.89→1.55 秒、錦標賽 1.92→1.62、牌組 1.90→1.61。
+- Rule 40：test-card-index-freshness ④（承認 cardDataUrl，但先驗 data-url.ts 真的加 ?v=）、test-v6467 ⑥（index.json 兩種寫法擇一）、test-v6462 M1（改觀察 changelog／ai-playbooks）、test-v6441 LATER 4 條。
+- test-v6509（S1–S5、U1–U5、E1–E7、E9；E4 在 v6.508 build 實測紅＝重現玩家症狀：植入 IndexedDB 登入資料、identitytoolkit 延遲 4 秒；突變拿掉 8 秒保險 ⇒ E6 紅）。
+
 ## v6.508：網頁版善用版面（2026-10-07）
 
 BASE admin v1.79（e648de89903d6bb8acd71a01919122422a931475）。站長：「對戰演練（包含線上連線對戰）、錦標賽的 windows 網頁版，仍然沒有有效利用版面，仍然是手機版的風格」；先在正式站（站長帳號、只在自己開的分頁注入樣式）做預覽圖，站長回「可以」。

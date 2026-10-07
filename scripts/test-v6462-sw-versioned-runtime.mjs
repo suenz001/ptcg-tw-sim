@@ -139,7 +139,9 @@ if (hasBaseCommit(ROOT, BASE_SHA)) {
 console.log('\n【突變】');
 const M1 = SRC.replace("PRECACHE.includes(url.pathname) || (VERSIONED_DATA(url.pathname) && url.searchParams.has('v'))", 'PRECACHE.includes(url.pathname)');
 ok('[M1 自驗] 突變有套上', M1 !== SRC);
-if (M1 !== SRC) { const r = await runMain(M1); ok('★★[M1] 拿掉 cache-first 的版本化條件 ⇒ B2 必紅（每次都打網路）', r.B2 !== 0, r.B2); }
+// ⭐v6.509（Rule 40）：卡包資料（/cards/*.json、card-set-map.json）改由專用的內容雜湊快取先接手，
+//   不再經過這個一般的版本化條件 ⇒ 拿掉它時改觀察仍走這條的 changelog.html（B3[1]）與 ai-playbooks（B3[2]）。意圖不變。
+if (M1 !== SRC) { const r = await runMain(M1); ok('★★[M1] 拿掉 cache-first 的版本化條件 ⇒ changelog／ai-playbooks 第二次必紅（每次都打網路）', r.B3[1] !== 0 && r.B3[2] !== 0, JSON.stringify(r.B3)); }
 const M2 = SRC.replace("(VERSIONED_DATA(url.pathname) && url.searchParams.has('v'))", 'VERSIONED_DATA(url.pathname)');
 ok('[M2 自驗] 突變有套上', M2 !== SRC);
 if (M2 !== SRC) { const r = await runMain(M2); ok('★★[M2] 拿掉「必須有 v 參數」⇒ B5 必紅（無版本請求被快取釘住）', r.B5 === 0, r.B5); }

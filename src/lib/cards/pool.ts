@@ -9,7 +9,7 @@
 import { base } from '$app/paths';
 import type { Card, SetSummary } from './types';
 // v4.956：fetch URL 帶版本參數，繞過 Cloudflare 邊緣 cache（每次版本 bump 觸發 cache miss）
-import { VERSION } from '$lib/version';
+import { cardDataUrl } from '$lib/cards/data-url';   // ⭐v6.509 卡包資料用內容雜湊當快取依據
 // v6.193：已下架的重複卡 id 要先對照回保留版，否則對照表查不到 → 卡包永遠載不進來。
 //   ⚠ cardIdMigration 是零 runtime 相依的葉子模組（只 import type），不會造成循環。
 import { migrateCardId } from '$lib/decks/cardIdMigration';
@@ -27,7 +27,7 @@ export async function loadIndex(
   //   失敗時清掉在途記錄，下一次呼叫照舊重試（與原本行為相同）。
   if (indexInflight) return indexInflight;
   indexInflight = (async () => {
-    const res = await fetchFn(`${base}/cards/index.json?v=${VERSION}`);
+    const res = await fetchFn(cardDataUrl(base, 'cards/index.json'));
     if (!res.ok) throw new Error(`Failed to load index.json: HTTP ${res.status}`);
     indexCache = (await res.json()) as SetSummary[];
     return indexCache;
@@ -45,7 +45,7 @@ export async function loadSet(
   if (pending) return pending;
 
   const p = (async () => {
-    const res = await fetchFn(`${base}/cards/${setCode}.json?v=${VERSION}`);
+    const res = await fetchFn(cardDataUrl(base, `cards/${setCode}.json`));
     if (!res.ok) throw new Error(`Set ${setCode} not found (HTTP ${res.status})`);
     const raw = (await res.json()) as Card[];
     // v2.22：統一訓練家寶可夢命名 — 部分 set（SV9a/MC/SVOM/SVOD）原始卡名帶有
@@ -100,7 +100,7 @@ export async function loadCardSetMap(
   if (cardSetMapCache) return cardSetMapCache;
   if (cardSetMapInflight) return cardSetMapInflight;
   cardSetMapInflight = (async () => {
-    const res = await fetchFn(`${base}/card-set-map.json?v=${VERSION}`);
+    const res = await fetchFn(cardDataUrl(base, 'card-set-map.json'));
     if (!res.ok) throw new Error(`Failed to load card-set-map.json: HTTP ${res.status}`);
     cardSetMapCache = (await res.json()) as Record<string, string>;
     cardSetMapInflight = null;

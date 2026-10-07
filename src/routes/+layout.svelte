@@ -99,6 +99,15 @@
         tryChunkReload(String((r && r.message) || r || ''));
       });
     }
+    // ⭐v6.509 登入狀態預熱（玩家回報：手機按下錦標賽後停在登入畫面好幾秒）：Firebase 要等到第一次用到才開始
+    //   「讀回帳號＋連 Google 驗證」，所以從首頁點進錦標賽時，這段等待全部發生在點下去之後。
+    //   ⇒ 任何頁面載完、瀏覽器空閒時就先把 Firebase 帶起來（只讀回既有登入，不會建立帳號、不會匿名登入）；
+    //     之後切到錦標賽／對戰演練／牌組編輯器時登入狀態已經就緒。
+    if (typeof window !== 'undefined') {
+      const _warmAuth = () => { import('$lib/firebase').catch(() => { /* 預熱失敗無妨：頁面用到時照常載入 */ }); };
+      const _ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+      if (typeof _ric === 'function') _ric(_warmAuth, { timeout: 3000 }); else setTimeout(_warmAuth, 1500);
+    }
     // ⭐v6.474：沒選過主題的玩家，作業系統切換深淺色時跟著變（選過就不再跟）。
     followSystemTheme((t) => { uiTheme = t; });
     showMigrationBanner = shouldShowMigrationBanner();

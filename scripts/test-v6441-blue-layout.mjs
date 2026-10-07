@@ -71,6 +71,12 @@ const REVERT = [
 //   這些後續版本的改動在這裡逐條還原（每條恰好命中 1 次；內容正確性由各版自己的守衛鎖：test-v6448…）。
 //   ⚠ 只准放「非藍桌墊」的全版面改動；藍桌墊的改動一律寫進哨兵。
 const LATER = [
+  // ⭐v6.509（Rule 40）：錦標賽「正在確認登入狀態」閘＋8 秒保險（非藍桌墊、只碰錦標賽大廳與登入回呼）。
+  //   difflib 產生、當場驗證逐位元還原 v6.508；內容由 test-v6509 鎖
+  ["  let firebaseUser = $state<User | null>(null);\n  // ⭐v6.509（玩家回報 2026-10-07：手機按下錦標賽後「畫面停在登入畫面，要等一段時間才會進入錦標賽」，幾乎每次）：\n  //   Firebase 開頁時要先從手機儲存區讀回帳號、再連 Google 驗證一次（accounts:lookup，實測 0.4 秒起跳，手機更久），\n  //   這段期間 firebaseUser 還是 null ⇒ isAnonymous 為 true ⇒ 錦標賽顯示「請登入」表單，看起來像沒登入。\n  //   ⇒ 第一次收到登入狀態之前顯示「確認登入狀態中」，不再先閃登入表單。\n  let tAuthResolved = $state(false);\n  let syncStatus = $state<'idle' | 'syncing' | 'synced' | 'error'>('idle');\n", "  let firebaseUser = $state<User | null>(null);\n  let syncStatus = $state<'idle' | 'syncing' | 'synced' | 'error'>('idle');\n"],
+  ["    //   下仍走 Oracle JWT uid，避免房間 memberUid 比對失敗。\n    // ⭐v6.509 保險：8 秒內都沒收到登入狀態（例：網路擋掉 Google 登入服務）⇒ 照舊顯示登入表單，不讓玩家卡在「確認中」\n    setTimeout(() => { if (!tAuthResolved) tAuthResolved = true; }, 8000);\n    _unsubAuth = onAuthStateChanged(auth, async u => {   // ⭐v6.307 存退訂函式（onDestroy 解除）\n", "    //   下仍走 Oracle JWT uid，避免房間 memberUid 比對失敗。\n    _unsubAuth = onAuthStateChanged(auth, async u => {   // ⭐v6.307 存退訂函式（onDestroy 解除）\n"],
+  ["      firebaseUser = u;\n      tAuthResolved = true;   // ⭐v6.509 第一次收到登入狀態（含「沒登入」）⇒ 錦標賽才決定要不要顯示登入表單\n      // Oracle build 下 myUid 必須走 Oracle JWT uid（房間 API 簽 JWT 用），\n", "      firebaseUser = u;\n      // Oracle build 下 myUid 必須走 Oracle JWT uid（房間 API 簽 JWT 用），\n"],
+  ["      {/if}\n    {:else if !tAuthResolved}\n      <!-- ⭐v6.509 還在讀回登入狀態：不先顯示登入表單（玩家回報「停在登入畫面」） -->\n      <p class=\"tourn-wait\">⏳ 正在確認登入狀態…</p>\n    {:else if isAnonymous}\n", "      {/if}\n    {:else if isAnonymous}\n"],
   // ⭐v6.507（Rule 40）：全站頁首統一——大廳／錦標賽頁首改用共用元件 PageHeader＋AccountBar（非藍桌墊、只碰大廳標記）。
   //   difflib 產生、當場驗證逐位元還原 v6.506；內容由 test-v6507 鎖
   ["  import KbdShortcutsSetting from '$lib/game/KbdShortcutsSetting.svelte';\n  import PageHeader from '$lib/ui/PageHeader.svelte';   // ⭐v6.507 全站頁首統一\n  import AccountBar from '$lib/ui/AccountBar.svelte';\n  import { goto } from '$app/navigation';   // v6.284 修：initNotifyNav 的回呼一直呼叫 goto 卻沒 import（ReferenceError 被 try/catch 吞掉 ⇒ 通知點擊導頁靜默失效）\n", "  import KbdShortcutsSetting from '$lib/game/KbdShortcutsSetting.svelte';\n  import { goto } from '$app/navigation';   // v6.284 修：initNotifyNav 的回呼一直呼叫 goto 卻沒 import（ReferenceError 被 try/catch 吞掉 ⇒ 通知點擊導頁靜默失效）\n"],

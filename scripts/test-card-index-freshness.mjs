@@ -147,6 +147,13 @@ T('⭐⭐ 全 repo 掃描：fetch 卡片 JSON 必須帶 ?v= 或指定 cache 模�
   //   任何「順手 fetch 一下 /cards/xxx」而沒帶防舊檔機制的新程式碼，都會複製本次事故。
   const roots = ['src', 'oracle-admin'];
   const bad = [];
+  // cardDataUrl 必須真的回傳帶 ?v= 的網址（剝註解後檢查函式本體），否則它不算防舊檔機制
+  let cardDataUrlBustsCache = false;
+  try {
+    const du = readFileSync(join(ROOT, 'src/lib/cards/data-url.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    const body = du.slice(du.indexOf('export function cardDataUrl'));
+    cardDataUrlBustsCache = /\?v=\$\{/.test(body.slice(0, body.indexOf('\n}') + 2));
+  } catch { /* 沒有 data-url.ts ⇒ 不承認 */ }
   const walk = (d) => {
     for (const f of readdirSync(d)) {
       const p = join(d, f);
@@ -160,6 +167,9 @@ T('⭐⭐ 全 repo 掃描：fetch 卡片 JSON 必須帶 ?v= 或指定 cache 模�
         const call = m[1];
         if (!/(cards\/index\.json|card-set-map\.json|CARDS_BASE)/.test(call)) continue;
         if (/\?v=|\?nocache|cache:\s*'|cache:\s*"|forceReload/.test(call)) continue;
+        // ⭐v6.509（Rule 40）：卡包資料改走中央 cardDataUrl()（?v=內容雜湊）——意圖「必須有防舊檔機制」不變；
+        //   只在 data-url.ts 真的把 ?v= 加上去時才承認（見下方 cardDataUrlBustsCache 檢查，不是看到名字就放行）
+        if (/^\s*cardDataUrl\(/.test(call) && cardDataUrlBustsCache) continue;
         bad.push(p.slice(ROOT.length) + ' :: fetch(' + call.trim().slice(0, 90) + ')');
       }
     }

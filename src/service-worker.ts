@@ -6,7 +6,7 @@
 // v4.26 PWA service worker — SvelteKit auto-registers this on production builds.
 // 使用 $service-worker 虛擬模組取得 build / files / prerendered / version。
 import { build, files, prerendered, version } from '$service-worker';
-import { cachesToDelete } from '$lib/sw-policy';
+import { cachesToDelete, CARD_DATA_CACHE, isCardDataPath, staleCardDataUrls } from '$lib/sw-policy';
 import { resolveClickUrl } from '$lib/notify-core'; // v6.022 通知點擊導頁(base path 由 scope 推)
 
 // Cast self to ServiceWorkerGlobalScope so TS knows the SW APIs.
@@ -150,6 +150,34 @@ sw.addEventListener('fetch', (event) => {
   //     ③ `unchanged` 回應帶 `serverNow`，吃到快取版會把時鐘校到過去。
   //   對戰狀態、賽事、聊天全部是「即時且會變」的資料，**沒有任何一條該被離線快取**。
   if (url.pathname.startsWith('/api/')) return;
+
+  // >>> v6509-card-data-cache
+  // ⭐v6.509 卡包資料：專用快取、cache-first、跨版本保留（網址帶內容雜湊 ⇒ 命中就一定是對的內容）。
+  //   換新雜湊時把同一個檔的舊網址刪掉；網路失敗時退回任何一份同路徑的舊資料（離線也能開）。
+  if (isCardDataPath(url.pathname) && url.searchParams.has('v')) {
+    event.respondWith((async () => {
+      const dc = await caches.open(CARD_DATA_CACHE);
+      const hit = await dc.match(event.request);
+      if (hit) return hit;
+      try {
+        const response = await fetch(event.request);
+        if (response.status === 200) {
+          try {
+            await dc.put(event.request, response.clone());
+            const keys = (await dc.keys()).map((r) => r.url);
+            for (const u of staleCardDataUrls(keys, event.request.url)) await dc.delete(u);
+          } catch { /* 空間不足等：不影響回應 */ }
+        }
+        return response;
+      } catch {
+        const old = await dc.match(event.request, { ignoreSearch: true });
+        if (old) return old;
+        throw new Error('offline and not cached: ' + url.pathname);
+      }
+    })());
+    return;
+  }
+  // <<< v6509-card-data-cache
 
   async function respond(): Promise<Response> {
     const cache = await caches.open(CACHE_NAME);
