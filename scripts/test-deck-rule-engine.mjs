@@ -199,22 +199,28 @@ T('⭐⭐v1.56 低序位要等高序位都沒命中才輪到', () => {
   const d3 = deckToSets(deckOf([KANGA]), nameMap);                            // 都沒完全吻合 ⇒ 未分類
   assert.equal(classifyDeck(d3, [common, rare]).rule, null, '低序位也必須完全吻合');
 });
-T('v1.56 序位相同時沿用舊規則（條件數多者勝）；沒設序位＝0', () => {
+// ⭐v1.57（Rule 40，站長 2026-10-07：「請幫我先把預設的序位設為 50」）：沒設序位由 0 改成 50；明確填 0 仍是 0。
+T('v1.56 序位相同時沿用舊規則（條件數多者勝）；v1.57 沒設序位＝50', () => {
   const sets = deckToSets(deckOf([KANGA, '老大的指令']), nameMap);
   const a = { _id: 'a', name: 'A', includes: [KANGA] };
   const b = { _id: 'b', name: 'B', includes: [KANGA, '老大的指令'] };
   assert.equal(classifyDeck(sets, [a, b]).rule.name, 'B', '兩條都沒設序位 ⇒ 與 v1.55 相同（條件多者勝）');
-  assert.equal(classifyDeck(sets, [{ ...a, rank: 0 }, b]).rule.name, 'B', 'rank:0 與沒設相同');
+  assert.equal(classifyDeck(sets, [{ ...a, rank: 50 }, b]).rule.name, 'B', 'rank:50 與沒設相同（v1.57 預設 50）');
+  assert.equal(classifyDeck(sets, [{ ...a, rank: 51 }, b]).rule.name, 'A', '比預設高 1 就優先（證明沒設＝50，不是 0）');
+  assert.equal(classifyDeck(sets, [a, { ...b, rank: 0 }]).rule.name, 'A', '明確填 0 低於沒設的（50）');
   assert.equal(classifyDeck(sets, [{ ...b, rank: -1 }, a]).rule.name, 'A', '負序位輸給沒設序位的');
-  assert.equal(ruleRank({}), 0); assert.equal(ruleRank({ rank: 'x' }), 0); assert.equal(ruleRank({ rank: 7 }), 7);
+  assert.equal(ruleRank({}), 50); assert.equal(ruleRank({ rank: 'x' }), 50); assert.equal(ruleRank({ rank: 7 }), 7);
+  assert.equal(ruleRank({ rank: null }), 50); assert.equal(ruleRank({ rank: '' }), 50); assert.equal(ruleRank({ rank: 0 }), 0); assert.equal(ruleRank(null), 50);
 });
-T('v1.56 sanitizeRule：序位取整數、夾在 -99～99、沒填＝0', () => {
+T('v1.56 sanitizeRule：序位取整數、夾在 -99～99、v1.57 沒填＝50', () => {
   const base = { name: 'X', includes: [KANGA] };
-  assert.equal(sanitizeRule(base).doc.rank, 0);
+  assert.equal(sanitizeRule(base).doc.rank, 50);
+  assert.equal(sanitizeRule({ ...base, rank: 0 }).doc.rank, 0);
+  assert.equal(sanitizeRule({ ...base, rank: '' }).doc.rank, 50);
   assert.equal(sanitizeRule({ ...base, rank: '12.6' }).doc.rank, 13);
   assert.equal(sanitizeRule({ ...base, rank: 500 }).doc.rank, 99);
   assert.equal(sanitizeRule({ ...base, rank: -500 }).doc.rank, -99);
-  assert.equal(sanitizeRule({ ...base, rank: 'abc' }).doc.rank, 0);
+  assert.equal(sanitizeRule({ ...base, rank: 'abc' }).doc.rank, 50);
 });
 
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);

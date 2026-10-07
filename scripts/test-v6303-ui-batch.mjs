@@ -45,6 +45,7 @@ import { revertAdminV153 } from './lib/sap-revert-admin-v153.mjs';   // ⭐serve
 import { revertAdminV154 } from './lib/sap-revert-admin-v154.mjs';   // ⭐server v1.54（全站 audit 降載）
 import { revertAdminV155 } from './lib/sap-revert-admin-v155.mjs';   // ⭐server v1.55（首頁錦標賽摘要端點）
 import { revertAdminV156 } from './lib/sap-revert-admin-v156.mjs';   // ⭐server v1.56（牌組原型序位）
+import { revertAdminV157 } from './lib/sap-revert-admin-v157.mjs';   // ⭐server v1.57（序位預設 50＋用最新規則重新判定）：先剝較新的（Rule 54）
 import { revertAdminV148 } from './lib/sap-revert-admin-v148.mjs';   // ⭐admin v1.76／server v1.48（Rule 54：由新到舊）   // ⭐v6.425 鏈又長一節（Rule 54：由新到舊）
 import { styleBlockOf } from './lib/svelte-style-block.mjs';
 import { pwUsable } from './lib/pw.mjs';
@@ -511,7 +512,7 @@ await T('H3 ⭐ 沒有動到不該動的檔：oracle-admin/server_admin_patch.js
   //   沒辦法用 `// >>> …` 哨兵框住 ⇒ 沿用 v6.292 的形狀，由
   //   scripts/lib/tourn-revert-v6381.mjs 逐字還原（它對「命中次數不合理」「還原後仍有
   //   v6381 痕跡」一律 throw ⇒ 這不是放寬，是把改動搬到宣告端）。
-  const SAP_REVERTED = revertV6381(revertAdminV146(revertCasualIdleV147(revertAdminV148(revertAdminV150(revertAdminV152(revertAdminV153(revertAdminV154(revertAdminV155(revertAdminV156(SAP_RAW))))))))));   // 由新到舊（Rule 54）
+  const SAP_REVERTED = revertV6381(revertAdminV146(revertCasualIdleV147(revertAdminV148(revertAdminV150(revertAdminV152(revertAdminV153(revertAdminV154(revertAdminV155(revertAdminV156(revertAdminV157(SAP_RAW)))))))))));   // 由新到舊（Rule 54）
   assert.ok(SAP_REVERTED !== SAP_RAW, '⚠ v6.381 的還原器對 server_admin_patch.js 是 no-op（宣告端過期了）');
   const SAP_STRIPPED = SAP_REVERTED.replace(/[ \t]*\/\/ >>> v\d+-[\w-]+[\s\S]*?\/\/ <<< v\d+-[\w-]+\n/g, '');
   assert.ok(SAP_STRIPPED !== SAP_REVERTED,

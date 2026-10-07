@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.78</title>
+<title>PTCG Oracle Admin v1.79</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.78</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.79</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1362,6 +1362,73 @@ window.tevOpenReplay = function (eventIdEnc, round, idx) {
 };
 
 window.tevDeleteArchive = (...a) => tevDeleteArchive(...a);
+// ══ v1.79 歷屆賽事「冠軍牌型」用牌組原型規則判定（站長 2026-10-07）═════════════════════════════
+//   原本這一欄是 detectMainPokemon（主力寶可夢的猜測），跟牌組原型規則無關，規則改了也不會跟著變。
+//   ⇒ 改成把每場冠軍的牌表送到伺服器 /api/admin/deck-rules/classify-decks，用**當下最新**的規則判定
+//     （伺服器分類走中央 archetypeNameOf、不經 30 秒規則快取）。判不出來（沒牌表／舊伺服器）才退回主力寶可夢並標註。
+let _tsChampArch = new Map();   // eventId -> 原型名（含「未分類」）；null ＝ 伺服器也不知道
+let _tsChampArchMsg = '';
+let _tsChampArchBusy = false;
+function tsChampRecOf(a) { return (a && a.championUid) ? ((a.players || []).find((p) => p.uid === a.championUid) || null) : null; }
+function tsChampMainOf(a) {
+  const rec = tsChampRecOf(a);
+  return rec ? (detectMainPokemon({ deckEntries: rec.deckEntries || [] }) || (rec.deckName || '—')) : '—';
+}
+/** 排序／搜尋用的純文字 */
+function tsChampDeckText(a) {
+  const arch = _tsChampArch.get(a && a.eventId);
+  if (typeof arch === 'string' && arch) return arch;
+  return a && a.championUid ? tsChampMainOf(a) : '';
+}
+/** 表格儲存格（純函式，守衛直接餵資料驗） */
+function tsChampDeckCellHtml(a) {
+  if (!a || !a.championUid) return '—';
+  const arch = _tsChampArch.get(a.eventId);
+  const main = tsChampMainOf(a);
+  if (typeof arch === 'string' && arch && arch !== '未分類') return escapeHtml(arch);
+  if (arch === '未分類') return '未分類 <span class="small muted">（主力：' + escapeHtml(main) + '）</span>';
+  return escapeHtml(main) + ' <span class="small muted" title="還沒用牌組原型規則判定（或沒有牌表），暫時顯示主力寶可夢">（主力寶可夢）</span>';
+}
+/** 要送去判定的冠軍牌表（只送有冠軍、有牌表的場次） */
+function tsChampDecksForClassify(archives) {
+  const out = [];
+  for (const a of (archives || [])) {
+    const rec = tsChampRecOf(a);
+    if (!rec || !Array.isArray(rec.deckEntries) || !rec.deckEntries.length || !a.eventId) continue;
+    out.push({ key: String(a.eventId), entries: rec.deckEntries.map((e) => ({ cardId: String(e.cardId), count: Number(e.count) || 0 })) });
+  }
+  return out;
+}
+window.tsRefreshChampArchetypes = async function (btn) {
+  if (_tsChampArchBusy) return;
+  const archives = (tournStatsCache && tournStatsCache.archives) || [];
+  const decks = tsChampDecksForClassify(archives);
+  const setMsg = (t) => { _tsChampArchMsg = t; const m = document.getElementById('ts-champ-arch-msg'); if (m) m.textContent = t; };
+  if (!decks.length) { setMsg('沒有可判定的冠軍牌表'); return; }
+  _tsChampArchBusy = true;
+  if (btn) btn.disabled = true;
+  setMsg('⏳ 判定中…（' + decks.length + ' 場）');
+  try {
+    const next = new Map();
+    let rulesCount = 0;
+    for (let i = 0; i < decks.length; i += 500) {
+      const res = await api('/api/admin/deck-rules/classify-decks', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decks: decks.slice(i, i + 500) }),
+      });
+      if (!res || res.error || !res.results) { setMsg('⚠ 判定失敗：' + ((res && res.error) || '伺服器沒有回結果（是否還沒跑 update-tournament.bat？）')); return; }
+      rulesCount = res.rulesCount || 0;
+      for (const [k, v] of Object.entries(res.results)) next.set(k, v);
+    }
+    _tsChampArch = next;
+    const t = new Date();
+    setMsg('✅ 已用目前 ' + rulesCount + ' 條啟用中的規則判定 ' + next.size + ' 場冠軍牌型（'
+      + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') + '）');
+    tvRender('tsArchives');
+  } finally {
+    _tsChampArchBusy = false;
+    if (btn) btn.disabled = false;
+  }
+};
 async function loadTournamentStats(reset = false) {
   if (tournStatsLoading) return;
   tournStatsLoading = true;
@@ -1380,6 +1447,7 @@ async function loadTournamentStats(reset = false) {
     if (data && data.error) { el.innerHTML = '<h2>📈 賽事統計</h2><div class="empty">Error: ' + escapeHtml(data.error) + '</div>'; return; }
     tournStatsCache = data || { archives: [], champions: [] };
     renderTournamentStats(el, tournStatsCache);
+    tsRefreshChampArchetypes();   // ⭐v1.79 載入完就用最新規則判定一次冠軍牌型（背景跑，好了表格自己更新）
   } catch (e) {
     const el = document.getElementById('tab-tournament-stats');
     if (el) el.innerHTML = '<h2>📈 賽事統計</h2><div class="empty">載入失敗：' + escapeHtml(e.message) + '</div>';
@@ -1779,7 +1847,12 @@ function renderTournamentStats(el, data) {
   html += '<section class="stats-section"><h3>📋 5. 歷屆賽事 <span class="small muted">（歸檔共 '
     + Number((data && data.total != null) ? data.total : allArchives.length).toLocaleString()
     + ' 場，已全部載入；上方所有統計都是用全量算的）</span></h3>';
-  html += '<div style="margin-bottom:8px;">' + tvSearchBox('tsArchives', '🔎 搜尋賽事名稱 / 冠軍…') + '</div>';
+  // ⭐v1.79（站長 2026-10-07）：冠軍牌型改用「牌組原型規則」判定，而且每次都用**當下最新**的規則（伺服器不經快取）；
+  //   改完規則按這顆就重新判定，不必重載整頁統計。
+  html += '<div style="margin-bottom:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">'
+    + '<button onclick="tsRefreshChampArchetypes(this)">🔄 用最新規則重新判定冠軍牌型</button>'
+    + '<span id="ts-champ-arch-msg" class="small muted">' + escapeHtml(_tsChampArchMsg) + '</span></div>';
+  html += '<div style="margin-bottom:8px;">' + tvSearchBox('tsArchives', '🔎 搜尋賽事名稱 / 冠軍 / 冠軍牌型…') + '</div>';
   html += '<div id="tv-mount-tsArchives"></div></section>';
 
   // ── 6. 賽果分佈 ──
@@ -1855,21 +1928,21 @@ function renderTournamentStats(el, data) {
       name: { get: (r) => r.eventName || '', str: true },
       players: { get: (r) => (r.playerCount || (r.players || []).length) },
       champ: { get: (r) => r.championName || '', str: true },
+      champDeck: { get: (r) => tsChampDeckText(r), str: true },   // ⭐v1.79 冠軍牌型可排序
     },
     defaultSort: ['finishedAt', 'desc'],
-    searchText: (r) => ((r.eventName || '') + ' ' + (r.championName || '')).toLowerCase(),
+    searchText: (r) => ((r.eventName || '') + ' ' + (r.championName || '') + ' ' + tsChampDeckText(r)).toLowerCase(),
     mount: () => document.getElementById('tv-mount-tsArchives'),
     render: (v) => '<table class="data-table" style="font-size:.9rem;"><thead><tr>'
       + tvTh('tsArchives', 'finishedAt', '完賽時間') + tvTh('tsArchives', 'dur', '耗時') + tvTh('tsArchives', 'name', '賽事名稱')
-      + tvTh('tsArchives', 'players', '人數') + tvTh('tsArchives', 'champ', '冠軍') + '<th>冠軍牌型</th><th></th></tr></thead><tbody>'
+      + tvTh('tsArchives', 'players', '人數') + tvTh('tsArchives', 'champ', '冠軍') + tvTh('tsArchives', 'champDeck', '冠軍牌型', ' title="依目前的牌組原型規則判定；改完規則按上方「🔄 用最新規則重新判定冠軍牌型」"') + '<th></th></tr></thead><tbody>'
       + v.pageRows.map((a) => {
-        const champRec = (a.players || []).find((p) => p.uid === a.championUid);
-        const champMain = champRec ? (detectMainPokemon({ deckEntries: champRec.deckEntries || [] }) || (champRec.deckName || '—')) : '—';
+        const champCell = tsChampDeckCellHtml(a);   // ⭐v1.79 冠軍牌型＝牌組原型規則（判不出來才退回主力寶可夢）
         const dur = (a.finishedAt && (a.startedAt || a.createdAt)) ? (a.finishedAt - (a.startedAt || a.createdAt)) : 0;
         return '<tr><td>' + _tsFmtDateTime(a.finishedAt) + '</td><td>' + _tsFmtDuration(dur) + '</td>'
           + '<td><button onclick="tevShowBracket(\'' + encodeURIComponent(a.eventId) + '\')" style="background:none;border:none;color:#7fd0ff;text-decoration:underline;cursor:pointer;padding:0;font-size:.9rem;" title="點看賽程與回放">' + escapeHtml(a.eventName || '錦標賽') + '</button></td>'
           + '<td>' + (a.playerCount || (a.players || []).length) + '</td>'
-          + '<td>' + (a.championName ? escapeHtml(a.championName) + ' 🏆' : '—') + '</td><td>' + escapeHtml(champMain) + '</td>'
+          + '<td>' + (a.championName ? escapeHtml(a.championName) + ' 🏆' : '—') + '</td><td>' + champCell + '</td>'
           + '<td><button style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:.8rem;" onclick="tevDeleteArchive(\'' + encodeURIComponent(a.eventId) + '\', this)">🗑️ 刪除</button></td></tr>';
       }).join('')
       + '</tbody></table>',
@@ -2914,7 +2987,7 @@ function renderDeckRules(el) {
     const rid = String(r._id).replace(/'/g, '&apos;');
     return '<tr>'
       + '<td>' + (r.enabled === false ? '⏸' : '✅') + '</td>'
-      + '<td style="text-align:center;" title="序位：數字越大越先判定">' + (Number(r.rank) || 0) + '</td>'   // ⭐v1.78 序位
+      + '<td style="text-align:center;" title="序位：數字越大越先判定">' + ruleRankOf(r) + '</td>'   // ⭐v1.78 序位（v1.79 沒填＝50）
       + '<td><b>' + escapeHtml(r.name) + '</b>' + (r.note ? '<div class="small muted">' + escapeHtml(r.note) + '</div>' : '') + ids + '</td>'
       + '<td>' + (inc || '<span class="small muted">—</span>') + '</td>'
       + '<td>' + (exc || '<span class="small muted">—</span>') + '</td>'
@@ -2967,9 +3040,15 @@ function renderDeckRules(el) {
     <h3>🎴 牌組原型規則</h3>
     <p class="small muted" style="margin:2px 0 12px;">
       定義「一副牌要含哪些卡、不能含哪些卡」就算是某個牌組。之後的使用率／勝率統計會依這些規則分類。
-      一副牌同時符合多條規則時，先看<b>序位</b>（數字越大越先判定：高序位只要符合就歸給它）；
+      一副牌同時符合多條規則時，先看<b>序位</b>（預設 50；數字越大越先判定：高序位只要符合就歸給它）；
       序位相同才比<b>條件數</b>（條件越多＝越特定者勝出）。都不符合就歸為「未分類」。
     </p>
+    <!-- ⭐v1.79（站長 2026-10-07）：改完規則後一鍵套用到「之前已經存下來的牌型」 -->
+    <div class="stats-box" style="padding:10px 12px;margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button id="rule-reclassify-btn" onclick="reclassifyStoredArchetypes(this)">🔄 用最新規則重新判定所有已儲存的牌型</button>
+      <span class="small muted">牌組公布欄每一篇投稿的牌型會依目前啟用的規則重算並存回；大廳、房間列表、原型統計、套牌戰績的暫存結果一併清掉（下次讀取就是新規則）。歷屆賽事的冠軍牌型在「賽事統計 → 5. 歷屆賽事」另有按鈕。</span>
+    </div>
+    <div id="rule-reclassify-result"></div>
     <div class="stats-box" style="padding:12px;margin-bottom:14px;">
       <div class="rule-form">
         <input type="hidden" id="rule-id" value="">
@@ -2984,8 +3063,9 @@ function renderDeckRules(el) {
         <input type="hidden" id="rule-priority" value="100">
         <!-- ⭐v1.78 序位（站長 2026-10-07）：多個牌組含同一張關鍵卡（例：超級袋獸ex）時，序位高的只要符合就優先判定，
              序位低的要等所有高序位規則都沒命中才輪到。伺服器端 classifyDeck 先比序位、再比條件數。 -->
-        <label>🔢 序位（數字越大越先判定；預設 0。常見牌組可設高一點，例 10；少見、容易被誤判的變體可設低一點，例 -10）</label>
-        <input id="rule-rank" type="number" min="-99" max="99" step="1" value="0" style="max-width:160px;">
+        <!-- ⭐v1.79（站長 2026-10-07）：預設序位改成 50，留出「比預設高／比預設低」的空間（沒填序位的舊規則伺服器也一律當 50） -->
+        <label>🔢 序位（數字越大越先判定；預設 50。要優先判定的牌組設高一點，例 60；少見、容易被誤判的變體設低一點，例 40）</label>
+        <input id="rule-rank" type="number" min="-99" max="99" step="1" value="50" style="max-width:160px;">
         <div><label>備註（選填）</label><input id="rule-note" placeholder=""></div>
         <label>🔒 鎖定特定卡片編號（進階，選填；同名不同效果時才需要。逗號分隔）</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -3043,7 +3123,7 @@ function renderDeckRules(el) {
     columns: {
       enabled: { get: (r) => (r.enabled === false ? 0 : 1) },
       name: { get: (r) => r.name || '', str: true },
-      rank: { get: (r) => Number(r.rank) || 0 },   // ⭐v1.78 序位
+      rank: { get: (r) => ruleRankOf(r) },   // ⭐v1.78 序位（v1.79 沒填＝50）
       strict: { get: (r) => ((r.includes || []).length + (r.excludes || []).length
                              + (r.includeIds || []).length + (r.excludeIds || []).length) },
     },
@@ -5764,7 +5844,7 @@ function renderArchetypeStats() {
   + ' 場賽事）。若切換時間範圍後數字不變，代表<b>現有資料都落在該範圍內</b>——可比對這裡的掃描場數確認。'
   + '目前啟用中的規則 ' + (d.ruleCount || 0) + ' 條。統計為即時計算（快取 60 秒），改完規則按「計算統計」就會反映。'
   + '<br>' + (d.multiHit
-      ? '⚠ 有 <b>' + d.multiHit + '</b> 副牌同時符合兩條以上的規則 —— 這些牌會歸給<b>條件較多（較特定）</b>的那條。'
+      ? '⚠ 有 <b>' + d.multiHit + '</b> 副牌同時符合兩條以上的規則 —— 這些牌會先歸給<b>序位較高</b>的那條，序位相同才歸給<b>條件較多（較特定）</b>的那條。'
         + '若分類結果不如預期，可在較廣的那條規則加「不能包含」把它們排除掉。'
       : '✅ 沒有任何一副牌同時符合兩條以上的規則，代表你的規則彼此互斥、分類不會有歧義。')
   + '</div>';
@@ -5776,6 +5856,39 @@ function renderArchetypeStats() {
   if (_mibf) _mibf.disabled = false;
 }
 
+// ⭐v1.79 序位的唯一判準（與伺服器 ruleRank 同語義）：沒填（undefined／null／空字串）或不是數字 ＝ 50；明確的 0 就是 0。
+const DEFAULT_RULE_RANK = 50;
+function ruleRankOf(r) {
+  const v = r ? r.rank : undefined;
+  if (v === undefined || v === null || v === '') return DEFAULT_RULE_RANK;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : DEFAULT_RULE_RANK;
+}
+/** ⭐v1.79 一鍵：公布欄已存的牌型依最新規則重算（伺服器 reclassify-stored）。 */
+window.reclassifyStoredArchetypes = async function (btn) {
+  if (!confirm('用目前啟用中的牌組原型規則，重新判定所有已儲存的牌型？\n\n・牌組公布欄每一篇投稿的牌型會改成新規則的結果\n・大廳／原型統計等暫存結果會清掉，下次讀取就是新規則\n\n（不會刪除任何投稿或規則）')) return;
+  const box = document.getElementById('rule-reclassify-result');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 重新判定中…'; }
+  try {
+    const res = await api('/api/admin/deck-rules/reclassify-stored', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (!res || res.error) { alert('重新判定失敗：' + (res?.error || '?')); return; }
+    if (box) box.innerHTML = reclassifyResultHtml(res);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 用最新規則重新判定所有已儲存的牌型'; }
+  }
+};
+/** 純函式（守衛直接餵資料驗文字）：重新判定的結果摘要。 */
+function reclassifyResultHtml(res) {
+  const by = Object.entries(res.byName || {}).sort((a, b) => b[1] - a[1]);
+  const samples = (res.samples || []).map((x) => '<li>' + escapeHtml(x.deckName || '牌組') + '：'
+    + escapeHtml(x.from || '（未分類）') + ' → <b>' + escapeHtml(x.to || '（未分類）') + '</b></li>').join('');
+  return '<div class="stats-box" style="padding:10px 12px;margin-bottom:12px;">'
+    + '✅ 已用 ' + Number(res.rulesCount || 0) + ' 條啟用中的規則重新判定牌組公布欄 '
+    + Number(res.scanned || 0).toLocaleString() + ' 篇投稿，其中 <b>' + Number(res.changed || 0).toLocaleString() + '</b> 篇的牌型有變。'
+    + (by.length ? '<div class="small" style="margin-top:6px;">改成：' + by.map(([n, c]) => escapeHtml(n) + ' ' + c + ' 篇').join('、') + '</div>' : '')
+    + (samples ? '<details style="margin-top:6px;"><summary class="small">看前 20 筆變動</summary><ul class="small" style="margin:6px 0 0;">' + samples + '</ul></details>' : '')
+    + '<div class="small muted" style="margin-top:6px;">公布欄列表有 30 秒快取，最慢 30 秒後玩家就會看到新牌型。</div></div>';
+}
 function readRuleForm() {
   const val = (id) => (document.getElementById(id)?.value || '').trim();
   return {
@@ -5786,7 +5899,7 @@ function readRuleForm() {
     includeIds: val('rule-include-ids'),
     excludeIds: val('rule-exclude-ids'),
     priority: Number(val('rule-priority') || 100),
-    rank: Number(val('rule-rank') || 0),   // ⭐v1.78 序位
+    rank: val('rule-rank') === '' ? DEFAULT_RULE_RANK : Number(val('rule-rank')),   // ⭐v1.78 序位（v1.79 空白＝50；明確填 0 就是 0）
     note: val('rule-note'),
     enabled: !!document.getElementById('rule-enabled')?.checked,
   };
@@ -5807,7 +5920,7 @@ window.editDeckRule = function(id) {
   set('rule-include-ids', (r.includeIds || []).join(','));
   set('rule-exclude-ids', (r.excludeIds || []).join(','));
   set('rule-priority', r.priority ?? 100); set('rule-note', r.note || '');
-  set('rule-rank', r.rank ?? 0);   // ⭐v1.78 序位
+  set('rule-rank', ruleRankOf(r));   // ⭐v1.78 序位（v1.79 沒填＝50）
   const en = document.getElementById('rule-enabled'); if (en) en.checked = r.enabled !== false;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
@@ -5866,7 +5979,7 @@ window.openRuleDraft = async function (draft) {
   set('rule-includes', (d.includes || []).filter(Boolean).join('\n'));
   set('rule-excludes', ''); set('rule-include-ids', ''); set('rule-exclude-ids', '');
   set('rule-priority', 100); set('rule-note', String(d.note || ''));
-  set('rule-rank', 0);   // ⭐v1.78 新規則預設序位 0
+  set('rule-rank', DEFAULT_RULE_RANK);   // ⭐v1.79 新規則預設序位 50
   const en = document.getElementById('rule-enabled'); if (en) en.checked = true;
   window.scrollTo({ top: 0, behavior: 'smooth' });
   const nm = document.getElementById('rule-name'); if (nm) { try { nm.focus(); nm.select(); } catch (e) { /* 無 */ } }

@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## admin v1.79／server patch v1.57：序位預設 50＋用最新規則重新判定（2026-10-07，admin 專用，不寫對外 changelog）
+
+BASE v6.507（7c756222）。站長：「請幫我先把預設的序位設為 50」「之前已經設定好的…也幫我改一下預設為50」；歷屆賽事冠軍牌型、牌組公布欄的牌型要能一鍵用最新規則重新判定。
+- 伺服器（registerDeckRules 所在 IIFE，錦標賽區塊之前 ⇒ 28 把鎖不動）：ruleRank 沒設（undefined／null／空字串／非數字）＝50、明確 0＝0；DEFAULT_RULE_RANK＝ruleRank(null)；sanitizeRule 改走 ruleRank。
+- 一次性遷移（哨兵 v157-rank50-migrate）：rank 不存在／null／0 ⇒ 50，完成後 deckRuleSettings 記 rank50Migrated，之後不再跑（站長刻意設的 0 不會被改）。
+- 盤點：牌型「存進資料庫」的只有牌組公布欄 deckPosts.archetype（投稿當下 dpClassify）；名人堂／歸檔只存玩家自填的 deckName；大廳、房間列表、對戰紀錄、原型統計、奪冠報告、套牌戰績都是讀取時現算（有結果快取，最長 10 分鐘）。admin「歷屆賽事 冠軍牌型」欄原本根本不是原型規則，是 detectMainPokemon（主力寶可夢）。
+- 新端點（哨兵 v157-reclassify）：POST /api/admin/deck-rules/classify-decks（≤1000 副、不經 30 秒規則快取、回 archetypeNameOf 語義）；POST /api/admin/deck-rules/reclassify-stored（公布欄逐篇重算、只寫有變的、沒命中寫 ''、清 _archDetailCache／_archStatsCache／_roomArchCache／_deckStatsCache；卡名對照沒載入 ⇒ 503 不寫；busy 旗標 409）。公布欄列表快取 _dpListCache（30 秒）在錦標賽區塊內，不動它 ⇒ 最慢 30 秒生效。
+- admin：表單序位預設 50、ruleRankOf／DEFAULT_RULE_RANK 中央判準；規則頁「🔄 用最新規則重新判定所有已儲存的牌型」＋結果摘要；賽事統計 5. 歷屆賽事「冠軍牌型」改用原型規則（載入後自動判定一次＋「🔄 用最新規則重新判定冠軍牌型」按鈕；未分類附主力、判不出來退回主力寶可夢並標註），欄位可排序、可搜尋。
+- Rule 40：test-deck-rule-engine（沒設序位 0→50，補「明確 0 低於沒設」）、test-admin-v178 B1～B4（接受 v1.78 或 v1.79 寫法）；還原鏈加 sap-revert-admin-v157（test-v6303 H3、test-sap153、test-sap154）。
+- test-admin-v179（11 條；HEAD 紅 A1～A4、B1～B4；突變 8 組全殺）。部署：update-tournament.bat。
+
 ## v6.507：全站頁首結構統一＋手機首頁鈕（2026-10-07）
 
 BASE v6.506／admin v1.78（64cf7c50）。

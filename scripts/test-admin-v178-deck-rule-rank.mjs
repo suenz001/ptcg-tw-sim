@@ -102,12 +102,20 @@ await T('★★A3 停用中的規則預覽：符合照算、實際歸類 0', asy
 });
 
 console.log('\n【B】admin.html');
+// ⭐v1.79（Rule 40，站長 2026-10-07：「請幫我先把預設的序位設為 50」）：預設序位 0 → 50，讀表單／回填／排序值改走中央 ruleRankOf。
+//   意圖不變（表單有序位欄、讀表單帶 rank、三個入口都設序位、表格有序位欄且依序位排）；每條都接受 v1.78 或 v1.79 的寫法，
+//   HEAD-FAIL（v6.506 一樣都沒有）照樣全紅。v1.79 的「預設 50」行為由 test-admin-v179 實跑。
 const judgeB = (H) => {
   const r = {};
-  r.B1 = H.includes('<input id="rule-rank" type="number" min="-99" max="99" step="1" value="0"');
-  r.B2 = /rank: Number\(val\('rule-rank'\) \|\| 0\),/.test(H);
-  r.B3 = H.includes("set('rule-rank', r.rank ?? 0);") && H.includes("set('rule-rank', form.rank);") && H.includes("set('rule-rank', 0);");
-  r.B4 = H.includes("rank: { get: (r) => Number(r.rank) || 0 },") && H.includes("tvTh('deckRules', 'rank', '序位'") && H.includes("defaultSort: ['rank', 'desc'],");
+  r.B1 = H.includes('<input id="rule-rank" type="number" min="-99" max="99" step="1" value="0"')
+    || H.includes('<input id="rule-rank" type="number" min="-99" max="99" step="1" value="50"');
+  r.B2 = /rank: Number\(val\('rule-rank'\) \|\| 0\),/.test(H)
+    || H.includes("rank: val('rule-rank') === '' ? DEFAULT_RULE_RANK : Number(val('rule-rank')),");
+  r.B3 = (H.includes("set('rule-rank', r.rank ?? 0);") || H.includes("set('rule-rank', ruleRankOf(r));"))
+    && H.includes("set('rule-rank', form.rank);")
+    && (H.includes("set('rule-rank', 0);") || H.includes("set('rule-rank', DEFAULT_RULE_RANK);"));
+  r.B4 = (H.includes("rank: { get: (r) => Number(r.rank) || 0 },") || H.includes("rank: { get: (r) => ruleRankOf(r) },"))
+    && H.includes("tvTh('deckRules', 'rank', '序位'") && H.includes("defaultSort: ['rank', 'desc'],");
   r.B5 = H.includes("typeof pv.wins === 'number'") && H.includes('其中實際會被分到本規則');
   r.B6 = !H.includes('取<b>優先序數字最小</b>的那條');
   return r;

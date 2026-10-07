@@ -225,13 +225,15 @@ await T('B1 ⭐⭐【HEAD-FAIL】主力候選判準只有一份：detectMainPoke
   ok(cands(tie)[0] === '沙奈朵' && dmp({ deckEntries: tie }) === '沙奈朵', '同分順序與 v1.19 不同：' + JSON.stringify(cands(tie)));
   ok(JSON.stringify(cands(tie)) === '["沙奈朵","拉魯拉絲"]', '同名沒去重：' + JSON.stringify(cands(tie)));
 });
+const DEFAULT_RANK_DECL = (/^const DEFAULT_RULE_RANK = \d+;$/m.exec(HTML) || [''])[0];   // ⭐admin v1.79：舊版沒有這行 ⇒ 空字串
 await T('B2 ⭐⭐【HEAD-FAIL】openRuleDraft：切到規則分頁、預填名稱／必含卡／備註，rule-id 一定清空（絕不覆蓋既有規則）', async () => {
   const src = fnSrc(HTML, 'openRuleDraft'); ok(src, '找不到 openRuleDraft');
   const els = {}; const calls = [];
   const doc = { getElementById: (k) => (els[k] = els[k] || { value: k === 'rule-id' ? 'OLD_RULE' : 'x', checked: false, focus() {}, select() {} }) };
   const win = { scrollTo() {} };
   const run = new Function('window', 'document', 'switchTab', 'renderDeckRules', 'scrollTo',
-    'let _rulePreview = { stale: true };\n' + src + '\nreturn [window.openRuleDraft, () => _rulePreview];')(
+    // ⭐admin v1.79（Rule 40）：新規則草稿的序位改成模組常數 DEFAULT_RULE_RANK（50）⇒ harness 一併提供（從 admin.html 原樣抽出那一行）
+    (DEFAULT_RANK_DECL + '\n') + 'let _rulePreview = { stale: true };\n' + src + '\nreturn [window.openRuleDraft, () => _rulePreview];')(
     win, doc, async (t) => { calls.push(t); }, () => { calls.push('render'); }, () => {});
   await run[0]({ name: '雙龍特調', includes: ['多龍巴魯托ex', '', '索羅亞克ex'], note: '由房間 X 草擬' });
   ok(calls[0] === 'deck-rules' && calls.includes('render'), '沒有切到規則分頁：' + JSON.stringify(calls));
@@ -240,6 +242,7 @@ await T('B2 ⭐⭐【HEAD-FAIL】openRuleDraft：切到規則分頁、預填名�
   ok(els['rule-includes'].value === '多龍巴魯托ex\n索羅亞克ex', 'rule-includes：' + JSON.stringify(els['rule-includes'].value));
   ok(els['rule-excludes'].value === '' && els['rule-note'].value === '由房間 X 草擬' && els['rule-enabled'].checked === true, '其他欄位');
   ok(run[1]() === null, '預覽結果沒清掉（會顯示上一條規則的命中數）');
+  if (DEFAULT_RANK_DECL) ok(String(els['rule-rank'].value) === '50', '新規則草稿的序位不是 50：' + els['rule-rank'].value);   // ⭐admin v1.79
 });
 await T('B3 ⭐⭐【HEAD-FAIL】openArchetypeRooms：切到 Oracle「已結束」、帶入原型名、時間範圍跟著原型統計', async () => {
   const src = fnSrc(HTML, 'openArchetypeRooms'); ok(src, '找不到 openArchetypeRooms');

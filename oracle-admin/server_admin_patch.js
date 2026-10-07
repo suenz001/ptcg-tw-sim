@@ -2630,10 +2630,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //     ① rank 大者優先（高序位只要符合就拿走，不管條件數）
     //     ② rank 相同 → 沿用 v0.93：條件數多者優先 → priority 小者 → _id 字典序
     //   「符合」的定義不變（必含卡全部都有、排除卡一張都沒有）。舊規則都沒有 rank ⇒ 全部是 0 ⇒ 分類結果與 v1.55 完全相同。
+    // ⭐v1.57（站長 2026-10-07：「請幫我先把預設的序位設為 50，這樣我才好增加比預設高或是比預設低的牌組」）：
+    //   沒設序位的規則一律當 50（DEFAULT_RULE_RANK）；明確填 0 就是 0（不會被當成「沒填」）。
     function ruleRank(r) {
-      const n = Number(r && r.rank);
-      return Number.isFinite(n) ? n : 0;
+      const v = r ? r.rank : undefined;
+      if (v === undefined || v === null || v === '') return 50;   // 預設序位（DEFAULT_RULE_RANK 由這裡導出，數字只寫這一處）
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 50;
     }
+    const DEFAULT_RULE_RANK = ruleRank(null);
     // <<< v156-deck-rule-rank
     function classifyDeck(sets, rules) {
       const all = [];
@@ -2662,8 +2667,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
         doc: {
           name, includes, excludes, includeIds, excludeIds,
           priority: Number.isFinite(Number(b.priority)) ? Number(b.priority) : 100,
-          // ⭐v1.56 序位（v156-deck-rule-rank）：整數、夾在 -99～99；沒填＝0（一般）
-          rank: Number.isFinite(Number(b.rank)) ? Math.max(-99, Math.min(99, Math.round(Number(b.rank)))) : 0,
+          // ⭐v1.56 序位（v156-deck-rule-rank）：整數、夾在 -99～99；⭐v1.57 沒填＝50（DEFAULT_RULE_RANK，走 ruleRank 同一份判準）
+          rank: Math.max(-99, Math.min(99, Math.round(ruleRank(b)))),
           enabled: b.enabled !== false,
           note: String((b && b.note) || '').slice(0, 200),
         },
@@ -2699,6 +2704,21 @@ import('firebase-admin').then(async ({ default: admin }) => {
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
+    // >>> v157-rank50-migrate
+    // ⭐v1.57 一次性遷移（站長：「之前已經設定好的牌組牌型原則也幫我改一下預設為50」）：
+    //   沒有序位（v1.56 之前存的）或序位是 0（v1.56 的舊預設）的規則 ⇒ 存成 50。
+    //   只跑一次：完成後在 deckRuleSettings 記一筆 rank50Migrated，之後站長刻意改回 0 的規則不會再被改掉。
+    //   失敗只記 log（ruleRank 本來就把「沒有序位」當 50，分類結果不受影響）。
+    Promise.resolve().then(async () => {
+      const META = getSupportPokemonCol();
+      if (await META.findOne({ _id: 'rank50Migrated' })) return;
+      const r = await TRULES.updateMany({ $or: [{ rank: { $exists: false } }, { rank: null }, { rank: 0 }] },
+        { $set: { rank: DEFAULT_RULE_RANK } });
+      await META.updateOne({ _id: 'rank50Migrated' }, { $set: { at: Date.now(), modified: (r && r.modifiedCount) || 0 } }, { upsert: true });
+      invalidateRulesCache();
+      console.log('[deck-rules] v1.57 序位預設 50 遷移完成：' + ((r && r.modifiedCount) || 0) + ' 條');
+    }).catch((e) => console.warn('[deck-rules] v1.57 序位遷移失敗（分類照常，沒有序位的規則一律當 50）:', e && e.message));
+    // <<< v157-rank50-migrate
 
     // 命中預覽：存檔前先對最近 N 場（雙方各一副）試算，讓打錯卡名當場就看得出來（全滅＝0 命中）。
     app.post('/api/admin/deck-rules/preview', requireFirebaseAdmin, async (req, res) => {
@@ -3626,6 +3646,94 @@ import('firebase-admin').then(async ({ default: admin }) => {
       res.json({ ok: true, names });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
+  // >>> v157-reclassify
+  // ⭐v1.57（站長 2026-10-07）：「我常常更新規則，因此冠軍的牌組原型規則不一定是最新的」「牌組公布欄也有這個狀況，
+  //   希望我在 admin 牌組原則那邊，提供我一個一鍵更新的按鈕，去更新之前儲存有相關牌組判定的部分（可能別的地方也有），都採用最新的判定」。
+  //   盤點（本版查過）：牌型「存進資料庫」的只有牌組公布欄（deckPosts.archetype，投稿當下算的）；
+  //   大廳／房間列表／對戰紀錄／原型統計／奪冠報告／套牌戰績都是讀取時用規則現算，但有幾份結果快取（最長 10 分鐘）。
+  //   ⇒ ① classify-decks：給一批牌表、用「當下最新、不經快取」的規則分類（歷屆賽事冠軍牌型用）
+  //      ② reclassify-stored：公布欄每一篇用最新規則重算並寫回；順便清掉本 IIFE 所有原型結果快取。
+  //   ⚠ 分類一律走本 IIFE 的中央 archetypeNameOf（Rule 38：不另寫一份分類）。
+  async function freshRulesForReclassify() {
+    invalidateRulesCache();
+    return TRULES.find({ enabled: { $ne: false } }).sort({ priority: 1 }).toArray();
+  }
+  // 公布欄存的語義與投稿時的 dpClassify 相同：命中＝規則名、沒命中／不知道＝''（不存「未分類」字樣）
+  function storedPostArchetype(entries, nameMap, rules) {
+    const a = archetypeNameOf(entries, nameMap, rules);
+    return (a && a !== '未分類') ? a : '';
+  }
+  function normDeckEntries(arr) {
+    if (!Array.isArray(arr)) return [];
+    const out = [];
+    for (const e of arr.slice(0, 120)) {
+      if (!e || typeof e !== 'object') continue;
+      const cid = String(e.cardId == null ? '' : e.cardId);
+      const n = Number(e.count);
+      if (!/^[0-9A-Za-z_-]{1,40}$/.test(cid) || !Number.isFinite(n) || n < 1 || n > 60) continue;
+      out.push({ cardId: cid, count: Math.round(n) });
+    }
+    return out;
+  }
+  app.post('/api/admin/deck-rules/classify-decks', requireFirebaseAdmin, async (req, res) => {
+    if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
+    try {
+      const decks = (req.body && Array.isArray(req.body.decks)) ? req.body.decks : null;
+      if (!decks) return res.status(400).json({ error: 'decks 必須是陣列' });
+      if (decks.length > 1000) return res.status(400).json({ error: '一次最多 1000 副' });
+      const nameMap = await getCardNameMap();
+      if (!nameMap.size) return res.status(503).json({ error: '卡名對照還沒載入，請稍後再試' });
+      const rules = await freshRulesForReclassify();
+      const results = {};
+      let n = 0;
+      for (const d of decks) {
+        n++;
+        const _y = _archYield(n); if (_y) await _y;
+        const key = String((d && d.key) || '').slice(0, 80);
+        if (!key) continue;
+        results[key] = archetypeNameOf(normDeckEntries(d.entries), nameMap, rules);   // null＝不知道（沒牌表）
+      }
+      res.json({ ok: true, rulesCount: rules.length, results, at: Date.now() });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  let _reclassifyBusy = false;
+  app.post('/api/admin/deck-rules/reclassify-stored', requireFirebaseAdmin, async (req, res) => {
+    if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
+    if (_reclassifyBusy) return res.status(409).json({ error: '上一次重新判定還在跑，請稍候' });
+    _reclassifyBusy = true;
+    try {
+      const nameMap = await getCardNameMap();
+      // ⚠ 卡名對照沒載入時 archetypeNameOf 一律回 null ⇒ 會把每一篇都寫成 ''（整批洗掉）⇒ 擋下來
+      if (!nameMap.size) return res.status(503).json({ error: '卡名對照還沒載入，請稍後再試' });
+      const rules = await freshRulesForReclassify();
+      const DP = db.collection('deckPosts');
+      const cursor = DP.find({}, { projection: { entries: 1, archetype: 1, deckName: 1 } });
+      if (typeof cursor.batchSize === 'function') cursor.batchSize(200);
+      let scanned = 0, changed = 0;
+      const samples = [], byName = {};
+      let ops = [];
+      const now = Date.now();
+      const flush = async () => { if (ops.length) { await DP.bulkWrite(ops, { ordered: false }); ops = []; } };
+      for await (const doc of cursor) {
+        scanned++;
+        const _y = _archYield(scanned); if (_y) await _y;
+        const to = storedPostArchetype(normDeckEntries(doc.entries), nameMap, rules);
+        const from = String(doc.archetype || '');
+        if (to === from) continue;
+        changed++;
+        byName[to || '（未分類）'] = (byName[to || '（未分類）'] || 0) + 1;
+        if (samples.length < 20) samples.push({ deckName: String(doc.deckName || ''), from, to });
+        ops.push({ updateOne: { filter: { _id: doc._id }, update: { $set: { archetype: to, archetypeAt: now } } } });
+        if (ops.length >= 200) await flush();
+      }
+      await flush();
+      // 讀取時現算的地方：清掉結果快取 ⇒ 大廳、房間列表、原型統計、明細、套牌戰績下次讀取就是新規則
+      _archDetailCache.clear(); _archStatsCache.clear(); _roomArchCache.clear(); _deckStatsCache.clear();
+      res.json({ ok: true, rulesCount: rules.length, scanned, changed, byName, samples, at: now });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+    finally { _reclassifyBusy = false; }
+  });
+  // <<< v157-reclassify
 
   app.get('/api/admin/stats/heatmap', requireFirebaseAdmin, async (req, res) => {
       if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
