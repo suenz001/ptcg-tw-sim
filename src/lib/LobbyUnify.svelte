@@ -56,4 +56,13 @@
   }
   :global(html:not([data-battle-view]) body .lobby .mode-card.mode-card.mode-card .mode-title) { color: var(--ui-text); }
   :global(html:not([data-battle-view]) body .lobby .mode-card.mode-card.mode-card .mode-desc) { color: var(--ui-text-muted); }
+
+  /* ⭐v6.506 全站版面統一 第 3 步：大廳的主要／次要按鈕與輸入框比照其他頁（綠色主色、白底框線輸入框）。
+     選擇器同樣加 body 與重複類別，蓋過 v6.477 產生器的淺色規則。 */
+  :global(html:not([data-battle-view]) body .lobby .btn-primary.btn-primary.btn-primary) { background: var(--ui-accent); color: var(--ui-accent-contrast); border: 1px solid var(--ui-accent); border-radius: 10px; }
+  :global(html:not([data-battle-view]) body .lobby .btn-primary.btn-primary.btn-primary:hover:not(:disabled)) { background: var(--ui-accent); filter: brightness(1.08); }
+  :global(html:not([data-battle-view]) body .lobby .btn-secondary.btn-secondary.btn-secondary) { background: var(--ui-bg-elev); color: var(--ui-text); border: 1px solid var(--ui-border); border-radius: 10px; }
+  :global(html:not([data-battle-view]) body .lobby .btn-secondary.btn-secondary.btn-secondary:hover:not(:disabled)) { background: var(--ui-accent-soft); border-color: var(--ui-accent); }
+  :global(html:not([data-battle-view]) body .lobby .name-input.name-input.name-input),
+  :global(html:not([data-battle-view]) body .lobby .deck-select.deck-select.deck-select) { background: var(--ui-input-bg); color: var(--ui-text); border: 1px solid var(--ui-border); border-radius: 8px; }
 </style>

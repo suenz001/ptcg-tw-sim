@@ -1919,5 +1919,7 @@
   }
   :global(html:not([data-ui-wide])) .back[href$="/"] { display: none; }
   :global(html:not([data-ui-wide])) h1 { font-size: 1.3rem; margin: 0.1rem 0 0.25rem; }
+  /* ⭐v6.506 全站版面統一 第 3 步：卡片視窗的「單卡頁」連結改用主題連結色（原本藍色）——所有寬度 */
+  :global(html) .cardPageLink { color: var(--ui-link); }
   /* <<< v6504-unify */
 </style>

@@ -4386,5 +4386,14 @@
   :global(html:not([data-ui-wide])) .page-head h1 { font-size: 1.3rem; }
   :global(html) .version-tag { display: none; }
   :global(html:not([data-ui-wide])) main { margin-top: calc(12px + var(--safe-top, 0px)); }   /* 頁首卡片頂端與其他頁一致（12px） */
+  /* ⭐v6.506 全站版面統一 第 3 步：主要按鈕統一成綠色主色（原本「存檔／讀取」與 primary 小按鈕是藍色 #0066cc）——所有寬度 */
+  :global(html) .cloud-btn { background: var(--ui-accent) !important; color: var(--ui-accent-contrast) !important; border-color: var(--ui-accent) !important; }
+  :global(html) .cloud-btn:hover { background: var(--ui-accent) !important; filter: brightness(1.08); }
+  :global(html) button.small.primary { background: var(--ui-accent); color: var(--ui-accent-contrast); border-color: var(--ui-accent); }
+  :global(html) button.small.primary:hover:not(:disabled) { background: var(--ui-accent); filter: brightness(1.08); }
+  :global(html) .auth-tabs button.active { color: var(--ui-link); border-bottom-color: var(--ui-accent); }
+  :global(html) .preset-section > .preset-summary:hover { color: var(--ui-link); }
+  :global(html) .to-board { color: var(--ui-link); border-color: var(--ui-border); background: var(--ui-bg-elev); }
+  :global(html) .sync-idle { background: var(--ui-bg-sunken); color: var(--ui-text-muted); }   /* 「⬜ 本機」標籤：深色主題下原本是亮白色 */
   /* <<< v6504-unify */
 </style>

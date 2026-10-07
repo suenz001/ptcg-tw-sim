@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.506：全站版面統一 第 3 步：按鈕與輸入框（2026-10-07）
+
+BASE v6.505（c3bfb348）。
+- /decks：.cloud-btn（存檔／讀取，原 #0066cc !important）、button.small.primary、.auth-tabs 作用中、預組標題 hover、.to-board、.sync-idle 改讀 --ui-*（所有寬度，在 v6504-unify 哨兵）。
+- /deck-posts：button.primary、.modal-foot button.primary、.sorts 作用中、.notice、.badge.arche 改讀 --ui-*。/cards：.cardPageLink。
+- LobbyUnify：大廳 .btn-primary／.btn-secondary／.name-input／.deck-select（body＋三重類別蓋過 v6.477 產生器規則）。
+- 刻意保留：篩選鈕的分類色（標籤紫、階段紫灰、賽季灰藍、屬性能量色）—— /cards 與 /decks 兩頁本來就一致，屬語意色。
+- Rule 40：test-v6213 桌機指紋改成「:global(html) 刻意改動逐條登記選擇器清單（9 條）、全部在 v6504-unify 哨兵裡、剝掉後指紋不變」。
+- test-v6506（26 條，HEAD 紅 4 條靜態）。
+
 ## v6.505：全站版面統一 第 2 步：大廳（2026-10-07）
 
 BASE v6.504（176086e6）。

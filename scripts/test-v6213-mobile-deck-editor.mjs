@@ -327,11 +327,19 @@ console.log('\n4) ★★★正對照：桌機 CSS 逐字未動');
   //   v6504-unify 的手機頁首也用同一個前綴 ⇒ 一起剝；網頁版仍永遠不成立。
   //   唯一刻意的桌機改動：版本號標籤所有寬度都收起（站長選「版本號只留首頁與頂端列」）⇒ 逐字登記這一條、恰好一次，剝掉後指紋不變。
   const V6498_RE = /:global\(html:not\(\[data-ui-wide\]\)\)[^{}]*\{[^}]*\}/g;
-  const V6504_DESK = ':global(html) .version-tag { display: none; }';
+  // ⭐v6.506（Rule 40）：全站版面統一第 3 步的刻意桌機改動（主要按鈕、登入分頁、預組標題 hover、公布欄連結、同步標籤改讀 --ui-* 色票）
+  //   全部以 :global(html) 開頭、只在 v6504-unify 哨兵裡 ⇒ 逐條登記選擇器、各恰好一條，剝掉後指紋不變。
+  const V6504_DESK_RE = /:global\(html\) [^{}]*\{[^}]*\}/g;
+  const V6504_DESK_SELS = ['.version-tag', '.cloud-btn', '.cloud-btn:hover', 'button.small.primary', 'button.small.primary:hover:not(:disabled)',
+    '.auth-tabs button.active', '.preset-section > .preset-summary:hover', '.to-board', '.sync-idle'];
+  const deskRules = SP.withoutMedia.match(V6504_DESK_RE) || [];
+  const deskSels = deskRules.map((r) => r.slice(':global(html) '.length, r.indexOf('{')).trim());
   const n6498 = (SP.withoutMedia.match(V6498_RE) || []).length;
   ok('[前提] v6.498／v6.504 手機規則抓得到（剝除器沒有失效）', n6498 > 20, String(n6498));
-  ok('[前提] v6.504 唯一刻意的桌機改動（版本號收起）恰好一條', SP.withoutMedia.split(V6504_DESK).length - 1 === 1);
-  const bare = SP.withoutMedia.replace(V6498_RE, '').split(V6504_DESK).join('').replace(/\s+/g, ' ').trim();
+  ok('[前提] v6.504／v6.506 刻意的桌機改動恰好是登記的那幾條（各一條、沒有多也沒有少）',
+    JSON.stringify([...deskSels].sort()) === JSON.stringify([...V6504_DESK_SELS].sort()), JSON.stringify(deskSels));
+  ok('[前提] 刻意的桌機改動全部在 v6504-unify 哨兵裡', deskRules.every((r) => { const D = DECKS.replace(/\r\n/g, '\n'); const i = D.indexOf(r.split('{')[0].trim()); const a = D.lastIndexOf('/* >>> v6504-unify */', i); const b = D.indexOf('/* <<< v6504-unify */', i); return i > 0 && a > 0 && b > i && D.lastIndexOf('/* <<< v6504-unify */', i) < a; }));
+  const bare = SP.withoutMedia.replace(V6498_RE, '').replace(V6504_DESK_RE, '').replace(/\s+/g, ' ').trim();
   ok('[前提] 非 @media 的桌機 CSS 抓得到且份量正常', bare.length > 15000, String(bare.length));
   // ⭐⭐⭐ 真正的逐字證明：把整段桌機 CSS 取指紋。
   //   ⚠ 這一條**只有在刻意要改桌機版面時**才准更新（更新時務必在 commit 訊息說明改了什麼）。

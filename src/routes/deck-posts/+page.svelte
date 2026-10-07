@@ -1367,5 +1367,10 @@
   :global(html:not([data-ui-wide])) .page-head h1 { font-size: 1.3rem; }
   :global(html) .version-tag { display: none; }
   :global(html:not([data-ui-wide])) main { padding-top: calc(12px + var(--safe-top, 0px)); }   /* 頁首卡片頂端與其他頁一致（12px；v6.503 的 24px 是頁首還沒有卡片時的對齊） */
+  /* ⭐v6.506 全站版面統一 第 3 步：主要按鈕、排序鈕、提示框、原型標籤改用綠色主色（原本是藍色）——所有寬度 */
+  :global(html) button.primary, :global(html) .modal-foot button.primary { background: var(--ui-accent); color: var(--ui-accent-contrast); border-color: var(--ui-accent); }
+  :global(html) .sorts button.active { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+  :global(html) .notice { background: var(--ui-accent-soft); border-color: var(--ui-border); color: var(--ui-text); }
+  :global(html) .badge.arche { background: var(--ui-accent-soft); border-color: var(--ui-border); }
   /* <<< v6504-unify */
 </style>
