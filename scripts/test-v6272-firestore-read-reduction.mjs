@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '6e130e6674adcc700ab1b4035e8a1c162b5fe47c';   // v6.508（上一版）
+const PREV_SHA = '7be9a6f625e1bb97bc8d6bf18e07279b3898c255';   // v6.509（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,21 +757,30 @@ const PREV_SHA = '6e130e6674adcc700ab1b4035e8a1c162b5fe47c';   // v6.508（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.509 前移：PREV_SHA 從 6e130e66（v6.508）起算。
+  // ⚠⚠ v6.510 前移：PREV_SHA 從 7be9a6f6（v6.509）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.509：卡包資料改用內容雜湊（建置時 sha1 前 10 碼，vite define 注入）當 ?v=、Service Worker 專用快取 ptcg-tw-sim-carddata 跨版本保留並刪同路徑舊雜湊；錦標賽 tAuthResolved 閘（第一次 onAuthStateChanged 前不顯示登入表單，8 秒保險）；layout 空閒預熱 Firebase；Rollup 合併 <1.5KB 片段。
-  'src/lib/cards/data-url.ts',
-  'src/lib/cards/pool.ts',
-  'src/lib/sw-policy.ts',
+  // ⭐v6.510：牌組編輯器：深色主題的未選中預組列改用 --ui-bg-sunken（原本淺色主題寫死的 #fff5e6 淡橙底在深色配淺字）。
   'src/lib/version.ts',
-  'src/routes/+layout.svelte',
-  'src/routes/cards/+page.ts',
-  'src/routes/game/+page.svelte',
-  'src/service-worker.ts',
+  'src/routes/decks/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.509）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.509 前移：PREV_SHA 從 6e130e66（v6.508）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.509：卡包資料改用內容雜湊（建置時 sha1 前 10 碼，vite define 注入）當 ?v=、Service Worker 專用快取 ptcg-tw-sim-carddata 跨版本保留並刪同路徑舊雜湊；錦標賽 tAuthResolved 閘（第一次 onAuthStateChanged 前不顯示登入表單，8 秒保險）；layout 空閒預熱 Firebase；Rollup 合併 <1.5KB 片段。
+//   'src/lib/cards/data-url.ts',
+//   'src/lib/cards/pool.ts',
+//   'src/lib/sw-policy.ts',
+//   'src/lib/version.ts',
+//   'src/routes/+layout.svelte',
+//   'src/routes/cards/+page.ts',
+//   'src/routes/game/+page.svelte',
+//   'src/service-worker.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.508）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.508 前移：PREV_SHA 從 e648de89（v6.507）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -901,21 +910,6 @@ const PREV_ALLOWED = [
 //   'src/routes/card/[id]/+page.svelte',
 //   'src/routes/cards/+page.svelte',
 //   'src/routes/deck-posts/+page.svelte',
-//   'src/routes/decks/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.497）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.497 前移：PREV_SHA 從 fd98a5f2（v6.496）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.497：站長手機清單 1／2／3／4／5／7 項：底部導覽列、篩選收合（MediaQuery，桌機不渲染按鈕）、觸控目標、卡名字級、首頁兩欄；首頁 changelog 三步搬運。
-//   'src/lib/SiteBottomNav.svelte',
-//   'src/lib/decks/DeckNotes.svelte',
-//   'src/lib/mobile-filters.ts',
-//   'src/lib/version.ts',
-//   'src/routes/+layout.svelte',
-//   'src/routes/+page.svelte',
-//   'src/routes/cards/+page.svelte',
 //   'src/routes/decks/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',

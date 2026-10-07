@@ -339,7 +339,10 @@ console.log('\n4) ★★★正對照：桌機 CSS 逐字未動');
   ok('[前提] v6.504／v6.506 刻意的桌機改動恰好是登記的那幾條（各一條、沒有多也沒有少）',
     JSON.stringify([...deskSels].sort()) === JSON.stringify([...V6504_DESK_SELS].sort()), JSON.stringify(deskSels));
   ok('[前提] 刻意的桌機改動全部在 v6504-unify 哨兵裡', deskRules.every((r) => { const D = DECKS.replace(/\r\n/g, '\n'); const i = D.indexOf(r.split('{')[0].trim()); const a = D.lastIndexOf('/* >>> v6504-unify */', i); const b = D.indexOf('/* <<< v6504-unify */', i); return i > 0 && a > 0 && b > i && D.lastIndexOf('/* <<< v6504-unify */', i) < a; }));
-  const bare = SP.withoutMedia.replace(V6498_RE, '').replace(V6504_DESK_RE, '').replace(/\s+/g, ' ').trim();
+  // ⭐v6.510（Rule 40，站長：深色模式預組清單字太淡）：深色主題才成立的一條（未選中預組列改用凹陷底）⇒ 逐字登記、恰好一次，剝掉後指紋不變。內容由 test-v6510 鎖。
+  const V6510_RULE = ":global(html[data-theme='dark']) .preset-list li:not(.active) { background: var(--ui-bg-sunken); }";
+  ok('[前提] v6.510 登記的深色規則在桌機 CSS 裡恰好出現一次', SP.withoutMedia.split(V6510_RULE).length - 1 === 1);
+  const bare = SP.withoutMedia.split(V6510_RULE).join('').replace(V6498_RE, '').replace(V6504_DESK_RE, '').replace(/\s+/g, ' ').trim();
   ok('[前提] 非 @media 的桌機 CSS 抓得到且份量正常', bare.length > 15000, String(bare.length));
   // ⭐⭐⭐ 真正的逐字證明：把整段桌機 CSS 取指紋。
   //   ⚠ 這一條**只有在刻意要改桌機版面時**才准更新（更新時務必在 commit 訊息說明改了什麼）。
