@@ -37,6 +37,7 @@ import { revertAdminV153 } from './lib/sap-revert-admin-v153.mjs';
 // ⭐v1.54（Rule 40，意圖不變）：之後的 server patch 又合法改過這份檔 ⇒ 位元組比對類判準先剝掉更新的版本。
 import { revertAdminV154 } from './lib/sap-revert-admin-v154.mjs';
 import { revertAdminV155 } from './lib/sap-revert-admin-v155.mjs';   // ⭐server v1.55：較新的版本先還原（Rule 54）
+import { revertAdminV156 } from './lib/sap-revert-admin-v156.mjs';   // ⭐server v1.56（牌組原型序位）：先剝較新的（Rule 54）
 import { revertV154 } from './lib/tourn-revert-v154.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -111,7 +112,7 @@ ok('★★[S1] helper 在哨兵內、且在 TAIL_ANCHOR 之前（不進錦標賽
     // 開戰（makeGame）與報到的程式碼在 v1.52 → v1.53 之間逐位元沒變
     const strip = (s) => s.replace(/[ \t]*\/\/ >>> v153-tourn-deck-validate\n[\s\S]*?[ \t]*\/\/ <<< v153-tourn-deck-validate\n/, '');
     ok('★[S4b] 剝掉本版哨兵、三行呼叫與一段說明註解後，整份 server patch 與 v1.52 逐位元相同（沒有夾帶其他改動）',
-      strip(revertAdminV153(revertAdminV154(revertAdminV155(CUR)))) === BASE);
+      strip(revertAdminV153(revertAdminV154(revertAdminV155(revertAdminV156(CUR))))) === BASE);
   }
 }
 

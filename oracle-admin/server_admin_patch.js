@@ -2621,19 +2621,34 @@ import('firebase-admin').then(async ({ default: admin }) => {
      * ⚠本函式同時被「原型統計總表」與「原型明細」使用，改動會同時影響兩邊（刻意如此，
      *   兩者若不同版，同一副牌會在總表與明細被分到不同原型）。
      */
+    // >>> v156-deck-rule-rank
+    // ── v1.56（2026-10-07）牌組原型「序位」（站長需求，逐字）：「之前在做牌組原型分類的時候，少了序位的方式，
+    //   導致現在多個牌組有相同的牌的時候，會以設定的牌的多寡來分類，例如有兩套牌組都設定了同一張超級袋獸ex，
+    //   卻有可能是不同的牌組。因此需要幫一些常見和不常出現的牌組設定序位高低，比較高的只要有符合內容就優先判定，
+    //   比較低的要完全吻合，且高序位的牌組都未判定，才判定為本牌組」。
+    //   ⇒ 規則多一個 rank（整數，越大越先判定；沒設＝0）。同時命中多條時：
+    //     ① rank 大者優先（高序位只要符合就拿走，不管條件數）
+    //     ② rank 相同 → 沿用 v0.93：條件數多者優先 → priority 小者 → _id 字典序
+    //   「符合」的定義不變（必含卡全部都有、排除卡一張都沒有）。舊規則都沒有 rank ⇒ 全部是 0 ⇒ 分類結果與 v1.55 完全相同。
+    function ruleRank(r) {
+      const n = Number(r && r.rank);
+      return Number.isFinite(n) ? n : 0;
+    }
+    // <<< v156-deck-rule-rank
     function classifyDeck(sets, rules) {
       const all = [];
       for (const r of rules) if (deckMatchesRule(sets, r)) all.push(r);
       if (!all.length) return { rule: null, all: [] };
       all.sort((a, b) =>
-        ruleStrictness(b) - ruleStrictness(a)
+        ruleRank(b) - ruleRank(a)   // ⭐v1.56 序位優先（v156-deck-rule-rank）
+        || ruleStrictness(b) - ruleStrictness(a)
         || (a.priority || 0) - (b.priority || 0)
         || String(a._id).localeCompare(String(b._id)));
       return { rule: all[0], all };
     }
     // 供批次3 統計端點重用（同一份比對邏輯，避免兩處漂移）
     app.locals = app.locals || {};
-    app.locals._deckRuleHelpers = { getCardNameMap, deckToSets, deckMatchesRule, classifyDeck, ruleStrictness, casualSideResult, tournSideResult };
+    app.locals._deckRuleHelpers = { getCardNameMap, deckToSets, deckMatchesRule, classifyDeck, ruleStrictness, ruleRank, casualSideResult, tournSideResult };   // v1.56 多 ruleRank
 
     function sanitizeRule(b) {
       const arr = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\n,，]/))
@@ -2647,6 +2662,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
         doc: {
           name, includes, excludes, includeIds, excludeIds,
           priority: Number.isFinite(Number(b.priority)) ? Number(b.priority) : 100,
+          // ⭐v1.56 序位（v156-deck-rule-rank）：整數、夾在 -99～99；沒填＝0（一般）
+          rank: Number.isFinite(Number(b.rank)) ? Math.max(-99, Math.min(99, Math.round(Number(b.rank)))) : 0,
           enabled: b.enabled !== false,
           note: String((b && b.note) || '').slice(0, 200),
         },
@@ -2700,18 +2717,32 @@ import('firebase-admin').then(async ({ default: admin }) => {
           .sort({ endedAt: -1 }).limit(limit).toArray();
         let decks = 0, hits = 0;
         const samples = [];
+        // ⭐v1.56（v156-deck-rule-rank）：除了「符合」幾副，也算「實際會被分到本規則」幾副——
+        //   拿目前啟用中的其他規則（編輯中的那條換成表單內容）一起跑中央 classifyDeck；
+        //   被序位較高（或同序位、條件較多）的規則拿走的，依那條規則名稱統計，讓站長調序位時看得到效果。
+        const editId = String((req.body && req.body.id) || '').trim();
+        const others = (await getEnabledRulesCached()).filter((r) => String(r._id) !== editId);
+        const cand = { ...s.doc, _id: editId || '__preview__' };
+        const pool = s.doc.enabled ? [...others, cand] : others;
+        let wins = 0;
+        const lostTo = new Map();
         for (const m of recent) {
           for (const side of ['p1', 'p2']) {
             const p = m[side];
             if (!p || !p.cardCounts || !Object.keys(p.cardCounts).length) continue;
             decks++;
-            if (deckMatchesRule(deckToSets(p.cardCounts, nameMap), s.doc)) {
+            const sets = deckToSets(p.cardCounts, nameMap);
+            if (deckMatchesRule(sets, s.doc)) {
               hits++;
               if (samples.length < 8) samples.push({ name: p.name || '', email: p.email || null, endedAt: m.endedAt || null, roomCode: m.roomCode || null });
+              const c = classifyDeck(sets, pool);
+              if (c.rule === cand) wins++;
+              else if (c.rule) lostTo.set(c.rule.name || '?', (lostTo.get(c.rule.name || '?') || 0) + 1);
             }
           }
         }
-        res.json({ ok: true, scannedMatches: recent.length, scannedDecks: decks, hits, samples, unknownCardNames: unknown });
+        const lost = [...lostTo.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name, n]) => ({ name, n }));
+        res.json({ ok: true, scannedMatches: recent.length, scannedDecks: decks, hits, wins, lost, samples, unknownCardNames: unknown });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 

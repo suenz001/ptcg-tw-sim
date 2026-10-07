@@ -21,9 +21,10 @@ function grabFn(name) {
   return src.slice(i, end + indent.length + 2);
 }
 // ⚠classifyDeck 依賴 ruleStrictness（v0.93 起改「條件較嚴格者優先」），必須一起抽出來
-const code = [grabFn('deckToSets'), grabFn('deckMatchesRule'), grabFn('ruleStrictness'), grabFn('classifyDeck')].join('\n')
-  + '\nreturn { deckToSets, deckMatchesRule, ruleStrictness, classifyDeck };';
-const { deckToSets, deckMatchesRule, ruleStrictness, classifyDeck } = new Function(code)();
+// ⭐v1.56 classifyDeck 先比序位（ruleRank）⇒ 一起抽；sanitizeRule 也抽出來驗序位的夾制
+const code = [grabFn('deckToSets'), grabFn('deckMatchesRule'), grabFn('ruleStrictness'), grabFn('ruleRank'), grabFn('classifyDeck'), grabFn('sanitizeRule')].join('\n')
+  + '\nreturn { deckToSets, deckMatchesRule, ruleStrictness, ruleRank, classifyDeck, sanitizeRule };';
+const { deckToSets, deckMatchesRule, ruleStrictness, ruleRank, classifyDeck, sanitizeRule } = new Function(code)();
 
 // ── 現役卡池：建 cardId → 卡名 對照（與伺服器端 tournament-pool.json 同構）──
 const dir = join(ROOT, 'static/cards');
@@ -173,6 +174,47 @@ T('錦標賽：以 winnerUid 比對，且型別不一致（數字 vs 字串）�
   assert.equal(tournSideResult('uidA', 'uidA'), 'win');
   assert.equal(tournSideResult('uidA', 'uidB'), 'loss');
   assert.equal(tournSideResult(123, '123'), 'win', 'uid 型別不一致時仍應判為同一人');
+});
+
+// ── v1.56 序位（站長 2026-10-07）：「比較高的只要有符合內容就優先判定，比較低的要完全吻合，且高序位的牌組都未判定，才判定為本牌組」──
+//   站長的例子：兩套牌組都設定了同一張超級袋獸ex（卡名取自 static/cards 官方卡面）
+const KANGA = '超級袋獸ex';
+T('v1.56 資料前提：超級袋獸ex／老大的指令／頂尖捕捉器在現役卡池', () => {
+  for (const n of [KANGA, '老大的指令', '頂尖捕捉器']) assert.ok(idByName.has(n), n + ' 應存在');
+});
+T('⭐⭐v1.56 高序位只要符合就優先判定（即使條件數比較少）', () => {
+  const sets = deckToSets(deckOf([KANGA, '老大的指令', '頂尖捕捉器']), nameMap);
+  const common = { _id: 'k1', name: '袋獸常見型', includes: [KANGA], rank: 10 };
+  const rare = { _id: 'k2', name: '袋獸少見型', includes: [KANGA, '老大的指令', '頂尖捕捉器'], rank: 0 };
+  assert.equal(classifyDeck(sets, [rare, common]).rule.name, '袋獸常見型', '序位 10 的應勝過條件較多但序位 0 的');
+  assert.equal(classifyDeck(sets, [common, rare]).rule.name, '袋獸常見型', '與輸入順序無關');
+});
+T('⭐⭐v1.56 低序位要等高序位都沒命中才輪到', () => {
+  const common = { _id: 'k1', name: '袋獸常見型', includes: [KANGA, '頂尖捕捉器'], rank: 10 };
+  const rare = { _id: 'k2', name: '袋獸少見型', includes: [KANGA, '老大的指令'], rank: -5 };
+  const d1 = deckToSets(deckOf([KANGA, '老大的指令']), nameMap);              // 高序位缺頂尖捕捉器 ⇒ 沒命中
+  assert.equal(classifyDeck(d1, [common, rare]).rule.name, '袋獸少見型');
+  const d2 = deckToSets(deckOf([KANGA, '老大的指令', '頂尖捕捉器']), nameMap);  // 兩條都命中 ⇒ 高序位
+  assert.equal(classifyDeck(d2, [common, rare]).rule.name, '袋獸常見型');
+  const d3 = deckToSets(deckOf([KANGA]), nameMap);                            // 都沒完全吻合 ⇒ 未分類
+  assert.equal(classifyDeck(d3, [common, rare]).rule, null, '低序位也必須完全吻合');
+});
+T('v1.56 序位相同時沿用舊規則（條件數多者勝）；沒設序位＝0', () => {
+  const sets = deckToSets(deckOf([KANGA, '老大的指令']), nameMap);
+  const a = { _id: 'a', name: 'A', includes: [KANGA] };
+  const b = { _id: 'b', name: 'B', includes: [KANGA, '老大的指令'] };
+  assert.equal(classifyDeck(sets, [a, b]).rule.name, 'B', '兩條都沒設序位 ⇒ 與 v1.55 相同（條件多者勝）');
+  assert.equal(classifyDeck(sets, [{ ...a, rank: 0 }, b]).rule.name, 'B', 'rank:0 與沒設相同');
+  assert.equal(classifyDeck(sets, [{ ...b, rank: -1 }, a]).rule.name, 'A', '負序位輸給沒設序位的');
+  assert.equal(ruleRank({}), 0); assert.equal(ruleRank({ rank: 'x' }), 0); assert.equal(ruleRank({ rank: 7 }), 7);
+});
+T('v1.56 sanitizeRule：序位取整數、夾在 -99～99、沒填＝0', () => {
+  const base = { name: 'X', includes: [KANGA] };
+  assert.equal(sanitizeRule(base).doc.rank, 0);
+  assert.equal(sanitizeRule({ ...base, rank: '12.6' }).doc.rank, 13);
+  assert.equal(sanitizeRule({ ...base, rank: 500 }).doc.rank, 99);
+  assert.equal(sanitizeRule({ ...base, rank: -500 }).doc.rank, -99);
+  assert.equal(sanitizeRule({ ...base, rank: 'abc' }).doc.rank, 0);
 });
 
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);

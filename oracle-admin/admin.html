@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.77</title>
+<title>PTCG Oracle Admin v1.78</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.77</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.78</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2914,10 +2914,11 @@ function renderDeckRules(el) {
     const rid = String(r._id).replace(/'/g, '&apos;');
     return '<tr>'
       + '<td>' + (r.enabled === false ? '⏸' : '✅') + '</td>'
+      + '<td style="text-align:center;" title="序位：數字越大越先判定">' + (Number(r.rank) || 0) + '</td>'   // ⭐v1.78 序位
       + '<td><b>' + escapeHtml(r.name) + '</b>' + (r.note ? '<div class="small muted">' + escapeHtml(r.note) + '</div>' : '') + ids + '</td>'
       + '<td>' + (inc || '<span class="small muted">—</span>') + '</td>'
       + '<td>' + (exc || '<span class="small muted">—</span>') + '</td>'
-      + '<td title="條件越多＝描述越特定，一副牌同時符合多條規則時由條件多的那條勝出">'
+      + '<td title="序位相同時：條件越多＝描述越特定，一副牌同時符合多條規則時由條件多的那條勝出">'
       + ((r.includes || []).length + (r.excludes || []).length
          + (r.includeIds || []).length + (r.excludeIds || []).length) + ' 項</td>'
       + '<td><button class="tiny ghost" onclick="editDeckRule(\'' + rid + '\')">編輯</button> '
@@ -2934,6 +2935,12 @@ function renderDeckRules(el) {
     + '<div>掃描最近 <b>' + pv.scannedDecks + '</b> 副牌組（' + pv.scannedMatches + ' 場對戰），命中 <b style="color:'
     + (pv.hits ? '#2e7d32' : '#c62828') + ';">' + pv.hits + '</b> 副'
     + (pv.hits === 0 ? ' — <span style="color:#c62828;">0 命中，請檢查卡名是否正確、或條件是否過嚴</span>' : '') + '</div>'
+    // ⭐v1.78 序位：符合的牌組裡，實際會被分到本規則的有幾副、其餘被哪條規則拿走（舊伺服器沒有 wins ⇒ 不顯示）
+    + (typeof pv.wins === 'number' && pv.hits
+        ? '<div style="margin-top:4px;">其中實際會被分到本規則：<b>' + pv.wins + '</b> 副'
+          + (pv.lost && pv.lost.length
+              ? '；被其他規則拿走（序位較高，或序位相同但條件較多）：' + pv.lost.map((x) => escapeHtml(x.name) + ' ' + x.n + ' 副').join('、')
+              : '') + '</div>' : '')
     + (pv.samples && pv.samples.length
         ? '<div class="small muted" style="margin-top:6px;">命中範例：' + pv.samples.map((x) =>
             escapeHtml(x.name || '?') + (x.email ? '（' + escapeHtml(x.email) + '）' : '')).join('、') + '</div>' : '')
@@ -2960,7 +2967,8 @@ function renderDeckRules(el) {
     <h3>🎴 牌組原型規則</h3>
     <p class="small muted" style="margin:2px 0 12px;">
       定義「一副牌要含哪些卡、不能含哪些卡」就算是某個牌組。之後的使用率／勝率統計會依這些規則分類。
-      一副牌同時符合多條規則時，取<b>優先序數字最小</b>的那條；都不符合就歸為「未分類」。
+      一副牌同時符合多條規則時，先看<b>序位</b>（數字越大越先判定：高序位只要符合就歸給它）；
+      序位相同才比<b>條件數</b>（條件越多＝越特定者勝出）。都不符合就歸為「未分類」。
     </p>
     <div class="stats-box" style="padding:12px;margin-bottom:14px;">
       <div class="rule-form">
@@ -2974,6 +2982,10 @@ function renderDeckRules(el) {
         <!-- v1.57：優先序改由系統自動判定（條件較多＝較特定者優先），欄位保留但隱藏，
              只在極少數「兩條規則條件數相同又同時命中」時才會用到。 -->
         <input type="hidden" id="rule-priority" value="100">
+        <!-- ⭐v1.78 序位（站長 2026-10-07）：多個牌組含同一張關鍵卡（例：超級袋獸ex）時，序位高的只要符合就優先判定，
+             序位低的要等所有高序位規則都沒命中才輪到。伺服器端 classifyDeck 先比序位、再比條件數。 -->
+        <label>🔢 序位（數字越大越先判定；預設 0。常見牌組可設高一點，例 10；少見、容易被誤判的變體可設低一點，例 -10）</label>
+        <input id="rule-rank" type="number" min="-99" max="99" step="1" value="0" style="max-width:160px;">
         <div><label>備註（選填）</label><input id="rule-note" placeholder=""></div>
         <label>🔒 鎖定特定卡片編號（進階，選填；同名不同效果時才需要。逗號分隔）</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -3031,10 +3043,11 @@ function renderDeckRules(el) {
     columns: {
       enabled: { get: (r) => (r.enabled === false ? 0 : 1) },
       name: { get: (r) => r.name || '', str: true },
+      rank: { get: (r) => Number(r.rank) || 0 },   // ⭐v1.78 序位
       strict: { get: (r) => ((r.includes || []).length + (r.excludes || []).length
                              + (r.includeIds || []).length + (r.excludeIds || []).length) },
     },
-    defaultSort: ['name', 'asc'],
+    defaultSort: ['rank', 'desc'],   // ⭐v1.78 序位高的排前面（同序位依伺服器回傳順序）
     searchText: (r) => [r.name, r.note, (r.includes || []).join(' '), (r.excludes || []).join(' ')]
       .filter(Boolean).join(' ').toLowerCase(),
     mount: () => document.getElementById('tv-mount-deckRules'),
@@ -3044,9 +3057,11 @@ function renderDeckRules(el) {
           ? '找不到符合「' + escapeHtml(tv.search) + '」的規則。'
           : '尚未建立任何規則。先在上面填一條試試，記得按「預覽命中」確認卡名沒打錯。') + '</div>';
       }
-      return '<table><thead><tr>' + tvTh('deckRules', 'enabled', '啟用') + tvTh('deckRules', 'name', '牌組名稱')
+      return '<table><thead><tr>' + tvTh('deckRules', 'enabled', '啟用')
+        + tvTh('deckRules', 'rank', '序位', ' title="數字越大越先判定：高序位只要符合就歸給它"')
+        + tvTh('deckRules', 'name', '牌組名稱')
         + '<th>必須包含</th><th>不能包含</th>'
-        + tvTh('deckRules', 'strict', '條件數', ' title="一副牌同時符合多條規則時，條件較多（較特定）的那條勝出"')
+        + tvTh('deckRules', 'strict', '條件數', ' title="序位相同時，條件較多（較特定）的那條勝出"')
         + '<th>操作</th></tr></thead><tbody>'
         + v.pageRows.map(ruleRowHtml).join('') + '</tbody></table>';
     },
@@ -5771,6 +5786,7 @@ function readRuleForm() {
     includeIds: val('rule-include-ids'),
     excludeIds: val('rule-exclude-ids'),
     priority: Number(val('rule-priority') || 100),
+    rank: Number(val('rule-rank') || 0),   // ⭐v1.78 序位
     note: val('rule-note'),
     enabled: !!document.getElementById('rule-enabled')?.checked,
   };
@@ -5791,6 +5807,7 @@ window.editDeckRule = function(id) {
   set('rule-include-ids', (r.includeIds || []).join(','));
   set('rule-exclude-ids', (r.excludeIds || []).join(','));
   set('rule-priority', r.priority ?? 100); set('rule-note', r.note || '');
+  set('rule-rank', r.rank ?? 0);   // ⭐v1.78 序位
   const en = document.getElementById('rule-enabled'); if (en) en.checked = r.enabled !== false;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
@@ -5817,6 +5834,7 @@ window.previewDeckRule = async function() {
   set('rule-includes', form.includes); set('rule-excludes', form.excludes);
   set('rule-include-ids', form.includeIds); set('rule-exclude-ids', form.excludeIds);
   set('rule-priority', form.priority); set('rule-note', form.note);
+  set('rule-rank', form.rank);   // ⭐v1.78 序位
   const en = document.getElementById('rule-enabled'); if (en) en.checked = form.enabled;
 };
 window.saveDeckRule = async function() {
@@ -5848,6 +5866,7 @@ window.openRuleDraft = async function (draft) {
   set('rule-includes', (d.includes || []).filter(Boolean).join('\n'));
   set('rule-excludes', ''); set('rule-include-ids', ''); set('rule-exclude-ids', '');
   set('rule-priority', 100); set('rule-note', String(d.note || ''));
+  set('rule-rank', 0);   // ⭐v1.78 新規則預設序位 0
   const en = document.getElementById('rule-enabled'); if (en) en.checked = true;
   window.scrollTo({ top: 0, behavior: 'smooth' });
   const nm = document.getElementById('rule-name'); if (nm) { try { nm.focus(); nm.select(); } catch (e) { /* 無 */ } }
