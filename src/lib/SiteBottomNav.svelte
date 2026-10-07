@@ -39,8 +39,8 @@
       height: calc(56px + var(--safe-bottom, 0px));
       padding-bottom: var(--safe-bottom, 0px);
       box-sizing: border-box;
-      background: rgba(255, 255, 255, 0.97);
-      border-top: 1px solid #e2e5ea;
+      background: var(--ui-topbar-bg);   /* ⭐v6.511 跟著主題色票（原本寫死純白，淺色主題太亮） */
+      border-top: 1px solid var(--ui-border);
       box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06);
       font-family: system-ui, -apple-system, 'Microsoft JhengHei', sans-serif;
     }
@@ -71,7 +71,7 @@
     .sbn-link.active { color: #2563eb; font-weight: 700; }
     .sbn-link.active .sbn-ico { transform: translateY(-1px); }
     /* ⭐v6.498 深色主題時整條導覽列都用深色 */
-    :global(html[data-theme='dark']) .sbn { background: rgba(16, 32, 22, 0.97); border-top-color: #2f4a37; box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.35); }
+    :global(html[data-theme='dark']) .sbn { background: var(--ui-topbar-bg); border-top-color: var(--ui-border); box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.35); }   /* ⭐v6.511 讀色票 */
     :global(html[data-theme='dark']) .sbn .sbn-link { color: #a9bdb0; }
     :global(html[data-theme='dark']) .sbn .sbn-link.active { color: #7ee2a8; }
     .sbn-theme { background: none; border: 0; padding: 0; font-family: inherit; cursor: pointer; }

@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
+import { uiColor } from './lib/ui-palette.mjs';   // ⭐v6.511 色票唯一讀取點（不寫死色碼）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.474。
@@ -55,7 +56,8 @@ const tokLight = (LAYOUT.match(/:global\(:root\) \{\n    --ui-bg:[^}]*\}/) || ['
 const tokDark = (LAYOUT.match(/:global\(html\[data-theme='dark'\]\) \{[^}]*\}/) || [''])[0];
 const NEED = ['--ui-topbar-bg', '--ui-topbar-text', '--ui-topbar-muted', '--ui-topbar-hover', '--ui-topbar-border', '--ui-cta-bg', '--ui-cta-text', '--ui-cta-border', '--ui-cta-desc', '--ui-cta-icon-bg', '--ui-input-bg', '--ui-chip-active-bg', '--ui-chip-active-text'];
 ok('★★[S3] 新色票淺色、深色兩套都有定義（少一個深色就會吃到淺色值）', NEED.every((k) => tokLight.includes(k + ':') && tokDark.includes(k + ':')), NEED.filter((k) => !tokLight.includes(k + ':') || !tokDark.includes(k + ':')).join());
-ok('★★[S4] 淺色主題頂端列是白底、主要動作卡不是深色', /--ui-topbar-bg: #ffffff;/.test(tokLight) && /--ui-cta-bg: linear-gradient\(135deg, #e3f3ea/.test(tokLight));
+// ⭐v6.511（Rule 40）：淺色主題整組降一階（站長看過預覽圖同意）⇒ 頂端列改「淺色（不是深綠）」、主要動作卡起色＝--ui-accent-soft；意圖（淺色主題不是深綠）不變
+ok('★★[S4] 淺色主題頂端列是淺底、主要動作卡不是深色', (() => { const m = /--ui-topbar-bg: #([0-9a-f]{6});/.exec(tokLight); return !!m && parseInt(m[1].slice(2, 4), 16) > 200; })() && /--ui-cta-bg: linear-gradient\(135deg, var\(--ui-accent-soft\)|--ui-cta-bg: linear-gradient\(135deg, #d3e8dc/.test(tokLight));
 
 const GAME = rd('src/routes/game/+page.svelte');
 ok('★★★[S5] 對戰頁：$derived 布林（盤面更新不重寫屬性）＋$effect 寫 data-battle-view＋onDestroy 拿掉',
@@ -104,26 +106,26 @@ else if (chromium) {
       let { ctx, pg } = await open(1440, 900, 'light', '/');
       const L = { bar: await css(pg, '.stb', 'backgroundColor'), barText: await css(pg, '.stb-name', 'color'), cta: await css(pg, '.hm-card-game', 'backgroundImage'), ctaTitle: await css(pg, '.hm-card-game .hm-title', 'color') };
       await ctx.close();
-      ok('★★★[E1] 淺色：頂端列白底深字、對戰卡是淡色漸層深字', lum(L.bar) > 240 && lum(L.barText) < 80 && /linear-gradient/.test(L.cta || '') && /227, 243, 234/.test(L.cta) && lum(L.ctaTitle) < 80, JSON.stringify(L));
+      ok('★★★[E1] 淺色：頂端列白底深字、對戰卡是淡色漸層深字', lum(L.bar) > 225 && lum(L.barText) < 80 && /linear-gradient/.test(L.cta || '') && (L.cta || '').includes(uiColor(ROOT, 'light', '--ui-accent-soft').slice(4, -1)) && lum(L.ctaTitle) < 80, JSON.stringify(L));
       ({ ctx, pg } = await open(1440, 900, 'dark', '/'));
       const D = { bar: await css(pg, '.stb', 'backgroundColor'), barText: await css(pg, '.stb-name', 'color'), ctaTitle: await css(pg, '.hm-card-game .hm-title', 'color') };
       await ctx.close();
-      ok('★★[E2] 深色：頂端列深底淺字、對戰卡淺字', lum(D.bar) < 40 && lum(D.barText) > 200 && lum(D.ctaTitle) > 200, JSON.stringify(D));
+      ok('★★[E2] 深色：頂端列深底淺字、對戰卡淺字', lum(D.bar) < 55 && lum(D.barText) > 200 && lum(D.ctaTitle) > 200, JSON.stringify(D));
       // 卡牌資料庫（卡包頁＋卡片頁）、單卡頁：深色時面板是深色、文字淺色
       ({ ctx, pg } = await open(1440, 900, 'dark', '/cards?set=M6'));
       await pg.waitForTimeout(800);
       const C = { body: await css(pg, 'body', 'backgroundColor'), panel: await css(pg, '.controls', 'backgroundColor'), h1: await css(pg, 'header h1', 'color'), tile: await css(pg, '.cardBtn', 'backgroundColor'), name: await css(pg, '.cardLabel .name', 'color'), back: await css(pg, '.back', 'display') };
       await ctx.close();
-      ok('★★★[E3] /cards?set= 深色：底色、篩選面板、卡片格都是深色，文字淺色；「← 卡包列表」仍在', lum(C.body) < 40 && lum(C.panel) < 50 && lum(C.tile) < 50 && lum(C.h1) > 200 && lum(C.name) > 200 && C.back !== 'none', JSON.stringify(C));
+      ok('★★★[E3] /cards?set= 深色：底色、篩選面板、卡片格都是深色，文字淺色；「← 卡包列表」仍在', lum(C.body) < 60 && lum(C.panel) < 80 && lum(C.tile) < 80 && lum(C.h1) > 200 && lum(C.name) > 200 && C.back !== 'none', JSON.stringify(C));
       ({ ctx, pg } = await open(1440, 900, 'light', '/cards'));
       const CI = { body: await css(pg, 'body', 'backgroundColor'), set: await css(pg, '.setTile:not(.setTileAll)', 'backgroundColor'), home: await pg.evaluate(() => [...document.querySelectorAll('header.ph a')].some((a) => /^\/?$/.test(a.getAttribute('href') || '') && getComputedStyle(a).display !== 'none' && a.getBoundingClientRect().width > 0) ? 'shown' : 'none') };
       // ⭐v6.507（Rule 40）：頁首改用共用元件，「← 首頁」從標記拿掉（不是藏起來）⇒ 改量「頁首裡看得見、指向首頁的連結」；意圖不變。
       await ctx.close();
-      ok('★★[E4] /cards 卡包列表淺色：白卡；網頁版「← 首頁」收起', lum(CI.body) > 230 && lum(CI.set) > 245 && CI.home === 'none', JSON.stringify(CI));
+      ok('★★[E4] /cards 卡包列表淺色：白卡；網頁版「← 首頁」收起', lum(CI.body) > 215 && lum(CI.set) > 230 && CI.home === 'none', JSON.stringify(CI));
       ({ ctx, pg } = await open(1440, 900, 'dark', '/card/19378/'));
       const K = { body: await css(pg, 'body', 'backgroundColor'), box: await css(pg, '.body', 'backgroundColor'), disp: await css(pg, '.body', 'display'), td: await css(pg, '.info td', 'color'), img: await css(pg, '.img', 'width') };
       await ctx.close();
-      ok('★★[E5] 單卡頁深色：資料卡深色、表格文字淺色、卡圖 340px、兩欄 grid', lum(K.body) < 40 && lum(K.box) < 50 && lum(K.td) > 200 && K.img === '340px' && K.disp === 'grid', JSON.stringify(K));
+      ok('★★[E5] 單卡頁深色：資料卡深色、表格文字淺色、卡圖 340px、兩欄 grid', lum(K.body) < 60 && lum(K.box) < 80 && lum(K.td) > 200 && K.img === '340px' && K.disp === 'grid', JSON.stringify(K));
       // 手機：卡牌頁與單卡頁完全沿用舊樣式（不吃主題）
       // ⭐v6.498（Rule 40，站長手機清單第 6 項「深色主題目前只有電腦版：手機沒有切換鈕、系統深色時仍是淺色」）：
       //   手機深色改成吃主題色 ⇒ 原本「手機深色也維持舊樣式」的判準拆成兩條：淺色＝顏色與版面全部維持舊樣式；深色＝版面維持、顏色吃主題。
@@ -135,16 +137,16 @@ else if (chromium) {
       };
       const MC = await mc('light'), MCD = await mc('dark');
       // ⭐v6.504（Rule 40）：站長要求全站版面統一（以電腦版綠色系為基準、手機拿掉「← 首頁」）⇒ 手機淺色也吃 --ui-* 色票；版面（寬度、圓角、排列）不變。
-      ok('★★★[E6] 手機 390 淺色：/cards 底色與篩選區吃主題色票、版面不變（v6.504）', MC.body === 'rgb(243, 245, 244)' && MC.radius === '0px' && MC.panel === 'rgb(255, 255, 255)', JSON.stringify(MC));
-      ok('★★[E6b] 手機 390 深色：/cards 版面維持（篩選區 0 圓角），顏色吃深色主題', MCD.body === 'rgb(22, 40, 22)' && MCD.radius === '0px' && MCD.panel === 'rgb(30, 53, 33)', JSON.stringify(MCD));
+      ok('★★★[E6] 手機 390 淺色：/cards 底色與篩選區吃主題色票、版面不變（v6.504）', MC.body === uiColor(ROOT, 'light', '--ui-bg') && MC.radius === '0px' && MC.panel === uiColor(ROOT, 'light', '--ui-bg-elev'), JSON.stringify(MC));
+      ok('★★[E6b] 手機 390 深色：/cards 版面維持（篩選區 0 圓角），顏色吃深色主題', MCD.body === uiColor(ROOT, 'dark', '--ui-bg') && MCD.radius === '0px' && MCD.panel === uiColor(ROOT, 'dark', '--ui-bg-elev'), JSON.stringify(MCD));
       const mk = async (scheme) => {
         ({ ctx, pg } = await open(390, 844, scheme, '/card/19378/', true));
         const r = { box: await css(pg, '.body', 'backgroundColor'), disp: await css(pg, '.body', 'display'), page: await css(pg, '.card-page', 'maxWidth') };
         await ctx.close(); return r;
       };
       const MK = await mk('light'), MKD = await mk('dark');
-      ok('★★[E7] 手機 390 淺色：單卡頁版面不變（flex、760 上限），底色吃主題（v6.504）', MK.disp === 'flex' && MK.page === '760px' && MK.box === 'rgb(255, 255, 255)', JSON.stringify(MK));
-      ok('★★[E7b] 手機 390 深色：單卡頁版面維持（flex、760 上限），顏色吃深色主題', MKD.disp === 'flex' && MKD.page === '760px' && MKD.box === 'rgb(30, 53, 33)', JSON.stringify(MKD));
+      ok('★★[E7] 手機 390 淺色：單卡頁版面不變（flex、760 上限），底色吃主題（v6.504）', MK.disp === 'flex' && MK.page === '760px' && MK.box === uiColor(ROOT, 'light', '--ui-bg-elev'), JSON.stringify(MK));
+      ok('★★[E7b] 手機 390 深色：單卡頁版面維持（flex、760 上限），顏色吃深色主題', MKD.disp === 'flex' && MKD.page === '760px' && MKD.box === uiColor(ROOT, 'dark', '--ui-bg-elev'), JSON.stringify(MKD));
       // 錦標賽大廳也有頂端列（active＝錦標賽）
       ({ ctx, pg } = await open(1440, 900, 'light', '/tournament'));
       const T = { disp: await css(pg, '.stb', 'display'), act: await pg.evaluate(() => [...document.querySelectorAll('.stb-link.active')].map((a) => a.textContent).join()), bv: await pg.evaluate(() => document.documentElement.hasAttribute('data-battle-view')) };

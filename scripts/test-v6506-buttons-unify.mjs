@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
+import { uiColor } from './lib/ui-palette.mjs';   // ⭐v6.511 色票唯一讀取點（不寫死色碼）
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.505。
 const BASE_SHA = 'c3bfb348';
@@ -56,8 +57,9 @@ else if (chromium) {
     await new Promise((r) => srv.listen(0, r));
     const port = srv.address().port;
     const errs = [];
-    const T = { light: { accent: 'rgb(29, 122, 74)', elev: 'rgb(255, 255, 255)', border: 'rgb(214, 221, 217)', soft: 'rgb(227, 243, 234)', sunken: 'rgb(232, 236, 234)', input: 'rgb(255, 255, 255)' },
-                dark: { accent: 'rgb(61, 187, 122)', elev: 'rgb(30, 53, 33)', border: 'rgb(49, 80, 58)', soft: 'rgba(61, 187, 122, 0.14)', sunken: 'rgb(16, 32, 16)', input: 'rgb(16, 32, 16)' } };
+    // ⭐v6.511（Rule 40）：色票調整後改讀現行色票（意圖「這些元件讀色票」不變）
+    const tok = (t) => ({ accent: uiColor(ROOT, t, '--ui-accent'), elev: uiColor(ROOT, t, '--ui-bg-elev'), border: uiColor(ROOT, t, '--ui-border'), soft: uiColor(ROOT, t, '--ui-accent-soft'), sunken: uiColor(ROOT, t, '--ui-bg-sunken'), input: uiColor(ROOT, t, '--ui-input-bg') });
+    const T = { light: tok('light'), dark: tok('dark') };
     const bg = (pg, sel) => pg.evaluate((s) => { const e = document.querySelector(s); if (!e) return null; const c = getComputedStyle(e); return [c.backgroundColor, c.borderTopColor]; }, sel);
     const btnByText = (pg, txt) => pg.evaluate((t) => { const e = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === t); if (!e) return null; const c = getComputedStyle(e); return [c.backgroundColor, c.borderTopColor]; }, txt);
     try {

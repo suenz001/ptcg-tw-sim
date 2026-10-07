@@ -21,6 +21,7 @@ import { createRequire } from 'node:module';
 import http from 'node:http';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
+import { uiColor } from './lib/ui-palette.mjs';   // ⭐v6.511 色票唯一讀取點（不寫死色碼）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.498。
@@ -127,7 +128,8 @@ else if (chromium) {
       return { ctx, pg };
     };
     const bodyBg = (pg) => pg.evaluate(() => getComputedStyle(document.body).backgroundColor);
-    const LIGHT = 'rgb(243, 245, 244)', GREEN = 'rgb(22, 40, 22)';
+    // ⭐v6.511（Rule 40）：淺底＝現行淺色 --ui-bg；牌桌（GREEN）維持原本墨綠；深色大廳改讀深色 --ui-bg
+    const LIGHT = uiColor(ROOT, 'light', '--ui-bg'), GREEN = 'rgb(22, 40, 22)', DARK_LOBBY = uiColor(ROOT, 'dark', '--ui-bg');
     try {
       const got = {};
       for (const path of ['/game', '/tournament', '/friends']) {
@@ -143,11 +145,11 @@ else if (chromium) {
       }
       ok('★★★[E1] 手機淺色 /game、/tournament、/friends 都是淺底（data-ui-lobby 有掛）',
         ['/game', '/tournament', '/friends'].every((p) => got[p].body === LIGHT && got[p].lobby), JSON.stringify(got));
-      ok('★★[E2] 手機淺色 /game 模式卡是白卡、底部導覽列是淺色', got.card === 'rgb(255, 255, 255)' && /^rgba\(255, 255, 255/.test(got.nav || ''), JSON.stringify({ card: got.card, nav: got.nav }));
+      ok('★★[E2] 手機淺色 /game 模式卡是白卡、底部導覽列是淺色', got.card === uiColor(ROOT, 'light', '--ui-bg-elev') && got.nav === uiColor(ROOT, 'light', '--ui-topbar-bg'), JSON.stringify({ card: got.card, nav: got.nav }));
       ok('★★★[E3] 掛上 data-battle-view（牌桌）⇒ 立刻回墨綠', got.battle === GREEN, got.battle);
       let { ctx, pg } = await open('dark', '/game');
       const D = await bodyBg(pg); await ctx.close();
-      ok('★★[E4] 手機深色 /game 維持墨綠', D === GREEN, D);
+      ok('★★[E4] 手機深色 /game 是深色色票底（v6.511 起與其他頁同色）', D === DARK_LOBBY, D);
       ({ ctx, pg } = await open('light', '/cards'));
       const Cd = { body: await bodyBg(pg), lobby: await pg.evaluate(() => document.documentElement.hasAttribute('data-ui-lobby')) }; await ctx.close();
       // ⭐v6.504（Rule 40）：全站版面統一後手機淺色 /cards 也是 --ui-bg ⇒ 本條只守「/cards 不是大廳（不掛 data-ui-lobby）」

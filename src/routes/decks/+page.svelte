@@ -2828,7 +2828,7 @@
     border-radius: 999px;
   }
   .preset-section > .deck-list { margin-top: 0.4rem; }
-  .preset-list li { background: #fff5e6; }
+  .preset-list li { background: #f1e6d3; }   /* ⭐v6.511 淺色主題降亮度（原 #fff5e6） */
   .preset-list li.active { background: #ffe6c4; box-shadow: inset 0 0 0 1px #d9aa4a; }
   /* ⭐v6.510（站長 2026-10-07：「深色模式的編輯牌組裡面的預設牌組的字太淡了 根本看不清楚」）：
      上面的淡橙底是淺色主題寫死的；深色主題字是淺色 ⇒ 淺字配淺底。深色改用色票的凹陷底（與一般牌組列同一套色），

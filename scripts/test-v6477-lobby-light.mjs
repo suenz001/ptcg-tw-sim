@@ -19,6 +19,7 @@ import { execFileSync } from 'node:child_process';
 import http from 'node:http';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
+import { uiColor } from './lib/ui-palette.mjs';   // ⭐v6.511 色票唯一讀取點（不寫死色碼）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.476。
@@ -140,21 +141,22 @@ else if (chromium) {
       await pg.waitForTimeout(100);
       const Bv = { body: await css(pg, 'body', 'backgroundColor'), card: await css(pg, '.mode-card', 'backgroundColor') };
       await ctx.close();
-      ok('★★★[E1] 淺色 /game 大廳：淺底、白色模式卡、深色字', L.body === 'rgb(243, 245, 244)' && L.card === 'rgb(255, 255, 255)' && L.title === 'rgb(15, 15, 15)', JSON.stringify(L));
+      ok('★★★[E1] 淺色 /game 大廳：淺底、白色模式卡、深色字', L.body === uiColor(ROOT, 'light', '--ui-bg') && L.card === uiColor(ROOT, 'light', '--ui-bg-elev') && L.title === 'rgb(15, 15, 15)', JSON.stringify(L));
       ok('★★★[E2] 掛上 data-battle-view（牌桌畫面）⇒ 立刻回到原本的墨綠底與深色卡', Bv.body === 'rgb(22, 40, 22)' && Bv.card !== 'rgb(255, 255, 255)', JSON.stringify(Bv));
       ({ ctx, pg } = await open(1440, 900, 'dark', '/game'));
       const D = { body: await css(pg, 'body', 'backgroundColor'), card: await css(pg, '.mode-card', 'backgroundColor') };
       await ctx.close();
-      ok('★★[E3] 深色 /game 大廳維持原本墨綠', D.body === 'rgb(22, 40, 22)' && D.card !== 'rgb(255, 255, 255)', JSON.stringify(D));
+      // ⭐v6.511（Rule 40，站長看過預覽圖同意「深色提亮一階」）：深色大廳整頁底改讀色票（牌桌畫面 E2 仍是原本墨綠）
+      ok('★★[E3] 深色 /game 大廳是深色色票底（墨綠色調）、模式卡不是淺色', D.body === uiColor(ROOT, 'dark', '--ui-bg') && D.card !== uiColor(ROOT, 'light', '--ui-bg-elev'), JSON.stringify(D));
       ({ ctx, pg } = await open(1440, 900, 'light', '/friends'));
       const F = { body: await css(pg, 'body', 'backgroundColor'), bg: await pg.evaluate(() => getComputedStyle(document.querySelector('.fr-panel')).getPropertyValue('--fr-bg').trim()) };
       await ctx.close();
-      ok('★★[E4] 淺色 /friends：淺底、好友面板換成淺色色票', F.body === 'rgb(243, 245, 244)' && F.bg === '#f3f5f4', JSON.stringify(F));
+      ok('★★[E4] 淺色 /friends：淺底、好友面板換成淺色色票', F.body === uiColor(ROOT, 'light', '--ui-bg') && (F.bg === 'var(--ui-bg)' || F.bg === uiColor(ROOT, 'light', '--ui-bg') || F.bg.toLowerCase() === '#dde3df'), JSON.stringify(F));
       ({ ctx, pg } = await open(390, 844, 'light', '/game', true));
       const M = { body: await css(pg, 'body', 'backgroundColor'), card: await css(pg, '.mode-card', 'backgroundColor') };
       await ctx.close();
       // ⭐v6.499（Rule 40）：站長要求手機淺色也是淺底 ⇒ 反轉成淺底白卡
-      ok('★★★[E5] 手機 390 淺色：/game 大廳也是淺底、白色模式卡（v6.499）', M.body === 'rgb(243, 245, 244)' && M.card === 'rgb(255, 255, 255)', JSON.stringify(M));
+      ok('★★★[E5] 手機 390 淺色：/game 大廳也是淺底、白色模式卡（v6.499）', M.body === uiColor(ROOT, 'light', '--ui-bg') && M.card === uiColor(ROOT, 'light', '--ui-bg-elev'), JSON.stringify(M));
       ok('[E9] 以上頁面沒有 JS 例外', errs.length === 0, errs.slice(0, 3).join(' | '));
     } finally { await browser.close(); srv.close(); }
   }

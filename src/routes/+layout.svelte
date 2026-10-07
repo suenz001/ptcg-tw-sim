@@ -216,63 +216,65 @@
      data-theme 永遠是「實際生效的主題」（由 $lib/site-theme.ts 寫入，玩家沒選過就跟作業系統）。
      ⚠ 只有已接上主題的頁面會讀這些變數（目前只有首頁的網頁版）；對戰／錦標賽頁完全不讀 ⇒ 不受影響。
      ⚠ 用 --ui- 前綴，避免撞到對戰頁既有的自訂屬性。文字對比都 ≥ 4.5:1（Fable 5.1 規劃時已算過）。 */
+  /* ⭐v6.511（玩家回饋：「淺色太亮、深色又太暗」；站長看過預覽圖後回「可以」）：淺色整組降一階（卡片從純白改柔和灰白），
+     深色整組提亮一階（墨綠色調不變）；文字對比仍全部 ≥ 4.5:1（淺色主文字約 12:1、深色約 8.5～12:1）。 */
   :global(:root) {
-    --ui-bg: #f3f5f4;
-    --ui-bg-elev: #ffffff;
-    --ui-bg-sunken: #e8ecea;
-    --ui-border: #d6ddd9;
+    --ui-bg: #dde3df;
+    --ui-bg-elev: #eef1ef;
+    --ui-bg-sunken: #d2d9d5;
+    --ui-border: #bfc9c3;
     --ui-text: #1a2320;
-    --ui-text-muted: #5b6762;
+    --ui-text-muted: #4a5651;
     --ui-accent: #1d7a4a;
     --ui-accent-contrast: #ffffff;
-    --ui-accent-soft: #e3f3ea;
-    --ui-link: #15663d;
-    --ui-cta-bg: linear-gradient(135deg, #e3f3ea 0%, #f2faf5 100%);
+    --ui-accent-soft: #d3e8dc;
+    --ui-link: #145f39;
+    --ui-cta-bg: linear-gradient(135deg, #d3e8dc 0%, #e4eee8 100%);
     --ui-cta-text: #123a26;
     --ui-shadow: 0 1px 2px rgba(16, 36, 26, 0.06), 0 4px 12px rgba(16, 36, 26, 0.06);
     --ui-shadow-hover: 0 2px 4px rgba(16, 36, 26, 0.08), 0 10px 24px rgba(16, 36, 26, 0.12);
-    --ui-hero-bg: radial-gradient(circle at 88% 0%, rgba(61, 187, 122, 0.14), transparent 55%), linear-gradient(135deg, #e9f4ee 0%, #f7f9f8 55%, #eef1f8 100%);
+    --ui-hero-bg: radial-gradient(circle at 88% 0%, rgba(61, 187, 122, 0.14), transparent 55%), linear-gradient(135deg, #d4e6db 0%, #e6eae7 55%, #dce0ea 100%);
     /* ⭐v6.475 頂端列與「主要動作」卡（對戰／錦標賽）跟著主題（站長：淺色主題下不要是深綠） */
-    --ui-topbar-bg: #ffffff;
+    --ui-topbar-bg: #ebefec;
     --ui-topbar-text: #1a2320;
     --ui-topbar-muted: #4a5751;
-    --ui-topbar-hover: #eef3f0;
-    --ui-topbar-border: #d6ddd9;
+    --ui-topbar-hover: #dde5e0;
+    --ui-topbar-border: #bfc9c3;
     --ui-topbar-shadow: 0 1px 3px rgba(16, 36, 26, 0.06);
     --ui-cta-border: #9fd3b6;
     --ui-cta-desc: #3f5a4c;
-    --ui-cta-icon-bg: #ffffff;
-    --ui-input-bg: #ffffff;
+    --ui-cta-icon-bg: #eef1ef;
+    --ui-input-bg: #f4f6f5;
     --ui-chip-active-bg: #1d7a4a;
     --ui-chip-active-text: #ffffff;
   }
   :global(html[data-theme='dark']) {
     /* ⭐v6.478 深色主題全站統一成對戰大廳／牌桌的墨綠 #162816（原本首頁等頁是 #0f1f17，切頁看得出色差；Fable 5.1 建議） */
-    --ui-bg: #162816;
-    --ui-bg-elev: #1e3521;
-    --ui-bg-sunken: #102010;
-    --ui-border: #31503a;
-    --ui-text: #e6efe9;
-    --ui-text-muted: #a3bba5;
+    --ui-bg: #253b27;
+    --ui-bg-elev: #2f4b33;
+    --ui-bg-sunken: #1e321f;
+    --ui-border: #4a6f52;
+    --ui-text: #eaf2ec;
+    --ui-text-muted: #b8cdba;
     --ui-accent: #3dbb7a;
     --ui-accent-contrast: #06261a;
-    --ui-accent-soft: rgba(61, 187, 122, 0.14);
-    --ui-link: #6cd39c;
-    --ui-cta-bg: linear-gradient(135deg, #1f4a33 0%, #183a29 100%);
+    --ui-accent-soft: rgba(61, 187, 122, 0.2);
+    --ui-link: #80e0ad;
+    --ui-cta-bg: linear-gradient(135deg, #2f6044 0%, #285139 100%);
     --ui-cta-text: #f0f7f2;
     --ui-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.35);
     --ui-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.45);
-    --ui-hero-bg: radial-gradient(circle at 88% 0%, rgba(61, 187, 122, 0.16), transparent 55%), linear-gradient(135deg, #1f4a2c 0%, #1a321c 60%, #162816 100%);
-    --ui-topbar-bg: #0f1f10;
+    --ui-hero-bg: radial-gradient(circle at 88% 0%, rgba(61, 187, 122, 0.2), transparent 55%), linear-gradient(135deg, #2f603d 0%, #29452b 60%, #253b27 100%);
+    --ui-topbar-bg: #1d311e;
     --ui-topbar-text: #e6efe9;
     --ui-topbar-muted: rgba(230, 239, 233, 0.78);
     --ui-topbar-hover: rgba(255, 255, 255, 0.08);
     --ui-topbar-border: rgba(255, 255, 255, 0.12);
     --ui-topbar-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
-    --ui-cta-border: #2f6a4a;
+    --ui-cta-border: #3f8560;
     --ui-cta-desc: rgba(230, 239, 233, 0.78);
     --ui-cta-icon-bg: rgba(255, 255, 255, 0.1);
-    --ui-input-bg: #102010;
+    --ui-input-bg: #1e321f;
     --ui-chip-active-bg: #3dbb7a;
     --ui-chip-active-text: #06261a;
   }
@@ -295,6 +297,12 @@
   :global(html[data-ui-lobby][data-theme='light']:not([data-battle-view])),
   :global(html[data-ui-lobby][data-theme='light']:not([data-battle-view]) body) { background-color: var(--ui-bg) !important; }
   /* <<< v6499-mobile-light-lobby */
+  /* >>> v6511-dark-lobby-bg */
+  /* ⭐v6.511 深色主題的墨綠底大廳（對戰演練／錦標賽／好友頁）整頁底色改讀色票（原本 <svelte:head> 以 !important 寫死 #162816，
+     調亮色票後會比其他頁暗一截）。牌桌畫面（data-battle-view）不套 ⇒ 牌桌永遠是原本的墨綠。 */
+  :global(html[data-ui-lobby][data-theme='dark']:not([data-battle-view])),
+  :global(html[data-ui-lobby][data-theme='dark']:not([data-battle-view]) body) { background-color: var(--ui-bg) !important; }
+  /* <<< v6511-dark-lobby-bg */
 
   /* >>> v6498-mobile-dark-base */
   /* ⭐v6.498 手機／平板深色主題（站長手機清單第 6 項）：已接上主題的頁面在深色時整頁底色跟著主題。

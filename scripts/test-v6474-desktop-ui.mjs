@@ -26,6 +26,7 @@ import http from 'node:http';
 import { createRequire } from 'node:module';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
+import { uiColor } from './lib/ui-palette.mjs';   // ⭐v6.511 色票唯一讀取點（不寫死色碼）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.473 之後的 LICENSE commit。
@@ -221,12 +222,12 @@ else if (chromium) {
       let { ctx, pg } = await open(1440, 900, 'light', '/');
       const L = await probe(pg);
       ok('★★★[E1] 1440 淺色：頂端列 56px（含底線 57）、首頁兩欄（右欄 360）、logo 出現、底色淺', L.theme === 'light' && L.stb?.disp === 'block' && L.stb.h >= 56 && L.stb.h <= 57
-        && L.mainDisp === 'grid' && / 360px$/.test(L.cols || '') && L.logo === 'block' && L.body === 'rgb(243, 245, 244)', JSON.stringify(L));
+        && L.mainDisp === 'grid' && / 360px$/.test(L.cols || '') && L.logo === 'block' && L.body === uiColor(ROOT, 'light', '--ui-bg'), JSON.stringify(L));
       // 切換鈕：翻成深色、存起來、重新整理後仍是深色
       await pg.click('.stb-theme'); await pg.waitForTimeout(300);
       const afterClick = await pg.evaluate(() => ({ t: document.documentElement.getAttribute('data-theme'), s: localStorage.getItem('ptcg_ui_theme'), bg: getComputedStyle(document.body).backgroundColor }));
       await ctx.close();
-      ok('★★★[E2] 按切換鈕：立刻變深色（底色 #162816；v6.478 起全站統一墨綠，原 #0f1f17）並記住', afterClick.t === 'dark' && afterClick.s === 'dark' && afterClick.bg === 'rgb(22, 40, 22)', JSON.stringify(afterClick));
+      ok('★★★[E2] 按切換鈕：立刻變深色（底色＝深色 --ui-bg；v6.511 起由守衛讀現行色票）並記住', afterClick.t === 'dark' && afterClick.s === 'dark' && afterClick.bg === uiColor(ROOT, 'dark', '--ui-bg'), JSON.stringify(afterClick));
       // 沒選過 ⇒ 跟作業系統（模擬深色系統）
       {
         const ctx2 = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 1440, height: 900 }, colorScheme: 'dark' });
@@ -239,7 +240,7 @@ else if (chromium) {
       // /cards（v6.475 已接主題）：有頂端列、active＝卡牌資料庫、有切換鈕、深色底色生效
       ({ ctx, pg } = await open(1440, 900, 'dark', '/cards'));
       const C = await probe(pg); await ctx.close();
-      ok('★★[E4] /cards：有頂端列、目前頁＝卡牌資料庫、有切換鈕、深色底色生效', C.stb?.disp === 'block' && C.active.join() === '卡牌資料庫' && C.toggle && C.body === 'rgb(22, 40, 22)', JSON.stringify(C));
+      ok('★★[E4] /cards：有頂端列、目前頁＝卡牌資料庫、有切換鈕、深色底色生效', C.stb?.disp === 'block' && C.active.join() === '卡牌資料庫' && C.toggle && C.body === uiColor(ROOT, 'dark', '--ui-bg'), JSON.stringify(C));
       // 首頁 → 站內點進 /friends（v6.477 起已接主題）：淺色主題下好友頁的墨綠底（頁面 <svelte:head> 以 !important 注入）被淺底蓋過
       ({ ctx, pg } = await open(1440, 900, 'light', '/'));
       // 站內導頁（SvelteKit 攔截 <a> 點擊做客戶端路由；頂端列沒有好友連結 ⇒ 臨時插一個再點）
@@ -247,7 +248,7 @@ else if (chromium) {
       await pg.waitForTimeout(1500);
       const nav = await pg.evaluate(() => ({ path: location.pathname, bg: getComputedStyle(document.body).backgroundColor, act: [...document.querySelectorAll('.stb-link.active')].map((a) => a.textContent).join(), themed: document.documentElement.hasAttribute('data-ui-themed') }));
       await ctx.close();
-      ok('★★★[E5] 首頁（淺色）站內點到 /friends：仍是已接主題、底色淺色（蓋過頁面自己的墨綠 !important）、沒有 active', /\/friends$/.test(nav.path) && nav.bg === 'rgb(243, 245, 244)' && nav.act === '' && nav.themed, JSON.stringify(nav));
+      ok('★★★[E5] 首頁（淺色）站內點到 /friends：仍是已接主題、底色淺色（蓋過頁面自己的墨綠 !important）、沒有 active', /\/friends$/.test(nav.path) && nav.bg === uiColor(ROOT, 'light', '--ui-bg') && nav.act === '' && nav.themed, JSON.stringify(nav));
       // /game 大廳：有頂端列（active＝對戰演練）；掛上 data-battle-view（牌桌畫面）時收起
       ({ ctx, pg } = await open(1440, 900, 'light', '/game'));
       const G = await probe(pg);
@@ -262,10 +263,10 @@ else if (chromium) {
       ({ ctx, pg } = await open(390, 844, 'light', '/', true));
       const Mo = await probe(pg); await ctx.close();
       // ⭐v6.504（Rule 40）：站長要求全站版面統一（以電腦版綠色系為基準、手機拿掉「← 首頁」）⇒ 手機淺色也吃 --ui-* 色票；版面（寬度、圓角、排列）不變。
-      ok('★★★[E7] 手機 390 淺色：頂端列 display:none、main 是 block 680 上限、logo 不顯示、底色是 --ui-bg（v6.504 起與網頁版一致）', Mo.stb?.disp === 'none' && Mo.mainDisp === 'block' && Mo.maxW === '680px' && Mo.logo === 'none' && Mo.body === 'rgb(243, 245, 244)', JSON.stringify(Mo));
+      ok('★★★[E7] 手機 390 淺色：頂端列 display:none、main 是 block 680 上限、logo 不顯示、底色是 --ui-bg（v6.504 起與網頁版一致）', Mo.stb?.disp === 'none' && Mo.mainDisp === 'block' && Mo.maxW === '680px' && Mo.logo === 'none' && Mo.body === uiColor(ROOT, 'light', '--ui-bg'), JSON.stringify(Mo));
       ({ ctx, pg } = await open(390, 844, 'dark', '/', true));
       const MoD = await probe(pg); await ctx.close();
-      ok('★★[E7b] 手機 390 深色：版面同上（頂端列不顯示、680 單欄），底色改吃深色主題', MoD.stb?.disp === 'none' && MoD.mainDisp === 'block' && MoD.maxW === '680px' && MoD.logo === 'none' && MoD.body === 'rgb(22, 40, 22)', JSON.stringify(MoD));
+      ok('★★[E7b] 手機 390 深色：版面同上（頂端列不顯示、680 單欄），底色改吃深色主題', MoD.stb?.disp === 'none' && MoD.mainDisp === 'block' && MoD.maxW === '680px' && MoD.logo === 'none' && MoD.body === uiColor(ROOT, 'dark', '--ui-bg'), JSON.stringify(MoD));
       // 平板 1000：同手機（臨界值以下不變）
       ({ ctx, pg } = await open(1000, 800, 'dark', '/'));
       const T = await probe(pg); await ctx.close();

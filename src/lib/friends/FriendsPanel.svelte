@@ -517,21 +517,25 @@
     background: var(--fr-bg);
   }
   .fr-panel.embed { background: transparent; }
+  /* ⭐v6.511 深色主題（非牌桌）：/friends 整頁底跟著全站色票提亮一階（與 layout 的 v6511-dark-lobby-bg 同一個值）；
+     卡片、分頁鈕維持與錦標賽同一套（--fr-* 單一來源不動）。 */
+  :global(html[data-theme='dark']:not([data-battle-view])) .fr-panel:not(.embed) { background: var(--ui-bg); }
   /* >>> v6477-friends-light */
   /* ⭐v6.477 淺色主題：好友頁／大廳好友分頁換一套淺色色票（本面板所有顏色都讀 --fr-*，換色票即可）。
      ・只在 <html data-theme="light"> 且不是牌桌畫面時生效；深色主題完全不變。
      ・⭐v6.499：手機／平板也套（原本包在 min-width:1024px 裡；大廳在手機改淺底後，好友分頁要跟著換）。 */
   :global(html[data-theme='light']:not([data-battle-view])) .fr-panel {
-    --fr-bg: #f3f5f4;
+    /* ⭐v6.511 淺色主題的底色、卡片、分頁鈕改讀全站色票（原本寫死純白，淺色太亮；隨全站一起降一階） */
+    --fr-bg: var(--ui-bg);
     --fr-fg: #1a2320;
     --fr-label: #2c3e33;
-    --fr-dim: #5b6762;
-    --fr-card-bg: #ffffff;
-    --fr-card-bd: #d6ddd9;
-    --fr-tab-bg: #ffffff;
+    --fr-dim: var(--ui-text-muted);
+    --fr-card-bg: var(--ui-bg-elev);
+    --fr-card-bd: var(--ui-border);
+    --fr-tab-bg: var(--ui-bg-elev);
     --fr-tab-bd: #c5d3cb;
     --fr-tab-fg: #1d5c3a;
-    --fr-tab-hover-bg: #eef3f0;
+    --fr-tab-hover-bg: var(--ui-topbar-hover);
     --fr-tab-on-from: #e3f3ea;
     --fr-tab-on-to: #d5ecdf;
     --fr-tab-on-fg: #0f3a24;
@@ -539,7 +543,7 @@
     --fr-gold: #8a5d00;
     --fr-ok: #1a7f44;
     --fr-danger: #c0392b;
-    --fr-bubble-them: #eef3f0;
+    --fr-bubble-them: var(--ui-bg-sunken);
     --fr-bubble-me: #d5ecdf;
   }
   /* <<< v6477-friends-light */

@@ -30,7 +30,8 @@ function judge(src) {
   const css = ((src.match(/<style>([\s\S]*?)<\/style>/) || ['', ''])[1]).replace(/\/\*[\s\S]*?\*\//g, '');
   return {
     S1: css.includes(RULE),
-    S2: css.includes('.preset-list li { background: #fff5e6; }'),
+    // ⭐v6.511（Rule 40）：淺色主題整組降一階，預組淡橙底跟著降（#fff5e6 → #f1e6d3）；意圖（淺色有淡橙唯讀提示）不變。BASE v6.509 是 #fff5e6
+    S2: /\.preset-list li \{ background: #(fff5e6|f1e6d3); \}/.test(css),
   };
 }
 
@@ -92,8 +93,8 @@ else if (chromium) {
       for (const vw of [390, 1280]) {
         const dk = await measure('dark', vw), lt = await measure('light', vw);
         ok(`★★★[E1-${vw}] 深色：預組列文字對比 ≥ 4.5（原本淺字配淡橙底約 1.1）`, dk.n > 0 && dk.cr >= 4.5, JSON.stringify(dk));
-        ok(`★★[E2-${vw}] 深色：選中的預組列仍是強調底（與未選中不同色）`, dk.n > 0 && dk.activeBg !== dk.bg && dk.activeBg !== 'rgb(255, 245, 230)', JSON.stringify(dk));
-        ok(`★★[E3-${vw}] 淺色：預組列仍是淡橙底、文字對比 ≥ 4.5（零回歸）`, lt.n > 0 && lt.bg === 'rgb(255, 245, 230)' && lt.cr >= 4.5, JSON.stringify(lt));
+        ok(`★★[E2-${vw}] 深色：選中的預組列仍是強調底（與未選中不同色）`, dk.n > 0 && dk.activeBg !== dk.bg && dk.activeBg !== 'rgb(255, 245, 230)' && dk.activeBg !== 'rgb(241, 230, 211)', JSON.stringify(dk));
+        ok(`★★[E3-${vw}] 淺色：預組列仍是淡橙底、文字對比 ≥ 4.5（零回歸）`, lt.n > 0 && (lt.bg === 'rgb(241, 230, 211)' || lt.bg === 'rgb(255, 245, 230)') && lt.cr >= 4.5, JSON.stringify(lt));
       }
       ok('[E9] 沒有 JS 例外', errs.length === 0, errs.slice(0, 3).join(' | '));
     } finally { await browser.close(); srv.close(); }

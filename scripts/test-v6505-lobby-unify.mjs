@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
+import { uiColor } from './lib/ui-palette.mjs';   // ⭐v6.511 色票唯一讀取點（不寫死色碼）
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.504。
 const BASE_SHA = '176086e6';
@@ -87,8 +88,7 @@ else if (chromium) {
             ok(`★★★[E2] ${tag}：看不到回首頁的連結／按鈕`, A.home === 0, JSON.stringify(A));
             if (mobile) ok(`★★[E3] ${tag}：手機頁首頂端 12px（與其他頁一致）`, A.top === 12, String(A.top));
             if (path === '/game') {
-              const BG = theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(30, 53, 33)';
-              const BD = theme === 'light' ? 'rgb(214, 221, 217)' : 'rgb(49, 80, 58)';
+              const BG = uiColor(ROOT, theme, '--ui-bg-elev'), BD = uiColor(ROOT, theme, '--ui-border');   // ⭐v6.511（Rule 40）讀現行色票
               ok(`★★[E4] ${tag}：模式卡片是 --ui-bg-elev 底＋--ui-border 框、14px 圓角`, A.card && A.card[0] === BG && A.card[1] === BD && A.card[2] === '14px', JSON.stringify(A.card));
             }
             if (path === '/game') ok(`★★★[E5] ${tag}：掛上 data-battle-view（牌桌）⇒ LobbyUnify 的模式卡片樣式不成立`, !!B.card && B.card[2] !== '14px', JSON.stringify(B.card));

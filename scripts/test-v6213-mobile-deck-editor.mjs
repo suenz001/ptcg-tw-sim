@@ -342,7 +342,10 @@ console.log('\n4) ★★★正對照：桌機 CSS 逐字未動');
   // ⭐v6.510（Rule 40，站長：深色模式預組清單字太淡）：深色主題才成立的一條（未選中預組列改用凹陷底）⇒ 逐字登記、恰好一次，剝掉後指紋不變。內容由 test-v6510 鎖。
   const V6510_RULE = ":global(html[data-theme='dark']) .preset-list li:not(.active) { background: var(--ui-bg-sunken); }";
   ok('[前提] v6.510 登記的深色規則在桌機 CSS 裡恰好出現一次', SP.withoutMedia.split(V6510_RULE).length - 1 === 1);
-  const bare = SP.withoutMedia.split(V6510_RULE).join('').replace(V6498_RE, '').replace(V6504_DESK_RE, '').replace(/\s+/g, ' ').trim();
+  // ⭐v6.511（Rule 40，淺色主題降一階、站長看過預覽圖同意）：預組淡橙底 #fff5e6 → #f1e6d3 ⇒ 逐字登記這一處、恰好一次，還原後指紋不變。
+  const V6511_NEW = '.preset-list li { background: #f1e6d3; }', V6511_OLD = '.preset-list li { background: #fff5e6; }';
+  ok('[前提] v6.511 登記的預組底色在桌機 CSS 裡恰好出現一次', SP.withoutMedia.split(V6511_NEW).length - 1 === 1);
+  const bare = SP.withoutMedia.split(V6511_NEW).join(V6511_OLD).split(V6510_RULE).join('').replace(V6498_RE, '').replace(V6504_DESK_RE, '').replace(/\s+/g, ' ').trim();
   ok('[前提] 非 @media 的桌機 CSS 抓得到且份量正常', bare.length > 15000, String(bare.length));
   // ⭐⭐⭐ 真正的逐字證明：把整段桌機 CSS 取指紋。
   //   ⚠ 這一條**只有在刻意要改桌機版面時**才准更新（更新時務必在 commit 訊息說明改了什麼）。

@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
+import { uiColor } from './lib/ui-palette.mjs';   // ⭐v6.511 色票唯一讀取點（不寫死色碼）
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.503。
 const BASE_SHA = '99fa08a2';
@@ -82,7 +83,7 @@ else if (chromium) {
           got[path] = await probe(pg, sel);
           await ctx.close();
         }
-        const BG = theme === 'light' ? 'rgb(243, 245, 244)' : 'rgb(22, 40, 22)';
+        const BG = uiColor(ROOT, theme, '--ui-bg');   // ⭐v6.511（Rule 40）讀現行色票
         const v = Object.values(got);
         ok(`★★★[E1] 手機 ${theme}：四頁頁首都是同一種卡片（14px 圓角、有框線）`, v.every((g) => g.radius === '14px' && g.border === '1px'), JSON.stringify(got));
         ok(`★★★[E2] 手機 ${theme}：四頁頁首頂端同一高度`, v.every((g) => g.top === v[0].top) && v[0].top <= 16, JSON.stringify(v.map((g) => g.top)));

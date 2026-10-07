@@ -71,7 +71,8 @@ T('C1 有深色／淺色切換鈕（aria-label 依目前主題）', () => {
   assert.ok(NAV.includes("aria-label={theme === 'dark' ? '切換成淺色主題' : '切換成深色主題'}"));
 });
 T('C2 深色主題時導覽列本身也是深色', () => {
-  assert.ok(NAV.includes(":global(html[data-theme='dark']) .sbn { background: rgba(16, 32, 22, 0.97);"));
+  // ⭐v6.511（Rule 40）：導覽列改讀色票 --ui-topbar-bg（深色時是深色值）；意圖（深色主題時導覽列是深色）不變
+  assert.ok(NAV.includes(":global(html[data-theme='dark']) .sbn { background: var(--ui-topbar-bg);"));
 });
 
 console.log(`\n=== v6.498 手機深色主題：${pass} PASS / ${fail} FAIL ===`);

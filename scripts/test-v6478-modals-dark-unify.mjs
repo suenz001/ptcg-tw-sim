@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
+import { uiColor } from './lib/ui-palette.mjs';   // ⭐v6.511 色票唯一讀取點（不寫死色碼）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.477。
@@ -35,16 +36,18 @@ function judge(get) {
   r.S2 = blk.split('\n').some((l) => l.includes(PRE + ' .pv-inner') && !l.includes('.lobby'));
   const L = get('src/routes/+layout.svelte');
   const dk = (L.match(/:global\(html\[data-theme='dark'\]\) \{[\s\S]*?\n  \}/) || [''])[0];
-  r.S3 = /--ui-bg: #162816;/.test(dk) && /--ui-topbar-bg: #0f1f10;/.test(dk);
+  // ⭐v6.511（Rule 40）：深色色票提亮一階 ⇒ 不再釘 #162816；意圖「全站深色同一個墨綠（載入畫面＝深色 --ui-bg）、頂端列有自己的深色」改成兩邊互相比對
+  const dkBg = (dk.match(/--ui-bg: (#[0-9a-f]{6});/) || [])[1];
+  r.S3 = !!dkBg && /--ui-topbar-bg: #[0-9a-f]{6};/.test(dk) && get('src/app.html').includes('#app-splash.dark{background:' + dkBg);
   const A = get('src/app.html');
-  r.S4 = /#app-splash\.dark\{background:#162816/.test(A) && /s\.classList\.add\('dark'\)/.test(A) && A.includes("matchMedia('(min-width: 1024px)')") && A.includes("localStorage.getItem('ptcg_ui_theme')");
+  r.S4 = /#app-splash\.dark\{background:#[0-9a-f]{6}/.test(A) && /s\.classList\.add\('dark'\)/.test(A) && A.includes("matchMedia('(min-width: 1024px)')") && A.includes("localStorage.getItem('ptcg_ui_theme')");
   return r;
 }
 console.log('【S】靜態');
 const C = judge(rd);
 ok('★★★[S1] 淺色大廳產生段：.tourn-vergate 換淺底、而且不掛 .lobby 祖先', C.S1);
 ok('★★★[S2] 淺色大廳產生段：帳號管理／改密碼的 .pv-inner 有覆寫', C.S2);
-ok('★★★[S3] 深色色票統一：--ui-bg #162816、頂端列 #0f1f10', C.S3);
+ok('★★★[S3] 深色色票統一：載入畫面的深色底＝深色 --ui-bg、頂端列有深色值', C.S3);
 ok('★★★[S4] app.html 載入畫面：≥1024px＋深色（與 site-theme 同一判準）掛 .dark 墨綠底', C.S4);
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const g = (p) => { const r = readBaseBlob(ROOT, BASE_SHA, p); return r.ok ? r.out.replace(/\r\n/g, '\n') : ''; };
@@ -95,7 +98,7 @@ else if (chromium) {
     try {
       let { ctx, pg } = await open(1440, 900, 'dark', '/', { blockApp: true });
       const S1 = await splash(pg); await ctx.close();
-      ok('★★★[E1] 1440 深色：載入畫面是墨綠底 #162816', S1?.dark === true && S1.bg === 'rgb(22, 40, 22)', JSON.stringify(S1));
+      ok('★★★[E1] 1440 深色：載入畫面是墨綠底 #162816', S1?.dark === true && S1.bg === uiColor(ROOT, 'dark', '--ui-bg'), JSON.stringify(S1));
       ({ ctx, pg } = await open(1440, 900, 'light', '/', { blockApp: true }));
       const S2 = await splash(pg); await ctx.close();
       ok('★★[E2] 1440 淺色：載入畫面維持白底', S2?.dark === false && S2.bg === 'rgb(255, 255, 255)', JSON.stringify(S2));
@@ -114,7 +117,7 @@ else if (chromium) {
       ok('★★★[E6] 手機 390 淺色：版本閘視窗也是淺底深字（v6.499 起與網頁版一致）', !!V3 && lum(V3.bg) > 220 && lum(V3.title) < 80, JSON.stringify(V3));
       ({ ctx, pg } = await open(1440, 900, 'dark', '/cards'));
       const body = await pg.evaluate(() => getComputedStyle(document.body).backgroundColor); await ctx.close();
-      ok('★★[E7] 1440 深色 /cards：底色與對戰大廳同為 #162816', body === 'rgb(22, 40, 22)', body);
+      ok('★★[E7] 1440 深色 /cards：底色與對戰大廳同為深色 --ui-bg', body === uiColor(ROOT, 'dark', '--ui-bg'), body);
       ok('[E9] 以上頁面沒有 JS 例外', errs.length === 0, errs.slice(0, 3).join(' | '));
     } finally { await browser.close(); srv.close(); }
   }

@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.511：全站色票亮度調整（2026-10-08）
+
+BASE v6.510（4bbe0f83）。站長轉述玩家：「淺色太亮 深色又太暗」；先做手機四頁前後對照預覽圖，站長回「可以」。
+- +layout.svelte 色票：淺色 bg #f3f5f4→#dde3df、elev #ffffff→#eef1ef、sunken #e8ecea→#d2d9d5、border #d6ddd9→#bfc9c3、muted→#4a5651、link→#145f39、topbar #fff→#ebefec、input→#f4f6f5；深色 bg #162816→#253b27、elev #1e3521→#2f4b33、sunken #102010→#1e321f、border→#4a6f52、text→#eaf2ec、muted→#b8cdba、link→#80e0ad、topbar #0f1f10→#1d311e。對比全部 ≥ 4.5（淺色主文字約 12:1、深色 8.5～12:1）。
+- 深色大廳（data-ui-lobby）整頁底讀色票（v6511-dark-lobby-bg，牌桌 data-battle-view 不套，仍是 #162816）；好友頁深色 .fr-panel:not(.embed) 讀 --ui-bg（--fr-* 單一來源與錦標賽一致不動）；好友頁淺色 --fr-* 改讀 --ui-*。
+- SiteBottomNav 淺色／深色改讀 --ui-topbar-bg、--ui-border；app.html 載入畫面深色底＝新深色 --ui-bg。
+- 新增 scripts/lib/ui-palette.mjs（從 layout 讀現行色票）；v6474／v6475／v6477／v6478／v6498／v6499／v6504／v6505／v6506／v6510 原本寫死舊色碼，Rule 40 改讀色票（意圖＝讀色票不變）；v6213 桌機指紋逐字登記預組底色；v6475 亮度門檻放寬到仍可區分深淺。
+- test-v6511（S1–S4 方向＋對比判準不寫死色碼、H1、E1–E4、E9）。
+
 ## v6.510：牌組編輯器預組清單深色對比（2026-10-07）
 
 BASE v6.509（7be9a6f6）。站長（附手機截圖）：「深色模式的編輯牌組裡面的預設牌組的字太淡了 根本看不清楚」。
