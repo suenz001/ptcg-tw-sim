@@ -1914,7 +1914,7 @@
   :global(html) .cardPageLink { color: var(--ui-link); }
   /* ⭐v6.507 全站頁首統一：本頁內容不在有內距的容器裡 ⇒ 頁首卡片的外距由本頁補（沿用 v6.504 本頁頁首的外距：
      網頁版與下方 1200px 卡包格線同寬置中；手機左右各 12px、頂端讓出瀏海安全區）。類別重複兩次以蓋過元件的預設外距。 */
-  :global(html[data-ui-wide] .ph.cards-ph.cards-ph) { max-width: 1200px; margin: 24px auto 20px; }
-  :global(html:not([data-ui-wide]) .ph.cards-ph.cards-ph) { margin: calc(12px + var(--safe-top, 0px)) 12px 14px; }
+  :global(html[data-ui-wide]) :global(.ph.cards-ph.cards-ph) { max-width: 1200px; margin: 24px auto 20px; }
+  :global(html:not([data-ui-wide])) :global(.ph.cards-ph.cards-ph) { margin: calc(12px + var(--safe-top, 0px)) 12px 14px; }
   /* <<< v6504-unify */
 </style>
