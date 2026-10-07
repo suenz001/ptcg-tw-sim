@@ -4249,129 +4249,142 @@
   }
   /* <<< v6475-desktop-theme */
   /* >>> v6498-mobile-dark */
+  /* ⭐v6.504 全站版面統一（站長選「以電腦版現有綠色系為基準」）：本區塊的條件從「手機＋深色」放寬成「手機（不分深淺）」，
+     前綴 :global(html:not([data-ui-wide])) ⇒ 手機淺色也改讀同一套 --ui-* 色票，與網頁版淺色一致。下方 v6.498 的原說明保留作歷史紀錄。 */
   /* ⭐v6.498 手機／平板深色主題（站長手機清單第 6 項：深色主題原本只有網頁版 ≥1024px）。
      ・條件：<html data-theme='dark'> 且不是網頁版（沒有 data-ui-wide）⇒ 手機淺色（預設）一個像素都不變，網頁版也不變。
      ・內容：本頁網頁版主題區塊（min-width:1024px）裡「只跟顏色有關」的宣告，原樣換成上面的條件（線寬、版面、尺寸一律不帶）；
        框線簡寫只取顏色（border-color），不會替手機版多出原本沒有的框。顏色讀 layout 的 --ui-* 深色色票。
      ・不用 @media（本頁的 @media 數量／桌機 CSS 指紋有守衛在釘）。 */
-  :global(html[data-theme='dark']:not([data-ui-wide])) main { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .page-head { background: var(--ui-hero-bg); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .page-head h1 { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .hint,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .muted,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .deck-size,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .entry-sub,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pick-sub,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .empty,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .small-note { color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .version-tag { background: var(--ui-accent-soft); color: var(--ui-link); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .back,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .auth-sub,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .auth-link { color: var(--ui-link); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .to-board { color: var(--ui-link); border-color: var(--ui-border); background: var(--ui-bg-elev); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .rail,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .deck-pane,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .picker { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .rail-head > strong,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .preset-section > .preset-summary { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .preset-section { border-top-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .preset-count { background: var(--ui-bg-sunken); color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .deck-list li:hover { background: var(--ui-bg-sunken); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .deck-list li.active { background: var(--ui-accent-soft); box-shadow: inset 3px 0 0 var(--ui-accent); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .deck-pick { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .deck-reorder-btn { border-color: var(--ui-border); color: var(--ui-accent); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .deck-title,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-search,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-mode-select,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-set-select,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .text-area,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .bm-code,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .auth-form input { background: var(--ui-input-bg); color: var(--ui-text); border-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-mode-select.keyword { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-mode-select:hover:not(.keyword) { background: var(--ui-bg-sunken); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .count { background: var(--ui-accent-soft); border-color: var(--ui-border); color: var(--ui-link); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .count.bad { background: rgba(224, 83, 63, 0.14); border-color: #e0533f; color: #e0533f; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .validation { background: rgba(245, 166, 35, 0.14); color: var(--ui-text); border-color: rgba(245, 166, 35, 0.45); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .validation.ok { background: var(--ui-accent-soft); color: var(--ui-text); border-color: var(--ui-accent); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .entry { background: var(--ui-bg-sunken); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .entry-name,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pick-name { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .picker-list li:hover { background: var(--ui-bg-sunken); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .picker-list li.previewing { background: var(--ui-accent-soft); outline-color: var(--ui-accent); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-label { color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-chip { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-chip:hover:not(.active) { background: var(--ui-bg-sunken); border-color: var(--ui-accent); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-chip.active { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-chip-tag,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-chip-type { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-chip-tag.active { background: #6366f1; border-color: #6366f1; color: #fff; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-chip-type.active { background: var(--type-bg, #6366f1); border-color: var(--type-bg, #6366f1); color: #fff; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-chip-stage { border-color: #8a77aa; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-chip-stage.active { background: #6c5a8a; border-color: #6c5a8a; color: #fff; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-chip-mark { border-color: #6f8f9f; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-chip-mark.active { background: #5a7a8a; border-color: #5a7a8a; color: #fff; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) button.small,
-  :global(html[data-theme='dark']:not([data-ui-wide])) label.file,
-  :global(html[data-theme='dark']:not([data-ui-wide])) button.icon { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) button.small:hover,
-  :global(html[data-theme='dark']:not([data-ui-wide])) button.icon:hover:not(:disabled) { background: var(--ui-bg-sunken); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) button.small.danger { color: #e0533f; border-color: rgba(224, 83, 63, 0.45); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) button.small.primary { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) button.small.primary:hover:not(:disabled) { background: var(--ui-chip-active-bg); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .stat-track { background: var(--ui-bg-sunken); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .auth-btn { background: var(--ui-bg-elev); border-color: var(--ui-border); color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .auth-btn:hover { background: var(--ui-accent-soft); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .auth-email { color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-inner { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-close { background: var(--ui-bg-sunken); border-color: var(--ui-border); color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-close:hover { background: var(--ui-accent-soft); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-variant-counter,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-top-counter { background: var(--ui-bg-sunken); border-color: var(--ui-border); color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-top-count-label,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-evo-chain-label,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .evo-card-link { color: var(--ui-link); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-evolve,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-setinfo,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-wrc,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .evo-arrow,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .evo-or { color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-rules,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .ab-effect,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .atk-effect { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-section,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-counter { border-top-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-evo-chain { background: var(--ui-accent-soft); border-left-color: var(--ui-accent); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .evo-card-link { background: var(--ui-bg-elev); border-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .evo-card-link:hover { background: var(--ui-accent-soft); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .evo-card-link.current { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .sub-badge { background: var(--ui-bg-sunken); color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .auth-tabs { border-bottom-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .auth-tabs button { color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .auth-tabs button.active { color: var(--ui-link); border-bottom-color: var(--ui-accent); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .auth-desc,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .ds-msg,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .ds-sub,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .ds-card-h,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .ds-notes,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .ds-pending { color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .ds-card { background: var(--ui-bg-sunken); border-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .ds-table th,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .ds-table td { border-bottom-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .ds-table thead th { background: var(--ui-bg-elev); color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .exported-code-display,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .official-import-help,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .fallback-help { background: var(--ui-bg-sunken); border-color: var(--ui-border); color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .exported-actions .button-like { background: var(--ui-bg-elev); border-color: var(--ui-border); color: var(--ui-link); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .exported-actions .button-like:hover { background: var(--ui-accent-soft); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .official-import-help summary,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .official-import-help a { color: var(--ui-link); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .official-import-help kbd,
-  :global(html[data-theme='dark']:not([data-ui-wide])) code { background: var(--ui-bg-sunken); border-color: var(--ui-border); color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-nav { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-nav:hover { background: rgba(61, 187, 122, 0.22); }
+  :global(html:not([data-ui-wide])) main { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .page-head { background: var(--ui-hero-bg); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+  :global(html:not([data-ui-wide])) .page-head h1 { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .hint,
+  :global(html:not([data-ui-wide])) .muted,
+  :global(html:not([data-ui-wide])) .deck-size,
+  :global(html:not([data-ui-wide])) .entry-sub,
+  :global(html:not([data-ui-wide])) .pick-sub,
+  :global(html:not([data-ui-wide])) .empty,
+  :global(html:not([data-ui-wide])) .small-note { color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .version-tag { background: var(--ui-accent-soft); color: var(--ui-link); }
+  :global(html:not([data-ui-wide])) .back,
+  :global(html:not([data-ui-wide])) .auth-sub,
+  :global(html:not([data-ui-wide])) .auth-link { color: var(--ui-link); }
+  :global(html:not([data-ui-wide])) .to-board { color: var(--ui-link); border-color: var(--ui-border); background: var(--ui-bg-elev); }
+  :global(html:not([data-ui-wide])) .rail,
+  :global(html:not([data-ui-wide])) .deck-pane,
+  :global(html:not([data-ui-wide])) .picker { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+  :global(html:not([data-ui-wide])) .rail-head > strong,
+  :global(html:not([data-ui-wide])) .preset-section > .preset-summary { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .preset-section { border-top-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .preset-count { background: var(--ui-bg-sunken); color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .deck-list li:hover { background: var(--ui-bg-sunken); }
+  :global(html:not([data-ui-wide])) .deck-list li.active { background: var(--ui-accent-soft); box-shadow: inset 3px 0 0 var(--ui-accent); }
+  :global(html:not([data-ui-wide])) .deck-pick { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .deck-reorder-btn { border-color: var(--ui-border); color: var(--ui-accent); }
+  :global(html:not([data-ui-wide])) .deck-title,
+  :global(html:not([data-ui-wide])) .pk-search,
+  :global(html:not([data-ui-wide])) .pk-mode-select,
+  :global(html:not([data-ui-wide])) .pk-set-select,
+  :global(html:not([data-ui-wide])) .text-area,
+  :global(html:not([data-ui-wide])) .bm-code,
+  :global(html:not([data-ui-wide])) .auth-form input { background: var(--ui-input-bg); color: var(--ui-text); border-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .pk-mode-select.keyword { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+  :global(html:not([data-ui-wide])) .pk-mode-select:hover:not(.keyword) { background: var(--ui-bg-sunken); }
+  :global(html:not([data-ui-wide])) .count { background: var(--ui-accent-soft); border-color: var(--ui-border); color: var(--ui-link); }
+  :global(html:not([data-ui-wide])) .count.bad { background: rgba(224, 83, 63, 0.14); border-color: #e0533f; color: #e0533f; }
+  :global(html:not([data-ui-wide])) .validation { background: rgba(245, 166, 35, 0.14); color: var(--ui-text); border-color: rgba(245, 166, 35, 0.45); }
+  :global(html:not([data-ui-wide])) .validation.ok { background: var(--ui-accent-soft); color: var(--ui-text); border-color: var(--ui-accent); }
+  :global(html:not([data-ui-wide])) .entry { background: var(--ui-bg-sunken); }
+  :global(html:not([data-ui-wide])) .entry-name,
+  :global(html:not([data-ui-wide])) .pick-name { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .picker-list li:hover { background: var(--ui-bg-sunken); }
+  :global(html:not([data-ui-wide])) .picker-list li.previewing { background: var(--ui-accent-soft); outline-color: var(--ui-accent); }
+  :global(html:not([data-ui-wide])) .pk-label { color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .pk-chip { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .pk-chip:hover:not(.active) { background: var(--ui-bg-sunken); border-color: var(--ui-accent); }
+  :global(html:not([data-ui-wide])) .pk-chip.active { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+  :global(html:not([data-ui-wide])) .pk-chip-tag,
+  :global(html:not([data-ui-wide])) .pk-chip-type { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .pk-chip-tag.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+  :global(html:not([data-ui-wide])) .pk-chip-type.active { background: var(--type-bg, #6366f1); border-color: var(--type-bg, #6366f1); color: #fff; }
+  :global(html:not([data-ui-wide])) .pk-chip-stage { border-color: #8a77aa; }
+  :global(html:not([data-ui-wide])) .pk-chip-stage.active { background: #6c5a8a; border-color: #6c5a8a; color: #fff; }
+  :global(html:not([data-ui-wide])) .pk-chip-mark { border-color: #6f8f9f; }
+  :global(html:not([data-ui-wide])) .pk-chip-mark.active { background: #5a7a8a; border-color: #5a7a8a; color: #fff; }
+  :global(html:not([data-ui-wide])) button.small,
+  :global(html:not([data-ui-wide])) label.file,
+  :global(html:not([data-ui-wide])) button.icon { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) button.small:hover,
+  :global(html:not([data-ui-wide])) button.icon:hover:not(:disabled) { background: var(--ui-bg-sunken); }
+  :global(html:not([data-ui-wide])) button.small.danger { color: #e0533f; border-color: rgba(224, 83, 63, 0.45); }
+  :global(html:not([data-ui-wide])) button.small.primary { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+  :global(html:not([data-ui-wide])) button.small.primary:hover:not(:disabled) { background: var(--ui-chip-active-bg); }
+  :global(html:not([data-ui-wide])) .stat-track { background: var(--ui-bg-sunken); }
+  :global(html:not([data-ui-wide])) .auth-btn { background: var(--ui-bg-elev); border-color: var(--ui-border); color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .auth-btn:hover { background: var(--ui-accent-soft); }
+  :global(html:not([data-ui-wide])) .auth-email { color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .pv-inner { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .pv-close { background: var(--ui-bg-sunken); border-color: var(--ui-border); color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .pv-close:hover { background: var(--ui-accent-soft); }
+  :global(html:not([data-ui-wide])) .pv-variant-counter,
+  :global(html:not([data-ui-wide])) .pv-top-counter { background: var(--ui-bg-sunken); border-color: var(--ui-border); color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .pv-top-count-label,
+  :global(html:not([data-ui-wide])) .pv-evo-chain-label,
+  :global(html:not([data-ui-wide])) .evo-card-link { color: var(--ui-link); }
+  :global(html:not([data-ui-wide])) .pv-evolve,
+  :global(html:not([data-ui-wide])) .pv-setinfo,
+  :global(html:not([data-ui-wide])) .pv-wrc,
+  :global(html:not([data-ui-wide])) .evo-arrow,
+  :global(html:not([data-ui-wide])) .evo-or { color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .pv-rules,
+  :global(html:not([data-ui-wide])) .ab-effect,
+  :global(html:not([data-ui-wide])) .atk-effect { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .pv-section,
+  :global(html:not([data-ui-wide])) .pv-counter { border-top-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .pv-evo-chain { background: var(--ui-accent-soft); border-left-color: var(--ui-accent); }
+  :global(html:not([data-ui-wide])) .evo-card-link { background: var(--ui-bg-elev); border-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .evo-card-link:hover { background: var(--ui-accent-soft); }
+  :global(html:not([data-ui-wide])) .evo-card-link.current { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+  :global(html:not([data-ui-wide])) .sub-badge { background: var(--ui-bg-sunken); color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .auth-tabs { border-bottom-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .auth-tabs button { color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .auth-tabs button.active { color: var(--ui-link); border-bottom-color: var(--ui-accent); }
+  :global(html:not([data-ui-wide])) .auth-desc,
+  :global(html:not([data-ui-wide])) .ds-msg,
+  :global(html:not([data-ui-wide])) .ds-sub,
+  :global(html:not([data-ui-wide])) .ds-card-h,
+  :global(html:not([data-ui-wide])) .ds-notes,
+  :global(html:not([data-ui-wide])) .ds-pending { color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .ds-card { background: var(--ui-bg-sunken); border-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .ds-table th,
+  :global(html:not([data-ui-wide])) .ds-table td { border-bottom-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .ds-table thead th { background: var(--ui-bg-elev); color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .exported-code-display,
+  :global(html:not([data-ui-wide])) .official-import-help,
+  :global(html:not([data-ui-wide])) .fallback-help { background: var(--ui-bg-sunken); border-color: var(--ui-border); color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .exported-actions .button-like { background: var(--ui-bg-elev); border-color: var(--ui-border); color: var(--ui-link); }
+  :global(html:not([data-ui-wide])) .exported-actions .button-like:hover { background: var(--ui-accent-soft); }
+  :global(html:not([data-ui-wide])) .official-import-help summary,
+  :global(html:not([data-ui-wide])) .official-import-help a { color: var(--ui-link); }
+  :global(html:not([data-ui-wide])) .official-import-help kbd,
+  :global(html:not([data-ui-wide])) code { background: var(--ui-bg-sunken); border-color: var(--ui-border); color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .pv-nav { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .pv-nav:hover { background: rgba(61, 187, 122, 0.22); }
   /* 手機專用元件與網頁版收起的元素（上面抽不到）：篩選收合鈕、「← 首頁」 */
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-filter-toggle { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pk-filter-toggle.has-active { background: var(--ui-accent-soft); color: var(--ui-link); border-color: var(--ui-accent); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .back { color: var(--ui-link); }
+  :global(html:not([data-ui-wide])) .pk-filter-toggle { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .pk-filter-toggle.has-active { background: var(--ui-accent-soft); color: var(--ui-link); border-color: var(--ui-accent); }
+  :global(html:not([data-ui-wide])) .back { color: var(--ui-link); }
   /* <<< v6498-mobile-dark */
+  /* >>> v6504-unify */
+  /* ⭐v6.504 全站版面統一（站長選「以電腦版現有綠色系為基準」「手機拿掉 ← 首頁」「版本號只留首頁與頂端列」）：
+     ・手機頁首改成與網頁版同一種卡片（框線、圓角、內距；底色由上方 v6498 區塊給），「← 首頁」收起。
+     ・版本號標籤所有寬度都收起（版本號只在首頁與網頁版頂端列）。
+     ・不用 @media（本頁桌機 CSS 有逐字指紋守衛）。 */
+  :global(html:not([data-ui-wide])) .page-head { padding: 12px 14px; border: 1px solid var(--ui-border); border-radius: 14px; align-items: center; }
+  :global(html:not([data-ui-wide])) .page-head > .back { display: none; }
+  :global(html:not([data-ui-wide])) .page-head h1 { font-size: 1.3rem; }
+  :global(html) .version-tag { display: none; }
+  :global(html:not([data-ui-wide])) main { margin-top: calc(12px + var(--safe-top, 0px)); }   /* 頁首卡片頂端與其他頁一致（12px） */
+  /* <<< v6504-unify */
 </style>

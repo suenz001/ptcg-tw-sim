@@ -133,7 +133,8 @@ else if (chromium) {
         await ctx.close(); return r;
       };
       const MC = await mc('light'), MCD = await mc('dark');
-      ok('★★★[E6] 手機 390 淺色：/cards 底色與篩選區維持舊樣式（不吃主題）', MC.body === 'rgb(244, 244, 246)' && MC.radius === '0px' && MC.panel === 'rgba(0, 0, 0, 0)', JSON.stringify(MC));
+      // ⭐v6.504（Rule 40）：站長要求全站版面統一（以電腦版綠色系為基準、手機拿掉「← 首頁」）⇒ 手機淺色也吃 --ui-* 色票；版面（寬度、圓角、排列）不變。
+      ok('★★★[E6] 手機 390 淺色：/cards 底色與篩選區吃主題色票、版面不變（v6.504）', MC.body === 'rgb(243, 245, 244)' && MC.radius === '0px' && MC.panel === 'rgb(255, 255, 255)', JSON.stringify(MC));
       ok('★★[E6b] 手機 390 深色：/cards 版面維持（篩選區 0 圓角），顏色吃深色主題', MCD.body === 'rgb(22, 40, 22)' && MCD.radius === '0px' && MCD.panel === 'rgb(30, 53, 33)', JSON.stringify(MCD));
       const mk = async (scheme) => {
         ({ ctx, pg } = await open(390, 844, scheme, '/card/19378/', true));
@@ -141,7 +142,7 @@ else if (chromium) {
         await ctx.close(); return r;
       };
       const MK = await mk('light'), MKD = await mk('dark');
-      ok('★★[E7] 手機 390 淺色：單卡頁維持舊版面（flex、760 上限、無底色）', MK.disp === 'flex' && MK.page === '760px' && MK.box === 'rgba(0, 0, 0, 0)', JSON.stringify(MK));
+      ok('★★[E7] 手機 390 淺色：單卡頁版面不變（flex、760 上限），底色吃主題（v6.504）', MK.disp === 'flex' && MK.page === '760px' && MK.box === 'rgb(255, 255, 255)', JSON.stringify(MK));
       ok('★★[E7b] 手機 390 深色：單卡頁版面維持（flex、760 上限），顏色吃深色主題', MKD.disp === 'flex' && MKD.page === '760px' && MKD.box === 'rgb(30, 53, 33)', JSON.stringify(MKD));
       // 錦標賽大廳也有頂端列（active＝錦標賽）
       ({ ctx, pg } = await open(1440, 900, 'light', '/tournament'));

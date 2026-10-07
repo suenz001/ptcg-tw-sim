@@ -609,6 +609,8 @@ await T('G1 ⭐⭐ `/friends` 這條獨立路由與 DmPanel.svelte **逐位元�
       // v6.468 全站 audit：main 補無襯線字型（原本顯示成新細明體）、「← 首頁」可點範圍放大（版面不動）。difflib 產生、當場驗證逐位元前進到現況。
       ["  main {\n    max-width: 760px;\n", "  main {\n    /* ⭐v6.468：本頁原本沒有指定字型 ⇒ 顯示成瀏覽器預設的襯線體（Windows 繁中是新細明體），與其他頁不一致 */\n    font-family: system-ui, -apple-system, 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;\n    max-width: 760px;\n"],
       ["  }\n</style>\n", "  }\n\n  /* ⭐v6.468（全站 audit）：「← 首頁」只有 16～21px 高，手機上很難點。用 padding＋等量負 margin 放大可點範圍，\n     版面位置一點都不動（純文字連結、沒有底色或框線 ⇒ 桌機看起來也完全一樣）。\n     ⚠ 刻意不包 @media：本頁的 @media 數量有守衛在釘（手機／桌機不靠斷點切版），而這條在桌機也無害。 */\n  .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }\n</style>\n"],
+      // v6.504 全站版面統一（站長選定以電腦版綠色系為基準、拿掉頁面內的 ← 首頁、版本號只留首頁與頂端列）：頁首改成卡片、收起 ← 首頁與版本號（整段在 v6504-unify 哨兵）。
+      ["  .back:hover { text-decoration: underline; }\n", "  .back:hover { text-decoration: underline; }\n  /* >>> v6504-unify */\n  /* ⭐v6.504 全站版面統一（站長選「以電腦版現有綠色系為基準」「拿掉頁面內的 ← 首頁」「版本號只留首頁與頂端列」）：\n     頁首改成與卡牌資料庫／牌組編輯器同一種卡片（--ui-* 色票，深淺主題都跟著變），「← 首頁」與版本號收起（手機有底部導覽列、網頁版有頂端列）。 */\n  .page-head {\n    padding: 12px 16px;\n    background: var(--ui-hero-bg);\n    border: 1px solid var(--ui-border);\n    border-radius: 14px;\n    box-shadow: var(--ui-shadow);\n    align-items: center;\n  }\n  .page-head h1 { color: var(--ui-text); font-size: 1.3rem; }\n  .page-head > .back, .version-tag { display: none; }\n  :global(html:not([data-ui-wide])) main { padding-top: calc(12px + var(--safe-top, 0px)); }   /* 手機頁首卡片頂端與其他頁一致（12px） */\n  /* <<< v6504-unify */\n"],
     ],
   };
   for (const [p, rel] of [[P_FRPAGE, 'src/routes/friends/+page.svelte'], [P_DMPANEL, 'src/routes/friends/DmPanel.svelte']]) {

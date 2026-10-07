@@ -323,10 +323,15 @@ console.log('\n4) ★★★正對照：桌機 CSS 逐字未動');
   // ⭐v6.498（Rule 40，站長手機清單第 6 項）：手機深色主題的規則全部以
   //   :global(html[data-theme='dark']:not([data-ui-wide])) 開頭（不用 @media：本頁 @media 有守衛），網頁版永遠不成立
   //   ⇒ 先把這些規則拿掉再取指紋；拿掉之後仍必須逐字等於 v6.457 ⇒「桌機一個宣告都沒動」的逐字證明不變。內容由 test-v6498 鎖。
-  const V6498_RE = /:global\(html\[data-theme='dark'\]:not\(\[data-ui-wide\]\)\)[^{}]*\{[^}]*\}/g;
+  // ⭐v6.504（Rule 40，全站版面統一）：v6498 區塊的前綴放寬成 :global(html:not([data-ui-wide]))（手機不分深淺），
+  //   v6504-unify 的手機頁首也用同一個前綴 ⇒ 一起剝；網頁版仍永遠不成立。
+  //   唯一刻意的桌機改動：版本號標籤所有寬度都收起（站長選「版本號只留首頁與頂端列」）⇒ 逐字登記這一條、恰好一次，剝掉後指紋不變。
+  const V6498_RE = /:global\(html:not\(\[data-ui-wide\]\)\)[^{}]*\{[^}]*\}/g;
+  const V6504_DESK = ':global(html) .version-tag { display: none; }';
   const n6498 = (SP.withoutMedia.match(V6498_RE) || []).length;
-  ok('[前提] v6.498 手機深色規則抓得到（剝除器沒有失效）', n6498 > 20, String(n6498));
-  const bare = SP.withoutMedia.replace(V6498_RE, '').replace(/\s+/g, ' ').trim();
+  ok('[前提] v6.498／v6.504 手機規則抓得到（剝除器沒有失效）', n6498 > 20, String(n6498));
+  ok('[前提] v6.504 唯一刻意的桌機改動（版本號收起）恰好一條', SP.withoutMedia.split(V6504_DESK).length - 1 === 1);
+  const bare = SP.withoutMedia.replace(V6498_RE, '').split(V6504_DESK).join('').replace(/\s+/g, ' ').trim();
   ok('[前提] 非 @media 的桌機 CSS 抓得到且份量正常', bare.length > 15000, String(bare.length));
   // ⭐⭐⭐ 真正的逐字證明：把整段桌機 CSS 取指紋。
   //   ⚠ 這一條**只有在刻意要改桌機版面時**才准更新（更新時務必在 commit 訊息說明改了什麼）。

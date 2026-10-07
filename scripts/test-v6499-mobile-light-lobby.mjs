@@ -150,7 +150,8 @@ else if (chromium) {
       ok('★★[E4] 手機深色 /game 維持墨綠', D === GREEN, D);
       ({ ctx, pg } = await open('light', '/cards'));
       const Cd = { body: await bodyBg(pg), lobby: await pg.evaluate(() => document.documentElement.hasAttribute('data-ui-lobby')) }; await ctx.close();
-      ok('★★★[E5] 手機淺色 /cards 不受影響（不是大廳、底色不是 --ui-bg）', Cd.lobby === false && Cd.body !== LIGHT, JSON.stringify(Cd));
+      // ⭐v6.504（Rule 40）：全站版面統一後手機淺色 /cards 也是 --ui-bg ⇒ 本條只守「/cards 不是大廳（不掛 data-ui-lobby）」
+      ok('★★★[E5] 手機淺色 /cards 不是大廳（不掛 data-ui-lobby）', Cd.lobby === false, JSON.stringify(Cd));
       ok('[E9] 以上頁面沒有 JS 例外', errs.length === 0, errs.slice(0, 3).join(' | '));
     } finally { await browser.close(); srv.close(); }
   }

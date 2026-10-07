@@ -133,6 +133,21 @@
   .version-tag { font-size: .7rem; color: var(--fr-dim); font-weight: 400; }
   .back { font-size: .85rem; text-decoration: none; color: var(--fr-tab-fg); }
   .back:hover { text-decoration: underline; }
+  /* >>> v6504-unify */
+  /* ⭐v6.504 全站版面統一（站長選「以電腦版現有綠色系為基準」「拿掉頁面內的 ← 首頁」「版本號只留首頁與頂端列」）：
+     頁首改成與卡牌資料庫／牌組編輯器同一種卡片（--ui-* 色票，深淺主題都跟著變），「← 首頁」與版本號收起（手機有底部導覽列、網頁版有頂端列）。 */
+  .page-head {
+    padding: 12px 16px;
+    background: var(--ui-hero-bg);
+    border: 1px solid var(--ui-border);
+    border-radius: 14px;
+    box-shadow: var(--ui-shadow);
+    align-items: center;
+  }
+  .page-head h1 { color: var(--ui-text); font-size: 1.3rem; }
+  .page-head > .back, .version-tag { display: none; }
+  :global(html:not([data-ui-wide])) main { padding-top: calc(12px + var(--safe-top, 0px)); }   /* 手機頁首卡片頂端與其他頁一致（12px） */
+  /* <<< v6504-unify */
 
   /* ⭐⭐ 假分頁列：外觀比照 game/+page.svelte 的 .tourn-tabs／.tourn-tab（逐條對齊，含 active 的
      inset 光暈），只是把 <button> 換成 <a>。⚠ white-space:nowrap ＋ .fr-tabs 的預設 flex nowrap

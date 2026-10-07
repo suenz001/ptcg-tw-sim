@@ -96,16 +96,17 @@ else if (chromium) {
         await ctx.close(); return r;
       };
       const M = await md('light'), MD = await md('dark');
-      ok('★★★[E3] 手機 390 淺色：/decks 維持舊樣式（白面板、8px 圓角、「← 首頁」在）', M.body === 'rgb(244, 244, 246)' && M.rail === 'rgb(255, 255, 255)' && M.radius === '8px' && M.back !== 'none', JSON.stringify(M));
-      ok('★★[E3b] 手機 390 深色：/decks 版面維持（8px 圓角、「← 首頁」在），顏色吃深色主題', MD.body === 'rgb(22, 40, 22)' && MD.rail === 'rgb(30, 53, 33)' && MD.radius === '8px' && MD.back !== 'none', JSON.stringify(MD));
+      // ⭐v6.504（Rule 40）：站長要求全站版面統一（以電腦版綠色系為基準、手機拿掉「← 首頁」）⇒ 手機淺色也吃 --ui-* 色票；版面（寬度、圓角、排列）不變。
+      ok('★★★[E3] 手機 390 淺色：/decks 白面板、8px 圓角不變；底色吃主題、「← 首頁」收起（v6.504）', M.body === 'rgb(243, 245, 244)' && M.rail === 'rgb(255, 255, 255)' && M.radius === '8px' && M.back === 'none', JSON.stringify(M));
+      ok('★★[E3b] 手機 390 深色：/decks 8px 圓角不變、顏色吃深色主題、「← 首頁」收起（v6.504）', MD.body === 'rgb(22, 40, 22)' && MD.rail === 'rgb(30, 53, 33)' && MD.radius === '8px' && MD.back === 'none', JSON.stringify(MD));
       const mp = async (scheme) => {
         ({ ctx, pg } = await open(390, 844, scheme, '/deck-posts', true));
         const r = { body: await css(pg, 'body', 'backgroundColor'), back: await css(pg, '.page-head > .back', 'display'), head: await css(pg, '.page-head', 'borderTopLeftRadius') };
         await ctx.close(); return r;
       };
       const MP = await mp('light'), MPD = await mp('dark');
-      ok('★★[E4] 手機 390 淺色：/deck-posts 維持舊樣式', MP.body === 'rgb(244, 244, 246)' && MP.back !== 'none' && MP.head === '0px', JSON.stringify(MP));
-      ok('★★[E4b] 手機 390 深色：/deck-posts 版面維持，底色吃深色主題', MPD.body === 'rgb(22, 40, 22)' && MPD.back !== 'none' && MPD.head === '0px', JSON.stringify(MPD));
+      ok('★★[E4] 手機 390 淺色：/deck-posts 底色吃主題、頁首是卡片、「← 首頁」收起（v6.504）', MP.body === 'rgb(243, 245, 244)' && MP.back === 'none' && MP.head !== '0px', JSON.stringify(MP));
+      ok('★★[E4b] 手機 390 深色：/deck-posts 底色吃深色主題、頁首是卡片、「← 首頁」收起（v6.504）', MPD.body === 'rgb(22, 40, 22)' && MPD.back === 'none' && MPD.head !== '0px', JSON.stringify(MPD));
       ok('[E9] 以上頁面沒有 JS 例外', errs.length === 0, errs.slice(0, 3).join(' | '));
     } finally { await browser.close(); srv.close(); }
   }

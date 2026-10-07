@@ -292,6 +292,8 @@
      條件與各頁的手機深色區塊相同（data-theme='dark' 且不是網頁版 data-ui-wide）⇒ 手機淺色與網頁版都不變；牌桌畫面不套。 */
   :global(html[data-ui-themed][data-theme='dark']:not([data-ui-wide]):not([data-battle-view]) body) { background: var(--ui-bg); color: var(--ui-text); }
   :global(html[data-ui-themed][data-theme='dark']:not([data-ui-wide]):not([data-battle-view])) { color-scheme: dark; }
+  /* ⭐v6.504 全站版面統一：手機淺色也改用同一套 --ui-bg 底色（原本各頁各自是白色／灰色），與網頁版淺色一致 */
+  :global(html[data-ui-themed][data-theme='light']:not([data-ui-wide]):not([data-battle-view]) body) { background: var(--ui-bg); color: var(--ui-text); }
   /* <<< v6498-mobile-dark-base */
 
   /* v5.034：BETA 標記 banner — 黃色細條，github.io 才顯示，不可 dismiss */

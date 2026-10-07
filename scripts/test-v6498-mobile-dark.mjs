@@ -13,7 +13,8 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 let pass = 0, fail = 0;
 const T = (n, f) => { try { f(); pass++; console.log('PASS ' + n); } catch (e) { fail++; console.log('FAIL ' + n + ' :: ' + (e && e.message)); } };
 const rd = (p) => { try { return readFileSync(join(ROOT, p), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
-const PREFIX = ":global(html[data-theme='dark']:not([data-ui-wide]))";
+// ⭐v6.504（Rule 40）：站長要求全站版面統一 ⇒ 本區塊的條件放寬成手機不分深淺（手機淺色也讀同一套 --ui-* 色票）；仍只有顏色宣告、網頁版永遠不成立
+const PREFIX = ":global(html:not([data-ui-wide]))";
 const COLOR_PROPS = new Set(['color', 'background', 'background-color', 'background-image', 'border-color', 'border-top-color', 'border-bottom-color',
   'border-left-color', 'border-right-color', 'box-shadow', 'outline-color', 'fill', 'stroke', 'caret-color', 'text-decoration-color', 'color-scheme', 'accent-color']);
 
@@ -34,7 +35,7 @@ for (const [file, minRules, keys] of PAGES) {
   const css = (blocks[0] || '').replace(/\/\*[\s\S]*?\*\//g, '');
   const rules = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
   T(`A ${file}：規則數 ≥ ${minRules}（剝出來的不是空殼）`, () => assert.ok(rules.length >= minRules, String(rules.length)));
-  T(`A ${file}：每個選擇器都以手機深色條件開頭（手機淺色、網頁版都不成立）`, () => {
+  T(`A ${file}：每個選擇器都以手機條件開頭（網頁版不成立；v6.504 起手機不分深淺）`, () => {
     const bad = [];
     for (const r of rules) for (const part of r.sel.split(/,(?![^(]*\))/)) if (!part.trim().startsWith(PREFIX)) bad.push(part.trim().slice(0, 60));
     assert.deepEqual(bad, []);

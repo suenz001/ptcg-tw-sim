@@ -1820,86 +1820,104 @@
      ⚠ 刻意不包 @media：本頁的 @media 數量有守衛在釘（手機／桌機不靠斷點切版），而這條在桌機也無害。 */
   .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
   /* >>> v6498-mobile-dark */
+  /* ⭐v6.504 全站版面統一（站長選「以電腦版現有綠色系為基準」）：本區塊的條件從「手機＋深色」放寬成「手機（不分深淺）」，
+     前綴 :global(html:not([data-ui-wide])) ⇒ 手機淺色也改讀同一套 --ui-* 色票，與網頁版淺色一致。下方 v6.498 的原說明保留作歷史紀錄。 */
   /* ⭐v6.498 手機／平板深色主題（站長手機清單第 6 項：深色主題原本只有網頁版 ≥1024px）。
      ・條件：<html data-theme='dark'> 且不是網頁版（沒有 data-ui-wide）⇒ 手機淺色（預設）一個像素都不變，網頁版也不變。
      ・內容：本頁網頁版主題區塊（min-width:1024px）裡「只跟顏色有關」的宣告，原樣換成上面的條件（線寬、版面、尺寸一律不帶）；
        框線簡寫只取顏色（border-color），不會替手機版多出原本沒有的框。顏色讀 layout 的 --ui-* 深色色票。
      ・不用 @media（本頁的 @media 數量／桌機 CSS 指紋有守衛在釘）。 */
-  :global(html[data-theme='dark']:not([data-ui-wide])) header,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .markSection,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .controls,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .grid,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .moreSentinel { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) header { background: var(--ui-hero-bg); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .back { color: var(--ui-link); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .back:hover { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) h1 { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .setTitleName,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .meta,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .hint { color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .markHeader { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .setTile { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .setTile:hover { border-color: var(--ui-accent); box-shadow: var(--ui-shadow-hover); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .setTile img { background: var(--ui-bg-sunken); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .setCode,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .setCount,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .setDate { color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .setTileAll { background: linear-gradient(var(--ui-bg-elev), var(--ui-bg-elev)) padding-box,
+  :global(html:not([data-ui-wide])) header,
+  :global(html:not([data-ui-wide])) .markSection,
+  :global(html:not([data-ui-wide])) .controls,
+  :global(html:not([data-ui-wide])) .grid,
+  :global(html:not([data-ui-wide])) .moreSentinel { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) header { background: var(--ui-hero-bg); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+  :global(html:not([data-ui-wide])) .back { color: var(--ui-link); }
+  :global(html:not([data-ui-wide])) .back:hover { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) h1 { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .setTitleName,
+  :global(html:not([data-ui-wide])) .meta,
+  :global(html:not([data-ui-wide])) .hint { color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .markHeader { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .setTile { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .setTile:hover { border-color: var(--ui-accent); box-shadow: var(--ui-shadow-hover); }
+  :global(html:not([data-ui-wide])) .setTile img { background: var(--ui-bg-sunken); }
+  :global(html:not([data-ui-wide])) .setCode,
+  :global(html:not([data-ui-wide])) .setCount,
+  :global(html:not([data-ui-wide])) .setDate { color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .setTileAll { background: linear-gradient(var(--ui-bg-elev), var(--ui-bg-elev)) padding-box,
         linear-gradient(135deg, #3b82f6, #8b5cf6, #f59e0b) border-box; border-color: transparent; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .setTileAll .setCode { color: #8b5cf6; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .controls { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) input[type='search'],
-  :global(html[data-theme='dark']:not([data-ui-wide])) .modeSelect { background: var(--ui-input-bg); color: var(--ui-text); border-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .modeSelect.keyword { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .modeSelect:hover:not(.keyword) { background: var(--ui-bg-sunken); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .filter { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .filter:hover:not(.active) { border-color: var(--ui-accent); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .filter.active { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .filter-tag,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .filter-type { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .filter-tag.active { background: #6366f1; border-color: #6366f1; color: #fff; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .filter-type.active { background: var(--type-bg, #6366f1); border-color: var(--type-bg, #6366f1); color: #fff; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .filter-stage { border-color: #8a77aa; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .filter-stage.active { background: #6c5a8a; border-color: #6c5a8a; color: #fff; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .filter-mark { border-color: #6f8f9f; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .filter-mark.active { background: #5a7a8a; border-color: #5a7a8a; color: #fff; }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .tagLabel { color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .cardBtn { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .cardBtn:hover { border-color: var(--ui-accent); box-shadow: var(--ui-shadow-hover); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .cardBtn img { background: var(--ui-bg-sunken); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .cardLabel .num { color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .cardLabel .name { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .setPrefix { background: var(--ui-accent-soft); color: var(--ui-link); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .moreSentinel { color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .modalInner { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .close { background: var(--ui-bg-sunken); color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .close:hover { background: var(--ui-accent-soft); color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .modal-nav { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .modal-nav:hover { background: rgba(61, 187, 122, 0.22); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .modal-variant-counter { color: var(--ui-link); background: var(--ui-accent-soft); border-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .detailInfo h2,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .detailInfo h3 { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .tag,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .evo,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .stats strong,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .foot,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .footSet { color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .rules { color: var(--ui-text); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-evo-chain { background: var(--ui-accent-soft); border-left-color: var(--ui-accent); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .pv-evo-chain-label { color: var(--ui-link); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .evo-arrow,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .evo-or { color: var(--ui-text-muted); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .evo-card-link { background: var(--ui-bg-elev); color: var(--ui-link); border-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .evo-card-link:hover { background: var(--ui-accent-soft); border-color: var(--ui-accent); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .evo-card-link.current { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .tagChip { background: var(--ui-accent-soft); color: var(--ui-link); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .skill { background: var(--ui-bg-sunken); border-left-color: var(--ui-accent); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .stats,
-  :global(html[data-theme='dark']:not([data-ui-wide])) .foot { border-top-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .cardPageLink { color: var(--ui-link); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .copyLinkBtn { background: var(--ui-bg-sunken); color: var(--ui-text); border-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .setTileAll .setCode { color: #8b5cf6; }
+  :global(html:not([data-ui-wide])) .controls { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+  :global(html:not([data-ui-wide])) input[type='search'],
+  :global(html:not([data-ui-wide])) .modeSelect { background: var(--ui-input-bg); color: var(--ui-text); border-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .modeSelect.keyword { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+  :global(html:not([data-ui-wide])) .modeSelect:hover:not(.keyword) { background: var(--ui-bg-sunken); }
+  :global(html:not([data-ui-wide])) .filter { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .filter:hover:not(.active) { border-color: var(--ui-accent); }
+  :global(html:not([data-ui-wide])) .filter.active { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+  :global(html:not([data-ui-wide])) .filter-tag,
+  :global(html:not([data-ui-wide])) .filter-type { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .filter-tag.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+  :global(html:not([data-ui-wide])) .filter-type.active { background: var(--type-bg, #6366f1); border-color: var(--type-bg, #6366f1); color: #fff; }
+  :global(html:not([data-ui-wide])) .filter-stage { border-color: #8a77aa; }
+  :global(html:not([data-ui-wide])) .filter-stage.active { background: #6c5a8a; border-color: #6c5a8a; color: #fff; }
+  :global(html:not([data-ui-wide])) .filter-mark { border-color: #6f8f9f; }
+  :global(html:not([data-ui-wide])) .filter-mark.active { background: #5a7a8a; border-color: #5a7a8a; color: #fff; }
+  :global(html:not([data-ui-wide])) .tagLabel { color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .cardBtn { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
+  :global(html:not([data-ui-wide])) .cardBtn:hover { border-color: var(--ui-accent); box-shadow: var(--ui-shadow-hover); }
+  :global(html:not([data-ui-wide])) .cardBtn img { background: var(--ui-bg-sunken); }
+  :global(html:not([data-ui-wide])) .cardLabel .num { color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .cardLabel .name { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .setPrefix { background: var(--ui-accent-soft); color: var(--ui-link); }
+  :global(html:not([data-ui-wide])) .moreSentinel { color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .modalInner { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .close { background: var(--ui-bg-sunken); color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .close:hover { background: var(--ui-accent-soft); color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .modal-nav { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .modal-nav:hover { background: rgba(61, 187, 122, 0.22); }
+  :global(html:not([data-ui-wide])) .modal-variant-counter { color: var(--ui-link); background: var(--ui-accent-soft); border-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .detailInfo h2,
+  :global(html:not([data-ui-wide])) .detailInfo h3 { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .tag,
+  :global(html:not([data-ui-wide])) .evo,
+  :global(html:not([data-ui-wide])) .stats strong,
+  :global(html:not([data-ui-wide])) .foot,
+  :global(html:not([data-ui-wide])) .footSet { color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .rules { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .pv-evo-chain { background: var(--ui-accent-soft); border-left-color: var(--ui-accent); }
+  :global(html:not([data-ui-wide])) .pv-evo-chain-label { color: var(--ui-link); }
+  :global(html:not([data-ui-wide])) .evo-arrow,
+  :global(html:not([data-ui-wide])) .evo-or { color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .evo-card-link { background: var(--ui-bg-elev); color: var(--ui-link); border-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .evo-card-link:hover { background: var(--ui-accent-soft); border-color: var(--ui-accent); }
+  :global(html:not([data-ui-wide])) .evo-card-link.current { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
+  :global(html:not([data-ui-wide])) .tagChip { background: var(--ui-accent-soft); color: var(--ui-link); }
+  :global(html:not([data-ui-wide])) .skill { background: var(--ui-bg-sunken); border-left-color: var(--ui-accent); }
+  :global(html:not([data-ui-wide])) .stats,
+  :global(html:not([data-ui-wide])) .foot { border-top-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .cardPageLink { color: var(--ui-link); }
+  :global(html:not([data-ui-wide])) .copyLinkBtn { background: var(--ui-bg-sunken); color: var(--ui-text); border-color: var(--ui-border); }
   /* 手機專用元件（網頁版沒有，所以上面抽不到）：篩選收合鈕 */
-  :global(html[data-theme='dark']:not([data-ui-wide])) .filterToggle { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
-  :global(html[data-theme='dark']:not([data-ui-wide])) .filterToggle.hasActive { background: var(--ui-accent-soft); color: var(--ui-link); border-color: var(--ui-accent); }
+  :global(html:not([data-ui-wide])) .filterToggle { background: var(--ui-bg-elev); color: var(--ui-text); border-color: var(--ui-border); }
+  :global(html:not([data-ui-wide])) .filterToggle.hasActive { background: var(--ui-accent-soft); color: var(--ui-link); border-color: var(--ui-accent); }
   /* <<< v6498-mobile-dark */
+  /* >>> v6504-unify */
+  /* ⭐v6.504 全站版面統一（站長：「每個功能都是在不同次更新做的…看能不能把每個功能的排版、色調都弄得一致」；
+     選定「以電腦版現有綠色系為基準」「手機拿掉 ← 首頁」）。手機（沒有 data-ui-wide）專用：
+     ・頁首改成與網頁版同一種卡片（漸層底、框線、圓角、陰影），字級縮小；「← 首頁」收起（底部導覽列已有）。
+     ・「← 卡包列表」保留（回上一層，不是回首頁）。不用 @media（本頁 @media 數量有守衛）。 */
+  :global(html:not([data-ui-wide])) header {
+    margin: calc(12px + var(--safe-top, 0px)) 12px 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--ui-border);
+    border-radius: 14px;
+    box-shadow: var(--ui-shadow);
+    box-sizing: border-box;
+  }
+  :global(html:not([data-ui-wide])) .back[href$="/"] { display: none; }
+  :global(html:not([data-ui-wide])) h1 { font-size: 1.3rem; margin: 0.1rem 0 0.25rem; }
+  /* <<< v6504-unify */
 </style>

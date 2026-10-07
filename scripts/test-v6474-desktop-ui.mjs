@@ -261,7 +261,8 @@ else if (chromium) {
       //   手機深色改成吃主題色 ⇒ 原本「手機深色也維持舊樣式」的判準拆成兩條：淺色＝顏色與版面全部維持舊樣式；深色＝版面維持、顏色吃主題。
       ({ ctx, pg } = await open(390, 844, 'light', '/', true));
       const Mo = await probe(pg); await ctx.close();
-      ok('★★★[E7] 手機 390 淺色：頂端列 display:none、main 是 block 680 上限、logo 不顯示、底色維持 #f4f4f6', Mo.stb?.disp === 'none' && Mo.mainDisp === 'block' && Mo.maxW === '680px' && Mo.logo === 'none' && Mo.body === 'rgb(244, 244, 246)', JSON.stringify(Mo));
+      // ⭐v6.504（Rule 40）：站長要求全站版面統一（以電腦版綠色系為基準、手機拿掉「← 首頁」）⇒ 手機淺色也吃 --ui-* 色票；版面（寬度、圓角、排列）不變。
+      ok('★★★[E7] 手機 390 淺色：頂端列 display:none、main 是 block 680 上限、logo 不顯示、底色是 --ui-bg（v6.504 起與網頁版一致）', Mo.stb?.disp === 'none' && Mo.mainDisp === 'block' && Mo.maxW === '680px' && Mo.logo === 'none' && Mo.body === 'rgb(243, 245, 244)', JSON.stringify(Mo));
       ({ ctx, pg } = await open(390, 844, 'dark', '/', true));
       const MoD = await probe(pg); await ctx.close();
       ok('★★[E7b] 手機 390 深色：版面同上（頂端列不顯示、680 單欄），底色改吃深色主題', MoD.stb?.disp === 'none' && MoD.mainDisp === 'block' && MoD.maxW === '680px' && MoD.logo === 'none' && MoD.body === 'rgb(22, 40, 22)', JSON.stringify(MoD));

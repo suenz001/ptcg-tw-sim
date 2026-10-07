@@ -156,6 +156,8 @@ let stripped = revertPairs(SRC.replace(/\r\n/g, '\n'), V6464_CARDS_PAIRS).replac
     ['    {/if}<!-- v6497-mobile-filter-toggle -->\n', ''],
     // ⭐v6.498（Rule 40）：手機深色主題整塊在 v6498-mobile-dark 哨兵（樣式表尾端、不在 @media 內；網頁版永遠不成立）
     [/  \/\* >>> v6498-mobile-dark \*\/\n[\s\S]*?  \/\* <<< v6498-mobile-dark \*\/\n/, ''],
+    // ⭐v6.504（Rule 40）：全站版面統一的手機頁首（樣式表尾端、不在 @media 內、前綴 html:not([data-ui-wide]) ⇒ 網頁版永遠不成立）；內容由 test-v6504 鎖
+    [/  \/\* >>> v6504-unify \*\/\n[\s\S]*?  \/\* <<< v6504-unify \*\/\n/, ''],
   ];
   for (const [a, b] of V6497) {
     const n = typeof a === 'string' ? stripped.split(a).length - 1 : (stripped.match(new RegExp(a.source, 'g')) || []).length;
