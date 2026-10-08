@@ -247,6 +247,10 @@
     --ui-input-bg: #f4f6f5;
     --ui-chip-active-bg: #1d7a4a;
     --ui-chip-active-text: #ffffff;
+    /* ⭐v6.512 傷害數字（紅）、警示（金）：兩個主題各自挑到對三種底都 ≥ 4.5 */
+    --ui-danger: #a32315;
+    --ui-warn: #6e4d00;
+    --ui-violet: #6d28d9;   /* ⭐v6.512「全部卡牌」的紫色字 */
   }
   :global(html[data-theme='dark']) {
     /* ⭐v6.478 深色主題全站統一成對戰大廳／牌桌的墨綠 #162816（原本首頁等頁是 #0f1f17，切頁看得出色差；Fable 5.1 建議） */
@@ -255,11 +259,11 @@
     --ui-bg-sunken: #1e321f;
     --ui-border: #4a6f52;
     --ui-text: #eaf2ec;
-    --ui-text-muted: #b8cdba;
+    --ui-text-muted: #c4d8c6;
     --ui-accent: #3dbb7a;
     --ui-accent-contrast: #06261a;
-    --ui-accent-soft: rgba(61, 187, 122, 0.2);
-    --ui-link: #80e0ad;
+    --ui-accent-soft: rgba(61, 187, 122, 0.14);   /* ⭐v6.512 0.2→0.14：疊在卡片上時連結字對比從 4.5 拉到 5.5 */
+    --ui-link: #8eebbd;
     --ui-cta-bg: linear-gradient(135deg, #2f6044 0%, #285139 100%);
     --ui-cta-text: #f0f7f2;
     --ui-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.35);
@@ -277,6 +281,9 @@
     --ui-input-bg: #1e321f;
     --ui-chip-active-bg: #3dbb7a;
     --ui-chip-active-text: #06261a;
+    --ui-danger: #ff9c8a;
+    --ui-warn: #ffd35a;
+    --ui-violet: #c4b5fd;
   }
 
   /* ⭐v6.474：已接上主題的頁面（<html data-ui-themed>，由上方 $effect 依 THEMED_ROUTES 切換），網頁版整頁底色跟著主題。

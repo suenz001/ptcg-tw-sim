@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
+import { uiColor } from './lib/ui-palette.mjs';   // ⭐v6.511 色票唯一讀取點（不寫死色碼）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.475。
@@ -87,11 +88,12 @@ const lum = (rgb) => { const m = String(rgb).match(/\d+/g); if (!m) return -1; c
       let { ctx, pg } = await open(1440, 900, 'dark', '/decks');
       const D = { body: await css(pg, 'body', 'backgroundColor'), rail: await css(pg, '.rail', 'backgroundColor'), picker: await css(pg, '.picker', 'backgroundColor'), h1: await css(pg, '.page-head h1', 'color'), back: await homeLinkInHead(pg), chip: await css(pg, '.pk-chip:not(.active)', 'color') };
       await ctx.close();
-      ok('★★★[E1] /decks 深色：底色、三欄面板深色，標題與篩選文字淺色，「← 首頁」收起', lum(D.body) < 40 && lum(D.rail) < 50 && lum(D.picker) < 50 && lum(D.h1) > 200 && lum(D.chip) > 200 && D.back === 'none', JSON.stringify(D));
+      // ⭐v6.511／v6.512（Rule 40）：色票調亮／調暗一階後，亮度門檻放寬到仍可區分深淺、精確值改讀現行色票（意圖不變）
+      ok('★★★[E1] /decks 深色：底色、三欄面板深色，標題與篩選文字淺色，「← 首頁」收起', lum(D.body) < 60 && lum(D.rail) < 80 && lum(D.picker) < 80 && lum(D.h1) > 200 && lum(D.chip) > 200 && D.back === 'none', JSON.stringify(D));
       ({ ctx, pg } = await open(1440, 900, 'light', '/deck-posts'));
       const P = { body: await css(pg, 'body', 'backgroundColor'), head: await css(pg, '.page-head', 'borderTopLeftRadius'), back: await homeLinkInHead(pg) };
       await ctx.close();
-      ok('★★[E2] /deck-posts 淺色：主題底色、頁首卡片、「← 首頁」收起', lum(P.body) > 230 && P.head === '16px' && P.back === 'none', JSON.stringify(P));
+      ok('★★[E2] /deck-posts 淺色：主題底色、頁首卡片、「← 首頁」收起', lum(P.body) > 215 && P.head === '16px' && P.back === 'none', JSON.stringify(P));
       // ⭐v6.498（Rule 40，站長手機清單第 6 項「深色主題目前只有電腦版：手機沒有切換鈕、系統深色時仍是淺色」）：
       //   手機深色改成吃主題色 ⇒ 原本「手機深色也維持舊樣式」的判準拆成兩條：淺色＝顏色與版面全部維持舊樣式；深色＝版面維持、顏色吃主題。
       const md = async (scheme) => {
@@ -101,16 +103,16 @@ const lum = (rgb) => { const m = String(rgb).match(/\d+/g); if (!m) return -1; c
       };
       const M = await md('light'), MD = await md('dark');
       // ⭐v6.504（Rule 40）：站長要求全站版面統一（以電腦版綠色系為基準、手機拿掉「← 首頁」）⇒ 手機淺色也吃 --ui-* 色票；版面（寬度、圓角、排列）不變。
-      ok('★★★[E3] 手機 390 淺色：/decks 白面板、8px 圓角不變；底色吃主題、「← 首頁」收起（v6.504）', M.body === 'rgb(243, 245, 244)' && M.rail === 'rgb(255, 255, 255)' && M.radius === '8px' && M.back === 'none', JSON.stringify(M));
-      ok('★★[E3b] 手機 390 深色：/decks 8px 圓角不變、顏色吃深色主題、「← 首頁」收起（v6.504）', MD.body === 'rgb(22, 40, 22)' && MD.rail === 'rgb(30, 53, 33)' && MD.radius === '8px' && MD.back === 'none', JSON.stringify(MD));
+      ok('★★★[E3] 手機 390 淺色：/decks 白面板、8px 圓角不變；底色吃主題、「← 首頁」收起（v6.504）', M.body === uiColor(ROOT, 'light', '--ui-bg') && M.rail === uiColor(ROOT, 'light', '--ui-bg-elev') && M.radius === '8px' && M.back === 'none', JSON.stringify(M));
+      ok('★★[E3b] 手機 390 深色：/decks 8px 圓角不變、顏色吃深色主題、「← 首頁」收起（v6.504）', MD.body === uiColor(ROOT, 'dark', '--ui-bg') && MD.rail === uiColor(ROOT, 'dark', '--ui-bg-elev') && MD.radius === '8px' && MD.back === 'none', JSON.stringify(MD));
       const mp = async (scheme) => {
         ({ ctx, pg } = await open(390, 844, scheme, '/deck-posts', true));
         const r = { body: await css(pg, 'body', 'backgroundColor'), back: await homeLinkInHead(pg), head: await css(pg, '.page-head', 'borderTopLeftRadius') };
         await ctx.close(); return r;
       };
       const MP = await mp('light'), MPD = await mp('dark');
-      ok('★★[E4] 手機 390 淺色：/deck-posts 底色吃主題、頁首是卡片、「← 首頁」收起（v6.504）', MP.body === 'rgb(243, 245, 244)' && MP.back === 'none' && MP.head !== '0px', JSON.stringify(MP));
-      ok('★★[E4b] 手機 390 深色：/deck-posts 底色吃深色主題、頁首是卡片、「← 首頁」收起（v6.504）', MPD.body === 'rgb(22, 40, 22)' && MPD.back === 'none' && MPD.head !== '0px', JSON.stringify(MPD));
+      ok('★★[E4] 手機 390 淺色：/deck-posts 底色吃主題、頁首是卡片、「← 首頁」收起（v6.504）', MP.body === uiColor(ROOT, 'light', '--ui-bg') && MP.back === 'none' && MP.head !== '0px', JSON.stringify(MP));
+      ok('★★[E4b] 手機 390 深色：/deck-posts 底色吃深色主題、頁首是卡片、「← 首頁」收起（v6.504）', MPD.body === uiColor(ROOT, 'dark', '--ui-bg') && MPD.back === 'none' && MPD.head !== '0px', JSON.stringify(MPD));
       ok('[E9] 以上頁面沒有 JS 例外', errs.length === 0, errs.slice(0, 3).join(' | '));
     } finally { await browser.close(); srv.close(); }
   }

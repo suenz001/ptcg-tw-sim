@@ -177,7 +177,7 @@
     .sec p, .block p { color: var(--ui-text); }
     .block { background: var(--ui-bg-sunken); border-radius: 10px; padding: 12px 16px; }
     .cost { background: var(--ui-accent-soft); color: var(--ui-link); }
-    .dmg { color: #e0533f; }
+    .dmg { color: var(--ui-danger); }   /* ⭐v6.512 原 #e0533f 在淺色底只有 2.7 */
     .foot { color: var(--ui-text-muted); }
     .foot a { color: var(--ui-link); }
   }
@@ -206,7 +206,7 @@
   :global(html:not([data-ui-wide])) .block p { color: var(--ui-text); }
   :global(html:not([data-ui-wide])) .block { background: var(--ui-bg-sunken); }
   :global(html:not([data-ui-wide])) .cost { background: var(--ui-accent-soft); color: var(--ui-link); }
-  :global(html:not([data-ui-wide])) .dmg { color: #e0533f; }
+  :global(html:not([data-ui-wide])) .dmg { color: var(--ui-danger); }
   :global(html:not([data-ui-wide])) .foot { color: var(--ui-text-muted); }
   :global(html:not([data-ui-wide])) .foot a { color: var(--ui-link); }
   /* <<< v6498-mobile-dark */

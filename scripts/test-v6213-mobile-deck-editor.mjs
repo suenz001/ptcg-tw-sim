@@ -345,7 +345,19 @@ console.log('\n4) ★★★正對照：桌機 CSS 逐字未動');
   // ⭐v6.511（Rule 40，淺色主題降一階、站長看過預覽圖同意）：預組淡橙底 #fff5e6 → #f1e6d3 ⇒ 逐字登記這一處、恰好一次，還原後指紋不變。
   const V6511_NEW = '.preset-list li { background: #f1e6d3; }', V6511_OLD = '.preset-list li { background: #fff5e6; }';
   ok('[前提] v6.511 登記的預組底色在桌機 CSS 裡恰好出現一次', SP.withoutMedia.split(V6511_NEW).length - 1 === 1);
-  const bare = SP.withoutMedia.split(V6511_NEW).join(V6511_OLD).split(V6510_RULE).join('').replace(V6498_RE, '').replace(V6504_DESK_RE, '').replace(/\s+/g, ' ').trim();
+  // ⭐v6.512（Rule 40，站長：「請你研究好配色」全站文字對比）：桌機 CSS 的刻意改動逐字登記（新 → 舊），還原後指紋不變。內容由 test-v6512 鎖。
+  const V6512_PAIRS = [
+    ['.mark-H { background: #2563eb; }', '.mark-H { background: #3b82f6; }'],
+    ['.mark-I { background: #7c3aed; }', '.mark-I { background: #8b5cf6; }'],
+    ['.mark-J { background: #f59e0b; color: #1a1a1a; }', '.mark-J { background: #f59e0b; }'],
+    ['.preset-badge { background:#d9aa4a; color:#2b1d00;', '.preset-badge { background:#d9aa4a; color:#fff;'],
+    ['color: var(--type-fg, #fff);', 'color: #fff;'],
+    ['#4f46e5', '#6366f1'],
+  ];
+  let _w6512 = SP.withoutMedia;
+  for (const [n, o] of V6512_PAIRS) { ok('[前提] v6.512 登記的桌機改動出現在桌機 CSS：' + n.slice(0, 30), _w6512.includes(n)); _w6512 = _w6512.split(n).join(o); }
+  ok('[前提] v6.512 還原後不再含新值', !V6512_PAIRS.some(([n]) => _w6512.includes(n)));
+  const bare = _w6512.split(V6511_NEW).join(V6511_OLD).split(V6510_RULE).join('').replace(V6498_RE, '').replace(V6504_DESK_RE, '').replace(/\s+/g, ' ').trim();
   ok('[前提] 非 @media 的桌機 CSS 抓得到且份量正常', bare.length > 15000, String(bare.length));
   // ⭐⭐⭐ 真正的逐字證明：把整段桌機 CSS 取指紋。
   //   ⚠ 這一條**只有在刻意要改桌機版面時**才准更新（更新時務必在 commit 訊息說明改了什麼）。

@@ -7,7 +7,7 @@
   import { cardThumb } from '$lib/cards/thumb'; // v6.464 小尺寸顯示改用縮圖（失敗由 retryImg 立刻退回官方原圖）
   import type { Card, SetSummary, EnergyType } from '$lib/cards/types';
   import { getEvolutionChainNames, getEvolutionChainGrouped } from '$lib/cards/evolutionChain';
-  import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
+  import { ENERGY_LABEL, ENERGY_COLOR, ENERGY_TEXT_COLOR } from '$lib/cards/energy';   // ⭐v6.512 屬性色塊上的字色
   // v6.045 卡包排序（越新越靠左上、特典卡墊底）抽成模組才測得到，見 set-order.ts
   import { orderSetsForPicker } from '$lib/cards/set-order';
   import { cardRegMarkFilterKey, regMarkFilterKeys, regMarkFilterLabel, getCardPolicy, isCardMarkStandardLegal } from '$lib/cards/regulation';
@@ -640,8 +640,9 @@
           onclick={() => toggleType(etype)}
           title="{ENERGY_LABEL[etype]}屬性 — 點一次選取、點兩次取消"
           style:--type-bg={ENERGY_COLOR[etype]}
+          style:--type-fg={ENERGY_TEXT_COLOR[etype]}
         >
-          <span class="typeChip" style:background={ENERGY_COLOR[etype]}>{ENERGY_LABEL[etype]}</span>
+          <span class="typeChip" style:background={ENERGY_COLOR[etype]} style:color={ENERGY_TEXT_COLOR[etype]}>{ENERGY_LABEL[etype]}</span>
         </button>
       {/each}
     </div>
@@ -732,7 +733,7 @@
               {/if}
               {#if selected.hp}· HP {selected.hp}{/if}
               {#if selected.pokemonType}
-                · <span class="energy" style:background={ENERGY_COLOR[selected.pokemonType]}>
+                · <span class="energy" style:background={ENERGY_COLOR[selected.pokemonType]} style:color={ENERGY_TEXT_COLOR[selected.pokemonType]}>
                   {ENERGY_LABEL[selected.pokemonType]}
                 </span>
               {/if}
@@ -794,7 +795,7 @@
                       <span class="cost">
                         {#each atk.cost as e}<span
                             class="energyDot"
-                            style:background={ENERGY_COLOR[e]}
+                            style:background={ENERGY_COLOR[e]} style:color={ENERGY_TEXT_COLOR[e]}
                             title={ENERGY_LABEL[e]}>{ENERGY_LABEL[e]}</span>{/each}
                       </span>
                       <span class="skillName">{atk.name}</span>
@@ -818,7 +819,7 @@
                 {#if selected.weakness}
                   <div>
                     <strong>弱點</strong>
-                    <span class="energy" style:background={ENERGY_COLOR[selected.weakness.type]}>
+                    <span class="energy" style:background={ENERGY_COLOR[selected.weakness.type]} style:color={ENERGY_TEXT_COLOR[selected.weakness.type]}>
                       {ENERGY_LABEL[selected.weakness.type]}
                     </span>
                     {selected.weakness.value}
@@ -827,7 +828,7 @@
                 {#if selected.resistance}
                   <div>
                     <strong>抵抗力</strong>
-                    <span class="energy" style:background={ENERGY_COLOR[selected.resistance.type]}>
+                    <span class="energy" style:background={ENERGY_COLOR[selected.resistance.type]} style:color={ENERGY_TEXT_COLOR[selected.resistance.type]}>
                       {ENERGY_LABEL[selected.resistance.type]}
                     </span>
                     {selected.resistance.value}
@@ -838,7 +839,7 @@
                     <strong>撤退</strong>
                     {#each selected.retreatCost as e}<span
                         class="energyDot small"
-                        style:background={ENERGY_COLOR[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                        style:background={ENERGY_COLOR[e]} style:color={ENERGY_TEXT_COLOR[e]}>{ENERGY_LABEL[e]}</span>{/each}
                   </div>
                 {/if}
               </section>
@@ -1005,9 +1006,9 @@
     /* Monospace keeps H/I/J optical width similar so the badge doesn't look lopsided */
     font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   }
-  .mark-H { background: #3b82f6; }
-  .mark-I { background: #8b5cf6; }
-  .mark-J { background: #f59e0b; }
+  .mark-H { background: #2563eb; }   /* ⭐v6.512 白字對比 ≥ 4.5（原 #3b82f6／#8b5cf6 是 3.7／4.2；J 的橘黃底白字只有 2.2 ⇒ 深字） */
+  .mark-I { background: #7c3aed; }
+  .mark-J { background: #f59e0b; color: #1a1a1a; }
   .mark-ALL {
     background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 55%, #f59e0b 100%);
   }
@@ -1146,9 +1147,9 @@
     color: #4b5563;
   }
   .filter-tag.active {
-    background: #6366f1;
+    background: #4f46e5;
     color: #fff;
-    border-color: #6366f1;
+    border-color: #4f46e5;
   }
   /* v2.74: 屬性篩選 chip — 帶能量色 dot */
   .filter-type {
@@ -1160,9 +1161,9 @@
     gap: 0.25rem;
   }
   .filter-type.active {
-    background: var(--type-bg, #6366f1);
-    color: #fff;
-    border-color: var(--type-bg, #6366f1);
+    background: var(--type-bg, #4f46e5);
+    color: var(--type-fg, #fff);   /* ⭐v6.512 字色跟著屬性（淺色屬性用深字） */
+    border-color: var(--type-bg, #4f46e5);
   }
   .filter-type.active .typeChip {
     background: rgba(255,255,255,0.35) !important;
@@ -1722,7 +1723,7 @@
         linear-gradient(135deg, #3b82f6, #8b5cf6, #f59e0b) border-box;
       border: 2px solid transparent;
     }
-    .setTileAll .setCode { color: #8b5cf6; }
+    .setTileAll .setCode { color: var(--ui-violet); }   /* ⭐v6.512 原 #8b5cf6 在深色底只有 2.3、淺色底 3.7 */
 
     /* 卡片列表：搜尋與篩選收進一張面板 */
     .controls {
@@ -1753,8 +1754,8 @@
     .filter:hover:not(.active) { border-color: var(--ui-accent); }
     .filter.active { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
     .filter-tag, .filter-type { color: var(--ui-text); }
-    .filter-tag.active { background: #6366f1; border-color: #6366f1; color: #fff; }
-    .filter-type.active { background: var(--type-bg, #6366f1); border-color: var(--type-bg, #6366f1); color: #fff; }
+    .filter-tag.active { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+    .filter-type.active { background: var(--type-bg, #4f46e5); border-color: var(--type-bg, #4f46e5); color: var(--type-fg, #fff); }
     .filter-stage { border-color: #8a77aa; }
     .filter-stage.active { background: #6c5a8a; border-color: #6c5a8a; color: #fff; }
     .filter-mark { border-color: #6f8f9f; }
@@ -1789,7 +1790,7 @@
     .modal-variant-counter { color: var(--ui-link); background: var(--ui-accent-soft); border-color: var(--ui-border); }
     .detailInfo h2, .detailInfo h3 { color: var(--ui-text); }
     .tag, .evo, .stats strong, .foot, .footSet { color: var(--ui-text-muted); }
-    .rules { color: var(--ui-text); }
+    .rules, .skillEffect { color: var(--ui-text); }   /* ⭐v6.512 招式／特性說明原本寫死 #333，深色主題看不見 */
     .pv-evo-chain { background: var(--ui-accent-soft); border-left-color: var(--ui-accent); }
     .pv-evo-chain-label { color: var(--ui-link); }
     .evo-arrow, .evo-or { color: var(--ui-text-muted); }
@@ -1839,7 +1840,7 @@
   :global(html:not([data-ui-wide])) .setDate { color: var(--ui-text-muted); }
   :global(html:not([data-ui-wide])) .setTileAll { background: linear-gradient(var(--ui-bg-elev), var(--ui-bg-elev)) padding-box,
         linear-gradient(135deg, #3b82f6, #8b5cf6, #f59e0b) border-box; border-color: transparent; }
-  :global(html:not([data-ui-wide])) .setTileAll .setCode { color: #8b5cf6; }
+  :global(html:not([data-ui-wide])) .setTileAll .setCode { color: var(--ui-violet); }   /* ⭐v6.512 */
   :global(html:not([data-ui-wide])) .controls { background: var(--ui-bg-elev); border-color: var(--ui-border); box-shadow: var(--ui-shadow); }
   :global(html:not([data-ui-wide])) input[type='search'],
   :global(html:not([data-ui-wide])) .modeSelect { background: var(--ui-input-bg); color: var(--ui-text); border-color: var(--ui-border); }
@@ -1850,8 +1851,8 @@
   :global(html:not([data-ui-wide])) .filter.active { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
   :global(html:not([data-ui-wide])) .filter-tag,
   :global(html:not([data-ui-wide])) .filter-type { color: var(--ui-text); }
-  :global(html:not([data-ui-wide])) .filter-tag.active { background: #6366f1; border-color: #6366f1; color: #fff; }
-  :global(html:not([data-ui-wide])) .filter-type.active { background: var(--type-bg, #6366f1); border-color: var(--type-bg, #6366f1); color: #fff; }
+  :global(html:not([data-ui-wide])) .filter-tag.active { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+  :global(html:not([data-ui-wide])) .filter-type.active { background: var(--type-bg, #4f46e5); border-color: var(--type-bg, #4f46e5); color: var(--type-fg, #fff); }
   :global(html:not([data-ui-wide])) .filter-stage { border-color: #8a77aa; }
   :global(html:not([data-ui-wide])) .filter-stage.active { background: #6c5a8a; border-color: #6c5a8a; color: #fff; }
   :global(html:not([data-ui-wide])) .filter-mark { border-color: #6f8f9f; }
@@ -1877,7 +1878,8 @@
   :global(html:not([data-ui-wide])) .stats strong,
   :global(html:not([data-ui-wide])) .foot,
   :global(html:not([data-ui-wide])) .footSet { color: var(--ui-text-muted); }
-  :global(html:not([data-ui-wide])) .rules { color: var(--ui-text); }
+  :global(html:not([data-ui-wide])) .rules,
+  :global(html:not([data-ui-wide])) .skillEffect { color: var(--ui-text); }   /* ⭐v6.512 */
   :global(html:not([data-ui-wide])) .pv-evo-chain { background: var(--ui-accent-soft); border-left-color: var(--ui-accent); }
   :global(html:not([data-ui-wide])) .pv-evo-chain-label { color: var(--ui-link); }
   :global(html:not([data-ui-wide])) .evo-arrow,

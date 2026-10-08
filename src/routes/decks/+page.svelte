@@ -15,7 +15,7 @@
   import { cardThumb } from '$lib/cards/thumb'; // v6.464 小尺寸顯示改用縮圖（失敗由 retryImg 立刻退回官方原圖）
   import { getEvolutionChainNames, getEvolutionChainGrouped } from '$lib/cards/evolutionChain';
   import { isMegaExCard } from '$lib/game/selection-filter'; // v6.210：Mega ex 判定收斂中央述詞
-  import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
+  import { ENERGY_LABEL, ENERGY_COLOR, ENERGY_TEXT_COLOR } from '$lib/cards/energy';   // ⭐v6.512 屬性色塊上的字色
   import { loadAllSets, loadIndex, buildCardIndex } from '$lib/cards/pool';
   // ⭐ v6.194 下架卡：全站唯一述詞。牌池(pool)＝玩家「可以挑的卡」，
   //   poolById＝「畫得出來的卡」——**兩者刻意不同**，見下方 onMount 的註解。
@@ -2071,8 +2071,8 @@
             onclick={clearTypes}>不限</button>
           {#each ENERGY_ORDER as etype (etype)}
             <button class="pk-chip pk-chip-type" class:active={selectedTypes.has(etype)}
-              onclick={() => toggleType(etype)} style:--type-bg={ENERGY_COLOR[etype]}>
-              <span class="pk-type-dot" style:background={ENERGY_COLOR[etype]}>{ENERGY_LABEL[etype]}</span>
+              onclick={() => toggleType(etype)} style:--type-bg={ENERGY_COLOR[etype]} style:--type-fg={ENERGY_TEXT_COLOR[etype]}>
+              <span class="pk-type-dot" style:background={ENERGY_COLOR[etype]} style:color={ENERGY_TEXT_COLOR[etype]}>{ENERGY_LABEL[etype]}</span>
             </button>
           {/each}
         </div>
@@ -2211,7 +2211,7 @@
           <!-- badges row -->
           <div class="pv-badges">
             {#if pv.pokemonType}
-              <span class="type-badge" style="background:{ENERGY_COLOR[pv.pokemonType]}">
+              <span class="type-badge" style="background:{ENERGY_COLOR[pv.pokemonType]};color:{ENERGY_TEXT_COLOR[pv.pokemonType]}">
                 {ENERGY_LABEL[pv.pokemonType]}
               </span>
             {/if}
@@ -2267,7 +2267,7 @@
                   <div class="atk-head">
                     <span class="atk-cost">
                       {#each atk.cost as e}
-                        <span class="energy-pip" style="background:{ENERGY_COLOR[e]}" title={ENERGY_LABEL[e]}>
+                        <span class="energy-pip" style="background:{ENERGY_COLOR[e]};color:{ENERGY_TEXT_COLOR[e]}" title={ENERGY_LABEL[e]}>
                           {ENERGY_LABEL[e]}
                         </span>
                       {/each}
@@ -2295,7 +2295,7 @@
             <div class="pv-wrc">
               {#if pv.weakness}
                 <span>弱點：
-                  <span class="energy-pip sm" style="background:{ENERGY_COLOR[pv.weakness.type]}">
+                  <span class="energy-pip sm" style="background:{ENERGY_COLOR[pv.weakness.type]};color:{ENERGY_TEXT_COLOR[pv.weakness.type]}">
                     {ENERGY_LABEL[pv.weakness.type]}
                   </span>
                   {pv.weakness.value}
@@ -2303,7 +2303,7 @@
               {/if}
               {#if pv.resistance}
                 <span>抵抗力：
-                  <span class="energy-pip sm" style="background:{ENERGY_COLOR[pv.resistance.type]}">
+                  <span class="energy-pip sm" style="background:{ENERGY_COLOR[pv.resistance.type]};color:{ENERGY_TEXT_COLOR[pv.resistance.type]}">
                     {ENERGY_LABEL[pv.resistance.type]}
                   </span>
                   {pv.resistance.value}
@@ -2312,7 +2312,7 @@
               {#if pv.retreatCost?.length}
                 <span>撤退：
                   {#each pv.retreatCost as e}
-                    <span class="energy-pip sm" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>
+                    <span class="energy-pip sm" style="background:{ENERGY_COLOR[e]};color:{ENERGY_TEXT_COLOR[e]}">{ENERGY_LABEL[e]}</span>
                   {/each}
                 </span>
               {/if}
@@ -2834,7 +2834,7 @@
      上面的淡橙底是淺色主題寫死的；深色主題字是淺色 ⇒ 淺字配淺底。深色改用色票的凹陷底（與一般牌組列同一套色），
      選中那一列照舊用上面主題規則的強調底（:not(.active) 不蓋掉它）。 */
   :global(html[data-theme='dark']) .preset-list li:not(.active) { background: var(--ui-bg-sunken); }
-  .preset-badge { background:#d9aa4a; color:#fff; font-size:.72rem; font-weight:700; padding:.18rem .45rem; border-radius:4px; white-space:nowrap; }
+  .preset-badge { background:#d9aa4a; color:#2b1d00; font-size:.72rem; font-weight:700; padding:.18rem .45rem; border-radius:4px; white-space:nowrap; }
   .deck-pick {
     flex: 1;
     min-width: 0;  /* v4.982: 允許子元素 shrink → deck-name 才能 truncate */
@@ -3180,7 +3180,7 @@
 
   /* Tag chips */
   .pk-chip-tag { color: #4b5563; }
-  .pk-chip-tag.active { background: #6366f1; border-color: #6366f1; color: #fff; }
+  .pk-chip-tag.active { background: #4f46e5; border-color: #4f46e5; color: #fff; }
 
   /* Type chips */
   .pk-chip-type {
@@ -3190,9 +3190,9 @@
     color: #4b5563;
   }
   .pk-chip-type.active {
-    background: var(--type-bg, #6366f1);
-    color: #fff;
-    border-color: var(--type-bg, #6366f1);
+    background: var(--type-bg, #4f46e5);
+    color: var(--type-fg, #fff);   /* ⭐v6.512 字色跟著屬性（淺色屬性用深字） */
+    border-color: var(--type-bg, #4f46e5);
   }
   .pk-chip-type.active .pk-type-dot {
     background: rgba(255,255,255,0.35) !important;
@@ -3297,9 +3297,9 @@
     font-weight: 700;
     color: #fff;
   }
-  .mark-H { background: #3b82f6; }
-  .mark-I { background: #8b5cf6; }
-  .mark-J { background: #f59e0b; }
+  .mark-H { background: #2563eb; }   /* ⭐v6.512 同卡牌資料庫：白字 ≥ 4.5；J 改深字 */
+  .mark-I { background: #7c3aed; }
+  .mark-J { background: #f59e0b; color: #1a1a1a; }
 
   /* Buttons */
   button {
@@ -4188,8 +4188,8 @@
     .pk-chip:hover:not(.active) { background: var(--ui-bg-sunken); border-color: var(--ui-accent); }
     .pk-chip.active { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
     .pk-chip-tag, .pk-chip-type { color: var(--ui-text); }
-    .pk-chip-tag.active { background: #6366f1; border-color: #6366f1; color: #fff; }
-    .pk-chip-type.active { background: var(--type-bg, #6366f1); border-color: var(--type-bg, #6366f1); color: #fff; }
+    .pk-chip-tag.active { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+    .pk-chip-type.active { background: var(--type-bg, #4f46e5); border-color: var(--type-bg, #4f46e5); color: var(--type-fg, #fff); }
     .pk-chip-stage { border-color: #8a77aa; }
     .pk-chip-stage.active { background: #6c5a8a; border-color: #6c5a8a; color: #fff; }
     .pk-chip-mark { border-color: #6f8f9f; }
@@ -4303,8 +4303,8 @@
   :global(html:not([data-ui-wide])) .pk-chip.active { background: var(--ui-chip-active-bg); color: var(--ui-chip-active-text); border-color: var(--ui-chip-active-bg); }
   :global(html:not([data-ui-wide])) .pk-chip-tag,
   :global(html:not([data-ui-wide])) .pk-chip-type { color: var(--ui-text); }
-  :global(html:not([data-ui-wide])) .pk-chip-tag.active { background: #6366f1; border-color: #6366f1; color: #fff; }
-  :global(html:not([data-ui-wide])) .pk-chip-type.active { background: var(--type-bg, #6366f1); border-color: var(--type-bg, #6366f1); color: #fff; }
+  :global(html:not([data-ui-wide])) .pk-chip-tag.active { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+  :global(html:not([data-ui-wide])) .pk-chip-type.active { background: var(--type-bg, #4f46e5); border-color: var(--type-bg, #4f46e5); color: var(--type-fg, #fff); }
   :global(html:not([data-ui-wide])) .pk-chip-stage { border-color: #8a77aa; }
   :global(html:not([data-ui-wide])) .pk-chip-stage.active { background: #6c5a8a; border-color: #6c5a8a; color: #fff; }
   :global(html:not([data-ui-wide])) .pk-chip-mark { border-color: #6f8f9f; }

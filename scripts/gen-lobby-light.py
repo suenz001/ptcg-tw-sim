@@ -63,6 +63,11 @@ def parse(c):
 def fmt(r,g,b,a):
     if a>=0.999: return '#%02x%02x%02x'%(round(r),round(g),round(b))
     return 'rgba(%d,%d,%d,%.2f)'%(round(r),round(g),round(b),a)
+def _lum(c):
+    f=lambda v: v/12.92 if v<=0.03928 else ((v+0.055)/1.055)**2.4
+    return 0.2126*f(c[0])+0.7152*f(c[1])+0.0722*f(c[2])
+def _cr(a,b):
+    x,y=_lum(a),_lum(b); return (max(x,y)+0.05)/(min(x,y)+0.05)
 def flip(c, role):
     p=parse(c)
     if not p: return c
@@ -81,6 +86,11 @@ def flip(c, role):
         nl=min(0.42,nl) if role=='fg' else min(0.75,max(0.55,1-l)) if l<0.5 else min(0.8,1-l+0.25)
         ns=min(1,sat*1.05)
     nr,ng,nb=colorsys.hls_to_rgb(h,nl,ns)
+    # ⭐v6.512 字色可讀性保證：轉出來的字色對「淺色主題最暗的底」（--ui-bg-sunken #d2d9d5）對比不足 4.6 時，
+    #   保持色相、逐步調暗到夠為止（原本金黃字 #a57900 在淺底只有 3.0）。只動字色，背景與框線不變。
+    if role=='fg' and a>=0.999:
+        while _cr((nr,ng,nb),(0xd2/255,0xd9/255,0xd5/255))<4.6 and nl>0.05:
+            nl-=0.01; nr,ng,nb=colorsys.hls_to_rgb(h,nl,ns)
     return fmt(nr*255,ng*255,nb*255,a)
 def keep_rule(body):
     # 飽和中亮度的實心底（按鈕、徽章）配白字：維持原樣（例：紅色確認鈕、綠色進場鈕）

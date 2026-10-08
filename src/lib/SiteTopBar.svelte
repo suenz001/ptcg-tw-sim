@@ -50,7 +50,7 @@
   /* 預設（手機與平板 <1024px）：完全不顯示，不佔任何空間。 */
   .stb { display: none; }
   /* ⭐v6.487 跳到主要內容：平常移出畫面，Tab 聚焦時才出現在左上角 */
-  .stb-skip { position: absolute; left: 8px; top: -60px; z-index: 60; padding: 8px 14px; border-radius: 8px; background: var(--ui-accent, #3dbb7a); color: #fff; font-weight: 700; font: inherit; font-weight: 700; border: 0; cursor: pointer; }
+  .stb-skip { position: absolute; left: 8px; top: -60px; z-index: 60; padding: 8px 14px; border-radius: 8px; background: var(--ui-accent, #3dbb7a); color: var(--ui-accent-contrast, #fff); font-weight: 700; font: inherit; font-weight: 700; border: 0; cursor: pointer; }
   .stb-skip:focus { top: calc(var(--safe-top, 0px) + 8px); }
 
   @media (min-width: 1024px) {

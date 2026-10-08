@@ -113,6 +113,19 @@ const STRIP_RE = /\n  \/\* >>> v6439-cards-mobile \*\/[\s\S]*?\/\* <<< v6439-car
 // ⭐ LATER（IRON_RULES Rule 40：之後版本的合法改動逐字登記、逐字還原，鎖不變鬆）
 //   v6.457：彈出視窗整頁捲動鎖（Rule 76）—— import 一行、兩個遮罩掛 use:pageScrollLock、.modalInner 加 overscroll-behavior:contain。
 const LATER = [
+  // ⭐v6.512（Rule 40）：全站文字對比——屬性色塊字色、標記徽章、篩選鈕選中色、全部卡牌紫字讀色票；difflib 產生、當場驗證逐位元還原 v6.511；內容由 test-v6512 鎖
+  ["  import { ENERGY_LABEL, ENERGY_COLOR, ENERGY_TEXT_COLOR } from '$lib/cards/energy';   // ⭐v6.512 屬性色塊上的字色\n", "  import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';\n"],
+  ["          style:--type-fg={ENERGY_TEXT_COLOR[etype]}\n", ""],
+  ["          <span class=\"typeChip\" style:background={ENERGY_COLOR[etype]} style:color={ENERGY_TEXT_COLOR[etype]}>{ENERGY_LABEL[etype]}</span>\n", "          <span class=\"typeChip\" style:background={ENERGY_COLOR[etype]}>{ENERGY_LABEL[etype]}</span>\n"],
+  ["                · <span class=\"energy\" style:background={ENERGY_COLOR[selected.pokemonType]} style:color={ENERGY_TEXT_COLOR[selected.pokemonType]}>\n", "                · <span class=\"energy\" style:background={ENERGY_COLOR[selected.pokemonType]}>\n"],
+  ["                            style:background={ENERGY_COLOR[e]} style:color={ENERGY_TEXT_COLOR[e]}\n", "                            style:background={ENERGY_COLOR[e]}\n"],
+  ["                    <span class=\"energy\" style:background={ENERGY_COLOR[selected.weakness.type]} style:color={ENERGY_TEXT_COLOR[selected.weakness.type]}>\n", "                    <span class=\"energy\" style:background={ENERGY_COLOR[selected.weakness.type]}>\n"],
+  ["                    <span class=\"energy\" style:background={ENERGY_COLOR[selected.resistance.type]} style:color={ENERGY_TEXT_COLOR[selected.resistance.type]}>\n", "                    <span class=\"energy\" style:background={ENERGY_COLOR[selected.resistance.type]}>\n"],
+  ["                        style:background={ENERGY_COLOR[e]} style:color={ENERGY_TEXT_COLOR[e]}>{ENERGY_LABEL[e]}</span>{/each}\n", "                        style:background={ENERGY_COLOR[e]}>{ENERGY_LABEL[e]}</span>{/each}\n"],
+  ["  .mark-H { background: #2563eb; }   /* ⭐v6.512 白字對比 ≥ 4.5（原 #3b82f6／#8b5cf6 是 3.7／4.2；J 的橘黃底白字只有 2.2 ⇒ 深字） */\n  .mark-I { background: #7c3aed; }\n  .mark-J { background: #f59e0b; color: #1a1a1a; }\n", "  .mark-H { background: #3b82f6; }\n  .mark-I { background: #8b5cf6; }\n  .mark-J { background: #f59e0b; }\n"],
+  ["    background: #4f46e5;\n", "    background: #6366f1;\n"],
+  ["    border-color: #4f46e5;\n", "    border-color: #6366f1;\n"],
+  ["    background: var(--type-bg, #4f46e5);\n    color: var(--type-fg, #fff);   /* ⭐v6.512 字色跟著屬性（淺色屬性用深字） */\n    border-color: var(--type-bg, #4f46e5);\n", "    background: var(--type-bg, #6366f1);\n    color: #fff;\n    border-color: var(--type-bg, #6366f1);\n"],
   // ⭐v6.507（Rule 40）：全站頁首統一——兩個頁首改用共用元件 PageHeader（import 一行＋兩段標記；頁首外距在 v6504-unify 哨兵內）。difflib 產生、當場驗證逐位元還原 v6.506；內容由 test-v6507 鎖
   ["<script lang=\"ts\">\n  import PageHeader from '$lib/ui/PageHeader.svelte';   // ⭐v6.507 全站頁首統一\n  import { compileCardQuery, cardSearchFields, SEARCH_SYNTAX_HINT } from '$lib/cards/search-query';   // ⭐v6.481 搜尋語法（兩頁共用）\n", "<script lang=\"ts\">\n  import { compileCardQuery, cardSearchFields, SEARCH_SYNTAX_HINT } from '$lib/cards/search-query';   // ⭐v6.481 搜尋語法（兩頁共用）\n"],
   ["\n  <!-- ⭐v6.507 全站頁首統一（PageHeader 共用元件） -->\n  <PageHeader title=\"🃏 卡牌資料庫\" sub={`${STANDARD_SETS.length} 個標準卡包 · 共 ${STANDARD_CARD_COUNT} 張卡（標準賽 ${MARKS_LABEL} 標，繁體中文）`} cls=\"cards-ph\" />\n\n", "\n  <header>\n    <a class=\"back\" href=\"{base}/\">← 首頁</a>\n    <h1>卡牌資料庫</h1>\n    <p class=\"meta\">\n      {STANDARD_SETS.length} 個標準卡包 · 共 {STANDARD_CARD_COUNT} 張卡\n      <span class=\"hint\">（標準賽 {MARKS_LABEL} 標，繁體中文）</span>\n    </p>\n  </header>\n\n"],

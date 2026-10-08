@@ -68,7 +68,7 @@
     }
     .sbn-ico { font-size: 20px; line-height: 1; }
     .sbn-lb { white-space: nowrap; }
-    .sbn-link.active { color: #2563eb; font-weight: 700; }
+    .sbn-link.active { color: #1d4ed8; font-weight: 700; }   /* ⭐v6.512 原 #2563eb 在新淺色導覽列上 4.45 */
     .sbn-link.active .sbn-ico { transform: translateY(-1px); }
     /* ⭐v6.498 深色主題時整條導覽列都用深色 */
     :global(html[data-theme='dark']) .sbn { background: var(--ui-topbar-bg); border-top-color: var(--ui-border); box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.35); }   /* ⭐v6.511 讀色票 */
