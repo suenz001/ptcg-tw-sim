@@ -218,34 +218,35 @@
      ⚠ 用 --ui- 前綴，避免撞到對戰頁既有的自訂屬性。文字對比都 ≥ 4.5:1（Fable 5.1 規劃時已算過）。 */
   /* ⭐v6.511（玩家回饋：「淺色太亮、深色又太暗」；站長看過預覽圖後回「可以」）：淺色整組降一階（卡片從純白改柔和灰白），
      深色整組提亮一階（墨綠色調不變）；文字對比仍全部 ≥ 4.5:1（淺色主文字約 12:1、深色約 8.5～12:1）。 */
+  /* v6.513：中性灰背景搭配森林綠；淺色／深色共用既有版面，牌桌不套。 */
   :global(:root) {
-    --ui-bg: #dde3df;
-    --ui-bg-elev: #eef1ef;
-    --ui-bg-sunken: #d2d9d5;
-    --ui-border: #bfc9c3;
-    --ui-text: #1a2320;
-    --ui-text-muted: #4a5651;
-    --ui-accent: #1d7a4a;
+    --ui-bg: #e4e6e5;
+    --ui-bg-elev: #f0f1f0;
+    --ui-bg-sunken: #d8ddda;
+    --ui-border: #bcc5bf;
+    --ui-text: #202824;
+    --ui-text-muted: #515b55;
+    --ui-accent: #236447;
     --ui-accent-contrast: #ffffff;
-    --ui-accent-soft: #d3e8dc;
-    --ui-link: #145f39;
-    --ui-cta-bg: linear-gradient(135deg, #d3e8dc 0%, #e4eee8 100%);
-    --ui-cta-text: #123a26;
+    --ui-accent-soft: #d7e6dc;
+    --ui-link: #205c40;
+    --ui-cta-bg: linear-gradient(135deg, var(--ui-accent-soft) 0%, #e7ece8 100%);
+    --ui-cta-text: #203e2c;
     --ui-shadow: 0 1px 2px rgba(16, 36, 26, 0.06), 0 4px 12px rgba(16, 36, 26, 0.06);
     --ui-shadow-hover: 0 2px 4px rgba(16, 36, 26, 0.08), 0 10px 24px rgba(16, 36, 26, 0.12);
-    --ui-hero-bg: radial-gradient(circle at 88% 0%, rgba(61, 187, 122, 0.14), transparent 55%), linear-gradient(135deg, #d4e6db 0%, #e6eae7 55%, #dce0ea 100%);
+    --ui-hero-bg: radial-gradient(circle at 88% 0%, rgba(35, 100, 71, 0.12), transparent 55%), linear-gradient(135deg, #dae3dd 0%, #e6e8e6 55%, #dfe3e6 100%);
     /* ⭐v6.475 頂端列與「主要動作」卡（對戰／錦標賽）跟著主題（站長：淺色主題下不要是深綠） */
-    --ui-topbar-bg: #ebefec;
-    --ui-topbar-text: #1a2320;
-    --ui-topbar-muted: #4a5751;
-    --ui-topbar-hover: #dde5e0;
-    --ui-topbar-border: #bfc9c3;
+    --ui-topbar-bg: #eceeec;
+    --ui-topbar-text: #202824;
+    --ui-topbar-muted: #515b55;
+    --ui-topbar-hover: #dce2de;
+    --ui-topbar-border: #bcc5bf;
     --ui-topbar-shadow: 0 1px 3px rgba(16, 36, 26, 0.06);
-    --ui-cta-border: #9fd3b6;
-    --ui-cta-desc: #3f5a4c;
-    --ui-cta-icon-bg: #eef1ef;
-    --ui-input-bg: #f4f6f5;
-    --ui-chip-active-bg: #1d7a4a;
+    --ui-cta-border: #aac5b4;
+    --ui-cta-desc: #435b4d;
+    --ui-cta-icon-bg: #f0f1f0;
+    --ui-input-bg: #f3f5f3;
+    --ui-chip-active-bg: #236447;
     --ui-chip-active-text: #ffffff;
     /* ⭐v6.512 傷害數字（紅）、警示（金）：兩個主題各自挑到對三種底都 ≥ 4.5 */
     --ui-danger: #a32315;
@@ -254,33 +255,33 @@
   }
   :global(html[data-theme='dark']) {
     /* ⭐v6.478 深色主題全站統一成對戰大廳／牌桌的墨綠 #162816（原本首頁等頁是 #0f1f17，切頁看得出色差；Fable 5.1 建議） */
-    --ui-bg: #253b27;
-    --ui-bg-elev: #2f4b33;
-    --ui-bg-sunken: #1e321f;
-    --ui-border: #4a6f52;
-    --ui-text: #eaf2ec;
-    --ui-text-muted: #c4d8c6;
-    --ui-accent: #3dbb7a;
-    --ui-accent-contrast: #06261a;
-    --ui-accent-soft: rgba(61, 187, 122, 0.14);   /* ⭐v6.512 0.2→0.14：疊在卡片上時連結字對比從 4.5 拉到 5.5 */
-    --ui-link: #8eebbd;
-    --ui-cta-bg: linear-gradient(135deg, #2f6044 0%, #285139 100%);
-    --ui-cta-text: #f0f7f2;
+    --ui-bg: #29312e;
+    --ui-bg-elev: #343e39;
+    --ui-bg-sunken: #232b27;
+    --ui-border: #576b5e;
+    --ui-text: #edf2ee;
+    --ui-text-muted: #c4cec7;
+    --ui-accent: #8bc9a4;
+    --ui-accent-contrast: #182c20;
+    --ui-accent-soft: rgba(139, 201, 164, 0.14);   /* ⭐v6.512 0.2→0.14：疊在卡片上時連結字對比從 4.5 拉到 5.5 */
+    --ui-link: #a8dfbc;
+    --ui-cta-bg: linear-gradient(135deg, #3b5747 0%, #344a3c 100%);
+    --ui-cta-text: #edf2ee;
     --ui-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.35);
     --ui-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.45);
-    --ui-hero-bg: radial-gradient(circle at 88% 0%, rgba(61, 187, 122, 0.2), transparent 55%), linear-gradient(135deg, #2f603d 0%, #29452b 60%, #253b27 100%);
-    --ui-topbar-bg: #1d311e;
-    --ui-topbar-text: #e6efe9;
-    --ui-topbar-muted: rgba(230, 239, 233, 0.78);
+    --ui-hero-bg: radial-gradient(circle at 88% 0%, rgba(139, 201, 164, 0.14), transparent 55%), linear-gradient(135deg, #3a5142 0%, #303d35 60%, #29312e 100%);
+    --ui-topbar-bg: #252e29;
+    --ui-topbar-text: #edf2ee;
+    --ui-topbar-muted: #c4cec7;
     --ui-topbar-hover: rgba(255, 255, 255, 0.08);
     --ui-topbar-border: rgba(255, 255, 255, 0.12);
     --ui-topbar-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
-    --ui-cta-border: #3f8560;
-    --ui-cta-desc: rgba(230, 239, 233, 0.78);
+    --ui-cta-border: #66866f;
+    --ui-cta-desc: #c4cec7;
     --ui-cta-icon-bg: rgba(255, 255, 255, 0.1);
-    --ui-input-bg: #1e321f;
-    --ui-chip-active-bg: #3dbb7a;
-    --ui-chip-active-text: #06261a;
+    --ui-input-bg: #232b27;
+    --ui-chip-active-bg: #8bc9a4;
+    --ui-chip-active-text: #182c20;
     --ui-danger: #ff9c8a;
     --ui-warn: #ffd35a;
     --ui-violet: #c4b5fd;
