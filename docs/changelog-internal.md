@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.515：戰鬥場空著時必須先補位（2026-10-09）
+
+BASE v6.514（da231909；v6.513／v6.514 是站長另請 AI 做的主題配色，本版先同步）。玩家回報：「對方能將戰鬥場的土龍節節逃跑抽出後，先在備戰區下夢幻＆填能，然後才推怪」。
+- 卡面（SV5K 9827）：逃跑抽出「…從自己的牌庫抽出3張卡。然後，將這隻寶可夢與附加的卡，全部放回自己的牌庫並重洗。」
+- 根因：engine 只在取獎賞、選擇視窗時擋其他動作；自己回合中戰鬥場被效果清空時（abra_mawile_deck.ts 註解：「active 被清空時由 hasPendingActions 觸發 SEND_NEW_ACTIVE」）只靠 UI 彈補位視窗與 END_TURN 前檢查，引擎不擋其他動作。
+- 修法：handlePlaying 在祭典樂舞閘之前加中央閘（哨兵 v6515-promote-first）：phase=playing、輪到行動的玩家 active=null 且備戰有寶可夢 ⇒ 只接受 SEND_NEW_ACTIVE、RESOLVE_SELECTION、TAKE_PRIZES，其他動作 no-op。只看行動方（對手被打空由取獎流程處理）；備戰空不擋（終局管線）。AI（ai.ts 1b）本來就先補位。
+- 錦標賽伺服器也跑同一份 engine bundle ⇒ 需要 update-tournament.bat。
+- test-v6515（A1 六種動作、A2 正對照、A3 零回歸、A4 範圍、A5、A6 AI、S1 例外清單、H1 BASE 實測重現 PLAY_BASIC／ATTACH_ENERGY 未擋、H2）；突變：拿掉備戰判斷 ⇒ A5 紅；改看對手 ⇒ A1 紅。v6375／v6376／evolve-iid 1000 seeds／ai-sim-harness／免疫網 34 支／anti-pattern-lint 全綠，tsc 0 錯。
+
 ## v6.514：淺色主題降低背景亮度（2026-10-08）
 
 站長確認桌機與手機實際套色預覽後，沿用中性灰 × 森林綠、原有版面。

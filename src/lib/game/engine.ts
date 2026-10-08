@@ -3898,6 +3898,25 @@ function handlePlaying(
     && action.type !== 'RESOLVE_SELECTION'
   ) return state;
 
+  // >>> v6515-promote-first
+  // ⭐v6.515 戰鬥場空著時，必須先從備戰區派出新的戰鬥寶可夢，才能做其他事（玩家回報：
+  //   「對方能將戰鬥場的土龍節節逃跑抽出後，先在備戰區下夢幻＆填能，然後才推怪」）。
+  //   逃跑抽出、化石丟棄等「自己回合中戰鬥場的寶可夢離場」的效果，原本只靠 UI 彈出補位視窗，
+  //   引擎沒有擋 ⇒ 補位之前還能打寶可夢、附能量、用訓練家、用特性。
+  //   ⇒ 輪到行動的玩家自己的戰鬥場空著、而且備戰區有寶可夢可派時，只接受 SEND_NEW_ACTIVE
+  //      （以及解完既有選擇視窗 RESOLVE_SELECTION、取獎賞 TAKE_PRIZES）；其他動作原封不動退回（no-op）。
+  //   ・只看「輪到行動的那一方」：對手戰鬥場被打空的補位，本來就由取獎賞／回合結束流程處理，不在這裡擋。
+  //   ・備戰區沒有寶可夢 ⇒ 不擋（勝負判定由終局管線處理）。
+  if (
+    state.phase === 'playing'
+    && action.type !== 'SEND_NEW_ACTIVE'
+    && action.type !== 'RESOLVE_SELECTION'
+    && action.type !== 'TAKE_PRIZES'
+    && players[aIdx]?.active === null
+    && (players[aIdx]?.bench?.length ?? 0) > 0
+  ) return state;
+  // <<< v6515-promote-first
+
   // ── v5.211 祭典樂舞第 2 次招式 pending — 只允許 ATTACK / END_TURN / mid-flow actions ──
   // 卡面語意：第 1 次後玩家只能「再用相同招式」或「跳過攻擊」（END_TURN）。
   // pending 期間禁止：附能 / 進化 / 用支援者 / 場地 / 道具 / 放寶可夢 / 撤退 / 特性。
