@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '0a2d71f91b5a0d6a29bee6456e17a99f7e2a8a49';   // v6.512（上一版）
+const PREV_SHA = '37e7878ed204a14c95ef7647d462f6c4df206370';   // v6.513（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,9 +757,7 @@ const PREV_SHA = '0a2d71f91b5a0d6a29bee6456e17a99f7e2a8a49';   // v6.512（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // v6.513：共用介面色票與深色載入畫面；版本與 changelog 三步搬運。
-  // PREV_SHA 必須是留在 main 上的上一版 commit（IRON_RULES Rule 45）。
-  'src/app.html',
+  // v6.514：淺色共用三個色票；版本與 changelog 三步搬運。
   'src/lib/version.ts',
   'src/routes/+layout.svelte',
   'static/changelog-archive.html',

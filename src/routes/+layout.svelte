@@ -220,12 +220,12 @@
      深色整組提亮一階（墨綠色調不變）；文字對比仍全部 ≥ 4.5:1（淺色主文字約 12:1、深色約 8.5～12:1）。 */
   /* v6.513：中性灰背景搭配森林綠；淺色／深色共用既有版面，牌桌不套。 */
   :global(:root) {
-    --ui-bg: #e4e6e5;
-    --ui-bg-elev: #f0f1f0;
+    --ui-bg: #dce0dd;
+    --ui-bg-elev: #e9edea;
     --ui-bg-sunken: #d8ddda;
     --ui-border: #bcc5bf;
     --ui-text: #202824;
-    --ui-text-muted: #515b55;
+    --ui-text-muted: #505a54;
     --ui-accent: #236447;
     --ui-accent-contrast: #ffffff;
     --ui-accent-soft: #d7e6dc;
