@@ -263,6 +263,20 @@ function recordTurnAction(
   // state 沒變 = action failed / gate 擋住 → 不記錄
   if (before === after) return after;
   if (after.phase !== 'playing') return after;
+  // >>> v6517-attack-reject-identity
+  // ⭐v6.517 只差內部簿記欄位（攻擊開頭清掉的 KO 快照）也算「沒變」：
+  //   上一次攻擊留下快照時，下一次被退回的攻擊仍會換新物件 ⇒ 用「除了簿記欄位，其餘欄位都是同一個參照」判定。
+  {
+    const BOOKKEEPING = new Set(['_koDefenderSnapshot']);
+    const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+    let onlyBookkeeping = true;
+    for (const k of keys) {
+      if (BOOKKEEPING.has(k)) continue;
+      if ((before as unknown as Record<string, unknown>)[k] !== (after as unknown as Record<string, unknown>)[k]) { onlyBookkeeping = false; break; }
+    }
+    if (onlyBookkeeping) return after;
+  }
+  // <<< v6517-attack-reject-identity
   const aIdx = before.activePlayerIndex;
 
   let rec: ActionRecord | null = null;
@@ -5760,7 +5774,12 @@ function handlePlaying(
   if (action.type === 'ATTACK') {
     if (state.turnPhase !== 'main') return state;
     // v5.769：每次攻擊開頭清「被KO戰鬥位能量快照」（戲法舞步/反轉之風 KO 分支用）。
-    state = { ...state, _koDefenderSnapshot: null };
+    // >>> v6517-attack-reject-identity
+    // ⭐v6.517 只在真的有快照時才換新物件：原本無條件 { ...state } ⇒ 之後所有「不能攻擊」的退回
+    //   （先攻第一回合、能量不足、已攻擊過…）回傳的都不是原物件 ⇒ recordTurnAction 以為攻擊成功，
+    //   對手回合面板多一筆「攻擊 XX」（實際什麼都沒發生）。
+    if (state._koDefenderSnapshot != null) state = { ...state, _koDefenderSnapshot: null };
+    // <<< v6517-attack-reject-identity
     // v5.211：祭典樂舞第 2 次必須使用相同招式（卡面「使用持有的招式 2 次」）
     if (state.festivalDancePendingSecondAttack
         && state.festivalDancePendingSecondAttack.idx === aIdx
