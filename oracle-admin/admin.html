@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.79</title>
+<title>PTCG Oracle Admin v1.80</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -346,6 +346,13 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
   h1, h2, h3 { color: #1a2332; }
   header h1 { color: #5b8def !important; }
 
+  /* v1.80 常用牌組對戰勝率 */
+  .mx-t { border-collapse: separate; border-spacing: 2px; font-size: 12px; }
+  .mx-t .mx-h { position: sticky; top: 0; font-weight: 600; color: #475569; padding: 4px 2px; white-space: nowrap; }
+  .mx-t .mx-r { text-align: left; white-space: nowrap; padding: 2px 8px 2px 2px; font-weight: 600; }
+  .mx-t .mx-c { min-width: 46px; text-align: center; padding: 3px 2px; border-radius: 4px; font-weight: 600; line-height: 1.2; }
+  .mx-t .mx-n { font-weight: 400; font-size: 10px; opacity: .75; }
+  .mx-f td { padding: 4px 6px; border-bottom: 1px solid #eef1f5; }
 </style>
 </head>
 <body>
@@ -365,7 +372,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.79</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.80</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -3114,6 +3121,36 @@ function renderDeckRules(el) {
               title="奪冠報告完整版：可自己勾選要出哪幾段、排順序；不省略任何一筆，1920×1080 多頁 PNG 打包成 ZIP（做影片用）">🎬 奪冠報告・完整版（多頁 ZIP）</button>
     </div>
     <div id="arch-stats-box"><div class="empty">按「📊 計算統計」開始（規則改完後重按即可更新）。</div></div>
+
+    <!-- v1.80（站長 2026-10-10）：常用牌組對戰勝率 —— 前 N 名彼此的勝率矩陣＋任一牌組對前 N 名的對戰表。
+         時間範圍沿用上面的「統計範圍」下拉；資料源、N、最少場數改了不必重新計算（前端用同一份計數重排）。 -->
+    <h3 style="margin:22px 0 6px;">⚔️ 常用牌組對戰勝率</h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+      <label class="small" style="margin:0;">資料來源：</label>
+      <select id="mx-src" onchange="renderArchMatchups()" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
+        <option value="casual">一般對戰</option>
+        <option value="tourn">錦標賽</option>
+        <option value="all">一般對戰＋錦標賽</option>
+      </select>
+      <label class="small" style="margin:0;">前</label>
+      <select id="mx-topn" onchange="renderArchMatchups()" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
+        <option value="10">10</option><option value="15">15</option><option value="20" selected>20</option><option value="25">25</option><option value="30">30</option>
+      </select>
+      <label class="small" style="margin:0;">名　最少場數：</label>
+      <select id="mx-min" onchange="renderArchMatchups()" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
+        <option value="1">1</option><option value="3">3</option><option value="5" selected>5</option><option value="10">10</option><option value="20">20</option>
+      </select>
+      <button onclick="loadArchMatchups()">⚔️ 計算對戰勝率</button>
+      <button id="mx-img-btn" onclick="exportArchMatrixImage()" disabled title="匯出對戰矩陣圖（PNG）">🖼️ 匯出矩陣圖</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+      <label class="small" style="margin:0;">單一牌組：</label>
+      <input id="mx-name" list="mx-name-list" placeholder="輸入或選擇牌組原型名稱" style="min-width:240px;"
+             onkeydown="if(event.key==='Enter')openArchFocus()">
+      <datalist id="mx-name-list"></datalist>
+      <button id="mx-focus-btn" onclick="openArchFocus()" disabled title="這個牌組對前 N 名每一副的勝率（可匯出圖）">🔍 對前 N 名勝率</button>
+    </div>
+    <div id="mx-box"><div class="empty">按「⚔️ 計算對戰勝率」開始。</div></div>
     <datalist id="card-name-list">${dlOpts}</datalist>`;
   const sel = document.getElementById('arch-since'); if (sel) sel.value = _archSince;
 
@@ -5620,6 +5657,433 @@ window.champFullToggle = champFullToggle;
 window.champFullMove = champFullMove;
 window.runChampionReportFullExport = runChampionReportFullExport;
 window.champFullBusy = champFullBusy;
+
+// ══ v1.80 常用牌組對戰勝率（站長 2026-10-10）══════════════════════════════════════════
+//
+// 站長：「抓前20名使用率的牌組，如多龍巴魯托牌組對上 N的索羅亞克、呆呆王、超級龍頭地鼠等同樣是前20名使用率的牌組，
+//   彼此間的勝率」「或是增加我輸入牌組原型名稱，然後就能產生該牌組對前20名使用率的牌組的勝率分析」。
+//   ⇒ 兩個視圖、一份口徑：
+//     ① 對戰矩陣：列＝使用的牌組、欄＝對手（前 N 名＋「其他」＋「全體」）
+//     ② 單一牌組對戰表：任何一個原型（不限前 N 名）對前 N 名每一副的勝率
+//   伺服器 /api/admin/deck-archetype-matchups 只回原始計數（每個原型的勝負和、每一對原型的勝負和），
+//   前 N 名怎麼挑、「其他」怎麼併、同型怎麼算，全部在下面的純函式 mxBuild —— 換 N、換牌組都不必重掃資料庫。
+//
+// ══ MX-PURE-BEGIN ── 對戰矩陣的口徑：純函式，node 端可直接跑（守衛實跑）══
+//
+// 計數一律是 [勝, 負, 和]，而且是「列方」的視角。
+// ⚠ 勝率＝勝 /（勝＋負），和局不進分母 —— 與環境報告圖（deck-archetype-stats 的 winRate）同一個定義。
+
+function mxCmp(a, b) { return a < b ? -1 : (a > b ? 1 : 0); }
+
+/** 把兩個資料源（一般對戰＋錦標賽）的計數相加成「合併」。⚠ 回新物件，不改傳進來的那份。 */
+function mxMergeBuckets(a, b) {
+  const out = { usage: {}, pairs: {} };
+  const add3 = (dst, k, v) => { const t = dst[k] || (dst[k] = [0, 0, 0]); t[0] += v[0] || 0; t[1] += v[1] || 0; t[2] += v[2] || 0; };
+  for (const bk of [a, b]) {
+    if (!bk) continue;
+    for (const k of Object.keys(bk.usage || {})) add3(out.usage, k, bk.usage[k]);
+    for (const r of Object.keys(bk.pairs || {})) {
+      const row = out.pairs[r] || (out.pairs[r] = {});
+      for (const c of Object.keys(bk.pairs[r] || {})) add3(row, c, bk.pairs[r][c]);
+    }
+  }
+  return out;
+}
+
+/** 該資料源的計數。srcKey：'casual'｜'tourn'｜'all'（合併）。回 null＝沒有資料。 */
+function mxBucket(data, srcKey) {
+  if (!data) return null;
+  if (srcKey === 'all') return (data.casual || data.tourn) ? mxMergeBuckets(data.casual, data.tourn) : null;
+  return data[srcKey] || null;
+}
+
+/** 勝率 95% 信賴區間（Wilson score）。decisive＝勝＋負。回 [下界, 上界] 或 null。 */
+function mxWilson(wins, decisive) {
+  if (!(decisive > 0)) return null;
+  const z = 1.96, p = wins / decisive, z2 = z * z;
+  const den = 1 + z2 / decisive;
+  const mid = (p + z2 / (2 * decisive)) / den;
+  const half = (z * Math.sqrt(p * (1 - p) / decisive + z2 / (4 * decisive * decisive))) / den;
+  return [Math.max(0, mid - half), Math.min(1, mid + half)];
+}
+
+/** 一格：由 [勝,負,和] 算出顯示用的數值。mirror＝同型（雙方同一個原型）。 */
+function mxCell(t, mirror, minGames) {
+  const w = (t && t[0]) || 0, l = (t && t[1]) || 0, d = (t && t[2]) || 0;
+  // ⚠ 同型：一場對戰會被記兩次（雙方視角各一筆、一勝一負），場數要除以 2；勝率恆為 50%，不顯示。
+  const games = mirror ? (w + l + d) / 2 : (w + l + d);
+  const decisive = w + l;
+  return {
+    w, l, d, games, mirror: !!mirror,
+    winRate: (!mirror && decisive > 0) ? w / decisive : null,
+    ci: mirror ? null : mxWilson(w, decisive),
+    ok: !mirror && decisive >= Math.max(1, minGames || 1),   // 「最少場數」看的是分出勝負的場數（和局不進勝率分母，也不算樣本）
+  };
+}
+
+/**
+ * ⭐ 唯一口徑。opts：{ topN, minGames, focusKey }
+ *   ・top：依使用次數（勝＋負＋和，與環境報告圖的 usage 同義）由大到小，未分類（unclassifiedKey）不排名；
+ *     同票依名稱排序（結果穩定，不會每次重算換位置）。
+ *   ・rows：沒有 focusKey ＝ top（矩陣）；有 focusKey ＝ 只有那一個原型（單一牌組對戰表，可以不在 top 裡）。
+ *   ・每一列：cells（對 top 每一副，同型標 mirror）、other（對 top 以外＋未分類，**不含**同型）、overall（對全體）。
+ * 回 null＝沒有資料。
+ */
+function mxBuild(data, srcKey, opts) {
+  const o = opts || {};
+  const b = mxBucket(data, srcKey);
+  if (!b) return null;
+  const names = (data && data.names) || {};
+  const UK = (data && data.unclassifiedKey) || '_u';
+  const used = (k) => { const u = b.usage[k]; return u ? (u[0] + u[1] + u[2]) : 0; };
+  const totalDecks = Object.keys(b.usage).reduce((s, k) => s + used(k), 0);
+  const ranked = Object.keys(b.usage)
+    .filter((k) => k !== UK && used(k) > 0)
+    // ⚠ 同票用「字碼」比，不用 localeCompare：後者依瀏覽器語系排序，同一份資料在不同電腦上名次會不一樣
+    .sort((x, y) => (used(y) - used(x)) || mxCmp(String(names[x] || x), String(names[y] || y)) || mxCmp(x, y));
+  const N = Math.max(1, Math.floor(o.topN) || 20);
+  const top = ranked.slice(0, N);
+  const inTop = new Set(top);
+  const rankOf = new Map(ranked.map((k, i) => [k, i + 1]));
+  const minGames = Math.max(1, Math.floor(o.minGames) || 1);
+  const meta = (k) => ({ key: k, name: k === UK ? '未分類' : (names[k] || '（已刪除的規則）'),
+                         rank: rankOf.get(k) || null, usage: used(k),
+                         share: totalDecks > 0 ? used(k) / totalDecks : 0 });
+  const rowKeys = o.focusKey ? (b.usage[o.focusKey] ? [o.focusKey] : []) : top;
+  const rows = rowKeys.map((rk) => {
+    const pr = b.pairs[rk] || {};
+    const cells = top.map((ck) => mxCell(pr[ck], ck === rk, minGames));
+    const oth = [0, 0, 0];
+    for (const ck of Object.keys(pr)) {
+      if (inTop.has(ck) || ck === rk) continue;     // ⚠ 同型不併進「其他」（它的勝率恆 50%，併進去只會把「其他」往 50% 拉）
+      oth[0] += pr[ck][0]; oth[1] += pr[ck][1]; oth[2] += pr[ck][2];
+    }
+    return Object.assign(meta(rk), {
+      cells,
+      other: mxCell(oth, false, minGames),
+      overall: mxCell(b.usage[rk], false, minGames),
+    });
+  });
+  return { srcKey, topN: N, minGames, totalDecks, ranked: ranked.length,
+           cols: top.map(meta), rows, focusKey: o.focusKey || null };
+}
+
+/** 依名稱找原型鍵（單一牌組對戰表的輸入框）。完全相同優先，其次唯一的「包含」；找不到或不唯一回 null。 */
+function mxFindKey(data, text) {
+  const t = String(text || '').trim().toLowerCase();
+  if (!t || !data || !data.names) return null;
+  const ents = Object.entries(data.names);
+  const exact = ents.filter(([, n]) => String(n).trim().toLowerCase() === t);
+  if (exact.length === 1) return exact[0][0];
+  const part = ents.filter(([, n]) => String(n).toLowerCase().indexOf(t) >= 0);
+  return part.length === 1 ? part[0][0] : null;
+}
+
+/** 勝率 → 色（diverging，50% 為中性）。pal：{ neg, mid, pos }（#rrggbb）。樣本不足或沒有勝率回 pal.na。 */
+function mxColor(cell, pal) {
+  if (!cell || cell.winRate === null || !cell.ok) return pal.na;
+  const t = Math.max(-1, Math.min(1, (cell.winRate - 0.5) / 0.2));   // ±20 個百分點就到飽和
+  const to = t >= 0 ? pal.pos : pal.neg, a = Math.abs(t);
+  const hx = (s, i) => parseInt(s.slice(1 + i * 2, 3 + i * 2), 16);
+  const c = [0, 1, 2].map((i) => Math.round(hx(pal.mid, i) + (hx(to, i) - hx(pal.mid, i)) * a));
+  return '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+}
+// ══ MX-PURE-END ══════════════════════════════════════════════════════════════
+
+let _mxData = null, _mxBusy = false;
+let _mxOpt = { src: 'casual', topN: 20, minGames: 5 };
+// 網頁（白底）與報告圖（深底）各一組配色；兩者都走 mxColor 同一個內插。
+const MX_PAL_WEB = { neg: '#f87171', mid: '#f8fafc', pos: '#4ade80', na: '#eef1f5' };
+const MX_PAL_IMG = { neg: '#B91C1C', mid: '#2A3B5C', pos: '#15803D', na: '#1E2D47' };
+const MX_SRC_LABEL = { casual: '一般對戰', tourn: '錦標賽', all: '一般對戰＋錦標賽' };
+
+function mxReadOpts() {
+  const v = (id) => { const e = document.getElementById(id); return e ? e.value : null; };
+  _mxOpt = { src: v('mx-src') || _mxOpt.src, topN: Number(v('mx-topn')) || _mxOpt.topN, minGames: Number(v('mx-min')) || _mxOpt.minGames };
+  return _mxOpt;
+}
+function mxPeriodText() {
+  const days = Number(currentArchSince() || 0);
+  return days > 0 ? (miDate(Date.now() - days * 86400000) + '–' + miDate(Date.now())) : '全部時間';
+}
+
+window.loadArchMatchups = async function () {
+  if (_mxBusy) return;
+  _mxBusy = true;
+  const box = document.getElementById('mx-box');
+  if (box) box.innerHTML = '<div class="empty">計算中…（會掃描期間內每一場對戰，第一次會久一點）</div>';
+  try {
+    const days = Number(currentArchSince() || 0);   // 與上面的「統計範圍」同一個下拉
+    // ⚠ 取整到分鐘：伺服器 60 秒快取的鍵含 since，不取整的話每按一次都是不同毫秒、快取永遠不命中（Fable 審查）
+    const since = days > 0 ? Math.floor((Date.now() - days * 86400000) / 60000) * 60000 : 0;
+    const res = await api('/api/admin/deck-archetype-matchups?source=all&since=' + since);
+    if (!res || res.error) { if (box) box.innerHTML = '<div class="empty">讀取失敗：' + escapeHtml(res?.error || '?') + '</div>'; return; }
+    _mxData = res;
+    const dl = document.getElementById('mx-name-list');
+    if (dl) dl.innerHTML = Object.values(res.names || {}).sort().map((n) => '<option value="' + escapeHtml(n) + '">').join('');
+    ['mx-img-btn', 'mx-focus-btn'].forEach((id) => { const e = document.getElementById(id); if (e) e.disabled = false; });
+    renderArchMatchups();
+  } finally { _mxBusy = false; }
+};
+
+window.renderArchMatchups = function () {
+  const box = document.getElementById('mx-box');
+  if (!box || !_mxData) return;
+  const op = mxReadOpts();
+  const m = mxBuild(_mxData, op.src, { topN: op.topN, minGames: op.minGames });
+  if (!m || !m.cols.length) { box.innerHTML = '<div class="empty">這個資料源在統計範圍內沒有任何命中原型的對戰。</div>'; return; }
+  const sc = _mxData.scanned || {};
+  const pairs = op.src === 'casual' ? sc.casualPairs : op.src === 'tourn' ? sc.tournPairs : (sc.casualPairs || 0) + (sc.tournPairs || 0);
+  const cellHtml = (c, isMirror) => {
+    if (isMirror) return '<td class="mx-c" style="background:#e5e7eb;color:#6b7280;" title="同型對戰 ' + c.games + ' 場">同型<br><span class="mx-n">' + c.games + '</span></td>';
+    const bg = mxColor(c, MX_PAL_WEB);
+    const tip = c.w + ' 勝 ' + c.l + ' 負 ' + c.d + ' 和' + (c.ci ? '｜95% 區間 ' + miPct(c.ci[0], 0) + '～' + miPct(c.ci[1], 0) : '')
+      + (c.ok ? '' : '｜分出勝負的場數不足 ' + op.minGames + '，僅供參考');
+    const txt = c.winRate === null ? '—' : miPct(c.winRate, 0);
+    return '<td class="mx-c" style="background:' + bg + ';' + (c.ok ? '' : 'color:#9aa5b4;') + '" title="' + escapeHtml(tip) + '">'
+      + txt + '<br><span class="mx-n">' + c.games + '</span></td>';
+  };
+  const head = '<tr><th class="mx-h" style="text-align:left;">列＝使用的牌組 ／ 欄＝對手</th>'
+    + m.cols.map((c) => '<th class="mx-h" title="' + escapeHtml(c.name) + '">#' + c.rank + '</th>').join('')
+    + '<th class="mx-h">其他</th><th class="mx-h">全體</th></tr>';
+  const body = m.rows.map((r) => '<tr><th class="mx-r"><a href="javascript:void(0)" data-key="' + escapeHtml(r.key) + '" onclick="openArchFocus(this.dataset.key)">#' + r.rank + ' ' + escapeHtml(r.name) + '</a>'
+      + ' <span class="small muted">' + miPct(r.share, 1) + '</span></th>'
+      + r.cells.map((c) => cellHtml(c, c.mirror)).join('')
+      + cellHtml(r.other, false) + cellHtml(r.overall, false) + '</tr>').join('');
+  box.innerHTML = '<div class="small muted" style="margin:4px 0 6px;">' + MX_SRC_LABEL[op.src] + '｜' + mxPeriodText()
+    + '｜雙方都有牌表的對戰 ' + (pairs || 0).toLocaleString('zh-TW') + ' 場｜共 ' + m.ranked + ' 種原型，顯示前 ' + m.cols.length + ' 名'
+    + '<br>格子＝<b>列方</b>對該欄對手的勝率（和局不算），下方小字是場數；滑鼠停在格子上看勝負和與 95% 信賴區間。'
+    + '分出勝負的場數（和局不算）少於 ' + op.minGames + ' 的格子以灰字顯示。點牌組名稱看它的單一對戰表。</div>'
+    + '<div style="overflow-x:auto;"><table class="mx-t">' + head + body + '</table></div>';
+};
+
+// 單一牌組對戰表：從輸入框（名稱）或矩陣列名（key）進來
+window.openArchFocus = function (key) {
+  if (!_mxData) { alert('請先按「⚔️ 計算對戰勝率」。'); return; }
+  let k = key || null;
+  if (!k) {
+    const inp = document.getElementById('mx-name');
+    k = mxFindKey(_mxData, inp ? inp.value : '');
+    if (!k) { alert('找不到這個牌組原型（或名稱不唯一）。請從下拉清單選一個完整名稱。'); return; }
+  }
+  const op = mxReadOpts();
+  const m = mxBuild(_mxData, op.src, { topN: op.topN, minGames: op.minGames, focusKey: k });
+  if (!m || !m.rows.length) { alert('這個牌組在「' + MX_SRC_LABEL[op.src] + '」、目前的統計範圍內沒有對戰紀錄。'); return; }
+  const r = m.rows[0];
+  const line = (c, label, opp) => {
+    const bar = c.winRate === null || c.mirror ? '' : '<div style="position:relative;height:10px;background:#eef1f5;border-radius:5px;">'
+      + '<div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:#94a3b8;"></div>'
+      + '<div style="position:absolute;top:0;bottom:0;border-radius:5px;background:' + mxColor(Object.assign({}, c, { ok: true }), MX_PAL_WEB) + ';opacity:' + (c.ok ? 1 : 0.45) + ';'
+      + (c.winRate >= 0.5 ? 'left:50%;width:' + Math.min(50, (c.winRate - 0.5) * 200) : 'right:50%;width:' + Math.min(50, (0.5 - c.winRate) * 200)) + '%;"></div></div>';
+    return '<tr><td style="white-space:nowrap;">' + (opp && opp.rank ? '#' + opp.rank + ' ' : '') + escapeHtml(label) + '</td>'
+      + '<td style="min-width:160px;">' + bar + '</td>'
+      + '<td style="text-align:right;font-weight:600;' + (c.ok ? '' : 'color:#9aa5b4;') + '">' + (c.mirror ? '同型' : (c.winRate === null ? '—' : miPct(c.winRate, 1))) + '</td>'
+      + '<td class="small muted" style="text-align:right;white-space:nowrap;">' + c.games + ' 場'
+      + (c.mirror ? '' : '（' + c.w + '勝' + c.l + '負' + (c.d ? c.d + '和' : '') + '）') + '</td></tr>';
+  };
+  const rowsHtml = r.cells.map((c, i) => line(c, m.cols[i].name, m.cols[i])).join('')
+    + line(r.other, '其他（前 ' + m.cols.length + ' 名以外＋未分類）', null);
+  window._mxFocusKey = k;
+  document.getElementById('modal-container').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="min-width:560px;max-width:820px;max-height:88vh;overflow-y:auto;">'
+    + '<h3>⚔️ ' + escapeHtml(r.name) + ' 對前 ' + m.cols.length + ' 名</h3>'
+    + '<div class="small muted" style="margin-bottom:8px;">' + MX_SRC_LABEL[op.src] + '｜' + mxPeriodText()
+    + '｜使用率 ' + (r.rank ? '第 ' + r.rank + ' 名（' + miPct(r.share, 1) + '）' : miPct(r.share, 1))
+    + '｜全體勝率 <b>' + (r.overall.winRate === null ? '—' : miPct(r.overall.winRate, 1)) + '</b>（' + r.overall.games + ' 場）'
+    + '<br>長條以 50% 為中線：往右＝佔優、往左＝吃虧，兩端是 75%／25%；分出勝負的場數少於 ' + op.minGames + ' 的以淡色顯示。</div>'
+    + '<table style="width:100%;border-collapse:collapse;" class="mx-f">' + rowsHtml + '</table>'
+    + '<div style="display:flex;gap:8px;margin-top:12px;"><button onclick="exportArchFocusImage()">🖼️ 匯出對戰表圖</button>'
+    + '<button class="ghost" onclick="closeModal()">關閉</button></div></div></div>';
+};
+
+// ── 報告圖（深底，與環境報告圖同一套品牌帶與色票）──────────────────────────
+async function mxBrand(ctx, W) {
+  const K = MI.K;
+  const logo = await miLogo();
+  let tx = MI.PAD;
+  if (logo) { ctx.drawImage(logo, MI.PAD, 30, 76, 76); tx = MI.PAD + 94; }
+  ctx.textAlign = 'left';
+  ctx.fillStyle = K.txt; miFont(ctx, 38, true);
+  ctx.fillText('PTCG 台灣線上對戰模擬器', tx, 56);
+  ctx.fillStyle = K.dim; miFont(ctx, 26, false);
+  ctx.fillText(MI_URL, tx, 92);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = K.dim; miFont(ctx, 24, false);
+  ctx.fillText('資料截至 ' + new Date().toLocaleDateString('zh-TW'), W - MI.PAD, 56);
+}
+function mxCanvas(W, H) {
+  const cv = document.createElement('canvas');
+  cv.width = W * MI.S; cv.height = H * MI.S;
+  const ctx = cv.getContext('2d');
+  ctx.scale(MI.S, MI.S);
+  ctx.textBaseline = 'middle';
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, MI.K.bg0); bg.addColorStop(1, MI.K.bg1);
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  return { cv, ctx };
+}
+function mxTitle(ctx, title, sub, accent) {
+  const K = MI.K;
+  ctx.fillStyle = accent; miRR(ctx, MI.PAD, 166, 8, 62, 4); ctx.fill();
+  ctx.textAlign = 'left';
+  ctx.fillStyle = K.txt; miFont(ctx, 50, true);
+  ctx.fillText(miFit(ctx, title, 9999), MI.PAD + 24, 190);
+  ctx.fillStyle = K.dim; miFont(ctx, 26, false);
+  ctx.fillText(sub, MI.PAD + 24, 234);
+}
+function mxAccent(src) { return (MI.SRC[src] || MI.SRC.casual).a1; }
+
+/** 對戰矩陣圖：列＝名次＋牌組名、欄＝名次編號（20 個牌組名橫排放不下，編號對照左邊的列）。 */
+async function mxDrawMatrix(m, src) {
+  const K = MI.K, N = m.cols.length;
+  const cw = N <= 20 ? 66 : 54, ch = 54, labelW = 330;
+  const W = Math.max(1080, MI.PAD * 2 + labelW + (N + 2) * cw);
+  const top0 = 300, H = top0 + N * ch + 150;
+  const { cv, ctx } = mxCanvas(W, H);
+  await mxBrand(ctx, W);
+  mxTitle(ctx, '常用牌組對戰勝率', MX_SRC_LABEL[src] + '　・　' + mxPeriodText() + '　・　使用率前 ' + N + ' 名', mxAccent(src));
+  const x0 = MI.PAD + labelW;
+  // 欄頭：名次編號
+  ctx.textAlign = 'center'; ctx.fillStyle = K.dim; miFont(ctx, 22, true);
+  m.cols.forEach((c, j) => ctx.fillText('#' + c.rank, x0 + j * cw + cw / 2, top0 - 24));
+  ctx.fillText('其他', x0 + N * cw + cw / 2, top0 - 24);
+  ctx.fillText('全體', x0 + (N + 1) * cw + cw / 2, top0 - 24);
+  ctx.textAlign = 'left'; miFont(ctx, 20, false);
+  ctx.fillText('列＝使用的牌組　欄＝對手', MI.PAD, top0 - 24);
+  const drawCell = (c, x, y) => {
+    ctx.fillStyle = c.mirror ? K.row : mxColor(c, MX_PAL_IMG);
+    miRR(ctx, x + 2, y + 2, cw - 4, ch - 4, 6); ctx.fill();
+    ctx.textAlign = 'center';
+    if (c.mirror) { ctx.fillStyle = K.dim; miFont(ctx, 18, false); ctx.fillText('同型', x + cw / 2, y + ch / 2 - 9); ctx.fillText(String(c.games), x + cw / 2, y + ch / 2 + 12); return; }
+    ctx.fillStyle = c.ok ? K.txt : K.dim; miFont(ctx, 22, true);
+    ctx.fillText(c.winRate === null ? '—' : Math.round(c.winRate * 100) + '%', x + cw / 2, y + ch / 2 - 9);
+    miFont(ctx, 16, false); ctx.fillStyle = c.ok ? K.mid : K.dim;
+    ctx.fillText(String(c.games), x + cw / 2, y + ch / 2 + 13);
+  };
+  m.rows.forEach((r, i) => {
+    const y = top0 + i * ch;
+    if (i % 2 === 0) { ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(MI.PAD, y, W - MI.PAD * 2, ch); }
+    ctx.textAlign = 'left'; ctx.fillStyle = K.dim; miFont(ctx, 22, true);
+    ctx.fillText('#' + r.rank, MI.PAD, y + ch / 2);
+    ctx.fillStyle = K.txt; miFont(ctx, 24, true);
+    ctx.fillText(miFit(ctx, r.name, labelW - 140), MI.PAD + 58, y + ch / 2);
+    ctx.textAlign = 'right'; ctx.fillStyle = K.dim; miFont(ctx, 18, false);
+    ctx.fillText(miPct(r.share, 1), x0 - 12, y + ch / 2);
+    r.cells.forEach((c, j) => drawCell(c, x0 + j * cw, y));
+    drawCell(r.other, x0 + N * cw, y);
+    drawCell(r.overall, x0 + (N + 1) * cw, y);
+  });
+  // 圖例與註腳
+  const ly = top0 + N * ch + 40;
+  const gx = MI.PAD, gw = 360;
+  const grad = ctx.createLinearGradient(gx, 0, gx + gw, 0);
+  grad.addColorStop(0, MX_PAL_IMG.neg); grad.addColorStop(0.5, MX_PAL_IMG.mid); grad.addColorStop(1, MX_PAL_IMG.pos);
+  ctx.fillStyle = grad; miRR(ctx, gx, ly - 10, gw, 20, 10); ctx.fill();
+  ctx.fillStyle = K.dim; miFont(ctx, 18, false);
+  ctx.textAlign = 'left'; ctx.fillText('≤30%', gx, ly + 26);
+  ctx.textAlign = 'center'; ctx.fillText('50%', gx + gw / 2, ly + 26);
+  ctx.textAlign = 'right'; ctx.fillText('≥70%', gx + gw, ly + 26);
+  ctx.textAlign = 'left'; miFont(ctx, 20, false);
+  const notes = ['格子＝列方對該欄對手的勝率（和局不算），小字為場數；灰字＝分出勝負的場數少於 ' + m.minGames + ' 場，僅供參考。',
+    '「其他」＝前 ' + N + ' 名以外與未分類的牌組；「全體」＝該牌組全部對戰。牌組分類依站上的牌組原型規則。'];
+  notes.forEach((t, i) => ctx.fillText(miFit(ctx, t, W - MI.PAD * 2 - gw - 30), gx + gw + 30, ly - 6 + i * 30));
+  return cv;
+}
+
+/** 單一牌組對戰表圖（1080×1350，與環境報告圖同尺寸）：以 50% 為中線的左右長條。 */
+async function mxDrawFocus(m, src) {
+  const K = MI.K, W = MI.W, H = MI.H;
+  const r = m.rows[0];
+  const items = r.cells.map((c, i) => ({ c, name: m.cols[i].name, rank: m.cols[i].rank }))
+    .concat([{ c: r.other, name: '其他（前 ' + m.cols.length + ' 名以外）', rank: null }]);
+  const { cv, ctx } = mxCanvas(W, H);
+  await mxBrand(ctx, W);
+  mxTitle(ctx, r.name + ' 對戰表', MX_SRC_LABEL[src] + '　・　' + mxPeriodText(), mxAccent(src));
+  // 摘要帶
+  ctx.textAlign = 'left'; ctx.fillStyle = K.txt; miFont(ctx, 26, false);
+  ctx.fillText('全體勝率 ' + (r.overall.winRate === null ? '—' : miPct(r.overall.winRate, 1)) + '（' + r.overall.games + ' 場）'
+    + '　・　使用率 ' + (r.rank ? '第 ' + r.rank + ' 名 ' : '') + miPct(r.share, 1), MI.PAD, 292);
+  const top0 = 350, avail = H - top0 - 140;
+  const rh = Math.min(46, Math.floor(avail / items.length));
+  const nameX = MI.PAD, barX = 470, barW = 360, cx = barX + barW / 2, pctX = 940, nX = W - MI.PAD;
+  ctx.fillStyle = K.dim; miFont(ctx, 20, false);
+  ctx.textAlign = 'left'; ctx.fillText('對手（使用率名次）', nameX, top0 - 22);
+  ctx.textAlign = 'left'; ctx.fillText('25%', barX, top0 - 22);
+  ctx.textAlign = 'center'; ctx.fillText('吃虧 ← 50% → 佔優', cx, top0 - 22);
+  ctx.textAlign = 'right'; ctx.fillText('75%', barX + barW, top0 - 22);
+  ctx.textAlign = 'right'; ctx.fillText('勝率', pctX, top0 - 22); ctx.fillText('場數', nX, top0 - 22);
+  items.forEach((it, i) => {
+    const y = top0 + i * rh + rh / 2, c = it.c;
+    if (i % 2 === 0) { ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(MI.PAD - 8, y - rh / 2, W - MI.PAD * 2 + 16, rh); }
+    ctx.textAlign = 'left'; ctx.fillStyle = K.dim; miFont(ctx, 20, true);
+    if (it.rank) ctx.fillText('#' + it.rank, nameX, y);
+    ctx.fillStyle = K.txt; miFont(ctx, 23, false);
+    ctx.fillText(miFit(ctx, it.name, barX - nameX - 70), nameX + 52, y);
+    ctx.fillStyle = K.row; miRR(ctx, barX, y - 8, barW, 16, 8); ctx.fill();
+    if (!c.mirror && c.winRate !== null) {
+      // 長條半邊＝25 個百分點（勝率幾乎都落在 25%～75%；用 0～100% 當滿格的話每條都只有一點點長）
+      const len = Math.min(1, Math.abs(c.winRate - 0.5) / 0.25) * (barW / 2);
+      ctx.globalAlpha = c.ok ? 1 : 0.45;
+      ctx.fillStyle = c.winRate > 0.5 ? K.up : K.dn;
+      if (len > 0.5) { miRR(ctx, c.winRate > 0.5 ? cx : cx - len, y - 8, len, 16, 6); ctx.fill(); }
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = K.mid; ctx.fillRect(cx - 1, y - 13, 2, 26);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = (c.mirror || !c.ok || c.winRate === null) ? K.dim : (c.winRate > 0.5 ? K.up : (c.winRate < 0.5 ? K.dn : K.txt)); miFont(ctx, 24, true);
+    ctx.fillText(c.mirror ? '同型' : (c.winRate === null ? '—' : miPct(c.winRate, 1)), pctX, y);
+    ctx.fillStyle = K.dim; miFont(ctx, 20, false);
+    ctx.fillText(String(c.games), nX, y);
+  });
+  ctx.textAlign = 'left'; ctx.fillStyle = K.dim; miFont(ctx, 20, false);
+  const ny = H - 96;
+  ['勝率＝勝 ÷（勝＋負），和局不算；淡色＝分出勝負的場數少於 ' + m.minGames + ' 場，僅供參考。',
+   '牌組分類依站上的牌組原型規則；「其他」含使用率前 ' + m.cols.length + ' 名以外與未分類的牌組。']
+    .forEach((t, i) => ctx.fillText(miFit(ctx, t, W - MI.PAD * 2), MI.PAD, ny + i * 30));
+  return cv;
+}
+
+let _mxImg = null;
+function mxShowImage(cv, title, fname) {
+  _mxImg = { cv, fname };
+  document.getElementById('modal-container').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:820px;width:100%;">'
+    + '<h3>🖼️ ' + escapeHtml(title) + '</h3>'
+    + '<img src="' + cv.toDataURL('image/png') + '" alt="' + escapeHtml(title) + '" style="width:100%;border-radius:10px;display:block;">'
+    + '<div style="display:flex;gap:8px;margin-top:12px;"><button onclick="downloadMxImage()">⬇️ 下載</button>'
+    + '<button class="ghost" onclick="closeModal()">關閉</button></div>'
+    + '<div class="small muted" style="margin-top:8px;">' + (cv.width / MI.S) + '×' + (cv.height / MI.S) + '（2× 輸出）。手機可長按圖片儲存。</div>'
+    + '</div></div>';
+}
+window.downloadMxImage = function () {
+  if (!_mxImg) return;
+  _mxImg.cv.toBlob(function (blob) {
+    if (!blob) { alert('產生檔案失敗'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = _mxImg.fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }, 'image/png');
+};
+window.exportArchMatrixImage = async function () {
+  if (!_mxData) { alert('請先按「⚔️ 計算對戰勝率」。'); return; }
+  const op = mxReadOpts();
+  const m = mxBuild(_mxData, op.src, { topN: op.topN, minGames: op.minGames });
+  if (!m || !m.cols.length) { alert('這個資料源沒有任何命中原型的對戰，無法產圖。'); return; }
+  try {
+    mxShowImage(await mxDrawMatrix(m, op.src), '常用牌組對戰勝率', 'ptcg-matchups-' + op.src + '-top' + m.cols.length + '-' + miStamp(Date.now()) + '.png');
+  } catch (e) { alert('產圖失敗：' + (e && e.message ? e.message : e)); }
+};
+window.exportArchFocusImage = async function () {
+  if (!_mxData || !window._mxFocusKey) return;
+  const op = mxReadOpts();
+  const m = mxBuild(_mxData, op.src, { topN: op.topN, minGames: op.minGames, focusKey: window._mxFocusKey });
+  if (!m || !m.rows.length) { alert('這個牌組沒有對戰紀錄。'); return; }
+  try {
+    mxShowImage(await mxDrawFocus(m, op.src), m.rows[0].name + ' 對戰表', 'ptcg-matchup-' + op.src + '-' + miStamp(Date.now()) + '.png');
+  } catch (e) { alert('產圖失敗：' + (e && e.message ? e.message : e)); }
+};
 
 window.loadArchetypeStats = async function() {
   if (_archStatsBusy) return;

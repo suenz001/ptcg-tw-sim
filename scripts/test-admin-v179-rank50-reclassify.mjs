@@ -305,8 +305,13 @@ await T('★★★B1 序位：空白＝50、填 0＝0、表單預設 50、編輯
 await T('★★★B2 歷屆賽事冠軍牌型：原型名／未分類（附主力）／還沒判定（主力寶可夢＋標註）；只送有冠軍有牌表的場次', () => assert.ok(B.B2, B.B2detail));
 await T('★★★B3 重新判定冠軍牌型：每 500 副一批、結果整份換新並重畫表格；伺服器錯誤 ⇒ 顯示原因、舊結果不動', () => assert.ok(B2.B3, B2.B3detail));
 await T('★★B4 一鍵重新判定的按鈕與結果摘要、冠軍牌型按鈕、載入賽事統計後自動判定一次、冠軍牌型欄可排序', () => assert.ok(B2.B4));
-await T('★B5 admin 版本 v1.79（title 與 h1 一致）', () => {
-  assert.ok(ADMIN.includes('<title>PTCG Oracle Admin v1.79</title>') && ADMIN.includes('<h1>🛠️ PTCG Oracle Admin <span class="small">v1.79</span></h1>'));
+await T('★B5 admin 版本 ≥ v1.79（title 與 h1 一致）', () => {
+  // ⭐admin v1.80（Rule 40）：原本釘死「v1.79」字面，下一版一 bump 就紅（安慰劑型態 9：pin 死版本號）。
+  //   意圖不變（本版功能上線時版本號有跟著升、title 與 h1 一致）⇒ 改成「兩處相同且 ≥ 1.79」。
+  const t = (/<title>PTCG Oracle Admin v(\d+)\.(\d+)<\/title>/.exec(ADMIN) || []);
+  const h = (/<h1>🛠️ PTCG Oracle Admin <span class="small">v(\d+)\.(\d+)<\/span><\/h1>/.exec(ADMIN) || []);
+  const v = (m) => (m.length ? Number(m[1]) * 1000 + Number(m[2]) : -1);
+  assert.ok(v(t) >= 1079 && v(t) === v(h), 'title=' + t[0] + ' h1=' + h[0]);
 });
 
 // ════════════════════════════════════════════════════════════════════

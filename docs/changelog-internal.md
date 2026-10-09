@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## admin v1.80／server patch v1.58：常用牌組對戰勝率（2026-10-10，admin 專用，不寫對外 changelog）
+
+BASE e867d7c2。站長：「抓前20名使用率的牌組 如 多龍巴魯托牌組 對上 N的索羅亞克 呆呆王 超級龍頭地鼠等同樣是前20名使用率的牌組 彼此間的勝率」「或是增加 我輸入牌組原型名稱 然後就能產生該牌組對前20名使用率的牌組的勝率分析」。
+- 伺服器（registerDeckRules 所在 IIFE、v157-reclassify 之後，錦標賽區塊之前 ⇒ 28 把鎖不動；哨兵 v158-arch-matchups）：唯讀端點 GET /api/admin/deck-archetype-matchups?source&since&excludeAI。每場雙方都分類，回每個原型的 [勝,負,和] 與每一對原型的 [勝,負,和]（列方視角；同型記兩筆；只有一側有牌表 ⇒ 記使用不記對戰）。口徑與 deck-archetype-stats 相同（同一支 buildCasualCleanFilter／classifyDeck／casualSideResult／tournSideResult、同一份規則查詢）⇒ 排名與環境報告圖一致。60 秒快取；只回計數與規則名稱，牌表不出去。
+- admin：牌組原型頁新增「⚔️ 常用牌組對戰勝率」——資料來源（一般對戰／錦標賽／合併）、前 N 名（10～30）、最少場數；矩陣表格（滑鼠停看勝負和與 95% 信賴區間）；「單一牌組」輸入任何原型名稱 ⇒ 對前 N 名的對戰表；兩種匯出圖（矩陣圖：欄用名次編號；單一牌組對戰表 1080×1350）。前 N 名、「其他」、同型、指定牌組都在純函式 mxBuild（MX-PURE 區段）算，換設定不必重掃。
+- 還原鏈加 sap-revert-admin-v158（test-v6303 H3、test-sap153、test-sap154）。
+- Rule 40：test-admin-v179 B5 原本釘死「v1.79」字面（pin 死版本號）⇒ 改成「title 與 h1 相同且 ≥ v1.79」；新守衛的版本斷言同樣不釘死。
+- Fable 5.1 獨立審查：可以推送、無阻擋；已採納四項建議——前端 since 取整到分鐘（60 秒快取才命中得到）、列名點擊改 data-key（escapeHtml 不跳脫單引號）、「最少場數」文案改成「分出勝負的場數」、守衛的假 DB 真的套用 projection 並斷言兩個迴圈都讓路。未採納：既有 deck-archetype-stats 前端的同型問題（不在本版範圍）。
+- test-admin-v180（25 條；HEAD 紅 S／P／U 組；突變 11 組全殺）。部署：update-tournament.bat。
+
 ## 測試工具：全套執行器修正（2026-10-09，玩家端零變更、不 bump）
 
 - 站長要求檢查改版耗時。實測發現 `scripts/run-tests.mjs` 三個問題：

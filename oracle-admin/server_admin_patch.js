@@ -3734,6 +3734,124 @@ import('firebase-admin').then(async ({ default: admin }) => {
     finally { _reclassifyBusy = false; }
   });
   // <<< v157-reclassify
+  // >>> v158-arch-matchups
+  // ⭐v1.58（站長 2026-10-10）：「抓前20名使用率的牌組，如多龍巴魯托牌組對上 N的索羅亞克、呆呆王、超級龍頭地鼠等
+  //   同樣是前20名使用率的牌組，彼此間的勝率」「我輸入牌組原型名稱，就能產生該牌組對前20名使用率的牌組的勝率分析」。
+  //   ⇒ 唯讀統計端點：每一場對戰把**雙方**都分類，記「列方原型 對 欄方原型」的勝／負／和。
+  //   口徑刻意與 /api/admin/deck-archetype-stats 完全相同（同一套淨化條件、同一份規則查詢、同一支 classifyDeck、
+  //   同一支 casualSideResult／tournSideResult、同樣「每場每一側＝1 筆使用」）⇒ usage 逐原型等於環境報告圖，
+  //   前 N 名的排名也就跟環境報告圖一致（守衛拿同一份假 DB 實跑兩支端點逐原型比對）。
+  //   ⚠ 前 N 名、「其他」欄、指定牌組那一列都在前端（admin 的純函式 mxBuild）用這份原始計數算，伺服器不做選擇 ⇒
+  //     換 N、換牌組都不必重掃資料庫；這裡只回計數，牌表一張都不出去。
+  //   ⚠ 一場只有一側有牌表 ⇒ 那一側照樣記使用（與環境報告圖一致），但不記對戰（不知道對手是誰）。
+  //   鍵：命中規則＝規則 _id 字串；沒命中＝'_u'（未分類）。
+  const _archMatchupCache = new Map();
+  const ARCH_MU_UNCLASSIFIED = '_u';
+  app.get('/api/admin/deck-archetype-matchups', requireFirebaseAdmin, async (req, res) => {
+    if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
+    const source = ['casual', 'tourn', 'all'].includes(String(req.query.source)) ? String(req.query.source) : 'all';
+    const since = req.query.since ? (parseInt(req.query.since) || 0) : 0;
+    const excludeAI = req.query.excludeAI !== 'false';
+    const ck = source + '|' + since + '|' + excludeAI;
+    const now = Date.now();
+    const hit = _archMatchupCache.get(ck);
+    if (hit && now - hit.at < 60000) return res.json({ ...hit.data, cached: true });
+    try {
+      const nameMap = await getCardNameMap();
+      if (!nameMap.size) return res.status(503).json({ error: '伺服器卡名對照尚未載入，稍後再試' });
+      // 與 deck-archetype-stats 同一份查詢（啟用中、依 priority）——不走 30 秒規則快取，規則一改立刻反映
+      const rules = await TRULES.find({ enabled: { $ne: false } }).sort({ priority: 1 }).toArray();
+      const mkBucket = () => ({ usage: {}, pairs: {} });
+      const out = { casual: mkBucket(), tourn: mkBucket() };
+      const scanned = { casualMatches: 0, casualDecks: 0, casualPairs: 0, tournEvents: 0, tournDecks: 0, tournPairs: 0 };
+      const keyOf = (deckRef) => {
+        const c = classifyDeck(deckToSets(deckRef, nameMap), rules);
+        return c.rule ? String(c.rule._id) : ARCH_MU_UNCLASSIFIED;
+      };
+      const RIDX = { win: 0, loss: 1, draw: 2 };
+      const addUsage = (b, k, result) => {
+        const u = b.usage[k] || (b.usage[k] = [0, 0, 0]);
+        u[RIDX[result]]++;
+      };
+      const addPair = (b, row, col, result) => {
+        const r = b.pairs[row] || (b.pairs[row] = {});
+        const c = r[col] || (r[col] = [0, 0, 0]);
+        c[RIDX[result]]++;
+      };
+      /** 一場對戰：sides = [{ deck, result }, { deck, result }]（deck 可能缺） */
+      const tallyMatch = (bucket, sides, statKey) => {
+        const b = out[bucket];
+        const keys = sides.map((sd) => (sd.deck ? keyOf(sd.deck) : null));
+        sides.forEach((sd, i) => { if (keys[i] !== null) { scanned[statKey + 'Decks']++; addUsage(b, keys[i], sd.result); } });
+        if (keys[0] !== null && keys[1] !== null) {
+          scanned[statKey + 'Pairs']++;
+          addPair(b, keys[0], keys[1], sides[0].result);
+          addPair(b, keys[1], keys[0], sides[1].result);
+        }
+      };
+      const hasDeck = (d) => !!d && (Array.isArray(d) ? d.length > 0 : Object.keys(d).length > 0);
+
+      // ── 休閒：與 deck-archetype-stats 同一支 buildCasualCleanFilter、同樣只取牌表與勝方 ──
+      if (source === 'casual' || source === 'all') {
+        const q = buildCasualCleanFilter({ excludeAI, since });
+        const cur = db.collection('matchRecords')
+          .find(q, { projection: { 'p1.cardCounts': 1, 'p2.cardCounts': 1, winner: 1 } })
+          .sort({ endedAt: -1 });
+        for await (const m of cur) {
+          scanned.casualMatches++;
+          const _y = adminScanYield(scanned.casualMatches); if (_y) await _y;
+          const sides = ['p1', 'p2'].map((side) => {
+            const cc = m[side] && m[side].cardCounts;
+            return { deck: hasDeck(cc) ? cc : null, result: casualSideResult(m.winner, side === 'p1') };
+          });
+          tallyMatch('casual', sides, 'casual');
+        }
+      }
+
+      // ── 錦標賽：與 deck-archetype-stats 同樣只算非 bye、有勝方的對局；牌組＝報名鎖定的那副 ──
+      if (source === 'tourn' || source === 'all') {
+        const q = {};
+        if (since) q.finishedAt = { $gte: since };
+        const cur = db.collection('tournamentArchives')
+          .find(q, { projection: { 'players.uid': 1, 'players.deckEntries': 1, 'matches.bye': 1,
+                                   'matches.winnerUid': 1, 'matches.p1uid': 1, 'matches.p2uid': 1 } })
+          .sort({ finishedAt: -1 });
+        let nm = 0;
+        for await (const a of cur) {
+          scanned.tournEvents++;
+          const deckByUid = new Map();
+          for (const p of (a.players || [])) if (p && p.uid) deckByUid.set(String(p.uid), p.deckEntries || []);
+          for (const m of (a.matches || [])) {
+            if (!m || m.bye || !m.winnerUid) continue;
+            nm++;
+            const _y = adminScanYield(nm); if (_y) await _y;
+            const sides = [m.p1uid, m.p2uid].map((uid) => {
+              const d = uid ? deckByUid.get(String(uid)) : null;
+              return { deck: hasDeck(d) ? d : null, result: tournSideResult(m.winnerUid, uid) };
+            });
+            tallyMatch('tourn', sides, 'tourn');
+          }
+        }
+      }
+
+      // 規則名稱（只列有出現的，依 priority 原順序）
+      const seen = new Set();
+      for (const bk of ['casual', 'tourn']) for (const k of Object.keys(out[bk].usage)) seen.add(k);
+      const names = {};
+      for (const r of rules) { const id = String(r._id); if (seen.has(id)) names[id] = r.name || ''; }
+      const data = { source, since, excludeAI, ruleCount: rules.length, scanned, names,
+                     unclassifiedKey: ARCH_MU_UNCLASSIFIED,
+                     casual: (source === 'tourn') ? null : out.casual,
+                     tourn: (source === 'casual') ? null : out.tourn, at: now };
+      _archMatchupCache.set(ck, { at: now, data });
+      if (_archMatchupCache.size > 30) { const k0 = _archMatchupCache.keys().next().value; _archMatchupCache.delete(k0); }
+      res.json(data);
+    } catch (e) {
+      console.warn('[deck-archetype-matchups] error:', e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+  // <<< v158-arch-matchups
 
   app.get('/api/admin/stats/heatmap', requireFirebaseAdmin, async (req, res) => {
       if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
