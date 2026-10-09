@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## 測試工具：全套執行器修正（2026-10-09，玩家端零變更、不 bump）
+
+- 站長要求檢查改版耗時。實測發現 `scripts/run-tests.mjs` 三個問題：
+  - `--baseline` 比對迴圈的 `bm` 同名遮蔽 ⇒ TDZ，一跑完就當掉、報表寫不出來。
+  - 計時歷史只存在沙盒根 `__rt/`，每輪刪沙盒就清空 ⇒ 每支逾時都只有 120 秒、6 支慢守衛固定 TIMEOUT 要人工單跑。
+  - 預設 6 workers，雲端容器只有 2 核 ⇒ 嚴重爭用。
+- 修法：改名 `bMarks`；計時歷史改存 `<sandbox-root>-history/durations.json`（可用 `--history-dir` 指定，逾時與舊值取大）；預設 workers ＝ min(6, 核數＋1)。
+- 守衛：`test-runner-baseline-history`（逐字抽出比對區段與歷史合併函式實跑；BASE v6.517 必丟 TDZ）。
+
 ## v6.517：系統 audit 第二輪（2026-10-09）
 
 BASE v6.516（031e238d）。站長：「繼續audit看看系統有沒有其他的問題」。

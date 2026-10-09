@@ -89,11 +89,16 @@ function argVal(name, dflt) {
 function argFlag(name) { return process.argv.includes(name); }
 
 const OPT = {
-  workers: Math.max(1, parseInt(argVal('--workers', '6'), 10) || 6),
+  // ⭐ 預設 workers ＝ min(6, CPU 核數＋1)（2026-10-09 實測）：雲端容器只有 2 核，開 6 個 workers
+  //   會讓單跑 0.8 秒的守衛在全套裡變成 2～10 秒、6 支慢守衛固定 TIMEOUT；3 個 workers 反而整輪更快且零逾時重跑。
+  workers: Math.max(1, parseInt(argVal('--workers', String(Math.min(6, os.cpus().length + 1))), 10) || 6),
   sandboxRoot: argVal('--sandbox-root', 'E:\\sb'),   // 短路徑：E:\sb\w1\repo 與主樹 E:\ptcg-tw-sim 同長度級距（MAX_PATH 餘裕）
   drives: String(argVal('--drives', 'P,Q,R,S,T,U')).split(',').map(s => s.trim().toUpperCase()).filter(Boolean),
   // ⚠ 報表**不寫主樹**（站長硬性要求：runner 對主樹只讀不寫，除 .git/worktrees/*）
   report: argVal('--report', ''),
+  // ⭐ 計時歷史放在沙盒根**之外**：沙盒每輪開跑前常被整個刪掉（rm -rf <sandbox-root>），
+  //   歷史若只存在 <sandbox-root>/__rt 就永遠是空的 ⇒ 每支逾時都只拿到 120 秒下限、排程也不知道誰該先跑。
+  historyDir: argVal('--history-dir', ''),
   baseline: argVal('--baseline', ''),
   timeoutMul: parseFloat(argVal('--timeout-mul', '3')) || 3,
   // heavy 的「耗時 top-N」門檻。預設 4 是上線時的值；
@@ -124,6 +129,8 @@ const OPT = {
 };
 
 if (!OPT.report) OPT.report = join(OPT.sandboxRoot, '__rt', `report-w${OPT.workers}-${Date.now()}.json`);
+if (!OPT.historyDir) OPT.historyDir = String(OPT.sandboxRoot).replace(/[\\/]+$/, '') + '-history';
+const HISTORY_FILE = join(OPT.historyDir, 'durations.json');
 if (OPT.dumpOut) {
   const abs = pResolve(OPT.dumpOut);
   if (!abs.toLowerCase().startsWith(pResolve(OPT.sandboxRoot).toLowerCase())) {
@@ -305,8 +312,33 @@ function classifyTiming(uniq) {
 }
 
 // 讀既有的逐支耗時（用來做 LPT 長尾優先排程與 per-guard timeout）
+// 把本輪每支的耗時併進沙盒外的計時歷史（只寫 historyDir，不碰主樹）。
+//   逾時的那支記成「逾時上限」與舊值取大 ⇒ 下一輪逾時是它的 3 倍，一路長到夠用為止。
+//   失敗不致命：歷史只影響排程與逾時，不影響任何判準。
+function mergeHistory(prev, results) {
+  const h = { ...(prev || {}) };
+  for (const r of results || []) {
+    if (!r || !r.script || !(r.ms > 0)) continue;
+    h[r.script] = r.timedOut ? Math.max(h[r.script] || 0, r.ms) : r.ms;
+  }
+  return h;
+}
+function saveHistory(results) {
+  try {
+    let prev = {};
+    try { prev = JSON.parse(readFileSync(HISTORY_FILE, 'utf8')); } catch { /* 沒有就從空的開始 */ }
+    ensureDir(OPT.historyDir);
+    writeFileSync(HISTORY_FILE, JSON.stringify(mergeHistory(prev, results), null, 1));
+  } catch (e) { log(`⚠ 計時歷史寫不進 ${HISTORY_FILE}：${e.message}`); }
+}
 function loadDurations() {
   const map = new Map();
+  // ⭐ 沙盒外的計時歷史（{ 腳本: 毫秒 }）**最優先**：它是每輪合併進去的最新量測；
+  //   --baseline 是拿來比對的舊報表，裡面逾時的那幾支只記著逾時上限，拿它當耗時會讓逾時永遠長不上去。
+  try {
+    const h = JSON.parse(readFileSync(HISTORY_FILE, 'utf8'));
+    for (const [k, v] of Object.entries(h || {})) if (v > 0) map.set(k, v);
+  } catch { /* 第一次跑沒有歷史，照舊 */ }
   const cands = [];
   if (OPT.baseline) cands.push(OPT.baseline);
   const rtDir = join(OPT.sandboxRoot, '__rt');
@@ -1205,15 +1237,17 @@ function finish(ctx) {
         if (!b) { diffs.push({ script: r.script, why: '基準沒有這一支' }); continue; }
         // ⭐ 不只比 exit code —— 也比 PASS/FAIL 條數。
         //   假綠的典型形狀是「支數還是綠、斷言數少跑了一整段」。
-        const bm = b.skipMarks || { shallow: b.shallowSkips || 0, platform: 0, env: 0 };
+        // ⚠ 這裡的變數名不可以叫 bm：外層的 bm 是「基準表」（上面的 bm.get、下面的 bm.keys()），
+        //   同名 const 會遮蔽它 ⇒ 上面那行 bm.get 落在 TDZ ⇒ --baseline 模式一跑完就當掉、報表寫不出來（2026-10-09 實測）。
+        const bMarks = b.skipMarks || { shallow: b.shallowSkips || 0, platform: 0, env: 0 };
         const rm = r.skipMarks || { shallow: r.shallowSkips || 0, platform: 0, env: 0 };
         const markStr = (m) => `sh${m.shallow || 0}/pf${m.platform || 0}/env${m.env || 0}`;
-        const marksDiffer = (bm.shallow || 0) !== (rm.shallow || 0)
-                         || (bm.platform || 0) !== (rm.platform || 0)
-                         || (bm.env || 0) !== (rm.env || 0);
+        const marksDiffer = (bMarks.shallow || 0) !== (rm.shallow || 0)
+                         || (bMarks.platform || 0) !== (rm.platform || 0)
+                         || (bMarks.env || 0) !== (rm.env || 0);
         if (b.exitCode !== r.exitCode || b.pass !== r.pass || b.fail !== r.fail || marksDiffer) {
           diffs.push({ script: r.script,
-            why: `基準 exit=${b.exitCode} P${b.pass}/F${b.fail} ${markStr(bm)}`
+            why: `基準 exit=${b.exitCode} P${b.pass}/F${b.fail} ${markStr(bMarks)}`
                + ` ／ 本次 exit=${r.exitCode} P${r.pass}/F${r.fail} ${markStr(rm)}` });
         }
         // ⚠ 兩個偵測器要**各自獨立**判斷，不可以用 else-if 串起來：
@@ -1268,6 +1302,7 @@ function finish(ctx) {
   };
   ensureDir(dirname(OPT.report));
   writeFileSync(OPT.report, JSON.stringify(report, null, 1));
+  saveHistory(results);
 
   // ── 摘要 ──────────────────────────────────────────────────────────────
   log('\n════════════════════════════════════════════════════════════════');
