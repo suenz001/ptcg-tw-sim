@@ -45,7 +45,9 @@ function board(p0, p1) {
     setupDone: [true, true], pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0], pendingSelection: null,
     players: [
       { ...s.players[0], hand: [], deck: [inst(GRASS), inst(GRASS), inst(GRASS), inst(DEF)], discard: [], prizes: Array.from({ length: 6 }, () => inst(DEF)), bench: [], ...p0 },
-      { ...s.players[1], hand: [], deck: [inst(DEF)], discard: [], prizes: Array.from({ length: 6 }, () => inst(DEF)), bench: [inst(KOKO)], ...p1 }] };
+      // ⭐v6.516（Rule 40）：對手預設要有戰鬥寶可夢——原本省略 ⇒ 「對手戰鬥場空、備戰有寶可夢」，v6.516 起引擎會先等對手補位、擋下我方動作；
+      //   本守衛要驗的是特性時機，與對手戰鬥場無關 ⇒ 補一隻（各條自己指定 p1.active 時照舊覆寫）
+      { ...s.players[1], hand: [], deck: [inst(DEF)], discard: [], prizes: Array.from({ length: 6 }, () => inst(DEF)), active: inst(KOKO), bench: [inst(KOKO)], ...p1 }] };
 }
 const isPrompt = (s) => s.pendingSelection?.effectKey === 'resolve-promote-active-ability-prompt';
 const answer = (s, yes) => applyAction(s, { type: 'RESOLVE_SELECTION', senderIdx: 0, actorIdx: 0, effectKey: s.pendingSelection.effectKey, selectedIids: [yes ? 'yes' : 'no'] }, pool);

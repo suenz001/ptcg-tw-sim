@@ -8,7 +8,7 @@
 //   A1  逃跑抽出後（戰鬥場空、備戰有寶可夢）：打基礎寶可夢、附能量、用訓練家、撤退、攻擊、結束回合、用特性 ⇒ 全部 no-op
 //   A2  派出新的戰鬥寶可夢之後，打基礎寶可夢、附能量照常可以（正對照：閘會放行）
 //   A3  戰鬥場有寶可夢時一切照舊（零回歸）
-//   A4  只看輪到行動的那一方：對手戰鬥場空著時，我方動作不受影響（範圍）
+//   A4  （v6.516 起反轉，Rule 40：站長要求的 audit 擴大到雙方）對手戰鬥場空著時，我方動作也要等對手補位
 //   A5  備戰區沒有寶可夢時不擋（交給終局管線）
 //   A6  AI：戰鬥場空著時第一個動作就是派出新的戰鬥寶可夢
 //   H   HEAD-FAIL：同一批情境餵 BASE（v6.514）的 engine，A1 必紅（逐條列出）
@@ -97,7 +97,7 @@ function scenarios(M) {
     const h = inst(C.snorlax), s3 = mk(ENG, { active: inst(C.snorlax), bench: [inst(C.snorlax)], hand: [h] });
     return ENG.applyAction(s3, { type: 'PLAY_BASIC', iid: h.iid }, pool).players[0].bench.some((c) => c.iid === h.iid);
   });
-  // A4：對手戰鬥場空著 ⇒ 我方動作不受影響
+  // A4：對手戰鬥場空著時「我方打出基礎寶可夢」是否成功（v6.516 起應為失敗＝被擋；BASE 為成功）
   T('A4', () => {
     const h = inst(C.snorlax), s4 = mk(ENG, { active: inst(C.snorlax), bench: [], hand: [h], oppActive: null, oppBench: [inst(C.snorlax)] });
     return ENG.applyAction(s4, { type: 'PLAY_BASIC', iid: h.iid }, pool).players[0].bench.some((c) => c.iid === h.iid);
@@ -120,7 +120,7 @@ for (const k of ['PLAY_BASIC', 'ATTACH_ENERGY', 'END_TURN', 'RETREAT', 'ATTACK',
   ok(`★★★[A1] 戰鬥場空著時 ${k} 被擋（盤面不變）`, CUR['A1:' + k], CUR['A1:' + k + ':err']);
 ok('★★★[A2] 派出新的戰鬥寶可夢之後，打基礎寶可夢、附能量照常', CUR.A2, CUR['A2:err']);
 ok('★★[A3] 戰鬥場有寶可夢時照舊（零回歸）', CUR.A3, CUR['A3:err']);
-ok('★★[A4] 對手戰鬥場空著時，我方動作不受影響', CUR.A4, CUR['A4:err']);
+ok('★★[A4] （v6.516 起）對手戰鬥場空著時，我方動作也被擋（等對手補位）', CUR.A4 === false && !CUR['A4:err'], CUR['A4:err']);
 ok('★[A5] 備戰區沒有寶可夢時不擋', CUR.A5, CUR['A5:err']);
 ok('★★[A6] AI：戰鬥場空著時第一個動作是派出新的戰鬥寶可夢', CUR.A6, CUR['A6:err']);
 

@@ -3905,15 +3905,18 @@ function handlePlaying(
   //   引擎沒有擋 ⇒ 補位之前還能打寶可夢、附能量、用訓練家、用特性。
   //   ⇒ 輪到行動的玩家自己的戰鬥場空著、而且備戰區有寶可夢可派時，只接受 SEND_NEW_ACTIVE
   //      （以及解完既有選擇視窗 RESOLVE_SELECTION、取獎賞 TAKE_PRIZES）；其他動作原封不動退回（no-op）。
-  //   ・只看「輪到行動的那一方」：對手戰鬥場被打空的補位，本來就由取獎賞／回合結束流程處理，不在這裡擋。
+  //   ・⭐v6.516（audit 擴大）：**雙方都看**。我方用特性在自己回合把對手的戰鬥寶可夢打倒（咒詛炸彈、必殺手裡劍
+  //     放傷害指示物），取完獎賞後對手還沒補位，我方原本可以繼續下寶可夢、附能量，甚至直接攻擊（打在空的戰鬥場上）。
+  //     對手補位本來就能在我方回合進行：伺服器 canSeatAct 收任何一方的 SEND_NEW_ACTIVE，對手畫面會跳補位視窗
+  //     （modal-slots 的 promoteModalSeats B），我方畫面顯示「等待對手送出」（promoteAlerts waitOpp）——只是引擎沒有強制等。
   //   ・備戰區沒有寶可夢 ⇒ 不擋（勝負判定由終局管線處理）。
+  const _v6515NeedsPromote = (i: 0 | 1) => players[i]?.active === null && (players[i]?.bench?.length ?? 0) > 0;
   if (
     state.phase === 'playing'
     && action.type !== 'SEND_NEW_ACTIVE'
     && action.type !== 'RESOLVE_SELECTION'
     && action.type !== 'TAKE_PRIZES'
-    && players[aIdx]?.active === null
-    && (players[aIdx]?.bench?.length ?? 0) > 0
+    && (_v6515NeedsPromote(aIdx) || _v6515NeedsPromote(dIdx))
   ) return state;
   // <<< v6515-promote-first
 

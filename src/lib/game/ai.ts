@@ -104,6 +104,13 @@ export function getAIAction(
 
   if (state.turnPhase !== 'main') return null;
 
+  // ⭐v6.516 對手的戰鬥場空著（例：我方特性在自己回合打倒了對手的戰鬥寶可夢）⇒ 等對手補位，不出任何動作。
+  //   引擎在補位前會退回所有其他動作（v6515-promote-first），不等的話 AI 會一直送被退回的動作。
+  {
+    const _dIdx = (1 - myIdx) as 0 | 1;
+    if (state.players[_dIdx].active === null && state.players[_dIdx].bench.length > 0) return null;
+  }
+
   // ── 主階段決策 ───────────────────────────────────────────────────────────
 
   // ⭐v6.429「牌庫頂借招」打法的狀態（其他牌組 _tc=false，下面每一處改動都不生效）
