@@ -1,5 +1,22 @@
 # 內部改版紀錄（不打包進網站）
 
+## server patch v1.60：套牌戰績／玩家戰績也排除第一回合沒進場（2026-10-11）
+
+BASE 725e9118（v6.524／admin v1.81／server v1.59）。站長：「1 這麼麻煩的話就算了 2 要」。
+- ① 錦標賽閒置判負（idleForfeit）沒記第幾回合 ⇒ 站長裁定不做，照算。
+- ② 把 v1.59 牌組原型的口徑延伸到套牌戰績與玩家戰績：
+  - 中央 casualNoShowExcludeClause()＝「winReason 不含『無回應』或 finalTurn≥2」；buildCasualCleanFilter 的 archNoShow 改用它（輸出與 v1.59 逐位元相同）。
+  - /api/deck-stats：休閒查詢帶 archNoShow；錦標賽側改走 archTournMatchCounts（未進場判勝不算）。
+  - /api/admin/player-profile：休閒 aggregate 加條件；錦標賽戰績改走 archTournMatchCounts。
+  - /api/admin/stats/players（排行）：$facet 前加一段 $match。
+  - /api/admin/stats/players/:email：戰績與常用卡統計加條件；最近對戰列表照列（看得到那場無回應）。
+  - 沒動：卡片勝率（stats/cards/winrate）、總覽（stats/overview）、排行榜。
+- 已知但本版未修：stats/overview「先攻後攻勝率」把 p1 當成先攻（p1 是建房者，不是先攻方）；v1.59 起有 firstSeat 可改，待站長裁定。
+- 錦標賽區塊逐位元未動；scripts/lib/sap-revert-admin-v160.mjs（8 對，驗證逐位元還原 v1.59）接進 test-sap153／sap154／v6303。
+- Rule 40：test-v6266 D3 突變錨點、test-v6276 補 archTournMatchCounts 替身、test-v6243 迷你 Mongo 支援 $not regex、test-admin-v180／v181 grabFn 清單補 casualNoShowExcludeClause。
+- test-sap160（P／S／D 實跑、Z 零回歸、H1 v1.59 逐條紅）；突變 7 組全殺。
+- Fable 5.1 審查：無 P1。真 mongod 實證 $not regex 對缺欄位／null 保留、deck-stats 仍走 deckId 索引；舊資料自 v5.005 起都有 finalTurn。P3-③ 補「第一回合正常結束」對照場 m5（必須保留）。P2：玩家端錦標賽個人戰績／排行榜（_aggregateArchives，錦標賽區塊內）與卡片勝率仍計入未進場，口徑待站長裁定。
+
 ## v6.524／admin v1.81／server patch v1.59：牌組原型未進場不計＋先攻後攻勝率（2026-10-10）
 
 BASE 7118d189。站長：「幫我確認一下牌組原型算勝負的方式，如果第一回合有玩家沒進場，不應該將勝負納入計算」「在類似算對戰矩陣的部分，再幫我增加一個先攻後攻的勝率計算（另外算）」。

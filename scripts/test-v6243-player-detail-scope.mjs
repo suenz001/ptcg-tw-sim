@@ -96,6 +96,7 @@ function matchDoc(q, doc) {
         else if (op === '$gte') { if (!(dv >= arg)) return false; }
         else if (op === '$type') { if (arg === 'string' && typeof dv !== 'string') return false; }
         else if (op === '$exists') { if ((dv !== undefined) !== !!arg) return false; }
+        else if (op === '$not') { if (arg instanceof RegExp ? (typeof dv === 'string' && arg.test(dv)) : false) return false; }   // v1.60：第一回合沒進場排除子句用到
         else throw new Error('迷你直譯器沒實作的 match 運算子：' + op);
       }
       continue;
@@ -193,7 +194,11 @@ function buildHandler(arrowSrc, docs) {
   const spy = { find: [], agg: [], materialized: 0 };
   const coll = makeColl(docs, spy);
   const db = { collection: () => coll };
-  const base = { db, console };
+  // v1.60 Rule 40：單一玩家統計多一個中央子句 casualNoShowExcludeClause（第一回合沒進場不算）⇒ 從補丁抽真的那一份注入
+  const _ncl = (() => { const i = pat.indexOf('function casualNoShowExcludeClause('); if (i < 0) return {};
+    const j = pat.indexOf('\n  }', i); const re = /\n\s*const CASUAL_NOSHOW_RE = [^\n]*/.exec(pat);
+    return { casualNoShowExcludeClause: new Function((re ? re[0] : '') + '\n' + pat.slice(i, j + 4) + '\nreturn casualNoShowExcludeClause;')() }; })();
+  const base = { db, console, ..._ncl };
   return { h: new Function(...Object.keys(base), '"use strict"; return (' + arrowSrc + ');')(...Object.values(base)), spy };
 }
 const call = async (h, email, query) => {
@@ -381,7 +386,8 @@ await T('⑪ 版本一致：version.ts ≥ 6.243、admin.html SITE_VERSION_HINT 
 
 // ══ 突變測試（正對照：把 bug 種回去，上面的儀器必須真的翻紅）══════════════
 await T('突變 A：在 summaryPipeline 的 $match 後插 { $limit: 30 } ⇒ ①②③ 必須翻紅', async () => {
-  const anchor = "{ $match: { $or: [{ 'p1.email': email }, { 'p2.email': email }] } },";
+  // v1.60 Rule 40：summaryPipeline 的 $match 多併了「第一回合沒進場」子句 ⇒ 錨點改成新的那一行（突變內容不變：$match 後插 $limit）
+  const anchor = "{ $match: { $and: [{ $or: [{ 'p1.email': email }, { 'p2.email': email }] }, casualNoShowExcludeClause()] } },";
   assert.strictEqual(arrow.split(anchor).length - 1, 1, '突變錨點不唯一');
   const { h, spy } = buildHandler(arrow.replace(anchor, anchor + ' { $limit: 30 },'), docs);
   const b = await call(h, ME);

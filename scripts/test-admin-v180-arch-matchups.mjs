@@ -133,7 +133,7 @@ const TRULES_FAKE = { find: (f) => { const rows = RULES.filter((r) => r.enabled 
 function buildServer(PATCH, opts) {
   const o = opts || {};
   const fns = ['deckToSets', 'deckMatchesRule', 'ruleStrictness', 'ruleRank', 'classifyDeck', 'casualSideResult',
-    'tournSideResult', 'buildCasualCleanFilter', 'archTournMatchCounts'].map((n) => grabFn(PATCH, n)).filter(Boolean).join('\n');   // v1.59：archTournMatchCounts
+    'tournSideResult', 'buildCasualCleanFilter', 'archTournMatchCounts', 'casualNoShowExcludeClause'].map((n) => grabFn(PATCH, n)).filter(Boolean).join('\n');   // v1.59：archTournMatchCounts
   const stats = grabBlock(PATCH, "app.get('/api/admin/deck-archetype-stats'") || '';
   const mu = sentinel(PATCH, 'v158-arch-matchups') || '';
   const handlers = {};

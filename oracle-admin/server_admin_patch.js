@@ -1140,6 +1140,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
   //      ⚠舊資料若無 finalTurn 欄位，$gte 判定為 false → 維持「排除」的舊行為（向後相容）。
   const CASUAL_LEAVE_RE = /中途離開|離開房間|斷線|斷開|退出|不在場|disconnect|技不如人|先行離開/i;
   const CASUAL_NOSHOW_RE = /無回應/;   // v159-arch-noshow：休閒無回應判負（見 buildCasualCleanFilter 的 archNoShow）
+  // >>> v160-noshow-all
+  // ⭐v1.60（站長 2026-10-11：套牌戰績、玩家戰績也要排除第一回合沒進場的場次）：「第一回合就無回應判負」的排除子句**只有這一份**，
+  //   牌組原型（buildCasualCleanFilter 的 archNoShow）、套牌戰績、玩家戰績（admin 玩家統計／玩家檔案）都用它。
+  function casualNoShowExcludeClause() {
+    return { $or: [{ winReason: { $not: CASUAL_NOSHOW_RE } }, { finalTurn: { $gte: 2 } }] };
+  }
+  // <<< v160-noshow-all
   function buildCasualCleanFilter(opts) {
     const o = opts || {};
     const q = {};
@@ -1158,7 +1165,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //   ⚠ 沒帶 archNoShow 的呼叫端（玩家戰績、套牌戰績…）回傳的查詢與 v1.58 逐位元相同。
     if (o.archNoShow) {
       const leaveOr = q.$or; delete q.$or;
-      q.$and = [{ $or: leaveOr }, { $or: [{ winReason: { $not: CASUAL_NOSHOW_RE } }, { finalTurn: { $gte: 2 } }] }];
+      q.$and = [{ $or: leaveOr }, casualNoShowExcludeClause()];   // v1.60：子句收進中央（輸出與 v1.59 逐位元相同）
     }
     // <<< v159-arch-noshow
     return q;
@@ -1997,6 +2004,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const pipeline = [];
         if (Object.keys(baseMatch).length > 0) pipeline.push({ $match: baseMatch });
+        pipeline.push({ $match: casualNoShowExcludeClause() });   // v160-noshow-all：第一回合沒進場不算
         pipeline.push({ $facet: {
           // v0.15 P1 視角：email 為主鍵；email 缺則用 name (prefix "name:" 避免與 email 碰撞)
           //   實況：多數玩家為 Firebase 匿名登入（無 email），但有 displayName。
@@ -2129,7 +2137,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
 
         // summary（全部對戰，不限 recentLimit）
         const summaryPipeline = [
-          { $match: { $or: [{ 'p1.email': email }, { 'p2.email': email }] } },
+          { $match: { $and: [{ $or: [{ 'p1.email': email }, { 'p2.email': email }] }, casualNoShowExcludeClause()] } },   // v160-noshow-all：第一回合沒進場不算（最近對戰列表照列）
           { $project: {
             isP1: { $eq: ['$p1.email', email] },
             winner: 1,
@@ -2424,7 +2432,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
 
         // ② 休閒對戰戰績（沿用 stats/players/:email 的判勝邏輯，含 AI 場，另回 online-only 一份）
         const pCasual = MR.aggregate([
-          { $match: orMe },
+          { $match: { $and: [orMe, casualNoShowExcludeClause()] } },   // v160-noshow-all：第一回合沒進場不算
           { $project: {
             isP1: { $eq: ['$p1.email', email] }, winner: 1, vsAI: 1, roomCode: 1, endedAt: 1,
             // v0.90：順便收集這位玩家在對戰中用過的顯示名（$addToSet 天然去重，不必另開查詢）
@@ -2501,7 +2509,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           if (!me) continue;
           let w = 0, l = 0;
           for (const m of (a.matches || [])) {
-            if (!m || m.bye) continue;
+            if (!archTournMatchCounts(m)) continue;   // v160-noshow-all（原：非 bye；下面另判有勝方）
             const inIt = m.p1uid === me.uid || m.p2uid === me.uid;
             if (!inIt || !m.winnerUid) continue;
             if (m.winnerUid === me.uid) w++; else l++;
@@ -3288,7 +3296,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         //   ⇒ vsAI 與本機雙人一律不計入；離開場只排除 finalTurn<=2（v0.91 裁定）。
         //   ⚠⚠ buildCasualCleanFilter 回傳的物件**自己就帶一個 `$or`**（離開場那條），
         //     直接把 deckId 的 $or 塞進同一層會把它整條**覆蓋掉** ⇒ 一律用 $and 併。
-        const q = { $and: [buildCasualCleanFilter({}), { $or: [{ 'p1.deckId': deckId }, { 'p2.deckId': deckId }] }] };
+        const q = { $and: [buildCasualCleanFilter({ archNoShow: true }), { $or: [{ 'p1.deckId': deckId }, { 'p2.deckId': deckId }] }] };   // v160-noshow-all：第一回合沒進場不算
         // ⚠⚠ **不可以**把 cardCounts 物件直接丟給 archetypeNameOf：它的第一行是
         //   `if (!entries || !entries.length) return null`，那是為 deckEntries **陣列**寫的；
         //   matchRecords 存的是 cardCounts **物件**，`.length` 恆為 undefined
@@ -3360,8 +3368,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
             if (!_myUids.size) continue;
             for (const _tm of ((_ta && _ta.matches) || [])) {
               _tn++; const _y2 = adminScanYield(_tn); if (_y2) await _y2;   // ⚠ 每 200 個元素讓路（v6.242）
-              // 口徑同 /api/admin/deck-archetype-stats 錦標賽側：非 bye 且有勝方才計。
-              if (!_tm || _tm.bye || !_tm.winnerUid) continue;
+              // 口徑同 /api/admin/deck-archetype-stats 錦標賽側：非 bye、有勝方、不是未進場判勝（v160-noshow-all 走中央述詞）才計。
+              if (!archTournMatchCounts(_tm)) continue;
               const _p1Mine = _tm.p1uid != null && _myUids.has(String(_tm.p1uid));
               const _p2Mine = _tm.p2uid != null && _myUids.has(String(_tm.p2uid));
               if (!_p1Mine && !_p2Mine) continue;

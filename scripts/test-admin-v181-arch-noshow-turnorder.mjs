@@ -169,7 +169,7 @@ const TRULES_FAKE = { find: () => { const cur = { sort: () => cur, toArray: asyn
 
 function buildServer(PATCH) {
   const fns = ['deckToSets', 'deckMatchesRule', 'ruleStrictness', 'ruleRank', 'classifyDeck', 'casualSideResult',
-    'tournSideResult', 'buildCasualCleanFilter', 'archTournMatchCounts'].map((n) => grabFn(PATCH, n)).filter(Boolean).join('\n');
+    'tournSideResult', 'buildCasualCleanFilter', 'archTournMatchCounts', 'casualNoShowExcludeClause'].map((n) => grabFn(PATCH, n)).filter(Boolean).join('\n');
   const stats = grabBlock(PATCH, "app.get('/api/admin/deck-archetype-stats'") || '';
   const detail = grabBlock(PATCH, "app.get('/api/admin/deck-archetype-detail'") || '';
   const norm = grabFn(PATCH, 'normCardName') || 'function normCardName(n) { return String(n || \'\').trim(); }';

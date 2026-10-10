@@ -524,6 +524,8 @@ function buildDS(sectionSrc, mrDocs, tarchDocs, opts) {
     casualSideResult: (w, isP1) => (w !== 0 && w !== 1 ? 'draw' : (((isP1 && w === 0) || (!isP1 && w === 1)) ? 'win' : 'loss')),
   };
   env.tournSideResult = new Function(extractFn(pat, 'tournSideResult', 40) + '\nreturn tournSideResult;')();
+  // v1.60 Rule 40：錦標賽側改走中央述詞 archTournMatchCounts（未進場不計）⇒ 同樣從補丁抽真的那一份（BASE 沒有就用舊口徑）
+  env.archTournMatchCounts = /function archTournMatchCounts\(/.test(pat) ? new Function(extractFn(pat, 'archTournMatchCounts', 40) + '\nreturn archTournMatchCounts;')() : ((m) => !!m && !m.bye && !!m.winnerUid);
   env.archetypeNameOf = mkArchetypeNameOf(env.classifyDeck, env.deckToSets);
   new Function(...Object.keys(env), '"use strict";\n' + sectionSrc + '\n')(...Object.values(env));
   assert.ok(routes['/api/deck-stats'], '區段沒有註冊 /api/deck-stats');

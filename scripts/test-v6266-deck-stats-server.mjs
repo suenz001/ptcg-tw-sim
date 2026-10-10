@@ -433,8 +433,9 @@ await T('D2 ⚠⚠ 查詢用 $and 併，**沒有覆蓋掉** buildCasualCleanFilt
 
 await T('D3 突變【M4】把 deckId 的 $or 直接塞同一層（覆蓋淨化的 $or）⇒ D2 必須翻紅', async () => {
   const MUT = SEC.replace(
-    "const q = { $and: [buildCasualCleanFilter({}), { $or: [{ 'p1.deckId': deckId }, { 'p2.deckId': deckId }] }] };",
-    "const q = { ...buildCasualCleanFilter({}), $or: [{ 'p1.deckId': deckId }, { 'p2.deckId': deckId }] };");
+    // v1.60 Rule 40：查詢改帶 archNoShow（第一回合沒進場不算）⇒ 突變錨點跟著改，突變內容（把 $and 拆成同一層）不變
+    "const q = { $and: [buildCasualCleanFilter({ archNoShow: true }), { $or: [{ 'p1.deckId': deckId }, { 'p2.deckId': deckId }] }] };",
+    "const q = { ...buildCasualCleanFilter({ archNoShow: true }), $or: [{ 'p1.deckId': deckId }, { 'p2.deckId': deckId }] };");
   assert.notStrictEqual(MUT, SEC, '突變錨點對不上');
   const { h, spy } = buildDeckStats(MUT, DOCS);
   await callDS(h, { deckId: MY });

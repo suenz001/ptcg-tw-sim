@@ -38,6 +38,7 @@ import { revertAdminV153 } from './lib/sap-revert-admin-v153.mjs';
 import { revertAdminV154 } from './lib/sap-revert-admin-v154.mjs';
 import { revertAdminV155 } from './lib/sap-revert-admin-v155.mjs';   // ⭐server v1.55：較新的版本先還原（Rule 54）
 import { revertAdminV156 } from './lib/sap-revert-admin-v156.mjs';   // ⭐server v1.56（牌組原型序位）：先剝較新的（Rule 54）
+import { revertAdminV160 } from './lib/sap-revert-admin-v160.mjs';   // ⭐server v1.60（套牌／玩家戰績未進場不計）：先剝較新的（Rule 54）
 import { revertAdminV159 } from './lib/sap-revert-admin-v159.mjs';   // ⭐server v1.59（原型未進場不計＋先攻後攻）：先剝較新的（Rule 54）
 import { revertAdminV158 } from './lib/sap-revert-admin-v158.mjs';   // ⭐server v1.58（常用牌組對戰矩陣端點）：先剝較新的（Rule 54）
 import { revertAdminV157 } from './lib/sap-revert-admin-v157.mjs';   // ⭐server v1.57（序位預設 50＋用最新規則重新判定）：先剝較新的（Rule 54）
@@ -115,7 +116,7 @@ ok('★★[S1] helper 在哨兵內、且在 TAIL_ANCHOR 之前（不進錦標賽
     // 開戰（makeGame）與報到的程式碼在 v1.52 → v1.53 之間逐位元沒變
     const strip = (s) => s.replace(/[ \t]*\/\/ >>> v153-tourn-deck-validate\n[\s\S]*?[ \t]*\/\/ <<< v153-tourn-deck-validate\n/, '');
     ok('★[S4b] 剝掉本版哨兵、三行呼叫與一段說明註解後，整份 server patch 與 v1.52 逐位元相同（沒有夾帶其他改動）',
-      strip(revertAdminV153(revertAdminV154(revertAdminV155(revertAdminV156(revertAdminV157(revertAdminV158(revertAdminV159(CUR)))))))) === BASE);
+      strip(revertAdminV153(revertAdminV154(revertAdminV155(revertAdminV156(revertAdminV157(revertAdminV158(revertAdminV159(revertAdminV160(CUR))))))))) === BASE);
   }
 }
 
