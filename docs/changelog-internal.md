@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.521：倖存鍛鍊器 × 防昏厥特性的順序選擇（2026-10-10）
+
+BASE v6.520。官方 Q&A（綠寶石風暴）：倖存鍛鍊器與不朽身軀同時可以防止昏厥時，持有者可以選擇處理順序。站長：「還是要做選擇視窗」。
+- engine resolveKnockouts：preventKoCandidates 兩者都有、且 action 沒帶 `_preventKoOrder` ⇒ 回到 preAttackStateForRetry、對防守方開 modal-choice（effectKey v6521-prevent-ko-order，params 帶 preAttackState／originalAction／coinFlips）；RESOLVE_SELECTION 時以重試徽章 keep 同一套機制（_retryInjectedFlipsQueue）帶 `_preventKoOrder` 重跑 ⇒ 招式擲幣不重擲。
+- 選先特性：特性（擲幣型正面）成功則道具留著；失敗再用道具。選先道具＝原本順序。
+- effects applyPreventKOToVictim（狙擊／多目標，無法暫停）：兩者都有一律先特性（持有者最佳順序）；其他情形維持先道具。
+- AI：modal-choice 預設選第一個（先特性）。
+- 中央判準（站長 2026-10-10：盡量走中央管線）：`preventKoCandidates`（誰能防昏厥，純查詢）＋`preventKoOrderDecision(cand, chosen, canPause)`（'ask'／'ability'／'tool'），engine 與 effects 都只問這兩支；守衛 C1 判準表、C2 禁止就地 `.tool && .ability`。
+- 既有技術債（本版未動）：道具／特性防昏厥的「套用」仍是 engine 主管線與 effects applyPreventKOToVictim 兩份實作（v6.202 註解已記），收斂要另開一版。
+- Rule 40：test-v6255 C3（岩殿居蟹結實＋倖存鍛鍊器）改為回答『先道具』再驗實際扣到的傷害，並補斷言道具真的丟棄。
+- test-v6521（M1～M7 主管線、E1～E3 狙擊路徑、C1／C2 中央判準、H1 v6.520 逐條紅）；突變 9 組全殺。
+
 ## v6.520：官方 Q&A 比對第二批（2026-10-10）
 
 BASE v6.519（f5a5e591）。

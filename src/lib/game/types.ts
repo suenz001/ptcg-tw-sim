@@ -1541,6 +1541,11 @@ export type GameAction =
        * 重試徽章 modal（無限循環防護）。
        */
       _retryBadgeAlreadyAsked?: boolean;
+      /**
+       * ⭐v6.521 防止昏厥的處理順序（官方 Q&A 綠寶石風暴：倖存鍛鍊器＋不朽身軀同時可用時由持有者選）。
+       * 防守方在選擇視窗選完後，引擎帶著這個欄位與剛才的擲幣結果重跑同一招：'ability'＝先特性、'tool'＝先道具。
+       */
+      _preventKoOrder?: 'ability' | 'tool';
     }
   | { type: 'TAKE_PRIZES'; count: number; playerIdx: 0 | 1; senderIdx?: 0 | 1 }
   | { type: 'SEND_NEW_ACTIVE'; iid: string; senderIdx?: 0 | 1 }

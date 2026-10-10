@@ -98,7 +98,7 @@ import {
   hasShellinkEvolveBypass,
   isAllPowerSoulBlocked,
   PASSIVE_PREVENT_KO,
-  COIN_PREVENT_KO_ABILITIES,
+  COIN_PREVENT_KO_ABILITIES, preventKoCandidates, preventKoOrderDecision,
   flipCoinsWithLog,
   hasBloomOnField,
   promptPlayAbilities,
@@ -1054,7 +1054,7 @@ export function isFossilItemCard(card: Card | undefined): boolean {
 import { sameEvoName, canEvolveOnto, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog, hasStatusInAnySlot, resolveInfiniteShadowKo, toBareCard, ATTACK_AFTER_KO } from './effects/_shared'; // v5.842 跨三槽狀態讀取
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared';
-import { withAttackDamageTaken } from './effects/_shared'; // ⭐v6.256「受到的招式的傷害」唯一中央寫入點 // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
+import { withAttackDamageTaken, withPending } from './effects/_shared'; // ⭐v6.256「受到的招式的傷害」唯一中央寫入點 // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst, isImmuneToOppAbilityEffect, oppAbilityEffectBlockReason } from './defense';  // v6.196 中央述詞；v6.427 反擊豁免
 // >>> v6410-festival-central-import
 // ⭐⭐⭐v6.410：祭典樂舞／祭典會場的判準收斂成**一份**（IRON_RULES Rule 38）。
@@ -4045,6 +4045,25 @@ function handlePlaying(
     //   選 'keep'  → 用 stored coinFlips inject 給 regPre 重跑 ATTACK（產生相同 heads/damage）
     //   選 'retry' → 設 retryBadgeUsedThisTurn=true + 重跑 ATTACK（不 inject = 重新 random）
     //   兩條路徑都帶 _retryBadgeAlreadyAsked=true 避免末端再次 trigger modal（無限循環防護）。
+    // >>> v6521-prevent-ko-order-resolve
+    // ⭐v6.521 防止昏厥的處理順序：回到攻擊前、帶著選擇與剛才的擲幣結果重跑同一招（同重試徽章的 keep 路徑）。
+    if (effectKey === 'v6521-prevent-ko-order') {
+      const choice = action.selectedIids[0] === 'ability' ? 'ability' : 'tool';
+      const preAttackState = params?.preAttackState as GameState | undefined;
+      const originalAction = params?.originalAction as GameAction | undefined;
+      const coinFlips = params?.coinFlips as string[] | undefined;
+      if (preAttackState && originalAction && originalAction.type === 'ATTACK') {
+        const reverted: GameState = {
+          ...preAttackState,
+          coinFlippedThisAttack: false,
+          _machineGunLastFlips: undefined,
+          _retryInjectedFlipsQueue: coinFlips && coinFlips.length ? [...coinFlips] : undefined,
+        };
+        const withLog = addLog(reverted, `🛡️ 持有者選擇：${choice === 'ability' ? '先處理特性' : '先處理道具'}`, actorIdx);
+        return handlePlaying(withLog, { ...originalAction, _preventKoOrder: choice }, pool);
+      }
+    }
+    // <<< v6521-prevent-ko-order-resolve
     if (effectKey === 'm5-retry-badge-decide') {
       const choice = action.selectedIids[0];
       const preAttackState = params?.preAttackState as GameState | undefined;
@@ -5841,7 +5860,7 @@ function handlePlaying(
       // ⭐v6.520（官方 Q&A 深淵之瞳：重試徽章只能重擲「因招式」擲的硬幣，混亂的擲幣不是）：
       //   重試徽章的重跑（_retryBadgeAlreadyAsked）一定是第一次混亂擲出正面、招式才有擲幣 ⇒ 沿用正面，不重擲、
       //   也不從「保留結果」佇列拿值（原本：選重擲連混亂一起重擲；選保留時混亂先吃掉第 1 枚，招式的硬幣整排錯位）。
-      const _retryReplay = action._retryBadgeAlreadyAsked === true;
+      const _retryReplay = action._retryBadgeAlreadyAsked === true || action._preventKoOrder != null;   // ⭐v6.521 防昏厥順序重跑同理
       const flipResult = _retryReplay
         ? { state: addLog(state, '混亂：沿用剛才的擲幣結果（正面）〔重試徽章不重擲混亂的硬幣〕', aIdx), heads: 1 }
         : flipCoinsWithLog(state, 1, '混亂', aIdx);
@@ -6024,7 +6043,7 @@ function handlePlaying(
     // v5.262：ATTACK 開頭 clear coinFlippedThisAttack + _machineGunLastFlips
     //   _retryInjectedFlipsQueue 在「玩家選 keep 重跑」路徑由 keep handler 已設好, 此處 ATTACK 開頭
     //   只清 queue 若不是 retry-replay (action._retryBadgeAlreadyAsked !== true).
-    const isRetryReplay = action._retryBadgeAlreadyAsked === true;
+    const isRetryReplay = action._retryBadgeAlreadyAsked === true || action._preventKoOrder != null;   // ⭐v6.521 防昏厥順序重跑也沿用剛才的擲幣
     state = {
       ...state,
       coinFlippedThisAttack: false,
@@ -6693,7 +6712,42 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
 
     // 道具防 KO（倖存鍛鍊器）— 滿血被 KO 時保留少量 HP，道具丟棄（阻礙之塔時失效）
     preventedKO = false;
-    if (!toolsJammed && wouldBeKO && defenderState.active) {
+    // >>> v6521-prevent-ko-order
+    // ⭐v6.521（官方 Q&A 綠寶石風暴：倖存鍛鍊器與不朽身軀同時可以防止昏厥時，持有者可以選擇處理順序；
+    //   站長 2026-10-10 裁定做選擇視窗）：兩者都會生效 ⇒ 第一次先暫停、回到攻擊前，讓防守方選；
+    //   選完帶著 _preventKoOrder 與剛才的擲幣結果重跑同一招（重試徽章同一套機制）。
+    const _pkoOrder = (action as { _preventKoOrder?: 'ability' | 'tool' })._preventKoOrder;
+    let _pkoDecision: 'ask' | 'ability' | 'tool' = 'tool';
+    if (wouldBeKO && defenderState.active) {
+      const _c = preventKoCandidates(newState, defenderState.active, defenderCard, dIdx, true, baseDamage, pool, toolsJammed);
+      _pkoDecision = preventKoOrderDecision(_c, _pkoOrder, true);
+      if (_pkoDecision === 'ask') {
+        const _flips = [...(workingState._machineGunLastFlips ?? [])];
+        const _paused: GameState = addLog(preAttackStateForRetry,
+          `🛡️ ${defenderCard.name} 可以用「${_c.tool}」與「${_c.ability}」防止昏厥 ⇒ 由持有者選擇處理順序`, null);
+        // ⭐ 走中央 withPending（test-v6211 凍結 engine 直接覆寫 pendingSelection 的處數）；_paused 是攻擊前盤面，本來就沒有 pending
+        return withPending({
+          ..._paused,
+          coinFlippedThisAttack: false,
+          _machineGunLastFlips: undefined,
+        }, {
+            type: 'modal-choice', actorIdx: dIdx, sourcePlayerIdx: dIdx, minCount: 1, maxCount: 1,
+            effectKey: 'v6521-prevent-ko-order',   // effectkey-inline-ok: engine RESOLVE_SELECTION inline 特判（v6521-prevent-ko-order-resolve，同重試徽章）
+            params: {
+              label: `${defenderCard.name} 即將昏厥：先處理哪一個？`,
+              preAttackState: preAttackStateForRetry, originalAction: action, coinFlips: _flips,
+              options: [
+                { id: 'ability', text: `先用特性「${_c.ability}」${COIN_PREVENT_KO_ABILITIES.has(_c.ability ?? "") ? '（擲硬幣；正面就保住、道具留著，反面再用道具）' : ''}` },
+                { id: 'tool', text: `先用道具「${_c.tool}」（道具會丟棄，特性不處理）` },
+              ],
+            },
+        });
+      }
+    }
+    const _abilityFirst = _pkoDecision === 'ability';
+    const _tryToolPreventKo = () => {
+    // <<< v6521-prevent-ko-order
+    if (!preventedKO && !toolsJammed && wouldBeKO && defenderState.active) {
       // v3.20 多重轉接：iterate 所有道具找第一個觸發 PREVENT_KO 的
       for (const t of getAllAttachedTools(defenderState.active)) {
         const preventTool = pool.get(t.cardId);
@@ -6721,7 +6775,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         break;
       }
     }
+    };   // v6521-prevent-ko-order：_tryToolPreventKo
     // v2.133 被動防 KO（皮卡丘ex 勤奮之心 等）— 條件由 PASSIVE_PREVENT_KO map 內 fn 決定
+    const _tryAbilityPreventKo = () => {   // v6521-prevent-ko-order
     if (!preventedKO && wouldBeKO && defenderState.active && defenderCard.abilities) {
       for (const ab of defenderCard.abilities) {
         const fn = PASSIVE_PREVENT_KO.get(ab.name);
@@ -6749,6 +6805,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         }
       }
     }
+    };   // v6521-prevent-ko-order：_tryAbilityPreventKo
+    // v6521-prevent-ko-order：預設（沒有衝突、或持有者選先道具）維持原本「先道具、後特性」；選先特性就反過來
+    if (_abilityFirst) { _tryAbilityPreventKo(); _tryToolPreventKo(); }
+    else { _tryToolPreventKo(); _tryAbilityPreventKo(); }
 
     // ⭐v6.490：耿鬼｜無限之影 的判斷搬進 resolveAttackActiveKo（在真正昏厥結算時才判）
     // ⭐⭐⭐ v6.253 中央述詞：這一擊之後防守方「仍留在場上」＝ PTCG 規則上的

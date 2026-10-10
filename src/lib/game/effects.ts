@@ -9816,8 +9816,17 @@ export function applyPreventKOToVictim(   // ⭐v6.260 export：mega_decks olive
   const inPlay = isActive ? defender.active! : defender.bench.find(c => c.iid === victim.iid);
   if (!inPlay) return { prevented: false, state };
   const hp = effectiveHPInline(inPlay, pool, state);
+  // >>> v6521-prevent-ko-order
+  // ⭐v6.521（官方 Q&A 綠寶石風暴：倖存鍛鍊器與不朽身軀同時可用時由持有者選順序）：
+  //   本路徑（狙擊／多目標／延後傷害）在招式效果裡面，無法暫停回到攻擊前讓防守方選 ⇒ 兩者都可用時一律**先處理特性**
+  //   （持有者的最佳順序：特性成功就保住、道具留著；擲幣反面再用道具）；其餘情形維持原本「先道具、後特性」。
+  //   engine 主管線（攻擊戰鬥寶可夢）則會開選擇視窗讓持有者自己選。
+  const _pkoCand = preventKoCandidates(state, inPlay, victimCard, defenderIdx, isActive, baseDamage, pool, isToolsJammed(state, pool));
+  const _abilityFirst = preventKoOrderDecision(_pkoCand, null, false) === 'ability';
+  // <<< v6521-prevent-ko-order
   // 1) 道具防 KO（倖存鍛鍊器）— 阻礙之塔(工具封鎖)時失效
-  if (!isToolsJammed(state, pool)) {
+  const _tryTool = (st0: GameState): { prevented: boolean; state: GameState } | null => {
+  if (!isToolsJammed(st0, pool)) {
     for (const t of getAllAttachedTools(inPlay)) {
       const tc = pool.get(t.cardId); if (!tc) continue;
       const fn = TOOL_PREVENT_KO.get(tc.name); if (!fn) continue;
@@ -9828,13 +9837,16 @@ export function applyPreventKOToVictim(   // ⭐v6.260 export：mega_decks olive
       let newInst: CardInstance = withAttackDamageTaken(inPlay, inPlay.damage, targetDamage, kind);
       if (newInst.toolAttached?.iid === t.iid) newInst = { ...newInst, toolAttached: undefined };
       else if (newInst.extraTools) newInst = { ...newInst, extraTools: newInst.extraTools.filter(x => x.iid !== t.iid) };
-      let s = updatePlayer(state, defenderIdx, p => isActive
+      let s = updatePlayer(st0, defenderIdx, p => isActive
         ? { ...p, active: newInst, discard: [...p.discard, t] }
         : { ...p, bench: p.bench.map(c => c.iid === victim.iid ? newInst : c), discard: [...p.discard, t] });
       s = addLog(s, `${tc.name}：${victimCard.name} 避免昏厥，剩餘 HP ${r.leaveHP}！`, null);
       return { prevented: true, state: s };
     }
   }
+  return null;
+  };
+  if (!_abilityFirst) { const _t = _tryTool(state); if (_t) return _t; }   // v6521-prevent-ko-order
   // 2) 被動防 KO（堅忍之軀/不朽身軀/勤奮之心/結實）
   let workState = state;
   if (victimCard.abilities) {
@@ -9861,6 +9873,7 @@ export function applyPreventKOToVictim(   // ⭐v6.260 export：mega_decks olive
       return { prevented: true, state: s };
     }
   }
+  if (_abilityFirst) { const _t = _tryTool(workState); if (_t) return _t; }   // v6521-prevent-ko-order：特性沒擋下（擲幣反面）再用道具
   return { prevented: false, state: workState };
 }
 
@@ -18089,6 +18102,47 @@ export const PASSIVE_PREVENT_KO = new Map<string, (
 // v5.596 擲幣型 prevent-KO 特性（堅忍之軀/不朽身軀）：呼叫端(engine inline + applyPreventKOToVictim)
 //   要走 flipCoinsWithLog 擲 1 幣，正面才真的防 KO（其餘如勤奮之心/結實是滿血條件型，無幣）。
 export const COIN_PREVENT_KO_ABILITIES = new Set<string>(['堅忍之軀', '不朽身軀']);
+// >>> v6521-prevent-ko-order
+/**
+ * ⭐v6.521 「這一下會昏厥時，有哪個道具、哪個特性可以防止昏厥」——**不擲幣、不改盤面**的純查詢。
+ *   官方 Q&A（綠寶石風暴）：倖存鍛鍊器與不朽身軀同時可用時，持有者可以選擇處理順序。
+ *   兩者都回名稱 ⇒ engine 主管線開順序選擇視窗；effects 狙擊／多目標路徑則先處理特性（持有者的最佳順序，見 applyPreventKOToVictim）。
+ *   判準與實際套用的兩段完全相同（道具：阻礙之塔失效；特性：isAbilityHolderEffective＋fn.prevent）。
+ */
+export function preventKoCandidates(
+  state: GameState, inst: CardInstance, card: Card | undefined, ownerIdx: 0 | 1, isActive: boolean,
+  baseDamage: number, pool: Map<string, Card>, toolsJammed: boolean,
+): { tool: string | null; ability: string | null } {
+  let tool: string | null = null, ability: string | null = null;
+  if (!card || baseDamage <= 0) return { tool, ability };
+  if (!toolsJammed) {
+    for (const t of getAllAttachedTools(inst)) {
+      const tc = pool.get(t.cardId); const fn = tc ? TOOL_PREVENT_KO.get(tc.name) : undefined;
+      if (tc && fn && fn(inst, card, baseDamage).prevent) { tool = tc.name; break; }
+    }
+  }
+  for (const ab of card.abilities ?? []) {
+    const fn = PASSIVE_PREVENT_KO.get(ab.name); if (!fn) continue;
+    if (!isAbilityHolderEffective(state, inst, card, ownerIdx, ab.name, isActive ? 'active' : 'bench', pool)) continue;
+    if (fn(inst, card, baseDamage).prevent) { ability = ab.name; break; }
+  }
+  return { tool, ability };
+}
+/**
+ * ⭐v6.521 防止昏厥的處理順序：**唯一判準**（engine 主管線與 effects 狙擊路徑都問這裡，不各寫一份）。
+ *   - 道具、特性只有一邊能用（或都不能）⇒ 'tool'（＝原本「先道具、後特性」，沒有差別）
+ *   - 兩者都能用、持有者已經選過 ⇒ 照選擇
+ *   - 兩者都能用、還沒選：能暫停回到攻擊前（engine 攻擊戰鬥寶可夢）⇒ 'ask' 開選擇視窗；
+ *     不能暫停（招式效果裡的狙擊／多目標／延後傷害）⇒ 'ability'（持有者的最佳順序：特性成功道具留著，失敗再用道具）
+ */
+export function preventKoOrderDecision(
+  cand: { tool: string | null; ability: string | null }, chosen: 'ability' | 'tool' | null | undefined, canPause: boolean,
+): 'ask' | 'ability' | 'tool' {
+  if (!cand.tool || !cand.ability) return 'tool';
+  if (chosen === 'ability' || chosen === 'tool') return chosen;
+  return canPause ? 'ask' : 'ability';
+}
+// <<< v6521-prevent-ko-order
 PASSIVE_PREVENT_KO.set('勤奮之心', (inst, card, _dmg) => {
   // 全血才能觸發（damage === 0）
   if (inst.damage > 0) return { prevent: false, leaveHP: 0 };

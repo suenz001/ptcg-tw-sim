@@ -312,7 +312,15 @@ T('C2 ⭐⭐⭐帶既有傷害的防 KO（超級摔角鷹人ex 堅忍之軀 HP25
 });
 
 T('C3 ⭐⭐⭐倖存鍛鍊器（道具型防 KO）也走同一條', () => {
-  const r = runAttack(inst(ID.CRAB, [], { toolAttached: inst(ID.SURV) }), atkDialga(), 1);
+  let r = runAttack(inst(ID.CRAB, [], { toolAttached: inst(ID.SURV) }), atkDialga(), 1);
+  // ⭐v6.521 Rule 40：岩殿居蟹｜結實（滿血）＋倖存鍛鍊器兩者都能防昏厥 ⇒ 引擎先暫停、由持有者選順序
+  //   （官方 Q&A 綠寶石風暴；站長 2026-10-10 裁定做選擇視窗）。本條要守的是「道具型防 KO 也記實際扣到的」
+  //   ⇒ 持有者選「先道具」，讓倖存鍛鍊器那一條路徑真的跑到；意圖不變。
+  if (r.pendingSelection?.effectKey === 'v6521-prevent-ko-order') {
+    const ps = r.pendingSelection;
+    r = applyAction(r, { type: 'RESOLVE_SELECTION', effectKey: ps.effectKey, selectedIids: ['tool'], actorIdx: ps.actorIdx, pendingToken: ps.token }, pool);
+  }
+  assert.ok(r.players[1].discard.some(c => c.cardId === ID.SURV), '倖存鍛鍊器那一條真的跑到（道具丟棄）');
   assert.equal(r.players[1].active?.damage, 140);
   assert.equal(r.players[1].active?.damageTakenLastOppTurn, 140);
 });
