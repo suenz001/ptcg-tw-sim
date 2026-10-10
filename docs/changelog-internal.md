@@ -24,7 +24,7 @@ BASE v6.521（ded8e4c5）。站長：「把兩份防止昏厥的套用程式碼�
 
 ## v6.521：倖存鍛鍊器 × 防昏厥特性的順序選擇（2026-10-10）
 
-BASE v6.520。官方 Q&A（綠寶石風暴）：倖存鍛鍊器與不朽身軀同時可以防止昏厥時，持有者可以選擇處理順序。站長：「還是要做選擇視窗」。
+BASE v6.520。官方 Q&A（深淵之瞳）：倖存鍛鍊器與不朽身軀同時可以防止昏厥時，持有者可以選擇處理順序。站長：「還是要做選擇視窗」。
 - engine resolveKnockouts：preventKoCandidates 兩者都有、且 action 沒帶 `_preventKoOrder` ⇒ 回到 preAttackStateForRetry、對防守方開 modal-choice（effectKey v6521-prevent-ko-order，params 帶 preAttackState／originalAction／coinFlips）；RESOLVE_SELECTION 時以重試徽章 keep 同一套機制（_retryInjectedFlipsQueue）帶 `_preventKoOrder` 重跑 ⇒ 招式擲幣不重擲。
 - 選先特性：特性（擲幣型正面）成功則道具留著；失敗再用道具。選先道具＝原本順序。
 - effects applyPreventKOToVictim（狙擊／多目標，無法暫停）：兩者都有一律先特性（持有者最佳順序）；其他情形維持先道具。
