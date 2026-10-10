@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.518：一般對戰雙方準備後不開始（2026-10-10）
+
+BASE admin v1.80（b963f3f3）。站長轉述玩家回報＋截圖：雙方都已準備，畫面停在「⏳ 雙方已準備，遊戲即將開始⋯」，12 秒後出現「建局逾時診斷 → 我的座位=1｜卡池已載入=true｜雙方牌組張數=24/25｜卡池缺卡=0｜卡包重試=0」。
+- 診斷：座位 1、卡池齊、沒有 createGame／startGame 錯誤 ⇒ P2 根本沒有嘗試建局。P2 的 6 秒接手（shouldAttemptStartGame）只在 checkAndStartOnlineGame 被呼叫時判斷，而它只在收到房間更新時被呼叫；oraclePollRoom 在版本沒變時不回呼 ⇒ 雙方準備完房間不再變動，要等下一次心跳（每 60 秒）才重判。房主那一端沒建局的原因（背景分頁、凍結等）無法從這張截圖確認。
+- 修法：sync-guards 新增 startGraceRecheckDelayMs（只有 seat 1、其他條件成立、只差 grace 時回剩餘毫秒＋250）；checkAndStartOnlineGame 依它排一次重新判斷（單一計時器，onDestroy 清掉；哨兵 v6518-start-recheck）。shouldAttemptStartGame 本體不動（test-v6274 E3 逐字釘住），grace 的 6000 兩處一致由 test-v6518 P1 逐組合斷言。
+- Rule 40：test-v6274 harness 補 startGraceRecheckDelayMs／_startGraceTimer／clearTimeout 替身（setTimeout 本來就是 no-op；BASE 版沒有 ⇒ 退成 null）。
+- Rule 40：test-v6441 LATER 加 4 條 v6.518 還原條目（非藍桌墊；當場驗證逐位元還原 b963f3f3）。
+- test-v6518（P 448 組合、B1～B4 假計時器實跑原文、S1／S2、H1 v6.517 等 60 秒都不建局）；突變 6 組全殺。
+
 ## admin v1.80／server patch v1.58：常用牌組對戰勝率（2026-10-10，admin 專用，不寫對外 changelog）
 
 BASE e867d7c2。站長：「抓前20名使用率的牌組 如 多龍巴魯托牌組 對上 N的索羅亞克 呆呆王 超級龍頭地鼠等同樣是前20名使用率的牌組 彼此間的勝率」「或是增加 我輸入牌組原型名稱 然後就能產生該牌組對前20名使用率的牌組的勝率分析」。

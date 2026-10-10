@@ -140,6 +140,12 @@ function makeSim(src, sgMod, opts = {}) {
   const poolReady = true, roomCode = 'ROOM', forceLegacyOpeningParam = false;
   const myUid = env.myUid, pool = new Map();
   const { shouldAttemptStartGame, shouldResetStartGrace } = env.sg;
+  // ⭐v6.518（Rule 40）：checkAndStartOnlineGame 多了「P2 只差 grace ⇒ 排一次重新判斷」的計時器。
+  //   本守衛的 setTimeout 是 no-op stub（意圖只看「收到房間更新時」的行為），新增的名字照樣補替身；
+  //   BASE 版沒有這個函式 ⇒ 退成永遠 null（等於沒有計時器，正是 BASE 的行為）。計時器本身由 test-v6518 實跑。
+  const startGraceRecheckDelayMs = env.sg.startGraceRecheckDelayMs || (() => null);
+  let _startGraceTimer = null;
+  const clearTimeout = () => {};
   const bothPlayersReady = env.bothPlayersReady;
   const Date = { now: () => env.now() };
   const deckEntriesAllInPool = () => true;

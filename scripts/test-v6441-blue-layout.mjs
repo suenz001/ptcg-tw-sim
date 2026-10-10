@@ -71,6 +71,11 @@ const REVERT = [
 //   這些後續版本的改動在這裡逐條還原（每條恰好命中 1 次；內容正確性由各版自己的守衛鎖：test-v6448…）。
 //   ⚠ 只准放「非藍桌墊」的全版面改動；藍桌墊的改動一律寫進哨兵。
 const LATER = [
+  // ⭐v6.518（Rule 40）：一般對戰 P2 接手建局的重新判斷計時器（非藍桌墊、只碰建局流程）——當場驗證逐位元還原 admin v1.80（b963f3f3）；內容由 test-v6518 鎖
+  ["shouldResetStartGrace, startGraceRecheckDelayMs, decideBoardAdopt", "shouldResetStartGrace, decideBoardAdopt"],
+  ["  // v6.518：P2 接手建局的重新判斷計時器（見 startGraceRecheckDelayMs）\n  let _startGraceTimer: ReturnType<typeof setTimeout> | null = null;\n", ""],
+  ["    if (_startGraceTimer !== null) { clearTimeout(_startGraceTimer); _startGraceTimer = null; }   // v6.518\n", ""],
+  ["    const _startOpts = {\n      mySeat: _mySeat, bothReady: true, roomStatus: roomData.status,\n      hasGameState: !!roomData.gameState, haveLocalGame: !!game,\n      readyElapsedMs: Date.now() - _onlineReadyAt,\n    };\n    if (!shouldAttemptStartGame({ ..._startOpts })) {\n      // >>> v6518-start-recheck\n      // ⭐v6.518：P2 只差 grace 還沒到 ⇒ 自己排一次重新判斷。房間輪詢在版本沒變時不回呼，\n      //   雙方都準備好之後房間就不再變動 ⇒ 不排的話要等到下一次心跳（最久約 60 秒）才會再問一次。\n      const _recheck = startGraceRecheckDelayMs(_startOpts);\n      if (_recheck !== null) {\n        if (_startGraceTimer !== null) clearTimeout(_startGraceTimer);\n        _startGraceTimer = setTimeout(() => { _startGraceTimer = null; checkAndStartOnlineGame(); }, _recheck);\n      }\n      // <<< v6518-start-recheck\n      return;\n    }\n", "    if (!shouldAttemptStartGame({\n      mySeat: _mySeat, bothReady: true, roomStatus: roomData.status,\n      hasGameState: !!roomData.gameState, haveLocalGame: !!game,\n      readyElapsedMs: Date.now() - _onlineReadyAt,\n    })) return;\n"],
   // ⭐v6.509（Rule 40）：錦標賽「正在確認登入狀態」閘＋8 秒保險（非藍桌墊、只碰錦標賽大廳與登入回呼）。
   //   difflib 產生、當場驗證逐位元還原 v6.508；內容由 test-v6509 鎖
   ["  let firebaseUser = $state<User | null>(null);\n  // ⭐v6.509（玩家回報 2026-10-07：手機按下錦標賽後「畫面停在登入畫面，要等一段時間才會進入錦標賽」，幾乎每次）：\n  //   Firebase 開頁時要先從手機儲存區讀回帳號、再連 Google 驗證一次（accounts:lookup，實測 0.4 秒起跳，手機更久），\n  //   這段期間 firebaseUser 還是 null ⇒ isAnonymous 為 true ⇒ 錦標賽顯示「請登入」表單，看起來像沒登入。\n  //   ⇒ 第一次收到登入狀態之前顯示「確認登入狀態中」，不再先閃登入表單。\n  let tAuthResolved = $state(false);\n  let syncStatus = $state<'idle' | 'syncing' | 'synced' | 'error'>('idle');\n", "  let firebaseUser = $state<User | null>(null);\n  let syncStatus = $state<'idle' | 'syncing' | 'synced' | 'error'>('idle');\n"],

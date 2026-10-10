@@ -732,6 +732,40 @@ export function shouldAttemptStartGame(opts: {
 }
 
 /**
+ * ⭐⭐⭐v6.518：P2 的 6 秒接手**要有人叫醒它**（玩家回報：一般對戰雙方都已準備，對戰卻不開始）。
+ *
+ * ## 真因（逐行查證）
+ * `shouldAttemptStartGame` 讓 seat 1 在「雙方就緒滿 6 秒」後接手建局，但重新判斷這件事的
+ * `checkAndStartOnlineGame()` **只在收到房間更新時**才會被呼叫；而房間輪詢（oraclePollRoom）
+ * 在版本沒變時**不回呼**。雙方都按完準備之後房間就不再變動 ⇒ 6 秒到了也沒有人再問一次。
+ * 唯一會再改到房間的是雙方各自每 60 秒一次的心跳 ⇒ 只要 P1（房主）那一端沒在第一時間建局
+ * （例如手機切到背景、分頁被凍結），P2 就要乾等到下一次心跳，最久將近一分鐘，期間畫面停在
+ * 「⏳ 雙方已準備，遊戲即將開始⋯」，12 秒後跳出「建局逾時診斷」。
+ *
+ * ## 判準
+ * 回「還要等幾毫秒再重新判斷一次」：只有「seat 1、其他條件都成立、只差 grace 還沒到」才回數字，
+ * 其他一律回 null（seat 0 會立刻建；條件不成立的情形本來就不該建）。
+ * 守衛逐組合斷言：回數字 ⇒ 現在 `shouldAttemptStartGame` 是 false、等這麼久之後是 true。
+ */
+export function startGraceRecheckDelayMs(opts: {
+  mySeat: number;
+  bothReady: boolean;
+  roomStatus: string;
+  hasGameState: boolean;
+  haveLocalGame: boolean;
+  readyElapsedMs: number;
+  fallbackGraceMs?: number;
+}): number | null {
+  if (opts.haveLocalGame || opts.roomStatus !== 'lobby' || opts.hasGameState || !opts.bothReady) return null;
+  if (opts.mySeat !== 1) return null;
+  // ⚠ 6000 必須與 shouldAttemptStartGame 的 fallback grace 相同。那支的本體被 test-v6274 E3 逐字釘住（不動它），
+  //   所以這裡不改成共用常數；改由 test-v6518 逐組合斷言「等這麼久之後 shouldAttemptStartGame 一定是 true、
+  //   現在一定是 false」——任何一邊單獨改數字都會紅。
+  const left = (opts.fallbackGraceMs ?? 6000) - opts.readyElapsedMs;
+  return left > 0 ? left + 250 : null;   // +250ms：計時器提早一點點醒來就會再落空一次
+}
+
+/**
  * ⭐⭐⭐v6.274：「P2 fallback grace 的起算點（`_onlineReadyAt`）什麼時候必須歸零」的**唯一**判準。
  *
  * ## 這一版在修什麼（線上實測，不是推論）

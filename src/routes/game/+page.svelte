@@ -66,7 +66,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemonExCard,
            isBasicEnergyOfType as isBasicEnergyOfTypeCentral } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
-  import { resolveRoomUpdate, shouldAttemptStartGame, shouldResetStartGrace, decideBoardAdopt, decideStuckSelfHeal, isStaleFinishedGame,
+  import { resolveRoomUpdate, shouldAttemptStartGame, shouldResetStartGrace, startGraceRecheckDelayMs, decideBoardAdopt, decideStuckSelfHeal, isStaleFinishedGame,
            casualResyncGapMs, casualResyncInLastChance, RESYNC_BASE_MS,
            nextRestartBaseline, setupSeatRank } from '$lib/game/sync-guards';
   import { staleVersionDiagWhy } from '$lib/tournament/stale-diag';
@@ -1813,6 +1813,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   /** v2.269：當前座位索引 (0..9)；觀戰位 ≥2 */
   let mySeatIdx = $state<number>(-1);
   let _onlineReadyAt = 0; // v5.749 決定性建局者 grace 計時(雙就緒+lobby+無局 起算)
+  // v6.518：P2 接手建局的重新判斷計時器（見 startGraceRecheckDelayMs）
+  let _startGraceTimer: ReturnType<typeof setTimeout> | null = null;
   // ⭐v6.265 診斷用（casual-phantom-adopt）：本頁最近一次 startGame 的判定與當下的 grace 已過多久。
   //   ⚠ 純紀錄，**不參與任何決策** —— 只在指紋成立時被讀出來，一般對局連讀都不會讀。
   let _startGameWon: boolean | null = null;
@@ -4947,6 +4949,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   });
 
   onDestroy(() => {
+    if (_startGraceTimer !== null) { clearTimeout(_startGraceTimer); _startGraceTimer = null; }   // v6.518
     // >>> v6467-destroy-timers
     // ⭐v6.467（全站 audit 2026-10-03）：錦標賽大廳／倒數／跨房提醒這四支 setInterval 建在 $effect 裡、
     //   只在 effect 的 else 分支清除 —— 元件卸載時 effect 直接銷毀、else 永遠不會跑 ⇒ 用站內連結或返回鍵
@@ -9361,11 +9364,23 @@ function _setupSelfPending(g: any, seat: number): string | null {
       bothReady: true, haveLocalGame: !!game })) { _onlineReadyAt = 0; return; }
     if (_onlineReadyAt === 0) _onlineReadyAt = Date.now();
     const _mySeat = roomData.seats.findIndex((s) => !!s.uid && s.uid === myUid);
-    if (!shouldAttemptStartGame({
+    const _startOpts = {
       mySeat: _mySeat, bothReady: true, roomStatus: roomData.status,
       hasGameState: !!roomData.gameState, haveLocalGame: !!game,
       readyElapsedMs: Date.now() - _onlineReadyAt,
-    })) return;
+    };
+    if (!shouldAttemptStartGame({ ..._startOpts })) {
+      // >>> v6518-start-recheck
+      // ⭐v6.518：P2 只差 grace 還沒到 ⇒ 自己排一次重新判斷。房間輪詢在版本沒變時不回呼，
+      //   雙方都準備好之後房間就不再變動 ⇒ 不排的話要等到下一次心跳（最久約 60 秒）才會再問一次。
+      const _recheck = startGraceRecheckDelayMs(_startOpts);
+      if (_recheck !== null) {
+        if (_startGraceTimer !== null) clearTimeout(_startGraceTimer);
+        _startGraceTimer = setTimeout(() => { _startGraceTimer = null; checkAndStartOnlineGame(); }, _recheck);
+      }
+      // <<< v6518-start-recheck
+      return;
+    }
 
     // v5.894：建局前確保雙方牌組卡包已載入（完整性 fallback）。缺卡→先載入再自我重呼叫本函式。
     // v6.055 診斷：這段是「自我重呼叫」迴圈 —— 若某張卡永遠載不進 pool 就會**無聲無限重試**，
