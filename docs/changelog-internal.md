@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.520：官方 Q&A 比對第二批（2026-10-10）
+
+BASE v6.519（f5a5e591）。
+- R011 光子纜線：koTargetAfterAttackDamage 多 `damagedWhileActive`，drainPendingAttackKo 備戰分支（非存活延後）帶 true ⇒ fireDefenderOnKO 以「受到傷害時在戰鬥場」判定。
+- R102 退化／拆道具後才昏厥：存活分支的 _pendingAttackKo 帶 `survivedDamage: true`，drain 走 attack-effect KO（不算招式傷害 ⇒ 傳說的山頂、古舊能量不套）；推翻站長 2026-10-06 v6.490 裁定（站長 2026-10-10：照官方判例改）。Rule 40：test-v6490 G12 期望改為兩種情形都拿 1 張。
+- R063 延伸：重試徽章重跑（保留）時混亂擲幣沿用剛才結果，不從注入佇列吃招式的硬幣；重擲時也不重擲混亂。
+- test-v6520（A／B／C 實跑＋對照、H1 v6.519 逐條紅）；突變全殺。
+
 ## v6.519：官方 Q&A 比對第一批（2026-10-10）
 
 BASE v6.518（67085dc8）。站長：「請你上網查詢比對一下官方的判例 卡牌規則等等內容 有沒有和我們網站系統不符的地方」。

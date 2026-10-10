@@ -3559,14 +3559,22 @@ export function drainPendingAttackKo(state: GameState, pool: Map<string, Card>):
     if (d.active && isAttackKoVictim(d.active, ctx.victimIid)) {
       if (isZombieKO(d.active, pool, s)) {
         koHappened = true;
-        s = resolveAttackActiveKo(s, ctx, pool);
+        // ⭐v6.520（v6520-survived-then-effect-ko）：傷害當下沒打倒、之後被招式效果弄到昏厥 ⇒ 效果昏厥（koByAttackDamage=false）：
+        //   獎賞只算基本張數、「受到招式的傷害而昏厥」類的觸發（反擊、道具、復仇類計數）都不算。
+        if (ctx.survivedDamage) s = koTargetAfterAttackDamage(s, ctx.aIdx, d.active, pool, { kind: 'attack-effect', label: '招式效果', onDamagedFired: true, attackerIid: ctx.attackerIid });
+        else s = resolveAttackActiveKo(s, ctx, pool);
       }
     } else {
       // 被招式效果換到備戰區（推倒類）⇒ 在備戰區昏厥（官方 L1132-1133）；放回手牌／牌庫 ⇒ 找不到 ⇒ 不昏厥
       const vb = d.bench.find(b => isAttackKoVictim(b, ctx.victimIid));
-      if (vb && isZombieKO(vb, pool, s)) {
+      if (vb && isZombieKO(vb, pool, s) && ctx.survivedDamage) {
+        koHappened = true;   // ⭐v6.520：傷害當下沒打倒、被換到備戰後才因效果昏厥 ⇒ 效果昏厥
+        s = koTargetAfterAttackDamage(s, ctx.aIdx, vb, pool, { kind: 'attack-effect', label: '招式效果', onDamagedFired: true, attackerIid: ctx.attackerIid });
+      } else if (vb && isZombieKO(vb, pool, s)) {
         koHappened = true;
-        s = koTargetAfterAttackDamage(s, ctx.aIdx, vb, pool, { label: '招式', onDamagedFired: true, attackerIid: ctx.attackerIid });
+        // ⭐v6.520（v6520-ko-damaged-while-active，官方 Q&A 深淵之瞳：密勒頓被推倒換到備戰區後昏厥 ⇒ 光子纜線照樣發動）：
+        //   受到招式傷害時在戰鬥場 ⇒「在戰鬥場上受到…傷害而昏厥」的 on-KO 效果照常（同 PTCG_RULES 甲殼刺判例）。
+        s = koTargetAfterAttackDamage(s, ctx.aIdx, vb, pool, { label: '招式', onDamagedFired: true, attackerIid: ctx.attackerIid, damagedWhileActive: true });
       }
     }
   }
@@ -5829,7 +5837,15 @@ function handlePlaying(
     // 特殊狀態：混亂 — 擲硬幣，反面自身受 30 傷害且攻擊失敗
     // v2.182：補上「自傷致 KO」流程 — 30 自傷可能讓寶可夢昏厥（HP ≤ 30 + 已有傷害指示物）
     if (attacker.active.status === 'confused') {
-      const flipResult = flipCoinsWithLog(state, 1, '混亂', aIdx);
+      // >>> v6520-retry-badge-confusion
+      // ⭐v6.520（官方 Q&A 深淵之瞳：重試徽章只能重擲「因招式」擲的硬幣，混亂的擲幣不是）：
+      //   重試徽章的重跑（_retryBadgeAlreadyAsked）一定是第一次混亂擲出正面、招式才有擲幣 ⇒ 沿用正面，不重擲、
+      //   也不從「保留結果」佇列拿值（原本：選重擲連混亂一起重擲；選保留時混亂先吃掉第 1 枚，招式的硬幣整排錯位）。
+      const _retryReplay = action._retryBadgeAlreadyAsked === true;
+      const flipResult = _retryReplay
+        ? { state: addLog(state, '混亂：沿用剛才的擲幣結果（正面）〔重試徽章不重擲混亂的硬幣〕', aIdx), heads: 1 }
+        : flipCoinsWithLog(state, 1, '混亂', aIdx);
+      // <<< v6520-retry-badge-confusion
       state = flipResult.state;
       const coin = flipResult.heads === 1;
       if (!coin) {
@@ -6957,9 +6973,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       defenderState.active = withAttackDamageTaken(defenderState.active!, _damageBeforeThisAttack, _survivedDamage, 'attack-damage');
       defPlayers[dIdx] = defenderState;
       newState = { ...newState, players: defPlayers, turnPhase: 'end' };
-      // ⭐v6.490（站長裁定 2026-10-06：退化光線 50 點傷害、退化後昏厥 ⇒ 古舊能量的加減照算）：
-      //   有招式效果時也記下這一隻；效果結束後若它已達昏厥，由 drainPendingAttackKo 完整結算（不是 sanityKOSweep 的簡化版）。
-      if (_v6490Defer && baseDamage > 0) newState = { ...newState, _pendingAttackKo: _v6490Ctx };
+      // ⭐v6.490：有招式效果時也記下這一隻；效果結束後若它已達昏厥，由 drainPendingAttackKo 完整結算（不是 sanityKOSweep 的簡化版）。
+      // ⭐⭐v6.520（v6520-survived-then-effect-ko）：站長 2026-10-06 裁定「退化光線退化後昏厥 ⇒ 古舊能量照算」已由官方 Q&A 推翻
+      //   （深淵之瞳：傳說的山頂在場、退化光線沒打倒、退化後才昏厥 ⇒ 獎賞卡不會減少——不是受到招式的傷害而昏厥）。
+      //   站長 2026-10-10 裁定照官方 ⇒ 標記 survivedDamage，drain 時改走效果昏厥（只拿基本張數）。
+      if (_v6490Defer && baseDamage > 0) newState = { ...newState, _pendingAttackKo: { ..._v6490Ctx, survivedDamage: true } };
 
       // v3.751：抓取攻擊方在 ON_DAMAGED hooks 觸發前的傷害值 — 用於判斷反傷有實際生效
       const atkDamageBeforeRetaliation = newState.players[aIdx].active?.damage ?? 0;

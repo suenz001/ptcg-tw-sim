@@ -9873,7 +9873,11 @@ export function applyPreventKOToVictim(   // ⭐v6.260 export：mega_decks olive
  */
 export function koTargetAfterAttackDamage(
   st: GameState, actorIdx: 0 | 1, targetNow: CardInstance, pool: Map<string, Card>,
-  opts: { kind?: DamageKind; label: string; suffix?: string; onDamagedFired: boolean; attackerIid?: string },
+  opts: { kind?: DamageKind; label: string; suffix?: string; onDamagedFired: boolean; attackerIid?: string;
+    /** ⭐v6.520：受到這一下傷害時在戰鬥場（之後才被招式效果換到備戰區，例：頭蓋龍｜推倒）。
+     *  卡面「在戰鬥場上受到…傷害而昏厥」的 on-KO 效果看的是受傷當下的位置（官方 Q&A：密勒頓被推倒換到備戰區後昏厥 ⇒ 光子纜線照樣發動）；
+     *  移出場、奇跡之吻等與實際昏厥位置有關的處理仍以此刻位置為準。 */
+    damagedWhileActive?: boolean },
 ): GameState {
   const kind = opts.kind ?? 'attack-damage';
   const label = opts.label;
@@ -9903,7 +9907,7 @@ export function koTargetAfterAttackDamage(
   s = recordOppKO(s, dIdx, targetCard, 'attack', kind === 'attack-damage');
   // v5.495：被 KO 觸發附加道具 TOOL_ON_KO（沉重接力棒移能量 / 希望護身符抽牌）——
   //   中央 helper 原漏呼叫，導致狙擊/分配招式 KO 帶接力棒的寶可夢時能量直接消失。
-  s = fireDefenderOnKO(s, dIdx, actorIdx, pool, targetNow, isActive, kind === 'attack-damage', _onDamagedFired, opts.attackerIid);
+  s = fireDefenderOnKO(s, dIdx, actorIdx, pool, targetNow, isActive || opts.damagedWhileActive === true, kind === 'attack-damage', _onDamagedFired, opts.attackerIid);   // ⭐v6.520 v6520-ko-damaged-while-active
   if (s.phase === 'game-over') return s;
   // v5.830：對手戰鬥位被狙擊/延後傷害 KO → 攻擊方「奇跡之吻」擲幣+1(卡面「對手戰鬥寶可夢昏厥時」不分主傷害/狙擊)。
   //   ⭐v6.493：走中央入口；脆弱蛻殼讓獎賞為 0 時照擲但不加（B6）

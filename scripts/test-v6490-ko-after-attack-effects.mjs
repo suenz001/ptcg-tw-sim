@@ -215,7 +215,9 @@ T('G11 切割洛托姆｜割除衝刺「在造成傷害前」丟掉古舊能量�
   assert.equal(taken(s), 1);
   assert.equal((s.ancientEnergyMinusOneUsed ?? [false, false])[1], false);
 });
-T('G12 念力土偶｜退化光線 50：傷害當下沒昏厥、退化後不夠 HP ⇒ 照「受到招式的傷害而昏厥」完整結算（古舊能量 −1）', () => {
+// ⭐v6.520（Rule 40）：站長 2026-10-06 裁定「退化後昏厥 ⇒ 古舊能量照算」已被官方 Q&A 推翻（深淵之瞳：退化光線＋傳說的山頂 ⇒ 獎賞不減少），
+//   站長 2026-10-10 裁定照官方。G12 的原意（延後到效果之後完整結算、不走 sanityKOSweep 簡化版）保留；期望值改成「效果昏厥：只拿基本張數」。
+T('G12 念力土偶｜退化光線 50：傷害當下沒昏厥、退化後不夠 HP ⇒ 效果結束後完整結算，但不算「受到招式的傷害而昏厥」（古舊能量不 −1，v6.520 依官方 Q&A）', () => {
   for (const withAnc of [true, false]) {
     const en = withAnc ? [inst(ANC)] : [];
     let s = board({ active: inst(DOLL, { energyAttached: [inst(FIGHT)] }) },
@@ -224,7 +226,7 @@ T('G12 念力土偶｜退化光線 50：傷害當下沒昏厥、退化後不夠 
     for (let g = 0; g < 3 && s.pendingSelection; g++) s = resolve(s, s.pendingSelection.actorIdx ?? 0, (s.pendingSelection.params?.validIids ?? []).slice(0, 1));
     noLinger(s, 'G12');
     assert.equal(s.players[1].active, null, '退化後的暖暖豬應昏厥');
-    assert.equal(taken(s), withAnc ? 0 : 1, withAnc ? '古舊能量 −1 ⇒ 0 張' : '基本 1 張');
+    assert.equal(taken(s), 1, withAnc ? '退化後才昏厥不是受到招式的傷害而昏厥 ⇒ 古舊能量不生效，照拿 1 張' : '基本 1 張');
     assert.ok(!s.log.some(l => /系統擊倒檢查/.test(l.message)), '不可再走 sanityKOSweep 的簡化版');
   }
 });

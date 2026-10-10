@@ -1035,6 +1035,9 @@ export interface GameState {
     baseDamage: number; peakTypeInst: CardInstance | null; effectKey: string;
     /** 借招鏈（欺詐／揮指…）：使用者自己的 key ＋ 借來的各層 key；昏厥後逐一查 ATTACK_AFTER_KO（純字串陣列，非巢狀）。 */
     afterKoKeys?: string[];
+    /** ⭐v6.520：招式的傷害當下**沒有**打倒（是之後的招式效果，例如退化光線把牠退化，才讓傷害超過 HP）。
+     *  官方 Q&A（深淵之瞳）：這不算「受到招式的傷害而昏厥」⇒ 傳說的山頂、古舊能量等獎賞修正不生效，只拿基本張數。 */
+    survivedDamage?: boolean;
   };
   /**
    * ⭐⭐ v6.362 站長裁定 A-1：賽富豪｜歡慶
