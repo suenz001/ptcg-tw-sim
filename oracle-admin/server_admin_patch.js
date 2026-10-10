@@ -1139,6 +1139,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
   //        故先攻與後攻的第 1 回合 finalTurn 都是 1；turn>=3 ⇔ 雙方各完成 2 回合。
   //      ⚠舊資料若無 finalTurn 欄位，$gte 判定為 false → 維持「排除」的舊行為（向後相容）。
   const CASUAL_LEAVE_RE = /中途離開|離開房間|斷線|斷開|退出|不在場|disconnect|技不如人|先行離開/i;
+  const CASUAL_NOSHOW_RE = /無回應/;   // v159-arch-noshow：休閒無回應判負（見 buildCasualCleanFilter 的 archNoShow）
   function buildCasualCleanFilter(opts) {
     const o = opts || {};
     const q = {};
@@ -1149,6 +1150,17 @@ import('firebase-admin').then(async ({ default: admin }) => {
       { winReason: { $not: CASUAL_LEAVE_RE } },   // 不是離開場 → 一律納入（含無 winReason 的舊場）
       { finalTurn: { $gte: 3 } },                 // 是離開場但雙方各已完成 2 回合 → 仍納入
     ];
+    // >>> v159-arch-noshow
+    // ⭐v1.59 牌組原型專用（opts.archNoShow）：第一回合就以「無回應，被宣告棄權」結束 ⇒ 有一方根本沒進場／沒動作 ⇒ 不算勝負。
+    //   ⚠ engine 的 turn 只在**後攻方**結束回合時 +1（初始 1，setup 階段也是 1）⇒ finalTurn === 1＝雙方都還在第一回合；
+    //     finalTurn 2＝雙方都已打完第一回合 ⇒ 照算（Fable 審查更正：第一稿寫成 < 3 會連第二回合的無回應都排掉）。
+    //   休閒的無回應判負字樣：「X 3 分鐘無回應，被宣告棄權」（room.ts）「X 長時間無回應，被宣告棄權」（room-oracle.ts，含 setup 掛機）。
+    //   ⚠ 沒帶 archNoShow 的呼叫端（玩家戰績、套牌戰績…）回傳的查詢與 v1.58 逐位元相同。
+    if (o.archNoShow) {
+      const leaveOr = q.$or; delete q.$or;
+      q.$and = [{ $or: leaveOr }, { $or: [{ winReason: { $not: CASUAL_NOSHOW_RE } }, { finalTurn: { $gte: 2 } }] }];
+    }
+    // <<< v159-arch-noshow
     return q;
   }
 
@@ -1552,6 +1564,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
           ip,  // for abuse audit
           createdAt: new Date(),
         };
+        // >>> v159-first-seat
+        // ⭐v1.59（站長 2026-10-10：牌組原型要另外算「先攻／後攻勝率」）：client（v6.524 起）送 firstPlayerIdx ⇒ 記 firstSeat（0＝p1 先攻）。
+        //   ⚠ 只有 0／1 才寫；沒送（舊 client）就一個位元都不動，doc 與 v1.58 逐位元相同（欄位缺席＝不知道誰先攻）。
+        if (body.firstPlayerIdx === 0 || body.firstPlayerIdx === 1) doc.firstSeat = body.firstPlayerIdx;
+        // <<< v159-first-seat
         // >>> PTCG-MATCH-EMAIL-ENRICH-START (守衛會抽出實跑)
         // v1.20(v6.220): seats[].email 已不再下發給玩家端(隱私) → 線上對局的 email 歸屬
         //   改由伺服器從房間 doc 補上(房間 doc 內仍保存 email)。舊 client 若有送 email
@@ -2604,6 +2621,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
     function tournSideResult(winnerUid, uid) {
       return String(winnerUid) === String(uid) ? 'win' : 'loss';
     }
+    // >>> v159-arch-noshow
+    // ⭐v1.59（站長 2026-10-10）：「牌組原型算勝負的方式，如果第一回合有玩家沒進場，不應該將勝負納入計算」。
+    //   ⇒ 牌組原型（環境報告圖／原型明細／對戰矩陣）三支端點的錦標賽側共用這一支：非 bye、有勝方、**而且不是未進場判勝（noShow）**。
+    //   ⚠ 只管牌組原型統計；玩家戰績、排行榜、套牌戰績（deck-stats）維持原口徑（站長未要求，另外確認）。
+    function archTournMatchCounts(m) {
+      return !!m && !m.bye && !!m.winnerUid && !m.noShow;
+    }
+    // <<< v159-arch-noshow
     /**
      * 規則的「嚴格度」＝條件總數。條件越多代表描述越特定，
      * 例如「含A且含B」比「只含A」更能精確描述一副牌，命中兩者時應歸給前者。
@@ -2856,7 +2881,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         }
 
         if (source === 'casual') {
-          const q = buildCasualCleanFilter({ excludeAI, since });
+          const q = buildCasualCleanFilter({ excludeAI, since, archNoShow: true });   // v159-arch-noshow
           // v6.242：**移除 limit(20000)** —— 與 v6.241 對錦標賽側的處理同一個理由：
           //   這支算的是「這個原型內每張卡的採用率／眾數張數／條件勝率差」＝**統計聚合**，
           //   限制筆數不是「少顯示幾列」，而是讓統計數字本身失真（只算最新 20000 場）。
@@ -2893,7 +2918,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
             const deckByUid = new Map();
             for (const p of (a.players || [])) if (p && p.uid) deckByUid.set(String(p.uid), p.deckEntries || []);
             for (const m of (a.matches || [])) {
-              if (!m || m.bye || !m.winnerUid) continue;
+              if (!archTournMatchCounts(m)) continue;   // v159-arch-noshow（原：非 bye、有勝方）
               for (const uid of [m.p1uid, m.p2uid]) {
                 if (!uid) continue;
                 const entries = deckByUid.get(String(uid));
@@ -3530,7 +3555,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         // ── 休閒（matchRecords）──沿用既有淨化規則（v0.98 只算有房號＝排 AI 與本機；v0.27/0.39 排中途離開）
         if (source === 'casual' || source === 'all') {
           // v0.91：改用中央 buildCasualCleanFilter（單一來源，含離開場 finalTurn 門檻）
-          const q = buildCasualCleanFilter({ excludeAI, since });
+          const q = buildCasualCleanFilter({ excludeAI, since, archNoShow: true });   // v159-arch-noshow
           // v6.242：**移除 limit(20000)** —— 同明細端點：這是「每個原型的使用次數／勝負／
           //   勝率」的統計聚合，限制筆數＝統計數字本身失真（只算最新 20000 場）。
           // ⚠ cursor 逐筆（不 toArray）＋ 每 200 筆 adminScanYield 讓路（見該函式註解）。
@@ -3563,7 +3588,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
             const deckByUid = new Map();
             for (const p of (a.players || [])) if (p && p.uid) deckByUid.set(String(p.uid), p.deckEntries || []);
             for (const m of (a.matches || [])) {
-              if (!m || m.bye || !m.winnerUid) continue;
+              if (!archTournMatchCounts(m)) continue;   // v159-arch-noshow（原：非 bye、有勝方）
               for (const uid of [m.p1uid, m.p2uid]) {
                 if (!uid) continue;
                 const entries = deckByUid.get(String(uid));
@@ -3747,6 +3772,55 @@ import('firebase-admin').then(async ({ default: admin }) => {
   //   鍵：命中規則＝規則 _id 字串；沒命中＝'_u'（未分類）。
   const _archMatchupCache = new Map();
   const ARCH_MU_UNCLASSIFIED = '_u';
+  // >>> v159-first-seat
+  // ⭐v1.59 錦標賽的先攻座位：歸檔沒有記 ⇒ 讀 tournamentMatches 那一局最後盤面的 finalState.firstPlayerIdx（房間座位 0＝p1uid）。
+  //   ⚠ 那份文件很大（整份最後盤面＋對戰紀錄），投影也擋不住磁碟讀取 ⇒ **每個賽事只讀一次**，結果存進小表 archTurnOrder
+  //     （_id＝eventId，map＝{ 'round|idx': 0|1 }；讀不到＝不寫進 map），之後只讀小表。一次最多讀 budget 個賽事，逐筆讓路。
+  //   只有正常結束、留有 finalState 的局才知道誰先攻；未進場、閒置判負、管理員判定等當作不知道（不進先後攻統計）。
+  const archTurnCol = () => db.collection('archTurnOrder');
+  async function archTurnBuild(eventId) {
+    const map = {};
+    let n = 0;
+    const cur = db.collection('tournamentMatches').find({ eventId, status: 'done' },
+      { projection: { round: 1, idx: 1, 'finalState.firstPlayerIdx': 1 } });
+    for await (const tm of cur) {
+      n++; const _y = adminScanYield(n); if (_y) await _y;
+      const f = tm && tm.finalState ? tm.finalState.firstPlayerIdx : undefined;
+      if (f === 0 || f === 1) map[tm.round + '|' + tm.idx] = f;
+    }
+    await archTurnCol().updateOne({ _id: eventId }, { $set: { map, at: Date.now() } }, { upsert: true });
+    return map;
+  }
+  /** 回 { maps: Map(eventId → map), missing: 還沒建的賽事數（補完 budget 之後） } */
+  async function archTurnLoad(eventIds, budget) {
+    const maps = new Map();
+    for (let i = 0; i < eventIds.length; i += 500) {
+      const docs = await archTurnCol().find({ _id: { $in: eventIds.slice(i, i + 500) } }).toArray();
+      for (const d of docs) maps.set(d._id, d.map || {});
+    }
+    let left = Math.max(0, budget | 0);
+    for (const id of eventIds) {
+      if (maps.has(id) || left <= 0) continue;
+      maps.set(id, await archTurnBuild(id)); left--;
+    }
+    return { maps, missing: eventIds.filter((id) => !maps.has(id)).length };
+  }
+  let _archTurnBusy = false;
+  app.post('/api/admin/arch-turn-backfill', requireFirebaseAdmin, async (req, res) => {
+    if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
+    if (_archTurnBusy) return res.status(409).json({ error: '上一批還在補，請稍候' });
+    _archTurnBusy = true;
+    try {
+      const max = Math.max(1, Math.min(20, parseInt(req.body && req.body.max) || 10));
+      const ids = (await db.collection('tournamentArchives').find({}, { projection: { eventId: 1 } }).sort({ finishedAt: -1 }).toArray())
+        .map((a) => a.eventId).filter((x) => x != null);
+      const t = await archTurnLoad(ids, max);
+      _archMatchupCache.clear();
+      res.json({ ok: true, total: ids.length, remaining: t.missing });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+    finally { _archTurnBusy = false; }
+  });
+  // <<< v159-first-seat
   app.get('/api/admin/deck-archetype-matchups', requireFirebaseAdmin, async (req, res) => {
     if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
     const source = ['casual', 'tourn', 'all'].includes(String(req.query.source)) ? String(req.query.source) : 'all';
@@ -3761,9 +3835,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
       if (!nameMap.size) return res.status(503).json({ error: '伺服器卡名對照尚未載入，稍後再試' });
       // 與 deck-archetype-stats 同一份查詢（啟用中、依 priority）——不走 30 秒規則快取，規則一改立刻反映
       const rules = await TRULES.find({ enabled: { $ne: false } }).sort({ priority: 1 }).toArray();
-      const mkBucket = () => ({ usage: {}, pairs: {} });
+      const mkBucket = () => ({ usage: {}, pairs: {}, turnOrder: {} });   // v159：turnOrder[原型] = { first:[勝,負,和], second:[勝,負,和] }
       const out = { casual: mkBucket(), tourn: mkBucket() };
-      const scanned = { casualMatches: 0, casualDecks: 0, casualPairs: 0, tournEvents: 0, tournDecks: 0, tournPairs: 0 };
+      const scanned = { casualMatches: 0, casualDecks: 0, casualPairs: 0, tournEvents: 0, tournDecks: 0, tournPairs: 0,
+                        casualTurnKnown: 0, tournTurnKnown: 0 };   // v159：知道誰先攻的對戰場數
       const keyOf = (deckRef) => {
         const c = classifyDeck(deckToSets(deckRef, nameMap), rules);
         return c.rule ? String(c.rule._id) : ARCH_MU_UNCLASSIFIED;
@@ -3778,24 +3853,40 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const c = r[col] || (r[col] = [0, 0, 0]);
         c[RIDX[result]]++;
       };
-      /** 一場對戰：sides = [{ deck, result }, { deck, result }]（deck 可能缺） */
-      const tallyMatch = (bucket, sides, statKey) => {
+      // >>> v159-first-seat
+      // ⭐v1.59 先攻／後攻：firstSeat＝0（p1 先攻）／1（p2 先攻）／null（不知道 ⇒ 不記）。每一側各記在自己原型的 first 或 second。
+      const addTurn = (b, k, slot, result) => {
+        const t = b.turnOrder[k] || (b.turnOrder[k] = { first: [0, 0, 0], second: [0, 0, 0] });
+        t[slot][RIDX[result]]++;
+      };
+      /** 先攻／後攻：keys＝tallyMatch 已分類好的雙方原型（不再分類，純加法）。至少一側有牌表才算「知道誰先攻」。 */
+      const tallyTurn = (bucket, sides, statKey, firstSeat, keys) => {
+        if (firstSeat !== 0 && firstSeat !== 1) return;
+        if (keys[0] === null && keys[1] === null) return;
+        scanned[statKey + 'TurnKnown']++;
+        sides.forEach((sd, i) => { if (keys[i] !== null) addTurn(out[bucket], keys[i], i === firstSeat ? 'first' : 'second', sd.result); });
+      };
+      // <<< v159-first-seat
+      /** 一場對戰：sides = [{ deck, result }, { deck, result }]（deck 可能缺）；firstSeat：0／1／null（v1.59） */
+      const tallyMatch = (bucket, sides, statKey, firstSeat) => {
         const b = out[bucket];
         const keys = sides.map((sd) => (sd.deck ? keyOf(sd.deck) : null));
+        tallyTurn(bucket, sides, statKey, firstSeat, keys);
         sides.forEach((sd, i) => { if (keys[i] !== null) { scanned[statKey + 'Decks']++; addUsage(b, keys[i], sd.result); } });
         if (keys[0] !== null && keys[1] !== null) {
           scanned[statKey + 'Pairs']++;
           addPair(b, keys[0], keys[1], sides[0].result);
           addPair(b, keys[1], keys[0], sides[1].result);
         }
+        return keys;
       };
       const hasDeck = (d) => !!d && (Array.isArray(d) ? d.length > 0 : Object.keys(d).length > 0);
 
       // ── 休閒：與 deck-archetype-stats 同一支 buildCasualCleanFilter、同樣只取牌表與勝方 ──
       if (source === 'casual' || source === 'all') {
-        const q = buildCasualCleanFilter({ excludeAI, since });
+        const q = buildCasualCleanFilter({ excludeAI, since, archNoShow: true });   // v159-arch-noshow
         const cur = db.collection('matchRecords')
-          .find(q, { projection: { 'p1.cardCounts': 1, 'p2.cardCounts': 1, winner: 1 } })
+          .find(q, { projection: { 'p1.cardCounts': 1, 'p2.cardCounts': 1, winner: 1, firstSeat: 1 } })
           .sort({ endedAt: -1 });
         for await (const m of cur) {
           scanned.casualMatches++;
@@ -3804,7 +3895,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
             const cc = m[side] && m[side].cardCounts;
             return { deck: hasDeck(cc) ? cc : null, result: casualSideResult(m.winner, side === 'p1') };
           });
-          tallyMatch('casual', sides, 'casual');
+          tallyMatch('casual', sides, 'casual', (m.firstSeat === 0 || m.firstSeat === 1) ? m.firstSeat : null);
         }
       }
 
@@ -3813,24 +3904,48 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const q = {};
         if (since) q.finishedAt = { $gte: since };
         const cur = db.collection('tournamentArchives')
-          .find(q, { projection: { 'players.uid': 1, 'players.deckEntries': 1, 'matches.bye': 1,
+          .find(q, { projection: { eventId: 1, bestOf: 1, 'players.uid': 1, 'players.deckEntries': 1, 'matches.bye': 1, 'matches.noShow': 1,
+                                   'matches.round': 1, 'matches.idx': 1,
                                    'matches.winnerUid': 1, 'matches.p1uid': 1, 'matches.p2uid': 1 } })
           .sort({ finishedAt: -1 });
+        // v159-first-seat：歸檔沒有記誰先攻 ⇒ 先把要算的對局收齊，再到 tournamentMatches 讀那一局最後盤面的 firstPlayerIdx
+        //   （房間座位 0＝p1uid；只有正常結束、留有 finalState 的局才知道，其餘當作不知道）。
+        const pend = [];
         let nm = 0;
         for await (const a of cur) {
           scanned.tournEvents++;
           const deckByUid = new Map();
           for (const p of (a.players || [])) if (p && p.uid) deckByUid.set(String(p.uid), p.deckEntries || []);
           for (const m of (a.matches || [])) {
-            if (!m || m.bye || !m.winnerUid) continue;
+            if (!archTournMatchCounts(m)) continue;   // v159-arch-noshow（原：非 bye、有勝方）
             nm++;
             const _y = adminScanYield(nm); if (_y) await _y;
             const sides = [m.p1uid, m.p2uid].map((uid) => {
               const d = uid ? deckByUid.get(String(uid)) : null;
               return { deck: hasDeck(d) ? d : null, result: tournSideResult(m.winnerUid, uid) };
             });
-            tallyMatch('tourn', sides, 'tourn');
+            // ⚠ 分類與計數照 v1.58 在這個逐場讓路的迴圈裡做（Fable 審查：搬到後面一次做完會變成 0.5～1 秒同步卡頓）；
+            //   先攻座位要等下面讀完快取表才知道 ⇒ 這裡先記下分類結果，後面只做加法。
+            const keys = tallyMatch('tourn', sides, 'tourn', null);
+            pend.push({ eventId: a.eventId, round: m.round, idx: m.idx, sides, keys, multi: (a.bestOf || 1) > 1 });
           }
+        }
+        // 先後攻資料：讀 archTurnOrder 快取表；還沒建的賽事每次最多順手補 3 場（新賽事一天約 2 場 ⇒ 平常就補得上），
+        //   歷史賽事由「補齊錦標賽先後攻資料」按鈕分批補（/api/admin/arch-turn-backfill）。
+        // ⚠ 補齊端點或另一個分頁正在讀大表 ⇒ 這次不順手補（不重複讀同一份大文件；Fable 審查）
+        const _bud = _archTurnBusy ? 0 : 3;
+        if (_bud) _archTurnBusy = true;
+        let tt;
+        try { tt = await archTurnLoad([...new Set(pend.map((p) => p.eventId).filter((x) => x != null))], _bud); }
+        finally { if (_bud) _archTurnBusy = false; }
+        scanned.tournTurnEventsMissing = tt.missing;
+        let np = 0;
+        for (const p of pend) {
+          np++; const _y2 = adminScanYield(np); if (_y2) await _y2;
+          const em = tt.maps.get(p.eventId);
+          // ⚠ 多局制（bestOf > 1）的最後盤面只代表最後一局的先後攻，不能代表整場 ⇒ 當作不知道
+          const f = (em && !p.multi) ? em[p.round + '|' + p.idx] : undefined;
+          tallyTurn('tourn', p.sides, 'tourn', (f === 0 || f === 1) ? f : null, p.keys);
         }
       }
 

@@ -121,7 +121,10 @@ function fakeDb(log) {
       return cur;
     },
   });
-  const c = { matchRecords: coll('matchRecords', CASUAL), tournamentArchives: coll('tournamentArchives', TOURN) };
+  // v1.59 Rule 40：對戰矩陣端點多讀 tournamentMatches（先攻座位）與 archTurnOrder（快取表）⇒ 假 DB 補這兩個集合（空的）
+  const c = { matchRecords: coll('matchRecords', CASUAL), tournamentArchives: coll('tournamentArchives', TOURN),
+    tournamentMatches: coll('tournamentMatches', []),
+    archTurnOrder: Object.assign(coll('archTurnOrder', []), { updateOne: async () => ({}) }) };
   return { collection: (n) => c[n] };
 }
 const TRULES_FAKE = { find: (f) => { const rows = RULES.filter((r) => r.enabled !== false); const cur = { sort: () => cur, toArray: async () => rows }; return cur; } };
@@ -130,7 +133,7 @@ const TRULES_FAKE = { find: (f) => { const rows = RULES.filter((r) => r.enabled 
 function buildServer(PATCH, opts) {
   const o = opts || {};
   const fns = ['deckToSets', 'deckMatchesRule', 'ruleStrictness', 'ruleRank', 'classifyDeck', 'casualSideResult',
-    'tournSideResult', 'buildCasualCleanFilter'].map((n) => grabFn(PATCH, n)).filter(Boolean).join('\n');
+    'tournSideResult', 'buildCasualCleanFilter', 'archTournMatchCounts'].map((n) => grabFn(PATCH, n)).filter(Boolean).join('\n');   // v1.59：archTournMatchCounts
   const stats = grabBlock(PATCH, "app.get('/api/admin/deck-archetype-stats'") || '';
   const mu = sentinel(PATCH, 'v158-arch-matchups') || '';
   const handlers = {};
@@ -138,10 +141,10 @@ function buildServer(PATCH, opts) {
   const log = [];
   const yields = [];   // 每一次讓路呼叫的參數（Fable 審查：要能斷言兩個迴圈都有讓路）
   new Function('app', 'requireFirebaseAdmin', 'db', 'TRULES', 'getCardNameMap', 'adminScanYield', '_archStatsCache',
-    'getPokemonNameSet', 'getSupportPokemonNames', 'CASUAL_LEAVE_RE',
+    'getPokemonNameSet', 'getSupportPokemonNames', 'CASUAL_LEAVE_RE', 'CASUAL_NOSHOW_RE',
     fns + '\n' + stats + '\n' + mu)(
     app, () => {}, fakeDb(log), TRULES_FAKE, async () => (o.nameMap || nameMap), (n) => { yields.push(n); return null; }, new Map(),
-    async () => new Set(), async () => new Set(), /中途離開|disconnect/i);
+    async () => new Set(), async () => new Set(), /中途離開|disconnect/i, /無回應/);
   const call = async (path, query) => {
     const h = handlers[path];
     if (!h) return { code: 404, out: null };
@@ -150,7 +153,7 @@ function buildServer(PATCH, opts) {
     await h({ query: query || {} }, res);
     return { code, out };
   };
-  const cleanFilter = (() => { try { return new Function('CASUAL_LEAVE_RE', fns + '\nreturn buildCasualCleanFilter;')(/中途離開|disconnect/i); } catch { return null; } })();
+  const cleanFilter = (() => { try { return new Function('CASUAL_LEAVE_RE', 'CASUAL_NOSHOW_RE', fns + '\nreturn buildCasualCleanFilter;')(/中途離開|disconnect/i, /無回應/); } catch { return null; } })();
   return { call, log, cleanFilter, yields };
 }
 
@@ -195,11 +198,12 @@ async function judgeServer(PATCH) {
     // S3 查詢條件與輸出
     const q = S.log.filter((x) => x.name === 'matchRecords');
     const muQ = q[q.length - 1];
-    const want = S.cleanFilter && JSON.stringify(S.cleanFilter({ excludeAI: true, since: 7 }), (k, v) => (v instanceof RegExp ? String(v) : v));
+    // v1.59 Rule 40：原型端點改帶 archNoShow（第一回合無回應棄權不算），意圖（休閒走中央 buildCasualCleanFilter）不變
+    const want = S.cleanFilter && JSON.stringify(S.cleanFilter({ excludeAI: true, since: 7, archNoShow: true }), (k, v) => (v instanceof RegExp ? String(v) : v));
     const got = muQ && JSON.stringify(muQ.filter, (k, v) => (v instanceof RegExp ? String(v) : v));
     const proj = muQ && muQ.opts && muQ.opts.projection;
     const tq = S.log.filter((x) => x.name === 'tournamentArchives').pop();
-    r.S3 = !!want && got === want && !!proj && Object.keys(proj).sort().join(',') === 'p1.cardCounts,p2.cardCounts,winner'
+    r.S3 = !!want && got === want && !!proj && Object.keys(proj).sort().join(',') === 'firstSeat,p1.cardCounts,p2.cardCounts,winner'   /* v1.59：多 firstSeat */
       && !!(tq && tq.filter && tq.filter.finishedAt && tq.filter.finishedAt.$gte === 7)
       && JSON.stringify(M.names) === JSON.stringify({ k1: '袋獸型', k2: '老大型' }) && M.unclassifiedKey === '_u';
     r.S3d = JSON.stringify({ got, want, proj, names: M.names });
@@ -210,7 +214,8 @@ async function judgeServer(PATCH) {
     const only = await S.call('/api/admin/deck-archetype-matchups', { source: 'casual' });
     r.S4 = again.out && again.out.cached === true && z.code === 503 && only.out.tourn === null && !!only.out.casual;
     // S5 讓路：休閒每一筆（6 場）＋錦標賽每一場有效對局（2 場）各呼叫一次 adminScanYield
-    r.S5 = yN === 8; r.S5d = 'adminScanYield 呼叫 ' + yN + ' 次（預期 6＋2）';
+    // v1.59 Rule 40：錦標賽多一個「先攻／後攻」加總迴圈，也逐筆讓路 ⇒ 6＋2＋2（意圖：每個掃描迴圈都讓路，不變）
+    r.S5 = yN === 10; r.S5d = 'adminScanYield 呼叫 ' + yN + ' 次（預期 6＋2＋2）';
     r.mu = M;
   } catch (e) { r.err = e.message; }
   return r;

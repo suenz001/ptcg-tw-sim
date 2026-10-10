@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '85e80655747954de3293132d283d68adb45a4789';   // v6.522（上一版）
+const PREV_SHA = '7118d18980bbe19c6da71747ab766b1fd64cb073';   // v6.523（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,21 +757,30 @@ const PREV_SHA = '85e80655747954de3293132d283d68adb45a4789';   // v6.522（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.523 前移：PREV_SHA 從 85e80655（v6.522）起算。
+  // ⚠⚠ v6.524 前移：PREV_SHA 從 7118d189（v6.523）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.523：哨兵 v6523-empty-payload-gate（engine RESOLVE_SELECTION 中央空選擇閘＋pendingHasLiveDeclaredCandidates）；AI 能量 picker 改走 activeEnergyDiscardCandidates。
-  'src/lib/game/ai.ts',
-  'src/lib/game/effects.ts',
-  'src/lib/game/effects/cards/m5_preview.ts',
-  'src/lib/game/effects/cards/m6_wave10.ts',
-  'src/lib/game/effects/cards/maroon_dragon_deck.ts',
-  'src/lib/game/engine.ts',
-  'src/lib/game/selection-candidates.ts',
+  // ⭐v6.524：+page.svelte 的 /api/match-result payload 多帶 firstPlayerIdx（伺服器 v1.59 收成 matchRecords.firstSeat）。
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.523）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.523 前移：PREV_SHA 從 85e80655（v6.522）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.523：哨兵 v6523-empty-payload-gate（engine RESOLVE_SELECTION 中央空選擇閘＋pendingHasLiveDeclaredCandidates）；AI 能量 picker 改走 activeEnergyDiscardCandidates。
+//   'src/lib/game/ai.ts',
+//   'src/lib/game/effects.ts',
+//   'src/lib/game/effects/cards/m5_preview.ts',
+//   'src/lib/game/effects/cards/m6_wave10.ts',
+//   'src/lib/game/effects/cards/maroon_dragon_deck.ts',
+//   'src/lib/game/engine.ts',
+//   'src/lib/game/selection-candidates.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.522）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.522 前移：PREV_SHA 從 ded8e4c5（v6.521）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -880,21 +889,6 @@ const PREV_ALLOWED = [
 // ⭐v6.510：牌組編輯器：深色主題的未選中預組列改用 --ui-bg-sunken（原本淺色主題寫死的 #fff5e6 淡橙底在深色配淺字）。
 //   'src/lib/version.ts',
 //   'src/routes/decks/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.509）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.509 前移：PREV_SHA 從 6e130e66（v6.508）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.509：卡包資料改用內容雜湊（建置時 sha1 前 10 碼，vite define 注入）當 ?v=、Service Worker 專用快取 ptcg-tw-sim-carddata 跨版本保留並刪同路徑舊雜湊；錦標賽 tAuthResolved 閘（第一次 onAuthStateChanged 前不顯示登入表單，8 秒保險）；layout 空閒預熱 Firebase；Rollup 合併 <1.5KB 片段。
-//   'src/lib/cards/data-url.ts',
-//   'src/lib/cards/pool.ts',
-//   'src/lib/sw-policy.ts',
-//   'src/lib/version.ts',
-//   'src/routes/+layout.svelte',
-//   'src/routes/cards/+page.ts',
-//   'src/routes/game/+page.svelte',
-//   'src/service-worker.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

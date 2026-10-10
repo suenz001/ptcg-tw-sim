@@ -318,6 +318,9 @@ const stubs = {
   buildCasualCleanFilter: () => ({}),
   casualSideResult: (winner, isP1) => ((winner === 'p1') === isP1 ? 'win' : 'loss'),
   tournSideResult: (winnerUid, uid) => (String(winnerUid) === String(uid) ? 'win' : 'loss'),
+  // v1.59 Rule 40：原型端點的錦標賽側改走中央述詞 archTournMatchCounts（未進場不計）；本守衛守的是「全量掃描」，
+  //   這裡給與正式版同語義的替身（盤面沒有 noShow 場 ⇒ 不影響全量計數），判準本身由 test-admin-v181 N2 實跑。
+  archTournMatchCounts: (m) => !!m && !m.bye && !!m.winnerUid && !m.noShow,
   getCardAttrMap: async () => new Map(),
   getPokemonNameSet: async () => new Set(['皮卡丘']),
   getSupportPokemonNames: async () => new Set(),

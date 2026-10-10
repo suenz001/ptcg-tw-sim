@@ -71,6 +71,8 @@ const REVERT = [
 //   這些後續版本的改動在這裡逐條還原（每條恰好命中 1 次；內容正確性由各版自己的守衛鎖：test-v6448…）。
 //   ⚠ 只准放「非藍桌墊」的全版面改動；藍桌墊的改動一律寫進哨兵。
 const LATER = [
+  // ⭐v6.524（Rule 40）：對戰結果紀錄多帶 firstPlayerIdx（非藍桌墊、只碰 fireMatchRecord 的 payload）；內容由 test-admin-v181 C1 鎖
+  ["      finalTurn: g.turn,\n      // v6.524：誰先攻（players 索引；0＝p1）—— admin 牌組原型的「先攻／後攻勝率」用（伺服器 v1.59 起收）\n      firstPlayerIdx: (g.firstPlayerIdx === 0 || g.firstPlayerIdx === 1) ? g.firstPlayerIdx : null,\n", "      finalTurn: g.turn,\n"],
   // ⭐v6.518（Rule 40）：一般對戰 P2 接手建局的重新判斷計時器（非藍桌墊、只碰建局流程）——當場驗證逐位元還原 admin v1.80（b963f3f3）；內容由 test-v6518 鎖
   ["shouldResetStartGrace, startGraceRecheckDelayMs, decideBoardAdopt", "shouldResetStartGrace, decideBoardAdopt"],
   ["  // v6.518：P2 接手建局的重新判斷計時器（見 startGraceRecheckDelayMs）\n  let _startGraceTimer: ReturnType<typeof setTimeout> | null = null;\n", ""],

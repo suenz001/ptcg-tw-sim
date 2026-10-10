@@ -3175,6 +3175,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       winner: g.winner ?? null,
       winReason: g.winReason ?? '',
       finalTurn: g.turn,
+      // v6.524：誰先攻（players 索引；0＝p1）—— admin 牌組原型的「先攻／後攻勝率」用（伺服器 v1.59 起收）
+      firstPlayerIdx: (g.firstPlayerIdx === 0 || g.firstPlayerIdx === 1) ? g.firstPlayerIdx : null,
       durationMs: g.gameStartTime ? (Date.now() - g.gameStartTime) : 0,
       startedAt: g.gameStartTime ?? null,
       endedAt: Date.now(),

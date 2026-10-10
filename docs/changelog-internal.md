@@ -1,5 +1,23 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.524／admin v1.81／server patch v1.59：牌組原型未進場不計＋先攻後攻勝率（2026-10-10）
+
+BASE 7118d189。站長：「幫我確認一下牌組原型算勝負的方式，如果第一回合有玩家沒進場，不應該將勝負納入計算」「在類似算對戰矩陣的部分，再幫我增加一個先攻後攻的勝率計算（另外算）」。
+- 確認結果（修改前）：錦標賽側只排 bye 與沒勝方，**未進場判勝（noShow）照算**；一般對戰的「離開場」有 finalTurn≥3 門檻，但「X 3 分鐘無回應／長時間無回應，被宣告棄權」不在離開字樣裡 ⇒ 第一回合就無回應判負的也照算。
+- 修法（只動牌組原型三支端點：環境報告圖 deck-archetype-stats、原型明細 deck-archetype-detail、對戰矩陣 deck-archetype-matchups）：
+  - 中央述詞 archTournMatchCounts(m)＝非 bye、有勝方、不是 noShow。
+  - buildCasualCleanFilter 新增 opt-in `archNoShow`：winReason 含「無回應」且 finalTurn === 1（engine 的 turn 只在後攻方結束回合時 +1 ⇒ turn 1＝雙方都還在第一回合；Fable 審查更正第一稿的 < 3）不算；沒帶的呼叫端（玩家戰績、套牌戰績、/api/admin 其他統計）查詢與 v1.58 逐位元相同。
+  - ⚠ 錦標賽的閒置判負（idleForfeit）歸檔沒有記第幾回合，無法分辨是不是第一回合 ⇒ 本版照算，待站長裁定。
+- 先攻／後攻：
+  - 一般對戰：v6.524 起 client 送 firstPlayerIdx，/api/match-result 收成 matchRecords.firstSeat（只收 0／1；沒送不寫，doc 與 v1.58 相同）。之前的對戰沒有資料。
+  - 錦標賽：歸檔沒有記；從 tournamentMatches 的 finalState.firstPlayerIdx 讀（房間座位 0＝p1uid）。那份文件很大、投影也擋不住磁碟讀取 ⇒ 每個賽事只讀一次，存進小表 archTurnOrder；對戰矩陣每次最多順手補 3 個賽事，歷史賽事用 admin「📥 補齊錦標賽先後攻資料」（/api/admin/arch-turn-backfill，一次 10 個、in-flight 旗標）。多局制、未進場、閒置判負、管理員判定沒有最後盤面 ⇒ 不知道誰先攻、不算。
+  - 對戰矩陣端點每個資料源多回 turnOrder[原型]={first,second}（[勝,負,和]）與 scanned.casualTurnKnown／tournTurnKnown／tournTurnEventsMissing。
+  - admin：純函式 mxTurnOrder（MX-PURE 區段，與矩陣同一個前 N 名）＋「🎲 先攻／後攻勝率（另外計算）」表（全體＋前 N 名，先攻－後攻差）；單一牌組對戰表加一行先攻／後攻；mxMergeBuckets 合併 turnOrder。
+- 錦標賽區塊逐位元未動（28 把鎖不變）；scripts/lib/sap-revert-admin-v159.mjs（difflib 產生、驗證逐位元還原 v1.58）接進 test-sap153／sap154／v6303。
+- Rule 40：test-admin-v180 假 DB 補 tournamentMatches／archTurnOrder、S3 改認 archNoShow 與 firstSeat 投影；admin h1 版本同步成 v1.81（title 與 h1 一致，test-admin-v179 B5）。
+- Fable 5.1 審查：①錦標賽側分類搬到後面一次做完會變成同步卡頓 ⇒ 改回逐場分類＋讓路、先後攻第二輪只做加法並讓路；②守衛沒涵蓋原型明細端點 ⇒ 補實跑、補 tournamentMatches 只讀 done、補齊後清快取；③ turn 門檻更正為 === 1；④對戰矩陣順手補與補齊端點共用 in-flight 旗標（不重複讀大文件）。
+- test-admin-v181（N1～N3、T1～T3、A1～A3、C1、H1；迷你 Mongo 真的套用查詢條件；原型明細端點也實跑）；突變 16 組全殺。
+
 ## v6.523：官方 Q&A 比對剩下的小問題（2026-10-10）
 
 BASE v6.522（85e80655）。站長：「還沒修的小問題都處理掉」。

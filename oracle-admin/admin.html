@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.80</title>
+<title>PTCG Oracle Admin v1.81</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -372,7 +372,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.80</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.81</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -3142,6 +3142,7 @@ function renderDeckRules(el) {
       </select>
       <button onclick="loadArchMatchups()">⚔️ 計算對戰勝率</button>
       <button id="mx-img-btn" onclick="exportArchMatrixImage()" disabled title="匯出對戰矩陣圖（PNG）">🖼️ 匯出矩陣圖</button>
+      <button class="ghost" onclick="archTurnBackfill()" title="錦標賽的先攻／後攻要從每場賽事的對局紀錄讀出來（每個賽事只讀一次），歷史賽事按這裡分批補齊">📥 補齊錦標賽先後攻資料</button>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
       <label class="small" style="margin:0;">單一牌組：</label>
@@ -3151,6 +3152,8 @@ function renderDeckRules(el) {
       <button id="mx-focus-btn" onclick="openArchFocus()" disabled title="這個牌組對前 N 名每一副的勝率（可匯出圖）">🔍 對前 N 名勝率</button>
     </div>
     <div id="mx-box"><div class="empty">按「⚔️ 計算對戰勝率」開始。</div></div>
+    <h4 style="margin:18px 0 6px;">🎲 先攻／後攻勝率（另外計算）</h4>
+    <div id="mx-turn-box"><div class="empty">按「⚔️ 計算對戰勝率」後一起算。</div></div>
     <datalist id="card-name-list">${dlOpts}</datalist>`;
   const sel = document.getElementById('arch-since'); if (sel) sel.value = _archSince;
 
@@ -3962,7 +3965,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.523';
+window.SITE_VERSION_HINT = '6.524';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -5677,7 +5680,7 @@ function mxCmp(a, b) { return a < b ? -1 : (a > b ? 1 : 0); }
 
 /** 把兩個資料源（一般對戰＋錦標賽）的計數相加成「合併」。⚠ 回新物件，不改傳進來的那份。 */
 function mxMergeBuckets(a, b) {
-  const out = { usage: {}, pairs: {} };
+  const out = { usage: {}, pairs: {}, turnOrder: {} };
   const add3 = (dst, k, v) => { const t = dst[k] || (dst[k] = [0, 0, 0]); t[0] += v[0] || 0; t[1] += v[1] || 0; t[2] += v[2] || 0; };
   for (const bk of [a, b]) {
     if (!bk) continue;
@@ -5685,6 +5688,11 @@ function mxMergeBuckets(a, b) {
     for (const r of Object.keys(bk.pairs || {})) {
       const row = out.pairs[r] || (out.pairs[r] = {});
       for (const c of Object.keys(bk.pairs[r] || {})) add3(row, c, bk.pairs[r][c]);
+    }
+    // v1.81 先攻／後攻（舊伺服器沒有這個欄位 ⇒ 略過）
+    for (const k of Object.keys(bk.turnOrder || {})) {
+      const t = out.turnOrder[k] || (out.turnOrder[k] = {});
+      add3(t, 'first', bk.turnOrder[k].first || []); add3(t, 'second', bk.turnOrder[k].second || []);
     }
   }
   return out;
@@ -5766,6 +5774,36 @@ function mxBuild(data, srcKey, opts) {
   });
   return { srcKey, topN: N, minGames, totalDecks, ranked: ranked.length,
            cols: top.map(meta), rows, focusKey: o.focusKey || null };
+}
+
+/**
+ * ⭐v1.81 先攻／後攻勝率（站長 2026-10-10：「再幫我增加一個先攻後攻的勝率計算（另外算）」）。
+ *   與對戰矩陣同一份資料、同一個前 N 名（直接拿 mxBuild 的 cols），但只看「知道誰先攻」的對戰：
+ *   ・overall：所有原型（含未分類）先攻方／後攻方的勝率
+ *   ・rows：前 N 名每一副的先攻、後攻勝率與差（先攻－後攻，百分點）
+ *   ・focus：指定原型（可以不在前 N 名）那一列
+ *   勝率口徑同矩陣：勝 /（勝＋負），和局不算；分出勝負少於 minGames 標 ok:false。
+ * 回 null＝沒有資料；伺服器還沒有 turnOrder（舊版）回 { supported:false }。
+ */
+function mxTurnOrder(data, srcKey, opts) {
+  const o = opts || {};
+  const b = mxBucket(data, srcKey);
+  if (!b) return null;
+  if (!b.turnOrder) return { supported: false };
+  const m = mxBuild(data, srcKey, { topN: o.topN, minGames: o.minGames });
+  const minGames = Math.max(1, Math.floor(o.minGames) || 1);
+  const sum = { first: [0, 0, 0], second: [0, 0, 0] };
+  for (const k of Object.keys(b.turnOrder)) for (const slot of ['first', 'second']) {
+    const v = b.turnOrder[k][slot] || []; for (let i = 0; i < 3; i++) sum[slot][i] += v[i] || 0;
+  }
+  const line = (t) => {
+    const first = mxCell(t && t.first, false, minGames), second = mxCell(t && t.second, false, minGames);
+    const diff = (first.winRate !== null && second.winRate !== null) ? first.winRate - second.winRate : null;
+    return { first, second, diff };
+  };
+  const rows = (m ? m.cols : []).map((c) => Object.assign({ key: c.key, name: c.name, rank: c.rank }, line(b.turnOrder[c.key])));
+  const focus = o.focusKey ? line(b.turnOrder[o.focusKey]) : null;
+  return { supported: true, overall: line(sum), rows, focus };
 }
 
 /** 依名稱找原型鍵（單一牌組對戰表的輸入框）。完全相同優先，其次唯一的「包含」；找不到或不唯一回 null。 */
@@ -5855,6 +5893,52 @@ window.renderArchMatchups = function () {
     + '<br>格子＝<b>列方</b>對該欄對手的勝率（和局不算），下方小字是場數；滑鼠停在格子上看勝負和與 95% 信賴區間。'
     + '分出勝負的場數（和局不算）少於 ' + op.minGames + ' 的格子以灰字顯示。點牌組名稱看它的單一對戰表。</div>'
     + '<div style="overflow-x:auto;"><table class="mx-t">' + head + body + '</table></div>';
+  renderArchTurnOrder();
+};
+
+// v1.81 先攻／後攻勝率（另外計算）
+window.renderArchTurnOrder = function () {
+  const box = document.getElementById('mx-turn-box');
+  if (!box || !_mxData) return;
+  const op = mxReadOpts();
+  const t = mxTurnOrder(_mxData, op.src, { topN: op.topN, minGames: op.minGames });
+  if (!t) { box.innerHTML = '<div class="empty">這個資料源在統計範圍內沒有資料。</div>'; return; }
+  if (!t.supported) { box.innerHTML = '<div class="empty">伺服器還沒更新到 v1.59（請先跑 update-tournament.bat），所以還沒有先攻／後攻資料。</div>'; return; }
+  const sc = _mxData.scanned || {};
+  const known = op.src === 'casual' ? (sc.casualTurnKnown || 0) : op.src === 'tourn' ? (sc.tournTurnKnown || 0) : (sc.casualTurnKnown || 0) + (sc.tournTurnKnown || 0);
+  const rate = (c) => c.winRate === null ? '—' : miPct(c.winRate, 1);
+  const cell = (c) => '<td style="text-align:right;' + (c.ok ? '' : 'color:#9aa5b4;') + '" title="' + c.w + ' 勝 ' + c.l + ' 負 ' + c.d + ' 和'
+    + (c.ci ? '｜95% 區間 ' + miPct(c.ci[0], 0) + '～' + miPct(c.ci[1], 0) : '') + '">'
+    + '<span style="display:inline-block;min-width:52px;padding:2px 6px;border-radius:4px;background:' + mxColor(c, MX_PAL_WEB) + ';">' + rate(c) + '</span>'
+    + ' <span class="small muted">' + c.games + ' 場</span></td>';
+  const diff = (d) => '<td style="text-align:right;font-weight:600;">' + (d === null ? '—' : ((d >= 0 ? '+' : '') + (d * 100).toFixed(1) + ' 點')) + '</td>';
+  const rows = t.rows.map((r) => '<tr><td>#' + r.rank + ' ' + escapeHtml(r.name) + '</td>' + cell(r.first) + cell(r.second) + diff(r.diff) + '</tr>').join('');
+  const missing = sc.tournTurnEventsMissing || 0;
+  box.innerHTML = '<div class="small muted" style="margin:4px 0 6px;">' + MX_SRC_LABEL[op.src] + '｜' + mxPeriodText()
+    + '｜知道誰先攻的對戰 ' + known.toLocaleString('zh-TW') + ' 場'
+    + '<br>一般對戰從 v6.524 起才記錄誰先攻（之前的對戰不知道，不算進來）；錦標賽從每場賽事的對局紀錄讀出，'
+    + '未進場、閒置判負、管理員判定、多局制的場次不知道誰先攻，不算進來。'
+    + (missing > 0 ? '<br>⚠ 還有 <b>' + missing + '</b> 場賽事還沒讀先後攻資料，按「📥 補齊錦標賽先後攻資料」。' : '')
+    + '</div>'
+    + '<table class="mx-f" style="border-collapse:collapse;min-width:520px;">'
+    + '<tr><th style="text-align:left;">牌組</th><th style="text-align:right;">先攻勝率</th><th style="text-align:right;">後攻勝率</th><th style="text-align:right;">先攻－後攻</th></tr>'
+    + '<tr style="background:#f1f5f9;"><td><b>全體</b></td>' + cell(t.overall.first) + cell(t.overall.second) + diff(t.overall.diff) + '</tr>'
+    + rows + '</table>';
+};
+
+window.archTurnBackfill = async function () {
+  const box = document.getElementById('mx-turn-box');
+  let remaining = null, rounds = 0;
+  while (rounds < 200) {
+    rounds++;
+    const r = await api('/api/admin/arch-turn-backfill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ max: 10 }) });
+    if (!r || r.error) { alert('補齊失敗：' + (r && r.error || '?')); return; }
+    remaining = r.remaining;
+    if (box) box.innerHTML = '<div class="empty">補齊中…還剩 ' + remaining + ' 場賽事（共 ' + r.total + ' 場）</div>';
+    if (!(remaining > 0)) break;
+  }
+  alert('錦標賽先後攻資料已補齊' + (remaining > 0 ? '（還剩 ' + remaining + ' 場，再按一次）' : '') + '。重新計算對戰勝率。');
+  window.loadArchMatchups();
 };
 
 // 單一牌組對戰表：從輸入框（名稱）或矩陣列名（key）進來
@@ -5890,6 +5974,12 @@ window.openArchFocus = function (key) {
     + '<div class="small muted" style="margin-bottom:8px;">' + MX_SRC_LABEL[op.src] + '｜' + mxPeriodText()
     + '｜使用率 ' + (r.rank ? '第 ' + r.rank + ' 名（' + miPct(r.share, 1) + '）' : miPct(r.share, 1))
     + '｜全體勝率 <b>' + (r.overall.winRate === null ? '—' : miPct(r.overall.winRate, 1)) + '</b>（' + r.overall.games + ' 場）'
+    + (function () {   // v1.81 先攻／後攻（另外計算）
+      const t = mxTurnOrder(_mxData, op.src, { topN: op.topN, minGames: op.minGames, focusKey: k });
+      if (!t || !t.supported || !t.focus) return '';
+      const f = (c) => (c.winRate === null ? '—' : miPct(c.winRate, 1)) + '（' + c.games + ' 場）';
+      return '<br>先攻勝率 <b>' + f(t.focus.first) + '</b>｜後攻勝率 <b>' + f(t.focus.second) + '</b>';
+    })()
     + '<br>長條以 50% 為中線：往右＝佔優、往左＝吃虧，兩端是 75%／25%；分出勝負的場數少於 ' + op.minGames + ' 的以淡色顯示。</div>'
     + '<table style="width:100%;border-collapse:collapse;" class="mx-f">' + rowsHtml + '</table>'
     + '<div style="display:flex;gap:8px;margin-top:12px;"><button onclick="exportArchFocusImage()">🖼️ 匯出對戰表圖</button>'
