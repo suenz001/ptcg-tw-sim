@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.522：防止昏厥套用合成一份（2026-10-10）
+
+BASE v6.521（ded8e4c5）。站長：「把兩份防止昏厥的套用程式碼合成一份」。
+- effects 新增 `applyPreventKo(state, inPlay, card, idx, isActive, dmg, pool, {kind, order, hp, toolsJammed})` 為唯一套用點；查表收進 `firstPreventKoTool`／`preventKoAbilityList`，`preventKoCandidates` 也改用這兩支（判準一份）。
+- engine resolveKnockouts 刪掉 inline 的 _tryToolPreventKo／_tryAbilityPreventKo，改呼叫 applyPreventKo：kind=null（受到的招式傷害由存活分支用絕對值記一次）、hp=defenderHP、toolsJammed 沿用本管線的值；成功時同步 defenderState／defPlayers 並 turnPhase 'end'，失敗只帶回擲幣 log。engine 不再 import TOOL_PREVENT_KO／PASSIVE_PREVENT_KO。
+- 唯一行為差異：狙擊／多目標路徑用掉倖存鍛鍊器時補印 addToolDiscardLog（v5.518 主管線早就有）。
+- Rule 40：test-v6521 C2 不再綁 effects 的區域變數名（`preventKoOrderDecision(\w+,`），意圖不變。
+- Fable 5.1 獨立審查抓到第一版回歸：果實減傷道具（福祿果等 discardOnTrigger）在 KO 判定前已丟進 defenderState.discard，第一版用 _st0（較早的 defPlayers 快照）的棄牌區整份覆寫 ⇒ 防昏厥成功時果實從盤面消失。改為只把 applyPreventKo 新丟的卡接在 defenderState.discard 後面；守衛補 P3（結實／多重道具倖存鍛鍊器／不朽身軀正反）並納入 A1。
+- test-v6522（S 結構、P1～P3 前提、N 新 log、A1 26 盤面 HEAD＝BASE 逐欄位、H1）；突變 9 組：7 殺、2 等價（拿掉 turnPhase 'end'：存活分支本來就會設；擲幣反面 continue→break：沒有任何卡同時有兩個防昏厥特性）。
+
 ## v6.521：倖存鍛鍊器 × 防昏厥特性的順序選擇（2026-10-10）
 
 BASE v6.520。官方 Q&A（綠寶石風暴）：倖存鍛鍊器與不朽身軀同時可以防止昏厥時，持有者可以選擇處理順序。站長：「還是要做選擇視窗」。

@@ -168,7 +168,7 @@ console.log('\n【C】中央判準');
   const eng = strip(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'));
   const eff = strip(readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8'));
   ok('★★[C2] engine 與 effects 都呼叫 preventKoOrderDecision(，且沒有就地的「.tool && ….ability」判斷',
-    /preventKoOrderDecision\(_c,/.test(eng) && /preventKoOrderDecision\(_pkoCand,/.test(eff)
+    /preventKoOrderDecision\(\w+,/.test(eng) && /preventKoOrderDecision\(\w+,/.test(eff)   /* v6.522 Rule 40：effects 變數改名 cand，意圖（兩邊都呼叫中央判準）不變 ⇒ 不綁變數名 */
       && !/\.tool\s*&&\s*\w+\.ability/.test(eng) && !/\.tool\s*&&\s*_pkoCand\.ability/.test(eff));
 }
 

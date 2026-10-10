@@ -46,7 +46,7 @@ import {
   // <<< v6350-engine-imports
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
   TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD,  // v6.072 訂製背心（依攻擊方卡片減傷）
-  TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
+  TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,   // v6.522：TOOL_PREVENT_KO 只在 effects applyPreventKo 用
   TOOL_FIRE_AFTER_ATTACK_EFFECT,   // v6.215 官方序：招式效果 → 道具（延後觸發名單）
   TOOL_ON_KO_MIRRORED_FROM_DAMAGED,   // ⭐v6.490
   PENDING_REFRESH_ON_POP,          // v6.215 佇列取出時重算 picker params
@@ -97,8 +97,7 @@ import {
   isLazyTraitBlockingAttack,
   hasShellinkEvolveBypass,
   isAllPowerSoulBlocked,
-  PASSIVE_PREVENT_KO,
-  COIN_PREVENT_KO_ABILITIES, preventKoCandidates, preventKoOrderDecision,
+  COIN_PREVENT_KO_ABILITIES, preventKoCandidates, preventKoOrderDecision, applyPreventKo,
   flipCoinsWithLog,
   hasBloomOnField,
   promptPlayAbilities,
@@ -6744,71 +6743,33 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         });
       }
     }
-    const _abilityFirst = _pkoDecision === 'ability';
-    const _tryToolPreventKo = () => {
     // <<< v6521-prevent-ko-order
-    if (!preventedKO && !toolsJammed && wouldBeKO && defenderState.active) {
-      // v3.20 多重轉接：iterate 所有道具找第一個觸發 PREVENT_KO 的
-      for (const t of getAllAttachedTools(defenderState.active)) {
-        const preventTool = pool.get(t.cardId);
-        if (!preventTool) continue;
-        const fn = TOOL_PREVENT_KO.get(preventTool.name);
-        if (!fn) continue;
-        const result = fn(defenderState.active, defenderCard, baseDamage);
-        if (!result.prevent) continue;
-        const triggered = t;
-        const targetDamage = Math.max(0, defenderHP - result.leaveHP);
-        let newAct = { ...defenderState.active, damage: targetDamage };
-        if (newAct.toolAttached?.iid === triggered.iid) {
-          newAct = { ...newAct, toolAttached: undefined };
-        } else if (newAct.extraTools) {
-          newAct = { ...newAct, extraTools: newAct.extraTools.filter(x => x.iid !== triggered.iid) };
-        }
-        defenderState.active = newAct;
-        defenderState.discard = [...defenderState.discard, triggered];
+    // >>> v6522-prevent-ko-central
+    // ⭐v6.522（站長 2026-10-10：「把兩份防止昏厥的套用程式碼合成一份」）：道具／特性防昏厥的套用只走 effects 的 applyPreventKo
+    //   （狙擊／多目標路徑同一支）。本管線的差別只在參數：
+    //   - kind=null：「受到的招式的傷害」由下方存活分支用絕對值記一次（v6.255/256），這裡不可重記
+    //   - hp=defenderHP、toolsJammed：沿用本管線攻擊開始時算的值（逐位元不變）
+    //   - order：preventKoOrderDecision 的結果（'ask' 已在上面暫停回到攻擊前）
+    //   盤面：以 defPlayers（防守方快照）為準組出 st0；成功時同步回 defenderState／defPlayers，並照舊進 turnPhase 'end'；
+    //   失敗（擲幣反面）只帶回擲幣的 log／旗標，players 維持 newState 原樣（與 v6.521 前相同）。
+    if (wouldBeKO && defenderState.active) {
+      const _st0: GameState = { ...newState, players: defPlayers as GameState['players'] };
+      const _pk = applyPreventKo(_st0, defenderState.active, defenderCard, dIdx, true, baseDamage, pool,
+        { kind: null, order: _pkoDecision === 'ability' ? 'ability' : 'tool', hp: defenderHP, toolsJammed });
+      if (_pk.prevented && _pk.inst) {
+        defenderState.active = _pk.inst;
+        // ⚠ 只把「這次新丟的」（倖存鍛鍊器）接在 defenderState.discard 後面，不可整份覆寫：
+        //   defenderState 在 KO 判定前可能已經改過（果實減傷道具 discardOnTrigger 已丟進 defenderState.discard），
+        //   而 _st0 用的 defPlayers[dIdx] 是更早的快照 ⇒ 整份覆寫會把果實弄丟（v6.522 Fable 審查抓到）。
+        defenderState.discard = [...defenderState.discard, ..._pk.state.players[dIdx].discard.slice(_st0.players[dIdx].discard.length)];
         defPlayers[dIdx] = defenderState;
-        newState = addLog({ ...newState, players: defPlayers, turnPhase: 'end' },
-          `${preventTool.name}：${defenderCard.name} 避免昏厥，剩餘 HP ${result.leaveHP}！`, null);
-        // v5.518：倖存鍛鍊器卡面「然後將這張卡丟棄」— log 顯示道具已丟棄(玩家報沒顯示)。
-        newState = addToolDiscardLog(newState, [triggered], pool, dIdx);
+        newState = { ..._pk.state, players: defPlayers as GameState['players'], turnPhase: 'end' };
         preventedKO = true;
-        break;
+      } else {
+        newState = { ..._pk.state, players: newState.players };
       }
     }
-    };   // v6521-prevent-ko-order：_tryToolPreventKo
-    // v2.133 被動防 KO（皮卡丘ex 勤奮之心 等）— 條件由 PASSIVE_PREVENT_KO map 內 fn 決定
-    const _tryAbilityPreventKo = () => {   // v6521-prevent-ko-order
-    if (!preventedKO && wouldBeKO && defenderState.active && defenderCard.abilities) {
-      for (const ab of defenderCard.abilities) {
-        const fn = PASSIVE_PREVENT_KO.get(ab.name);
-        if (!fn) continue;
-        // ⭐ v6.202：原本**完全沒有** gate（同區塊的 PASSIVE_IMMUNITY／PASSIVE_ON_KO／
-        //   PASSIVE_KO_RETALIATION 都有，只有 prevent-KO 漏掉）。岩殿居蟹｜結實 是 Stage1
-        //   ⇒【傳說的熔岩洞】打得到；皮卡丘ex｜勤奮之心、超級摔角鷹人ex｜堅忍之軀 是規則
-        //   寶可夢 ⇒ 初始化打得到；此處恆為防守方**戰鬥位** ⇒ 暗夜羽擊兩型亦然。
-        if (!isAbilityHolderEffective(newState, defenderState.active, defenderCard, dIdx, ab.name, 'active', pool)) continue;
-        const result = fn(defenderState.active, defenderCard, baseDamage);
-        if (result.prevent) {
-          // v5.596 擲幣型 prevent-KO(堅忍之軀/不朽身軀)走 flipCoinsWithLog；反面則照常昏厥
-          if (COIN_PREVENT_KO_ABILITIES.has(ab.name)) {
-            const _cf = flipCoinsWithLog(newState, 1, ab.name, dIdx);
-            newState = _cf.state;
-            if (_cf.heads === 0) continue;
-          }
-          const targetDamage = Math.max(0, defenderHP - result.leaveHP);
-          defenderState.active = { ...defenderState.active, damage: targetDamage };
-          defPlayers[dIdx] = defenderState;
-          newState = addLog({ ...newState, players: defPlayers, turnPhase: 'end' },
-            `「${ab.name}」啟動：${defenderCard.name} 避免昏厥，剩餘 HP ${result.leaveHP}！`, null);
-          preventedKO = true;
-          break;
-        }
-      }
-    }
-    };   // v6521-prevent-ko-order：_tryAbilityPreventKo
-    // v6521-prevent-ko-order：預設（沒有衝突、或持有者選先道具）維持原本「先道具、後特性」；選先特性就反過來
-    if (_abilityFirst) { _tryAbilityPreventKo(); _tryToolPreventKo(); }
-    else { _tryToolPreventKo(); _tryAbilityPreventKo(); }
+    // <<< v6522-prevent-ko-central
 
     // ⭐v6.490：耿鬼｜無限之影 的判斷搬進 resolveAttackActiveKo（在真正昏厥結算時才判）
     // ⭐⭐⭐ v6.253 中央述詞：這一擊之後防守方「仍留在場上」＝ PTCG 規則上的

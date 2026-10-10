@@ -11,7 +11,7 @@
 import type { Card, EnergyType } from '$lib/cards/types';
 import { ENERGY_LABEL } from '$lib/cards/energy'; // v5.801 屬性→CJK 標籤(丟對手【X】能量 log)
 import { hasOakEye, faceAttackDamage } from './effects/_shared'; // v5.789 監視之眼 gate
-import { withAttackDamageTaken } from './effects/_shared'; // ⭐v6.256「受到的招式的傷害」唯一中央寫入點
+import { withAttackDamageTaken, addToolDiscardLog } from './effects/_shared'; // ⭐v6.256「受到的招式的傷害」唯一中央寫入點
 import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂（【無】被招式傷害KO 獎賞-1）
 import { markDamageCounterMovedFrom } from './effects/_shared'; // v5.947 移動指示物非治療
 import { hasStatusInAnySlot, countSpecialConditions } from './effects/_shared'; // v5.834 跨三槽狀態讀取
@@ -9815,67 +9815,103 @@ export function applyPreventKOToVictim(   // ⭐v6.260 export：mega_decks olive
   const isActive = defender.active?.iid === victim.iid;
   const inPlay = isActive ? defender.active! : defender.bench.find(c => c.iid === victim.iid);
   if (!inPlay) return { prevented: false, state };
-  const hp = effectiveHPInline(inPlay, pool, state);
-  // >>> v6521-prevent-ko-order
-  // ⭐v6.521（官方 Q&A 綠寶石風暴：倖存鍛鍊器與不朽身軀同時可用時由持有者選順序）：
-  //   本路徑（狙擊／多目標／延後傷害）在招式效果裡面，無法暫停回到攻擊前讓防守方選 ⇒ 兩者都可用時一律**先處理特性**
-  //   （持有者的最佳順序：特性成功就保住、道具留著；擲幣反面再用道具）；其餘情形維持原本「先道具、後特性」。
-  //   engine 主管線（攻擊戰鬥寶可夢）則會開選擇視窗讓持有者自己選。
-  const _pkoCand = preventKoCandidates(state, inPlay, victimCard, defenderIdx, isActive, baseDamage, pool, isToolsJammed(state, pool));
-  const _abilityFirst = preventKoOrderDecision(_pkoCand, null, false) === 'ability';
-  // <<< v6521-prevent-ko-order
-  // 1) 道具防 KO（倖存鍛鍊器）— 阻礙之塔(工具封鎖)時失效
-  const _tryTool = (st0: GameState): { prevented: boolean; state: GameState } | null => {
-  if (!isToolsJammed(st0, pool)) {
-    for (const t of getAllAttachedTools(inPlay)) {
-      const tc = pool.get(t.cardId); if (!tc) continue;
-      const fn = TOOL_PREVENT_KO.get(tc.name); if (!fn) continue;
-      const r = fn(inPlay, victimCard, baseDamage);
-      if (!r.prevent) continue;
-      const targetDamage = Math.max(0, hp - r.leaveHP);
-      // ⭐v6.256：走中央寫入點 ⇒ 防 KO 成功時記「實際扣到的」（targetDamage − 受招前 damage）
-      let newInst: CardInstance = withAttackDamageTaken(inPlay, inPlay.damage, targetDamage, kind);
-      if (newInst.toolAttached?.iid === t.iid) newInst = { ...newInst, toolAttached: undefined };
-      else if (newInst.extraTools) newInst = { ...newInst, extraTools: newInst.extraTools.filter(x => x.iid !== t.iid) };
-      let s = updatePlayer(st0, defenderIdx, p => isActive
-        ? { ...p, active: newInst, discard: [...p.discard, t] }
-        : { ...p, bench: p.bench.map(c => c.iid === victim.iid ? newInst : c), discard: [...p.discard, t] });
-      s = addLog(s, `${tc.name}：${victimCard.name} 避免昏厥，剩餘 HP ${r.leaveHP}！`, null);
-      return { prevented: true, state: s };
-    }
+  // >>> v6522-prevent-ko-central
+  // ⭐v6.522（站長 2026-10-10：「把兩份防止昏厥的套用程式碼合成一份」）：
+  //   本函式只負責「找出這一隻、決定順序」，真正的套用全部交給 applyPreventKo（engine 主管線也呼叫同一支）。
+  //   本路徑（狙擊／多目標／延後傷害）在招式效果裡面，無法暫停 ⇒ preventKoOrderDecision(…, canPause=false)。
+  const jam = isToolsJammed(state, pool);
+  const cand = preventKoCandidates(state, inPlay, victimCard, defenderIdx, isActive, baseDamage, pool, jam);
+  const order = preventKoOrderDecision(cand, null, false) === 'ability' ? 'ability' : 'tool';
+  const r = applyPreventKo(state, inPlay, victimCard, defenderIdx, isActive, baseDamage, pool,
+    { kind, order, hp: effectiveHPInline(inPlay, pool, state), toolsJammed: jam });
+  return { prevented: r.prevented, state: r.state };
+  // <<< v6522-prevent-ko-central
+}
+
+// >>> v6522-prevent-ko-central
+/** ⭐v6.522 第一個「會生效」的防昏厥道具（倖存鍛鍊器）。阻礙之塔由呼叫端判（toolsJammed）。查詢與套用共用這一支。 */
+function firstPreventKoTool(inst: CardInstance, card: Card, baseDamage: number, pool: Map<string, Card>):
+  { tool: CardInstance; toolCard: Card; leaveHP: number } | null {
+  for (const t of getAllAttachedTools(inst)) {
+    const tc = pool.get(t.cardId); if (!tc) continue;
+    const fn = TOOL_PREVENT_KO.get(tc.name); if (!fn) continue;
+    const r = fn(inst, card, baseDamage);
+    if (r.prevent) return { tool: t, toolCard: tc, leaveHP: r.leaveHP };
   }
   return null;
-  };
-  if (!_abilityFirst) { const _t = _tryTool(state); if (_t) return _t; }   // v6521-prevent-ko-order
-  // 2) 被動防 KO（堅忍之軀/不朽身軀/勤奮之心/結實）
-  let workState = state;
-  if (victimCard.abilities) {
-    for (const ab of victimCard.abilities) {
-      const fn = PASSIVE_PREVENT_KO.get(ab.name); if (!fn) continue;
-      // ⭐ v6.202：與 engine 主管線那份同 commit（兩份獨立實作會漂，v6.202 前兩份都沒 gate）。
-      //   這條路徑目標可能在備戰 ⇒ location 依 isActive 判（備戰 Stage2 還會吃到黏著束縛）。
-      if (!isAbilityHolderEffective(state, inPlay, victimCard, defenderIdx, ab.name, isActive ? 'active' : 'bench', pool)) continue;
-      const r = fn(inPlay, victimCard, baseDamage);
-      if (!r.prevent) continue;
-      // v5.596 擲幣型(堅忍之軀/不朽身軀)走 flipCoinsWithLog；反面則不防(保留擲幣 log)，繼續查其他特性
-      if (COIN_PREVENT_KO_ABILITIES.has(ab.name)) {
-        const cf = flipCoinsWithLog(workState, 1, ab.name, defenderIdx);
-        workState = cf.state;
-        if (cf.heads === 0) continue;
-      }
-      const targetDamage = Math.max(0, hp - r.leaveHP);
-      // ⭐v6.256：同上，被動型防 KO（結實/勤奮之心/堅忍之軀/不朽身軀）也走中央寫入點
-      const newInst: CardInstance = withAttackDamageTaken(inPlay, inPlay.damage, targetDamage, kind);
-      let s = updatePlayer(workState, defenderIdx, p => isActive
-        ? { ...p, active: newInst }
-        : { ...p, bench: p.bench.map(c => c.iid === victim.iid ? newInst : c) });
-      s = addLog(s, `「${ab.name}」啟動：${victimCard.name} 避免昏厥，剩餘 HP ${r.leaveHP}！`, null);
-      return { prevented: true, state: s };
-    }
-  }
-  if (_abilityFirst) { const _t = _tryTool(workState); if (_t) return _t; }   // v6521-prevent-ko-order：特性沒擋下（擲幣反面）再用道具
-  return { prevented: false, state: workState };
 }
+/** ⭐v6.522 依卡面順序列出「有效、條件成立」的防昏厥特性（擲幣型要不要擲由套用端處理）。查詢與套用共用這一支。
+ *   ⭐ v6.202 的特性有效判定（isAbilityHolderEffective，備戰依位置判）也只在這裡。 */
+function preventKoAbilityList(state: GameState, inst: CardInstance, card: Card, ownerIdx: 0 | 1, isActive: boolean,
+  baseDamage: number, pool: Map<string, Card>): Array<{ name: string; leaveHP: number }> {
+  const out: Array<{ name: string; leaveHP: number }> = [];
+  for (const ab of card.abilities ?? []) {
+    const fn = PASSIVE_PREVENT_KO.get(ab.name); if (!fn) continue;
+    if (!isAbilityHolderEffective(state, inst, card, ownerIdx, ab.name, isActive ? 'active' : 'bench', pool)) continue;
+    const r = fn(inst, card, baseDamage);
+    if (r.prevent) out.push({ name: ab.name, leaveHP: r.leaveHP });
+  }
+  return out;
+}
+/**
+ * ⭐⭐⭐v6.522 防止昏厥的**唯一套用點**（engine 主管線與 effects 狙擊／多目標路徑都呼叫這一支）。
+ *   呼叫端已確定「這一下會昏厥」；本函式依 order 先試道具或特性，成功就把 damage 寫成「剩餘 HP = leaveHP」。
+ *   - 道具（倖存鍛鍊器）：丟棄道具＋道具丟棄 log（v5.518；v6.522 前狙擊路徑漏印這一行）。
+ *   - 特性：擲幣型（堅忍之軀／不朽身軀）走 flipCoinsWithLog，反面繼續找下一個（含之後再試道具）。
+ *   - opts.kind：要記「受到的招式的傷害」時傳 DamageKind；null ＝ 呼叫端自己記（engine 存活分支用絕對值記一次，不可重記）。
+ *   - opts.hp：用哪個最大 HP 算剩餘（engine 沿用攻擊開始時算的 defenderHP，逐位元不變）。
+ *   回傳 inst：成功時寫進盤面的那一隻（engine 要同步回它自己的 defenderState）。
+ */
+export function applyPreventKo(
+  state: GameState, inPlay: CardInstance, victimCard: Card, defenderIdx: 0 | 1, isActive: boolean,
+  baseDamage: number, pool: Map<string, Card>,
+  opts: { kind: DamageKind | null; order: 'ability' | 'tool'; hp: number; toolsJammed: boolean },
+): { prevented: boolean; state: GameState; inst?: CardInstance } {
+  const mkInst = (target: number): CardInstance => opts.kind
+    ? withAttackDamageTaken(inPlay, inPlay.damage, target, opts.kind)
+    : { ...inPlay, damage: target };
+  const writeInst = (st: GameState, ni: CardInstance, discarded?: CardInstance): GameState =>
+    updatePlayer(st, defenderIdx, p => {
+      const discard = discarded ? [...p.discard, discarded] : p.discard;
+      return isActive ? { ...p, active: ni, discard } : { ...p, bench: p.bench.map(c => c.iid === inPlay.iid ? ni : c), discard };
+    });
+  const tryTool = (st0: GameState): { prevented: true; state: GameState; inst: CardInstance } | null => {
+    if (opts.toolsJammed) return null;
+    const hit = firstPreventKoTool(inPlay, victimCard, baseDamage, pool);
+    if (!hit) return null;
+    let ni = mkInst(Math.max(0, opts.hp - hit.leaveHP));
+    if (ni.toolAttached?.iid === hit.tool.iid) ni = { ...ni, toolAttached: undefined };
+    else if (ni.extraTools) ni = { ...ni, extraTools: ni.extraTools.filter(x => x.iid !== hit.tool.iid) };
+    let s = writeInst(st0, ni, hit.tool);
+    s = addLog(s, `${hit.toolCard.name}：${victimCard.name} 避免昏厥，剩餘 HP ${hit.leaveHP}！`, null);
+    s = addToolDiscardLog(s, [hit.tool], pool, defenderIdx);
+    return { prevented: true, state: s, inst: ni };
+  };
+  const tryAbility = (st0: GameState): { done: { prevented: true; state: GameState; inst: CardInstance } | null; state: GameState } => {
+    let ws = st0;
+    for (const a of preventKoAbilityList(st0, inPlay, victimCard, defenderIdx, isActive, baseDamage, pool)) {
+      if (COIN_PREVENT_KO_ABILITIES.has(a.name)) {
+        const cf = flipCoinsWithLog(ws, 1, a.name, defenderIdx);
+        ws = cf.state;
+        if (cf.heads === 0) continue;   // 反面：保留擲幣 log，繼續找下一個
+      }
+      const ni = mkInst(Math.max(0, opts.hp - a.leaveHP));
+      let s = writeInst(ws, ni);
+      s = addLog(s, `「${a.name}」啟動：${victimCard.name} 避免昏厥，剩餘 HP ${a.leaveHP}！`, null);
+      return { done: { prevented: true, state: s, inst: ni }, state: s };
+    }
+    return { done: null, state: ws };
+  };
+  if (opts.order === 'ability') {
+    const a = tryAbility(state); if (a.done) return a.done;
+    const t = tryTool(a.state); if (t) return t;
+    return { prevented: false, state: a.state };
+  }
+  const t = tryTool(state); if (t) return t;
+  const a = tryAbility(state); if (a.done) return a.done;
+  return { prevented: false, state: a.state };
+}
+// <<< v6522-prevent-ko-central
 
 // >>> v6490-ko-target-after-attack-damage
 /**
@@ -18113,19 +18149,10 @@ export function preventKoCandidates(
   state: GameState, inst: CardInstance, card: Card | undefined, ownerIdx: 0 | 1, isActive: boolean,
   baseDamage: number, pool: Map<string, Card>, toolsJammed: boolean,
 ): { tool: string | null; ability: string | null } {
-  let tool: string | null = null, ability: string | null = null;
-  if (!card || baseDamage <= 0) return { tool, ability };
-  if (!toolsJammed) {
-    for (const t of getAllAttachedTools(inst)) {
-      const tc = pool.get(t.cardId); const fn = tc ? TOOL_PREVENT_KO.get(tc.name) : undefined;
-      if (tc && fn && fn(inst, card, baseDamage).prevent) { tool = tc.name; break; }
-    }
-  }
-  for (const ab of card.abilities ?? []) {
-    const fn = PASSIVE_PREVENT_KO.get(ab.name); if (!fn) continue;
-    if (!isAbilityHolderEffective(state, inst, card, ownerIdx, ab.name, isActive ? 'active' : 'bench', pool)) continue;
-    if (fn(inst, card, baseDamage).prevent) { ability = ab.name; break; }
-  }
+  if (!card || baseDamage <= 0) return { tool: null, ability: null };
+  // ⭐v6.522：與 applyPreventKo 共用同兩支 helper（判準只有一份）
+  const tool = toolsJammed ? null : (firstPreventKoTool(inst, card, baseDamage, pool)?.toolCard.name ?? null);
+  const ability = preventKoAbilityList(state, inst, card, ownerIdx, isActive, baseDamage, pool)[0]?.name ?? null;
   return { tool, ability };
 }
 /**
