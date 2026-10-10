@@ -234,7 +234,9 @@ ok('★★★[A1] mrSeatLabel／mrSeatTag：知道誰先攻 ⇒ 先攻／後攻�
 ok('★★★[A2] 對戰列表：p2 先攻的那場，p2 標先攻、p1 標後攻；不知道的場不標；名字缺席顯示玩家 1／2', !!HA.A2);
 ok('★★★[A3] 1.2 區塊：新伺服器顯示先攻／後攻勝場；舊伺服器（p1Win）不顯示錯的數字並提示更新', !!HA.A3);
 ok('★★[A4] 牌組視窗（含複製文字）、玩家視窗、列表表頭都走中央函式，沒有寫死「先攻＝p1」', !!HA.A4);
-ok('★[A5] admin 版本號 v1.82（title 與 h1 一致）', HTML.includes('<title>PTCG Oracle Admin v1.82</title>') && HTML.includes('PTCG Oracle Admin <span class="small">v1.82</span>'));
+// ⚠ 不可釘死某一版（下一版合法升號就假紅，IRON_RULES 安慰劑型態 9）⇒ 驗「≥ v1.82 且 title 與 h1 一致」
+const _tv = /<title>PTCG Oracle Admin v1\.(\d+)<\/title>/.exec(HTML), _hv = /PTCG Oracle Admin <span class="small">v1\.(\d+)<\/span>/.exec(HTML);
+ok('★[A5] admin 版本號 ≥ v1.82（title 與 h1 一致）', !!_tv && !!_hv && _tv[1] === _hv[1] && Number(_tv[1]) >= 82, JSON.stringify([_tv && _tv[1], _hv && _hv[1]]));
 
 console.log('\n【Z／H】與 BASE 比對');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
