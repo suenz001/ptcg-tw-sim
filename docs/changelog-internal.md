@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.523：官方 Q&A 比對剩下的小問題（2026-10-10）
+
+BASE v6.522（85e80655）。站長：「還沒修的小問題都處理掉」。
+- R106 希嘉娜的信賴：engine RESOLVE_SELECTION 新增中央空選擇閘（v6523-empty-payload-gate）：真正空 payload＋minCount≥1＋非 selectionAllowsCancel＋pending 宣告的 validIids 仍在該型別會列候選的區域（pendingHasLiveDeclaredCandidates；場上型只掃場上與附加物、hand-* 掃手牌、discard-search 掃棄牌區；deck-search／分配型／modal-choice／reorder-deck-top 不歸本閘）⇒ 退回、pending 留著，沿用 RESOLVE_REJECT_STREAK_MAX=3。m6-sigana-energy 宣告 validIids。
+- AI：active-energy-discard 候選改走中央 activeEnergyDiscardCandidates（與 UI 同一支；原本只讀戰鬥寶可夢 ⇒ 希嘉娜永遠選不到）。
+- selection-candidates activeEnergyDiscardCandidates 的預設路徑補套 validIids（Fable 複驗：AI 改走中央後，returnSelfActiveEnergyPost basicOnly 型會選到 validIids 外的特殊能量；畫面原本也會列出勾不動的能量）。
+- 腎上腺腦力：log 改「拿起 N 個傷害指示物（改放…不是恢復 HP）」；目標被化隱／光之翼擋下時，官方 Q&A（深淵之瞳：「移除選擇的傷害指示物後，即結束處理」；光之翼、對戰圓形競技場備戰同型）＝指示物移除 ⇒ 行為本來就對，只把 log「已回復來源傷害」改成「選擇的傷害指示物已移除，效果結束」。⚠ 本版第一稿曾改成「放回來源」，站長要求查判例後撤回。
+- log：registerDamageThenOptionalDeckSearchToHand 依 minCount 寫張數（不再 0~1）；頭蓋龍｜推倒 forceOppSwapPost 標籤；兩張合一競技場擋下訊息。
+- Fable 5.1 審查：抓到 test-v6175 D 段紅、AI 選不到能量、存活判定太寬、H1 未含 G2 ⇒ 全部處理。
+- Rule 40：test-legend-stadium-two-card 擋下訊息改認「左半與右半」；test-v6174（沸騰鬥志）、test-v6175 D（必殺手裡劍）空選擇改成連送到 pending 關閉再驗還原，並驗第一次被退回。
+- test-v6523（G1～G5、A1～A3、L1～L3、H1）；突變 10 組全殺。
+
 ## v6.522：防止昏厥套用合成一份（2026-10-10）
 
 BASE v6.521（ded8e4c5）。站長：「把兩份防止昏厥的套用程式碼合成一份」。

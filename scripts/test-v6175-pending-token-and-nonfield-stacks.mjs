@@ -199,7 +199,12 @@ console.log('\n── D. 超級甲賀忍蛙ex｜必殺手裡劍：代價與效�
     ck('★★★ 送不存在的 iid → 不解析、pending 留著（代價不會白付）',
       bad.pendingSelection?.effectKey === 'greninja-shuriken-6');
     // 空選擇（舊 client 的放棄鈕）→ 原子還原
-    const empt = RES(s, [], s.pendingSelection?.token);
+    // ⭐v6.523 Rule 40：中央空選擇閘（v6523-empty-payload-gate）會先把「必選、候選還在」的空選擇退回最多 3 次，
+    //   第 4 次才照常解析 ⇒ 本段要守的「空選擇最後一定原子還原（能量退回手牌、特性標記解除、牌張守恆）」
+    //   改成連送到 pending 關閉為止再驗；另驗第一次確實被退回（代價還沒退、pending 還在）。
+    let empt = RES(s, [], s.pendingSelection?.token);
+    ck('v6.523：第一次空選擇被退回（pending 還在）', empt.pendingSelection?.effectKey === 'greninja-shuriken-6');
+    for (let i = 0; i < 6 && empt.pendingSelection?.effectKey === 'greninja-shuriken-6'; i++) empt = RES(empt, [], empt.pendingSelection?.token);
     ck('★★★ 空選擇 → 基本【水】能量退回手牌', empt.players[0].hand.some(c => c.iid === 'w1'));
     ck('★★★ 空選擇 → 本回合特性標記解除（可再用）', !empt.players[0].active.abilityUsedThisTurn);
     ck('★★★ 空選擇 → 牌張守恆', countAll(empt) === total0, `${countAll(empt)} vs ${total0}`);

@@ -9,7 +9,7 @@
  */
 
 import { ancientKey, isPlayerLevelAttackOnCooldown } from './player-attack-cooldown';   // ⭐v6.435 leaf（玩家層級冷卻唯一判準）
-import { modalChoicePayloadValid } from './selection-ui';   // >>> v6331-modal-choice-payload-import
+import { modalChoicePayloadValid, selectionAllowsCancel } from './selection-ui';   // >>> v6331-modal-choice-payload-import（v6.523 加 selectionAllowsCancel）
 import type { Card, EnergyType, Attack } from '$lib/cards/types';
 // v5.988：平穩境地述詞改從 v3001 既有安全 import 取得(移除此處早期反向 import 卡檔 v3080，杜絕 module-init TDZ)
 import { BENCH_SCRUB_LOCK_FLAGS, OPP_ATTACK_DEBUFF_FLAGS } from './instance-flags';
@@ -1445,6 +1445,42 @@ export function getEffectiveHP(
  *     modal-choice(payload 是選項字串非 iid)/reorder-deck-top(來源為 params.candidateIids)一律【原封放行】。
  *   filter 語義(如 BasicEnergy/限ex)本閘不驗,由 resolver 自驗(v6.009)或未來中央 filter evaluator(Stage 2)補。
  */
+// >>> v6523-empty-payload-gate
+/**
+ * ⭐v6.523 這個 pending 宣告的候選（params.validIids）是否至少還有一個在盤面上（任一玩家的任何區域，含附在寶可夢身上的能量／道具）。
+ *   只給「空選擇閘」用；牌庫搜尋與 payload 不是 iid 的型別一律回 false（不擋）。
+ */
+const EMPTY_GATE_SKIP_TYPES = new Set(['deck-search', 'damage-distribute', 'energy-distribute', 'modal-choice', 'reorder-deck-top']);
+export function pendingHasLiveDeclaredCandidates(state: GameState, pending: PendingSelection): boolean {
+  if (EMPTY_GATE_SKIP_TYPES.has(pending.type)) return false;
+  const vi = pending.params?.validIids;
+  if (!Array.isArray(vi) || vi.length === 0) return false;
+  const want = new Set(vi as string[]);
+  const seen = (c: CardInstance | null | undefined): boolean => {
+    if (!c) return false;
+    if (want.has(c.iid)) return true;
+    if ((c.energyAttached ?? []).some(e => want.has(e.iid))) return true;
+    if (c.toolAttached && want.has(c.toolAttached.iid)) return true;
+    if ((c.extraTools ?? []).some(t => want.has(t.iid))) return true;
+    return (c.evolvedFromStack ?? []).some(e => want.has(e.iid));
+  };
+  // 依型別只看該 picker 會列候選的區域（Fable 審查：候選跑去棄牌區／牌庫時就不是合法目標了，不可算存活）
+  const t = pending.type;
+  const fieldOnly = FIELD_TARGET_PICKER_TYPES.has(t) || (t === 'active-energy-discard' && pending.params?.fromDiscard !== true);
+  const zonesOf = (p: PlayerState): CardInstance[][] =>
+    (t === 'hand-discard' || t === 'hand-choose') ? [p.hand]
+      : t === 'discard-search' || (t === 'active-energy-discard' && pending.params?.fromDiscard === true) ? [p.discard]
+      : [p.hand, p.discard, p.deck, p.prizes, (p as { lostZone?: CardInstance[] }).lostZone ?? []];
+  for (const p of state.players) {
+    if (seen(p.active) || p.bench.some(seen)) return true;
+    if (fieldOnly) continue;
+    for (const z of zonesOf(p)) {
+      if ((z ?? []).some(c => want.has(c.iid))) return true;
+    }
+  }
+  return false;
+}
+// <<< v6523-empty-payload-gate
 export function sanitizeSelectedIids(state: GameState, pending: PendingSelection, iids: string[], pool?: Map<string, Card>): string[] {
   if (!Array.isArray(iids) || iids.length === 0) return Array.isArray(iids) ? iids : [];
   const t = pending.type;
@@ -4011,6 +4047,27 @@ function handlePlaying(
         actorIdx,
       );
     }
+    // >>> v6523-empty-payload-gate
+    // ⭐⭐v6.523（官方 Q&A 比對 R106：希嘉娜的信賴改附能量送空選擇＝「不移能量」被引擎接受）：
+    //   **真正的空陣列**、卡面必選（minCount ≥ 1）、不是「取消整個動作」型、而且這個 pending 自己宣告的候選
+    //   （params.validIids）至少還有一個在盤面上 ⇒ 這不是「玩家選 0」（UI 根本不給【不選】），
+    //   是改過的 client／舊版／AI 後備送出來的 ⇒ 不執行、不關 pending，讓玩家重選。
+    //   ⚠ 只管「有宣告 validIids」的已知資訊型 picker；牌庫搜尋（fail-to-find）、modal-choice（上一刀管）、
+    //     分配型／排序型（payload 不是 iid 清單）一律不碰。
+    //   ⚠ 候選全部不在了（validIids 過期）⇒ 放行：那時空選擇是玩家唯一的出口（UI 的「放棄」鈕）。
+    //   ⚠ 同樣受 RESOLVE_REJECT_STREAK_MAX 上限保護 ⇒ 任何情況下都不會軟鎖。
+    if (_rawIids.length === 0
+        && (state.pendingSelection.minCount ?? 0) >= 1
+        && !selectionAllowsCancel({ effectKey, allowCancel: params?.allowCancel === true })
+        && pendingHasLiveDeclaredCandidates(state, state.pendingSelection)
+        && _rejStreak < RESOLVE_REJECT_STREAK_MAX) {
+      return addLog(
+        { ...state, _rejectedResolveStreak: _rejStreak + 1, _rejectedResolveTok: _tokNow },
+        '⚠ 這一步必須選擇，空的選擇沒有生效 —— 請在畫面上選一個。',
+        actorIdx,
+      );
+    }
+    // <<< v6523-empty-payload-gate
     // >>> v6331-modal-choice-payload-gate
     // ⭐⭐⭐ v6.331 **modal-choice 的空／對不上任何選項的 payload，一律不執行、不關 pending。**
     //   玩家回報：「選擇為空（取消）時，卡片已經消耗掉了，盤面卻什麼都沒發生。」
@@ -4822,7 +4879,7 @@ function handlePlaying(
     if (trainerCard.subtype === 'Stadium' && isTwoCardStadiumName(trainerCard.name)
         && !canPlayTwoCardStadium(state.players[aIdx].hand, trainerInst.cardId)) {
       return addLog(state,
-        `${trainerCard.name}：這是由兩張實體卡合成的場地，手牌必須同時有兩張才能放置`, aIdx);
+        `${trainerCard.name}：這是由左右兩半合成的場地，手牌必須同時有左半與右半各 1 張才能放置`, aIdx);   // v6.523：原本「兩張」在同一半拿兩張時講不清楚
     }
     if (trainerCard.subtype === 'Stadium' && state.players[aIdx].cantPlayStadiumThisTurn) {
       return addLog(state, `${trainerCard.name}：本回合被「燒灼大地」效果禁止使出競技場`, aIdx);

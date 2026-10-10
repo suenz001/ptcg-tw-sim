@@ -17437,7 +17437,9 @@ export function registerDamageThenOptionalDeckSearchToHand(
     const p = state.players[aIdx];
     if (p.deck.length === 0) return dealNow(addLog(state, `${ln}：牌庫已空，跳過搜尋`, aIdx));
     const max = Math.min(opts.maxCount, p.deck.length);
-    const s = addLog(state, `${ln}：若希望，從牌庫任選 0~${max} 張卡加手牌（之後重洗），確定後造成傷害`, aIdx);
+    // ⭐v6.523：log 跟著 minCount 寫（v6.126 起任意選擇必選 ≥1，原本寫「0~N」與實際不符）
+    const _min = Math.min(1, max);
+    const s = addLog(state, `${ln}：從牌庫任意選擇 ${_min === max ? max : `${_min}~${max}`} 張卡加入手牌（之後重洗），確定後造成傷害`, aIdx);
     return withPending(s, {
       type: 'deck-search',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,

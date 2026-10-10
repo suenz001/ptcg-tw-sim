@@ -143,6 +143,8 @@ regR('m6-sigana-swap', (st, idx, iids, _params, pool) => {
       minCount: 1, maxCount: 1,
       effectKey: 'm6-sigana-energy',
       params: { targetIid: prevActiveIid, newActiveIid: s.players[idx].active.iid,
+                // ⭐v6.523：宣告候選（換下那隻身上的能量）⇒ 中央空選擇閘才擋得住「送空陣列＝不移能量」（官方 Q&A R106：必須改附）
+                validIids: nowBench.energyAttached.map(e => e.iid),
                 titleOverride: '希嘉娜的信賴：選擇 1 個要移到新戰鬥寶可夢的能量' },
     });
 });

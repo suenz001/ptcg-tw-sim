@@ -71,7 +71,7 @@ const totalCards=(s)=>s.players.reduce((a,p)=>a+p.hand.length+p.deck.length+p.di
       JSON.stringify(getPlayableTrainers(st1,pool)));
   const r1=applyAction(st1,{type:'PLAY_TRAINER',iid:one.iid,actorIdx:0},pool);
   chk('手牌只有 1 張 → 引擎擋下並說明原因',
-      !r1.activeStadium && r1.log.map(logText).some(t=>t.includes('兩張實體卡')),
+      !r1.activeStadium && r1.log.map(logText).some(t=>t.includes('左半與右半'))   /* v6.523 Rule 40：擋下訊息改寫成「左半與右半各 1 張」，意圖（說明原因）不變 */,
       r1.log.map(logText).slice(-1)[0]);
   chk('手牌只有 1 張 → 卡片沒消失', r1.players[0].hand.length===1);
 

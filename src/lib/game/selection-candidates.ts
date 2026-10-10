@@ -96,5 +96,10 @@ export function activeEnergyDiscardCandidates(
     const eListT = tgt?.energyAttached ?? [];
     return validIidsT ? eListT.filter(e => validIidsT.includes(e.iid)) : eListT;
   }
-  return src.active?.energyAttached ?? [];
+  // ⭐v6.523：預設路徑也要套 validIids（其他三條都有套，只有這條漏）。
+  //   例：returnSelfActiveEnergyPost 帶 typeFilter／basicOnly（只能選基本能量）時，畫面原本會把特殊能量也列出來、
+  //   勾了被中央閘退回；AI 改走本函式後也會選到 validIids 之外的能量（v6.523 Fable 複驗抓到）。
+  const validIidsA = params?.validIids as string[] | undefined;
+  const eListA = src.active?.energyAttached ?? [];
+  return validIidsA ? eListA.filter(e => validIidsA.includes(e.iid)) : eListA;
 }

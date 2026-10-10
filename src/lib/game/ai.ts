@@ -26,6 +26,7 @@ import { ATTACK_PRE_DISCARD_CHOICE, getEnergyDiscardUnits, preDiscardOptInThresh
 // v6.202：「這隻場上寶可夢的這個特性此刻是否生效」中央述詞（v6.196 建立於 defense.ts）。
 //   ai.ts 已經 import engine（engine 也 import defense）⇒ 不是新的相依方向、無循環風險。
 import { hasEffectiveAbilityByInst } from './defense';
+import { activeEnergyDiscardCandidates } from './selection-candidates';   // ⭐v6.523 能量 picker 候選與 UI 同一支
 import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemonExCard } from './selection-filter'; // v6.013/6.016 P1-1:deck-search/hand-discard/discard-search filter 中央求值器
 // v6.038 批次4b：AI 打法表（離線由高勝率對局整理出的策略表）。載入與適用判定都在 ai-playbook.ts，
 //   這裡只做**同步查詢**——getAIAction 是同步的，不能在決策路徑做 fetch。
@@ -1378,10 +1379,11 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
     case 'active-energy-discard': {
       // v5.800：丟/移對手能量或回手(sourcePlayerIdx≠actor)=對 AI 有利→取滿 maxCount；
       //   丟自己能量(成本，sourcePlayerIdx=actor)→只取 minCount。
-      const _validE = sel.params?.validIids as string[] | undefined;
       const _srcAct = srcPlayer.active;
-      let _cand = _srcAct ? _srcAct.energyAttached.map(e => e.iid) : [];
-      if (_validE) _cand = _cand.filter(iid => _validE.includes(iid));
+      // ⭐v6.523：候選改走與 UI 同一支中央述詞（targetIid／scope／fromDiscard／validIids 都在裡面）。
+      //   原本只讀戰鬥寶可夢的能量 ⇒ 希嘉娜的信賴（能量在剛換到備戰的那隻身上，params.targetIid）AI 永遠選不到，
+      //   只能送空選擇（v6.523 Fable 審查抓到）。
+      const _cand = activeEnergyDiscardCandidates(sel.params as Record<string, unknown> | undefined, srcPlayer).map(e => e.iid);
       if (_cand.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
       // ⭐v6.039 撤退費 picker（effectKey='retreat-energy-discard'）是**單位數**而非張數判定。
       //   resolver 驗的是 `totalEnergyUnits(選中) >= retreatCost`；原本自方能量一律只取

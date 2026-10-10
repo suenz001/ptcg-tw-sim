@@ -110,7 +110,15 @@ function blazikenState() {
   ck('沸騰鬥志：正常路徑牌張守恆', countAllCards(okS) === total0, `${countAllCards(okS)} vs ${total0}`);
 
   // A2 ★ 真因重現：client 送空陣列（玩家按安全網「放棄」／線上 race）
-  const emptyS = mod.applyAction(s, { type: 'RESOLVE_SELECTION', selectedIids: [] }, pool);
+  // ⭐v6.523 Rule 40：中央空選擇閘（v6523-empty-payload-gate）會先把「必選、候選還在」的空選擇退回最多 3 次
+  //   （RESOLVE_REJECT_STREAK_MAX），第 4 次才照常以空選擇解析 ⇒ 本段要守的「能量不蒸發、牌張守恆、不軟鎖」
+  //   改成連送到 pending 關閉為止（上限 6 次）再驗；另驗第一次確實被退回（pending 還在、能量沒動）。
+  let emptyS = mod.applyAction(s, { type: 'RESOLVE_SELECTION', selectedIids: [] }, pool);
+  ck('v6.523：第一次空選擇被退回（pending 還在、能量還在棄牌區）',
+    emptyS.pendingSelection?.effectKey === 'blaziken-boiling-attach' && emptyS.players[0].discard.some((c) => c.iid === 'ENG1'));
+  for (let i = 0; i < 6 && emptyS.pendingSelection?.effectKey === 'blaziken-boiling-attach'; i++) {
+    emptyS = mod.applyAction(emptyS, { type: 'RESOLVE_SELECTION', selectedIids: [] }, pool);
+  }
   ck('★沸騰鬥志：送空選擇 → 能量必須留在棄牌區（不得蒸發）',
     emptyS.players[0].discard.some((c) => c.iid === 'ENG1'));
   ck('★沸騰鬥志：送空選擇 → 牌張守恆', countAllCards(emptyS) === total0, `${countAllCards(emptyS)} vs ${total0}`);

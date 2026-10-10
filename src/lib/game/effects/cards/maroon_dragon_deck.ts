@@ -222,7 +222,8 @@ function _adrenalCountChosen(
 ): GameState {
   const amount = count * 10;
   let s = st;
-  s = addLog(s, `腎上腺腦力：從 ${sourceName} 身上移除 ${amount} 傷害（回復 ${amount} HP）`, idx);
+  // ⭐v6.523：官方 Q&A（海溝判例）：改放傷害指示物「並非恢復 HP」⇒ log 不再寫「回復」
+  s = addLog(s, `腎上腺腦力：從 ${sourceName} 身上拿起 ${count} 個傷害指示物（改放到對手的寶可夢身上，不是恢復 HP）`, idx);
   s = updatePlayer(s, idx, pl => {
     if (pl.active && pl.active.iid === sourceIid) {
       return { ...pl, active: { ...pl.active, damage: Math.max(0, pl.active.damage - amount) } };
@@ -258,8 +259,11 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
   // v4.51 Phase 2：改用統一 canApplyEffectToTarget（kind='ability-effect'）— 涵蓋光之翼 + 對戰圓形
   const _adrenalGuard = canApplyEffectToTarget(st, actorIdx, target, targetCard, 'ability-effect', pool, { isBench: !isActive });
   if (_adrenalGuard.blocked) {
+    // ⭐v6.523 官方 Q&A（深淵之瞳）逐字：「可以。但是，這個情況下，因特性『化隱』的效果，斯魔茶不受特性的效果影響，
+    //   因此移除選擇的傷害指示物後，即結束處理。」（光之翼／對戰圓形競技場備戰同型判例）
+    //   ⇒ 拿起的指示物**直接移除**，不放回來源。行為本來就對；v6.522 前的 log 寫「已回復來源傷害」與實際不符，改寫。
     return addLog(st,
-      `腎上腺腦力：${targetCard?.name ?? '?'} ${_adrenalGuard.reason}（已回復來源傷害）`,
+      `腎上腺腦力：${targetCard?.name ?? '?'} ${_adrenalGuard.reason}（選擇的傷害指示物已移除，效果結束）`,
       actorIdx);
   }
   // v5.091: 用 getEffectiveHP 含夠讚狗腎上腺力量等 +HP 修正
