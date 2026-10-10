@@ -1,5 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
+## admin v1.82／server patch v1.61：先攻後攻改用真正的先攻座位＋卡片勝率排除第一回合沒進場（2026-10-11）
+
+BASE 0dd13ba5（server v1.60）。站長回覆 v1.60 的三個待決事項：「1要改 2不用改 3一起排出」。
+- ① 先攻／後攻（原本一律把 p1＝建房者當先攻）：
+  - server：/api/admin/stats/overview 1.2 的三組統計只算有 matchRecords.firstSeat（v1.59／玩家 v6.524 起）的對戰；先攻勝＝勝方座位等於 firstSeat。中央常數 FIRST_SEAT_KNOWN／FIRST_MOVER_GROUP（哨兵 v161-first-seat）。回應欄位改名 firstWin／secondWin（舊 p1Win／p2Win 不再回）。
+  - admin：中央 mrSeatLabel／mrSeatTag；對戰列表表頭改「玩家 1／玩家 2」並在知道時標先攻／後攻、牌組視窗（含複製文字）與玩家視窗的先攻／後攻標籤都改走它；不知道就標玩家 1／2 或「—」。1.2 區塊拿到舊欄位（伺服器未更新）時不顯示錯的數字，提示跑 update-tournament.bat。
+- ② 玩家端錦標賽個人戰績／排行榜：站長裁定不改。
+- ③ /api/admin/stats/cards/winrate 加 casualNoShowExcludeClause。cards/archetype（卡片組合分析）原本就沒有套任何休閒清洗條件，本版不動。
+- 錦標賽區塊逐位元未動；scripts/lib/sap-revert-admin-v161.mjs（4 對，驗證逐位元還原 v1.60）接進 test-sap153／sap154／v6303。
+- Rule 40：test-admin-v176 B6 抽 renderMatchRow 時一併抽中央 mrSeatTag（守的是原型標籤，與座位無關）。
+- test-admin-v182（O／W 實跑 handler＋迷你聚合、A1～A5 admin 行為、Z1／Z2 零回歸、H1 BASE 逐條紅）；突變 12 組全殺（firstWin 拿掉 $in 閘為等價突變）。
+- Fable 5.1 審查：無 P1；真 mongod 實證缺欄位／null／2 的 winner 與 firstSeat 都正確排除、draws 口徑不變、winrate 診斷計數走同一個 baseMatch。P2：測資缺「本機真人且知道先攻」的場 ⇒ 線上真人那組拿掉 roomCode 條件不會紅 ⇒ 補 g 場。P3：admin 快取停在 v1.81 遇新伺服器時 1.2 會顯示 NaN%，Ctrl+F5 即解。
+
 ## server patch v1.60：套牌戰績／玩家戰績也排除第一回合沒進場（2026-10-11）
 
 BASE 725e9118（v6.524／admin v1.81／server v1.59）。站長：「1 這麼麻煩的話就算了 2 要」。

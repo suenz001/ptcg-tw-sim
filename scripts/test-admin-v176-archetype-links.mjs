@@ -283,8 +283,10 @@ await T('B5 ⭐【HEAD-FAIL】入口都接上中央出口：牌組 modal（座�
 });
 await T('B6 ⭐【HEAD-FAIL】📜 對戰歷史：有 archetype 欄位就顯示【原型】，欄位不存在或 null 才退回主力打手；null 絕不顯示成未分類', async () => {
   const src = fnSrc(HTML, 'renderMatchRow'); ok(src, '找不到 renderMatchRow');
+  // Rule 40（admin v1.82）：renderMatchRow 多呼叫中央 mrSeatTag（先攻／後攻小標籤）；本段守的是原型標籤，與座位無關 ⇒ 連同中央函式一起抽（有就帶、BASE 沒有就不帶）
+  const _seatSrc = fnSrc(HTML, 'mrSeatTag') || '';
   const f = new Function('escapeHtml', 'playerLink', 'detectMainFromCardCounts', 'fmtMatchTime', 'fmtMatchDuration',
-    src + '\nreturn renderMatchRow;')((x) => String(x), (e) => e, () => '主力X', () => 't', () => 'd');
+    _seatSrc + '\n' + src + '\nreturn renderMatchRow;')((x) => String(x), (e) => e, () => '主力X', () => 't', () => 'd');
   const base = { _id: 'm', roomCode: 'R', winner: 0 };
   const h1 = f({ ...base, p1: { name: 'a', archetype: '雙龍特調' }, p2: { name: 'b', archetype: '未分類' } });
   ok(h1.includes('【雙龍特調】') && h1.includes('【未分類】') && !h1.includes('主力X'), '原型沒顯示或還混著主力打手');

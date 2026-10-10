@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.81</title>
+<title>PTCG Oracle Admin v1.82</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -372,7 +372,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.81</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.82</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -7062,7 +7062,7 @@ window.deleteFeedback = async function(fbId) {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // v0.80 Tab: Match Records (對戰歷史) — server v0.9 提供的 GET /api/admin/match-records
-//   - 表格顯示：時間 / 房號 / 先攻(綠底=勝者) / 後攻(綠底=勝者) / 結束原因 / 回合 / 時長
+//   - 表格顯示：時間 / 房號 / 玩家 1(綠底=勝者) / 玩家 2(綠底=勝者) / 結束原因 / 回合 / 時長（v1.82：知道誰先攻才另標先攻／後攻）
 //   - 點玩家名字 → modal 顯示這場用的牌組（lazy-load /cards/<set>.json 解析卡名）
 //   - email filter（查特定玩家戰績）
 //   - 分頁：50 筆 / 頁，按「載入更多」append
@@ -7240,6 +7240,19 @@ function renderMatchPagination() {
   `;
 }
 
+// v1.82：對戰紀錄的座位標籤（站長 2026-10-11：p1 是建房者，不一定先攻；原本一律把 p1 標成先攻 ⇒ 錯）。
+//   firstSeat（伺服器 v1.59／玩家 v6.524 起才有）＝0／1 ⇒ 先攻／後攻；沒有（之前的對戰）⇒ 玩家 1／玩家 2。
+function mrSeatLabel(rec, seat) {
+  const fs = rec ? rec.firstSeat : undefined;
+  if (fs === 0 || fs === 1) return seat === fs ? '先攻' : '後攻';
+  return '玩家 ' + (seat + 1);
+}
+// v1.82：知道誰先攻才顯示小標籤（先攻藍、後攻橘，沿用 side-p1／side-p2 色）；不知道就不顯示（絕不猜）。
+function mrSeatTag(rec, seat) {
+  const fs = rec ? rec.firstSeat : undefined;
+  if (fs !== 0 && fs !== 1) return '';
+  return seat === fs ? '<span class="side-p1">先攻</span>' : '<span class="side-p2">後攻</span>';
+}
 // v1.22：matchRecord 的 cardCounts({id→count}) → entries 餵 detectMainPokemon 判主力牌組
 function detectMainFromCardCounts(cc) {
   if (!cc || typeof cc !== 'object' || Array.isArray(cc)) return '';
@@ -7273,11 +7286,11 @@ function renderMatchRow(r) {
     <td>${fmtMatchTime(r.endedAt)}</td>
     <td>${modeBadge} <code>${escapeHtml(r.roomCode || '本機')}</code></td>
     <td class="${p1Cls}">
-      <span class="player-name" onclick="showMatchDeck('${mid}')">${escapeHtml(r.p1?.name || '先攻')}</span>
+      <span class="player-name" onclick="showMatchDeck('${mid}')">${escapeHtml(r.p1?.name || '玩家 1')}</span> ${mrSeatTag(r, 0)}
       <span class="player-email">${p1Email}</span>${p1MainBadge}
     </td>
     <td class="${p2Cls}">
-      <span class="player-name" onclick="showMatchDeck('${mid}')">${escapeHtml(r.p2?.name || '後攻')}</span>
+      <span class="player-name" onclick="showMatchDeck('${mid}')">${escapeHtml(r.p2?.name || '玩家 2')}</span> ${mrSeatTag(r, 1)}
       <span class="player-email">${p2Email}</span>${p2MainBadge}
     </td>
     <td>${escapeHtml(r.winReason || '-')}</td>
@@ -7332,8 +7345,8 @@ function renderMatchRecords(el) {
         <thead><tr>
           <th>結束時間</th>
           <th>模式 / 房號</th>
-          <th>先攻 (email)</th>
-          <th>後攻 (email)</th>
+          <th>玩家 1 (email)</th>
+          <th>玩家 2 (email)</th>
           <th>結束原因</th>
           <th>回合數</th>
           <th>對戰時長</th>
@@ -7349,7 +7362,7 @@ function renderMatchRecords(el) {
 }
 
 // v0.81：showMatchDeck 重設計 — 仿 Oracle 對戰 deck modal 格式
-//   - 兩欄並排：先攻 / 後攻
+//   - 兩欄並排：玩家 1 / 玩家 2（v1.82：知道誰先攻就標先攻／後攻，mrSeatLabel）
 //   - 使用既有 ensureCardIndex / cardLabel infrastructure（保持風格一致）
 //   - 讀 cardCounts (v5.006+ 新格式 Record<id,count>) 或 cardIds (v5.005 舊格式 fallback 視為 ×1)
 //   - 「📋 複製全部牌組」按鈕 — 把兩邊牌組文字格式 copy to clipboard
@@ -7401,7 +7414,7 @@ window.showMatchDeck = async function(matchId) {
     for (const e of entries) lines.push(cardLabel(e.cardId, e.count));
     return lines.join('\n');
   };
-  const copyText = formatSide('先攻', record.p1, e1) + '\n\n' + formatSide('後攻', record.p2, e2);
+  const copyText = formatSide(mrSeatLabel(record, 0), record.p1, e1) + '\n\n' + formatSide(mrSeatLabel(record, 1), record.p2, e2);   // v1.82
   // 存在 dataset 給複製按鈕用（avoid escape hell）
   window._lastMatchCopyText = copyText;
 
@@ -7431,8 +7444,8 @@ window.showMatchDeck = async function(matchId) {
       <div class="modal" style="min-width:720px;">
         <h3>🃏 房間 ${escapeHtml(record.roomCode || '-')} 的牌組</h3>
         <div class="deck-grid">
-          ${renderSide('先攻', record.p1, e1, p1Win)}
-          ${renderSide('後攻', record.p2, e2, p2Win)}
+          ${renderSide(mrSeatLabel(record, 0), record.p1, e1, p1Win)}
+          ${renderSide(mrSeatLabel(record, 1), record.p2, e2, p2Win)}
         </div>
         <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center;">
           <button onclick="copyMatchDeck()">📋 複製全部牌組（文字）</button>
@@ -7722,34 +7735,42 @@ function renderStatsOverview(s) {
   `;
 }
 
-// 1.2 先攻 vs 後攻勝率（三組 filter）
+// 1.2 先攻 vs 後攻勝率
+// ⭐v1.82（站長 2026-10-11「1 要改」）：原本把 p1（建房者）當先攻 ⇒ 錯。伺服器 v1.61 起回 firstWin／secondWin
+//   （只算有記錄 firstSeat 的對戰，v6.524 起）；還是舊欄位 p1Win／p2Win ⇒ 伺服器沒更新，那份數字是錯的，不顯示。
 function renderFirstMover(s) {
   const fm = s.firstMover || {};
+  const d0 = fm.all || {};
+  const supported = Object.prototype.hasOwnProperty.call(d0, 'firstWin');
   const sub = (label, d) => {
     d = d || {};
-    const t = (d.p1Win || 0) + (d.p2Win || 0) + (d.draws || 0);
+    const fw = d.firstWin || 0, sw = d.secondWin || 0, dr = d.draws || 0;
+    const t = fw + sw + dr;
     if (t === 0) return `<div class="fm-row"><span class="fm-label">${label}</span><span class="muted">（無資料）</span><span></span></div>`;
-    const p1Pct = Math.round(d.p1Win / t * 100);
-    const p2Pct = Math.round(d.p2Win / t * 100);
+    const p1Pct = Math.round(fw / t * 100);
+    const p2Pct = Math.round(sw / t * 100);
     const drawPct = Math.max(0, 100 - p1Pct - p2Pct);
     return `
       <div class="fm-row">
         <div class="fm-label">${label}<div class="small muted">${t} 場</div></div>
         <div class="fm-bars">
-          <div class="fm-bar fm-p1" style="width:${p1Pct}%" title="先攻勝 ${d.p1Win} (${p1Pct}%)">${p1Pct > 8 ? p1Pct + '%' : ''}</div>
-          <div class="fm-bar fm-p2" style="width:${p2Pct}%" title="後攻勝 ${d.p2Win} (${p2Pct}%)">${p2Pct > 8 ? p2Pct + '%' : ''}</div>
-          ${d.draws > 0 ? `<div class="fm-bar fm-draw" style="width:${drawPct}%" title="平局 ${d.draws}">${drawPct > 8 ? drawPct + '%' : ''}</div>` : ''}
+          <div class="fm-bar fm-p1" style="width:${p1Pct}%" title="先攻勝 ${fw} (${p1Pct}%)">${p1Pct > 8 ? p1Pct + '%' : ''}</div>
+          <div class="fm-bar fm-p2" style="width:${p2Pct}%" title="後攻勝 ${sw} (${p2Pct}%)">${p2Pct > 8 ? p2Pct + '%' : ''}</div>
+          ${dr > 0 ? `<div class="fm-bar fm-draw" style="width:${drawPct}%" title="平局 ${dr}">${drawPct > 8 ? drawPct + '%' : ''}</div>` : ''}
         </div>
-        <div class="fm-detail">先攻 ${d.p1Win} / 後攻 ${d.p2Win}${d.draws > 0 ? ' / 平 ' + d.draws : ''}</div>
+        <div class="fm-detail">先攻 ${fw} / 後攻 ${sw}${dr > 0 ? ' / 平 ' + dr : ''}</div>
       </div>
     `;
   };
   return `
     <section class="stats-section">
       <h3>👑 1.2 先攻 vs 後攻勝率</h3>
+      ${supported
+        ? `<div class="small muted" style="margin-bottom:6px;">只算有記錄誰先攻的對戰（玩家端 v6.524 起）；之前的對戰不知道誰先攻，不算進來。</div>
       <div class="fm-table">
-        ${sub('全部對戰', fm.all)}
-      </div>
+        ${sub('全部對戰', d0)}
+      </div>`
+        : '<div class="empty">伺服器還沒更新到 v1.61（請先跑 update-tournament.bat）。舊版把建房者當成先攻，數字不正確，所以不顯示。</div>'}
     </section>
   `;
 }
@@ -8200,7 +8221,7 @@ window.showPlayerDetail = async function(email) {
     const win = (isP1 && m.winner === 0) || (!isP1 && m.winner === 1);
     const loss = (isP1 && m.winner === 1) || (!isP1 && m.winner === 0);
     const resultTag = win ? '<span class="result-win">勝</span>' : (loss ? '<span class="result-loss">負</span>' : '<span class="result-draw">平</span>');
-    const sideTag = isP1 ? '<span class="side-p1">先攻</span>' : '<span class="side-p2">後攻</span>';
+    const sideTag = mrSeatTag(m, isP1 ? 0 : 1) || '<span class="muted" title="v6.524 以前的對戰沒有記錄誰先攻">—</span>';   // v1.82
     // v0.95: 房號 cell 改 clickable → 開該場 match detail modal (雙方牌組)
     const matchIdSafe = String(m._id || '').replace(/'/g, '&apos;');
     const roomLabel = escapeHtml(m.roomCode || '本機');

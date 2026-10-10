@@ -1744,6 +1744,19 @@ import('firebase-admin').then(async ({ default: admin }) => {
   //   POST /api/admin/cards/tags/:cardId  (toggle/upsert tag — 給「⭐ 標支援型」按鈕用)
   // ═════════════════════════════════════════════════════════════════════════════
   (function registerStatsEndpoints() {
+    // >>> v161-first-seat
+    // ⭐v1.61（站長 2026-10-11「1 要改」）：1.2 先攻後攻勝率原本把 p1（建房者）當先攻 ⇒ 錯。
+    //   v1.59 起 matchRecords 記了 firstSeat（0＝p1 先攻、1＝p2 先攻；v6.524 以前的對戰沒有）。
+    //   只算知道誰先攻的場；firstWin＝勝方座位等於先攻座位，secondWin＝勝方是另一個座位，draws 沿用原本 winner===null 的口徑。
+    //   回應欄位改名（firstWin／secondWin），舊的 p1Win／p2Win 不再回 ⇒ admin 靠欄位名分辨新舊伺服器，不會把錯的數字當成先攻。
+    const FIRST_SEAT_KNOWN = { firstSeat: { $in: [0, 1] } };
+    const FIRST_MOVER_GROUP = {
+      _id: null,
+      firstWin: { $sum: { $cond: [{ $and: [{ $in: ['$winner', [0, 1]] }, { $eq: ['$winner', '$firstSeat'] }] }, 1, 0] } },
+      secondWin: { $sum: { $cond: [{ $and: [{ $in: ['$winner', [0, 1]] }, { $ne: ['$winner', '$firstSeat'] }] }, 1, 0] } },
+      draws: { $sum: { $cond: [{ $eq: ['$winner', null] }, 1, 0] } },
+    };
+    // <<< v161-first-seat
     // 1.1-1.4 對戰總覽 — 單一 aggregate 跑 N 個 $facet
     // v0.12 + 全局 ?mode=online|local 過濾（玩家要區分線上 vs 本機統計）
     app.get('/api/admin/stats/overview', requireFirebaseAdmin, async (req, res) => {
@@ -1777,32 +1790,18 @@ import('firebase-admin').then(async ({ default: admin }) => {
             new30d: [{ $match: { endedAt: { $gte: now - 30 * ONE_DAY } } }, { $count: 'n' }],
             // 1.2 先攻後攻勝率（可選 filter：只看真人對戰）
             firstMover: [
-              { $group: {
-                _id: null,
-                p1Win: { $sum: { $cond: [{ $eq: ['$winner', 0] }, 1, 0] } },
-                p2Win: { $sum: { $cond: [{ $eq: ['$winner', 1] }, 1, 0] } },
-                draws: { $sum: { $cond: [{ $eq: ['$winner', null] }, 1, 0] } },
-              }},
+              { $match: FIRST_SEAT_KNOWN },
+              { $group: FIRST_MOVER_GROUP },   // v161-first-seat：用真正的先攻座位 firstSeat（原：p1 當先攻）
               { $project: { _id: 0 } },
             ],
             firstMoverHumanOnly: [
-              { $match: { vsAI: { $ne: true } } },
-              { $group: {
-                _id: null,
-                p1Win: { $sum: { $cond: [{ $eq: ['$winner', 0] }, 1, 0] } },
-                p2Win: { $sum: { $cond: [{ $eq: ['$winner', 1] }, 1, 0] } },
-                draws: { $sum: { $cond: [{ $eq: ['$winner', null] }, 1, 0] } },
-              }},
+              { $match: { $and: [{ vsAI: { $ne: true } }, FIRST_SEAT_KNOWN] } },
+              { $group: FIRST_MOVER_GROUP },   // v161-first-seat：用真正的先攻座位 firstSeat（原：p1 當先攻）
               { $project: { _id: 0 } },
             ],
             firstMoverOnlineOnly: [
-              { $match: { $and: [{ roomCode: { $type: 'string' } }, { vsAI: { $ne: true } }] } },
-              { $group: {
-                _id: null,
-                p1Win: { $sum: { $cond: [{ $eq: ['$winner', 0] }, 1, 0] } },
-                p2Win: { $sum: { $cond: [{ $eq: ['$winner', 1] }, 1, 0] } },
-                draws: { $sum: { $cond: [{ $eq: ['$winner', null] }, 1, 0] } },
-              }},
+              { $match: { $and: [{ roomCode: { $type: 'string' } }, { vsAI: { $ne: true } }, FIRST_SEAT_KNOWN] } },
+              { $group: FIRST_MOVER_GROUP },   // v161-first-seat：用真正的先攻座位 firstSeat（原：p1 當先攻）
               { $project: { _id: 0 } },
             ],
             // 1.3 對戰時長 / 回合（avg + bucket histogram）
@@ -1853,9 +1852,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
           new7d: unwrapCount(agg.new7d),
           new30d: unwrapCount(agg.new30d),
           firstMover: {
-            all: unwrap(agg.firstMover, { p1Win: 0, p2Win: 0, draws: 0 }),
-            humanOnly: unwrap(agg.firstMoverHumanOnly, { p1Win: 0, p2Win: 0, draws: 0 }),
-            onlineHumanOnly: unwrap(agg.firstMoverOnlineOnly, { p1Win: 0, p2Win: 0, draws: 0 }),
+            all: unwrap(agg.firstMover, { firstWin: 0, secondWin: 0, draws: 0 }),   // v161-first-seat
+            humanOnly: unwrap(agg.firstMoverHumanOnly, { firstWin: 0, secondWin: 0, draws: 0 }),
+            onlineHumanOnly: unwrap(agg.firstMoverOnlineOnly, { firstWin: 0, secondWin: 0, draws: 0 }),
           },
           duration: {
             avgMs: unwrap(agg.durationAvg, { avg: 0 }).avg || 0,
@@ -2221,6 +2220,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       //   $not + regex：同時保留 winReason 不存在的舊場（不影響歷史資料）。
       // v0.91：離開場改由中央 helper 判定（finalTurn<=2 排除、>=3 納入），不再整類排除
       Object.assign(baseMatch, { $or: buildCasualCleanFilter({}).$or });
+      baseMatch.$and = [casualNoShowExcludeClause()];   // v161-noshow-cards：第一回合沒進場不算（站長 2026-10-11「3 一起排出」）
       const minDecks = Math.max(1, parseInt(req.query.minDecks) || 5);
       try {
         const pipeline = [
