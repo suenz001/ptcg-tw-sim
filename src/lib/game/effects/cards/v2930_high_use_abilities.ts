@@ -303,11 +303,13 @@ regA('鐵掌力士', 0, (st, idx, _pool, _cardInst) => {
   if (opp.bench.length === 0) return rejectAbilityUse(st, '大力捕捉器：對手備戰區無寶可夢', idx);
   // v5.995 C-05 方向修正：效果對象是被選的【備戰寶可夢】→ 原戰鬥位免疫不擋（v5.839 舊 gate 方向相反，移除）；
   //   改過濾備戰候選（免疫特性效果的備戰不可被選為互換目標）。
-  const validIids = opp.bench
-    // v6.028：互換位置不是「放置傷害指示物」→ 對戰圓形競技場不該擋（玩家回報本卡被誤擋）
-    .filter(b => !canApplyEffectToTarget(st, idx, b, _pool.get(b.cardId), 'ability-effect', _pool, { isBench: true, counterPlacement: false }).blocked)
+  // ⭐v6.519（官方 Q&A，深淵之瞳：可以選擇化隱的備戰寶可夢，但不會互換）：候選列出全部備戰，
+  //   不受特性效果影響的另記在 immuneIids，由 gust-opp resolver 據實 log「不互換」（v6519-gust-immune-selectable）。
+  // v6.028：互換位置不是「放置傷害指示物」→ 對戰圓形競技場不該擋（玩家回報本卡被誤擋）
+  const validIids = opp.bench.map(b => b.iid);
+  const immuneIids = opp.bench
+    .filter(b => canApplyEffectToTarget(st, idx, b, _pool.get(b.cardId), 'ability-effect', _pool, { isBench: true, counterPlacement: false }).blocked)
     .map(b => b.iid);
-  if (validIids.length === 0) return addLog(st, '大力捕捉器：對手備戰寶可夢皆不受特性效果影響，無法互換', idx);
   const s = addLog(st, '大力捕捉器：選 1 隻對手備戰寶可夢與戰鬥場互換', idx);
   return withPending(s, {
     type: 'opp-bench-choose',
@@ -316,7 +318,7 @@ regA('鐵掌力士', 0, (st, idx, _pool, _cardInst) => {
     minCount: 1,
     maxCount: 1,
     effectKey: 'gust-opp',
-    params: { validIids },
+    params: { validIids, immuneIids },
   });
 });
 

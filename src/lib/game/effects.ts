@@ -4848,6 +4848,25 @@ export const ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES: ReadonlySet<string> = new Set
   '寂寞眼神',  // ⭐v6.347 皮卡丘（M6a 022/103，J，Basic）— PASSIVE_DAMAGE_REDUCE -20
 ]);
 
+// >>> v6519-attacker-immune-reduce
+/**
+ * ⭐v6.519【中央宣告＋中央述詞】被動減傷特性中，**減傷對象是攻擊方**（卡面「對手的戰鬥寶可夢使用的招式的傷害 -N」）的那一類。
+ *   官方 Q&A（深淵之瞳）：化隱的詛咒娃娃對火炎獅使出玩偶捕捉 ⇒ 不會 -30；PTCG_RULES 同型判例：光之翼的超級皮可西ex 亦然。
+ *   對照：鑽石膜這類「這隻寶可夢受到的傷害 -N」作用在持有者自己身上 ⇒ 攻擊方的化隱擋不住（不在本清單）。
+ *   ⚠ 目前恰好與 ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES 同三張，但語意不同（一個講位置、一個講對象）⇒ 分開宣告。
+ */
+export const ATTACKER_TARGETED_PASSIVE_REDUCE_ABILITIES: ReadonlySet<string> = new Set<string>(['威嚇之牙', '威嚇之顎', '寂寞眼神']);
+/** 攻擊方不受持有者（holderIdx）一側的特性效果影響 ⇒ 回擋下的理由（log 用）；不擋回 null。 */
+export function passiveReduceBlockedByAttackerImmunity(
+  state: GameState, holderIdx: 0 | 1, abilityName: string,
+  attackerInst: CardInstance | null | undefined, pool: Map<string, Card>,
+): string | null {
+  if (!attackerInst || !ATTACKER_TARGETED_PASSIVE_REDUCE_ABILITIES.has(abilityName)) return null;
+  // 改變攻擊方招式的傷害，不是放置傷害指示物 ⇒ counterPlacement=false
+  return oppAbilityEffectBlockReason(state, holderIdx, attackerInst, pool, false);
+}
+// <<< v6519-attacker-immune-reduce
+
 /**
  * ⭐ 這個被動減傷特性在 `location` 這個位置生效嗎？（`ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES` 的唯一述詞）
  *

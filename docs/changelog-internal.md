@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.519：官方 Q&A 比對第一批（2026-10-10）
+
+BASE v6.518（67085dc8）。站長：「請你上網查詢比對一下官方的判例 卡牌規則等等內容 有沒有和我們網站系統不符的地方」。
+- 方法：抓台灣官方 Q&A 資料庫標準賽制全量 1127 條（asia.pokemon-card.com/tw/rules/search/?regulation=1），比對站內 PTCG_RULES.md（2026-04-28 整理）得 246 條未收錄；扣 V 系與重複剩 115 條（深淵之瞳 70、綠寶石風暴 45），分四個子代理以 applyAction 全流程實跑：106 條符合、8 條不符（站長裁定全部修，R102 照官方推翻 10/6 裁定、R080 做順序選擇視窗）。
+- 本版：R084 深海抽出牌庫 0 張 gate（getUsableAbilities）；R030 音波刀鋒（skipDefEffects）不計 takeExtraDamageThisTurn；R010 攻擊方化隱／光之翼時「對手的戰鬥寶可夢使用的招式的傷害 -N」（威嚇之牙、威嚇之顎、寂寞眼神；中央宣告 ATTACKER_TARGETED_PASSIVE_REDUCE_ABILITIES＋述詞 passiveReduceBlockedByAttackerImmunity）不生效，鑽石膜這類作用在持有者自己的照常；R029 大力捕捉器候選列出化隱備戰（immuneIids），gust-opp resolver 選到就 log 不互換，其他呼叫端不受影響。
+- 待後續版本：R011 光子纜線被推倒換到備戰後昏厥、R102 退化後昏厥不算招式傷害、R063 重試徽章×混亂、R080 防昏厥順序選擇；小問題：R106 漣漪改附空 payload、log 措辭（腎上腺腦力寫「回復」、玩偶捕捉「0~1」、頭蓋龍推倒 log 寫撞飛）。
+- Rule 40：test-ability-swap-hidden-immunity 的大力捕捉器「備戰全化隱不開 picker」改為「可選但不互換」（挑戰角擊／媚惑引誘沒有判例，維持原判準）。
+- test-v6519（A～D 實跑＋對照、H1 v6.518 逐條紅）；突變 5 組全殺。
+
 ## v6.518：一般對戰雙方準備後不開始（2026-10-10）
 
 BASE admin v1.80（b963f3f3）。站長轉述玩家回報＋截圖：雙方都已準備，畫面停在「⏳ 雙方已準備，遊戲即將開始⋯」，12 秒後出現「建局逾時診斷 → 我的座位=1｜卡池已載入=true｜雙方牌組張數=24/25｜卡池缺卡=0｜卡包重試=0」。

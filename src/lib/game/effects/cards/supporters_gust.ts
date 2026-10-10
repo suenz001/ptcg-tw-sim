@@ -81,6 +81,15 @@ for (const _n of GUST_SUPPORTER_NAMES) registerGustSupporter(_n);
 //   promoteOppBenchToActive：解析失敗 = 完全 no-op + 據實 log。
 regR('gust-opp', (st, idx, iids, _params, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
+  // >>> v6519-gust-immune-selectable
+  // ⭐v6.519：呼叫端（大力捕捉器）可宣告「選得到但不受效果影響」的備戰（immuneIids）⇒ 選到就據實 log、不互換。
+  //   其他呼叫端不帶這個參數 ⇒ 行為不變。
+  const _immune = (_params as { immuneIids?: unknown } | undefined)?.immuneIids;
+  if (Array.isArray(_immune) && iids[0] != null && _immune.includes(iids[0])) {
+    const _b = st.players[oppIdx].bench.find(b => b.iid === iids[0]);
+    return addLog(st, `${_b ? (pool.get(_b.cardId)?.name ?? '該寶可夢') : '該寶可夢'} 不受對手特性的效果影響，不會互換`, idx);
+  }
+  // <<< v6519-gust-immune-selectable
   // label 空字串＝維持既有成功 log 逐字格式「將對手戰鬥場的 X 換到備戰區，呼叫 Y 到對手戰鬥場」
   const afterSt = promoteOppBenchToActive(st, oppIdx, iids[0], pool, '', idx).state;
   // v5.245：自方換位 ON_PROMOTE_TO_ACTIVE prompt（火箭隊的坂木自換 + 對換場景：

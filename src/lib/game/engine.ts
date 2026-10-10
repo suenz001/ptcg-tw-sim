@@ -28,7 +28,7 @@ import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
   PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
   collectPassiveAttackBonuses,   // v6.258 攻擊方被動加成唯一 dispatch
-  PASSIVE_DAMAGE_REDUCE_COND, passiveReduceAppliesAtLocation,
+  PASSIVE_DAMAGE_REDUCE_COND, passiveReduceAppliesAtLocation, passiveReduceBlockedByAttackerImmunity,
   PASSIVE_DAMAGE_REDUCE_BY_ATTACKER, PASSIVE_COIN_AVOID, PASSIVE_KO_RETALIATION, PASSIVE_ON_KO,
   koVictimAbilityPrizeAdjust,  // ⭐v6.259 被 KO 者自身特性的獎賞張數修正（願增猿ex｜鬆口氣）
   koDefenderSidePrizeModifiers, koPrizeFormulaLog,  // ⭐v6.471 KO 獎賞防守方側修正中央管線（張數與 log 同一份資料）
@@ -9116,6 +9116,17 @@ export function composeAttackFormula(terms: FormulaTerm[], finalValue: number): 
 //   ★ 不含「條件式完全免疫(PASSIVE_IMMUNITY/COIN)」與「damageReduceNextHit 消耗」——前者各自管線已處理、
 //     後者在呼叫端套（消耗語意）。skipDefEffects=true 時整段照引擎原樣 gate 跳過。
 // ════════════════════════════════════════════════════════════════════════════
+// >>> v6519-attacker-immune-reduce
+/** 「對手的戰鬥寶可夢使用的招式的傷害 -N」這類特性：攻擊方不受對手特性效果影響（化隱／光之翼…）時不生效。
+ *  判準只問 effects.ts 的 passiveReduceBlockedByAttackerImmunity（唯一一份），這裡只負責寫 log。 */
+function attackerImmunePassiveReduceLog(st: GameState, holderIdx: 0 | 1, abilityName: string,
+  attackerInst: CardInstance | null | undefined, pool: Map<string, Card>, setState: (s: GameState) => void): boolean {
+  const why = passiveReduceBlockedByAttackerImmunity(st, holderIdx, abilityName, attackerInst, pool);
+  if (!why) return false;
+  setState(addLog(st, `「${abilityName}」的減傷對 ${pool.get(attackerInst!.cardId)?.name ?? '攻擊方'} 無效（${why}）`, holderIdx));
+  return true;
+}
+// <<< v6519-attacker-immune-reduce
 export function applyDefenderReductionsBlockA(
   workingState: GameState,
   state: GameState,
@@ -9169,7 +9180,9 @@ export function applyDefenderReductionsBlockA(
         //   共用同一份 `ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES`（兩張卡面逐字相同，禁各寫一份）。
         //   本段的防守方必為戰鬥位，故此處恆真；真正被它擋下的是 effects.ts 的備戰管線。
         && passiveReduceAppliesAtLocation('威嚇之顎', 'active')
-        && isAbilityHolderEffective(workingState, defender.active, defenderCard, dIdx, '威嚇之顎', 'active', pool)) {
+        && isAbilityHolderEffective(workingState, defender.active, defenderCard, dIdx, '威嚇之顎', 'active', pool)
+        // ⭐v6.519（v6519-attacker-immune-reduce）：減傷對象是「對手的戰鬥寶可夢」⇒ 攻擊方有化隱／光之翼時不生效
+        && !attackerImmunePassiveReduceLog(workingState, dIdx, '威嚇之顎', attacker.active, pool, (s) => { workingState = s; })) {
       const reduced = Math.max(0, baseDamage - 30);
       workingState = addLog(workingState,
         `陳舊的顎之化石：受到的傷害 -30（${baseDamage} → ${reduced}）`, dIdx);
@@ -9181,7 +9194,9 @@ export function applyDefenderReductionsBlockA(
     // 由對手上個回合 ATTACK_POST 設於 takeExtraDamageNextTurn → 本回合開始前 promote 為 ThisTurn。
     // 不消耗旗標，本回合結束時在 END_TURN 統一清除。
     // 位置：weakness 後（語意上是 defender-side 的「本回合受傷 +N」debuff，不是 attacker's bonus）。
-    if (baseDamage > 0 && defender.active!.takeExtraDamageThisTurn) {
+    // ⭐v6.519（官方 Q&A，深淵之瞳）：雷電獸｜音波刀鋒「不計算對手的戰鬥寶可夢身上的附加效果」
+    //   ⇒ 撲身頭擊的「受傷 +100」也是附加在牠身上的效果，不算（110 不是 210）。skipDefEffects 時整段跳過（v6519-sonic-skip-extra）。
+    if (!skipDefEffects && baseDamage > 0 && defender.active!.takeExtraDamageThisTurn) {
       const extra = defender.active!.takeExtraDamageThisTurn;
       baseDamage += extra;
       workingState = addLog(workingState, `${defenderCard.name} 受到 +${extra} 傷害（上回合招式遺留效果）`, dIdx);
@@ -9198,6 +9213,9 @@ export function applyDefenderReductionsBlockA(
         // ⭐ v6.208：與 effects.ts 備戰管線共用同一份位置宣告（本段防守方必為戰鬥位 ⇒ 恆真，
         //   寫出來是為了「位置規則只有一份」，日後有人把這段拿去給備戰用時不會漏）。
         if (!passiveReduceAppliesAtLocation(ab.name, 'active')) continue;
+        // ⭐v6.519（官方 Q&A，深淵之瞳：化隱的詛咒娃娃打火炎獅不會 -30）：減傷對象是攻擊方的那一類，
+        //   攻擊方不受對手特性效果影響時不生效（v6519-attacker-immune-reduce）。
+        if (attackerImmunePassiveReduceLog(workingState, dIdx, ab.name, attacker.active, pool, (s) => { workingState = s; })) continue;
         const reduce = PASSIVE_DAMAGE_REDUCE.get(ab.name);
         if (reduce) {
           const before = baseDamage;
@@ -11261,6 +11279,11 @@ export function getUsableAbilities(
       }
       // v5.519 土龍節節｜逃跑抽出 — 官方 Q&A：牌庫為 0 時不能使用（需先抽 3 張）→ 不列入可用清單。
       if (ab.name === '逃跑抽出' && player.deck.length === 0) return;
+      // >>> v6519-deep-sea-draw-gate
+      // ⭐v6.519 胖嘟嘟｜深海抽出 — 官方 Q&A（深淵之瞳）：牌庫為 0 張時不可以使用 ⇒ 不列入可用清單
+      //   （特性函式裡才擋的話，USE_ABILITY 會先蓋「本回合已用」再執行，次數照樣被吃掉）。
+      if (ab.name === '深海抽出' && player.deck.length === 0) return;
+      // <<< v6519-deep-sea-draw-gate
       // >>> v6347-ability-gates
       // ⭐v6.347 M6a 三神鳥（火焰鳥｜燃燒羽擊／急凍鳥｜嚴寒羽擊／閃電鳥｜濺射羽擊）
       //   卡面前提：「若自己的場上有『X』『Y』」＋「從自己的手牌選擇1張『基本【Z】能量』卡」。
