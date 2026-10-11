@@ -1,5 +1,30 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.534：中央傷害路徑的受傷觸發延後、同時昏厥判定（2026-10-12）
+
+BASE f55b5ab6（v6.533）。站長 2026-10-12 裁定（受傷反擊整體移到招式效果之後）的第二部分＋v6.533 審查的 P2-2／P3-7／P3-8。
+- effects.dealAttackDamageToTarget（狙擊、選擇視窗型、POST 才造成傷害的招式；哨兵 v6534-defer-effects-on-damaged）：
+  - 攻擊方＝現在輪到的玩家、`attack-damage`、這一下**沒有**打倒目標 ⇒ 記一筆 `_pendingOnDamaged`（備戰被打 ⇒ `benchHit:true`），不當場呼叫 fireDefenderOnDamaged／備戰 anywhere 反擊；由 engine.settlePendingOnDamaged 在招式效果結束後結算（v6.533 的同一個出口）。
+  - 這一下就打倒（或觸發防昏厥）⇒ 照舊當場觸發後立刻結算昏厥（本路徑的昏厥本來就不延後）——**已知差異**：狙擊型招式打倒對手時，反擊仍在同一招的後續效果之前發生（全面延後需要本路徑的昏厥也延後，牽動 59 個呼叫點，暫不做）。
+  - 自傷型招式反向呼叫本 helper（攻擊方≠現在輪到的玩家）不延後，行為不變。
+  - 結算時 `benchHit` ⇒ 只跑 ANYWHERE_RETALIATION（快掃拳返）且過特性有效性與攻擊方豁免；其他「在戰鬥場受到傷害時」的觸發不跑。
+- v6.533 審查 P2-2（既有）：沒有招式效果時，攻擊方取完最後的獎賞當場寫終局 ⇒ 反擊打昏攻擊方時對手拿不到獎賞 ⇒ 判先取完者勝。**已修**：legacy KO 分支 resolveAttackActiveKo 之後若新寫了終局 ⇒ liftEndgameForOnKoV6361（哨兵 v6534-legacy-ko-lift），終局交 v6.361 中央重判。
+- v6.533 審查 P3-7：`_pendingAttackKo` 還在且有選擇視窗開著 ⇒ applyActionImpl 末端的中央重判與 v2.135 防禦層這一輪不判（哨兵 v6534-hold-verdict-pending-ko），等視窗解完、drain 結算後再判；三個暫存旗標照樣清除。
+- v6.533 審查 P3-8：火箭隊的催眠裝置的「不會陷入特殊狀態」說明只在持有者是火箭隊的寶可夢時寫。
+- Rule 40：test-v6120「中央 helper 非 KO → 幸運頭盔仍抽 2」、test-v6427 F4（備戰快掃拳返）直呼 helper 後補呼叫 settlePendingOnDamaged（舊版沒有該出口時原樣）；意圖不變。
+- 守衛 test-v6534-effects-path-defer-and-endgame：8 條行為＋HEAD-FAIL（BASE：EFF、BENCH、LEGDBL、HOLD、HOLD_D 紅；EFF_ctl、BENCH_NEG、SNIPE_KO 兩版綠）；突變 7 個全殺。
+- harness＋免疫測試網（36 支）：除 v6427 F4（上述 Rule 40）外與 BASE 逐支相同。
+- 全套第一輪：test-retaliation-tail-cdef C（直呼 helper 打備戰拖拖蚓ex）照 Rule 40 補呼叫 settlePendingOnDamaged（舊版沒有該出口時原樣）；test-v6276 為已知速度假紅（單跑綠）。
+- **Fable 5.1 審查**（2784 招 × 16 盤面 × 2 目標選法約 11 萬局 BASE/HEAD 零差異；59 個呼叫點逐一核對沒有自傷被延後）：
+  - P1-1（本版引入）：暫停判定時刪掉 v6.361 暫存旗標 ⇒ 防守方在反擊中取完最後的獎賞時終局遺失、遊戲在獎賞 0 張下繼續。**已修**：暫停時改記 `_pendingAttackKo.heldVerdict`，drainPendingAttackKo 結算完若有它 ⇒ requestEndgameVerdictV6361（已是終局則 liftEndgameForOnKoV6361）再交中央重判；守衛 HOLD_D。
+  - P2-1（既有，排 v6.535）：中央 koTargetAfterAttackDamage 在「對手無備戰」時直接寫終局**不取獎** ⇒ 雙方同時取完的判定失真（官方 L622：同時取完時可放置的一方勝）。本版 changelog「反擊與取獎照常進行」在無備戰情形尚不成立。
+  - P2-2（既有，排 v6.535）：wave3a-snipe-bench 等備戰狙擊 resolver 不走中央傷害路徑 ⇒ 備戰快掃拳返、備戰減傷、免疫擲幣、中央 KO 都漏；本版 benchHit 規則對它們無效。
+  - P3-1（潛在，現行卡池無）：中央傷害路徑延後後、同一招再以效果把同一隻打倒 ⇒ 那筆受傷觸發被吃掉（持有者已不在場）。**已知差異**，排 v6.535 一併處理（helper 的 KO 分支前先結算該持有者的紀錄）。
+  - P3-2：火箭隊的寶可夢判準抽到 _shared `isRocketTeamPokemonCard`，tools.ts 催眠裝置與 engine 說明 log 共用（站內其他 9 處同字面另列後續）。
+  - P3-3：守衛補 HOLD_D、SNIPE_KO（中央傷害路徑一擊打倒 ⇒ 當場觸發一次）。
+  - **複審（41c379b5）**：P1-1 修法正確（HOLD 矩陣只有 HOLD_d 改為正確的 P2 勝、5/0；正面朝上 picker 與無備戰平手情境皆正確）、兩個直接突變都殺；「drain 只 request 不 lift」為等價存活；無新問題，可以推送。建議 v6.535 補 HOLD_g2 守衛並在修 P2-1 時同步更新 HOLD_e／LEG_k 預期。
+- 全套（41c379b5）：882／882，紅 2 支——test-v6272 ⑩ PREV_ALLOWED 漏列審查後才改的 _shared.ts／tools.ts（已補，單跑綠）、test-v6370 已知速度假紅（單跑綠）。
+
 ## v6.533：受傷觸發改在招式效果之後結算（2026-10-12）
 
 BASE af9ea475（v6.532）。**站長 2026-10-12 裁定**：「把受傷反擊（甲殼刺、扣殺能量、毒刺、龐克頭盔等）整體移到招式效果之後」。

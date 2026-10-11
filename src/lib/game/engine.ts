@@ -109,6 +109,7 @@ import {
   blockedRetaliationNames, blockedRetaliationLog,  // ⭐v6.427 擋下反擊時的 log（唯一一份）
   // >>> v6352-field-wide-retal-import
   fireFieldWideRetaliation,  // ⭐v6.352 field-wide 受傷反擊中央管線（怨恨旋渦／群聚反擊）
+  ANYWHERE_RETALIATION,      // ⭐v6.534 備戰受傷（狙擊）也會觸發的受傷反擊（快掃拳返）
   // <<< v6352-field-wide-retal-import
   // >>> v6357-field-wide-retal-snapshot-import
   snapshotFieldWideRetalHolders,  // ⭐v6.357 站長裁定 C-7：field-wide 反擊「宣告當時」持有者快照
@@ -1071,7 +1072,8 @@ export function isFossilItemCard(card: Card | undefined): boolean {
 import { sameEvoName, canEvolveOnto, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog, hasStatusInAnySlot, resolveInfiniteShadowKo, toBareCard, ATTACK_AFTER_KO } from './effects/_shared'; // v5.842 跨三槽狀態讀取
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared';
-import { withAttackDamageTaken, withPending } from './effects/_shared'; // ⭐v6.256「受到的招式的傷害」唯一中央寫入點 // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
+import { withAttackDamageTaken, withPending } from './effects/_shared';
+import { isRocketTeamPokemonCard } from './effects/_shared';   // ⭐v6.534 火箭隊的寶可夢判準（與 tools.ts 共用） // ⭐v6.256「受到的招式的傷害」唯一中央寫入點 // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst, isImmuneToOppAbilityEffect, oppAbilityEffectBlockReason, futureShieldProtects } from './defense';  // v6.196 中央述詞；v6.427 反擊豁免
 // >>> v6410-festival-central-import
 // ⭐⭐⭐v6.410：祭典樂舞／祭典會場的判準收斂成**一份**（IRON_RULES Rule 38）。
@@ -3676,7 +3678,10 @@ const STATUS_ON_DAMAGED_SOURCES: ReadonlySet<string> = new Set(['毒刺', '灼�
 function fireOnDamagedInView(v: GameState, rec: PendingOnDamagedRec, holderLoc: 'active' | 'bench', pool: Map<string, Card>, attackerOnBench = false): GameState {
   const statusSkipped = (name: string): boolean => {
     if (!attackerOnBench || !STATUS_ON_DAMAGED_SOURCES.has(name)) return false;
-    v = addLog(v, `${name}：使出招式的寶可夢在備戰區，不會陷入特殊狀態`, rec.dIdx);
+    // ⭐v6.534（v6.533 審查 P3-8）：火箭隊的催眠裝置只在持有者是「火箭隊的」寶可夢時才會發動（同 tools.ts 的判準）⇒ 不是的話不寫說明
+    const h = v.players[rec.dIdx].active;
+    const silent = name === '火箭隊的催眠裝置' && !(h && isRocketTeamPokemonCard(pool.get(h.cardId)));   // 判準與 tools.ts 同一份
+    if (!silent) v = addLog(v, `${name}：使出招式的寶可夢在備戰區，不會陷入特殊狀態`, rec.dIdx);
     return true;
   };
   const { aIdx, dIdx, baseDamage } = rec;
@@ -3684,6 +3689,17 @@ function fireOnDamagedInView(v: GameState, rec: PendingOnDamagedRec, holderLoc: 
   if (!holder0) return v;
   const holderCard = pool.get(holder0.cardId);
   if (!holderCard) return v;
+  // ⭐v6.534：在備戰受到傷害（狙擊）⇒ 只有不限戰鬥場的受傷反擊（ANYWHERE_RETALIATION：快掃拳返）
+  if (rec.benchHit) {
+    if (!holderCard.abilities || isImmuneToOppAbilityEffect(v, dIdx, v.players[aIdx].active, pool, true)) return v;
+    for (const ab of holderCard.abilities) {
+      if (!ANYWHERE_RETALIATION.has(ab.name)) continue;
+      if (!isAbilityHolderEffective(v, holder0, holderCard, dIdx, ab.name, holderLoc, pool)) continue;
+      const fn = PASSIVE_RETALIATION.get(ab.name);
+      if (fn && !statusSkipped(ab.name)) v = fn(v, dIdx, pool, v.players[dIdx].active);
+    }
+    return v;
+  }
   const toolsJammed = isToolsJammed(v, pool);
   // ① 道具（「在戰鬥場受到傷害時」：受傷當下在戰鬥場已由紀錄保證）——結算時還附著才算（扣殺能量 Q&A 同理）
   if (!toolsJammed) {
@@ -3887,6 +3903,8 @@ export function drainPendingAttackKo(state: GameState, pool: Map<string, Card>):
       log: [...s.log, { turn: s.turn, playerIndex: null as null, message: `${ds.name} 沒有可上場的寶可夢，${s.players[ctx.aIdx].name} 獲勝！` }],
     };
   }
+  // ⭐v6.534（審查 P1-1）：先前有一輪中央重判為了等選擇視窗而暫停 ⇒ 這裡結算完要再請一次「含獎賞規則」的重判（v6.361）
+  if (ctx.heldVerdict) s = s.phase === 'game-over' ? liftEndgameForOnKoV6361(s) : requestEndgameVerdictV6361(s);
   return s;
 }
 // <<< v6490-ko-after-attack-effects
@@ -7136,6 +7154,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         defPlayers[dIdx] = { ...defenderState, active: { ...defenderState.active!, damage: newDamage } };
         newState = resolveAttackActiveKo({ ...newState, players: defPlayers }, _v6490Ctx, pool,
           { deferredToolFires: _deferredToolFires, toolsJammed });
+        // >>> v6534-legacy-ko-lift
+        // ⭐v6.534（v6.533 審查 P2-2）：沒有招式效果時，攻擊方取完最後的獎賞當場寫了終局 ⇒ 下面的受傷反擊把攻擊方也打昏時，
+        //   fireDefenderOnKO 在 game-over 直接 return ⇒ 對手拿不到獎賞、判先取完者勝（官方：雙方同時取完 ⇒ 依放置規則／平手）。
+        //   ⇒ 暫時收回 'playing'，反擊與取獎照常進行，終局交 v6.361 中央重判（與 v6421-koend-run-post 同型）。
+        if (newState.phase === 'game-over' && state.phase !== 'game-over') newState = liftEndgameForOnKoV6361(newState);
+        // <<< v6534-legacy-ko-lift
       }
       const _v456KoMagicalShine = isImmuneToOppAbilityEffect(newState, dIdx, newState.players[aIdx].active, pool, true);
       // <<< v6490-attack-ko-branch
@@ -10522,7 +10546,20 @@ function applyActionImpl(
   //   ⚠ 下方 v2.135 防禦層**逐字保留**，但在本區塊之後實務上不可達（本區塊的 byPlacement
   //     判準與它完全相同，只是多了「雙方皆無 ⇒ 平手」）—— 刻意不動它的任何一個字，
   //     好讓 test-v6265 F4 對 BASE 的逐字比對只需要剝哨兵。
-  if (next.phase === 'playing' || next._v6361NeedsVerdict === true) {
+  // >>> v6534-hold-verdict-pending-ko
+  // ⭐v6.534（v6.533 審查 P3-7）：防守方這一下招式的昏厥還在等（_pendingAttackKo）、而且有選擇視窗開著
+  //   （例：受傷觸發的甲殼刺視窗）⇒ 先不判勝負，等視窗解完、drainPendingAttackKo 結算之後再判（否則防守方昏厥永遠不結算）。
+  const _v6534HoldVerdict = !!next._pendingAttackKo && !!next.pendingSelection && next.phase === 'playing';
+  if (_v6534HoldVerdict && (next._v6361NeedsVerdict !== undefined || next._v6361LiftedWinner !== undefined || next._v6361LiftedReason !== undefined)) {
+    // ⭐v6.534（審查 P1-1）：暫存旗標只活在單一 action ⇒ 改記在 _pendingAttackKo.heldVerdict，drain 結算完再請一次重判（含獎賞規則）
+    const _cl: GameState = { ...next, _pendingAttackKo: { ...next._pendingAttackKo!, heldVerdict: true } };
+    delete (_cl as { _v6361NeedsVerdict?: boolean })._v6361NeedsVerdict;
+    delete (_cl as { _v6361LiftedWinner?: 0 | 1 })._v6361LiftedWinner;
+    delete (_cl as { _v6361LiftedReason?: string })._v6361LiftedReason;
+    next = _cl;
+  }
+  // <<< v6534-hold-verdict-pending-ko
+  if (!_v6534HoldVerdict && (next.phase === 'playing' || next._v6361NeedsVerdict === true)) {
     const _v6361Need = next._v6361NeedsVerdict === true;
     const _v6361V = judgeEndgameV6361(next, _v6361Need);
     if (_v6361V.over) {
@@ -10554,7 +10591,8 @@ function applyActionImpl(
   //   gate 鎖死、game-over 永遠 fire 不了，遊戲卡住。
   //   修正：active=null + bench=0 是無可挽回的 game-over 狀態，無論 pendingSelection 是否存在
   //   都該強制終局；觸發時順手清 pendingSelection 確保 UI modal 不被擋住。
-  if (next.phase === 'playing') {
+  // ⭐v6.534：_pendingAttackKo 還在等選擇視窗（見上方 v6534-hold-verdict-pending-ko）⇒ 這一輪不判；視窗一解完 drain 就會結算，不會卡住。
+  if (next.phase === 'playing' && !_v6534HoldVerdict) {
     for (const idx of [0, 1] as const) {
       const p = next.players[idx];
       if (p.active === null && p.bench.length === 0) {

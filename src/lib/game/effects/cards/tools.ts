@@ -28,6 +28,7 @@ import type { Card, EnergyType } from '$lib/cards/types';
 import { megaExAttackerAndNonMegaHolder, luxuryBombGateOk } from '../../selection-filter'; // ⭐v6.402 超級進化ex 打非超級進化ex 的唯一判準（下沉 leaf，避免 effects→tools 反向 edge）；本檔不再自己呼叫 isMegaExCard
 import type { GameState, CardInstance } from '../../types';
 import type { EffectFn } from '../_shared';
+import { isRocketTeamPokemonCard } from '../_shared';   // ⭐v6.534
 import {
   TRAINER_EFFECTS,
   PENDING_REFRESH_ON_POP,   // v6.215 佇列取出時重算 picker params
@@ -451,7 +452,7 @@ registerToolOnDamagedAndKO('火箭隊的催眠裝置', (state, dIdx, aIdx, _dmg,
   //   「是不是『火箭隊的』寶可夢」永遠判 false ⇒ 玩家回報的「昏厥時不觸發」。
   if (!holder) return state;
   const holderCard = pool.get(holder.cardId);
-  if (!holderCard?.name?.startsWith('火箭隊的')) return state;
+  if (!isRocketTeamPokemonCard(holderCard)) return state;   // ⭐v6.534 中央判準
   // v5.675 收斂：道具讓攻擊方睡眠走中央（item-effect 不被化隱擋；補不眠/泡沫水免疫 + 欄位保留）。
   //   holder=dIdx，applyStatusToOppActive 施加於 1-dIdx=攻擊方 aIdx。
   return applyStatusToOppActive(state, dIdx, 'asleep', pool, { kind: 'item-effect', label: '火箭隊的催眠裝置' });

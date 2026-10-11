@@ -29,7 +29,7 @@ writeFileSync(E,
   + "export { PASSIVE_RETALIATION, PASSIVE_ON_DAMAGED, PASSIVE_KO_RETALIATION, PASSIVE_ON_KO } from './src/lib/game/effects';\n"
   + "export { SPECIAL_ENERGY_ON_DAMAGED } from './src/lib/game/effects/_shared';\n"
   + "export { TOOL_ON_KO_MIRRORED_FROM_DAMAGED } from './src/lib/game/effects/cards/tools';\n"
-  + "export { applyAction } from './src/lib/game/engine';\n"
+  + "export { applyAction, settlePendingOnDamaged } from './src/lib/game/engine';\n"
   + "import './src/lib/game/effects';\n");
 await build({
   entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node', target: 'node20',
@@ -118,7 +118,11 @@ T('⭐⭐⭐ 手持循環扇：中央 helper 一擊 KO → 只開 1 個 pending�
 console.log('② 不得矯枉過正：該觸發的一次都不能少');
 
 T('中央 helper 非 KO → 幸運頭盔仍抽 2', () => {
-  const s = mod.dealAttackDamageToTarget(mkState(LUCK), 0, 'd1', 10, pool, { kind: 'attack-damage', label: 'T' });
+  // ⭐v6.534（Rule 40）：沒打倒時受傷觸發改記 _pendingOnDamaged、招式效果結束才由 engine.settlePendingOnDamaged 結算
+  //   ⇒ 直呼 helper 後補呼叫結算出口（實際對戰由 ATTACK／RESOLVE_SELECTION 末端呼叫）。意圖（非 KO 照樣抽 2、不多不少）不變。
+  const s0 = mod.dealAttackDamageToTarget(mkState(LUCK), 0, 'd1', 10, pool, { kind: 'attack-damage', label: 'T' });
+  ok((s0._pendingOnDamaged ?? []).length === 1 && s0.players[1].hand.length === 0, 'v6.534：結算前應只記一筆、還沒抽');
+  const s = mod.settlePendingOnDamaged(s0, pool);
   ok(s.players[1].active !== null, '不該被 KO');
   ok(s.players[1].hand.length === 2, '非 KO 情況抽了 ' + s.players[1].hand.length + ' 張');
 });

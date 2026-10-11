@@ -18,10 +18,10 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.v6427-s.js'), E = join(ROOT, '.v6427-e.ts'), O = join(ROOT, '.v6427-o.mjs');
 process.on('exit', () => { for (const p of [S, E, O]) { try { unlinkSync(p); } catch { /* noop */ } } });
 writeFileSync(S, 'export const base="";export const assets="";');
-writeFileSync(E, "export { applyAction } from './src/lib/game/engine';\nexport * as DEF from './src/lib/game/defense';\nexport * as EFF from './src/lib/game/effects';\n");
+writeFileSync(E, "export { applyAction, settlePendingOnDamaged } from './src/lib/game/engine';\nexport * as DEF from './src/lib/game/defense';\nexport * as EFF from './src/lib/game/effects';\n");
 await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node',
   target: 'node20', alias: { $lib: join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
-const { applyAction, DEF, EFF } = await import(pathToFileURL(O).href);
+const { applyAction, settlePendingOnDamaged, DEF, EFF } = await import(pathToFileURL(O).href);
 
 const dir = join(ROOT, 'static/cards');
 const live = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).map((e) => e.code));
@@ -205,9 +205,12 @@ console.log('\n【F】engine 主管線＋其他反擊型態（無 picker 的招�
   // F4 備戰 anywhere 型（快掃拳返）：直呼 dealAttackDamageToTarget 打備戰
   const mkBench = (atk) => mk({ active: inst(atk.id), bench: [], deck: filler(5), prizes: filler(6) },
     { active: inst(PLAIN.id), bench: [inst(ORTH.id, { iid: 'orth', energyAttached: [inst(EID.Metal), inst(EID.Metal)] })], deck: filler(5), prizes: filler(6) });
-  const b0 = EFF.dealAttackDamageToTarget(mkBench(MORT), 0, 'orth', 30, pool);
-  const b1 = EFF.dealAttackDamageToTarget(mkBench(CURSOLA), 0, 'orth', 30, pool);
-  const b2 = EFF.dealAttackDamageToTarget(mkBench(PIXI), 0, 'orth', 30, pool);
+  // ⭐v6.534（Rule 40）：中央傷害路徑沒打倒時受傷反擊改記 _pendingOnDamaged、招式效果結束才結算 ⇒ 直呼 helper 後補呼叫結算出口
+  //   （真實對戰由 ATTACK／RESOLVE_SELECTION 末端呼叫）。意圖（一般 +40、化隱 0、光之翼 0）不變；舊版沒有該出口時原樣（當場已結算）。
+  const _settle = (s) => (typeof settlePendingOnDamaged === 'function' ? settlePendingOnDamaged(s, pool) : s);
+  const b0 = _settle(EFF.dealAttackDamageToTarget(mkBench(MORT), 0, 'orth', 30, pool));
+  const b1 = _settle(EFF.dealAttackDamageToTarget(mkBench(CURSOLA), 0, 'orth', 30, pool));
+  const b2 = _settle(EFF.dealAttackDamageToTarget(mkBench(PIXI), 0, 'orth', 30, pool));
   chk('F4 ⭐⭐【HEAD-FAIL】備戰的拖拖蚓ex｜快掃拳返：一般攻擊方 +40；化隱 0；光之翼 0',
     b0.players[0].active.damage === 40 && b1.players[0].active.damage === 0 && b2.players[0].active.damage === 0,
     `mort=${b0.players[0].active.damage} curs=${b1.players[0].active.damage} pixi=${b2.players[0].active.damage}`);

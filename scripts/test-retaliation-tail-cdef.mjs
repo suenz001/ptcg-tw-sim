@@ -8,7 +8,7 @@ const ROOT=fileURLToPath(new URL('..',import.meta.url));
 const S=join(ROOT,'.xtd-s.js'),E=join(ROOT,'.xtd-e.ts'),O=join(ROOT,'.xtd-o.mjs');
 process.on('exit',()=>{for(const p of[S,E,O]){try{unlinkSync(p);}catch{}}});
 writeFileSync(S,'export const base="";export const assets="";');
-writeFileSync(E,"export { dealAttackDamageToTarget } from './src/lib/game/effects';\nexport { applyAction } from './src/lib/game/engine';\nimport './src/lib/game/effects';");
+writeFileSync(E,"export { dealAttackDamageToTarget } from './src/lib/game/effects';\nexport { applyAction, settlePendingOnDamaged } from './src/lib/game/engine';\nimport './src/lib/game/effects';");
 await build({entryPoints:[E],outfile:O,bundle:true,format:'esm',platform:'node',target:'node20',alias:{'$lib':join(ROOT,'src/lib'),'$app/paths':S},logLevel:'error'});
 const mod=await import(pathToFileURL(O).href);
 const dir=join(ROOT,'static/cards');
@@ -31,7 +31,9 @@ let pass=0;
 {
   const tudu=inst(TUDU,{energyAttached:[en(METAL),en(METAL)]});
   const st=mk(inst(ZAMA),inst(ZAMA),[tudu]); // P1 備戰有拖拖蚓ex
-  const after=mod.dealAttackDamageToTarget(st,0,tudu.iid,30,pool,{kind:'attack-damage',label:'狙擊'});
+  // ⭐v6.534（Rule 40）：中央傷害路徑沒打倒時受傷反擊改記 _pendingOnDamaged、招式效果結束才結算 ⇒ 直呼 helper 後補呼叫結算出口（意圖不變）
+  const after0=mod.dealAttackDamageToTarget(st,0,tudu.iid,30,pool,{kind:'attack-damage',label:'狙擊'});
+  const after=typeof mod.settlePendingOnDamaged==='function'?mod.settlePendingOnDamaged(after0,pool):after0;
   const atkDmg=after.players[0].active.damage;
   assert.strictEqual(atkDmg,40,`備戰拖拖蚓ex被狙擊應反擊+40(2鋼×2),實得 ${atkDmg}`);
   console.log('  ✅ C 備戰拖拖蚓ex被狙擊→反擊+40(anywhere)'); pass++;

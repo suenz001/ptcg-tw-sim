@@ -3127,3 +3127,13 @@ export function withAttackDamageTaken(
   if (kind !== 'attack-damage' || actual <= 0) return { ...inst, damage: newDamage };
   return { ...inst, damage: newDamage, damageTakenLastOppTurn: (inst.damageTakenLastOppTurn ?? 0) + actual };
 }
+
+// >>> v6534-rocket-holder
+/**
+ * ⭐v6.534：「火箭隊的寶可夢」判準（卡名以「火箭隊的」開頭）。火箭隊的催眠裝置（tools.ts）與 engine 受傷結算的說明 log 共用這一份（Rule 38）。
+ *   ⚠ 站內其他 9 處同字面的寫法尚未收斂（另一個維度，列入後續）。
+ */
+export function isRocketTeamPokemonCard(card: { name?: string } | null | undefined): boolean {
+  return !!card?.name?.startsWith('火箭隊的');
+}
+// <<< v6534-rocket-holder

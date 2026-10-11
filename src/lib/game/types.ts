@@ -1047,6 +1047,8 @@ export interface GameState {
     /** ⭐v6.520：招式的傷害當下**沒有**打倒（是之後的招式效果，例如退化光線把牠退化，才讓傷害超過 HP）。
      *  官方 Q&A（深淵之瞳）：這不算「受到招式的傷害而昏厥」⇒ 傳說的山頂、古舊能量等獎賞修正不生效，只拿基本張數。 */
     survivedDamage?: boolean;
+    /** ⭐v6.534（審查 P1-1）：有一輪中央重判因為還在等選擇視窗而暫停（v6534-hold-verdict-pending-ko）⇒ drain 結算完要再請一次重判（含獎賞規則）。 */
+    heldVerdict?: boolean;
   };
   /**
    * ⭐⭐ v6.362 站長裁定 A-1：賽富豪｜歡慶
@@ -1455,6 +1457,8 @@ export interface GameState {
     /** 受到傷害的那一隻（持有者）與使出招式的那一隻 */
     holderIid: string; attackerIid: string | null;
     baseDamage: number;
+    /** ⭐v6.534：受傷時在**備戰**（狙擊）⇒ 只有「不限戰鬥場」的受傷反擊（ANYWHERE_RETALIATION，快掃拳返）會觸發 */
+    benchHit?: boolean;
     /** 宣告當時的 field-wide 反擊持有者快照（_attackTimeFieldWideRetal 在 action 結束時就清掉，跨選擇視窗要自己帶著） */
     fieldWide?: { p1: FieldWideRetalHolderSnapshot[]; p2: FieldWideRetalHolderSnapshot[] };
   }>;

@@ -10265,12 +10265,32 @@ export function dealAttackDamageToTarget(
   // v6.120：記下「這一次傷害有沒有跑過 on-damaged」，下方 fireDefenderOnKO 需要它
   //   才知道要不要跳過鏡射型道具（否則手持循環扇/幸運頭盔等會觸發兩次）。
   const _onDamagedFired = isActive && kind === 'attack-damage' && effDmg > 0;
-  if (_onDamagedFired) {
+  // >>> v6534-defer-effects-on-damaged
+  // ⭐⭐⭐v6.534（站長 2026-10-12 裁定：受傷反擊整體移到招式效果之後；v6.533 已改 engine 主管線）：
+  //   本中央傷害路徑（狙擊、選擇視窗型招式、POST 才造成傷害的招式）在**招式的效果裡**被呼叫 ⇒
+  //   這一下沒有把目標打倒時，受傷觸發改記一筆 _pendingOnDamaged，招式效果全部結束後由 engine.settlePendingOnDamaged 結算。
+  //   ⚠ 只限「攻擊方＝現在輪到的玩家」（自傷型招式反向呼叫本 helper 時不延後，行為不變）。
+  //   ⚠ 這一下就把目標打倒（或觸發防昏厥）⇒ 照舊當場觸發後立刻結算昏厥（本路徑的昏厥本來就不延後；已知差異，見 changelog-internal）。
+  const _v6534Defer = kind === 'attack-damage' && effDmg > 0 && actorIdx === st.activePlayerIndex && (() => {
+    const t0 = isActive ? st.players[dIdx].active : st.players[dIdx].bench.find(c => c.iid === targetIid);
+    if (!t0) return false;
+    const hp0 = effectiveHPInline(t0, pool, st);
+    return !(hp0 > 0 && t0.damage + effDmg >= hp0);
+  })();
+  if (_v6534Defer) {
+    st = { ...st, _pendingOnDamaged: [...(st._pendingOnDamaged ?? []), {
+      aIdx: actorIdx, dIdx, holderIid: targetIid, attackerIid: st.players[actorIdx].active?.iid ?? null, baseDamage: effDmg,
+      ...(isActive ? {} : { benchHit: true }),
+      ...(st._attackTimeFieldWideRetal ? { fieldWide: st._attackTimeFieldWideRetal } : {}),
+    }] };
+  }
+  // <<< v6534-defer-effects-on-damaged
+  if (_onDamagedFired && !_v6534Defer) {
     st = fireDefenderOnDamaged(st, dIdx, actorIdx, effDmg, pool);
     if (st.phase === 'game-over') return st;
   }
   // v5.980：anywhere 型受傷反擊(快掃拳返,卡面無「在戰鬥場」)在備戰被狙擊時也觸發(active 已走上方 fireDefenderOnDamaged)。
-  if (!isActive && kind === 'attack-damage' && effDmg > 0) {
+  if (!isActive && kind === 'attack-damage' && effDmg > 0 && !_v6534Defer) {
     const _bt = st.players[dIdx].bench.find(c => c.iid === targetIid);
     const _btCard = _bt ? pool.get(_bt.cardId) : null;
     if (_bt && _btCard?.abilities) {
