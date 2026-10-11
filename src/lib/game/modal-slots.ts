@@ -41,10 +41,33 @@ export interface PromoteInput {
   myIdx: Seat;
   /** isMyDefenderTurn()：輪到我替防守方補位（本機雙人恆為 true） */
   defenderTurnMine: boolean;
+  /** ⭐v6.539 game.activePlayerIndex（雙方同時要補位時決定誰先放；不傳 ⇒ 不排序，舊行為） */
+  activePlayerIndex?: Seat | null;
 }
 
 const benchCount = (p: PlayerLike | null | undefined): number => (p && Array.isArray(p.bench) ? p.bench.length : 0);
 const activeEmpty = (p: PlayerLike | null | undefined): boolean => !!p && p.active === null;
+
+// >>> v6539-promote-order
+/**
+ * ⭐⭐⭐v6.539 站長裁定（2026-10-12 第 5 項，選項 A）＋官方 Q&A：
+ *   PTCG_RULES L410「在寶可夢檢查中，若雙方的寶可夢同時昏厥，哪方玩家先放置下一隻戰鬥寶可夢？」「從下一個回合的玩家開始放置。」
+ *   L893（火焰嚎叫，雙方戰鬥寶可夢皆昏厥）「由對手玩家先放置戰鬥寶可夢。…由下一個回合的玩家先放置戰鬥寶可夢。」
+ *   L1671（咒詛炸彈，特性讓雙方戰鬥寶可夢昏厥）「對方玩家先放置戰鬥寶可夢。」
+ * ⇒ 雙方戰鬥場**同時**空著、而且雙方都有備戰可派時，「下一個回合的玩家」＝ 1 − activePlayerIndex 先放；
+ *   這個函式回傳**必須等待**的座位（＝ activePlayerIndex），沒有要等的人回 null。
+ *   （寶可夢檢查中 activePlayerIndex 仍是正在結束回合的玩家 ⇒ 公式相同。）
+ * ⚠ 唯一判準：engine 的 SEND_NEW_ACTIVE（擋下等待方）、補位視窗與提示（本檔）、AI（ai.ts）都問這一份。
+ * ⚠ 只有一方有備戰時不排序（另一方沒有東西可放，勝負交給終局管線）。
+ */
+export function promoteWaitSeat(v: { phase: string | undefined | null; players: ReadonlyArray<PlayerLike | null | undefined>; activePlayerIndex?: Seat | null }): Seat | null {
+  if (v.phase !== 'playing') return null;
+  if (v.activePlayerIndex !== 0 && v.activePlayerIndex !== 1) return null;
+  const p0 = v.players[0], p1 = v.players[1];
+  if (!(activeEmpty(p0) && benchCount(p0) > 0 && activeEmpty(p1) && benchCount(p1) > 0)) return null;
+  return v.activePlayerIndex;
+}
+// <<< v6539-promote-order
 
 /**
  * 需要開「派出新的戰鬥寶可夢」視窗的座位（去重、依 A→B 的順序）。
@@ -54,12 +77,13 @@ const activeEmpty = (p: PlayerLike | null | undefined): boolean => !!p && p.acti
 export function promoteModalSeats(v: PromoteInput & { isSpectator: boolean }): Seat[] {
   if (v.phase !== 'playing' || v.hasPendingSelection || v.isSpectator) return [];
   const out: Seat[] = [];
+  const _wait = promoteWaitSeat(v);   // ⭐v6.539 等待方先不開視窗（等下一個回合的玩家放完）
   // A：防守方（被擊倒的一方）補位 —— 沿用 v2.123 條件（不看備戰數：沒有備戰時引擎應已判定勝負）
   if (activeEmpty(v.players[v.defenderIdx]) && v.defenderTurnMine) out.push(v.defenderIdx);
   // B：我自己的戰鬥場空（自 KO：咒詛炸彈、中毒於回合結束等）
   const me = v.players[v.myIdx];
   if (activeEmpty(me) && benchCount(me) > 0 && !out.includes(v.myIdx)) out.push(v.myIdx);
-  return out;
+  return _wait === null ? out : out.filter((s) => s !== _wait);
 }
 
 export interface PromoteAlertInput extends PromoteInput {
@@ -82,6 +106,9 @@ export function promoteAlerts(v: PromoteAlertInput): { mine: boolean; waitSeat: 
   const def = v.players[v.defenderIdx];
   const me = v.players[v.myIdx];
   const opp = v.players[v.oppIdx];
+  // ⭐v6.539：雙方同時要補位時，我是等待方 ⇒ 不顯示「請派出」，改顯示「等待對手先派出」
+  const _wait = promoteWaitSeat(v);
+  if (_wait !== null && _wait === v.myIdx) return { mine: false, waitSeat: v.oppIdx };
   const mine = (activeEmpty(def) && v.defenderTurnMine) || (activeEmpty(me) && benchCount(me) > 0);
   const waitDef = activeEmpty(def) && !v.defenderTurnMine && v.isMyTurn;
   const waitOpp = activeEmpty(opp) && (v.turnPhase !== 'end' || v.checkupPromoteWait === true) && benchCount(opp) > 0;   // ⭐v6.500 檢查後等補位

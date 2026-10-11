@@ -3885,11 +3885,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   const promoteSeatsList = $derived(game ? promoteModalSeats({
     phase: game.phase, players: game.players, hasPendingSelection: !!pendingSelection,
     defenderIdx: dIdx, myIdx, defenderTurnMine: isMyDefenderTurn(), isSpectator,
+    activePlayerIndex: game.activePlayerIndex,   // ⭐v6.539 雙方同時補位：下一個回合的玩家先放
   }) : []);
   const promoteAlert = $derived(game ? promoteAlerts({
     phase: game.phase, players: game.players, hasPendingSelection: !!pendingSelection,
     defenderIdx: dIdx, myIdx, oppIdx, defenderTurnMine: isMyDefenderTurn(), isMyTurn: isMyTurn(),
     turnPhase: game.turnPhase, checkupPromoteWait: game.endTurnContinueAfterKO != null,   // ⭐v6.500
+    activePlayerIndex: game.activePlayerIndex,   // ⭐v6.539
   }) : { mine: false, waitSeat: null });
 
   const selectionItemsRaw = $derived.by(() => {

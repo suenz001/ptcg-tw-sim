@@ -8,6 +8,7 @@
  *   - M3 多人連線時只需傳送動作序列
  */
 
+import { promoteWaitSeat } from './modal-slots';   // ⭐v6.539 雙方同時補位的順序（leaf，唯一判準）
 import { quickRhythmUsable, bigWingUsable, toolAttackUsableBy } from './usable-gates'; // ⭐v6.528 快節奏／大飛翅 gate 唯一判準（leaf）
 import { ancientKey, isPlayerLevelAttackOnCooldown } from './player-attack-cooldown';   // ⭐v6.435 leaf（玩家層級冷卻唯一判準）
 import { modalChoicePayloadValid, selectionAllowsCancel } from './selection-ui';   // >>> v6331-modal-choice-payload-import（v6.523 加 selectionAllowsCancel）
@@ -7461,7 +7462,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       newState = addLog(newState,
         `陳舊的背蓋化石：免疫招式效果（只擋指向它的效果；玩家層級效果如「物品/支援者鎖」照常生效）`, dIdx);
     }
-    // v2.78 純樸 — defender immuneToAttackEffectsThisTurn → skip ATTACK_POST 附加效果
+    // v2.78 純樸（v6.538 起改為特性；下方 postNuetralImmune 只用於資訊性 log）
     // v5.238 擴展：
     //   - 飛翔（喇叭啄鳥/咕咕鴿）/ 要害斬（具甲武者）— 卡面「不受招式的傷害和效果」
     //     → immuneToAllAttackThisTurn 同時擋 POST。
@@ -7824,6 +7825,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     const sendingPlayer = { ...players[sendingIdx] };
 
     if (sendingPlayer.active !== null) return state; // 還有出場寶可夢
+    // >>> v6539-promote-order
+    // ⭐v6.539 站長裁定（10-12 第 5 項）＋Q&A L410／L893／L1671：雙方戰鬥寶可夢同時昏厥 ⇒ 下一個回合的玩家先放，
+    //   另一方等它放完才能放（唯一判準 modal-slots.ts 的 promoteWaitSeat）。等待方送來的 SEND_NEW_ACTIVE 原封不動退回。
+    if (promoteWaitSeat({ phase: state.phase, players, activePlayerIndex: state.activePlayerIndex }) === sendingIdx) return state;
+    // <<< v6539-promote-order
 
     const benchIdx = sendingPlayer.bench.findIndex((c) => c.iid === action.iid);
     if (benchIdx < 0) return state;

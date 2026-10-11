@@ -10,6 +10,7 @@
  *  4. 主階段：進化 → 打基礎備戰 → 附能量 → 打訓練家 → 使用特性 → 攻擊 → 結束
  */
 
+import { promoteWaitSeat } from './modal-slots';   // ⭐v6.539 雙方同時補位的順序
 import type { Card, EnergyType } from '$lib/cards/types';
 import type { GameState, GameAction, CardInstance, PendingSelection, PlayerState } from './types';
 import {
@@ -76,7 +77,9 @@ export function getAIAction(
   }
 
   // 1b. 我作為防守方，active 被擊倒 → 送新出場
-  if (state.players[myIdx].active === null && state.players[myIdx].bench.length > 0) {
+  //   ⭐v6.539：雙方同時要補位、我是等待方（下一個回合的玩家先放）⇒ 先不送（engine 也會退回）
+  if (state.players[myIdx].active === null && state.players[myIdx].bench.length > 0
+      && promoteWaitSeat({ phase: state.phase, players: state.players, activePlayerIndex: state.activePlayerIndex }) !== myIdx) {
     return {
       type: 'SEND_NEW_ACTIVE',
       iid: pickBestActive(state.players[myIdx].bench, pool, state).iid,

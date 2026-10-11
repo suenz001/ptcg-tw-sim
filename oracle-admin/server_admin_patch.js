@@ -5013,6 +5013,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
       if (gs.pendingSelection && (gs.pendingSelection.actorIdx === 0 || gs.pendingSelection.actorIdx === 1)) return gs.pendingSelection.actorIdx;
       if (gs.pendingPrizes && (gs.pendingPrizes[0] || 0) > 0) return 0;
       if (gs.pendingPrizes && (gs.pendingPrizes[1] || 0) > 0) return 1;
+      // >>> v6539-promote-order
+      // ⭐v6.539 站長裁定（2026-10-12 第 5 項）＋官方 Q&A（PTCG_RULES L410／L893／L1671）：雙方戰鬥寶可夢同時昏厥、雙方都有備戰時，
+      //   由「下一個回合的玩家」（1 − activePlayerIndex）先派出，另一方等它派完（引擎 SEND_NEW_ACTIVE 會退回等待方）。
+      //   ⇒ 這時該動作的是下一個回合的玩家；原本一律回 0，等待方會被當成掛機。判準與前端 modal-slots.ts promoteWaitSeat 相同。
+      if (gs.players && gs.players[0] && gs.players[1] && gs.players[0].active === null && gs.players[1].active === null
+          && Array.isArray(gs.players[0].bench) && gs.players[0].bench.length > 0 && Array.isArray(gs.players[1].bench) && gs.players[1].bench.length > 0
+          && (gs.activePlayerIndex === 0 || gs.activePlayerIndex === 1)) return 1 - gs.activePlayerIndex;
+      // <<< v6539-promote-order
       if (gs.players && gs.players[0] && gs.players[0].active === null) return 0;
       if (gs.players && gs.players[1] && gs.players[1].active === null) return 1;
       return (gs.activePlayerIndex === 0 || gs.activePlayerIndex === 1) ? gs.activePlayerIndex : null;

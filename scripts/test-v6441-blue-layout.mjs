@@ -225,6 +225,9 @@ const LATER = [
   ["    // ⭐v6.526（Fable 補審 v6.518 F4）：離開房間時清掉接手建局計時器（typeof 防衛：test-v6197 會抽這支函式原文實跑）\n    if (typeof _startGraceTimer !== 'undefined' && _startGraceTimer !== null) { clearTimeout(_startGraceTimer); _startGraceTimer = null; }\n", ""],
   ["                      <!-- ⭐v6.526（Fable 補審 v6.519 F3）：選得到、但不受這個效果影響的目標（例：大力捕捉器選到化隱的備戰 ⇒ 不會互換）要標出來 -->\n                      {#if selImmuneIids.has(item.iid)}<span class=\"sel-immune\" title=\"這隻寶可夢不受這個效果影響：選了也不會發生效果（例如不會互換）\">🛡 不受影響</span>{/if}\n", ""],
   ["  .sel-immune{ font-size:.6rem; color:#ffd27a; font-weight:600; }   /* v6.526 不受影響的目標 */\n", ""],
+  // ⭐v6.539（Rule 40）：補位視窗／提示多傳 activePlayerIndex（雙方同時補位的順序，非版面改動；內容由 test-v6539-promote-order 鎖）
+  ["    activePlayerIndex: game.activePlayerIndex,   // ⭐v6.539 雙方同時補位：下一個回合的玩家先放\n", ""],
+  ["    activePlayerIndex: game.activePlayerIndex,   // ⭐v6.539\n", ""],
 ];
 // ⭐v6.464 起：改動也碰到藍桌墊哨兵內的 <img>（全版面一致改用縮圖），無法放進 LATER（哨兵先被剝掉、條目會命中 0 次）
 //   ⇒ 在 strip() 的**最前面**先把本版改動整段還原成 v6.463（IRON_RULES Rule 40：保留「藍桌墊只活在哨兵裡」的原意）。

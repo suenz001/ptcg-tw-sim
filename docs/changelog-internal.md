@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.539：雙方同時昏厥的補位順序（2026-10-12）
+
+BASE 99010a78（v6.538）。**站長裁定**（2026-10-12 第 5 項，選項 A）＋**直接判例**：PTCG_RULES L410（寶可夢檢查中雙方同時昏厥「從下一個回合的玩家開始放置」）、L893（火焰嚎叫雙方戰鬥寶可夢皆昏厥「由對手玩家先放置」）、L1671（咒詛炸彈「對方玩家先放置」）。
+- 唯一判準 modal-slots.ts `promoteWaitSeat`（哨兵 v6539-promote-order，leaf）：phase playing、雙方戰鬥場都空、雙方都有備戰 ⇒ 等待方＝activePlayerIndex（下一個回合的玩家＝1−activePlayerIndex 先放；寶可夢檢查中 activePlayerIndex 仍是結束回合的玩家，公式相同）；只有一方有備戰時不排序。
+- 消費端：engine SEND_NEW_ACTIVE（等待方送來原封不動退回）、promoteModalSeats（等待方不開視窗）、promoteAlerts（等待方顯示「等待 X 送出新戰鬥寶可夢」）、ai.ts 1b（等待方不送）、+page.svelte 傳 activePlayerIndex。
+- 伺服器 server_admin_patch.js `currentActorSeat`（錦標賽區塊之前，純新增哨兵 v6539-promote-order）：雙方同時要補位時回 1−activePlayerIndex（原本一律回 0 ⇒ 等待方會被閒置判負計時）。H3 哨兵剝除後逐位元同 BASE。**需要 update-tournament.bat**。
+- v6.538 審查 P3-1：六處過時註解（純樸舊旗標）整理。
+- Rule 40：test-v6500 F10（「雙方都要補，0 先補也正確」⇒ 改成 0 先送被退回、1 先放、0 再放；意圖：補完才收尾、冰冷之帳恰好一次、換回合）。
+- **Fable 5.1 審查（0e34013c）**：五條「雙方同時補位」流程（轟爆尖刺自爆、寶可夢檢查雙方中毒、咒詛炸彈、只有一方有備戰、取獎視窗開著）逐步跑引擎＋兩邊視窗／提示／AI，全部走完無卡死；activePlayerIndex 在三種情境都是這回合的玩家；canSeatAct／currentActorSeat 與前端一致；舊客戶端過渡期只是順序差異。無 P1／P2，可合併。P3-1：AI 當等待方且在自己的 main 階段（咒詛炸彈）時，+page.svelte tickAI 的 v2.131 後備會一直送 END_TURN 被退回（空轉，不卡死）——排 v6.540。P3-2：過渡期請玩家重新整理（部署提醒）。
+- 全套（0e34013c）：test-sap153 S4b／test-sap154 D6（伺服器補丁整份還原比對）⇒ 依 ptcg-server-admin-change 慣例新增 scripts/lib/sap-revert-admin-v163.mjs（python 切出、當場驗證還原＝v1.62 原檔），串進 sap153／sap154／v6303 H3 的還原鏈最前面；test-v6441 零回歸（+page.svelte 兩行 activePlayerIndex 加進 LATER，Rule 40）；test-v6370／v6301 已知速度假紅，單跑綠。之後只動守衛、scripts/lib 與本文件。
+- 守衛 test-v6539-promote-order：ATK（引擎、線上兩邊視窗、本機雙人視窗、提示、AI、伺服器判定）、CHECKUP、ONE_SIDE、NO_BENCH；HEAD-FAIL（BASE：ATK、CHECKUP 紅）。突變 6 個全殺（引擎不擋、視窗不過濾、AI 不看順序、伺服器不排序、順序反了、提示不改）。
+
 ## v6.538：骨紋巨聲鱷｜純樸 改為特性（2026-10-12）
 
 BASE 701252ff（v6.537）。**站長裁定**（2026-10-12 第 2 項，選項 A）＋官方 Q&A PTCG_RULES L1933（「特性『純樸』處於有效狀態的對手的骨紋巨聲鱷」）。

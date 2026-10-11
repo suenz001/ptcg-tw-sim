@@ -173,10 +173,17 @@ function makeCases({ createGame, applyAction }) {
     let s = endTurn(board({ active: inst(KISS, { damage: hp(KISS) - 10 }), bench: [inst(FROS)] },
                           { active: inst(CACNEA, { status: 'poisoned', damage: hp(CACNEA) - 10 }), bench: [inst(KOKO)] }));
     assert.equal(s.players[0].active, null, '前置：冰冷之帳已在檢查中打倒 0 的波克基斯');
+    // ⭐v6.539（IRON_RULES Rule 40）：站長裁定（2026-10-12 第 5 項）＋Q&A L410「從下一個回合的玩家開始放置」
+    //   ⇒ 寶可夢檢查中雙方同時昏厥，正在結束回合的 0 不能先放（原本兩種順序都收）。
+    //   本條意圖（雙方都要補時，補完才收尾、冰冷之帳恰好一次、換回合）不變；順序改成：0 先送被退回 → 1 放 → 0 放。
+    const _s0 = s;
     s = send(s, 0, s.players[0].bench[0].iid);
-    assert.equal(s.players[0].active?.cardId, FROS, '0 先補上雪妖女');
-    assert.equal(s.activePlayerIndex, 0, '0 先補 ⇒ 等 1'); assert.equal(s.endTurnContinueAfterKO, 0);
+    assert.equal(s.players[0].active, null, '0 是正在結束回合的玩家 ⇒ 要等下一個回合的玩家（1）先放，先送被退回');
+    assert.equal(s, _s0, '退回＝原封不動');
     s = send(s, 1, s.players[1].bench[0].iid);
+    assert.equal(s.activePlayerIndex, 0, '1 先補 ⇒ 等 0'); assert.equal(s.endTurnContinueAfterKO, 0);
+    s = send(s, 0, s.players[0].bench[0].iid);
+    assert.equal(s.players[0].active?.cardId, FROS, '0 補上雪妖女');
     assert.equal(s.activePlayerIndex, 1); assert.equal(tentLogs(s).length, 1);
   };
   C.F11 = () => {
@@ -204,7 +211,7 @@ const NAMES = {
   F7: '正面朝上獎賞的取獎視窗：取完、補完位後冰冷之帳恰好一次並換回合',
   F8: '冰冷之帳打倒昏厥方最後一隻備戰 ⇒ 直接判勝負（由出口的中央終局判定判出）',
   F9: '結束回合的一方自己中毒昏厥：對手的冰冷之帳在補位前放',
-  F10: '雙方都要補，0 先補也正確',
+  F10: '雙方都要補，下一個回合的玩家（1）先補、0 先送被退回（v6.539）',
   F11: '等補位時重送 END_TURN 不會再跑一次檢查',
 };
 for (const [k, f] of Object.entries(CUR)) {

@@ -2853,7 +2853,7 @@ function hasEffectShield(inst: CardInstance | null, pool: Map<string, Card>): bo
  *   - targetFilter: 'BasicRocket' — 目標必須是【基礎】火箭隊（抵抗之幕）
  *
  * 不在本 map 內的免疫機制：
- *   - 純樸（immuneToAttackEffectsThisTurn flag）— engine ATTACK_POST 直接 short-circuit
+ *   - 純樸（v6.538 起為骨紋巨聲鱷的特性，走下方 ATTACK_EFFECT_IMMUNITY self-ability；舊旗標已退休）
  *   - 陳舊的背蓋化石（fossilOnField）— engine ATTACK_POST 直接 short-circuit
  *   - 對戰圓形 / 太晶 / 花之帷幔 — resolveBenchGuard 處理（限備戰目標）
  */
@@ -3098,8 +3098,8 @@ export function canApplyAttackEffectToTarget(
     const _oppAbWhy = oppAbilityEffectBlockReason(state, atkIdx, target, pool, false);   // 效果昏厥＝非放指示物
     if (_oppAbWhy) return { blocked: true, reason: _oppAbWhy };
   }
-  // v5.333：per-turn 招式免疫旗標（飛翔/要害斬/躲藏=immuneToAllAttackThisTurn、純樸=
-  //   immuneToAttackEffectsThisTurn、阿塞蘿拉=immuneToExAttackThisTurn）也納入此 legacy guard，
+  // v5.333：per-turn 招式免疫旗標（飛翔/要害斬/躲藏=immuneToAllAttackThisTurn、（純樸 v6.538 起改特性、
+  //   不在此）、阿塞蘿拉=immuneToExAttackThisTurn）也納入此 legacy guard，
   //   與 unified canApplyEffectToTarget 一致 — 因 defCantAttackNextPost / defNextAtkReducePost /
   //   悄聲加害 等仍走此 helper。此 helper 永遠是 attack-effect 語境，三者皆擋。
   // ⭐v6358-D9：三個 per-turn 旗標的卡面都只寫「**招式**的…效果」⇒ A 類，只擋 'attack'。
