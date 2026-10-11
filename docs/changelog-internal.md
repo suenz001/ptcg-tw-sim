@@ -1,5 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.538：骨紋巨聲鱷｜純樸 改為特性（2026-10-12）
+
+BASE 701252ff（v6.537）。**站長裁定**（2026-10-12 第 2 項，選項 A）＋官方 Q&A PTCG_RULES L1933（「特性『純樸』處於有效狀態的對手的骨紋巨聲鱷」）。
+- 資料：static/cards SV8 11199、MC 16615 的「純樸」由 attacks 搬到 abilities（label 特性；文字層級編輯，其餘位元組不動）。
+- 抓卡防回退：scripts/scrape/parse-card.js 加 FORCED_ABILITY_NAMES（純樸；沒費用沒傷害才套用）——官網這一條沒有「[特性]」前綴，重抓卡會整檔重寫。test-card-db-integrity 新增 ⑧：純樸必須在 abilities、H/I/J 不得有「沒費用、沒傷害、常駐句型」的招式（正對照：抓得到舊形狀、不誤抓 全部燒光 這類一次性 0 費招式）、parse-card 必須有覆寫。
+- 實作：刪 v2760 的 regPre/regPost（0 費招式＋immuneToAttackEffectsNextTurn）；ATTACK_EFFECT_IMMUNITY 新增 ['純樸', self-ability]（與皇帝之勢逐字同句，過 isAbilityHolderEffective）；EFFECT_SOURCE_IMMUNITY 的 immuneToAttackEffectsThisTurn 改登記為 '純樸'（field ability，只擋招式來源）。
+- 旗標退休（唯一設定者已刪）：types.ts、instance-flags.ts、defense.ts 1b-2、effects.ts legacy 檢查、engine END_TURN promote／清除；engine ATTACK_POST 的資訊性 log 改讀特性（hasEffectiveAbilityByInst）。defense.ts 說明表更新。
+- audit（子代理）：H/I/J 「沒費用、沒傷害」的招式共 6 組，只有純樸是特性；其餘 5 組（全部燒光、樂呵呵之吻、鈴鈴吵鬧、相反抽出、蹦蹦充能）是一次性動作，沒有 Q&A 稱為特性。abilities 反向檢查 0 件。
+- Rule 40：test-opp-turn-immune-promote（兩條純樸旗標 promote／清除 ⇒ 改驗「旗標確實退休」）、test-attack-effect-immunity-matrix（改用真卡，補備戰）、test-self-swap-clear-status（換用 immuneToAllAttackThisTurn，意圖：互換退場清除免疫旗標）、test-v6358 D1（改用分類表驗純樸只擋招式來源；行為由 C1 皇帝之勢同句真卡驗）、Ed1（改用真卡）、test-v6366 C7（改用真卡）。
+- **Fable 5.1 審查（85442a7d）**：12 組真卡盤面（火焰咒詛 Q&A L1933 兩個印刷戰鬥場＋備戰都不丟、薄暮之毒無狀態、刺殺魔法備戰 0、冰雹傷害照常）；熔岩洞／暗夜羽擊消除正確；getUsableAbilities 不列出（UI 無按鈕、AI 不嘗試）；src 已無旗標讀寫，舊對局殘留旗標無害；Rule 40 六支無放寬；資料只動兩筆。無 P1／P2，可合併。P3：①六處過時註解仍提到旗標（排下一版）②test-opp-debuff-immunity SELF_OR_BUFF 表的死字串——**已移除**③舊對局殘留旗標不清除（無行為影響，不處理）。
+- 全套（85442a7d）：test-instance-flags-convergence ①（CLEAR_ON_EXIT 69 → 67，兩個退休旗標，Rule 40 已更新）；test-v6370／v6301 已知速度假紅，單跑綠。之後只動守衛與本文件。
+- 守衛 test-v6538-simplicity-ability：7 條行為＋HEAD-FAIL（BASE 引擎＋BASE 卡池：ACTIVE、ACTIVE_MC、BENCH、NO_ATTACK 紅；正對照與 NULL_CAVE 兩版綠）。突變 3 個全殺。
+
 ## v6.537：美納斯｜平穩境地漏網、上搗角擊打昏 × 薄霧（2026-10-12）
 
 BASE ab4afb3e（v6.536）。站長 2026-10-12 裁定 1、3（皆選 A）＋平穩境地全站 audit（子代理，H/I/J 全部「場上→手牌」效果 30 餘條逐一對中央述詞 isReturnToHandBlockedByCalmGround）。

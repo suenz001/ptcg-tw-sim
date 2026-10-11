@@ -33,10 +33,13 @@ const endTurn = (st) => applyAction(st, { type: 'END_TURN' }, pool);
 let pass = 0, fail = 0;
 const T = (n, f) => { try { f(); console.log('  OK', n); pass++; } catch (e) { console.log('  FAIL', n, '::', e.message); fail++; } };
 
-T('★純樸:設旗標方(P0)END_TURN → promote 成 ThisTurn(對手回合生效)', () => {
+// ⭐v6.538（IRON_RULES Rule 40）：骨紋巨聲鱷｜純樸 改為常駐特性（站長 2026-10-12；Q&A L1933），
+//   immuneToAttackEffectsNextTurn／ThisTurn 旗標整組退休 ⇒ 原本兩條「純樸旗標 promote／清除」沒有觀測對象。
+//   意圖（純樸在對手回合有效）改由 test-v6538-simplicity-ability 驗：特性常駐、不需旗標、對手回合與備戰都有效。
+//   這裡改驗「旗標確實退休」：END_TURN 不會再憑空長出它。
+T('★純樸旗標已退休：END_TURN 不會產生 immuneToAttackEffectsThisTurn', () => {
   const n = endTurn(mk(0, { immuneToAttackEffectsNextTurn: true }));
-  assert.equal(n.players[0].active.immuneToAttackEffectsThisTurn, true, '應 promote 成 ThisTurn(供對手回合用)');
-  assert.equal(n.players[0].active.immuneToAttackEffectsNextTurn, undefined);
+  assert.equal(n.players[0].active.immuneToAttackEffectsThisTurn, undefined, '退休的旗標又被 promote 了（引擎還在處理它）');
 });
 T('★防護代碼:設旗標方(P0)END_TURN → immuneToExAttackTagThisTurn=未來', () => {
   const n = endTurn(mk(0, { immuneToExAttackTagNextTurn: '未來' }));
@@ -46,10 +49,6 @@ T('★防護代碼:設旗標方(P0)END_TURN → immuneToExAttackTagThisTurn=未�
 T('白日夢(設在對手身上,不動):P0 END_TURN→P1 回合,P1 promote 成 ThisTurn', () => {
   const n = endTurn(mk(0, {}, { endTurnOnOppAttachEnergyNextTurn: true }));
   assert.equal(n.players[1].active.endTurnOnOppAttachEnergyThisTurn, true, '白日夢應在受影響者(對手)回合開始 promote');
-});
-T('純樸 clear:設旗標方下個自己回合 END_TURN → ThisTurn 清除', () => {
-  const n = endTurn(mk(0, { immuneToAttackEffectsThisTurn: true }));
-  assert.equal(n.players[0].active.immuneToAttackEffectsThisTurn, undefined, '擁有者 END_TURN 應清除已用過的 ThisTurn');
 });
 console.log('\n對手回合型防守旗標 promote 時機:PASS ' + pass + ' / FAIL ' + fail);
 process.exit(fail ? 1 : 0);

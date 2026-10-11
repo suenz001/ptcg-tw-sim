@@ -24,8 +24,9 @@ const T=(n,fn)=>{try{fn();console.log('PASS',n);pass++;}catch(e){console.log('FA
 //   離場一定要清（下一次放上戰鬥場要重新詢問，站長裁定 3），②會驗證 clearActiveEffects 真的清掉它。
 // ⭐v6.530（Rule 40）：71 → 69。immuneToExAttackNextTurn／ThisTurn（阿塞蘿拉的惡作劇）移到 PERSIST_ON_EXIT_FLAGS
 //   （官方 Q&A PTCG_RULES L2528：換到備戰「不會消除」）；兩份清單互斥（instance-flags.ts 載入時自檢）。
-T('① CLEAR_ON_EXIT_FLAGS=69、BENCH_SCRUB_LOCK_FLAGS=10 且為子集',()=>{
-  assert.equal(CLEAR_ON_EXIT_FLAGS.length,69,'CLEAR_ON_EXIT 應 69，實際'+CLEAR_ON_EXIT_FLAGS.length);
+// ⭐v6.538（Rule 40）：69 → 67。immuneToAttackEffectsNextTurn／ThisTurn（骨紋巨聲鱷｜純樸）隨純樸改為特性而退休（唯一設定者已刪）；意圖（清單精確枚舉、不得無聲增減）不變。
+T('① CLEAR_ON_EXIT_FLAGS=67、BENCH_SCRUB_LOCK_FLAGS=10 且為子集',()=>{
+  assert.equal(CLEAR_ON_EXIT_FLAGS.length,67,'CLEAR_ON_EXIT 應 67，實際'+CLEAR_ON_EXIT_FLAGS.length);
   assert(!CLEAR_ON_EXIT_FLAGS.includes('immuneToExAttackNextTurn') && !CLEAR_ON_EXIT_FLAGS.includes('immuneToExAttackThisTurn'),'阿塞蘿拉的惡作劇旗標不可在 CLEAR_ON_EXIT');
   assert.equal(BENCH_SCRUB_LOCK_FLAGS.length,10,'SCRUB 應 10');
   for(const k of BENCH_SCRUB_LOCK_FLAGS) assert(CLEAR_ON_EXIT_FLAGS.includes(k),'子集破壞 '+k);

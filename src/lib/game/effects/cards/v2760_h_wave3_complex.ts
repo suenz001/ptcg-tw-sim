@@ -63,18 +63,12 @@ function parseDmg(s: string): number {
 // v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 喵喵|亂抓)
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 2. 骨紋巨聲鱷|純樸 — 「這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響」
-//    這是招式宣告本身（damage 0）→ 設置自身 immuneToAttackEffectsThisTurn flag
-//    引擎暫無此精確 flag — 使用既有 damageReduceNextHit + log 提示
+// 2. 骨紋巨聲鱷|純樸 —「這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。」
+// ⭐v6.538 站長裁定（2026-10-12，選項 A）＋官方 Q&A（PTCG_RULES L1933 稱「特性『純樸』」）：
+//   資料改成特性（static/cards SV8 11199、MC 16615），常駐被動免疫走中央 ATTACK_EFFECT_IMMUNITY
+//   self-ability（與帝王拿波ex｜皇帝之勢逐字同句），所有特性規則（特性消除、擁有特性的寶可夢…）一併適用。
+//   原本存成 0 費招式＋「下回合」旗標：按了浪費攻擊回合、只免疫一回合、備戰永遠不免疫 ⇒ 整組刪除。
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('骨紋巨聲鱷|純樸', (s) => ({ state: s, damage: 0 }));
-regPost('骨紋巨聲鱷|純樸', (state, aIdx, _pool) => {
-  // v2.78 用新 flag immuneToAttackEffectsNextTurn — engine 在 ATTACK_POST 階段 skip
-  return updatePlayer(addLog(state, '純樸：下回合不受對手寶可夢使用招式的附加效果影響（傷害仍結算）', aIdx), aIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, immuneToAttackEffectsNextTurn: true } : null,
-  }));
-});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 3. 帝牙海獅|凍結獠牙 60 — 全場效果，下回合「身上附加的能量為 2 個以下」全部寶可夢無法使用招式

@@ -308,9 +308,7 @@ export function canApplyEffectToTarget(
       }
     }
   }
-  if (kind === 'attack-effect' && target.immuneToAttackEffectsThisTurn) {
-    return { blocked: true, reason: '免疫招式的效果（純樸類）' };
-  }
+  // ⭐v6.538：純樸改為特性（canApplyAttackEffectToTarget 的 self-ability），immuneToAttackEffectsThisTurn 旗標退休。
 
   // 1b-3. v5.828：防護代碼(immuneToExAttackTagThisTurn)/塗層攻擊·閃光射線(immuneToBasicAttackThisTurn)
   //   — per-instance 本回合「招式傷害」免疫，隨寶可夢存在於 active 或 bench（END_TURN promote 同套
@@ -712,11 +710,11 @@ export const DEFENSE_RULES_DOC = [
   },
   {
     card: '純樸',
-    type: 'attack-set-flag (鴨嘴炎獸 招式效果)',
+    type: 'self-ability (骨紋巨聲鱷)',
     blocks: ['attack-effect'],
-    scope: 'self only',
-    via: 'TODO: immuneToEffectThisTurn flag (P2 deferred)',
-    note: '招式 POST 設旗標 → 下回合自身免效果（未確認是否實裝）',
+    scope: 'both',
+    via: 'canApplyAttackEffectToTarget (self-ability)',
+    note: 'v6.538 由「招式＋下回合旗標」改為常駐特性（站長 2026-10-12；Q&A L1933）',
   },
   {
     card: '全能硬殼',

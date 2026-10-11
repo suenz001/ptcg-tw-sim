@@ -45,9 +45,10 @@ T('★陀螺音波:減傷buff(damageReduceNextHit)互換→退場備戰清除', 
   assert.ok(d, '退場陀螺音波在備戰');
   assert.ok(!d.damageReduceNextHit, 'damageReduceNextHit 應清除(HEAD scrub不清RECEIVE→殘留)');
 });
-T('★陀螺音波:招式效果免疫(immuneToAttackEffectsThisTurn)互換→退場清除', () => {
-  const d=swapDemoted({ immuneToAttackEffectsThisTurn: true });
-  assert.ok(!d.immuneToAttackEffectsThisTurn, '免疫旗標應清除(HEAD 殘留)');
+// ⭐v6.538（Rule 40）：immuneToAttackEffectsThisTurn（純樸）退休 ⇒ 換用同家族仍在用的 per-turn 免疫旗標（飛翔／躲藏類），意圖（互換退場清除免疫旗標）不變。
+T('★陀螺音波:招式免疫旗標(immuneToAllAttackThisTurn)互換→退場清除', () => {
+  const d=swapDemoted({ immuneToAllAttackThisTurn: true });
+  assert.ok(!d.immuneToAllAttackThisTurn, '免疫旗標應清除(HEAD 殘留)');
 });
 T('陀螺音波:狀態(中毒)互換→退場無中毒(本就被sweep,確認不回歸)', () => {
   const d=swapDemoted({ status:'asleep', secondaryStatus:'poisoned' });

@@ -216,6 +216,7 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
     const attacks = [];
     const tags = [];
     const TAG_KEYWORDS = new Set(['太晶', '[太晶]']);
+    const FORCED_ABILITY_NAMES = new Set(['純樸']);   // ⭐v6.538 見下方說明
     $('.skillInformation .skill').each((_, el) => {
       const $el = $(el);
       // v2.95：PTCG 官網部分 skillName 帶 U+200C ZWJ 前綴（1-3 個），
@@ -236,6 +237,14 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
           name: abilityMatch[2],
           effect
         });
+        return;
+      }
+
+      // ⭐v6.538：官網沒有「[特性]」前綴、但官方 Q&A 稱為特性的條目（骨紋巨聲鱷｜純樸，PTCG_RULES L1933；
+      //   站長 2026-10-12 裁定改成特性）。沒有費用、沒有傷害時才套用，避免誤傷同名招式。
+      //   重抓卡會整檔重寫 ⇒ 必須在這裡覆寫，否則手工修好的資料會被蓋回招式（守衛 test-card-db-integrity 會紅）。
+      if (FORCED_ABILITY_NAMES.has(rawName) && cost.length === 0 && !damage) {
+        abilities.push({ label: '特性', name: rawName, effect });
         return;
       }
 

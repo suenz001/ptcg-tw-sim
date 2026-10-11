@@ -7470,7 +7470,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //     → immuneToExAttackThisTurn 在 attacker is ex 時擋 POST。
     //   - 中立中心/精神防護/閃光屏障/塗層攻擊 卡面只擋「傷害」不寫「效果」，POST 不擋。
     const defActiveForPost = newState.players[dIdx].active;
-    const postNuetralImmune = defActiveForPost?.immuneToAttackEffectsThisTurn ?? false;
+    // ⭐v6.538：純樸改為特性（只用於下方資訊性 log；實際擋下由 per-target guard 判，含特性消除）
+    const postNuetralImmune = !!defActiveForPost && hasEffectiveAbilityByInst(newState, dIdx, defActiveForPost, pool, '純樸');
     const postAllImmune = defActiveForPost?.immuneToAllAttackThisTurn ?? false;
     const postExImmune = (defActiveForPost?.immuneToExAttackThisTurn ?? false)
                           && isPokemonExCard(attackerCard);   // ⭐v6.403 與主管線同一份
@@ -8688,7 +8689,6 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     // v2.78 清除 currentPlayer 各 ThisTurn flag
     const clearV278ThisTurn = (c: CardInstance): CardInstance => {
       let n = c;
-      if (c.immuneToAttackEffectsThisTurn) { n = { ...n }; delete n.immuneToAttackEffectsThisTurn; }
       if (c.attackCostIncreaseColorlessThisTurn) { n = { ...n }; delete n.attackCostIncreaseColorlessThisTurn; }
       if (c.retreatCostIncreaseThisTurn) { n = { ...n }; delete n.retreatCostIncreaseThisTurn; }
       if (c.endTurnOnOppAttachEnergyThisTurn) { n = { ...n }; delete n.endTurnOnOppAttachEnergyThisTurn; }
@@ -9071,10 +9071,6 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       }
       // v5.658：純樸(免疫對手招式效果)/防護代碼(免疫帶tag的ex招式傷害)— 自設「下個對手回合」防守旗標。
       //   原誤放在 nextP(promotePending)→ 對手回合沒生效、反而自己回合才 promote(空跑證實);移到 owner END_TURN promote。
-      if (c.immuneToAttackEffectsNextTurn) {
-        n = { ...n, immuneToAttackEffectsThisTurn: true };
-        delete n.immuneToAttackEffectsNextTurn;
-      }
       if (c.immuneToExAttackTagNextTurn) {
         n = { ...n, immuneToExAttackTagThisTurn: c.immuneToExAttackTagNextTurn };
         delete n.immuneToExAttackTagNextTurn;

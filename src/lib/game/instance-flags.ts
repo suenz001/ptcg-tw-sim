@@ -34,7 +34,7 @@ export const CLEAR_ON_EXIT_FLAGS: readonly (keyof CardInstance)[] = [
   'deferredPrizeBonusNextTurn',
   // RECEIVE 受傷類免疫/減傷/弱點(禁 scrub)
   'damageReduceNextHit', 'takeExtraDamageThisTurn', 'takeExtraDamageNextTurn',
-  'immuneToAttackEffectsNextTurn', 'immuneToAttackEffectsThisTurn', 'immuneToExAttackTagNextTurn',
+  'immuneToExAttackTagNextTurn',   // ⭐v6.538 immuneToAttackEffects*（純樸）退休
   'immuneToExAttackTagThisTurn', 'weaknessOverrideTypeNextTurn', 'weaknessOverrideTypeThisTurn',
   'weaknessDisabledNextTurn', 'weaknessDisabledThisTurn', 'immuneToBasicAttackNextTurn',
   'immuneToBasicAttackThisTurn', 'basicImmuneColorlessExcept',

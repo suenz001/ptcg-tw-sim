@@ -232,15 +232,17 @@ console.log('\n【C】⭐A 類第三筆（self-ability）：攻擊方是「皇�
     !!A0(T) && PZ(T, 1) === 6, JSON.stringify([!!A0(T), PZ(T, 1)]));
 }
 
-console.log('\n【D】⭐A 類 per-turn 旗標（純樸／飛翔躲藏類）⇒ 死亡宣告照樣讓它昏厥');
+console.log('\n【D】⭐A 類 per-turn 旗標（飛翔躲藏類）／純樸 ⇒ 死亡宣告照樣讓它昏厥');
 {
-  const HpuLe = runIce({ energyAttached: energyFor(ICE, '冰雹'), immuneToAttackEffectsThisTurn: true });
+  // ⭐v6.538（IRON_RULES Rule 40）：純樸改為骨紋巨聲鱷的常駐特性、immuneToAttackEffectsThisTurn 旗標退休。
+  //   D1 的意圖（純樸卡面只寫「招式的效果」⇒ 擋不住死亡宣告這種**特性**效果）改用分類表直接驗：
+  //   純樸那一筆只擋 'attack'、不擋 'ability'（與 C1 皇帝之勢逐字同句，C1 已用真卡驗過行為）。
   const HallA = runIce({ energyAttached: energyFor(ICE, '冰雹'), immuneToAllAttackThisTurn: true });
-  chk('D0 哨兵：兩邊的耿鬼ex 都因招式傷害昏厥',
-    D0(HpuLe) == null && D0(HallA) == null, JSON.stringify([D0(HpuLe), D0(HallA)]));
-  chk('D1 ⭐攻擊方帶 immuneToAttackEffectsThisTurn（純樸）⇒ 死亡宣告仍讓它昏厥',
-    A0(HpuLe) == null && PZ(HpuLe, 1) === 5,
-    JSON.stringify([!!A0(HpuLe), PZ(HpuLe, 1), LOGS(HpuLe).filter((x) => x.includes('純樸'))]));
+  chk('D0 哨兵：耿鬼ex 因招式傷害昏厥', D0(HallA) == null, JSON.stringify([D0(HallA)]));
+  chk('D1 ⭐純樸（特性，卡面只寫「招式的效果」）只擋招式來源、不擋特性來源（死亡宣告）',
+    effectSourceBlocks('純樸', 'attack') === true && effectSourceBlocks('純樸', 'ability') === false
+    && EFFECT_SOURCE_IMMUNITY.get('純樸')?.field === 'ability',
+    JSON.stringify(EFFECT_SOURCE_IMMUNITY.get('純樸') ?? null));
   chk('D2 ⭐攻擊方帶 immuneToAllAttackThisTurn（飛翔／躲藏／要害斬）⇒ 死亡宣告仍讓它昏厥',
     A0(HallA) == null && PZ(HallA, 1) === 5,
     JSON.stringify([!!A0(HallA), PZ(HallA, 1), LOGS(HallA).filter((x) => x.includes('飛翔'))]));
@@ -288,11 +290,12 @@ console.log('\n【E】⭐⭐⭐「招式」來源**完全不變**（這是「既
     !!D0(monkBlk) && LOGS(monkBlk).some((x) => x.includes('同命戰鬥：') && x.includes('薄霧能量 免疫招式效果')),
     JSON.stringify([!!D0(monkBlk), LOGS(monkBlk).filter((x) => x.includes('同命戰鬥'))]));
 
-  const blkPure = runSnake(inst(PLAIN.id, { immuneToAttackEffectsThisTurn: true }));
+  // ⭐v6.538（Rule 40）：純樸改為骨紋巨聲鱷的特性（旗標退休）⇒ 用真卡驗
+  const blkPure = runSnake(inst('11199'));
   const blkAll  = runSnake(inst(PLAIN.id, { immuneToAllAttackThisTurn: true }));
-  chk('Ed1 ⭐⭐per-turn 旗標（純樸／飛翔躲藏類）**照舊**擋得住招式效果昏厥',
+  chk('Ed1 ⭐⭐純樸（特性）／per-turn 旗標（飛翔躲藏類）**照舊**擋得住招式效果昏厥',
     !!D0(blkPure) && !!D0(blkAll)
-    && LOGS(blkPure).some((x) => x.includes('免疫招式的效果（純樸類）'))
+    && LOGS(blkPure).some((x) => x.includes('純樸 免疫招式效果'))
     && LOGS(blkAll).some((x) => x.includes('免疫招式的傷害與效果（飛翔/要害斬/躲藏類）')),
     JSON.stringify([!!D0(blkPure), !!D0(blkAll)]));
 }

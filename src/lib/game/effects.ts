@@ -2937,6 +2937,12 @@ export const EFFECT_SOURCE_IMMUNITY = new Map<string, EffectSourceImmunityDecl>(
     face: '這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。',
     blocks: ['attack'],
   }],
+  // ⭐v6.538：骨紋巨聲鱷｜純樸 改為特性（原本是「招式＋immuneToAttackEffectsThisTurn 旗標」，旗標整組退休）
+  ['純樸', {
+    card: '骨紋巨聲鱷', field: 'ability', member: '純樸',
+    face: '這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。',
+    blocks: ['attack'],
+  }],
   ['璀璨鱗片', {
     card: '美納斯ex', field: 'ability', member: '璀璨鱗片',
     face: '這隻寶可夢不會受到對手的「太晶」寶可夢招式的傷害與效果的影響。',
@@ -2958,11 +2964,6 @@ export const EFFECT_SOURCE_IMMUNITY = new Map<string, EffectSourceImmunityDecl>(
     // 要害斬（具甲武者）・高速移動（電海燕／音波龍）・躍起閃避（赫普的小木靈）・暗影側踢（瑪夏多）…
     card: '雪吞蟲', field: 'attack', member: '躲藏',
     face: '擲1次硬幣若為正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害與效果的影響。',
-    blocks: ['attack'],
-  }],
-  ['immuneToAttackEffectsThisTurn', {
-    card: '骨紋巨聲鱷', field: 'attack', member: '純樸',
-    face: '這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。',
     blocks: ['attack'],
   }],
   ['immuneToExAttackThisTurn', {
@@ -2994,6 +2995,7 @@ export const ATTACK_EFFECT_IMMUNITY = new Map<string, AttackEffectImmunityRule>(
   ['硬岩【鬥】能量',   { kind: 'energy-on-target', requireType: 'Fighting' }],
   // 自身特性
   ['皇帝之勢',         { kind: 'self-ability' }],
+  ['純樸',             { kind: 'self-ability' }],   // ⭐v6.538 骨紋巨聲鱷（站長 10-12 裁定 2：改成特性）
   // v5.854 美納斯ex｜璀璨鱗片 — 卡面「不受太晶寶可夢招式的傷害與效果」；傷害側已在 PASSIVE_IMMUNITY,
   //   效果側補此 self-ability entry(attacker=太晶 的 special-case 在 canApplyAttackEffectToTarget)。
   ['璀璨鱗片',         { kind: 'self-ability' }],
@@ -3104,9 +3106,7 @@ export function canApplyAttackEffectToTarget(
   if (target.immuneToAllAttackThisTurn && effectSourceBlocks('immuneToAllAttackThisTurn', source)) {
     return { blocked: true, reason: '免疫招式的傷害與效果（飛翔/要害斬/躲藏類）' };
   }
-  if (target.immuneToAttackEffectsThisTurn && effectSourceBlocks('immuneToAttackEffectsThisTurn', source)) {
-    return { blocked: true, reason: '免疫招式的效果（純樸類）' };
-  }
+  // ⭐v6.538：純樸改為特性 ⇒ 由下方 ATTACK_EFFECT_IMMUNITY 的 self-ability（過特性消除閘）判，旗標退休。
   if (target.immuneToExAttackThisTurn && effectSourceBlocks('immuneToExAttackThisTurn', source)) {
     const atkActiveIm = state.players[atkIdx].active;
     const atkCardIm = atkActiveIm ? pool.get(atkActiveIm.cardId) : undefined;

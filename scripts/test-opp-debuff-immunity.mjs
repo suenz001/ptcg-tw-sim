@@ -248,7 +248,7 @@ const SELF_OR_BUFF_FLAGS = new Set([
   'pointySpinNextTurn',                 // 自身加傷條件（v5.967 已被 attackUsedLastSelfTurn 取代）
   'basicImmuneColorlessExcept',         // 免疫旗標的附屬參數
   // 以下皆為「自己給自己」的免疫／減傷 buff
-  'immuneToAttackEffectsNextTurn', 'immuneToExAttackTagNextTurn', 'weaknessDisabledNextTurn',
+  'immuneToExAttackTagNextTurn', 'weaknessDisabledNextTurn',   // ⭐v6.538 immuneToAttackEffectsNextTurn（純樸）退休、移除
   'immuneToBasicAttackNextTurn', 'immuneToExAttackNextTurn', 'immuneToAbilityPokemonNextTurn',
   'immuneToAllAttackNextTurn', 'immuneToAttackDamageNextTurn', 'immuneToEvolutionAttackNextTurn',
   'evolutionDamageReduceNextTurn', 'immuneToBurnedAttackerNextTurn', 'immuneToAncientAttackNextTurn',

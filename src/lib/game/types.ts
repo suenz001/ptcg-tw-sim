@@ -240,9 +240,7 @@ export interface CardInstance {
   koAtMyNextEndOfTurn?: boolean;
   /** v2.78 冰伊布｜滲透寒氣 — 於擁有者 END_TURN 時，自動為此寶可夢加上 N 點傷害。觸發後清除。 */
   damageAtMyNextEndOfTurn?: number;
-  /** v2.78 骨紋巨聲鱷｜純樸 — 下回合不受對手寶可使用招式 ATTACK_POST 附加效果（傷害仍結算）。 */
-  immuneToAttackEffectsNextTurn?: boolean;
-  immuneToAttackEffectsThisTurn?: boolean;
+  // ⭐v6.538：immuneToAttackEffectsNextTurn／ThisTurn（骨紋巨聲鱷｜純樸）退休 —— 純樸改為特性。
   /** v2.78 轟擂金剛猩｜鼓擊 — 下回合招式所需 +N【無】，撤退所需 +N【無】。 */
   attackCostIncreaseColorlessNextTurn?: number;
   attackCostIncreaseColorlessThisTurn?: number;

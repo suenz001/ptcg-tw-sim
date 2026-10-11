@@ -6096,13 +6096,14 @@
   "scrapedAt": "2026-04-16T08:31:11.490Z",
   "hp": 180,
   "pokemonType": "Fire",
-  "attacks": [
+  "abilities": [
    {
+    "label": "特性",
     "name": "純樸",
-    "cost": [],
-    "damage": "",
     "effect": "這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。"
-   },
+   }
+  ],
+  "attacks": [
    {
     "name": "閃焰獨唱會",
     "cost": [

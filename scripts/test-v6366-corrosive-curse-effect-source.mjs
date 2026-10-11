@@ -241,8 +241,9 @@ console.log('\n【C】⭐⭐⭐四張「卡面只寫招式」的免疫 ⇒ 不�
       { a: inst(TOUGH.id), b: [inst(ROCK.id)], pick: 0 }],
     ['C6 躲藏／飛翔／要害斬 類 per-turn 旗標 immuneToAllAttackThisTurn（卡面只寫「招式」）',
       { a: inst(TOUGH.id, { immuneToAllAttackThisTurn: true }) }],
-    ['C7 純樸 類 per-turn 旗標 immuneToAttackEffectsThisTurn（卡面只寫「招式」）',
-      { a: inst(TOUGH.id, { immuneToAttackEffectsThisTurn: true }) }],
+    // ⭐v6.538（Rule 40）：純樸改為骨紋巨聲鱷的常駐特性（旗標退休）⇒ 用真卡；意圖（卡面只寫「招式」⇒ 不擋特性來源）不變
+    ['C7 純樸（骨紋巨聲鱷的特性，卡面只寫「招式」）',
+      { a: inst('11199') }],
   ];
   for (const [name, board] of CASES) {
     const ability = attach({ ...board });

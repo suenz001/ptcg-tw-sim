@@ -80,10 +80,13 @@ const ck = (name, ok, detail = '') => { if (ok) pass++; else fails.push(`${name}
   ck('飛翔類 / 擋 attack-effect', check(mkState({ defActive: t }), t, 'attack-effect', false).blocked, '應 blocked');
   const t2 = inst(CLEAN, { immuneToAllAttackThisTurn: true });
   ck('飛翔類 / 也擋 attack-damage', check(mkState({ defActive: t2 }), t2, 'attack-damage', false).blocked, '應 blocked'); }
-{ const t = inst(CLEAN, { immuneToAttackEffectsThisTurn: true });
+// ⭐v6.538（Rule 40）：純樸改為骨紋巨聲鱷的特性（旗標退休）⇒ 用真卡驗；意圖（只擋效果、不擋傷害）不變，另補備戰。
+{ const t = inst('11199');
   ck('純樸 / 擋 attack-effect', check(mkState({ defActive: t }), t, 'attack-effect', false).blocked, '應 blocked');
-  const t2 = inst(CLEAN, { immuneToAttackEffectsThisTurn: true });
-  ck('純樸 / 不擋 attack-damage（kind 區分）', !check(mkState({ defActive: t2 }), t2, 'attack-damage', false).blocked, '應 NOT blocked'); }
+  const t2 = inst('11199');
+  ck('純樸 / 不擋 attack-damage（kind 區分）', !check(mkState({ defActive: t2 }), t2, 'attack-damage', false).blocked, '應 NOT blocked');
+  const t3 = inst('11199');
+  ck('純樸 / 備戰也擋 attack-effect（常駐特性）', check(mkState({ defActive: inst(CLEAN), defBench: [t3] }), t3, 'attack-effect', true).blocked, '應 blocked'); }
 { const t = inst(CLEAN, { immuneToExAttackThisTurn: true });
   ck('阿塞蘿拉 / ex 攻擊方擋 attack-effect', check(mkState({ atk: ATK_EX, defActive: t }), t, 'attack-effect', false).blocked, '應 blocked');
   const t2 = inst(CLEAN, { immuneToExAttackThisTurn: true });

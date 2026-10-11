@@ -190,5 +190,32 @@ T('⭐⭐ 該腳本必須有參數閘：--help 不執行、未知參數 exit 1�
   ok(i > src.lastIndexOf('--write'), 'main() 應該在參數閘之後才呼叫');
 });
 
+// ⭐v6.538（站長 2026-10-12 裁定 2：骨紋巨聲鱷｜純樸 是特性，Q&A L1933）
+//   官網這一條沒有「[特性]」前綴 ⇒ 重抓卡會被分到 attacks[]。守住資料，並確認抓卡解析有覆寫。
+console.log('\n⑧ 特性被存成招式（v6.538）');
+const ALL_POKE = Object.values(CARDS).flat().filter((c) => c && c.supertype === 'Pokemon' && 'HIJ'.includes(c.regulationMark || '?'));
+const isPassiveAttackShape = (a) => (!a.cost || a.cost.length === 0) && !a.damage && /這隻寶可夢不會受到|只要這隻寶可夢在/.test(a.effect || '');
+T('⭐⭐ 骨紋巨聲鱷｜純樸 在 abilities、不在 attacks（每一張印刷）', () => {
+  const crocs = ALL_POKE.filter((c) => c.name === '骨紋巨聲鱷');
+  ok(crocs.length >= 2, `只找到 ${crocs.length} 張骨紋巨聲鱷（預期 ≥2：SV8 11199、MC 16615），掃描器壞了？`);
+  for (const c of crocs) {
+    ok((c.abilities || []).some((a) => a.name === '純樸' && a.label === '特性'), `${c.id} 的純樸不在 abilities`);
+    ok(!(c.attacks || []).some((a) => a.name === '純樸'), `${c.id} 的 attacks 還有純樸（重抓卡蓋回去了？）`);
+  }
+});
+T('⭐ H/I/J 沒有「沒費用、沒傷害、常駐句型」的招式（特性被存成招式的形狀）', () => {
+  const bad = ALL_POKE.flatMap((c) => (c.attacks || []).filter(isPassiveAttackShape).map((a) => `${c.id} ${c.name}｜${a.name}`));
+  ok(bad.length === 0, '疑似特性被存成招式：' + bad.join('、'));
+});
+T('正對照：判準抓得到純樸的舊資料形狀', () => {
+  ok(isPassiveAttackShape({ name: '純樸', cost: [], damage: '', effect: '這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。' }), '判準抓不到');
+  ok(!isPassiveAttackShape({ name: '全部燒光', cost: [], damage: '', effect: '將場上的競技場卡丟棄。' }), '判準誤抓一次性 0 費招式');
+});
+T('⭐ 抓卡解析（scripts/scrape/parse-card.js）有純樸的特性覆寫', () => {
+  const src = readFileSync(join(ROOT, 'scripts/scrape/parse-card.js'), 'utf8');
+  ok(/FORCED_ABILITY_NAMES = new Set\(\[[^\]]*'純樸'/.test(src), '沒有 FORCED_ABILITY_NAMES 純樸');
+  ok(/FORCED_ABILITY_NAMES\.has\(rawName\)[\s\S]{0,120}abilities\.push/.test(src), '覆寫沒有推進 abilities');
+});
+
 console.log('\n=== v6.117 卡庫資料完整性：PASS ' + pass + ' / FAIL ' + fail + ' ===');
 if (fail > 0) process.exit(1);
