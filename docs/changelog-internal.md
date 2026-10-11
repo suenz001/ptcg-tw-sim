@@ -1,5 +1,19 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.537：美納斯｜平穩境地漏網、上搗角擊打昏 × 薄霧（2026-10-12）
+
+BASE ab4afb3e（v6.536）。站長 2026-10-12 裁定 1、3（皆選 A）＋平穩境地全站 audit（子代理，H/I/J 全部「場上→手牌」效果 30 餘條逐一對中央述詞 isReturnToHandBlockedByCalmGround）。
+- 裁定 1 滿充的體貼（mega_decks max-affection，哨兵 v6537-max-affection-calm-ground）：**站長裁定**＋Q&A L2491。對手有生效中的平穩境地 ⇒ HP 全恢復、能量留在身上（Q&A 問句「可以將能量卡放回手牌」與卡面矛盾，站長裁定依卡面）。
+- 寶可夢旋風回收機（effects.ts，哨兵 v6537-vortex-calm-ground）：**類推**（平穩境地卡面＋判準①物品 L805／L819）：regG 不能使用；resolver 同一份述詞防時間差。
+- 奇異時鐘（items_misc，哨兵 v6537-odd-clock-calm-ground）：**類推**（L1862 奧密之眼「不可以退化」＋判準①）：regG 不能使用；doOddClockDevolve 防時間差（整個退化不發生）。
+- 始祖大鳥｜原始之翼、毒粉蛾｜微風吹拂（engine getUsableAbilities，哨兵 v6537-calm-ground-ability-gate；regA 改 rejectAbilityUse）：**類推**（判準①特性 L1957；L2682 微風吹拂 × 自己的平穩境地「不可以」放回）。原本按下去只寫 log、吃掉每回合 1 次；log 原本誤寫「對手場上」（實為自己的美納斯）。
+- 裁定 3 上搗角擊打昏 × 薄霧能量：實測 BASE 在一般流程本來就擋（v6.533 起主管線昏厥延後到招式效果之後，走到效果時戰鬥寶可夢還在、由 v6.528 那條擋）。本版在「戰鬥位已空、讀昏厥快照」分支補同一個免疫判定（哨兵 v6537-thrust-ko-misty，縱深防禦；守衛 THRUST_SNAP 直呼 POST 驗）。
+- 刪死碼：v2306 selfBouncePost（沒有呼叫者、沒有平穩境地閘）。
+- audit 已看過、有閘不需改：能量閉環／冰柱閉環／逆火、叢林鞭打、忍者飛旋、螺旋關節、夾尾巴逃跑等自身回手、幸福迴旋、刺殺迴旋、反轉之風、上搗角擊、付諸東流、水流清洗、悠哉尾草棒、奧密之眼、退化光線、奇跡璨耀、潛者捕捉、燃料火能量（棄牌區回手，L2927 可以）。無限之影受平穩境地限制屬站內類推（engine 註解已註明），列入最後一批請站長確認。
+- **Fable 5.1 審查（3262812f）**：5 主題 × 5 種美納斯位置（對手備戰／對手戰鬥場／對手戰鬥場但特性被消除／自己備戰／沒有）30 組＋真送 USE_ABILITY 驗每回合 1 次；方向每一處正確、自己的美納斯不誤擋、消除時不擋；原始之翼／微風吹拂的 gate 與 coinAbilityHeadsHasTarget 不重複不衝突，AI（getUsableAbilities）只會少無效動作；上搗角擊快照分支正確；H/I/J 32 條「場上卡→手牌」無漏網。無 P1／P2，可合併。P3-1：守衛補方向／消除正對照（MAX_own、MAX_null、VORTEX_own、VORTEX_null、CLOCK_own、WING_opp、BREEZE_opp）——**已補**，「述詞改成雙方都擋」突變 5 條紅。P3-2：BREEZE 只驗按鈕、不驗按下去的結果（不固定亂數也不影響判準），如實記錄。
+- 全套（3262812f）：883／883、FAIL 0；之後只動守衛（加正對照，單跑 44 PASS）與本文件。
+- 守衛 test-v6537-calm-ground-and-misty-ko：13 條行為＋HEAD-FAIL（BASE：MAX、VORTEX、CLOCK、WING、BREEZE、THRUST_SNAP 紅；正對照與 THRUST_KO 兩版綠）。突變 7 個全殺；旋風回收機／奇異時鐘 resolver 內的防時間差閘行為端打不到（regG 先擋），如實記錄為縱深防禦。
+
 ## v6.536：多目標招式對手側收斂中央、一同爆炸只限自己的場上（2026-10-12）
 
 BASE 632f1e89（v6.535）。v6.535 audit 的 A4～A7、B1～B2 與兩個順手發現。

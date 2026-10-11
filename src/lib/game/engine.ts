@@ -12350,6 +12350,14 @@ export function getUsableAbilities(
         const hasEvo = allOpp.some(c => (c.evolvedFromStack?.length ?? 0) >= 1);
         if (!hasEvo) return;
       }
+      // >>> v6537-calm-ground-ability-gate
+      // ⭐v6.537：「把對手的卡放回對手手牌」型特性（始祖大鳥｜原始之翼、毒粉蛾｜微風吹拂），
+      //   自己的美納斯｜平穩境地生效中 ⇒ 效果完全無法執行 ⇒ 不能按（判準①：官方 L1957 過度放電「不可以」的特性同型）。
+      //   官方 Q&A L2682（微風吹拂 × 自己的平穩境地）「不可以」放回；能不能按是判準①的類推。
+      //   原本 regA 只寫一行 log ⇒ 按下去吃掉「每回合 1 次」。
+      if ((ab.name === '原始之翼' || ab.name === '微風吹拂')
+          && _calmGroundBlocksReturn(state, (1 - state.activePlayerIndex) as 0 | 1, pool)) return;
+      // <<< v6537-calm-ground-ability-gate
       // 烈焰猴｜火焰蹈舞：手牌至少有【火】或【鬥】基本能量
       if (ab.name === '火焰蹈舞') {
         const hasFireOrFight = player.hand.some(c => {

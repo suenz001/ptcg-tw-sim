@@ -30,6 +30,7 @@ import { dispatchEnergyDistributePending } from './v158_energy_chain';
 // v6.202：「這隻場上寶可夢的這個特性此刻是否生效」中央述詞（v6.196／v5.224）。
 //   本檔的 PASSIVE_ATTACK_BONUS 迴圈是 effects.ts:8149 那份的第二份實作，必須接同一個閘。
 import { isAbilityHolderEffective } from './v3001_g3_wave3';
+import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // ⭐v6.537 平穩境地（傳被回手卡的持有者）
 import { isMegaExCard } from '../../selection-filter'; // v6.210：Mega ex 判定收斂中央述詞（leaf，Check O 安全）
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -295,6 +296,21 @@ regR('max-affection', (st, idx, iids, _params, pool) => {
   if (!target) return st;
   const tName = pool.get(target.cardId)?.name ?? '?';
   const energyCount = target.energyAttached.length;
+  // >>> v6537-max-affection-calm-ground
+  // ⭐v6.537 站長裁定（2026-10-12，選項 A）＋官方 Q&A（PTCG_RULES L2491，滿充的體貼 × 美納斯｜平穩境地）：
+  //   Q「對手的場上有擁有特性『平穩境地』的美納斯時，對…自己的『超級進化寶可夢ex』使出了支援者卡『滿充的體貼』。
+  //     這個情況下，可以將能量卡放回手牌，那麼可以將『超級進化寶可夢ex』的HP全部恢復嗎？」 A「可以。」
+  //   （問句「可以將能量卡放回手牌」與平穩境地卡面矛盾，站長裁定依卡面：能量不回手。）
+  //   ⇒ HP 全恢復照常；能量放回手牌被平穩境地擋下、留在寶可夢身上。
+  if (_calmGroundBlocks(st, idx, pool)) {
+    const s0 = addLog(st, `滿充的體貼：${tName} HP 全恢復；對手場上有【平穩境地】，能量無法放回手牌（留在寶可夢身上）`, idx);
+    return updatePlayer(s0, idx, pl => ({
+      ...pl,
+      active: pl.active?.iid === targetIid ? { ...pl.active, damage: 0 } : pl.active,
+      bench: pl.bench.map(c => c.iid === targetIid ? { ...c, damage: 0 } : c),
+    }));
+  }
+  // <<< v6537-max-affection-calm-ground
   const s = addLog(st,
     `滿充的體貼：${tName} HP 全恢復，${energyCount} 張能量放回手牌`, idx);
   return updatePlayer(s, idx, pl => {

@@ -1714,6 +1714,12 @@ function psychicEvoIids(st: import('../../types').GameState, idx: 0 | 1,
 }
 regG('奇異時鐘', (st, idx, pool) => {
   const p = st.players[idx];
+  // >>> v6537-odd-clock-calm-ground
+  // ⭐v6.537：對手有生效中的美納斯｜平穩境地 ⇒ 移除的進化卡無法放回手牌 ⇒ 不能退化、不能使用。
+  //   類推官方 Q&A（PTCG_RULES L1862，平穩境地 × 超能豔鴕｜奧密之眼「可以…將對手的『進化寶可夢』退化嗎？」「不可以。」）
+  //   ＋判準①（效果完全無法執行的物品不能使用）。
+  if (_calmGroundBlocks(st, idx, pool)) return false;
+  // <<< v6537-odd-clock-calm-ground
   const fieldInsts = [...(p.active ? [p.active] : []), ...p.bench];
   return psychicEvoIids(st, idx, fieldInsts, pool).length > 0;
 });
@@ -1790,6 +1796,8 @@ function doOddClockDevolve(
   st: import('../../types').GameState, idx: 0 | 1, targetIid: string, layers: number,
   pool: Map<string, import('$lib/cards/types').Card>
 ): import('../../types').GameState {
+  // ⭐v6.537：防時間差 —— 平穩境地生效中 ⇒ 不退化（L1862 同型：整個退化不發生）
+  if (_calmGroundBlocks(st, idx, pool)) return addLog(st, '奇異時鐘：對手場上有【平穩境地】，無法退化', idx);
   const p = st.players[idx];
   const target = p.active?.iid === targetIid ? p.active
     : p.bench.find(c => c.iid === targetIid);

@@ -16014,8 +16014,14 @@ reg('水蓮的照顧', (st, idx) => {
 });
 
 // ── 寶可夢旋風回收機（Item） ── 選 1 自己場上寶可夢 → 本體+附加全放回手牌
-regG('寶可夢旋風回收機', (st, idx) => {
+regG('寶可夢旋風回收機', (st, idx, pool) => {
   const p = st.players[idx];
+  // >>> v6537-vortex-calm-ground
+  // ⭐v6.537：美納斯｜平穩境地「對手的場上寶可夢與那隻寶可夢身上附加的卡，全部無法放回手牌」
+  //   ⇒ 對手（相對於我）有生效中的平穩境地時，卡面唯一的效果完全無法執行 ⇒ 不能使用（判準①，官方 L805／L819 物品同型）。
+  //   這是依平穩境地卡面與判準①的類推，官方沒有這張卡的直接 Q&A。
+  if (_calmGroundBlocks(st, idx, pool)) return false;
+  // <<< v6537-vortex-calm-ground
   // 只有 active 且備戰空 → 不可打（否則場上就沒有寶可夢）
   // 只要備戰 >= 1（或 active 有且備戰也有），就可用
   if (!p.active && p.bench.length === 0) return false;
@@ -16042,6 +16048,8 @@ reg('寶可夢旋風回收機', (st, idx) => {
 regR('wind-vortex-return', (st, idx, iids, _params, pool) => {
   const targetIid = iids[0];
   if (!targetIid) return st;
+  // ⭐v6.537：防時間差（打出後到選擇之間盤面變化）—— 同一份述詞，擋下時什麼都不做
+  if (_calmGroundBlocks(st, idx, pool)) return addLog(st, '寶可夢旋風回收機：對手場上有【平穩境地】，無法放回手牌', idx);
   const p = st.players[idx];
   const isActive = p.active?.iid === targetIid;
   const target = isActive ? p.active! : p.bench.find(c => c.iid === targetIid);

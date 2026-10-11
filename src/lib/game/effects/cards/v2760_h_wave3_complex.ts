@@ -700,6 +700,16 @@ regPost('帕底亞 肯泰羅|上搗角擊', (state, aIdx, pool, action) => {
     const _snap = getKODefenderSnapshot(state, dIdx);
     const _snapCard = _snap ? pool.get(_snap.cardId) : null;
     if (_snapCard?.stage !== 'Stage2') return addLog(state, '上搗角擊：對手戰鬥場（已昏厥）非 2 階進化，沒有附加效果', aIdx);
+    // >>> v6537-thrust-ko-misty
+    // ⭐v6.537 站長裁定（2026-10-12，選項 A）：打昏時也照「沒打昏」那條（v6.528，Q&A L1926 薄霧能量「不可以」）擋。
+    //   以昏厥前的快照判（快照仍帶著薄霧能量；官方順序「先處理招式效果、再處理昏厥」）。
+    //   ⚠ v6.533 起主管線的昏厥延後到招式效果之後 ⇒ 一般流程走到這裡時戰鬥寶可夢還在、由下方那條擋；
+    //     這一段只在「進入效果時戰鬥位已經空了」的路徑生效（縱深防禦，守衛 THRUST_SNAP 直呼 POST 驗）。
+    if (_snap && _snapCard) {
+      const _immKo = canApplyEffectToTarget(state, aIdx, _snap, _snapCard, 'attack-effect', pool, { isBench: false, counterPlacement: false });
+      if (_immKo.blocked) return addLog(state, `上搗角擊：${_snapCard.name}｜${_immKo.reason}（能量不放回手牌）`, aIdx);
+    }
+    // <<< v6537-thrust-ko-misty
     const _koE = getKODefenderEnergyInDiscard(state, dIdx).map(e => e.iid);
     if (_koE.length === 0) return addLog(state, '上搗角擊：對手戰鬥無可放回的能量', aIdx);
     const _capKO = Math.min(2, _koE.length);

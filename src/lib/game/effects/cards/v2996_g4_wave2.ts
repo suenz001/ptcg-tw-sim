@@ -256,7 +256,7 @@ regA('始祖大鳥', 0, (st, idx, pool, cardInst) => {
   }
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 整個效果無效
   if (_calmGroundBlocks(st, (1 - idx) as 0 | 1, pool)) { // v5.985 被回手的是對手的卡
-    return addLog(st, '原始之翼：對手場上有【平穩境地】，效果無效', idx);
+    return rejectAbilityUse(st, '原始之翼：自己場上有【平穩境地】，進化卡無法放回對手手牌', idx); // ⭐v6.537 不吃掉使用次數
   }
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
@@ -802,7 +802,7 @@ regA('毒粉蛾', 0, (st, idx, pool, _cardInst) => {
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 整個效果無效（仍消耗每回合 1 次？
   //   保守採卡面解讀「效果不發生」→ 直接 short-circuit、不啟動擲幣，避免浪費觸發）
   if (_calmGroundBlocks(st, (1 - idx) as 0 | 1, pool)) { // v5.985 被回手的是對手的卡
-    return addLog(st, '微風吹拂：對手場上有【平穩境地】，效果無效', idx);
+    return rejectAbilityUse(st, '微風吹拂：自己場上有【平穩境地】，能量無法放回對手手牌', idx); // ⭐v6.537 不吃掉使用次數
   }
   const r = flipCoinsWithLog(st, 1, '微風吹拂', idx);
   if (r.heads === 0) return addLog(r.state, '微風吹拂：反面，效果無效', idx);

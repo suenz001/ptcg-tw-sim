@@ -241,24 +241,7 @@ regR('ninjask-shed-skin', (state, actorIdx, selectedIids, params, pool) => {
 });
 import { selfSwapPost, statusPost, flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
 import { totalEnergyUnits } from '../../engine'; // v5.949「選N個能量」單位計數(繁茂-aware)
-const selfBouncePost = (name: string) => {
-  return (state: GameState, aIdx: 0|1) => {
-    // v2.991：拆能量、道具、進化棧底逐一回手牌（與 effects.ts selfReturnToHandPost 一致）
-    let s = updatePlayer(state, aIdx, pl => {
-      if (!pl.active) return pl;
-      const inst = pl.active;
-      // v5.705：主體與附加卡全部裸化（中央白名單 toBareCard，取代手動黑名單；附加改 getAllAttachedTools 修漏 extraTools）
-      const returning: CardInstance[] = [
-        toBareCard(inst),
-        ...inst.energyAttached.map(toBareCard),
-        ...getAllAttachedTools(inst).map(toBareCard),
-        ...(inst.evolvedFromStack ?? []).map(toBareCard),
-      ];
-      return { ...pl, hand: [...pl.hand, ...returning], active: null };
-    });
-    return addLog(s, `${name}：將這隻寶可夢與附加的卡全部放回手牌`, aIdx);
-  };
-};
+// ⭐v6.537：刪除沒有任何呼叫者的 selfBouncePost（手刻自身回手、沒有平穩境地閘；中央版是 effects.ts 的 selfReturnToHandPost）
 const deckSearchToHandA = (maxCount: number, filter: string, name: string) => {
   return (state: GameState, aIdx: 0|1, pool: Map<string, Card>, inst: CardInstance | undefined) => {
   if (!inst) return state;

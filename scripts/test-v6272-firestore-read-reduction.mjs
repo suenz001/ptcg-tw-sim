@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '632f1e89801368f995abad30468e9f098a1ba4a8';   // v6.535（上一版）
+const PREV_SHA = 'ab4afb3e09f23ac16feac382417b74a041fc434f';   // v6.536（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,22 +757,37 @@ const PREV_SHA = '632f1e89801368f995abad30468e9f098a1ba4a8';   // v6.535（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.536 前移：PREV_SHA 從 632f1e89（v6.535）起算。
+  // ⚠⚠ v6.537 前移：PREV_SHA 從 ab4afb3e（v6.536）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.536：多目標招式對手側收斂中央 dealAttackDamageToOppTargets（hitBenchAll／bench-hit-N／冰凍羽擊／捲入伏特／大沙風暴／灑口水＋既有 5 支同型迴圈）；一同爆炸只限自己的場上；水俯衝 label。
+  // ⭐v6.537：平穩境地漏網（滿充的體貼／旋風回收機／奇異時鐘／原始之翼／微風吹拂）；上搗角擊打昏 × 薄霧能量縱深防禦；刪死碼 selfBouncePost。
   'src/lib/game/effects.ts',
-  'src/lib/game/effects/cards/v2490_i_wave3a_conditional.ts',
-  'src/lib/game/effects/cards/v2560_i_wave6_complex.ts',
-  'src/lib/game/effects/cards/v2610_i_wave11_misc4.ts',
-  'src/lib/game/effects/cards/v2620_i_wave12_misc5.ts',
-  'src/lib/game/effects/cards/v2630_i_wave13_misc6.ts',
-  'src/lib/game/effects/cards/v2660_i_wave16_misc9.ts',
-  'src/lib/game/effects/cards/v2750_h_wave2_full.ts',
+  'src/lib/game/effects/cards/items_misc.ts',
+  'src/lib/game/effects/cards/mega_decks.ts',
+  'src/lib/game/effects/cards/v2306_meta_pokemon.ts',
+  'src/lib/game/effects/cards/v2760_h_wave3_complex.ts',
+  'src/lib/game/effects/cards/v2996_g4_wave2.ts',
+  'src/lib/game/engine.ts',
   'src/lib/version.ts',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.536）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.536 前移：PREV_SHA 從 632f1e89（v6.535）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.536：多目標招式對手側收斂中央 dealAttackDamageToOppTargets（hitBenchAll／bench-hit-N／冰凍羽擊／捲入伏特／大沙風暴／灑口水＋既有 5 支同型迴圈）；一同爆炸只限自己的場上；水俯衝 label。
+//   'src/lib/game/effects.ts',
+//   'src/lib/game/effects/cards/v2490_i_wave3a_conditional.ts',
+//   'src/lib/game/effects/cards/v2560_i_wave6_complex.ts',
+//   'src/lib/game/effects/cards/v2610_i_wave11_misc4.ts',
+//   'src/lib/game/effects/cards/v2620_i_wave12_misc5.ts',
+//   'src/lib/game/effects/cards/v2630_i_wave13_misc6.ts',
+//   'src/lib/game/effects/cards/v2660_i_wave16_misc9.ts',
+//   'src/lib/game/effects/cards/v2750_h_wave2_full.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.535）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.535 前移：PREV_SHA 從 38964609（v6.534）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -926,15 +941,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/casual-reclaim.ts',
 //   'src/lib/game/room-oracle.ts',
 //   'src/lib/game/room.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.524）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.524 前移：PREV_SHA 從 7118d189（v6.523）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.524：+page.svelte 的 /api/match-result payload 多帶 firstPlayerIdx（伺服器 v1.59 收成 matchRecords.firstSeat）。
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',
