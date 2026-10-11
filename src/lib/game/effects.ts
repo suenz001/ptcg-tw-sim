@@ -1659,8 +1659,13 @@ function _applyBenchAbilityReduce(
       const _atkTools = getAllAttachedTools(_atkAct);
       const _tc = _atkTools.length > 0 ? pool.get(_atkTools[0].cardId) : undefined;
       if (_tc?.subtype === 'PokemonTool') {
-        const _b = dmg; dmg = Math.max(0, dmg - 20);
-        if (_b > dmg) logs.push(`垃圾洩氣 -${_b - dmg}`);
+        // ⭐v6.527：攻擊方不受對手特性效果影響（化隱／光之翼）⇒ 不減（中央述詞，與 engine 戰鬥位那一段同一支）
+        const _why = passiveReduceBlockedByAttackerImmunity(state, defenderIdx as 0 | 1, '垃圾洩氣', _atkAct, pool);
+        if (_why) logs.push(`「垃圾洩氣」的減傷對 ${pool.get(_atkAct.cardId)?.name ?? '攻擊方'} 無效（${_why}）`);   // 與 engine 同一句（Fable P3-2）
+        else {
+          const _b = dmg; dmg = Math.max(0, dmg - 20);
+          if (_b > dmg) logs.push(`垃圾洩氣 -${_b - dmg}`);
+        }
       }
     }
   }
@@ -4853,9 +4858,12 @@ export const ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES: ReadonlySet<string> = new Set
  * ⭐v6.519【中央宣告＋中央述詞】被動減傷特性中，**減傷對象是攻擊方**（卡面「對手的戰鬥寶可夢使用的招式的傷害 -N」）的那一類。
  *   官方 Q&A（深淵之瞳）：化隱的詛咒娃娃對火炎獅使出玩偶捕捉 ⇒ 不會 -30；PTCG_RULES 同型判例：光之翼的超級皮可西ex 亦然。
  *   對照：鑽石膜這類「這隻寶可夢受到的傷害 -N」作用在持有者自己身上 ⇒ 攻擊方的化隱擋不住（不在本清單）。
- *   ⚠ 目前恰好與 ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES 同三張，但語意不同（一個講位置、一個講對象）⇒ 分開宣告。
+ *   ⚠ 與 ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES 語意不同（一個講位置、一個講對象）⇒ 分開宣告。
+ *   ⭐v6.527 加灰塵山｜垃圾洩氣（卡面「對手身上附有寶可夢道具卡的戰鬥寶可夢使用的招式的傷害 -20」，減傷對象同樣是攻擊方）：
+ *     站長 2026-10-11 裁定「也不生效，化隱 光之翼不會受到對手特性影響」（與威嚇之牙同原理；Fable 補審 v6.519 F1）。
+ *     它是 field-wide 寫法（不在 ACTIVE_ONLY 表、不走 PASSIVE_DAMAGE_REDUCE 迴圈），兩個消費點各自問這支述詞。
  */
-export const ATTACKER_TARGETED_PASSIVE_REDUCE_ABILITIES: ReadonlySet<string> = new Set<string>(['威嚇之牙', '威嚇之顎', '寂寞眼神']);
+export const ATTACKER_TARGETED_PASSIVE_REDUCE_ABILITIES: ReadonlySet<string> = new Set<string>(['威嚇之牙', '威嚇之顎', '寂寞眼神', '垃圾洩氣']);
 /** 攻擊方不受持有者（holderIdx）一側的特性效果影響 ⇒ 回擋下的理由（log 用）；不擋回 null。 */
 export function passiveReduceBlockedByAttackerImmunity(
   state: GameState, holderIdx: 0 | 1, abilityName: string,

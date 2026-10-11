@@ -9311,6 +9311,10 @@ export function applyDefenderReductionsBlockA(
         if (!passiveReduceAppliesAtLocation(ab.name, 'active')) continue;
         // ⭐v6.519（官方 Q&A，深淵之瞳：化隱的詛咒娃娃打火炎獅不會 -30）：減傷對象是攻擊方的那一類，
         //   攻擊方不受對手特性效果影響時不生效（v6519-attacker-immune-reduce）。
+        // ⭐v6.527（Fable 審查 P2-1）：只替「本迴圈真的會減傷」的特性問攻擊方免疫並寫 log；
+        //   垃圾洩氣（field-wide，下方另一段）、威嚇之顎（上方化石手刻段）各自在自己那段問，
+        //   不在這裡多寫一行（否則沒附道具也寫「無效」、有道具寫兩次）。
+        if (!PASSIVE_DAMAGE_REDUCE.has(ab.name) && !PASSIVE_DAMAGE_REDUCE_COND.has(ab.name)) continue;
         if (attackerImmunePassiveReduceLog(workingState, dIdx, ab.name, attacker.active, pool, (s) => { workingState = s; })) continue;
         const reduce = PASSIVE_DAMAGE_REDUCE.get(ab.name);
         if (reduce) {
@@ -9440,7 +9444,9 @@ export function applyDefenderReductionsBlockA(
         // v3.20 多重轉接：只要附了任一張寶可夢道具就觸發
         const allTools = getAllAttachedTools(attacker.active);
         const toolCard = pool.get(allTools[0].cardId);
-        if (toolCard?.subtype === 'PokemonTool') {
+        // ⭐v6.527：攻擊方不受對手特性效果影響（化隱／光之翼）⇒ 垃圾洩氣不減、寫一行 log（中央述詞；站長裁定）
+        if (toolCard?.subtype === 'PokemonTool'
+            && !attackerImmunePassiveReduceLog(workingState, dIdx as 0 | 1, '垃圾洩氣', attacker.active, pool, (s) => { workingState = s; })) {
           const before = baseDamage;
           baseDamage = Math.max(0, baseDamage - 20);
           workingState = addLog(workingState,

@@ -45,7 +45,7 @@ for(const [uid,cn,an] of [['13982','鐵掌力士','大力捕捉器'],['14802','�
     const r=runAbility(uid,cn,an,PLAIN);
     assert(r.pendingSelection,'一般 active 應開 picker');
   });
-  T(`${cn}|${an}(C-05): 備戰全化隱 → 不會被換上戰鬥場（大力捕捉器：可選但不互換；其他：不開 picker）`,()=>{
+  T(`${cn}|${an}(C-05): 備戰全化隱 → 不會被換上戰鬥場（可選但不互換）`,()=>{
     const user=inst(uid);
     const st2={phase:'playing',turnPhase:'main',activePlayerIndex:0,firstPlayerIdx:0,turn:5,isFirstTurn:false,log:[],pendingSelection:null,
       players:[{name:'A',active:user,bench:[],hand:[],deck:[],discard:[],prizes:[]},
@@ -53,20 +53,18 @@ for(const [uid,cn,an] of [['13982','鐵掌力士','大力捕捉器'],['14802','�
     const fn=mod.getAbilityFn(cn,an,0);
     const old=Math.random; Math.random=()=>0.1;
     let r; try{ r=fn(st2,0,pool,user); } finally { Math.random=old; }
-    // ⭐v6.519（Rule 40，官方 Q&A 深淵之瞳：大力捕捉器「可以選擇化隱的備戰寶可夢，但不會互換」）：
-    //   大力捕捉器改成化隱的備戰也列在候選、選了不互換 ⇒ 意圖（化隱的備戰不會被換上戰鬥場）改用走完選擇來驗；
-    //   挑戰角擊／媚惑引誘沒有這條判例，維持原判準（不開 picker）。
-    if (an === '大力捕捉器') {
-      assert(r.pendingSelection, '大力捕捉器：化隱的備戰也應列為候選（官方：可以選）');
-      const hid = st2.players[1].bench[0].iid;
-      assert((r.pendingSelection.params?.validIids || []).includes(hid), '候選應含化隱的備戰');
-      const ps = r.pendingSelection;
-      const rr = mod.RESOLVERS.get(ps.effectKey)({ ...r, pendingSelection: null }, 0, [hid], ps.params, pool);
-      assert.equal(rr.players[1].active.cardId, PLAIN, '選了化隱的備戰也不會互換（active 應維持）');
-    } else {
-      assert(!r.pendingSelection,'備戰唯一候選是化隱 → 不應開 picker');
-      assert.equal(r.players[1].active.cardId,PLAIN,'active 應維持');
-    }
+    // ⭐v6.519（Rule 40，官方 Q&A 深淵之瞳：大力捕捉器「可以選擇化隱的備戰寶可夢，但不會互換」）。
+    // ⭐v6.527（Rule 40，站長 2026-10-11：挑戰角擊／媚惑引誘「改成跟大力捕捉器一樣」）：
+    //   三張卡一律：化隱的備戰列在候選、params.immuneIids 標出它、選了不互換。
+    //   意圖（化隱的備戰不會被換上戰鬥場）不變，改用走完選擇來驗。
+    assert(r.pendingSelection, '化隱的備戰也應列為候選（可以選）');
+    const hid = st2.players[1].bench[0].iid;
+    assert((r.pendingSelection.params?.validIids || []).includes(hid), '候選應含化隱的備戰');
+    assert((r.pendingSelection.params?.immuneIids || []).includes(hid), 'immuneIids 應標出化隱的備戰');
+    const ps = r.pendingSelection;
+    const rr = mod.RESOLVERS.get(ps.effectKey)({ ...r, pendingSelection: null }, 0, [hid], ps.params, pool);
+    assert.equal(rr.players[1].active.cardId, PLAIN, '選了化隱的備戰也不會互換（active 應維持）');
+    assert.equal(rr.players[1].bench[0].cardId, HIDDEN, '化隱的備戰仍在備戰區');
   });
 }
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);

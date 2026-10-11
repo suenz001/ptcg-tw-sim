@@ -31,6 +31,7 @@
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
+import { oppBenchSwapTargets, immuneSwapPick } from '../swap-immune';   // ⭐v6.527 特性互換 × 化隱／光之翼 中央判準
 import {
   regA, regAByName, regR,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
@@ -134,6 +135,9 @@ function swapOppActiveWithBench(
 regR('v2998-swap-opp-active-bench', (st, idx, iids, params, pool) => {
   if (iids.length === 0) return st;
   const label = (params?.label as string) ?? '互換';
+  // ⭐v6.527：選到不受特性效果影響的備戰 ⇒ 不互換（沒帶 immuneIids 的呼叫端行為不變）
+  const _imm = immuneSwapPick(st, idx, iids, params, pool, label);
+  if (_imm) return _imm;
   return swapOppActiveWithBench(st, idx, iids[0], pool, label);
 });
 
@@ -150,14 +154,12 @@ regA('安瓢蟲', 0, (st, idx, pool, _cardInst) => {
   if (!opp.active) return rejectAbilityUse(st, '繁星花紋：對手戰鬥場無寶可夢', idx);
   if (opp.bench.length === 0) return rejectAbilityUse(st, '繁星花紋：對手備戰區為空', idx);
   // 候選：剩 HP ≤ 90 的對手備戰寶可夢
-  const validIids = opp.bench.filter(b => {
+  // ⭐v6.527：比照大力捕捉器——不受特性效果影響的備戰也列為候選（選了不互換），另記 immuneIids
+  const { validIids, immuneIids } = oppBenchSwapTargets(st, idx, pool, (b) => {
     const card = pool.get(b.cardId);
     if (!card?.hp) return false;
-    // v5.995：C-05 目標端免疫 — 免疫特性效果的備戰不可被選為互換目標
-    // v6.028：互換不是放指示物 → 對戰圓形不擋
-    if (canApplyEffectToTarget(st, idx, b, card, 'ability-effect', pool, { isBench: true, counterPlacement: false }).blocked) return false;
     return (getEffectiveHP(b, pool, st) - b.damage) <= 90; // v5.778 有效HP(含道具/場地),禁 base hp
-  }).map(b => b.iid);
+  });
   if (validIids.length === 0) {
     return rejectAbilityUse(st, '繁星花紋：對手備戰沒有剩餘 HP ≤ 90 的寶可夢', idx);
   }
@@ -167,7 +169,7 @@ regA('安瓢蟲', 0, (st, idx, pool, _cardInst) => {
     actorIdx: idx, sourcePlayerIdx: oppIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'v2998-swap-opp-active-bench',
-    params: { validIids, label: '繁星花紋' },
+    params: { validIids, immuneIids, label: '繁星花紋' },
   });
 });
 
@@ -562,18 +564,15 @@ regA('赫普的毛毛角羊', 0, (st, idx, _pool, _cardInst) => {
   if (opp.bench.length === 0) return rejectAbilityUse(st, '挑戰角擊：對手備戰區為空', idx);
   // v5.995 C-05 方向修正：效果對象是被選的【備戰寶可夢】→ 原戰鬥位免疫不擋（v5.839 舊 gate 方向相反，移除）；
   //   改過濾備戰候選（免疫特性效果的備戰不可被選為互換目標）。
-  const validIids = opp.bench
-    // v6.028：互換不是放指示物 → 對戰圓形不擋
-    .filter(b => !canApplyEffectToTarget(st, idx, b, _pool.get(b.cardId), 'ability-effect', _pool, { isBench: true, counterPlacement: false }).blocked)
-    .map(b => b.iid);
-  if (validIids.length === 0) return addLog(st, '挑戰角擊：對手備戰寶可夢皆不受特性效果影響，無法互換', idx);
+  // ⭐v6.527：站長裁定「改成跟大力捕捉器一樣」——不受特性效果影響的備戰也可選、選了不互換
+  const { validIids, immuneIids } = oppBenchSwapTargets(st, idx, _pool);
   const s = addLog(st, '挑戰角擊：選 1 隻對手備戰寶可夢與戰鬥場互換', idx);
   return withPending(s, {
     type: 'opp-bench-choose',
     actorIdx: idx, sourcePlayerIdx: oppIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'v2998-swap-opp-active-bench',
-    params: { label: '挑戰角擊', validIids },
+    params: { label: '挑戰角擊', validIids, immuneIids },
   });
 });
 

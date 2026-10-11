@@ -15,6 +15,7 @@ import type { CardInstance, PlayerState, GameState } from '../../types';
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense'; // v5.839 換位免疫 gate // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
+import { oppBenchSwapTargets, immuneSwapPick } from '../swap-immune';   // ⭐v6.527 特性互換 × 化隱／光之翼 中央判準
 import {
   regA, regAByName, regR,
   addLog, addPrivateLog, updatePlayer, withPending,
@@ -306,10 +307,7 @@ regA('鐵掌力士', 0, (st, idx, _pool, _cardInst) => {
   // ⭐v6.519（官方 Q&A，深淵之瞳：可以選擇化隱的備戰寶可夢，但不會互換）：候選列出全部備戰，
   //   不受特性效果影響的另記在 immuneIids，由 gust-opp resolver 據實 log「不互換」（v6519-gust-immune-selectable）。
   // v6.028：互換位置不是「放置傷害指示物」→ 對戰圓形競技場不該擋（玩家回報本卡被誤擋）
-  const validIids = opp.bench.map(b => b.iid);
-  const immuneIids = opp.bench
-    .filter(b => canApplyEffectToTarget(st, idx, b, _pool.get(b.cardId), 'ability-effect', _pool, { isBench: true, counterPlacement: false }).blocked)
-    .map(b => b.iid);
+  const { validIids, immuneIids } = oppBenchSwapTargets(st, idx, _pool);   // ⭐v6.527 中央（swap-immune.ts）
   const s = addLog(st, '大力捕捉器：選 1 隻對手備戰寶可夢與戰鬥場互換', idx);
   return withPending(s, {
     type: 'opp-bench-choose',

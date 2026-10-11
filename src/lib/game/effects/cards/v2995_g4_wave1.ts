@@ -34,6 +34,7 @@
 
 import { tryPromptPromoteActive } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense'; // v5.839 換位免疫 gate
+import { oppBenchSwapTargets, immuneSwapPick } from '../swap-immune';   // ⭐v6.527 特性互換 × 化隱／光之翼 中央判準
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
   regA, regAByName, regR,
@@ -224,20 +225,20 @@ regA('花潔夫人', 0, (st, idx, _pool, _cardInst) => {
   }
   // v5.995 C-05 方向修正：效果對象是被選的【備戰寶可夢】→ 原戰鬥位免疫不擋（v5.839 舊 gate 方向相反，移除）；
   //   改過濾備戰候選（免疫特性效果的備戰不可被選為互換目標）。
-  const _lureIids = dp.bench
-    // v6.028：互換不是放指示物 → 對戰圓形不擋
-    .filter((c: CardInstance) => !canApplyEffectToTarget(r.state, idx, c, _pool.get(c.cardId), 'ability-effect', _pool, { isBench: true, counterPlacement: false }).blocked)
-    .map((c: CardInstance) => c.iid);
-  if (_lureIids.length === 0) return addLog(r.state, '媚惑引誘：正面，但對手備戰寶可夢皆不受特性效果影響，無法互換', idx);
+  // ⭐v6.527：站長裁定「改成跟大力捕捉器一樣」——不受特性效果影響的備戰也可選、選了不互換（也沒有新上場的寶可夢可混亂）
+  const { validIids: _lureIids, immuneIids: _lureImmune } = oppBenchSwapTargets(r.state, idx, _pool);
   const s = addLog(r.state, '媚惑引誘：正面，選 1 隻對手備戰寶可夢與其戰鬥場互換並混亂', idx);
   return withPending(s, {
     type: 'opp-bench-choose', actorIdx: idx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'flowery-lure',
-    params: { validIids: _lureIids },
+    params: { validIids: _lureIids, immuneIids: _lureImmune },
   });
 });
 regR('flowery-lure', (st, idx, iids, _params, pool) => {
+  // ⭐v6.527：選到不受特性效果影響的備戰 ⇒ 不互換、不混亂
+  const _imm = immuneSwapPick(st, idx, iids, _params, pool, '媚惑引誘');
+  if (_imm) return _imm;
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   const targetIid = iids[0];

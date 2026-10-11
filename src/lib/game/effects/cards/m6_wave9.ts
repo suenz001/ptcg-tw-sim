@@ -5,6 +5,7 @@
 
 import { regA, regPre, addLog, withPending, rejectAbilityUse } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense'; // v5.839 換位免疫 gate
+import { oppBenchSwapTargets, immuneSwapPick } from '../swap-immune';   // ⭐v6.527 特性互換 × 化隱／光之翼 中央判準
 import { flipCoinsWithLog, countOwnFireLightningEnergyUnion } from '../../effects';
 
 // ── 1. 化身團結（龍捲雲／雷電雲／土地雲／眷戀雲，共 4 張）────────────────────
@@ -49,18 +50,13 @@ regA('尼多后', 0, (st, idx, pool, _cardInst) => {
   const r = flipCoinsWithLog(st, 1, '母親的誘引', idx);
   st = r.state;
   if (!r.heads) return addLog(st, '母親的誘引：反面 → 沒有效果', idx);
-  const validIids = opp.bench
-    .filter(b => !canApplyEffectToTarget(st, idx, b, pool.get(b.cardId), 'ability-effect', pool,
-                                         { isBench: true, counterPlacement: false }).blocked)
-    .map(b => b.iid);
-  if (validIids.length === 0) {
-    return addLog(st, '母親的誘引：正面，但對手備戰寶可夢皆不受特性效果影響，無法互換', idx);
-  }
+  // ⭐v6.527：比照大力捕捉器（官方 Q&A：可以選不受特性效果影響的備戰，但不會互換；站長裁定同型卡一致）
+  const { validIids, immuneIids } = oppBenchSwapTargets(st, idx, pool);
   return withPending(addLog(st, '母親的誘引：正面 → 選 1 隻對手備戰與戰鬥場互換', idx), {
     type: 'opp-bench-choose',
     actorIdx: idx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'gust-opp',        // 復用既有中央 resolver（supporters_gust.ts）
-    params: { validIids },
+    params: { validIids, immuneIids },
   });
 });

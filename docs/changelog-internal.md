@@ -1,5 +1,23 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.527：化隱／光之翼 × 垃圾洩氣、特性互換統一（2026-10-11）
+
+BASE 0da255cd（v6.526）。站長裁定（v6.526 審查 F1／F7）：
+- 「1 也不生效，化隱 光之翼不會受到對手特性影響」⇒ 灰塵山｜垃圾洩氣加入 ATTACKER_TARGETED_PASSIVE_REDUCE_ABILITIES；engine 戰鬥位管線（applyDefenderReductionsBlockA）與 effects 備戰管線（_applyBenchAbilityReduce）都問 passiveReduceBlockedByAttackerImmunity，擋下時寫「垃圾洩氣 無效（理由）」。
+- 「2 改成跟大力捕捉器一樣」⇒ 挑戰角擊、媚惑引誘改成可選但不互換（媚惑引誘選到時也不混亂）。
+  ⚠ 同型推論（站長未點名，回報時列出、站長可改回）：尼多后｜母親的誘引（與大力捕捉器逐字相同、只多擲幣）、安瓢蟲｜繁星花紋（多剩餘 HP ≤ 90 條件）一併收斂。
+- 中央模組 src/lib/game/effects/swap-immune.ts：oppBenchSwapTargets（validIids／immuneIids，可帶卡面額外條件）、immuneSwapPick（resolver 端：選到 immuneIids ⇒ 據實 log、不互換）。鐵掌力士、gust-opp（大力捕捉器／母親的誘引共用）、v2998-swap-opp-active-bench（挑戰角擊／繁星花紋）、flowery-lure 都改走它；沒帶 immuneIids 的呼叫端（老大的指令等支援者）行為不變。
+- 「3 等開遮蔽再修」：錦標賽盤面遮蔽下 preAttackState 洩漏，延後到開遮蔽時處理。
+- Rule 40：test-ability-swap-hidden-immunity 的 C-05「備戰全化隱」原本只有大力捕捉器走「可選但不互換」，其餘斷言不開 picker ⇒ 依站長裁定三張一律可選、帶 immuneIids、選了不互換（意圖「化隱的備戰不會被換上戰鬥場」不變）。
+- test-v6527-ability-immune-swap-garbage：G（engine／bench 兩條路徑 × 化隱／光之翼＋一般攻擊方正對照）、S1～S4（五張卡）、H（BASE 逐條紅、正對照兩版綠）；突變 11/11 殺。
+- **Fable 5.1 審查（無 P1）**：
+  - P2-1 已修：「垃圾洩氣」加進 ATTACKER_TARGETED 集合後，engine 被動減傷迴圈會對戰鬥位灰塵山多寫「無效」log（沒附道具也寫、有道具寫兩次；傷害正確）⇒ 迴圈只替 PASSIVE_DAMAGE_REDUCE／_COND 裡的特性問免疫（垃圾洩氣、威嚇之顎各在自己那段問）。守衛補 G-log（無道具 0 行、有道具恰 1 行、一般攻擊方 0 行；拿掉新閘門實測翻紅 [[1,2],[1,2],[0,0]]）。
+  - P3-2 已修：備戰路徑 log 文案與 engine 統一為「「垃圾洩氣」的減傷對 X 無效（理由）」。
+  - P3-1 記錄不修：dealAttackDamageToTarget 單體路徑只在傷害有變時才印減傷 log ⇒ 備戰被免疫時「無效」那行不顯示（行為正確，純 log；hitBenchAll／snipe-multi 會印）。
+  - P3-3：母親的誘引、繁星花紋屬同型推論，回報站長確認。
+  - 複審（f8104d86 修正版）通過：灰塵山戰鬥位 log 由 [1,2] 變 [0,1]；威嚇之牙／寂寞眼神／岩石盔甲零退化；陳舊的顎之化石｜威嚇之顎自 v6.519 以來的重複「無效」log（2 行）順帶變 1 行；G-log 在未修正版紅、BASE 紅、修正版綠。
+  - 其餘檢查通過：immuneIids 來自伺服器端 pending 快照、不可由選擇 payload 偽造；gust-opp／v2998／flowery-lure 其他呼叫端不帶 immuneIids ⇒ 行為零變化；AI／UI 讀 params.immuneIids 對四張新卡自動生效；化隱被暗夜羽擊壓制時 -20 照常。
+
 ## v6.526：補審 v6.518～v6.521 後的修正（2026-10-11）
 
 BASE e2146f86（admin v1.84）。站長：「最近的更新是否都有經過審查？因為我發現幾乎每次審查都會發現錯誤，所以一定都要審查」。v6.518～v6.521 沒有審查紀錄，補送 Fable 5.1（以 HEAD 行為為準；無 P1）。本版修：
