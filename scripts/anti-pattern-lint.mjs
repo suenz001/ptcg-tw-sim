@@ -326,9 +326,8 @@ const H_OBJLIT_PENDING = new Set([
   'src/lib/game/effects/cards/v172_hij_batch.ts::creepyBroDiscardEnergy',
   'src/lib/game/effects/cards/v2760_h_wave3_complex.ts::prank-paint-attach-one',
   'src/lib/game/effects/cards/v2996_g4_wave2.ts::dustox-breeze-blow',
-  // ⚠ 甲殼刺是**防禦方的反擊型特性**（動的是攻擊方），與上面那批「攻擊方動防禦方」
-  //   方向相反，該不該過 gate 更需要站長裁定 —— 一併列待審。
-  'src/lib/game/effects.ts::spike-shell-discard',
+  // ⭐v6.533：甲殼刺 resolver 改依 targetIid 定位（受傷觸發改在招式效果之後結算）⇒ 原寫法不再出現，依死條目斷言移除。
+  //   攻擊方「不受對手特性效果影響」（光之翼／化隱）的豁免在觸發端（engine.settlePendingOnDamaged／fireDefenderOnDamaged 的 shine 閘）。
 ]);
 const H_OBJLIT_SEEN = new Set();
 let _hScanned = 0, _hProducerExempt = 0;

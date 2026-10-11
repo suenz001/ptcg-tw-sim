@@ -402,10 +402,13 @@ console.log('\n【C】中央性（Rule 38）—— 同一個判準只能有一�
     .map((l, i) => [file, i + 1, l])
     .filter(([, , l]) => l.includes(CALL) && !l.includes('export function ') && !l.includes('* '));
   const sites = [...callLines(engSrc, 'engine.ts'), ...callLines(effSrc, 'effects.ts')];
-  chk('C3 ⭐⭐三處掃描都改成呼叫同一支 helper（呼叫點剛好 3 個）',
-    sites.length === 3, JSON.stringify(sites.map(([f, n]) => `${f}:${n}`)));
-  chk('C3b ⭐engine.ts 2 處（KO／非 KO）＋ effects.ts 1 處（fireDefenderOnDamaged）',
-    sites.filter(([f]) => f === 'engine.ts').length === 2 && sites.filter(([f]) => f === 'effects.ts').length === 1,
+  // ⚠ Rule 40（v6.533）：受傷觸發改在招式效果之後由 engine.settlePendingOnDamaged 結算 ⇒ engine 多一個呼叫點（同一支 helper）。
+  //   意圖（所有 field-wide 掃描都走同一支 helper、沒有手寫第二份）不變 ⇒ engine 3（KO／非 KO legacy＋結算出口）＋ effects 1。
+  chk('C3 ⭐⭐所有掃描都改成呼叫同一支 helper（呼叫點剛好 4 個）',
+    sites.length === 4, JSON.stringify(sites.map(([f, n]) => `${f}:${n}`)));
+  chk('C3b ⭐engine.ts 3 處（KO／非 KO／v6.533 結算出口）＋ effects.ts 1 處（fireDefenderOnDamaged）',
+    sites.filter(([f]) => f === 'engine.ts').length === 3 && sites.filter(([f]) => f === 'effects.ts').length === 1
+    && countOf(engSrc, 'fireFieldWideRetaliation({ ...v, _attackTimeFieldWideRetal: rec.fieldWide }') === 1,
     JSON.stringify(sites.map(([f, n]) => `${f}:${n}`)));
   chk('C3c ⭐helper 只有一份定義（export function 剛好 1 次，且在 effects.ts）',
     countOf(effSrc, 'export function fireFieldWideRetaliation(') === 1

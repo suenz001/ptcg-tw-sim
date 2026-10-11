@@ -1442,6 +1442,23 @@ export interface GameState {
    */
   _attackTimeFieldWideRetal?: { p1: FieldWideRetalHolderSnapshot[]; p2: FieldWideRetalHolderSnapshot[] };
   /**
+   * ⭐⭐⭐v6.533「受到招式傷害時」的效果在**招式效果全部處理完之後**才結算（官方 Q&A：
+   *   戲法舞步把扣殺能量改附他處 ⇒ 不放指示物；螺旋關節先把能量放回手牌 ⇒ 甲殼刺選不到；
+   *   退化光線先退化 ⇒ 尖刺盔甲不生效；彎曲／夾尾巴逃跑讓攻擊方離場 ⇒ 不放；控制輪回備戰 ⇒ 照放；
+   *   推倒把持有者換到備戰 ⇒ 照樣觸發）。
+   * 有招式效果的招式（v6.490 延後昏厥模式）在傷害當下只記一筆，由 engine.settlePendingOnDamaged
+   * 在 drainPendingAttackKo 之前（ATTACK 末端／RESOLVE_SELECTION 鏈結束／action 尾段保險）逐筆重判結算。
+   * 純資料（物件陣列，不是巢狀陣列）；END_TURN 另有安全清除。
+   */
+  _pendingOnDamaged?: Array<{
+    aIdx: 0 | 1; dIdx: 0 | 1;
+    /** 受到傷害的那一隻（持有者）與使出招式的那一隻 */
+    holderIid: string; attackerIid: string | null;
+    baseDamage: number;
+    /** 宣告當時的 field-wide 反擊持有者快照（_attackTimeFieldWideRetal 在 action 結束時就清掉，跨選擇視窗要自己帶著） */
+    fieldWide?: { p1: FieldWideRetalHolderSnapshot[]; p2: FieldWideRetalHolderSnapshot[] };
+  }>;
+  /**
    * ⭐v6.368 站長裁定 六-10（逐字：「一起修」）：伊裴爾塔爾（那張卡唯一的特性）的 attack-time snapshot
    * （比照 _attackTimeCalmGround／_attackTimeOppFlowerVeil，同一個「宣告當時」家族）。
    * 卡面逐字（static/cards/M6a.json，M6a 079/103，id 19991）：

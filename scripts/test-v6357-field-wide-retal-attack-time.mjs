@@ -455,12 +455,14 @@ console.log('\n【H】中央性（Rule 38）—— 同一個判準只能有一�
   chk('H2 ⭐消費點只有一處（effects.ts 讀 `state._attackTimeFieldWideRetal` 恰好 1 次）',
     countOf(effSrc, 'state._attackTimeFieldWideRetal') === 1,
     String(countOf(effSrc, 'state._attackTimeFieldWideRetal')));
-  chk('H2b ⭐fireFieldWideRetaliation 的呼叫點數量**沒有變**（engine 2 ＋ effects 1 ＝ 3；與 v6.352 守衛 C3 同一判準）',
+  chk('H2b ⭐fireFieldWideRetaliation 的呼叫點數量**沒有變**（engine 3 ＋ effects 1 ＝ 4，v6.533 起；與 v6.352 守衛 C3 同一判準）',
     (() => {
       const lines = (src, file) => src.split(/\r?\n/).map((l, i) => [file, i + 1, l])
         .filter(([, , l]) => l.includes('fireFieldWideRetaliation(') && !l.includes('export function ') && !l.includes('* '));
       const sites = [...lines(engSrc, 'engine.ts'), ...lines(effSrc, 'effects.ts')];
-      return sites.length === 3 && sites.filter(([f]) => f === 'engine.ts').length === 2;
+      // ⚠ Rule 40（v6.533）：engine 多了 settlePendingOnDamaged 的結算出口（同一支 helper，帶著宣告時快照）⇒ 3＋1。
+      //   意圖（v6.357 只改快照來源、不另開呼叫點／不手寫第二份）不變。
+      return sites.length === 4 && sites.filter(([f]) => f === 'engine.ts').length === 3;
     })(), 'fireFieldWideRetaliation 呼叫點數量變了');
 
   chk('H3 ⭐clear 只有一處（engine.ts `delete cleared._attackTimeFieldWideRetal;` 恰好 1 次）',

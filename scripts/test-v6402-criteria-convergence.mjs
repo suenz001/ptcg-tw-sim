@@ -429,10 +429,13 @@ T('D0 ★ 剝註解真的有作用（不然下面每一條否定斷言都可能�
   assert.ok(!EFFECTS.includes('龐克頭盔反射（戰鬥場'), 'effects 的註解沒被剝掉');
   assert.ok(ENGINE.includes('punkHelmetReflectDamageFor('), '剝除器把真碼也砍掉了');
 });
-T('D1 ⭐⭐⭐ 龐克頭盔判準只有一份：定義 1 處、呼叫恰 2 處，且沒有人再自己比對卡名', () => {
+T('D1 ⭐⭐⭐ 龐克頭盔判準只有一份：定義 1 處、呼叫恰 3 處，且沒有人再自己比對卡名', () => {
   assert.strictEqual(count(EFFECTS, 'export function punkHelmetReflectDamageFor('), 1, '中央述詞定義不是 1 份');
   const calls = count(ENGINE, 'punkHelmetReflectDamageFor(') + count(EFFECTS, 'punkHelmetReflectDamageFor(');
-  assert.strictEqual(calls, 3, '定義 1 ＋ 呼叫 2 ＝ 3 個字面，實得 ' + calls);
+  // ⚠ Rule 40（v6.533）：受傷觸發改在招式效果之後由 engine.settlePendingOnDamaged 結算 ⇒ 該出口多一個呼叫點（同一份述詞）。
+  //   意圖（判準只有一份、所有呼叫點都走它、沒有人自己比對卡名）不變 ⇒ 呼叫恰 3 處（engine 2：傷害當下 legacy＋結算出口；effects 1）。
+  assert.strictEqual(calls, 4, '定義 1 ＋ 呼叫 3 ＝ 4 個字面，實得 ' + calls);
+  assert.strictEqual(count(ENGINE, 'punkHelmetReflectDamageFor(v, dIdx, v.players[dIdx].active, pool'), 1, 'v6.533 結算出口的呼叫點不見了');
   // 除了中央述詞內那一行，全站不得再出現「name === '龐克頭盔'」型的 gate
   const bad = [];
   for (const [tag, s] of [['engine.ts', ENGINE], ['effects.ts', EFFECTS], ['tools.ts', TOOLS], ['defense.ts', DEFENSE]]) {

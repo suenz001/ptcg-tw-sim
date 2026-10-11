@@ -3633,6 +3633,209 @@ function resolveAttackActiveKo(
   return newState;
 }
 
+// >>> v6533-settle-on-damaged
+type PendingOnDamagedRec = NonNullable<GameState['_pendingOnDamaged']>[number];
+
+/** 依 iid 在某一方場上找寶可夢：'active'、備戰位置（數字）、或 null（不在場上：回手牌／牌庫）。 */
+function locateFieldIid(p: PlayerState, iid: string | null | undefined): 'active' | number | null {
+  if (!iid) return null;
+  if (p.active?.iid === iid) return 'active';
+  const k = p.bench.findIndex(b => b.iid === iid);
+  return k >= 0 ? k : null;
+}
+
+/**
+ * 結算視角：把 iid 那一隻暫時放到該方戰鬥位（原本的戰鬥寶可夢暫放到它的備戰位置），fn 跑完再原樣換回。
+ *   ⭐ 既有的受傷觸發函式（PASSIVE_RETALIATION／TOOL_ON_DAMAGED／扣殺能量…）都寫死「攻擊方＝players[aIdx].active」
+ *     「持有者＝players[dIdx].active」；招式效果可能已把攻擊方換到備戰（控制輪：官方照放）、把持有者換到備戰（推倒：官方照樣觸發），
+ *     不逐一改寫各卡函式（判準只留一份），由本視角統一處理。
+ *   iid 不在場上（攻擊方被放回手牌／牌庫）⇒ 視角裡該方戰鬥位為空 ⇒ 對攻擊方的效果自然不發生（官方：彎曲／夾尾巴逃跑）。
+ */
+function swapIntoActiveView(p: PlayerState, iid: string | null): { view: PlayerState; undo: (q: PlayerState) => PlayerState } {
+  const loc = locateFieldIid(p, iid);
+  if (loc === 'active') return { view: p, undo: (q) => q };
+  const orig = p.active;
+  if (loc === null) {
+    return { view: { ...p, active: null }, undo: (q) => ({ ...q, active: orig }) };
+  }
+  const k = loc;
+  const target = p.bench[k];
+  if (orig) {
+    const bench = p.bench.slice(); bench[k] = orig;
+    return { view: { ...p, active: target, bench },
+      undo: (q) => { const b2 = q.bench.slice(); const back = b2[k]; b2[k] = q.active as CardInstance; return { ...q, active: back, bench: b2 }; } };
+  }
+  const bench = p.bench.filter((_, i) => i !== k);
+  return { view: { ...p, active: target, bench },
+    undo: (q) => { const b2 = q.bench.slice(); if (q.active) b2.splice(k, 0, q.active); return { ...q, active: null, bench: b2 }; } };
+}
+
+/** 一筆受傷紀錄的所有觸發（視角內：持有者＝dIdx 戰鬥位、攻擊方＝aIdx 戰鬥位或空）。順序與 effects.fireDefenderOnDamaged 相同。 */
+// ⭐v6.533（審查 P3-3）：讓攻擊方陷入特殊狀態的受傷觸發。攻擊方已被自己的招式換到備戰 ⇒ 特殊狀態只存在於戰鬥寶可夢 ⇒ 直接說明不發生（不先印「陷入」再撤回）
+const STATUS_ON_DAMAGED_SOURCES: ReadonlySet<string> = new Set(['毒刺', '灼熱之軀', '火箭隊的催眠裝置']);
+function fireOnDamagedInView(v: GameState, rec: PendingOnDamagedRec, holderLoc: 'active' | 'bench', pool: Map<string, Card>, attackerOnBench = false): GameState {
+  const statusSkipped = (name: string): boolean => {
+    if (!attackerOnBench || !STATUS_ON_DAMAGED_SOURCES.has(name)) return false;
+    v = addLog(v, `${name}：使出招式的寶可夢在備戰區，不會陷入特殊狀態`, rec.dIdx);
+    return true;
+  };
+  const { aIdx, dIdx, baseDamage } = rec;
+  const holder0 = v.players[dIdx].active;
+  if (!holder0) return v;
+  const holderCard = pool.get(holder0.cardId);
+  if (!holderCard) return v;
+  const toolsJammed = isToolsJammed(v, pool);
+  // ① 道具（「在戰鬥場受到傷害時」：受傷當下在戰鬥場已由紀錄保證）——結算時還附著才算（扣殺能量 Q&A 同理）
+  if (!toolsJammed) {
+    for (const t of getAllAttachedTools(holder0)) {
+      const tool = pool.get(t.cardId);
+      const fn = tool ? TOOL_ON_DAMAGED.get(tool.name) : undefined;
+      if (!fn || !tool) continue;
+      const nowHolder = v.players[dIdx].active;
+      if (!nowHolder || !getAllAttachedTools(nowHolder).some(x => x.iid === t.iid)) continue;
+      if (statusSkipped(tool.name)) continue;
+      v = fn(v, dIdx, aIdx, baseDamage, pool, rec.attackerIid ?? undefined);
+    }
+  }
+  // ② 特殊能量（扣殺能量）：官方 Q&A 戲法舞步／戲法斗篷 ⇒ 招式效果移走了就不放
+  {
+    const nowHolder = v.players[dIdx].active;
+    for (const e of (nowHolder?.energyAttached ?? [])) {
+      const ec = pool.get(e.cardId);
+      const fn = ec ? SPECIAL_ENERGY_ON_DAMAGED.get(ec.name) : undefined;
+      if (fn) v = fn(v, dIdx, aIdx, baseDamage, pool);
+    }
+  }
+  // ③ 受傷反擊特性（讀**現在的卡**：退化光線退化後的卡沒有該特性 ⇒ 不生效）
+  const shine = isImmuneToOppAbilityEffect(v, dIdx, v.players[aIdx].active, pool, true);
+  {
+    const nowHolder = v.players[dIdx].active;
+    const nowCard = nowHolder ? pool.get(nowHolder.cardId) : undefined;
+    if (nowHolder && nowCard?.abilities && !shine) {
+      for (const ab of nowCard.abilities) {
+        if (!isAbilityHolderEffective(v, nowHolder, nowCard, dIdx, ab.name, holderLoc, pool)) continue;
+        const retal = PASSIVE_RETALIATION.get(ab.name);
+        if (retal && !statusSkipped(ab.name)) v = retal(v, dIdx, pool, v.players[dIdx].active);
+      }
+    } else if (nowHolder && nowCard && shine) {
+      const msg = blockedRetaliationLog(v, dIdx, v.players[aIdx].active, pool,
+        blockedRetaliationNames(v, dIdx, nowHolder, nowCard, pool, 'damaged'));
+      if (msg) v = addLog(v, msg, aIdx);
+    }
+    // ④ 警備濁霧（只作用在持有者自己這一側 ⇒ 攻擊方豁免不擋）
+    if (nowHolder && nowCard?.abilities) {
+      for (const ab of nowCard.abilities) {
+        const fnOD = PASSIVE_ON_DAMAGED.get(ab.name);
+        if (fnOD && isAbilityHolderEffective(v, nowHolder, nowCard, dIdx, ab.name, holderLoc, pool)) v = fnOD(v, dIdx, aIdx, pool, nowCard);
+      }
+    }
+    // ⑤ 卡面內建受傷反擊（陳舊的頭蓋化石）
+    if (nowHolder && nowCard) v = applyInherentRetaliation(v, dIdx, nowCard, pool, v.players[dIdx].active);
+  }
+  // ⑥ field-wide（怨恨旋渦／群聚反擊）：宣告當時的持有者快照由紀錄帶著
+  if (!shine && v.players[dIdx].active) {
+    const prev = v._attackTimeFieldWideRetal;
+    v = fireFieldWideRetaliation({ ...v, _attackTimeFieldWideRetal: rec.fieldWide }, dIdx, pool, v.players[dIdx].active);
+    if (prev === undefined) { const c = { ...v }; delete c._attackTimeFieldWideRetal; v = c; }
+    else v = { ...v, _attackTimeFieldWideRetal: prev };
+  }
+  // ⑦ 招式旗標型（還擊斧／等待角擊／殼捲風旋轉／強大猛擊 'mirror'）
+  {
+    const nowHolder = v.players[dIdx].active;
+    const flag = nowHolder?.retaliateCountersOnNextHit;
+    const n = flag === 'mirror' ? Math.floor(baseDamage / 10) : (typeof flag === 'number' ? flag : 0);
+    if (nowHolder && n > 0) {
+      const rp = [...v.players] as [PlayerState, PlayerState];
+      if (rp[aIdx].active) rp[aIdx] = { ...rp[aIdx], active: { ...rp[aIdx].active!, damage: rp[aIdx].active!.damage + n * 10 } };
+      const na = { ...rp[dIdx].active! }; delete na.retaliateCountersOnNextHit;
+      rp[dIdx] = { ...rp[dIdx], active: na };
+      v = addLog({ ...v, players: rp }, `反擊：對攻擊方放 ${n} 個傷害指示物（${n * 10} 點傷害）`, dIdx);
+    }
+  }
+  // ⑧ 龐克頭盔（唯一判準 punkHelmetReflectDamageFor）
+  {
+    const amt = punkHelmetReflectDamageFor(v, dIdx, v.players[dIdx].active, pool, { toolsJammed, damageDealt: baseDamage });
+    const atk = v.players[aIdx].active;
+    if (amt > 0 && atk) {
+      const rp = [...v.players] as [PlayerState, PlayerState];
+      rp[aIdx] = { ...rp[aIdx], active: { ...atk, damage: atk.damage + amt } };
+      v = addLog({ ...v, players: rp }, `🔧 龐克頭盔：${pool.get(atk.cardId)?.name ?? '?'} 受到 ${amt} 傷害反擊！`, null);
+    }
+  }
+  return v;
+}
+
+function settleOneOnDamaged(s: GameState, rec: PendingOnDamagedRec, pool: Map<string, Card>): GameState {
+  const { aIdx, dIdx } = rec;
+  const hLoc = locateFieldIid(s.players[dIdx], rec.holderIid);
+  if (hLoc === null) return s;   // 持有者已不在場上（被招式效果放回手牌／牌庫）⇒ 不觸發（類推：攻擊方離場同型判例）
+  const aLoc = locateFieldIid(s.players[aIdx], rec.attackerIid);
+  if (aLoc === null) {
+    // 官方：攻擊方被招式效果放回手牌／牌庫（彎曲、挖逃閃光、夾尾巴逃跑）⇒ 對牠的反擊不會發生；寫一行說明（不留懸空狀態）
+    const h = hLoc === 'active' ? s.players[dIdx].active! : s.players[dIdx].bench[hLoc];
+    const hc = pool.get(h.cardId);
+    const hasRetal = getAllAttachedTools(h).some(t => TOOL_ON_DAMAGED.has(pool.get(t.cardId)?.name ?? ''))
+      || h.energyAttached.some(e => SPECIAL_ENERGY_ON_DAMAGED.has(pool.get(e.cardId)?.name ?? ''))
+      || (hc?.abilities ?? []).some(a => PASSIVE_RETALIATION.has(a.name) && isAbilityHolderEffective(s, h, hc!, dIdx, a.name, hLoc === 'active' ? 'active' : 'bench', pool))
+      || !!h.retaliateCountersOnNextHit;
+    if (hasRetal) s = addLog(s, `使用招式的寶可夢已不在場上 ⇒ ${hc?.name ?? '?'} 對牠的受傷反擊不會發生`, dIdx);
+  }
+  const atkBefore = aLoc === null ? null
+    : (aLoc === 'active' ? s.players[aIdx].active! : s.players[aIdx].bench[aLoc]);
+  const hv = swapIntoActiveView(s.players[dIdx], rec.holderIid);
+  const av = swapIntoActiveView(s.players[aIdx], rec.attackerIid);
+  const vp = [...s.players] as [PlayerState, PlayerState];
+  vp[dIdx] = hv.view; vp[aIdx] = av.view;
+  let v = fireOnDamagedInView({ ...s, players: vp }, rec, hLoc === 'active' ? 'active' : 'bench', pool, aLoc !== null && aLoc !== 'active');
+  const bp = [...v.players] as [PlayerState, PlayerState];
+  bp[dIdx] = hv.undo(bp[dIdx]); bp[aIdx] = av.undo(bp[aIdx]);
+  v = { ...v, players: bp };
+  if (!atkBefore) return v;
+  // 攻擊方在備戰區：特殊狀態只存在於戰鬥寶可夢（規則）⇒ 視角內被加上的狀態撤回
+  if (aLoc !== 'active') {
+    const k = v.players[aIdx].bench.findIndex(b => b.iid === atkBefore.iid);
+    if (k >= 0) {
+      const b = v.players[aIdx].bench[k];
+      if (b.status !== atkBefore.status || b.secondaryStatus !== atkBefore.secondaryStatus || b.tertiaryStatus !== atkBefore.tertiaryStatus) {
+        const bench = v.players[aIdx].bench.slice();
+        bench[k] = { ...b, status: atkBefore.status, secondaryStatus: atkBefore.secondaryStatus, tertiaryStatus: atkBefore.tertiaryStatus };
+        const rp = [...v.players] as [PlayerState, PlayerState]; rp[aIdx] = { ...rp[aIdx], bench };
+        v = addLog({ ...v, players: rp }, `${pool.get(b.cardId)?.name ?? '?'} 在備戰區，不會陷入特殊狀態`, null);
+      }
+    }
+  }
+  // 攻擊方被反擊打昏 ⇒ 中央 koAttackerAfterRetaliation（戰鬥位）／koTargetAfterAttackDamage（備戰區）
+  if (v.phase !== 'playing') return v;
+  if (v.players[aIdx].active?.iid === atkBefore.iid) {
+    return koAttackerAfterRetaliation(v, aIdx, atkBefore.damage, pool);
+  }
+  const nb = v.players[aIdx].bench.find(b => b.iid === atkBefore.iid);
+  if (nb && nb.damage > atkBefore.damage) {
+    const hp = getEffectiveHP(nb, pool, v);
+    if (hp > 0 && nb.damage >= hp) v = koTargetAfterAttackDamage(v, dIdx, nb, pool, { kind: 'ability-effect', label: '反彈傷害', onDamagedFired: false });
+  }
+  return v;
+}
+
+/**
+ * ⭐⭐⭐v6.533「受到招式傷害時」效果的唯一結算出口（見 types.ts `_pendingOnDamaged`）。
+ *   呼叫點與 drainPendingAttackKo 相同（且在它之前）：ATTACK 末端、RESOLVE_SELECTION 鏈結束、applyActionImpl 尾段保險。
+ *   還有選擇視窗開著 ⇒ 不動。先清佇列再逐筆結算（結算中開的選擇視窗照常排隊）。
+ */
+export function settlePendingOnDamaged(state: GameState, pool: Map<string, Card>): GameState {
+  const q = state._pendingOnDamaged;
+  if (!q || q.length === 0 || state.pendingSelection) return state;
+  let s: GameState = { ...state };
+  delete s._pendingOnDamaged;
+  for (const rec of q) s = settleOneOnDamaged(s, rec, pool);
+  // ⭐v6.533（審查 P2-1）：反擊把攻擊方打昏而寫了終局，但防守方這一下招式的昏厥還沒結算（_pendingAttackKo）
+  //   ⇒ 暫時收回 'playing'，讓接著的 drainPendingAttackKo 完整結算（古舊能量等獎賞修正、on-KO 效果），終局交 v6.361 中央重判
+  //   （與 v6421-koend-run-post 同型）。
+  if (s.phase === 'game-over' && state.phase !== 'game-over' && s._pendingAttackKo) s = liftEndgameForOnKoV6361(s);
+  return s;
+}
+// <<< v6533-settle-on-damaged
+
 /**
  * ⭐⭐⭐v6.490 延後的招式昏厥：招式效果（含選擇視窗鏈）全部結束時結算。**全站唯一**消費 _pendingAttackKo 的地方。
  *   呼叫點：ATTACK 管線末端（效果同步結束）、RESOLVE_SELECTION 末端（選擇視窗鏈解完）、
@@ -4280,6 +4483,7 @@ function handlePlaying(
     }
     // >>> v6490-drain-resolve-end
     // ⭐⭐⭐v6.490：招式效果的選擇視窗鏈全部解完 ⇒ 結算延後的昏厥（必須在下面的 sanityKOSweep 之前）。
+    newState = settlePendingOnDamaged(newState, pool);   // ⭐v6.533 受傷觸發先結算（反擊 → 攻擊方昏厥 → 防守方昏厥）
     newState = drainPendingAttackKo(newState, pool);
     // <<< v6490-drain-resolve-end
     // >>> v6362-return-hand-after-prize
@@ -6813,6 +7017,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     const _deferredToolFires: Array<{ name: string; run: (s: GameState) => GameState }> = [];
     //   使用招式的寶可夢在**攻擊當下**的 iid（自身互換型招式解完後 active 會換人）。
     const _attackerIidSnapshot = attacker.active?.iid;
+    // ⭐v6.533：有招式效果（v6.490 延後模式）⇒「受到傷害時」的效果改排進 _pendingOnDamaged，招式效果全部結束才結算
+    let _v6533DeferOnDamaged = false;
 
     const resolveKnockouts = (): GameState | null => {
     // 擊倒判定
@@ -6905,6 +7111,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       afterKoKeys: [effectKey, ...(newState.pendingCopyAttackKeys ?? [])],
     };
     const _v6490Defer = (_v6490Ctx.afterKoKeys ?? [effectKey]).some(k => ATTACK_POST.has(k) || ATTACK_AFTER_KO.has(k));
+    _v6533DeferOnDamaged = _v6490Defer;
     // <<< v6490-attack-ko-ctx
     if (!preventedKO && wouldBeKO) {
       // ⭐v6.492 這一擊的反擊（含當場結算時 TOOL_ON_KO 鏡射的凸凸頭盔等）之前，攻擊方身上的傷害
@@ -6921,24 +7128,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         defenderState.active = withAttackDamageTaken(defenderState.active!, newDamage - baseDamage, newDamage, 'attack-damage');
         defPlayers[dIdx] = defenderState;
         newState = { ...newState, players: defPlayers, turnPhase: 'end', _pendingAttackKo: _v6490Ctx };
-        // ⭐v6.490（fable 審查 Bug 1／4）：「在戰鬥場受到傷害時」的道具在**傷害當下**觸發（holder 還在戰鬥場、
-        //   攻擊方也還在戰鬥場）——比照沒昏厥分支的同一個迴圈；v6.215 延後名單照樣排進 _deferredToolFires。
-        //   昏厥結算時（resolveAttackActiveKo 延後模式）會跳過這批鏡射道具的 TOOL_ON_KO，不會觸發兩次；
-        //   受害者若被效果換到備戰區後才昏厥（推倒），這裡已經觸發過 ⇒ 不再漏掉。
-        if (!toolsJammed && baseDamage > 0 && defenderState.active) {
-          for (const t of getAllAttachedTools(defenderState.active)) {
-            const tool = pool.get(t.cardId);
-            if (!tool) continue;
-            const fn = TOOL_ON_DAMAGED.get(tool.name);
-            if (!fn) continue;
-            if (TOOL_FIRE_AFTER_ATTACK_EFFECT.has(tool.name)) {
-              _deferredToolFires.push({ name: tool.name,
-                run: (s) => fn(s, dIdx, aIdx, baseDamage, pool, _attackerIidSnapshot) });
-              continue;
-            }
-            newState = fn(newState, dIdx, aIdx, baseDamage, pool, _attackerIidSnapshot);
-          }
-        }
+        // ⭐v6.533：「在戰鬥場受到傷害時」的道具不再在傷害當下觸發 ⇒ 排進 _pendingOnDamaged（見下方 v6533-enqueue-on-damaged），
+        //   招式效果全部結束後由 settlePendingOnDamaged 結算（官方：狙落先丟道具、戲法舞步先移走扣殺能量…）。
+        //   昏厥結算時（resolveAttackActiveKo 延後模式）照舊跳過鏡射道具的 TOOL_ON_KO（已在結算出口觸發過），不會觸發兩次。
       } else {
         // 原 KO 分支的 updatedActive／棄牌堆實體都帶「含這一下」的傷害（fable 審查：抽出後曾讀成攻擊前的 damage）
         defPlayers[dIdx] = { ...defenderState, active: { ...defenderState.active!, damage: newDamage } };
@@ -6979,6 +7171,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       //   holder 被 KO 時漏觸發。複製套用邏輯到 KO 分支（在 TOOL_ON_KO 之後）。
       //   注意：punkReflectDamage 已在 L4639 預先計算（不論 KO 與否都算 40）。
       //   雙 KO 邊緣案例（反彈把 attacker 也打死）：交給後續 sanityKOSweep 處理。
+      // >>> v6533-ko-branch-hooks-legacy-only
+      // ⭐v6.533：以下受傷觸發只給「沒有招式效果」的招式（當場結算，行為不變）；有招式效果 ⇒ 由 settlePendingOnDamaged 結算
+      if (!_v6490Defer) {
       if (!toolsJammed && punkReflectDamage > 0) {
         const refPlayers = [...newState.players] as [PlayerState, PlayerState];
         const atkP = { ...refPlayers[aIdx] };
@@ -7063,6 +7258,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       newState = koAttackerAfterRetaliation(newState, aIdx, _v6492AtkDmgBeforeKoHooks, pool);
       if (newState.phase === 'game-over') return newState;
       // <<< v6492-retal-ko-ko-branch
+      }
+      // <<< v6533-ko-branch-hooks-legacy-only
       // 無備戰寶可夢 → 直接終局，不需送出新寶可夢（⭐v6.490：延後結算時改由 drainPendingAttackKo 判斷）
       if (!_v6490Defer && !newState.players[dIdx].active && newState.players[dIdx].bench.length === 0) {
         const _ds = newState.players[dIdx];
@@ -7109,6 +7306,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       //   站長 2026-10-10 裁定照官方 ⇒ 標記 survivedDamage，drain 時改走效果昏厥（只拿基本張數）。
       if (_v6490Defer && baseDamage > 0) newState = { ...newState, _pendingAttackKo: { ..._v6490Ctx, survivedDamage: true } };
 
+      // >>> v6533-survive-hooks-legacy-only
+      // ⭐v6.533：同上，有招式效果 ⇒ 改由 settlePendingOnDamaged 在招式效果之後結算
+      if (!_v6490Defer) {
       // v3.751：抓取攻擊方在 ON_DAMAGED hooks 觸發前的傷害值 — 用於判斷反傷有實際生效
       const atkDamageBeforeRetaliation = newState.players[aIdx].active?.damage ?? 0;
 
@@ -7151,10 +7351,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       newState = koAttackerAfterRetaliation(newState, aIdx, atkDamageBeforeRetaliation, pool);
       if (newState.phase === 'game-over') return newState;
       // <<< v6492-retal-ko-survive
+      }
+      // <<< v6533-survive-hooks-legacy-only
     }
 
     // ── 龐克頭盔反彈 40：在防守方狀態已提交後套用，避免被覆蓋 ──────────────────
-    if (punkReflectDamage > 0) {
+    // ⭐v6.533：有招式效果時改由 settlePendingOnDamaged 結算
+    if (!_v6490Defer && punkReflectDamage > 0) {
       const refPlayers = [...newState.players] as [PlayerState, PlayerState];
       const atkP = { ...refPlayers[aIdx] };
       if (atkP.active) {
@@ -7176,6 +7379,16 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         // <<< v6492-retal-ko-punk
       }
     }
+      // >>> v6533-enqueue-on-damaged
+      // ⭐⭐⭐v6.533：有招式效果 ⇒ 這一下「受到招式的傷害」只記一筆（持有者／攻擊方 iid、傷害值、宣告時 field-wide 快照），
+      //   招式效果（含選擇視窗鏈）全部結束後由 settlePendingOnDamaged 依當時盤面逐項重判（官方 Q&A 682／681／904／905／975／L615 等）。
+      if (_v6490Defer && baseDamage > 0) {
+        newState = { ...newState, _pendingOnDamaged: [...(newState._pendingOnDamaged ?? []), {
+          aIdx, dIdx, holderIid: _v6490Ctx.victimIid, attackerIid: _attackerIidSnapshot ?? null, baseDamage,
+          ...(newState._attackTimeFieldWideRetal ? { fieldWide: newState._attackTimeFieldWideRetal } : {}),
+        }] };
+      }
+      // <<< v6533-enqueue-on-damaged
       return null;
     };
     // 呼叫點不變：仍於傷害套用後、postFn 前同步結算 KO（Phase 3 才會移到 postFn 後）。
@@ -7310,6 +7523,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     }
     // >>> v6490-drain-attack-end
     // ⭐⭐⭐v6.490：招式效果同步結束（沒有開選擇視窗）⇒ 在這裡結算延後的昏厥；有視窗 ⇒ 留到 RESOLVE_SELECTION 鏈結束。
+    newState = settlePendingOnDamaged(newState, pool);   // ⭐v6.533 受傷觸發先結算
     newState = drainPendingAttackKo(newState, pool);
     // <<< v6490-drain-attack-end
     // v4.991: ATTACK 流程結尾統一 set turnPhase='end' — 修玩家 case 1 卡死。
@@ -7377,7 +7591,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     // ⭐ v6.196：改走中央述詞（熔岩洞/初始化 等消除來源）— 原只比對特性名。
     // ⭐v6.427：改問中央 isImmuneToOppAbilityEffect（光之翼＋化隱…；原本寫死只認光之翼）
     const attackerHasMagicalShine = isImmuneToOppAbilityEffect(newState, dIdx, newState.players[aIdx].active, pool, true);
-    const _v5113RanInKoBranch = wouldBeKO && !preventedKO;
+    // ⭐v6.533：有招式效果時下方共用尾段一律不跑（受傷觸發已排進 _pendingOnDamaged，招式效果結束才結算）
+    const _v5113RanInKoBranch = (wouldBeKO && !preventedKO) || _v6533DeferOnDamaged;
     const _v6492AtkDmgBeforeTail = newState.players[aIdx].active?.damage ?? 0;   // ⭐v6.492 下方共用反擊之前
     // >>> v6532-retal-current-card
     // ⭐v6.532：官方 Q&A（念力土偶｜退化光線 × 布里卡隆｜尖刺盔甲）：「布里卡隆會先因招式『退化光線』的效果退化成胖胖哈力，
@@ -9111,6 +9326,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         endTurnCheckupAbilitiesDone: undefined,  // v5.426 清除特性區旗標
         endTurnActiveIidAtEnd: undefined,  // ⭐v6.502 清除「回合結束當下的戰鬥寶可夢」
         _pendingAttackEnergyRevive: undefined,  // v5.678 安全清除跨picker revive快照
+        _pendingOnDamaged: undefined,  // ⭐v6.533 安全清除（正常情況招式結束時已結算完）
         // >>> v6362-clear-return-hand
         _pendingReturnHandToDeck: undefined,  // ⭐v6.362 A-1 安全清除跨picker「手牌洗回牌庫」待辦
         // <<< v6362-clear-return-hand
@@ -10142,6 +10358,7 @@ function applyActionImpl(
   // >>> v6490-drain-dispatch-tail
   // ⭐v6.490 保險：任何 action 結束、沒有待選視窗時，延後的招式昏厥一律不殘留（正常情況 ATTACK／RESOLVE_SELECTION 末端已結算完）；
   //   放在 v6.361 終局延後判斷之前 ⇒ 這裡結算出的終局照樣走中央重判。。
+  if (next._pendingOnDamaged && !next.pendingSelection) next = settlePendingOnDamaged(next, pool);   // ⭐v6.533
   if (next._pendingAttackKo && !next.pendingSelection) next = drainPendingAttackKo(next, pool);
   // <<< v6490-drain-dispatch-tail
   // >>> v6361-defer-endgame

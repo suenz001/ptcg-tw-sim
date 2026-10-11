@@ -106,13 +106,16 @@ T('⭐⭐⭐ 君主蛇ex｜青草命令：手持循環扇的 picker 必須還在
   const ai = serp.attacks.findIndex(x => x.name === '青草命令');
   ok(ai >= 0, '卡面沒有「青草命令」——卡片資料變了？');
   const { st } = buildFanBoard(serp, 4);
-  const s = applyAction(st, { type: 'ATTACK', attackIndex: ai, actorIdx: 0 }, POOL);
-  ok(logsOf(s).some(m => m.includes('手持循環扇')), '手持循環扇連 log 都沒出現 —— 盤面沒佈對');
+  let s = applyAction(st, { type: 'ATTACK', attackIndex: ai, actorIdx: 0 }, POOL);
   // v6.215 官方序：招式效果（青草命令）先、道具（手持循環扇）後。
   ok(s.pendingSelection?.effectKey === 'wave9-take-any-from-deck',
     'pendingSelection 應該是招式自己的 picker（官方序先跑），現在是 ' + s.pendingSelection?.effectKey);
-  ok(qOf(s).includes('cycle-fan-step1-pick-energy'),
-    '手持循環扇的 picker 沒有排進 pendingChainQueue（＝被蓋掉，只剩假 log）：' + JSON.stringify(qOf(s)));
+  // ⭐v6.533（Rule 40）：受傷觸發改記在 _pendingOnDamaged、招式效果的視窗解完才結算（不再預先排隊）。
+  //   意圖（扇子不會被招式的 picker 蓋掉、只剩假 log）不變 ⇒ 改驗：此刻有受傷紀錄、解完招式視窗後扇子的 picker 真的浮上來。
+  ok((s._pendingOnDamaged ?? []).length === 1, '受傷紀錄沒有排進 _pendingOnDamaged（＝扇子會被吃掉）');
+  s = applyAction(s, { type: 'RESOLVE_SELECTION', selectedIids: s.players[0].deck.slice(0, 2).map(c => c.iid), actorIdx: 0 }, POOL);
+  ok(s.pendingSelection?.effectKey === 'cycle-fan-step1-pick-energy',
+    '招式視窗解完後手持循環扇的 picker 沒有浮上來（＝被蓋掉，只剩假 log）：' + s.pendingSelection?.effectKey);
 });
 
 T('⭐⭐⭐ 青草命令：兩個 picker 全解完後，**盤面真的變了**（能量移動 ＋ 手牌加卡）', () => {
@@ -149,14 +152,16 @@ T('⭐⭐ 赫普的蒼響ex｜剎那斬（snipeOneBenchPost 共用 factory）：
   const zac = card('赫普的蒼響ex');
   const ai = zac.attacks.findIndex(x => x.name === '剎那斬');
   ok(ai >= 0, '卡面沒有「剎那斬」');
-  const { st } = buildFanBoard(zac, zac.attacks[ai].cost.length);
-  const s = applyAction(st, { type: 'ATTACK', attackIndex: ai, actorIdx: 0 }, POOL);
-  ok(logsOf(s).some(m => m.includes('手持循環扇')), '手持循環扇沒觸發 —— 盤面沒佈對');
+  const { st, oppBench } = buildFanBoard(zac, zac.attacks[ai].cost.length);
+  let s = applyAction(st, { type: 'ATTACK', attackIndex: ai, actorIdx: 0 }, POOL);
   // v6.215 官方序：招式效果（剎那斬狙擊）先、道具後。
   ok(s.pendingSelection?.effectKey === 'wave3a-snipe-bench',
     'pendingSelection 應是剎那斬的狙擊 picker：' + s.pendingSelection?.effectKey);
-  ok(qOf(s).includes('cycle-fan-step1-pick-energy'),
-    '手持循環扇的 picker 被剎那斬蓋掉了（只剩假 log）：' + JSON.stringify(qOf(s)));
+  // ⭐v6.533（Rule 40）：同上一條——扇子記在 _pendingOnDamaged，狙擊視窗解完才浮上來
+  ok((s._pendingOnDamaged ?? []).length === 1, '受傷紀錄沒有排進 _pendingOnDamaged');
+  s = applyAction(s, { type: 'RESOLVE_SELECTION', selectedIids: [oppBench.iid], actorIdx: 0 }, POOL);
+  ok(s.pendingSelection?.effectKey === 'cycle-fan-step1-pick-energy',
+    '狙擊視窗解完後手持循環扇的 picker 沒有浮上來（被剎那斬蓋掉）：' + s.pendingSelection?.effectKey);
 });
 
 console.log('B) 正對照：沒有防守方道具時，原本的行為完全不變');

@@ -162,7 +162,9 @@ console.log('── D) 批1 正對照：沒有這兩張道具時，行為完全�
   eq(ids(st.players[1].deck), 'dkD,dkE', 'D3 無道具：牌庫剩 D,E');
   eq(st.players[1].active?.damage, 200, 'D4 無道具：傷害 200');
   eq(st.pendingSelection ?? null, null, 'D5 無道具：不開任何 picker');
-  // 凸凸頭盔（**不在**延後名單）：必須維持「道具先、招式效果後」的舊順序。
+  // ⭐v6.533（Rule 40，站長 2026-10-12 裁定「受傷反擊整體移到招式效果之後」）：凸凸頭盔（反傷型）也改在招式效果**之後**
+  //   （官方 Q&A：龐克頭盔「會在造成招式傷害後，才進行寶可夢道具卡的效果處理」、奢華炸彈：水迴旋先把攻擊方放回牌庫 ⇒ 不放）。
+  //   原意圖（無延後名單道具時的順序被明確守住、反傷值照常）不變，只是方向依官方改成「招式效果先」。
   let s2 = ST(P('P0', { active: mon(C.hydre, 'atk', { energyAttached: DARK5() }), bench: [mon(C.hydre, 'ab1')] }),
               P('P1', { active: mon(C.hydre, 'def', { toolAttached: { iid: 't2', cardId: C.bumpy } }),
                         bench: [mon(C.hydre, 'db1')], deck: DECK5() }));
@@ -170,7 +172,7 @@ console.log('── D) 批1 正對照：沒有這兩張道具時，行為完全�
   const l2 = s2.log.map(l => l.message);
   const iB = l2.findIndex(m => m.includes('凸凸頭盔'));
   const iM = l2.findIndex(m => m.includes('粉碎頭：對手牌庫頂'));
-  ok(iB >= 0 && iM >= 0 && iB < iM, `D6 正對照：凸凸頭盔（反傷型）仍在招式效果**之前**（bumpy=${iB} mill=${iM}）`);
+  ok(iB >= 0 && iM >= 0 && iB > iM, `D6 ⭐v6.533 凸凸頭盔（反傷型）在招式效果**之後**（bumpy=${iB} mill=${iM}）`);
   eq(s2.players[0].active?.damage, 20, 'D7 凸凸頭盔反傷 20 照常');
 }
 
@@ -203,8 +205,11 @@ console.log('── F) 批2 手持循環扇 × 自我互換招式（伏特替換
                         bench: [mon(C.hydre, 'db1')], deck: [en(DARK, 'dk1')] }));
   st = mod.applyAction(st, { type: 'ATTACK', attackIndex: 0, actorIdx: 0 }, pool);
   eq(st.pendingSelection?.effectKey, 'do-switch', 'F1 招式效果的 picker 先解（官方序）');
-  eq((st.pendingChainQueue ?? []).map(q => q.effectKey).join('|'), 'cycle-fan-step1-pick-energy',
-     'F2 手持循環扇排在隊尾');
+  // ⭐v6.533（Rule 40）：受傷觸發改排進 _pendingOnDamaged，招式效果的選擇視窗解完才結算 ⇒ 此刻扇子還沒有任何 picker／log。
+  //   意圖（扇子在招式效果之後、用攻擊當下的 iid 定位）不變，由 F4～F9 守。
+  ok(!(st.pendingChainQueue ?? []).some(q => q.effectKey === 'cycle-fan-step1-pick-energy')
+     && (st._pendingOnDamaged ?? []).some(r => r.attackerIid === 'atk' && r.holderIid === 'def'),
+     'F2 ⭐v6.533 扇子尚未觸發：記在 _pendingOnDamaged（帶 atk／def 的 iid），沒有排隊的 picker');
   // ⚠ 以下每一步都必須 null-safe：HEAD（未修版）走的是完全不同的 pending 順序，
   //   測試要能「紅」但不能 crash，否則看不到後面的段落與結束標記。
   const step = (sel) => { const t = st.pendingSelection?.token; st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: sel, token: t }, pool); };
@@ -241,11 +246,13 @@ console.log('── F) 批2 手持循環扇 × 自我互換招式（伏特替換
                  P('P1', { active: mon(C.hydre, 'def', { toolAttached: { iid: 'tool1', cardId: C.fan } }),
                            bench: [mon(C.hydre, 'db1')], deck: [en(DARK, 'dk1')] }));
     s10 = mod.applyAction(s10, { type: 'ATTACK', attackIndex: 0, actorIdx: 0 }, pool);
-    const queued = (s10.pendingChainQueue ?? [])[0];
-    ok(typeof queued?.token === 'number', 'F10a 排隊中的扇子 pending 已蓋章');
+    // ⭐v6.533（Rule 40）：扇子不再「先排隊、出列時重算」，而是招式效果解完才當場產生 ⇒ 改驗它浮上來時的身分欄位與蓋章。
+    const queued = { type: 'modal-choice', actorIdx: 1, sourcePlayerIdx: 0, minCount: 1, maxCount: 1,
+      params: { attackerIid: 'atk', label: '手持循環扇：選 1 個攻擊方戰鬥位能量' } };
     s10 = mod.applyAction(s10, { type: 'RESOLVE_SELECTION', selectedIids: ['ab1'], token: s10.pendingSelection?.token }, pool);
     const popped = s10.pendingSelection;
     eq(popped?.effectKey ?? null, 'cycle-fan-step1-pick-energy', 'F10b 扇子浮上來了');
+    ok(typeof popped?.token === 'number', 'F10a 浮上來的扇子 pending 已蓋章');
     // ⭐ refresher 只准動 params 裡的候選欄位；「這是哪一個 picker」的身分欄位必須逐欄不變。
     eq([popped?.type, popped?.actorIdx, popped?.sourcePlayerIdx, popped?.minCount, popped?.maxCount,
         popped?.params?.attackerIid, popped?.params?.label].join('|'),
@@ -347,15 +354,17 @@ console.log('── I) 批2 佇列取出時重算候選（招式先動走攻擊�
                   P('P1', { active: mon(C.hydre, 'def', { toolAttached: { iid: 'tool1', cardId: C.fan } }),
                             bench: [mon(C.hydre, 'db1')], deck: [en(DARK, 'dk1')] }));
       st = mod.applyAction(st, { type: 'ATTACK', attackIndex: li2, actorIdx: 0 }, pool);
-      eq((st.pendingChainQueue ?? []).map(q => q.effectKey).join(','), 'cycle-fan-step1-pick-energy',
-         'I5b 盤面佈對：扇子確實排在佇列裡');
+      // ⭐v6.533（Rule 40）：扇子不再預先排隊 ⇒ 改驗「記在 _pendingOnDamaged、還沒有 picker」
+      ok((st._pendingOnDamaged ?? []).some(r => r.holderIid === 'def') && !(st.pendingChainQueue ?? []).length,
+         'I5b ⭐v6.533 盤面佈對：受傷紀錄已排入、扇子還沒產生 picker');
       // 只留 ge1（模擬中途被清掉）——招式 picker 仍開著，接下來解掉它就會讓能量歸零
       const _p0 = { ...st.players[0], active: { ...st.players[0].active, energyAttached: [st.players[0].active.energyAttached[0]] } };
       st = { ...st, players: [_p0, st.players[1]] };
       st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: ['ge1'], token: st.pendingSelection?.token }, pool);
       eq(ids(st.players[0].active?.energyAttached), '', 'I5d 攻擊方能量已歸零');
       eq(st.pendingSelection?.effectKey ?? null, null, 'I6 重算後無對象 → 扇子整筆取消，不留死 picker');
-      ok(st.log.some(l => l.message.includes('手持循環扇：已無可改附')), 'I7 取消時有明確 log');
+      // ⭐v6.533（Rule 40）：結算當下攻擊方已沒有能量 ⇒ 扇子根本不產生 picker，比照 E2「不留假 log」
+      ok(!st.log.some(l => l.message.includes('手持循環扇')), 'I7 ⭐v6.533 沒有能量可搬 ⇒ 不印任何手持循環扇 log（同 E2）');
     }
   }
   // I-c 正對照：沒有登記 refresher 的 effectKey 不受影響（青草命令那條鏈仍照常）
@@ -401,7 +410,8 @@ console.log('── K) 批2 使用招式的寶可夢已離場 → 不發動、�
               P('P1', { active: mon(C.hydre, 'def', { toolAttached: { iid: 'tool1', cardId: C.fan } }),
                         bench: [mon(C.hydre, 'db1')], deck: [en(DARK, 'dk1')] }));
   st = mod.applyAction(st, { type: 'ATTACK', attackIndex: 0, actorIdx: 0 }, pool);
-  eq((st.pendingChainQueue ?? [])[0]?.params?.attackerIid ?? null, 'atk', 'K1 排隊中的扇子帶著 atk 快照');
+  // ⭐v6.533（Rule 40）：快照改記在 _pendingOnDamaged（不是排隊的 picker）
+  eq((st._pendingOnDamaged ?? [])[0]?.attackerIid ?? null, 'atk', 'K1 ⭐v6.533 受傷紀錄帶著 atk 快照');
   // 手術：atk 離場（進手牌），改由 nx 當戰鬥位、nb 當備戰，兩者都帶能量
   const _hand = [{ iid: 'atk', cardId: st.players[0].active.cardId }];
   st = { ...st, players: [{ ...st.players[0],
@@ -413,8 +423,9 @@ console.log('── K) 批2 使用招式的寶可夢已離場 → 不發動、�
      'K2 ⭐ 使用招式的寶可夢已離場 → 扇子不發動（不得退回打現在的戰鬥寶可夢）');
   // ⚠ 「請選能量」那行是**排隊當下**（寶可夢還在場上）印的，屬合理；
   //   關鍵是取出時要有一行明確講「取消」，玩家才知道 picker 為什麼沒出現。
-  ok(st.log.some(l => l.message.includes('手持循環扇：已無可改附')),
-     'K3 取消時要有明確 log（不留下「印了卻沒發生」的懸空狀態）');
+  // ⭐v6.533（Rule 40）：扇子在離場前從未印過任何 log；結算時中央出口寫一行「使用招式的寶可夢已不在場上」說明
+  ok(st.log.some(l => l.message.includes('使用招式的寶可夢已不在場上')) && !st.log.some(l => l.message.includes('手持循環扇')),
+     'K3 ⭐v6.533 有明確說明 log、且沒有懸空的手持循環扇 log');
   const _all = [st.players[0].active, ...st.players[0].bench].filter(Boolean)
     .flatMap(c => c.energyAttached.map(x => x.iid)).sort().join(',');
   eq(_all, 'nb1,nx1', 'K4 場上能量一顆都沒被動到');
@@ -447,30 +458,24 @@ console.log('── L) 沒登記 refresher 的排隊 picker 必須照常浮上�
 {
   // ⚠ engine 的 pop 迴圈裡 `if (!_refresh) { _picked = cand; break; }` 若寫成 continue，
   //   所有**沒登記 refresher** 的排隊 picker 都會被無聲吃掉。這一段就是那條分支的正對照。
-  // ⭐v6.490（Rule 40）：原盤面是「防守方帶【希望護身符】被 KO ⇒ 它先開 deck-search、招式 POST 排隊尾」。
-  //   昏厥改在招式效果全部結束後才結算 ⇒ 希望護身符改在招式的視窗解完之後才觸發，那個盤面不會再排隊。
-  //   意圖（沒登記 refresher 的排隊 picker 必須浮上來）不變 ⇒ 換成「傷害當下就開視窗」的來源：
-  //   防守方 火箭隊的瓦斯彈｜警備濁霧（受到傷害時從自己的牌庫找「瓦斯彈」放備戰）先開，招式 POST 排隊尾。
-  let SERP = null, si = -1;
-  for (const [id, c] of pool) {
-    const i = (c.attacks ?? []).findIndex(a => a.name === '青草命令');
-    if (c.name === '君主蛇ex' && i >= 0) { SERP = id; si = i; break; }
-  }
+  // ⭐v6.533（Rule 40）：受傷觸發改在招式效果結束後才結算 ⇒「傷害當下先開視窗」的來源不存在了。
+  //   意圖不變 ⇒ 換成「同一次結算裡兩個受傷觸發各開一個視窗」：防守方 火箭隊的瓦斯彈｜警備濁霧 帶【手持循環扇】，
+  //   被三首惡龍ex｜粉碎頭（有招式效果、無 picker）打 ⇒ 扇子（道具先）開、警備濁霧（沒登記 refresher）排隊。
   const GAS = [...pool].find(([, c]) => (c.abilities ?? []).some(a => a.name === '警備濁霧'))?.[0] ?? null;
-  ok(SERP !== null && GAS !== null, 'L0 fixture：君主蛇ex｜青草命令 ＋ 火箭隊的瓦斯彈｜警備濁霧');
-  if (SERP && GAS) {
-    const GRASS2 = eName('基本【草】能量');
-    let st = ST(P('P0', { active: mon(SERP, 'atk', { energyAttached: [en(GRASS2, 'g1'), en(GRASS2, 'g2'), en(GRASS2, 'g3'), en(GRASS2, 'g4')] }),
-                          bench: [mon(C.hydre, 'ab1')], deck: [en(DARK, 'sd1'), en(DARK, 'sd2'), en(DARK, 'sd3')] }),
-                P('P1', { active: mon(GAS, 'def'),
-                          bench: [mon(C.hydre, 'db1')], deck: [mon(GAS, 'gd1'), en(DARK, 'dd2')] }));
-    st = mod.applyAction(st, { type: 'ATTACK', attackIndex: si, actorIdx: 0 }, pool);
+  ok(GAS !== null, 'L0 fixture：火箭隊的瓦斯彈｜警備濁霧');
+  if (GAS) {
+    let st = ST(P('P0', { active: mon(C.hydre, 'atk', { energyAttached: DARK5() }), bench: [mon(C.hydre, 'ab1')] }),
+                P('P1', { active: mon(GAS, 'def', { toolAttached: { iid: 'tool1', cardId: C.fan } }),
+                          bench: [mon(C.hydre, 'db1')], deck: [mon(GAS, 'gd1'), en(DARK, 'dd2'), en(DARK, 'dd3'), en(DARK, 'dd4')] }));
+    st = mod.applyAction(st, { type: 'ATTACK', attackIndex: 0, actorIdx: 0 }, pool);
     const first = st.pendingSelection?.effectKey ?? null;
-    ok(first !== null && first !== 'wave9-take-any-from-deck', `L1 警備濁霧（傷害當下）先開｜實際=${first}`);
-    eq((st.pendingChainQueue ?? []).map(q => q.effectKey).join(','), 'wave9-take-any-from-deck',
-       'L3 招式自己的 picker 排在隊尾，且該 effectKey **沒有**登記 refresher');
-    st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: [], token: st.pendingSelection?.token, actorIdx: 1, senderIdx: 1 }, pool);
-    eq(st.pendingSelection?.effectKey ?? null, 'wave9-take-any-from-deck',
+    eq(first, 'cycle-fan-step1-pick-energy', 'L1 ⭐v6.533 結算時道具先：手持循環扇先開');
+    const q = (st.pendingChainQueue ?? []).map(x => x.effectKey);
+    ok(q.length === 1 && q[0] !== 'cycle-fan-step1-pick-energy', `L3 警備濁霧的 picker 排在隊尾（沒登記 refresher）｜實際=${q.join(',')}`);
+    const queuedKey = q[0];
+    st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: [st.pendingSelection?.params?.options?.[0]?.id], token: st.pendingSelection?.token, actorIdx: 1, senderIdx: 1 }, pool);
+    st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: ['ab1'], token: st.pendingSelection?.token, actorIdx: 1, senderIdx: 1 }, pool);
+    eq(st.pendingSelection?.effectKey ?? null, queuedKey ?? '(none)',
        'L4 ⭐ 沒登記 refresher 的排隊 picker 必須照常浮上來（不得被 pop 迴圈吃掉）');
   }
 }

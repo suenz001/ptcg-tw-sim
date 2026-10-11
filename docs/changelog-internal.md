@@ -1,5 +1,40 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.533：受傷觸發改在招式效果之後結算（2026-10-12）
+
+BASE af9ea475（v6.532）。**站長 2026-10-12 裁定**：「把受傷反擊（甲殼刺、扣殺能量、毒刺、龐克頭盔等）整體移到招式效果之後」。
+- 依據（**直接判例**，官方 Q&A）：682／681 戲法舞步／戲法斗篷移走扣殺能量 ⇒ 不放；904 螺旋關節先回手 ⇒ 甲殼刺選不到；905 夾尾巴逃跑 ⇒ 不丟；975 退化光線 ⇒ 尖刺盔甲不生效；10／454 攻擊方回手牌 ⇒ 反擊針不放；17 控制輪回備戰 ⇒ 照放；613／913 吹飛、推倒換下持有者 ⇒ 照樣觸發；16 泡沫吸取先回復；359 毒刺在芳香射擊效果之後；583／899／970 幸運頭盔在招式之後；1051 龐克頭盔在招式傷害之後；501 水迴旋把攻擊方放回牌庫 ⇒ 奢華炸彈不放、不丟。
+- 中央管線：
+  - 有招式效果（v6.490 延後模式 _v6490Defer）時，engine 主管線不再在傷害當下觸發 KO 分支／存活分支／龐克頭盔／共用尾段的受傷觸發，改記一筆 `_pendingOnDamaged`（純資料：aIdx、dIdx、holderIid、attackerIid、baseDamage、宣告時 field-wide 快照）。
+  - `settlePendingOnDamaged`（engine，哨兵 v6533-settle-on-damaged）：ATTACK 末端、RESOLVE_SELECTION 鏈結束、applyActionImpl 尾段，**都在 drainPendingAttackKo 之前**呼叫；有選擇視窗開著就不動；先清佇列再逐筆結算。
+  - 結算時依**當下盤面**重判：持有者依 iid 找（不在場上 ⇒ 不觸發，**類推**）、攻擊方依 iid 找（備戰也算；不在場上 ⇒ 對牠的反擊不發生，寫一行說明）、讀現在的卡（退化）、道具與特殊能量要還附著、特性有效性與攻擊方豁免在結算當下判。
+  - 既有各卡函式寫死「players[aIdx].active／players[dIdx].active」⇒ 用 `swapIntoActiveView` 暫時把持有者／攻擊方換到戰鬥位跑完再換回（不逐卡改寫，判準仍一份）；攻擊方在備戰時視角內被加上的特殊狀態撤回並 log。
+  - 順序與 effects.fireDefenderOnDamaged 相同：道具 → 特殊能量 → 受傷反擊特性（擋下時 blockedRetaliationLog）→ 警備濁霧 → 卡面內建 → field-wide → 招式旗標 → 龐克頭盔 → 攻擊方被反擊打昏（戰鬥位走 koAttackerAfterRetaliation、備戰走 koTargetAfterAttackDamage）。
+  - 甲殼刺選擇視窗帶 `targetIid`（使出招式那一隻），resolver 依它定位（中央 activeEnergyDiscardCandidates 本來就認 targetIid，UI／AI 同源）。
+  - 沒有招式效果的招式：原路徑不動（當場結算，行為相同；守衛 LEG 正對照）。
+- 本版**未**改 effects.ts 的中央傷害路徑（dealAttackDamageToTarget → fireDefenderOnDamaged：狙擊、選擇視窗型招式），排在 v6.534。
+- 待站長確認（類推）：持有者被招式效果放回手牌／牌庫 ⇒ 受傷觸發不發生；特性消除源以結算當下為準。
+- Rule 40：
+  - test-v6215：D6 凸凸頭盔改斷言「在招式效果之後」（官方 1051／501 同型）；F2／F10／I5b／I7／K1／K3 由「排隊＋出列重算」改驗 `_pendingOnDamaged` 與結算後浮上來的視窗；L 段換成「同一次結算兩個受傷觸發各開一個視窗」驗沒登記 refresher 的排隊 picker 照常浮上來。
+  - test-v6402 D1：龐克頭盔述詞呼叫點 2 → 3（新增結算出口，同一份述詞）。
+- 守衛 test-v6533-on-damaged-after-effects：14 條行為＋HEAD-FAIL（BASE：Q682、Q904、BENCH_SPIKE、TOOLGONE、ENDGAME、BENCH_POISON_LOG 紅；其餘兩版綠）。
+- 突變 9 個：殺 7；存活 2 為等價——①備戰特殊狀態撤回（中央 sweep 也會清掉備戰狀態，只差說明 log）②道具迴圈內再查一次（結算開頭已讀當下盤面）。
+- harness＋免疫測試網（36 支）：BASE 與 HEAD 結果逐支相同。
+- 全套第一輪紅 5 支（Rule 40）：test-v6352 C3／C3b 與 test-v6357 H2b（field-wide helper 呼叫點 3 → 4：多了結算出口，同一支 helper）、test-v6368 BR（重跑 v6357）、test-v6211（扇子不再預先排隊 ⇒ 改驗「受傷紀錄在 _pendingOnDamaged、招式視窗解完扇子浮上來」）、test-v6202 20d（攻擊方不在場的說明 log 查 PASSIVE_RETALIATION 時補接 isAbilityHolderEffective）。v6301 為已知速度假紅（單跑綠）。
+- **Fable 5.1 審查**（2302 招 × 33 盤面＝75,966 局 BASE/HEAD 比對；1,148 處差異全為預期時序改變或修掉的 BASE 舊 bug；無重複／漏觸發）：
+  - P2-1（本版引入）：反擊打昏無備戰的攻擊方 ⇒ 寫終局 ⇒ drain 不結算防守方昏厥 ⇒ 古舊能量等修正失效、誤判平手。**已修**：settlePendingOnDamaged 結尾若寫了終局且還有 _pendingAttackKo ⇒ liftEndgameForOnKoV6361（與 v6421-koend-run-post 同型）；守衛 ENDGAME。
+  - P2-2（既有）：沒有招式效果時雙方同時昏厥、各剩最後 1 張獎賞 ⇒ 後者沒拿獎賞、判先取完者勝（官方應平手）。排進 v6.534 與 effects 路徑一併處理。
+  - P3-1（類推，**待站長裁定**）：推倒／蟲洞把帶「殼捲風旋轉／還擊斧／等待角擊／強大猛擊」招式旗標的寶可夢換到備戰 ⇒ 旗標隨離場清除 ⇒ 結算時不反擊（與 Q913 甲殼刺是特性不同；與 975 同向）。
+  - P3-2：守衛補 RKO_ACTIVE、RKO_BENCH（反擊打昏攻擊方走中央結算）——兩個存活突變現在都會紅。
+  - P3-3：攻擊方在備戰時，毒刺／灼熱之軀／火箭隊的催眠裝置直接說明「不會陷入特殊狀態」，不再先印「陷入【中毒】」再撤回；守衛 BENCH_POISON_LOG。
+  - P3-4（AI）：試打停在對手要解的視窗時受傷反擊尚未結算 ⇒ selfDamage 低估；列入之後 AI 批次。
+  - P3-5（既有）：手持循環扇 × 攻擊方自換到備戰 ⇒ step2 候選含來源本身；列入小問題批次。
+  - P3-6（文案）：koAttackerAfterRetaliation「…獲勝！」在中央重判前印出；列入小問題批次。
+  - **複審（699b7427）**：P2-1／P3-2／P3-3 修法正確、Rule 40 無放寬、存活突變皆轉紅（「lift 不看 _pendingAttackKo」為等價存活）；329313c5→699b7427 重掃 75,966 局只差 3 處預期改善（未知圖騰｜神秘信號的防守方昏厥改走完整結算）。可以推送。
+  - P3-7（既有、極邊緣）：結算時同時開著受傷觸發自己的視窗、另一個反擊打昏無備戰的攻擊方 ⇒ 中央重判提早判勝、防守方昏厥不結算。與 P2-2 同屬終局中央管線，排 v6.534。
+  - P3-8（小）：火箭隊的催眠裝置的「不會陷入特殊狀態」說明，在持有者不是火箭隊的寶可夢時也會印；排 v6.534。
+- 全套（699b7427）：881／881，FAIL 只有已知速度假紅 test-v6301（單跑綠）。
+
 ## v6.532：退化後反擊、緊張感物品掃描、註解更正（2026-10-11）
 
 BASE 6c14391c（v6.531）。

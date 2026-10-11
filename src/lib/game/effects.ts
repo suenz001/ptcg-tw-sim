@@ -4031,18 +4031,21 @@ RESOLVERS.set('spike-shell-discard', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return st;
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
-  if (!opp.active) return st;
+  // ⭐v6.533：依 targetIid 定位使用招式的寶可夢（戰鬥位或備戰）；舊存檔沒有 targetIid ⇒ 沿用戰鬥位
+  const tIid = (_params as { targetIid?: string } | undefined)?.targetIid ?? opp.active?.iid;
+  const target = opp.active?.iid === tIid ? opp.active : opp.bench.find(b => b.iid === tIid) ?? null;
+  if (!target) return st;
   const set = new Set(iids);
-  const removed = opp.active.energyAttached.filter(e => set.has(e.iid));
+  const removed = target.energyAttached.filter(e => set.has(e.iid));
   if (removed.length === 0) return st;
   const names = removed.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
-  const attName = pool.get(opp.active.cardId)?.name ?? '?';
+  const attName = pool.get(target.cardId)?.name ?? '?';
   const s = addLog(st, `甲殼刺：丟棄 ${attName} 身上的 ${names}`, idx);
+  const strip = (c: CardInstance) => c.iid === target.iid ? { ...c, energyAttached: c.energyAttached.filter(e => !set.has(e.iid)) } : c;
   return updatePlayer(s, oppIdx, pl => ({
     ...pl,
-    active: pl.active
-      ? { ...pl.active, energyAttached: pl.active.energyAttached.filter(e => !set.has(e.iid)) }
-      : pl.active,
+    active: pl.active ? strip(pl.active) : pl.active,
+    bench: pl.bench.map(strip),
     discard: [...pl.discard, ...removed],
   }));
 });
@@ -5842,7 +5845,9 @@ export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
       actorIdx: dIdx, sourcePlayerIdx: aIdx,
       minCount: 1, maxCount: 1,
       effectKey: 'spike-shell-discard',
-      params: { titleOverride: `甲殼刺：選擇 1 張對手 ${attName} 身上的能量丟棄` },
+      // ⭐v6.533：帶使用招式的寶可夢的 iid（targetIid：選擇視窗與 resolver 都依它定位）——
+      //   受傷觸發改在招式效果之後結算，攻擊方可能已被自己的招式換到備戰（官方：控制輪回備戰仍照樣處理）
+      params: { titleOverride: `甲殼刺：選擇 1 張對手 ${attName} 身上的能量丟棄`, targetIid: att.iid },
     });
   }],
   // 超級頭巾混混ex｜反擊雞冠 (M2a Stage1 330HP, Darkness)
