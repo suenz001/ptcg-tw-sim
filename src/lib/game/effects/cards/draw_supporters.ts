@@ -19,7 +19,7 @@ import {
   joinCardNames,   // v6.334 附能 log 顯示實際能量卡名
   shuffle,   // v6.213 sameEvoName 不再需要（2 階判定改走 stage2-index 的 per-pool 索引）
 } from '../_shared';
-import type { CardInstance } from '../../types';
+import type { CardInstance, GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
 // ⭐v6.213 2 階判定的 per-pool 索引（leaf，只 import type ⇒ 不可能循環）
 import { isStage2ByEvoVariant } from '../../stage2-index';
@@ -277,7 +277,10 @@ regR('loquat-discard-opp-items', (st, actorIdx, selectedIids, _params, pool) => 
 // v6.089：卡面「這張卡必須將自己的1張手牌丟棄才可使用」＝印刷 cost。
 //   手牌只剩這張時 cost 付不出來 → 照卡娜莉／秘密箱的既有守衛形態 gate（含此卡需 ≥2 張）。
 //   ⚠ 只 gate cost，不 gate「手牌已≥6 抽 0 張」——抽牌類依站內慣例一律放行。
-regG('艾莉絲的鬥志', (st, idx) => st.players[idx].hand.length >= 2);
+// ⭐v6.528 官方 Q&A（PTCG_RULES L2089）：「自己的手牌有8張時，可以使用支援者卡『艾莉絲的鬥志』嗎？」「不可以。」
+//   （打出＋丟 1 張後仍 ≥6 張 ⇒ 抽不到牌。）手牌張數含這張卡：可用範圍 2～7 張。
+//   ⚠ 取代 v6.089「抽 0 張也維持可打出」的站內慣例（那是設計決定，不是站長裁定；官方判例優先）。
+regG('艾莉絲的鬥志', (st, idx) => st.players[idx].hand.length >= 2 && st.players[idx].hand.length <= 7);
 reg('艾莉絲的鬥志', (st, idx) => {
   const hand = st.players[idx].hand;
   if (hand.length === 0) {
@@ -457,25 +460,56 @@ regR('naruei-encourage-commit', (st, idx, iids, params, pool) => {
 // ── 琵魯（Supporter / J）── v2.179 ────────────────────────────────────────────
 // 卡面：從牌庫抽卡直到自己的手牌滿 5 張為止。
 //       若希望，在從牌庫抽卡前，將自己的任意數量的手牌丟棄。
-// 實裝：開 hand-discard pending（任意 0~hand.length），resolver 棄掉所選 + 抽到 5。
-// gate：永遠可用（牌庫空也允許 — 卡面沒禁；丟掉手牌也可能是策略）。
-reg('琵魯', (st, idx) => {
-  st = addLog(st, '琵魯：選擇要丟棄的手牌（可不選），然後抽卡直到滿 5 張', idx);
+// 實裝：開 hand-discard pending，resolver 棄掉所選 + 抽到 5。
+// ⭐v6.528 官方 Q&A（PTCG_RULES §17.46.I）：
+//   ・「自己的牌庫1張卡都不剩時，可以使用…琵魯，丟棄手牌嗎？」「不可以。…不可以使用支援者卡『琵魯』。」⇒ regG：牌庫 ≥1。
+//   ・「自己的手牌有7張卡時，使用…琵魯，可以只丟棄1張手牌嗎？」「不可以。…必須將手牌丟棄至僅剩4張以下。」
+//   ・「當自己包含…琵魯在內，僅有5張以下的手牌時…可以不丟棄任何1張…嗎？」「可以。」
+//   ⇒ 打出後剩 h 張：至少丟 max(0, h−4) 張（pirouMinDiscard，唯一判準）；牌庫 1 張時可丟光再抽 1 張（L2807）。
+regG('琵魯', (st, idx) => st.players[idx].deck.length > 0);
+/** ⭐v6.528 琵魯打出後（手牌不含琵魯）至少要丟幾張：丟完必須 ≤4 張（才抽得到牌）。 */
+export function pirouMinDiscard(handAfterPlay: number): number {
+  return Math.max(0, handAfterPlay - 4);
+}
+/** 丟不夠時最多重開幾次（比照 engine RESOLVE_REJECT_STREAK_MAX=3：任何情況下都不軟鎖；Fable 審查 v6.528 P2-1）。 */
+const PIROU_REJECT_MAX = 3;
+function pirouPending(st: GameState, idx: 0 | 1, rejects = 0): GameState {
   const handLen = st.players[idx].hand.length;
-  if (handLen === 0) {
-    // 沒手牌可丟，直接抽到 5
-    const need = Math.max(0, 5 - st.players[idx].hand.length);
-    return drawCards(st, idx, need);
-  }
+  const minD = pirouMinDiscard(handLen);
   return withPending(st, {
     type: 'hand-discard',
     actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 0, maxCount: handLen,
+    minCount: minD, maxCount: handLen,
     effectKey: 'pirou-discard-then-draw',
+    // minCount ≥ 1 時 selectionAllowsSkip 自動不給【不選】；0 時沿用 OPTIONAL 白名單
+    params: {
+      minDiscard: minD, rejects,
+      ...(minD > 0 ? { titleOverride: `琵魯：至少丟棄 ${minD} 張手牌（丟到剩 4 張以下），然後抽卡直到滿 5 張` } : {}),
+    },
   });
+}
+reg('琵魯', (st, idx) => {
+  const handLen = st.players[idx].hand.length;
+  const minD = pirouMinDiscard(handLen);
+  st = addLog(st, minD > 0
+    ? `琵魯：至少丟棄 ${minD} 張手牌（丟到剩 4 張以下），然後抽卡直到滿 5 張`
+    : '琵魯：選擇要丟棄的手牌（可不選），然後抽卡直到滿 5 張', idx);
+  if (handLen === 0) {
+    // 沒手牌可丟，直接抽到 5（實際抽到的張數受牌庫限制）
+    const need = Math.min(5, st.players[idx].deck.length);
+    if (need > 0) st = addLog(st, `琵魯：抽 ${need} 張`, idx);
+    return drawCards(st, idx, need);
+  }
+  return pirouPending(st, idx as 0 | 1);
 });
 regR('pirou-discard-then-draw', (st, idx, iids, _params, pool) => {
   const chosen = st.players[idx].hand.filter(c => iids.includes(c.iid));
+  // ⭐v6.528：丟的張數不足（只有改過的 client 送得出來）⇒ 原樣重開選擇視窗，不替玩家挑
+  const _minD = Number((_params as { minDiscard?: number } | undefined)?.minDiscard ?? 0);
+  const _rej = Number((_params as { rejects?: number } | undefined)?.rejects ?? 0);
+  if (chosen.length < _minD && _rej < PIROU_REJECT_MAX) {
+    return pirouPending(addLog(st, `琵魯：至少要丟棄 ${_minD} 張手牌`, idx), idx as 0 | 1, _rej + 1);
+  }
   if (chosen.length > 0) {
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
     st = addLog(st, `琵魯：丟棄 ${chosen.length} 張手牌（${names}）`, idx);
@@ -487,9 +521,10 @@ regR('pirou-discard-then-draw', (st, idx, iids, _params, pool) => {
   } else {
     st = addLog(st, '琵魯：未丟棄任何手牌', idx);
   }
-  const need = Math.max(0, 5 - st.players[idx].hand.length);
+  // ⭐v6.528：log 寫實際抽到的張數（牌庫不夠時不寫成「補 N 張」）
+  const need = Math.min(Math.max(0, 5 - st.players[idx].hand.length), st.players[idx].deck.length);
   if (need > 0) {
-    st = addLog(st, `琵魯：抽到 5 張手牌（補 ${need} 張）`, idx);
+    st = addLog(st, `琵魯：抽 ${need} 張`, idx);
     st = drawCards(st, idx, need);
   } else {
     st = addLog(st, '琵魯：手牌已滿 5 張，不抽', idx);

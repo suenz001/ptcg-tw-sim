@@ -11,6 +11,7 @@
  *   - 各 resolver 用既有 chained pending pattern（仿 麻麻鰻｜電氣發電機 / 龐克練肌）
  */
 
+import { quickRhythmUsable } from '../../usable-gates'; // ⭐v6.528
 import type { CardInstance, PlayerState, GameState } from '../../types';
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared';
@@ -337,6 +338,9 @@ regA('狂歡浪舞鴨', 0, (st, idx, _pool, _cardInst) => {
   const p = st.players[idx];
   if (p.hand.length === 0) {
     return rejectAbilityUse(st, '快節奏：手牌為空，無法支付 1 張手牌的代價', idx);
+  }
+  if (!quickRhythmUsable(p.hand.length)) {
+    return rejectAbilityUse(st, '快節奏：手牌 6 張以上，放回 1 張後仍抽不到牌，無法使用', idx);
   }
   const s = addLog(st, '狂歡浪舞鴨：使用特性「快節奏」，選擇 1 張手牌放回牌庫下方', idx);
   return withPending(s, {

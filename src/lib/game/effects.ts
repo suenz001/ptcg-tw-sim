@@ -6058,7 +6058,15 @@ regR('pokemon-center-lady-heal', healResolver);
 //   ③ 危險光線是【道具】，化隱／純樸只擋「對手招式或特性效果」→ 不該擋道具
 //      （原 v5.444 誤加 canApplyEffectToTarget('attack-effect') 化隱 gate，Wilson 裁定移除）
 // 約定：行動類狀態（混亂）放 status 主格；傷害類狀態（灼傷）放 secondaryStatus（helper 自動處理）。
-regG('危險光線', (st, idx) => !!st.players[(1-idx) as 0|1].active);
+// ⭐v6.528 官方 Q&A（PTCG_RULES L1699）：「對手的戰鬥寶可夢已處於[灼傷]和[混亂]時，可以使用…危險光線嗎？」「不可以。」
+//   L1697：混亂是「放 3 個指示物」的變體（confusionSelfDamageCounters）時「可以」（置換成一般混亂）；L1701：睡眠時可以。
+//   ⚠ 防禦方的免疫不算進 gate（站長 2026-08-07 裁定，判準①）。
+regG('危險光線', (st, idx) => {
+  const a = st.players[(1-idx) as 0|1].active;
+  if (!a) return false;
+  const alreadyBoth = hasStatusInAnySlot(a, 'burned') && hasStatusInAnySlot(a, 'confused') && a.confusionSelfDamageCounters == null;
+  return !alreadyBoth;
+});
 reg('危險光線', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   if (!st.players[dIdx].active) return st;

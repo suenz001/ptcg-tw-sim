@@ -1024,29 +1024,47 @@ regR('sturdy-might-tree-step2', (st, idx, iids, params, pool) => {
 //   獎賞格的手牌）設 faceUp，維持到對戰結束、對雙方公開，該玩家取獎時可選要不要取那張已知卡
 //   （沿用 v5.878 克雷色利亞｜弦月光芒的 faceUp 機制與 engine TAKE_PRIZES 取獎選擇）。
 //
-// gate：對手獎賞 ≥1 + 對手手牌 ≥1（任一空就完全沒效果）
+// ⭐v6.528 官方 Q&A（PTCG_RULES L2213／L2215）：
+//   ・「對手手牌為0張時，可否使出…妨礙機器人？」「可以。此情況在將1張對手的獎賞卡翻到正面後，效果的處理便結束了。」
+//   ・「對手的獎賞卡…全部被翻到正面時…可否將對手的獎賞卡與對手的1張手牌互換？」「不行。此情況在查看1張對手的手牌後，效果的處理便結束了。」
+//   ⇒ gate：對手有「反面朝上」的獎賞卡，或對手手牌 ≥1（兩者都沒有才完全沒效果）；
+//     獎賞卡只從反面朝上的裡面選（卡面「選擇1張對手的反面朝上的獎賞卡」）；兩者都有才問要不要互換。
+export function disruptBotTargets(opp: { prizes: readonly { faceUp?: boolean }[]; hand: readonly unknown[] }): { faceDownPrizeIdx: number[]; handCount: number } {
+  const faceDownPrizeIdx: number[] = [];
+  opp.prizes.forEach((c, i) => { if (!c.faceUp) faceDownPrizeIdx.push(i); });
+  return { faceDownPrizeIdx, handCount: opp.hand.length };
+}
 regG('火箭隊的妨礙機器人', (st, idx) => {
-  const opp = st.players[(1 - idx) as 0 | 1];
-  return opp.prizes.length > 0 && opp.hand.length > 0;
+  const t = disruptBotTargets(st.players[(1 - idx) as 0 | 1]);
+  return t.faceDownPrizeIdx.length > 0 || t.handCount > 0;
 });
 reg('火箭隊的妨礙機器人', (st, idx, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
-  // 隨機抽 1 張獎賞（位置）+ 1 張手牌（位置）
-  const prizeIndex = Math.floor(Math.random() * opp.prizes.length);
-  const handIndex = Math.floor(Math.random() * opp.hand.length);
-  const prizeInst = opp.prizes[prizeIndex];
-  const handInst = opp.hand[handIndex];
-  const prizeName = pool.get(prizeInst.cardId)?.name ?? '?';
-  const handName = pool.get(handInst.cardId)?.name ?? '?';
-  st = addLog(st, `火箭隊的妨礙機器人：盲選 ${opp.name} 的 1 張獎賞卡 + 1 張手牌`, idx);
-  st = addLog(st, `→ 翻開：獎賞卡=「${prizeName}」、手牌=「${handName}」`, idx);
-  // v5.879：卡面「在對戰結束前，那張獎賞卡維持正面朝上」— 將選中的對手獎賞設 faceUp（維持到
-  //   對戰結束、對雙方公開、顯示於獎賞區）。若稍後互換，resolver 會把換進獎賞格的那張改設 faceUp。
-  st = updatePlayer(st, oppIdx, p => ({
-    ...p,
-    prizes: p.prizes.map((c, i) => (i === prizeIndex ? { ...c, faceUp: true } : c)),
-  }));
+  const t = disruptBotTargets(opp);
+  // 盲選：反面朝上的獎賞 1 張（位置）＋ 手牌 1 張（位置）；任一邊沒有就只做有的那一邊
+  const prizeIndex = t.faceDownPrizeIdx.length > 0 ? t.faceDownPrizeIdx[Math.floor(Math.random() * t.faceDownPrizeIdx.length)] : -1;
+  const handIndex = t.handCount > 0 ? Math.floor(Math.random() * t.handCount) : -1;
+  const prizeInst = prizeIndex >= 0 ? opp.prizes[prizeIndex] : null;
+  const handInst = handIndex >= 0 ? opp.hand[handIndex] : null;
+  const prizeName = prizeInst ? (pool.get(prizeInst.cardId)?.name ?? '?') : '';
+  const handName = handInst ? (pool.get(handInst.cardId)?.name ?? '?') : '';
+  if (prizeInst && handInst) {
+    st = addLog(st, `火箭隊的妨礙機器人：盲選 ${opp.name} 的 1 張反面朝上的獎賞卡 + 1 張手牌`, idx);
+    st = addLog(st, `→ 翻開：獎賞卡=「${prizeName}」、手牌=「${handName}」`, idx);
+  } else if (prizeInst) {
+    st = addLog(st, `火箭隊的妨礙機器人：${opp.name} 沒有手牌 ⇒ 翻開 1 張獎賞卡「${prizeName}」，效果結束`, idx);
+  } else {
+    st = addLog(st, `火箭隊的妨礙機器人：${opp.name} 沒有反面朝上的獎賞卡 ⇒ 查看 1 張手牌「${handName}」，效果結束`, idx);
+  }
+  // v5.879：卡面「在對戰結束前，那張獎賞卡維持正面朝上」— 將選中的對手獎賞設 faceUp。
+  if (prizeIndex >= 0) {
+    st = updatePlayer(st, oppIdx, p => ({
+      ...p,
+      prizes: p.prizes.map((c, i) => (i === prizeIndex ? { ...c, faceUp: true } : c)),
+    }));
+  }
+  if (!prizeInst || !handInst) return st;
   return withPending(st, {
     type: 'modal-choice',
     actorIdx: idx, sourcePlayerIdx: idx,

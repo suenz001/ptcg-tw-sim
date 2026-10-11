@@ -161,9 +161,12 @@ const guard = (name, st, idx = 0) => {
     ok(guard('艾莉絲的鬥志', s1) === false, '⭐ B4 手牌只剩這張（付不出丟棄成本）→ 艾莉絲的鬥志不可打出');
     const s2 = mkState(); s2.players[0].hand = [inst(c), inst(other)];
     ok(guard('艾莉絲的鬥志', s2) === true, 'B4 正對照：手牌 2 張 → 可打出');
-    // 誠實邊界：手牌已 ≥6 抽 0 張 — 抽牌類依站內慣例放行，不 gate
-    const s3 = mkState(); s3.players[0].hand = Array.from({ length: 8 }, () => inst(other)).concat([inst(c)]);
-    ok(guard('艾莉絲的鬥志', s3) === true, 'B4 邊界：手牌已很多仍可打出（抽牌類不 gate，站內慣例）');
+    // ⭐v6.528（Rule 40）：原本的「抽牌類依站內慣例放行」被官方 Q&A 推翻（PTCG_RULES L2089：手牌 8 張時「不可以」）。
+    //   邊界改成：含本卡 7 張（丟 1 後 5 張、抽得到 1 張）可打出；8 張不可。
+    const s3 = mkState(); s3.players[0].hand = Array.from({ length: 6 }, () => inst(other)).concat([inst(c)]);
+    ok(guard('艾莉絲的鬥志', s3) === true, 'B4 邊界：含本卡 7 張 → 可打出（丟 1 張後抽得到 1 張）');
+    const s4 = mkState(); s4.players[0].hand = Array.from({ length: 7 }, () => inst(other)).concat([inst(c)]);
+    ok(guard('艾莉絲的鬥志', s4) === false, '⭐ B4 官方判例：含本卡 8 張 → 不可打出（PTCG_RULES L2089）');
   }
 }
 

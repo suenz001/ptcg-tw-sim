@@ -10,6 +10,7 @@
  * 群組 G  主動特性       — 彩粉蝶（大飛翅）、烈箭鷹（穹天狩獵）、莉佳的霸王花ex（動人香氣）
  */
 
+import { bigWingUsable } from '../../usable-gates'; // ⭐v6.528
 import type { CardInstance, GameState } from '../../types';
 import type { Card } from '$lib/cards/types';   // ⭐v6.385b totalEnergyCount 的 pool 型別
 import { startEnergyChain } from './v158_energy_chain';
@@ -406,8 +407,8 @@ regR('j-2354-raichu-charge-commit', (state, aIdx, iids, params, pool) => {
 regAByName('彩粉蝶', '大飛翅', (st, idx) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
-  if (dp.hand.length === 0 && dp.deck.length === 0) {
-    return rejectAbilityUse(st, '大飛翅：對手手牌與牌庫均為空', idx);
+  if (!bigWingUsable(dp.hand.length)) {
+    return rejectAbilityUse(st, '大飛翅：對手手牌為 0 張，無法使用', idx);
   }
   let s = st;
   if (dp.hand.length > 0) {

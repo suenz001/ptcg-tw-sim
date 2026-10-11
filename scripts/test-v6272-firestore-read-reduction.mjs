@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '0da255cdcedf1b838115b190ea8d18ffa3f180b1';   // v6.526（上一版）
+const PREV_SHA = '7b508fe2e848f75f03243abae1f66b2670f48d90';   // v6.527（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,22 +757,38 @@ const PREV_SHA = '0da255cdcedf1b838115b190ea8d18ffa3f180b1';   // v6.526（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.527 前移：PREV_SHA 從 0da255cd（v6.526）起算。
+  // ⚠⚠ v6.528 前移：PREV_SHA 從 7b508fe2（v6.527）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.527：站長裁定：垃圾洩氣不影響化隱／光之翼的攻擊方（engine 戰鬥位＋effects 備戰兩條管線）；特性互換五張卡走中央 swap-immune.ts（可選但不互換）。
+  // ⭐v6.528：官方 Q&A 第二輪比對 A 組：效果完全無法執行時不能使用（7 張卡），妨礙機器人改依判例。
   'src/lib/game/effects.ts',
-  'src/lib/game/effects/cards/m6_wave9.ts',
-  'src/lib/game/effects/cards/supporters_gust.ts',
+  'src/lib/game/effects/cards/draw_supporters.ts',
+  'src/lib/game/effects/cards/maroon_dragon_deck.ts',
+  'src/lib/game/effects/cards/v172_hij_batch.ts',
+  'src/lib/game/effects/cards/v2354_j_mark_batch.ts',
   'src/lib/game/effects/cards/v2930_high_use_abilities.ts',
-  'src/lib/game/effects/cards/v2995_g4_wave1.ts',
-  'src/lib/game/effects/cards/v2998_g2.ts',
-  'src/lib/game/effects/swap-immune.ts',
   'src/lib/game/engine.ts',
+  'src/lib/game/usable-gates.ts',
   'src/lib/version.ts',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.527）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.527 前移：PREV_SHA 從 0da255cd（v6.526）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.527：站長裁定：垃圾洩氣不影響化隱／光之翼的攻擊方（engine 戰鬥位＋effects 備戰兩條管線）；特性互換五張卡走中央 swap-immune.ts（可選但不互換）。
+//   'src/lib/game/effects.ts',
+//   'src/lib/game/effects/cards/m6_wave9.ts',
+//   'src/lib/game/effects/cards/supporters_gust.ts',
+//   'src/lib/game/effects/cards/v2930_high_use_abilities.ts',
+//   'src/lib/game/effects/cards/v2995_g4_wave1.ts',
+//   'src/lib/game/effects/cards/v2998_g2.ts',
+//   'src/lib/game/effects/swap-immune.ts',
+//   'src/lib/game/engine.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.526）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.526 前移：PREV_SHA 從 e2146f86（v6.525）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -887,15 +903,6 @@ const PREV_ALLOWED = [
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
 // ⭐v6.516：engine v6515-promote-first 閘改成雙方都看（對手戰鬥場空、備戰有寶可夢也只收補位／選擇／取獎）；ai.ts 主階段對手戰鬥場空時回 null 等補位。
 //   'src/lib/game/ai.ts',
-//   'src/lib/game/engine.ts',
-//   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.515）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.515 前移：PREV_SHA 從 da231909（v6.514）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.515：engine handlePlaying 加中央閘（哨兵 v6515-promote-first）：輪到行動的玩家戰鬥場空、備戰有寶可夢時只接受 SEND_NEW_ACTIVE／RESOLVE_SELECTION／TAKE_PRIZES。
 //   'src/lib/game/engine.ts',
 //   'src/lib/version.ts',
 //   'static/changelog-archive.html',

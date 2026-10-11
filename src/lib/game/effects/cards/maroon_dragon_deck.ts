@@ -315,9 +315,10 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
 // ── 特殊紅牌（Item） ────────────────────────────────────────────────────────
 // 原文：這張卡只有在對手剩餘獎賞卡的張數為 3 張以下時才可使用。
 // 效果：對手手牌洗回牌庫，抽 3 張。
+// ⭐v6.528 官方 Q&A（PTCG_RULES §18.I）：「對手1張手牌都沒有時，可以使用物品卡『特殊紅牌』嗎？」「不可以。」
 regG('特殊紅牌', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
-  return st.players[oppIdx].prizes.length <= 3;
+  return st.players[oppIdx].prizes.length <= 3 && st.players[oppIdx].hand.length > 0;
 });
 reg('特殊紅牌', (st, idx) => {
   const dIdx = (1 - idx) as 0 | 1;

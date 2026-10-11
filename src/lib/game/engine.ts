@@ -8,6 +8,7 @@
  *   - M3 多人連線時只需傳送動作序列
  */
 
+import { quickRhythmUsable, bigWingUsable } from './usable-gates'; // ⭐v6.528 快節奏／大飛翅 gate 唯一判準（leaf）
 import { ancientKey, isPlayerLevelAttackOnCooldown } from './player-attack-cooldown';   // ⭐v6.435 leaf（玩家層級冷卻唯一判準）
 import { modalChoicePayloadValid, selectionAllowsCancel } from './selection-ui';   // >>> v6331-modal-choice-payload-import（v6.523 加 selectionAllowsCancel）
 import type { Card, EnergyType, Attack } from '$lib/cards/types';
@@ -11493,8 +11494,10 @@ export function getUsableAbilities(
         if (!hasEvo) return;
       }
       // P1：狂歡浪舞鴨 | 快節奏 — 手牌非空
+      // ⭐v6.528 官方 Q&A（PTCG_RULES L1891）：「自己的手牌有6張以上時，可以使用…快節奏嗎？」「不可以。」
+      //   ⇒ 判準只有一份：quickRhythmUsable（src/lib/game/usable-gates.ts）。
       if (ab.name === '快節奏') {
-        if (player.hand.length === 0) return;
+        if (!quickRhythmUsable(player.hand.length)) return;
       }
       // P1：奇樹的大電海燕 | 閃光抽出 — 自身有基本【雷】能量
       if (ab.name === '閃光抽出') {
@@ -12101,7 +12104,9 @@ export function getUsableAbilities(
       // 彩粉蝶｜大飛翅 — 卡面「對手將對手自己的手牌全部…放回牌庫下方。然後，對手從牌庫抽出4張卡。」
       //   對手手牌／牌庫的**張數**都是公開資訊（內容才是隱藏的，不得拿內容 gate，見 v6.131 瞄準獵物）。
       const _oppForBigWing = state.players[(1 - state.activePlayerIndex) as 0 | 1];
-      if (ab.name === '大飛翅' && _oppForBigWing.hand.length === 0 && _oppForBigWing.deck.length === 0) return;
+      // ⭐v6.528 官方 Q&A（PTCG_RULES L2816）：「對手的手牌為0張卡時，可以使用…大飛翅嗎？」「不可以。」
+      //   （L2814：對手牌庫 0 張、手牌 ≥1 ⇒ 可以。）判準只有一份：bigWingUsable。
+      if (ab.name === '大飛翅' && !bigWingUsable(_oppForBigWing.hand.length)) return;
       // 「牌庫 0 張 ⇒ 整個效果無事可做」型（v6.132 站長裁定，只判張數不看內容）：
       //   竹蘭的尖牙陸鯊｜王者呼聲、蓋諾賽克特ex｜金屬信號、銃嘴大鳥｜天空抽出。
       //   ⚠ 這三張原本的註解寫「no gate needed — deck content is hidden info」——

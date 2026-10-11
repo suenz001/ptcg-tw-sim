@@ -2580,7 +2580,7 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
   卻讓跳回頂端時圖片空白 ⇒ 撤回。量記憶體：本地固定回應模擬快速網路、`Memory.simulatePressureNotification` 後再量、新舊 build 同腳本對照。
 - **雲端 clone 推送**：commit 前 `git branch --show-current`（detached HEAD 上 amend、再從 main 打 bundle ⇒ 推上去的是舊 commit）；
   bundle 後 `git bundle list-heads` 核對 sha；已推送的 commit 不 amend，另補一顆。
-- **重大修正每版送 Fable 5.1 獨立審查**（站長 2026-10-03），已推送未部署的伺服器改動也要補審；小事不送（節約 token）。
+- ~~重大修正每版送 Fable 5.1 獨立審查；小事不送~~ ⇒ **已由 Rule 82 取代：每一版都送審**（站長 2026-10-11）。
 - 給站長在 VM 跑的指令必須是可直接貼進 bash 的一行；VM 沒有 mongosh ⇒ 查 Mongo 用 `cd /opt/ptcg/api && node -e '…require("mongodb")…'`（URI 從 `.env` 取）。
 
 ## Rule 81（2026-10-10）：有疑問先找判例，找到判例才動手（v6.519～v6.523）
@@ -2601,3 +2601,72 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
   ⇒ 原本行為才是對的，錯的只有 log。站長要求查判例後才撤回。**「看起來像 bug」不是改行為的理由，判例才是。**
 - 審查者（Fable／Opus）提出「行為應該改成 X」的建議時，同樣先查判例；審查者的推論不等於判例。
 - 程式行為與判例無關的決定（例：狙擊路徑無法暫停 ⇒ 倖存鍛鍊器與防昏厥特性一律先特性）也要在回報裡標明「這是設計決定，沒有判例」，讓站長有機會改。
+
+## Rule 82（2026-10-11）：每一版都要審查，審查結果寫進 changelog-internal（v6.525～v6.527）
+
+站長逐字：「最近的更新是否都有經過審查？因為我發現幾乎每次審查都會發現錯誤，所以一定都要審查」。
+（本條取代 Rule 80「小事不送」那一句。）
+
+- **每一版不論大小**（玩家端、admin、伺服器、純守衛）都送 Fable 5.1 獨立審查，流程固定為：
+  改動 → 相關守衛＋新守衛（HEAD-FAIL、突變）→ bump → 全套 → **審查** → 修審查發現 → 修完再請**同一位審查者複審** → push → 看 CI。
+  中途不停下來問站長；push 完才回報。
+- **審查結果一定寫進 `docs/changelog-internal.md` 該版段落**：P1／P2／P3 各列「已修／記錄不修（理由）／回報站長」，複審結論也寫。
+  實績：v6.525（P1 幽靈 P2＋四個 P2）、admin v1.83 沒送審→v1.84 補修、v6.526（補審 v6.518～6.521 抓到 F1～F7）、
+  v6.527（P2：清單擴張後 engine 迴圈多寫 log）—— **每一次都有東西**。
+- 審查提示詞要寫清楚：站長裁定原文、BASE／HEAD sha、「唯讀；要實驗就 `git archive` 到自己的暫存目錄」、要求附實跑證據與 P1/P2/P3 分級、
+  要求檢查守衛是否安慰劑。審查者的結論一律自己重現（突變把它說的洞重新打開，守衛要紅）。
+- 審查發現的修正若動到 src ⇒ amend 前**重跑 build、tsc、相關守衛，並重跑全套**（全套結果必須對應最後推上去的那顆 commit 的程式碼；
+  只改 docs 的 amend 不必重跑）。
+
+## Rule 83（2026-10-11）：擴張「中央清單／中央述詞」時，要審查**所有消費者**，不是只看自己要的那一個（v6.527）
+
+- 實例：把「垃圾洩氣」加進 `ATTACKER_TARGETED_PASSIVE_REDUCE_ABILITIES`，我要的消費點（engine 垃圾洩氣段、effects 備戰段）都對，
+  但同一份清單還被 engine 的 PASSIVE_DAMAGE_REDUCE 迴圈拿去「先問免疫、寫 log、continue」⇒ 灰塵山在戰鬥位時
+  **沒附道具也寫「無效」、有道具寫兩次**（傷害正確、只有 log 錯）。Fable 審查抓到；順帶發現陳舊的顎之化石自 v6.519 起也重複寫兩行。
+  修法：迴圈只替 `PASSIVE_DAMAGE_REDUCE`／`_COND` 裡真的會減傷的特性問免疫。
+- ⭐ 動中央清單前：`grep -n 清單名` 列出**每一個**讀它的地方，逐一想「多一個成員，這裡會多做什麼」。
+- ⭐ 改到 log 的版本，守衛要**斷言 log 行數**（例：沒附道具 0 行、有道具恰好 1 行、一般攻擊方 0 行），只驗傷害數字抓不到重複 log。
+- 共用 resolver（多張卡共用同一個 effectKey）加新行為 ⇒ 用 pending `params` 逐卡宣告（例：`params.immuneIids`），
+  沒帶參數的呼叫端行為必須零變化，守衛要有一條「老大的指令等沒帶參數的呼叫端不受影響」的正對照。
+
+## Rule 84（2026-10-11）：特性互換 × 不受特性效果影響（化隱／光之翼），以及「同型推論」的回報方式（v6.519～v6.527）
+
+- 官方 Q&A（深淵之瞳）：鐵掌力士｜大力捕捉器「可以選擇化隱的備戰寶可夢，但不會互換」。
+  站長 2026-10-11：挑戰角擊、媚惑引誘「改成跟大力捕捉器一樣」；灰塵山｜垃圾洩氣「也不生效，化隱 光之翼不會受到對手特性影響」。
+- **唯一判準**：`src/lib/game/effects/swap-immune.ts`
+  - 發動端 `oppBenchSwapTargets(st, actorIdx, pool, extra?)` ⇒ `{ validIids, immuneIids }`（extra＝卡面額外條件，例：剩餘 HP ≤ 90）；
+  - resolver 端 `immuneSwapPick(...)`：選到 `params.immuneIids` 裡的 ⇒ 據實 log「X 不受對手特性的效果影響，不會互換」、不互換（媚惑引誘也不混亂）。
+  - `immuneIids` 來自 pending 快照，玩家只能送 `selectedIids`，偽造不了。AI（ai.ts opp-bench-choose）與選擇視窗（`selImmuneIids`「🛡 不受影響」）
+    都讀 `params.immuneIids`，新卡帶上就自動生效。
+  - 禁止再在卡片檔就地寫 `canApplyEffectToTarget(...'ability-effect'...)` 過濾候選（會把可選的寶可夢藏起來）。
+- 涵蓋：鐵掌力士｜大力捕捉器、赫普的毛毛角羊｜挑戰角擊、花潔夫人｜媚惑引誘（站長點名）；
+  尼多后｜母親的誘引、安瓢蟲｜繁星花紋（**同型推論**：卡面同一句「選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換」）。
+- ⭐ **同型推論的回報方式**：站長沒點名、我依同一句卡面措辭一併改的卡，回報時**逐張列出卡名＋理由，並說「不同意可以改回」**；
+  changelog-internal 也寫「同型推論，不是站長點名／不是直接判例」。
+- 延後事項：錦標賽盤面遮蔽（預設關閉）開啟時，`pendingSelection.params.preAttackState` 會整包下發 ⇒ 站長：「等開遮蔽再修」。
+
+## Rule 85（2026-10-11）：頁面與守衛的固定配套（v6.525～v6.526 一次踩齊）
+
+改 `src/routes/game/+page.svelte`（或其他大廳頁面）時，以下守衛會因合法改動翻紅，照 Rule 40 處理，**不可放寬判準**：
+- `test-v6441`：用 difflib 從前一版頁面產生還原對，加進 LATER 清單（插在 `"\n];\n// ⭐v6.464 起"` 之前）。
+- `test-v6296` D1：大廳新區塊要登記。
+- `test-v6477`：淺色 CSS 一律 `python3 scripts/gen-lobby-light.py <page>` 產生，貼在 MK 與「手調」之間；色票斷言用 cssColor 正規化。
+- `test-v6169`：報告圖（canvas）範圍內禁「位」字（OKWORD 例外除外）——註解也算，改寫成「以 0.1 個百分點為單位取整」這類說法。
+- 守衛「抽函式原文實跑」（test-v6197／v6280／v6467／v6217 等）：
+  - 新程式引用了 harness 沒有的識別字 ⇒ 用 `typeof X !== 'undefined' && …` 防衛（v6.526 `_startGraceTimer`）；
+  - 函式裡用到的狀態要宣告在**函式內**，放模組層會讓抽出來的原文找不到（v6.525 `rawRooms`）。
+- `room.ts` 的 Firestore 呼叫數被 test-v6267／v6279 釘住 ⇒ Firestore 版不用的新功能直接回預設值，不要多讀一次。
+- 新端點／新哨兵命名先 `grep -rn` 全 repo，避免和既有守衛的關鍵字撞名（v6.525「休閒專用端點／casualApi」撞到既有斷言 ⇒ 改名 `/api/my-room`、`myRoomApi`）。
+- 對外 changelog 不得使用第二人稱（「你」）——有守衛會擋；寫「玩家」「開房的人」或省略主詞。
+- admin canvas 報告圖守衛：攔截 `fillText` 記 x、y、fillStyle、**measureText 寬度**；用超長牌組名當正對照驗不會超出版面（v1.84 G5）。
+- 不得釘死版本號：改用「≥ vX 且 title 與 h1 一致」。
+
+## Rule 86（2026-10-11）：休閒對戰「回到之前的房間」機制（v6.525／server v1.62）
+
+- 休閒房座位只認 Oracle 匿名 uid（瀏覽器 localStorage）；換瀏覽器／清資料 ⇒ uid 換新。房主關頁後 3 分鐘大廳藏房、10 分鐘過舊藏房、伺服器 5 分鐘沒寫入刪 lobby 房。
+- 兩個來源（中央 `src/lib/game/casual-reclaim.ts`）：① 同瀏覽器：大廳輪詢的**未過濾**原始列表找自己 uid 的 p1／p2；
+  ② 登入玩家：`GET /api/my-room`（email → 房號，回應哨兵 `myRoomApi:1`）＋ `POST /api/my-room/reclaim-seat`（CAS 最多 4 次，把座位綁回現在的 uid）。
+- 伺服器端（哨兵 `v162-casual-reclaim`，在 PTCG-FRIENDS-DM-BLOCK-END 之後、錦標賽區塊之前）：只看 p1／p2；觀戰位殘留一律清掉；
+  對戰位：lobby 清掉、playing 回 409；`heartbeats` 整個物件覆寫（欄位可能是 null，點路徑會失敗）。
+- 前端：用房號加入自己的舊房 ⇒ **先認回座位再 join**（否則坐成幽靈 P2）；開新房時只自動釋放「同瀏覽器、lobby、心跳停超過門檻」的舊房
+  （`releasableOldRooms`），email 來源一律不自動釋放；釋放走 `releaseLobbySeat`（交易內檢查仍是 lobby，否則丟 NOT_LOBBY）。
