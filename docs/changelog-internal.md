@@ -1,5 +1,19 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.531：監視之眼不能使用、白日夢補位、終局通則（2026-10-11）
+
+BASE a1965980（v6.530）。
+- 願增猿｜腎上腺腦力 × 探探鼠｜監視之眼：**直接判例** PTCG_RULES L3004（「不可以。…會繼續放置在自己的寶可夢身上」）＋**站長 2026-10-11 裁定**：「可以依你說的改成不能按【特性按紐】，但是你要注意，願增猿此時的特性並不是被消除，因此還是會受到例如雪妖女特性冰冷之帳的影響而被放置傷害指示物」。
+  - getUsableAbilities 對 MOVE_DAMAGE_COUNTER_ABILITIES 問 isAbilityBlockedByOakEye ⇒ 不列；regA 改 rejectAbilityUse（不吃使用次數，engine 已先擋，屬縱深防禦——該突變因此是等價存活，誠實記錄）。
+  - 取代 v6.049 站長裁定「可以按、效果被擋下」（站長本次改裁）。hasEffectiveAbilityByInst／isAbilityHolderEffective 不動：守衛 OE_snow 驗冰冷之帳照樣放 1 個。
+  - 火箭隊的以歐路普｜火箭腦力：**類推**（同屬「改放傷害指示物」的特性、同一個 set）。
+- 白日夢（Fable 複審 v6.530 待補）：附能者被侵蝕詛咒當場放到昏厥、要補位 ⇒ 出口暫留 daydreamEndTurnPending，補位那個動作的出口再結束回合。
+- 終局通則（Fable 審查 v6.530 P2-1）：applyActionImpl 出口新增 centralVerdictDiffersV6531——盤面寫的勝方與中央 judgeEndgameV6361 判的勝方不同時也收回重判（同一動作內雙方都取完最後一張、後寫的覆蓋前寫的）。咒詛炸彈 v6.530 的局部 lift 因此移除（單一機制）。
+- Rule 40：test-v6202 6c 改用可用清單判（監視之眼有效 ⇒ 不在清單；被消除 ⇒ 恢復）；test-has-effective-ability「探探鼠在場仍可發動」改成「不能按」（站長改裁定；同檔「特性仍有效」各條不變）；engine 新函式放在自己的哨兵 v6531-verdict-differs，engine-strip-v6421 先剝掉它與延後條件尾端那一項（test-v6361 H4 的意圖「v6.361 那一格沒被改寬」不變）。
+- **Fable 5.1 審查：無 P1／P2**。終局通則自動化掃描：全部 H/I/J 招式 2784 招 × 36 組盤面＝100,224 局、特性 308 個 × 36 組＝11,088 局，BASE vs HEAD 終局結果 0 差異、0 例外（咒詛炸彈 BASE 局部 lift 與 HEAD 中央通則逐格相同）；監視之眼「特性仍有效」各消費點未動；白日夢暫留 7 種情境實跑正確。P3 記錄、下一版順手改：_shared.ts 監視之眼維護鐵律第 3 條（「不要隱藏按鈕」）已過時；centralVerdictIsDrawV6421 docblock 過時（被 v6421 剝除器逐字釘住）；咒詛炸彈／白日夢在獎賞翻正面時終局盤面獎賞未扣（純外觀、勝負正確、既有）；test-v6202 6c 的 void idx。
+- 全套：v6171 在負載下 TIMEOUT（單跑 28 秒綠）。
+- test-v6531-oakeye-daydream-endgame（6 情境）；突變 4 個：3 個殺、1 個等價（見上）。
+
 ## v6.530：官方 Q&A 第二輪比對 B2 組——效果判定第二批（2026-10-11）
 
 BASE 14121b8b（v6.529）。

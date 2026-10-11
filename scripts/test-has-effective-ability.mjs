@@ -96,13 +96,15 @@ T('⭐⭐被監視之眼「擋住效果」的寶可夢，仍然是「擁有特�
     '效果被阻擋 ≠ 特性被消除 —— 願增猿仍是「擁有特性的寶可夢」，冰冷之帳照樣要打它');
 });
 
-T('⭐⭐探探鼠在場時，腎上腺腦力仍然可以發動（效果被擋是發動之後的事）', () => {
+// ⭐v6.531（Rule 40）：站長 2026-10-11 改裁定（依官方 Q&A PTCG_RULES L3004）：探探鼠在場時腎上腺腦力**不能按**；
+//   但特性**沒有被消除**（本檔的核心意圖：hasEffectiveAbilityByInst 不可把監視之眼算成消除）——這一半不變，由下方其他條與 test-v6531 OE_snow 守。
+T('⭐⭐探探鼠在場時，腎上腺腦力的按鈕不能按（v6.531 站長裁定；特性本身仍有效）', () => {
   const ape = inst(APE, [en(DARK)]);
   const hurt = inst(JYNX, [], { damage: 30 });   // 腎上腺腦力需要己方有受傷的寶可夢
   const withOak = { ...mk(mkP('P1', ape, [hurt]), mkP('P2', inst(OAK), [inst(JYNX)]), null), turnPhase: 'main' };
   const names = getUsableAbilities(withOak, pool).map((u) => u.abilityName);
-  assert.ok(names.includes('腎上腺腦力'),
-    `探探鼠在場時特性按鈕不該消失（Wilson 裁定：可以發動，發動後才被擋下失效），實得：${names.join('、')}`);
+  assert.ok(!names.includes('腎上腺腦力'),
+    `探探鼠在場時腎上腺腦力不該出現在可用清單（PTCG_RULES L3004），實得：${names.join('、')}`);
 });
 
 T('對照：場上沒有探探鼠時當然也可以發動', () => {

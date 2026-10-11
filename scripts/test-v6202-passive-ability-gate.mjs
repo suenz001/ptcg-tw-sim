@@ -234,11 +234,13 @@ T('6c. 監視之眼：願增猿｜腎上腺腦力 行為端 —— 特性被消�
     const ape=I(APE,{damage:30,energyAttached:[I(DARKE)]});
     const st=ST({active:ape,bench:[]},{active:oak});
     const idx=pool.get(APE).abilities.findIndex(a=>a.name==='腎上腺腦力');
-    const s=mod.applyAction(st,{type:'USE_ABILITY',iid:ape.iid,abilityIndex:idx,actorIdx:0},pool);
-    return s.log.map(l=>l.message).join('\n');
+    // ⭐v6.531（Rule 40）：站長改裁定（PTCG_RULES L3004）——監視之眼有效時腎上腺腦力**不能按**（不在可用清單），
+    //   不再是「按了才 log 被擋」。意圖（監視之眼被消除後就不再擋）不變：改用可用清單判。
+    void idx;
+    return mod.getUsableAbilities(st,pool).some(u=>u.iid===ape.iid);
   };
-  assert.ok(/監視之眼/.test(mk(false)),'特性正常時應該被監視之眼擋下並 log');
-  assert.ok(!/監視之眼/.test(mk(true)),'特性被消除後仍被監視之眼擋：'+mk(true));
+  assert.equal(mk(false),false,'特性正常時監視之眼應擋住（腎上腺腦力不在可用清單）');
+  assert.equal(mk(true),true,'監視之眼被消除後腎上腺腦力應恢復可用');
 });
 
 // ── 多重轉接（洛托姆ex ex ＋ 對手鐵荊棘ex｜初始化）──

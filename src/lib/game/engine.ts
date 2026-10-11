@@ -3704,6 +3704,19 @@ function centralVerdictIsDrawV6421(s: GameState): boolean {
   return v.over === true && v.winner === null;
 }
 // <<< v6421-zombie-ko-central
+// >>> v6531-verdict-differs
+/**
+ * ⭐v6.531（Fable 審查 v6.530 P2-1）：盤面已寫成「某一方獲勝」，中央判定（含獎賞規則）卻判出**另一方**獲勝。
+ *   情境：同一個動作內雙方都取完最後一張獎賞（例：咒詛炸彈把對手打昏、自己也昏厥），兩次 addPendingPrize
+ *   各自寫 game-over、後寫的覆蓋前寫的 ⇒「後寫的那一方贏」。中央判定才是唯一勝負（Rule 38）⇒ 一樣收回重判。
+ *   中央判定不認得的終局（判 over:false）一律不動。
+ */
+function centralVerdictDiffersV6531(s: GameState): boolean {
+  if (s.isDraw === true || (s.winner !== 0 && s.winner !== 1)) return false;
+  const v = judgeEndgameV6361(s, true);
+  return v.over === true && v.winner !== null && v.winner !== s.winner;
+}
+// <<< v6531-verdict-differs
 function sanityKOSweep(
   state: GameState,
   attackerIdx: 0 | 1,
@@ -9743,11 +9756,14 @@ export function applyAction(
     const c: GameState = { ...raw };
     delete c.daydreamEndTurnPending;
     raw = c;
-    if (!raw.pendingSelection && raw.phase === 'playing' && raw.activePlayerIndex === who) {
+    // ⚠ 附能者的戰鬥寶可夢被當場放到昏厥（例：侵蝕詛咒）、還要補位 ⇒ END_TURN 會被引擎退回；比照選擇視窗暫留，
+    //   等補位那個動作的出口再結束（Fable 複審 v6.530）。
+    const _needPromote = raw.phase === 'playing' && !raw.players[who]?.active;
+    if (!raw.pendingSelection && !_needPromote && raw.phase === 'playing' && raw.activePlayerIndex === who) {
       raw = applyAction(addLog(raw, '[白日夢] 對手的回合結束', who), { type: 'END_TURN' }, pool);
       return raw;
-    } else if (raw.pendingSelection && raw.phase === 'playing') {
-      raw = { ...raw, daydreamEndTurnPending: who };   // 還有選擇視窗 ⇒ 等它解完的那個動作再結束
+    } else if ((raw.pendingSelection || _needPromote) && raw.phase === 'playing' && raw.activePlayerIndex === who) {
+      raw = { ...raw, daydreamEndTurnPending: who };   // 還有選擇視窗／要補位 ⇒ 等解完的那個動作再結束
     }
   }
   return stampPendingToken(state,
@@ -10126,7 +10142,7 @@ function applyActionImpl(
   if (next.phase === 'game-over' && state.phase === 'playing'
       && !next.pendingSelection
       && ((next._onKoAfterPrize?.length ?? 0) > 0 || hasUnresolvedKnockout(next, pool)
-          || centralVerdictIsDrawV6421(next))) {
+          || centralVerdictIsDrawV6421(next) || centralVerdictDiffersV6531(next))) {
   // <<< v6421-defer-endgame-zombie
     next = liftEndgameForOnKoV6361(next);
   }
@@ -11636,11 +11652,13 @@ export function getUsableAbilities(
         const opp = state.players[oppIdx];
         if (!opp.active && opp.bench.length === 0) return;
       }
-      // ⭐v6.049 探探鼠｜監視之眼（「雙方的所有寶可夢身上放置的傷害指示物，無法改放於
-      //   其他寶可夢身上」）**不再隱藏特性按鈕**。Wilson 裁定：監視之眼擋的是「改放指示物」
-      //   這個**效果**，被擋住的寶可夢**仍然是擁有特性的寶可夢**，特性照樣可以發動，
-      //   只是發動之後效果被擋下而失效（該特性的 regA 入口仍有 gate 會 log 原因）。
-      //   原本在這裡 return 會讓按鈕直接消失，玩家看不出「特性還在、只是被擋」。
+      // ⭐v6.531 探探鼠｜監視之眼：特性按鈕**不能按**（取代 v6.049「可以按、效果被擋下」）。
+      //   官方 Q&A（PTCG_RULES L3004）：「當對手的場上有擁有特性『監視之眼』的探探鼠時，可以使用自己的願增猿的特性
+      //   『腎上腺腦力』…改放於對手的寶可夢身上嗎？」「不可以。…會繼續放置在自己的寶可夢身上。」站長 2026-10-11 同意改成不能按。
+      //   ⚠ 站長同時提醒：特性**沒有被消除**——願增猿仍是「擁有特性的寶可夢」（冰冷之帳等照樣放指示物）⇒
+      //     這裡只擋「發動」，不碰 hasEffectiveAbilityByInst／isAbilityHolderEffective（test-has-effective-ability 在守）。
+      //   火箭腦力同屬 MOVE_DAMAGE_COUNTER_ABILITIES（**類推**：同一句「改放傷害指示物」的特性）。
+      if (isAbilityBlockedByOakEye(state, ab.name, pool)) return;
       // v2.53 碧綠之舞：手牌必須至少有 1 張基本草能量（否則按了只會輸出警告 log，
       // Leon 反饋希望 UI 直接隱藏按鈕，而不是誤按後才提示）。
       // v5.510 熱浪鱗粉（火神蛾）：手牌需有基本【火】能量 + 對手 active 非已灼傷（碧綠之舞 pattern 隱藏按鈕）

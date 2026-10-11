@@ -39,7 +39,8 @@ regA('火箭隊的以歐路普', 0, (st, idx, pool) => {
   // 監視之眼 gate（v2.372 通用標籤判定）
   if (isAbilityBlockedByOakEye(st, '火箭腦力', pool)) {
     // v6.049 措辭更正：阻擋效果 ≠ 消除特性
-    return addLog(st, '火箭腦力：發動了，但被探探鼠的監視之眼擋下（傷害指示物無法改放）', idx);
+    // ⭐v6.531（類推 PTCG_RULES L3004 腎上腺腦力）：不能使用 ⇒ 拒絕、不吃本回合使用次數
+    return rejectAbilityUse(st, '火箭腦力：場上有探探鼠的監視之眼，傷害指示物無法改放，不能使用', idx);
   }
 
   const player = st.players[idx];

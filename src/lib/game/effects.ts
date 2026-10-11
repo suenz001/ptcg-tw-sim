@@ -15795,9 +15795,9 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
   //   自己的戰鬥寶可夢和對手的彷徨夜靈同時[昏厥]了。…」「可以從備戰區放置寶可夢到戰鬥場的玩家獲勝。若雙方都可以放置，
   //   或雙方都無法放置，則為平手。」⇒ 上方不再提早寫「使用方獲勝」；兩隻都處理完後交給 applyActionImpl 出口的中央
   //   judgeEndgameV6361 重判（唯一一份）。
-  //   ⚠ 兩次 addPendingPrize 都可能取完最後一張而各自寫 game-over（後寫的覆蓋前寫的）⇒ 一律 liftEndgameForOnKoV6361
-  //     收回、交給中央重判（Fable 審查 v6.530 P1-1：使用者可放置、對手不可放置時曾被判成對手勝）。
-  return liftEndgameForOnKoV6361(s);
+  //   ⚠ 兩次 addPendingPrize 都可能取完最後一張而各自寫 game-over（後寫的覆蓋前寫的；Fable 審查 v6.530 P1-1）
+  //     ⇒ v6.531 起由 applyActionImpl 出口的 centralVerdictDiffersV6531 統一收回重判（通則，不再逐 resolver 補 lift）。
+  return s;
 });
 
 /**

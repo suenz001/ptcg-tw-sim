@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '14121b8b2805a35d1c9865a7529eb15c859b5602';   // v6.529（上一版）
+const PREV_SHA = 'a1965980cd276f4d2436a1e2269e994309d1cdcd';   // v6.530（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,28 +757,40 @@ const PREV_SHA = '14121b8b2805a35d1c9865a7529eb15c859b5602';   // v6.529（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.530 前移：PREV_SHA 從 14121b8b（v6.529）起算。
+  // ⚠⚠ v6.531 前移：PREV_SHA 從 a1965980（v6.530）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.530：官方 Q&A 第二輪比對 B2 組：7 項效果判定（直接判例＋2 項類推）。
-  'src/lib/game/defense.ts',
+  // ⭐v6.531：監視之眼不能使用（站長裁定＋L3004）、白日夢補位後結束回合、終局中央出口勝方不一致也收回重判。
   'src/lib/game/effects.ts',
-  'src/lib/game/effects/_shared.ts',
-  'src/lib/game/effects/cards/m5_preview.ts',
-  'src/lib/game/effects/cards/tools.ts',
-  'src/lib/game/effects/cards/v155_attacks.ts',
-  'src/lib/game/effects/cards/v2560_i_wave6_complex.ts',
-  'src/lib/game/effects/cards/v2600_i_wave10_conditional.ts',
-  'src/lib/game/effects/cards/v2680_i_wave18_copy_attacks.ts',
-  'src/lib/game/effects/cards/v2760_h_wave3_complex.ts',
+  'src/lib/game/effects/cards/maroon_dragon_deck.ts',
+  'src/lib/game/effects/cards/v2374_rocket_brain.ts',
   'src/lib/game/engine.ts',
-  'src/lib/game/instance-flags.ts',
-  'src/lib/game/types.ts',
-  'src/lib/game/usable-gates.ts',
   'src/lib/version.ts',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.530）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.530 前移：PREV_SHA 從 14121b8b（v6.529）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.530：官方 Q&A 第二輪比對 B2 組：7 項效果判定（直接判例＋2 項類推）。
+//   'src/lib/game/defense.ts',
+//   'src/lib/game/effects.ts',
+//   'src/lib/game/effects/_shared.ts',
+//   'src/lib/game/effects/cards/m5_preview.ts',
+//   'src/lib/game/effects/cards/tools.ts',
+//   'src/lib/game/effects/cards/v155_attacks.ts',
+//   'src/lib/game/effects/cards/v2560_i_wave6_complex.ts',
+//   'src/lib/game/effects/cards/v2600_i_wave10_conditional.ts',
+//   'src/lib/game/effects/cards/v2680_i_wave18_copy_attacks.ts',
+//   'src/lib/game/effects/cards/v2760_h_wave3_complex.ts',
+//   'src/lib/game/engine.ts',
+//   'src/lib/game/instance-flags.ts',
+//   'src/lib/game/types.ts',
+//   'src/lib/game/usable-gates.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.529）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.529 前移：PREV_SHA 從 2ab86d04（v6.528）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -917,16 +929,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/effects/cards/v2930_high_use_abilities.ts',
 //   'src/lib/game/engine.ts',
 //   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.518）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.518 前移：PREV_SHA 從 b963f3f3（v6.517）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.518：sync-guards 新增 startGraceRecheckDelayMs；checkAndStartOnlineGame 在 P2 只差 grace 時自己排一次重新判斷（哨兵 v6518-start-recheck），onDestroy 清計時器。
-//   'src/lib/game/sync-guards.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

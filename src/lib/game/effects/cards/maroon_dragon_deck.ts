@@ -151,7 +151,8 @@ regA('願增猿', 0, (st, idx, pool) => {
   if (isAbilityBlockedByOakEye(st, '腎上腺腦力', pool)) {
     // v6.049 措辭更正：監視之眼**阻擋的是效果**，特性本身沒有被消除（願增猿仍是
     //   「擁有特性的寶可夢」）。原本寫「消除」會讓玩家誤以為特性不見了。
-    return addLog(st, '腎上腺腦力：發動了，但被探探鼠的監視之眼擋下（傷害指示物無法改放）', idx);
+    // ⭐v6.531：不能使用（PTCG_RULES L3004）⇒ 拒絕＝完全不動盤面、不吃本回合使用次數（getUsableAbilities 同一判準）
+    return rejectAbilityUse(st, '腎上腺腦力：對手場上有探探鼠的監視之眼，傷害指示物無法改放，不能使用', idx);
   }
   const p = st.players[idx];
   const self = [p.active, ...p.bench].filter((c): c is CardInstance => !!c);
