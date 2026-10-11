@@ -59,7 +59,7 @@ import {
   shuffle, healResolver, fireOnHandEnergyAttached,
   healOneOwnPokemonPending,   // ⭐v6.348 治癒類中央出口（與 甜點之禮／發酵果汁／激動治癒 同一支）
 } from '../_shared';
-import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
+import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
 import {
   flipCoinsWithLog,
   m6aWingSpec,             // ⭐ 三神鳥「羽擊」三支特性的中央規格（effects.ts，函式宣告 → 無 TDZ）
@@ -162,9 +162,8 @@ regR('m6a-wing-attach-self', (st, idx, iids, params, pool) => {
   const s = addLog(s0, `${abilityName}：將 ${pool.get(energies[0].cardId)?.name ?? '能量'} 附於 ${tName}`, idx);
   // v6.105/v6.164：從手牌附能 → 對手附能反應（侵蝕詛咒／麻痺門牙）＋ 瑪機雅娜｜自動治癒，
   //   而且是「每張各一次」。
-  return fireOnHandEnergyAttached(
-    applyMagearnaHandAttachHeal(s, idx, [targetIid], pool, energies.length),
-    idx, targetIid, pool, energies.length);
+  // ⭐v6.540：自動治癒＋對手反應改走唯一入口（順序依官方 Q&A L2036 規則）
+  return applyHandAttachReactions(s, idx, targetIid, pool, energies.length);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

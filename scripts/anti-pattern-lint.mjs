@@ -210,6 +210,22 @@ for (const f of files) {
   }
 }
 
+// ── Check G2（v6.540）：從手牌附能的反應只能走唯一入口 applyHandAttachReactions ──────────
+//   自動治癒與對手反應（侵蝕詛咒／麻痺門牙）的處理順序由持有人選（官方 Q&A L2036），判準在
+//   v3000_g3_wave2.ts 的 applyHandAttachReactions。其他檔案直接呼叫 applyMagearnaHandAttachHeal 或
+//   fireOnHandEnergyAttached ＝ 又寫死一種順序（v6.540 前手動附能與特性附能兩條路徑順序相反）。
+for (const f of files) {
+  const r = rel(f).replace(/\\/g, '/');
+  if (/effects\/cards\/v3000_g3_wave2\.ts$|effects\/_shared\.ts$/.test(r)) continue;   // 唯一入口與 fireOnHandEnergyAttached 本體
+  const lines = readFileSync(f, 'utf8').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const code = lines[i].replace(/\/\/.*$/, '');
+    if (/\b(applyMagearnaHandAttachHeal|_magHeal|fireOnHandEnergyAttached)\s*\(/.test(code) && !/function\s+(applyMagearnaHandAttachHeal|fireOnHandEnergyAttached)/.test(code)) {
+      violations.push(`[G2] ${r}:${i + 1} — 直接呼叫 applyMagearnaHandAttachHeal／fireOnHandEnergyAttached；從手牌附能的反應一律走 applyHandAttachReactions（處理順序由持有人選，官方 Q&A L2036）`);
+    }
+  }
+}
+
 // ── Check G：從手牌附能的「自方治療」與「對手反應」雙胞胎必須成對 ──────────
 //   applyMagearnaHandAttachHeal(瀑機雅娜自動治療,從手牌附能觸發) 與 fireOnHandEnergyAttached
 //   (對手附能被動:耕鬼ex侵蝕詛咒/麻痺門牙) 是同一「從手牌附能」事件的雙胞胎反應。
@@ -592,7 +608,9 @@ for (const f of files) {
     "steelixPalaceReduce"
   ],
   "effects.ts→v3000_g3_wave2": [
-    "applyMagearnaHandAttachHeal",
+    // ⭐v6.540：effects.ts 不再直接呼叫 applyMagearnaHandAttachHeal，改用唯一入口 applyHandAttachReactions
+    //   （同模組、同型的 function 宣告，只在 resolver 執行期呼叫、不在模組初始化期執行 ⇒ 同一條既有反向 edge，TDZ 安全）。
+    "applyHandAttachReactions",
     "canRelicanthDiverCatchTrigger",
     "hasBugAegislashShield",
     "isBasicWaterEnergy",
@@ -648,6 +666,7 @@ for (const f of files) {
     "hasMeloettaExDebut",
     "isBasicWaterEnergy",
     "magearnaAutoHealAmount",
+    "applyHandAttachReactions",   // ⭐v6.540 手動附能改走唯一入口（同模組 function 宣告、執行期呼叫）
     "magmarFlowingBurnBonus"
   ],
   "engine.ts→v3001_g3_wave3": [

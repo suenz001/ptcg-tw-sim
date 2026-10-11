@@ -23,6 +23,7 @@
  * 共 ~32 張 I 標寶可夢招式 effect 實裝
  */
 
+import { applyHandAttachReactions } from './v3000_g3_wave2';   // ⭐v6.540 從手牌附能反應的唯一入口
 import { dealAttackDamageToOppTargets } from '../../effects'; // ⭐v6.536 多目標對手側中央迴圈
 import type { CardInstance, PlayerState } from '../../types';
 import { applyStatusToOppActive, countEnergyTypeHostAware, flipCoinsWithLog, dealAttackDamageToTarget, selfReturnToHandPost, returnSelfActiveEnergyPost} from '../../effects'; // v5.795 host-aware；v5.797 中央施狀態
@@ -487,7 +488,7 @@ regR('sakura-crescendo-attach', (state, aIdx, iids, params, pool) => {
   //   ⚠ 通則：regPre 傷害延後（damage:0）、由 regPost/regR 自己結算傷害的招式，
   //     若同一招還會「從手牌附能」，附能反應一律排在自己的傷害結算之後。
   //     （走 engine 主管線的 regPre 固定傷害招式沒有這個問題 —— 傷害早在 ATTACK_POST 之前就結算了。）
-  if (_host && _fireCount > 0) s = fireOnHandEnergyAttached(s, aIdx, _host, pool, _fireCount);
+  if (_host && _fireCount > 0) s = applyHandAttachReactions(s, aIdx, _host, pool, _fireCount);   // ⭐v6.540 唯一入口
   return s;
 });
 

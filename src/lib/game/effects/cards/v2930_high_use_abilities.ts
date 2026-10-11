@@ -13,7 +13,7 @@
 
 import { quickRhythmUsable } from '../../usable-gates'; // ⭐v6.528
 import type { CardInstance, PlayerState, GameState } from '../../types';
-import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
+import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense'; // v5.839 換位免疫 gate // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import { oppBenchSwapTargets, immuneSwapPick } from '../swap-immune';   // ⭐v6.527 特性互換 × 化隱／光之翼 中央判準
@@ -176,9 +176,7 @@ regR('gold-flame-pick-energy', (st, idx, energyIids, _params, pool) => {
     //   ⚠ 通則：**fast-path 與 picker path 必須做完全一樣的副作用**，只能省掉「選誰」。
     // v6.164：卡面「最多 2 張」→ 一次附 N 張，「每次附能」反應要觸發 N 次
     //   （官方 §17.21.F：侵蝕詛咒對一次附 2 張放 4 個指示物）。
-    return fireOnHandEnergyAttached(
-      applyMagearnaHandAttachHeal(attached, idx, [target.iid], pool, energies.length),
-      idx, target.iid, pool, energies.length);
+    return applyHandAttachReactions(attached, idx, target.iid, pool, energies.length);   // ⭐v6.540 唯一入口
   }
 
   return withPending(st, {
@@ -216,9 +214,8 @@ regR('gold-flame-attach', (st, idx, iids, params, pool) => {
   }));
   // v5.662：補對手附能反應(侵蝕詛咒/麻痺門牙)
   // v6.164：per-energy-card（一次附 N 張 → 反應觸發 N 次）
-  return fireOnHandEnergyAttached(
-    applyMagearnaHandAttachHeal(attached, idx, [targetIid], pool, energies.length),
-    idx, targetIid, pool, energies.length);
+  // ⭐v6.540：自動治癒＋對手反應改走唯一入口（順序依官方 Q&A L2036 規則）
+  return applyHandAttachReactions(attached, idx, targetIid, pool, energies.length);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

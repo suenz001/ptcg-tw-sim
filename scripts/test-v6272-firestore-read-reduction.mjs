@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '99010a7898ff0925f223f042c345857a1b899b9c';   // v6.538（上一版）
+const PREV_SHA = 'f147c7438c8ed3f43e98fab2296fbf0cc8d2346e';   // v6.539（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,20 +757,45 @@ const PREV_SHA = '99010a7898ff0925f223f042c345857a1b899b9c';   // v6.538（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.539 前移：PREV_SHA 從 99010a78（v6.538）起算。
+  // ⚠⚠ v6.540 前移：PREV_SHA 從 f147c743（v6.539）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.539：雙方同時補位順序：中央 promoteWaitSeat（modal-slots leaf）＋engine SEND_NEW_ACTIVE 閘＋視窗／提示＋AI＋伺服器 currentActorSeat；v6.538 審查 P3 註解整理。
-  'src/lib/game/ai.ts',
-  'src/lib/game/defense.ts',
+  // ⭐v6.540：從手牌附能的反應唯一入口 applyHandAttachReactions（v3000）＋手動附能由持有人選順序；24 個呼叫點收斂；lint G2；AI 後備 END_TURN 等補位時不送。
   'src/lib/game/effects.ts',
+  'src/lib/game/effects/cards/lopunny_serperior_flareon_festival.ts',
+  'src/lib/game/effects/cards/m2_dragon_charizard_batch.ts',
+  'src/lib/game/effects/cards/m6a_wave7.ts',
+  'src/lib/game/effects/cards/six_decks.ts',
+  'src/lib/game/effects/cards/v158_energy_chain.ts',
+  'src/lib/game/effects/cards/v2380_j_abilities_batch.ts',
+  'src/lib/game/effects/cards/v2380_j_attacks_batch.ts',
+  'src/lib/game/effects/cards/v2590_i_wave9_misc3.ts',
+  'src/lib/game/effects/cards/v2610_i_wave11_misc4.ts',
+  'src/lib/game/effects/cards/v2750_h_wave2_full.ts',
+  'src/lib/game/effects/cards/v2930_high_use_abilities.ts',
+  'src/lib/game/effects/cards/v2996_g4_wave2.ts',
+  'src/lib/game/effects/cards/v3000_g3_wave2.ts',
+  'src/lib/game/effects/cards/v3050_deferred_wave_a.ts',
   'src/lib/game/engine.ts',
-  'src/lib/game/modal-slots.ts',
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.539）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.539 前移：PREV_SHA 從 99010a78（v6.538）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.539：雙方同時補位順序：中央 promoteWaitSeat（modal-slots leaf）＋engine SEND_NEW_ACTIVE 閘＋視窗／提示＋AI＋伺服器 currentActorSeat；v6.538 審查 P3 註解整理。
+//   'src/lib/game/ai.ts',
+//   'src/lib/game/defense.ts',
+//   'src/lib/game/effects.ts',
+//   'src/lib/game/engine.ts',
+//   'src/lib/game/modal-slots.ts',
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.538）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.538 前移：PREV_SHA 從 701252ff（v6.537）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -934,22 +959,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/effects/cards/v2930_high_use_abilities.ts',
 //   'src/lib/game/engine.ts',
 //   'src/lib/game/usable-gates.ts',
-//   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.527）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.527 前移：PREV_SHA 從 0da255cd（v6.526）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.527：站長裁定：垃圾洩氣不影響化隱／光之翼的攻擊方（engine 戰鬥位＋effects 備戰兩條管線）；特性互換五張卡走中央 swap-immune.ts（可選但不互換）。
-//   'src/lib/game/effects.ts',
-//   'src/lib/game/effects/cards/m6_wave9.ts',
-//   'src/lib/game/effects/cards/supporters_gust.ts',
-//   'src/lib/game/effects/cards/v2930_high_use_abilities.ts',
-//   'src/lib/game/effects/cards/v2995_g4_wave1.ts',
-//   'src/lib/game/effects/cards/v2998_g2.ts',
-//   'src/lib/game/effects/swap-immune.ts',
-//   'src/lib/game/engine.ts',
 //   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',

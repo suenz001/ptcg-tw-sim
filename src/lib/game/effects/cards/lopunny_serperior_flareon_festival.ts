@@ -16,7 +16,7 @@
 
 import type { CardInstance } from '../../types';
 import { hasFestivalDanceActive } from '../../festival';   // ⭐v6.410 祭典樂舞判準中央述詞
-import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
+import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
 import type { Card } from '$lib/cards/types';
 import {
   reg, regR, regG, regA, regPre,
@@ -90,9 +90,8 @@ regR('serperior-mature-charge', (st, idx, iids, params, pool) => {
   const target = all.find(c => c.iid === targetIid);
   const tname = target ? pool.get(target.cardId)?.name ?? '?' : '?';
   // v5.539：從手牌附能後觸發對手附能被動（侵蝕詛咒 等）
-  return fireOnHandEnergyAttached(
-    applyMagearnaHandAttachHeal(addLog(s, `熟成充能：將基本【草】能量附於 ${tname}，回復 30 HP`, idx), idx, [targetIid], pool),  // v5.485 自動治癒
-    idx, targetIid, pool);
+  // ⭐v6.540：自動治癒＋對手反應改走唯一入口（順序依官方 Q&A L2036 規則）
+  return applyHandAttachReactions(addLog(s, `熟成充能：將基本【草】能量附於 ${tname}，回復 30 HP`, idx), idx, targetIid, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

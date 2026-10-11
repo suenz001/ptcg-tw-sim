@@ -17,6 +17,7 @@
  * 共 30 張 I 標寶可夢招式 effect 實裝
  */
 
+import { applyHandAttachReactions } from './v3000_g3_wave2';   // ⭐v6.540 從手牌附能反應的唯一入口
 import type { CardInstance, PlayerState } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { isRulePokemon } from '../../engine';
@@ -341,7 +342,7 @@ regPost('龍捲雲|玉樹臨風', (state, aIdx, pool) => {
       active: p.active ? { ...p.active, energyAttached: [...p.active.energyAttached, energy] } : null,
     }),
   );
-  return fireOnHandEnergyAttached(after, aIdx, hostIid, pool); // v5.782 補對手反應(侵蝕詛咒/麻痺門牙)
+  return applyHandAttachReactions(after, aIdx, hostIid, pool); // v5.782 補對手反應(侵蝕詛咒/麻痺門牙)；⭐v6.540 唯一入口
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

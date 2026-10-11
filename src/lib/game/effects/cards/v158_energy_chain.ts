@@ -49,7 +49,7 @@ import {
 //   招式型（滿載心田／熱帶狂燒／幸福禮物）攻擊者本身佔住 active，helper 內部查不到
 //   瑪機雅娜會回 0，統一呼叫是安全的。
 //   ⚠ v3000_g3_wave2 只 import ../_shared，不 import 本檔 ⇒ 無循環 import／TDZ 疑慮。
-import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
+import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
 import { getEffectivePokemonTypes } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -168,7 +168,7 @@ regR('v87-energy-distribute-flat', (st, aIdx, selectedIids, params, pool) => {
   //   （官方 §17.21.F：一次附 2 張 → 侵蝕詛咒放 4 個指示物）。
   if (params?.source === 'hand') {
     // v6.164：自方自動治癒（heal）＋ 對手附能反應（fire），兩者都 per-energy-card
-    for (const [iid, n] of tally) s = fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(s, aIdx, [iid], pool, n), aIdx, iid, pool, n);
+    for (const [iid, n] of tally) s = applyHandAttachReactions(s, aIdx, iid, pool, n);   // ⭐v6.540 唯一入口
   }
 
   const parts: string[] = [];
@@ -330,7 +330,7 @@ export function startEnergyChain(
     });
     // v5.539：source==='hand' → 觸發對手附能被動（耿鬼ex|侵蝕詛咒 等）
     // v6.164：這條是「唯一合法目標 → 全附」，一次附 energyIids.length 張 ⇒ per-energy-card
-    if (source === 'hand') st = fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(st, aIdx, [target.iid], pool, energyIids.length), aIdx, target.iid, pool, energyIids.length); // v6.164 heal+fire 皆 per-card
+    if (source === 'hand') st = applyHandAttachReactions(st, aIdx, target.iid, pool, energyIids.length); // v6.164 per-card；⭐v6.540 唯一入口
     return addLog(st, `${label}：場上僅有 1 個合法目標 → 全 ${energyIids.length} 張能量附到 ${tname}`, aIdx);
   }
 
@@ -523,7 +523,7 @@ regR('v357-multi-type-distribute-wave', (st, aIdx, selectedIids, params, pool) =
     // v6.164：per-energy-card（tally = 這隻拿了幾張）
     if (params?.source === 'hand') {
       // v6.164：自方自動治癒＋對手附能反應，兩者都 per-energy-card
-      for (const [iid, n] of tally) st = fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(st, aIdx, [iid], pool, n), aIdx, iid, pool, n);
+      for (const [iid, n] of tally) st = applyHandAttachReactions(st, aIdx, iid, pool, n);   // ⭐v6.540 唯一入口
     }
     const parts: string[] = [];
     for (const [iid, n] of tally) {
@@ -625,7 +625,7 @@ regR('v158-energy-single-target-attach', (st, aIdx, pickedIids, params, pool) =>
   });
   // v5.539：從手牌附能要觸發對手的附能反應被動（耿鬼ex｜侵蝕詛咒 等）
   // v6.164：singleTarget 全附型 —— 一次附 energyIids.length 張 ⇒ per-energy-card
-  if (source === 'hand') st = fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(st, aIdx, [targetIid], pool, energyIids.length), aIdx, targetIid, pool, energyIids.length); // v6.164 heal+fire 皆 per-card
+  if (source === 'hand') st = applyHandAttachReactions(st, aIdx, targetIid, pool, energyIids.length); // v6.164 per-card；⭐v6.540 唯一入口
   return addLog(st, `${label}：${energyIids.length} 張能量全部附到 ${tname}`, aIdx);
 });
 

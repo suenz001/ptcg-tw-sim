@@ -35,7 +35,7 @@
  */
 
 import type { CardInstance, PlayerState, GameState } from '../../types';
-import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
+import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import { energyProvidesType } from '../../effects'; // v5.682 host-aware「視為提供X屬性」(含古舊/稜鏡等特殊能量)
 import type { Card } from '$lib/cards/types';
@@ -321,7 +321,8 @@ regR('koala-feeble-charge', (state, aIdx, iids, _params, pool) => {
     };
   });
   // v5.662：補對手附能反應(侵蝕詛咒/麻痺門牙)
-  return tgtIid ? fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(attached, aIdx, [tgtIid], pool), aIdx, tgtIid, pool) : attached;
+  // ⭐v6.540：自動治癒＋對手反應改走唯一入口（順序依官方 Q&A L2036 規則）
+  return tgtIid ? applyHandAttachReactions(attached, aIdx, tgtIid, pool) : attached;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

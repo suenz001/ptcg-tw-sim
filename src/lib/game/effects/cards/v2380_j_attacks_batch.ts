@@ -36,7 +36,7 @@
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { hasOakEye, fireOnHandEnergyAttached } from '../_shared'; // v5.789 監視之眼 gate；v6.164 從手牌附能→對手反應
-import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2'; // v6.164 從手牌附能→自方瑪機雅娜｜自動治癒
+import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2'; // v6.164 從手牌附能→自方瑪機雅娜｜自動治癒
 
 import { canApplyEffectToTarget } from '../../defense';
 import type { Card } from '$lib/cards/types';
@@ -651,8 +651,7 @@ regR('lucky-gift-attach', (state, actorIdx, targetIids, params, pool) => {
     //   同理自方的 瑪機雅娜｜自動治癒（「每次**從自己的手牌**將能量卡附於寶可夢身上時，
     //   將那隻寶可夢恢復 90 HP」）——幸福禮物**雙方**都是「從自己的手牌附給自己的寶可夢」，
     //   所以對手 phase（actorIdx = 對手）時，對手戰鬥場若是瑪機雅娜就該回血。
-    s = applyMagearnaHandAttachHeal(s, actorIdx, [targetIid], pool, 1);
-    s = fireOnHandEnergyAttached(s, actorIdx, targetIid, pool, 1);
+    s = applyHandAttachReactions(s, actorIdx, targetIid, pool, 1);   // ⭐v6.540 唯一入口
   }
 
   // 遞迴下一張（chain 自帶 phase 切換邏輯）

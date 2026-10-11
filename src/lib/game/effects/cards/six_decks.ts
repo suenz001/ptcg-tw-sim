@@ -19,7 +19,7 @@ import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_
 import { joinCardNames, toBareCard } from '../_shared';  // v5.515 丟棄 log 顯示卡名 / v5.993 rescue 回手裸化
 import { attachEnergyFromZoneToOwnPokemon } from '../_shared';  // ⭐ v6.174 附能目標解析失敗一律 no-op（禁半套：能量已離開來源區卻沒附上）
 import { recruitBasicToBenchPost } from '../../effects';  // v6.067 呼朋引伴族中央 helper
-import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
+import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
 import { isImmuneToOppTrainer as _v6532ImmuneOppTrainer } from './v3060_deferred_wave_b';   // ⭐v6.532 高溫燃燒器
@@ -450,9 +450,8 @@ regR('rock-armor-attach', (state, aIdx, selectedPokeIids, _params, pool) => {
   if (!r.ok) return r.state;
   const pIid = r.target!.iid;
   // v5.539：從手牌附能後觸發對手附能被動（侵蝕詛咒 等）
-  return fireOnHandEnergyAttached(
-    applyMagearnaHandAttachHeal(r.state, aIdx, [pIid], pool),  // v5.485 自動治癒
-    aIdx, pIid, pool);
+  // ⭐v6.540：自動治癒＋對手反應改走唯一入口（順序依官方 Q&A L2036 規則）
+  return applyHandAttachReactions(r.state, aIdx, pIid, pool);
 });
 
 // 顫弦蠑螈｜惡棍衝天 — 牌庫選 1 張「基本【惡】能量」附給備戰區【惡】寶可夢 + 重洗 + 放 2 傷

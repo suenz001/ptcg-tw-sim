@@ -138,6 +138,7 @@ import {
   hasMeloettaExDebut,
   FIRST_TURN_USABLE_ATTACKS,
   magearnaAutoHealAmount,
+  applyHandAttachReactions,   // ⭐v6.540 從手牌附能的反應順序（唯一入口）
 } from './effects/cards/v3000_g3_wave2';
 // v3.08 Deferred Wave C helpers — 古空棘魚｜潛入記憶（進化前招式擴展）
 import {
@@ -6112,31 +6113,10 @@ function handlePlaying(
     // v5.539：對手附能反應收斂到中央 fireOnHandEnergyAttached（侵蝕詛咒 OPP_ENERGY_ATTACH_PASSIVE
     //   + 麻痺門牙）。所有「從手牌附能」路徑（手動 ATTACH_ENERGY + 特性/招式填能）共用同一函式，
     //   避免特性填能漏觸發（玩家報耿鬼ex侵蝕詛咒對碧綠之舞等沒生效）。白日夢 END_TURN 留在下方。
-    afterAttach = fireOnHandEnergyAttached(afterAttach, aIdx as 0 | 1, target.iid, pool);
-    // v2.78 引夢貘人｜白日夢 —— ⭐v6.530 收斂到中央 fireOnHandEnergyAttached（設 daydreamEndTurnPending），
-    //   由 applyAction 出口在效果處理完後結束回合（手動附能、特性、招式填能同一條路）。
-    // v3.0 瑪機雅娜｜自動治癒 — 戰鬥場上有此卡時，附能量到任何寶可夢 → 該寶可夢恢復 90 HP。
-    //   只看 attacher（aIdx）戰鬥位是否為持有者；若是，找到 target 寶可夢 inst 對 damage -90（不低於 0）。
-    {
-      const healAmt = magearnaAutoHealAmount(afterAttach, aIdx, pool);
-      if (healAmt > 0) {
-        const newPlayersHeal = [...afterAttach.players] as [PlayerState, PlayerState];
-        const updateHeal = (c: CardInstance): CardInstance => {
-          if (c.iid !== target!.iid) return c;
-          const newDmg = Math.max(0, (c.damage ?? 0) - healAmt);
-          return { ...c, damage: newDmg };
-        };
-        newPlayersHeal[aIdx] = {
-          ...newPlayersHeal[aIdx],
-          active: newPlayersHeal[aIdx].active && newPlayersHeal[aIdx].active!.iid === target.iid
-            ? updateHeal(newPlayersHeal[aIdx].active!) : newPlayersHeal[aIdx].active,
-          bench: newPlayersHeal[aIdx].bench.map(updateHeal),
-        };
-        const targetCardName = pool.get(target.cardId)?.name ?? '?';
-        afterAttach = addLog({ ...afterAttach, players: newPlayersHeal },
-          `「自動治癒」啟動：${targetCardName} 恢復 ${healAmt} HP`, aIdx);
-      }
-    }
+    // ⭐v6.540：自動治癒（自方）與對手反應（侵蝕詛咒／麻痺門牙）改走唯一入口 applyHandAttachReactions；
+    //   兩種順序結果不同時由持有人選（官方 Q&A L2036；手動附能＝Q&A 的情境 ⇒ ask）。原本固定「先詛咒、後治癒」，
+    //   與約 20 個特性附能路徑的「先治癒」相反。白日夢 END_TURN 仍由 fireOnHandEnergyAttached 設旗標、出口處理。
+    afterAttach = applyHandAttachReactions(afterAttach, aIdx as 0 | 1, target.iid, pool, 1, { ask: true });
     // v4.996: 先 sweep 自方場面清除「附泡沫【水】能量後身上既有特殊狀態」（卡面後半句）
     afterAttach = clearSpecialEnergyProtectedStatuses(afterAttach, aIdx, pool);
     return clearFestivalVenueProtectedStatuses(afterAttach, pool);

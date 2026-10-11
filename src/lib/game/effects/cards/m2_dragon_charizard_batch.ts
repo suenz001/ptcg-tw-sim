@@ -10,7 +10,7 @@
  * - 火恐龍 SVQL｜大字爆炎（user explicitly requested this G-reg card）
  */
 import { tryPromptPromoteActive } from '../_shared';
-import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
+import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import type { Card } from '$lib/cards/types';
 import type { CardInstance, GameState, PlayerState } from '../../types';
@@ -186,7 +186,8 @@ regR('exciting-turbo-commit', (st, idx, iids, params, pool) => {
     bench: pl.bench.map(b => b.iid === targetIid ? { ...b, energyAttached: [...b.energyAttached, energy] } : b),
   }));
   // v5.662：從手牌附能 → 自方治癒 + 對手附能反應(侵蝕詛咒/麻痺門牙),原漏 fireOnHandEnergyAttached
-  return fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(attached, idx, [targetIid], pool), idx, targetIid, pool);
+  // ⭐v6.540：自動治癒＋對手反應改走唯一入口（順序依官方 Q&A L2036 規則）
+  return applyHandAttachReactions(attached, idx, targetIid, pool);
 });
 
 // ── 超級噴火駝ex｜炙燒 ─────────────────────────────────────────────────────

@@ -4,7 +4,7 @@
   import { cardThumb } from '$lib/cards/thumb'; // v6.464 小尺寸顯示改用縮圖（失敗由 retryImg 立刻退回官方原圖）
   import { modalDrag } from '$lib/modal-drag';   // ⭐v6.420：全站視窗拖曳＋邊界夾制的唯一來源
   import { panelResize } from '$lib/panel-resize';   // ⭐v6.495：浮動視窗自訂大小＋記住設定（聊天視窗）
-  import { promoteModalSeats, promoteAlerts, preDiscardModalKind } from '$lib/game/modal-slots';   // ⭐v6.425：「該開哪個視窗」的唯一判準
+  import { promoteModalSeats, promoteAlerts, preDiscardModalKind, promoteWaitSeat } from '$lib/game/modal-slots';   // ⭐v6.425：「該開哪個視窗」的唯一判準
 import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式清單上限（單一來源，UI 與守衛共用）
   // ⭐⭐⭐v6.177「抓取中／抓取失敗不清空已顯示資料」的唯一中央述詞（stale-while-revalidate）。
   import { adoptOrKeep, mergeKeyedOrKeep } from '$lib/ui/stale-keep';
@@ -3324,7 +3324,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
           && g.turnPhase === 'main'
           && !g.pendingSelection
           && (g.pendingPrizes?.[0] ?? 0) === 0
-          && (g.pendingPrizes?.[1] ?? 0) === 0) {
+          && (g.pendingPrizes?.[1] ?? 0) === 0
+          && promoteWaitSeat({ phase: g.phase, players: g.players, activePlayerIndex: g.activePlayerIndex }) === null) {   // ⭐v6.540 雙方同時補位、AI 在等對手先放 ⇒ 不要硬送 END_TURN 空轉
         console.warn('[AI fallback] getAIAction returned null in main phase → forcing END_TURN');
         aiThinking = true;
         dispatch({ type: 'END_TURN' } as any, { fromAI: true });

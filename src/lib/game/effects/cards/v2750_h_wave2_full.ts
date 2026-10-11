@@ -28,7 +28,7 @@ import { getBasicEnergyType } from '../../engine'; // v6.009 resolver 端 re-val
 import { isBasicPokemonOnField } from '../../selection-filter'; // v6.250 場上【基礎】中央述詞（leaf，無循環）
 import { secondPlayerFirstTurnOnlyBlock } from '../../attack-use-precondition'; // ⭐v6.438 後攻最初回合限定（leaf）
 import { cellAwakeningStep } from './v2650_i_wave15_misc8'; // v5.983 收斂「進化全備戰」chain(與人造細胞卵|細胞覺醒共用)
-import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2'; // v6.165 從手牌附能→自方瑪機雅娜｜自動治癒
+import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2'; // v6.165 從手牌附能→自方瑪機雅娜｜自動治癒
 import {
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
@@ -1702,9 +1702,9 @@ regR('h-wave2-attach-from-hand', (state, aIdx, iids, _params, pool) => {
   //   ⚠ 一般的攻擊型「從手牌附能」不需要接（攻擊者自己佔住戰鬥位，不可能同時是瑪機雅娜）——
   //     但**迴旋充能會先互換**，換上來的那一隻可以是瑪機雅娜 ⇒ 這張是該假設的例外。
   //   per-energy-card（附 N 張回 90×N），與 v6.164 侵蝕詛咒同一個「每次＝每張」判準。
-  after = applyMagearnaHandAttachHeal(after, aIdx, hostIid ? [hostIid] : [], pool, set.size);
+  // ⭐v6.540：自動治癒＋對手反應改走唯一入口（順序依官方 Q&A L2036 規則）
   // v6.164：卡面「最多2張」→ per-energy-card 觸發（侵蝕詛咒/麻痺門牙 各張都算）
-  return hostIid ? fireOnHandEnergyAttached(after, aIdx, hostIid, pool, set.size) : after; // v5.782 補對手反應
+  return hostIid ? applyHandAttachReactions(after, aIdx, hostIid, pool, set.size) : after; // v5.782 補對手反應
 });
 
 // 遠古巨蜓|陀螺音波 110 — 自互

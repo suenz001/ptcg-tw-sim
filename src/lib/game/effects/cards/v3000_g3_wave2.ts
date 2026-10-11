@@ -57,7 +57,7 @@
 
 import type { CardInstance, GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { regR, updatePlayer, addLog } from '../_shared';  // v5.464：潛者捕捉確認選單 resolver
+import { regR, updatePlayer, addLog, withPending, fireOnHandEnergyAttached } from '../_shared';  // v5.464：潛者捕捉確認選單 resolver；⭐v6.540 從手牌附能的反應順序
 // ⭐ v6.196：特性生效性中央述詞（取代本檔原本的 local hasAbilityOnSide/hasAbilityOnActive）
 import {
   hasAbilityOnSide,
@@ -342,3 +342,75 @@ export function registerV3000G3W2Passives(): void {
   _v3000G3W2Registered = true;
   // 本波無對 effects.ts 內 Map 的 .set() 需要做；helpers 全部走 engine.ts inline import。
 }
+
+// >>> v6540-hand-attach-order
+// ════════════════════════════════════════════════════════════════════════════
+// ⭐⭐⭐v6.540「從手牌附能量」的兩組反應（自己的瑪機雅娜｜自動治癒 ↔ 對手的侵蝕詛咒／麻痺門牙）的**唯一入口**。
+//
+// 站長裁定（2026-10-12 第 6 項「請都依照官方 QA 處理」）＋官方 Q&A（PTCG_RULES L2036）：
+//   Q「自己的戰鬥場上有特性『自動治癒』處於有效狀態的瑪機雅娜，對手的場上有特性『侵蝕詛咒』處於有效狀態的耿鬼ex。
+//     此時，若從手牌將能量卡附加給瑪機雅娜，因特性『自動治癒』的效果恢復HP，與因耿鬼ex的特性『侵蝕詛咒』的效果
+//     放置傷害指示物，何者先執行？」 A「可由瑪機雅娜的持有人選擇處理順序。」
+//   麻痺門牙（對手招式留下的效果）同一個時點（「每次對手從手牌將能量卡附於…時」）⇒ 類推，一併由持有人選。
+//
+// 原本：手動附能固定「先詛咒、後治癒」；約 20 個特性／卡片附能路徑固定「先治癒、後詛咒」—— 兩條相反、都沒得選。
+// 現在：所有路徑都呼叫本函式。
+//   ・沒有自動治癒（或沒有任何反應）⇒ 照舊只跑 fireOnHandEnergyAttached（零差異）。
+//   ・兩種順序的結果**完全相同**（盤面、選擇視窗，不看對戰紀錄）⇒ 直接先治癒（原本特性路徑的順序），不開視窗。
+//   ・結果不同：
+//       ・`ask: true`（手動附能，官方 Q&A 的情境）⇒ 開 modal-choice 由持有人選（AI 偏好的排第一）；
+//       ・其他路徑（特性／卡片在效果中途附能，後面可能還接著選擇視窗或連續附能）⇒ 自動採持有人有利的順序
+//         （這隻寶可夢不會因此昏厥優先，其次傷害較少）——**設計決定，沒有判例**，列入回報請站長確認。
+//   ・任一種順序會開出選擇視窗（反應本身要選）⇒ 不比較、維持先治癒（原本行為）。
+// ════════════════════════════════════════════════════════════════════════════
+export type HandAttachOrder = 'heal-first' | 'react-first';
+function _handAttachRun(state: GameState, attacherIdx: 0 | 1, targetIid: string, pool: Map<string, Card>, n: number, order: HandAttachOrder): GameState {
+  return order === 'heal-first'
+    ? fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(state, attacherIdx, [targetIid], pool, n), attacherIdx, targetIid, pool, n)
+    : applyMagearnaHandAttachHeal(fireOnHandEnergyAttached(state, attacherIdx, targetIid, pool, n), attacherIdx, [targetIid], pool, n);
+}
+/** 比較兩種順序（純函式、試算不落地）。沒有自動治癒時回 null（只有一種效果，沒有順序可言）。 */
+export function handAttachOrderOutcomes(
+  state: GameState, attacherIdx: 0 | 1, targetIid: string, pool: Map<string, Card>, n: number = 1,
+): { differ: boolean; best: HandAttachOrder; comparable: boolean } | null {
+  if (magearnaAutoHealAmount(state, attacherIdx, pool) <= 0) return null;
+  const a = _handAttachRun(state, attacherIdx, targetIid, pool, n, 'heal-first');
+  const b = _handAttachRun(state, attacherIdx, targetIid, pool, n, 'react-first');
+  if (a.pendingSelection || b.pendingSelection) return { differ: false, best: 'heal-first', comparable: false };
+  const sig = (x: GameState) => JSON.stringify([x.players, x.phase, x.winner ?? null, x.pendingPrizes ?? null, x.daydreamEndTurnPending ?? null]);
+  const differ = sig(a) !== sig(b);
+  const tgt = (x: GameState) => { const p = x.players[attacherIdx]; return p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid) ?? null; };
+  const ta = tgt(a), tb = tgt(b);
+  // 持有人有利：這隻寶可夢還在場上（沒有因此昏厥）優先，其次傷害較少；平手先治癒（原本特性路徑的順序）
+  let best: HandAttachOrder = 'heal-first';
+  if (!ta && tb) best = 'react-first';
+  else if (ta && tb && (tb.damage ?? 0) < (ta.damage ?? 0)) best = 'react-first';
+  return { differ, best, comparable: true };
+}
+/** ⭐唯一入口：從手牌附能量後的自方自動治癒＋對手反應（侵蝕詛咒／麻痺門牙），依上面的規則決定順序。 */
+export function applyHandAttachReactions(
+  state: GameState, attacherIdx: 0 | 1, targetIid: string, pool: Map<string, Card>, n: number = 1,
+  opts?: { ask?: boolean },
+): GameState {
+  const cmp = handAttachOrderOutcomes(state, attacherIdx, targetIid, pool, n);
+  if (!cmp) return fireOnHandEnergyAttached(state, attacherIdx, targetIid, pool, n);
+  if (!cmp.differ) return _handAttachRun(state, attacherIdx, targetIid, pool, n, 'heal-first');
+  if (!opts?.ask) return _handAttachRun(state, attacherIdx, targetIid, pool, n, cmp.best);
+  const other: HandAttachOrder = cmp.best === 'heal-first' ? 'react-first' : 'heal-first';
+  const text = (o: HandAttachOrder) => o === 'heal-first'
+    ? '先「自動治癒」恢復 HP，再處理對手的效果（侵蝕詛咒／麻痺門牙）'
+    : '先處理對手的效果（侵蝕詛咒／麻痺門牙），再「自動治癒」恢復 HP';
+  return withPending(addLog(state, '從手牌附加能量：「自動治癒」與對手的效果同時觸發 ⇒ 由持有人選擇處理順序（官方 Q&A）', attacherIdx), {
+    type: 'modal-choice', actorIdx: attacherIdx, sourcePlayerIdx: attacherIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'hand-attach-order',
+    params: { label: '選擇處理順序', targetIid, n, options: [cmp.best, other].map((o) => ({ id: o, text: text(o) })) },
+  });
+}
+regR('hand-attach-order', (st, idx, iids, params, pool) => {
+  const targetIid = String(params?.targetIid ?? '');
+  const n = Math.max(1, Math.floor(Number(params?.n ?? 1)));
+  const pick = iids[0] === 'react-first' ? 'react-first' : 'heal-first';
+  return _handAttachRun(st, idx, targetIid, pool, n, pick);
+});
+// <<< v6540-hand-attach-order

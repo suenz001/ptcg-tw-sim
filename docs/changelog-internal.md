@@ -1,5 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.540：從手牌附能的反應順序（自動治癒 × 侵蝕詛咒／麻痺門牙）（2026-10-12）
+
+BASE f147c743（v6.539）。**站長裁定**（2026-10-12 第 6 項「請都依照官方 QA 處理」）＋**直接判例** PTCG_RULES L2036（瑪機雅娜｜自動治癒 × 耿鬼ex｜侵蝕詛咒「可由瑪機雅娜的持有人選擇處理順序」）。麻痺門牙同一時點（每次對手從手牌附能）⇒ **類推**一併處理。
+- 唯一入口 v3000_g3_wave2.ts `applyHandAttachReactions(state, attacherIdx, targetIid, pool, n, { ask })`（哨兵 v6540-hand-attach-order）：沒有自動治癒 ⇒ 只跑 fireOnHandEnergyAttached（零差異）；兩種順序試算（純函式）結果相同 ⇒ 先治癒；不同 ⇒ ask 時開 modal-choice（effectKey hand-attach-order，AI 偏好的排第一：不昏厥優先、其次傷害少），否則自動採偏好順序；任一順序會開選擇視窗 ⇒ 不比較、先治癒。
+- 呼叫點：engine 手動 ATTACH_ENERGY（ask，原本固定「先詛咒、後治癒」）；20 個特性／卡片附能路徑（原本固定「先治癒、後詛咒」，與手動相反）＋4 個攻擊型附能路徑（原本只有 fireOnHandEnergyAttached）全部改呼叫入口，張數沿用原本。
+- **設計決定，沒有判例**（列入最後一批請站長確認）：特性／卡片在效果中途附能時不開視窗、自動採持有人有利的順序（後面常接著連續附能或其他選擇視窗，中途插視窗會打亂流程）。
+- anti-pattern-lint：新增 Check G2（v3000／_shared 以外不得直接呼叫 applyMagearnaHandAttachHeal／fireOnHandEnergyAttached，正對照已驗）；O 白名單 effects.ts／engine.ts → v3000 加 applyHandAttachReactions（同模組 function 宣告、執行期呼叫）、effects.ts 移除不再使用的 applyMagearnaHandAttachHeal。
+- v6.539 審查 P3-1：+page.svelte AI 後備 END_TURN 加「promoteWaitSeat === null」（等對手先補位時不空轉）；test-v6441 LATER 登記兩行（Rule 40）。
+- 順手發現（未改，排後續）：effects.ts self-active-hand-attach-heal／bench-hand-attach-fullheal 兩個攻擊附能 resolver 可附多張但反應只算 1 次（v6.164 每張一次的判準），待逐張讀卡面確認。
+- **Fable 5.1 審查（43f68b0b）**：9 組手動附能盤面（80／0／50、白日夢、麻痺門牙、瑪機雅娜被消除）逐項驗輸入 state 不變、選項順序、AI 選擇、兩種解法結果、energyAttachedThisTurn、白日夢結束回合；24 個呼叫點逐一對 diff（4 個攻擊型路徑現在也會過自動治癒＝依卡面補對）；試算無亂數、無誤判；G2 無漏網。無 P1／P2，可合併。P3-1：11 個卡檔留下沒用的 applyMagearnaHandAttachHeal import（排下一版清）。P3-2：「不可比（任一順序會開視窗）時先治癒」對手動附能是小差異（原本先詛咒），一併列入待站長確認。
+- 全套（43f68b0b）：884／884、FAIL 0。
+- 守衛 test-v6540-hand-attach-order：KO_RISK、NO_DMG（兩選項各自結算、AI 選擇）、NO_GENGAR、NO_MAG、AUTO、AI_WAIT（靜態＋正對照）；HEAD-FAIL（BASE：KO_RISK、NO_DMG、AUTO 紅）。突變 5 個：4 殺；「不昏厥優先」那一條存活＝等價（先治癒會昏厥而先詛咒不會的盤面在數學上不存在），如實記錄。
+
 ## v6.539：雙方同時昏厥的補位順序（2026-10-12）
 
 BASE 99010a78（v6.538）。**站長裁定**（2026-10-12 第 5 項，選項 A）＋**直接判例**：PTCG_RULES L410（寶可夢檢查中雙方同時昏厥「從下一個回合的玩家開始放置」）、L893（火焰嚎叫雙方戰鬥寶可夢皆昏厥「由對手玩家先放置」）、L1671（咒詛炸彈「對方玩家先放置」）。

@@ -14365,7 +14365,7 @@ regR('self-active-hand-attach-heal', (st, idx, iids, params, pool) => {
     };
   });
   // v5.539：從手牌附能後觸發對手附能被動（侵蝕詛咒 等）
-  return fireOnHandEnergyAttached(s, idx, p.active.iid, pool);
+  return _handAttachReactions(s, idx, p.active.iid, pool);   // ⭐v6.540 唯一入口（張數沿用原本的 1）
 });
 regPre('卡比獸|吃飽先', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('卡比獸|吃飽先', selfActiveHandAttachHealPost(60, '吃飽先'));
@@ -14439,7 +14439,7 @@ function applyBenchAttachFullHeal(st: GameState, idx: 0 | 1, energyIids: string[
       : c),
   }));
   // v5.539：從手牌附能後觸發對手附能被動（侵蝕詛咒 等）
-  return fireOnHandEnergyAttached(s, idx, targetIid, pool);
+  return _handAttachReactions(s, idx, targetIid, pool);   // ⭐v6.540 唯一入口（張數沿用原本的 1）
 }
 regPre('葉伊布|嫩葉之恩', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('葉伊布|嫩葉之恩', benchHandAttachFullHealPost('Grass', '嫩葉之恩'));
@@ -16856,8 +16856,7 @@ regA('厄鬼椪 碧草面具ex', 0, (st, idx, pool, cardInst) => {
       bench: pl.bench.map(attach),
     };
   });
-  st = _magHeal(st, idx, [src.iid], pool);  // v5.485 自動治癒（瑪機雅娜在戰鬥場時）
-  st = fireOnHandEnergyAttached(st, idx, src.iid, pool);  // v5.539 從手牌附能後觸發對手附能被動（侵蝕詛咒 等）
+  st = _handAttachReactions(st, idx, src.iid, pool);  // ⭐v6.540 自動治癒＋對手附能反應（唯一入口）
   // 步驟 2：抽 1 張
   st = addLog(st, '碧綠之舞：從牌庫抽 1 張', idx);
   return drawCards(st, idx, 1);
@@ -17518,7 +17517,7 @@ regR('ursaluna-bm-attach', (state, aIdx, selectedIids, params, pool) => {
   const names = energies.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   // v5.782：從手牌附能 → 補對手反應(侵蝕詛咒/麻痺門牙)
   // v6.164：卡面「最多2張」→ per-energy-card（侵蝕詛咒/自動治癒 各張都算）
-  return fireOnHandEnergyAttached(_magHeal(addLog({ ...state, players }, `經驗法則：附 ${energies.length} 張基本【鬥】能量（${names}）到月月熊 赫月`, aIdx), aIdx, [hostIid], pool, energies.length), aIdx, hostIid, pool, energies.length);
+  return _handAttachReactions(addLog({ ...state, players }, `經驗法則：附 ${energies.length} 張基本【鬥】能量（${names}）到月月熊 赫月`, aIdx), aIdx, hostIid, pool, energies.length);   // ⭐v6.540 唯一入口
 });
 
 // ── 5) 菊草葉｜叫聲 — 對手戰鬥位下回合招式 -20（沿用 嘎啦嘎啦|叫聲 的 helper）
@@ -19680,7 +19679,7 @@ regR('inferno-fandango-attach', (st, idx, iids, params, pool) => {
     };
   });
   // v5.782：從手牌附能 → 補對手反應(侵蝕詛咒/麻痺門牙),原只 _magHeal 漏 fire
-  return fireOnHandEnergyAttached(_magHeal(_attached, idx, [targetIid], pool), idx, targetIid, pool);
+  return _handAttachReactions(_attached, idx, targetIid, pool);   // ⭐v6.540 唯一入口
 });
 
 // v3.07 Deferred Wave D — 手牌觸發特性 effect fn（給 ON_DISCARD_FROM_HAND_ABILITIES /
@@ -20540,7 +20539,7 @@ registerV3080DeferredWaveC();
 //   - 化石補漏在本 effects.ts inline 改完（resolveBenchGuard 羽毛 / canApplyAttackEffectToTarget 背蓋）
 //   - 鰭之化石整合進 v3080_deferred_wave_c.ts 的 isImmuneToOppSupporter（單獨 patch）
 import { registerV3210Ordiga } from './effects/cards/v3210_ordiga';
-import { applyMagearnaHandAttachHeal as _magHeal } from './effects/cards/v3000_g3_wave2';
+import { applyHandAttachReactions as _handAttachReactions } from './effects/cards/v3000_g3_wave2';   // ⭐v6.540 從手牌附能反應的唯一入口
 registerV3210Ordiga();
 
 // ============================================================================
