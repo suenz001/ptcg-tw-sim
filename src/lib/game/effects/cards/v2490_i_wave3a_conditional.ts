@@ -31,6 +31,7 @@ import { canApplyEffectToTarget } from '../../defense';
 import { flipCoinsWithLog, countAttachedEnergyAsUnits, countEnergyTypeHostAware, prizesConditionPre } from '../../effects';
 // ⭐v6.413：「對手所有備戰各受 N」的中央實作（取代本檔原本的自跑迴圈）
 import { snipeAllOppBenchDamage } from '../../effects';
+import { dealAttackDamageToTarget } from '../../effects';   // ⭐v6.535 備戰狙擊收斂中央
 import { oppCountersMultiplyPre } from '../../effects'; // ⭐v6.399 收斂：對手傷害指示物 × N（中央唯一一份）
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -182,24 +183,13 @@ regR('wave3a-snipe-bench', (state, aIdx, iids, params, pool) => {
   // v5.445：加選用 kind 參數 — 預設 'attack-damage'(維持既有 7 卡)；放傷害指示物型(刺殺魔法)
   //   傳 'attack-effect' 才會走對戰圓形競技場等「招式效果」免疫。
   const kind = (params?.kind as 'attack-damage' | 'attack-effect' | undefined) ?? 'attack-damage';
-  let s = state;
-  const target = s.players[dIdx].bench.find(b => b.iid === targetIid);
-  if (!target) return s;
-  const targetCard = pool.get(target.cardId);
-  // v6.029：本 resolver 的 kind='attack-effect' 同樣只用於「放指示物型」備戰狙擊 → 對戰圓形應擋。
-  const guard = canApplyEffectToTarget(s, aIdx, target, targetCard, kind, pool, { isBench: true, counterPlacement: true });
-  if (guard.blocked) {
-    return addLog(s, `✋ ${label}：${targetCard?.name ?? '?'} 受到 ${guard.reason} 保護, 不受影響`, aIdx);
-  }
-  // v5.270: guard 未觸發 — 確認套用前寫一條 audit log (讓玩家從 log 對帳)
-  const applyDesc = kind === 'attack-effect' ? `放置 ${Math.round(amount / 10)} 個傷害指示物` : `造成 ${amount} 點傷害`;
-  s = addLog(s, `🎯 ${label}：對 ${targetCard?.name ?? '?'} ${applyDesc} (guard 未觸發)`, aIdx);
-  return updatePlayer(s, dIdx, p => ({
-    ...p,
-    bench: p.bench.map(b => b.iid === targetIid
-      ? { ...b, damage: (b.damage ?? 0) + amount }
-      : b),
-  }));
+  // ⭐⭐v6.535（收斂）：改走中央 dealAttackDamageToTarget —— 原本手寫 `damage + amount` 只過 canApplyEffectToTarget，
+  //   漏了中央閘第 1／2／4 層（中立中心、條件式完全免疫、擲幣免疫）、招致削傷、備戰減傷、傷害量門檻免疫、擲幣免傷、
+  //   備戰受傷觸發（拖拖蚓ex｜快掃拳返：v6.534 審查 P2-2）、防昏厥、中央 KO（原本交 sanityKOSweep：沒有獎賞修正與 on-KO）、
+  //   withAttackDamageTaken（超級赫拉克羅斯ex｜重裝角擊）。備戰本來就不計弱點抵抗力；kind 原樣傳（刺殺魔法＝attack-effect）。
+  //   目標必須在備戰（防偽造 payload 指到戰鬥場；validIids 已由 engine sanitizeSelectedIids 交集）。
+  if (!state.players[dIdx].bench.some(b => b.iid === targetIid)) return state;
+  return dealAttackDamageToTarget(state, aIdx, targetIid, amount, pool, { kind, label });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

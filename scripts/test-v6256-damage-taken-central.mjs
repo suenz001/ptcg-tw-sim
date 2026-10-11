@@ -361,9 +361,17 @@ T('C3 ⭐⭐防 KO 中央 helper 的三個呼叫端都必須宣告 kind（＋正
   // ⭐⭐v6.412：6 → 4。snipe-multi 與 clone-strike-multi-hit 整段交給中央 helper，
   //   不再自己做防 KO ⇒ 剩下 dealAttackDamageToTarget／hitBenchAll／bench-hit-N／snipe-60-ex。
   //   意圖（每一個呼叫端都必須宣告 kind）不變，下方的逐個參數數檢查照舊。
-  assert.equal(sites.length, 4,
-    `applyPreventKOToVictim effects.ts 呼叫端應恰好 4 個（dealAttackDamageToTarget／` +
-    `hitBenchAll／bench-hit-N／snipe-60-ex），實得 ${sites.length} ⇒ 新增了管線就必須回來讀卡面決定 kind`);
+  // ⭐⭐v6.535（Rule 40）：4 → 3。snipe-60-ex（謝米｜精刺奇襲）整段收斂進中央 dealAttackDamageToTarget ⇒ 不再自己做防 KO。
+  //   意圖不變 ⇒ 下方補接線斷言：snipe-60-ex 必須走中央管線、且不得留 inline 防 KO（判準兩份＝安慰劑型態 11）。
+  assert.equal(sites.length, 3,
+    `applyPreventKOToVictim effects.ts 呼叫端應恰好 3 個（dealAttackDamageToTarget／` +
+    `hitBenchAll／bench-hit-N），實得 ${sites.length} ⇒ 新增了管線就必須回來讀卡面決定 kind`);
+  {
+    const i60 = SRC.effects.indexOf("regR('snipe-60-ex'");
+    assert.ok(i60 >= 0, "anchor 失效：regR('snipe-60-ex'");
+    const b60 = SRC.effects.slice(i60, SRC.effects.indexOf('\n});', i60));
+    assert.ok(/dealAttackDamageToTarget\(/.test(b60) && !/applyPreventKOToVictim\(/.test(b60), 'snipe-60-ex 沒走中央管線或還留著 inline 防 KO');
+  }
   // ⭐⭐v6.413（IRON_RULES Rule 40）：olive-oil-distribute 整段收斂進中央
   //   `dealAttackDamageToTarget` ⇒ 它不再自己做防 KO（那份已經在中央管線裡做過了）。
   //   意圖（每一條會造成傷害的路徑都必須經過防 KO，且必須宣告 kind）沒有被破壞，

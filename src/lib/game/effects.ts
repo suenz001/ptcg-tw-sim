@@ -303,6 +303,7 @@ import { canApplyEffectToTarget, isOppActiveImmuneToAttackEffect, taikoBariBlock
 import { isFestivalDanceFirstAttack, hasFestivalVenue } from './festival';
 // <<< v6410-festival-central-import-effects
 import { applyDefenderReductionsBlockA, isToolsJammed, getEffectiveHP, computeActiveRetreatCostFor, energyTypeUnitsHostAware, energyProvidesType, composeAttackFormula, attackFormulaReconstructs, type FormulaTerm  } from './engine'; 
+import { settlePendingOnDamagedFor } from './engine';   // ⭐v6.535 昏厥離場前先結算該持有者的受傷紀錄（執行期呼叫，非模組初始化）
 import { applyOppActiveReturnedToBenchTriggers } from './engine'; // v5.831 對手回備戰觸發統一入口 // v5.544 防守方減傷中央收斂；v5.677 getEffectiveHP 單一來源；v5.702 host-aware 能量述詞移至 engine 單一來源
 
 export type DamageKind = 'attack-damage' | 'attack-effect' | 'ability-effect';
@@ -8444,57 +8445,13 @@ regPost('謝米|精刺奇襲', (state, aIdx, pool) => {
 });
 regR('snipe-60-ex', (st, actorIdx, selectedIids, _params, pool) => {
   const dIdx = (1 - actorIdx) as 0 | 1;
-  const defender = st.players[dIdx];
   const targetIid = selectedIids[0];
   if (!targetIid) return st;
-  const target = defender.bench.find(c => c.iid === targetIid);
-  if (!target) return st;
-  const targetCard = pool.get(target.cardId);
-  // >>> v6415-snipe60-guard-central
-  // ⭐⭐⭐v6.415：第四條備戰傷害路徑也收斂到中央閘（Rule 38）。
-  //   原本是「resolveBenchGuard ＋ 自己跑擲幣」兩段，少了中央閘的第 1 層（中立中心）
-  //   與第 2 層（條件式完全免疫 PASSIVE_IMMUNITY）。
-  //   v2.46 的既有註解保留：精刺奇襲＝招式【傷害】⇒ 不受對戰圓形影響；只受花之帷幔擋
-  //   （備戰 + 非 ex），而它僅能選對手的 ex/EX ⇒ 實務上通常 pass，仍走中央閘以保持一致。
-  {
-    const g = resolveMultiTargetDamageGuard(st, actorIdx, target, targetCard, pool, { isBench: true });
-    st = g.state;
-    if (g.blocked) {
-      const name = targetCard?.name ?? '?';
-      return addLog(st, `精刺奇襲：${name} 因${g.reason}不受傷害`, actorIdx);
-    }
-  }
-  // <<< v6415-snipe60-guard-central
-  const newDmg = target.damage + 60;
-  const targetHP = effectiveHPInline(target, pool, st);  // v5.091
-  if (targetHP > 0 && newDmg >= targetHP) {
-    // ⭐v6.260 防 KO（倖存鍛鍊器/勤奮之心等 —— 卡面皆無「在戰鬥場」，備戰同樣適用）。
-    {
-      const _pk = applyPreventKOToVictim(st, target, targetCard, dIdx, 60, pool, 'attack-damage');
-      if (_pk.prevented) return _pk.state;
-    }
-    const koDiscard: CardInstance[] = [
-      { ...target, damage: newDmg },
-      ...target.energyAttached,
-      ...getAllAttachedTools(target),
-      ...(target.evolvedFromStack ?? []),
-    ];
-    const _ko = koPrizesAdjusted(st, target, targetCard, (1 - dIdx) as 0 | 1, dIdx, pool);
-    st = _ko.state;
-    const prizes = _ko.prizes;
-    const players = [...st.players] as [PlayerState, PlayerState];
-    players[dIdx] = { ...defender, bench: defender.bench.filter(c => c.iid !== targetIid),
-      discard: [...defender.discard, ...koDiscard] };
-    let s = addLog({ ...st, players }, `精刺奇襲：${targetCard?.name ?? '?'} 被擊倒！${st.players[actorIdx].name} 取得 ${prizes} 張獎賞卡。`, null);
-    s = recordOppKO(s, dIdx, targetCard, 'attack');
-    // ⭐v6.260：備戰被對手招式傷害 KO → 中央 on-KO（本路徑原漏；isActive=false）
-    s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...target, damage: newDmg }, false, true, false);
-    return addPendingPrize(s, actorIdx, prizes, pool);
-  }
-  const players = [...st.players] as [PlayerState, PlayerState];
-  // ⭐v6.256：卡面「受到60點傷害」＝招式傷害 ⇒ 走中央寫入點（過去這條路徑完全沒記）
-  players[dIdx] = { ...defender, bench: defender.bench.map(c => c.iid === targetIid ? withAttackDamageTaken(c, c.damage, newDmg, 'attack-damage') : c) };
-  return addLog({ ...st, players }, `精刺奇襲：對 ${targetCard?.name ?? '?'} 造成 60 傷害！`, actorIdx);
+  if (!st.players[dIdx].bench.some(c => c.iid === targetIid)) return st;
+  // ⭐⭐v6.535（收斂）：謝米｜精刺奇襲「對手的備戰區的1隻『寶可夢【ex】・【V】』受到60點傷害。[在備戰區不計算弱點・抵抗力。]」
+  //   原本自己跑中央閘＋防昏厥＋獎賞＋on-KO，漏了招致削傷、備戰減傷、傷害量門檻免疫、擲幣免傷、備戰受傷觸發、無限之影、中央 log，
+  //   且 KO／非 KO 分支用擲幣前的舊 defender 重組盤面（v6.534 後續審查）⇒ 整段改走中央 dealAttackDamageToTarget（判準只留一份）。
+  return dealAttackDamageToTarget(st, actorIdx, targetIid, 60, pool, { kind: 'attack-damage', label: '精刺奇襲' });
 });
 
 // 聒噪鳥|無伴奏合唱 — 從牌庫選最多 3 張 Basic 寶可夢卡放到備戰
@@ -9971,6 +9928,17 @@ export function koTargetAfterAttackDamage(
   const _fSuffix = opts.suffix ?? '';
   const _onDamagedFired = opts.onDamagedFired;
   const dIdx = (1 - actorIdx) as 0 | 1;
+  // >>> v6535-settle-holder-before-ko
+  // ⭐v6.535（v6.534 審查 P3-1）：這一隻先前受到的招式傷害還有待結算的受傷觸發（_pendingOnDamaged）⇒ 昏厥離場前先結算
+  //   （否則持有者離場後結算時找不到 ⇒ 幸運頭盔／扣殺能量等「即使昏厥也會觸發」的效果被吃掉）。
+  if ((st._pendingOnDamaged ?? []).some(r => r.holderIid === targetNow.iid)) {
+    st = settlePendingOnDamagedFor(st, targetNow.iid, pool);
+    const d0 = st.players[dIdx];
+    const re = d0.active?.iid === targetNow.iid ? d0.active : d0.bench.find(c => c.iid === targetNow.iid);
+    if (!re) return st;
+    targetNow = { ...re, damage: Math.max(re.damage, targetNow.damage) };
+  }
+  // <<< v6535-settle-holder-before-ko
   const defenderNow = st.players[dIdx];
   const targetIid = targetNow.iid;
   const isActive = defenderNow.active?.iid === targetIid;
@@ -9995,13 +9963,23 @@ export function koTargetAfterAttackDamage(
   // v5.495：被 KO 觸發附加道具 TOOL_ON_KO（沉重接力棒移能量 / 希望護身符抽牌）——
   //   中央 helper 原漏呼叫，導致狙擊/分配招式 KO 帶接力棒的寶可夢時能量直接消失。
   s = fireDefenderOnKO(s, dIdx, actorIdx, pool, targetNow, isActive || opts.damagedWhileActive === true, kind === 'attack-damage', _onDamagedFired, opts.attackerIid);   // ⭐v6.520 v6520-ko-damaged-while-active
+  // ⭐v6.535（審查 P1-1 第二段）：on-KO 效果（炸裂針等）寫了終局 ⇒ 原本直接 return、這一下的取獎被吃掉 ⇒ 收回後照常取獎，終局交中央重判
+  if (s.phase === 'game-over' && st.phase !== 'game-over') s = liftEndgameForOnKoV6361(s);
   if (s.phase === 'game-over') return s;
   // v5.830：對手戰鬥位被狙擊/延後傷害 KO → 攻擊方「奇跡之吻」擲幣+1(卡面「對手戰鬥寶可夢昏厥時」不分主傷害/狙擊)。
   //   ⭐v6.493：走中央入口；脆弱蛻殼讓獎賞為 0 時照擲但不加（B6）
   if (isActive) s = miracleKissOnActiveFaint(s, dIdx, pool, _ko.preventPrizeAll === true);
+  // >>> v6535-no-bench-take-prize-first
+  // ⭐v6.535（v6.534 審查 P2-1）：對手沒有備戰時原本直接寫終局、**不取獎** ⇒ 雙方同時取完的判定失真
+  //   （官方 L622：雙方同時達成勝利條件時，依可否放置判定）。改成先取獎（與 engine 主管線 legacy 分支相同），再寫「沒有可上場的寶可夢」。
   if (isActive && newDefender.bench.length === 0) {
+    s = addPendingPrize(s, actorIdx, p, pool);
+    if (s.phase === 'game-over') return s;
+    // ⭐v6.535（審查 P3-5）：補「沒有可上場的寶可夢，獲勝！」那一行（engine／drain／koAttackerAfterRetaliation 都有，這裡原本漏）
+    s = addLog(s, `${defenderNow.name} 沒有可上場的寶可夢，${s.players[actorIdx].name} 獲勝！`, null);
     return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defenderNow.name} 沒有可上場的寶可夢` };
   }
+  // <<< v6535-no-bench-take-prize-first
   return addPendingPrize(s, actorIdx, p, pool);
 }
 // <<< v6490-ko-target-after-attack-damage
@@ -10106,7 +10084,8 @@ export function dealAttackDamageToTarget(
   // <<< v6415-immunity-guard-central
   if (guard.blocked) {
     const name = targetCard?.name ?? '?';
-    return addLog(st, `${label}：${name} 因${guard.reason}不受傷害`, actorIdx);
+    // ⭐v6.535（審查 P3-1）：放置傷害指示物型（attack-effect）不是「傷害」⇒ 文案依 kind 區分
+    return addLog(st, `${label}：${name} 因${guard.reason}${kind === 'attack-effect' ? '不受招式效果影響（不放置傷害指示物）' : '不受傷害'}`, actorIdx);
   }
   // v5.369：戰鬥位（active）的招式【傷害】要套弱點×2 + 抵抗力 + 攻擊方道具加成（猛攻手鐲等）。
   //   備戰位不計弱抗（卡面標準「備戰不計弱抗」）；放傷害指示物(kind='attack-effect',如飛來橫禍)
@@ -10286,8 +10265,13 @@ export function dealAttackDamageToTarget(
   }
   // <<< v6534-defer-effects-on-damaged
   if (_onDamagedFired && !_v6534Defer) {
+    const _ph0 = st.phase;
     st = fireDefenderOnDamaged(st, dIdx, actorIdx, effDmg, pool);
-    if (st.phase === 'game-over') return st;
+    // >>> v6535-lift-after-ondamaged
+    // ⭐v6.535（審查 P1-1）：受傷反擊把攻擊方打昏而寫了終局 ⇒ 原本這裡直接 return ⇒ 防守方這一下的傷害與昏厥整個遺失、勝負判錯。
+    //   ⇒ 收回 'playing'，讓這一下照常結算，終局交 applyActionImpl 末端 v6.361 中央重判（與 v6534-legacy-ko-lift 同型）。
+    if (st.phase === 'game-over' && _ph0 !== 'game-over') st = liftEndgameForOnKoV6361(st);
+    // <<< v6535-lift-after-ondamaged
   }
   // v5.980：anywhere 型受傷反擊(快掃拳返,卡面無「在戰鬥場」)在備戰被狙擊時也觸發(active 已走上方 fireDefenderOnDamaged)。
   if (!isActive && kind === 'attack-damage' && effDmg > 0 && !_v6534Defer) {
@@ -10299,7 +10283,14 @@ export function dealAttackDamageToTarget(
         if (ANYWHERE_RETALIATION.has(ab.name) && isAbilityHolderEffective(st, _bt, _btCard, dIdx, ab.name, 'bench', pool)
             && !isImmuneToOppAbilityEffect(st, dIdx, st.players[actorIdx].active, pool, true)) {
           const fn = PASSIVE_RETALIATION.get(ab.name);
-          if (fn) st = fn(st, dIdx, pool, _bt);
+          if (fn) {
+            const _atkBefore = st.players[actorIdx].active?.damage ?? 0;
+            st = fn(st, dIdx, pool, _bt);
+            // ⭐v6.535（審查 P3-2）：攻擊方被反擊打昏 ⇒ 中央 koAttackerAfterRetaliation（v6.492 裁定；原本交 sanityKOSweep 簡化處理）
+            const _ph1 = st.phase;
+            st = koAttackerAfterRetaliation(st, actorIdx, _atkBefore, pool, ab.name);
+            if (st.phase === 'game-over' && _ph1 !== 'game-over') st = liftEndgameForOnKoV6361(st);
+          }
         }
       }
     }
@@ -10329,6 +10320,8 @@ export function dealAttackDamageToTarget(
   if (isActive) newDefender.active = withAttackDamageTaken(targetNow, targetNow.damage, newDmg, kind);
   else newDefender.bench = defenderNow.bench.map(c => c.iid === targetIid ? withAttackDamageTaken(c, c.damage, newDmg, kind) : c);
   players[dIdx] = newDefender;
+  // ⭐v6.535（審查 P3-1）：放置傷害指示物型（attack-effect，例：夢妖魔｜刺殺魔法）寫「放置 N 個傷害指示物」
+  if (kind === 'attack-effect') return addLog({ ...st, players }, `${label}：在 ${targetCard?.name ?? '?'} 身上放置 ${Math.round(effDmg / 10)} 個傷害指示物`, actorIdx);
   return addLog({ ...st, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${effDmg} 傷害${_fSuffix}`, actorIdx);
 }
 

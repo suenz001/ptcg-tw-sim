@@ -1,5 +1,31 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.535：單一目標狙擊收斂中央、中央 KO 取獎、離場前結算（2026-10-12）
+
+BASE 38964609（v6.534）。處理 v6.534 審查 P2-1／P2-2／P3-1；全站「招式傷害沒走中央 dealAttackDamageToTarget」audit（子代理，掃 137 個 damage 寫入點、1267 個實際生效的 POST）找到 9 條，本版先收單一目標 3 條，多目標 6 條排 v6.536。
+- `wave3a-snipe-bench`（v2490）：手寫 `damage + amount` ⇒ 改呼叫中央 helper（kind 原樣：刺殺魔法＝attack-effect）。影響 H/I/J：赫普的蒼響ex｜剎那斬、波皇子｜瞄準俯衝、巨石丁｜岩石踢、長耳兔｜魯莽踢、雪暴馬｜冰之射擊、水君｜飛馳、鐵武者｜雙生鐳射、九尾｜火焰聖靈、爆焰龜獸｜吐出射擊、火焰雞｜業火連踢、捷拉奧拉｜閃電急襲、皮卡丘｜電光、路卡利歐｜波導彈、魔幻假面喵ex｜魔法子彈、雷電斑馬｜電氣子彈、赫普的鋼鎧鴉｜穿通、竹蘭的美納斯｜水分岔（只有 1 隻可選時）、夢妖魔｜刺殺魔法。原本漏：中央閘第 1／2／4 層、招致削傷、備戰減傷、傷害量門檻免疫、擲幣免傷、備戰受傷觸發、防昏厥、中央 KO（交 sanityKOSweep：無獎賞修正與 on-KO）、withAttackDamageTaken。
+- `snipe-60-ex`（謝米｜精刺奇襲）：自跑一套 ⇒ 改呼叫中央 helper（另修：原本用擲幣前的舊 defender 重組盤面）。
+- `j-taurus-group-aim`（肯泰羅｜群起瞄準，可打戰鬥場）：raw 加傷害＋就地免疫閘 ⇒ 改呼叫中央 helper（戰鬥場計弱點抵抗力與攻擊方加成、受傷反擊、防昏厥、中央 KO；判準只留一份）。
+- 中央 `koTargetAfterAttackDamage`：
+  - 哨兵 v6535-no-bench-take-prize-first（v6.534 審查 P2-1）：對手沒有備戰時先 addPendingPrize 再寫「沒有可上場的寶可夢」（原本直接終局、不取獎 ⇒ 雙方同時取完的判定失真；官方 L622）。
+  - 哨兵 v6535-settle-holder-before-ko（v6.534 審查 P3-1）：這一隻還有待結算的 _pendingOnDamaged ⇒ 離場前先結算（engine 新增 `settlePendingOnDamagedFor`），再以結算後的實體結算昏厥。
+- Rule 40：test-v6256 C3（applyPreventKOToVictim 呼叫端 4 → 3，補接線斷言：snipe-60-ex 必須走中央、不得留 inline 防 KO）、test-v6415 C3（snipe-60-ex 改呼叫中央 helper 亦算走中央閘）。
+- 守衛 test-v6535-snipe-central-and-ko-prize：13 條行為＋HEAD-FAIL（BASE：LUCARIO、LUC_KO、LUC_KO2、BURST、SHAYMIN、TAUROS、LEGK、P31、CM_11、CM_10、CM_10_61、CM_00 紅；HOLDG2 兩版綠）；突變 9 個殺 8，存活 1 為等價（koTargetAfterAttackDamage 的 on-KO 後 lift：現行沒有寫終局的 on-KO 效果）。
+- harness＋免疫測試網：與 BASE 相同（v6427 已全綠）。
+- 全套第一輪：test-v6367 BASE 重建（只換舊 engine）時 effects.ts 從 './engine' 多 import 了 settlePendingOnDamagedFor ⇒ Rule 40：替身掃描補掃 effects.ts 本身（原只掃 effects/ 子樹）；test-v6368 BR 跟著綠；test-v6370 已知速度假紅。
+- **Fable 5.1 審查**（21 招 × 29 盤面 BASE/HEAD 420 局：116 處差異全為預期改善；中央路徑終局矩陣 32＋11 格）：
+  - P1-1（既有根、本版讓肯泰羅可達）：中央 helper 當場觸發的受傷反擊把攻擊方打昏寫了終局 ⇒ helper 早退，防守方這一下的傷害與昏厥遺失 ⇒ 勝負判錯（只差獎賞有沒有翻正面就結果不同）。**已修**：fireDefenderOnDamaged 後若新寫終局 ⇒ liftEndgameForOnKoV6361 繼續結算（哨兵 v6535-lift-after-ondamaged）；koTargetAfterAttackDamage 的 fireDefenderOnKO 後同型（防禦性，現行卡池未見 on-KO 效果寫終局 ⇒ 該突變等價存活）。守衛 CM_11／CM_10／CM_10_61／CM_00（中央路徑終局矩陣）、BURST。
+  - P3-1：helper 的「放置傷害指示物」型（attack-effect）擋下／成功文案改為「不受招式效果影響（不放置傷害指示物）」／「放置 N 個傷害指示物」。
+  - P3-2：備戰 anywhere 反擊（快掃拳返）當場打昏攻擊方 ⇒ 走中央 koAttackerAfterRetaliation（v6.492 裁定）；守衛 LUC_KO2。
+  - P3-3：settlePendingOnDamagedFor 現行卡池不可達（守衛 P31 為人工情境），早退問題由 P1-1 第二段一併處理。
+  - P3-4：TAUROS 釘精確值 50。
+  - P3-5：中央 KO 無備戰終局補「…沒有可上場的寶可夢，…獲勝！」；守衛 CM_10_61 驗。
+  - **複審（e5d77c38）**：P1-1、P3-1～P3-5 都已修好；bd8a8e7a→e5d77c38 重跑 420 局零差異（只動終局情境）；終局矩陣、翻正面 vs 蓋著 16 組結果一致；lift 重入與 heldVerdict／drain 互動無問題；無 P1／P2，可合併。
+    - 複審 P3-1（守衛缺口）：備戰 anywhere 路徑 koAttackerAfterRetaliation 後的 lift 改回 return ⇒ 原守衛全綠但行為不同（路卡利歐無備戰、6/1 ⇒ 拖拖蚓ex 留在場上、P1 沒取獎）。**已補** LUC_KO3（BASE 紅、該突變紅），守衛 28 PASS。
+    - fireDefenderOnKO 後的 lift 拿掉 ⇒ 存活，等價（現行卡池無 on-KO 效果寫終局），如實記錄。
+- 全套（e5d77c38）：883／883、FAIL 0；之後只動守衛（LUC_KO3）與本文件，單跑 test-v6535 綠。
+- 排 v6.536：雪絨蛾｜冰凍羽擊、雷丘｜捲入伏特、河馬獸｜大沙風暴、臭臭花｜灑口水（對手側）、hitBenchAll、bench-hit-N（備戰受傷觸發）；順手發現：隨風球｜一同爆炸打到對手（卡面只限自己的場上）、h-wave2-hit-any-opp 的 label。
+
 ## v6.534：中央傷害路徑的受傷觸發延後、同時昏厥判定（2026-10-12）
 
 BASE f55b5ab6（v6.533）。站長 2026-10-12 裁定（受傷反擊整體移到招式效果之後）的第二部分＋v6.533 審查的 P2-2／P3-7／P3-8。

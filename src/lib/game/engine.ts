@@ -3850,6 +3850,20 @@ export function settlePendingOnDamaged(state: GameState, pool: Map<string, Card>
   if (s.phase === 'game-over' && state.phase !== 'game-over' && s._pendingAttackKo) s = liftEndgameForOnKoV6361(s);
   return s;
 }
+/**
+ * ⭐v6.535：只結算某一隻持有者的受傷紀錄（中央 KO koTargetAfterAttackDamage 在牠離場前呼叫；不看選擇視窗——昏厥當下就要觸發）。
+ */
+export function settlePendingOnDamagedFor(state: GameState, holderIid: string, pool: Map<string, Card>): GameState {
+  const q = state._pendingOnDamaged;
+  if (!q || q.length === 0) return state;
+  const mine = q.filter(r => r.holderIid === holderIid);
+  if (mine.length === 0) return state;
+  const rest = q.filter(r => r.holderIid !== holderIid);
+  let s: GameState = { ...state, _pendingOnDamaged: rest };
+  if (rest.length === 0) delete s._pendingOnDamaged;
+  for (const rec of mine) s = settleOneOnDamaged(s, rec, pool);
+  return s;
+}
 // <<< v6533-settle-on-damaged
 
 /**

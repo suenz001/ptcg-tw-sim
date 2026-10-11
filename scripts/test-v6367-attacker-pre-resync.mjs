@@ -316,6 +316,9 @@ if (!hasBaseCommit(ROOT, BASE)) {
         for (const m of t.matchAll(/import\s*\{([^}]*)\}\s*from\s*'(?:\.\.\/)+engine'/g)) for (const nm of m[1].split(',')) { const x = nm.trim().split(/\s+as\s+/)[0].replace(/^type\s+/, ''); if (x) _need.add(x); }
       } } };
     _walk(join(baseSrc, 'lib/game/effects'));
+    // ⭐v6.535（Rule 40）：effects.ts 本身（不在 effects/ 子樹）也從 './engine' 多 import 了新 export（settlePendingOnDamagedFor）⇒ 一併掃。
+    { const t = readFileSync(join(baseSrc, 'lib/game/effects.ts'), 'utf8');
+      for (const m of t.matchAll(/import\s*\{([^}]*)\}\s*from\s*'\.\/engine'/g)) for (const nm of m[1].split(',')) { const x = nm.trim().split(/\s+as\s+/)[0].replace(/^type\s+/, ''); if (x) _need.add(x); } }
     for (const nm of _need) {
       if (!new RegExp(`export\\s+(?:async\\s+)?(?:function|const|let|class|type|interface)\\s+${nm}\\b|export\\s*\\{[^}]*\\b${nm}\\b`).test(_eng)) {
         _eng += `\nexport function ${nm}(..._a: unknown[]): never { throw new Error('v6367 BASE shim: ${nm}'); }\n`;

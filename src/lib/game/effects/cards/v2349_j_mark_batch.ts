@@ -138,21 +138,14 @@ regR('j-taurus-group-aim', (state, aIdx, iids, _params, pool) => {
   const dmg = r.heads * 50;
   const target = iids[0];
   if (!target || dmg <= 0) return addLog(r.state, `群起瞄準：${r.heads}/${count} 次正面，未造成傷害`, aIdx);
-  // v4.54：卡面是「N×50 點傷害」(attack-damage)，不是「招式效果」。
-  //   原 v2.92 誤套 canApplyAttackEffectToTarget 連薄霧/抵抗之幕等 effect immunity 都擋 → 違反卡面。
-  //   改用 unified('attack-damage', isBench:?) → bench 才走 resolveBenchGuard 擋球形盾牌等，active 不擋。
-  const _groupIsActive = state.players[dIdx].active?.iid === target;
-  const tInst = _groupIsActive
-    ? state.players[dIdx].active!
-    : state.players[dIdx].bench.find(b => b.iid === target);
-  if (tInst) {
-    const tCard = pool.get(tInst.cardId);
-    const guard = canApplyEffectToTarget(r.state, aIdx, tInst, tCard, 'attack-damage', pool, { isBench: !_groupIsActive });
-    if (guard.blocked) {
-      return addLog(r.state, `群起瞄準：${tCard?.name ?? '?'}｜${guard.reason}（不受傷害）`, aIdx);
-    }
-  }
-  return addLog(damageOneNoKo(r.state, dIdx, target, dmg), `群起瞄準：${r.heads}/${count} 次正面 → ${dmg} 傷害`, aIdx);
+  // ⭐⭐v6.535（收斂）：卡面「所選的寶可夢受到正面出現的次數×50點傷害。[在備戰區不計算弱點・抵抗力。]」＝招式傷害、可以選戰鬥場。
+  //   原本手寫 damageOneNoKo（raw +N）＋就地 canApplyEffectToTarget：戰鬥場漏攻擊方加成、弱點抵抗力、防守方減傷、受傷反擊、
+  //   防昏厥、中央 KO（交 sanityKOSweep）、傷害公式；備戰漏備戰減傷、擲幣免傷、快掃拳返… ⇒ 改走中央 dealAttackDamageToTarget
+  //   （戰鬥場計弱點、備戰自動不計；免疫閘在 helper 內，刪掉就地那一份 ⇒ 判準只留一份）。擲幣在造成傷害前，與卡面順序相符。
+  const _onField = state.players[dIdx].active?.iid === target || state.players[dIdx].bench.some(b => b.iid === target);
+  if (!_onField) return r.state;
+  const s1 = addLog(r.state, `群起瞄準：${r.heads}/${count} 次正面 → ${dmg} 傷害`, aIdx);
+  return dealAttackDamageToTarget(s1, aIdx, target, dmg, pool, { kind: 'attack-damage', label: '群起瞄準' });
 });
 
 // 步哨鼠｜臨檢：擲 3 次，依正面數「查看對手手牌並選擇 N 張」放回牌庫並重洗。

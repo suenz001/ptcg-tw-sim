@@ -226,7 +226,8 @@ T('C3. ⭐⭐ 四條備戰傷害路徑都走中央閘，且都不得自己擲幣
     ['snipe-60-ex', "regR('snipe-60-ex'"],
   ]) {
     const b = blockOf(anchor, 8000);
-    assert.ok(/resolveMultiTargetDamageGuard\(/.test(b), `${nm} 沒有走中央閘`);
+    // ⭐v6.535（Rule 40）：snipe-60-ex 整段改呼叫中央 dealAttackDamageToTarget（它內部就走 resolveMultiTargetDamageGuard）⇒ 兩者擇一即可
+    assert.ok(/resolveMultiTargetDamageGuard\(/.test(b) || (nm === 'snipe-60-ex' && /dealAttackDamageToTarget\(/.test(b.slice(0, b.indexOf('\n});') + 1))), `${nm} 沒有走中央閘`);
     assert.ok(!/passiveCoinImmunity\(/.test(b), `${nm} 還自己擲幣（判準兩份）`);
     assert.ok(!/skipCoin:\s*true/.test(b), `${nm} 傳了 skipCoin ⇒ 那條路徑的備戰又不擲幣了`);
   }
