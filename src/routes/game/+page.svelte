@@ -1826,6 +1826,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // v2.73 殭屍房間心跳機制
   let heartbeatTimer: number | null = null;
   // 可加入的開放房間列表（onlineStep='join' 時即時訂閱）
+  // ⭐v6.526：pending 宣告的「選得到但不受效果影響」目標（目前只有大力捕捉器）——選擇視窗用來標示
+  const selImmuneIids = $derived(new Set<string>(Array.isArray(pendingSelection?.params?.immuneIids) ? (pendingSelection!.params!.immuneIids as string[]) : []));
   let openRooms = $state<Room[]>([]);
   let openRoomsErr = $state('');
   // >>> v6525-my-old-rooms
@@ -9071,6 +9073,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
 
   function startRoomSubscription() {
+    // ⭐v6.526（Fable 補審 v6.518 F4）：換房時清掉上一間的接手建局計時器。
+    //   ⚠ typeof 防衛（同 room-oracle oracleTx 的寫法）：test-v6197／test-v6280 會把這支函式原文抽出來實跑，harness 裡沒有這個識別字。
+    if (typeof _startGraceTimer !== 'undefined' && _startGraceTimer !== null) { clearTimeout(_startGraceTimer); _startGraceTimer = null; }
     // ⭐v6.274：進入／換一間房＝grace 計時必須從頭起算。`_onlineReadyAt` 是 per-page 的、
     //   不跟著房間走；少了這一行，離開房間再開一間新房時會沿用上一間房的陳舊起點
     //   （若新房的第一發更新就已經是「雙方就緒」，handleRoomUpdate 的歸零判斷會放行）。
@@ -9659,6 +9664,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     tLeaveMatch();
   }
   async function leaveOnlineGame() {
+    // ⭐v6.526（Fable 補審 v6.518 F4）：離開房間時清掉接手建局計時器（typeof 防衛：test-v6197 會抽這支函式原文實跑）
+    if (typeof _startGraceTimer !== 'undefined' && _startGraceTimer !== null) { clearTimeout(_startGraceTimer); _startGraceTimer = null; }
     // v3.34 Fix #3：先 unsubRoom 阻斷 onSnapshot callback，再 stopHeartbeat，
     //   最後 await leaveRoom；避免 await 期間 firestore snapshot 仍 fire
     //   handleRoomUpdate → 把 game 重新填回（或誤判房間不存在跳到 onlineError）。
@@ -12960,6 +12967,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
                         class:legend-half-l={twoCardStadiumHalfIndex(selectionItems, item.iid, pool) === 0}
                         class:legend-half-r={twoCardStadiumHalfIndex(selectionItems, item.iid, pool) === 1}/><span class="sel-name">{c.name}</span>
                       {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
+                      <!-- ⭐v6.526（Fable 補審 v6.519 F3）：選得到、但不受這個效果影響的目標（例：大力捕捉器選到化隱的備戰 ⇒ 不會互換）要標出來 -->
+                      {#if selImmuneIids.has(item.iid)}<span class="sel-immune" title="這隻寶可夢不受這個效果影響：選了也不會發生效果（例如不會互換）">🛡 不受影響</span>{/if}
                     {/if}
                     {#if isEnergyPicker && energyOwnerMap.has(item.iid)}
                       {@const owner = energyOwnerMap.get(item.iid)!}
@@ -18311,6 +18320,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .sel-grid.sel-grid-energy .sel-card img{ width:88px; }
   .sel-grid.sel-grid-energy .sel-name{ font-size:.72rem; }
   .sel-hp{ font-size:.58rem; color:#888; }
+  .sel-immune{ font-size:.6rem; color:#ffd27a; font-weight:600; }   /* v6.526 不受影響的目標 */
   .sel-check{ position:absolute; top:2px; right:4px; font-size:.9rem; color:#aaff44; font-weight:700; }
   .sel-empty{ color:#666; font-size:.85rem; grid-column:1/-1; text-align:center; padding:1rem; }
   .sel-footer{ display:flex; gap:.75rem; justify-content:flex-end; flex-wrap:wrap; }

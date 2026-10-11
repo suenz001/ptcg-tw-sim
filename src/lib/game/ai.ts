@@ -1070,8 +1070,13 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       const includeActiveOB = sel.params?.includeActive === true;
       const validIidsOB = sel.params?.validIids as string[] | undefined;
       const baseOB = includeActiveOB && srcPlayer.active ? [srcPlayer.active, ...srcPlayer.bench] : srcPlayer.bench;
-      const bench = validIidsOB ? baseOB.filter(c => validIidsOB.includes(c.iid)) : baseOB;
-      if (bench.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+      const benchAll = validIidsOB ? baseOB.filter(c => validIidsOB.includes(c.iid)) : baseOB;
+      if (benchAll.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+      // ⭐v6.526（Fable 補審 v6.519 F3）：pending 宣告「選得到但不受效果影響」的目標（大力捕捉器 × 化隱／光之翼備戰）
+      //   ⇒ 選了也不互換、白白浪費 ⇒ 有其他目標時一律不選它們（全部都不受影響時才照舊，至少選一個）。
+      const immuneOB = Array.isArray(sel.params?.immuneIids) ? (sel.params!.immuneIids as string[]) : [];
+      const effOB = immuneOB.length ? benchAll.filter(c => !immuneOB.includes(c.iid)) : benchAll;
+      const bench = effOB.length ? effOB : benchAll;
       // v3.43 魔靈多龍 老大指令：抓 ex 且 remainingHP ≤ 200（讓多龍幻影奇襲 KO 取 2 獎賞）
       // 60 內備戰不抓（保留給幻影奇襲分配 KO，省一張老大指令）
       if (sel.effectKey === 'gust-opp') {
