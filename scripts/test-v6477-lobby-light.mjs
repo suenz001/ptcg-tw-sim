@@ -19,7 +19,7 @@ import { execFileSync } from 'node:child_process';
 import http from 'node:http';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
-import { uiColor } from './lib/ui-palette.mjs';   // ⭐v6.511 色票唯一讀取點（不寫死色碼）
+import { uiColor, cssColor } from './lib/ui-palette.mjs';   // ⭐v6.511 色票唯一讀取點（不寫死色碼）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.476。
@@ -151,7 +151,10 @@ else if (chromium) {
       ({ ctx, pg } = await open(1440, 900, 'light', '/friends'));
       const F = { body: await css(pg, 'body', 'backgroundColor'), bg: await pg.evaluate(() => getComputedStyle(document.querySelector('.fr-panel')).getPropertyValue('--fr-bg').trim()) };
       await ctx.close();
-      ok('★★[E4] 淺色 /friends：淺底、好友面板換成淺色色票', F.body === uiColor(ROOT, 'light', '--ui-bg') && (F.bg === 'var(--ui-bg)' || F.bg === uiColor(ROOT, 'light', '--ui-bg') || F.bg.toLowerCase() === '#dde3df'), JSON.stringify(F));
+      // ⭐v6.525（Rule 40，意圖不變＝好友面板用淺色底色）：Chrome 讀自訂屬性時會把 var() 展開成色碼字面（例如 #dce0dd），
+      //   原本只接受 v6.514 換色票前的舊色碼 #dde3df ⇒ 有 build/ 時必紅。改成把讀到的色碼正規化後與色票比對（色票仍是唯一來源）。
+      const _frBgOk = F.bg === 'var(--ui-bg)' || (() => { try { return cssColor(F.bg) === uiColor(ROOT, 'light', '--ui-bg'); } catch { return false; } })();
+      ok('★★[E4] 淺色 /friends：淺底、好友面板換成淺色色票', F.body === uiColor(ROOT, 'light', '--ui-bg') && _frBgOk, JSON.stringify(F));
       ({ ctx, pg } = await open(390, 844, 'light', '/game', true));
       const M = { body: await css(pg, 'body', 'backgroundColor'), card: await css(pg, '.mode-card', 'backgroundColor') };
       await ctx.close();

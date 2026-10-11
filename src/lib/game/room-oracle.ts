@@ -218,7 +218,8 @@ export async function joinRoom(roomCode: string, guestName: string): Promise<Roo
     throw new Error('此房間是舊版本，請對方建立新房間');
   }
   if (data.status === 'ended') throw new Error('此房對戰已結束');
-  if (data.status === 'playing' && data.spectatorsAllowed === false) {
+  // ⭐v6.525：自己本來就坐在這間房（回到自己的房）⇒ 不是觀戰，不受「未開放觀戰」限制（原本對戰中回不去自己的對局）。
+  if (data.status === 'playing' && data.spectatorsAllowed === false && findMySeatIdx(data.seats ?? [], uid) < 0) {
     throw new Error('此房對戰中未開放觀戰');
   }
 
@@ -411,6 +412,36 @@ export async function claimOpponentForfeit(roomCode: string, mySeatIdx: 0 | 1): 
     return false;
   }
 }
+
+// >>> v6525-release-lobby
+/**
+ * ⭐v6.525 開新房時釋放自己留在大廳的舊房（Fable 審查 P2-3）：**只在交易當下仍是 lobby** 才把我的座位清掉。
+ *   ⚠ 不走 leaveRoom：leaveRoom 會重新讀狀態，若舊房剛好轉成對戰中（對手準備好自動開局）就走「投降判對手勝」。
+ *   ⚠ 清空後不刪房：房主位空了大廳就不列（isLobbyHostDead），伺服器 5 分鐘後清掉；
+ *     刪房要另外一發、中間有人加入就會把他的房刪掉（leaveRoom 既有的競態，這裡不複製）。
+ */
+export async function releaseLobbySeat(roomCode: string): Promise<boolean> {
+  const uid = oracleCurrentUid();
+  if (!uid) return false;
+  const NOT_LOBBY = new Error('not-lobby');
+  try {
+    await oracleTx(roomCode.toUpperCase(), (cur) => {
+      if (cur.status !== 'lobby') throw NOT_LOBBY;
+      const seats = cur.seats ?? [];
+      const i = findMySeatIdx(seats, uid);
+      if (i < 0) throw NOT_LOBBY;
+      const ns = seats.map((s, k) =>
+        k === i ? { ...s, uid: null, name: null, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const } : s
+      );
+      return { ...cur, seats: ns, memberUids: computeMemberUids(ns) };
+    });
+    return true;
+  } catch (err) {
+    if (err !== NOT_LOBBY) console.warn('[oracle releaseLobbySeat]', err);
+    return false;
+  }
+}
+// <<< v6525-release-lobby
 
 export async function leaveRoom(roomCode: string): Promise<void> {
   const uid = oracleCurrentUid();
@@ -832,7 +863,13 @@ export function filterAndSortOpenRooms(all: OracleRoom[]): Room[] {
   return rooms;
 }
 
-export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: (err: Error) => void): () => void {
+export function subscribeOpenRooms(callback: (rooms: Room[], raw?: Room[]) => void, onError?: (err: Error) => void): () => void {
+  // >>> v6525-my-old-rooms
+  // ⭐v6.525：除了「給別人看的」過濾後列表，也把**未過濾**的原始列表交出去（房主自己的房被死房／過久／私密房規則
+  //   藏起來時仍要能回去；見 casual-reclaim.ts）。只做 _id → roomId 的形狀轉換，不過濾、不排序。
+  //   ⚠ 寫在函式裡面（同 v6467 的理由）：多支舊守衛是把這支函式原文抽出來實跑的。
+  const rawRooms = (all: OracleRoom[]): Room[] => (Array.isArray(all) ? all : []).map(r => ({ ...(r as unknown as RoomData), roomId: r._id }) as Room);
+  // <<< v6525-my-old-rooms
   let alive = true;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let _inFlight = false;   // ⭐v6.467 回前景補抓時不可以跟在途的那一發重疊
@@ -885,7 +922,7 @@ export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: 
         if (alive) timer = setTimeout(legacyTick, _hidden() ? 10000 : 2000);
         return;
       }
-      callback(filterAndSortOpenRooms([...(lobby ?? []), ...(playing ?? [])] as OracleRoom[]));
+      { const _all = [...(lobby ?? []), ...(playing ?? [])] as OracleRoom[]; callback(filterAndSortOpenRooms(_all), rawRooms(_all)); }   // v6525-my-old-rooms：多給未過濾的原始列表
     } catch (err) {
       console.warn('[subscribeOpenRooms]', err);
       onError?.(err as Error);
@@ -911,18 +948,18 @@ export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: 
         // 204:內容沒變 ⇒ 沿用上一包原始資料**重跑過濾**(死房/殭屍房判定是時間函數,見
         // filterAndSortOpenRooms 的說明)。理論上第一發不帶 h 不可能拿到 204;防禦性起見
         // 沒有上一包就當作「這一發沒資料」,維持畫面既有狀態。
-        if (_lastAll !== null) callback(filterAndSortOpenRooms(_lastAll));
+        if (_lastAll !== null) callback(filterAndSortOpenRooms(_lastAll), rawRooms(_lastAll));
       } else {
         _lastAll = r.rooms;
         _lastH = r.h;
-        callback(filterAndSortOpenRooms(r.rooms));
+        callback(filterAndSortOpenRooms(r.rooms), rawRooms(r.rooms));
       }
     } catch (err) {
       // 網路失敗:不清空、不退回舊協定(v6.177 紀律+上方 _combinedMode 說明);
       // 有上一包就重跑過濾讓列表維持可見。
       console.warn('[subscribeOpenRooms]', err);
       onError?.(err as Error);
-      if (_lastAll !== null) callback(filterAndSortOpenRooms(_lastAll));
+      if (_lastAll !== null) callback(filterAndSortOpenRooms(_lastAll), rawRooms(_lastAll));
     }
     _inFlight = false;
     if (alive) timer = setTimeout(tick, _hidden() ? 10000 : 2000);

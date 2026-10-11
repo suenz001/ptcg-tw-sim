@@ -7044,6 +7044,123 @@ import('firebase-admin').then(async ({ default: admin }) => {
     });
     console.log('[friends] dm endpoints registered (v1.38) dm-enabled-by-default=false');
     // <<< PTCG-FRIENDS-DM-BLOCK-END
+    // >>> v162-casual-reclaim
+    // ⭐server v1.62（v6.525，站長 2026-10-11：玩家回報「開房後把網頁關掉重開、重新登入，舊房間進不去」；
+    //   站長：「要讓開房的房主可以回去他開過房的舊房間（當然如果他要開新房間也是可以的）」）。
+    //   休閒房的座位只用 Oracle 匿名 uid 認人；uid 存在瀏覽器 localStorage，換瀏覽器／無痕／清資料就換一個
+    //   ⇒ 回到自己的房會被當成新玩家，坐進 P2 位等一個永遠不會回來的「自己」（＝「進房對手沒反應」）。
+    //   玩家端讀到的房間資料 seats[].email 一律被剝掉（v6.220 隱私），所以「用登入 email 認回座位」只能在伺服器做：
+    //   ① GET  /api/my-room      ：驗過 Firebase 身分 ⇒ 回「我的 email 現在坐在哪一間房」（只看 p1／p2，
+    //      沿用好友功能的 5 秒全站共用快照 _frRoomsByEmail，不多打 DB；索引不在 ⇒ 回應不帶 roomId，絕不 COLLSCAN）。
+    //   ② POST /api/my-room/reclaim-seat ：{ roomCode, uid } 驗過 Firebase 身分，且該房 p1／p2 某一座位的 email
+    //      與登入 email 相同 ⇒ 把那個座位的 uid 換成呼叫端現在的 Oracle uid（memberUids、hostUid、心跳一起更新），
+    //      用 _version 做 CAS（與 PUT /api/rooms/:code 同一個樂觀鎖）。只動 uid，不動名字、牌組、準備狀態、盤面。
+    //   ⚠ 只回房號，不回房名／對手／email（房名由 client 從大廳列表或 GET /api/rooms/:code 取）。
+    //   ⚠ 不依賴好友功能的開關（friendsEnabled）：這是休閒對戰的功能，好友關閉時也要能用。
+    //   ⚠ 安全性：PUT /api/rooms/:code 本來就沒有成員檢查（既有狀況），這兩支只會「比原本更嚴」——
+    //      認回座位必須持有該 email 的 Firebase 登入憑證；呼叫端自報的 uid 只能綁到「自己 email 的座位」上。
+    const CASUAL_RECLAIM_CAS_TRIES = 4;
+    const CASUAL_CODE_RE = /^[A-Z0-9]{1,16}$/;
+    async function _casualMe(req, res) {
+      if (typeof db === 'undefined' || !db) { res.status(503).json({ error: 'db not ready', code: 'casual-db-not-ready' }); return null; }
+      let id = null;
+      try { id = await tournIdentity(req); } catch (e) { id = null; }
+      const email = id && !id.error && id.verified ? _frNormEmail(id.email) : null;
+      if (!email) { res.status(401).json({ error: '需要以 email 帳號登入', code: 'casual-auth-required' }); return null; }
+      return { email };
+    }
+    /** 純函式：該房 p1／p2 中 email 與我相同、而且**還有人坐著**（uid 非空）的座位（多個時取較小的索引）；沒有回 -1。
+     *  ⚠ uid 是空的＝那個座位已經離開（離座時 email 可能還殘留）⇒ 不可以認回（不然會把自己拉回已經離開的房）。 */
+    function casualSeatByEmail(seats, email) {
+      const ss = Array.isArray(seats) ? seats : [];
+      for (let i = 0; i < Math.min(FR_ROOM_SEAT_SLOTS, ss.length); i++) {
+        if (ss[i] && ss[i].uid && _frNormEmail(ss[i].email) === email) return i;
+      }
+      return -1;
+    }
+    /**
+     * 純函式：算出認回座位要寫的 $set（不含 _version／updatedAt）。
+     *   回 { ok:true, set, changed } 或 { ok:false, status, code, error }。
+     *   ⚠ 同一個 uid 已經坐在本房另一個位置（典型：之前被當成新玩家坐進 P2，或先點了觀戰）：
+     *     觀戰位（≥2）⇒ 一律清掉（觀戰者本來就可以隨時離席）；
+     *     對戰位 ⇒ lobby 清空（還給別人）、對戰中拒絕（不可以動到對局中的座位）。（Fable 審查 P2-1）
+     *   ⚠ 心跳整個物件覆寫（不用 'heartbeats.N' 點路徑）：heartbeats 是 null／數字時點路徑會讓整筆更新失敗（Fable 審查 P2-4，真 mongod 實證）。
+     */
+    function casualReclaimPlan(room, email, uid, now) {
+      const st = room && room.status;
+      if (st !== 'lobby' && st !== 'playing') return { ok: false, status: 409, code: 'casual-room-closed', error: '這間房已經結束或關閉了' };
+      const seats = Array.isArray(room.seats) ? room.seats : [];
+      const idx = casualSeatByEmail(seats, email);
+      if (idx < 0) return { ok: false, status: 403, code: 'casual-not-your-room', error: '這間房沒有你的座位' };
+      if (seats[idx].uid === uid) return { ok: true, set: {}, changed: false, seatIdx: idx };
+      const oldUid = seats[idx].uid;
+      const other = seats.findIndex((s, i) => i !== idx && s && s.uid === uid);
+      if (other >= 0 && other < FR_ROOM_SEAT_SLOTS && st !== 'lobby') return { ok: false, status: 409, code: 'casual-seat-conflict', error: '你在這間房已經有另一個對戰座位' };
+      const next = seats.map((s, i) => {
+        if (i === idx) return { ...s, uid };
+        if (i === other) return { ...s, uid: null, email: null, name: null, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' };
+        return s;
+      });
+      const hb = room.heartbeats;
+      const hbs = Object.assign({}, (hb && typeof hb === 'object') ? hb : {});
+      hbs[idx] = now;
+      const set = { seats: next, memberUids: [...new Set(next.map((s) => s && s.uid).filter(Boolean))], heartbeats: hbs };
+      if (room.hostUid === oldUid) set.hostUid = uid;
+      return { ok: true, set, changed: true, seatIdx: idx };
+    }
+    app.get('/api/my-room', async (req, res) => {
+      try {
+        const me = await _casualMe(req, res); if (!me) return;
+        const y = (app.locals && typeof app.locals._adminScanYield === 'function') ? app.locals._adminScanYield : () => null;
+        const m = await _frRoomsByEmail(y);
+        if (!m) return res.json({ myRoomApi: 1 });   // 答不出來（索引不在／查詢失敗）⇒ 不帶 roomId
+        const code = m.get(me.email) || null;
+        if (!code) return res.json({ myRoomApi: 1, roomId: null });
+        // 快照最多 5 秒舊、而且只記 email→房號 ⇒ 用主鍵再確認一次：房還在、狀態對、那個座位還有人坐（離座的不算）
+        const cur = await db.collection('rooms').findOne({ _id: code }, { projection: { status: 1, 'seats.uid': 1, 'seats.email': 1 } });
+        const okRoom = !!cur && (cur.status === 'lobby' || cur.status === 'playing') && casualSeatByEmail(cur.seats, me.email) >= 0;
+        if (okRoom) return res.json({ myRoomApi: 1, roomId: code });
+        // ⭐Fable 審查 P2-2：快照只記「最新一間有我 email 的房」、不看座位有沒有人坐 ⇒ 最新那間是我已經離開的房時，
+        //   真正還坐著的舊房會被蓋掉。只有這種情況才另外掃一次（同一條走索引的查詢、同一個上限），只認有人坐的座位。
+        if (!(await _frRoomIdxReady())) return res.json({ myRoomApi: 1 });
+        const list = await db.collection('rooms')
+          .find({ status: { $in: FR_ROOM_STATUSES } }, { projection: { _id: 1, 'seats.uid': 1, 'seats.email': 1 } })
+          .limit(FR_ROOM_CAP).sort({ updatedAt: -1 }).toArray();
+        const hit = (list || []).find((r) => casualSeatByEmail(r && r.seats, me.email) >= 0);
+        return res.json({ myRoomApi: 1, roomId: hit ? String(hit._id) : null });
+      } catch (e) {
+        console.warn('[casual] my-room 失敗:', e && e.message);
+        return res.status(500).json({ error: '查詢失敗', code: 'casual-error' });
+      }
+    });
+    app.post('/api/my-room/reclaim-seat', async (req, res) => {
+      try {
+        const me = await _casualMe(req, res); if (!me) return;
+        const b = req.body || {};
+        const code = String(b.roomCode || '').toUpperCase().trim();
+        const uid = typeof b.uid === 'string' ? b.uid.trim() : '';
+        if (!CASUAL_CODE_RE.test(code)) return res.status(400).json({ error: '房號格式不正確', code: 'casual-bad-code' });
+        if (!uid || uid.length > 128) return res.status(400).json({ error: '缺少身分', code: 'casual-bad-uid' });
+        const col = db.collection('rooms');
+        for (let t = 0; t < CASUAL_RECLAIM_CAS_TRIES; t++) {
+          const cur = await col.findOne({ _id: code }, { projection: { status: 1, seats: 1, hostUid: 1, heartbeats: 1, _version: 1 } });
+          if (!cur) return res.status(404).json({ error: '找不到這間房（可能已經被清掉了）', code: 'casual-room-not-found' });
+          const now = Date.now();
+          const plan = casualReclaimPlan(cur, me.email, uid, now);
+          if (!plan.ok) return res.status(plan.status).json({ error: plan.error, code: plan.code });
+          if (!plan.changed) return res.json({ myRoomApi: 1, ok: true, seatIdx: plan.seatIdx, changed: false });
+          const r = await col.updateOne({ _id: code, _version: cur._version },
+            { $set: { ...plan.set, _version: (cur._version || 0) + 1, updatedAt: now } });
+          if (r && r.matchedCount === 1) return res.json({ myRoomApi: 1, ok: true, seatIdx: plan.seatIdx, changed: true });
+        }
+        return res.status(409).json({ error: '房間正在更新，請再試一次', code: 'casual-busy' });
+      } catch (e) {
+        console.warn('[casual] reclaim-seat 失敗:', e && e.message);
+        return res.status(500).json({ error: '認回座位失敗', code: 'casual-error' });
+      }
+    });
+    console.log('[casual] reclaim endpoints registered (v1.62)');
+    // <<< v162-casual-reclaim
 
     app.post('/api/tournament/join', async (req, res) => {
       try {

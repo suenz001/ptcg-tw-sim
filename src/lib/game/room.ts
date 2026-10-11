@@ -276,7 +276,8 @@ export async function joinRoom(
   }
   // v3.992：允許 status='playing' 房間加入觀戰（前提：spectatorsAllowed !== false）
   if (data.status === 'ended') throw new Error('此房對戰已結束');
-  if (data.status === 'playing' && data.spectatorsAllowed === false) {
+  // ⭐v6.525：自己本來就坐在這間房 ⇒ 不受「未開放觀戰」限制（與 room-oracle.ts 同步）
+  if (data.status === 'playing' && data.spectatorsAllowed === false && findMySeatIdx((data.seats ?? []) as Seat[], uid) < 0) {
     throw new Error('此房對戰中未開放觀戰');
   }
   const seats = (data.seats ?? []) as Seat[];
@@ -602,6 +603,11 @@ export async function claimOpponentForfeit(roomCode: string, mySeatIdx: 0 | 1): 
     updatedAt: serverTimestamp(),
   });
   return true;
+}
+
+/** ⭐v6.525（與 room-oracle.ts 同名，型別用）：Firestore 版（測試站）不自動釋放舊房 ⇒ 一發 Firestore 讀寫都不做（讀取額度很緊）。 */
+export async function releaseLobbySeat(_roomCode: string): Promise<boolean> {
+  return false;
 }
 
 export async function leaveRoom(roomCode: string): Promise<void> {
@@ -1030,7 +1036,7 @@ async function cleanupStaleNonLobbyRooms(): Promise<void> {
 }
 
 export function subscribeOpenRooms(
-  callback: (rooms: Room[]) => void,
+  callback: (rooms: Room[], raw?: Room[]) => void,   // v6.525：第二個參數＝未過濾的原始列表（Oracle 版才有；Firestore 版不給）
   onError?: (err: Error) => void,
 ): () => void {
   // v3.992：同時返回 lobby + playing 房間（playing 房需 spectatorsAllowed !== false）

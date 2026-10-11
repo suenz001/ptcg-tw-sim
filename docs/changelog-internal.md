@@ -1,5 +1,30 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.525／server patch v1.62：休閒對戰「回到我之前的房間」（2026-10-11）
+
+BASE 09c0234e。玩家回報（站長轉述）：「開房後把網頁關掉重開，再重新登入之後，前面開的舊房間是進不去的」；站長：「要讓開房的房主可以回去他開過房的舊房間（當然如果他要開新房間也是可以的）」，並懷疑與「進房間對手沒反應」有關。
+- 現況查證：
+  - 座位只用 Oracle 匿名 uid 認人（findMySeatIdx）；uid 存在 localStorage（JWT 30 天，VM server.js 實查 expiresIn '30d'）。Firebase 登出不會清它；關分頁也不會。
+  - 房主關掉頁面 ⇒ 沒有心跳 ⇒ 大廳列表 3 分鐘後隱藏（isLobbyHostDead）、開房 10 分鐘後也隱藏（isLobbyTooOld）；伺服器 lobby 房 5 分鐘沒寫入就刪（zombie-cleanup）。藏起來的房只剩房號能回去，房主通常不記得。
+  - 換瀏覽器／無痕／清資料 ⇒ uid 換新 ⇒ 點自己的舊房被當成新玩家坐進 P2（或觀戰位），等一個不會回來的「自己」；別人在房主離開後 3 分鐘內進房也一樣等不到人 ⇒ 與「進房對手沒反應」吻合。
+  - 對戰中的房 spectatorsAllowed=false 時，joinRoom 先擋「此房對戰中未開放觀戰」才認座位 ⇒ 自己的對局也回不去。
+  - 玩家端讀到的房間資料 seats[].email 一律被剝掉（v6.220）⇒ 用 email 認座位只能在伺服器做。
+- server v1.62（哨兵 v162-casual-reclaim，錦標賽區塊之前、好友私聊區塊之後，不依賴好友開關）：
+  - GET /api/my-room：tournIdentity 驗過的 email ⇒ 沿用好友的 5 秒共用快照 _frRoomsByEmail 找房號，再用主鍵確認座位仍有人坐；快照答不出來不帶 roomId。
+  - POST /api/my-room/reclaim-seat {roomCode, uid}：email 相同且 uid 非空的 p1／p2 座位 ⇒ uid 換成呼叫端現在的 Oracle uid（memberUids、hostUid、heartbeats 整個物件覆寫），_version CAS 最多 4 次。同一個 uid 已坐本房另一位：觀戰位一律清掉；對戰位 lobby 清掉、playing 拒絕。離座、觀戰位、已結束、別人的房拒絕。
+  - my-room：快照指到的房若我已離座（email 殘留），另外掃一次（同一條走索引的查詢、同一個上限）只認有人坐的座位。
+  - PUT /api/rooms/:code 本來就沒有成員檢查（既有狀況，本版不動）；新端點只會更嚴。
+- 玩家端：
+  - 中央模組 src/lib/game/casual-reclaim.ts：myRoomsFromList（未過濾原始列表裡我坐 p1／p2 的 lobby／playing 房）、mergeMyOldRooms、fetchMyCasualRoom、reclaimCasualSeat（匿名一發都不送）。
+  - room-oracle：subscribeOpenRooms 的 callback 多一個參數＝未過濾原始列表（rawRooms）；joinRoom 自己已坐在房裡就不受「未開放觀戰」限制（room.ts Firestore 版同步）。
+  - 頁面：大廳「🔙 之前的房間還在」區塊＋「回到房間」（email 來源先認座位，失敗不進房）；登入玩家在大廳時每 30 秒問一次 my-room；進房前（列表、手輸房號、回到房間）若伺服器說是我 email 的房就先認座位；回到座位 0 仍是房主。
+  - 開新房成功後，只釋放 releasableOldRooms（中央判準）：同一個瀏覽器、仍是等待中、我那個座位心跳停超過 LOBBY_HOST_AWAY_MS（90 秒）的舊房；用 releaseLobbySeat（交易當下仍是 lobby 才清座位、不刪房），不用 leaveRoom（剛好開打時會變成投降）。email 來源（別的瀏覽器／裝置）一律不自動釋放。
+- scripts/lib/sap-revert-admin-v162.mjs（驗證逐位元還原 v1.61）接進 test-sap153／sap154／v6303。
+- Fable 5.1 審查：P1-1 幽靈 P2（同一間房 uid 來源與 email 來源並存時沒有認座位）⇒ 進房前先認座位；P2-1 觀戰殘留造成對戰中認不回 ⇒ 觀戰位一律清；P2-2 快照指到離座房 ⇒ 退回掃描；P2-3 開新房誤關別的分頁正在用的房、或剛開打的房變成投降 ⇒ 心跳判準＋releaseLobbySeat；P2-4 heartbeats 為 null 時點路徑 $set 整筆失敗（真 mongod 實證）⇒ 整個物件覆寫。
+- Rule 40：test-v6441 LATER 登記本版頁面改動（difflib 還原對，驗證逐位元還原）；test-v6296 D1 登記「之前的房間還在」區塊；test-v6477 S5 重跑產生器（新區塊的淺色樣式由產生器產生，不手寫）、E4 改成色碼正規化後比對色票（v6.514 換色票後只接受舊色碼，有 build/ 時必紅）。
+- 端點路徑不含 casual、哨兵用 myRoomApi：避開 test-v6269（休閒監控那一版）「不新增休閒專用端點／玩家端不認識 casualApi」的既有判準（命名撞名，不是同一件事）。
+- test-v6525-my-old-rooms（S1～S3 伺服器實跑、C1～C6 玩家端實跑、H1 BASE 逐條紅）；突變 26 組全殺。
+
 ## admin v1.83：先攻／後攻勝率匯出圖（2026-10-11）
 
 BASE 25404351（admin v1.82／server v1.61）。站長：「Admin先後攻的統計資料，你有做匯出圖片的功能嗎」「直接做，不用預覽 交給你了」。只動 admin.html（伺服器不動）。

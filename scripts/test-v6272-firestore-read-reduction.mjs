@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '7118d18980bbe19c6da71747ab766b1fd64cb073';   // v6.523（上一版）
+const PREV_SHA = '09c0234ed496f900eb7c896d98ea4d9e0510c6d5';   // v6.524（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,15 +757,27 @@ const PREV_SHA = '7118d18980bbe19c6da71747ab766b1fd64cb073';   // v6.523（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.524 前移：PREV_SHA 從 7118d189（v6.523）起算。
+  // ⚠⚠ v6.525 前移：PREV_SHA 從 09c0234e（v6.524）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.524：+page.svelte 的 /api/match-result payload 多帶 firstPlayerIdx（伺服器 v1.59 收成 matchRecords.firstSeat）。
+  // ⭐v6.525：新增中央模組 casual-reclaim.ts；room-oracle 大廳輪詢多給未過濾原始列表、joinRoom 回自己的對戰中房不受未開放觀戰限制；頁面新增「你之前的房間」區塊、回到房間、開新房釋放舊 lobby 房。
+  'src/lib/game/casual-reclaim.ts',
+  'src/lib/game/room-oracle.ts',
+  'src/lib/game/room.ts',
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.524）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.524 前移：PREV_SHA 從 7118d189（v6.523）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.524：+page.svelte 的 /api/match-result payload 多帶 firstPlayerIdx（伺服器 v1.59 收成 matchRecords.firstSeat）。
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.523）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.523 前移：PREV_SHA 從 85e80655（v6.522）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -879,15 +891,6 @@ const PREV_ALLOWED = [
 //   'src/lib/friends/FriendsPanel.svelte',
 //   'src/lib/version.ts',
 //   'src/routes/+layout.svelte',
-//   'src/routes/decks/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.510）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.510 前移：PREV_SHA 從 7be9a6f6（v6.509）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.510：牌組編輯器：深色主題的未選中預組列改用 --ui-bg-sunken（原本淺色主題寫死的 #fff5e6 淡橙底在深色配淺字）。
-//   'src/lib/version.ts',
 //   'src/routes/decks/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',

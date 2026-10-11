@@ -118,6 +118,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
     sendMessage, subscribeMessages,
     heartbeat, isSeatStale, HEARTBEAT_STALE_MS, deleteRoom,
     hostPresence,  // v5.393 大廳房主在線狀態
+    releaseLobbySeat, LOBBY_HOST_AWAY_MS,  // v6.525 開新房釋放自己沒在用的舊房
     // v4.75 連線練習模式悔棋 API
     requestUndo as requestUndoApi,
     agreeUndo as agreeUndoApi,
@@ -125,6 +126,8 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
     clearUndoRequest as clearUndoRequestApi,
     type Room, type Seat, type ChatMessage,
   } from '$lib/game/room';
+  // ⭐v6.525 回到我之前的房間（中央模組）
+  import { myRoomsFromList, mergeMyOldRooms, fetchMyCasualRoom, reclaimCasualSeat, releasableOldRooms, type MyOldRoom } from '$lib/game/casual-reclaim';
   import { getAIAction } from '$lib/game/ai';
   // v6.038 批次4b：本機 AI 對戰開始前，依 AI 那一側的牌組載入打法表（fail-open）。
   import { prepareAIPlaybook, clearPlaybook } from '$lib/game/ai-playbook';
@@ -1825,6 +1828,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // 可加入的開放房間列表（onlineStep='join' 時即時訂閱）
   let openRooms = $state<Room[]>([]);
   let openRoomsErr = $state('');
+  // >>> v6525-my-old-rooms
+  // ⭐v6.525「你之前的房間」：①同一個瀏覽器（大廳未過濾原始列表裡有我的 uid）②登入玩家（伺服器用 email 找）。
+  let _openRoomsRaw: Room[] = [];
+  let myOldRoomsByUid = $state<MyOldRoom[]>([]);
+  let myEmailOldRoom = $state<MyOldRoom | null>(null);
+  let myOldRooms = $derived(mergeMyOldRooms(myOldRoomsByUid, myEmailOldRoom, onlineStep === 'room' ? roomCode : null));
+  // <<< v6525-my-old-rooms
   // v3.992：把 openRooms 依 status 分組（lobby = 等待中可加入；playing = 對戰中可觀戰）
   const lobbyRooms = $derived(openRooms.filter(r => r.status === 'lobby'));
   const playingRooms = $derived(openRooms.filter(r => r.status === 'playing'));
@@ -5099,8 +5109,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       unsubOpenRooms?.();
       openRoomsErr = '';
       unsubOpenRooms = subscribeOpenRooms(
-        rooms => {
+        (rooms, raw) => {
           openRooms = rooms; openRoomsErr = '';
+          // v6.525：自己的房不套「給別人看」的過濾（死房／過久／私密房），從未過濾的原始列表找
+          if (raw) { _openRoomsRaw = raw; myOldRoomsByUid = myRoomsFromList(raw, myUid); }
           // v6.115：只問「還沒有標籤且 30 秒內沒問過」的對戰中房間 —— 一場對戰內牌組不會變，
           //   所以正常情況每間房只會問一次，不會隨大廳每 2 秒輪詢一起放大。
           void ensureRoomArchetypes(rooms);
@@ -5116,8 +5128,60 @@ function _setupSelfPending(g: any, seat: number): string | null {
       unsubOpenRooms = null;
       openRooms = [];
       openRoomsErr = '';
+      _openRoomsRaw = []; myOldRoomsByUid = [];
     }
   });
+
+  // >>> v6525-my-old-rooms
+  // ⭐v6.525 登入玩家：在大廳時向伺服器問「我的 email 坐在哪一間房」（換瀏覽器／無痕／清過資料也找得到）。
+  //   進大廳先問一次、之後每 30 秒；匿名玩家一發都不送。伺服器答不出來（undefined）⇒ 沿用上一次的結果。
+  let _myRoomTimer: ReturnType<typeof setInterval> | null = null;
+  async function refreshMyEmailOldRoom() {
+    const code = await fetchMyCasualRoom();
+    if (code === undefined) return;
+    if (!code) { myEmailOldRoom = null; return; }
+    const hit = _openRoomsRaw.find((r) => String(r.roomId).toUpperCase() === code);
+    const st = hit && (hit.status === 'lobby' || hit.status === 'playing') ? hit.status : null;
+    myEmailOldRoom = { roomId: code, roomName: hit?.roomName ? String(hit.roomName) : code, status: st, seatIdx: null, via: 'email', lastSeenAt: null };
+  }
+  $effect(() => {
+    const loggedIn = !!(firebaseUser && !firebaseUser.isAnonymous && firebaseUser.email);
+    if (!isTournament && mode === 'online' && onlineStep === 'join' && loggedIn) {
+      void refreshMyEmailOldRoom();
+      if (_myRoomTimer) clearInterval(_myRoomTimer);
+      _myRoomTimer = setInterval(() => { void refreshMyEmailOldRoom(); }, 30000);
+      return () => { if (_myRoomTimer) { clearInterval(_myRoomTimer); _myRoomTimer = null; } };
+    }
+    myEmailOldRoom = null;
+  });
+
+  /** 「回到房間」：email 來源要先請伺服器把座位綁回現在的身分，再走一般的加入流程（joinRoom 會認得我的座位）。 */
+  async function handleReturnToOldRoom(r: MyOldRoom) {
+    if (onlineLoading) return;
+    if (!myName.trim()) { onlineError = '請先填寫玩家名稱'; return; }
+    if (r.via === 'email') {
+      onlineLoading = true; onlineError = '';
+      try {
+        const uid = myUid || (await oracleAuth()).uid;
+        const rc = await reclaimCasualSeat(r.roomId, uid);
+        if (!rc.ok) { onlineError = rc.error; myEmailOldRoom = null; return; }
+      } catch (e: any) { onlineError = e?.message ?? '回到房間失敗'; return; }
+      finally { onlineLoading = false; }
+    }
+    joinInput = r.roomId;
+    await handleJoinRoom();
+  }
+
+  /** 開新房間時，把自己還留在大廳、已經沒有分頁在用的舊房釋放掉（免得別人進去等一個不在的房主）。
+   *  判準只有一份：casual-reclaim.ts 的 releasableOldRooms（同一個瀏覽器、等待中、心跳已停超過 LOBBY_HOST_AWAY_MS）。
+   *  ⚠ 用 releaseLobbySeat（交易當下仍是 lobby 才動），不用 leaveRoom（剛好開打時會變成投降）。（Fable 審查 P2-3） */
+  function releaseOldLobbyRooms(list: MyOldRoom[], newCode: string) {
+    for (const r of releasableOldRooms(list, newCode, Date.now(), LOBBY_HOST_AWAY_MS)) {
+      void releaseLobbySeat(r.roomId).catch(() => false);   // best-effort：失敗就交給伺服器 5 分鐘後清掉
+    }
+    myOldRoomsByUid = []; myEmailOldRoom = null;
+  }
+  // <<< v6525-my-old-rooms
 
   // 從房間列表一鍵加入
   async function handleJoinFromList(rc: string) {
@@ -8517,7 +8581,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     try {
       // v4.75：傳 allowUndo 旗標決定是否為練習房
       // v5.003：第 4 個參數是 visible — !private 即「公開房 = true」「私密房 = false」
+      const _oldRooms = myOldRooms.slice();   // v6.525：建好之後把還沒開打的舊房釋放掉
       roomCode = await createRoom(roomNameInput.trim(), myName.trim(), roomAllowUndoInput, !roomPrivateInput);
+      releaseOldLobbyRooms(_oldRooms, roomCode);
       amIHost = true;
       onlineStep = 'room';
       startRoomSubscription();
@@ -8547,9 +8613,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!joinInput.trim()) { onlineError = '請輸入房號'; return; }
     onlineLoading = true; onlineError = '';
     try {
-      await joinRoom(joinInput.trim(), myName.trim());
+      // ⭐v6.525（Fable 審查 P1-1）：伺服器說這間是「我 email 的房」⇒ 先把座位認回現在的身分再進房。
+      //   不管從大廳列表、手輸房號還是「回到房間」進來都一樣；否則會被當成新玩家坐進另一個位置等自己。
+      //   失敗（不是我的座位、網路）一律照常加入，不擋。
+      const _code = joinInput.trim().toUpperCase();
+      if (myEmailOldRoom && myEmailOldRoom.roomId === _code) {
+        const _uid = myUid || (await oracleAuth()).uid;
+        await reclaimCasualSeat(_code, _uid).catch(() => null);
+      }
+      const _joined = await joinRoom(joinInput.trim(), myName.trim());
       roomCode = joinInput.trim().toUpperCase();
-      amIHost = false;
+      // v6.525：回到自己開的房（座位 0）時仍是房主
+      amIHost = !!myUid && findMySeatIdx(_joined?.seats ?? [], myUid) === 0;
       onlineStep = 'room';
       startRoomSubscription();
       // v5.480：套用上次記憶的先後攻偏好——非阻塞，避免 hang 住進房流程。
@@ -11166,6 +11241,22 @@ function _setupSelfPending(g: any, seat: number): string | null {
             </div>
           {/if}
         </div>
+
+        <!-- v6.525 你之前的房間（房主關掉頁面／換瀏覽器後回得去；自己的房不套大廳的死房過濾） -->
+        {#if myOldRooms.length > 0}
+          <div class="my-old-rooms">
+            <h3>🔙 之前的房間還在</h3>
+            {#each myOldRooms as r (r.roomId)}
+              <div class="mor-row">
+                <span class="mor-name">🎮 {r.roomName}</span>
+                <code class="mor-code">{r.roomId}</code>
+                {#if r.status}<span class="mor-st">{r.status === 'playing' ? '對戰中' : '等待中'}</span>{/if}
+                <button class="btn-sm primary mor-act" onclick={() => handleReturnToOldRoom(r)} disabled={onlineLoading || !myName.trim()}>回到房間</button>
+              </div>
+            {/each}
+            <p class="mor-hint">也可以直接開新房間；開新房時，這個瀏覽器裡已經沒在用、還沒開打的舊房會自動關掉，別人就不會進去空等。</p>
+          </div>
+        {/if}
 
         <!-- v3.992 公開房間列表：分兩區（等待中可加入 + 對戰中可觀戰）-->
         <div class="open-rooms-section">
@@ -15594,6 +15685,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   /* 開放房間列表 */
   .open-rooms-section{ background:#162616; border:1px solid #2a4a2a; border-radius:8px; padding:.7rem .9rem; }
+  /* v6.525 你之前的房間 */
+  .my-old-rooms{ background:#1d2a14; border:1px solid #6a8a2a; border-radius:8px; padding:.7rem .9rem; margin-bottom:.8rem; }
+  .my-old-rooms h3{ margin:0 0 .5rem; font-size:.95rem; color:#e6ff9a; }
+  .mor-row{ display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; padding:.35rem 0; border-top:1px solid #2f3f1f; }
+  .mor-row:first-of-type{ border-top:none; }
+  .mor-name{ color:#f0f0f0; font-weight:600; min-width:0; overflow-wrap:anywhere; }
+  .mor-code{ color:#c8d8ff; font-size:.8rem; }
+  .mor-st{ color:#ffd27a; font-size:.8rem; }
+  .mor-act{ margin-left:auto; }
+  .mor-hint{ margin:.4rem 0 0; color:#b8c8a8; font-size:.78rem; }
   .open-rooms-section h3{ margin:0 0 .5rem; font-size:.95rem; color:#aaffcc; }
   .small{ font-size:.8rem; }
   /* v6.114 大廳房間列改「卡片式多行」：原本一列硬塞 6 個元素、單行 flex 又沒有 flex-wrap，
@@ -20055,6 +20156,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .online-form { background: #f2f5f2; border: 1px solid #a4c6a4; }
     :global(html[data-theme='light']:not([data-battle-view])) .online-form label { color: #333333; }
     :global(html[data-theme='light']:not([data-battle-view])) .open-rooms-section { background: #f5f7f5; border: 1px solid #add2ad; }
+    :global(html[data-theme='light']:not([data-battle-view])) .my-old-rooms { background: #f5f7f4; border: 1px solid #b6d773; }
+    :global(html[data-theme='light']:not([data-battle-view])) .my-old-rooms h3 { color: #4c6500; }
+    :global(html[data-theme='light']:not([data-battle-view])) .mor-row { border-top: 1px solid #bfd6a8; }
+    :global(html[data-theme='light']:not([data-battle-view])) .mor-name { color: #0f0f0f; }
+    :global(html[data-theme='light']:not([data-battle-view])) .mor-code { color: #001037; }
+    :global(html[data-theme='light']:not([data-battle-view])) .mor-st { color: #7b5100; }
+    :global(html[data-theme='light']:not([data-battle-view])) .mor-hint { color: #475836; }
     :global(html[data-theme='light']:not([data-battle-view])) .open-rooms-section h3 { color: #005522; }
     :global(html[data-theme='light']:not([data-battle-view])) .open-room-row { background: #f4f6f4; border: 1px solid #a4c6a4; }
     :global(html[data-theme='light']:not([data-battle-view])) .or-meta { color: #5b5b5b; }
