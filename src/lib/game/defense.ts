@@ -322,7 +322,7 @@ export function canApplyEffectToTarget(
     const _atkCardPT = _atkInstPT ? pool.get(_atkInstPT.cardId) : undefined;
     if (_atkCardPT) {
       // 防護代碼 — 任意 ex（不限 tag）
-      if (target.immuneToExAttackTagThisTurn && isPokemonExCard(_atkCardPT)) {   // ⭐v6.403
+      if ((target.immuneToExAttackTagThisTurn || futureShieldProtects(state, (1 - actorIdx) as 0 | 1, target, pool)) && isPokemonExCard(_atkCardPT)) {   // ⭐v6.403／⭐v6.530
         return { blocked: true, reason: '防護代碼免疫【ex】寶可夢招式傷害' };
       }
       // 塗層攻擊/閃光射線 — 【基礎】寶可夢招式傷害（皇冠蛋白石【無】除外）
@@ -509,6 +509,18 @@ export function isOppActiveImmuneToAttackEffect(
 
 
 /**
+ * ⭐v6.530 密勒頓｜防護代碼：ownerIdx 一側的這隻寶可夢此刻受不受保護（玩家層級，唯一判準）。
+ *   條件：ownerIdx 的 futureShieldThisTurn 指向的那隻密勒頓**仍在戰鬥場**（卡面「若這隻寶可夢離開戰鬥場，則這個效果消除」），
+ *   且目標是「未來」寶可夢（含下個對手回合才放上場的，官方 Q&A 配樂之笛 × 鐵頭殼ex）。
+ */
+export function futureShieldProtects(state: GameState, ownerIdx: 0 | 1, target: CardInstance, pool: Map<string, Card>): boolean {
+  const who = state.players[ownerIdx]?.futureShieldThisTurn;
+  if (!who) return false;
+  if (state.players[ownerIdx].active?.iid !== who) return false;
+  return pool.get(target.cardId)?.tags?.includes('未來') === true;
+}
+
+/**
  * v4.975: 統一 active target 招式傷害守護 helper。
  * 
  * **為什麼需要**：engine.ts 主路徑（約 line 3870-4000）已 inline check 11 個 active-side
@@ -546,7 +558,7 @@ export function resolveActiveAttackGuard(
 
   // 1. 防護代碼（密勒頓）— 卡面「寶可夢【ex】招式」=任意 ex（不限 tag；v5.828 修）；
   //    flag 只設在受保護的「未來」寶可夢身上，故只需判 attacker 是規則寶可夢(ex)。
-  if (defender.immuneToExAttackTagThisTurn && isPokemonExCard(attackerCard)) {   // ⭐v6.403
+  if ((defender.immuneToExAttackTagThisTurn || futureShieldProtects(state, (1 - actorIdx) as 0 | 1, defender, pool)) && isPokemonExCard(attackerCard)) {   // ⭐v6.403／⭐v6.530
     return { blocked: true, reason: '防護代碼免疫【ex】寶可夢招式傷害' };
   }
 

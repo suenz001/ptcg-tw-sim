@@ -502,6 +502,14 @@ export interface PlayerState {
    * 攻擊計算時：defender 屬性為【鋼】 + defendingPlayer.metalShieldThisTurn → -30。
    */
   metalShieldNextTurn?: number; // v5.766：改計數(用幾張鐵之防禦強化),減傷=30×count
+  /**
+   * ⭐v6.530 密勒頓｜防護代碼（玩家層級「對手回合」型）：值＝使出招式的那隻密勒頓的 iid。
+   *   卡面「在下個對手的回合，自己的所有『未來』寶可夢不會受到『寶可夢【ex】』招式的傷害。若這隻寶可夢離開戰鬥場，則這個效果消除。」
+   *   官方 Q&A：下個對手回合才由配樂之笛放上備戰的鐵頭殼ex 也「不會受到傷害」⇒ 不能只標在當時在場的寶可夢上。
+   *   promote／clear 時機同 metalShield；判定只問 defense.ts futureShieldProtects（那隻密勒頓仍在戰鬥場才生效）。
+   */
+  futureShieldNextTurn?: string;
+  futureShieldThisTurn?: string;
   metalShieldThisTurn?: number;
   /**
    * v5.641 阿蜜的目光（Supporter）— 下個對手的回合，自己的「所有」寶可夢（含新上場）受到對手寶可夢
@@ -1076,6 +1084,12 @@ export interface GameState {
    * ⚠ 只計「攻擊方 → 對手戰鬥位」的招式傷害：備戰狙擊、自傷、放置傷害指示物都不算。
    */
   attackDamageToDefActive?: number;
+  /**
+   * ⭐v6.530 引夢貘人｜白日夢：本動作中「從手牌將能量附於受到白日夢的寶可夢」的玩家座位。
+   *   效果（例：碧綠之舞的抽 1 張）處理完、沒有待選視窗時，applyAction 出口把該玩家的回合結束（官方 Q&A，鬼之假面×白日夢）。
+   *   通常在同一個動作的出口就刪掉；只有效果還開著選擇視窗時才暫留到解完那個動作。
+   */
+  daydreamEndTurnPending?: 0 | 1;
   /** 目前場上的競技場牌（Stadium） */
   activeStadium?: CardInstance;
   /**

@@ -303,7 +303,25 @@ if (!hasBaseCommit(ROOT, BASE)) {
   const b = readBaseBlob(ROOT, BASE, 'src/lib/game/engine.ts');
   const rebuilt = chk('F0 BASE 樹重建成功（engine.ts 換回 BASE blob）', b.ok);
   if (rebuilt) {
-    writeFileSync(join(baseSrc, 'lib/game/engine.ts'), b.out, 'utf8');
+    // ⭐v6.530（Rule 40）：之後的版本讓卡片模組從 engine 多 import 了新 export（例：attackEnergySurplus），
+    //   只換回舊 engine.ts 會 bundle 失敗。⇒ 掃 effects 子樹從 engine import 的名字，舊 engine 沒有的補**丟例外**的替身：
+    //   本矩陣若真的用到會當場炸（不會靜默變綠），沒用到則與 BASE 行為相同。意圖（對 v6.366 engine 重跑矩陣）不變。
+    let _eng = b.out;
+    const _need = new Set();
+    const _walk = (d) => { for (const f of readdirSync(d, { withFileTypes: true })) {
+      const fp = join(d, f.name);
+      if (f.isDirectory()) _walk(fp);
+      else if (f.name.endsWith('.ts')) {
+        const t = readFileSync(fp, 'utf8');
+        for (const m of t.matchAll(/import\s*\{([^}]*)\}\s*from\s*'(?:\.\.\/)+engine'/g)) for (const nm of m[1].split(',')) { const x = nm.trim().split(/\s+as\s+/)[0].replace(/^type\s+/, ''); if (x) _need.add(x); }
+      } } };
+    _walk(join(baseSrc, 'lib/game/effects'));
+    for (const nm of _need) {
+      if (!new RegExp(`export\\s+(?:async\\s+)?(?:function|const|let|class|type|interface)\\s+${nm}\\b|export\\s*\\{[^}]*\\b${nm}\\b`).test(_eng)) {
+        _eng += `\nexport function ${nm}(..._a: unknown[]): never { throw new Error('v6367 BASE shim: ${nm}'); }\n`;
+      }
+    }
+    writeFileSync(join(baseSrc, 'lib/game/engine.ts'), _eng, 'utf8');
     const BMOD = await bundleFrom(baseSrc, 'base');
     const B = matrix(BMOD);
     // Rule 41 哨兵：BASE bundle 必須是活的（不是整支爆掉造成「全紅」）

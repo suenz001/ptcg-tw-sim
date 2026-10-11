@@ -114,7 +114,9 @@ const MEW   = findAb('夢幻ex', '記憶螺旋');                  // 057/103
 const PYRO  = findAb('火炎獅', '威嚇之牙');                  // 正對照：active-only -30
 const SINIS = findAb('斯魔茶', '藏隱');                      // 正對照：備戰完全免疫
 const LAVA  = byName('傳說的熔岩洞');                        // 場地：雙方場上進化寶可夢特性全消除
-const DISC  = byName('核心記憶碟');                          // 有 attacks 的寶可夢道具（L2059 反對照）
+// ⭐v6.530（Rule 40）：核心記憶碟的招式改成只有超級基格爾德ex 能用（PTCG_RULES L2801）⇒ 5g 哨兵的「備戰皮卡丘自己可用道具招式」
+//   不再成立；換成任何寶可夢都能用的招式學習器 螢石（卡面「附有這張卡的寶可夢，可使用這張卡上寫的招式」），意圖（5f 非空真）不變。
+const DISC  = byName('招式學習器 螢石');                     // 有 attacks 的寶可夢道具（L2059 反對照）
 const PLAIN = all.find((c) => c.supertype === 'Pokemon' && c.stage === 'Basic'
   && !(c.abilities || []).length && !(c.tags || []).includes('太晶')
   && Number(c.hp) >= 60 && c.pokemonType === 'Colorless');

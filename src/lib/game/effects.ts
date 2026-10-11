@@ -302,7 +302,7 @@ import { canApplyEffectToTarget, isOppActiveImmuneToAttackEffect, taikoBariBlock
 //   現在判準住在 leaf `./festival`，engine 與 effects 兩邊 import 同一份。
 import { isFestivalDanceFirstAttack, hasFestivalVenue } from './festival';
 // <<< v6410-festival-central-import-effects
-import { applyDefenderReductionsBlockA, isToolsJammed, getEffectiveHP, computeActiveRetreatCostFor, energyTypeUnitsHostAware, energyProvidesType, composeAttackFormula, attackFormulaReconstructs, type FormulaTerm } from './engine'; 
+import { applyDefenderReductionsBlockA, isToolsJammed, getEffectiveHP, computeActiveRetreatCostFor, energyTypeUnitsHostAware, energyProvidesType, composeAttackFormula, attackFormulaReconstructs, type FormulaTerm  } from './engine'; 
 import { applyOppActiveReturnedToBenchTriggers } from './engine'; // v5.831 對手回備戰觸發統一入口 // v5.544 防守方減傷中央收斂；v5.677 getEffectiveHP 單一來源；v5.702 host-aware 能量述詞移至 engine 單一來源
 
 export type DamageKind = 'attack-damage' | 'attack-effect' | 'ability-effect';
@@ -15778,9 +15778,7 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
     s = recordOppKO(s, dIdx, targetCard, 'ability');
     // v5.830：對手戰鬥位被特性(咒詛炸彈)放指示物 KO → 攻擊方「奇跡之吻」擲幣+1(卡面「昏厥時」不分招式/特性)。
     if (isActive) s = miracleKissOnActiveFaint(s, dIdx, pool);   // ⭐v6.493 中央入口
-    if (isActive && newDefender.bench.length === 0) {
-      return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
-    }
+    // ⭐v6.530：不在這裡提早判勝——咒詛炸彈的使用者也同時昏厥，勝負由下方「雙方都處理完」後的中央判定決定（PTCG_RULES L1669）。
   } else {
     const players = [...s.players] as [PlayerState, PlayerState];
     const newDefender = { ...defender };
@@ -15793,7 +15791,13 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
   if (userIid) {
     s = selfKOInstance(s, actorIdx, userIid, pool, label);
   }
-  return s;
+  // ⭐v6.530 官方 Q&A（PTCG_RULES L1669）：「雙方的獎賞卡剩餘張數皆為1張時，對手的彷徨夜靈使用特性『咒詛炸彈』，
+  //   自己的戰鬥寶可夢和對手的彷徨夜靈同時[昏厥]了。…」「可以從備戰區放置寶可夢到戰鬥場的玩家獲勝。若雙方都可以放置，
+  //   或雙方都無法放置，則為平手。」⇒ 上方不再提早寫「使用方獲勝」；兩隻都處理完後交給 applyActionImpl 出口的中央
+  //   judgeEndgameV6361 重判（唯一一份）。
+  //   ⚠ 兩次 addPendingPrize 都可能取完最後一張而各自寫 game-over（後寫的覆蓋前寫的）⇒ 一律 liftEndgameForOnKoV6361
+  //     收回、交給中央重判（Fable 審查 v6.530 P1-1：使用者可放置、對手不可放置時曾被判成對手勝）。
+  return liftEndgameForOnKoV6361(s);
 });
 
 /**

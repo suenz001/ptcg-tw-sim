@@ -1145,7 +1145,8 @@ regPost('招式學習器 螢石|螢石', (state, aIdx, pool) => {
 //   - TOOL_ATTACH_GATE 限定 holder.name === '超級基格爾德ex'
 //   - regPost('核心記憶碟|大地光炮') 招式後棄全部能量
 //     350 base damage 由 attack.damage 處理（engine 自動讀）
-TOOL_ATTACH_GATE.set('核心記憶碟', (holderCard) => holderCard.name === '超級基格爾德ex');
+// ⭐v6.530 官方 Q&A（PTCG_RULES L2801）：可以附加在超級基格爾德ex 以外的寶可夢身上，只是不能使用卡上的招式
+//   ⇒ 移除附加限制；招式限制改在 engine getEffectiveAttacks（usable-gates.ts toolAttackUsableBy）。
 reg('核心記憶碟', toolAttachEffect('核心記憶碟'));
 
 // v5.273: 移除 v5.162 設的「重試徽章 Colorless 限制」

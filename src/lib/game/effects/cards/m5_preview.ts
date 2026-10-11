@@ -45,6 +45,7 @@
  *   - 不動 engine.ts / types.ts — 純用既有 helper
  */
 
+import { attackEnergySurplus } from '../../engine';   // ⭐v6.530「比所需能量多 N 個」唯一判準
 import { recruitNamedToBenchPost } from '../../effects'; // v6.069 收斂：牌庫指名放備戰
 import { setSelfDamageBonusPendingPost } from '../../effects';   // ⭐v6.414 下回合加傷／覆寫的唯一寫入點
 import { hostHasEnergyType } from '../../effects'; // ⭐v6.398「身上附有【X】能量卡」中央 host-aware 述詞
@@ -586,9 +587,9 @@ regPre('薩戮德|暗影鞭打', (state, aIdx, pool) => {
 regPre('超級龍頭地鼠ex|極限鑽', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att) return { state, damage: 200 };
-  const totalUnits = totalEnergyUnits(att.energyAttached, pool, state, aIdx, att);
-  const required = 3;  // cost length 3
-  const threshold = required + 2;  // ≥ 5
+  // ⭐v6.530（類推 反擊增幅器 × 高電壓壓制）：所需能量走中央 attackEnergySurplus（套用費用增減）
+  const { have: totalUnits, need: required } = attackEnergySurplus(state, aIdx, '極限鑽', pool, 3);
+  const threshold = required + 2;
   const bonus = totalUnits >= threshold ? 130 : 0;
   const dmg = 200 + bonus;
   return {

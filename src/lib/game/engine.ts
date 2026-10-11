@@ -8,7 +8,7 @@
  *   - M3 多人連線時只需傳送動作序列
  */
 
-import { quickRhythmUsable, bigWingUsable } from './usable-gates'; // ⭐v6.528 快節奏／大飛翅 gate 唯一判準（leaf）
+import { quickRhythmUsable, bigWingUsable, toolAttackUsableBy } from './usable-gates'; // ⭐v6.528 快節奏／大飛翅 gate 唯一判準（leaf）
 import { ancientKey, isPlayerLevelAttackOnCooldown } from './player-attack-cooldown';   // ⭐v6.435 leaf（玩家層級冷卻唯一判準）
 import { modalChoicePayloadValid, selectionAllowsCancel } from './selection-ui';   // >>> v6331-modal-choice-payload-import（v6.523 加 selectionAllowsCancel）
 import type { Card, EnergyType, Attack } from '$lib/cards/types';
@@ -1055,7 +1055,7 @@ import { sameEvoName, canEvolveOnto, recordOppKO, isAbilityBlockedByOakEye, getA
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared';
 import { withAttackDamageTaken, withPending } from './effects/_shared'; // ⭐v6.256「受到的招式的傷害」唯一中央寫入點 // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
-import { canApplyEffectToTarget, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst, isImmuneToOppAbilityEffect, oppAbilityEffectBlockReason } from './defense';  // v6.196 中央述詞；v6.427 反擊豁免
+import { canApplyEffectToTarget, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst, isImmuneToOppAbilityEffect, oppAbilityEffectBlockReason, futureShieldProtects } from './defense';  // v6.196 中央述詞；v6.427 反擊豁免
 // >>> v6410-festival-central-import
 // ⭐⭐⭐v6.410：祭典樂舞／祭典會場的判準收斂成**一份**（IRON_RULES Rule 38）。
 //   原本 engine 這裡有 hasFestivalDanceActive / 首擊判定 / hasFestivalVenue
@@ -1834,14 +1834,20 @@ export function totalEnergyUnits(
  * - 有色 cost 必須由 types 中有該色的 unit 支付。
  * 使用回溯確保如「火箭隊能量+基本超」這類混合能量組合能正確分配。
  */
-export function canAffordAttack(
+/**
+ * ⭐v6.530「這一招實際所需的能量」唯一一份（canAffordAttack 與「比使用這個招式所需的能量多 N 個」型招式共用）。
+ *   官方 Q&A（PTCG_RULES，反擊增幅器 × 電擊魔獸ex｜高電壓壓制）：附反擊增幅器（所需能量 -1【無】）與 4 個【雷】能量時
+ *   「可以」增加 100 點 ⇒ 「所需的能量」是**套用增減之後**的數量，不是印刷費用。
+ *   shinyCrystal：璀璨結晶「減少的能量任何屬性皆可」⇒ 由 canAffordAttack 嘗試每一種扣法；算「所需數量」時固定 -1。
+ */
+export function effectiveAttackCost(
   pokemon: CardInstance,
   cost: EnergyType[],
   pool: Map<string, Card>,
   state?: GameState,
   attackerIdx?: 0 | 1,
   attackName?: string,
-): boolean {
+): { cost: EnergyType[]; shinyCrystal: boolean } {
   // v2.78 鼓擊 — 招式所需 +N【無】
   if (pokemon.attackCostIncreaseColorlessThisTurn && pokemon.attackCostIncreaseColorlessThisTurn > 0) {
     cost = [...cost, ...Array(pokemon.attackCostIncreaseColorlessThisTurn).fill('Colorless' as EnergyType)];
@@ -2007,6 +2013,20 @@ export function canAffordAttack(
       }
     }
   }
+  return { cost, shinyCrystal: hasShinyCrystalReduction };
+}
+export function canAffordAttack(
+  pokemon: CardInstance,
+  cost: EnergyType[],
+  pool: Map<string, Card>,
+  state?: GameState,
+  attackerIdx?: 0 | 1,
+  attackName?: string,
+): boolean {
+  // ⭐v6.530：費用增減整段搬到 effectiveAttackCost（唯一一份），這裡只取結果。
+  const _ec = effectiveAttackCost(pokemon, cost, pool, state, attackerIdx, attackName);
+  cost = _ec.cost;
+  const hasShinyCrystalReduction = _ec.shinyCrystal;
   // v2.103 大竺葵｜繁茂：自己場上有大竺葵時，自己所有寶可夢身上的「基本【草】能量」視為 2 個【草】能量。
   //   「這個特性的效果不會重複」→ 多隻大竺葵也只算一次倍率。
   // v2.108 修：原 check 用 `pokemonType === 'Grass'`，但基本能量的 pokemonType 欄位通常空，
@@ -2072,6 +2092,23 @@ export function canAffordAttack(
     return false;
   }
   return tryAffordWithCost(cost);
+}
+
+/**
+ * ⭐v6.530「若身上附有的能量比使用這個招式所需的能量多 N 個」唯一判準（高電壓壓制、力量壓制、精神尖槍、肌力鞭打、極限鑽）。
+ *   所需能量＝effectiveAttackCost（套用增減後，官方 Q&A 反擊增幅器 × 高電壓壓制）；身上能量＝host-aware totalEnergyUnits。
+ *   找不到這一招（借來的招式等）⇒ 用 fallbackCost（印刷費用張數）。
+ */
+export function attackEnergySurplus(
+  state: GameState, aIdx: 0 | 1, attackName: string, pool: Map<string, Card>, fallbackCost: number,
+): { have: number; need: number } {
+  const a = state.players[aIdx].active;
+  if (!a) return { have: 0, need: fallbackCost };
+  const atk = getEffectiveAttacks(state, a, pool).find(x => x.atk.name === attackName)?.atk;
+  const have = totalEnergyUnits(a.energyAttached, pool, state, aIdx, a);
+  if (!atk) return { have, need: fallbackCost };
+  const ec = effectiveAttackCost(a, (atk.cost ?? []) as EnergyType[], pool, state, aIdx, attackName);
+  return { have, need: Math.max(0, ec.cost.length - (ec.shinyCrystal && ec.cost.length > 0 ? 1 : 0)) };
 }
 
 /** 判斷一張 ex 卡（name 含 'ex' 後綴）對應獎賞卡數 */
@@ -5810,23 +5847,8 @@ function handlePlaying(
     //   + 麻痺門牙）。所有「從手牌附能」路徑（手動 ATTACH_ENERGY + 特性/招式填能）共用同一函式，
     //   避免特性填能漏觸發（玩家報耿鬼ex侵蝕詛咒對碧綠之舞等沒生效）。白日夢 END_TURN 留在下方。
     afterAttach = fireOnHandEnergyAttached(afterAttach, aIdx as 0 | 1, target.iid, pool);
-    // v2.78 引夢貘人｜白日夢 — defender 有 endTurnOnOppAttachEnergyThisTurn → 對手回合結束
-    if (target.endTurnOnOppAttachEnergyThisTurn) {
-      const newPlayers2 = [...afterAttach.players] as [PlayerState, PlayerState];
-      const updateInst = (c: CardInstance): CardInstance => {
-        if (c.iid !== target!.iid) return c;
-        const n = { ...c };
-        delete n.endTurnOnOppAttachEnergyThisTurn;
-        return n;
-      };
-      newPlayers2[aIdx] = {
-        ...newPlayers2[aIdx],
-        active: newPlayers2[aIdx].active && newPlayers2[aIdx].active!.iid === target.iid ? updateInst(newPlayers2[aIdx].active!) : newPlayers2[aIdx].active,
-        bench: newPlayers2[aIdx].bench.map(updateInst),
-      };
-      afterAttach = addLog({ ...afterAttach, players: newPlayers2 }, '[白日夢]對手附能量於受招式者 → 對手回合結束（一次性，flag 清除）', aIdx);
-      return applyAction(afterAttach, { type: 'END_TURN' }, pool);
-    }
+    // v2.78 引夢貘人｜白日夢 —— ⭐v6.530 收斂到中央 fireOnHandEnergyAttached（設 daydreamEndTurnPending），
+    //   由 applyAction 出口在效果處理完後結束回合（手動附能、特性、招式填能同一條路）。
     // v3.0 瑪機雅娜｜自動治癒 — 戰鬥場上有此卡時，附能量到任何寶可夢 → 該寶可夢恢復 90 HP。
     //   只看 attacher（aIdx）戰鬥位是否為持有者；若是，找到 target 寶可夢 inst 對 damage -90（不低於 0）。
     {
@@ -6415,7 +6437,7 @@ function handlePlaying(
     // v5.828：卡面「寶可夢【ex】招式」= 任意 ex（不限 tag）。舊實作誤要求 attacker.tags.includes('未來')
     //   → 對一般 ex（無「未來」tag）完全不擋，防護代碼幾乎失效。flag 只設在受保護的「未來」寶可夢身上，
     //   故此處只需判 attacker 是規則寶可夢(ex)。
-    if (!skipDefEffects && baseDamage > 0 && defender.active.immuneToExAttackTagThisTurn && isPokemonExCard(attackerCard)) {   // ⭐v6.403
+    if (!skipDefEffects && baseDamage > 0 && (defender.active.immuneToExAttackTagThisTurn || futureShieldProtects(state, dIdx as 0 | 1, defender.active, pool)) && isPokemonExCard(attackerCard)) {   // ⭐v6.403 ／⭐v6.530 玩家層級
       workingState = addLog(workingState, `${defenderCard.name}：[防護代碼]免疫【ex】寶可夢招式傷害（${baseDamage} → 0）`, dIdx);
       baseDamage = 0;
     }
@@ -8926,6 +8948,17 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       delete np.metalShieldThisTurn;
       players[nextIdx] = np;
     }
+    // ⭐v6.530 密勒頓｜防護代碼（玩家層級「對手回合」型，promote/clear 時機同 metalShield）
+    if (players[aIdx].futureShieldNextTurn) {
+      const ep = { ...players[aIdx], futureShieldThisTurn: players[aIdx].futureShieldNextTurn };
+      delete ep.futureShieldNextTurn;
+      players[aIdx] = ep;
+    }
+    if (players[nextIdx].futureShieldThisTurn) {
+      const np = { ...players[nextIdx] };
+      delete np.futureShieldThisTurn;
+      players[nextIdx] = np;
+    }
     // v5.641 阿蜜的目光（玩家層級「對手回合」型減傷，promote/clear 時機同 metalShield）
     if (players[aIdx].flatDamageReduceNextTurn) {
       const ep = { ...players[aIdx], flatDamageReduceThisTurn: players[aIdx].flatDamageReduceNextTurn };
@@ -9704,6 +9737,19 @@ export function applyAction(
     delete cleaned._abilityUseRejectedIdx;
     raw = cleaned;
   }
+  // ⭐v6.530 引夢貘人｜白日夢：效果處理完（沒有待選視窗）才結束那位玩家的回合；欄位一律在出口刪掉（不寫進資料庫）。
+  if (raw.daydreamEndTurnPending != null) {
+    const who = raw.daydreamEndTurnPending;
+    const c: GameState = { ...raw };
+    delete c.daydreamEndTurnPending;
+    raw = c;
+    if (!raw.pendingSelection && raw.phase === 'playing' && raw.activePlayerIndex === who) {
+      raw = applyAction(addLog(raw, '[白日夢] 對手的回合結束', who), { type: 'END_TURN' }, pool);
+      return raw;
+    } else if (raw.pendingSelection && raw.phase === 'playing') {
+      raw = { ...raw, daydreamEndTurnPending: who };   // 還有選擇視窗 ⇒ 等它解完的那個動作再結束
+    }
+  }
   return stampPendingToken(state,
     applyRuggedRuinsBenchPlace(state, normalizeNonFieldStacks(raw), pool)); // v5.866 險惡廢墟中央 / v6.175 pending 蓋章
 }
@@ -10342,7 +10388,8 @@ export function getEffectiveAttacks(
     // v3.20 多重轉接：iterate 所有道具
     for (const t of getAllAttachedTools(inst)) {
       const toolCard = pool.get(t.cardId);
-      if (toolCard?.subtype === 'PokemonTool' && toolCard.attacks?.length) {
+      // ⭐v6.530：道具招式限定持有者（核心記憶碟只有超級基格爾德ex 能用；附加本身不設限，PTCG_RULES L2801）
+      if (toolCard?.subtype === 'PokemonTool' && toolCard.attacks?.length && toolAttackUsableBy(toolCard.name, card.name)) {
         for (const atk of toolCard.attacks) {
           result.push({ atk, sourceCardName: toolCard.name, isFromTool: true });
         }

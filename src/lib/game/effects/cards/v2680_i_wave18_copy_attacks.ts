@@ -19,7 +19,7 @@ import { regPre, regPost, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE
 import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
 // ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
 import { copyAttackCandidates, copyAttackCooldownNote, pickCopiedAttack } from '../../copy-attack';
-import { ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS } from '../_shared';
+import { ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, copiedSupporterConditionMet } from '../_shared';
 // ⭐ v6.262 支援者效果來源（葉子模組）—— 複製成招式效果時關閉「從手牌使出」才有的免疫
 import { runAsCopiedSupporterEffect } from '../../supporter-effect-source';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -111,7 +111,10 @@ regPost('九尾|靈怪變化', (state, aIdx, pool) => {
   // 若是支援者則執行
   if (topCard?.subtype === 'Supporter') {
     const fn = TRAINER_EFFECTS.get(topCard.name ?? '');
-    if (fn) {
+    // ⭐v6.530 官方 Q&A（PTCG_RULES L2403）：支援者的使用條件不滿足 ⇒ 不能使用那個效果（中央 copiedSupporterConditionMet）
+    if (fn && !copiedSupporterConditionMet(s, aIdx, top, pool)) {
+      s = addLog(s, `靈怪變化：「${topCard.name}」的使用條件不符合 ⇒ 不能使用這個效果`, aIdx);
+    } else if (fn) {
       s = addLog(s, `靈怪變化：「${topCard.name}」是支援者卡 → 執行其效果`, aIdx);
       // ⭐⭐⭐ v6.262：卡面「將那個效果**作為這個招式的效果**使用」＝**不是**「從手牌使出支援者卡」。
       //   鰭之守護 / 緊張感 / 融合為雪 / 廣域堡壘 四個免疫的卡面前提都是「對手從手牌使出」，

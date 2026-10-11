@@ -20,6 +20,7 @@
  * 共 ~22 張 I 標寶可夢招式 effect 實裝
  */
 
+import { attackEnergySurplus } from '../../engine';   // ⭐v6.530「比所需能量多 N 個」唯一判準
 import type { CardInstance, PlayerState } from '../../types';
 import { regPre } from '../_shared';
 import { energyMatchesType } from '../_shared';
@@ -138,10 +139,11 @@ function selfExtraEnergyPre(
   return (state, aIdx, pool) => {
     const a = state.players[aIdx].active;
     if (!a) return { state, damage: base };
-    const have = totalEnergyUnits(a.energyAttached, pool, state, aIdx, a);
-    const cond = have >= costCount + 2;
+    // ⭐v6.530 所需能量走中央 attackEnergySurplus（套用反擊增幅器等增減；官方 Q&A 反擊增幅器 × 高電壓壓制「可以」+100）
+    const { have, need } = attackEnergySurplus(state, aIdx, label, pool, costCount);
+    const cond = have >= need + 2;
     const dmg = base + (cond ? bonus : 0);
-    const s = addLog(state, `${label}：自身能量 ${have} 個（cost+2 = ${costCount + 2}）${cond ? `→ +${bonus}` : '不足'} = ${dmg}`, aIdx);
+    const s = addLog(state, `${label}：自身能量 ${have} 個（所需 ${need}＋2 = ${need + 2}）${cond ? `→ +${bonus}` : '不足'} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };
   };
 }

@@ -14,8 +14,9 @@
  * v2.05 (Session 38b2)：從 effects.ts 抽離，作為模組化第一步骨架。
  */
 
+import { runAsCopiedSupporterEffect } from '../supporter-effect-source';   // ⭐v6.530 複製支援者的使用條件判定
 import type { Card } from '$lib/cards/types';
-import { CLEAR_ON_EXIT_FLAGS } from '../instance-flags';
+import { CLEAR_ON_EXIT_FLAGS, PERSIST_ON_EXIT_FLAGS } from '../instance-flags';
 // v6.191 玳蘿：「超級進化寶可夢【ex】」中央述詞（selection-filter 只 import types，無循環）
 // v6.250 險惡廢墟：「場上【基礎】寶可夢」中央述詞同樣來自 selection-filter（同一個 leaf）
 import { isMegaExCard, isBasicPokemonOnField } from '../selection-filter';
@@ -1036,6 +1037,10 @@ export function fireOnHandEnergyAttached(
   //   放置 8 個傷害指示物」，措辭平行 ⇒ 一併 per-energy-card。
   //   ⚠ 呼叫端一次只附 1 張時傳預設 1；一次附多張（金色火焰/漸強波/滿載心田/幸福禮物…）
   //     **必須**傳入實際張數，否則就是靜默的 under-count。
+  // ⭐v6.530（審查 P3-3）：白日夢旗標在處理對手反應**之前**先讀——侵蝕詛咒可能當場把目標放到昏厥，之後就讀不到了。
+  const _daydreamHit = (() => { const me0 = state.players[attacherIdx];
+    const t0 = me0.active?.iid === targetIid ? me0.active : me0.bench.find(c => c.iid === targetIid);
+    return t0?.endTurnOnOppAttachEnergyThisTurn === true; })();
   const reps = Math.max(1, Math.floor(energyCardCount));
   for (let _rep = 0; _rep < reps; _rep++) {
   // ① 對手場上被動特性（侵蝕詛咒 等）
@@ -1080,7 +1085,44 @@ export function fireOnHandEnergyAttached(
     s = addLog(s, `麻痺門牙：${tName} 因附加能量被放 8 個傷害指示物（+80 點）`, attacherIdx);
   }
   }  // end for _rep（v6.164 per-energy-card）
+  // ⭐v6.530 引夢貘人｜白日夢（卡面：在下個對手的回合，若對手從手牌將能量附於受到這個招式的寶可夢身上，則對手的回合結束）。
+  //   原本只寫在 engine ATTACH_ENERGY（手動附能）⇒ 碧綠之舞等特性／招式從手牌附能不會結束回合（官方 Q&A 不符）。
+  //   收斂到「所有從手牌附能」的中央出口：清掉旗標、記下要結束誰的回合；**效果處理完**才由 applyAction 出口結束回合
+  //   （PTCG_RULES，鬼之假面 × 白日夢：碧綠之舞附能後「可以」照樣抽 1 張）。
+  {
+    const me = s.players[attacherIdx];
+    const tgt = me.active?.iid === targetIid ? me.active : me.bench.find(c => c.iid === targetIid);
+    if (_daydreamHit) {
+      const strip = (c: CardInstance): CardInstance => {
+        if (c.iid !== targetIid) return c;
+        const n = { ...c }; delete n.endTurnOnOppAttachEnergyThisTurn; return n;
+      };
+      const players = [...s.players] as [PlayerState, PlayerState];
+      players[attacherIdx] = { ...me, active: me.active ? strip(me.active) : me.active, bench: me.bench.map(strip) };
+      s = addLog({ ...s, players, daydreamEndTurnPending: attacherIdx }, '[白日夢]從手牌將能量附於受招式者 → 效果處理完後回合結束', attacherIdx);
+    }
+  }
   return s;
+}
+
+/**
+ * ⭐v6.530「將那個（支援者的）效果作為這個招式的效果使用」型招式（九尾｜靈怪變化、魔牆人偶｜相仿秀）：
+ *   支援者卡的**使用條件**（「這張卡只有在…才可使用」等，即 regG）不滿足 ⇒ 不能使用那個效果。
+ *   官方 Q&A（PTCG_RULES L2403）：「…若從牌庫上方丟棄的1張卡為支援者卡『梅洛可』，那麼可以將棄牌區中的基本【火】能量卡
+ *   附加給自己的寶可夢嗎？」「不可以。使用招式『靈怪變化』的玩家若無法滿足丟棄的『支援者』卡的使用條件，則無法使用這個效果。」
+ *   （魔牆人偶｜相仿秀：卡面同一句「將那個效果作為這個招式的效果使用」⇒ **類推**，同一支判準。）
+ *   判法：把那張支援者當成「在使用者手牌裡」再問一次 canPlayTrainer（regG 有些判準把手牌張數含這張卡算進去）。
+ */
+export function copiedSupporterConditionMet(
+  state: GameState, actorIdx: 0 | 1, supporterInst: CardInstance, pool: Map<string, Card>,
+): boolean {
+  const name = pool.get(supporterInst.cardId)?.name;
+  if (!name) return false;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[actorIdx] = { ...players[actorIdx], hand: [...players[actorIdx].hand, { ...supporterInst, iid: supporterInst.iid + '__copycheck' }] };
+  // ⚠ 用「作為招式效果」的來源判使用條件：regG 裡的「有沒有合法目標」會問支援者免疫（鰭之守護／緊張感…），
+  //   那些免疫的前提是「從手牌使出」，複製時不適用（v6.262）⇒ 必須在 runAsCopiedSupporterEffect 裡問，否則化石會被誤判成沒有目標。
+  return runAsCopiedSupporterEffect(() => canPlayTrainer(name, { ...state, players }, actorIdx, pool));
 }
 
 export function canPlayTrainer(
@@ -2442,8 +2484,11 @@ export function buildDevolvedInstance(
   }));
   const newBase = stack[stack.length - layers];
   const newStack = stack.slice(0, stack.length - layers);
+  // ⭐v6.530 官方 Q&A（PTCG_RULES L2493）：被退化 ⇒ 阿塞蘿拉的惡作劇等支援者效果「會消除」（離場則保留，見 PERSIST_ON_EXIT_FLAGS）
+  const _cleared = clearActiveEffects({ ...target, cardId: newBase.cardId }) as unknown as Record<string, unknown>;
+  for (const k of PERSIST_ON_EXIT_FLAGS) delete _cleared[k as string];
   const devolved: CardInstance = {
-    ...clearActiveEffects({ ...target, cardId: newBase.cardId }),
+    ...(_cleared as unknown as CardInstance),
     ...evolvedStatusAfter(target, state, pool),
     evolvedFromStack: newStack.length > 0 ? newStack : undefined,
     evolvedFromIid: newStack.length > 0 ? newStack[newStack.length - 1].iid : undefined,

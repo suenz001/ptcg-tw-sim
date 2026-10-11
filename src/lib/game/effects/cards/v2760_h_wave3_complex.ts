@@ -21,7 +21,7 @@ import { clearActiveEffects } from '../_shared'; // v5.807 退化清附加效果
 // ⭐ v6.262 支援者效果來源（葉子模組，零 import）—— 複製成招式效果時關閉「從手牌使出」才有的免疫
 import { runAsCopiedSupporterEffect } from '../../supporter-effect-source';
 
-import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
+import { copyAttackPostDispatch, dispatchCopiedAttack, copiedSupporterConditionMet } from '../_shared';
 // ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
 import { copyAttackCandidates, copyAttackCooldownNote, pickCopiedAttack } from '../../copy-attack';
 import { canApplyEffectToTarget } from '../../defense';
@@ -431,8 +431,11 @@ regPost('魔牆人偶|相仿秀', (state, aIdx, pool) => {
   if (oppHand.length === 0) {
     return addLog(state, '相仿秀：對手手牌為空，無可查看', aIdx);
   }
-  const suppIids = oppHand.filter(c => pool.get(c.cardId)?.subtype === 'Supporter').map(c => c.iid);
-  const s = addLog(state, `相仿秀：查看對手手牌（共 ${oppHand.length} 張，其中支援者 ${suppIids.length} 張）`, aIdx);
+  const allSupp = oppHand.filter(c => pool.get(c.cardId)?.subtype === 'Supporter');
+  // ⭐v6.530（審查 P3-4）：使用條件不符的支援者不列為可選（類推 PTCG_RULES L2403；仍可在揭露區查看整副手牌）
+  const suppIids = allSupp.filter(c => copiedSupporterConditionMet(state, aIdx, c, pool)).map(c => c.iid);
+  const _noUse = allSupp.length - suppIids.length;
+  const s = addLog(state, `相仿秀：查看對手手牌（共 ${oppHand.length} 張，其中支援者 ${allSupp.length} 張${_noUse > 0 ? `，${_noUse} 張不符合使用條件` : ''}）`, aIdx);
   // v5.875 修：卡面「查看對手的手牌」是無條件的(對手手牌是重要戰略資訊)。原 v5.868 在「沒有支援者」時
   //   直接 return → 玩家完全看不到對手手牌。改為一律開 hand-choose picker(參考枇琶 v2.41 Leon 裁定:
   //   即使無可選卡也開 UI 讓玩家查看整副手牌):有支援者 → maxCount1 可選 1 張複製;無支援者 → maxCount0
@@ -462,6 +465,11 @@ regR('mrmime-copycat-pick', (state, aIdx, iids, _params, pool) => {
   const fn = TRAINER_EFFECTS.get(card.name);
   if (!fn) {
     return addLog(state, `相仿秀：對手支援者「${card.name}」的效果未實裝（跳過）`, aIdx);
+  }
+  // ⭐v6.530（**類推** PTCG_RULES L2403 九尾｜靈怪變化，卡面同一句「將那個效果作為這個招式的效果使用」）：
+  //   支援者的使用條件不滿足 ⇒ 不能使用那個效果。
+  if (picked && !copiedSupporterConditionMet(state, aIdx, picked, pool)) {
+    return addLog(state, `相仿秀：「${card.name}」的使用條件不符合 ⇒ 不能使用這個效果`, aIdx);
   }
   const s = addLog(state, `相仿秀：複製對手手牌支援者「${card.name}」的效果（該卡仍留在對手手牌）`, aIdx);
   // ⭐⭐⭐ v6.262：卡面「將那個效果**作為這個招式的效果**使用」＝**不是**「從手牌使出支援者卡」
@@ -751,11 +759,12 @@ regR('v327-tauros-thrust', (st, idx, iids, _params, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('密勒頓|防護代碼', (s) => ({ state: s, damage: 40 }));
 regPost('密勒頓|防護代碼', (state, aIdx, pool) => {
-  // v2.78 對自方所有「未來」寶可夢設 immuneToExAttackTagNextTurn = '未來'
-  return updatePlayer(addLog(state, '防護代碼：下回合自方所有未來寶可不受【ex】寶可夢招式傷害', aIdx), aIdx, p => ({
-    ...p,
-    active: p.active && pool.get(p.active.cardId)?.tags?.includes('未來') ? { ...p.active, immuneToExAttackTagNextTurn: '未來' } : p.active,
-    bench: p.bench.map(b => pool.get(b.cardId)?.tags?.includes('未來') ? { ...b, immuneToExAttackTagNextTurn: '未來' } : b),
+  // ⭐v6.530：改成玩家層級（值＝這隻密勒頓的 iid）——下個對手回合才上場的「未來」寶可夢也受保護（官方 Q&A 配樂之笛 × 鐵頭殼ex），
+  //   密勒頓離開戰鬥場則效果消除（卡面）。判定在 defense.ts futureShieldProtects。
+  const me = state.players[aIdx].active;
+  if (!me) return state;
+  return updatePlayer(addLog(state, '防護代碼：下個對手的回合，自己的所有「未來」寶可夢不受【ex】寶可夢招式的傷害（密勒頓離開戰鬥場則消除）', aIdx), aIdx, p => ({
+    ...p, futureShieldNextTurn: me.iid,
   }));
 });
 

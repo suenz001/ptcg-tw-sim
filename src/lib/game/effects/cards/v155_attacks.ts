@@ -38,6 +38,7 @@
  *   - 天仙石 cooldown：blockedAttackNamesNextTurn 只鎖招式名（不鎖整隻寶可夢）
  */
 
+import { attackEnergySurplus } from '../../engine';   // ⭐v6.530「比所需能量多 N 個」唯一判準
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
   regPre, regPost, regR,
@@ -663,13 +664,10 @@ regPost('代歐奇希斯|精神尖槍', (state, aIdx, pool) => {
   if (!att) return state;
   const card = pool.get(att.cardId);
   if (!card) return state;
-  // 找「精神尖槍」這個招式的 cost 長度
-  const atk = card.attacks?.find(a => a.name === '精神尖槍');
-  const costLen = atk?.cost?.length ?? 3;
-  // v5.541：改用中央 host-aware countAttachedEnergyAsUnits（燃火附進化=3、火箭隊=2、新衝天Stage2=2）
-  const unitCount = countAttachedEnergyAsUnits(att, pool, state, aIdx);
+  // ⭐v6.530（類推：卡面同一句「比使用這個招式所需的能量多2個」，官方 Q&A 反擊增幅器 × 高電壓壓制）：所需能量走中央 attackEnergySurplus
+  const { have: unitCount, need: costLen } = attackEnergySurplus(state, aIdx, '精神尖槍', pool, 3);
   if (unitCount < costLen + 2) {
-    return addLog(state, `精神尖槍：能量 ${unitCount} 不滿 cost+2（${costLen + 2}）→ 不觸發備戰打擊`, aIdx);
+    return addLog(state, `精神尖槍：能量 ${unitCount} 不滿所需＋2（${costLen + 2}）→ 不觸發備戰打擊`, aIdx);
   }
   return hitBenchPickPost(state, aIdx, 'opp', 1, 120, '精神尖槍');
 });

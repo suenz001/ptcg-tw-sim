@@ -26,3 +26,17 @@ export function isAllPowerSoulBlocked(card: Card | undefined): boolean {
   if (card.name !== '海豚俠ex') return false;
   return card.abilities?.some(a => a.name === '全能靈魂') ?? false;
 }
+
+/**
+ * ⭐v6.530 寶可夢道具卡上寫的招式：誰可以使用（附加不設限，只限制「使用招式」）。
+ *   官方 Q&A（PTCG_RULES L2801）：「寶可夢道具卡『核心記憶碟』可以附加在超級基格爾德ex以外的寶可夢身上嗎？」
+ *   「可以。但是，若附加在超級基格爾德ex以外的寶可夢身上，則不能使用這張卡上寫的招式。」
+ *   沒列在表上的道具招式（招式學習器等）＝任何寶可夢都能用。
+ */
+const TOOL_ATTACK_HOLDER: Readonly<Record<string, readonly string[]>> = {
+  '核心記憶碟': ['超級基格爾德ex'],   // 卡面：「附有這張卡的『超級基格爾德ex』可使用這張卡上寫的招式。」
+};
+export function toolAttackUsableBy(toolName: string, holderName: string | undefined): boolean {
+  const allow = TOOL_ATTACK_HOLDER[toolName];
+  return !allow || (holderName != null && allow.includes(holderName));
+}

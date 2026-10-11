@@ -1,5 +1,28 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.530：官方 Q&A 第二輪比對 B2 組——效果判定第二批（2026-10-11）
+
+BASE 14121b8b（v6.529）。
+- 阿塞蘿拉的惡作劇（**直接判例** L2528 換到備戰不消除、L2524 鬼之假面保留、L2493 退化消除）：immuneToExAttackNextTurn／ThisTurn 從 CLEAR_ON_EXIT_FLAGS 移到新的 PERSIST_ON_EXIT_FLAGS（兩份互斥，載入時自檢）；buildDevolvedInstance 另外清。進化本來就不帶這些欄位（行為不變）。
+- 密勒頓｜防護代碼（**直接判例** L1979：下個對手回合才由配樂之笛放上的鐵頭殼ex 也不受傷害；卡面「若這隻寶可夢離開戰鬥場，則這個效果消除」）：改成玩家層級 futureShieldNextTurn／ThisTurn（值＝那隻密勒頓的 iid，promote／clear 同 metalShield），判定唯一一份 defense.ts futureShieldProtects（三個消費點：canApplyEffectToTarget、resolveActiveAttackGuard、engine 主管線）。舊的逐隻旗標保留相容但不再寫入。
+- 核心記憶碟（**直接判例** L2801）：移除 TOOL_ATTACH_GATE；道具招式改由 getEffectiveAttacks 依 usable-gates.ts toolAttackUsableBy 限定持有者。Rule 40：test-m6a-wave7 5g 哨兵改用招式學習器 螢石（任何寶可夢可用）。
+- 白日夢 × 碧綠之舞（**直接判例**，鬼之假面 × 白日夢：附能後「可以」抽 1 張）：白日夢從 engine ATTACH_ENERGY 搬到所有從手牌附能的中央出口 fireOnHandEnergyAttached（設 daydreamEndTurnPending），由 applyAction 出口在效果處理完、沒有選擇視窗時結束回合。
+- 九尾｜靈怪變化（**直接判例** L2403）、魔牆人偶｜相仿秀（**類推**：卡面同一句「將那個效果作為這個招式的效果使用」）：新中央 copiedSupporterConditionMet——把支援者當成在使用者手牌裡、在「作為招式效果」的來源下問 canPlayTrainer（必須在 runAsCopiedSupporterEffect 裡問，否則鰭之化石等「從手牌使出」才有的免疫會讓老大的指令被誤判成沒有目標；test-v6262 第一次跑就抓到）。
+- 咒詛炸彈（**直接判例** L1669）：cursed-bomb resolver 不再提早寫「使用方獲勝」，兩隻都昏厥後交給 applyActionImpl 出口的中央 judgeEndgameV6361（雙方都無法放置 ⇒ 平手）。
+- 高電壓壓制（**直接判例**，反擊增幅器 × 電擊魔獸ex「可以」+100）：canAffordAttack 的費用增減整段抽成 effectiveAttackCost（唯一一份），新增 attackEnergySurplus；力量壓制、精神尖槍、肌力鞭打、極限鑽卡面同一句「比使用這個招式所需的能量多2個」⇒ **類推**一起改走中央。
+- 不修（結果等價）：三合一磁怪｜過度放電「可以附給使用特性的三合一磁怪自己」（L1961）——現行是先昏厥再選能量，附給自己的能量會隨昏厥進棄牌區，最終盤面與現行相同；需要改流程才能讓它出現在選項裡，列給站長。
+- test-v6530-official-effect-fixes-b2（14 情境、H 逐條紅＋正對照綠）；突變 9 個：7 個由守衛抓到、「惡作劇旗標放回 CLEAR」由 instance-flags 載入自檢擋下、「咒詛炸彈不重判」等價（已改由中央出口重判，冗餘的那份已刪；恢復提早判勝的突變實測翻紅）。
+- **Fable 5.1 審查**：
+  - **P1-1 已修**：咒詛炸彈「雙方各剩 1 張、使用者可放置、對手不可放置」被判成**對手勝**（BASE 正確）——兩次 addPendingPrize 都取完最後一張、後寫的 game-over 覆蓋前寫的，而出口的延後重判只在中央判「平手」時才收回。修法：cursed-bomb resolver 末端 liftEndgameForOnKoV6361，一律交給中央重判。守衛補 CB2／CB3（使用者在戰鬥場有備戰、使用者在備戰；拿掉 lift 實測兩條翻紅）。
+  - **P2-1 記錄、下一版處理**：通則缺口——同一動作內兩方都取完最後一張時「後寫的贏」，中央重判只在判平手時收回；建議改成「中央勝方與已寫勝方不同也收回」。牽動終局中央管線，下一版單獨做並送審。
+  - P3-1 記錄：防護代碼的密勒頓同一對手回合被換下又換回，效果會「復活」（卡面離場即消除）；需 gust＋換回才觸發。
+  - P3-2 記錄：借來的「比所需能量多 2 個」招式找不到招式時 fallback 用印刷費用。
+  - P3-3 已修：白日夢旗標改在處理對手反應（侵蝕詛咒）**之前**讀，目標被當場放到昏厥也照樣結束回合（BASE 同樣不對，非回歸）。
+  - P3-4 已修：相仿秀選擇視窗只列「符合使用條件」的支援者（仍可查看整副手牌），AI 也不會選到不能用的。
+  - P3-5／P3-6 記錄：守衛 AC/FS 另兩個消費點審查者已實測；optimistic.ts 註解過時；滿載心田多一行白日夢 log。
+  - **複審（edb6c412）通過**：咒詛炸彈 32 組矩陣＋黑夜魔靈與預期逐行一致（對 BASE 的 7 組差異全部是正確方向）；v6367 替身非安慰劑（缺的只有 attackEnergySurplus、丟例外、矩陣不涉及）。待補（P3，非回歸）：白日夢在附能者被侵蝕詛咒 KO、要補位時，出口的 END_TURN 被引擎退回 ⇒ 回合沒結束（BASE 同樣），下一版比照選擇視窗暫留到補位那個動作。
+  - 全套：v6367／v6368 的 BASE 重建只換回舊 engine.ts，卡片模組 import 新 export（attackEnergySurplus）⇒ bundle 失敗。Rule 40：v6367 F 段替舊 engine 補「丟例外」的替身（矩陣真的用到會炸、不會靜默變綠），意圖不變；v6371 平行偽紅。
+
 ## v6.529：官方 Q&A 第二輪比對 B1 組——效果判定（2026-10-11）
 
 BASE 2ab86d04（v6.528）。全部是**直接判例**：

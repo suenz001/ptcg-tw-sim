@@ -37,8 +37,9 @@ export const CLEAR_ON_EXIT_FLAGS: readonly (keyof CardInstance)[] = [
   'immuneToAttackEffectsNextTurn', 'immuneToAttackEffectsThisTurn', 'immuneToExAttackTagNextTurn',
   'immuneToExAttackTagThisTurn', 'weaknessOverrideTypeNextTurn', 'weaknessOverrideTypeThisTurn',
   'weaknessDisabledNextTurn', 'weaknessDisabledThisTurn', 'immuneToBasicAttackNextTurn',
-  'immuneToBasicAttackThisTurn', 'basicImmuneColorlessExcept', 'immuneToExAttackNextTurn',
-  'immuneToExAttackThisTurn', 'immuneToAbilityPokemonNextTurn', 'immuneToAbilityPokemonThisTurn',
+  'immuneToBasicAttackThisTurn', 'basicImmuneColorlessExcept',
+  // ⭐v6.530：immuneToExAttackNextTurn／ThisTurn（阿塞蘿拉的惡作劇）移到 PERSIST_ON_EXIT_FLAGS——支援者的效果離開戰鬥場不消除。
+  'immuneToAbilityPokemonNextTurn', 'immuneToAbilityPokemonThisTurn',
   'immuneToAllAttackNextTurn', 'immuneToAllAttackThisTurn', 'immuneToAttackDamageNextTurn',
   'immuneToAttackDamageThisTurn', 'immuneToEvolutionAttackNextTurn', 'immuneToEvolutionAttackThisTurn',
   'evolutionDamageReduceNextTurn', 'evolutionDamageReduceThisTurn', 'immuneToBurnedAttackerNextTurn',
@@ -52,6 +53,20 @@ export const CLEAR_ON_EXIT_FLAGS: readonly (keyof CardInstance)[] = [
   // ⭐v6.496：「這一次放上戰鬥場」已經詢問過上場時特性（離場清除 ⇒ 下一次放上戰鬥場會再問）
   'promoteAbilityAsked',
 ];
+
+/**
+ * ⭐v6.530 **離開戰鬥場不清除**、但**退化時清除**的旗標（支援者卡加在「這隻寶可夢」身上的效果）。
+ *   官方 Q&A（PTCG_RULES §17.41.I／L2528）：阿塞蘿拉的惡作劇選了戰鬥寶可夢，同回合換到備戰「不會消除。…即使回到備戰區也會生效。」
+ *   L2524：鬼之假面互換後「也會保留」。L2493：被奇異時鐘退化「會消除」⇒ buildDevolvedInstance 另外清。
+ *   （進化：buildEvolvedInstance 本來就只帶白名單欄位，這些旗標不會帶到進化後，行為不變。）
+ *   ⚠ 招式加在寶可夢身上的效果仍一律放 CLEAR_ON_EXIT_FLAGS（官方規則：離開戰鬥場移除招式效果）。
+ */
+export const PERSIST_ON_EXIT_FLAGS: readonly (keyof CardInstance)[] = [
+  'immuneToExAttackNextTurn', 'immuneToExAttackThisTurn',
+];
+for (const k of PERSIST_ON_EXIT_FLAGS) {
+  if (CLEAR_ON_EXIT_FLAGS.includes(k)) throw new Error(`PERSIST_ON_EXIT_FLAGS 不可同時在 CLEAR_ON_EXIT_FLAGS：${String(k)}`);
+}
 
 /**
  * scrubBenchStatus 每個 action 後從【備戰】寶可夢強制清除的「攻擊/撤退鎖」（備戰不可能

@@ -15,6 +15,7 @@
  * 共 10 張 I 標寶可夢招式 effect 實裝
  */
 
+import { attackEnergySurplus } from '../../engine';   // ⭐v6.530「比所需能量多 N 個」唯一判準
 import type { CardInstance, PlayerState } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
 import {
@@ -96,10 +97,11 @@ regPre('巨蔓藤|肌力鞭打', (state, aIdx, pool) => {
   // ⭐⭐v6.385b（Fable 5 複審 🔴2）：卡面「身上附有的能量比使用這個招式所需的能量多 2 個」
   //   ＝**個數**（站長 v5.669 裁定）。原本數張數 ⇒ 4 張基本草＋大竺葵｜繁茂算成 4 個
   //   （應為 8 個 ⇒ 達標 +140）、火箭隊能量算 1 個（應為 2）。草牌配大竺葵是實戰盤面。
-  const have = a ? countAttachedEnergyAsUnits(a, pool, state, aIdx) : 0;
-  const cond = have >= 6;  // cost 4 + 2
+  // ⭐v6.530（類推 反擊增幅器 × 高電壓壓制）：所需能量走中央 attackEnergySurplus（套用費用增減）
+  const { have, need } = a ? attackEnergySurplus(state, aIdx, '肌力鞭打', pool, 4) : { have: 0, need: 4 };
+  const cond = have >= need + 2;
   const dmg = 120 + (cond ? 140 : 0);
-  const s = addLog(state, `肌力鞭打：自身能量 ${have} 個 ${cond ? '(≥ cost+2 = 6) → +140' : '不足 cost+2，不增傷'} = ${dmg}`, aIdx);
+  const s = addLog(state, `肌力鞭打：自身能量 ${have} 個 ${cond ? `(≥ 所需＋2 = ${need + 2}) → +140` : '不足所需＋2，不增傷'} = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
 
