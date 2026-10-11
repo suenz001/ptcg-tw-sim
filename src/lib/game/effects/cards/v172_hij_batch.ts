@@ -16,6 +16,7 @@
  *   - 火箭隊的超級球 (I, Item)：coin 正面=進化「火箭隊的」/反面=基礎「火箭隊的」
  */
 
+import { getSupporterEffectSource } from '../../supporter-effect-source';   // ⭐v6.532 霍米加的演奏：記下使出方式
 import { isAllPowerSoulBlocked } from '../../usable-gates'; // ⭐v6.528 全能靈魂（壯偉碩木不可以進化成海豚俠ex）
 import {
   reg, regR, regG, regA,
@@ -507,7 +508,11 @@ regG('霍米加的演奏', () => true);
 reg('霍米加的演奏', (st, idx) => {
   const dIdx = (1 - idx) as 0 | 1;
   st = addLog(st, '霍米加的演奏：下個對手回合，對手【中毒】寶可夢無法撤退', idx);
-  return updatePlayer(st, dIdx, p => ({ ...p, cantRetreatIfPoisonedNextTurn: true }));
+  // ⭐v6.532：記下使出方式——從手牌使出時，「不受對手支援者效果影響」的寶可夢（緊張感／融合為雪／鰭之守護／廣域堡壘）照樣可以撤退；
+  //   作為招式的效果使出（靈怪變化／相仿秀）時這些免疫不適用。同回合兩者都有 ⇒ 以較嚴的 'as-attack-effect' 為準。
+  const _asAttack = getSupporterEffectSource() !== 'from-hand';
+  return updatePlayer(st, dIdx, p => ({ ...p,
+    cantRetreatIfPoisonedNextTurn: (_asAttack || p.cantRetreatIfPoisonedNextTurn === 'as-attack-effect') ? 'as-attack-effect' as const : true }));
 });
 
 // ═══ 可怕的哥哥 v5.995 重寫：多張道具/特殊能量時由使用支援者的玩家選要丟哪張 ═══

@@ -233,10 +233,8 @@ T('6c. 監視之眼：願增猿｜腎上腺腦力 行為端 —— 特性被消�
     const oak=I(OAK, nullified?{abilityNullifiedThisTurn:true}:{});
     const ape=I(APE,{damage:30,energyAttached:[I(DARKE)]});
     const st=ST({active:ape,bench:[]},{active:oak});
-    const idx=pool.get(APE).abilities.findIndex(a=>a.name==='腎上腺腦力');
     // ⭐v6.531（Rule 40）：站長改裁定（PTCG_RULES L3004）——監視之眼有效時腎上腺腦力**不能按**（不在可用清單），
     //   不再是「按了才 log 被擋」。意圖（監視之眼被消除後就不再擋）不變：改用可用清單判。
-    void idx;
     return mod.getUsableAbilities(st,pool).some(u=>u.iid===ape.iid);
   };
   assert.equal(mk(false),false,'特性正常時監視之眼應擋住（腎上腺腦力不在可用清單）');

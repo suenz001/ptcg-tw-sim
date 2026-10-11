@@ -1,5 +1,31 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.532：退化後反擊、緊張感物品掃描、註解更正（2026-10-11）
+
+BASE 6c14391c（v6.531）。
+- 念力土偶｜退化光線 × 布里卡隆｜尖刺盔甲：**直接判例**（官方 Q&A idx 975：「布里卡隆會先因招式『退化光線』的效果會退化成胖胖哈力，因此特性『尖刺盔甲』的效果不會生效」）。
+  - engine「沒有昏厥」路徑（在招式效果之後跑）：同 iid 仍在戰鬥位但 cardId 換了（退化沿用 iid）⇒ 改讀現在的卡（retalDefCard，哨兵 v6532-retal-current-card）；PASSIVE_RETALIATION、blockedRetaliation log、卡面內建反擊、PASSIVE_ON_DAMAGED 四處共用。
+  - 大範圍的「反擊移到招式效果之後」（904 甲殼刺 × 螺旋關節、682 扣殺能量 × 戲法舞步）仍等站長回覆，本版未動。
+- 緊張感／融合為雪 物品與支援者掃描（H/I/J 全部「對手」字樣的物品／支援者逐張看過）：
+  - **卡面直接適用**（「對手從手牌使出物品卡或者支援者卡時，這隻寶可夢不會受到那個效果的影響」），選目標的物品比照 v6.528 改造之錘的官方 Q&A（PTCG_RULES L1688）**類推**為「不可以選、沒有其他目標時不能使用」：粉碎之錘、悠哉尾草棒、高溫燃燒器（gate＋候選＋resolver）、火箭隊的驚嚇炸彈（正面時候選）。
+  - 危險光線：gate 不看免疫（站長 2026-08-07 裁定）⇒ 可以打出、效果被擋並 log；**不**改 applyStatusToOppActive 的 'item-effect'（火箭隊的催眠裝置是道具受傷觸發，不是「從手牌使出」）。
+  - 百萬噸吹風機：免疫的寶可夢身上的道具／特殊能量留著（gate 也只看非免疫的）。
+  - 霍米加的演奏：新中央判準 engine homikaPoisonRetreatLocked（RETREAT／getRetreatCost／getRetreatBlockReason 三處共用，哨兵 v6532-homika-immune），用 isImmuneToOppSupporter（含鰭之守護／廣域堡壘）；旗標記使出方式，'as-attack-effect'（靈怪變化／相仿秀）⇒ 免疫不適用（v6.262 通則），types 欄位改 boolean | 'as-attack-effect'。
+  - 已正確、未動：寶可夢捕捉器、頂尖捕捉器、反擊捕捉器、除蟲噴霧、改造之錘、老大的指令、坂木、琉琪亞的展示、可怕的哥哥、鏽蝕組手下。加傷害的支援者（空手道王的演練等）不屬於「對那隻寶可夢的效果」，未動（官方 Q&A idx 747：白蕾雅對融合為雪照樣多拿獎賞）。
+- 註解更正（v6.531 審查 P3）：_shared.ts 監視之眼維護鐵律第 3 條改為 v6.531 站長裁定；centralVerdictDiffersV6531 docblock 註明 v6.421 docblock 的舊說法（v6.421 區塊在還原器逐字錨點內，不改寫）；test-v6202 6c 刪 `void idx` 死行。
+  - ⚠ **反向（類推）**：退化後的卡若有受傷反擊特性（例：被打的是胖胖哈力、退化堆疊裡是布里卡隆…這種反向盤面實際很少見），改讀現在的卡會讓它觸發；這是同一則 Q&A「以退化後的卡判斷」的同向類推，非直接判例。
+- 守衛 test-v6532-retal-devolve-tension-items：23 條行為＋HEAD-FAIL（BASE v6.531：RT、CH、CH_ctl、LT、SB、SB_ctl、SB_payload、DR、MB、MB_gate、HB、HB_gate、HM、HM_copy、HM_merge 逐條紅，正對照兩版綠）；突變 13 個殺 12 個，存活 1 個為等價（驚嚇炸彈 resolver 的檢查是縱深防禦，v6.331 中央閘先擋下硬送的斧牙龍）。
+- **Fable 5.1 審查**：無 P1／P2。驗證：全部 H/I/J 2784 招 × 退化堆疊布里卡隆盤面 BASE/HEAD 比對，只有念力土偶｜退化光線一個差異；homikaPoisonRetreatLocked 三個呼叫點一致、AI 只走 canRetreat（Rule 38）；135 張含「對手」的訓練家逐張看過，無漏網。P3 已全部處理：
+  - P3-1／P3-2／P3-4：守衛補 MB_gate、HB_gate（＋競技場正對照）、HM_merge、SB_payload（審查者的兩個存活突變現在都會紅）。
+  - P3-3：百萬噸吹風機跳過免疫寶可夢時補 log（只在牠身上真的有道具／特殊能量時）。
+  - P3-5：上面的反向類推註記。
+  - 修正後 src 有動 ⇒ 全套重跑。
+  - **複審（5c88aa48）**：無新的 P1／P2／P3；先前存活的兩個突變與新增的 log 斷言都會紅；2784 招重掃仍只有退化光線一個差異。
+- 全套抓到 anti-pattern-lint O：engine 直接 import 卡檔 v3080 的 isImmuneToOppSupporter（反向 edge 新 symbol）⇒ 改由 effects.ts 轉接 `isImmuneToOppSupporterFromHand`（固定 'from-hand'；'as-attack-effect' 在呼叫前已分流），行為不變。
+- Rule 40：test-v6374 E10 數 engine 兩處 applyInherentRetaliation 接線 ⇒ 非 KO 那處改傳 retalDefCard，改成兩個具名變數各 1 處（意圖不變、不放寬成任意運算式）。
+- IRON_RULES 新增 Rule 87（官方 Q&A 比對的固定判準）。
+- 第三輪複審（c5710511）：轉接行為等價（實測守衛全綠、lint 由紅轉綠）、無初始化循環、E10 沒有放寬；兩個文字層 P3 已處理（Rule 87「同一份免疫述詞」措辭＋驚嚇炸彈 gate 例外說明；E10 診斷補印 retalDefCard 計數）。全套 880／880、FAIL 0（c5710511）；之後只動 docs 與守衛診斷字串，單跑 test-v6374 綠。
+
 ## v6.531：監視之眼不能使用、白日夢補位、終局通則（2026-10-11）
 
 BASE a1965980（v6.530）。

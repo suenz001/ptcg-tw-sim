@@ -142,6 +142,23 @@ import {
   hasArchaeoglobinDiveMemory,
   getAttacksFromEvolvedFromStack,
 } from './effects/cards/v3080_deferred_wave_c';
+import { isImmuneToOppSupporterFromHand as _v6532ImmuneOppSupporter } from './effects';   // ⭐v6.532 霍米加的演奏（經 effects.ts 轉接：engine→卡檔反向 edge 白名單只准縮，anti-pattern-lint O）
+
+// >>> v6532-homika-immune
+/**
+ * ⭐v6.532 霍米加的演奏「在下個對手的回合，對手的【中毒】的寶可夢無法撤退」的唯一判準（RETREAT／getRetreatCost／getRetreatBlockReason 三處共用）。
+ *   斧牙龍｜緊張感等「對手從手牌使出支援者卡時，這隻寶可夢不會受到那個效果的影響」⇒ 那隻中毒了照樣可以撤退。
+ *   旗標值 'as-attack-effect'（靈怪變化／相仿秀作為招式的效果使出）⇒ 免疫不適用。
+ */
+export function homikaPoisonRetreatLocked(state: GameState, pIdx: 0 | 1, pool: Map<string, Card>): boolean {
+  const p = state.players[pIdx];
+  const a = p?.active;
+  if (!p?.cantRetreatIfPoisonedThisTurn || !a) return false;
+  if (!(a.status === 'poisoned' || a.secondaryStatus === 'poisoned' || a.tertiaryStatus === 'poisoned')) return false;
+  if (p.cantRetreatIfPoisonedThisTurn === 'as-attack-effect') return true;
+  return !_v6532ImmuneOppSupporter(state, pIdx, a, pool);
+}
+// <<< v6532-homika-immune
 
 // v2.341：鐵荊棘ex SV5a 033/066｜初始化
 // 「只要這隻寶可夢在戰鬥場上，雙方場上『擁有規則的寶可夢』（『未來』寶可夢除外）的特性全部消除。」
@@ -3710,6 +3727,8 @@ function centralVerdictIsDrawV6421(s: GameState): boolean {
  *   情境：同一個動作內雙方都取完最後一張獎賞（例：咒詛炸彈把對手打昏、自己也昏厥），兩次 addPendingPrize
  *   各自寫 game-over、後寫的覆蓋前寫的 ⇒「後寫的那一方贏」。中央判定才是唯一勝負（Rule 38）⇒ 一樣收回重判。
  *   中央判定不認得的終局（判 over:false）一律不動。
+ *   ⚠ 上方 centralVerdictIsDrawV6421 docblock 的「只看 → 平手這一個方向」是 v6.421 當時的說法；
+ *     v6.531 起「→ 另一方獲勝」由本函式補上，兩者在延後條件裡並列（docblock 在 v6.421 還原器的逐字錨點內，故不改寫）。
  */
 function centralVerdictDiffersV6531(s: GameState): boolean {
   if (s.isDraw === true || (s.winner !== 0 && s.winner !== 1)) return false;
@@ -4694,10 +4713,7 @@ function handlePlaying(
     if (attacker.active.cantRetreatNextTurn) return state;
     // v2.174 霍米加的演奏 — 對手玩家在我方下個回合的中毒寶可夢無法撤退
     // 套用點：actor 自己的 cantRetreatIfPoisonedThisTurn + active 中毒（含 secondaryStatus）→ 阻擋
-    if (attacker.cantRetreatIfPoisonedThisTurn
-        && (attacker.active.status === 'poisoned' || attacker.active.secondaryStatus === 'poisoned' || attacker.active.tertiaryStatus === 'poisoned')) {
-      return state;
-    }
+    if (homikaPoisonRetreatLocked(state, aIdx as 0 | 1, pool)) return state;   // ⭐v6.532 中央判準（含緊張感等免疫）
 
     // v2.360 黏美龍｜黏滑失足 — 對手場上有此特性，撤退前擲幣，反面撤退失敗
     // 規則：「這個特性的效果不會重複」— 只要至少 1 隻黏美龍有此特性即觸發，不疊加。
@@ -7363,29 +7379,38 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     const attackerHasMagicalShine = isImmuneToOppAbilityEffect(newState, dIdx, newState.players[aIdx].active, pool, true);
     const _v5113RanInKoBranch = wouldBeKO && !preventedKO;
     const _v6492AtkDmgBeforeTail = newState.players[aIdx].active?.damage ?? 0;   // ⭐v6.492 下方共用反擊之前
-    if (!_v5113RanInKoBranch && baseDamage > 0 && defenderCard.abilities && !attackerHasMagicalShine) {
-      for (const ab of defenderCard.abilities) {
-        if (!isAbilityHolderEffective(newState, newState.players[dIdx].active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.656 非KO分支反擊/受傷觸發 gate
+    // >>> v6532-retal-current-card
+    // ⭐v6.532：官方 Q&A（念力土偶｜退化光線 × 布里卡隆｜尖刺盔甲）：「布里卡隆會先因招式『退化光線』的效果退化成胖胖哈力，
+    //   因此特性『尖刺盔甲』的效果不會生效」。下方「沒有昏厥」這條路徑在招式效果之後才跑，
+    //   原本讀的是受招當下的卡（defenderCard）⇒ 退化後的胖胖哈力照樣反擊。
+    //   ⇒ 同一隻（同 iid）仍在戰鬥位、但卡已換掉（退化沿用 iid）時，改讀現在的卡。
+    const _v6532Cur = newState.players[dIdx].active;
+    const retalDefCard = (_v6532Cur && _v6532Cur.iid === defender.active.iid && _v6532Cur.cardId !== defender.active.cardId)
+      ? (pool.get(_v6532Cur.cardId) ?? defenderCard) : defenderCard;
+    // <<< v6532-retal-current-card
+    if (!_v5113RanInKoBranch && baseDamage > 0 && retalDefCard.abilities && !attackerHasMagicalShine) {
+      for (const ab of retalDefCard.abilities) {
+        if (!isAbilityHolderEffective(newState, newState.players[dIdx].active, retalDefCard, dIdx, ab.name, 'active', pool)) continue; // v5.656 非KO分支反擊/受傷觸發 gate
         const retal = PASSIVE_RETALIATION.get(ab.name);
         if (retal) newState = retal(newState, dIdx, pool);
       }
     } else if (!_v5113RanInKoBranch && baseDamage > 0 && attackerHasMagicalShine) {
       // ⭐v6.427：只列「本來會觸發」的反擊（原本列出防守方全部特性 ⇒ 化隱打雪妖女會印「冰冷之帳 無效」）
       const _msgNk = blockedRetaliationLog(newState, dIdx, newState.players[aIdx].active, pool,
-        blockedRetaliationNames(newState, dIdx, newState.players[dIdx].active, defenderCard, pool, 'damaged'));
+        blockedRetaliationNames(newState, dIdx, newState.players[dIdx].active, retalDefCard, pool, 'damaged'));
       if (_msgNk) newState = addLog(newState, _msgNk, aIdx);
     }
     // v5.494：卡面內建受傷反擊（陳舊的頭蓋化石 — 非 KO 分支；攻擊方反殺交 sanityKOSweep）。
-    if (!_v5113RanInKoBranch && baseDamage > 0) newState = applyInherentRetaliation(newState, dIdx, defenderCard, pool, newState.players[dIdx].active);   // ⭐v6.427 特性消除閘
+    if (!_v5113RanInKoBranch && baseDamage > 0) newState = applyInherentRetaliation(newState, dIdx, retalDefCard, pool, newState.players[dIdx].active);   // ⭐v6.427 特性消除閘
 
     // v2.992 PASSIVE_ON_DAMAGED（火箭隊的瓦斯彈 警備濁霧）— 受傷觸發 deck search
     // v5.113 KO 重複觸發修：v5.081 KO branch L4994 已跑過，這裡共用版加 KO gate
     // ⭐v6.427：警備濁霧只作用在持有者自己這一側 ⇒ 攻擊方的「不受對手特性效果影響」不擋（原本誤跟著光之翼擋）
-    if (!_v5113RanInKoBranch && baseDamage > 0 && defenderCard.abilities) {
-      for (const ab of defenderCard.abilities) {
-        if (!isAbilityHolderEffective(newState, newState.players[dIdx].active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.656 非KO分支反擊/受傷觸發 gate
+    if (!_v5113RanInKoBranch && baseDamage > 0 && retalDefCard.abilities) {
+      for (const ab of retalDefCard.abilities) {
+        if (!isAbilityHolderEffective(newState, newState.players[dIdx].active, retalDefCard, dIdx, ab.name, 'active', pool)) continue; // v5.656 非KO分支反擊/受傷觸發 gate
         const fnOD = PASSIVE_ON_DAMAGED.get(ab.name);
-        if (fnOD) newState = fnOD(newState, dIdx, aIdx, pool, defenderCard);
+        if (fnOD) newState = fnOD(newState, dIdx, aIdx, pool, retalDefCard);
       }
     }
 
@@ -8913,7 +8938,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     }
     // v2.174 promote 霍米加的演奏 旗標（鐵之防禦強化 metalShield 改為「對手回合」型，見下方 players[nextIdx] 賦值之後）
     if (nextP.cantRetreatIfPoisonedNextTurn) {
-      nextP.cantRetreatIfPoisonedThisTurn = true;
+      nextP.cantRetreatIfPoisonedThisTurn = nextP.cantRetreatIfPoisonedNextTurn;   // ⭐v6.532 保留使出方式（true／'as-attack-effect'）
       delete nextP.cantRetreatIfPoisonedNextTurn;
     }
     // v4.33：promote nextIdx 的 cantPlayStadiumNextTurn → ThisTurn（燒灼大地）
@@ -11208,10 +11233,7 @@ export function getRetreatCost(state: GameState, pool: Map<string, Card>): numbe
   // 之前只在 RETREAT handler 擋，UI 仍顯示按鈕但點下去無反應，造成玩家以為 bug。
   if (player.active.cantRetreatNextTurn) return null;
   // v2.174 霍米加的演奏：自己的中毒寶可夢本回合無法撤退
-  if (player.cantRetreatIfPoisonedThisTurn
-      && (player.active.status === 'poisoned' || player.active.secondaryStatus === 'poisoned' || player.active.tertiaryStatus === 'poisoned')) {
-    return null;
-  }
+  if (homikaPoisonRetreatLocked(state, state.activePlayerIndex as 0 | 1, pool)) return null;   // ⭐v6.532 中央判準（含緊張感等免疫）
   // v5.473：撤退費收斂——狀態鎖 guard 留在本函式，數值計算全委派中央 computeActiveRetreatCostFor。
   return computeActiveRetreatCostFor(state, state.activePlayerIndex, pool);
 }
@@ -11243,8 +11265,7 @@ export function getRetreatBlockReason(state: GameState, pool: Map<string, Card>)
   if (player.active.status === 'asleep') return '戰鬥場寶可夢睡眠中（PTCG 規則：無法撤退）';
   if (player.active.status === 'paralyzed') return '戰鬥場寶可夢麻痺中（PTCG 規則：無法撤退）';
   if (player.active.cantRetreatNextTurn) return '對手招式效果鎖定撤退（懶人獺 悠哉 / 束縛 / 鬼盜衝撞 等）';
-  if (player.cantRetreatIfPoisonedThisTurn
-      && (player.active.status === 'poisoned' || player.active.secondaryStatus === 'poisoned' || player.active.tertiaryStatus === 'poisoned')) {
+  if (homikaPoisonRetreatLocked(state, state.activePlayerIndex as 0 | 1, pool)) {   // ⭐v6.532 中央判準（含緊張感等免疫）
     return '霍米加的演奏：本回合中毒的戰鬥場寶可夢無法撤退';
   }
   // 計算能量是否足夠（重用 getRetreatCost 的 cost 與 canRetreat 的能量比對）

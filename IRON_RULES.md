@@ -2670,3 +2670,18 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
   對戰位：lobby 清掉、playing 回 409；`heartbeats` 整個物件覆寫（欄位可能是 null，點路徑會失敗）。
 - 前端：用房號加入自己的舊房 ⇒ **先認回座位再 join**（否則坐成幽靈 P2）；開新房時只自動釋放「同瀏覽器、lobby、心跳停超過門檻」的舊房
   （`releasableOldRooms`），email 來源一律不自動釋放；釋放走 `releaseLobbySeat`（交易內檢查仍是 lobby，否則丟 NOT_LOBBY）。
+
+## Rule 87（2026-10-11）：官方 Q&A 比對修正的固定判準（v6.528～v6.532）
+
+- **受傷反擊在招式效果之後判斷**（官方 Q&A：退化光線把布里卡隆退化成胖胖哈力 ⇒ 尖刺盔甲不生效）：
+  engine「沒有昏厥」路徑讀 `retalDefCard`（同 iid 但 cardId 換了 ⇒ 現在的卡）。全面把反擊移到效果之後（甲殼刺 × 螺旋關節、扣殺能量 × 戲法舞步）等站長決定，不可自行大改。
+- **「從手牌使出」的免疫**（緊張感／融合為雪／鰭之守護／廣域堡壘）：物品用 `isImmuneToOppTrainer`、支援者用 `isImmuneToOppSupporter`；
+  「作為招式的效果」複製支援者（靈怪變化／相仿秀，`runAsCopiedSupporterEffect`）時**不適用** ⇒ 延時旗標要記使出方式（例：霍米加 `'as-attack-effect'`），
+  判準只有一份（`homikaPoisonRetreatLocked`，RETREAT／getRetreatCost／getRetreatBlockReason 共用）。
+- 選目標型物品：免疫的寶可夢不可以是目標，gate／候選／resolver 走**同一份免疫述詞**（能抽成候選函式的就抽，例 crushHammerCands）；沒有其他目標時不能使用（改造之錘 Q&A L1688 類推）。
+  例外：火箭隊的驚嚇炸彈 gate 恆 true 是刻意的（反面會傷自己，效果的一部分永遠可執行），不要照字面去「修」。
+  固定目標型（危險光線）gate 不看免疫（站長 2026-08-07），效果擋下並 log；不要改中央 `applyStatusToOppActive` 的 'item-effect'（道具受傷觸發也走那條）。
+- 守衛要**同時**守 gate 與效果兩半（v6.532 審查：只守效果 ⇒ gate 的免疫過濾刪掉也全綠）；延時旗標的「合併」（同回合兩種來源）也要一條。
+- engine 需要卡檔的 helper：**不要**直接 import 卡檔（anti-pattern-lint O 白名單只准縮）⇒ 經 effects.ts 轉接（例：`isImmuneToOppSupporterFromHand`）或下沉 leaf。
+- 監視之眼（站長 2026-10-11＋L3004）：腎上腺腦力／火箭腦力按鈕不能按（`getUsableAbilities`），但特性沒有被消除（冰冷之帳照放）。
+- 舊哨兵區塊（例：v6421）內的文字被還原器逐字釘住 ⇒ 註解更正寫在新版自己的哨兵區塊裡。

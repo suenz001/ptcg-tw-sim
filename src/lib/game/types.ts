@@ -525,8 +525,9 @@ export interface PlayerState {
    * RETREAT handler 檢查 attacker.cantRetreatIfPoisonedThisTurn + active.status==='poisoned'
    * → 阻擋撤退。
    */
-  cantRetreatIfPoisonedNextTurn?: boolean;
-  cantRetreatIfPoisonedThisTurn?: boolean;
+  // ⭐v6.532：'as-attack-effect' ＝ 由九尾｜靈怪變化等「作為招式的效果」使出（緊張感等「從手牌使出」的免疫不適用）
+  cantRetreatIfPoisonedNextTurn?: boolean | 'as-attack-effect';
+  cantRetreatIfPoisonedThisTurn?: boolean | 'as-attack-effect';
   /** 本回合是否已撤退 */
   retreatedThisTurn: boolean;
   /** v3.24 力之沙漏 per-turn flag — 避免 END_TURN 重複觸發 prompt

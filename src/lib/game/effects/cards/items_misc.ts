@@ -579,13 +579,16 @@ reg('開洞之鏟', (st, idx, pool) => {
 // 卡面：擲 1 次硬幣若為正面，則選擇 1 個對手的場上寶可夢身上附加的能量，將其丟棄。
 // gate：對手場上至少 1 隻寶可夢身上有能量（不論基本/特殊）
 // 流程：先 coin flip → 正面開 opp-poke-choose（限有能量的）→ resolver 丟最後一張能量
-regG('粉碎之錘', (st, idx) => {
+// ⭐v6.532：斧牙龍｜緊張感／浩大鯨ex｜融合為雪「對手從手牌使出物品卡…時，這隻寶可夢不會受到那個效果的影響」
+//   ⇒ 不可以是目標（同 v6.528 改造之錘，官方 Q&A PTCG_RULES L1688）。
+function crushHammerCands(st: GameState, idx: number, pool: Map<string, Card>): CardInstance[] {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
-  return all.some(pk => pk.energyAttached.length > 0);
-});
-reg('粉碎之錘', (st, idx) => {
+  return all.filter(pk => pk.energyAttached.length > 0 && !_v3060IsImmuneOppTrainer(st, dIdx, pk, pool));
+}
+regG('粉碎之錘', (st, idx, pool) => crushHammerCands(st, idx, pool).length > 0);
+reg('粉碎之錘', (st, idx, pool) => {
   // v3.14 修 Rule 7：原本選完寶可夢自動取末尾能量。卡面寫「選擇 1 個能量」
   // 應由玩家選擇。改成 flipCoinsWithLog → opp-poke-choose（選目標寶可夢）→
   // active-energy-discard（選該寶可夢身上的 1 張能量）chain。
@@ -595,9 +598,7 @@ reg('粉碎之錘', (st, idx) => {
     return addLog(st, '粉碎之錘：反面 → 無效', idx);
   }
   const dIdx = (1 - idx) as 0 | 1;
-  const dp = st.players[dIdx];
-  const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
-  const cand = all.filter(pk => pk.energyAttached.length > 0);
+  const cand = crushHammerCands(st, idx, pool);   // ⭐v6.532 排除緊張感／融合為雪
   if (cand.length === 0) return addLog(st, '粉碎之錘：對手場上沒有能量可丟', idx);
   st = addLog(st, '粉碎之錘：選 1 隻對手寶可夢丟棄 1 張能量', idx);
   return withPending(st, {
@@ -611,10 +612,12 @@ reg('粉碎之錘', (st, idx) => {
 // v3.14 第二步：玩家在選中的寶可夢身上挑 1 張能量丟棄
 //   active-energy-discard 擴充：透過 params.targetIid 指定 iid，picker 讀該寶可夢
 //   的 energyAttached（無論 active 或 bench）。
-regR('crush-hammer-pick-poke', (st, idx, iids) => {
+regR('crush-hammer-pick-poke', (st, idx, iids, _params, pool) => {
   const targetIid = iids[0];
   if (!targetIid) return st;
   const dIdx = (1 - idx) as 0 | 1;
+  // ⭐v6.532：payload 不可以是緊張感／融合為雪的寶可夢
+  if (!crushHammerCands(st, idx, pool).some(c => c.iid === targetIid)) return addLog(st, '粉碎之錘：選擇的寶可夢不是合法目標', idx);
   return withPending(st, {
     type: 'active-energy-discard',
     actorIdx: idx, sourcePlayerIdx: dIdx,
@@ -1005,7 +1008,7 @@ regR('help-bell-pick', (st, idx, iids, _params, pool) => {
 // 卡面：擲 1 次硬幣若為正面，則在對手的 1 隻寶可夢身上放置 2 個傷害指示物。
 //       若為反面，則在自己的戰鬥寶可夢身上放置 2 個傷害指示物。
 regG('火箭隊的驚嚇炸彈', () => true);
-reg('火箭隊的驚嚇炸彈', (st, idx) => {
+reg('火箭隊的驚嚇炸彈', (st, idx, pool) => {
   // v3.14 改用 flipCoinsWithLog 替代 Math.random + 反面分支補 addLog
   //   （原本反面只默默扣自己 20 HP，玩家看不到 log）。
   const r = flipCoinsWithLog(st, 1, '火箭隊的驚嚇炸彈', idx);
@@ -1024,13 +1027,16 @@ reg('火箭隊的驚嚇炸彈', (st, idx) => {
   const dp = st.players[dIdx];
   const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
   if (all.length === 0) return st;
+  // ⭐v6.532：緊張感／融合為雪「不會受到那個效果的影響」⇒ 不可以是目標
+  const valid = all.filter(pk => !_v3060IsImmuneOppTrainer(st, dIdx, pk, pool));
+  if (valid.length === 0) return addLog(st, '火箭隊的驚嚇炸彈：正面，但對手的寶可夢都不受對手物品卡的效果影響', idx);
   st = addLog(st, '火箭隊的驚嚇炸彈：選 1 隻對手寶可夢放置 2 個傷害指示物', idx);
   return withPending(st, {
     type: 'opp-poke-choose',
     actorIdx: idx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'rocket-scare-bomb-place',
-    params: { includeActive: true },
+    params: { includeActive: true, validIids: valid.map(c => c.iid) },
   });
 });
 regR('rocket-scare-bomb-place', (st, idx, iids, _params, pool) => {
@@ -1043,6 +1049,7 @@ regR('rocket-scare-bomb-place', (st, idx, iids, _params, pool) => {
     : dp.bench.find(c => c.iid === targetIid) ?? null;
   if (!target) return st;
   const tn = pool.get(target.cardId)?.name ?? '?';
+  if (_v3060IsImmuneOppTrainer(st, dIdx, target, pool)) return addLog(st, `火箭隊的驚嚇炸彈：${tn} 不受對手物品卡的效果影響`, idx);   // ⭐v6.532
   st = addLog(st, `火箭隊的驚嚇炸彈：${tn} 受到 20 傷害`, idx);
   // dmg-direct-ok: 道具放置傷害指示物，免疫(化隱/神秘石居)僅針對招式/特性，不走中央招式 guard
   return updatePlayer(st, dIdx, p => {
@@ -1166,20 +1173,22 @@ regG('悠哉尾草棒', (st, idx, pool) => {
   if (st.activePlayerIndex === st.firstPlayerIdx) return false;
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋整個效果
   if (_calmGroundBlocks(st, (1 - idx) as 0 | 1, pool)) return false; // v5.985 被回手的是對手的卡
+  return lazyTailCands(st, idx, pool).length > 0;   // ⭐v6.532 排除緊張感／融合為雪
+});
+// ⭐v6.532：不受對手物品卡效果影響的寶可夢（緊張感／融合為雪）不可以是目標（同改造之錘，PTCG_RULES L1688）
+function lazyTailCands(st: GameState, idx: number, pool: Map<string, Card>): CardInstance[] {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
-  return all.some(pk => pk.energyAttached.length > 0);
-});
+  return all.filter(pk => pk.energyAttached.length > 0 && !_v3060IsImmuneOppTrainer(st, dIdx, pk, pool));
+}
 reg('悠哉尾草棒', (st, idx, pool) => {
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 整個效果不發生
   if (_calmGroundBlocks(st, (1 - idx) as 0 | 1, pool)) { // v5.985 被回手的是對手的卡
     return addLog(st, '悠哉尾草棒：對手場上有【平穩境地】，效果無效', idx);
   }
   const dIdx = (1 - idx) as 0 | 1;
-  const dp = st.players[dIdx];
-  const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
-  const cand = all.filter(pk => pk.energyAttached.length > 0);
+  const cand = lazyTailCands(st, idx, pool);   // ⭐v6.532
   if (cand.length === 0) return addLog(st, '悠哉尾草棒：對手場上沒有能量', idx);
   st = addLog(st, '悠哉尾草棒：選 1 隻對手寶可夢，1 張能量放回對手手牌', idx);
   return withPending(st, {
@@ -1193,10 +1202,12 @@ reg('悠哉尾草棒', (st, idx, pool) => {
 // v3.14 修 Rule 7：原本選完寶可夢自動拿末尾能量。卡面寫「選擇 1 個能量」應玩家選。
 //   改成 opp-poke-choose（pick 目標寶可夢）→ active-energy-discard（pick 該寶可夢
 //   身上能量）chain。
-regR('lazy-tail-grass-bounce', (st, idx, iids) => {
+regR('lazy-tail-grass-bounce', (st, idx, iids, _params, pool) => {
   const targetIid = iids[0];
   if (!targetIid) return st;
   const dIdx = (1 - idx) as 0 | 1;
+  // ⭐v6.532：payload 不可以是緊張感／融合為雪的寶可夢
+  if (!lazyTailCands(st, idx, pool).some(c => c.iid === targetIid)) return addLog(st, '悠哉尾草棒：選擇的寶可夢不是合法目標', idx);
   return withPending(st, {
     type: 'active-energy-discard',
     actorIdx: idx, sourcePlayerIdx: dIdx,

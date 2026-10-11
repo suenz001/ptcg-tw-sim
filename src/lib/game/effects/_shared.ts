@@ -761,11 +761,11 @@ export const SPECIAL_ENERGY_ON_DAMAGED = new Map<string, (
 // ⚠️ 維護鐵律：新增「將某寶可夢身上的傷害指示物搬到另一隻」類特性時：
 //   1) 把特性名加進 MOVE_DAMAGE_COUNTER_ABILITIES
 //   2) 在該特性的 regA callback 入口呼叫 isAbilityBlockedByOakEye()
-//   3) ⚠**不要**在 engine.ts 的「特性可用性 gate」隱藏按鈕（v6.049 更正，原第 3 條寫反了）。
-//      Wilson 裁定：監視之眼擋的是「改放傷害指示物」這個**效果**，特性本身沒有被消除 ——
-//      持有者仍然是「擁有特性的寶可夢」（例如仍會被雪妖女｜冰冷之帳打到），
-//      特性也照樣可以發動，只是發動後效果被擋下而失效（regA 入口會 log 原因）。
-//      把按鈕藏起來會讓玩家誤以為特性被消除了。
+//   3) engine.ts getUsableAbilities 已統一呼叫 isAbilityBlockedByOakEye ⇒ 特性按鈕不能按（不必另加）。
+//      ⭐v6.531 站長改裁定（官方 Q&A PTCG_RULES L3004，取代 v6.049 的「可以按、按了才失效」）：
+//      監視之眼有效時腎上腺腦力「不可以」改放 ⇒ 按鈕不能按。但特性本身**沒有被消除** ——
+//      持有者仍然是「擁有特性的寶可夢」（例如仍會被雪妖女｜冰冷之帳打到，test-v6531 OE_snow 守）；
+//      ⚠ 因此**不可以**用「特性消除」的機制實作（isAbilityHolderEffective 必須仍回 true）。
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**

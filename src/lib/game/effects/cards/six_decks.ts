@@ -22,6 +22,7 @@ import { recruitBasicToBenchPost } from '../../effects';  // v6.067 呼朋引伴
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
+import { isImmuneToOppTrainer as _v6532ImmuneOppTrainer } from './v3060_deferred_wave_b';   // ⭐v6.532 高溫燃燒器
 import { isBasicPokemonCard } from '../../engine';  // v5.270: 毒電嬰呼朋引伴 pre-scan basic
 import { isPokemonExCard } from '../../selection-filter';  // ⭐v6.403 中央述詞直接取自 leaf
 import type { Card } from '$lib/cards/types';
@@ -839,7 +840,9 @@ regG('高溫燃燒器', (st, idx, pool) => {
   if (!hasFire) return false;
   // 也要對手場上有可敲對象，否則整張牌無意義
   const dIdx = (1 - idx) as 0 | 1;
-  const oppAll = [...(st.players[dIdx].active ? [st.players[dIdx].active!] : []), ...st.players[dIdx].bench];
+  // ⭐v6.532：緊張感／融合為雪的寶可夢身上的道具與特殊能量不是合法目標
+  const oppAll = [...(st.players[dIdx].active ? [st.players[dIdx].active!] : []), ...st.players[dIdx].bench]
+    .filter(p => !_v6532ImmuneOppTrainer(st, dIdx, p, pool));
   const hasTargetTool = oppAll.some(p => p.toolAttached);
   const hasTargetSpecialE = oppAll.some(p => p.energyAttached.some(e => {
     const ec = pool.get(e.cardId);
@@ -872,6 +875,7 @@ reg('高溫燃燒器', (st, idx, pool) => {
 
   const options: { id: string; text: string }[] = [];
   for (const { inst, pos } of oppAll) {
+    if (_v6532ImmuneOppTrainer(st, dIdx, inst, pool)) continue;   // ⭐v6.532 緊張感／融合為雪
     const ownerName = pool.get(inst.cardId)?.name ?? '?';
     const posLabel = pos === 'active' ? '戰鬥' : '備戰';
     if (inst.toolAttached) {

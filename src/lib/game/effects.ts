@@ -1101,6 +1101,11 @@ import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './effect
 // v5.700 對手備戰強制換位(gust)免疫過濾：item 級(緊張感/融合為雪) / supporter 級(+化石/廣域堡壘)
 import { isImmuneToOppTrainer as _gustImmuneTrainer } from './effects/cards/v3060_deferred_wave_b';
 import { isImmuneToOppSupporter as _gustImmuneSupporter } from './effects/cards/v3080_deferred_wave_c';
+// ⭐v6.532：給 engine（霍米加的演奏撤退判準）用的轉接——engine 直接 import 卡檔會新增反向 edge（anti-pattern-lint O）。
+//   固定 'from-hand'：延時旗標已另外記下「作為招式的效果」的情形（'as-attack-effect'），呼叫端在那之前就分流了。
+export function isImmuneToOppSupporterFromHand(state: GameState, ownerIdx: 0 | 1, inst: CardInstance, pool: Map<string, Card>): boolean {
+  return _gustImmuneSupporter(state, ownerIdx, inst, pool, 'from-hand');
+}
 // ⭐ v6.262 支援者效果來源（葉子模組，零 import）
 import { getSupporterEffectSource } from './supporter-effect-source';
 
@@ -6076,6 +6081,12 @@ regG('危險光線', (st, idx) => {
 reg('危險光線', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   if (!st.players[dIdx].active) return st;
+  // ⭐v6.532：斧牙龍｜緊張感／浩大鯨ex｜融合為雪「對手從手牌使出物品卡…時，這隻寶可夢不會受到那個效果的影響」
+  //   ⇒ 不灼傷、不混亂。gate 不看免疫（站長 2026-08-07 裁定：防禦方的免疫不算進 gate），所以在這裡擋。
+  //   ⚠ 不放進 applyStatusToOppActive 的 'item-effect'：火箭隊的催眠裝置（道具在受傷時觸發，不是「從手牌使出」）也走那條。
+  if (_gustImmuneTrainer(st, dIdx, st.players[dIdx].active!, pool)) {
+    return addLog(st, `危險光線：${pool.get(st.players[dIdx].active!.cardId)?.name ?? '?'} 不受對手物品卡的效果影響`, idx);
+  }
   // 先灼傷、再混亂；各自處理自身免疫（特殊能量/憨憨臉/祭典會場）與欄位放置。
   let s = applyStatusToOppActive(st, idx, 'burned', pool, { kind: 'item-effect', label: '危險光線' });
   s = applyStatusToOppActive(s, idx, 'confused', pool, { kind: 'item-effect', label: '危險光線' });
@@ -16261,7 +16272,8 @@ regR('akuroma-step2-energy', (st, idx, iids, _params, pool) => {
 // ── 百萬噸吹風機（Item） ── 丟棄對手所有道具 + 特殊能量 + 場上競技場 ────
 regG('百萬噸吹風機', (st, idx, pool) => {
   const opp = st.players[(1 - idx) as 0 | 1];
-  const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
+  // ⭐v6.532：緊張感／融合為雪的寶可夢身上的道具與特殊能量不受影響（只看其他寶可夢）
+  const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench].filter(c => !_gustImmuneTrainer(st, (1 - idx) as 0 | 1, c, pool));
   // v3.20 多重轉接：iterate 所有道具
   const hasTool = allOpp.some(c => getAllAttachedTools(c).length > 0);
   const hasSpecial = allOpp.some(c =>
@@ -16279,8 +16291,15 @@ reg('百萬噸吹風機', (st, idx, pool) => {
   const removedSpecials: CardInstance[] = [];
   const toolNames: string[] = [];
   const specialNames: string[] = [];
+  const immuneNames: string[] = [];   // ⭐v6.532 緊張感／融合為雪
   const stripOne = (c: CardInstance | null): CardInstance | null => {
     if (!c) return c;
+    // ⭐v6.532：斧牙龍｜緊張感／浩大鯨ex｜融合為雪「不會受到那個效果的影響」⇒ 身上的道具與特殊能量留著
+    if (_gustImmuneTrainer(st, dIdx, c, pool)) {
+      // 只有身上真的有會被丟的卡才說明（審查 v6.532 P3-3：否則玩家以為沒生效是 bug）
+      if (getAllAttachedTools(c).length > 0 || c.energyAttached.some(e => pool.get(e.cardId)?.subtype === 'Special')) immuneNames.push(pool.get(c.cardId)?.name ?? '?');
+      return c;
+    }
     // v3.20 多重轉接：把 toolAttached 與 extraTools 全部丟棄
     for (const t of getAllAttachedTools(c)) {
       removedTools.push(t);
@@ -16313,6 +16332,7 @@ reg('百萬噸吹風機', (st, idx, pool) => {
   if (specialNames.length > 0) {
     s = addLog(s, `百萬噸吹風機：丟棄對手 ${specialNames.length} 張特殊能量（${specialNames.join('、')}）`, idx);
   }
+  for (const nm of immuneNames) s = addLog(s, `百萬噸吹風機：${nm} 不受對手物品卡的效果影響（身上的道具與特殊能量留著）`, idx);
   // 丟棄場上的競技場（v2.244：丟回擁有者棄牌堆）
   if (s.activeStadium) {
     const stadName = pool.get(s.activeStadium.cardId)?.name ?? '?';
