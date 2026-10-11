@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.83</title>
+<title>PTCG Oracle Admin v1.84</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -372,7 +372,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.83</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.84</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -5696,6 +5696,9 @@ function mxMergeBuckets(a, b) {
       add3(t, 'first', bk.turnOrder[k].first || []); add3(t, 'second', bk.turnOrder[k].second || []);
     }
   }
+  // 複審 P3-4（v1.81 起既有）：兩個資料源都沒有 turnOrder（舊伺服器）⇒ 合併後也不要有，
+  //   否則 mxTurnOrder 會當成「支援但全是空的」，網頁顯示一張全是「—」的表，而不是「伺服器還沒更新」。
+  if (!(a && a.turnOrder) && !(b && b.turnOrder)) delete out.turnOrder;
   return out;
 }
 
@@ -5827,6 +5830,28 @@ function mxColor(cell, pal) {
   const c = [0, 1, 2].map((i) => Math.round(hx(pal.mid, i) + (hx(to, i) - hx(pal.mid, i)) * a));
   return '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
 }
+/**
+ * ⭐v1.84 先攻／後攻：這個資料源「知道誰先攻」的對戰場數（網頁表與匯出圖共用，原本兩處各抄一份；Fable 審查 P3-4）。
+ */
+function mxKnownTurn(sc, src) {
+  const c = (sc && sc.casualTurnKnown) || 0, t = (sc && sc.tournTurnKnown) || 0;
+  return src === 'casual' ? c : src === 'tourn' ? t : c + t;
+}
+/**
+ * ⭐v1.84 先攻－後攻差的顯示（網頁表與匯出圖共用；Fable 審查 P3-1／P3-2）。
+ *   正負號與顏色依「顯示出來的數字」決定（原本依浮點：+0.00008 會顯示「+0.0 點」卻是綠字、-0.00008 顯示「-0.0 點」）；
+ *   任一格樣本不足（ok:false）⇒ dim（灰），不讓讀者把飽和色的差值當成可信。
+ *   回 { text, sign: 1／-1／0, dim }；沒有差值回 text '—'、sign 0、dim true。
+ */
+function mxDiffView(line) {
+  const d = line ? line.diff : null;
+  if (d === null || d === undefined || !Number.isFinite(d)) return { text: '—', sign: 0, dim: true };
+  const tenths = Math.sign(d) * Math.round(Math.abs(d) * 1000);   // 以 0.1 個百分點為單位取整；正負對稱捨入（複審 P3-2：+0.0005 與 -0.0005 對稱）
+  const sign = tenths > 0 ? 1 : tenths < 0 ? -1 : 0;
+  const text = (sign > 0 ? '+' : sign < 0 ? '-' : '') + (Math.abs(tenths) / 10).toFixed(1) + ' 點';
+  const dim = !(line.first && line.first.ok) || !(line.second && line.second.ok);
+  return { text, sign, dim };
+}
 // ══ MX-PURE-END ══════════════════════════════════════════════════════════════
 
 let _mxData = null, _mxBusy = false;
@@ -5861,6 +5886,8 @@ window.loadArchMatchups = async function () {
     const dl = document.getElementById('mx-name-list');
     if (dl) dl.innerHTML = Object.values(res.names || {}).sort().map((n) => '<option value="' + escapeHtml(n) + '">').join('');
     ['mx-img-btn', 'mx-focus-btn', 'mx-turn-img-btn'].forEach((id) => { const e = document.getElementById(id); if (e) e.disabled = false; });
+    // v1.84：舊伺服器（沒有 turnOrder）不啟用「匯出先後攻圖」（原本要按了才跳提示；Fable 審查 P3-4）
+    { const tb = document.getElementById('mx-turn-img-btn'); if (tb && !(res.casual && res.casual.turnOrder) && !(res.tourn && res.tourn.turnOrder)) tb.disabled = true; }
     renderArchMatchups();
   } finally { _mxBusy = false; }
 };
@@ -5906,14 +5933,15 @@ window.renderArchTurnOrder = function () {
   if (!t) { box.innerHTML = '<div class="empty">這個資料源在統計範圍內沒有資料。</div>'; return; }
   if (!t.supported) { box.innerHTML = '<div class="empty">伺服器還沒更新到 v1.59（請先跑 update-tournament.bat），所以還沒有先攻／後攻資料。</div>'; return; }
   const sc = _mxData.scanned || {};
-  const known = op.src === 'casual' ? (sc.casualTurnKnown || 0) : op.src === 'tourn' ? (sc.tournTurnKnown || 0) : (sc.casualTurnKnown || 0) + (sc.tournTurnKnown || 0);
+  const known = mxKnownTurn(sc, op.src);   // v1.84 中央
   const rate = (c) => c.winRate === null ? '—' : miPct(c.winRate, 1);
   const cell = (c) => '<td style="text-align:right;' + (c.ok ? '' : 'color:#9aa5b4;') + '" title="' + c.w + ' 勝 ' + c.l + ' 負 ' + c.d + ' 和'
     + (c.ci ? '｜95% 區間 ' + miPct(c.ci[0], 0) + '～' + miPct(c.ci[1], 0) : '') + '">'
     + '<span style="display:inline-block;min-width:52px;padding:2px 6px;border-radius:4px;background:' + mxColor(c, MX_PAL_WEB) + ';">' + rate(c) + '</span>'
-    + ' <span class="small muted">' + c.games + ' 場</span></td>';
-  const diff = (d) => '<td style="text-align:right;font-weight:600;">' + (d === null ? '—' : ((d >= 0 ? '+' : '') + (d * 100).toFixed(1) + ' 點')) + '</td>';
-  const rows = t.rows.map((r) => '<tr><td>#' + r.rank + ' ' + escapeHtml(r.name) + '</td>' + cell(r.first) + cell(r.second) + diff(r.diff) + '</tr>').join('');
+    + ' <span class="small muted">' + Number(c.games || 0).toLocaleString('zh-TW') + ' 場</span></td>';   // 複審 P3-3：場數與匯出圖一樣加逗號分隔
+  // v1.84：差值走中央 mxDiffView（與匯出圖同一份）；樣本不足時灰字
+  const diff = (line) => { const v = mxDiffView(line); return '<td style="text-align:right;font-weight:600;' + (v.dim ? 'color:#9aa5b4;' : '') + '">' + v.text + '</td>'; };
+  const rows = t.rows.map((r) => '<tr><td>#' + r.rank + ' ' + escapeHtml(r.name) + '</td>' + cell(r.first) + cell(r.second) + diff(r) + '</tr>').join('');
   const missing = sc.tournTurnEventsMissing || 0;
   box.innerHTML = '<div class="small muted" style="margin:4px 0 6px;">' + MX_SRC_LABEL[op.src] + '｜' + mxPeriodText()
     + '｜知道誰先攻的對戰 ' + known.toLocaleString('zh-TW') + ' 場'
@@ -5923,7 +5951,7 @@ window.renderArchTurnOrder = function () {
     + '</div>'
     + '<table class="mx-f" style="border-collapse:collapse;min-width:520px;">'
     + '<tr><th style="text-align:left;">牌組</th><th style="text-align:right;">先攻勝率</th><th style="text-align:right;">後攻勝率</th><th style="text-align:right;">先攻－後攻</th></tr>'
-    + '<tr style="background:#f1f5f9;"><td><b>全體</b></td>' + cell(t.overall.first) + cell(t.overall.second) + diff(t.overall.diff) + '</tr>'
+    + '<tr style="background:#f1f5f9;"><td><b>全體</b></td>' + cell(t.overall.first) + cell(t.overall.second) + diff(t.overall) + '</tr>'
     + rows + '</table>';
 };
 
@@ -6151,7 +6179,15 @@ async function mxDrawTurnOrder(t, src, info) {
   const K = MI.K, W = MI.W;
   const rows = [{ name: '全體', rank: null, line: t.overall, all: true }].concat(t.rows.map((r) => ({ name: r.name, rank: r.rank, line: r })));
   const rh = 58, top0 = 340;
-  const H = top0 + rows.length * rh + 170;
+  // v1.84 註腳改用 miWrap（站長要完整內容，不截斷；Fable 審查 P3-3），圖高依實際行數計算
+  const notes = ['勝率＝勝 ÷（勝＋負），和局不算；灰字＝分出勝負的場數少於 ' + info.minGames + ' 場，僅供參考（差值也跟著變灰）。',
+    '只算知道誰先攻的對戰：一般對戰從 v6.524 起記錄；錦標賽的未進場、閒置判負、管理員判定、多局制不算。',
+    '牌組分類依站上的牌組原型規則；「全體」含所有牌組（也含前 ' + t.rows.length + ' 名以外與未分類）。'];
+  const mctx = document.createElement('canvas').getContext('2d');
+  miFont(mctx, 20, false);
+  const noteLines = [].concat(...notes.map((n) => miWrap(mctx, n, W - MI.PAD * 2)));
+  const ny = top0 + rows.length * rh + 44;
+  const H = ny + noteLines.length * 30 + 40;
   const { cv, ctx } = mxCanvas(W, H);
   await mxBrand(ctx, W);
   mxTitle(ctx, '先攻／後攻勝率', MX_SRC_LABEL[src] + '　・　' + mxPeriodText() + '　・　使用率前 ' + t.rows.length + ' 名', mxAccent(src));
@@ -6162,14 +6198,15 @@ async function mxDrawTurnOrder(t, src, info) {
   ctx.textAlign = 'left'; ctx.fillText('牌組（使用率名次）', MI.PAD, top0 - 22);
   ctx.textAlign = 'center'; ctx.fillText('先攻勝率', fX + cw / 2, top0 - 22); ctx.fillText('後攻勝率', sX + cw / 2, top0 - 22);
   ctx.textAlign = 'right'; ctx.fillText('先攻－後攻', dX, top0 - 22);
+  // v1.84：勝率與場數分上下兩行（同矩陣圖的格子），場數再大也不會重疊（Fable 審查 P2-1：五位數場數原本會疊到勝率）
   const drawCell = (c, x, y) => {
     ctx.fillStyle = mxColor(c, MX_PAL_IMG);
-    miRR(ctx, x, y + 6, cw, rh - 12, 8); ctx.fill();
+    miRR(ctx, x, y + 4, cw, rh - 8, 8); ctx.fill();
     ctx.textAlign = 'center';
-    ctx.fillStyle = c.ok ? K.txt : K.dim; miFont(ctx, 24, true);
-    ctx.fillText(c.winRate === null ? '—' : miPct(c.winRate, 1), x + cw / 2 - 26, y + rh / 2);
-    ctx.fillStyle = c.ok ? K.mid : K.dim; miFont(ctx, 17, false);
-    ctx.textAlign = 'right'; ctx.fillText(c.games + ' 場', x + cw - 10, y + rh / 2 + 1);
+    ctx.fillStyle = c.ok ? K.txt : K.dim; miFont(ctx, 23, true);
+    ctx.fillText(c.winRate === null ? '—' : miPct(c.winRate, 1), x + cw / 2, y + rh / 2 - 9);
+    ctx.fillStyle = c.ok ? K.mid : K.dim; miFont(ctx, 15, false);
+    ctx.fillText(Number(c.games || 0).toLocaleString('zh-TW') + ' 場', x + cw / 2, y + rh / 2 + 14);
   };
   rows.forEach((r, i) => {
     const y = top0 + i * rh;
@@ -6181,17 +6218,13 @@ async function mxDrawTurnOrder(t, src, info) {
     ctx.fillText(miFit(ctx, r.name, fX - MI.PAD - 70), MI.PAD + (r.rank ? 54 : 0), y + rh / 2);
     drawCell(r.line.first, fX, y);
     drawCell(r.line.second, sX, y);
-    const d = r.line.diff;
+    const v = mxDiffView(r.line);   // v1.84 中央（與網頁同一份）
     ctx.textAlign = 'right'; miFont(ctx, 24, true);
-    ctx.fillStyle = d === null ? K.dim : (d > 0 ? K.up : (d < 0 ? K.dn : K.txt));
-    ctx.fillText(d === null ? '—' : ((d >= 0 ? '+' : '') + (d * 100).toFixed(1) + ' 點'), dX, y + rh / 2);
+    ctx.fillStyle = v.dim ? K.dim : (v.sign > 0 ? K.up : (v.sign < 0 ? K.dn : K.txt));
+    ctx.fillText(v.text, dX, y + rh / 2);
   });
   ctx.textAlign = 'left'; ctx.fillStyle = K.dim; miFont(ctx, 20, false);
-  const ny = top0 + rows.length * rh + 44;
-  ['勝率＝勝 ÷（勝＋負），和局不算；灰字＝分出勝負的場數少於 ' + info.minGames + ' 場，僅供參考。',
-   '只算知道誰先攻的對戰：一般對戰從 v6.524 起記錄；錦標賽的未進場、閒置判負、管理員判定、多局制不算。',
-   '牌組分類依站上的牌組原型規則；「全體」含所有牌組（也含前 ' + t.rows.length + ' 名以外與未分類）。']
-    .forEach((s, i) => ctx.fillText(miFit(ctx, s, W - MI.PAD * 2), MI.PAD, ny + i * 30));
+  noteLines.forEach((s, i) => ctx.fillText(s, MI.PAD, ny + i * 30));
   return cv;
 }
 
@@ -6235,7 +6268,7 @@ window.exportArchTurnImage = async function () {
   if (!t) { alert('這個資料源在統計範圍內沒有資料。'); return; }
   if (!t.supported) { alert('伺服器還沒更新到 v1.59（請先跑 update-tournament.bat），所以還沒有先攻／後攻資料。'); return; }
   const sc = _mxData.scanned || {};
-  const known = op.src === 'casual' ? (sc.casualTurnKnown || 0) : op.src === 'tourn' ? (sc.tournTurnKnown || 0) : (sc.casualTurnKnown || 0) + (sc.tournTurnKnown || 0);
+  const known = mxKnownTurn(sc, op.src);   // v1.84 中央
   if (!(known > 0)) { alert('這個資料源還沒有任何知道誰先攻的對戰，無法產圖。'); return; }
   try {
     mxShowImage(await mxDrawTurnOrder(t, op.src, { known, minGames: op.minGames }), '先攻／後攻勝率',
@@ -6249,7 +6282,7 @@ window.exportArchFocusImage = async function () {
   if (!m || !m.rows.length) { alert('這個牌組沒有對戰紀錄。'); return; }
   try {
     const t = mxTurnOrder(_mxData, op.src, { topN: op.topN, minGames: op.minGames, focusKey: window._mxFocusKey });   // v1.83
-    const tf = t && t.supported && t.focus && (t.focus.first.games + t.focus.second.games) > 0 ? t.focus : null;
+    const tf = t && t.supported && t.focus ? t.focus : null;   // v1.84：與網頁視窗一致（0 場也顯示「—（0 場）」）
     mxShowImage(await mxDrawFocus(m, op.src, tf), m.rows[0].name + ' 對戰表', 'ptcg-matchup-' + op.src + '-' + miStamp(Date.now()) + '.png');
   } catch (e) { alert('產圖失敗：' + (e && e.message ? e.message : e)); }
 };
