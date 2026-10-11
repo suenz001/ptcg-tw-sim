@@ -147,17 +147,20 @@ function selfExtraEnergyPre(
 }
 
 // helper: 自方備戰有特定名稱寶可夢 +N
+// ⭐v6.528 match 必填：卡面「名稱中有『X』的寶可夢」⇒ 'includes'；卡面「有『X』」（指定卡名）⇒ 'exact'。
+//   官方 Q&A（PTCG_RULES L2392，鐵蟻｜一起啃食）：「自己的備戰區只有鐵蟻ex時…可以增加『20』點傷害嗎？」「不可以。」
 function selfBenchHasNamePre(
   base: number, bonus: number,
   namePatterns: string[],
   label: string,
+  match: 'includes' | 'exact',
 ): AttackPreFn {
   return (state, aIdx, pool) => {
     const player = state.players[aIdx];
     const cond = player.bench.some(b => {
       const card = pool.get(b.cardId);
       if (!card) return false;
-      return namePatterns.some(p => card.name.includes(p));
+      return namePatterns.some(p => (match === 'exact' ? card.name === p : card.name.includes(p)));
     });
     const dmg = base + (cond ? bonus : 0);
     const s = addLog(state, `${label}：自方備戰 ${cond ? `有「${namePatterns.join('/')}」 → +${bonus}` : `無「${namePatterns.join('/')}」`} = ${dmg}`, aIdx);
@@ -227,8 +230,8 @@ regPre('胖嘟嘟ex|力量壓制', selfExtraEnergyPre(80, 80, 2, '力量壓制')
 // ══════════════════════════════════════════════════════════════════════════════
 // J. 自方備戰有特定名稱寶可夢 +N (3 張)
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('火箭隊的尼多后|愛之衝擊', selfBenchHasNamePre(60, 120, ['尼多王'], '愛之衝擊'));
-regPre('鐵蟻|一起啃食', selfBenchHasNamePre(20, 20, ['鐵蟻'], '一起啃食'));
+regPre('火箭隊的尼多后|愛之衝擊', selfBenchHasNamePre(60, 120, ['尼多王'], '愛之衝擊', 'includes'));   // 卡面「名稱中有『尼多王』」
+regPre('鐵蟻|一起啃食', selfBenchHasNamePre(20, 20, ['鐵蟻'], '一起啃食', 'exact'));   // 卡面「有『鐵蟻』」⇒ 鐵蟻ex 不算
 // 巨金怪|結合光束 — 自方備戰需同時有「鐵啞鈴」AND「金屬怪」
 regPre('巨金怪|結合光束', (state, aIdx, pool) => {
   const player = state.players[aIdx];

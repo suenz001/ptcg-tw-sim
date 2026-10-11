@@ -78,7 +78,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   // ⭐⭐⭐v6.337 借招（複製他人招式）中央管線 —— 候選枚舉與規則層共用同一份，
   //   且提供「借到的招式本身也是借招卡」時要不要再開一段 picker 的判準。
   import { copyAttackCandidates, isCopyAttackKey, COPY_ATTACK_MAX_DEPTH, type CopyChoice } from '$lib/game/copy-attack';
-  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, effectivePreDiscardMin, preDiscardOptInThreshold, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType, preDiscardEnergyEligible, OPTIN_NO_PAYMENT, damageCounterCount, stampClientVersion } from '$lib/game/effects'; // v5.992 若希望 opt-in sentinel / ⭐v6.349 preDiscardEnergyEligible
+  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, effectivePreDiscardMin, preDiscardOptInThreshold, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType, preDiscardEnergyEligible, OPTIN_NO_PAYMENT, damageCounterCount, stampClientVersion, isAllPowerSoulBlocked } from '$lib/game/effects'; // v5.992 若希望 opt-in sentinel / ⭐v6.349 preDiscardEnergyEligible
   import { JAMMING_TOWER_STADIUMS } from '$lib/game/effects/cards/stadiums';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
@@ -4049,6 +4049,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           return src.deck.filter(c => {
             const card = pool.get(c.cardId);
             if (!card || card.supertype !== 'Pokemon') return false;
+            if (isAllPowerSoulBlocked(card)) return false;   // ⭐v6.528 PTCG_RULES L1745（全能靈魂）
             if ((card.stage ?? card.subtype) !== 'Stage1') return false;
             if (!card.evolvesFrom) return false;
             return baseNames.some(n => card.evolvesFrom === n || card.evolvesFrom!.replace(/<|>/g, '') === n);
@@ -12755,7 +12756,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 　<span class="muted">（{dmgPlaced + selectionBatchSum}／{dmgTotal} 個指示物）</span>
               </div>
               <p class="sel-hint">
-                {#if isAbraRem}
+                {#if isAbraRem && pendingSelection.params?.gatherToActive === true}
+                  剩餘可選 <strong>{pendingSelection.maxCount - selectionBatchSum}</strong>／{pendingSelection.maxCount} 個
+                  · 點對手備戰寶可夢選取其身上指示物（每隻最多其現有數）· 確認後改放到對手的戰鬥寶可夢（可選 0 略過）
+                {:else if isAbraRem}
                   剩餘可抽走 <strong>{pendingSelection.maxCount - selectionBatchSum}</strong>／{pendingSelection.maxCount} 個
                   · 點對手寶可夢抽走其身上指示物（每隻最多抽走其現有數）· 確認後開「分配」視窗（可選 0 略過）
                 {:else}

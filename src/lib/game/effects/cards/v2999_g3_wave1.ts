@@ -49,6 +49,7 @@ import { asOfDeclarationHolderIids } from '../../as-of-declaration';
 // <<< v6375-as-of-declaration-import
 import type { Card } from '$lib/cards/types';
 import { PASSIVE_ATTACK_BONUS } from '../../effects';
+import { energyProvidesType } from '../../engine';   // ⭐v6.528 齒輪塗層的【鋼】能量判定走中央 host-aware
 import { ROCKET_WATCHTOWER_STADIUMS } from './stadiums';
 
 // 導出 sentinel 防止 unused import warnings
@@ -368,14 +369,10 @@ export function gearCoatingReduce(
 ): number {
   if (!state || defenderIdx == null || !pool || !defenderInst) return 0;
   // 受傷者身上必須附【鋼】能量
-  const hasMetal = defenderInst.energyAttached.some(e => {
-    const ec = pool.get(e.cardId);
-    if (!ec || ec.supertype !== 'Energy') return false;
-    if (ec.subtype === 'Basic' && (ec.pokemonType === 'Metal' || /【鋼】/.test(ec.name))) return true;
-    if (ec.pokemonType === 'Metal') return true;
-    if (ec.name === '古舊能量' || ec.name === '夜光能量') return true;
-    return false;
-  });
+  // ⭐v6.528 官方 Q&A（PTCG_RULES L2354，齒輪塗層 × 附 1 張「稜鏡能量」的蓋諾賽克特ex，被神聖刀鋒丟稜鏡）：「會『-20』。
+  //   此時，在計算傷害後，丟棄『稜鏡能量』。」⇒ 稜鏡能量附在基礎寶可夢身上視為所有屬性＝有【鋼】能量。
+  //   判準改走中央 host-aware energyProvidesType（稜鏡／新衝天／古舊等一律由 energyUnitsOnHost 決定），不再手寫卡名清單。
+  const hasMetal = defenderInst.energyAttached.some(e => energyProvidesType(defenderInst, e, 'Metal', pool));
   if (!hasMetal) return 0;
   // v5.193：count × 20（場上有 N 隻齒輪怪 → -20×N 傷害）
   // ⭐v6375-as-of-declaration：同 守護之鐘 —— 原迴圈與 effectiveAbilityHolderIidsOnSide

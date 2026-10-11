@@ -489,7 +489,8 @@ const GATE_RE=/(isAbilityHolderEffective|isNullifierAbilityEffective|hasEffectiv
 const ABILITY_REGISTRY_RE=/\b(PASSIVE_[A-Z0-9_]+|OPP_ENERGY_ATTACH_PASSIVE|DAMAGE_AMOUNT_DEPENDENT_IMMUNITY|ABILITY_COLORLESS_COST_ZERO|ABILITY_RETREAT_MOD|FREE_RETREAT_BASIC_ABILITY_NAMES)\s*\.\s*(?:get|has)\s*\(\s*([A-Za-z_$][\w$]*)\.name\s*\)/g;
 const EXEMPT=new Map(Object.entries({
   // ── 不是「場上的 passive 特性」──────────────────────────────────────────
-  'src/lib/game/effects.ts|全能靈魂':'判的是**手牌**裡的海豚俠ex（PLAY_BASIC marker），不在場上',
+  // ⭐v6.529（Rule 40）：判準搬到 leaf usable-gates.ts（effects.ts 只 re-export），豁免理由不變。
+  'src/lib/game/usable-gates.ts|全能靈魂':'判的是**手牌**裡的海豚俠ex（PLAY_BASIC marker），不在場上',
   'src/lib/game/engine.ts|瞬間爆發力':'判的是手牌／setup 階段的卡，不在場上',
   'src/lib/game/engine.ts|緊急迴轉':'ON_HAND_ACTIVATE：判的是**手牌**裡的卡',
   'src/lib/game/engine.ts|激動俯衝':'ON_HAND_ACTIVATE：判的是**手牌**裡的卡',

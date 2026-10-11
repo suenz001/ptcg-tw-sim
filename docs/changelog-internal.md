@@ -1,5 +1,29 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.529：官方 Q&A 第二輪比對 B1 組——效果判定（2026-10-11）
+
+BASE 2ab86d04（v6.528）。全部是**直接判例**：
+- 鐵蟻｜一起啃食（L2392）：selfBenchHasNamePre 加必填 match：'exact'（卡面「有『鐵蟻』」）／'includes'（火箭隊的尼多后｜愛之衝擊卡面「名稱中有『尼多王』」）。
+- 壯偉碩木 × 海豚俠ex（L1745）：isAllPowerSoulBlocked 搬到 leaf usable-gates.ts（effects.ts re-export），壯偉碩木 resolver、ai.ts 與畫面的 SturdyMightTree:Stage1 候選都排除。
+- 毒音波 × 致死猛毒（L2978）：applyStatusToActive 每次重新施加【中毒】先清 poisonDamagePerCheckup（比照 v5.679 混亂變體），要變體的呼叫端在之後再設。
+- 改造之錘 × 緊張感（L1688）：候選排除 isImmuneToOppTrainer（緊張感／融合為雪，含特性消除）；resolver 再驗一次。lint H 待審清單 reform-hammer-energy-pick 變死條目 ⇒ 移除。
+- 上搗角擊 × 薄霧能量（L1926）：放回能量前過 canApplyEffectToTarget('attack-effect', counterPlacement:false)。
+- 傷害集結 × 薄霧能量（L1511）：source-first——備戰指示物一律移除、戰鬥寶可夢不受招式效果影響時不放置；同時把「自動全搬」（簡化）改成 damage-distribute 選擇視窗（abraRemove 模式，每隻最多選它身上的數量，可選 0），resolver 夾制 payload。
+- 齒輪塗層 × 稜鏡能量（L2354）：【鋼】能量判定改走中央 host-aware energyProvidesType（原本手寫卡名清單漏稜鏡）。
+- 漸強波 × 詛咒根（L2855）：cantAttachEnergyThisTurn 時選的基本【水】能量進棄牌區、不附加，傷害照當下能量算。
+- 同型待掃（下一版）：緊張感卡面「對手從手牌使出物品卡或者支援者卡時，這隻寶可夢不會受到那個效果的影響」——其他對對手寶可夢起作用的物品（例：粉碎之錘，lint H 待審清單）是否都排除。
+- test-v6529-official-effect-fixes（14 情境、H 逐條紅＋正對照綠）；突變 9/9 殺（審查修正後 AI 分支另加 1 個，10/10）。
+- **Fable 5.1 審查（無 P1）**：
+  - P2-1 已修：AI 的 damage-distribute 不認「抽走」模式（abraRemove），對傷害集結套「放置」演算法 ⇒ 挑無傷的備戰、被夾成 0。新增 abraRemove 分支：只選 validIids、每隻上限＝damageCounterCount、取滿 maxCount（奇異駭入同受惠）。守衛 GD_ai（拿掉分支實測翻紅）。
+  - P3-1 已修：傷害集結選擇視窗的提示沿用奇異駭入文字（「確認後開分配視窗」）⇒ params.gatherToActive 換成正確文字。
+  - P3-2 已修：夠讚狗ex｜猛毒筋力、阿響能量附加的自身中毒直接寫 status ⇒ 改走 applyStatusToActive（保留行動類狀態、不重複槽、清中毒變體）。支配鎖鏈（effects.ts 備戰上場帶中毒）備戰無變體、記錄不修。
+  - P3-4 記錄：齒輪塗層改走 energyProvidesType 後，新衝天能量附 2 階、磁鐵【鋼】能量也算【鋼】（舊手寫清單漏掉，卡面「附有【鋼】能量卡」⇒ 新判準正確）。
+  - P3-5 已修：漸強波受詛咒根影響時，選擇視窗標題事先說明能量會進棄牌區。
+  - P3-3 **回報站長裁定**：上搗角擊把對手戰鬥寶可夢打昏後（從棄牌區放回能量的分支），沒有套薄霧能量的判定；審查者依 L549／L608「先處理招式效果再處理昏厥」推論應同樣不發動，但沒有直接判例 ⇒ 依 Rule 81 不改。
+  - **複審**（8810826a）：其餘修正確認正確，但抓到 P2 回歸——AI 的 abraRemove 分支也套到奇異駭入，對手沒有備戰時會把戰鬥位指示物抽走、第二段分配只放備戰 ⇒ 指示物消失＝替對手治療。修法：分支限定 params.gatherToActive（傷害集結），奇異駭入維持舊行為；守衛補 AH_ai 正對照（拿掉限定實測翻紅）。另記：resolver abra-hack-place 不驗放回數＝抽走數（只有改過的 client 送得出，既有洞，記錄待修）。
+  - 第二輪全套：v6272 ⑩ 因審查修正多動了 six_decks.ts、v2750_h_wave2_full.ts ⇒ 補進 PREV_ALLOWED；v6276 平行偽紅（單跑綠）。
+  - 全套第一輪 4 支紅（v6202 豁免表鍵名跟著全能靈魂搬家、v6399 自算指示物數、v6125 新 picker 未表態可選 0、v6371 平行偽紅單跑綠）⇒ 前三支依 Rule 40／修正程式處理。
+
 ## v6.528：官方 Q&A 第二輪比對 A 組——使用條件（2026-10-11）
 
 BASE 7b508fe2（v6.527）。站長：「繼續檢查還有沒有我們系統與官方規則不符合的地方」。

@@ -16,6 +16,7 @@
  *   - 火箭隊的超級球 (I, Item)：coin 正面=進化「火箭隊的」/反面=基礎「火箭隊的」
  */
 
+import { isAllPowerSoulBlocked } from '../../usable-gates'; // ⭐v6.528 全能靈魂（壯偉碩木不可以進化成海豚俠ex）
 import {
   reg, regR, regG, regA,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, clearActiveEffects, drawCards,
@@ -904,6 +905,11 @@ regR('sturdy-might-tree-step1', (st, idx, iids, _params, pool) => {
   const evoCard = pool.get(evoInst.cardId);
   if (!evoCard || !evoCard.evolvesFrom) {
     return addLog(st, '壯偉碩木：選擇無效（非進化卡）', idx);
+  }
+  // ⭐v6.528 官方 Q&A（PTCG_RULES L1745）：壯偉碩木不可以把波普海豚進化成有「全能靈魂」的海豚俠ex
+  if (isAllPowerSoulBlocked(evoCard)) {
+    return updatePlayer(addLog(st, `壯偉碩木：${evoCard.name} 只能依「全能變身」放置於場上，不可以這樣進化 → 重洗牌庫`, idx),
+      idx, x => ({ ...x, deck: shuffle(x.deck) }));
   }
   // v3.813: 找場上所有 match base；0/1 沿用原流程，≥2 隻開 disambiguator picker
   const fieldPokemon: CardInstance[] = [

@@ -22,10 +22,11 @@ import {
 } from './engine';
 // v4.949 Phase 2a：能量分配 role-aware
 import { findMainAttackers } from './ai-roles';
-import { ATTACK_PRE_DISCARD_CHOICE, getEnergyDiscardUnits, preDiscardOptInThreshold } from './effects/_shared';   // ⭐v6.456 若希望全有或全無門檻（與引擎／畫面同一支）
+import { ATTACK_PRE_DISCARD_CHOICE, getEnergyDiscardUnits, preDiscardOptInThreshold, damageCounterCount } from './effects/_shared';   // ⭐v6.456 若希望全有或全無門檻（與引擎／畫面同一支）
 // v6.202：「這隻場上寶可夢的這個特性此刻是否生效」中央述詞（v6.196 建立於 defense.ts）。
 //   ai.ts 已經 import engine（engine 也 import defense）⇒ 不是新的相依方向、無循環風險。
 import { hasEffectiveAbilityByInst } from './defense';
+import { isAllPowerSoulBlocked } from './usable-gates';   // ⭐v6.528 全能靈魂（壯偉碩木候選）
 import { activeEnergyDiscardCandidates } from './selection-candidates';   // ⭐v6.523 能量 picker 候選與 UI 同一支
 import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemonExCard } from './selection-filter'; // v6.013/6.016 P1-1:deck-search/hand-discard/discard-search filter 中央求值器
 // v6.038 批次4b：AI 打法表（離線由高勝率對局整理出的策略表）。載入與適用判定都在 ai-playbook.ts，
@@ -793,6 +794,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         // v2.211 壯偉碩木 step 1：1 階寶可夢，evolvesFrom 必須符合場上某基底
         if (f === 'SturdyMightTree:Stage1') {
           if (card.supertype !== 'Pokemon') return false;
+          if (isAllPowerSoulBlocked(card)) return false;   // ⭐v6.528 PTCG_RULES L1745
           if ((card.stage ?? card.subtype) !== 'Stage1') return false;
           if (!card.evolvesFrom) return false;
           const baseNames = (sel.params?.baseNames as string[] | undefined) ?? [];
@@ -1373,6 +1375,21 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       const placedBefore = (sel.params?.placedCounters as number) ?? 0;
       const counterDamage = (sel.params?.counterDamage as number) ?? 10;
       const remaining = totalCounters - placedBefore;
+      // ⭐v6.529（Fable 審查 P2-1）：「抽走」模式（abraRemove：傷害集結、奇異駭入）——不是放置，
+      //   每隻上限＝身上的指示物數、只能選 validIids。原本誤用「放置」演算法 ⇒ 挑到無傷的寶可夢、被夾成 0。
+      //   ⚠ 只限 gatherToActive（傷害集結：確認後全部改放到對手戰鬥寶可夢）。奇異駭入的第二段「分配」AI 只會放備戰，
+      //     套這支會把對手戰鬥位的指示物抽走後丟掉＝替對手治療（v6.529 複審抓到）⇒ 奇異駭入維持舊行為。
+      if (sel.params?.abraRemove === true && sel.params?.gatherToActive === true) {
+        const _v = sel.params?.validIids as string[] | undefined;
+        const _base = sel.params?.includeActive === true && srcPlayer.active ? [srcPlayer.active, ...srcPlayer.bench] : srcPlayer.bench;
+        const _cands = _base.filter((c) => !_v || _v.includes(c.iid));
+        const _out: string[] = [];
+        for (const c of _cands) {
+          const k = damageCounterCount(c);
+          for (let i = 0; i < k && _out.length < sel.maxCount; i++) _out.push(c.iid);
+        }
+        return { type: 'RESOLVE_SELECTION', selectedIids: _out };
+      }
       const benchPool = srcPlayer.bench;
       if (benchPool.length === 0 || remaining <= 0) {
         return { type: 'RESOLVE_SELECTION', selectedIids: [] };

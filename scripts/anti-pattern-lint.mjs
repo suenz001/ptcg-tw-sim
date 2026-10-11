@@ -326,7 +326,6 @@ const H_OBJLIT_PENDING = new Set([
   'src/lib/game/effects/cards/v172_hij_batch.ts::creepyBroDiscardEnergy',
   'src/lib/game/effects/cards/v2760_h_wave3_complex.ts::prank-paint-attach-one',
   'src/lib/game/effects/cards/v2996_g4_wave2.ts::dustox-breeze-blow',
-  'src/lib/game/effects.ts::reform-hammer-energy-pick',
   // ⚠ 甲殼刺是**防禦方的反擊型特性**（動的是攻擊方），與上面那批「攻擊方動防禦方」
   //   方向相反，該不該過 gate 更需要站長裁定 —— 一併列待審。
   'src/lib/game/effects.ts::spike-shell-discard',

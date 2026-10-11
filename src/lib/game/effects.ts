@@ -3546,6 +3546,12 @@ export function applyStatusToActive(active: CardInstance, newStatus: SpecialCond
   if (newStatus === 'confused' && active.confusionSelfDamageCounters != null) {
     active = { ...active, confusionSelfDamageCounters: undefined };
   }
+  // ⭐v6.528 官方 Q&A（PTCG_RULES L2978，叉字蝠｜毒音波 × 超級毒藻龍ex｜致死猛毒）：對「放置16個傷害指示物的[中毒]」再使用毒音波，
+  //   寶可夢檢查放「1個」——「放置1個傷害指示物的[中毒]將覆蓋原有狀態」。⇒ 每次重新施加【中毒】先清掉上一次的
+  //   中毒變體（poisonDamagePerCheckup），要變體的呼叫端在套用【之後】再設（applyStatusToOppActive／SelfActive 的 opts）。
+  if (newStatus === 'poisoned' && active.poisonDamagePerCheckup != null) {
+    active = { ...active, poisonDamagePerCheckup: undefined };
+  }
   // v5.295: 三槽配置 — PTCG 規則允許行動類+中毒+灼傷 3 個並存
   const isNewAction = newStatus === 'asleep' || newStatus === 'confused' || newStatus === 'paralyzed';
   const isNewDamage = newStatus === 'poisoned' || newStatus === 'burned';
@@ -16459,23 +16465,22 @@ reg('寶可平板', (st, idx) => {
 // Guard：對手場上（含出場 + 備戰）至少 1 隻寶可夢附有特殊能量。
 // UI：opp-poke-choose 並用 validIids 只顯示有特殊能量的寶可夢。
 // Resolver：把該寶可夢身上「最後一張」特殊能量丟到對手棄牌區。
-regG('改造之錘', (st, idx, pool) => {
+// ⭐v6.528 官方 Q&A（PTCG_RULES L1688，改造之錘 × 斧牙龍｜緊張感）：「特性『緊張感』處於有效狀態的對手的斧牙龍附有『夜光能量』時，
+//   可以使用物品卡『改造之錘』將斧牙龍身上附加的『夜光能量』丟棄嗎？」「不可以。」
+//   ⇒ 候選排除「不受對手物品卡效果影響」的寶可夢（緊張感／融合為雪，中央 isImmuneToOppTrainer，含特性消除）。
+function reformHammerCands(st: GameState, idx: number, pool: Map<string, Card>): CardInstance[] {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
-  return all.some(pk => pk.energyAttached.some(e => {
+  return all.filter(pk => !_gustImmuneTrainer(st, dIdx, pk, pool) && pk.energyAttached.some(e => {
     const c = pool.get(e.cardId);
     return c?.supertype === 'Energy' && c.subtype === 'Special';
   }));
-});
+}
+regG('改造之錘', (st, idx, pool) => reformHammerCands(st, idx, pool).length > 0);
 reg('改造之錘', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
-  const dp = st.players[dIdx];
-  const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
-  const cand = all.filter(pk => pk.energyAttached.some(e => {
-    const c = pool.get(e.cardId);
-    return c?.supertype === 'Energy' && c.subtype === 'Special';
-  }));
+  const cand = reformHammerCands(st, idx, pool);
   if (cand.length === 0) return addLog(st, '改造之錘：對手場上沒有特殊能量', idx);
   const s = addLog(st, '改造之錘：選 1 隻對手附有特殊能量的寶可夢丟棄 1 張特殊能量', idx);
   return withPending(s, {
@@ -16498,6 +16503,8 @@ regR('reform-hammer-discard', (st, idx, iids, _params, pool) => {
     ? dp.active
     : dp.bench.find(c => c.iid === targetIid) ?? null;
   if (!target) return st;
+  // ⭐v6.528：不受對手物品卡效果影響的寶可夢（緊張感／融合為雪）不可以是目標
+  if (_gustImmuneTrainer(st, dIdx, target, pool)) return addLog(st, `改造之錘：${pool.get(target.cardId)?.name ?? '?'} 不受對手物品卡的效果影響`, idx);
   // 列出該寶可夢身上所有「特殊能量」的 iid（一隻可能附多種不同特殊能量）
   const specialIids = target.energyAttached
     .filter(e => { const c = pool.get(e.cardId); return c?.supertype === 'Energy' && c.subtype === 'Special'; })
@@ -18131,11 +18138,8 @@ export function hasShellinkEvolveBypass(
  *   全能變身（H 標）目前未實裝（engine 沒對應 hook），但本 marker 仍 block
  *   PLAY_BASIC，避免玩家直接從手牌打出海豚俠ex。
  */
-export function isAllPowerSoulBlocked(card: Card | undefined): boolean {
-  if (!card) return false;
-  if (card.name !== '海豚俠ex') return false;
-  return card.abilities?.some(a => a.name === '全能靈魂') ?? false;
-}
+// ⭐v6.528：判準搬到 leaf usable-gates.ts（壯偉碩木的畫面／AI／resolver 也要用），這裡 re-export 保持既有 import 不變。
+export { isAllPowerSoulBlocked } from './usable-gates';
 
 
 // ══════════════════════════════════════════════════════════════════════════════

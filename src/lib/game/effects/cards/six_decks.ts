@@ -9,6 +9,7 @@
  *     蓋諾賽克特｜ACE消弭（canPlayTrainer gate）
  *   - 特殊能量（engine canAffordAttack inline）：稜鏡能量 / 新衝天能量
  */
+import { applyStatusToActive } from '../../effects';   // ⭐v6.529 中毒寫入走中央（三槽／變體）
 import { tryPromptPromoteActive, damageCounterCount } from '../_shared';
 import { deckWithCardsToBottom } from '../_shared'; // v6.124 「放回牌庫下方」中央管線 // v5.785 指示物個數中央
 import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
@@ -749,7 +750,8 @@ regR('akyo-pick-energies', (state, aIdx, selectedEnergyIids, params, pool) => {
     if (!pokeIid) break;
     const ename = pool.get(e.cardId)?.name ?? '?';
     if (p.active?.iid === pokeIid) {
-      p.active = { ...p.active, energyAttached: [...p.active.energyAttached, e], status: 'poisoned' };
+      // ⭐v6.529（Fable 審查 v6.529 P3-2）：中毒改走中央 applyStatusToActive（保留行動類狀態、清中毒變體、不重複槽）
+      p.active = applyStatusToActive({ ...p.active, energyAttached: [...p.active.energyAttached, e] }, 'poisoned');
       poisonedActive.push(pool.get(p.active.cardId)?.name ?? '?');
       attachLog.push(`${pool.get(p.active.cardId)?.name ?? '?'} +${ename}`);
     } else {

@@ -433,7 +433,9 @@ regPost('櫻花魚|漸強波', (state, aIdx, pool) => {
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
       minCount: 0, maxCount: waterInHand.length,
       effectKey: 'sakura-crescendo-attach',
-      params: { validIids: waterInHand.map(c => c.iid), defIid, label: '漸強波' },
+      params: { validIids: waterInHand.map(c => c.iid), defIid, label: '漸強波',
+        // ⭐v6.529（Fable 審查 P3-5）：受詛咒根影響時，事先告知選的能量會進棄牌區（L2855）
+        ...(a.cantAttachEnergyThisTurn === true ? { titleOverride: '漸強波：受「詛咒根」影響，選擇的基本【水】能量會放到棄牌區（不會附上）' } : {}) },
     },
   );
 });
@@ -447,7 +449,17 @@ regR('sakura-crescendo-attach', (state, aIdx, iids, params, pool) => {
     const card = inst ? pool.get(inst.cardId) : undefined;
     return card?.supertype === 'Energy' && card?.subtype === 'Basic' && energyMatchesType(card, 'Water');
   });
-  if (valid.length > 0) {
+  // ⭐v6.528 官方 Q&A（PTCG_RULES L2855，朽木妖｜詛咒根 × 櫻花魚｜漸強波）：「…可以希望進行招式效果的處理嗎？」「可以。這個情況下，
+  //   欲附加至櫻花魚身上的基本【水】能量卡會被移至棄牌區。」⇒ 有 cantAttachEnergyThisTurn 時選的能量進棄牌區、不附加。
+  if (valid.length > 0 && s.players[aIdx].active?.cantAttachEnergyThisTurn === true) {
+    const set = new Set(valid);
+    s = updatePlayer(s, aIdx, p => ({
+      ...p,
+      hand: p.hand.filter(c => !set.has(c.iid)),
+      discard: [...p.discard, ...p.hand.filter(c => set.has(c.iid))],
+    }));
+    s = addLog(s, `漸強波：受「詛咒根」影響無法附加能量 ⇒ 選擇的 ${valid.length} 張「基本【水】能量」移至棄牌區`, aIdx);
+  } else if (valid.length > 0) {
     const set = new Set(valid);
     s = updatePlayer(s, aIdx, p => {
       const energies = p.hand.filter(c => set.has(c.iid));

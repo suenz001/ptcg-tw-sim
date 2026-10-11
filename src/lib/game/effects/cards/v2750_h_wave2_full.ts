@@ -6,6 +6,7 @@
  * 必要時新增本檔 inline helper。
  */
 
+import { applyStatusToActive } from '../../effects';   // ⭐v6.529 中毒寫入走中央（三槽／變體）
 import {
   regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, getAllAttachedTools, toBareCard,
   bareCardsForReturn, // v5.781 bounce 到牌庫中央收斂
@@ -1319,11 +1320,9 @@ regR('v313-mengdu-jinli-attach-self', (state, aIdx, iids, _params, _pool) => {
     return {
       ...p,
       deck: shuffle(rest),
-      active: {
-        ...p.active,
-        energyAttached: [...p.active.energyAttached, ...picked],
-        status: 'poisoned' as const,  // 卡面「附上卡的情況下，自身陷入中毒」
-      },
+      // 卡面「附上卡的情況下，自身陷入中毒」。⭐v6.529（Fable 審查 v6.529 P3-2）：改走中央 applyStatusToActive
+      //   （原本直接寫 status 會蓋掉行動類狀態、可能與 secondaryStatus 重複中毒、殘留中毒變體）。
+      active: applyStatusToActive({ ...p.active, energyAttached: [...p.active.energyAttached, ...picked] }, 'poisoned'),
     };
   });
 });

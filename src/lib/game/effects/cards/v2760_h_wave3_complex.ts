@@ -12,7 +12,7 @@ import {
   ATTACK_PRE_DISCARD_CHOICE,  // v5.060：克雷色利亞|弦月光芒 補若希望 prompt
   buildDevolvedInstance, // v5.984 中央退化建構
 } from '../_shared';
-import { markDamageCounterMovedFrom } from '../_shared'; // v5.947 移動指示物非治療
+import { markDamageCounterMovedFrom, damageCounterCount } from '../_shared'; // v5.947 移動指示物非治療／⭐v6.399 指示物個數唯一判準
 import { getKODefenderEnergyInDiscard, getKODefenderSnapshot, pluckOppEnergyActiveOrDiscard } from '../_shared'; // v5.776 KO對手戰鬥位能量搬移中央
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -257,17 +257,55 @@ regPre('勾魂眼|傷害集結', (s) => ({ state: s, damage: 0 }));
 regPost('勾魂眼|傷害集結', (state, aIdx, pool) => {
   if (hasOakEye(state, pool)) return addLog(state, '傷害集結：被探探鼠的監視之眼擋下，傷害指示物無法改放', aIdx); // v5.789
   const dIdx = (1 - aIdx) as 0 | 1;
-  let totalDmg = 0;
-  for (const b of state.players[dIdx].bench) totalDmg += b.damage ?? 0;
-  if (totalDmg === 0) return addLog(state, '傷害集結：對手備戰無指示物', aIdx);
-  const _gouSrc = state.players[dIdx].bench.filter(b => (b.damage ?? 0) > 0).map(b => b.iid);  // v5.947 記錄被清 0 的來源
-  let s = updatePlayer(state, dIdx, p => ({
+  if (!state.players[dIdx].active) return addLog(state, '傷害集結：對手戰鬥場無寶可夢', aIdx);
+  const srcs = state.players[dIdx].bench.filter(b => damageCounterCount(b) > 0);
+  const total = srcs.reduce((n, b) => n + damageCounterCount(b), 0);
+  if (total === 0) return addLog(state, '傷害集結：對手備戰無指示物', aIdx);
+  // ⭐v6.528 卡面「選擇任意數量的對手的備戰寶可夢身上放置的傷害指示物，改放於對手的戰鬥寶可夢身上。」
+  //   舊版自動把全部指示物搬過去（玩家沒得選＝簡化）⇒ 改成選擇視窗：每隻備戰最多選它身上的指示物數（abraRemove 模式），可選 0。
+  return withPending(addLog(state, `傷害集結：選擇要改放到對手戰鬥寶可夢的傷害指示物（0～${total} 個）`, aIdx), {
+    type: 'damage-distribute',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 0, maxCount: total,
+    effectKey: 'gouhunyan-gather-damage',
+    params: {
+      totalCounters: total, placedCounters: 0, counterDamage: 10, abraRemove: true, includeActive: false,
+      allowSkipZero: true,   // 卡面「選擇任意數量」⇒ 可以選 0（v6.125 逐卡表態）
+      gatherToActive: true,  // 提示文字用：確認後直接改放到戰鬥寶可夢（不像奇異駭入還有「分配」視窗）
+      validIids: srcs.map(b => b.iid), label: '傷害集結',
+      titleOverride: `傷害集結：選擇要改放到對手戰鬥寶可夢的傷害指示物（0～${total} 個）`,
+    },
+  });
+});
+// ⭐v6.528 官方 Q&A（PTCG_RULES L1511）：「因勾魂眼的招式『傷害集結』的效果，可以將附有『薄霧能量』的對手的戰鬥寶可夢身上的
+//   傷害指示物改附嗎？」「可以。但是，這個情況下，因『薄霧能量』的效果，不會受到來自對手的戰鬥寶可夢的招式效果影響，
+//   因此去除選擇的傷害指示物後，結束效果處理。」⇒ source-first：備戰的指示物一律移除，戰鬥寶可夢不受招式效果影響時不放置。
+regR('gouhunyan-gather-damage', (st, aIdx, iids, _params, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  if (iids.length === 0) return addLog(st, '傷害集結：未選擇任何指示物', aIdx);
+  const want = new Map<string, number>();
+  for (const iid of iids) want.set(iid, (want.get(iid) ?? 0) + 1);
+  const dp = st.players[dIdx];
+  const taken = new Map<string, number>();
+  let n = 0;
+  for (const b of dp.bench) {
+    const k = Math.min(want.get(b.iid) ?? 0, damageCounterCount(b));   // 夾制：不超過身上的指示物數（payload 未消毒）
+    if (k > 0) { taken.set(b.iid, k); n += k; }
+  }
+  if (n === 0) return addLog(st, '傷害集結：未選擇任何指示物', aIdx);
+  let s = updatePlayer(st, dIdx, p => ({
     ...p,
-    bench: p.bench.map(b => ({ ...b, damage: 0 })),
-    active: p.active ? { ...p.active, damage: (p.active.damage ?? 0) + totalDmg } : null,
+    bench: p.bench.map(b => (taken.has(b.iid) ? { ...b, damage: Math.max(0, b.damage - taken.get(b.iid)! * 10) } : b)),
   }));
-  s = markDamageCounterMovedFrom(s, ..._gouSrc);  // v5.947 對手備戰指示物是移動(非治療)→不算 healedThisTurn
-  return addLog(s, `傷害集結：對手備戰所有 ${totalDmg} 點指示物 → 對手戰鬥場`, aIdx);
+  s = markDamageCounterMovedFrom(s, ...taken.keys());  // v5.947 移動非治療
+  const act = s.players[dIdx].active;
+  if (!act) return addLog(s, `傷害集結：移除對手備戰 ${n} 個指示物（對手戰鬥場無寶可夢）`, aIdx);
+  const g = canApplyEffectToTarget(s, aIdx, act, pool.get(act.cardId), 'attack-effect', pool, { isBench: false, counterPlacement: true });
+  if (g.blocked) {
+    return addLog(s, `傷害集結：移除對手備戰 ${n} 個指示物；${pool.get(act.cardId)?.name ?? '?'}｜${g.reason}（不放置）`, aIdx);
+  }
+  s = updatePlayer(s, dIdx, p => ({ ...p, active: p.active ? { ...p.active, damage: (p.active.damage ?? 0) + n * 10 } : p.active }));
+  return addLog(s, `傷害集結：對手備戰 ${n} 個指示物 → 對手戰鬥場`, aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -669,6 +707,11 @@ regPost('帕底亞 肯泰羅|上搗角擊', (state, aIdx, pool, action) => {
   const card = pool.get(da.cardId);
   if (card?.stage !== 'Stage2') return addLog(state, '上搗角擊：對手戰鬥場非 2 階進化，沒有附加效果', aIdx);
   if (da.energyAttached.length === 0) return addLog(state, '上搗角擊：對手戰鬥無能量', aIdx);
+  // ⭐v6.528 官方 Q&A（PTCG_RULES L1926，帕底亞 肯泰羅｜上搗角擊 × 薄霧能量）：「對手的戰鬥場上的[2階進化]寶可夢身上附有基本能量卡與
+  //   『薄霧能量』各1張時，可以使用…『上搗角擊』，將…能量卡放回對手的手牌嗎？」「不可以。」
+  //   ⇒ 放回能量是招式效果，不受招式效果影響的寶可夢（薄霧能量／化隱／純樸…）整段不發動（中央免疫閘，非放指示物）。
+  const _imm = canApplyEffectToTarget(state, aIdx, da, card, 'attack-effect', pool, { isBench: false, counterPlacement: false });
+  if (_imm.blocked) return addLog(state, `上搗角擊：${card?.name ?? '?'}｜${_imm.reason}（能量不放回手牌）`, aIdx);
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋
   if (_calmGroundBlocks(state, (1 - aIdx) as 0 | 1, pool)) { // v5.985 被回手的是對手的卡
     return addLog(state, '上搗角擊：對手場上有【平穩境地】，能量回手效果無效', aIdx);
