@@ -4,6 +4,7 @@
  * 擲幣反面失敗 / 棄能量大招 / 擲到反面×K / 自身/對手 ×K / 對手獎賞 / 治癒批次 等
  */
 
+import { dealAttackDamageToOppTargets } from '../../effects'; // ⭐v6.536 多目標對手側中央迴圈
 import type { CardInstance, PlayerState } from '../../types';
 import { statusPost, discardOppActiveEnergyPost, countOneEnergy, flipCoinsWithLog, flipCoinsUntilTails, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware } from '../../effects'; // v5.797 中央施狀態(gate 免疫)
 import { defNextAtkReducePost, selfDmgReducePost } from '../../effects'; // v5.803 中央減攻(免疫gate) + v6.001 自身防護
@@ -402,12 +403,9 @@ regR('wave12-snipe-2-flat', (state, aIdx, iids, params, pool) => {
   const label = (params?.label as string | undefined) ?? '雙重狙擊';
   if (iids.length === 0 || amount === 0) return state;
   // v5.437：改走中央函式（補免疫/弱抗/KO/受傷反擊）。卡面「受到傷害，[備戰不計弱抗]」→ active 計弱點。
-  let s = addLog(state, `${label}：選定 ${iids.length} 隻寶可夢各受到 ${amount} 點傷害`, aIdx);
-  for (const iid of iids) {
-    s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
-    if (s.phase === 'game-over') return s;
-  }
-  return s;
+  const s = addLog(state, `${label}：選定 ${iids.length} 隻寶可夢各受到 ${amount} 點傷害`, aIdx);
+  // ⭐v6.536：迴圈收斂到中央 dealAttackDamageToOppTargets（同一份逐隻＋遊戲結束即停）。
+  return dealAttackDamageToOppTargets(s, aIdx, iids, amount, pool, label);
 });
 
 regPre('超級麻麻鰻魚王ex|爆裂彈', (s) => ({ state: s, damage: 0 }));

@@ -227,7 +227,16 @@ T('C3. ⭐⭐ 四條備戰傷害路徑都走中央閘，且都不得自己擲幣
   ]) {
     const b = blockOf(anchor, 8000);
     // ⭐v6.535（Rule 40）：snipe-60-ex 整段改呼叫中央 dealAttackDamageToTarget（它內部就走 resolveMultiTargetDamageGuard）⇒ 兩者擇一即可
-    assert.ok(/resolveMultiTargetDamageGuard\(/.test(b) || (nm === 'snipe-60-ex' && /dealAttackDamageToTarget\(/.test(b.slice(0, b.indexOf('\n});') + 1))), `${nm} 沒有走中央閘`);
+    // ⭐v6.536（Rule 40）：hitBenchAll／bench-hit-N 的對手分支委派中央（snipeAllOppBenchDamage／dealAttackDamageToOppTargets
+    //   → dealAttackDamageToTarget → resolveMultiTargetDamageGuard），剩下的迴圈只打自己（自傷不套中央閘，C5）。
+    //   ⇒ 委派也算走中央閘；但委派的函式內不得再自己接一份閘（判準兩份）。
+    const _ends = [b.indexOf('\n});'), b.indexOf('\n}\n')].filter((x) => x > 0);
+    const _body = b.slice(0, (_ends.length ? Math.min(..._ends) : b.length) + 1);   // 只取這一支函式／resolver 本體
+    const _delegates = (nm === 'hitBenchAll' && /if \(attackerIdx !== targetIdx\) \{\s*return snipeAllOppBenchDamage\(/.test(_body))
+      || (nm === 'bench-hit-N' && /if \(targetIdx !== actorIdx\) \{[\s\S]{0,300}?return dealAttackDamageToOppTargets\(/.test(_body))
+      || (nm === 'snipe-60-ex' && /dealAttackDamageToTarget\(/.test(_body));
+    assert.ok(_delegates || /resolveMultiTargetDamageGuard\(/.test(b), `${nm} 沒有走中央閘`);
+    if (_delegates) assert.ok(!/resolveMultiTargetDamageGuard\(/.test(_body), `${nm} 委派中央之後又自己接一份中央閘（判準兩份）`);
     assert.ok(!/passiveCoinImmunity\(/.test(b), `${nm} 還自己擲幣（判準兩份）`);
     assert.ok(!/skipCoin:\s*true/.test(b), `${nm} 傳了 skipCoin ⇒ 那條路徑的備戰又不擲幣了`);
   }

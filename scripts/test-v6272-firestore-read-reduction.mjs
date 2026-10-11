@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '3896460947c4b66e52319025febcdf47bbfa1d42';   // v6.534（上一版）
+const PREV_SHA = '632f1e89801368f995abad30468e9f098a1ba4a8';   // v6.535（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,18 +757,34 @@ const PREV_SHA = '3896460947c4b66e52319025febcdf47bbfa1d42';   // v6.534（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.535 前移：PREV_SHA 從 38964609（v6.534）起算。
+  // ⚠⚠ v6.536 前移：PREV_SHA 從 632f1e89（v6.535）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.535：單一目標狙擊收斂中央（wave3a-snipe-bench／snipe-60-ex／群起瞄準）、中央 KO 無備戰先取獎、昏厥離場前先結算受傷紀錄。
+  // ⭐v6.536：多目標招式對手側收斂中央 dealAttackDamageToOppTargets（hitBenchAll／bench-hit-N／冰凍羽擊／捲入伏特／大沙風暴／灑口水＋既有 5 支同型迴圈）；一同爆炸只限自己的場上；水俯衝 label。
   'src/lib/game/effects.ts',
-  'src/lib/game/effects/cards/v2349_j_mark_batch.ts',
   'src/lib/game/effects/cards/v2490_i_wave3a_conditional.ts',
-  'src/lib/game/engine.ts',
+  'src/lib/game/effects/cards/v2560_i_wave6_complex.ts',
+  'src/lib/game/effects/cards/v2610_i_wave11_misc4.ts',
+  'src/lib/game/effects/cards/v2620_i_wave12_misc5.ts',
+  'src/lib/game/effects/cards/v2630_i_wave13_misc6.ts',
+  'src/lib/game/effects/cards/v2660_i_wave16_misc9.ts',
+  'src/lib/game/effects/cards/v2750_h_wave2_full.ts',
   'src/lib/version.ts',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.535）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.535 前移：PREV_SHA 從 38964609（v6.534）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.535：單一目標狙擊收斂中央（wave3a-snipe-bench／snipe-60-ex／群起瞄準）、中央 KO 無備戰先取獎、昏厥離場前先結算受傷紀錄。
+//   'src/lib/game/effects.ts',
+//   'src/lib/game/effects/cards/v2349_j_mark_batch.ts',
+//   'src/lib/game/effects/cards/v2490_i_wave3a_conditional.ts',
+//   'src/lib/game/engine.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.534）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.534 前移：PREV_SHA 從 f55b5ab6（v6.533）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -921,21 +937,6 @@ const PREV_ALLOWED = [
 // ⭐v6.524：+page.svelte 的 /api/match-result payload 多帶 firstPlayerIdx（伺服器 v1.59 收成 matchRecords.firstSeat）。
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.523）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.523 前移：PREV_SHA 從 85e80655（v6.522）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.523：哨兵 v6523-empty-payload-gate（engine RESOLVE_SELECTION 中央空選擇閘＋pendingHasLiveDeclaredCandidates）；AI 能量 picker 改走 activeEnergyDiscardCandidates。
-//   'src/lib/game/ai.ts',
-//   'src/lib/game/effects.ts',
-//   'src/lib/game/effects/cards/m5_preview.ts',
-//   'src/lib/game/effects/cards/m6_wave10.ts',
-//   'src/lib/game/effects/cards/maroon_dragon_deck.ts',
-//   'src/lib/game/engine.ts',
-//   'src/lib/game/selection-candidates.ts',
-//   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

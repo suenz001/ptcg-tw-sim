@@ -210,7 +210,17 @@ T('⭐⭐ 擲幣只能有一層：hitBenchAll 交給中央閘，且自己不得�
   const i = EFF_C.indexOf('export function resolveMultiTargetDamageGuard');
   ok(/skipCoin/.test(EFF_C.slice(i, i + 2500)), '中央閘沒有 skipCoin 選項');
   const hb = EFF_C.slice(EFF_C.indexOf('function hitBenchAll'), EFF_C.indexOf('function hitBenchAll') + 6000);
-  ok(/resolveMultiTargetDamageGuard\(/.test(hb), 'hitBenchAll 沒有接中央閘');
+  // ⭐⭐v6.536（IRON_RULES Rule 40）：hitBenchAll 打**對手**備戰時整段交給中央 snipeAllOppBenchDamage
+  //   （→ dealAttackDamageToOppTargets → dealAttackDamageToTarget → 中央閘），自己不再跑迴圈。
+  //   意圖（對手側走中央閘、擲幣只有一層、自傷分流保留）不變；觀測點改成「對手分支委派中央」
+  //   ＋「中央 helper 本身接中央閘」兩段，下面三條「hb 不得自己擲幣／不得 skipCoin」照舊。
+  ok(/if \(attackerIdx !== targetIdx\) \{\s*return snipeAllOppBenchDamage\(/.test(hb),
+    'hitBenchAll 的對手分支沒有委派給中央 snipeAllOppBenchDamage');
+  const _dt = EFF_C.indexOf('export function dealAttackDamageToTarget');
+  ok(_dt >= 0 && /resolveMultiTargetDamageGuard\(/.test(EFF_C.slice(_dt, _dt + 6000)), '中央 dealAttackDamageToTarget 沒有接中央閘');
+  const _sa = EFF_C.indexOf('export function snipeAllOppBenchDamage');
+  ok(_sa >= 0 && /dealAttackDamageToOppTargets\(/.test(EFF_C.slice(_sa, _sa + 1200)), 'snipeAllOppBenchDamage 沒有走中央迴圈');
+  ok(!/resolveMultiTargetDamageGuard\(/.test(hb), 'hitBenchAll 又自己接了一份中央閘（判準兩份）');
   ok(!/passiveCoinImmunity\(/.test(hb),
     'hitBenchAll 又自己擲了一次幣（判準兩份）—— 擲幣只能由中央閘負責');
   ok(!/passiveImmunityDamageBlock\(/.test(hb),

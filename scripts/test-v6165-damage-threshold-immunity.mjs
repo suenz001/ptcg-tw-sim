@@ -17,6 +17,7 @@
  *   （它同時服務會被 UI 預覽呼叫的 resolveBenchGuard，拿不到真實傷害）⇒ `1 >= 200` 恆 false
  *   ⇒ 鐵壁硬殼在**所有**手動結算傷害的路徑（狙擊／多目標／備戰 AOE／油之機關槍）永遠不成立。
  */
+import { normEol } from './lib/eol-agnostic.mjs';
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
@@ -256,14 +257,31 @@ T('全站每條自跑傷害迴圈都接上 passiveImmunityByDamageAmount（含 b
   let total = 0; const missing = [];
   for (const f of files) {
     const sites = scanDamageLoopSites(readFileSync(join(ROOT, f), 'utf8'));
-    total += sites.length;
-    for (const x of sites) if (!x.hasThreshold) missing.push(`${f}@${x.index}(${x.name})`);
+    // ⭐⭐v6.536（IRON_RULES Rule 40）：hitBenchAll／bench-hit-N 打**對手**時整段委派中央
+    //   （snipeAllOppBenchDamage／dealAttackDamageToOppTargets → dealAttackDamageToTarget），
+    //   函式內剩下的迴圈只處理**打自己的備戰**（地震／燃燒熱浪／雙向頭擊）——那不是「對手的招式」，
+    //   鐵壁硬殼這類「受到對手招式傷害」的免疫本來就不適用（v6.165 起就是 attackerIdx !== targetIdx 才判）。
+    //   ⇒ 這兩支函式內的錨點排除，改由下一條接線斷言確認「對手分支已委派中央」。
+    const code = stripComments(normEol(readFileSync(join(ROOT, f), 'utf8')));
+    const selfOnly = [];
+    for (const a of ['function hitBenchAll(', "regR('bench-hit-N'"]) {
+      const i = code.indexOf(a);
+      if (i < 0) continue;
+      const j = code.indexOf('\n}', i);
+      selfOnly.push([i, j < 0 ? i : j]);
+    }
+    for (const x of sites) {
+      if (selfOnly.some(([a, b]) => x.index > a && x.index < b)) continue;
+      total += 1;
+      if (!x.hasThreshold) missing.push(`${f}@${x.index}(${x.name})`);
+    }
   }
   // ⭐⭐v6.412（Rule 40：意圖沒被破壞，只是觀測點被收斂掉）：8 → 4（實測 4）。
   //   snipe-multi 與 clone-strike-multi-hit 的 inline 傷害迴圈整段刪掉了，
   //   改成逐目標呼叫中央 `dealAttackDamageToTarget` ⇒ 它們不再是「自跑迴圈」。
   //   意圖（鐵壁硬殼不得在任何一條傷害路徑靜默失效）改由下一條接線斷言接住。
-  ok(total >= 4, `只掃到 ${total} 個傷害迴圈錨點，掃描器壞了？（v6.412 後預期 ≥4）`);
+  //   ⭐v6.536：再排除 hitBenchAll／bench-hit-N 的自傷迴圈 ⇒ 剩 dealAttackDamageToTarget 的兩個錨點（實測 2）。
+  ok(total >= 2, `只掃到 ${total} 個傷害迴圈錨點，掃描器壞了？（v6.536 後預期 ≥2）`);
   ok(missing.length === 0,
     `${missing.length} 條傷害迴圈沒有接依傷害量的被動免疫（鐵壁硬殼會在那裡靜默失效）：` + missing.join('、'));
 });
@@ -274,13 +292,27 @@ T('插入點逐一存在（hitBenchAll／bench-hit-N／dealAttackDamageToTarget�
   const nMega = (mega.match(/passiveImmunityByDamageAmount\s*\(/g) || []).length;
   // ⭐⭐v6.412：6 → 4（實測 4）。snipe-multi 與 clone-strike 不再自己插（整段交給中央 helper）。
   //   現在的插入點：定義 1 + hitBenchAll / bench-hit-N / dealAttackDamageToTarget 共 3 個呼叫。
-  ok(nEff >= 4, `effects.ts 只有 ${nEff} 處（定義 1 + 呼叫 3），有插入點被拿掉？`);
+  // ⭐⭐v6.536（Rule 40）：4 → 2。hitBenchAll／bench-hit-N 的對手分支委派中央、不再自己插；
+  //   現在只剩 定義 1 ＋ dealAttackDamageToTarget 1。意圖轉成下面的委派接線斷言。
+  ok(nEff >= 2, `effects.ts 只有 ${nEff} 處（定義 1 + dealAttackDamageToTarget 1），有插入點被拿掉？`);
+  const iDt = eff.indexOf('export function dealAttackDamageToTarget');
+  ok(iDt >= 0 && eff.slice(iDt, iDt + 12000).includes('passiveImmunityByDamageAmount('), 'dealAttackDamageToTarget 沒有接門檻免疫');
+  const iHb = eff.indexOf('function hitBenchAll(');
+  // ⭐（Fable 審查 P3-2）委派 if 必須是「備戰為空就返回」之後的**第一個敘述** ⇒ 前面不可能再塞一段對手側 raw 迴圈
+  ok(iHb >= 0 && /if \(target\.bench\.length === 0 \|\| amount <= 0\) return state;\s*if \(attackerIdx !== targetIdx\) \{\s*return snipeAllOppBenchDamage\(/.test(eff.slice(iHb, iHb + 1500)),
+    'hitBenchAll 的對手分支沒有委派中央 snipeAllOppBenchDamage ⇒ 它必須自己接門檻免疫');
+  const iBn = eff.indexOf("regR('bench-hit-N'");
+  ok(iBn >= 0 && /const target = st\.players\[targetIdx\];\s*if \(targetIdx !== actorIdx\) \{[\s\S]{0,300}?return dealAttackDamageToOppTargets\(/.test(eff.slice(iBn, iBn + 2000)),
+    'bench-hit-N 的對手分支沒有委派中央 dealAttackDamageToOppTargets ⇒ 它必須自己接門檻免疫');
+  const iLoop = eff.indexOf('export function dealAttackDamageToOppTargets');
+  ok(iLoop >= 0 && eff.slice(iLoop, iLoop + 600).includes('dealAttackDamageToTarget('), '中央迴圈 dealAttackDamageToOppTargets 沒有呼叫 dealAttackDamageToTarget');
   // ⭐ 接線斷言（意圖轉移到這裡）：兩個多目標 resolver 必須交給中央 helper，
   //   否則它們就是「自跑迴圈但沒接門檻免疫」的那一種洞。
   for (const a of ["regR('snipe-multi'", "regR('clone-strike-multi-hit'"]) {
     const i = eff.indexOf(a);
     ok(i >= 0, 'anchor 失效：' + a);
-    ok(eff.slice(i, i + 4000).includes('dealAttackDamageToTarget('),
+    // ⭐v6.536：clone-strike 改呼叫中央迴圈 dealAttackDamageToOppTargets（它再呼叫 dealAttackDamageToTarget，上面已驗）
+    ok(/dealAttackDamageToTarget\(|dealAttackDamageToOppTargets\(/.test(eff.slice(i, i + 4000)),
       `${a} 沒有交給中央 dealAttackDamageToTarget ⇒ 它必須自己接門檻免疫`);
   }
   // ⭐⭐v6.413（IRON_RULES Rule 40）：油之機關槍整段收斂進中央 `dealAttackDamageToTarget`

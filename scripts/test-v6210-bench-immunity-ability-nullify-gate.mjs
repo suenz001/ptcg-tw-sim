@@ -264,12 +264,20 @@ console.log('\nF) hitBenchAll inline 閘的靜態接線（行為上被遮蔽，�
   const blk = src.slice(i, i + 6000);
   ck('F1 anchor 沒失效（切出來的區塊 <6000 字元且含 teraImmunNames 迴圈）',
     blk.length < 6000 + 1 && /teraImmunNames/.test(blk));
-  const m = blk.match(/_v3060GetBenchImmName\s*\(([^)]*)\)/);
-  ck('F2 hitBenchAll 內仍呼叫 getBenchImmunityAbilityName（別被改回無閘版）', !!m, blk.slice(0, 120));
+  // ⭐⭐v6.536（IRON_RULES Rule 40）：hitBenchAll 打**對手**備戰時整段委派中央 snipeAllOppBenchDamage，
+  //   F 段原本要釘的那份「inline 縱深防禦」（上方註解說它是第二份判準、行為上被中央閘遮蔽）已整段刪除
+  //   ⇒ 判準只剩中央 resolveBenchGuard 那一份。意圖（藏隱判定不可以有未過特性消除閘的版本）改成：
+  //   F2：hitBenchAll 不再自己判藏隱（沒有第二份），且對手分支委派中央；
+  //   F3：中央 resolveBenchGuard 那一份把場上脈絡（state／ownerIdx／inst／card／pool）全部傳進去。
+  ck('F2 hitBenchAll 不再自己判藏隱（判準只剩中央一份），且對手分支委派中央 snipeAllOppBenchDamage',
+    !/_v3060GetBenchImmName\s*\(/.test(blk) && /if \(attackerIdx !== targetIdx\) \{\s*return snipeAllOppBenchDamage\(/.test(blk), blk.slice(0, 120));
+  const gi = src.indexOf('function resolveBenchGuard');
+  const gblk = gi >= 0 ? src.slice(gi, gi + 12000) : '';
+  const m = gblk.match(/_v3060GetBenchImmName\s*\(([^)]*)\)/);
   const args = (m?.[1] ?? '').split(',').map(x => x.trim());
-  ck('F3 ★它必須把「場上脈絡」四件事都傳進去（state / ownerIdx / inst / card / pool）——'
+  ck('F3 ★中央 resolveBenchGuard 必須把「場上脈絡」都傳進去（state / ownerIdx / inst / card / pool）——'
      + ' 少傳任何一個都會 fail-open 成無閘版',
-    args.length === 5 && args[0] === 'state' && args[1] === 'targetIdx' && args[4] === 'pool',
+    gi >= 0 && args.length === 5 && args[0] === 'state' && args[1] === '_benchImmOwner' && args[2] === 'opts.targetInst' && args[4] === 'pool',
     JSON.stringify(args));
   ck('F4 正對照：判準抓得到「只傳 card」的無閘寫法（HEAD 就是那樣）', (() => {
     const bad = 'const x = _v3060GetBenchImmName(card);';

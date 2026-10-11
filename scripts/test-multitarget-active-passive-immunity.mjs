@@ -153,10 +153,16 @@ console.log('【正對照】攻擊方沒有特性 ⇒ 礎石之勢不生效');
     const blk = src.slice(i, i + 6000);
     assert.ok(blk.length > 500 && blk.length <= 6000, 'anchor 窗口異常：' + a);
     // 接線斷言：要麼自己走中央闘（舊形式），要麼整個交給中央 helper（v6.412 後）。
-    assert.ok(blk.includes('resolveMultiTargetDamageGuard(') || blk.includes('dealAttackDamageToTarget('),
+    // ⭐v6.536（Rule 40）：clone-strike 改呼叫中央迴圈 dealAttackDamageToOppTargets（它只做逐隻 dealAttackDamageToTarget，下方另驗）
+    assert.ok(blk.includes('resolveMultiTargetDamageGuard(') || blk.includes('dealAttackDamageToTarget(') || blk.includes('dealAttackDamageToOppTargets('),
       `${a} 既沒走中央 resolveMultiTargetDamageGuard、也沒交給 dealAttackDamageToTarget`
       + `（兩者必居其一，否則戰鬥位會漏 PASSIVE_IMMUNITY）`);
     checked++;
+  }
+  {
+    const iL = src.indexOf('export function dealAttackDamageToOppTargets');
+    assert.ok(iL >= 0 && src.slice(iL, iL + 600).includes('dealAttackDamageToTarget('),
+      '中央迴圈 dealAttackDamageToOppTargets 沒有呼叫 dealAttackDamageToTarget（戰鬥位會漏 PASSIVE_IMMUNITY）');
   }
   assert.ok(checked === 2, '掃描器只檢查到 ' + checked + ' 個 anchor，掃描器壞了？');
   // ⭐ 正對照（防空真）：兩個字面都拿掉的樣本必須被抓到。

@@ -1741,42 +1741,21 @@ function hitBenchAll(
 ): GameState {
   const target = state.players[targetIdx];
   if (target.bench.length === 0 || amount <= 0) return state;
-  // >>> v6413-self-penalty-hitbenchall
-  // ⭐⭐⭐v6.413：招致削傷（吠／叫聲／大聲咆哮／魔法魅惑／月亮之力…）**不限目標位置**。
-  //   卡面逐字是「受到這個招式的寶可夢**使用招式的傷害**「-N」點」——沒有「對對手的戰鬥寶可夢」，
-  //   而力量蛋白飲／伏特【雷】能量／極限腰帶那些**都有**那一句（官方 §17.46.E 還特別裁定
-  //   「對備戰寶可夢造成的傷害不會 +30」）⇒ 只有這一族是「攻擊方自己身上的效果」，備戰也要扣。
-  //   官方 §18.E：「…但**會計算超級長耳兔ex自己身上的附加效果**」。
-  // ⚠ 在迴圈**外面**扣一次：卡面說的是「這一次招式的傷害 -N」，對每一隻都一樣；
-  //   站長裁定「每一隻都扣、旗標只消耗一次」⇒ 先扣 amount 再進迴圈，語意正好相符。
-  // ⚠ 只對**對手側**的備戰套（targetIdx !== attackerIdx）：打自己備戰是自傷型效果，不是「對對手造成的招式傷害」。
-  if (attackerIdx !== targetIdx && amount > 0) {
-    const _sp = applyAttackerSelfPenalty(state, attackerIdx, amount, pool);
-    if (_sp.amount > 0) {
-      state = _sp.state;
-      const _b = amount;
-      amount = Math.max(0, _sp.damage);
-      state = addLog(state, `${attackLabel}：備戰受到的傷害 -${_sp.amount}（攻擊方受招致使傷害削減效果，${_b} → ${amount}）`, attackerIdx);
-      if (amount <= 0) return state;
-    }
+  // >>> v6536-hitbenchall-opp-central
+  // ⭐⭐⭐v6.536：打**對手**的所有備戰 ⇒ 整段交給中央 snipeAllOppBenchDamage
+  //   （逐隻 dealAttackDamageToTarget）。原本這裡自己跑迴圈：中央閘、招致削傷、太古防壁、
+  //   花之帷幔（宣告當時）、備戰減傷、門檻免疫、防昏厥、無限之影、取獎、on-KO 都手刻了一份，
+  //   但**沒有受傷觸發**（備戰的拖拖蚓ex｜快掃拳返不反擊）⇒ 判準兩份、其中一份漏一層（Rule 38）。
+  //   v6.413／v6.415 那幾段（招致削傷只扣一次、擲幣由中央閘唯一負責）在中央 helper 裡都有同一份。
+  if (attackerIdx !== targetIdx) {
+    return snipeAllOppBenchDamage(state, attackerIdx, amount, pool, attackLabel);
   }
-  // <<< v6413-self-penalty-hitbenchall
-  // v5.832：太古防壁（護城龍）— hitBenchAll 走 inline guard 不經 canApplyEffectToTarget/resolveBenchGuard，
-  //   過去漏此檢查（天空波/大地斷裂 打對手全體備戰）。對手能量≤2 時整段不造成傷害。
-  if (attackerIdx !== targetIdx && taikoBariBlocksAttackDamage(state, attackerIdx, pool)) {
-    const _u = state._attackTimeAttackerEnergyUnits ?? Infinity;
-    return addLog(state, `${attackLabel}：對手 護城龍｜太古防壁 → 備戰不受招式傷害（攻擊方能量 ${_u} 個≤2）`, targetIdx);
-  }
-  let coinWS = state;  // v5.368：thread 擲幣 log（順滑大衣）
-  // v3.94：移除 v3.892 入口整段 skip — 改為 loop 內 per-target check（規則寶可夢仍受傷害）。
-  //   原本 v3.892 過頭：對手全是非規則寶可夢時直接 skip 整個 picker，玩家連選都選不了。
-  //   修法：保留 _attackTimeOppFlowerVeil snapshot 用於「KO 後仍擋」，但只 per-target 擋非規則。
-
+  // <<< v6536-hitbenchall-opp-central
+  // 以下只剩**打自己的備戰**（穿山王｜地震、焚焰蚣｜燃燒熱浪、固拉多｜大地裂破、電飛鼠｜天空波的自己側）：
+  //   不是「對手的招式」⇒ 不套中央閘、招致削傷、防昏厥、無限之影；昏厥時由對手取獎（v6.421）。
   let morePrizes = 0;
   const newBench: CardInstance[] = [];
   const koDiscards: CardInstance[] = [];
-  const koSnaps: CardInstance[] = [];   // ⭐v6.260 每隻被KO者的KO前快照(含能量/道具)→中央on-KO
-  const koToHand: CardInstance[] = [];  // v5.934 無限之影:備戰受對手招式傷害KO本體+進化鏈回手
   const koNames: string[] = [];
   const koCards: (Card | undefined)[] = [];  // v2.246 KO cause tracking
   const teraImmunNames: string[] = [];        // v2.260 Bug #3 太晶備戰免疫名單
@@ -1784,79 +1763,13 @@ function hitBenchAll(
 
   for (const c of target.bench) {
     const card = pool.get(c.cardId);
-    // v2.260 Bug #3：太晶寶可夢規則 — 在備戰位免疫招式傷害（卡面規則性）
-    //   只擋招式傷害（這裡是 hitBenchAll 來自招式），**不擋**特性/效果放置指示物（C-07）
+    // v2.260 Bug #3：太晶寶可夢規則 — 在備戰位免疫招式傷害（卡面規則性，沒有「對手的」）
     if (card?.tags?.includes('太晶')) {
       teraImmunNames.push(card.name ?? '?');
       newBench.push(c);  // 保持原狀，不放傷害
       continue;
     }
-    // v3.06 斯魔茶｜藏隱 / 小霞的鯉魚王｜深度下潛 —
-    //   「只要這隻寶可夢在備戰區，不會受到對手的寶可夢招式的傷害與效果的影響。」
-    //   只在 attackerIdx !== targetIdx（對手對自己施招）時生效；自爆 / 自殘類 self-bench
-    //   傷害不擋。
-    // ⭐ v6.210：改問中央特性消除閘（持有者＝ targetIdx 側的備戰寶可夢）。
-    // ⚠⚠ **誠實標註（v6.210 第二輪 opus 破壞測試實測）**：這一段其實是**行為上偵測不到**的
-    //   縱深防禦 —— 同一輪迴圈約 30 行後的 v6.141 `resolveMultiTargetDamageGuard(…isBench:true…)`
-    //   會走 `canApplyEffectToTarget → resolveBenchGuard`，那裡有同一份（已過閘的）判準。
-    //   把本段整個刪掉，真走 hitBenchAll 的招式（電飛鼠｜天空波）行為 **0 差異**。
-    //   保留的理由是「兩份判準不得漂移」：本段若留著舊的無閘版本，日後只要有人調動兩者的
-    //   先後順序，未過閘的那份就會變成生效版。⇒ 不要因為「測不出來」就把它改回去或放著不管；
-    //   守衛只能用**靜態接線斷言**釘住它（見 test-v6210-bench-immunity-ability-nullify-gate.mjs F 段）。
-    const _hbaImmName = attackerIdx !== targetIdx
-      ? _v3060GetBenchImmName(state, targetIdx, c, card, pool)
-      : null;
-    if (_hbaImmName) {
-      teraImmunNames.push(`${card?.name ?? '?'}（${_hbaImmName}）`);
-      newBench.push(c);
-      continue;
-    }
-    // v3.94 per-target 花之帷幔 check（取代 v3.892 入口整段 skip）：
-    //   - 條件：對手對我施招 + 場上目前有花之帷幔謝米 OR attack-time snapshot 為 true
-    //   - 目標限制：只擋非規則寶可夢（卡面：「擁有規則的寶可夢除外」）
-    //   - snapshot 機制：戰鬥場謝米被同招式 KO 後，state 已沒謝米但 snapshot 仍記得宣告當時有 → 仍擋
-    if (
-      attackerIdx !== targetIdx
-      // ⭐v6.373 站長裁定 A-3：改走全站唯一的「宣告當時」述詞（原 live || snapshot 過寬）。
-      && isEffectiveAsOfDeclaration(state, targetIdx, '花之帷幔',
-        hasFlowerVeil(state, targetIdx, pool), state._attackTimeOppFlowerVeil === true)
-      // ⭐v6.404：同 P1，卡面是「擁有規則的寶可夢」除外（這一行上面三行的既有註解本來就寫對了）。
-      && !isRulePokemon(card)
-    ) {
-      teraImmunNames.push(`${card?.name ?? '?'}（謝米 花之帷幔）`);
-      newBench.push(c);
-      continue;
-    }
-    // v6.141【中央收斂】hitBenchAll 的 inline guard 只手刻了太晶／藏隱・深度下潛／花之帷幔／
-    //   神秘石居／擲幣／太古防壁，**漏掉整組 per-turn 與 passive 的備戰免疫**——最明顯的是
-    //   蟲甲聖｜球形盾牌（卡面「只要這隻寶可夢在場上，自己的所有備戰寶可夢不會受到對手的
-    //   寶可夢招式的傷害與效果的影響」），實測電飛鼠｜天空波對它保護下的備戰仍照打 10。
-    //   接上與油之機關槍同一支中央閘（Fable 5 review 行為端指出，我已自行重現確認）。
-    //   ⚠ 兩件事必須保留：
-    //     ・`attackerIdx !== targetIdx` 分流 —— 中央閘是「對手側」語意，自傷 bench
-    //       （地震／燃燒熱浪）不可套用，否則自己的備戰會被自己的盾牌擋住。
-    //     ・`skipCoin: true` —— 本函式下方已有自己的擲幣段，不能再擲一次。
-    // >>> v6415-hitbenchall-guard-central
-    // ⭐⭐⭐v6.415：免疫判準收斂成**一份** —— 原本這裡是「中央閘（skipCoin:true）
-    //   ＋ 自己再跑一次 passiveImmunityDamageBlock ＋ 自己跑擲幣」三段，
-    //   而中央閘的第 2 層就是 passiveImmunityDamageBlock、第 4 層就是擲幣
-    //   ⇒ **判準兩份**（Rule 38／安慰劑型態 11）。改成整段交給中央閘。
-    //   ⚠ `attackerIdx !== targetIdx` 分流必須保留：中央閘是「對手側」語意，
-    //     自傷 bench（地震／燃燒熱浪）不可套用，否則自己的備戰會被自己的盾牌擋住。
-    //   ⚠ 不再傳 `skipCoin` ⇒ 擲幣由中央閘**唯一**負責（本函式下方不再自己擲）。
-    if (attackerIdx !== targetIdx) {
-      const gBench = resolveMultiTargetDamageGuard(coinWS, attackerIdx, c, card, pool, {
-        isBench: true,
-      });
-      coinWS = gBench.state;
-      if (gBench.blocked) {
-        teraImmunNames.push(`${card?.name ?? '?'}（${gBench.reason}）`);
-        newBench.push(c);
-        continue;
-      }
-    }
-    // <<< v6415-hitbenchall-guard-central
-    // v5.293/v5.294 bench 招式傷害套特性減傷 (含厚脂肪等 BY_ATTACKER)
+    // v5.293/v5.294 bench 招式傷害套特性減傷
     let perAmt = amount;
     let _btd: CardInstance | null = null;
     if (perAmt > 0 && card) {
@@ -1867,61 +1780,30 @@ function hitBenchAll(
         reduceLogs.push(`${card.name}：${r.logs.join('、')}`);
       }
     }
-    // v6.165：依傷害量判定的被動免疫（鐵壁硬殼）—— 最終傷害算完後才判，鏡射引擎主管線順序。
-    if (attackerIdx !== targetIdx && perAmt > 0) {
-      const _pdt = passiveImmunityByDamageAmount(coinWS, attackerIdx, c, card, pool, perAmt, { isBench: true });
-      if (_pdt.blocked) { teraImmunNames.push(`${card?.name ?? '?'}（${_pdt.reason}）`); newBench.push(c); continue; }
-    }
     const newDmg = c.damage + perAmt;
     const hp = effectiveHPInline(c, pool, state);
     if (hp > 0 && newDmg >= hp) {
-      // ⭐v6.260 防 KO（倖存鍛鍊器/勤奮之心/結實/堅忍之軀/不朽身軀 —— 卡面皆無「在戰鬥場」，
-      //   備戰同樣適用）。僅對手招式（自傷路徑維持既有行為，卡面歧義待站長裁定）。
-      if (attackerIdx !== targetIdx) {
-        const _pk = applyPreventKOToVictim(coinWS, c, card, targetIdx, perAmt, pool, 'attack-damage');
-        if (_pk.prevented) {
-          coinWS = _pk.state;
-          const _keptPk = coinWS.players[targetIdx].bench.find(x => x.iid === c.iid);
-          if (_keptPk) { newBench.push(_keptPk); continue; }
-        }
-      }
-      // v5.934 無限之影中央收斂：備戰耿鬼受【對手】招式傷害 KO → 本體+進化鏈實體卡回手(自傷 targetIdx===attackerIdx 不觸發)
-      const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, attackerIdx !== targetIdx && !_calmGroundBlocks(state, targetIdx, pool), coinWS, targetIdx, 'bench');
-      koSnaps.push({ ...c, damage: newDmg });  // ⭐v6.260 KO 前快照
+      // v5.934 無限之影：自傷不觸發（第三參數 false）⇒ 只取得要丟棄的卡
+      const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, false, state, targetIdx, 'bench');
       for (const _d of _isk.toDiscard) koDiscards.push(_d);
-      for (const _h of _isk.toHand) koToHand.push(_h);
-      if (card) {
-        if (attackerIdx !== targetIdx) {
-          const _ko = koPrizesAdjusted(coinWS, c, card, attackerIdx, targetIdx, pool);
-          morePrizes += _ko.prizes; coinWS = _ko.state;
-        } else morePrizes += koPrizeCount(card);
-      }
+      if (card) morePrizes += koPrizeCount(card);
       koNames.push(card?.name ?? '?');
       koCards.push(card);
     } else {
       // v5.818：防具道具(果實)觸發後丟棄(KO 已隨 getAllAttachedTools 進棄牌)
-      // ⭐v6.256：本管線（地震/燃燒熱浪/天空波/大地斷裂）是**招式傷害**（卡面「受到N點傷害」），
-      //   過去完全沒寫 damageTakenLastOppTurn ⇒ 備戰的超級赫拉克羅斯ex 被打到後重裝角擊少算。
+      // ⭐v6.256：招式傷害（卡面「受到N點傷害」）⇒ 寫 damageTakenLastOppTurn
       let _kept = withAttackDamageTaken(c, c.damage, newDmg, 'attack-damage');
       if (_btd) { _kept = _stripBenchTool(_kept, _btd.iid); koDiscards.push(_btd); }
       newBench.push(_kept);
     }
   }
 
-  const players = [...coinWS.players] as [PlayerState, PlayerState];
-  // ⭐v6.260：防 KO helper（倖存鍛鍊器）可能已把道具丟進 discard ⇒ 以最新 player 為基底
-  const _tgtNow = coinWS.players[targetIdx];
-  players[targetIdx] = {
-    ..._tgtNow,
-    bench: newBench,
-    discard: [..._tgtNow.discard, ...koDiscards],
-    hand: koToHand.length > 0 ? [..._tgtNow.hand, ...koToHand] : _tgtNow.hand,  // v5.934 無限之影
-  };
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const _tgtNow = state.players[targetIdx];
+  players[targetIdx] = { ..._tgtNow, bench: newBench, discard: [..._tgtNow.discard, ...koDiscards] };
 
-  const who = targetIdx === attackerIdx ? '自己' : '對手';
-  let s: GameState = { ...coinWS, players };
-  if (koToHand.length > 0) s = addLog(s, `無限之影：備戰的寶可夢因對手招式的傷害【昏厥】→ 本體與進化來源卡放回手牌（附加能量/道具丟棄）`, targetIdx);
-  s = addLog(s, `${attackLabel}：對${who}所有備戰寶可夢各造成 ${amount} 傷害`, attackerIdx);
+  let s: GameState = { ...state, players };
+  s = addLog(s, `${attackLabel}：對自己所有備戰寶可夢各造成 ${amount} 傷害`, attackerIdx);
   // v5.293 特性減傷 log
   if (reduceLogs.length > 0) {
     s = addLog(s, `${attackLabel} 特性減傷：${reduceLogs.join('；')}`, attackerIdx);
@@ -1934,17 +1816,9 @@ function hitBenchAll(
     // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）
     s = addLog(s, `${attackLabel}：${koNames.join('、')} 被擊倒，${state.players[koPrizeTaker(targetIdx)].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
     s = addPendingPrize(s, koPrizeTaker(targetIdx), morePrizes, pool);
-    // v2.246 KO cause tracking — 每隻 KO 都登錄為招式 KO（self-KO 由 recordOppKO 內部 skip）
+    // v2.246 KO cause tracking（self-KO 由 recordOppKO 內部 skip）
     for (const card of koCards) {
       s = recordOppKO(s, targetIdx, card, 'attack');
-    }
-    // ⭐⭐⭐ v6.260：備戰被【對手】招式傷害 KO → 中央 on-KO 觸發（本路徑原本完全沒呼叫）。
-    //   isActive=false ⇒ 只觸發卡面沒有「在戰鬥場」的效果（希望護身符/最後鎖鏈/潛者捕捉）；
-    //   多隻同時 KO 的多個 picker 由既有 pendingChainQueue 依序排隊（v4.933/v6.175 token）。
-    if (attackerIdx !== targetIdx) {
-      for (const _snap of koSnaps) {
-        s = fireDefenderOnKO(s, targetIdx, attackerIdx, pool, _snap, false, true, false);
-      }
     }
   }
   return s;
@@ -2040,41 +1914,25 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   const label = String(params?.attackLabel ?? '招式');
   const targetIdx = ((params?.targetIdx ?? (1 - actorIdx)) as 0 | 1);
   if (amount <= 0 || selectedIids.length === 0) return st;
-  // v3.894：移除 v2.22 在此處加的 isBenchProtected check（語意錯誤）。
-  //   bench-hit-N 是 hitBenchPickPost 用的 resolver，處理「對備戰造成 N 點傷害」
-  //   — 屬於【招式傷害 attack-damage】(卡面：「受到 N 點傷害」)，不是「招式效果 attack-effect」。
-  //   對戰圓形競技場只擋【招式效果】/【特性效果】（放指示物 / 異常狀態），不擋招式傷害。
-  //   下方 v3.888 加的 per-target resolveBenchGuard(kind='attack-damage') 會按規則正確擋
-  //   花之帷幔 / 太晶 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石（這些才擋招式傷害）。
-  //   玩家回報：激流水泵對備戰 120（attack-damage）被誤判為對戰圓形擋住。
+  // v3.894：bench-hit-N 是「對備戰造成 N 點傷害」＝招式傷害（不是放指示物）⇒ 對戰圓形競技場不擋。
   const target = st.players[targetIdx];
-  // >>> v6413-self-penalty-benchhitn
-  // ⭐⭐⭐v6.413：招致削傷（吠／叫聲／大聲咆哮／魔法魅惑／月亮之力…）**不限目標位置**。
-  //   卡面逐字是「受到這個招式的寶可夢**使用招式的傷害**「-N」點」——沒有「對對手的戰鬥寶可夢」，
-  //   而力量蛋白飲／伏特【雷】能量／極限腰帶那些**都有**那一句（官方 §17.46.E 還特別裁定
-  //   「對備戰寶可夢造成的傷害不會 +30」）⇒ 只有這一族是「攻擊方自己身上的效果」，備戰也要扣。
-  //   官方 §18.E：「…但**會計算超級長耳兔ex自己身上的附加效果**」。
-  // ⚠ 在迴圈**外面**扣一次：卡面說的是「這一次招式的傷害 -N」，對每一隻都一樣；
-  //   站長裁定「每一隻都扣、旗標只消耗一次」⇒ 先扣 amount 再進迴圈，語意正好相符。
-  // ⚠ 只對**對手側**的備戰套（targetIdx !== actorIdx）：打自己備戰是自傷型效果，不是「對對手造成的招式傷害」。
-  let amount2 = amount;
-  if (actorIdx !== targetIdx && amount2 > 0) {
-    const _sp = applyAttackerSelfPenalty(st, actorIdx, amount2, pool);
-    if (_sp.amount > 0) {
-      st = _sp.state;
-      const _b = amount2;
-      amount2 = Math.max(0, _sp.damage);
-      st = addLog(st, `${label}：備戰受到的傷害 -${_sp.amount}（攻擊方受招致使傷害削減效果，${_b} → ${amount2}）`, actorIdx);
-      if (amount2 <= 0) return st;
-    }
+  // >>> v6536-benchhitn-opp-central
+  // ⭐⭐⭐v6.536：選**對手**的備戰 ⇒ 逐隻交給中央 dealAttackDamageToTarget（dealAttackDamageToOppTargets）。
+  //   原本自己跑迴圈：中央閘、招致削傷、備戰減傷、門檻免疫、防昏厥、無限之影、取獎、on-KO 手刻一份，
+  //   但**沒有受傷觸發**（備戰的拖拖蚓ex｜快掃拳返不反擊）⇒ 判準兩份（Rule 38）。
+  //   ⚠ 只打「選到的、而且還在對手備戰區的」：防偽造 payload 指到戰鬥場（戰鬥場會被算弱點）。
+  //   ⚠ 依備戰區的順序結算（與舊迴圈相同），不是依 payload 的順序。
+  if (targetIdx !== actorIdx) {
+    const hitSet0 = new Set(selectedIids);
+    const iids = target.bench.filter(c => hitSet0.has(c.iid)).map(c => c.iid);
+    return dealAttackDamageToOppTargets(st, actorIdx, iids, amount, pool, label);
   }
-  // <<< v6413-self-penalty-benchhitn
-
+  // <<< v6536-benchhitn-opp-central
+  // 以下只剩**選自己的備戰**（雙向頭擊）：不是「對手的招式」⇒ 不套中央閘、招致削傷、防昏厥、無限之影；
+  //   昏厥時由對手取獎（v6.421）。
   let morePrizes = 0;
   const newBench: CardInstance[] = [];
   const koDiscards: CardInstance[] = [];
-  const koSnaps: CardInstance[] = [];   // ⭐v6.260 每隻被KO者的KO前快照(含能量/道具)→中央on-KO
-  const koToHand: CardInstance[] = [];  // v5.934 無限之影:備戰受對手招式傷害KO本體+進化鏈回手
   const hitNames: string[] = [];
   const koNames: string[] = [];
   const koCards: (Card | undefined)[] = [];  // v2.246 KO cause tracking
@@ -2082,10 +1940,6 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   const benchReduceLogs: string[] = [];       // v5.293 特性減傷 log
   const hitSet = new Set(selectedIids);
 
-  // v3.888：每隻 hit target 各別 check resolveBenchGuard（花之帷幔 / 抵抗之幕 / 藏隱 / 深度下潛 / 球形盾牌 / 羽毛化石 等）
-  //   原 v2.22 只擋對戰圓形（整體 sweep）和太晶（per-target），漏了 resolveBenchGuard 整套。
-  //   玩家回報 精神尖槍 攻擊 謝米花之帷幔備戰 沒擋住 — 因為 bench-hit-N resolver 沒呼叫 resolveBenchGuard。
-  const guardBlockedLog: string[] = [];
   for (const c of target.bench) {
     if (!hitSet.has(c.iid)) { newBench.push(c); continue; }
     const card = pool.get(c.cardId);
@@ -2095,24 +1949,8 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
       newBench.push(c);
       continue;
     }
-    // >>> v6415-benchhitn-guard-central
-    // ⭐⭐⭐v6.415：免疫判準收斂成**一份**。原本這裡是「resolveBenchGuard ＋ 自己跑擲幣」
-    //   兩段，少了中央閘的第 1 層（中立中心）與第 2 層（條件式完全免疫 PASSIVE_IMMUNITY）
-    //   ⇒ 與另外兩條備戰路徑不一致。改成整段交給中央閘 `resolveMultiTargetDamageGuard`
-    //   （第 3 層內部就是 canApplyEffectToTarget → resolveBenchGuard，原判準完整保留）。
-    //   ⚠ `targetIdx !== actorIdx` 分流保留（自殘類不擋）。
-    if (targetIdx !== actorIdx) {
-      const g = resolveMultiTargetDamageGuard(st, actorIdx, c, card, pool, { isBench: true });
-      st = g.state;
-      if (g.blocked) {
-        guardBlockedLog.push(`${card?.name ?? '?'}：${g.reason}`);
-        newBench.push(c);
-        continue;
-      }
-    }
-    // <<< v6415-benchhitn-guard-central
-    // v5.293/v5.294 bench 招式傷害套特性減傷 (含厚脂肪等 BY_ATTACKER)
-    let perAmt = amount2;   // ⭐v6.413：已扣過招致削傷的基數
+    // v5.293/v5.294 bench 招式傷害套特性減傷
+    let perAmt = amount;
     let _btd2: CardInstance | null = null;
     if (perAmt > 0 && card) {
       const r = _applyBenchAbilityReduce(st, c, card, targetIdx, actorIdx, pool, perAmt);
@@ -2122,41 +1960,17 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
         benchReduceLogs.push(`${card.name}：${r.logs.join('、')}`);
       }
     }
-    // v6.165：依傷害量判定的被動免疫（鐵壁硬殼）—— 最終傷害算完後才判（官方 §17.27.B：
-    //   備戰區同樣適用）。目前 bench-hit-N 的 caller 最大 130 ⇒ 今天打不到門檻，
-    //   但這條迴圈與其他五條同型，一併接上避免下一張卡靜默失效。
-    if (targetIdx !== actorIdx && perAmt > 0) {
-      const _pdt = passiveImmunityByDamageAmount(st, actorIdx, c, card, pool, perAmt, { isBench: true });
-      if (_pdt.blocked) { guardBlockedLog.push(`${card?.name ?? '?'}：${_pdt.reason}`); newBench.push(c); continue; }
-    }
     const newDmg = c.damage + perAmt;
     const hp = effectiveHPInline(c, pool, st);
     if (hp > 0 && newDmg >= hp) {
-      // ⭐v6.260 防 KO（倖存鍛鍊器/勤奮之心等 —— 卡面皆無「在戰鬥場」，備戰同樣適用）。
-      if (actorIdx !== targetIdx) {
-        const _pk = applyPreventKOToVictim(st, c, card, targetIdx, perAmt, pool, 'attack-damage');
-        if (_pk.prevented) {
-          st = _pk.state;
-          const _keptPk = st.players[targetIdx].bench.find(x => x.iid === c.iid);
-          if (_keptPk) { newBench.push(_keptPk); continue; }
-        }
-      }
-      // v5.934 無限之影中央收斂：備戰耿鬼受【對手】招式傷害 KO → 本體+進化鏈實體卡回手(自傷不觸發)
-      const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, actorIdx !== targetIdx && !_calmGroundBlocks(st, targetIdx, pool), st, targetIdx, 'bench');
-      koSnaps.push({ ...c, damage: newDmg });  // ⭐v6.260 KO 前快照
+      // v5.934 無限之影：自傷不觸發（第三參數 false）⇒ 只取得要丟棄的卡
+      const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, false, st, targetIdx, 'bench');
       for (const _d of _isk.toDiscard) koDiscards.push(_d);
-      for (const _h of _isk.toHand) koToHand.push(_h);
-      if (card) {
-        if (actorIdx !== targetIdx) {
-          const _ko = koPrizesAdjusted(st, c, card, actorIdx, targetIdx, pool);
-          morePrizes += _ko.prizes; st = _ko.state;
-        } else morePrizes += koPrizeCount(card);
-      }
+      if (card) morePrizes += koPrizeCount(card);
       koNames.push(card?.name ?? '?');
       koCards.push(card);
     } else {
-      // v5.818：防具道具(果實)觸發後丟棄(KO 已隨 getAllAttachedTools 進棄牌)
-      // ⭐v6.256：同 hitBenchAll —— bench-hit-N 全是卡面「受到N點傷害」的招式傷害。
+      // v5.818：防具道具(果實)觸發後丟棄；⭐v6.256：招式傷害 ⇒ 寫 damageTakenLastOppTurn
       let _kept = withAttackDamageTaken(c, c.damage, newDmg, 'attack-damage');
       if (_btd2) { _kept = _stripBenchTool(_kept, _btd2.iid); koDiscards.push(_btd2); }
       newBench.push(_kept);
@@ -2165,16 +1979,10 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   }
 
   const players = [...st.players] as [PlayerState, PlayerState];
-  // ⭐v6.260：防 KO helper 可能已動 discard ⇒ 以最新 player 為基底
   const _tgtNowB = st.players[targetIdx];
-  players[targetIdx] = { ..._tgtNowB, bench: newBench, discard: [..._tgtNowB.discard, ...koDiscards], hand: koToHand.length > 0 ? [..._tgtNowB.hand, ...koToHand] : _tgtNowB.hand };  // v5.934 無限之影
+  players[targetIdx] = { ..._tgtNowB, bench: newBench, discard: [..._tgtNowB.discard, ...koDiscards] };
 
   let s: GameState = { ...st, players };
-  if (koToHand.length > 0) s = addLog(s, `無限之影：備戰的寶可夢因對手招式的傷害【昏厥】→ 本體與進化來源卡放回手牌（附加能量/道具丟棄）`, targetIdx);
-  // v3.888：log 被 resolveBenchGuard 擋下的目標（花之帷幔 / 抵抗之幕 等）
-  if (guardBlockedLog.length > 0) {
-    s = addLog(s, `${label}：以下備戰寶可夢免疫此招式傷害 — ${guardBlockedLog.join('；')}`, actorIdx);
-  }
   if (hitNames.length > 0) {
     s = addLog(s, `${label}：對 ${hitNames.join('、')} 造成 ${amount} 傷害`, actorIdx);
   }
@@ -2190,15 +1998,8 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
     // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）
     s = addLog(s, `${label}：${koNames.join('、')} 被擊倒，${st.players[koPrizeTaker(targetIdx)].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
     s = addPendingPrize(s, koPrizeTaker(targetIdx), morePrizes, pool);
-    // v2.246 KO cause tracking — 每隻 KO 都登錄為招式 KO（self-KO 由 recordOppKO 內部 skip）
     for (const card of koCards) {
       s = recordOppKO(s, targetIdx, card, 'attack');
-    }
-    // ⭐⭐⭐ v6.260：備戰被【對手】招式傷害 KO → 中央 on-KO 觸發（本路徑原本完全沒呼叫）。
-    if (actorIdx !== targetIdx) {
-      for (const _snap of koSnaps) {
-        s = fireDefenderOnKO(s, targetIdx, actorIdx, pool, _snap, false, true, false);
-      }
     }
   }
   return s;
@@ -4756,7 +4557,10 @@ regPost('焚焰蚣|燃燒熱浪', (state, aIdx, pool) =>
   hitBenchAll(state, aIdx, aIdx, 30, pool, '燃燒熱浪'));
 // 電飛鼠 天空波 — 雙方所有備戰各 10
 regPost('電飛鼠|天空波', (state, aIdx, pool) => {
-  const s1 = hitBenchAll(state, aIdx, aIdx, 10, pool, '天空波');
+  // ⭐v6.536（Fable 審查 P1-1）：雙方的備戰同時受傷 ⇒ 自己那一側取完／被取完時寫的終局先收回，
+  //   對手那一側照常結算，勝負交動作出口的中央重判（雙方同時取完 ⇒ 依放置規則）。
+  const s0 = hitBenchAll(state, aIdx, aIdx, 10, pool, '天空波');
+  const s1 = state.phase !== 'game-over' ? liftEndgameForOnKoV6361(s0) : s0;
   return hitBenchAll(s1, aIdx, (1 - aIdx) as 0 | 1, 10, pool, '天空波');
 });
 
@@ -9562,14 +9366,51 @@ export function snipeAllOppBenchDamage(
   const dIdx = (1 - aIdx) as 0 | 1;
   const benchIids = state.players[dIdx].bench.map(b => b.iid);
   if (benchIids.length === 0) return addLog(state, `${label}：對手備戰區無寶可夢`, aIdx);
-  let s = addLog(state, `${label}：對手所有備戰寶可夢各受到 ${amount} 點傷害`, aIdx);
-  for (const iid of benchIids) {
-    s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
-    if (s.phase === 'game-over') return s;
+  const s = addLog(state, `${label}：對手所有備戰寶可夢各受到 ${amount} 點傷害`, aIdx);
+  return dealAttackDamageToOppTargets(s, aIdx, benchIids, amount, pool, label);
+}
+// <<< v6413-snipe-all-opp-bench-central
+
+// >>> v6536-opp-targets-central
+/**
+ * ⭐⭐⭐v6.536：「對手的**多隻**寶可夢各受到 N 點傷害」的**唯一迴圈**（IRON_RULES Rule 38）。
+ *
+ * 【為什麼要收】v6.535 的全站 audit 找到多目標招式各自手寫迴圈，打對手的寶可夢時直接
+ *   `damage + N`，漏掉中央 dealAttackDamageToTarget 的整組處理（備戰的擲幣免傷、
+ *   備戰減傷、傷害量門檻免疫、受傷觸發（快掃拳返）、防昏厥、中央 KO 與獎賞…）：
+ *   ・hitBenchAll（電飛鼠｜天空波、古鼎鹿｜大地斷裂、急凍鳥｜冰雹、蓋歐卡｜狂暴漩渦、堅果啞鈴｜轟爆尖刺）
+ *   ・bench-hit-N（奇麒麟ex｜惡劣光束、三首惡龍ex｜黑曜石、代歐奇希斯｜精神尖槍…共 8 招）
+ *   ・雪絨蛾｜冰凍羽擊、雷丘｜捲入伏特、河馬獸｜大沙風暴、臭臭花｜灑口水（對手側）
+ *   ⇒ 全部改走這一份。
+ *
+ * 規則：
+ *   ・iids 由呼叫端在**傷害之前**取快照（例：卡面「身上放置有傷害指示物的」要看招式開始時的盤面）。
+ *   ・逐隻呼叫中央 helper。卡面「各受到」＝**同時**受傷 ⇒ 中途有人取完獎賞（addPendingPrize 當場寫終局）
+ *     或攻擊方被反擊打昏時**不停**：收回終局（liftEndgameForOnKoV6361）、其餘目標照常結算，
+ *     勝負交給動作出口的中央重判（v6.361；雙方同時取完 ⇒ 依放置規則，PTCG_RULES §17.26 咒詛炸彈判例同型）。
+ *     （v6.536 第一稿是「遇到終局就停」⇒ 雙方同時取完被判成單方勝 ── Fable 審查 P1-1。）
+ *   ・已經不在對手場上的 iid（前一隻的效果讓它離場）由中央 helper 自己略過。
+ *   ⚠ 只能打**對手側**：中央 helper 的免疫、減傷、取獎都是「對手的招式」語意；
+ *     打自己的寶可夢（地震、燃燒熱浪、捲入伏特的自己側…）呼叫端自己處理，不可以拿這支代打。
+ *   ⚠ 戰鬥場的 iid 會照中央 helper 的戰鬥位分支計算弱點・抵抗力與攻擊方加成；
+ *     卡面寫「在備戰區不計算弱點・抵抗力」的招式，備戰本來就不套。
+ */
+export function dealAttackDamageToOppTargets(
+  state: GameState, aIdx: 0 | 1, iids: readonly string[], amount: number, pool: Map<string, Card>, label: string,
+  // 其餘中央 helper 選項（snipe-multi 的 kind／flat）；未傳 ＝ 一般招式傷害
+  opts?: { kind?: DamageKind; noWeakness?: boolean; skipDefEffects?: boolean },
+): GameState {
+  let s = state;
+  if (s.phase === 'game-over') return s;
+  for (const iid of iids) {
+    s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', ...opts, label });
+    // >>> v6536-multi-target-lift
+    if (s.phase === 'game-over') s = liftEndgameForOnKoV6361(s);
+    // <<< v6536-multi-target-lift
   }
   return s;
 }
-// <<< v6413-snipe-all-opp-bench-central
+// <<< v6536-opp-targets-central
 
 export function applyAttackerActiveDamageBonuses(
   stateIn: GameState, aIdx: 0 | 1, dmg: number, pool: Map<string, Card>,
@@ -12748,13 +12589,9 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
   const kind = ((params?.kind as DamageKind) ?? 'attack-damage');
   const flat = !!params?.flat;
   if (dmg === 0 || selectedIids.length === 0) return st;
-  let s = st;
-  for (const iid of selectedIids) {
-    s = dealAttackDamageToTarget(s, actorIdx, iid, dmg, pool,
-      { kind, label, noWeakness: flat, skipDefEffects: flat });
-    if (s.phase === 'game-over') return s;
-  }
-  return s;
+  // ⭐v6.536（Fable 審查 P3-1）：迴圈收斂到中央 dealAttackDamageToOppTargets（同時受傷、終局收回後繼續）。
+  return dealAttackDamageToOppTargets(st, actorIdx, selectedIids, dmg, pool, label,
+    { kind, noWeakness: flat, skipDefEffects: flat });
 });
 
 // ── 棄牌能量附加（6 張） ────────────────────────────────────────────────────
@@ -17625,12 +17462,8 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
   const baseDmg = (params?.dmg as number) ?? 0;
   const label = (params?.label as string) ?? '招式';
   if (baseDmg <= 0 || selectedIids.length === 0) return st;
-  let s = st;
-  for (const iid of selectedIids) {
-    s = dealAttackDamageToTarget(s, actorIdx, iid, baseDmg, pool, { kind: 'attack-damage', label });
-    if (s.phase === 'game-over') return s;
-  }
-  return s;
+  // ⭐v6.536：迴圈收斂到中央 dealAttackDamageToOppTargets（同一份逐隻＋遊戲結束即停）。
+  return dealAttackDamageToOppTargets(st, actorIdx, selectedIids, baseDmg, pool, label);
 });
 
 // ── 4) 月月熊 赫月｜經驗法則 — 從手牌選最多 2 張基本【鬥】能量附給自己（剛上備戰才可用）

@@ -1,5 +1,33 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.536：多目標招式對手側收斂中央、一同爆炸只限自己的場上（2026-10-12）
+
+BASE 632f1e89（v6.535）。v6.535 audit 的 A4～A7、B1～B2 與兩個順手發現。
+- 新增中央 `dealAttackDamageToOppTargets`（哨兵 v6536-opp-targets-central）：對手多隻寶可夢各受到 N 點傷害的唯一迴圈（逐隻 dealAttackDamageToTarget；只能打對手側）。卡面「各受到」＝同時受傷 ⇒ 中途寫了終局就 liftEndgameForOnKoV6361 收回、其餘目標照常結算，勝負交動作出口中央重判（哨兵 v6536-multi-target-lift；審查 P1-1）。可帶 kind／noWeakness／skipDefEffects（snipe-multi 一併收進來，審查 P3-1）。`snipeAllOppBenchDamage` 改呼叫它；既有同型迴圈 h-wave2-hit-any-opp、wave12-snipe-2-flat、wave13-snipe-multi-opp-bench、wave16-snipe-multi、wave16-hit-any-opp、allOppBenchAddDamagePost、snipeAllOppPost（v2610）、clone-strike-multi-hit 一併改呼叫（行為不變，只收斂寫法）。
+- B1 `hitBenchAll`（哨兵 v6536-hitbenchall-opp-central）：打對手備戰 ⇒ snipeAllOppBenchDamage；原本自跑迴圈的中央閘、招致削傷、太古防壁、花之帷幔、藏隱 inline 縱深防禦、防昏厥、無限之影、取獎、on-KO 都刪掉（中央 helper 各有一份）。漏掉的是備戰受傷觸發（快掃拳返）。函式只剩打自己的備戰（地震、燃燒熱浪、大地裂破、天空波自己側），行為與 BASE 相同。影響：電飛鼠｜天空波、古鼎鹿｜大地斷裂、急凍鳥｜冰雹、蓋歐卡｜狂暴漩渦、堅果啞鈴｜轟爆尖刺。
+- B2 `bench-hit-N`（哨兵 v6536-benchhitn-opp-central）：選對手備戰 ⇒ 依備戰區順序過濾 payload（防偽造指到戰鬥場）後交 dealAttackDamageToOppTargets；只剩自己側（雙向頭擊）。影響：惡劣光束、突圍、冰霜子彈、黑曜石、貪婪危害、激流水泵、精神尖槍、噴射打擊。
+- A4 雪絨蛾｜冰凍羽擊（v2560，哨兵 v6536-freezing-wing-central）：備戰 raw +20 ⇒ snipeAllOppBenchDamage，再睡眠。
+- A5 雷丘｜捲入伏特（v2750，哨兵 v6536-volt-tackle-central）：傷害前取快照（雙方 damage>0、排除雷丘自己）；對手側交中央（戰鬥場改計弱點抵抗力與攻擊方加成），自己側照舊直接加。
+- A6 河馬獸｜大沙風暴（哨兵 v6536-sandstorm-central）：同上，只看備戰。
+- A7 臭臭花｜灑口水（v2490 snipeAllBothBenchPost，哨兵 v6536-both-bench-central）：對手側交 snipeAllOppBenchDamage，自己側照舊。
+- 隨風球｜一同爆炸（哨兵 v6536-explosion-own-side）：卡面「造成**自己的場上的**…數量×50」「**自己的場上的**所有…也各受到30點傷害」；原本計數與 30 都含對手側 ⇒ 直接依卡面修（不是規則判斷，沒有判例需求）。
+- 巨翅飛魚｜水俯衝：h-wave2-hit-any-opp 的 pending params 補 label（原本 log 寫「攻擊」）。
+- Rule 40（意圖不變、觀測點因委派中央而移動；每支都補「對手分支委派中央」接線斷言，且委派的函式內不得再留一份判準）：test-v6141（hitBenchAll 中央閘）、test-v6165（門檻免疫插入點 4 → 2，排除兩支函式的自傷迴圈）、test-v6210 F 段（hitBenchAll inline 藏隱判定整段刪除 ⇒ 改釘中央 resolveBenchGuard 的參數）、test-v6256 C2／C3（applyPreventKOToVictim 呼叫端 3 → 1；clone-strike 可呼叫中央迴圈）、test-v6260 D4（掃描下限 7 → 5，實掃 6）、test-v6415 C3（委派算走中央閘）、test-multitarget-active-passive-immunity（clone-strike 可呼叫中央迴圈）。
+- 天空波：自己側 hitBenchAll 寫了終局先收回，再打對手側（審查 P1-1 第三段：否則對手側 koTargetAfterAttackDamage 進入時已是終局 ⇒ 昏厥但不取獎）。
+- 守衛 test-v6536-multi-target-central：17 條行為＋HEAD-FAIL（BASE：ICE、VOLT、SAND、SPIT、HAIL、JET、EXPL、DIVE、DRAW_BOMB 紅；ICE_KO、VOLT_OWN、HAIL_END、DRAW_SKY／SPIT／SAND／VOLT 兩版綠——DRAW_* 在 BASE 本來就對，守的是第一稿的回歸）。突變 12 個全殺（含「迴圈遇終局就停」＝第一稿、「終局不收回也不停」、「天空波自己側不收回」）。
+- **Fable 5.1 審查（第一稿 9be58f2f）**：16 招 × 16 盤面 × 自己側 × 招致削傷 1088 組＋30 組定向，相異 280 組逐類歸因。
+  - P1-1（本版回歸）：雙方獎賞各剩 1、同一招同時打昏自己與對手各一隻 ⇒ BASE 正確判平手，第一稿判單方勝。根因：中央迴圈「遇終局就停」＋卡片 POST「終局就跳過自己側」＋天空波自己側寫終局沒收回。**已修**（見上），守衛 DRAW_SKY／SPIT／SAND／VOLT。
+  - P2-1（BASE 就有）：堅果啞鈴｜轟爆尖刺 打昏對手備戰取完後自傷 130 不執行 ⇒ 應平手卻判 P1 勝。中央迴圈收回終局後自然修好；守衛 DRAW_BOMB。
+  - P2-2：第一稿把「迴圈不停在遊戲結束」判為等價突變是錯的（addPendingPrize 取完就當場寫終局）；HAIL_END 補釘第二隻備戰照樣受 30。
+  - P3-1：snipe-multi 併入中央迴圈（帶 opts）。damageAllOppByCoin（虛無歸零，每隻先擲幣）本來就不在終局時中斷，維持原樣。
+  - P3-2：test-v6165 委派斷言收緊為「備戰為空就返回之後的第一個敘述」。
+  - **複審（f2ccad8b）**：P1-1／P2-1／P2-2 確認修好（四招平手與 BASE 逐位元相同、轟爆尖刺平手）；1088 組 BASE vs f2ccad8b 相異 218 組全為已歸類的改善；snipe-multi 併入後 kind／flat 三版逐位元相同；新增 Rule 40 無放寬。無 P1／P2，可合併。順帶：同時取完＋對手備戰帶希望護身符的盤面 BASE 判 P1 勝，本版改為平手（舊 bug 修對）。P3 排後續版：①備戰反擊打昏無備戰攻擊方時「沒有可上場的寶可夢」紀錄重複兩行（v6.535 起）；②終局收回後跨 action 的「獲勝！」舊紀錄未改寫（既有設計限制）；③damageAllOppByCoin 不收回終局（靠出口重判，與 §17.26 一致）註解補寫。
+  - 其餘 Rule 40 改動逐條核對無放寬；改善類：備戰快掃拳返、腎上腺費洛蒙備戰擲幣（BASE 的 hitBenchAll／bench-hit-N 也沒擲）、捲入伏特戰鬥場弱點、招致削傷對手側每隻都扣、一同爆炸。
+- 全套第二輪（f2ccad8b）：883／883、FAIL 0；之後只動本文件。
+- 全套第一輪（9be58f2f）紅 8 支，皆為本版合法改動的觀測點：test-v6373 F4／v6374 E7／v6375 E7（isEffectiveAsOfDeclaration 在 effects.ts 5 → 4：hitBenchAll 那份重複的花之帷幔判定刪除，Rule 40）、test-v6412 A1／A2（clone-strike／snipe-multi 可呼叫中央迴圈，A2 另驗中央迴圈把 opts 傳下去）、lint-eol-anchors＋v6377／v6378（test-v6165 新增的 indexOf("\n}") 讀檔處補 normEol）、test-changelog-size（摘要縮到 150 字內）。
+- harness＋免疫測試網：與 BASE 相同（test-multitarget-active-passive-immunity 依 Rule 40 更新後綠）。
+- 已看過、不在本版範圍：applyDamageToAllOpp（痛楚記憶、侵蝕之風、覆雪，放傷害指示物）的備戰昏厥沒有呼叫 fireDefenderOnKO（放指示物機制，排後續）。
+
 ## v6.535：單一目標狙擊收斂中央、中央 KO 取獎、離場前結算（2026-10-12）
 
 BASE 38964609（v6.534）。處理 v6.534 審查 P2-1／P2-2／P3-1；全站「招式傷害沒走中央 dealAttackDamageToTarget」audit（子代理，掃 137 個 damage 寫入點、1267 個實際生效的 POST）找到 9 條，本版先收單一目標 3 條，多目標 6 條排 v6.536。

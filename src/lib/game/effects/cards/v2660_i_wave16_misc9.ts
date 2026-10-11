@@ -20,6 +20,7 @@
  *   - 雜 (1 張)
  */
 
+import { dealAttackDamageToOppTargets } from '../../effects'; // ⭐v6.536 多目標對手側中央迴圈
 import type { PlayerState } from '../../types'; // v6.020：補 type-only import(TS2304 scanner)
 import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit, getAllAttachedTools,
@@ -125,12 +126,8 @@ regR('wave16-snipe-multi', (state, aIdx, iids, params, pool) => {
   if (amount === 0) return state;
   const label = (params?.label as string | undefined) ?? '雙尾';
   // v5.437：改走中央函式（補免疫/弱抗/KO/受傷反擊）。
-  let s = state;
-  for (const iid of iids) {
-    s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
-    if (s.phase === 'game-over') return s;
-  }
-  return s;
+  // ⭐v6.536：迴圈收斂到中央 dealAttackDamageToOppTargets（同一份逐隻＋遊戲結束即停）。
+  return dealAttackDamageToOppTargets(state, aIdx, iids, amount, pool, label);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -220,12 +217,8 @@ regR('wave16-hit-any-opp', (state, aIdx, iids, params, pool) => {
   if (amount === 0) return state;
   const label = (params?.label as string | undefined) ?? '攻擊';
   // v5.437：改走中央函式（補免疫/弱抗/KO/受傷反擊）。卡面「受到傷害，[備戰不計弱抗]」→ active 計弱點。
-  let s = state;
-  for (const iid of iids) {
-    s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
-    if (s.phase === 'game-over') return s;
-  }
-  return s;
+  // ⭐v6.536：迴圈收斂到中央 dealAttackDamageToOppTargets（同一份逐隻＋遊戲結束即停）。
+  return dealAttackDamageToOppTargets(state, aIdx, iids, amount, pool, label);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -28,6 +28,7 @@ import { getEffectiveHP } from '../../engine'; // v5.778 有效HP單一來源
 import type { AttackPostFn } from '../_shared';
 import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, countEnergyTypeBloomAware, markFaintByEffect, koTargetByAttackEffect, discardOppActiveEnergyPost } from '../../effects';
 import { coinHeadsDiscardOppEnergyPost } from '../../effects'; // ⭐v6.388a 擲 N 次 → 棄對手 N 個能量（中央）
+import { snipeAllOppBenchDamage } from '../../effects'; // ⭐v6.536 冰凍羽擊備戰走中央
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 瑪夏多|暗影側踢 60 + 若 KO 對手 → 下回合免疫招式
@@ -202,23 +203,13 @@ regR('wave6-snipe-any-opp-flat', (state, aIdx, iids, params, pool) => {
 //   Wilson 補充 v5.168：active 要算弱點+道具，bench 才不算 → regPre 不設 skipWeakRes / skipDefEffects。
 regPre('雪絨蛾|冰凍羽擊', (s) => ({ state: s, damage: 20 }));
 regPost('雪絨蛾|冰凍羽擊', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  let s = addLog(state, '冰凍羽擊：對手備戰寶可夢各受到 20 點傷害（不計弱抗）+ 對手戰鬥場睡眠', aIdx);
-  // active 的 20 傷害 + tool bonus 已由 mainline ATTACK handler 套用（含猛攻手鐲、活力頭帶 等）。
-  // 此處只處理 bench +20（卡面「不計弱抗」故 raw +20）+ bench guard（球形盾牌/藏隱/深度下潛/羽毛化石/花之帷幔/太晶）。
-  const opp = s.players[dIdx];
-  const benchBlocked = new Set<string>();
-  for (const b of opp.bench) {
-    const g = canApplyEffectToTarget(s, aIdx, b, pool.get(b.cardId), 'attack-damage', pool, { isBench: true });
-    if (g.blocked) {
-      benchBlocked.add(b.iid);
-      s = addLog(s, `冰凍羽擊：${pool.get(b.cardId)?.name ?? '?'}｜${g.reason}（不受傷害）`, aIdx);
-    }
-  }
-  s = updatePlayer(s, dIdx, p => ({
-    ...p,
-    bench: p.bench.map(b => ({ ...b, damage: (b.damage ?? 0) + (benchBlocked.has(b.iid) ? 0 : 20) })),
-  }));
+  // active 的 20 傷害已由 mainline ATTACK handler 套用（含弱點、攻擊方道具）。
+  // >>> v6536-freezing-wing-central
+  // ⭐⭐⭐v6.536：備戰 +20 改走中央 snipeAllOppBenchDamage（原本 raw `+20`、只有 canApplyEffectToTarget：
+  //   備戰的擲幣免傷、備戰減傷、受傷反擊、防昏厥、中央 KO 與獎賞都漏，備戰被打到 0 HP 也不會當場昏厥）。
+  let s = snipeAllOppBenchDamage(state, aIdx, 20, pool, '冰凍羽擊');
+  if (s.phase === 'game-over') return s;
+  // <<< v6536-freezing-wing-central
   // 睡眠走 statusPost — 內含薄霧 / 硬岩 / 皇帝之勢 / 抵抗之幕 / 泡沫 / 祭典會場 / 憨憨臉 全套檢查
   s = statusPost('asleep')(s, aIdx, pool);
   return s;

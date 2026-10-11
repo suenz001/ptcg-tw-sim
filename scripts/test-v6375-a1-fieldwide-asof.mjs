@@ -586,9 +586,10 @@ chk('E6 ⭐⭐判準核心仍然只有一份：declarationHolderStillCounts 定�
     stripComments(g3Src).indexOf('export function getOppRetreatTriggers('))),
   JSON.stringify([count(asof, 'export function declarationHolderStillCounts('),
     count(g3Src, 'export function asOfDeclarationSameNameIids(')]));
+// ⭐v6.536（IRON_RULES Rule 40）：hitBenchAll 那份 inline 花之帷幔判定（與中央 resolveBenchGuard 重複）隨對手分支委派中央而刪除 ⇒ effects.ts 5 → 4；意圖不變。
 chk('E7 ⭐v6.373／v6.374 的既有消費點都沒有被動到'
-  + '（effects.ts 5 處 isEffectiveAsOfDeclaration、v3001 2 處、凹洞/熔岩地域 2 處 asOfDeclarationHolderIids）',
-  count(effSrc, 'isEffectiveAsOfDeclaration(') === 5
+  + '（effects.ts 4 處（v6.536 起）isEffectiveAsOfDeclaration、v3001 2 處、凹洞/熔岩地域 2 處 asOfDeclarationHolderIids）',
+  count(effSrc, 'isEffectiveAsOfDeclaration(') === 4
   && count(g3Src, 'isEffectiveAsOfDeclaration(') === 2
   && count(g3Src, 'asOfDeclarationHolderIids(state, oppIdx,') === 2,
   JSON.stringify([count(effSrc, 'isEffectiveAsOfDeclaration('), count(g3Src, 'isEffectiveAsOfDeclaration('),

@@ -7,6 +7,7 @@
  */
 
 import { applyStatusToActive } from '../../effects';   // ⭐v6.529 中毒寫入走中央（三槽／變體）
+import { dealAttackDamageToOppTargets } from '../../effects'; // ⭐v6.536 多目標對手側中央迴圈
 import {
   regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, getAllAttachedTools, toBareCard,
   bareCardsForReturn, // v5.781 bounce 到牌庫中央收斂
@@ -126,7 +127,7 @@ function hitAnyOneOppPost(amount: number, label: string): AttackPostFn {
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
       minCount: 1, maxCount: 1,
       effectKey: 'h-wave2-hit-any-opp',
-      params: { amount },
+      params: { amount, label },   // ⭐v6.536：補 label（原本 log 寫「攻擊」而不是招式名）
     });
   };
 }
@@ -136,12 +137,8 @@ regR('h-wave2-hit-any-opp', (state, aIdx, iids, params, pool) => {
   if (amount === 0) return state;
   const label = (params?.label as string | undefined) ?? '攻擊';
   // v5.437：改走中央函式（補免疫/弱抗/KO/受傷反擊）。卡面「受到傷害，[備戰不計弱抗]」→ active 計弱點。
-  let s = state;
-  for (const iid of iids) {
-    s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
-    if (s.phase === 'game-over') return s;
-  }
-  return s;
+  // ⭐v6.536：迴圈收斂到中央 dealAttackDamageToOppTargets。
+  return dealAttackDamageToOppTargets(state, aIdx, iids, amount, pool, label);
 });
 
 // 對手所有備戰各受 N（不選）
@@ -150,12 +147,9 @@ function allOppBenchAddDamagePost(amount: number, label: string): AttackPostFn {
     const dIdx = (1 - aIdx) as 0 | 1;
     const benchIids = state.players[dIdx].bench.map(b => b.iid);
     // v5.437：改走中央函式（補免疫/KO/受傷反擊）。備戰不計弱抗（中央函式 isActive gate 自動）。
-    let s = addLog(state, `${label}：對手所有備戰各受 ${amount}`, aIdx);
-    for (const iid of benchIids) {
-      s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
-      if (s.phase === 'game-over') return s;
-    }
-    return s;
+    const s = addLog(state, `${label}：對手所有備戰各受 ${amount}`, aIdx);
+    // ⭐v6.536：迴圈收斂到中央 dealAttackDamageToOppTargets（同一份逐隻＋遊戲結束即停）。
+    return dealAttackDamageToOppTargets(s, aIdx, benchIids, amount, pool, label);
   };
 }
 
@@ -2313,107 +2307,72 @@ regPost('死神棺|冥府之律', (state, aIdx, pool) => {
 // 雷丘|捲入伏特 — 此寶可外，雙方有指示物的所有寶可夢受 50（不計弱抗）
 regPre('雷丘|捲入伏特', (s) => ({ state: s, damage: 0 }));
 regPost('雷丘|捲入伏特', (state, aIdx, pool) => {
-  let s = state;
-  const myActiveIid = s.players[aIdx].active?.iid;
+  // >>> v6536-volt-tackle-central
+  // ⭐⭐⭐v6.536：對手側改走中央 dealAttackDamageToOppTargets（逐隻 dealAttackDamageToTarget）。
+  //   原本對手側也是 raw `+50`：戰鬥場不算弱點・抵抗力（卡面只有「在備戰區」不計）、
+  //   沒有防守方減傷、擲幣免傷、受傷反擊、防昏厥、中央 KO 與獎賞。
+  //   ⚠ 目標在**傷害之前**取快照：卡面「身上放置有傷害指示物的所有寶可夢」看的是招式開始時的盤面。
+  //   ⚠ 自己那一側不是「對手的招式」⇒ 維持直接加傷害（昏厥由之後的結算處理），不可以拿中央 helper 代打。
+  const myActiveIid = state.players[aIdx].active?.iid;
   const dIdx = (1 - aIdx) as 0 | 1;
-  for (const idx of [0, 1] as const) {
-    const updateOne = (c: CardInstance | null): CardInstance | null => {
-      if (!c) return c;
-      if (c.iid === myActiveIid) return c;  // 排除自身
-      if ((c.damage ?? 0) === 0) return c;  // 排除無指示物
-      // v4.54：卡面是「N 點傷害」(attack-damage)，不是「招式效果」。
-      //   不該套薄霧/抵抗之幕/皇帝之勢/全能硬殼/硬岩 (這些只擋 effect 不擋 damage)。
-      //   對 bench 走 resolveBenchGuard('attack-damage') → 擋球形盾牌/藏隱/深度下潛/羽毛化石/花之帷幔/太晶 等
-      //   對 active 完全不擋 (傷害計算由 caller 直接寫 damage)
-      if (idx === dIdx) {
-        const card = pool.get(c.cardId);
-        const _voltIsBench = c.iid !== s.players[dIdx].active?.iid;
-        const guard = canApplyEffectToTarget(s, aIdx, c, card, 'attack-damage', pool, { isBench: _voltIsBench });
-        if (guard.blocked) {
-          s = addLog(s, `捲入伏特：${card?.name ?? '?'}｜${guard.reason}（不受傷害）`, aIdx);
-          return c;
-        }
-      }
-      return { ...c, damage: (c.damage ?? 0) + 50 };
-    };
-    s = updatePlayer(s, idx, pl => ({
-      ...pl,
-      active: updateOne(pl.active) as CardInstance | null,
-      bench: pl.bench.map(b => updateOne(b)!),
-    }));
-  }
-  return addLog(s, '捲入伏特：除自身外，雙方有指示物寶可夢各受 50（不計弱抗）', aIdx);
+  const hasCounters = (c: CardInstance | null | undefined): c is CardInstance => !!c && (c.damage ?? 0) > 0;
+  const opp0 = state.players[dIdx];
+  const oppIids = [opp0.active, ...opp0.bench].filter(hasCounters).map(c => c.iid);
+  const own0 = state.players[aIdx];
+  const ownIids = new Set([own0.active, ...own0.bench].filter(hasCounters).filter(c => c.iid !== myActiveIid).map(c => c.iid));
+  let s = addLog(state, '捲入伏特：除自身外，雙方身上有傷害指示物的寶可夢各受到 50 點傷害（備戰不計弱抗）', aIdx);
+  s = dealAttackDamageToOppTargets(s, aIdx, oppIids, 50, pool, '捲入伏特');
+  if (s.phase === 'game-over' || ownIids.size === 0) return s;
+  s = updatePlayer(s, aIdx, pl => ({
+    ...pl,
+    active: pl.active && ownIids.has(pl.active.iid) ? { ...pl.active, damage: (pl.active.damage ?? 0) + 50 } : pl.active,
+    bench: pl.bench.map(b => ownIids.has(b.iid) ? { ...b, damage: (b.damage ?? 0) + 50 } : b),
+  }));
+  return s;
+  // <<< v6536-volt-tackle-central
 });
 
 // 河馬獸|大沙風暴 150 — 雙方所有有指示物的備戰寶可夢受 40（不計弱抗）
 regPre('河馬獸|大沙風暴', (s) => ({ state: s, damage: 150 }));
 regPost('河馬獸|大沙風暴', (state, aIdx, pool) => {
-  let s = state;
+  // >>> v6536-sandstorm-central
+  // ⭐⭐⭐v6.536：對手側改走中央 dealAttackDamageToOppTargets（原本 raw `+40`，備戰的擲幣免傷、
+  //   備戰減傷、受傷反擊、防昏厥、中央 KO 都漏）。目標在傷害之前取快照；自己那一側維持直接加傷害。
   const dIdx = (1 - aIdx) as 0 | 1;
-  for (const idx of [0, 1] as const) {
-    s = updatePlayer(s, idx, p => ({
-      ...p,
-      bench: p.bench.map(b => {
-        if ((b.damage ?? 0) <= 0) return b;
-        // v2.92 對手側 per-target check
-        if (idx === dIdx) {
-          const bCard = pool.get(b.cardId);
-          // v4.58：卡面是「40 點傷害」(attack-damage)，不是「指示物放置」(attack-effect)。
-          //   原 v2.92 用 effect immunity 雙重 helper 過度擋（薄霧/抵抗之幕/皇帝之勢/全能硬殼/硬岩 只擋 effect 不擋 damage）。
-          //   改 unified('attack-damage', isBench:true) → 只擋球形盾牌/藏隱/深度下潛/羽毛化石/花之帷幔/太晶 等真擋傷害的卡
-          const guard = canApplyEffectToTarget(s, aIdx, b, bCard, 'attack-damage', pool, { isBench: true });
-          if (guard.blocked) {
-            s = addLog(s, `大沙風暴：${bCard?.name ?? '?'}｜${guard.reason}（不受傷害）`, aIdx);
-            return b;
-          }
-        }
-        return { ...b, damage: (b.damage ?? 0) + 40 };
-      }),
-    }));
-  }
-  return addLog(s, '大沙風暴：雙方所有有指示物備戰寶可受 40', aIdx);
+  const oppIids = state.players[dIdx].bench.filter(b => (b.damage ?? 0) > 0).map(b => b.iid);
+  const ownIids = new Set(state.players[aIdx].bench.filter(b => (b.damage ?? 0) > 0).map(b => b.iid));
+  let s = addLog(state, '大沙風暴：雙方身上有傷害指示物的備戰寶可夢各受到 40 點傷害', aIdx);
+  s = dealAttackDamageToOppTargets(s, aIdx, oppIids, 40, pool, '大沙風暴');
+  if (s.phase === 'game-over' || ownIids.size === 0) return s;
+  s = updatePlayer(s, aIdx, p => ({
+    ...p,
+    bench: p.bench.map(b => ownIids.has(b.iid) ? { ...b, damage: (b.damage ?? 0) + 40 } : b),
+  }));
+  return s;
+  // <<< v6536-sandstorm-central
 });
 
-// 隨風球|一同爆炸 — 場上「飄飄球」/「隨風球」數 ×50 + 同類各受 30
+// 隨風球|一同爆炸 — 卡面：「造成**自己的場上的**「飄飄球」與「隨風球」的數量×50點傷害。
+//   **自己的場上的**所有「飄飄球」與「隨風球」也各受到30點傷害。[在備戰區不計算弱點・抵抗力。]」
+// >>> v6536-explosion-own-side
+// ⭐⭐⭐v6.536：原本計數與 30 點都把**雙方**的場上算進去（對手的飄飄球／隨風球被多算、還被打 30），
+//   卡面兩句都只限「自己的場上」⇒ 只看自己那一側（含這隻寶可夢自己）。
+//   自己的寶可夢受到 30 不是「對手的招式」⇒ 不套免疫閘，直接加傷害（昏厥由之後的結算處理）。
+const isDriftloonLine = (card: Card | undefined): boolean => card?.name === '飄飄球' || card?.name === '隨風球';
 regPre('隨風球|一同爆炸', (state, aIdx, pool) => {
-  let count = 0;
-  for (const idx of [0, 1] as const) {
-    const p = state.players[idx];
-    for (const c of [p.active, ...p.bench].filter(Boolean) as CardInstance[]) {
-      const card = pool.get(c.cardId);
-      if (card?.name === '飄飄球' || card?.name === '隨風球') count++;
-    }
-  }
-  return { state: addLog(state, `一同爆炸：場上飄飄球/隨風球 ${count} → ${count}×50 = ${count*50}`, aIdx), damage: count * 50 };
+  const p = state.players[aIdx];
+  const count = ([p.active, ...p.bench].filter(Boolean) as CardInstance[])
+    .filter(c => isDriftloonLine(pool.get(c.cardId))).length;
+  return { state: addLog(state, `一同爆炸：自己的場上飄飄球/隨風球 ${count} 隻 → ${count}×50 = ${count * 50}`, aIdx), damage: count * 50 };
 });
 regPost('隨風球|一同爆炸', (state, aIdx, pool) => {
-  let s = state;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  for (const idx of [0, 1] as const) {
-    s = updatePlayer(s, idx, p => {
-      const updateOne = (c: CardInstance | null): CardInstance | null => {
-        if (!c) return c;
-        const card = pool.get(c.cardId);
-        if (card?.name !== '飄飄球' && card?.name !== '隨風球') return c;
-        // v2.92 招式效果免疫檢查（僅對手側）
-        if (idx === dIdx) {
-          const guard = canApplyAttackEffectToTarget(s, aIdx, c, card, pool);
-          if (guard.blocked) {
-            s = addLog(s, `一同爆炸：${card.name}｜${guard.reason}（不放指示物）`, aIdx);
-            return c;
-          }
-        }
-        return { ...c, damage: (c.damage ?? 0) + 30 };
-      };
-      return {
-        ...p,
-        active: updateOne(p.active) as CardInstance | null,
-        bench: p.bench.map(b => updateOne(b)!),
-      };
-    });
-  }
-  return addLog(s, '一同爆炸：場上飄飄球/隨風球各受 30', aIdx);
+  const s = updatePlayer(state, aIdx, p => {
+    const hit = (c: CardInstance): CardInstance => isDriftloonLine(pool.get(c.cardId)) ? { ...c, damage: (c.damage ?? 0) + 30 } : c;
+    return { ...p, active: p.active ? hit(p.active) : p.active, bench: p.bench.map(hit) };
+  });
+  return addLog(s, '一同爆炸：自己的場上飄飄球/隨風球各受到 30 點傷害', aIdx);
 });
+// <<< v6536-explosion-own-side
 
 // ══════════════════════════════════════════════════════════════════════════════
 // === Section 27: 來悲粗茶|詛咒水滴 — 4 個指示物分配對手寶可夢 ===

@@ -23,6 +23,7 @@
  * 共 ~32 張 I 標寶可夢招式 effect 實裝
  */
 
+import { dealAttackDamageToOppTargets } from '../../effects'; // ⭐v6.536 多目標對手側中央迴圈
 import type { CardInstance, PlayerState } from '../../types';
 import { applyStatusToOppActive, countEnergyTypeHostAware, flipCoinsWithLog, dealAttackDamageToTarget, selfReturnToHandPost, returnSelfActiveEnergyPost} from '../../effects'; // v5.795 host-aware；v5.797 中央施狀態
 import { snipeAllOppBenchDamage } from '../../effects';   // ⭐v6.413 對手全備戰傷害的唯一實作
@@ -100,12 +101,9 @@ function snipeAllOppPost(amount: number, label: string): AttackPostFn {
     const dIdx = (1 - aIdx) as 0 | 1;
     const d = state.players[dIdx];
     const iids = [...(d.active ? [d.active.iid] : []), ...d.bench.map(b => b.iid)];
-    let s = addLog(state, `${label}：對手所有寶可夢各受到 ${amount} 點傷害`, aIdx);
-    for (const iid of iids) {
-      s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
-      if (s.phase === 'game-over') return s;
-    }
-    return s;
+    const s = addLog(state, `${label}：對手所有寶可夢各受到 ${amount} 點傷害`, aIdx);
+    // ⭐v6.536：迴圈收斂到中央 dealAttackDamageToOppTargets（同一份逐隻＋遊戲結束即停）。
+    return dealAttackDamageToOppTargets(s, aIdx, iids, amount, pool, label);
   };
 }
 

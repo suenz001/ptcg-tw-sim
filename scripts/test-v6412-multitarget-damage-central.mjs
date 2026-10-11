@@ -141,14 +141,19 @@ const blockOf = (anchor) => {
 };
 T('A1. clone-strike-multi-hit 交給中央 dealAttackDamageToTarget（HEAD-FAIL：BASE 上是 inline）', () => {
   const b = blockOf("regR('clone-strike-multi-hit'");
-  assert.ok(b.includes('dealAttackDamageToTarget('), '沒有交給中央 helper');
+  // ⭐v6.536（Rule 40）：改呼叫中央迴圈 dealAttackDamageToOppTargets（它只逐隻呼叫 dealAttackDamageToTarget，見 A0）
+  assert.ok(b.includes('dealAttackDamageToTarget(') || b.includes('dealAttackDamageToOppTargets('), '沒有交給中央 helper');
   for (const bad of ['applyWeakRes(', 'TOOL_ATTACK_BONUS', 'koPrizesAdjusted(', 'fireDefenderOnDamaged(', 'withAttackDamageTaken(']) {
     assert.ok(!b.includes(bad), `inline 管線還在（出現 ${bad}）⇒ 判準又變兩份`);
   }
 });
 T('A2. snipe-multi 交給中央 dealAttackDamageToTarget（HEAD-FAIL：BASE 上是 inline）', () => {
   const b = blockOf("regR('snipe-multi'");
-  assert.ok(b.includes('dealAttackDamageToTarget('), '沒有交給中央 helper');
+  // ⭐v6.536（Rule 40，Fable 審查 P3-1）：改呼叫中央迴圈 dealAttackDamageToOppTargets；中央迴圈必須把 kind／flat 原樣傳給 dealAttackDamageToTarget
+  assert.ok(b.includes('dealAttackDamageToTarget(') || b.includes('dealAttackDamageToOppTargets('), '沒有交給中央 helper');
+  const iL = EFF.indexOf('export function dealAttackDamageToOppTargets');
+  const loop = iL >= 0 ? EFF.slice(iL, EFF.indexOf('\n}', iL)) : '';
+  assert.ok(/dealAttackDamageToTarget\([^)]*\.\.\.opts/.test(loop), '中央迴圈沒有把 opts（kind／noWeakness／skipDefEffects）傳給 dealAttackDamageToTarget');
   for (const bad of ['applyWeakRes(', 'TOOL_ATTACK_BONUS', 'koPrizesAdjusted(', 'fireDefenderOnDamaged(', 'withAttackDamageTaken(']) {
     assert.ok(!b.includes(bad), `inline 管線還在（出現 ${bad}）⇒ 判準又變兩份`);
   }

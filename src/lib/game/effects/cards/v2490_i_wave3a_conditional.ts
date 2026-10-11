@@ -143,32 +143,24 @@ function snipeAllOppBenchPost(amount: number, label: string): AttackPostFn {
 }
 // <<< v6413-snipe-all-opp-bench-central-v2490
 
-// 雙方所有備戰每隻 +N
-// v5.268: 對手側 per-bench 走 canApplyEffectToTarget guard (花之帷幔等可擋);
-//   自方側不走 guard (自傷不應受花之帷幔保護, 卡面如此).
+// 雙方所有備戰每隻 +N（臭臭花｜灑口水：「雙方的所有備戰寶可夢也各受到20點傷害。」）
+// >>> v6536-both-bench-central
+// ⭐⭐⭐v6.536：對手側改走中央 snipeAllOppBenchDamage（原本 raw `+N`、只有 canApplyEffectToTarget：
+//   備戰的擲幣免傷、備戰減傷、受傷反擊、防昏厥、中央 KO 與獎賞都漏）。
+//   自己那一側不是「對手的招式」⇒ 維持直接加傷害、不套免疫閘（v5.268：自傷不受花之帷幔保護）。
+//   ⚠ 自己那一側先取快照：對手側的反擊不會改變自己的備戰名單，但仍以招式開始時為準。
 function snipeAllBothBenchPost(amount: number, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
-    let s = state;
+    const ownIids = new Set(state.players[aIdx].bench.map(b => b.iid));
+    // ⭐v6.536（Fable 審查 P1-1）：雙方同時受傷 ⇒ 對手側取完獎賞也不停（中央迴圈已收回終局），自己側照常結算。
+    const s = snipeAllOppBenchDamage(state, aIdx, amount, pool, label);
+    if (s.phase === 'game-over' || ownIids.size === 0) return s;
     const players = [...s.players] as [PlayerState, PlayerState];
-    for (const i of [0, 1] as const) {
-      const p = { ...players[i] };
-      const isOppSide = i !== aIdx;
-      p.bench = p.bench.map(b => {
-        if (isOppSide) {
-          const card = pool.get(b.cardId);
-          const guard = canApplyEffectToTarget(s, aIdx, b, card, 'attack-damage', pool, { isBench: true });
-          if (guard.blocked) {
-            s = addLog(s, `${label}：${card?.name ?? '?'} 因 ${guard.reason} 不受傷害`, aIdx);
-            return b;
-          }
-        }
-        return { ...b, damage: (b.damage ?? 0) + amount };
-      });
-      players[i] = p;
-    }
-    return addLog({ ...s, players }, `${label}：雙方備戰寶可夢各受到 ${amount} 點傷害（未被擋者）`, aIdx);
+    players[aIdx] = { ...players[aIdx], bench: players[aIdx].bench.map(b => ownIids.has(b.iid) ? { ...b, damage: (b.damage ?? 0) + amount } : b) };
+    return addLog({ ...s, players }, `${label}：自己的所有備戰寶可夢各受到 ${amount} 點傷害`, aIdx);
   };
 }
+// <<< v6536-both-bench-central
 
 // resolver for snipe one
 import { regR } from '../_shared';

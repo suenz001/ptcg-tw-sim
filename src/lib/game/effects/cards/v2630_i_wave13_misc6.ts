@@ -2,6 +2,7 @@
  * v2.63 I 標 Wave 13 — 雜項第六批（35 張）
  */
 
+import { dealAttackDamageToOppTargets } from '../../effects'; // ⭐v6.536 多目標對手側中央迴圈
 import type { CardInstance, PlayerState } from '../../types';
 import { damageCounterCount } from '../_shared'; // ⭐v6.399 指示物個數：全站唯一一份判準
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE, openDeckTopRevealOptionalDiscard,
@@ -186,12 +187,9 @@ regR('wave13-snipe-multi-opp-bench', (state, aIdx, iids, params, pool) => {
   const label = (params?.label as string | undefined) ?? '狙擊';
   if (amount === 0) return state;
   // v5.437：改走中央函式（補免疫/KO/受傷反擊）。備戰目標不計弱抗（中央函式 isActive gate 自動）。
-  let s = addLog(state, `${label}：${iids.length} 隻備戰各受到 ${amount} 點傷害`, aIdx);
-  for (const iid of iids) {
-    s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
-    if (s.phase === 'game-over') return s;
-  }
-  return s;
+  const s = addLog(state, `${label}：${iids.length} 隻備戰各受到 ${amount} 點傷害`, aIdx);
+  // ⭐v6.536：迴圈收斂到中央 dealAttackDamageToOppTargets（同一份逐隻＋遊戲結束即停）。
+  return dealAttackDamageToOppTargets(s, aIdx, iids, amount, pool, label);
 });
 
 // 自方備戰各 +N（不選擇）

@@ -437,8 +437,9 @@ chk('F3 ⭐中央述詞檔存在，且判準核心 declarationHolderStillCounts 
   && count(asof, 'export function isEffectiveAsOfDeclaration(') === 1, String(asof.length));
 const effSrc = readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8');
 const g3Src = readFileSync(join(ROOT, 'src/lib/game/effects/cards/v3001_g3_wave3.ts'), 'utf8');
-chk('F4 ⭐6 個消費點都改走中央述詞：effects.ts 5 處 ＋ v3001_g3_wave3.ts 2 處呼叫 isEffectiveAsOfDeclaration',
-  count(effSrc, 'isEffectiveAsOfDeclaration(') === 5 && count(g3Src, 'isEffectiveAsOfDeclaration(') === 2,
+// ⭐v6.536（IRON_RULES Rule 40）：hitBenchAll 打對手備戰改委派中央 snipeAllOppBenchDamage，它那份 inline 花之帷幔「宣告當時」判定（與中央 resolveBenchGuard 那份重複）整段刪除 ⇒ effects.ts 5 → 4；意圖（消費點都走中央述詞、沒有被動到）不變，花之帷幔的行為由本檔行為矩陣與 test-v6536 守。
+chk('F4 ⭐消費點都改走中央述詞：effects.ts 4 處（v6.536 起）＋ v3001_g3_wave3.ts 2 處呼叫 isEffectiveAsOfDeclaration',
+  count(effSrc, 'isEffectiveAsOfDeclaration(') === 4 && count(g3Src, 'isEffectiveAsOfDeclaration(') === 2,
   JSON.stringify([count(effSrc, 'isEffectiveAsOfDeclaration('), count(g3Src, 'isEffectiveAsOfDeclaration(')]));
 chk('F5 ⭐field-wide 反擊那一份（已經存 iid）直接走同一份判準核心，不另寫第二份',
   count(effSrc, 'declarationHolderStillCounts(') === 1, String(count(effSrc, 'declarationHolderStillCounts(')));

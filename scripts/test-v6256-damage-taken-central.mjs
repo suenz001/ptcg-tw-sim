@@ -339,8 +339,14 @@ T('C2 ⭐⭐中央 helper 的算式與所有消費端（＋下限斷言＋正對
   for (const a of ["regR('snipe-multi'", "regR('clone-strike-multi-hit'"]) {
     const i = SRC.effects.indexOf(a);
     assert.ok(i >= 0, 'anchor 失效：' + a);
-    assert.ok(SRC.effects.slice(i, i + 4000).includes('dealAttackDamageToTarget('),
+    // ⭐v6.536（Rule 40）：clone-strike 改呼叫中央迴圈 dealAttackDamageToOppTargets（它只呼叫 dealAttackDamageToTarget，下面驗）
+    assert.ok(/dealAttackDamageToTarget\(|dealAttackDamageToOppTargets\(/.test(SRC.effects.slice(i, i + 4000)),
       `${a} 既沒自己寫 withAttackDamageTaken、也沒交給 dealAttackDamageToTarget ⇒ 受傷記錄會漏`);
+  }
+  {
+    const iL = SRC.effects.indexOf('export function dealAttackDamageToOppTargets');
+    assert.ok(iL >= 0 && SRC.effects.slice(iL, iL + 600).includes('dealAttackDamageToTarget('),
+      '中央迴圈 dealAttackDamageToOppTargets 沒有呼叫 dealAttackDamageToTarget ⇒ 受傷記錄會漏');
   }
   assert.ok(/withAttackDamageTaken\(defenderState\.active!, _damageBeforeThisAttack, _survivedDamage, 'attack-damage'\)/.test(SRC.engine),
     'engine 主管線沒有走中央寫入點');
@@ -363,9 +369,22 @@ T('C3 ⭐⭐防 KO 中央 helper 的三個呼叫端都必須宣告 kind（＋正
   //   意圖（每一個呼叫端都必須宣告 kind）不變，下方的逐個參數數檢查照舊。
   // ⭐⭐v6.535（Rule 40）：4 → 3。snipe-60-ex（謝米｜精刺奇襲）整段收斂進中央 dealAttackDamageToTarget ⇒ 不再自己做防 KO。
   //   意圖不變 ⇒ 下方補接線斷言：snipe-60-ex 必須走中央管線、且不得留 inline 防 KO（判準兩份＝安慰劑型態 11）。
-  assert.equal(sites.length, 3,
-    `applyPreventKOToVictim effects.ts 呼叫端應恰好 3 個（dealAttackDamageToTarget／` +
-    `hitBenchAll／bench-hit-N），實得 ${sites.length} ⇒ 新增了管線就必須回來讀卡面決定 kind`);
+  // ⭐⭐v6.536（Rule 40）：3 → 1。hitBenchAll／bench-hit-N 打對手時整段委派中央
+  //   （snipeAllOppBenchDamage／dealAttackDamageToOppTargets → dealAttackDamageToTarget），
+  //   剩下的自傷迴圈本來就不做防 KO（v6.260：僅對手招式）⇒ 只剩 dealAttackDamageToTarget 一個呼叫端。
+  //   意圖不變 ⇒ 下方補兩條委派接線斷言，且兩支函式內不得再留 inline 防 KO（判準兩份）。
+  assert.equal(sites.length, 1,
+    `applyPreventKOToVictim effects.ts 呼叫端應恰好 1 個（dealAttackDamageToTarget），` +
+    `實得 ${sites.length} ⇒ 新增了管線就必須回來讀卡面決定 kind`);
+  for (const [a, re2] of [
+    ['function hitBenchAll(', /if \(attackerIdx !== targetIdx\) \{\s*return snipeAllOppBenchDamage\(/],
+    ["regR('bench-hit-N'", /if \(targetIdx !== actorIdx\) \{[\s\S]{0,300}?return dealAttackDamageToOppTargets\(/],
+  ]) {
+    const i = SRC.effects.indexOf(a);
+    assert.ok(i >= 0, 'anchor 失效：' + a);
+    const blk = SRC.effects.slice(i, SRC.effects.indexOf('\n}', i));
+    assert.ok(re2.test(blk) && !/applyPreventKOToVictim\(/.test(blk), `${a} 對手分支沒有委派中央，或還留著 inline 防 KO`);
+  }
   {
     const i60 = SRC.effects.indexOf("regR('snipe-60-ex'");
     assert.ok(i60 >= 0, "anchor 失效：regR('snipe-60-ex'");

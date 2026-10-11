@@ -482,8 +482,9 @@ chk('E6b ⭐正對照：bodyOf 抓得到本體，且對「自寫區位判斷」�
   bodyOf(asof, 'declarationHolderStillCounts').includes('p.hand?.some')
   && /\b(hand|deck)\b/.test('if (p.hand?.some(x => x.iid === iid)) continue;'),
   String(bodyOf(asof, 'declarationHolderStillCounts').length));
-chk('E7 ⭐v6.373 的六個消費點沒有被動到（effects.ts 5 處 ＋ v3001_g3_wave3.ts 2 處 isEffectiveAsOfDeclaration）',
-  count(effSrc, 'isEffectiveAsOfDeclaration(') === 5 && count(g3Src, 'isEffectiveAsOfDeclaration(') === 2,
+// ⭐v6.536（IRON_RULES Rule 40）：hitBenchAll 打對手備戰改委派中央 snipeAllOppBenchDamage，它那份 inline 花之帷幔「宣告當時」判定（與中央 resolveBenchGuard 那份重複）整段刪除 ⇒ effects.ts 5 → 4；意圖（消費點都走中央述詞、沒有被動到）不變，花之帷幔的行為由本檔行為矩陣與 test-v6536 守。
+chk('E7 ⭐v6.373 的消費點沒有被動到（effects.ts 4 處（v6.536 起）＋ v3001_g3_wave3.ts 2 處 isEffectiveAsOfDeclaration）',
+  count(effSrc, 'isEffectiveAsOfDeclaration(') === 4 && count(g3Src, 'isEffectiveAsOfDeclaration(') === 2,
   JSON.stringify([count(effSrc, 'isEffectiveAsOfDeclaration('), count(g3Src, 'isEffectiveAsOfDeclaration(')]));
 chk('E8 ⭐(甲) 的兩個消費點都走 asOfDeclarationHolderIids，且逐隻掃描只有一份'
   + '（countEffectiveAbilityOnSide ＝ effectiveAbilityHolderIidsOnSide().length）',
