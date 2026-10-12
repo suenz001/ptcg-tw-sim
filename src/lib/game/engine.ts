@@ -8271,6 +8271,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           currentPlayer.bench = newBench;
           if (discardAdds.length > 0) {
             currentPlayer.discard = [...currentPlayer.discard, ...discardAdds];
+            // ⭐v6.554（v6554-discard-announce）：棄牌一律寫進對戰紀錄（站長規則）；在回合結束時當場寫，順序才會在寶可夢檢查之前
+            state = addLog(state, `燃火能量：自己的回合結束時丟棄 ${discardAdds.map(e => cardLink(e.iid, pool.get(e.cardId)?.name ?? '?')).join('、')}`, aIdx);
           }
         }
         // v2.228 納莉：「在使用了這張卡的回合結束時，若自己的手牌有 5 張以上，
@@ -10226,6 +10228,123 @@ function stampPendingToken(before: GameState, after: GameState): GameState {
   return out;
 }
 
+// >>> v6554-discard-announce
+/**
+ * ⭐⭐v6.554 站長規則（2026-10-12）：「丟棄牌到棄牌區時，都應該要顯示在對戰log（例如使用高級球）」。
+ *   玩家回報探險家的嚮導丟了哪幾張沒寫；動態 audit（37 副預組兩兩對戰）另抓到丹瑜、青木的手法、濺射咆哮、完全體攪拌器、
+ *   競技場被換掉、撤退費、招式費用丟能量、燃火能量回合結束丟棄……散在幾十個效果裡各自漏寫。
+ *   ⇒ 收斂成**一個出口**：applyAction 每一次「整串動作結束」（沒有待選視窗）時，比對雙方棄牌區新增的卡，
+ *     這一串動作的 log 裡沒有說到的，補一行「🗑 棄牌區：誰 的 A、B 放入棄牌區」。
+ *   判準（全部在這一支，Rule 38）：
+ *   ・整串比對：有選擇視窗時把起點（_discardWatch）記下來，解完才比 ⇒ 能量鏈「暫放棄牌區再附上」不會誤報。
+ *   ・寶可夢離場（昏厥、被丟棄）時連同身上的能量／道具／進化來源一起進棄牌區 ⇒ 由昏厥／丟棄的 log 交代，不重複列。
+ *   ・已經說到的不重複：log 裡有那一張的卡名連結（iid）⇒ 已說明；否則以卡名出現次數（含「×N」）逐張抵扣。只看公開訊息（message）。
+ *   棄牌區本來就是公開資訊 ⇒ 不洩漏隱藏區。
+ */
+const _longerNamesCacheV6554 = new WeakMap<Map<string, Card>, Map<string, string[]>>();
+/** 卡池裡「包含 name、但比它長」的卡名（卡名邊界判斷用；每個卡池物件快取一份）。⚠ 卡池加卡必須換新的 Map 物件（現行前端載入新卡包即建新 Map），原地加卡不會進快取。 */
+function longerNamesV6554(name: string, pool: Map<string, Card>): string[] {
+  let m = _longerNamesCacheV6554.get(pool);
+  if (!m) { m = new Map(); _longerNamesCacheV6554.set(pool, m); }
+  const hit = m.get(name);
+  if (hit) return hit;
+  const set = new Set<string>();
+  for (const c of pool.values()) if (c.name && c.name !== name && c.name.includes(name)) set.add(c.name);
+  const arr = [...set];
+  m.set(name, arr);
+  return arr;
+}
+function fieldHostMapV6554(st: GameState, idx: 0 | 1): Record<string, string> {
+  const m: Record<string, string> = {};
+  const p = st.players[idx];
+  for (const mon of [p.active, ...p.bench]) {
+    if (!mon) continue;
+    m[mon.iid] = mon.iid;
+    for (const e of mon.energyAttached ?? []) m[e.iid] = mon.iid;
+    for (const t of getAllAttachedTools(mon)) m[t.iid] = mon.iid;
+    for (const s of mon.evolvedFromStack ?? []) m[s.iid] = mon.iid;
+  }
+  return m;
+}
+function discardBaseIids(st: GameState): NonNullable<GameState['_discardWatch']> {
+  return { p1: st.players[0].discard.map(c => c.iid), p2: st.players[1].discard.map(c => c.iid), logLen: st.log.length,
+    h1: fieldHostMapV6554(st, 0), h2: fieldHostMapV6554(st, 1) };
+}
+export function announceDiscardsV6554(before: GameState, after: GameState, pool: Map<string, Card>, playedIid?: string): GameState {
+  if (after === before) return after;
+  if (after.pendingSelection) {
+    // 整串還沒結束 ⇒ 只記起點（第一次；起點＝這一串第一個動作「之前」的盤面，開視窗那一步就丟的牌也算得到）
+    const w = after._discardWatch ?? before._discardWatch ?? discardBaseIids(before);
+    // 這一串裡打出的訓練家本身（打出那一步就開了視窗）也要記下來排除
+    const px = playedIid && !(w.px ?? []).includes(playedIid) ? [...(w.px ?? []), playedIid] : w.px;
+    return after._discardWatch === w && px === w.px ? after : { ...after, _discardWatch: px ? { ...w, px } : w };
+  }
+  // 快速路徑（審查 P3）：沒有進行中的一串、雙方棄牌區陣列與動作前同一個物件 ⇒ 沒有新增
+  if (!after._discardWatch && !before._discardWatch
+      && after.players[0].discard === before.players[0].discard && after.players[1].discard === before.players[1].discard) return after;
+  const base = after._discardWatch ?? before._discardWatch ?? discardBaseIids(before);
+  let out: GameState = after;
+  if (out._discardWatch) { out = { ...out }; delete out._discardWatch; }
+  const chainLines = out.log.slice(base.logLen).map(l => (typeof l === 'string' ? l : (l.message ?? '')));
+  const chainLog = chainLines.join('\n');
+  // ⭐（審查 P2-1）卡名抵扣只看「講棄牌」的那幾行（含「丟」或「棄」）——翻開／揭示那一行出現卡名不算說明了丟棄。
+  //   卡名後面緊接英數（例：「皮卡丘」對「皮卡丘ex」）不算同一張。
+  //   （複審 P3-2）「從棄牌區…取回」這種取回的行不算（除非同一行也有「丟」）。
+  const discardText = chainLines.filter(m => /[丟棄]/.test(m) && !m.startsWith('🗑') && (/丟/.test(m) || !/從[^。，、]{0,8}棄牌區/.test(m))).join('\n');
+  //   （複審 P3-2）卡名邊界：該位置其實是另一張「更長的卡名」（雷丘 vs 阿羅拉雷丘、皮卡丘 vs 皮卡丘ex）⇒ 不算
+  const isNameAt = (txt: string, i: number, name: string) => {
+    if (/[A-Za-z0-9]/.test(txt.charAt(i + name.length))) return false;
+    for (const L of longerNamesV6554(name, pool)) {
+      const k = L.indexOf(name);
+      if (i - k >= 0 && txt.startsWith(L, i - k)) return false;
+    }
+    return true;
+  };
+  const hostOfIdx = (idx: 0 | 1) => new Map<string, string>(Object.entries({ ...(idx === 0 ? base.h1 : base.h2), ...fieldHostMapV6554(before, idx) }));
+  for (const idx of [0, 1] as const) {
+    const baseSet = new Set(idx === 0 ? base.p1 : base.p2);
+    const played = new Set([...(base.px ?? []), ...(playedIid ? [playedIid] : [])]);
+    const added = out.players[idx].discard.filter(c => !baseSet.has(c.iid) && !played.has(c.iid));   // 這一串打出的訓練家本身由「使用了」那一行交代
+    if (added.length === 0) continue;
+    const addedSet = new Set(added.map(c => c.iid));
+    const host = hostOfIdx(idx);
+    // 卡名出現次數（「卡名×N」算 N 次）；雙方各自一份
+    const nameBudget = new Map<string, number>();
+    const budgetOf = (name: string): number => {
+      if (nameBudget.has(name)) return nameBudget.get(name)!;
+      let n = 0, i = discardText.indexOf(name);
+      while (i >= 0) {
+        if (isNameAt(discardText, i, name)) {
+          const m = /^\s*[×xX]\s*(\d+)/.exec(discardText.slice(i + name.length, i + name.length + 6));
+          n += m ? Math.max(1, Number(m[1])) : 1;
+        }
+        i = discardText.indexOf(name, i + name.length);
+      }
+      nameBudget.set(name, n);
+      return n;
+    };
+    const unannounced: CardInstance[] = [];
+    for (const c of added) {
+      const h = host.get(c.iid);
+      if (h && h !== c.iid && addedSet.has(h)) continue;   // 隨寶可夢一起離場（昏厥／整隻丟棄）
+      if (h === c.iid) continue;                            // 寶可夢本體離場：昏厥／丟棄的 log 交代
+      const name = pool.get(c.cardId)?.name ?? '?';
+      if (chainLog.includes(`\uE100${c.iid}\uE101`)) {   // 已用卡名連結說到這一張（同名次數也扣掉一次，免得吞掉另一張）
+        const b0 = budgetOf(name); if (b0 > 0) nameBudget.set(name, b0 - 1);
+        continue;
+      }
+      const b = budgetOf(name);
+      if (b > 0) { nameBudget.set(name, b - 1); continue; }
+      unannounced.push(c);
+    }
+    if (unannounced.length === 0) continue;
+    const links = unannounced.map(c => cardLink(c.iid, pool.get(c.cardId)?.name ?? '?')).join('、');
+    out = addLog(out, `🗑 棄牌區：${out.players[idx].name} 的 ${links} 放入棄牌區`, idx);
+  }
+  return out;
+}
+// <<< v6554-discard-announce
+
 export function applyAction(
   state: GameState,
   action: GameAction,
@@ -10250,6 +10369,9 @@ export function applyAction(
     delete cleaned._abilityUseRejectedIdx;
     raw = cleaned;
   }
+  // ⭐v6.554 v6554-discard-announce：整串動作結束時補寫沒有說明的棄牌。整包回捲的拒絕在上面原樣回傳、不經這裡；
+  //   「回答視窗被拒但不回捲」的那一條也經過這裡 ⇒ 視窗已關時 watch 一定被清掉（審查 P3）。
+  raw = announceDiscardsV6554(state, raw, pool, action.type === 'PLAY_TRAINER' ? (action as { iid?: string }).iid : undefined);
   // ⭐v6.530 引夢貘人｜白日夢：效果處理完（沒有待選視窗）才結束那位玩家的回合；欄位一律在出口刪掉（不寫進資料庫）。
   if (raw.daydreamEndTurnPending != null) {
     const who = raw.daydreamEndTurnPending;
