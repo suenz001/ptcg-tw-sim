@@ -13,6 +13,7 @@
  *   - 雜 (1 張)
  */
 
+import { isRocketTeamPokemonCard } from '../_shared';   // ⭐v6.546「火箭隊的寶可夢」唯一判準
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, canEvolveOnto, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
 import { getAllAttachedTools } from '../_shared'; // v5.835 道具數含多重轉接
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
@@ -569,7 +570,7 @@ regPre('火箭隊的操陷蛛|火箭猛攻', (state, aIdx, pool) => {
   let count = 0;
   for (const c of [p.active, ...p.bench].filter(Boolean) as CardInstance[]) {
     const card = pool.get(c.cardId);
-    if (card?.name?.startsWith('火箭隊的')) count++;
+    if (isRocketTeamPokemonCard(card)) count++;
   }
   const dmg = count * 30;
   return { state: addLog(state, `火箭猛攻：場上火箭隊寶可夢 ${count} 隻 → ${count}×30 = ${dmg}`, aIdx), damage: dmg };

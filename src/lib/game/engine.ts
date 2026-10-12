@@ -7982,7 +7982,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       const countRocket = (pl: PlayerState): number =>
         pl.discard.filter(c => {
           const card = pool.get(c.cardId);
-          return card?.supertype === 'Pokemon' && card.name?.startsWith('火箭隊的');
+          return isRocketTeamPokemonCard(card);   // ⭐v6.546 中央判準
         }).length;
       const prevRocketMainEnd = state.rocketInMyDiscardAtMainEnd ?? [0, 0] as [number, number];
       const newRocketMainEnd: [number, number] = [prevRocketMainEnd[0], prevRocketMainEnd[1]];
@@ -9399,7 +9399,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     const countRocketPokeInDiscard = (pl: PlayerState): number =>
       pl.discard.filter(c => {
         const card = pool.get(c.cardId);
-        return card?.supertype === 'Pokemon' && card.name?.startsWith('火箭隊的');
+        return isRocketTeamPokemonCard(card);   // ⭐v6.546 中央判準
       }).length;
     const prevRocketLastEnd = state.rocketInMyDiscardAtMyLastTurnEnd ?? [0, 0] as [number, number];
     const newRocketLastEnd: [number, number] = [prevRocketLastEnd[0], prevRocketLastEnd[1]];
@@ -11133,7 +11133,7 @@ function selfAttackPreconditionBlock(
     if (ab.name === '力量抑制者') {
       if (!isAbilityHolderEffective(state, act, card, idx, ab.name, 'active', pool)) continue;
       const rocketCount = [act, ...player.bench]
-        .filter(c => pool.get(c.cardId)?.name?.startsWith('火箭隊的')).length;
+        .filter(c => isRocketTeamPokemonCard(pool.get(c.cardId))).length;   // ⭐v6.546 中央判準
       if (rocketCount < 4) {
         return `${card.name} 力量抑制者：自己場上「火箭隊的」寶可夢只有 ${rocketCount} 隻（未達 4 隻），無法使用招式`;
       }

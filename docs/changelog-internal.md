@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.546：火箭隊的寶可夢判準收斂、虛無歸零文案（2026-10-12，小問題批次 D，**非規則改動**）
+
+BASE 981b61c3（v6.545）。
+- 「火箭隊的寶可夢」：`startsWith` 寫法的 9 處 `startsWith('火箭隊的')` 散寫（_shared recordOppKO、火箭隊的頭腦、v172、v2650、v2670 火箭鏡面、v3001、engine ×3）收斂到中央 isRocketTeamPokemonCard，並把 supertype === 'Pokemon' 收進判準（H/I/J 以「火箭隊的」開頭的非寶可夢卡 12 張全是訓練家，場上不會出現；牌庫／棄牌區呼叫點原本就各自檢查 supertype ⇒ 零行為變更）。anti-pattern-lint 新增 Check Z（散寫回流即紅，含正對照與掃描器下限）。effects.ts isRocketBasicTarget 用 includes，語義不同，未動。
+- 超級基格爾德ex｜虛無歸零（damageAllOppByCoin）：全部反面時 log 改「全部反面，沒有寶可夢受到傷害」；補上「迴圈刻意不在中途收回終局、交給出口中央重判」的註解（v6.536 複審 P3）。
+- 守衛 test-v6546-rocket-pred-and-coin-log：ROCKET_PRED、COIN_ALL_TAILS、LINT_Z（BASE 三條全紅）。突變 3 個全殺（散寫回流、中央不看 supertype、反面照寫）。
+- **Fable 5.1 審查（aec2e45b860dee49e）：可合併，無 P1／P2**。確認：9 處加 supertype 零行為變更（對象皆為場上實體、有特性的候選卡或原本就檢查 supertype）；import 無循環；Check Z 豁免無洞；HEAD-FAIL 三條各自獨立翻紅。
+  - P3-1：另有約 10 處 `.includes('火箭隊的')` 的同義寫法（isRocketBasicTarget、火箭隊的雅典娜、selection-filter 'RocketBasic'、ai.ts、+page.svelte），Check Z 只抓 startsWith ⇒ 列入下一輪：擴成 (startsWith|includes) 並收斂成中央述詞（部分帶「基礎」條件）。本條文字已改為「startsWith 寫法的 9 處」。
+  - **複審：可合併**，無 P1／P2／P3。
+- 全套（607a7efa）：FAIL 1 —— test-v6370 已知平行假紅（單跑綠）。
+
 ## v6.545：零之大空洞的處理順序（2026-10-12，小問題批次 C）
 
 BASE 393123ef（v6.544）。調查：子代理以 applyAction 完整流程重現（小問題第 1 項 A／D′）。

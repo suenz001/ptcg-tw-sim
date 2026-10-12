@@ -21,6 +21,7 @@
  *   - 雙方睡眠+下回合 +N（樹枕尾熊）
  */
 
+import { isRocketTeamPokemonCard } from '../_shared';   // ⭐v6.546「火箭隊的寶可夢」唯一判準
 import type { PlayerState } from '../../types'; // v6.020：補 type-only import(TS2304 scanner)
 import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardActiveStadium, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
@@ -223,7 +224,7 @@ regPost('火箭隊的果然翁|火箭鏡面', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const rocketBench = p.bench.filter(b => {
     const card = pool.get(b.cardId);
-    return card?.name?.startsWith('火箭隊的') && (b.damage ?? 0) > 0;
+    return isRocketTeamPokemonCard(card) && (b.damage ?? 0) > 0;
   });
   if (rocketBench.length === 0) return addLog(state, '火箭鏡面：自方備戰無火箭隊寶可夢有傷害可移轉', aIdx);
   const s = addLog(state, '火箭鏡面：選 1 隻自方備戰火箭隊寶可夢，指示物全移到對手戰鬥場', aIdx);

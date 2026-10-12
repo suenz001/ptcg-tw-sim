@@ -46,6 +46,7 @@
  *     但仍提供空的 register() function 保持 wave 模板一致，effects.ts 末端呼叫即可。
  */
 
+import { isRocketTeamPokemonCard } from '../_shared';   // ⭐v6.546「火箭隊的寶可夢」唯一判準
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { RULE_BOX_SUBTYPES } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -720,7 +721,7 @@ export function isOppEvilEyeBlocking(
   // 候選寶可夢無特性 → 不受影響
   if (!candidateCard.abilities || candidateCard.abilities.length === 0) return false;
   // 「火箭隊的」開頭寶可夢 → 例外不擋
-  if ((candidateCard.name ?? '').startsWith('火箭隊的')) return false;
+  if (isRocketTeamPokemonCard(candidateCard)) return false;
   const oppIdx = (1 - aIdx) as 0 | 1;
   return hasAbilityOnActive(state, oppIdx, pool, '瞪眼效用');
 }

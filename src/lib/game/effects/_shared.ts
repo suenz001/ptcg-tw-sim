@@ -1270,8 +1270,7 @@ export function recordOppKO(
 ): GameState {
   // 自 KO：攻擊方 KO 自己的寶可夢（咒詛炸彈自爆等） — 不算入「對手主動 KO 我方」
   if (state.activePlayerIndex === victimIdx) return state;
-  const isRocket = victimCard?.supertype === 'Pokemon'
-    && (victimCard.name?.startsWith('火箭隊的') ?? false);
+  const isRocket = isRocketTeamPokemonCard(victimCard);   // ⭐v6.546 中央判準
   // v5.274 赫普家族 — 給「赫普的朽木妖|恐怖復仇」用 (卡面只計「赫普的」KO)
   const isHop = victimCard?.supertype === 'Pokemon'
     && (victimCard.name?.startsWith('赫普的') ?? false);
@@ -3131,9 +3130,11 @@ export function withAttackDamageTaken(
 // >>> v6534-rocket-holder
 /**
  * ⭐v6.534：「火箭隊的寶可夢」判準（卡名以「火箭隊的」開頭）。火箭隊的催眠裝置（tools.ts）與 engine 受傷結算的說明 log 共用這一份（Rule 38）。
- *   ⚠ 站內其他 9 處同字面的寫法尚未收斂（另一個維度，列入後續）。
+ * ⭐v6.546：站內其他 9 處同字面的寫法全部收斂到這裡（anti-pattern-lint Check Z 擋新的散寫），並補上「是寶可夢卡」：
+ *   H/I/J 以「火箭隊的」開頭的非寶可夢卡共 12 張、全是訓練家（支援者／物品／道具），場上不會出現；
+ *   牌庫／棄牌區的呼叫點原本就各自加了 supertype 檢查 ⇒ 判準收進來後零行為變更。
  */
-export function isRocketTeamPokemonCard(card: { name?: string } | null | undefined): boolean {
-  return !!card?.name?.startsWith('火箭隊的');
+export function isRocketTeamPokemonCard(card: { name?: string; supertype?: string } | null | undefined): boolean {
+  return card?.supertype === 'Pokemon' && !!card.name?.startsWith('火箭隊的');
 }
 // <<< v6534-rocket-holder

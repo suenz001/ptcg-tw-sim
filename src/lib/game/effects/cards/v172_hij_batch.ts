@@ -16,6 +16,7 @@
  *   - 火箭隊的超級球 (I, Item)：coin 正面=進化「火箭隊的」/反面=基礎「火箭隊的」
  */
 
+import { isRocketTeamPokemonCard } from '../_shared';   // ⭐v6.546「火箭隊的寶可夢」唯一判準
 import { getSupporterEffectSource } from '../../supporter-effect-source';   // ⭐v6.532 霍米加的演奏：記下使出方式
 import { isAllPowerSoulBlocked } from '../../usable-gates'; // ⭐v6.528 全能靈魂（壯偉碩木不可以進化成海豚俠ex）
 import {
@@ -51,8 +52,7 @@ reg('火箭隊的超級球', (st, idx, pool) => {
   const validIids = st.players[idx].deck
     .filter(c => {
       const card = pool.get(c.cardId);
-      if (!card?.name?.startsWith('火箭隊的')) return false;
-      if (card.supertype !== 'Pokemon') return false;
+      if (!card || !isRocketTeamPokemonCard(card)) return false;
       const isEvo = !!card.evolvesFrom;
       return heads ? isEvo : !isEvo;
     })

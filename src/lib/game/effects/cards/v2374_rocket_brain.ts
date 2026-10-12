@@ -25,6 +25,7 @@
  *   - 對手場上有探探鼠也會擋（雙方都不能用此特性，符合卡面）
  */
 
+import { isRocketTeamPokemonCard } from '../_shared';   // ⭐v6.546「火箭隊的寶可夢」唯一判準
 import type { CardInstance } from '../../types';
 import {
   regA, regR,
@@ -52,7 +53,7 @@ regA('火箭隊的以歐路普', 0, (st, idx, pool) => {
   // 來源候選：自己場上的「火箭隊的」寶可夢 + 至少 1 顆指示物
   const sources = allOwn.filter(c => {
     const card = pool.get(c.cardId);
-    return !!card?.name?.startsWith('火箭隊的') && c.damage >= 10;
+    return isRocketTeamPokemonCard(card) && c.damage >= 10;
   });
   if (sources.length === 0) {
     return rejectAbilityUse(st, '火箭腦力：場上沒有「火箭隊的」寶可夢有傷害指示物', idx);

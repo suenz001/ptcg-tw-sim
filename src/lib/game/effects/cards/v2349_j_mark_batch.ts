@@ -56,11 +56,18 @@ function damageAllOppByCoin(
   const dIdx = 1 - aIdx as 0 | 1;
   let s = state;
   const targets = [s.players[dIdx].active, ...s.players[dIdx].bench].filter((c): c is CardInstance => !!c);
+  // ⚠ v6.546（v6.536 複審 P3 補註解）：本迴圈刻意**不在中途收回終局**（liftEndgameForOnKoV6361），也不在 game-over 後 break：
+  //   卡面「所有出現正面的寶可夢各受到150點傷害」是同一個效果，每一隻都要擲幣、結算；dealAttackDamageToTarget 打倒某隻、
+  //   取完最後獎賞而寫了終局時，後續目標照樣結算，勝負交給 applyActionImpl 出口的中央重判
+  //   （v6421-defer-endgame-zombie／centralVerdictDiffersV6531）一次決定（含平手）。
+  //   log 會出現「獲勝！」之後仍有擲幣，這是已知的文案順序，不是行為錯誤。
+  let _heads = 0;
   for (const t of targets) {
     const rco = flipCoinsWithLog(s, 1, label, aIdx);
     s = rco.state;
     const isHeads = rco.heads === 1;
     if (!isHeads) continue;
+    _heads++;
     // v5.470：改走中央 dealAttackDamageToTarget（免疫+弱抗+道具+擊倒一次到位）。
     //   卡面「各受到150點傷害，[在備戰區不計算弱點・抵抗力]」→ 戰鬥場(active)計弱點×2/抵抗、備戰 noWeakness。
     //   原 damageOneNoKo 為 raw（不算弱抗、不 KO）→ 戰鬥場漏弱點（玩家回報虛無歸零沒算對手戰鬥場弱點）。
@@ -72,7 +79,8 @@ function damageAllOppByCoin(
       s = damageOneNoKo(s, dIdx, t.iid, amount);
     }
   }
-  return addLog(s, `${label}：正面且未被擋下的對手寶可夢各受到 ${amount} 傷害`, aIdx);
+  // ⭐v6.546 全部反面時不寫「各受到 N 傷害」（原本照寫，像是有寶可夢受到傷害）
+  return addLog(s, _heads > 0 ? `${label}：正面且未被擋下的對手寶可夢各受到 ${amount} 傷害` : `${label}：全部反面，沒有寶可夢受到傷害`, aIdx);
 }
 
 function attachBasicEnergyFromDeckToActive(state: GameState, aIdx: 0 | 1, pool: Map<string, any>, maxCount: number, label: string): GameState {
