@@ -2877,10 +2877,20 @@ function _setupSelfPending(g: any, seat: number): string | null {
     }
   }
 
+  // >>> v6555-suppress-click-after-drag
+  // ⭐v6.555（審查 P1，Chromium 實測）：拖曳手牌放開後，瀏覽器一定會在那張手牌上再補發一次 click，
+  //   而這時 dragging 已在下面被設成 null ⇒ onclick 的 `!dragging` 擋不住 ⇒ 拖過的能量被「點選」起來
+  //   （拖曳取消時 ⚡ 掛在每一隻寶可夢上、點寶可夢會直接附能）。⇒ 記下「剛拖完的那張」，onclick 吃掉這一次。
+  let _suppressHandClickIid: string | null = null;
+  // <<< v6555-suppress-click-after-drag
   async function onWindowPointerUp(e: PointerEvent) {
     if (!dragging) return;
     const d = dragging;
     dragging = null;
+    if (d.moved) {   // ⭐v6.555 v6555-suppress-click-after-drag
+      _suppressHandClickIid = d.iid;
+      setTimeout(() => { if (_suppressHandClickIid === d.iid) _suppressHandClickIid = null; }, 400);
+    }
     const tIid = dropTargetIid;
     const benchEmpty = dropBenchEmpty;
     const activeEmpty = dropActiveEmpty;
@@ -3614,6 +3624,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
     return getHandCardOps(game, myIdx as 0 | 1, pool, { isMyTurn: isMyTurn() });
   });
   const EMPTY_HAND_OPS: ReadonlySet<HandCardOp> = new Set<HandCardOp>();
+  // >>> v6555-stale-energy-pick
+  // ⭐v6.555（站長回報：沒有點能量，備戰區卻一直顯示 ⚡）：點選附能用的 selectedEnergyIid 只有「點手牌能量」會設、
+  //   但那張卡離開手牌（拖曳附上、被丟棄）或這回合已經附過能量之後從沒清掉 ⇒ ⚡ 提示一直掛著、點寶可夢變成附能而不是放大。
+  //   ⇒ 判準只用手牌操作的唯一來源 handCardOps：選取的那張不在手牌、或現在不能附 ⇒ 清掉。
+  $effect(() => {
+    if (selectedEnergyIid && !(handCardOps.get(selectedEnergyIid)?.has('energy'))) selectedEnergyIid = null;
+  });
+  // <<< v6555-stale-energy-pick
   /** 拖曳中的那張卡，放到某種釋放區會結算成哪個操作（給 drop-zone 高亮用，與實際結算同一支） */
   function dragOpFor(target: HandDropTarget): HandCardOp | null {
     if (!dragging) return null;
@@ -7282,6 +7300,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     void tForceResync();
   }
   async function tournamentDispatch(action: any) {
+    selectedEnergyIid = null;   // ⭐v6.555（審查 P2）比照休閒 dispatch：送出任何動作都清掉點選附能（v6555-stale-energy-pick）
     // v6.135 不再靜默 return：tBusy 沒有 template 綁定，按鈕外觀不會變，
     //   玩家在等待往返時連點會完全沒有回饋 ⇒ 體感就是「按下去沒反應」。改為顯性提示。
     if (tInFlight) {
@@ -12484,7 +12503,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             onpointerenter={(e)=>enterHandCard(e, inst.iid)}
             onpointerleave={leaveHandCard}
             onpointerdown={(e)=>{leaveHandCard(); if(handCardDraggable(ops)){ if(actionBusy){tActSay(TACT_BLOCKED_MSG,5000);} else startDrag(e, inst, ops, c); }}}
-            onclick={()=>{if(actionBusy){tActSay(TACT_BLOCKED_MSG,5000);return;} if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
+            onclick={()=>{if(actionBusy){tActSay(TACT_BLOCKED_MSG,5000);return;} if(_suppressHandClickIid===inst.iid){_suppressHandClickIid=null;return;} if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
             title={canHandActivate?(canEvolve?`拖到空備戰格發動特性、拖到進化目標進化 · ${c.name}`:`拖到備戰格使用特性 · ${c.name}`):(dragKind?`拖曳使用 · ${c.name}`:c.name)}>
             <!-- v4.27 修：iPad / 觸控裝置 tap 此鈕本來會「同時」觸發 parent 的 hover-peek 大圖
                  預覽 + 自己的 openZoom modal（兩種視覺都出現很多餘）。玩家要求只保留 hover-peek。

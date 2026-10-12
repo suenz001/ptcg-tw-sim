@@ -613,6 +613,19 @@ const V6441_BATTLE_EDITS = [
   ["      onOpenDiscard={(who) => { viewDiscardFor = who === 'me' ? myIdx : oppIdx; }}\n", ""],  // ⭐v6.453：手機直式元件的撤退改開父層共用的撤退選單 ⇒ 元件呼叫再多一個 prop。
   ["      onOpenRetreat={() => { floatingRetreatMenu = { x: innerWidth / 2, y: innerHeight / 2 }; }}\n", ""],
 ];
+// ⭐v6.555（Rule 40，意圖不變）：手牌 onclick 開頭多一行「剛拖完的那張吃掉這次 click」（v6555-suppress-click-after-drag，非版面改動；由 test-v6555 守）。
+const V6555_BATTLE_EDITS = [
+  [" if(_suppressHandClickIid===inst.iid){_suppressHandClickIid=null;return;}", ""],
+];
+function revertV6555(region) {
+  let r = region;
+  for (const [now, before] of V6555_BATTLE_EDITS) {
+    const n = r.split(now).length - 1;
+    assert.strictEqual(n, 1, 'v6.555 的合法改動必須恰出現 1 次（實際 ' + n + '）：' + now.slice(0, 70));
+    r = r.split(now).join(before);
+  }
+  return r;
+}
 function revertV6441(region) {
   const n0 = region.split('>>> ' + V6441_BLUE_TAG).length - 1;
   assert.strictEqual(n0, 1, 'v6.441 blueDeco snippet 的哨兵必須恰出現一次（實際 ' + n0 + '）');
@@ -681,7 +694,7 @@ await T('E1 ⭐⭐⭐ 對戰版面分支區間（手機直式＋三種桌機版�
   if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6293 E1 對戰版面分支逐位元比對', '需要歷史 commit；E1c 的結構斷言不需要歷史，仍在守'); skipped.push('E1（淺複製）'); return; }
   const baseSrc = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':src/routes/game/+page.svelte'], { maxBuffer: 1 << 28 }).toString('utf8');
   // ⭐v6.464（Rule 40）：卡圖縮圖改了對戰區的 <img src>（全版面一致）⇒ 先用共用還原表把整檔還原成 v6.463，再走原本的還原鏈；其餘仍須逐位元等於 BASE。
-  assert.strictEqual(sha256(revertV6441(revertV6425(revertV6418(revertV6389(revertV6321(battleRegionOf(revertPairs(GAME, V6464_GAME_PAIRS)))))))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
+  assert.strictEqual(sha256(revertV6555(revertV6441(revertV6425(revertV6418(revertV6389(revertV6321(battleRegionOf(revertPairs(GAME, V6464_GAME_PAIRS))))))))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
   assert.strictEqual(sha256(revertV6420Gameover(gameoverRegionOf(stripV6361DrawModal(GAME)))), sha256(gameoverRegionOf(baseSrc)), '⚠⚠ 勝負結算 modal 被動到了');
 });
 await T('E1b ⭐ 正對照：把對戰版面分支改一個位元 ⇒ E1 的比對必須不同（不是恆真式）', () => {

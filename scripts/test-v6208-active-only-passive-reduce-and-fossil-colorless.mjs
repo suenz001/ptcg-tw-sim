@@ -429,6 +429,7 @@ T('4b.〔核心〕真的執行 onclick：手牌特性可用時**不送出任何�
   // eslint-disable-next-line no-new-func
   const fn = new Function('actionBusy', 'tActSay', 'TACT_BLOCKED_MSG', 'canHandActivate', 'canEnergy',
     'dragging', 'selectedEnergyIid', 'inst', 'dispatch', 'GameActions', 'triggerHandActivateAbility',
+    '_suppressHandClickIid',   // ⭐v6.555（Rule 40）onclick 開頭多一行「剛拖完的那張吃掉這次 click」；不傳＝undefined＝不是剛拖完
     body + '\n;return selectedEnergyIid;');
   sel = fn(false, () => {}, 'blocked', /* canHandActivate */ true, /* canEnergy */ false,
     null, null, { iid: 'h1' }, () => { dispatched++; },
@@ -443,6 +444,7 @@ T('4c. 正對照：能量卡點一下仍然切換 selectedEnergyIid（比照對�
   // eslint-disable-next-line no-new-func
   const fn = new Function('actionBusy', 'tActSay', 'TACT_BLOCKED_MSG', 'canHandActivate', 'canEnergy',
     'dragging', 'selectedEnergyIid', 'inst', 'dispatch', 'GameActions', 'triggerHandActivateAbility',
+    '_suppressHandClickIid',   // ⭐v6.555（Rule 40）onclick 開頭多一行「剛拖完的那張吃掉這次 click」；不傳＝undefined＝不是剛拖完
     body + '\n;return selectedEnergyIid;');
   const on = fn(false, () => {}, 'blocked', false, true, null, null, { iid: 'h1' }, () => {}, {}, () => {});
   assert.equal(on, 'h1', '選取沒生效');
@@ -456,6 +458,7 @@ T('4d. 正對照：actionBusy 時 onclick 仍然先擋下並提示（v6.147 的 
   // eslint-disable-next-line no-new-func
   const fn = new Function('actionBusy', 'tActSay', 'TACT_BLOCKED_MSG', 'canHandActivate', 'canEnergy',
     'dragging', 'selectedEnergyIid', 'inst', 'dispatch', 'GameActions', 'triggerHandActivateAbility',
+    '_suppressHandClickIid',   // ⭐v6.555（Rule 40）onclick 開頭多一行「剛拖完的那張吃掉這次 click」；不傳＝undefined＝不是剛拖完
     body + '\n;return selectedEnergyIid;');
   const r = fn(true, () => { said++; }, 'blocked', false, true, null, null, { iid: 'h1' }, () => {}, {}, () => {});
   assert.equal(said, 1); assert.equal(r, null);

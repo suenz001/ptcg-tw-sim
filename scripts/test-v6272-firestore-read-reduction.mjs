@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '4d70c6b20f15b86db05f5f311f38c967d281f2eb';   // v6.553（上一版）
+const PREV_SHA = '6b6f244330ccae8a5b77cb23c43097af1ddc92ad';   // v6.554（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,16 +757,25 @@ const PREV_SHA = '4d70c6b20f15b86db05f5f311f38c967d281f2eb';   // v6.553（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.554 前移：PREV_SHA 從 4d70c6b2（v6.553）起算。
+  // ⚠⚠ v6.555 前移：PREV_SHA 從 6b6f2443（v6.554）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.554：applyAction 出口中央補寫沒有說明的棄牌（v6554-discard-announce）；燃火能量回合結束當場寫。
-  'src/lib/game/engine.ts',
-  'src/lib/game/types.ts',
+  // ⭐v6.555：對戰頁 selectedEnergyIid 依 handCardOps 自動清除（v6555-stale-energy-pick）。
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.554）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.554 前移：PREV_SHA 從 4d70c6b2（v6.553）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.554：applyAction 出口中央補寫沒有說明的棄牌（v6554-discard-announce）；燃火能量回合結束當場寫。
+//   'src/lib/game/engine.ts',
+//   'src/lib/game/types.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.553）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.553 前移：PREV_SHA 從 93c73398（v6.552）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -894,16 +903,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/selection-filter.ts',
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.542）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.542 前移：PREV_SHA 從 0677386e（v6.541）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.542：納莉 × 力之沙漏 回合結束處理順序（nanu-hourglass-order）。
-//   'src/lib/game/effects.ts',
-//   'src/lib/game/engine.ts',
-//   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

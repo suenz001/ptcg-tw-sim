@@ -131,10 +131,11 @@ function runBothUiPaths(handIid, metaList) {
   //  ⚠ `triggerHandActivateAbility` 一定要當參數傳進去，而且要**忠實鏡射**舊版的行為
   //    （它會 dispatch useHandAbility）。不傳＝BASE 跑到那行直接 ReferenceError 讓測試「當掉」；
   //    傳一個什麼都不做的空函式＝BASE 也拿到 clickAct===null ⇒ **假綠**。
+  // ⭐v6.555（Rule 40）：onclick 開頭多一行「剛拖完的那張吃掉這次 click」（_suppressHandClickIid）⇒ 參數表補上，傳 null（不是剛拖完）。
   const clickFn = new Function('actionBusy', 'tActSay', 'TACT_BLOCKED_MSG', 'canHandActivate', 'canEnergy',
-    'dragging', 'selectedEnergyIid', 'inst', 'dispatch', 'GameActions', 'triggerHandActivateAbility', clickBody);
+    'dragging', 'selectedEnergyIid', 'inst', 'dispatch', 'GameActions', 'triggerHandActivateAbility', '_suppressHandClickIid', clickBody);
   clickFn(false, () => {}, 'blocked', true, false, null, null, { iid: handIid }, (a) => { clickAct = a; }, GA,
-    (iid) => { clickAct = GA.useHandAbility(iid, map.get(iid)?.abilityIndex ?? 0); });
+    (iid) => { clickAct = GA.useHandAbility(iid, map.get(iid)?.abilityIndex ?? 0); }, null);
   return { drag: dragAct, click: clickAct };
 }
 

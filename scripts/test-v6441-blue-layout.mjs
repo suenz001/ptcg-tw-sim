@@ -71,6 +71,12 @@ const REVERT = [
 //   這些後續版本的改動在這裡逐條還原（每條恰好命中 1 次；內容正確性由各版自己的守衛鎖：test-v6448…）。
 //   ⚠ 只准放「非藍桌墊」的全版面改動；藍桌墊的改動一律寫進哨兵。
 const LATER = [
+  // ⭐v6.555（Rule 40）：拖曳後補發 click 的抑制、錦標賽送出時清點選附能（非版面改動；由 test-v6555 鎖）
+  ["  // >>> v6555-suppress-click-after-drag\n  // ⭐v6.555（審查 P1，Chromium 實測）：拖曳手牌放開後，瀏覽器一定會在那張手牌上再補發一次 click，\n  //   而這時 dragging 已在下面被設成 null ⇒ onclick 的 `!dragging` 擋不住 ⇒ 拖過的能量被「點選」起來\n  //   （拖曳取消時 ⚡ 掛在每一隻寶可夢上、點寶可夢會直接附能）。⇒ 記下「剛拖完的那張」，onclick 吃掉這一次。\n  let _suppressHandClickIid: string | null = null;\n  // <<< v6555-suppress-click-after-drag\n  async function onWindowPointerUp(e: PointerEvent) {\n    if (!dragging) return;\n    const d = dragging;\n    dragging = null;\n    if (d.moved) {   // ⭐v6.555 v6555-suppress-click-after-drag\n      _suppressHandClickIid = d.iid;\n      setTimeout(() => { if (_suppressHandClickIid === d.iid) _suppressHandClickIid = null; }, 400);\n    }\n", "  async function onWindowPointerUp(e: PointerEvent) {\n    if (!dragging) return;\n    const d = dragging;\n    dragging = null;\n"],
+  [" if(_suppressHandClickIid===inst.iid){_suppressHandClickIid=null;return;}", ""],
+  ["    selectedEnergyIid = null;   // ⭐v6.555（審查 P2）比照休閒 dispatch：送出任何動作都清掉點選附能（v6555-stale-energy-pick）\n", ""],
+  // ⭐v6.555（Rule 40）：對戰頁新增「過期的附能選取自動清掉」$effect（非版面改動；內容由 test-v6555-stale-energy-pick 鎖）
+  ["  // >>> v6555-stale-energy-pick\n  // ⭐v6.555（站長回報：沒有點能量，備戰區卻一直顯示 ⚡）：點選附能用的 selectedEnergyIid 只有「點手牌能量」會設、\n  //   但那張卡離開手牌（拖曳附上、被丟棄）或這回合已經附過能量之後從沒清掉 ⇒ ⚡ 提示一直掛著、點寶可夢變成附能而不是放大。\n  //   ⇒ 判準只用手牌操作的唯一來源 handCardOps：選取的那張不在手牌、或現在不能附 ⇒ 清掉。\n  $effect(() => {\n    if (selectedEnergyIid && !(handCardOps.get(selectedEnergyIid)?.has('energy'))) selectedEnergyIid = null;\n  });\n  // <<< v6555-stale-energy-pick\n", ""],
   // ⭐v6.551（Rule 40）：對戰頁 RocketBasic inline 後備（死碼）刪除（非版面改動；內容由 test-v6551-rocket-pred-and-ai-retaliation 鎖）
   ["          // ⭐v6.551：'RocketBasic' 已收錄於中央 selection-filter（上方 evaluateSelectionFilter 先回 boolean）⇒ 這裡的 inline 後備是死碼，已刪除。\n", "          if (f === 'RocketBasic') {\n            return card.supertype === 'Pokemon' && !card.evolvesFrom && card.name.includes('火箭隊的');\n          }\n"],
   // ⭐v6.543（Rule 40）：選擇視窗候選改走中央 handDiscardCandidates／damageDistributeCandidates、牌庫頂 TOP filter 的 inline 判斷收進中央 selection-filter（非版面改動；內容由 test-v6543-payload-count-central 鎖）

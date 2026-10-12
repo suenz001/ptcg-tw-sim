@@ -1,5 +1,20 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.555：附能提示 ⚡ 殘留（2026-10-12 站長回報）
+
+BASE v6.554。站長 19:09 逐字：「我沒有點選任何能量，備戰區寶可夢身上還是有閃電符號，請你確認」（附藍桌墊截圖：5 隻備戰都有 ⚡，對戰紀錄顯示這回合已附過能量）。
+- 根因：⚡ 是點選附能提示 .attach-hint（條件 selectedEnergyIid && !pendingSelection && isMyTurn()）。selectedEnergyIid 只在點手牌能量時設定，但那張卡離開手牌（拖曳附上後的 click、被丟棄）或這回合已附過能量之後**從來沒有清掉** ⇒ 提示一直掛著，而且點寶可夢會變成「附能」而不是放大（zoomable 也被它關掉）。
+- 修法（+page.svelte，哨兵 v6555-stale-energy-pick）：handCardOps 之後加 $effect：選取的那張在 handCardOps 裡沒有 'energy' 操作（不在手牌、已附過、有待選視窗、不是自己的回合…）⇒ 清掉 selectedEnergyIid。判準只用手牌操作唯一來源 handCardOps（v6.200）。手機直式不使用 selectedEnergyIid，不受影響。
+- **Opus 5.5 審查（agent a96e0d5980d0a07c3）第一輪：需修**。
+  - P1（Chromium 實測）：拖曳手牌放開後，瀏覽器一定在那張手牌上補發 click，而 onWindowPointerUp 已先把 dragging 設成 null ⇒ onclick 的 `!dragging` 擋不住 ⇒ 拖過的能量被點選。拖曳附能成功時（休閒 dispatch 清了又被設回）就是截圖情況；拖曳取消時卡還在手牌、還能附 ⇒ $effect 不會清 ⇒ ⚡ 掛著、點寶可夢會直接附能。**已修**（哨兵 v6555-suppress-click-after-drag）：pointerup 有拖動就記下那張 iid（400ms 自動清），onclick 開頭吃掉那一次。Rule 40：test-v6200 new Function 參數表補 _suppressHandClickIid。
+  - P2：tournamentDispatch 送出動作不清 selectedEnergyIid（休閒 dispatch 會清）⇒ **已修**，入口清掉。
+  - P3（備戰 status chip 的最後一個分支顯示 ⚡，引擎異常時會混淆）：未改，另案。
+- 守衛 test-v6555-stale-energy-pick：A 段 getHandCardOps 三種情況（正對照）、B 段 $effect 接線、C 段實際執行手牌 onclick 本體（剛拖完的那張不選取、一般點擊照常選取）＋pointerup 設標記（B、C BASE 紅）。Rule 40：test-v6441 LATER 登記四段（非版面改動）。
+- **複審：可合併**（Chromium 8 種劇本：滑鼠拖放到寶可夢／拖回手牌／放空白處都不再選取；一般點擊、拖完 100ms／500ms 再點、觸控點擊、觸控拖曳後再點都照常）。
+- 全套（70571d98）紅 2 支（Rule 40，只動守衛；src 未變，不重跑全套，兩支單跑綠）：
+  - test-v6208 4b／4c／4d：直接執行手牌 onclick 本體的 new Function 參數表補 _suppressHandClickIid（不傳＝undefined＝不是剛拖完）。
+  - test-v6293 E1：對戰版面分支逐位元比對多接一層 revertV6555（只還原 onclick 那一行，恰一次）。
+
 ## v6.554：棄牌一律寫進對戰紀錄（2026-10-12 站長規則＋玩家回報）
 
 BASE v6.553。站長 17:29 逐字：「玩家反應 使用 支援者 探險家的嚮導的時候，對戰log不會顯示丟棄了哪幾張牌到棄牌區／依據我們的規則，丟棄牌到棄牌區時，都應該要顯示在對戰log(例如使用高級球)／請你確認，並做整體的audit…請盡量用一勞永逸的收斂式 中央管線的方式來作修正」。
