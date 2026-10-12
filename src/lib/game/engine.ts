@@ -8510,6 +8510,32 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       const _v6502SameActive = !_v6502StartIid || active?.iid === _v6502StartIid;
       if (_hasLouTool && !aPlayer.lourisToolUsedThisTurn && _v6502SameActive) {
         const hasPending = (state as any).pendingSelection;
+        // >>> v6542-nanu-hourglass-order
+        // ⭐v6.542 站長裁定（2026-10-12 第 6 項）＋官方 Q&A（PTCG_RULES L2013）：
+        //   Q「在使用了支援者卡『納莉』的回合結束時，因自己的戰鬥寶可夢身上附加的寶可夢道具卡『力之沙漏』的效果，從棄牌區附加能量卡
+        //     與因支援者卡『納莉』的效果將手牌全部丟棄，何者先執行？」 A「可由寶可夢道具『力之沙漏』的持有人選擇執行順序。」
+        //   ⇒ 納莉這回合會丟牌（手牌 ≥5）而且手牌裡有基本能量卡（先丟就多出可以附的能量）⇒ 兩種順序結果不同 ⇒ 由持有人選。
+        //   其他情況（手牌沒有基本能量、納莉不會丟）兩種順序選項完全相同 ⇒ 照舊先力之沙漏、不開視窗。
+        const _hourglassEnergyCard = (c: CardInstance) => { const cd = pool.get(c.cardId); return cd?.supertype === 'Energy' && cd.subtype === 'Basic'; };
+        if (!hasPending && aPlayer.nanuDiscardAtTurnEnd && aPlayer.hand.length >= 5 && aPlayer.hand.some(_hourglassEnergyCard)) {
+          const newPlayers = [...players] as [PlayerState, PlayerState];
+          newPlayers[aIdx] = { ...aPlayer, lourisToolUsedThisTurn: true };
+          // 與下方力之沙漏同一組旗標（v4.955：暫停 END_TURN 必須 endTurnSkipCheckup）
+          return withPending(addLog({ ...state, players: newPlayers, endTurnSkipCheckup: true },
+            '回合結束：力之沙漏與納莉同時處理 ⇒ 由持有人選擇順序（官方 Q&A）', aIdx), {
+            type: 'modal-choice', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+            effectKey: 'nanu-hourglass-order',
+            params: {
+              label: '回合結束：選擇處理順序',
+              endTurnAfter: true,
+              options: [
+                { id: 'nanu-first', text: '先處理納莉（丟棄手牌），再用力之沙漏從棄牌區附 1 張基本能量' },
+                { id: 'hourglass-first', text: '先用力之沙漏從棄牌區附 1 張基本能量，再處理納莉（丟棄手牌）' },
+              ],
+            },
+          });
+        }
+        // <<< v6542-nanu-hourglass-order
         if (!hasPending) {
           const hasBasic = aPlayer.discard.some(c => {
             const card = pool.get(c.cardId);

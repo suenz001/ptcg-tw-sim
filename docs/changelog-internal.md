@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.542：納莉 × 力之沙漏 的處理順序（2026-10-12）
+
+BASE 0677386e（v6.541）。**站長裁定**（2026-10-12 第 6 項「請都依照官方 QA 處理」）＋**直接判例** PTCG_RULES L2013（「可由寶可夢道具『力之沙漏』的持有人選擇執行順序」）。
+- engine END_TURN 力之沙漏區塊（哨兵 v6542-nanu-hourglass-order）：沒有其他選擇視窗、nanuDiscardAtTurnEnd、手牌 ≥5、手牌含基本能量 ⇒ 設 lourisToolUsedThisTurn＋endTurnSkipCheckup（與原力之沙漏同一組旗標），開 modal-choice（先納莉／先力之沙漏，AI 選第一個＝先納莉，多一張可附的能量）。
+- effects RESOLVERS 'nanu-hourglass-order'：先納莉 ⇒ 立刻丟光手牌並清掉納莉旗標；兩條都在棄牌區有基本能量時開原本的 brailliant-attach（endTurnAfter）。
+- **敏感度規則（設計決定，列入最後一批請站長確認）**：手牌沒有基本能量時，兩種順序結果相同 ⇒ 不開視窗、照舊先力之沙漏。
+- 守衛 test-v6542-nanu-hourglass-order：ASK、NANU_FIRST（含中毒只結算一次）、HOUR_FIRST；正對照 NO_BASIC_IN_HAND、NO_NANU；HEAD-FAIL（BASE：前三條紅、正對照綠）。突變 8 個：7 殺；M4「先納莉不清旗標」為**等價突變**（finalize 手牌 0 張時只刪旗標、不寫 log），如實標記。
+- **Fable 5.1 審查（aec2e45b860dee49e）：可合併，無 P1／P2**。確認：endTurnAfter 解完走 turnPhase='end'、checkup／snapshot 不重跑；resolver 無 pending 時不會卡住；_v6502SameActive 等既有條件沿用；AI 先納莉合理；M4 等價判斷正確。P3（備註、不改）：回合結束仍靠前端自動送 END_TURN，與既有 brailliant-attach 同一設計。
+- 全套（8d3721ea）：FAIL 3 —— test-v6370／v6371 已知平行假紅（單跑 91/0、153/0）；**test-v6251 lint B 真紅**：新本地述詞 `_isBasicE` 名稱含 Basic ⇒ 改名 `_hourglassEnergyCard`（Rule 40 不適用，照守衛修），重跑全套。
+- 全套重跑（改名後）：FAIL／TIMEOUT 0。
+
 ## v6.541：回備戰特性——衝浪手的處理順序、換位後的詢問（2026-10-12）
 
 BASE 6de7ac5a（v6.540）。**站長裁定**（2026-10-12 第 6 項「請都依照官方 QA 處理」）＋**直接判例** PTCG_RULES L1844（衝浪手 × 海豚俠｜全能變身「可由海豚俠的持有者選擇」）、L2459（衝浪手 × 鋼炮臂蝦｜返回重載「先因支援者卡『衝浪手』從牌庫抽卡至自己的手牌滿5張」）。

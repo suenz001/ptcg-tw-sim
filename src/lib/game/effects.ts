@@ -4323,6 +4323,28 @@ regR('search-to-hand-reshuffle', (st, idx, iids, params, pool) => {
 // ── v2.247 力之沙漏｜brailliant-attach ──────────────────────────────────────
 // 玩家在 END_TURN 時選擇是否將棄牌區的基本能量附到有力之沙漏的寶可夢。
 // selectedIids = []（跳過）或 [energyIid]（選擇1張能量）。
+// >>> v6542-nanu-hourglass-order
+// ⭐v6.542 力之沙漏 × 納莉（PTCG_RULES L2013 由力之沙漏的持有人選順序）的選擇結果。
+//   先納莉 ⇒ 立刻把手牌全部丟棄（清掉 nanuDiscardAtTurnEnd，回合結束 finalize 就不會再丟一次），再開力之沙漏的選擇視窗；
+//   先力之沙漏 ⇒ 開力之沙漏的選擇視窗，納莉照舊在 finalize 丟牌。兩條都帶 endTurnAfter（解完回到回合結束，與原本力之沙漏相同）。
+RESOLVERS.set('nanu-hourglass-order', (st, idx, iids, _params, pool) => {
+  let s = st;
+  if (iids[0] === 'nanu-first') {
+    const p = s.players[idx];
+    if (p.nanuDiscardAtTurnEnd && p.hand.length >= 5) {
+      const n = p.hand.length;
+      s = updatePlayer(s, idx, pl => { const np = { ...pl, discard: [...pl.discard, ...pl.hand], hand: [] }; delete np.nanuDiscardAtTurnEnd; return np; });
+      s = addLog(s, `納莉：回合結束時手牌 ${n} 張（≥5）→ 全部丟棄`, idx);
+    }
+  }
+  const hasBasic = s.players[idx].discard.some(c => { const cd = pool.get(c.cardId); return cd?.supertype === 'Energy' && cd.subtype === 'Basic'; });
+  if (!hasBasic || !s.players[idx].active) return s;
+  return withPending(s, {
+    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx, filter: 'BasicEnergy',
+    minCount: 0, maxCount: 1, effectKey: 'brailliant-attach', params: { endTurnAfter: true },
+  });
+});
+// <<< v6542-nanu-hourglass-order
 RESOLVERS.set('brailliant-attach', (st, idx, iids, params, pool) => {
   const player = st.players[idx];
   const active = player.active;
