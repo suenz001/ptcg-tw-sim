@@ -3993,6 +3993,36 @@ export function settlePendingOnDamagedFor(state: GameState, holderIid: string, p
  *   applyActionImpl 尾段（保險：任何 action 結束且沒有待選視窗時都不殘留）。
  *   還有選擇視窗開著 ⇒ 不動（等下一次）。
  */
+// >>> v6549-drain-effect-ko
+/**
+ * ⭐v6.549 招式進行中被效果（侵蝕詛咒）放到 HP 0 的寶可夢：招式效果全部結束時才判昏厥（官方 PTCG_RULES L2198）。
+ *   **全站唯一**消費 _pendingEffectKo 的地方；三個呼叫點都緊接在 drainPendingAttackKo 之後
+ *   （先結算招式本身的昏厥，再結算這一類，對應「先處理漸強波的傷害，再處理櫻花魚的昏厥」）。
+ *   重判：那一隻已離場（放回手牌等）⇒ 不昏厥；HP 已回復到大於 0（嫩葉之恩／吃飽先的回血）⇒ 不昏厥；仍為 0 ⇒ 走中央 koTargetAfterAttackDamage。
+ */
+export function drainPendingEffectKo(state: GameState, pool: Map<string, Card>, underEndgamePicker = false): GameState {
+  const q = state._pendingEffectKo;
+  // underEndgamePicker：終局之下檯面上的 picker 不會再有人解（v6549-drain-under-endgame-picker）⇒ 不等它。
+  if (!q || (state.pendingSelection && !underEndgamePicker)) return state;
+  let s: GameState = { ...state };
+  delete s._pendingEffectKo;
+  for (const e of q) {
+    // ⭐v6.549（審查 P2-1）：招式本身的昏厥（或前一筆）已經取完最後一張而寫了終局 ⇒ 這一隻與它在同一個昏厥檢查點一起昏厥、
+    //   一起取獎（官方 L2198「先處理傷害，再處理昏厥」）⇒ 收回終局照常結算，勝負交 applyActionImpl 末端 v6.361 中央重判（雙方同時取完 ⇒ 平手）。
+    if (s.phase === 'game-over') s = liftEndgameForOnKoV6361(s);
+    const d = s.players[(1 - e.actorIdx) as 0 | 1];
+    const t = d.active?.iid === e.targetIid ? d.active : d.bench.find(c => c.iid === e.targetIid);
+    if (!t) continue;
+    if (!isZombieKO(t, pool, s)) {
+      s = addLog(s, `${e.label}：${pool.get(t.cardId)?.name ?? '?'} 在招式處理完時 HP 已不為 0 ⇒ 不會昏厥`, e.actorIdx);
+      continue;
+    }
+    s = koTargetAfterAttackDamage(s, e.actorIdx, t, pool, { kind: e.kind as NonNullable<Parameters<typeof koTargetAfterAttackDamage>[4]['kind']>, label: e.label, onDamagedFired: false });
+  }
+  return s;
+}
+// <<< v6549-drain-effect-ko
+
 export function drainPendingAttackKo(state: GameState, pool: Map<string, Card>): GameState {
   const ctx = state._pendingAttackKo;
   if (!ctx || state.pendingSelection) return state;
@@ -4055,6 +4085,10 @@ function isZombieKO(inst: CardInstance, pool: Map<string, Card>, s: GameState): 
   //   不可以被 sanityKOSweep 先用簡化版（沒有古舊能量等獎賞修正）掃掉。
   if (s._pendingAttackKo && isAttackKoVictim(inst, s._pendingAttackKo.victimIid)) return false;
   // <<< v6490-zombie-pending-exempt
+  // >>> v6549-zombie-effect-exempt
+  // ⭐v6.549（v6549-defer-effect-ko）：招式進行中被效果放到 HP 0、等招式結束才判的那一隻同理（由 drainPendingEffectKo 完整結算）
+  if (s._pendingEffectKo?.some(e => e.targetIid === inst.iid)) return false;
+  // <<< v6549-zombie-effect-exempt
   const hp = getEffectiveHP(inst, pool, s);
   return hp > 0 && inst.damage >= hp;
 }
@@ -4635,6 +4669,7 @@ function handlePlaying(
     // ⭐⭐⭐v6.490：招式效果的選擇視窗鏈全部解完 ⇒ 結算延後的昏厥（必須在下面的 sanityKOSweep 之前）。
     newState = settlePendingOnDamaged(newState, pool);   // ⭐v6.533 受傷觸發先結算（反擊 → 攻擊方昏厥 → 防守方昏厥）
     newState = drainPendingAttackKo(newState, pool);
+    newState = drainPendingEffectKo(newState, pool);   // ⭐v6.549 v6549-drain-effect-ko
     // <<< v6490-drain-resolve-end
     // >>> v6362-return-hand-after-prize
     // ⭐⭐ v6.362 站長裁定 A-1：賽富豪｜歡慶「獲得2張獎賞卡。**然後**，將自己的手牌全部放回
@@ -7661,6 +7696,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     // ⭐⭐⭐v6.490：招式效果同步結束（沒有開選擇視窗）⇒ 在這裡結算延後的昏厥；有視窗 ⇒ 留到 RESOLVE_SELECTION 鏈結束。
     newState = settlePendingOnDamaged(newState, pool);   // ⭐v6.533 受傷觸發先結算
     newState = drainPendingAttackKo(newState, pool);
+    newState = drainPendingEffectKo(newState, pool);   // ⭐v6.549 v6549-drain-effect-ko
     // <<< v6490-drain-attack-end
     // v4.991: ATTACK 流程結尾統一 set turnPhase='end' — 修玩家 case 1 卡死。
     //   之前 KO 分支跳過 turnPhase 設定（line 4751 只有「沒 KO」分支 set），
@@ -9489,6 +9525,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         endTurnActiveIidAtEnd: undefined,  // ⭐v6.502 清除「回合結束當下的戰鬥寶可夢」
         _pendingAttackEnergyRevive: undefined,  // v5.678 安全清除跨picker revive快照
         _pendingOnDamaged: undefined,  // ⭐v6.533 安全清除（正常情況招式結束時已結算完）
+        _pendingEffectKo: undefined,  // ⭐v6.549（審查 P3-2）安全清除（正常情況招式結束時已由 drainPendingEffectKo 結算完）
         // >>> v6362-clear-return-hand
         _pendingReturnHandToDeck: undefined,  // ⭐v6.362 A-1 安全清除跨picker「手牌洗回牌庫」待辦
         // <<< v6362-clear-return-hand
@@ -10577,6 +10614,7 @@ function applyActionImpl(
   //   放在 v6.361 終局延後判斷之前 ⇒ 這裡結算出的終局照樣走中央重判。。
   if (next._pendingOnDamaged && !next.pendingSelection) next = settlePendingOnDamaged(next, pool);   // ⭐v6.533
   if (next._pendingAttackKo && !next.pendingSelection) next = drainPendingAttackKo(next, pool);
+  if (next._pendingEffectKo && !next.pendingSelection) next = drainPendingEffectKo(next, pool);   // ⭐v6.549
   // <<< v6490-drain-dispatch-tail
   // >>> v6361-defer-endgame
   // ⭐⭐⭐ v6.361 站長裁定 D-10：「應該先結算死亡宣告再判勝負」。
@@ -10636,6 +10674,15 @@ function applyActionImpl(
       next = sanityKOSweep(next, (1 - aIdxForKO) as 0 | 1, pool);
     }
   }
+  // >>> v6549-drain-under-endgame-picker
+  // ⭐v6.549（審查 P2-2）：這一次 action 已判出終局（或正在重判）而檯面上還有 picker（例：正面朝上獎賞的 take-prize-choose）⇒
+  //   那個 picker 不會再有人解，上方的 drain 永遠等不到 ⇒ 招式中被延後昏厥的那一隻會以 HP 0 留在終局盤面。
+  //   ⇒ 比照下方 v6421：不等 picker，先結算延後昏厥（drain 內部會收回終局），再交給 v6421 掃殭屍與中央重判。
+  if ((next.phase === 'game-over' || next._v6361NeedsVerdict === true)
+      && !!next.pendingSelection && (next._pendingEffectKo?.length ?? 0) > 0) {
+    next = drainPendingEffectKo(next, pool, true);
+  }
+  // <<< v6549-drain-under-endgame-picker
   // >>> v6421-sweep-zombie-under-picker
   // ⭐⭐v6.421（fable 審查抓到、我自行重現屬實）：攻擊方最後一張獎賞是「正面朝上」時，
   //   addPendingPrize 開了 take-prize-choose picker ⇒ 上面的延後與 sweep 都被 pendingSelection

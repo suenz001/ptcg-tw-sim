@@ -1,5 +1,32 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.549：站長裁定第 10 項「要改」（2026-10-12）
+
+BASE v6.548。站長 11:56 第 10 項逐字：「要改」（本批問題：吃飽先／嫩葉之恩「附能 → 侵蝕詛咒 → 然後回血」的順序，需要先把招式中途的反應傷害延後到招式結束才判昏厥）。
+- 官方 PTCG_RULES L2196-2198（櫻花魚｜漸強波從手牌附 5 張【水】能量，侵蝕詛咒放 10 個指示物讓 HP 變 0）：「會。此情況應先處理招式『漸強波』造成的傷害，再處理櫻花魚的[昏厥]」。
+- 中央改動：
+  - effects.ts `isAttackResolving`（v6549-attack-resolving）：判準沿用宣告當時快照 _attackTimeFieldWideRetal（每次 ATTACK 效果開始前設定、applyAction 收尾沒有待選視窗時清除）⇒ 不另開 ATTACK 起點 hook。
+  - dealAttackDamageToTarget 新增 opts.deferKoDuringAttack（v6549-defer-effect-ko）：招式進行中放到 HP 0 ⇒ 指示物照放、排進 _pendingEffectKo、不當場昏厥。目前只有侵蝕詛咒表態。
+  - engine `drainPendingEffectKo`（v6549-drain-effect-ko）：三個呼叫點都緊接 drainPendingAttackKo 之後（先招式昏厥、再效果昏厥）；離場 ⇒ 略過，HP 已回復 ⇒ 寫「不會昏厥」，仍為 0 ⇒ 中央 koTargetAfterAttackDamage。isZombieKO 對佇列中的那一隻豁免（比照 _pendingAttackKo，免得被簡化版 sweep 先掃）。
+- 卡片：
+  - 櫻花魚｜漸強波：附能反應改回附能當下觸發（v6549-crescendo-react-on-attach）。v6.164 把反應延到傷害之後 ⇒ 這一下打倒耿鬼ex 時侵蝕詛咒整個不發動、櫻花魚存活（實測 BASE 確認）。
+  - 卡比獸｜吃飽先、葉伊布｜嫩葉之恩：附能 → 反應 → 然後回復（回復量看反應之後的傷害）。原本先回血後觸發 ⇒ 詛咒的 20 留在身上。
+- 突變 11 個：9 個殺；M3（拿掉出口 drain）與 M9（拿掉 ATTACK／RESOLVE 末端 drain）各自存活、合併後殺 ⇒ 三個 drain 點互為備援（與 drainPendingAttackKo 同一設計）；M8（拿掉 isZombieKO 豁免）在審查修正後存活 ＝ 等價突變（drain 一定先於任何 sweep，審查者同意）。
+- 已知範圍：麻痺門牙（+80）原本就不當場昏厥（交出口 sweep），不在本版範圍。
+- **Fable 5.1 審查（aec2e45b860dee49e）第一輪：需修 P2 ×3＋流程 1**，(a) isAttackResolving 無漏網／誤判、(b) 攻擊方戰鬥位延後昏厥的補位換手、(c) 延後與當場兩條路徑的獎賞修正／無限之影／on-KO 一致，皆確認。
+  - P2-1：drain 在終局之後照跑 ⇒「被擊倒 +1」卻沒取獎、雙方同時取完判單方勝 ⇒ **已修**：每筆前收回終局，勝負交中央重判（雙方最後一張 ⇒ 平手）。
+  - P2-2：終局之下開著取獎視窗（正面朝上獎賞）⇒ drain 永遠等不到、HP 0 的櫻花魚留在終局盤面、勝負與沒有視窗時不同 ⇒ **已修**：v6549-drain-under-endgame-picker（比照 v6421，在它之前強制 drain）。
+  - P2-3：守衛補 CRES_LAST_BOTH、CRES_FACEUP_NOBENCH；新增突變 M10／M11 各殺 1。
+  - P2-4（Rule 45）：BASE_SHA 改指 v6.548 正式 commit。
+  - P3-1：延後分支加 `kind !== 'attack-damage'`（防昏厥不可被繞過）。P3-2（審查者複審時收回，但 finalize 本就安全清除 _pendingOnDamaged）：比照加 `_pendingEffectKo: undefined`。P3-3（drain 不帶 suffix，flat 20 無差）備註。
+- **複審：可合併，無 P1／P2／P3**（B／H／H2／F2／F3 劇本重跑：平手判定與取獎一致、終局盤面無殭屍無佇列；A／G／K 零回歸）。
+- Rule 40：test-v6415 C2 原本取 dealAttackDamageToTarget 錨點後固定 3000 字，簽章加了 deferKoDuringAttack 說明 ⇒ 中央閘呼叫被推出視窗（nets 抓到）。意圖不變 ⇒ 改取到函式結尾並斷言範圍正確。
+- 全套第一輪（9d1b850d）紅 4 支（Rule 40；另 v6370／v6301 已知假紅）：
+  - test-v6366 F7：逐字釘侵蝕詛咒的呼叫 ⇒ 接受多帶 deferKoDuringAttack 的寫法（意圖：kind 仍是既有的 'ability-effect'）。
+  - test-hand-attach-percard-reaction 漸強波段：直呼 ATTACK_POST（不經 ATTACK）⇒ 沒有「招式處理中」快照、昏厥不延後 ⇒ 補上 _attackTimeFieldWideRetal 模擬 ATTACK 起點（完整流程另由 test-v6549 守）。
+  - test-v6361 D7／test-v6369 D5、D7：v6.421 還原器第 1 組錨點在 isZombieKO 內，本版在同處新增的豁免沒有哨兵 ⇒ 補哨兵 v6549-zombie-effect-exempt（src 只加註解行），還原器比照 v6.490 整段剝掉。
+- 全套重跑（c3650f5d）：FAIL 1 —— test-v6370 已知平行假紅（單跑綠）。
+
 ## v6.548：站長裁定第 7 項「應該可以選順序」（2026-10-12）
 
 BASE v6.547。站長 11:56 第 7 項逐字：「應該可以選順序」。

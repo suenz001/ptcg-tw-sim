@@ -52,6 +52,9 @@ export function stripV6421Engine(src) {
   //   由自己的哨兵 v6490-zombie-pending-exempt 框住、由 test-v6490 守。先把它剝掉，第 1 組錨點才比得到 v6.421 的原樣。
   //   只認這一個哨兵名、整段（含哨兵行）移除；不存在時不動（不讓本還原器綁死在 v6.490）。
   t = t.replace(/  \/\/ >>> v6490-zombie-pending-exempt\n[\s\S]*?  \/\/ <<< v6490-zombie-pending-exempt\n/, '');
+  // ⭐v6.549（Rule 40）：v6.549 在同一處（isZombieKO）合法插了「_pendingEffectKo 受害者不算殭屍」，哨兵 v6549-zombie-effect-exempt
+  //   （由 test-v6549 守）；同 v6.490 的作法整段剝掉，不存在時不動。
+  t = t.replace(/  \/\/ >>> v6549-zombie-effect-exempt\n[\s\S]*?  \/\/ <<< v6549-zombie-effect-exempt\n/, '');
   // ⭐v6.531（Rule 40）：v6.531 新增 centralVerdictDiffersV6531（自己的哨兵 v6531-verdict-differs，放在 v6.421 區塊之後），
   //   並在 v6.421 的延後條件尾端多接一項「|| centralVerdictDiffersV6531(next)」（由 test-v6531 守）。先剝掉，v6.421 的錨點才比得到原樣。
   t = t.replace(/\/\/ >>> v6531-verdict-differs\n[\s\S]*?\/\/ <<< v6531-verdict-differs\n/, '');

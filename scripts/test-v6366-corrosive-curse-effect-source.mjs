@@ -411,7 +411,9 @@ console.log('\n【F】⭐中央性：侵蝕詛咒沒有自己的私有判準／�
     && effectSourceBlocks('查無此登記XYZ', 'ability') === true,
     JSON.stringify([effectSourceBlocks('抵抗之幕', 'ability'), effectSourceBlocks('化隱', 'ability')]));
   chk('F7 補充：侵蝕詛咒走的是**既有**的 \'ability-effect\'，DamageKind 沒有新增第四種值',
-    eff.includes("dealAttackDamageToTarget(state, gIdx, targetIid, 20, pool, { kind: 'ability-effect', label: '侵蝕詛咒' })")
+    // ⭐v6.549（Rule 40）：呼叫多帶 deferKoDuringAttack（招式中延後判昏厥，v6549-defer-effect-ko）；意圖（kind 仍是既有的 'ability-effect'）不變 ⇒ 兩種逐字擇一
+    (eff.includes("dealAttackDamageToTarget(state, gIdx, targetIid, 20, pool, { kind: 'ability-effect', label: '侵蝕詛咒' })")
+      || eff.includes("dealAttackDamageToTarget(state, gIdx, targetIid, 20, pool, { kind: 'ability-effect', label: '侵蝕詛咒', deferKoDuringAttack: true })"))
     && (eff.match(/export type DamageKind = 'attack-damage' \| 'attack-effect' \| 'ability-effect';/g) || []).length === 1,
     'kind 或 DamageKind 定義不如預期');
   chk('F8 補充：EFFECT_SOURCE_IMMUNITY 的【抵抗之幕】仍登記為 A 類（本版沒有改動這張表）',

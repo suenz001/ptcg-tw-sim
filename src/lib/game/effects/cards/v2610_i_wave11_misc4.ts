@@ -471,6 +471,12 @@ regR('sakura-crescendo-attach', (state, aIdx, iids, params, pool) => {
     s = addLog(s, `漸強波：從手牌附 ${valid.length} 張「基本【水】能量」到櫻花魚`, aIdx);
     _host = s.players[aIdx].active?.iid; // v5.782 從手牌附能→補對手反應(侵蝕詛咒/麻痺門牙)
     _fireCount = valid.length;
+    // >>> v6549-crescendo-react-on-attach
+    // ⭐v6.549（站長裁定第 10 項；官方 L2196-2198）：附能反應改回「附上去的當下」觸發（侵蝕詛咒當場放指示物），
+    //   昏厥則由中央 v6549-defer-effect-ko 延到招式處理完才判 ⇒ 漸強波照樣造成傷害（櫻花魚還在、能量數照算），
+    //   而且就算這一下把耿鬼ex 打倒，侵蝕詛咒也已經在附能當下觸發過（v6.164 把反應延到傷害之後 ⇒ 耿鬼ex 先被打倒、詛咒整個不發動）。
+    if (_host && _fireCount > 0) s = applyHandAttachReactions(s, aIdx, _host, pool, _fireCount);   // ⭐v6.540 唯一入口
+    // <<< v6549-crescendo-react-on-attach
   } else {
     s = addLog(s, '漸強波：未選擇附加能量', aIdx);
   }
@@ -488,7 +494,7 @@ regR('sakura-crescendo-attach', (state, aIdx, iids, params, pool) => {
   //   ⚠ 通則：regPre 傷害延後（damage:0）、由 regPost/regR 自己結算傷害的招式，
   //     若同一招還會「從手牌附能」，附能反應一律排在自己的傷害結算之後。
   //     （走 engine 主管線的 regPre 固定傷害招式沒有這個問題 —— 傷害早在 ATTACK_POST 之前就結算了。）
-  if (_host && _fireCount > 0) s = applyHandAttachReactions(s, aIdx, _host, pool, _fireCount);   // ⭐v6.540 唯一入口
+  //   ⭐v6.549：上面這段 v6.164 的說明已由 v6549-crescendo-react-on-attach 取代（反應在附能當下觸發、昏厥延到招式結束）。
   return s;
 });
 

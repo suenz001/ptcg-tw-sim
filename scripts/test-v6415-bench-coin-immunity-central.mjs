@@ -213,7 +213,13 @@ T('C1. ⭐⭐⭐ `passiveCoinImmunity` 全站**恰好一個**呼叫點（中央�
   assert.ok(/passiveCoinImmunity\(/.test(g), '中央閘裡沒有擲幣層 ⇒ 那唯一的呼叫點跑到別的地方了');
 });
 T('C2. ⭐⭐⭐ `dealAttackDamageToTarget` 走中央閘（不是只用 canApplyEffectToTarget）', () => {
-  const b = blockOf('export function dealAttackDamageToTarget(', 3000);
+  // ⭐v6.549（Rule 40）：原本取錨點後固定 3000 字；v6.549 在簽章加了 deferKoDuringAttack 的說明 ⇒ 中央閘呼叫被推出視窗。
+  //   意圖（函式本體走中央閘）不變 ⇒ 改取到函式結尾（第一個行首的 `}`），並斷言視窗確實含函式本體開頭。
+  const _s = EFF.indexOf('export function dealAttackDamageToTarget(');
+  assert.ok(_s >= 0, 'anchor 失效：dealAttackDamageToTarget');
+  const _e = EFF.indexOf('\n}\n', _s);
+  const b = EFF.slice(_s, _e > _s ? _e : _s + 3000);
+  assert.ok(b.length > 3000 && b.length < 40000 && /const dIdx = \(1 - actorIdx\)/.test(b), '函式範圍取錯了（長度 ' + b.length + '）');
   assert.ok(/resolveMultiTargetDamageGuard\(/.test(b),
     '沒有走中央閘 ⇒ 備戰目標又會漏掉擲幣與條件式完全免疫');
   assert.ok(!/isActive && kind === 'attack-damage'\)\s*\{\s*const _pb = passiveImmunityDamageBlock/.test(b),

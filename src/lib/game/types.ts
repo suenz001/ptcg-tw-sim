@@ -1463,6 +1463,16 @@ export interface GameState {
    * 在 drainPendingAttackKo 之前（ATTACK 末端／RESOLVE_SELECTION 鏈結束／action 尾段保險）逐筆重判結算。
    * 純資料（物件陣列，不是巢狀陣列）；END_TURN 另有安全清除。
    */
+  // >>> v6549-pending-effect-ko-type
+  /**
+   * ⭐v6.549（站長 2026-10-12 裁定第 10 項「要改」；官方 PTCG_RULES L2198 櫻花魚｜漸強波 × 耿鬼ex｜侵蝕詛咒：
+   * 「此情況應先處理招式『漸強波』造成的傷害，再處理櫻花魚的[昏厥]」）：
+   * 招式進行中（含選擇視窗鏈）因「從手牌附能」觸發的反應（侵蝕詛咒）把寶可夢放到 HP 0 ⇒ 不當場昏厥，
+   * 記在這裡，招式效果全部結束時（drainPendingAttackKo 之後）由 engine.drainPendingEffectKo 逐筆重判結算。
+   * 純資料（物件陣列，不是巢狀陣列）。
+   */
+  _pendingEffectKo?: Array<{ actorIdx: 0 | 1; targetIid: string; kind: string; label: string }>;
+  // <<< v6549-pending-effect-ko-type
   _pendingOnDamaged?: Array<{
     aIdx: 0 | 1; dIdx: 0 | 1;
     /** 受到傷害的那一隻（持有者）與使出招式的那一隻 */

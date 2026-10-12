@@ -137,6 +137,10 @@ console.log('【漸強波】官方 §17.37.A L2196-2197：附能反應打死攻�
   const gengar = instId(GENGAR_CURSE());                       // HP 310
   let st = mk({ active: sakura, bench: [shelter], hand: es, prizes: [{ iid: 'p1' }, { iid: 'p2' }] },
               { active: gengar, prizes: [{ iid: 'q1' }, { iid: 'q2' }] });
+  // ⭐v6.549（Rule 40）：本段直呼 ATTACK_POST（不經 ATTACK）⇒ 補上 ATTACK 起點設定的「招式處理中」快照（isAttackResolving），
+  //   否則侵蝕詛咒的昏厥不會延後（v6549-defer-effect-ko 只在招式處理中延後）。意圖（傷害先於櫻花魚昏厥）不變；
+  //   完整 ATTACK 流程另由 test-v6549-defer-effect-ko-during-attack 守。
+  st = { ...st, _attackTimeFieldWideRetal: { p1: [], p2: [] } };
   st = mod.ATTACK_POST.get('櫻花魚|漸強波')(st, 0, pool, {});
   st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: es.map(e => e.iid) }, pool);
   const dealt = st.players[1].active?.damage ?? 0;

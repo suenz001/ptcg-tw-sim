@@ -9993,6 +9993,17 @@ export function koAttackerAfterRetaliation(
 }
 // <<< v6492-attacker-retaliation-ko
 
+// >>> v6549-attack-resolving
+/**
+ * ⭐v6.549：現在是不是「某個招式正在處理中」（含它開出的選擇視窗鏈）。
+ *   判準沿用既有的宣告當時快照 _attackTimeFieldWideRetal：每次 ATTACK 都在效果開始前無條件設定、
+ *   只在 applyAction 收尾「沒有待選視窗」時清除（v6357-field-wide-retal-snapshot-clear-wrapper）⇒ 範圍恰好等於一個招式的處理期間。
+ *   （不另開一個 ATTACK 起點 hook ⇒ Rule 38。）
+ */
+export function isAttackResolving(st: GameState): boolean {
+  return st._attackTimeFieldWideRetal !== undefined;
+}
+// <<< v6549-attack-resolving
 export function dealAttackDamageToTarget(
   st: GameState,
   actorIdx: 0 | 1,
@@ -10007,7 +10018,9 @@ export function dealAttackDamageToTarget(
   //     戰鬥寶可夢身上的附加效果，但**會計算超級長耳兔ex自己身上的附加效果**」）
   //     ⇒ `applyAttackerActiveDamageBonuses` 照樣套。
   //   ⚠ 與 `noWeakness` 是兩件事：弱點・抵抗力不是「身上的附加效果」，engine 也分開兩個旗標。
-  opts?: { kind?: DamageKind; label?: string; noWeakness?: boolean; skipDefEffects?: boolean },
+  opts?: { kind?: DamageKind; label?: string; noWeakness?: boolean; skipDefEffects?: boolean;
+    /** ⭐v6.549：招式進行中把目標打到 HP 0 時不當場昏厥，招式結束後才判（官方 L2198；目前只有侵蝕詛咒傳）。見 v6549-defer-effect-ko。 */
+    deferKoDuringAttack?: boolean },
   // <<< v6412-skip-def-effects-opt
 ): GameState {
   const kind = opts?.kind ?? 'attack-damage';
@@ -10280,6 +10293,24 @@ export function dealAttackDamageToTarget(
   if (!targetNow) return st;
   const newDmg = targetNow.damage + effDmg;
   const hp = effectiveHPInline(targetNow, pool, st);
+  // >>> v6549-defer-effect-ko
+  // ⭐v6.549（站長裁定第 10 項；官方 PTCG_RULES L2198：漸強波附 5 張水能量 → 侵蝕詛咒讓櫻花魚 HP 變 0 ⇒
+  //   「應先處理招式『漸強波』造成的傷害，再處理櫻花魚的[昏厥]」）：
+  //   招式進行中（isAttackResolving）由呼叫端表態 deferKoDuringAttack 的效果傷害 ⇒ 指示物照放、這裡不昏厥，
+  //   排進 _pendingEffectKo，招式效果全部結束時由 engine.drainPendingEffectKo 重判（那時已回滿 HP ⇒ 不昏厥）。
+  //   ⚠（審查 P3-1）只給「效果」傷害用：attack-damage 要先過下面的防昏厥（堅忍之軀等）⇒ 這裡排除，不可放寬。
+  if (hp > 0 && newDmg >= hp && opts?.deferKoDuringAttack === true && kind !== 'attack-damage' && isAttackResolving(st)) {
+    const players = [...st.players] as [PlayerState, PlayerState];
+    const nd = { ...defenderNow };
+    const upd = (c: CardInstance): CardInstance => c.iid === targetIid ? withAttackDamageTaken(c, c.damage, newDmg, kind) : c;
+    if (isActive) nd.active = upd(targetNow); else nd.bench = defenderNow.bench.map(upd);
+    players[dIdx] = nd;
+    const q = st._pendingEffectKo ?? [];
+    const s2: GameState = { ...st, players,
+      _pendingEffectKo: q.some(e => e.targetIid === targetIid) ? q : [...q, { actorIdx, targetIid, kind, label }] };
+    return addLog(s2, `${label}：在 ${targetCard?.name ?? '?'} 身上放置 ${Math.round(effDmg / 10)} 個傷害指示物（剩餘 HP 0 ⇒ 招式處理完後才判定昏厥）`, actorIdx);
+  }
+  // <<< v6549-defer-effect-ko
   if (hp > 0 && newDmg >= hp) {
     // v5.594 受招式傷害昏厥前查 prevent-KO（堅忍之軀/倖存鍛鍊器等）；命中則留 HP 不昏厥
     if (kind === 'attack-damage') {
@@ -14487,23 +14518,26 @@ regR('self-active-hand-attach-heal', (st, idx, iids, params, pool) => {
   if (picked.length === 0) return st;
   const tname = pool.get(p.active.cardId)?.name ?? '?';
   const ename = pool.get(picked[0].cardId)?.name ?? '?';
-  const newDmg = Math.max(0, p.active.damage - heal);
-  const healed = p.active.damage - newDmg;
-  let s = addLog(st, `${label}：${ename} 附於 ${tname}，並回 ${healed} HP`, idx);
+  // >>> v6549-attach-react-then-heal
+  // ⭐v6.549（站長裁定第 10 項）：卡面順序「附於這隻寶可夢 → 然後回復」⇒ 附上去的當下先觸發對手的附能反應（侵蝕詛咒），
+  //   再回復（回復量看反應之後的傷害）。侵蝕詛咒放到 HP 0 時由中央 v6549-defer-effect-ko 延到招式處理完才判 ⇒ 回血救得回來（官方 L2198 類推）。
+  //   原本「先回血再觸發反應」⇒ 詛咒的指示物留在身上。
+  const hostIid = p.active.iid;
+  let s = addLog(st, `${label}：${ename} 附於 ${tname}`, idx);
   s = updatePlayer(s, idx, pl => {
     if (!pl.active) return pl;
-    return {
-      ...pl,
-      hand: pl.hand.filter(c => !iids.includes(c.iid)),
-      active: {
-        ...pl.active,
-        damage: newDmg,
-        energyAttached: [...pl.active.energyAttached, ...picked],
-      },
-    };
+    return { ...pl, hand: pl.hand.filter(c => !iids.includes(c.iid)),
+      active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...picked] } };
   });
   // v5.539：從手牌附能後觸發對手附能被動（侵蝕詛咒 等）
-  return _handAttachReactions(s, idx, p.active.iid, pool);   // ⭐v6.540 唯一入口（張數沿用原本的 1）
+  s = _handAttachReactions(s, idx, hostIid, pool);   // ⭐v6.540 唯一入口（張數沿用原本的 1）
+  const a2 = s.players[idx].active;
+  if (!a2 || a2.iid !== hostIid) return s;
+  const newDmg = Math.max(0, a2.damage - heal);
+  const healed = a2.damage - newDmg;
+  s = addLog(s, `${label}：${tname} 回 ${healed} HP`, idx);
+  return updatePlayer(s, idx, pl => (pl.active && pl.active.iid === hostIid ? { ...pl, active: { ...pl.active, damage: newDmg } } : pl));
+  // <<< v6549-attach-react-then-heal
 });
 regPre('卡比獸|吃飽先', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('卡比獸|吃飽先', selfActiveHandAttachHealPost(60, '吃飽先'));
@@ -14564,20 +14598,23 @@ function applyBenchAttachFullHeal(st: GameState, idx: 0 | 1, energyIids: string[
   if (!target) return st;
   const energies = p.hand.filter(c => energyIids.includes(c.iid));
   if (energies.length === 0) return st;
-  // 只取 pool 以保留名字 — 由呼叫者傳入 pool 會較好，這裡從 cardId 推名即可
-  const newDamage = 0;
-  const healed = target.damage;
+  // >>> v6549-bench-attach-react-then-heal
+  // ⭐v6.549（站長裁定第 10 項）：卡面「附於備戰寶可夢身上。然後，將附上那張卡的寶可夢的HP全部恢復」
+  //   ⇒ 附能 → 對手的附能反應（侵蝕詛咒）→ 然後全回復（同 v6549-attach-react-then-heal）。
   // v6.334：改列出實際能量卡名
-  let s = addLog(st, `${label}：將 ${joinCardNames(energies, pool)} 附加到備戰，並全回復（回 ${healed} HP）`, idx);
+  let s = addLog(st, `${label}：將 ${joinCardNames(energies, pool)} 附加到備戰`, idx);
   s = updatePlayer(s, idx, pl => ({
     ...pl,
     hand: pl.hand.filter(c => !energyIids.includes(c.iid)),
-    bench: pl.bench.map(c => c.iid === targetIid
-      ? { ...c, damage: newDamage, energyAttached: [...c.energyAttached, ...energies] }
-      : c),
+    bench: pl.bench.map(c => c.iid === targetIid ? { ...c, energyAttached: [...c.energyAttached, ...energies] } : c),
   }));
   // v5.539：從手牌附能後觸發對手附能被動（侵蝕詛咒 等）
-  return _handAttachReactions(s, idx, targetIid, pool);   // ⭐v6.540 唯一入口（張數沿用原本的 1）
+  s = _handAttachReactions(s, idx, targetIid, pool);   // ⭐v6.540 唯一入口（張數沿用原本的 1）
+  const t2 = s.players[idx].bench.find(c => c.iid === targetIid);
+  if (!t2) return s;
+  s = addLog(s, `${label}：全回復（回 ${t2.damage} HP）`, idx);
+  return updatePlayer(s, idx, pl => ({ ...pl, bench: pl.bench.map(c => c.iid === targetIid ? { ...c, damage: 0 } : c) }));
+  // <<< v6549-bench-attach-react-then-heal
 }
 regPre('葉伊布|嫩葉之恩', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('葉伊布|嫩葉之恩', benchHandAttachFullHealPost('Grass', '嫩葉之恩'));
@@ -20159,7 +20196,8 @@ OPP_ENERGY_ATTACH_PASSIVE.set('侵蝕詛咒', (state, gIdx, _oppIdx, targetIid, 
   //   ⚠ 數字那一維**不動**：dealAttackDamageToTarget 內的弱點／抵抗力／防守方減傷／防 KO 全部
   //     gate 在 `kind === 'attack-damage'`，'attack-effect' 與 'ability-effect' 一律 flat。
   //     卡面「放置2個傷害指示物」＝ 20 點 flat，實測不變（v6.366 守衛 §D 釘住行為端數字）。
-  return dealAttackDamageToTarget(state, gIdx, targetIid, 20, pool, { kind: 'ability-effect', label: '侵蝕詛咒' });
+  // ⭐v6.549：招式進行中（吃飽先／漸強波…從手牌附能）放到 HP 0 ⇒ 招式結束後才判昏厥（官方 L2198）
+  return dealAttackDamageToTarget(state, gIdx, targetIid, 20, pool, { kind: 'ability-effect', label: '侵蝕詛咒', deferKoDuringAttack: true });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
