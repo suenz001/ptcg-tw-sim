@@ -1,5 +1,22 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.552：AI 自己被打倒的扣分（2026-10-12，v6.551 審查 P3-1）
+
+BASE v6.551。
+- ai-eval evaluateAttackOnce：自己的寶可夢被這一擊連帶打倒（受傷反擊、自傷）時原本沒有任何扣分（sameSelf 為 false ⇒ selfDamage／selfEnergyLost 記 0）⇒ 送獎賞給對手的招分數反而更高（審查實測：萌芽鹿帶 100 傷用推倒打龐克頭盔，致死 100 分 > 不致死 80 分）。
+- 新增 prizesGiven（對手拿到的獎賞，讀含受傷反擊結算的 afterForSelf），以同一個 W.PRIZE 尺度扣分；這一擊讓對手直接獲勝 ⇒ score = -1e12（有限值，排在所有能打的招之後，不等於「不能用」）。哨兵 v6552-ai-self-ko-penalty。
+- AI 相關守衛 49 支全綠（all-presets、evolve-iid 1000 seeds 長時限單跑通過）。
+- **Fable 5.1 審查（aec2e45b860dee49e）第一輪：需修 P2 ×1**。(a) 對手取獎沒有其他誤算來源、(b) 自爆 1 換 1／平手計分合理、(c) -1e12 在消費端無 NaN／Infinity 問題，皆確認。
+  - P2-1：ai.ts `_scoreRaw` 對試打停在對手視窗（unresolved）的招一律走印刷傷害保底、不讀 ev.score ⇒ 推倒這類招的代價完全不進決策（實測沒有備戰時 AI 照選推倒、直接輸）。**已修**（v6552-ai-fallback-cost）：AttackEval 補 gameLost、costScore（prizesGiven×PRIZE＋selfDamage×SELF_DAMAGE）；保底值扣回 costScore、gameLost ⇒ -1e12；每一招都必輸 ⇒ 不出招（落到撤退換人／結束回合）。
+  - 修的過程發現：拿掉視窗後手動結算的副本，終局會被收回待重判（_v6361NeedsVerdict）、中央重判沒跑 ⇒ gameLost 漏判 ⇒ 另外直接看盤面（自己沒有寶可夢而對手有、或對手取完獎賞而自己沒有）。
+  - P3-1（既有：任一次試打 gameWon 就 MAX、-1e12 卻走平均，不對稱）：列入最後一批請站長確認。P3-2（gameLost 補進回傳）：**已補**。
+- Rule 40：test-ai-attack-eval「保底估值尺度」原本釘 `return (…) ? PRIZE_SCORE_UNIT : est;` 字面 ⇒ 改成 return／const _fb = 擇一（意圖：打得死只補一張獎賞、不加 est）。
+- 守衛 test-v6552-ai-self-ko-penalty：PUSH_LETHAL（停在對手視窗）、BEAM_LETHAL（同步結算）、LOSE、AI_ALL_LOSE_NO_ATTACK（決策層，BASE 紅）；正對照 SAFE_ZERO、AI_PREFERS_TRADE。突變 7 個（不扣獎賞、讀未結算盤面、輸了不壓底、盤面判輸拿掉、決策層不扣代價、決策層不看必輸、全輸仍出招）全殺。
+- **複審：可合併，無 P1／P2**（5 種盤面實測：無備戰 ⇒ END_TURN、1 換 1 選日光束、雙方同歸於盡 ⇒ 拼平手照打、安全盤面不變）。
+  - P3-1：撤退換人分支的 bestAttackOutcome 不看 gameLost ⇒ 可能先付撤退費換上一樣會輸的寶可夢。**已修**：bestAttackOutcome 跳過 gameLost 的招。
+  - P3-2：-1e12／-1e11 常數散在兩檔 ⇒ **已修**：ai-eval 匯出 LOSE_SCORE，ai.ts 引用（門檻 LOSE_SCORE / 10）。
+- 全套（3a55b4ed）：FAIL 1 —— test-v6371 已知速度假紅（單跑綠）。harness＋免疫測試網 36 支全綠。
+
 ## v6.551：前幾版審查留下的「之後處理」（2026-10-12，**非規則改動**）
 
 BASE v6.550。

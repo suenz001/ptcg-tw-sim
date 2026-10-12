@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '2853e0d0d7cb5defe1483cd5c633f8f23a2acb2e';   // v6.550（上一版）
+const PREV_SHA = 'ca337e75360f583dd316bcd3d711b21b230c7575';   // v6.551（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,20 +757,30 @@ const PREV_SHA = '2853e0d0d7cb5defe1483cd5c633f8f23a2acb2e';   // v6.550（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.551 前移：PREV_SHA 從 2853e0d0（v6.550）起算。
+  // ⚠⚠ v6.552 前移：PREV_SHA 從 ca337e75（v6.551）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.551：isRocketTeamPokemonCard 定義搬到 selection-filter（leaf），10 處 includes('火箭隊的') 收斂；AI 試打停在對手視窗時估算受傷反擊。
+  // ⭐v6.552：AI 試打評分加入 prizesGiven（對手拿到的獎賞）與直接輸局的壓底。
   'src/lib/game/ai-eval.ts',
   'src/lib/game/ai.ts',
-  'src/lib/game/effects.ts',
-  'src/lib/game/effects/_shared.ts',
-  'src/lib/game/selection-filter.ts',
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.551）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.551 前移：PREV_SHA 從 2853e0d0（v6.550）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.551：isRocketTeamPokemonCard 定義搬到 selection-filter（leaf），10 處 includes('火箭隊的') 收斂；AI 試打停在對手視窗時估算受傷反擊。
+//   'src/lib/game/ai-eval.ts',
+//   'src/lib/game/ai.ts',
+//   'src/lib/game/effects.ts',
+//   'src/lib/game/effects/_shared.ts',
+//   'src/lib/game/selection-filter.ts',
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.550）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.550 前移：PREV_SHA 從 29a43c5f（v6.549）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -919,20 +929,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/effects/cards/v3000_g3_wave2.ts',
 //   'src/lib/game/effects/cards/v3050_deferred_wave_a.ts',
 //   'src/lib/game/engine.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.539）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.539 前移：PREV_SHA 從 99010a78（v6.538）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.539：雙方同時補位順序：中央 promoteWaitSeat（modal-slots leaf）＋engine SEND_NEW_ACTIVE 閘＋視窗／提示＋AI＋伺服器 currentActorSeat；v6.538 審查 P3 註解整理。
-//   'src/lib/game/ai.ts',
-//   'src/lib/game/defense.ts',
-//   'src/lib/game/effects.ts',
-//   'src/lib/game/engine.ts',
-//   'src/lib/game/modal-slots.ts',
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',

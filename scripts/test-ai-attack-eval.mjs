@@ -187,7 +187,8 @@ T('⭐保底估值的尺度不可超過真正試打出來的擊倒分數', () =>
   assert.ok(PRIZE_SCORE_UNIT > 300,
     '獎賞的份量必須壓過任何單次傷害數字，否則「能擊倒」會輸給「傷害高但沒擊倒」');
   const ai = readFileSync(join(ROOT, 'src/lib/game/ai.ts'), 'utf8');
-  assert.ok(/return \(_oppRem > 0 && est >= _oppRem\) \? PRIZE_SCORE_UNIT : est;/.test(ai),
+  // ⭐v6.552（Rule 40）：保底值改存進 _fb 再扣代價端（v6552-ai-fallback-cost）⇒ 兩種寫法擇一（意圖：打得死只補一張獎賞、不加 est）。
+  assert.ok(/(?:return|const _fb =) \(_oppRem > 0 && est >= _oppRem\) \? PRIZE_SCORE_UNIT : est;/.test(ai),
     '保底判定「打得死」時只該補一張獎賞的份量，不可再加上估計傷害 —— '
     + '那會超過真正擊倒（可能值 2~3 張獎賞）的分數，AI 反而放掉能擊倒的招');
 });

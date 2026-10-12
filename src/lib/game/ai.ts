@@ -36,7 +36,7 @@ import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemo
 import { getPlaybook, benchScoreOf } from './ai-playbook';
 // v6.039 批次4c：場面評估（引擎試打）。方向嚴格單向 ai.ts → ai-eval.ts → engine，
 //   ai-eval 不得反向 import ai.ts（會造成 module-init 循環，見 v5.985 TDZ 事故）。
-import { actionWeakensAttackThisTurn, estimateIfPromoted, evaluateAttack, isInSimResolve, isPointlessAttack, PRIZE_SCORE_UNIT, setSimSelectionResolver, type AttackEval } from './ai-eval';
+import { actionWeakensAttackThisTurn, estimateIfPromoted, evaluateAttack, isInSimResolve, isPointlessAttack, LOSE_SCORE, PRIZE_SCORE_UNIT, setSimSelectionResolver, type AttackEval } from './ai-eval';
 // ⭐v6.429 呆呆王「牌庫頂借招」打法（站長說明）；只對場上／手上有會耀閃挑戰寶可夢的一方生效
 import {
   isTopCopyPlayer, topCopyUser, bestKnownTopCopy, valueAsTop, pickCipherArrange,
@@ -506,7 +506,13 @@ export function getAIAction(
         //   否則會超過真正試打出來的擊倒分數（打 ex 明明值 2 張獎賞），
         //   AI 反而會選開選擇視窗的那一招而放掉真的能擊倒的招。
         //   fallback 只有印刷傷害可用，不知道對手值幾張獎賞，保守給 1 張。
-        return (_oppRem > 0 && est >= _oppRem) ? PRIZE_SCORE_UNIT : est;
+        // >>> v6552-ai-fallback-cost
+        // ⭐v6.552（審查 P2-1）：試打停在對手的選擇視窗（推倒等）時傷害端改用印刷估值，但**代價端**（自己被反擊打倒送出的獎賞、
+        //   受傷反擊的傷害）試打已經算得出來（v6.551 afterForSelf）⇒ 扣回去；會直接輸 ⇒ 排到最後（與試打評分同一個常數）。
+        if (ev.ok && ev.gameLost) return LOSE_SCORE;
+        const _fb = (_oppRem > 0 && est >= _oppRem) ? PRIZE_SCORE_UNIT : est;
+        return ev.ok ? _fb - ev.costScore : _fb;
+        // <<< v6552-ai-fallback-cost
       }
       return ev.score;
     };
@@ -573,7 +579,9 @@ export function getAIAction(
       }
     }
     // ⭐v6.430（批次 C）每一招都打不動 ⇒ 不出招（判定在上面，這裡只是出口）
-    if (!_pointless) {
+    // ⭐v6.552（v6552-ai-fallback-cost）：每一招都會讓自己直接輸（分數壓底 -1e12）⇒ 也不出招（落到撤退換人／結束回合）
+    const _allLose = atkIdxs.every(i => (_scoreOf.get(i) ?? 0) <= LOSE_SCORE / 10);
+    if (!_pointless && !_allLose) {
       const _cc = _copyChoice.get(best);
       if (_cc) return { type: 'ATTACK', attackIndex: best, copyAttackChoice: _cc };
       return aiDiscardedEnergyIids

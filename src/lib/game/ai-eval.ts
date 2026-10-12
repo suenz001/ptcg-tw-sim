@@ -215,7 +215,8 @@ export function bestAttackOutcome(
     for (const idx of getAvailableAttacks(state, pool)) {
       if (eff && excludeAttackNames!.includes(eff[idx]?.atk?.name ?? '')) continue;
       const ev = evaluateAttack(state, actorIdx, idx, pool);
-      if (!ev.ok) continue;
+      // ⭐v6.552（審查 P3-1）：會讓自己直接輸的招不列入「換上去能打什麼」（撤退換人分支不會為了它付撤退費）
+      if (!ev.ok || ev.gameLost) continue;
       const o: AttackOutcome = { ok: true, ko: ev.ko, dealt: ev.ko ? Infinity : ev.oppDamage, unresolved: ev.unresolved };
       if (!best || (o.ko && !best.outcome.ko) || (o.ko === best.outcome.ko && o.dealt > best.outcome.dealt)) {
         best = { attackIndex: idx, outcome: o };
@@ -404,6 +405,12 @@ export interface AttackEval extends AttackOutcome {
   selfEnergyLost: number;
   /** 我方戰鬥位自身增加的傷害（反衝傷害） */
   selfDamage: number;
+  /** ⭐v6.552 這一擊讓**對手**拿到幾張獎賞（自己的寶可夢因自傷、受傷反擊等昏厥） */
+  prizesGiven: number;
+  /** ⭐v6.552 這一擊會讓自己直接輸掉（任一次試打） */
+  gameLost: boolean;
+  /** ⭐v6.552（審查 P2-1）代價端分數（prizesGiven×PRIZE＋selfDamage×SELF_DAMAGE），ai.ts 對 unresolved 的招用印刷傷害估值時扣回去 */
+  costScore: number;
   /** 這一擊是否直接贏得對局 */
   gameWon: boolean;
   /** 綜合分數（越大越好） */
@@ -419,7 +426,7 @@ export interface AttackEval extends AttackOutcome {
 }
 
 const DEAD_EVAL: AttackEval = {
-  ...DEAD, prizes: 0, oppDamage: 0, selfEnergyLost: 0, selfDamage: 0, gameWon: false, score: -Infinity,
+  ...DEAD, prizes: 0, oppDamage: 0, selfEnergyLost: 0, selfDamage: 0, prizesGiven: 0, gameLost: false, costScore: 0, gameWon: false, score: -Infinity,
   sideEffectKeys: [], usedRandom: false,
 };
 
@@ -547,6 +554,8 @@ const W = { PRIZE: 1000, SELF_ENERGY: 30, SELF_DAMAGE: 0.5, CANT_ATTACK_NEXT: 15
 /** 一張獎賞卡在評分尺度上的份量。呼叫端做 fallback 估值時要用同一個尺度，否則
  *  「能擊倒」與「傷害高」兩種估值混在一起比會得到亂七八糟的排序。 */
 export const PRIZE_SCORE_UNIT = W.PRIZE;
+/** ⭐v6.552 這一擊會讓自己直接輸的分數（有限值，排在所有能打的招之後）；ai.ts 判「每一招都必輸」用 LOSE_SCORE / 10 當門檻（審查 P3-2：常數只有一份）。 */
+export const LOSE_SCORE = -1e12;
 
 /** 單次試打並回傳完整評估（不平均；平均版見 evaluateAttack）。 */
 function evaluateAttackOnce(
@@ -627,15 +636,33 @@ function evaluateAttackOnce(
       //   結果是「下回合不能攻擊」這個代價**完全不被計入**而毫無徵兆。守衛已釘死此欄位。
       const cantAttackNext = !!(sameSelf && selfNow.cantAttackPending);
 
+      // >>> v6552-ai-self-ko-penalty
+      // ⭐v6.552（v6.551 審查 P3-1）：自己的寶可夢被這一擊連帶打倒（自傷、受傷反擊…）時原本沒有任何扣分
+      //   （sameSelf 為 false ⇒ selfDamage／selfEnergyLost 都記 0）⇒ 送獎賞給對手的招反而分數更高。
+      //   改成讀對手拿到的獎賞（含受傷反擊結算後的 afterForSelf），與自己拿到的獎賞用同一個尺度相減；
+      //   這一擊讓對手直接獲勝 ⇒ 排到所有「能打」的招之後（仍是有限值，不等於「不能用」）。
+      const beforeOppPending = state.pendingPrizes?.[oppIdx] ?? 0;
+      const prizesGiven = Math.max(0, (afterForSelf.pendingPrizes?.[oppIdx] ?? 0) - beforeOppPending)
+        + Math.max(0, state.players[oppIdx].prizes.length - afterForSelf.players[oppIdx].prizes.length);
+      //   ⚠ afterForSelf 可能是「拿掉視窗後手動結算」的副本：終局被收回待重判（_v6361NeedsVerdict）、中央重判還沒跑
+      //     ⇒ 另外直接看盤面：自己沒有寶可夢（對手還有）、或對手取完獎賞（自己還沒）⇒ 也算輸。
+      const _me = afterForSelf.players[actorIdx], _op = afterForSelf.players[oppIdx];
+      const _meNoMon = !_me.active && _me.bench.length === 0, _opNoMon = !_op.active && _op.bench.length === 0;
+      const gameLost = afterForSelf.phase === 'game-over'
+        ? afterForSelf.winner === oppIdx
+        : ((_meNoMon && !_opNoMon) || (_op.prizes.length === 0 && _me.prizes.length > 0));
       let score = prizes * W.PRIZE + oppDamage
+        - prizesGiven * W.PRIZE
         - selfEnergyLost * W.SELF_ENERGY
         - selfDamage * W.SELF_DAMAGE
         - (cantAttackNext ? W.CANT_ATTACK_NEXT : 0);
       if (gameWon) score = Number.MAX_SAFE_INTEGER;
+      else if (gameLost) score = LOSE_SCORE;
+      // <<< v6552-ai-self-ko-penalty
 
       return {
         ok: true, ko, dealt: ko ? Infinity : oppDamage, unresolved: !!after.pendingSelection,
-        prizes, oppDamage, selfEnergyLost, selfDamage, gameWon, score,
+        prizes, oppDamage, selfEnergyLost, selfDamage, prizesGiven, gameLost, costScore: prizesGiven * W.PRIZE + selfDamage * W.SELF_DAMAGE, gameWon, score,
         sideEffectKeys: attackBoardChangeKeys(simBefore, after), usedRandom: _rndCalls > 0,
       };
     });
@@ -669,6 +696,7 @@ export function evaluateAttack(
       ? { ...r,
           prizes: acc.prizes + r.prizes, oppDamage: acc.oppDamage + r.oppDamage,
           selfEnergyLost: acc.selfEnergyLost + r.selfEnergyLost, selfDamage: acc.selfDamage + r.selfDamage,
+          prizesGiven: acc.prizesGiven + r.prizesGiven, costScore: acc.costScore + r.costScore, gameLost: acc.gameLost || r.gameLost,
           gameWon: acc.gameWon || r.gameWon,
           score: acc.score === Number.MAX_SAFE_INTEGER || r.score === Number.MAX_SAFE_INTEGER
             ? Number.MAX_SAFE_INTEGER : acc.score + r.score,
@@ -683,7 +711,7 @@ export function evaluateAttack(
     ...acc,
     ko: koCount * 2 > okCount,          // 過半數會擊倒才算「能擊倒」
     prizes: avg(acc.prizes), oppDamage: avg(acc.oppDamage),
-    selfEnergyLost: avg(acc.selfEnergyLost), selfDamage: avg(acc.selfDamage),
+    selfEnergyLost: avg(acc.selfEnergyLost), selfDamage: avg(acc.selfDamage), prizesGiven: avg(acc.prizesGiven), costScore: avg(acc.costScore),
     score: acc.score === Number.MAX_SAFE_INTEGER ? acc.score : avg(acc.score),
   };
 }
