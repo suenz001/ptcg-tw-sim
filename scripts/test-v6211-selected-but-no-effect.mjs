@@ -181,9 +181,12 @@ const SRC = walkSrc('src').map((rel) => [rel, readFileSync(join(ROOT, rel), 'utf
 //   掃到的字面處數從 900+ 掉到 863。⚠ 這是**收斂**造成的下降，不是掃描器壞掉：
 //   Rule 40 的紀律是「判準往上移不放寬」⇒ 下面**同時新增一條棘輪**，把被移走的那部分
 //   保護接回來（中央述詞的呼叫點數），否則單純調低下限就是放寬。
-T('⭐ 掃描器下限：至少掃到 850 處 subtype/supertype 比對（v6.403 實測 863；掃不到＝安慰劑）', () => {
+// ⭐v6.543（Rule 40）：850 → 820。本版刪掉 +page.svelte／ai.ts 的 18 種 TOP filter inline 副本與 hand-discard 死 inline chain（收進中央述詞表），
+//   散寫比對自然減少（實測 849）；意圖（掃描器沒壞、掃得到大宗散寫）不變。
+//   ⚠ 被移走的那部分保護由 test-v6543 TOP_CENTRAL 接回（18 種 TOP filter 必須全部由中央求值器判定）與 test-v6109（UI／ai.ts 不得長回 inline），不是單純調低下限。
+T('⭐ 掃描器下限：至少掃到 820 處 subtype/supertype 比對（v6.543 實測約 849；掃不到＝安慰劑）', () => {
   const { n } = scanSubtypeLiterals(SRC);
-  ok(n >= 850, `只掃到 ${n} 處`);
+  ok(n >= 820, `只掃到 ${n} 處`);
 });
 T('⭐v6.403 棘輪：中央 ex 述詞的呼叫點 ≥ 44（字面被收斂掉多少，就要在中央述詞這邊長回來）', () => {
   let n = 0;

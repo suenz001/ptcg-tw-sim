@@ -112,11 +112,12 @@ T('前綴規則 Name:/Pokemon:NamePrefix=/Pokemon:NameContains= 與 golden 逐�
 });
 
 T('unknown filter(批1未收錄)→ null(caller fallback)',()=>{
-  assert.equal(ev('deck-search','TOP6',{iid:'x'},cards[0],{}),null);
+  // ⭐v6.543（Rule 40）：TOP 型 filter 已收進中央（'TOP6' 不再是未收錄樣本）⇒ 改用仍未收錄的 'SturdyMightTree:Stage1'，意圖（未收錄回 null）不變
+  assert.equal(ev('deck-search','SturdyMightTree:Stage1',{iid:'x'},cards[0],{}),null);
   assert.equal(ev('deck-search','',{iid:'x'},cards[0],{}),null);
   assert.equal(ev('deck-search','Evolution',{iid:'x'},cards[0],{}),null,'Evolution(validIids交集)批2才收');
   assert.equal(ev('hand-discard','Pokemon',{iid:'x'},cards[0],{}),null,'hand-discard Pokemon 延後未收錄→null（批4）');
-  assert.equal(known('deck-search','TOP6'),false);
+  assert.equal(known('deck-search','SturdyMightTree:Stage1'),false);
 });
 
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);

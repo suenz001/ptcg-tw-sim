@@ -28,7 +28,7 @@ import { ATTACK_PRE_DISCARD_CHOICE, getEnergyDiscardUnits, preDiscardOptInThresh
 //   ai.ts 已經 import engine（engine 也 import defense）⇒ 不是新的相依方向、無循環風險。
 import { hasEffectiveAbilityByInst } from './defense';
 import { isAllPowerSoulBlocked } from './usable-gates';   // ⭐v6.528 全能靈魂（壯偉碩木候選）
-import { activeEnergyDiscardCandidates } from './selection-candidates';   // ⭐v6.523 能量 picker 候選與 UI 同一支
+import { activeEnergyDiscardCandidates, damageDistributeCandidates } from './selection-candidates';   // ⭐v6.523 能量 picker 候選與 UI 同一支；⭐v6.543 分配候選
 import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemonExCard } from './selection-filter'; // v6.013/6.016 P1-1:deck-search/hand-discard/discard-search filter 中央求值器
 // v6.038 批次4b：AI 打法表（離線由高勝率對局整理出的策略表）。載入與適用判定都在 ai-playbook.ts，
 //   這裡只做**同步查詢**——getAIAction 是同步的，不能在決策路徑做 fetch。
@@ -751,49 +751,6 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         //   fallback,批次遷移)。這修掉 AI 對 ex/Item/Supporter/Stage1 等原本落 `return true` 全牌庫的漂移。
         const _central = evaluateSelectionFilter('deck-search', f, c, card, { params: sel.params });
         if (_central !== null) return _central;
-        const top6 = new Set<string>((sel.params?.top6Iids as string[]) ?? []);
-        if (f === 'TOP6')            return top6.has(c.iid);
-        // v6.083：'TOP4'（超級烈空坐ex｜霸者咆哮）。沒有這條的話 AI 會 fallthrough `return true`
-        //   → 拿整副牌庫當候選 → 被 engine sanitizeSelectedIids 的 validIids 交集清成空 →
-        //   AI 的霸者咆哮永遠附不到能量（靜默 no-op）。
-        if (f === 'TOP4') {
-          const top4 = new Set<string>((sel.params?.top4Iids as string[]) ?? []);
-          return top4.has(c.iid);
-        }
-        if (f === 'Supporter:TOP6')  return top6.has(c.iid) && card.subtype === 'Supporter';
-        // v2.56 寶可裝置3.0：牌庫頂 7 張中的支援者
-        if (f === 'Supporter:TOP7') {
-          const top7 = new Set<string>((sel.params?.top7Iids as string[]) ?? []);
-          return top7.has(c.iid) && card.subtype === 'Supporter';
-        }
-        // v3.11 拉普拉斯ex / 米立龍ex / 人造細胞卵：peek N 限定 filter
-        if (f === 'Basic:TOP_N') {
-          const topN = new Set<string>((sel.params?.topIids as string[]) ?? []);
-          return topN.has(c.iid) && isBasicPokemonCard(card);
-        }
-        if (f === 'Energy:TOP_N') {
-          const topN = new Set<string>((sel.params?.topIids as string[]) ?? []);
-          return topN.has(c.iid) && card.supertype === 'Energy';
-        }
-        // v5.964 女服務生:peek N 中的基本能量(與 +page.svelte 對齊;須在下方 startsWith('BasicEnergy:') 之前)。
-        if (f === 'BasicEnergy:TOP_N') {
-          const topN = new Set<string>((sel.params?.topIids as string[]) ?? []);
-          return topN.has(c.iid) && card.supertype === 'Energy' && card.subtype === 'Basic';
-        }
-        // v4.915 杜若：peek N 中的寶可夢 / 訓練家
-        if (f === 'Pokemon:TOP_N') {
-          const topN = new Set<string>((sel.params?.topIids as string[]) ?? []);
-          return topN.has(c.iid) && card.supertype === 'Pokemon';
-        }
-        if (f === 'Trainer:TOP_N') {
-          const topN = new Set<string>((sel.params?.topIids as string[]) ?? []);
-          return topN.has(c.iid) && card.supertype === 'Trainer';
-        }
-        // v2.209 配樂之笛：對手牌庫頂 5 張中的基礎寶可夢
-        if (f === 'Basic:TOP5') {
-          const top5 = new Set<string>((sel.params?.top5Iids as string[]) ?? []);
-          return top5.has(c.iid) && isBasicPokemonCard(card);
-        }
         // v2.211 壯偉碩木 step 1：1 階寶可夢，evolvesFrom 必須符合場上某基底
         if (f === 'SturdyMightTree:Stage1') {
           if (card.supertype !== 'Pokemon') return false;
@@ -822,14 +779,6 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (f === 'Resistance:Fighting') {
           return card.supertype === 'Pokemon' && card.resistance?.type === 'Fighting';
         }
-        // v2.55 捕蟲組合：牌庫頂 7 張中的基本【草】寶可夢 or 基本【草】能量
-        if (f === 'GrassBasicOrGrassEnergy:TOP7') {
-          const top7 = new Set<string>((sel.params?.top7Iids as string[]) ?? []);
-          if (!top7.has(c.iid)) return false;
-          if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
-          if (isBasicEnergyOfType(card, 'Grass')) return true;
-          return false;
-        }
         if (f === 'Basic')           return isBasicPokemonCard(card);
         if (f === 'Basic:HP70')      return isBasicPokemonCard(card) && (card.hp ?? 0) <= 70;
         // v5.254：BasicPokemon (毒電嬰/大嘴娃/火狐狸 呼朋引伴等同義 filter, UI 端為 +page.svelte:2674)
@@ -838,15 +787,6 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (f === 'Stage1')          return card.supertype === 'Pokemon' && (card.stage ?? card.subtype) === 'Stage1';
         if (f === 'Stage2')          return card.supertype === 'Pokemon' && (card.stage ?? card.subtype) === 'Stage2';
         if (f === 'Evolution')       return card.supertype === 'Pokemon' && !!card.evolvesFrom;
-        if (f === 'PsychicBasic')    return card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Psychic';
-        if (f === 'TOP8') {
-          const top8 = new Set<string>((sel.params?.top8Iids as string[]) ?? []);
-          return top8.has(c.iid);
-        }
-        if (f === 'TOP2') {
-          const top2 = new Set<string>((sel.params?.top2Iids as string[]) ?? []);
-          return top2.has(c.iid);
-        }
         if (f === 'Pokemon')         return card.supertype === 'Pokemon';
         if (f === 'Energy')          return card.supertype === 'Energy';
         if (f === 'BasicEnergy')     return card.supertype === 'Energy' && card.subtype === 'Basic';
@@ -895,11 +835,6 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           if (card.supertype === 'Pokemon' && card.name.startsWith('阿響的')) return true;
           if (isBasicEnergyOfType(card, 'Fire')) return true;
           return false;
-        }
-        // v2.135：洛拍棒（牌庫頂 4 張中的支援者）
-        if (f === 'Supporter:TOP4') {
-          const top4 = new Set<string>((sel.params?.top4Iids as string[]) ?? []);
-          return top4.has(c.iid) && card.subtype === 'Supporter';
         }
         // v2.135：固定卡名搜尋（旅途牽絆 用 'Card:阿響的冒險'）
         if (f.startsWith('Card:')) {
@@ -1393,11 +1328,13 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         }
         return { type: 'RESOLVE_SELECTION', selectedIids: _out };
       }
-      const benchPool = srcPlayer.bench;
+      // ⭐v6.543（審查 P3-1）：候選走中央 damageDistributeCandidates 並尊重 validIids（排除免疫目標）；
+      //   ⚠ 刻意維持只放備戰（includeActive:false）——v6.529 複審：奇異駭入讓 AI 動戰鬥位會變成替對手治療。
+      const benchPool = damageDistributeCandidates({ ...(sel.params as Record<string, unknown> | undefined), includeActive: false }, srcPlayer);
       if (benchPool.length === 0 || remaining <= 0) {
         return { type: 'RESOLVE_SELECTION', selectedIids: [] };
       }
-      const ids = dragapultDistribute6Counters(benchPool, remaining, counterDamage, pool, state);
+      const ids = dragapultDistribute6Counters(benchPool, remaining, counterDamage, pool, state, (sel.minCount ?? 0) >= remaining);
       return { type: 'RESOLVE_SELECTION', selectedIids: ids };
     }
 
@@ -1708,7 +1645,7 @@ function shouldUseCursedBomb(
  */
 function dragapultDistribute6Counters(
   bench: CardInstance[], totalCounters: number, counterDamage: number,
-  pool: Map<string, Card>, state?: GameState,
+  pool: Map<string, Card>, state?: GameState, mustPlaceAll = false,
 ): string[] {
   const tracker = bench.map(b => ({
     iid: b.iid,
@@ -1748,6 +1685,12 @@ function dragapultDistribute6Counters(
     result.push(target.iid);
     target.rem = Math.max(0, target.rem - counterDamage);
     counters--;
+  }
+  // ⭐v6.543（審查 P3-1）：卡面要放滿 N 個（minCount＝maxCount），目標都已經會被打倒時，剩下的照樣放
+  //   （放在 HP 最高的那隻上）；否則引擎的少選閘會退回 3 次才放行（無效 dispatch＋log 噪音）。
+  if (mustPlaceAll && counters > 0 && tracker.length > 0) {
+    const pad = tracker.reduce((a, b) => a.hp >= b.hp ? a : b);
+    while (counters > 0) { result.push(pad.iid); counters--; }
   }
   return result;
 }

@@ -70,7 +70,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
            casualResyncGapMs, casualResyncInLastChance, RESYNC_BASE_MS,
            nextRestartBaseline, setupSeatRank } from '$lib/game/sync-guards';
   import { staleVersionDiagWhy } from '$lib/tournament/stale-diag';
-  import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates } from '$lib/game/selection-candidates';
+  import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates, handDiscardCandidates, damageDistributeCandidates } from '$lib/game/selection-candidates';
   import { selectionAllowsSkip, selectionAllowsCancel, selectionConfirmFloor, selectionHasNoExit, aiStuckSelectionPayload } from '$lib/game/selection-ui';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
@@ -3907,98 +3907,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
           const nm = f.slice('Name:'.length);
           return src.deck.filter(c => pool.get(c.cardId)?.name === nm);
         }
-        if (f === 'TOP6') {
-          const top6 = new Set<string>((pendingSelection.params?.top6Iids as string[]) ?? []);
-          return src.deck.filter(c => top6.has(c.iid));
-        }
-        if (f === 'TOP8') {
-          const top8 = new Set<string>((pendingSelection.params?.top8Iids as string[]) ?? []);
-          return src.deck.filter(c => top8.has(c.iid));
-        }
-        // v6.081 超級烈空坐ex｜霸者咆哮：牌庫上方 4 張（顯示全部＝「查看」，可勾的限制走 validIids）
-        if (f === 'TOP4') {
-          const top4 = new Set<string>((pendingSelection.params?.top4Iids as string[]) ?? []);
-          return src.deck.filter(c => top4.has(c.iid));
-        }
-        if (f === 'TOP2') {
-          const top2 = new Set<string>((pendingSelection.params?.top2Iids as string[]) ?? []);
-          return src.deck.filter(c => top2.has(c.iid));
-        }
-        if (f === 'Supporter:TOP6') {
-          const top6 = new Set<string>((pendingSelection.params?.top6Iids as string[]) ?? []);
-          return src.deck.filter(c => top6.has(c.iid) && pool.get(c.cardId)?.subtype === 'Supporter');
-        }
-        // v2.56 寶可裝置3.0：牌庫頂 7 張中的支援者
-        if (f === 'Supporter:TOP7') {
-          const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);
-          return src.deck.filter(c => top7.has(c.iid) && pool.get(c.cardId)?.subtype === 'Supporter');
-        }
-        // v3.11 米立龍ex|硃砂誘餌 / 人造細胞卵|傳喚之門：peek N 中的基礎寶可夢
-        if (f === 'Basic:TOP_N') {
-          const topN = new Set<string>((pendingSelection.params?.topIids as string[]) ?? []);
-          return src.deck.filter(c => {
-            if (!topN.has(c.iid)) return false;
-            const card = pool.get(c.cardId);
-            return !!card && card.supertype === 'Pokemon' && !card.evolvesFrom;
-          });
-        }
-        // v3.11 拉普拉斯ex|海紋石之雨：peek N 中的能量（含特殊能量）
-        if (f === 'Energy:TOP_N') {
-          const topN = new Set<string>((pendingSelection.params?.topIids as string[]) ?? []);
-          return src.deck.filter(c => {
-            if (!topN.has(c.iid)) return false;
-            const card = pool.get(c.cardId);
-            return !!card && card.supertype === 'Energy';
-          });
-        }
-        // v5.964 女服務生:peek N 中的「基本」能量 — 須在 generic startsWith('BasicEnergy:') 之前
-        //   (否則 TOP_N 被當 EnergyType 恒 false)。原 generic 'BasicEnergy' 不交集 topIids → 顯示整副。
-        if (f === 'BasicEnergy:TOP_N') {
-          const topN = new Set<string>((pendingSelection.params?.topIids as string[]) ?? []);
-          return src.deck.filter(c => {
-            if (!topN.has(c.iid)) return false;
-            const card = pool.get(c.cardId);
-            return !!card && card.supertype === 'Energy' && card.subtype === 'Basic';
-          });
-        }
-        // v4.952 超級妖火紅狐ex 戲法傳送門：牌庫頂 9 張中的寶可夢卡（任意階段）
-        if (f === 'Pokemon:TOP9') {
-          const top9 = new Set<string>((pendingSelection.params?.top9Iids as string[]) ?? []);
-          return src.deck.filter(c => {
-            if (!top9.has(c.iid)) return false;
-            const card = pool.get(c.cardId);
-            return !!card && card.supertype === 'Pokemon';
-          });
-        }
-        // v6.027：NameContains:（化石採掘場語義＝名稱含 X 的物品卡）已收進中央 selection-filter，
-        //   這裡的早期 return 移除，讓它落到下方「先問中央求值器」的通用出口（零行為變更、單一真相）。
-        // v4.942 黑暗球：bottom 7（用 top7Iids 名義 reuse 既有 spec'd TOP-N 機制）中的寶可夢卡
-        if (f === 'Pokemon:TOP7') {
-          const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);
-          return src.deck.filter(c => {
-            if (!top7.has(c.iid)) return false;
-            const card = pool.get(c.cardId);
-            return !!card && card.supertype === 'Pokemon';
-          });
-        }
-        // v4.915 杜若：peek N 中的寶可夢卡（任意階段）
-        if (f === 'Pokemon:TOP_N') {
-          const topN = new Set<string>((pendingSelection.params?.topIids as string[]) ?? []);
-          return src.deck.filter(c => {
-            if (!topN.has(c.iid)) return false;
-            const card = pool.get(c.cardId);
-            return !!card && card.supertype === 'Pokemon';
-          });
-        }
-        // v4.915 杜若：peek N 中的訓練家卡（含支援者/物品/競技場/道具）
-        if (f === 'Trainer:TOP_N') {
-          const topN = new Set<string>((pendingSelection.params?.topIids as string[]) ?? []);
-          return src.deck.filter(c => {
-            if (!topN.has(c.iid)) return false;
-            const card = pool.get(c.cardId);
-            return !!card && card.supertype === 'Trainer';
-          });
-        }
         // v4.941 同名群聚（呱呱泡蛙 / 強顎雞母蟲 / 一家鼠 / 蟲電寶 等）：限定同名寶可夢
         // v5.085：原 v4.941 過度限制為 isBasicPokemonCard — 但蟲電寶/一家鼠 SV7 是
         //   Stage1，被 isBasicPokemonCard 濾掉 → picker 顯示空白（玩家回報）。
@@ -4015,35 +3923,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
             if (!card || card.supertype !== 'Pokemon') return false;
             if (targetName && card.name !== targetName) return false;
             return true;
-          });
-        }
-        // v2.209 配樂之笛：對手牌庫頂 5 張中的基礎寶可夢
-        if (f === 'Basic:TOP5') {
-          const top5 = new Set<string>((pendingSelection.params?.top5Iids as string[]) ?? []);
-          return src.deck.filter(c => {
-            if (!top5.has(c.iid)) return false;
-            const card = pool.get(c.cardId);
-            return !!card && card.supertype === 'Pokemon' && !card.evolvesFrom;
-          });
-        }
-        // v2.42 越橘的一步棋：牌庫頂 7 張中的【惡】屬性寶可夢卡（任意階段）
-        // ── 修正夜間學院互動 bug：原 filter 'Pokemon:Type=Darkness' 落到 generic
-        //    Pokemon: parser → t='Type=Darkness' 比對 pokemonType 永遠 false。
-        if (f === 'DarknessPokemon:TOP7') {
-          const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);
-          return src.deck.filter(c => {
-            if (!top7.has(c.iid)) return false;
-            const card = pool.get(c.cardId);
-            return !!card && card.supertype === 'Pokemon' && card.pokemonType === 'Darkness';
-          });
-        }
-        // Bug fix (#19 金屬怪): 牌庫頂 4 張中的基本【鋼】能量（不顯示整個牌庫）
-        if (f === 'BasicMetalEnergy:TOP4') {
-          const top4 = new Set<string>((pendingSelection.params?.top4Iids as string[]) ?? []);
-          return src.deck.filter(c => {
-            if (!top4.has(c.iid)) return false;
-            const card = pool.get(c.cardId);
-            return !!card && isBasicEnergyOfType(card, 'Metal');
           });
         }
         // v2.211 壯偉碩木 step 1：牌庫中 evolvesFrom 對得上場上某基底的 Stage1
@@ -4086,19 +3965,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
             const card = pool.get(c.cardId);
             if (!card || card.supertype !== 'Pokemon') return false;
             return card.resistance?.type === 'Fighting';
-          });
-        }
-        // v2.55 捕蟲組合：牌庫頂 7 張中的基本【草】寶可夢 or 基本【草】能量
-        if (f === 'GrassBasicOrGrassEnergy:TOP7') {
-          const top7 = new Set<string>((pendingSelection.params?.top7Iids as string[]) ?? []);
-          return src.deck.filter(c => {
-            if (!top7.has(c.iid)) return false;
-            const card = pool.get(c.cardId);
-            if (!card) return false;
-            // Bug fix (#20): 捕蟲組合卡面寫「【草】寶可夢卡」= 任何階段，移除 !evolvesFrom 限制
-            if (card.supertype === 'Pokemon' && card.pokemonType === 'Grass') return true;
-            if (isBasicEnergyOfType(card, 'Grass')) return true;
-            return false;
           });
         }
         return src.deck.filter(c => {
@@ -4250,11 +4116,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
             if (isBasicEnergyOfType(card, 'Fire')) return true;
             return false;
           }
-          // v2.135：洛拍棒
-          if (f === 'Supporter:TOP4') {
-            const top4 = new Set<string>((pendingSelection.params?.top4Iids as string[]) ?? []);
-            return top4.has(c.iid) && card.subtype === 'Supporter';
-          }
           // v2.135：固定卡名（旅途牽絆 'Card:阿響的冒險'）
           if (f.startsWith('Card:')) {
             return card.name === f.slice(5);
@@ -4370,12 +4231,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         return validIidsOppB ? base.filter(c => validIidsOppB.includes(c.iid)) : base;
       }
       case 'damage-distribute': {
-        // v4.990: 支援 params.validIids 過濾免疫目標（化隱 / 球形盾牌 / 對戰圓形 等），
-        //   配合幻影奇襲 POST dry-run，picker UI 不再顯示永遠 block 的 bench → 不會卡 picker。
-        const includeActiveDD = pendingSelection.params?.includeActive === true;
-        const validIidsDD = pendingSelection.params?.validIids as string[] | undefined;
-        const baseDD = includeActiveDD && src.active ? [src.active, ...src.bench] : src.bench;
-        return validIidsDD ? baseDD.filter(c => validIidsDD.includes(c.iid)) : baseDD;
+        // v4.990：params.validIids 過濾免疫目標（化隱／球形盾牌／對戰圓形等）。
+        // ⭐v6.543：候選走中央 damageDistributeCandidates（engine 少選閘用同一份）
+        return damageDistributeCandidates(pendingSelection.params as Record<string, unknown> | undefined, src);
       }
       case 'energy-distribute': {
         // v2.87 同類能量自由分配：自方寶可夢，依 validIids 過濾
@@ -4384,35 +4242,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
         return validIidsED ? all.filter(c => validIidsED.includes(c.iid)) : all;
       }
       case 'hand-discard': {
-        const f2 = pendingSelection.filter ?? '';
-        const validIidsHD = pendingSelection.params?.validIids as string[] | undefined;
-        let pool0 = src.hand;
-        if (validIidsHD) pool0 = pool0.filter(c => validIidsHD.includes(c.iid));
-        // v6.017（P1-1 批4）：中央 selection filter 求值器（known 走中央、否則落原 inline chain）；UI 為 canonical，零行為變更
-        if (isKnownSelectionFilter('hand-discard', f2)) return pool0.filter(c => evaluateSelectionFilter('hand-discard', f2, c, pool.get(c.cardId), {}) === true);
-        if (f2 === 'Energy') return pool0.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
-        if (f2 === 'BasicEnergy') return pool0.filter(c => {
-          const card = pool.get(c.cardId);
-          return card?.supertype === 'Energy' && card.subtype === 'Basic';
-        });
-        // v2.40 月光丘陵：只基本【超】能量（排除感應【超】等 Special Energy）
-        if (f2 === 'BasicPsychicEnergy') return pool0.filter(c => isBasicEnergyOfType(pool.get(c.cardId), 'Psychic'));
-        // v2.89 波動突刺：只基本【鬥】能量（排除硬岩【鬥】等 Special Energy）
-        if (f2 === 'BasicFightingEnergy') return pool0.filter(c => isBasicEnergyOfType(pool.get(c.cardId), 'Fighting'));
-        // v3.58：generic 基本能量 + 屬性 filter（妖火紅狐｜閃焰魔法 用 BasicEnergy:Fire）
-        //   原本 UI 只認 BasicEnergy:Grass / Lightning（v2.305 加的兩個具名 case），
-        //   fallthrough 到 `return pool0;` 讓玩家可棄任何手牌 — 這是 bug。
-        //   放在最後讓上面具名 case 優先（如 BasicPsychicEnergy / BasicFightingEnergy）。
-        if (f2.startsWith('BasicEnergy:')) {
-          const t = f2.slice('BasicEnergy:'.length) as EnergyType;
-          return pool0.filter(c => isBasicEnergyOfType(pool.get(c.cardId), t));
-        }
-        if (f2.startsWith('Energy:')) {
-          // v2.121：加 name fallback
-          const t = f2.slice(7) as EnergyType;
-          return pool0.filter(c => isBasicEnergyOfType(pool.get(c.cardId), t));
-        }
-        return pool0;
+        // ⭐v6.543：候選走中央 handDiscardCandidates（engine 消毒閘與少選閘用同一份；原 inline chain 中央之後的分支全是死碼）
+        return handDiscardCandidates(pendingSelection.filter, pendingSelection.params as Record<string, unknown> | undefined, src.hand, pool);
       }
       case 'hand-choose':  {
         const validIids2 = pendingSelection.params?.validIids as string[] | undefined;

@@ -50,9 +50,11 @@ T('pool 缺席（舊呼叫者）跳過 Stage2，不 crash',()=>{
   assert.deepEqual(out, ['i1','i4','i3'], 'pool 缺席應只做 Stage1，實際='+JSON.stringify(out));
 });
 
+// ⭐v6.543（Rule 40）：hand-discard 改由中央 handDiscardCandidates 消毒（test-v6543 鎖），不再原封放行 ⇒ 樣本改用仍原封放行的 hand-choose（無 validIids），
+//   意圖（deck-search 的 Stage2 語義過濾不會套到其他型別）不變。
 T('非 deck-search 型別原封放行（不受 Stage2 影響）',()=>{
-  const out=sanitizeSelectedIids(state, {type:'hand-discard',actorIdx:0,sourcePlayerIdx:0,filter:'BasicEnergy',maxCount:3}, ['i1','i4','i3'], pool);
-  assert.deepEqual(out, ['i1','i4','i3'], 'hand-discard 原封放行，實際='+JSON.stringify(out));
+  const out=sanitizeSelectedIids(state, {type:'hand-choose',actorIdx:0,sourcePlayerIdx:0,filter:'BasicEnergy',maxCount:3}, ['i1','i4','i3'], pool);
+  assert.deepEqual(out, ['i1','i4','i3'], 'hand-choose 原封放行，實際='+JSON.stringify(out));
 });
 
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);

@@ -471,9 +471,9 @@ regG('琵魯', (st, idx) => st.players[idx].deck.length > 0);
 export function pirouMinDiscard(handAfterPlay: number): number {
   return Math.max(0, handAfterPlay - 4);
 }
-/** 丟不夠時最多重開幾次（比照 engine RESOLVE_REJECT_STREAK_MAX=3：任何情況下都不軟鎖；Fable 審查 v6.528 P2-1）。 */
-const PIROU_REJECT_MAX = 3;
-function pirouPending(st: GameState, idx: 0 | 1, rejects = 0): GameState {
+// ⭐v6.543：「丟不夠就重開」改由 engine 中央少選閘（selectionUnderMinCount，hand-discard）處理，
+//   這裡原本的 rejects／PIROU_REJECT_MAX 是同一條規則的第二份（疊加後會重開 6 次以上）⇒ 刪除，判準只剩中央一份。
+function pirouPending(st: GameState, idx: 0 | 1): GameState {
   const handLen = st.players[idx].hand.length;
   const minD = pirouMinDiscard(handLen);
   return withPending(st, {
@@ -483,7 +483,7 @@ function pirouPending(st: GameState, idx: 0 | 1, rejects = 0): GameState {
     effectKey: 'pirou-discard-then-draw',
     // minCount ≥ 1 時 selectionAllowsSkip 自動不給【不選】；0 時沿用 OPTIONAL 白名單
     params: {
-      minDiscard: minD, rejects,
+      minDiscard: minD,
       ...(minD > 0 ? { titleOverride: `琵魯：至少丟棄 ${minD} 張手牌（丟到剩 4 張以下），然後抽卡直到滿 5 張` } : {}),
     },
   });
@@ -504,12 +504,7 @@ reg('琵魯', (st, idx) => {
 });
 regR('pirou-discard-then-draw', (st, idx, iids, _params, pool) => {
   const chosen = st.players[idx].hand.filter(c => iids.includes(c.iid));
-  // ⭐v6.528：丟的張數不足（只有改過的 client 送得出來）⇒ 原樣重開選擇視窗，不替玩家挑
-  const _minD = Number((_params as { minDiscard?: number } | undefined)?.minDiscard ?? 0);
-  const _rej = Number((_params as { rejects?: number } | undefined)?.rejects ?? 0);
-  if (chosen.length < _minD && _rej < PIROU_REJECT_MAX) {
-    return pirouPending(addLog(st, `琵魯：至少要丟棄 ${_minD} 張手牌`, idx), idx as 0 | 1, _rej + 1);
-  }
+  // ⭐v6.528 丟的張數不足 ⇒ 不結算、視窗留著：⭐v6.543 起由 engine 中央少選閘處理（同樣受 RESOLVE_REJECT_STREAK_MAX 保護、不軟鎖）。
   if (chosen.length > 0) {
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
     st = addLog(st, `琵魯：丟棄 ${chosen.length} 張手牌（${names}）`, idx);

@@ -1,5 +1,28 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.543：選擇視窗的張數與範圍改由中央驗證（2026-10-12，小問題批次 A）
+
+BASE 67880226（v6.542）。**非規則改動（防作弊／卡面成本）**＋**直接卡面**（杜若「從其中選擇」、高級球「必須將 2 張手牌丟棄」、奇異駭入「改放」＝總數不變）。調查：子代理逐項以 applyAction 完整流程重現（第 3、4、5、10 項的張數部分）。
+- 中央候選（selection-candidates.ts，哨兵 v6543-payload-count-central）：handDiscardCandidates（手牌 ∩ validIids ∩ 已收錄 filter）、damageDistributeCandidates（includeActive／validIids）；+page.svelte 的 hand-discard／damage-distribute case 改呼叫它們（原 inline chain 中央之後的分支全為死碼，一併刪）。
+- engine sanitizeSelectedIids：hand-discard 收斂到中央候選＋去重＋夾 maxCount（54 個 producer 實查 sourcePlayerIdx 一律是被丟手牌的一方）；damage-distribute 只夾總數 ≤ maxCount（合法重複 iid 編碼數量，不去重）。
+- engine 少選閘 selectionUnderMinCount（哨兵 v6543-under-min-gate，唯一一份）：hand-discard 候選 ≥ minCount、damage-distribute 有可放置目標，而消毒後少於 minCount ⇒ RESOLVE_SELECTION 原地退回（受 RESOLVE_REJECT_STREAK_MAX 保護；候選不足時放行＝逃生口；取消整個動作的空選擇照舊放行）。
+- selection-filter.ts（哨兵 v6543-top-filters-central）：18 種牌庫頂 TOP filter 全部收進中央 DECK_SEARCH_PREDICATES（inTopParam 讀各 producer 實查的 params 鍵），+page.svelte／ai.ts 的 inline 判斷刪除（判準只剩一份）。**順帶修正 AI**：ai.ts 原本漏 Pokemon:TOP7（黑暗球）／Pokemon:TOP9（戲法傳送門）⇒ 落到 generic 'Pokemon:' 解析恆 false；GrassBasicOrGrassEnergy:TOP7 殘留 !evolvesFrom（Bug #20 舊判準）。
+- 杜若 tora-pokemon／tora-trainer：選擇與上方 7 張取交集（真 bug：訓練家階段選範圍外的卡 ⇒ rest 與 got 同時含那張 ⇒ 複製）。
+- Rule 40：test-selection-filter（'TOP6' 已收錄 ⇒ 未收錄樣本改 'SturdyMightTree:Stage1'）、test-v6109（UI／ai.ts 不再各有 inline case ⇒ 改斷言中央有、兩端走中央求值器、且不得長回 inline；行為對照改呼叫中央）、test-v6441 LATER 登記（7 組還原對，difflib 產生並驗證逐位元還原）。
+- 守衛 test-v6543-payload-count-central：UB_SHORT／UB_EMPTY／UB_DUP／UB_FOREIGN、TORA_OUT_TRAINER／TORA_RESOLVER_DIRECT／TORA_OUT_POKE、ABRA_SHORT／ABRA_OVER、SNOR_2、TOP_CENTRAL；正對照 UB_OK、TORA_OK、ABRA_OK、UB_FEW_ESCAPE（逃生口）；HEAD-FAIL（BASE：NEW 全紅、正對照綠）。突變 11 個全殺（含 resolver 自保層、少選閘不看候選數）。
+- 本批其餘：第 2、6 項（離場清除）排 v6.544；第 1、10 順序排 v6.545；第 9、11 排 v6.546；第 7、8、12 列入最後一批請站長裁定。
+- **Fable 5.1 審查（aec2e45b860dee49e）：需修 1 條 P2，行為面無 P1**。(a) 54 個 hand-discard producer sourcePlayerIdx 全對；(c) 18 條 TOP 述詞與刪掉的 UI inline 逐字等價、21 個 producer 的 params 鍵全部對上；(d) fallthrough 無變化；(e) Rule 40 無放寬。
+  - P2-1：anti-pattern-lint Check B 在本版紅（ai.ts PsychicBasic 那一行的 ±4 行窗口原本靠被刪掉的 TOP inline 帶到 SAFE 字樣，屬誤報）。**已修**：該行是中央 DECK_SEARCH_PREDICATES 已收錄的 'PsychicBasic' 的死 inline ⇒ 刪除（判準只剩一份），lint 綠。
+  - P3-1：AI damage-distribute 在「要放滿 6 個、目標只剩 30 HP」時只送 3 個 ⇒ 少選閘退回 3 次才放行。**已修**：AI 候選改走中央 damageDistributeCandidates（尊重 validIids，刻意維持只放備戰：v6.529 複審的奇異駭入替對手治療問題）；minCount ≥ 剩餘個數時把不足的補到 HP 最高的目標。守衛補 AI_PAD（BASE 紅）、AI_NO_PAD_OPTIONAL（min 0 不補，正對照）⇒ 34 PASS。
+  - **複審（ccb56f35）：可合併**，無 P1／P2／P3（10 個 damage-distribute producer 的 validIids 語義逐一核對：只有幻影奇襲帶 validIids，改善非回歸）。
+- 全套（ccb56f35）FAIL 5：test-v6370 已知平行假紅；其餘四支依 Rule 40／真修：
+  - test-v6528 PI_7（琵魯只丟 1 張的重開次數 3 ⇒ 7）：琵魯 resolver 自己有一份「丟不夠就重開」（rejects／PIROU_REJECT_MAX），與中央少選閘疊加 ⇒ **收斂**：刪掉琵魯那一份（判準只剩中央），重開次數回到 3。
+  - test-sanitize-filter-semantics（hand-discard 原封放行 ⇒ 殘缺盤面 crash）：engine 補 `Array.isArray(p.hand)` fail-open；樣本改用仍原封放行的 hand-choose（意圖：Stage2 語義過濾不套到其他型別）。
+  - test-v6251 lint A 白名單死條目（ai.ts PsychicBasic 已刪）⇒ 移除該條目。
+  - test-v6211 掃描器下限 850 ⇒ 820（刪掉 UI／ai.ts 的 TOP inline 副本，實測 849）；被移走的保護由 test-v6543 TOP_CENTRAL 與 test-v6109（不得長回 inline）接回，註解寫明。
+  - **第二次複審（0bf89fd2）：可合併**，無 P1／P2／P3（琵魯收斂後重開 3 次、放行時機與舊第 4 次相同；三支 Rule 40 無放寬）。
+- 全套（0bf89fd2）FAIL 3：test-v6371、test-v6301（效能倍率 4.3×<5×）為已知速度假紅（單跑綠）；test-v6272 ⑩ 玩家端檔案清單少列 draw_supporters.ts（琵魯收斂是全套後補的）⇒ PREV_ALLOWED 補列（只動守衛，src 不變）。
+
 ## v6.542：納莉 × 力之沙漏 的處理順序（2026-10-12）
 
 BASE 0677386e（v6.541）。**站長裁定**（2026-10-12 第 6 項「請都依照官方 QA 處理」）＋**直接判例** PTCG_RULES L2013（「可由寶可夢道具『力之沙漏』的持有人選擇執行順序」）。

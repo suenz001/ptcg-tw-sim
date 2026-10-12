@@ -79,7 +79,9 @@ reg('杜若', (st, idx) => {
 regR('tora-pokemon', (st, idx, iids, params, pool) => {
   const topIids = (params?.topIids as string[] | undefined) ?? [];
   // 把選到的寶可夢加手牌（保留 topIids 給下一階段過濾）
-  const set = new Set(iids);
+  // ⭐v6.543 卡面「從其中選擇」⇒ 只收上方 7 張裡的（中央消毒閘已收 Pokemon:TOP_N，這裡再交集一次自保）
+  const _top = new Set(topIids);
+  const set = new Set(iids.filter(id => _top.has(id)));
   if (set.size > 0) {
     const picked = st.players[idx].deck.filter(c => set.has(c.iid));
     // v2.96：卡面「給對手看過」→ 公開卡名
@@ -104,7 +106,10 @@ regR('tora-pokemon', (st, idx, iids, params, pool) => {
 });
 regR('tora-trainer', (st, idx, iids, params, pool) => {
   const topIids = (params?.topIids as string[] | undefined) ?? [];
-  const set = new Set(iids);
+  // ⭐v6.543 真 bug：選上方 7 張以外的訓練家 ⇒ 下面的 rest（不在上方 7 張）與 got（選到的）同時含那張卡 ⇒ 卡片被複製。
+  //   卡面「從其中選擇」⇒ 只收上方 7 張裡的。
+  const _top = new Set(topIids);
+  const set = new Set(iids.filter(id => _top.has(id)));
   if (set.size > 0) {
     const picked = st.players[idx].deck.filter(c => set.has(c.iid));
     // v2.96：卡面「給對手看過」→ 公開卡名

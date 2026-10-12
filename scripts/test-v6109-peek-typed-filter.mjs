@@ -24,7 +24,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.v6109-s.js'), E = join(ROOT, '.v6109-e.ts'), O = join(ROOT, '.v6109-o.mjs');
 process.on('exit', () => { for (const p of [S, E, O]) { try { unlinkSync(p); } catch {} } });
 writeFileSync(S, 'export const base="";');
-writeFileSync(E, "export { getAbilityFn } from './src/lib/game/effects/_shared';\nimport './src/lib/game/effects';");
+writeFileSync(E, "export { getAbilityFn } from './src/lib/game/effects/_shared';\nexport { evaluateSelectionFilter } from './src/lib/game/selection-filter';\nimport './src/lib/game/effects';");
 await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node',
   target: 'node20', alias: { '$lib': join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
 const M = await import(pathToFileURL(O).href);
@@ -57,16 +57,12 @@ const SOME_POKEMON = [...pool.values()].find(c => c.supertype === 'Pokemon');
 const grass = BASIC_ENERGY.find(c => c.name.includes('草')) ?? BASIC_ENERGY[0];
 const fire = BASIC_ENERGY.find(c => c.name.includes('火')) ?? BASIC_ENERGY[1];
 
-// UI 端（+page.svelte）'BasicEnergy:TOP_N' 的候選求值，原樣重寫一份當可執行對照。
-// ⚠ 這不是「複製實作再自我驗證」——它下面有靜態斷言釘住 UI 檔真的有這個 case，
-//   兩條合起來才成立（單靠任一條都是假綠）。
+// UI 端 'BasicEnergy:TOP_N' 的候選求值。
+// ⭐v6.543（Rule 40）：TOP filter 的 inline 判斷已收進中央 selection-filter（UI／ai.ts／engine 消毒閘同一份），
+//   這裡改成直接呼叫中央求值器（原本是「重寫一份 UI inline」＋靜態斷言 UI 有那個 case），意圖不變：
+//   ① 行為端：候選只有牌庫頂 N 張裡的基本能量；② 靜態端：UI 與 ai.ts 都走中央求值器、不再各留一份 inline。
 function uiCandidatesBasicEnergyTopN(deck, params) {
-  const topN = new Set(params?.topIids ?? []);
-  return deck.filter(c => {
-    if (!topN.has(c.iid)) return false;
-    const card = pool.get(c.cardId);
-    return !!card && card.supertype === 'Energy' && card.subtype === 'Basic';
-  });
+  return deck.filter(c => M.evaluateSelectionFilter('deck-search', 'BasicEnergy:TOP_N', c, pool.get(c.cardId), { params }) === true);
 }
 
 console.log('① 超級烈空坐ex｜霸者咆哮（玩家回報的那張）');
@@ -143,9 +139,12 @@ console.log('③ 兩端接線 + 反向守衛（單靠行為端會是假綠）');
 const GP = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
 const AI = readFileSync(join(ROOT, 'src/lib/game/ai.ts'), 'utf8');
 
-T('⭐ UI 與 ai.ts 都認得 BasicEnergy:TOP_N（兩份 filter 會漂移，兩邊都要有）', () => {
-  ok(/f === 'BasicEnergy:TOP_N'/.test(GP), '+page.svelte 沒有這個 case');
-  ok(/f === 'BasicEnergy:TOP_N'/.test(AI), 'ai.ts 沒有這個 case');
+T('⭐ UI 與 ai.ts 都認得 BasicEnergy:TOP_N（v6.543 起由中央 selection-filter 判定，兩端不得再各留一份 inline）', () => {
+  const SF = readFileSync(join(ROOT, 'src/lib/game/selection-filter.ts'), 'utf8');
+  ok(/'BasicEnergy:TOP_N':/.test(SF), '中央 selection-filter 沒有這個 filter');
+  ok(/evaluateSelectionFilter\('deck-search', f, c, card/.test(GP), '+page.svelte 的 deck-search 沒有走中央求值器');
+  ok(/evaluateSelectionFilter\('deck-search', f, c, card/.test(AI), 'ai.ts 的 deck-search 沒有走中央求值器');
+  ok(!/f === 'BasicEnergy:TOP_N'/.test(GP) && !/f === 'BasicEnergy:TOP_N'/.test(AI), 'UI／ai.ts 又長回一份 inline（判準兩份會漂移）');
 });
 
 T('⭐ UI「查看翻到的其他 N 張」下拉的 gate 必須匹配 :TOP_N（否則其他卡玩家看不到）', () => {

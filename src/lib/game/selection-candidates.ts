@@ -11,6 +11,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { CardInstance } from './types';
+import type { Card } from '$lib/cards/types';
+import { evaluateSelectionFilter, isKnownSelectionFilter } from './selection-filter';
 
 type SrcPlayer = { active: CardInstance | null; bench: CardInstance[]; discard?: CardInstance[] };
 
@@ -50,6 +52,44 @@ export function fieldPickerBaseIids(
 ): string[] {
   return fieldPickerBaseCandidates(type, src, includeActive).map(c => c.iid);
 }
+
+// >>> v6543-payload-count-central
+/**
+ * ⭐v6.543 中央述詞：**hand-discard picker 的候選**（UI 顯示什麼 ＝ engine 消毒閘允許勾什麼 ＝ 少選閘的候選數）。
+ *   語義逐字對齊原本 inline 在 +page.svelte 的 hand-discard case：手牌 ∩ params.validIids（有宣告時）
+ *   ∩ 已收錄 filter 的中央求值器；未收錄的 filter（'Pokemon'、''…）維持顯示全部手牌（既有語義）。
+ *   ⚠ 原 inline chain 在中央判斷之後的分支（Energy／BasicEnergy／BasicPsychicEnergy…）全部已被中央收錄 ⇒ 死碼，一併移除。
+ *   ⚠ pool 缺席或查不到卡 ⇒ 求值器回 null ⇒ 保留（fail-open，不誤殺）。
+ */
+export function handDiscardCandidates(
+  filter: string | undefined,
+  params: Record<string, unknown> | undefined,
+  hand: CardInstance[],
+  pool?: Map<string, Card>,
+): CardInstance[] {
+  const f = filter ?? '';
+  const vi = params?.validIids as string[] | undefined;
+  let out = Array.isArray(vi) ? hand.filter(c => vi.includes(c.iid)) : hand;
+  if (isKnownSelectionFilter('hand-discard', f)) {
+    out = out.filter(c => evaluateSelectionFilter('hand-discard', f, c, pool?.get(c.cardId), {}) !== false);
+  }
+  return out;
+}
+
+/**
+ * ⭐v6.543 中央述詞：**damage-distribute picker 的可放置目標**（src = sourcePlayerIdx 那一側）。
+ *   語義逐字對齊原本 inline 在 +page.svelte 的 damage-distribute case：
+ *   includeActive ⇒ 戰鬥位＋備戰，否則只有備戰；有宣告 validIids 時取交集（免疫目標已由呼叫端排除）。
+ */
+export function damageDistributeCandidates(
+  params: Record<string, unknown> | undefined,
+  src: SrcPlayer,
+): CardInstance[] {
+  const base = params?.includeActive === true && src.active ? [src.active, ...src.bench] : src.bench;
+  const vi = params?.validIids as string[] | undefined;
+  return Array.isArray(vi) ? base.filter(c => vi.includes(c.iid)) : base;
+}
+// <<< v6543-payload-count-central
 
 /** 本函式涵蓋的 pending 型別（中央閘用來決定要不要套 fallback）。 */
 export const FIELD_TARGET_PICKER_TYPES = new Set([

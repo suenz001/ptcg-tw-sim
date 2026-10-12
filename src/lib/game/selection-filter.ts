@@ -216,6 +216,11 @@ export interface SelectionFilterCtx {
  *   必須拿得到 iid 才能跟 params.topNIids 比對 —— 沒有這個參數，這一整類 filter 永遠收不進中央，
  *   只能留在 UI/AI 各一份 inline（漂移來源）。
  */
+/** ⭐v6.543 TOP 型 filter 共用：這張卡是不是在 params[key]（牌庫頂 N 張的 iid 清單）裡。 */
+function inTopParam(ctx: SelectionFilterCtx, key: string, inst: { iid: string }): boolean {
+  const ids = ctx.params?.[key];
+  return Array.isArray(ids) && (ids as string[]).includes(inst.iid);
+}
 const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCtx, inst: { iid: string }) => boolean> = {
   // 基礎/階段/寶可夢型（v2.132：階段用 stage ?? subtype，避免 ex 進化被 subtype='ex' 排除）
   'Basic':        (c) => isBasicPokemonCard(c),
@@ -321,6 +326,29 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
     if (c.supertype === 'Energy') return isBasicEnergyOfType(c, 'Fighting');
     return false;
   },
+  // >>> v6543-top-filters-central
+  // ⭐v6.543 牌庫頂 N 張型（TOP）filter 全部收進中央（原本 +page.svelte 與 ai.ts 各一份 inline，engine 消毒閘看不到）。
+  //   後果（小問題批次調查）：杜若 Trainer:TOP_N 可以選上方 7 張以外的卡 ⇒ 卡片被複製；ai.ts 漏了 Pokemon:TOP7／TOP9。
+  //   語義逐字對齊 +page.svelte 的 inline（UI 是 canonical）；讀的 params 鍵與各 producer 實查一致。
+  'TOP2': (_c, ctx, inst) => inTopParam(ctx, 'top2Iids', inst),
+  'TOP4': (_c, ctx, inst) => inTopParam(ctx, 'top4Iids', inst),
+  'TOP6': (_c, ctx, inst) => inTopParam(ctx, 'top6Iids', inst),
+  'TOP8': (_c, ctx, inst) => inTopParam(ctx, 'top8Iids', inst),
+  'Supporter:TOP4': (c, ctx, inst) => inTopParam(ctx, 'top4Iids', inst) && c.subtype === 'Supporter',
+  'Supporter:TOP6': (c, ctx, inst) => inTopParam(ctx, 'top6Iids', inst) && c.subtype === 'Supporter',
+  'Supporter:TOP7': (c, ctx, inst) => inTopParam(ctx, 'top7Iids', inst) && c.subtype === 'Supporter',
+  'Pokemon:TOP7': (c, ctx, inst) => inTopParam(ctx, 'top7Iids', inst) && c.supertype === 'Pokemon',
+  'Pokemon:TOP9': (c, ctx, inst) => inTopParam(ctx, 'top9Iids', inst) && c.supertype === 'Pokemon',
+  'Basic:TOP5': (c, ctx, inst) => inTopParam(ctx, 'top5Iids', inst) && isBasicPokemonCard(c),
+  // 捕蟲組合「【草】寶可夢卡」＝任何階段（Bug #20；ai.ts 舊 inline 殘留 !evolvesFrom，本版一併修正）
+  'GrassBasicOrGrassEnergy:TOP7': (c, ctx, inst) => inTopParam(ctx, 'top7Iids', inst)
+    && ((c.supertype === 'Pokemon' && c.pokemonType === 'Grass') || isBasicEnergyOfType(c, 'Grass')),
+  'Basic:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && isBasicPokemonCard(c),
+  'Energy:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && c.supertype === 'Energy',
+  'BasicEnergy:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && c.supertype === 'Energy' && c.subtype === 'Basic',
+  'Pokemon:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && c.supertype === 'Pokemon',
+  'Trainer:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && c.supertype === 'Trainer',
+  // <<< v6543-top-filters-central
 };
 
 /**

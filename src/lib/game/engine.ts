@@ -24,7 +24,7 @@ import { RULE_BOX_SUBTYPES } from './types';
 // v6.018 批5：4 卡片述詞 helper + ZH_ENERGY_TYPE 下沉 selection-filter.ts（解循環）；engine re-export 給既有 importer
 import { isBasicPokemonCard, isBasicPokemonOnField, isRulePokemon, isPokemonExCard, isRuleBoxExOrV, isBasicEnergyOfType, getBasicEnergyType, isMegaExCard, ZH_ENERGY_TYPE, evaluateSelectionFilter, isKnownSelectionFilter, sanitizeSelectionSet } from './selection-filter';
 // v6.176：場上目標型 picker 的候選述詞（UI 與中央消毒閘共用同一份，見 selection-candidates.ts）
-import { fieldPickerBaseIids, FIELD_TARGET_PICKER_TYPES } from './selection-candidates';
+import { fieldPickerBaseIids, FIELD_TARGET_PICKER_TYPES, handDiscardCandidates, damageDistributeCandidates } from './selection-candidates';
 export { isBasicPokemonCard, isBasicPokemonOnField, isRulePokemon, isPokemonExCard, isRuleBoxExOrV, isBasicEnergyOfType, getBasicEnergyType };
 import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
@@ -1503,6 +1503,28 @@ export function pendingHasLiveDeclaredCandidates(state: GameState, pending: Pend
   return false;
 }
 // <<< v6523-empty-payload-gate
+// >>> v6543-under-min-gate
+/**
+ * ⭐v6.543 少選閘的判準（唯一一份）：消毒後的張數／個數少於 minCount，而且畫面上確實有足夠的候選讓玩家選滿
+ *   ⇒ 這不是「玩家選不滿」，是改過的 client／舊版／AI 後備送出來的 ⇒ RESOLVE_SELECTION 原地退回、pending 留著。
+ *   ・hand-discard：候選（handDiscardCandidates，與 UI 同一份）≥ minCount 才擋 —— UI 的確定鈕要求選滿 minCount（selectionConfirmFloor）。
+ *   ・damage-distribute：有任何可放置目標就擋 —— UI 的確定鈕要求 minCount ≤ 個數 ≤ maxCount（同一目標可放多個）。
+ *   ⚠ 候選不足時放行（那是玩家唯一的出口，擋下去會鎖死畫面）；其他型別不碰。
+ */
+export function selectionUnderMinCount(state: GameState, pending: PendingSelection, clean: string[], pool?: Map<string, Card>): boolean {
+  const min = pending.minCount ?? 0;
+  if (min < 1 || clean.length >= min) return false;
+  const p = state.players[((pending.sourcePlayerIdx ?? pending.actorIdx ?? 0) as 0 | 1)];
+  if (!p) return false;
+  if (pending.type === 'hand-discard') {
+    return handDiscardCandidates(pending.filter, pending.params as Record<string, unknown> | undefined, p.hand, pool).length >= min;
+  }
+  if (pending.type === 'damage-distribute') {
+    return damageDistributeCandidates(pending.params as Record<string, unknown> | undefined, p).length > 0;
+  }
+  return false;
+}
+// <<< v6543-under-min-gate
 export function sanitizeSelectedIids(state: GameState, pending: PendingSelection, iids: string[], pool?: Map<string, Card>): string[] {
   if (!Array.isArray(iids) || iids.length === 0) return Array.isArray(iids) ? iids : [];
   const t = pending.type;
@@ -1525,6 +1547,27 @@ export function sanitizeSelectedIids(state: GameState, pending: PendingSelection
   //     ・reorder-deck-top：候選來源是 params.candidateIids，且 payload 帶「順序」語義。
   const VALID_IIDS_GATE_EXEMPT = new Set(['damage-distribute', 'energy-distribute', 'modal-choice', 'reorder-deck-top']);
   let zone: { iid: string }[] | undefined;
+  // >>> v6543-payload-count-central
+  // ⭐v6.543（小問題批次：高級球丟 0／1 張照樣搜尋、吃飽先送 2 張附 2 張、奇異駭入送 9 個憑空多 90 傷害）：
+  //   ・hand-discard：一律收斂到中央候選（來源手牌 ∩ validIids ∩ 已收錄 filter ＝ UI 顯示的同一份），去重、夾 maxCount。
+  //     54 個 producer 實查：sourcePlayerIdx 一律是「被丟手牌的那一方」⇒ 以它的手牌為來源區不會誤殺。
+  //   ・damage-distribute：payload 合法用重複 iid 編碼數量 ⇒ 不去重、不濾（resolver 各自驗目標），只把總數夾在 maxCount。
+  //   少於 minCount 的情況交給 RESOLVE_SELECTION 的少選閘（selectionUnderMinCount）退回重選。
+  if (t === 'hand-discard' && p && Array.isArray(p.hand)) {   // 沒有 hand 欄位的殘缺盤面 ⇒ fail-open（不 crash）
+    const okSet = new Set(handDiscardCandidates(pending.filter, pending.params as Record<string, unknown> | undefined, p.hand, pool).map(c => c.iid));
+    const seenH = new Set<string>();
+    const outH: string[] = [];
+    for (const iid of iids) {
+      if (seenH.has(iid) || !okSet.has(iid)) continue;
+      seenH.add(iid); outH.push(iid);
+      if (typeof pending.maxCount === 'number' && outH.length >= pending.maxCount) break;
+    }
+    return outH;
+  }
+  if (t === 'damage-distribute') {
+    return typeof pending.maxCount === 'number' && iids.length > pending.maxCount ? iids.slice(0, Math.max(0, pending.maxCount)) : iids;
+  }
+  // <<< v6543-payload-count-central
   if (t === 'deck-search') zone = p?.deck;
   else {
     const viRaw = pending.params?.validIids;
@@ -4375,6 +4418,19 @@ function handlePlaying(
       );
     }
     // <<< v6523-empty-payload-gate
+    // >>> v6543-under-min-gate
+    // ⭐v6.543 少選閘（hand-discard／damage-distribute）：高級球只丟 0～1 張、奇異駭入只放回一部分指示物 ⇒ 不執行、不關 pending。
+    //   「取消整個動作」型的空選擇照舊放行；同樣受 RESOLVE_REJECT_STREAK_MAX 上限保護 ⇒ 任何情況下都不會軟鎖。
+    if (selectionUnderMinCount(state, state.pendingSelection, _cleanIids, pool)
+        && !(_rawIids.length === 0 && selectionAllowsCancel({ effectKey, allowCancel: params?.allowCancel === true }))
+        && _rejStreak < RESOLVE_REJECT_STREAK_MAX) {
+      return addLog(
+        { ...state, _rejectedResolveStreak: _rejStreak + 1, _rejectedResolveTok: _tokNow },
+        `⚠ 這一步必須選滿 ${state.pendingSelection.minCount} 個，剛才的選擇數量不足，沒有生效 —— 請重新選擇。`,
+        actorIdx,
+      );
+    }
+    // <<< v6543-under-min-gate
     // >>> v6331-modal-choice-payload-gate
     // ⭐⭐⭐ v6.331 **modal-choice 的空／對不上任何選項的 payload，一律不執行、不關 pending。**
     //   玩家回報：「選擇為空（取消）時，卡片已經消耗掉了，盤面卻什麼都沒發生。」

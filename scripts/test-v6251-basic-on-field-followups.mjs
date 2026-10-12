@@ -339,7 +339,7 @@ const ALLOW_A = [
   ['/src/lib/game/selection-filter.ts', "'RocketBasic':    (c) => c.supertype === 'Pokemon' && !c.evolvesFrom && c.name.includes('火箭隊的'),", '中央 deck-search filter（牌庫視角）'],
   ['/src/lib/game/selection-filter.ts', "if (c.supertype === 'Pokemon' && !c.evolvesFrom && c.pokemonType === 'Fighting') return true;", '中央 deck-search filter（牌庫視角）'],
   ['/src/lib/game/ai.ts', "if (f === 'Basic')           return card.supertype === 'Pokemon' && !card.evolvesFrom", 'AI 鏡射 UI 的牌庫／手牌 filter'],
-  ['/src/lib/game/ai.ts', "if (f === 'PsychicBasic')    return card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Psychic';", '同上'],
+  // ⭐v6.543（Rule 40）：ai.ts 的 PsychicBasic inline 是中央 DECK_SEARCH_PREDICATES 的死副本，已刪除 ⇒ 白名單條目隨之移除（本守衛要求不得有死條目）。
   ['/src/lib/game/ai.ts', "if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;", '同上'],
   ['/src/lib/game/ai.ts', "if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;", '同上'],
   ['/src/lib/game/ai.ts', "return card.supertype === 'Pokemon' && !card.evolvesFrom && card.name.includes('火箭隊的');", '同上'],
