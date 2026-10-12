@@ -452,7 +452,14 @@ function maybePushTurnLog(before: GameState, after: GameState): GameState {
 function enforceBenchLimit(state: GameState, pool: Map<string, Card>): GameState {
   if (state.phase !== 'playing') return state;
   if (state.pendingSelection) return state;  // 已有 pending — 等
-  const order: (0 | 1)[] = [state.activePlayerIndex, (1 - state.activePlayerIndex) as 0 | 1];
+  // >>> v6545-void-holder-first
+  // ⭐v6.545（小問題批次第 1 項，**直接卡面**）：卡面「若雙方都要丟棄，則這張卡的持有人先丟棄」。
+  //   原本用 activePlayerIndex 近似 ⇒ 對手的零之大空洞被我方換掉時變成我方先丟（錯）。
+  //   零之大空洞還在場（失去太晶）⇒ 現在的持有人；已被換掉／丟掉 ⇒ 最近一次在場時記下的持有人（_voidHolderIdx）。
+  const _voidNow = state.activeStadium && pool.get(state.activeStadium.cardId)?.name === '零之大空洞';
+  const holder: 0 | 1 = (_voidNow ? state.activeStadiumOwnerIdx : state._voidHolderIdx) ?? state.activePlayerIndex;
+  const order: (0 | 1)[] = [holder, (1 - holder) as 0 | 1];
+  // <<< v6545-void-holder-first
   for (const idx of order) {
     const limit = getBenchLimit(state, idx, pool);
     const p = state.players[idx];
@@ -4032,6 +4039,12 @@ function sanityKOSweep(
   state = drainOnKoAfterPrize(state, pool);
   // <<< v6355-ko-after-prize-drain
   const dIdx = (1 - attackerIdx) as 0 | 1;
+  // >>> v6545-void-discard-before-ko
+  // ⭐v6.545（小問題批次第 1 項，類推 PTCG_RULES L552／L1725／L1850：零之大空洞超過 5 隻時「先丟棄備戰寶可夢使其降至 5 隻，再處理昏厥」）：
+  //   這一側備戰超過上限（零之大空洞剛失效）⇒ 這次先不結算昏厥，交給 applyAction 出口的 enforceBenchLimit 先開丟棄視窗，
+  //   丟完之後的出口再照常結算（被丟掉的那隻就不會昏厥、不送獎賞）。原本打出新場地時直接先掃昏厥 ⇒ 先送獎賞才丟備戰。
+  if (state.phase === 'playing' && state.players[dIdx].bench.length > getBenchLimit(state, dIdx, pool)) return state;
+  // <<< v6545-void-discard-before-ko
   let s = state;
   let prizesAcc = 0;
   let anyKO = false;
@@ -10492,6 +10505,11 @@ function applyActionImpl(
   next = dissipateFutureShieldOnExit(next);   // ⭐v6.544 防護代碼離開戰鬥場即消除
 
   // v2.136 零之大空洞：每次 dispatch 完，重新計算備戰上限。若場地離場/失去太晶 → 自動丟備戰至 5
+  // ⭐v6.545 記下「零之大空洞」的持有人（這次動作開始時還在場 ⇒ 用那時的持有人；被換掉之後 enforceBenchLimit 仍要讓持有人先丟）
+  for (const _vs of [state, next]) {
+    if (_vs.activeStadium && pool.get(_vs.activeStadium.cardId)?.name === '零之大空洞' && _vs.activeStadiumOwnerIdx !== undefined
+        && next._voidHolderIdx !== _vs.activeStadiumOwnerIdx) next = { ...next, _voidHolderIdx: _vs.activeStadiumOwnerIdx };
+  }
   next = enforceBenchLimit(next, pool);
 
   // v3.20 多重轉接 reconcile：若某方場上沒有「洛托姆ex 多重轉接」啟用，

@@ -1,5 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.545：零之大空洞的處理順序（2026-10-12，小問題批次 C）
+
+BASE 393123ef（v6.544）。調查：子代理以 applyAction 完整流程重現（小問題第 1 項 A／D′）。
+- 持有人先丟（**直接卡面**「若雙方都要丟棄，則這張卡的持有人先丟棄」，哨兵 v6545-void-holder-first）：enforceBenchLimit 原本用 activePlayerIndex 近似 ⇒ 對手的零之大空洞被我方換掉時我方先丟。改成：零之大空洞還在場（失去太晶）⇒ 現在的持有人；已離場 ⇒ GameState._voidHolderIdx（applyAction 出口從本次動作開始時的盤面與結果盤面記下零之大空洞的持有人）。
+- 先丟備戰再處理昏厥（**類推** PTCG_RULES L552「先丟棄備戰寶可夢使其降至 5 隻，再處理其他結算（昏厥、獎賞卡）」、L1725、L1850，哨兵 v6545-void-discard-before-ko）：sanityKOSweep 在被掃那一側備戰超過上限時先不結算（只限 playing），交給出口的 enforceBenchLimit 先開丟棄視窗，丟完的出口照常結算。原本打出新場地的路徑直接先掃昏厥 ⇒ 先送獎賞才丟備戰。L1727（戰鬥太晶昏厥）既有流程已正確。
+- **本批第 10 項的順序部分（吃飽先／嫩葉之恩：附能 → 侵蝕詛咒 → 然後回血）沒有做**：實作後發現侵蝕詛咒走 dealAttackDamageToTarget，在招式中途就當場結算昏厥（L2198 官方是招式結束後才處理昏厥）⇒ 改順序反而讓「剛好打到 HP 線」的寶可夢先被詛咒打倒、回血失效，比現況更差。正解是「招式中途的反應傷害延後到招式結束才判昏厥」（牽動整條 KO 管線）⇒ 留到最後一批請站長裁定。
+- 守衛 test-v6545-processing-order：VOID_HOLDER_FIRST、VOID_DISCARD_BEFORE_KO（BASE 紅）；正對照 VOID_HOLDER_SELF、NO_VOID_KO_NOW（沒有超過上限 ⇒ 照常立刻昏厥）。突變 4 個全殺（含「只記結果盤面」「一律延後」）。
+- **Fable 5.1 審查（aec2e45b860dee49e）：需修 1 條 P2，行為面無 P1**。確認：出口 enforce → sweep 順序不會讓昏厥永久掛起、延後閘與 enforce 用同一支 getBenchLimit、終局判定不受 zombie 影響；_voidHolderIdx 各情境記錄正確、純量欄位無白名單問題；AI 不需改。
+  - P2-1：test-v6355 G3 的「`const dIdx` 與 `let s = state` 兩行相鄰」錨點被延後閘隔開 ⇒ 紅。**已修（Rule 40，加嚴）**：在 sanityKOSweep 範圍內各自定位，斷言 drain 同時在延後閘（新的 early return）與 `let s = state` 之前。只動守衛。
+  - P3-1（極窄，記錄）：v6421 強制 sweep（已判終局＋pending＋未結算昏厥）若同時零之大空洞剛失效、被掃側超過上限 ⇒ zombie 跳過；需同一動作內取完最後獎賞＋正面獎賞 picker＋場地失效，實務上幾乎不可能。
+  - **複審（2022afb6）：可合併**，無 P1／P2／P3（新 G3 更嚴、未放寬）。
+- 全套（8fa136b2，src 與 2022afb6 相同）：FAIL 1 —— 只有 test-v6355 G3（即審查 P2-1，已修；單跑 86/0）。
+
 ## v6.544：離開戰鬥場才消除的效果（2026-10-12，小問題批次 B）
 
 BASE d4e1bed4（v6.543）。調查：子代理以 applyAction 完整流程重現（小問題第 2、6 項）。

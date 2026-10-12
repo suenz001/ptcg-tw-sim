@@ -485,9 +485,11 @@ console.log('\n【G】中央性（呼叫點數量／不得掛錯表／禁令）'
     cnt(eng, /drainOnKoAfterPrize\(/g) === 1 && cnt(eff, /drainOnKoAfterPrize\(/g) === 1,
     JSON.stringify([cnt(eng, /drainOnKoAfterPrize\(/g), cnt(eff, /drainOnKoAfterPrize\(/g)]));
   chk('G3 ⭐drain 點在 sanityKOSweep **函式開頭**（在 `let s = state` 之前 ⇒ !anyKO 的 early return 也吃得到）',
-    eng.indexOf('state = drainOnKoAfterPrize(state, pool);') > 0
-    && eng.indexOf('state = drainOnKoAfterPrize(state, pool);')
-       < eng.indexOf('  const dIdx = (1 - attackerIdx) as 0 | 1;\r\n  let s = state;'.replace(/\r\n/g, eng.includes('\r\n') ? '\r\n' : '\n')),
+    // ⭐v6.545（Rule 40）：v6545-void-discard-before-ko 延後閘插在 `const dIdx` 與 `let s = state` 之間 ⇒ 原本的兩行相鄰錨點失效。
+    //   改成在 sanityKOSweep 範圍內各自定位，並**加嚴**：drain 必須同時在新的 early return（延後閘）與 `let s = state` 之前。
+    (() => { const k = eng.indexOf('function sanityKOSweep('); const d = eng.indexOf('state = drainOnKoAfterPrize(state, pool);', k);
+      const gate = eng.indexOf('// >>> v6545-void-discard-before-ko', k); const ls = eng.indexOf('  let s = state;', k);
+      return k > 0 && d > k && gate > d && ls > gate; })(),
     String(eng.indexOf('state = drainOnKoAfterPrize(state, pool);')));
 
   chk('G4 三張 on-KO 表的名字不可相交（相交＝同一效果掛兩個 hook＝雙觸發）',
