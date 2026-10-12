@@ -8005,10 +8005,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       if (_v6500Other.active === null && _v6500Other.bench.length > 0) return newState;
       // <<< v6500-checkup-ko-defer-promote
       const continueIdx = state.endTurnContinueAfterKO;
+      // ⭐v6.550（v6550-turn-end-before-checkup）：回合結束時效果造成的昏厥（寶可夢檢查**之前**）補位 ⇒ 重送後要照常做寶可夢檢查，不設 endTurnSkipCheckup。
+      const _v6550PreCheckup = state.endTurnPreCheckupStop === true;
       let cleared: GameState = {
         ...newState,
         endTurnContinueAfterKO: undefined,
-        endTurnSkipCheckup: true,
+        endTurnPreCheckupStop: undefined,
+        ...(_v6550PreCheckup ? {} : { endTurnSkipCheckup: true }),
       };
       // 確保 activePlayerIndex 正確，這樣 END_TURN 處理者是當初被 KO 的那方
       if (cleared.activePlayerIndex !== continueIdx) {
@@ -8046,21 +8049,279 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       };
     }
 
+    // >>> v6550-turn-end-before-checkup
+    // ⭐⭐v6.550（站長 2026-10-12 裁定第 9 項「要改」；官方 PTCG_RULES L219：「『自己的回合結束』指的是寶可夢檢查前。……
+    //   寶可夢檢查是在包含『自己的回合結束時可做的事』在內的『自己的回合』結束後進行」）：
+    //   卡面「（自己的／對手的）回合結束時」的效果（力之沙漏、招式學習器自棄、強烈之吻、滲透寒氣、浸蝕污泥、燃火能量、納莉）
+    //   原本排在寶可夢檢查之後的收尾區 ⇒ 全部搬到寶可夢檢查之前，順序與原本相同。
+    //   ・endTurnEffectsDone：本區跑完才設 ⇒ 力之沙漏暫停（選擇視窗）解完重送 END_TURN 時本區重跑一次（力之沙漏靠 lourisToolUsedThisTurn 不重問，
+    //     其餘各項旗標／卡片已消耗 ⇒ 冪等）；跑完之後的重送（補位、寶可夢檢查後補位）不再跑。
+    //   ・本區造成的昏厥（滲透寒氣／浸蝕污泥）與強烈之吻丟棄 ⇒ 在寶可夢檢查**之前**結算、補位（endTurnPreCheckupStop），補完再做寶可夢檢查。
+    //   ・⭐（審查 P3-1）本區排在回合快照（thisTurn→InLastOppTurn、對手獎賞數…）**之前**：「回合結束時」屬於自己的回合（L219），
+    //     本區造成的昏厥與取獎要算在這個回合裡；快照由 endTurnSnapshotDone 保證只跑一次（補位重送時才跑）。
+    //   ・力之沙漏「回合結束當下的戰鬥寶可夢」（v6.502）改在本區之前記下（只記第一次）。
+    if (state.endTurnActiveIidAtEnd == null && !state.endTurnSnapshotDone && !state.endTurnEffectsDone) {
+      state = { ...state, endTurnActiveIidAtEnd: players[aIdx].active?.iid ?? null };   // v6502-checkup-simultaneous-verdict
+    }
+    if (!state.endTurnEffectsDone) {
+      // ── v2.247 力之沙漏（PokemonTool）— 回合結束時，若戰鬥場寶可夢附有此 Tool，
+      //   可以從棄牌區將 1 張基本能量附於該寶可夢。改為玩家選擇而非自動附能量。
+      //   阻礙之塔時道具失效。
+      {
+        const aPlayer = players[aIdx];
+        const active = aPlayer.active;
+        const toolsJammedET = isToolsJammed(state, pool);
+        // v3.20 多重轉接：力之沙漏可在 toolAttached 或 extraTools
+        const _hasLouTool = active && !toolsJammedET
+          && getAllAttachedTools(active).some(t => pool.get(t.cardId)?.name === '力之沙漏');
+        // ⭐v6.502：寶可夢檢查後才補上場的寶可夢不是「回合結束時在戰鬥場」⇒ 不問（原本那隻在、或開始時本來就空著才照舊）
+        const _v6502StartIid = state.endTurnActiveIidAtEnd;
+        const _v6502SameActive = !_v6502StartIid || active?.iid === _v6502StartIid;
+        if (_hasLouTool && !aPlayer.lourisToolUsedThisTurn && _v6502SameActive) {
+          const hasPending = (state as any).pendingSelection;
+          // >>> v6542-nanu-hourglass-order
+          // ⭐v6.542 站長裁定（2026-10-12 第 6 項）＋官方 Q&A（PTCG_RULES L2013）：
+          //   Q「在使用了支援者卡『納莉』的回合結束時，因自己的戰鬥寶可夢身上附加的寶可夢道具卡『力之沙漏』的效果，從棄牌區附加能量卡
+          //     與因支援者卡『納莉』的效果將手牌全部丟棄，何者先執行？」 A「可由寶可夢道具『力之沙漏』的持有人選擇執行順序。」
+          //   ⇒ 納莉這回合會丟牌（手牌 ≥5）而且手牌裡有基本能量卡（先丟就多出可以附的能量）⇒ 兩種順序結果不同 ⇒ 由持有人選。
+          //   其他情況（手牌沒有基本能量、納莉不會丟）兩種順序選項完全相同 ⇒ 照舊先力之沙漏、不開視窗。
+          const _hourglassEnergyCard = (c: CardInstance) => { const cd = pool.get(c.cardId); return cd?.supertype === 'Energy' && cd.subtype === 'Basic'; };
+          if (!hasPending && aPlayer.nanuDiscardAtTurnEnd && aPlayer.hand.length >= 5 && aPlayer.hand.some(_hourglassEnergyCard)) {
+            const newPlayers = [...players] as [PlayerState, PlayerState];
+            newPlayers[aIdx] = { ...aPlayer, lourisToolUsedThisTurn: true };
+            // ⭐v6.550：暫停時快照不重跑改由 endTurnSnapshotDone 保證（不再借用 endTurnSkipCheckup ⇒ 解完後寶可夢檢查照常進行）
+            return withPending(addLog({ ...state, players: newPlayers },
+              '回合結束：力之沙漏與納莉同時處理 ⇒ 由持有人選擇順序（官方 Q&A）', aIdx), {
+              type: 'modal-choice', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+              effectKey: 'nanu-hourglass-order',
+              params: {
+                label: '回合結束：選擇處理順序',
+                endTurnAfter: true,
+                options: [
+                  { id: 'nanu-first', text: '先處理納莉（丟棄手牌），再用力之沙漏從棄牌區附 1 張基本能量' },
+                  { id: 'hourglass-first', text: '先用力之沙漏從棄牌區附 1 張基本能量，再處理納莉（丟棄手牌）' },
+                ],
+              },
+            });
+          }
+          // <<< v6542-nanu-hourglass-order
+          if (!hasPending) {
+            const hasBasic = aPlayer.discard.some(c => {
+              const card = pool.get(c.cardId);
+              return card?.supertype === 'Energy' && card.subtype === 'Basic';
+            });
+            if (hasBasic) {
+              // v3.24 set per-turn flag 避免重複觸發
+              const newPlayers = [...players] as [PlayerState, PlayerState];
+              newPlayers[aIdx] = { ...aPlayer, lourisToolUsedThisTurn: true };
+              state = {
+                ...state,
+                players: newPlayers,
+                // v4.955：力之沙漏暫停 END_TURN 後 re-dispatch 不可重跑回合快照（否則 InLastOppTurn 被歸零）。
+                //   ⭐v6.550：改由 endTurnSnapshotDone 保證（原本借用 endTurnSkipCheckup，會連寶可夢檢查一起跳過；
+                //   力之沙漏搬到寶可夢檢查之前後，解完必須照常進行寶可夢檢查）。
+                pendingSelection: {
+                  type: 'discard-search',
+                  actorIdx: aIdx,
+                  sourcePlayerIdx: aIdx,
+                  filter: 'BasicEnergy',
+                  minCount: 0,
+                  maxCount: 1,
+                  effectKey: 'brailliant-attach',
+                  params: { endTurnAfter: true },
+                },
+              };
+              return state;
+            }
+          }
+        }
+      }
+
+      // ── v2.214 TOOL_END_TURN_DISCARD（招式學習器 螢石 等）─────────────────
+      //   卡面：「將附於寶可夢身上的這張卡，在自己的回合結束時丟棄」。
+      //   掃自己場上所有附有 TOOL_END_TURN_DISCARD 道具的寶可夢，把該道具搬到棄牌區。
+      //   阻礙之塔下道具失效，但「自棄」屬於 tool 自身的 self-clean 規則，仍然執行
+      //   （PTCG 官方判例：tool 即便被 nullify 仍會在自己回合結束時離場 — 道具效果不
+      //   觸發，但「離場」的時機是道具卡面寫死的固有行為。為一致性此處不加 jam guard）
+      {
+        const aPlayer = players[aIdx];
+        const allMine: CardInstance[] = [
+          ...(aPlayer.active ? [aPlayer.active] : []),
+          ...aPlayer.bench,
+        ];
+        let touched = false;
+        const newDiscards: CardInstance[] = [];
+        const stripIfDiscard = (c: CardInstance): CardInstance => {
+          // v3.20 多重轉接：處理 toolAttached 與 extraTools 兩種來源
+          let updated: CardInstance = c;
+          if (c.toolAttached) {
+            const tCard = pool.get(c.toolAttached.cardId);
+            if (tCard && TOOL_END_TURN_DISCARD.has(tCard.name)) {
+              newDiscards.push(c.toolAttached);
+              touched = true;
+              updated = { ...updated, toolAttached: undefined };
+            }
+          }
+          if (updated.extraTools && updated.extraTools.length > 0) {
+            const keep: CardInstance[] = [];
+            for (const t of updated.extraTools) {
+              const tCard = pool.get(t.cardId);
+              if (tCard && TOOL_END_TURN_DISCARD.has(tCard.name)) {
+                newDiscards.push(t);
+                touched = true;
+              } else {
+                keep.push(t);
+              }
+            }
+            if (keep.length !== updated.extraTools.length) {
+              updated = { ...updated, extraTools: keep };
+            }
+          }
+          return updated;
+        };
+        if (touched || aPlayer.active) {
+          // intentionally always run map; touched 由內部判斷
+        }
+        const newActive = aPlayer.active ? stripIfDiscard(aPlayer.active) : null;
+        const newBench = aPlayer.bench.map(stripIfDiscard);
+        void allMine; // suppressed — only used conceptually
+        if (touched) {
+          players[aIdx] = {
+            ...aPlayer,
+            active: newActive,
+            bench: newBench,
+            discard: [...aPlayer.discard, ...newDiscards],
+          };
+          // v5.518：收斂走中央 addToolDiscardLog(原 inline 逐張 log)。
+          state = addToolDiscardLog({ ...state, players }, newDiscards, pool, aIdx, '自己回合結束');
+        }
+      }
+
+
+      {
+        const currentPlayer = { ...players[aIdx] };
+        // v4.892 強烈之吻（M5 迷唇姐）— delayed discard at end of opp's next turn
+        //   POST 在 attacker 端設了 defender.strongKissTargetIid = X
+        //   此處 (defender's END_TURN) 觸發：若 active 仍為 X → 丟棄整套
+        //   ★ 重要：丟棄 ≠ 昏厥。不給對手獎賞卡，不觸發 PASSIVE_ON_KO / PASSIVE_KO_RETALIATION。
+        // v5.443：改用 instance 級 strongKissDiscardPending（退備戰由 clearActiveEffects 自動清，
+        //   故「退備戰再回戰鬥場」不會誤丟棄）。只丟棄「仍在戰鬥場且仍帶旗標」的那隻。
+        if (currentPlayer.active?.strongKissDiscardPending) {
+          const koInst = currentPlayer.active;
+          const cardName = pool.get(koInst.cardId)?.name ?? '?';
+          const discards: CardInstance[] = [
+            koInst,
+            ...koInst.energyAttached,
+            ...getAllAttachedTools(koInst),
+            ...(koInst.evolvedFromStack ?? []),
+          ];
+          currentPlayer.active = null;
+          currentPlayer.discard = [...currentPlayer.discard, ...discards];
+          state = addLog(state,
+            `${cardName} 與身上 ${discards.length - 1} 張附加卡因招式效果全部丟棄（非昏厥，對手不獲得獎賞卡）`,
+            aIdx);
+        }
+
+
+        // v2.78 觸發滲透寒氣等延遲傷害（於擁有者 END_TURN 時應用）
+        const applyDamageAtMyEnd = (c: CardInstance): CardInstance => {
+          if (!c.damageAtMyNextEndOfTurn || c.damageAtMyNextEndOfTurn <= 0) return c;
+          const _newDmgEnd = (c.damage ?? 0) + c.damageAtMyNextEndOfTurn;
+          const n = { ...c, damage: _newDmgEnd };
+          if (_newDmgEnd >= getEffectiveHP(c, pool, state)) { n._faintByEffect = true; n._faintReason = '滲透寒氣'; } // v5.926 滲透寒氣放指示物致死=效果昏厥（v6.037 帶來源）
+          delete n.damageAtMyNextEndOfTurn;
+          return n;
+        };
+
+        if (currentPlayer.active) currentPlayer.active = applyDamageAtMyEnd(currentPlayer.active);
+        currentPlayer.bench = currentPlayer.bench.map(applyDamageAtMyEnd);
+        // v2.69 浸蝕污泥：於 defender 自己 END_TURN 時，將 koAtMyNextEndOfTurn pokemon KO
+        //   實作：把 damage 直接設為 HP（讓既有 KO 流程在下一輪招式或 sanityKOSweep 處理）
+        //   清除 flag（消費完）
+        const triggerSludgeKO = (c: CardInstance): CardInstance => {
+          if (!c.koAtMyNextEndOfTurn) return c;
+          const n = { ...c, damage: getEffectiveHP(c, pool, state), _faintByEffect: true, _faintReason: '浸蝕污泥' }; // v5.926 浸蝕污泥效果昏厥（v6.037 帶來源）
+          delete n.koAtMyNextEndOfTurn;
+          return n;
+        };
+        if (currentPlayer.active) currentPlayer.active = triggerSludgeKO(currentPlayer.active);
+        currentPlayer.bench = currentPlayer.bench.map(triggerSludgeKO);
+        // v2.103 燃火能量 — 「將附於寶可夢身上的這張卡，在自己的回合結束時丟棄。」
+        //   在 aIdx（自己）的 active + bench 各寶可夢身上移除所有燃火能量 entry，追加到 discard。
+        //   此處在 END_TURN 的 aIdx 方處理，符合卡面「自己的回合結束時」。
+        {
+          const extractBurnSoulEnergies = (c: CardInstance): { kept: CardInstance; removed: CardInstance[] } => {
+            const burnSoul = c.energyAttached.filter(e => pool.get(e.cardId)?.name === '燃火能量');
+            if (burnSoul.length === 0) return { kept: c, removed: [] };
+            const kept = { ...c, energyAttached: c.energyAttached.filter(e => pool.get(e.cardId)?.name !== '燃火能量') };
+            return { kept, removed: burnSoul };
+          };
+          let discardAdds: CardInstance[] = [];
+          if (currentPlayer.active) {
+            const { kept, removed } = extractBurnSoulEnergies(currentPlayer.active);
+            currentPlayer.active = kept;
+            discardAdds.push(...removed);
+          }
+          const newBench: CardInstance[] = [];
+          for (const c of currentPlayer.bench) {
+            const { kept, removed } = extractBurnSoulEnergies(c);
+            newBench.push(kept);
+            discardAdds.push(...removed);
+          }
+          currentPlayer.bench = newBench;
+          if (discardAdds.length > 0) {
+            currentPlayer.discard = [...currentPlayer.discard, ...discardAdds];
+          }
+        }
+        // v2.228 納莉：「在使用了這張卡的回合結束時，若自己的手牌有 5 張以上，
+        //   則將自己的手牌全部丟棄」— END_TURN 時於 aIdx 方檢查並丟棄
+        if (currentPlayer.nanuDiscardAtTurnEnd) {
+          if (currentPlayer.hand.length >= 5) {
+            const discarded = currentPlayer.hand;
+            currentPlayer.discard = [...currentPlayer.discard, ...discarded];
+            currentPlayer.hand = [];
+            state = addLog(state,
+              `納莉：回合結束時手牌 ${discarded.length} 張（≥5）→ 全部丟棄`,
+              aIdx);
+          }
+          delete currentPlayer.nanuDiscardAtTurnEnd;
+        }
+        players[aIdx] = currentPlayer;
+      }
+      state = { ...state, players, endTurnEffectsDone: true };
+    }
+    {
+      // 本區造成的昏厥在寶可夢檢查之前結算（被掃的是結束回合的一方 aIdx ⇒ 獎賞給對手）
+      const _sw = sanityKOSweep({ ...state, players }, (1 - aIdx) as 0 | 1, pool);
+      state = _sw; players[0] = _sw.players[0]; players[1] = _sw.players[1];
+      if (state.phase === 'game-over') return state;
+      const _me = players[aIdx];
+      if (_me.active === null) {
+        // 備戰也沒有 ⇒ 交中央重判（v6.502 同型）；有備戰 ⇒ 先補位，補完 SEND_NEW_ACTIVE 重送 END_TURN、照常做寶可夢檢查
+        if (_me.bench.length === 0) return requestEndgameVerdictV6361({ ...state, players, turnPhase: 'end' });
+        return { ...state, players, endTurnContinueAfterKO: aIdx, endTurnPreCheckupStop: true, turnPhase: 'end' };
+      }
+      // 取獎視窗（正面朝上獎賞）開著 ⇒ 解完再重送 END_TURN（同力之沙漏）
+      if (state.pendingSelection) return { ...state, players, turnPhase: 'end' };
+    }
+    // <<< v6550-turn-end-before-checkup
+
     // v2.245：在 checkup *之前* 取「對手主回合結束時」snapshot。
     //   PTCG 規則：寶可夢檢查不屬於任何玩家的回合 → 中毒/灼傷/冰冷之帳等 checkup KO
     //   不算「上個對手的回合自己的寶可夢昏厥」。本 snapshot 用於精確區分主動 KO vs checkup KO。
     //   只在第一次 END_TURN（非 skipCheckup）時更新；re-dispatch 後保留原 snapshot。
     //   雙 snapshot：(a) opp prize 用於 prize-based gate（不公印章/扭轉乾坤/八朔）
     //               (b) 我方棄牌堆火箭隊寶可夢數 用於 rocket-based gate（阿波羅）
-    if (!state.endTurnSkipCheckup) {
+    if (!state.endTurnSkipCheckup && !state.endTurnSnapshotDone) {   // ⭐v6.550 endTurnSnapshotDone：回合快照只跑一次
       const oppIdx = (1 - aIdx) as 0 | 1;
+      state = { ...state, endTurnSnapshotDone: true };
       // (a) opp prize snapshot
       const prevMainEnd = state.oppPrizesAtMainEnd ?? [6, 6] as [number, number];
       const newMainEnd: [number, number] = [prevMainEnd[0], prevMainEnd[1]];
       // 從「對手」視角看：剛結束回合的玩家 aIdx = 對手；對手獎賞 = players[aIdx].prizes.length
       newMainEnd[oppIdx] = players[aIdx].prizes.length;
       // ⭐v6.502（Opus 審查 3）：記下「回合結束當下」的戰鬥寶可夢（力之沙漏卡面：在自己的回合結束時、附在戰鬥場的寶可夢）
-      state = { ...state, endTurnActiveIidAtEnd: players[aIdx].active?.iid ?? null };   // v6502-checkup-simultaneous-verdict
+      // ⭐v6.550：endTurnActiveIidAtEnd 改在 v6550-turn-end-before-checkup 區塊之前記下（力之沙漏在快照之前詢問）
       // (b) rocket-poke-in-discard snapshot（從即將進入新回合的玩家視角看自己的棄牌堆）
       const countRocket = (pl: PlayerState): number =>
         pl.discard.filter(c => {
@@ -8120,6 +8381,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         oppDamageKOdMyAxiangThisTurn: [0, 0],
       };
     }
+
 
     // >>> v6500-checkup-ko-defer-promote
     // ⭐v6.500 站長裁定：「對手中毒（或灼傷）昏厥後，同一次檢查的冰冷之帳照常對其他還在場上、有特性的寶可夢各放 1 個指示物，
@@ -8647,169 +8909,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     }
     // <<< v6500-checkup-ko-defer-promote
 
-    // ── v2.247 力之沙漏（PokemonTool）— 回合結束時，若戰鬥場寶可夢附有此 Tool，
-    //   可以從棄牌區將 1 張基本能量附於該寶可夢。改為玩家選擇而非自動附能量。
-    //   阻礙之塔時道具失效。
-    {
-      const aPlayer = players[aIdx];
-      const active = aPlayer.active;
-      const toolsJammedET = isToolsJammed(state, pool);
-      // v3.20 多重轉接：力之沙漏可在 toolAttached 或 extraTools
-      const _hasLouTool = active && !toolsJammedET
-        && getAllAttachedTools(active).some(t => pool.get(t.cardId)?.name === '力之沙漏');
-      // ⭐v6.502：寶可夢檢查後才補上場的寶可夢不是「回合結束時在戰鬥場」⇒ 不問（原本那隻在、或開始時本來就空著才照舊）
-      const _v6502StartIid = state.endTurnActiveIidAtEnd;
-      const _v6502SameActive = !_v6502StartIid || active?.iid === _v6502StartIid;
-      if (_hasLouTool && !aPlayer.lourisToolUsedThisTurn && _v6502SameActive) {
-        const hasPending = (state as any).pendingSelection;
-        // >>> v6542-nanu-hourglass-order
-        // ⭐v6.542 站長裁定（2026-10-12 第 6 項）＋官方 Q&A（PTCG_RULES L2013）：
-        //   Q「在使用了支援者卡『納莉』的回合結束時，因自己的戰鬥寶可夢身上附加的寶可夢道具卡『力之沙漏』的效果，從棄牌區附加能量卡
-        //     與因支援者卡『納莉』的效果將手牌全部丟棄，何者先執行？」 A「可由寶可夢道具『力之沙漏』的持有人選擇執行順序。」
-        //   ⇒ 納莉這回合會丟牌（手牌 ≥5）而且手牌裡有基本能量卡（先丟就多出可以附的能量）⇒ 兩種順序結果不同 ⇒ 由持有人選。
-        //   其他情況（手牌沒有基本能量、納莉不會丟）兩種順序選項完全相同 ⇒ 照舊先力之沙漏、不開視窗。
-        const _hourglassEnergyCard = (c: CardInstance) => { const cd = pool.get(c.cardId); return cd?.supertype === 'Energy' && cd.subtype === 'Basic'; };
-        if (!hasPending && aPlayer.nanuDiscardAtTurnEnd && aPlayer.hand.length >= 5 && aPlayer.hand.some(_hourglassEnergyCard)) {
-          const newPlayers = [...players] as [PlayerState, PlayerState];
-          newPlayers[aIdx] = { ...aPlayer, lourisToolUsedThisTurn: true };
-          // 與下方力之沙漏同一組旗標（v4.955：暫停 END_TURN 必須 endTurnSkipCheckup）
-          return withPending(addLog({ ...state, players: newPlayers, endTurnSkipCheckup: true },
-            '回合結束：力之沙漏與納莉同時處理 ⇒ 由持有人選擇順序（官方 Q&A）', aIdx), {
-            type: 'modal-choice', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
-            effectKey: 'nanu-hourglass-order',
-            params: {
-              label: '回合結束：選擇處理順序',
-              endTurnAfter: true,
-              options: [
-                { id: 'nanu-first', text: '先處理納莉（丟棄手牌），再用力之沙漏從棄牌區附 1 張基本能量' },
-                { id: 'hourglass-first', text: '先用力之沙漏從棄牌區附 1 張基本能量，再處理納莉（丟棄手牌）' },
-              ],
-            },
-          });
-        }
-        // <<< v6542-nanu-hourglass-order
-        if (!hasPending) {
-          const hasBasic = aPlayer.discard.some(c => {
-            const card = pool.get(c.cardId);
-            return card?.supertype === 'Energy' && card.subtype === 'Basic';
-          });
-          if (hasBasic) {
-            // v3.24 set per-turn flag 避免重複觸發
-            const newPlayers = [...players] as [PlayerState, PlayerState];
-            newPlayers[aIdx] = { ...aPlayer, lourisToolUsedThisTurn: true };
-            state = {
-              ...state,
-              players: newPlayers,
-              // v4.955 BUG FIX：力之沙漏暫停 END_TURN 時必須設 endTurnSkipCheckup=true。
-              //   理由：本 hook 之前的 snapshot 區塊已 rotate `thisTurn → InLastOppTurn`
-              //   並 reset thisTurn=[0,0]；若 re-dispatch END_TURN 時沒設 skipCheckup，
-              //   snapshot 區塊會再跑一次 → 用「現在已歸零的 thisTurn」覆蓋掉 InLastOppTurn，
-              //   導致對手用扭轉乾坤 / 不公印章 / 八朔 / 寶寶暴龍 勃然大怒 等讀 InLastOppTurn
-              //   的 gate / 招式時看到 0 → gate 拒絕觸發。
-              //   設 skipCheckup=true 跳過 snapshot rotation AND checkup 重跑（中毒/灼傷扣血
-              //   不會重複放）；finalize 區塊會清掉旗標，不影響後續 turn。
-              endTurnSkipCheckup: true,
-              pendingSelection: {
-                type: 'discard-search',
-                actorIdx: aIdx,
-                sourcePlayerIdx: aIdx,
-                filter: 'BasicEnergy',
-                minCount: 0,
-                maxCount: 1,
-                effectKey: 'brailliant-attach',
-                params: { endTurnAfter: true },
-              },
-            };
-            return state;
-          }
-        }
-      }
-    }
-
-    // ── v2.214 TOOL_END_TURN_DISCARD（招式學習器 螢石 等）─────────────────
-    //   卡面：「將附於寶可夢身上的這張卡，在自己的回合結束時丟棄」。
-    //   掃自己場上所有附有 TOOL_END_TURN_DISCARD 道具的寶可夢，把該道具搬到棄牌區。
-    //   阻礙之塔下道具失效，但「自棄」屬於 tool 自身的 self-clean 規則，仍然執行
-    //   （PTCG 官方判例：tool 即便被 nullify 仍會在自己回合結束時離場 — 道具效果不
-    //   觸發，但「離場」的時機是道具卡面寫死的固有行為。為一致性此處不加 jam guard）
-    {
-      const aPlayer = players[aIdx];
-      const allMine: CardInstance[] = [
-        ...(aPlayer.active ? [aPlayer.active] : []),
-        ...aPlayer.bench,
-      ];
-      let touched = false;
-      const newDiscards: CardInstance[] = [];
-      const stripIfDiscard = (c: CardInstance): CardInstance => {
-        // v3.20 多重轉接：處理 toolAttached 與 extraTools 兩種來源
-        let updated: CardInstance = c;
-        if (c.toolAttached) {
-          const tCard = pool.get(c.toolAttached.cardId);
-          if (tCard && TOOL_END_TURN_DISCARD.has(tCard.name)) {
-            newDiscards.push(c.toolAttached);
-            touched = true;
-            updated = { ...updated, toolAttached: undefined };
-          }
-        }
-        if (updated.extraTools && updated.extraTools.length > 0) {
-          const keep: CardInstance[] = [];
-          for (const t of updated.extraTools) {
-            const tCard = pool.get(t.cardId);
-            if (tCard && TOOL_END_TURN_DISCARD.has(tCard.name)) {
-              newDiscards.push(t);
-              touched = true;
-            } else {
-              keep.push(t);
-            }
-          }
-          if (keep.length !== updated.extraTools.length) {
-            updated = { ...updated, extraTools: keep };
-          }
-        }
-        return updated;
-      };
-      if (touched || aPlayer.active) {
-        // intentionally always run map; touched 由內部判斷
-      }
-      const newActive = aPlayer.active ? stripIfDiscard(aPlayer.active) : null;
-      const newBench = aPlayer.bench.map(stripIfDiscard);
-      void allMine; // suppressed — only used conceptually
-      if (touched) {
-        players[aIdx] = {
-          ...aPlayer,
-          active: newActive,
-          bench: newBench,
-          discard: [...aPlayer.discard, ...newDiscards],
-        };
-        // v5.518：收斂走中央 addToolDiscardLog(原 inline 逐張 log)。
-        state = addToolDiscardLog({ ...state, players }, newDiscards, pool, aIdx, '自己回合結束');
-      }
-    }
-
     // 清除當前玩家的回合旗標（justPlaced / evolvedThisTurn / abilityUsedThisTurn）
     const currentPlayer = { ...players[aIdx] };
-
-    // v4.892 強烈之吻（M5 迷唇姐）— delayed discard at end of opp's next turn
-    //   POST 在 attacker 端設了 defender.strongKissTargetIid = X
-    //   此處 (defender's END_TURN) 觸發：若 active 仍為 X → 丟棄整套
-    //   ★ 重要：丟棄 ≠ 昏厥。不給對手獎賞卡，不觸發 PASSIVE_ON_KO / PASSIVE_KO_RETALIATION。
-    // v5.443：改用 instance 級 strongKissDiscardPending（退備戰由 clearActiveEffects 自動清，
-    //   故「退備戰再回戰鬥場」不會誤丟棄）。只丟棄「仍在戰鬥場且仍帶旗標」的那隻。
-    if (currentPlayer.active?.strongKissDiscardPending) {
-      const koInst = currentPlayer.active;
-      const cardName = pool.get(koInst.cardId)?.name ?? '?';
-      const discards: CardInstance[] = [
-        koInst,
-        ...koInst.energyAttached,
-        ...getAllAttachedTools(koInst),
-        ...(koInst.evolvedFromStack ?? []),
-      ];
-      currentPlayer.active = null;
-      currentPlayer.discard = [...currentPlayer.discard, ...discards];
-      state = addLog(state,
-        `${cardName} 與身上 ${discards.length - 1} 張附加卡因招式效果全部丟棄（非昏厥，對手不獲得獎賞卡）`,
-        aIdx);
-    }
 
     currentPlayer.active = currentPlayer.active ? clearTurnFlags(currentPlayer.active) : null;
     currentPlayer.bench = currentPlayer.bench.map(clearTurnFlags);
@@ -8860,20 +8961,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       if (c.weaknessOverrideTypeThisTurn) { n = { ...n }; delete n.weaknessOverrideTypeThisTurn; }
       return n;
     };
-    // v2.78 觸發滲透寒氣等延遲傷害（於擁有者 END_TURN 時應用）
-    const applyDamageAtMyEnd = (c: CardInstance): CardInstance => {
-      if (!c.damageAtMyNextEndOfTurn || c.damageAtMyNextEndOfTurn <= 0) return c;
-      const _newDmgEnd = (c.damage ?? 0) + c.damageAtMyNextEndOfTurn;
-      const n = { ...c, damage: _newDmgEnd };
-      if (_newDmgEnd >= getEffectiveHP(c, pool, state)) { n._faintByEffect = true; n._faintReason = '滲透寒氣'; } // v5.926 滲透寒氣放指示物致死=效果昏厥（v6.037 帶來源）
-      delete n.damageAtMyNextEndOfTurn;
-      return n;
-    };
     if (currentPlayer.active) currentPlayer.active = clearCantAttackThisTurn(currentPlayer.active);
     currentPlayer.bench = currentPlayer.bench.map(clearCantAttackThisTurn);
-    // v2.78 觸發 currentPlayer 側的延遲傷害 + 清除 ThisTurn flags
-    if (currentPlayer.active) currentPlayer.active = applyDamageAtMyEnd(currentPlayer.active);
-    currentPlayer.bench = currentPlayer.bench.map(applyDamageAtMyEnd);
+    // v2.78 清除 ThisTurn flags（⭐v6.550：滲透寒氣的延遲傷害已搬到寶可夢檢查之前，見 v6550-turn-end-before-checkup）
     if (currentPlayer.active) currentPlayer.active = clearV278ThisTurn(currentPlayer.active);
     currentPlayer.bench = currentPlayer.bench.map(clearV278ThisTurn);
     // v2.78 重置 currentPlayer supporterTagsUsedThisTurn
@@ -8949,18 +9039,6 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     };
     if (currentPlayer.active) currentPlayer.active = clearParalyzeFang(currentPlayer.active);
     currentPlayer.bench = currentPlayer.bench.map(clearParalyzeFang);
-
-    // v2.69 浸蝕污泥：於 defender 自己 END_TURN 時，將 koAtMyNextEndOfTurn pokemon KO
-    //   實作：把 damage 直接設為 HP（讓既有 KO 流程在下一輪招式或 sanityKOSweep 處理）
-    //   清除 flag（消費完）
-    const triggerSludgeKO = (c: CardInstance): CardInstance => {
-      if (!c.koAtMyNextEndOfTurn) return c;
-      const n = { ...c, damage: getEffectiveHP(c, pool, state), _faintByEffect: true, _faintReason: '浸蝕污泥' }; // v5.926 浸蝕污泥效果昏厥（v6.037 帶來源）
-      delete n.koAtMyNextEndOfTurn;
-      return n;
-    };
-    if (currentPlayer.active) currentPlayer.active = triggerSludgeKO(currentPlayer.active);
-    currentPlayer.bench = currentPlayer.bench.map(triggerSludgeKO);
 
     players[aIdx] = currentPlayer;
 
@@ -9243,46 +9321,6 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     };
     if (currentPlayer.active) currentPlayer.active = promoteSelfNextToThis(clearBlockedAttackThisTurn(clearCantAttachEnergy(clearDmgBonusThisTurn(currentPlayer.active))));
     currentPlayer.bench = currentPlayer.bench.map(c => promoteSelfNextToThis(clearBlockedAttackThisTurn(clearCantAttachEnergy(clearDmgBonusThisTurn(c)))));
-    // v2.103 燃火能量 — 「將附於寶可夢身上的這張卡，在自己的回合結束時丟棄。」
-    //   在 aIdx（自己）的 active + bench 各寶可夢身上移除所有燃火能量 entry，追加到 discard。
-    //   此處在 END_TURN 的 aIdx 方處理，符合卡面「自己的回合結束時」。
-    {
-      const extractBurnSoulEnergies = (c: CardInstance): { kept: CardInstance; removed: CardInstance[] } => {
-        const burnSoul = c.energyAttached.filter(e => pool.get(e.cardId)?.name === '燃火能量');
-        if (burnSoul.length === 0) return { kept: c, removed: [] };
-        const kept = { ...c, energyAttached: c.energyAttached.filter(e => pool.get(e.cardId)?.name !== '燃火能量') };
-        return { kept, removed: burnSoul };
-      };
-      let discardAdds: CardInstance[] = [];
-      if (currentPlayer.active) {
-        const { kept, removed } = extractBurnSoulEnergies(currentPlayer.active);
-        currentPlayer.active = kept;
-        discardAdds.push(...removed);
-      }
-      const newBench: CardInstance[] = [];
-      for (const c of currentPlayer.bench) {
-        const { kept, removed } = extractBurnSoulEnergies(c);
-        newBench.push(kept);
-        discardAdds.push(...removed);
-      }
-      currentPlayer.bench = newBench;
-      if (discardAdds.length > 0) {
-        currentPlayer.discard = [...currentPlayer.discard, ...discardAdds];
-      }
-    }
-    // v2.228 納莉：「在使用了這張卡的回合結束時，若自己的手牌有 5 張以上，
-    //   則將自己的手牌全部丟棄」— END_TURN 時於 aIdx 方檢查並丟棄
-    if (currentPlayer.nanuDiscardAtTurnEnd) {
-      if (currentPlayer.hand.length >= 5) {
-        const discarded = currentPlayer.hand;
-        currentPlayer.discard = [...currentPlayer.discard, ...discarded];
-        currentPlayer.hand = [];
-        state = addLog(state,
-          `納莉：回合結束時手牌 ${discarded.length} 張（≥5）→ 全部丟棄`,
-          aIdx);
-      }
-      delete currentPlayer.nanuDiscardAtTurnEnd;
-    }
     // Wave 36/39：清除 aIdx（本回合結束方）的玩家級 ThisTurn 旗標（若本回合已消耗完）
     if (
       // >>> v6356-endturn-clear-cond
@@ -9522,6 +9560,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         // v2.124：finalize 結束時清掉 endTurnSkipCheckup（避免下次 endTurn 也跳過 checkup）
         endTurnSkipCheckup: undefined,
         endTurnCheckupAbilitiesDone: undefined,  // v5.426 清除特性區旗標
+        endTurnSnapshotDone: undefined, endTurnEffectsDone: undefined, endTurnPreCheckupStop: undefined,  // ⭐v6.550
         endTurnActiveIidAtEnd: undefined,  // ⭐v6.502 清除「回合結束當下的戰鬥寶可夢」
         _pendingAttackEnergyRevive: undefined,  // v5.678 安全清除跨picker revive快照
         _pendingOnDamaged: undefined,  // ⭐v6.533 安全清除（正常情況招式結束時已結算完）

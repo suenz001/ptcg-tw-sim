@@ -1372,6 +1372,12 @@ export interface GameState {
    *  與 endTurnSkipCheckup 解耦：status-KO 提早 return + re-dispatch(skipCheckup) 後，
    *  status 區跳過但本旗標仍為 false → 特性區照常執行一次。finalize 時清除。 */
   endTurnCheckupAbilitiesDone?: boolean;
+  /** ⭐v6.550（v6550-turn-end-before-checkup）：回合快照（InLastOppTurn 等）已輪替 ⇒ 重送 END_TURN 不再跑（原本借用 endTurnSkipCheckup）。 */
+  endTurnSnapshotDone?: boolean;
+  /** ⭐v6.550：寶可夢檢查之前的「回合結束時」效果區已跑完。 */
+  endTurnEffectsDone?: boolean;
+  /** ⭐v6.550：這次補位是回合結束時效果造成的昏厥（寶可夢檢查之前）⇒ 補完重送 END_TURN 照常做寶可夢檢查。 */
+  endTurnPreCheckupStop?: boolean;
   /** ⭐v6.502：第一次 END_TURN（寶可夢檢查前）當下的戰鬥寶可夢 iid（null＝當時空著）。力之沙漏只問這一隻；
    *  寶可夢檢查後才補上場的寶可夢不是「回合結束時在戰鬥場」。finalize 時清除。 */
   endTurnActiveIidAtEnd?: string | null;

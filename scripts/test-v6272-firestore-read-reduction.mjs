@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'b3bbd137ce9bb44369d39480b9b588ec90e7cf4e';   // v6.548（上一版）
+const PREV_SHA = '29a43c5f17b64d035f66b1e2f0f4c9bfdf4ef975';   // v6.549（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,11 +757,9 @@ const PREV_SHA = 'b3bbd137ce9bb44369d39480b9b588ec90e7cf4e';   // v6.548（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.549 前移：PREV_SHA 從 b3bbd137（v6.548）起算。
+  // ⚠⚠ v6.550 前移：PREV_SHA 從 29a43c5f（v6.549）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.549：招式進行中的效果昏厥延後（v6549-defer-effect-ko／drainPendingEffectKo）；漸強波反應改附能當下；吃飽先／嫩葉之恩改附能→反應→回復。
-  'src/lib/game/effects.ts',
-  'src/lib/game/effects/cards/v2610_i_wave11_misc4.ts',
+  // ⭐v6.550：END_TURN：「回合結束時」效果區搬到回合快照與寶可夢檢查之前（v6550-turn-end-before-checkup），快照改由 endTurnSnapshotDone 保證只跑一次。
   'src/lib/game/engine.ts',
   'src/lib/game/types.ts',
   'src/lib/version.ts',
@@ -769,6 +767,18 @@ const PREV_ALLOWED = [
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.549）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.549 前移：PREV_SHA 從 b3bbd137（v6.548）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.549：招式進行中的效果昏厥延後（v6549-defer-effect-ko／drainPendingEffectKo）；漸強波反應改附能當下；吃飽先／嫩葉之恩改附能→反應→回復。
+//   'src/lib/game/effects.ts',
+//   'src/lib/game/effects/cards/v2610_i_wave11_misc4.ts',
+//   'src/lib/game/engine.ts',
+//   'src/lib/game/types.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.548）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.548 前移：PREV_SHA 從 87b6c996（v6.547）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -927,21 +937,6 @@ const PREV_ALLOWED = [
 //   'src/lib/version.ts',
 //   'static/cards/MC.json',
 //   'static/cards/SV8.json',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.537）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.537 前移：PREV_SHA 從 ab4afb3e（v6.536）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.537：平穩境地漏網（滿充的體貼／旋風回收機／奇異時鐘／原始之翼／微風吹拂）；上搗角擊打昏 × 薄霧能量縱深防禦；刪死碼 selfBouncePost。
-//   'src/lib/game/effects.ts',
-//   'src/lib/game/effects/cards/items_misc.ts',
-//   'src/lib/game/effects/cards/mega_decks.ts',
-//   'src/lib/game/effects/cards/v2306_meta_pokemon.ts',
-//   'src/lib/game/effects/cards/v2760_h_wave3_complex.ts',
-//   'src/lib/game/effects/cards/v2996_g4_wave2.ts',
-//   'src/lib/game/engine.ts',
-//   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
