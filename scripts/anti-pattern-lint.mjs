@@ -1167,12 +1167,14 @@ for (const f of files) {
   }
 }
 
-// ── Check Z（⭐v6.546）：「火箭隊的寶可夢」判準只能寫在中央 isRocketTeamPokemonCard（effects/_shared.ts）──
+// ── Check Z（⭐v6.546；v6.551 擴及 includes、中央搬到 selection-filter.ts）：「火箭隊的寶可夢」判準只能寫在中央 isRocketTeamPokemonCard ──
 //   原本 9 處各自 `name.startsWith('火箭隊的')`（有的加 supertype、有的沒加）⇒ 收斂後擋新的散寫。
 {
-  const zRe = /\.startsWith\(\s*['"]火箭隊的['"]\s*\)/g;
+  // ⭐v6.551：一併擋 `.includes('火箭隊的')`（v6.546 只擋 startsWith，漏了 10 處 includes 寫法）；中央定義搬到 selection-filter.ts
+  const zRe = /\.(?:startsWith|includes)\(\s*['"]火箭隊的['"]\s*\)/g;
   // 正對照：判準本身抓得到散寫樣本
   if ((("card.name.startsWith('火箭隊的')").match(zRe) || []).length !== 1) violations.push('[Z] 正對照失敗 — 判準抓不到 startsWith(\'火箭隊的\')');
+  if ((("(n ?? '').includes('火箭隊的')").match(zRe) || []).length !== 1) violations.push('[Z] 正對照失敗 — 判準抓不到 includes(\'火箭隊的\')');
   let zSeen = 0;
   for (const f of files) {
     let src;
@@ -1182,7 +1184,7 @@ for (const f of files) {
       zSeen++;
       const line = src.slice(0, m.index).split('\n').length;
       const lineText = src.split('\n')[line - 1] ?? '';
-      if (rel(f).replace(/\\/g, '/').endsWith('effects/_shared.ts') && /card\?\.supertype === 'Pokemon' && !!card\.name\?\.startsWith/.test(lineText)) continue;   // 中央 isRocketTeamPokemonCard 本身
+      if (rel(f).replace(/\\/g, '/').endsWith('game/selection-filter.ts') && /card\?\.supertype === 'Pokemon' && !!card\.name\?\.startsWith/.test(lineText)) continue;   // 中央 isRocketTeamPokemonCard 本身（⭐v6.551 搬到 selection-filter）
       violations.push(`[Z] ${rel(f)}:${line} — 「火箭隊的寶可夢」請用中央 isRocketTeamPokemonCard（effects/_shared.ts），不要再寫 startsWith('火箭隊的')`);
     }
   }
@@ -1190,7 +1192,7 @@ for (const f of files) {
 }
 
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough / T: picker log帶候選/發現N張洩漏隱藏zone統計 / U: 對手active寫跨回合debuff旗標漏免疫gate(強烈之吻類) / V: canApplyEffectToTarget未表態counterPlacement(對戰圓形只擋放指示物) / W: deck-search純TOPn卻帶validIids(可勾子集但顯示全部) / X: pending頂層寫validIids(型別只認params.validIids→限制死資料失效) / Y: regG用在寶可夢(註冊進TRAINER_GUARDS→死碼永不呼叫) / Z: 火箭隊的寶可夢判準散寫→中央isRocketTeamPokemonCard）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough / T: picker log帶候選/發現N張洩漏隱藏zone統計 / U: 對手active寫跨回合debuff旗標漏免疫gate(強烈之吻類) / V: canApplyEffectToTarget未表態counterPlacement(對戰圓形只擋放指示物) / W: deck-search純TOPn卻帶validIids(可勾子集但顯示全部) / X: pending頂層寫validIids(型別只認params.validIids→限制死資料失效) / Y: regG用在寶可夢(註冊進TRAINER_GUARDS→死碼永不呼叫) / Z: 火箭隊的寶可夢判準散寫(startsWith/includes)→中央isRocketTeamPokemonCard）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);

@@ -1,4 +1,9 @@
 <details open>
+        <summary><span class="ver-badge">v6.551</span> <b>火箭隊的寶可夢判定統一；電腦評估招式時計入對手道具的反擊傷害</b><br>「火箭隊的寶可夢」判定全部改用同一套規則；電腦評估招式時，會把龐克頭盔等受傷反擊造成的傷害算進去。</summary>
+        <div class="log-body">・「火箭隊的寶可夢」的判定全部改用同一套規則（行為不變）。
+・電腦對戰：招式需要對手選擇時（例：推倒），評估也會計入龐克頭盔等受傷反擊對自己造成的傷害。</div>
+      </details>
+      <details>
         <summary><span class="ver-badge">v6.550</span> <b>「回合結束時」的效果改在寶可夢檢查之前處理</b><br>力之沙漏、納莉、燃火能量、招式學習器、強烈之吻、浸蝕污泥、滲透寒氣等「回合結束時」的效果，改在寶可夢檢查之前處理。</summary>
         <div class="log-body">・依官方說明「回合結束」指寶可夢檢查前：力之沙漏、納莉、燃火能量、招式學習器、強烈之吻、浸蝕污泥、滲透寒氣等效果改在寶可夢檢查之前處理；因此昏厥的寶可夢先補上戰鬥場，再進行寶可夢檢查。</div>
       </details>
@@ -59,11 +64,8 @@
   ・原本手動附能與特性附能的處理順序相反，現在全部走同一套。
 ・電腦對手在雙方同時派出新戰鬥寶可夢、需要等待對手先派出時，不再反覆嘗試結束回合。</div>
       </details>
-      <details>
+      <details data-ver="v6.539">
         <summary><span class="ver-badge">v6.539</span> <b>雙方戰鬥寶可夢同時昏厥時，依規則由下一個回合的玩家先派出</b><br>雙方的戰鬥寶可夢同時昏厥（招式、特性或寶可夢檢查）時，改為依官方規則由下一個回合的玩家先派出新的戰鬥寶可夢，另一方等對手派完才派出。</summary>
-        <div class="log-body">・雙方的戰鬥寶可夢同時昏厥時（例：招式擊倒對手、同時被反擊打倒；咒詛炸彈；寶可夢檢查中雙方同時昏厥），依官方問答由下一個回合的玩家先從備戰區派出新的戰鬥寶可夢，另一方在對手派出之前會看到「等待對手送出」的提示，對手派出後才開啟自己的派出視窗。
-・電腦對手與線上對戰的閒置判定也依同一個順序判斷。
-・只有一方需要派出時與以往相同。</div>
       </details>
       <details data-ver="v6.538">
         <summary><span class="ver-badge">v6.538</span> <b>骨紋巨聲鱷｜純樸改為特性</b><br>骨紋巨聲鱷的「純樸」改為常駐特性：不必使用招式，在戰鬥場與備戰區都不受對手招式的效果影響；特性被消除時（傳說的熔岩洞等）失效。</summary>
@@ -130,9 +132,6 @@
       </details>
       <details data-ver="v6.517">
         <summary><span class="ver-badge">v6.517</span> <b>沒有成功的攻擊不再出現在對手回合紀錄</b><br>修正被規則擋下的攻擊（例：先攻第一回合、能量不足）仍被記進「對手這回合做了什麼」紀錄的問題；同時檢查了其他核心規則，引擎都有正確擋下。</summary>
-      </details>
-      <details data-ver="v6.516">
-        <summary><span class="ver-badge">v6.516</span> <b>對手戰鬥場被特性打空時，要等對手補位才能繼續</b><br>延續上一版：在自己的回合用特性打倒對手的戰鬥寶可夢（例：咒詛炸彈、必殺手裡劍）後，必須等對手派出新的戰鬥寶可夢，才能繼續打寶可夢、附能量或攻擊。</summary>
       </details>
       <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
         📚 這裡顯示<b>最近的更新內容</b>。更早的紀錄完整保留在 →

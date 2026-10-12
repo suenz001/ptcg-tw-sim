@@ -1,5 +1,23 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.551：前幾版審查留下的「之後處理」（2026-10-12，**非規則改動**）
+
+BASE v6.550。
+- 「火箭隊的寶可夢」判準（v6.546 審查後續）：v6.546 只收斂 startsWith 寫法，另有 10 處 `name.includes('火箭隊的')`（effects.ts isRocketBasicTarget、火箭隊的雅典娜 4 處、_shared 火箭隊能量 host 檢查、selection-filter 'RocketBasic'、ai.ts／+page.svelte 的 RocketBasic inline 後備）。
+  - 中央 isRocketTeamPokemonCard 定義搬到 leaf selection-filter.ts（哨兵 v6551-rocket-pred-leaf），_shared 原名 re-export；10 處全部改呼叫中央。
+  - ai.ts／+page.svelte 的 RocketBasic 分支排在 evaluateSelectionFilter 回 boolean 之後 ⇒ 死碼，刪除。
+  - H/I/J 卡名含「火箭隊的」169 張全部以它開頭、12 張非寶可夢都是訓練家 ⇒ 零行為變更。
+  - anti-pattern-lint Check Z 擴及 includes（新增 includes 正對照），中央那一行的豁免改指 selection-filter.ts。
+- AI（v6.533 審查 P3-4）：試打停在對手要解的選擇視窗時，受傷反擊（_pendingOnDamaged）要等視窗解完才結算 ⇒ selfDamage 低估。改成用拿掉視窗的副本結算一次，只讀自己戰鬥寶可夢的傷害（哨兵 v6551-ai-self-damage-retaliation）。萌芽鹿｜推倒 × 龐克頭盔：0 → 40（與引擎實際結算一致）。
+- 守衛 test-v6551-rocket-pred-and-ai-retaliation：AI_SELF_DAMAGE、ROCKET_ONE_DEF、ROCKET_NO_SCATTER（BASE 紅）；正對照 AI_SELF_DAMAGE_NONE、ROCKET_FILTER。突變（AI 不估反擊、回寫一處 includes、_shared 另寫一份定義、lint 只擋 startsWith）全殺；lint 正對照（插入 includes 散寫）會紅。
+- **Fable 5.1 審查（aec2e45b860dee49e）：可合併，無 P1／P2**。確認 cloneState 深拷貝、settle 在隔離 PRNG 內、引擎實際結算與 AI 估值一致、火箭隊收斂零語意差、兩段死碼確實走不到。
+  - P3-1（既有缺口）：反擊把攻擊方打倒時 AI 沒有任何扣分 ⇒ 排進下一版 AI 改動。
+  - P3-2：註解寫明「自己要解的視窗已由 resolveOwnPendingsInSim 解完」的分工。**已加**。
+- 全套（ef8e6e11）紅 2 支（Rule 40，只動守衛）：
+  - test-v6251 lint A 白名單：selection-filter RocketBasic 改呼叫中央後更新條目（視角不變：牌庫）；ai.ts 那條死碼已刪 ⇒ 白名單條目移除。
+  - test-v6441 零回歸：對戰頁刪掉 RocketBasic 死碼 ⇒ LATER 登記一組還原對（非版面改動）。
+  - 兩支單跑綠；src 未變動，不重跑全套。
+
 ## v6.550：站長裁定第 9 項「要改」——「回合結束時」的效果在寶可夢檢查之前（2026-10-12）
 
 BASE v6.549。站長 11:56 第 9 項逐字：「要改」。官方 PTCG_RULES L219：「『自己的回合結束』指的是寶可夢檢查前。……寶可夢檢查是在包含『自己的回合結束時可做的事』在內的『自己的回合』結束後進行。因此，寶可夢檢查不包含在『自己的回合』中。」

@@ -19,7 +19,8 @@ import type { Card } from '$lib/cards/types';
 import { CLEAR_ON_EXIT_FLAGS, PERSIST_ON_EXIT_FLAGS } from '../instance-flags';
 // v6.191 玳蘿：「超級進化寶可夢【ex】」中央述詞（selection-filter 只 import types，無循環）
 // v6.250 險惡廢墟：「場上【基礎】寶可夢」中央述詞同樣來自 selection-filter（同一個 leaf）
-import { isMegaExCard, isBasicPokemonOnField } from '../selection-filter';
+import { isMegaExCard, isBasicPokemonOnField, isRocketTeamPokemonCard } from '../selection-filter';
+export { isRocketTeamPokemonCard };   // ⭐v6.551 定義搬到 selection-filter（leaf），原名 re-export
 // ⭐v6.213 sameEvoName 的名稱正規化唯一來源（stage2-index 是 leaf，只 import type，無循環）
 import { normalizeEvoVariantName } from '../stage2-index';
 // ⭐v6.337 借招（複製他人招式）中央管線；copy-attack 只 import ../types，無循環
@@ -688,8 +689,7 @@ export function discardIllegalRocketEnergy(
   const isRocketEnergy = (e: CardInstance): boolean => pool.get(e.cardId)?.name === '火箭隊能量';
   const scrub = (inst: CardInstance | null): CardInstance | null => {
     if (!inst) return inst;
-    const hostName = pool.get(inst.cardId)?.name ?? '';
-    if (hostName.includes('火箭隊的')) return inst; // 合法 host,保留
+    if (isRocketTeamPokemonCard(pool.get(inst.cardId))) return inst; // 合法 host,保留（⭐v6.551 中央判準）
     const illegal = inst.energyAttached.filter(isRocketEnergy);
     if (illegal.length === 0) return inst;
     removed.push(...illegal);
@@ -3134,7 +3134,5 @@ export function withAttackDamageTaken(
  *   H/I/J 以「火箭隊的」開頭的非寶可夢卡共 12 張、全是訓練家（支援者／物品／道具），場上不會出現；
  *   牌庫／棄牌區的呼叫點原本就各自加了 supertype 檢查 ⇒ 判準收進來後零行為變更。
  */
-export function isRocketTeamPokemonCard(card: { name?: string; supertype?: string } | null | undefined): boolean {
-  return card?.supertype === 'Pokemon' && !!card.name?.startsWith('火箭隊的');
-}
+//   ⭐v6.551：定義搬到 selection-filter.ts（v6551-rocket-pred-leaf），本檔 re-export。
 // <<< v6534-rocket-holder

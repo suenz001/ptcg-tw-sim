@@ -21,6 +21,18 @@ import { RULE_BOX_SUBTYPES } from './types';
 
 // ─── 卡片述詞 helper（v6.018 批5：從 engine.ts 下沉；engine 改 re-export，解 engine↔selection-filter 循環）───
 /** 台灣卡牌中文屬性名稱 → EnergyType（pokemonType 欄位遺漏時備用）。export 供 engine 內部 isEnergyOfType 等使用。 */
+// >>> v6551-rocket-pred-leaf
+/**
+ * ⭐v6.551「火箭隊的寶可夢」判準（卡名以「火箭隊的」開頭的寶可夢卡）的**唯一**定義。
+ *   v6.534 起在 effects/_shared.ts，v6.551 搬到本 leaf 模組（_shared 原名 re-export），讓 selection-filter 的 RocketBasic、
+ *   火箭隊的雅典娜／蘭斯、能量 host 檢查等原本寫 `name.includes('火箭隊的')` 的 10 處都能共用（anti-pattern-lint Check Z 擋新的散寫）。
+ *   H/I/J 卡名含「火箭隊的」者全部以它開頭（includes 與 startsWith 在現行卡池等價）。
+ */
+export function isRocketTeamPokemonCard(card: { name?: string; supertype?: string } | null | undefined): boolean {
+  return card?.supertype === 'Pokemon' && !!card.name?.startsWith('火箭隊的');
+}
+// <<< v6551-rocket-pred-leaf
+
 export const ZH_ENERGY_TYPE: Record<string, EnergyType> = {
   '草': 'Grass', '火': 'Fire', '水': 'Water', '雷': 'Lightning',
   '超': 'Psychic', '格': 'Fighting', '鬥': 'Fighting',
@@ -262,7 +274,7 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
   'MarniePokemon':  (c) => c.supertype === 'Pokemon' && c.name.startsWith('瑪俐的'),
   'ErikaPokemon':   (c) => c.supertype === 'Pokemon' && c.name.startsWith('莉佳的'),
   'RocketSupporter': (c) => c.supertype === 'Trainer' && c.subtype === 'Supporter' && c.name.includes('火箭隊'),
-  'RocketBasic':    (c) => c.supertype === 'Pokemon' && !c.evolvesFrom && c.name.includes('火箭隊的'),
+  'RocketBasic':    (c) => isRocketTeamPokemonCard(c) && !c.evolvesFrom,   // ⭐v6.551 中央判準
   // 組合(寶可夢或基本能量)。⚠草:Bug#20 移除 !evolvesFrom(任意階段草寶可夢);鬥:基礎鬥寶可夢(有 !evolvesFrom)。
   //   基本能量屬性走名稱【X】(基本能量 pokemonType 恒 null,v6.008)。ai.ts 兩處殘留 !evolvesFrom(草)+死碼→本收斂修正。
   'GrassBasicOrGrassEnergy': (c) => {

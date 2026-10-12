@@ -21,7 +21,7 @@
 import type { Card } from '$lib/cards/types';
 import type { GameState, CardInstance, GameAction } from './types';
 import { knownDeckTopIids, recordKnownDeckTop } from './deck-top-known';   // ⭐v6.429
-import { applyAction, getAvailableAttacks, getEffectiveAttacks, getEffectiveHP } from './engine';
+import { applyAction, getAvailableAttacks, getEffectiveAttacks, getEffectiveHP, settlePendingOnDamaged } from './engine';
 
 /** 一次試打的結果。dealt 只在「沒擊倒」時有意義（擊倒時傷害多寡不重要）。 */
 export interface AttackOutcome {
@@ -585,6 +585,7 @@ function evaluateAttackOnce(
       Math.random = () => { _rndCalls++; return _rnd(); };
       let after0: GameState;
       let after: GameState;
+      let afterForSelf: GameState;
       try {
         after0 = applyAction(sim, { type: 'ATTACK', attackIndex, ...(actionExtra ?? {}) } as GameAction, pool);
         // ⚠（fable 審查 v6.430 C）這裡比的是外層 state 而不是 sim，所以引擎「原樣退回」的拒絕抓不到、會當成 ok 且盤面零變化。
@@ -592,6 +593,16 @@ function evaluateAttackOnce(
         //   故意保留，改動前請先想清楚這一層。
         if (!after0 || after0 === state) return DEAD_EVAL;
         after = resolveOwnPendingsInSim(after0, actorIdx, pool);
+        // >>> v6551-ai-self-damage-retaliation
+        // ⭐v6.551（v6.533 審查 P3-4）：試打停在**對手**要解的選擇視窗時，「受到招式傷害時」的反擊（_pendingOnDamaged）
+        //   要等視窗解完才結算 ⇒ 原本 selfDamage 讀不到反擊（低估）。只為了估自己受的傷：用拿掉視窗的副本結算一次。
+        //   （審查 P3-2）自己要解的視窗已由上面 resolveOwnPendingsInSim 解完、引擎照常結算 ⇒ 只需補「對手的視窗」這一種。
+        afterForSelf = after;
+        if ((after._pendingOnDamaged?.length ?? 0) > 0 && after.pendingSelection && after.pendingSelection.actorIdx !== actorIdx) {
+          try { afterForSelf = settlePendingOnDamaged({ ...cloneState(after), pendingSelection: undefined }, pool); }
+          catch { afterForSelf = after; }
+        }
+        // <<< v6551-ai-self-damage-retaliation
       } finally {
         Math.random = _rnd;
       }
@@ -604,11 +615,12 @@ function evaluateAttackOnce(
       const oppDamage = oppEffectiveDamage(state, after, oppIdx, pool);
 
       const selfNow = after.players[actorIdx].active;
+      const selfNowDmg = afterForSelf.players[actorIdx].active?.iid === selfNow?.iid ? (afterForSelf.players[actorIdx].active?.damage ?? 0) : (selfNow?.damage ?? 0);   // ⭐v6.551
       // 自己被擊倒／換位時能量差沒有意義，記 0 避免誤判成「丟了很多能量」
       const sameSelf = selfNow && beforeSelf && selfNow.iid === beforeSelf.iid;
       const selfEnergyLost = sameSelf
         ? Math.max(0, beforeSelfEnergy - selfNow.energyAttached.length) : 0;
-      const selfDamage = sameSelf ? Math.max(0, (selfNow.damage ?? 0) - beforeSelfDmg) : 0;
+      const selfDamage = sameSelf ? Math.max(0, selfNowDmg - beforeSelfDmg) : 0;
       // ⚠欄位名一定要查證：正確的是 `cantAttackPending`（攻擊當下設，擁有者下個回合開始時
       //   才 promote 成 cantAttackThisTurn）。我第一版寫成 cantAttackNextTurn／
       //   mustRechargeNextTurn —— 兩個都不存在，TypeScript 不會報錯、值恆為 undefined，

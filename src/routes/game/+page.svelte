@@ -4086,9 +4086,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           if (f === 'RocketSupporter') {
             return card.supertype === 'Trainer' && card.subtype === 'Supporter' && card.name.includes('火箭隊');
           }
-          if (f === 'RocketBasic') {
-            return card.supertype === 'Pokemon' && !card.evolvesFrom && card.name.includes('火箭隊的');
-          }
+          // ⭐v6.551：'RocketBasic' 已收錄於中央 selection-filter（上方 evaluateSelectionFilter 先回 boolean）⇒ 這裡的 inline 後備是死碼，已刪除。
           if (f === 'AnyTrainer') {
             return card.supertype === 'Trainer';
           }

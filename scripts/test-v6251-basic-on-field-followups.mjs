@@ -336,13 +336,14 @@ const ALLOW_A = [
   // ── 牌庫／手牌／棄牌區視角（卡片述詞的等價寫法或其 AI 鏡射）──────────────
   ['/src/lib/game/selection-filter.ts', "return !card.evolvesFrom;", '中央卡片述詞 isBasicPokemonCard 本體'],
   ['/src/lib/game/selection-filter.ts', "'PsychicBasic': (c) => c.supertype === 'Pokemon' && !c.evolvesFrom && c.pokemonType === 'Psychic',", '中央 deck-search filter（牌庫視角）'],
-  ['/src/lib/game/selection-filter.ts', "'RocketBasic':    (c) => c.supertype === 'Pokemon' && !c.evolvesFrom && c.name.includes('火箭隊的'),", '中央 deck-search filter（牌庫視角）'],
+  // ⭐v6.551（Rule 40）：判準改呼叫中央 isRocketTeamPokemonCard（視角不變：牌庫）
+  ['/src/lib/game/selection-filter.ts', "'RocketBasic':    (c) => isRocketTeamPokemonCard(c) && !c.evolvesFrom,", '中央 deck-search filter（牌庫視角）'],
   ['/src/lib/game/selection-filter.ts', "if (c.supertype === 'Pokemon' && !c.evolvesFrom && c.pokemonType === 'Fighting') return true;", '中央 deck-search filter（牌庫視角）'],
   ['/src/lib/game/ai.ts', "if (f === 'Basic')           return card.supertype === 'Pokemon' && !card.evolvesFrom", 'AI 鏡射 UI 的牌庫／手牌 filter'],
   // ⭐v6.543（Rule 40）：ai.ts 的 PsychicBasic inline 是中央 DECK_SEARCH_PREDICATES 的死副本，已刪除 ⇒ 白名單條目隨之移除（本守衛要求不得有死條目）。
   ['/src/lib/game/ai.ts', "if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;", '同上'],
   ['/src/lib/game/ai.ts', "if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;", '同上'],
-  ['/src/lib/game/ai.ts', "return card.supertype === 'Pokemon' && !card.evolvesFrom && card.name.includes('火箭隊的');", '同上'],
+  // ⭐v6.551（Rule 40）：ai.ts 的 RocketBasic inline 後備已刪除（死碼，中央 evaluateSelectionFilter 先回 boolean）⇒ 白名單條目一併移除
   ['/src/lib/game/effects.ts', "return !card.evolvesFrom;", '謎擬Q｜呼朋引伴的 gate＝掃自己**牌庫**（牌庫視角）'],
   ['/src/lib/game/effects/cards/energy_cards.ts', "return cc?.supertype === 'Pokemon' && !cc.evolvesFrom && cc.pokemonType === 'Psychic';", '感應【超】能量＝從**牌庫**找基礎【超】'],
   ['/src/lib/game/effects/cards/pokemon_search.ts', "if (!(card?.supertype === 'Pokemon' && !card.evolvesFrom)) return false;", 'bench-named-basic-from-deck resolver 再驗證（牌庫視角）'],

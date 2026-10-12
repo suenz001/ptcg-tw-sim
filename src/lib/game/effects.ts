@@ -32,7 +32,7 @@ import { isStage2ByEvoVariant } from './stage2-index';
 // effects.ts 仍保留所有尚未被搬遷的卡牌 reg 呼叫。
 
 import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec } from './effects/_shared';
-import { isBasicPokemonCard, isBasicPokemonOnField, getBasicEnergyType, isBasicEnergyOfType, isMegaExCard, isPokemonExCard, isRulePokemon, isRuleBoxExOrV } from './selection-filter'; // v6.069 getBasicEnergyType：基本能量 pokemonType 恒 null，禁直讀（v6.008）
+import { isBasicPokemonCard, isBasicPokemonOnField, getBasicEnergyType, isBasicEnergyOfType, isMegaExCard, isPokemonExCard, isRulePokemon, isRuleBoxExOrV, isRocketTeamPokemonCard } from './selection-filter'; // v6.069 getBasicEnergyType：基本能量 pokemonType 恒 null，禁直讀（v6.008）
 // >>> v6402-luxury-bomb-import
 // ⭐v6.402：超級進化ex 判準放在 leaf（selection-filter）而不是 tools.ts —— effects→tools 是既有反向 edge，
 //   往那裡新增 symbol 會被 anti-pattern-lint [O] 擋（module-init 循環 TDZ）。本檔只轉發給 engine。
@@ -385,7 +385,7 @@ export function isRocketBasicTarget(targetCard: Card | undefined): boolean {
   if (targetCard.subtype === 'Stage1' || targetCard.subtype === 'Stage2') return false;
   if (targetCard.subtype === 'Other') return false;
   if (targetCard.evolvesFrom) return false;
-  return targetCard.name.includes('火箭隊的');
+  return isRocketTeamPokemonCard(targetCard);   // ⭐v6.551 中央判準
 }
 
 /**
@@ -16796,13 +16796,13 @@ regG('火箭隊的雅典娜', (st, idx, pool) => {
   const p = st.players[idx];
   if (p.deck.length === 0) return false;
   const field = [...(p.active ? [p.active] : []), ...p.bench];
-  const allRocket = field.length > 0 && field.every(c => (pool.get(c.cardId)?.name ?? '').includes('火箭隊的'));
+  const allRocket = field.length > 0 && field.every(c => isRocketTeamPokemonCard(pool.get(c.cardId)));
   return (p.hand.length - 1) < (allRocket ? 8 : 5);
 });
 reg('火箭隊的雅典娜', (st, idx, pool) => {
   const p = st.players[idx];
   const field = [...(p.active ? [p.active] : []), ...p.bench];
-  const allRocket = field.length > 0 && field.every(c => (pool.get(c.cardId)?.name ?? '').includes('火箭隊的'));
+  const allRocket = field.length > 0 && field.every(c => isRocketTeamPokemonCard(pool.get(c.cardId)));
   const target = allRocket ? 8 : 5;
   const toDraw = Math.max(0, target - p.hand.length);
   st = addLog(st, `火箭隊的雅典娜：抽到手牌滿 ${target} 張（抽 ${toDraw} 張${allRocket ? '（全場皆為火箭隊寶可夢）' : ''}）`, idx);
@@ -16838,14 +16838,14 @@ regG('火箭隊的坂木', (st, idx, pool) => {
   const opp = st.players[(1 - idx) as 0 | 1];
   // v5.483 官方 Q&A：自己戰鬥場與備戰區都要有「火箭隊的寶可夢」才能使出（卡面第一句自換是必須效果，
   //   無火箭隊寶可夢可換則不能使出）；加上對手要有備戰才能進行對手互換。
-  const activeIsRocket = !!p.active && (pool.get(p.active.cardId)?.name ?? '').includes('火箭隊的');
-  const benchHasRocket = p.bench.some(c => (pool.get(c.cardId)?.name ?? '').includes('火箭隊的'));
+  const activeIsRocket = !!p.active && isRocketTeamPokemonCard(pool.get(p.active.cardId));
+  const benchHasRocket = p.bench.some(c => isRocketTeamPokemonCard(pool.get(c.cardId)));
   return activeIsRocket && benchHasRocket && opp.bench.length > 0;
 });
 reg('火箭隊的坂木', (st, idx, pool) => {
   const p = st.players[idx];
-  const activeIsRocket = p.active && (pool.get(p.active.cardId)?.name ?? '').includes('火箭隊的');
-  const rocketBench = p.bench.filter(c => (pool.get(c.cardId)?.name ?? '').includes('火箭隊的'));
+  const activeIsRocket = p.active && isRocketTeamPokemonCard(pool.get(p.active.cardId));
+  const rocketBench = p.bench.filter(c => isRocketTeamPokemonCard(pool.get(c.cardId)));
   st = addLog(st, '火箭隊的坂木：自己戰鬥↔備戰互換火箭隊寶可夢，然後對手備戰↔戰鬥互換', idx);
   if (activeIsRocket && rocketBench.length > 0) {
     // 先自換：選 1 隻備戰火箭隊寶可夢
