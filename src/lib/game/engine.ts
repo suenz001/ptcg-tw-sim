@@ -8500,7 +8500,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       }
       // v5.192：致死分支前先 addLog 顯示實際傷害（同中毒）
       if (burnedHP > 0 && newBurnDmg >= burnedHP) {
-        state = addLog({ ...state, players }, `燒傷：${burnedCard?.name ?? '?'} 受到 ${burnTotalDmg} 傷害！`, null);
+        state = addLog({ ...state, players }, `灼傷：${burnedCard?.name ?? '?'} 受到 ${burnTotalDmg} 傷害！`, null);
+        // ⭐v6.556：對戰紀錄用詞改成台灣官方卡面的「灼傷」（原本寫「燒傷」，卡面 0 次）。
         // 燒傷致死 → KO；獎賞給對手 oIdx
         const koDiscard3: CardInstance[] = [
           { ...burnedPlayer.active, damage: newBurnDmg },
@@ -8513,7 +8514,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         players[tIdx] = burnedPlayer;
         const burnPrizes = prizesForKO(burnedCard!);
         // v5.889：取獎收斂到中央 addPendingPrize(同中毒/一般 KO)。
-        let burnState = addLog({ ...state, players }, `${burnedCard?.name ?? '?'} 被燒傷傷害擊倒！`, null);
+        let burnState = addLog({ ...state, players }, `${burnedCard?.name ?? '?'} 被灼傷傷害擊倒！`, null);
         burnState = addPendingPrize(burnState, oIdx, burnPrizes, pool);
         players[0] = burnState.players[0]; players[1] = burnState.players[1];
         burnState = liftEndgameForOnKoV6361(burnState);   // ⭐v6.502（Opus 審查 2）：同中毒那一格
@@ -8533,7 +8534,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         state = noteCheckupDamageUpV6369(state, burnedPlayer.active.iid, burnTotalDmg);
         // <<< v6369-checkup-damage-up-burn
         // 擲硬幣：正面解除燒傷
-        const burnFlip = flipCoinsWithLog(state, 1, `燒傷判定（${burnedCard?.name ?? '?'}）`, tIdx);
+        const burnFlip = flipCoinsWithLog(state, 1, `灼傷判定（${burnedCard?.name ?? '?'}）`, tIdx);
         state = burnFlip.state;
         const burnCoin = burnFlip.heads === 1;
         if (burnCoin) {
@@ -8549,7 +8550,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           }
         }
         players[tIdx] = burnedPlayer;
-        state = addLog({ ...state, players }, `燒傷：${burnedCard?.name ?? '?'} 受到 ${burnTotalDmg} 傷害 → ${burnCoin ? '正面：燒傷解除' : '反面：燒傷持續'}`, null);
+        state = addLog({ ...state, players }, `灼傷：${burnedCard?.name ?? '?'} 受到 ${burnTotalDmg} 傷害 → ${burnCoin ? '正面：灼傷解除' : '反面：灼傷持續'}`, null);
       }
     }
 

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
+  import { statusIcon, statusLabel, statusSlots } from '$lib/game/status-display';   // ⭐v6.556 特殊狀態圖示與官方用詞的唯一出口
   import { retryImg } from '$lib/img-retry';
   import { cardThumb } from '$lib/cards/thumb'; // v6.464 小尺寸顯示改用縮圖（失敗由 retryImg 立刻退回官方原圖）
   import { modalDrag } from '$lib/modal-drag';   // ⭐v6.420：全站視窗拖曳＋邊界夾制的唯一來源
@@ -11852,12 +11853,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 <div class="hp-bar-wrap sm"><div class="hp-bar" style="width:{hpTotal(b)?hpRemaining(b)/hpTotal(b)*100:0}%;background:{hpColor(hpRemaining(b),hpTotal(b))}"></div></div>
                 {#if b.toolAttached}{@const tc3=getCard(b.toolAttached.cardId)}<div class="tool-chip sm">🔧{tc3?.name ?? '道具'}</div>{/if}{#each (b.extraTools ?? []) as et3}{@const tcE=getCard(et3.cardId)}<div class="tool-chip sm">🔧{tcE?.name ?? '道具'}</div>{/each}
                 {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
-                {#if b.status}<div class="status-chip-sm status-{b.status}">{
-                  b.status === 'poisoned' ? '☠️' :
-                  b.status === 'burned' ? '🔥' :
-                  b.status === 'asleep' ? '💤' :
-                  b.status === 'confused' ? '😵' : '⚡'
-                }</div>{/if}
+                {#if b.status}<div class="status-chip-sm status-{b.status}">{statusIcon(b.status)}</div>{/if}
               </div>
             {/if}
           {:else}<div class="bench-slot bench-empty"></div>{/if}
@@ -11911,29 +11907,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 <div class="active-name">{ac?.name}</div>
                 {#if oppPlayer.active.toolAttached}{@const tc=getCard(oppPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name ?? '道具（未載入）'}</div>{/if}{#each (oppPlayer.active.extraTools ?? []) as etOA}{@const tcOA=getCard(etOA.cardId)}<div class="tool-chip">🔧{tcOA?.name ?? '道具（未載入）'}</div>{/each}
                 {#if oppPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
-                {#if oppPlayer.active.status}<div class="status-chip status-{oppPlayer.active.status}">{
-                  oppPlayer.active.status === 'poisoned' ? '☠️ 中毒' :
-                  oppPlayer.active.status === 'burned' ? '🔥 燒傷' :
-                  oppPlayer.active.status === 'asleep' ? '💤 睡眠' :
-                  oppPlayer.active.status === 'confused' ? '😵 混亂' :
-                  oppPlayer.active.status === 'paralyzed' ? '⚡ 麻痺' : oppPlayer.active.status
-                }</div>{/if}
+                {#if oppPlayer.active.status}<div class="status-chip status-{oppPlayer.active.status}">{statusLabel(oppPlayer.active.status)}</div>{/if}
                 <!-- v2.163：同時兩狀態（如危險光線 灼傷+混亂） -->
-                {#if oppPlayer.active.secondaryStatus}<div class="status-chip status-{oppPlayer.active.secondaryStatus}">{
-                  oppPlayer.active.secondaryStatus === 'poisoned' ? '☠️ 中毒' :
-                  oppPlayer.active.secondaryStatus === 'burned' ? '🔥 燒傷' :
-                  oppPlayer.active.secondaryStatus === 'asleep' ? '💤 睡眠' :
-                  oppPlayer.active.secondaryStatus === 'confused' ? '😵 混亂' :
-                  oppPlayer.active.secondaryStatus === 'paralyzed' ? '⚡ 麻痺' : oppPlayer.active.secondaryStatus
-                }</div>{/if}
+                {#if oppPlayer.active.secondaryStatus}<div class="status-chip status-{oppPlayer.active.secondaryStatus}">{statusLabel(oppPlayer.active.secondaryStatus)}</div>{/if}
                 <!-- v5.295/v5.296：三狀態並存獨立第三 chip (中毒+灼傷+混亂) -->
-                {#if oppPlayer.active.tertiaryStatus}<div class="status-chip status-{oppPlayer.active.tertiaryStatus}">{
-                  oppPlayer.active.tertiaryStatus === 'poisoned' ? '☠️ 中毒' :
-                  oppPlayer.active.tertiaryStatus === 'burned' ? '🔥 燒傷' :
-                  oppPlayer.active.tertiaryStatus === 'asleep' ? '💤 睡眠' :
-                  oppPlayer.active.tertiaryStatus === 'confused' ? '😵 混亂' :
-                  oppPlayer.active.tertiaryStatus === 'paralyzed' ? '⚡ 麻痺' : oppPlayer.active.tertiaryStatus
-                }</div>{/if}
+                {#if oppPlayer.active.tertiaryStatus}<div class="status-chip status-{oppPlayer.active.tertiaryStatus}">{statusLabel(oppPlayer.active.tertiaryStatus)}</div>{/if}
               </div>
               <!-- v2.130：血條移到卡牌最下方，避免被特性按鈕等 UI 蓋住（雙方統一） -->
               <div class="active-hpbar-bottom">
@@ -12281,29 +12259,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
               <div class="active-name">{ac?.name}</div>
               {#if myPlayer.active.toolAttached}{@const tc=getCard(myPlayer.active.toolAttached.cardId)}<div class="tool-chip">🔧{tc?.name ?? '道具（未載入）'}</div>{/if}{#each (myPlayer.active.extraTools ?? []) as etMA}{@const tcMA=getCard(etMA.cardId)}<div class="tool-chip">🔧{tcMA?.name ?? '道具（未載入）'}</div>{/each}
               {#if myPlayer.active.abilityUsedThisTurn}<div class="ab-used-chip" title="本回合已使用特性">✨已用特性</div>{/if}
-              {#if myPlayer.active.status}<div class="status-chip status-{myPlayer.active.status}">{
-                myPlayer.active.status === 'poisoned' ? '☠️ 中毒' :
-                myPlayer.active.status === 'burned' ? '🔥 燒傷' :
-                myPlayer.active.status === 'asleep' ? '💤 睡眠' :
-                myPlayer.active.status === 'confused' ? '😵 混亂' :
-                myPlayer.active.status === 'paralyzed' ? '⚡ 麻痺' : myPlayer.active.status
-              }</div>{/if}
+              {#if myPlayer.active.status}<div class="status-chip status-{myPlayer.active.status}">{statusLabel(myPlayer.active.status)}</div>{/if}
               <!-- v2.163：同時兩狀態（如危險光線 灼傷+混亂） -->
-              {#if myPlayer.active.secondaryStatus}<div class="status-chip status-{myPlayer.active.secondaryStatus}">{
-                myPlayer.active.secondaryStatus === 'poisoned' ? '☠️ 中毒' :
-                myPlayer.active.secondaryStatus === 'burned' ? '🔥 燒傷' :
-                myPlayer.active.secondaryStatus === 'asleep' ? '💤 睡眠' :
-                myPlayer.active.secondaryStatus === 'confused' ? '😵 混亂' :
-                myPlayer.active.secondaryStatus === 'paralyzed' ? '⚡ 麻痺' : myPlayer.active.secondaryStatus
-              }</div>{/if}
+              {#if myPlayer.active.secondaryStatus}<div class="status-chip status-{myPlayer.active.secondaryStatus}">{statusLabel(myPlayer.active.secondaryStatus)}</div>{/if}
               <!-- v5.295/v5.296：三狀態並存獨立第三 chip (中毒+灼傷+混亂) -->
-              {#if myPlayer.active.tertiaryStatus}<div class="status-chip status-{myPlayer.active.tertiaryStatus}">{
-                myPlayer.active.tertiaryStatus === 'poisoned' ? '☠️ 中毒' :
-                myPlayer.active.tertiaryStatus === 'burned' ? '🔥 燒傷' :
-                myPlayer.active.tertiaryStatus === 'asleep' ? '💤 睡眠' :
-                myPlayer.active.tertiaryStatus === 'confused' ? '😵 混亂' :
-                myPlayer.active.tertiaryStatus === 'paralyzed' ? '⚡ 麻痺' : myPlayer.active.tertiaryStatus
-              }</div>{/if}
+              {#if myPlayer.active.tertiaryStatus}<div class="status-chip status-{myPlayer.active.tertiaryStatus}">{statusLabel(myPlayer.active.tertiaryStatus)}</div>{/if}
               {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡ 點此附加</div>{/if}
             </div>
             <!-- v2.130：血條移到卡牌最下方，避免被特性按鈕擠擋（雙方統一） -->
@@ -12385,12 +12345,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {#if b.abilityUsedThisTurn}<div class="ab-used-chip sm" title="本回合已使用特性">✨</div>{/if}
               <!-- v2.47：備戰區寶可夢依 PTCG 規則不會有異常狀態；engine scrubBenchStatus 亦會抹除，
                    這裡不再渲染 status chip（避免佔版面） -->
-              {#if b.status}<div class="status-chip-sm status-{b.status}" title="異常狀態（不應出現於備戰，請回報）">{
-                b.status === 'poisoned' ? '☠️' :
-                b.status === 'burned' ? '🔥' :
-                b.status === 'asleep' ? '💤' :
-                b.status === 'confused' ? '😵' : '⚡'
-              }</div>{/if}
+              {#if b.status}<div class="status-chip-sm status-{b.status}" title="異常狀態（不應出現於備戰，請回報）">{statusIcon(b.status)}</div>{/if}
               {#if selectedEnergyIid&&!pendingSelection&&isMyTurn()}<div class="attach-hint">⚡</div>{/if}
               {#if evoOptsB.length>0&&!pendingSelection&&isMyTurn()}
                 <button class="evo-btn-sm" onclick={(e)=>{e.stopPropagation();openFloatingEvo(b.iid,evoOptsB,e);}}>進化</button>
@@ -12678,9 +12633,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     <div class="retreat-hp">HP {rem}/{eff}</div>
                     <div class="retreat-nrg">{energySummary(item)}</div>
                     {#if item.toolAttached}{@const tc=getCard(item.toolAttached.cardId)}<div class="retreat-tool">🔧 {tc?.name ?? '?'}</div>{/if}{#each (item.extraTools ?? []) as etIT}{@const tcIT=getCard(etIT.cardId)}<div class="retreat-tool">🔧 {tcIT?.name ?? '?'}</div>{/each}
-                    {#if item.status}<div class="retreat-status">
-                      {item.status==='poisoned'?'☠️':item.status==='burned'?'🔥':item.status==='asleep'?'💤':item.status==='confused'?'😵':item.status==='paralyzed'?'⚡':''}
-                      {item.status}
+                    {#if statusSlots(item).length > 0}<div class="retreat-status">
+                      {statusSlots(item).map(statusLabel).join('＋')}<!-- ⭐v6.556：原本圖示後面直接印英文狀態值（poisoned…），改成圖示＋官方用詞 -->
                     </div>{/if}
                     {#if picked}<span class="sel-check">✓</span>{/if}
                   </button>
@@ -14220,8 +14174,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
               <div class="retreat-nrg" title="附加的能量">⚡ {energySummary(b)}</div>
               {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool" title="附加道具">🔧 道具：{tc?.name ?? '?'}</div>{/if}
               {#each (b.extraTools ?? []) as etSN}{@const tcSN=getCard(etSN.cardId)}<div class="retreat-tool" title="附加道具（多重轉接）">🔧 道具：{tcSN?.name ?? '?'}</div>{/each}
-              {#if b.status}<div class="retreat-status" title="特殊狀態">
-                ⚠️ 狀態：{b.status==='poisoned'?'☠️ 中毒':b.status==='burned'?'🔥 灼傷':b.status==='asleep'?'💤 睡眠':b.status==='confused'?'😵 混亂':b.status==='paralyzed'?'⚡ 麻痺':b.status}
+              {#if statusSlots(b).length > 0}<div class="retreat-status" title="特殊狀態">
+                ⚠️ 狀態：{statusSlots(b).map(statusLabel).join('＋')}
               </div>{/if}
               {#if picked}<span class="sel-check">✓</span>{/if}
             </button>
@@ -14688,20 +14642,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 {/if}
                 <!-- v5.071：補 secondaryStatus 雙狀態同顯（如「灼傷+混亂」時 status='confused' / secondaryStatus='burned'，
                      原本只顯示 status 漏掉 secondaryStatus；玩家手機回報只看到「混亂」沒看到「灼傷」）。 -->
-                {#if zoomInst.status || zoomInst.secondaryStatus}
-                  <div class="state-row"><span class="state-k">異常</span><span class="state-v">{#if zoomInst.status}<span class="status-piece">{
-                    zoomInst.status==='poisoned'?'☠️ 中毒':
-                    zoomInst.status==='burned'?'🔥 燒傷':
-                    zoomInst.status==='asleep'?'💤 睡眠':
-                    zoomInst.status==='confused'?'😵 混亂':
-                    zoomInst.status==='paralyzed'?'⚡ 麻痺':zoomInst.status
-                  }</span>{/if}{#if zoomInst.status && zoomInst.secondaryStatus}<span class="status-sep"> + </span>{/if}{#if zoomInst.secondaryStatus}<span class="status-piece">{
-                    zoomInst.secondaryStatus==='poisoned' || zoomInst.tertiaryStatus === 'poisoned'?'☠️ 中毒':
-                    zoomInst.secondaryStatus==='burned' || zoomInst.tertiaryStatus === 'burned'?'🔥 燒傷':
-                    zoomInst.secondaryStatus==='asleep'?'💤 睡眠':
-                    zoomInst.secondaryStatus==='confused'?'😵 混亂':
-                    zoomInst.secondaryStatus==='paralyzed'?'⚡ 麻痺':zoomInst.secondaryStatus
-                  }</span>{/if}</span></div>
+                <!-- ⭐v6.556：三個狀態槽一起列（原本漏第三槽，且第二槽會被第三槽的值蓋掉）；圖示與用詞走 status-display.ts -->
+                {#if statusSlots(zoomInst).length > 0}
+                  <div class="state-row"><span class="state-k">異常</span><span class="state-v">{#each statusSlots(zoomInst) as zs, zi}{#if zi > 0}<span class="status-sep"> + </span>{/if}<span class="status-piece">{statusLabel(zs)}</span>{/each}</span></div>
                 {/if}
                 {#if zoomInst.evolvedFromStack && zoomInst.evolvedFromStack.length>0}
                   <div class="state-row">

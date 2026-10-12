@@ -58,6 +58,7 @@
   import { estimateShortText, hasEstimateToShow, type DamageEstimate } from '$lib/game/damage-estimate';
   // v3.02：log 著色 + 卡名可點連結
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
+  import { statusIcon, statusLabel, statusSlots } from '$lib/game/status-display';   // ⭐v6.556 特殊狀態圖示與官方用詞的唯一出口
   import { resolveLogCard } from '$lib/game/log_zoom';
   // v4.49：能量屬性顯示（彩色 chip + 文字摘要）
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
@@ -883,26 +884,8 @@
               {/if}
               {#if inst.toolAttached || (inst.extraTools && inst.extraTools.length > 0)}<span>🔧{(inst.extraTools && inst.extraTools.length > 0) ? `×${1 + inst.extraTools.length}` : ''}</span>{/if}
               <!-- v5.071：顯示中文 label + emoji，並補 secondaryStatus 雙狀態同顯 -->
-              {#if inst.status}<span class="mp-status mp-status-chip-{inst.status}">{
-                inst.status==='poisoned'?'☠️ 中毒':
-                inst.status==='burned'?'🔥 燒傷':
-                inst.status==='asleep'?'💤 睡眠':
-                inst.status==='confused'?'😵 混亂':
-                inst.status==='paralyzed'?'⚡ 麻痺':inst.status
-              }</span>{/if}
-              {#if inst.secondaryStatus}<span class="mp-status mp-status-chip-{inst.secondaryStatus}">{
-                inst.secondaryStatus==='poisoned' || inst.tertiaryStatus === 'poisoned'?'☠️ 中毒':
-                inst.secondaryStatus==='burned' || inst.tertiaryStatus === 'burned'?'🔥 燒傷':
-                inst.secondaryStatus==='asleep'?'💤 睡眠':
-                inst.secondaryStatus==='confused'?'😵 混亂':
-                inst.secondaryStatus==='paralyzed'?'⚡ 麻痺':inst.secondaryStatus
-              }</span>{/if}{#if inst.tertiaryStatus}<span class="mp-status mp-status-chip-{inst.tertiaryStatus}">{
-                inst.tertiaryStatus==='poisoned' || inst.tertiaryStatus === 'poisoned'?'☠️ 中毒':
-                inst.tertiaryStatus==='burned' || inst.tertiaryStatus === 'burned'?'🔥 燒傷':
-                inst.tertiaryStatus==='asleep'?'💤 睡眠':
-                inst.tertiaryStatus==='confused'?'😵 混亂':
-                inst.tertiaryStatus==='paralyzed'?'⚡ 麻痺':inst.tertiaryStatus
-              }</span>{/if}
+              {#if inst.status}<span class="mp-status mp-status-chip-{inst.status}">{statusLabel(inst.status)}</span>{/if}
+              {#if inst.secondaryStatus}<span class="mp-status mp-status-chip-{inst.secondaryStatus}">{statusLabel(inst.secondaryStatus)}</span>{/if}{#if inst.tertiaryStatus}<span class="mp-status mp-status-chip-{inst.tertiaryStatus}">{statusLabel(inst.tertiaryStatus)}</span>{/if}
             </div>
           </div>
         </button>
@@ -959,26 +942,8 @@
             {/if}
             {#if inst.toolAttached || (inst.extraTools && inst.extraTools.length > 0)}<span>🔧{(inst.extraTools && inst.extraTools.length > 0) ? `×${1 + inst.extraTools.length}` : ''}</span>{/if}
             <!-- v5.071：顯示中文 label + emoji，並補 secondaryStatus 雙狀態同顯 -->
-              {#if inst.status}<span class="mp-status mp-status-chip-{inst.status}">{
-                inst.status==='poisoned'?'☠️ 中毒':
-                inst.status==='burned'?'🔥 燒傷':
-                inst.status==='asleep'?'💤 睡眠':
-                inst.status==='confused'?'😵 混亂':
-                inst.status==='paralyzed'?'⚡ 麻痺':inst.status
-              }</span>{/if}
-              {#if inst.secondaryStatus}<span class="mp-status mp-status-chip-{inst.secondaryStatus}">{
-                inst.secondaryStatus==='poisoned' || inst.tertiaryStatus === 'poisoned'?'☠️ 中毒':
-                inst.secondaryStatus==='burned' || inst.tertiaryStatus === 'burned'?'🔥 燒傷':
-                inst.secondaryStatus==='asleep'?'💤 睡眠':
-                inst.secondaryStatus==='confused'?'😵 混亂':
-                inst.secondaryStatus==='paralyzed'?'⚡ 麻痺':inst.secondaryStatus
-              }</span>{/if}{#if inst.tertiaryStatus}<span class="mp-status mp-status-chip-{inst.tertiaryStatus}">{
-                inst.tertiaryStatus==='poisoned' || inst.tertiaryStatus === 'poisoned'?'☠️ 中毒':
-                inst.tertiaryStatus==='burned' || inst.tertiaryStatus === 'burned'?'🔥 燒傷':
-                inst.tertiaryStatus==='asleep'?'💤 睡眠':
-                inst.tertiaryStatus==='confused'?'😵 混亂':
-                inst.tertiaryStatus==='paralyzed'?'⚡ 麻痺':inst.tertiaryStatus
-              }</span>{/if}
+              {#if inst.status}<span class="mp-status mp-status-chip-{inst.status}">{statusLabel(inst.status)}</span>{/if}
+              {#if inst.secondaryStatus}<span class="mp-status mp-status-chip-{inst.secondaryStatus}">{statusLabel(inst.secondaryStatus)}</span>{/if}{#if inst.tertiaryStatus}<span class="mp-status mp-status-chip-{inst.tertiaryStatus}">{statusLabel(inst.tertiaryStatus)}</span>{/if}
             {#if isPlaying && isMyTurn && isMainPhase}
               <span class="mp-tap-hint">👆 點開動作</span>
             {/if}
@@ -1165,7 +1130,7 @@
                   {#if tinst.energyAttached.length === 0}<span class="mp-pick-noenergy">無能量</span>{/if}
                 </div>
                 {#if toolCnt > 0}<div class="mp-pick-meta">🔧 {toolCnt}</div>{/if}
-                {#if tinst.status}<div class="mp-pick-status">⚠️ {tinst.status === 'poisoned' ? '☠️' : tinst.status === 'burned' ? '🔥' : tinst.status === 'asleep' ? '💤' : tinst.status === 'confused' ? '😵' : tinst.status === 'paralyzed' ? '⚡' : tinst.status}</div>{/if}
+                {#if statusSlots(tinst).length > 0}<div class="mp-pick-status">⚠️ {statusSlots(tinst).map(statusIcon).join('')}</div>{/if}
               </button>
             </div>
           {/each}
@@ -1195,7 +1160,7 @@
                     {#if inst.energyAttached.length === 0}<span class="mp-pick-noenergy">無能量</span>{/if}
                   </div>
                   {#if toolCnt > 0}<div class="mp-pick-meta">🔧 {toolCnt}</div>{/if}
-                  {#if inst.status}<div class="mp-pick-status">⚠️ {inst.status === 'poisoned' ? '☠️' : inst.status === 'burned' ? '🔥' : inst.status === 'asleep' ? '💤' : inst.status === 'confused' ? '😵' : inst.status === 'paralyzed' ? '⚡' : inst.status}</div>{/if}
+                  {#if statusSlots(inst).length > 0}<div class="mp-pick-status">⚠️ {statusSlots(inst).map(statusIcon).join('')}</div>{/if}
                 </button>
               </div>
             {/if}

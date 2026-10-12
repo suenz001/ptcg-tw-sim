@@ -9,6 +9,7 @@
  */
 
 import type { Card, EnergyType } from '$lib/cards/types';
+import { STATUS_NAME } from './status-display';   // ⭐v6.556 狀態官方用詞的唯一出口
 import { ENERGY_LABEL } from '$lib/cards/energy'; // v5.801 屬性→CJK 標籤(丟對手【X】能量 log)
 import { hasOakEye, faceAttackDamage } from './effects/_shared'; // v5.789 監視之眼 gate
 import { withAttackDamageTaken, addToolDiscardLog } from './effects/_shared'; // ⭐v6.256「受到的招式的傷害」唯一中央寫入點
@@ -3345,9 +3346,7 @@ export function clearFestivalVenueProtectedStatuses(
   // <<< v6410-festival-venue-central-clear
 
   // 特殊狀態 → 中文標籤（log 用）
-  const STATUS_LABEL: Record<SpecialCondition, string> = {
-    poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
-  };
+  const STATUS_LABEL: Record<SpecialCondition, string> = { ...STATUS_NAME }   /* ⭐v6.556 走 status-display.ts 唯一出口 */;
   const cleared: string[] = []; // 收集被恢復的寶可夢描述，事後一次補 log
 
   // 單一實例：身上有能量 + 任一狀態槽有特殊狀態 → 三槽全清，並記錄供 log
@@ -3557,14 +3556,10 @@ export function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused'
     // v2.175：泡沫【水】能量 — 對指定狀態免疫
     const immune = checkSpecialEnergyStatusImmune(def.active, status, pool, state);  // ⭐v6.402 state 必填
     if (immune.immune) {
-      const statusLabelImmune: Record<string, string> = {
-        poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
-      };
+      const statusLabelImmune: Record<string, string> = { ...STATUS_NAME }   /* ⭐v6.556 走 status-display.ts 唯一出口 */;
       return addLog(state, `${defName}｜${immune.energyName}：免疫【${statusLabelImmune[status]}】`, aIdx);
     }
-    const statusLabelMap: Record<string, string> = {
-      poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
-    };
+    const statusLabelMap: Record<string, string> = { ...STATUS_NAME }   /* ⭐v6.556 走 status-display.ts 唯一出口 */;
     if (isFestivalVenueStatusProtected(state, def.active, pool)) {
       return addLog(state, `${defName}｜祭典會場：免疫【${statusLabelMap[status]}】`, aIdx);
     }
@@ -3613,9 +3608,7 @@ export function applyStatusToOppActive(
   if (!def.active) return state;
   const defName = pool.get(def.active.cardId)?.name ?? '?';
   const prefix = opts.label ? `${opts.label}：` : '';
-  const statusLabel: Record<string, string> = {
-    poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
-  };
+  const statusLabel: Record<string, string> = { ...STATUS_NAME }   /* ⭐v6.556 走 status-display.ts 唯一出口 */;
   // 1. 憨憨臉 — 混亂免疫
   if (status === 'confused' && isConfusionImmune(state, dIdx, def.active, pool)) {
     return addLog(state, `${prefix}${defName}｜憨憨臉：免疫【混亂】`, srcIdx);
@@ -3667,9 +3660,7 @@ export function applyStatusToSelfActive(
   if (!me.active) return state;
   const myName = pool.get(me.active.cardId)?.name ?? '?';
   const prefix = opts.label ? `${opts.label}：` : '';
-  const statusLabel: Record<string, string> = {
-    poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
-  };
+  const statusLabel: Record<string, string> = { ...STATUS_NAME }   /* ⭐v6.556 走 status-display.ts 唯一出口 */;
   // 憨憨臉 — 混亂免疫
   if (status === 'confused' && isConfusionImmune(state, idx, me.active, pool)) {
     return addLog(state, `${prefix}${myName}｜憨憨臉：免疫【混亂】`, idx);
@@ -4486,10 +4477,8 @@ export function coinStatusPost(status: 'poisoned'|'burned'|'asleep'|'confused'|'
     // v4.965: 用 applyStatusToActive 正確處理狀態共存（不蓋掉原中毒/灼傷）
     def.active = applyStatusToActive(def.active, status);
     players[dIdx] = def;
-    return addLog({ ...state, players }, `正面！對手${
-      status === 'poisoned' ? '中毒' : status === 'burned' ? '燒傷' :
-      status === 'asleep' ? '睡眠' : status === 'confused' ? '混亂' : '麻痺'
-    }`, aIdx);
+    // ⭐v6.556：狀態名稱走 status-display.ts（台灣官方用詞「灼傷」，原本寫「燒傷」）
+    return addLog({ ...state, players }, `正面！對手${STATUS_NAME[status] ?? status}`, aIdx);
   };
 }
 regPost('火斑喵|擊掌奇襲', coinStatusPost('paralyzed'));
@@ -6585,9 +6574,7 @@ regA('吉雉雞ex', 0, (st, idx) => {
 //   ・「恢復1個」＝ 玩家選哪一個（站長原則：絕不簡化成「自動挑第一個」）。
 //     身上只有 1 個特殊狀態 ⇒ 直接恢復；有 2 個以上（中毒＋灼傷＋混亂可並存，三槽）⇒ 開選單讓玩家選。
 //   ・原本愛管侍是「status 主格整個清掉、且是主動按鈕」，派餅是「依槽位優先序自動清 1 個」—— 兩份寫法各自簡化。
-const COND_ZH_V6489: Record<SpecialCondition, string> = {
-  poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
-};
+const COND_ZH_V6489: Record<SpecialCondition, string> = { ...STATUS_NAME }   /* ⭐v6.556 走 status-display.ts 唯一出口 */;
 type CondSlotV6489 = 'status' | 'secondaryStatus' | 'tertiaryStatus';
 const COND_SLOTS_V6489: readonly CondSlotV6489[] = ['status', 'secondaryStatus', 'tertiaryStatus'];
 /** 這隻寶可夢身上目前的特殊狀態（依槽位，略過空槽）。 */
@@ -13596,9 +13583,7 @@ export function selfStatusPost(status: SpecialCondition): AttackPostFn {
     const att = { ...players[aIdx] };
     if (!att.active) return state;
     const attName = pool.get(att.active.cardId)?.name ?? '?';
-    const statusLabelMap: Record<string, string> = {
-      poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
-    };
+    const statusLabelMap: Record<string, string> = { ...STATUS_NAME }   /* ⭐v6.556 走 status-display.ts 唯一出口 */;
     // v5.017：補 SPECIAL_ENERGY_STATUS_IMMUNE 免疫 check（泡沫【水】能量 等）
     //   玩家回報：吼鯨王ex（水）附 泡沫【水】能量 後使用「摔落」自身睡眠，
     //   仍進入睡眠狀態 — 因 selfStatusPost 漏檢查（statusPost 對對手有，selfStatusPost 沒有）。

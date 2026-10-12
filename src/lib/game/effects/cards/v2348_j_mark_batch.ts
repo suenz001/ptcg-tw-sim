@@ -1,11 +1,10 @@
 import type { GameState, PlayerState, CardInstance, SpecialCondition } from '../../types';
+import { STATUS_NAME } from '../../status-display';   // ⭐v6.556 狀態官方用詞的唯一出口
 import type { Card } from '$lib/cards/types';
 import { addLog, clearActiveEffects, regPost, regPre, updatePlayer, withPending } from '../_shared';
 import { flipCoinsWithLog, dealSelfDamage, applyStatusToOppActive } from '../../effects';
 
-const statusLabel: Record<SpecialCondition, string> = {
-  poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
-};
+const statusLabel: Record<SpecialCondition, string> = { ...STATUS_NAME }   /* ⭐v6.556 走 status-display.ts 唯一出口 */;
 
 // v5.444：改走中央 applyStatusToOppActive（一勞永逸補化隱 / 純樸 / 泡沫能量 / 祭典會場
 //   / 憨憨臉 / 不眠 全部免疫；原本完全無 guard，化隱被中毒+灼傷類招式無視）。

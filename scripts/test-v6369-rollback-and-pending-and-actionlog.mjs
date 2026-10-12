@@ -182,7 +182,7 @@ const runSleep = (p1Bench, dmg, extra = {}, stadium = null) => {
   chk('A2 ⭐⭐灼傷 +20 後被擋下的好眠 ⇒ damage 必須是 120（BASE：100）',
     A0(a2)?.damage === 120, String(A0(a2)?.damage));
   chk('A2b 哨兵：灼傷真的結算了（20 傷害 ＋ 反面：燒傷持續）',
-    L(a2).includes('燒傷：') && L(a2).includes('受到 20 傷害') && L(a2).includes('反面：燒傷持續'),
+    /(灼傷|燒傷)：/.test(L(a2)) && L(a2).includes('受到 20 傷害') && /反面：(灼傷|燒傷)持續/.test(L(a2)),   // v6.556 Rule 40：log 用詞改官方「灼傷」，新舊用詞都接受（BASE 對照仍可跑）
     L(a2).slice(0, 300));
   chk('A2c ⭐反對照：同盤面沒有伊裴爾塔爾 ⇒ 0',
     A0(a2c)?.damage === 0, String(A0(a2c)?.damage));
