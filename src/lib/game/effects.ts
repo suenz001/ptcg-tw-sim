@@ -2810,6 +2810,59 @@ regR('surfer-order', (st, idx, iids, params, pool) => {
   return fn(marked, idx, pool, { ...inst, abilityUsedThisTurn: true });
 });
 // <<< v6541-surfer-order
+// >>> v6548-switch-retreat-order
+/**
+ * ⭐v6.548 站長裁定（2026-10-12 第 7 項「應該可以選順序」）：急進開關／希嘉娜的信賴把有「回到備戰區時」特性的寶可夢換下 ⇒
+ *   特性與訓練家剩下的「改附能量」由持有人選擇順序。
+ *   ⚠ 敏感度規則（同第 8 項站長「可以」）：只在兩種順序**結果不同**時才問 ——
+ *     ・返回重載（從手牌附最多 2 張基本【水】能量於這隻寶可夢）：手牌有基本【水】能量 ⇒ 先用特性的話，急進開關／希嘉娜可以把剛附上的能量一起改附 ⇒ 結果不同 ⇒ 問。
+ *     ・全能變身（與牌庫的海豚俠ex互換，附加的卡全部保留）：兩種順序改附的都是同一批能量、最後盤面相同 ⇒ 不問（照舊訓練家先處理完，再由出口詢問）。
+ *   值＝「這次會不會造成不同結果」的判斷。新增同類特性時在這裡登記。
+ */
+export const SWITCH_ORDER_ABILITIES = new Map<string, (st: GameState, idx: 0 | 1, pool: Map<string, Card>) => boolean>([
+  ['返回重載', (st, idx, pool) => st.players[idx].hand.some(c => isBasicEnergyOfType(pool.get(c.cardId), 'Water'))],
+]);
+export interface SwitchOrderInfo { abilityName: string; abIdx: number; cardName: string }
+/** 換下來的那一隻（現在在備戰）有沒有「要問順序」的回備戰特性；有就回傳特性資訊。 */
+export function switchRetreatOrderInfo(st: GameState, idx: 0 | 1, demotedIid: string, pool: Map<string, Card>): SwitchOrderInfo | null {
+  const d = st.players[idx].bench.find(c => c.iid === demotedIid);
+  if (!d || d.abilityUsedThisTurn) return null;
+  const card = pool.get(d.cardId);
+  const abs = card?.abilities ?? [];
+  for (let i = 0; i < abs.length; i++) {
+    const differs = SWITCH_ORDER_ABILITIES.get(abs[i].name);
+    if (!differs || !card) continue;
+    if (!hasAbilityFn(card.name, abs[i].name, i)) continue;
+    if (!isAbilityHolderEffective(st, d, card, idx, abs[i].name, 'bench', pool)) continue;
+    if (!differs(st, idx, pool)) continue;
+    return { abilityName: abs[i].name, abIdx: i, cardName: card.name };
+  }
+  return null;
+}
+/** 「先用特性」：標記本回合已用（同 resolve-retreat-to-bench-ability-prompt），直接發動特性。 */
+export function fireSwitchRetreatAbility(st: GameState, idx: 0 | 1, demotedIid: string, info: SwitchOrderInfo, pool: Map<string, Card>): GameState {
+  const fn = getAbilityFn(info.cardName, info.abilityName, info.abIdx);
+  const inst = st.players[idx].bench.find(c => c.iid === demotedIid);
+  if (!fn || !inst || inst.abilityUsedThisTurn) return st;
+  const marked = updatePlayer(st, idx, pl => ({
+    ...pl, bench: pl.bench.map(c => c.iid === demotedIid ? { ...c, abilityUsedThisTurn: true } : c),
+  }));
+  return fn(marked, idx, pool, { ...inst, abilityUsedThisTurn: true });
+}
+/** 問順序的選擇視窗（兩張卡共用同一份文字）。 */
+export function switchRetreatOrderPending(st: GameState, idx: 0 | 1, label: string, effectKey: string, info: SwitchOrderInfo, params: Record<string, unknown>): GameState {
+  return withPending(addLog(st, `${label}：「${info.abilityName}」與改附能量同時可以處理 ⇒ 由持有人選擇順序（站長裁定）`, idx), {
+    type: 'modal-choice', actorIdx: idx, sourcePlayerIdx: idx, minCount: 1, maxCount: 1, effectKey,
+    params: {
+      label: `${label}：選擇處理順序`, ...params, ...info,
+      options: [
+        { id: 'trainer-first', text: `先改附能量（之後再決定要不要使用「${info.abilityName}」）` },
+        { id: 'ability-first', text: `先使用「${info.abilityName}」，再改附能量（可以連剛附上的能量一起改附）` },
+      ],
+    },
+  });
+}
+// <<< v6548-switch-retreat-order
 
 // 精靈球 — 擲硬幣，正面則從牌庫選 1 張寶可夢加手牌（物品）
 // ⭐ v6.127 官方判準（PTCG_RULES.md）：**效果完全無法執行時，訓練家卡／特性不能使用**。

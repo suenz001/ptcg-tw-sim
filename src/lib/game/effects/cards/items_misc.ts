@@ -31,7 +31,8 @@ import {
 import { hasEffectivePokemonType } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
 import { peekOppPickToDeckBottomPost } from '../../effects'; // ⭐v6.349 「查看對手手牌→選1張→放回對手牌庫下方」中央管線
 import { joinCardNames, abilityUsedAfterSwap, toBareCard, buildDevolvedInstance, devolvableLayers } from '../_shared'; // v5.993 rescue 回牌庫裸化 + v6.020 buildDevolvedInstance(修奇異時鐘 TS2304 runtime 炸彈) + v6.330 devolvableLayers
-import { tryPromptPromoteActive } from '../_shared';
+import { tryPromptPromoteActive, PENDING_REFRESH_ON_POP } from '../_shared';
+import { switchRetreatOrderInfo, switchRetreatOrderPending, fireSwitchRetreatAbility } from '../../effects';   // ⭐v6.548 回備戰特性 × 訓練家 的順序（中央）
 import { promoteOppBenchToActive } from '../_shared';  // ⭐ v6.174 換場目標解析失敗一律 no-op + 據實 log
 import { deckWithCardsToBottom } from '../_shared'; // v6.124 「重洗放回牌庫下方」中央管線
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
@@ -144,6 +145,32 @@ regR('rush-switch-pick-bench', (st, idx, iids, _params, pool) => {
     newBench[bIdx] = clearActiveEffects(p.active);
     return { ...p, active: newActive, bench: newBench };
   });
+  // >>> v6548-switch-retreat-order
+  // ⭐v6.548 站長裁定第 7 項：換下來的寶可夢有「回到備戰區時」特性、而且兩種順序結果不同（中央 switchRetreatOrderInfo）⇒ 由持有人選順序
+  const _ord = switchRetreatOrderInfo(s, idx, prevActiveIid, pool);
+  const _na = s.players[idx].active;
+  if (_ord && _na) {
+    return switchRetreatOrderPending(s, idx, '急進開關', 'rush-switch-order', _ord, { prevActiveIid, newActiveIid: _na.iid });
+  }
+  // <<< v6548-switch-retreat-order
+  return rushEnergyStep(s, idx, prevActiveIid, oldName, newName, pool);
+});
+
+/** ⭐v6.548 急進開關的「改附能量」那一段（換位之後；順序視窗兩個選項都會走到這裡）。 */
+function rushEnergyPending(s: GameState, idx: 0 | 1, prevActiveIid: string, newActiveIid: string, eCount: number) {
+  return {
+    type: 'active-energy-discard' as const,
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 0, maxCount: eCount,
+    effectKey: 'rush-switch-energy-transfer',
+    params: {
+      targetIid: prevActiveIid,
+      newActiveIid,
+      titleOverride: '急進開關：選擇要轉移到新戰鬥寶可夢的能量',
+    },
+  };
+}
+function rushEnergyStep(s: GameState, idx: 0 | 1, prevActiveIid: string, oldName: string, newName: string, pool: Map<string, Card>): GameState {
   // 找原 active（現在在 bench），檢查能量數
   const newP = s.players[idx];
   const prevOnBench = newP.bench.find(c => c.iid === prevActiveIid);
@@ -154,17 +181,32 @@ regR('rush-switch-pick-bench', (st, idx, iids, _params, pool) => {
   // 開 picker：選 0~N 張能量轉移
   const eCount = prevOnBench.energyAttached.length;
   s = addLog(s, `急進開關：選擇要從 ${oldName} 轉移到 ${newName} 的能量（0-${eCount} 張）`, idx);
-  return withPending(s, {
-    type: 'active-energy-discard',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 0, maxCount: eCount,
-    effectKey: 'rush-switch-energy-transfer',
-    params: {
-      targetIid: prevActiveIid,
-      newActiveIid: newP.active.iid,
-      titleOverride: '急進開關：選擇要轉移到新戰鬥寶可夢的能量',
-    },
-  });
+  return withPending(s, rushEnergyPending(s, idx, prevActiveIid, newP.active.iid, eCount));
+}
+regR('rush-switch-order', (st, idx, iids, params, pool) => {
+  const prev = String(params?.prevActiveIid ?? '');
+  const p0 = st.players[idx];
+  const oldName = pool.get(p0.bench.find(c => c.iid === prev)?.cardId ?? '')?.name ?? '?';
+  const newName = pool.get(p0.active?.cardId ?? '')?.name ?? '?';
+  if (iids[0] !== 'ability-first') return rushEnergyStep(st, idx, prev, oldName, newName, pool);
+  const info = { abilityName: String(params?.abilityName ?? ''), abIdx: Number(params?.abIdx ?? 0), cardName: String(params?.cardName ?? '') };
+  const s = fireSwitchRetreatAbility(st, idx, prev, info, pool);
+  // 特性開了自己的選擇視窗 ⇒ 改附能量排在它後面（取出時由 PENDING_REFRESH_ON_POP 依當下能量重算）
+  if (s.pendingSelection && s.players[idx].active) {
+    return withPending(s, rushEnergyPending(s, idx, prev, s.players[idx].active.iid, 0));
+  }
+  return rushEnergyStep(s, idx, prev, oldName, newName, pool);
+});
+// ⭐v6.548：排隊中的改附能量視窗在浮上時依「換下那隻」當下的能量重算；已沒有能量 ⇒ 不開，改問上場時特性（同原本無能量出口）
+PENDING_REFRESH_ON_POP.set('rush-switch-energy-transfer', (state, sel, pool) => {
+  const idx = sel.actorIdx as 0 | 1;
+  const p = state.players[idx];
+  const src = p.bench.find(c => c.iid === sel.params?.targetIid);
+  if (!src || !p.active || p.active.iid !== sel.params?.newActiveIid || src.energyAttached.length === 0) {
+    const t = tryPromptPromoteActive(addLog(state, '急進開關：原戰鬥寶可夢身上無能量可轉移', idx), idx, pool);
+    return { state: { ...t, pendingSelection: undefined }, sel: t.pendingSelection ?? null };
+  }
+  return { state, sel: { ...sel, maxCount: src.energyAttached.length } };
 });
 
 regR('rush-switch-energy-transfer', (st, idx, iids, params, pool) => {

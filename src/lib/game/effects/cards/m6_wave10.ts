@@ -11,7 +11,8 @@
 //   ・主持人的帶動 → 與既有 SV9a 同名同文，已自動承接 handler
 
 import { reg, regG, regR, addLog, updatePlayer, withPending, shuffle,
-         clearActiveEffects, tryPromptPromoteActive } from '../_shared';
+         clearActiveEffects, tryPromptPromoteActive, PENDING_REFRESH_ON_POP } from '../_shared';
+import { switchRetreatOrderInfo, switchRetreatOrderPending, fireSwitchRetreatAbility } from '../../effects';   // ⭐v6.548 回備戰特性 × 訓練家 的順序（中央）
 import type { GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
 
@@ -131,22 +132,62 @@ regR('m6-sigana-swap', (st, idx, iids, _params, pool) => {
     newBench[bIdx] = clearActiveEffects(pl.active);   // 離開戰鬥場清狀態
     return { ...pl, active: newActive, bench: newBench };
   });
+  // >>> v6548-switch-retreat-order
+  // ⭐v6.548 站長裁定第 7 項：換下來的寶可夢有「回到備戰區時」特性、且兩種順序結果不同（中央 switchRetreatOrderInfo）⇒ 由持有人選順序
+  const _ord = switchRetreatOrderInfo(s, idx as 0 | 1, prevActiveIid, pool);
+  const _na = s.players[idx].active;
+  if (_ord && _na) {
+    return switchRetreatOrderPending(s, idx as 0 | 1, '希嘉娜的信賴', 'm6-sigana-order', _ord, { prevActiveIid, newActiveIid: _na.iid });
+  }
+  // <<< v6548-switch-retreat-order
+  return siganaEnergyStep(s, idx as 0 | 1, prevActiveIid, oldName, newName, pool);
+});
+/** ⭐v6.548 希嘉娜的信賴的「改附 1 個能量」那一段（換位之後）。 */
+function siganaEnergyPending(prevActiveIid: string, newActiveIid: string, idx: 0 | 1, validIids: string[]) {
+  return {
+    type: 'active-energy-discard' as const,
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'm6-sigana-energy',
+    params: { targetIid: prevActiveIid, newActiveIid,
+              // ⭐v6.523：宣告候選（換下那隻身上的能量）⇒ 中央空選擇閘才擋得住「送空陣列＝不移能量」（官方 Q&A R106：必須改附）
+              validIids,
+              titleOverride: '希嘉娜的信賴：選擇 1 個要移到新戰鬥寶可夢的能量' },
+  };
+}
+function siganaEnergyStep(s: GameState, idx: 0 | 1, prevActiveIid: string, oldName: string, newName: string, pool: Map<string, Card>): GameState {
   const nowBench = s.players[idx].bench.find(c => c.iid === prevActiveIid);
   if (!nowBench || nowBench.energyAttached.length === 0 || !s.players[idx].active) {
     return tryPromptPromoteActive(addLog(s, '希嘉娜的信賴：換下的寶可夢身上沒有能量可移動', idx), idx, pool);
   }
   // 卡面「選擇 1 個…能量」→ 只能選 1 張（急進開關是任意數量，這裡 max=1）
-  return withPending(
-    addLog(s, `希嘉娜的信賴：選擇 1 個要從 ${oldName} 移到 ${newName} 的能量`, idx), {
-      type: 'active-energy-discard',
-      actorIdx: idx, sourcePlayerIdx: idx,
-      minCount: 1, maxCount: 1,
-      effectKey: 'm6-sigana-energy',
-      params: { targetIid: prevActiveIid, newActiveIid: s.players[idx].active.iid,
-                // ⭐v6.523：宣告候選（換下那隻身上的能量）⇒ 中央空選擇閘才擋得住「送空陣列＝不移能量」（官方 Q&A R106：必須改附）
-                validIids: nowBench.energyAttached.map(e => e.iid),
-                titleOverride: '希嘉娜的信賴：選擇 1 個要移到新戰鬥寶可夢的能量' },
-    });
+  return withPending(addLog(s, `希嘉娜的信賴：選擇 1 個要從 ${oldName} 移到 ${newName} 的能量`, idx),
+    siganaEnergyPending(prevActiveIid, s.players[idx].active!.iid, idx, nowBench.energyAttached.map(e => e.iid)));
+}
+regR('m6-sigana-order', (st, idx, iids, params, pool) => {
+  const prev = String(params?.prevActiveIid ?? '');
+  const p0 = st.players[idx];
+  const oldName = pool.get(p0.bench.find(c => c.iid === prev)?.cardId ?? '')?.name ?? '?';
+  const newName = pool.get(p0.active?.cardId ?? '')?.name ?? '?';
+  if (iids[0] !== 'ability-first') return siganaEnergyStep(st, idx as 0 | 1, prev, oldName, newName, pool);
+  const info = { abilityName: String(params?.abilityName ?? ''), abIdx: Number(params?.abIdx ?? 0), cardName: String(params?.cardName ?? '') };
+  const s = fireSwitchRetreatAbility(st, idx as 0 | 1, prev, info, pool);
+  // 特性開了自己的選擇視窗 ⇒ 改附能量排在它後面（取出時由 PENDING_REFRESH_ON_POP 依當下能量重算）
+  if (s.pendingSelection && s.players[idx].active) {
+    return withPending(s, siganaEnergyPending(prev, s.players[idx].active!.iid, idx as 0 | 1, []));
+  }
+  return siganaEnergyStep(s, idx as 0 | 1, prev, oldName, newName, pool);
+});
+// ⭐v6.548：排隊中的改附能量視窗浮上時依「換下那隻」當下的能量重算候選；已沒有能量 ⇒ 不開，改問上場時特性（同原本無能量出口）
+PENDING_REFRESH_ON_POP.set('m6-sigana-energy', (state, sel, pool) => {
+  const idx = sel.actorIdx as 0 | 1;
+  const p = state.players[idx];
+  const src = p.bench.find(c => c.iid === sel.params?.targetIid);
+  if (!src || !p.active || p.active.iid !== sel.params?.newActiveIid || src.energyAttached.length === 0) {
+    const t = tryPromptPromoteActive(addLog(state, '希嘉娜的信賴：換下的寶可夢身上沒有能量可移動', idx), idx, pool);
+    return { state: { ...t, pendingSelection: undefined }, sel: t.pendingSelection ?? null };
+  }
+  return { state, sel: { ...sel, params: { ...sel.params, validIids: src.energyAttached.map(e => e.iid) } } };
 });
 regR('m6-sigana-energy', (st, idx, iids, params, pool) => {
   const fromIid = params?.targetIid as string | undefined;
