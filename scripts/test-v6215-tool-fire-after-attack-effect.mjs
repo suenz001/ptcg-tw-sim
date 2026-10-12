@@ -229,8 +229,10 @@ console.log('── F) 批2 手持循環扇 × 自我互換招式（伏特替換
   eq(st.pendingSelection?.effectKey ?? null, 'cycle-fan-step2-place-energy', 'F6 進到 step2 選備戰');
   // v6.215：step2 必須宣告 validIids（＝攻擊方備戰，與 fieldPickerBaseIids / UI 同源），
   //   不能只靠 v6.176 的兜底裸奔。
-  eq((st.pendingSelection?.params?.validIids ?? []).join(','), 'atk,ab2',
-     'F6b step2 必須宣告 validIids ＝ 攻擊方當下的備戰');
+  // ⭐v6.547（Rule 40，站長裁定 2026-10-12 第 12 項「要排除」）：候選不含使用招式的那一隻（atk）⇒ 'atk,ab2' → 'ab2'。
+  //   意圖不變：step2 必須宣告 validIids（中央 cycleFanTargetIids），不能靠兜底裸奔；且不得含 atk（反向）。
+  eq((st.pendingSelection?.params?.validIids ?? []).join(','), 'ab2',
+     'F6b step2 必須宣告 validIids ＝ 攻擊方當下的備戰，扣掉使用招式的那一隻（站長裁定）');
   step(['ab2']);
   eq((st.players[0].active?.iid ?? '-') + ':' + ids(st.players[0].active?.energyAttached), 'ab1:bl1',
      'F7 新 active(ab1) 的能量沒有被動到');

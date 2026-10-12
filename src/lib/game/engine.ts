@@ -2165,19 +2165,42 @@ export function canAffordAttack(
   return tryAffordWithCost(cost);
 }
 
+// >>> v6547-borrowed-printed-cost
+/** ⭐v6.547：卡片資料裡這個招式名的「印刷費用」個數（全部印刷一致時才回傳；找不到或不一致 ⇒ null）。依 pool 快取。 */
+const _printedCostCache = new WeakMap<Map<string, Card>, Map<string, number | null>>();
+export function printedAttackCostCount(attackName: string, pool: Map<string, Card>): number | null {
+  let m = _printedCostCache.get(pool);
+  if (!m) { m = new Map(); _printedCostCache.set(pool, m); }
+  if (m.has(attackName)) return m.get(attackName)!;
+  let n: number | null | undefined;
+  for (const c of pool.values()) {
+    for (const at of c.attacks ?? []) {
+      if (at.name !== attackName) continue;
+      const k = (at.cost ?? []).length;
+      if (n === undefined) n = k; else if (n !== k) n = null;
+    }
+  }
+  const r = n === undefined ? null : n;
+  m.set(attackName, r);
+  return r;
+}
+// <<< v6547-borrowed-printed-cost
 /**
  * ⭐v6.530「若身上附有的能量比使用這個招式所需的能量多 N 個」唯一判準（高電壓壓制、力量壓制、精神尖槍、肌力鞭打、極限鑽）。
  *   所需能量＝effectiveAttackCost（套用增減後，官方 Q&A 反擊增幅器 × 高電壓壓制）；身上能量＝host-aware totalEnergyUnits。
- *   找不到這一招（借來的招式等）⇒ 用 fallbackCost（印刷費用張數）。
+ *   ⭐v6.547 站長裁定（2026-10-12 第 11 項）：借來的招式（使用者身上沒有這一招）「用高電壓壓制原本的所需能量 雷雷無 去當作所需能量」
+ *     ⇒ 所需能量＝被借招式的**印刷費用**個數（不套用使用者身上的費用增減），由卡片資料中央查出（printedAttackCostCount），
+ *       查不到或印刷不一致時才用呼叫端的 fallbackCost。
  */
 export function attackEnergySurplus(
   state: GameState, aIdx: 0 | 1, attackName: string, pool: Map<string, Card>, fallbackCost: number,
 ): { have: number; need: number } {
+  const printed = printedAttackCostCount(attackName, pool) ?? fallbackCost;
   const a = state.players[aIdx].active;
-  if (!a) return { have: 0, need: fallbackCost };
+  if (!a) return { have: 0, need: printed };
   const atk = getEffectiveAttacks(state, a, pool).find(x => x.atk.name === attackName)?.atk;
   const have = totalEnergyUnits(a.energyAttached, pool, state, aIdx, a);
-  if (!atk) return { have, need: fallbackCost };
+  if (!atk) return { have, need: printed };
   const ec = effectiveAttackCost(a, (atk.cost ?? []) as EnergyType[], pool, state, aIdx, attackName);
   return { have, need: Math.max(0, ec.cost.length - (ec.shinyCrystal && ec.cost.length > 0 ? 1 : 0)) };
 }
@@ -3833,6 +3856,38 @@ function fireOnDamagedInView(v: GameState, rec: PendingOnDamagedRec, holderLoc: 
   return v;
 }
 
+// >>> v6547-pop-pending-chain
+/**
+ * ⭐v6.547 把排隊中的選擇視窗浮上檯面的**唯一一份**（RESOLVE_SELECTION 末端與 settleOneOnDamaged 視角後重算共用，Rule 38）。
+ *   ⭐ v6.215：排隊中的 picker，其 params（候選清單）是**排隊當下**算好的。
+ *   官方序把「受到傷害時」的道具排到招式效果之後，於是招式自己的 resolver 有機會
+ *   在道具的 picker 浮上檯面之前動到同一批資源（例：土地雲｜螺旋關節把能量放回手牌
+ *   × 手持循環扇）⇒ 取出時先重算一次。回傳 sel=null 代表已無對象 ⇒ 丟掉換下一筆。
+ *   ⚠ 沒登記 refresher 的 effectKey 直接浮上，行為完全不變。
+ *   ⚠ v6.419：終局之後不浮（佇列刻意保留給 v6419-settle-queued-prizes 結清）⇒ 這裡自帶 phase 閘。
+ */
+function popPendingChain(state: GameState, pool: Map<string, Card>): GameState {
+  if (state.phase !== 'playing' || state.pendingSelection || !state.pendingChainQueue || state.pendingChainQueue.length === 0) return state;
+  let newState = state;
+  let _q = state.pendingChainQueue;
+  let _picked: PendingSelection | null = null;
+  while (_q.length > 0) {
+    const [cand, ...rest] = _q;
+    _q = rest;
+    const _refresh = PENDING_REFRESH_ON_POP.get(cand.effectKey);
+    if (!_refresh) { _picked = cand; break; }
+    const _r = _refresh(newState, cand, pool);
+    newState = _r.state;
+    if (_r.sel) { _picked = _r.sel; break; }
+  }
+  return {
+    ...newState,
+    // ⚠ 全站 pendingSelection 的「清除」寫法是 undefined（序列化時 null 會被上傳、undefined 不會）
+    pendingSelection: _picked ?? undefined,
+    pendingChainQueue: _q.length > 0 ? _q : undefined,
+  };
+}
+// <<< v6547-pop-pending-chain
 function settleOneOnDamaged(s: GameState, rec: PendingOnDamagedRec, pool: Map<string, Card>): GameState {
   const { aIdx, dIdx } = rec;
   const hLoc = locateFieldIid(s.players[dIdx], rec.holderIid);
@@ -3858,6 +3913,20 @@ function settleOneOnDamaged(s: GameState, rec: PendingOnDamagedRec, pool: Map<st
   const bp = [...v.players] as [PlayerState, PlayerState];
   bp[dIdx] = hv.undo(bp[dIdx]); bp[aIdx] = av.undo(bp[aIdx]);
   v = { ...v, players: bp };
+  // >>> v6547-view-picker-refresh
+  // ⭐v6.547（第 12 項實作時抓到）：受傷觸發在「把攻擊方換回戰鬥位」的視角裡結算，視角裡開出的選擇視窗（手持循環扇 step1）
+  //   是照視角盤面算的；還原成真實盤面後要再用同一個「佇列取出時重算」(PENDING_REFRESH_ON_POP) 驗一次 ⇒ 已無對象就不開。
+  //   （例：瞬間移動攻擊把自己換到備戰、備戰只剩它 ⇒ 手持循環扇在視角裡看到的備戰其實是戰鬥寶可夢。）
+  if (v.pendingSelection && v.pendingSelection !== s.pendingSelection) {
+    const _rf = PENDING_REFRESH_ON_POP.get(v.pendingSelection.effectKey);
+    if (_rf) {
+      const _r = _rf(v, v.pendingSelection, pool);
+      v = { ..._r.state, pendingSelection: _r.sel ?? undefined };
+      // 取消後若後面還有排隊的選擇視窗 ⇒ 照佇列規則接著浮上來（中央 popPendingChain，含終局不浮的 v6.419 閘）
+      v = popPendingChain(v, pool);
+    }
+  }
+  // <<< v6547-view-picker-refresh
   if (!atkBefore) return v;
   // 攻擊方在備戰區：特殊狀態只存在於戰鬥寶可夢（規則）⇒ 視角內被加上的狀態撤回
   if (aLoc !== 'active') {
@@ -4554,29 +4623,7 @@ function handlePlaying(
     //     讀它把未兌現的取獎賞結清，清空的動作由那裡負責。
     if (newState.phase === 'playing' && !newState.pendingSelection && newState.pendingChainQueue && newState.pendingChainQueue.length > 0) {
     // <<< v6419-no-pop-after-gameover
-      // ⭐ v6.215：排隊中的 picker，其 params（候選清單）是**排隊當下**算好的。
-      //   官方序把「受到傷害時」的道具排到招式效果之後，於是招式自己的 resolver 有機會
-      //   在道具的 picker 浮上檯面之前動到同一批資源（例：土地雲｜螺旋關節把能量放回手牌
-      //   × 手持循環扇）⇒ 取出時先重算一次。回傳 sel=null 代表已無對象 ⇒ 丟掉換下一筆。
-      //   ⚠ 沒登記 refresher 的 effectKey 走 `?? { state: newState, sel: cand }`，行為完全不變。
-      let _q = newState.pendingChainQueue;
-      let _picked: PendingSelection | null = null;
-      while (_q.length > 0) {
-        const [cand, ...rest] = _q;
-        _q = rest;
-        const _refresh = PENDING_REFRESH_ON_POP.get(cand.effectKey);
-        if (!_refresh) { _picked = cand; break; }
-        const _r = _refresh(newState, cand, pool);
-        newState = _r.state;
-        if (_r.sel) { _picked = _r.sel; break; }
-      }
-      newState = {
-        ...newState,
-        // ⚠ 全站 pendingSelection 的「清除」寫法是 undefined（其餘 4 處都是），只有這裡塞 null。
-        //   兩者對 `if (state.pendingSelection)` 等價，但序列化時 null 會被上傳、undefined 不會 ⇒ 統一。
-        pendingSelection: _picked ?? undefined,
-        pendingChainQueue: _q.length > 0 ? _q : undefined,
-      };
+      newState = popPendingChain(newState, pool);   // ⭐v6.547 收斂成中央一份（審查 P3-1；settleOneOnDamaged 共用）
     }
     // v5.678：picker 收尾的招式自身丟能量 → 在 picker 鏈全部解完後補跑回力鏢/燃料火 revive（單一 helper）。
     if (!newState.pendingSelection && newState._pendingAttackEnergyRevive) {

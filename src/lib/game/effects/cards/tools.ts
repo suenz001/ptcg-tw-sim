@@ -560,8 +560,17 @@ TOOL_ON_DAMAGED.set('豪邁炸彈', (state, dIdx, aIdx, baseDamage, pool) => {
 // 兩段 pending：
 //   1. modal-choice：列出 attacker.active 的能量為 options
 //   2. opp-bench-choose：選 attacker 備戰寶可夢
+// >>> v6547-cycle-fan-exclude-source
+/**
+ * ⭐v6.547 站長裁定（2026-10-12 第 12 項「要排除」）：手持循環扇「改附於對手的備戰寶可夢身上」的候選
+ *   **不含使用招式的那一隻**（自我互換型招式把它換到備戰時，改附回原處＝能量沒動，站長裁定排除）。
+ *   觸發、佇列重算、step1 開 step2、step2 resolver 四處都只問這一份。
+ */
+export function cycleFanTargetIids(state: GameState, aIdx: 0 | 1, holderIid: string | undefined): string[] {
+  return state.players[aIdx].bench.filter(b => b.iid !== holderIid).map(b => b.iid);
+}
+// <<< v6547-cycle-fan-exclude-source
 registerToolOnDamagedAndKO('手持循環扇', (state, dIdx, aIdx, _dmg, pool, attackerIid) => {
-  const ap = state.players[aIdx];
   // ⭐ v6.215：本道具已延後到 ATTACK_POST 之後才觸發（官方序：招式效果 → 道具）。
   //   ⇒ 「使用招式的寶可夢」必須用攻擊當下的 iid 快照定位，禁讀 players[aIdx].active。
   //   ⇒ 招式若先自丟能量（蒼炎刃鬼ex｜紫水晶激怒「將這隻寶可夢身上附加的能量卡全部丟棄」），
@@ -571,8 +580,8 @@ registerToolOnDamagedAndKO('手持循環扇', (state, dIdx, aIdx, _dmg, pool, at
     // 使用招式的寶可夢已離場、或身上無能量 → 無效果
     return state;
   }
-  if (ap.bench.length === 0) {
-    // 攻擊方無備戰寶可夢 → 沒地方放，無效果
+  if (cycleFanTargetIids(state, aIdx, holder.iid).length === 0) {
+    // 攻擊方沒有「使用招式的寶可夢以外」的備戰寶可夢 → 沒地方放，無效果（⭐v6.547 排除來源本身）
     return state;
   }
   // 列出能量選項（⭐ 用能量 iid 當 option id，不用陣列索引 —— 索引會因招式自丟能量而位移）
@@ -606,8 +615,7 @@ PENDING_REFRESH_ON_POP.set('cycle-fan-step1-pick-energy', (state, sel, pool) => 
   // 舊版 pending 沒有 attackerIid ⇒ 顯式補當下 active（見 regR 的同一條相容註解）
   const _sn = sel.params?.attackerIid as string | undefined;
   const holder = findAttackerInstance(state, aIdx, _sn ?? state.players[aIdx].active?.iid);
-  const ap = state.players[aIdx];
-  if (!holder || holder.energyAttached.length === 0 || ap.bench.length === 0) {
+  if (!holder || holder.energyAttached.length === 0 || cycleFanTargetIids(state, aIdx, holder.iid).length === 0) {   // ⭐v6.547 排除來源
     return { state: addLog(state, '手持循環扇：已無可改附的能量或備戰寶可夢，效果取消', dIdx), sel: null };
   }
   const options = holder.energyAttached.map((en) => ({
@@ -638,6 +646,10 @@ regR('cycle-fan-step1-pick-energy', (st, dIdx, iids, params, _pool) => {
   if (!holder || !removed) {
     return addLog(st, '手持循環扇：選擇無效，效果取消', dIdx);
   }
+  // ⭐v6.547：先確認有「使用招式的寶可夢以外」的備戰可以改附，才拿走能量（否則能量會憑空消失）
+  if (cycleFanTargetIids(st, aIdx, holder.iid).length === 0) {
+    return addLog(st, '手持循環扇：使用招式的寶可夢以外沒有備戰寶可夢，效果取消（能量不動）', dIdx);
+  }
   const _rmIid = removed.iid;
   // 從「使用招式的寶可夢」身上移除能量（它可能已被自身互換型招式換到備戰區）
   st = updatePlayer(st, aIdx, p => {
@@ -659,7 +671,7 @@ regR('cycle-fan-step1-pick-energy', (st, dIdx, iids, params, _pool) => {
     actorIdx: dIdx, sourcePlayerIdx: aIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'cycle-fan-step2-place-energy',
-    params: { energy: removed, validIids: st.players[aIdx].bench.map(b => b.iid) },
+    params: { energy: removed, attackerIid: holder.iid, validIids: cycleFanTargetIids(st, aIdx, holder.iid) },   // ⭐v6.547 排除使用招式的那一隻
   });
 });
 // resolver step 2: 把暫存能量附到選中的 attacker 備戰
@@ -671,7 +683,8 @@ regR('cycle-fan-step2-place-energy', (st, dIdx, iids, params, pool) => {
     return addLog(st, '手持循環扇：缺少能量或目標，效果取消', dIdx);
   }
   const ap = st.players[aIdx];
-  const target = ap.bench.find(c => c.iid === targetIid);
+  // ⭐v6.547：目標必須是「使用招式的寶可夢以外」的備戰（中央 cycleFanTargetIids；舊 pending 沒有 attackerIid ⇒ 不排除）
+  const target = cycleFanTargetIids(st, aIdx, params?.attackerIid as string | undefined).includes(targetIid) ? ap.bench.find(c => c.iid === targetIid) : undefined;
   if (!target) {
     return addLog(st, '手持循環扇：找不到目標備戰寶可夢，效果取消', dIdx);
   }
