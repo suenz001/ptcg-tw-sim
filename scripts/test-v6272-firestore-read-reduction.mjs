@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'ca337e75360f583dd316bcd3d711b21b230c7575';   // v6.551（上一版）
+const PREV_SHA = '93c733982fbd142d6e676d406b79810411b8a13b';   // v6.552（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,16 +757,26 @@ const PREV_SHA = 'ca337e75360f583dd316bcd3d711b21b230c7575';   // v6.551（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.552 前移：PREV_SHA 從 ca337e75（v6.551）起算。
+  // ⚠⚠ v6.553 前移：PREV_SHA 從 93c73398（v6.552）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.552：AI 試打評分加入 prizesGiven（對手拿到的獎賞）與直接輸局的壓底。
-  'src/lib/game/ai-eval.ts',
+  // ⭐v6.553：借招候選排除借用方被鎖的同名招式（isAttackNameBlocked），copyAttackCooldownNote 說明原因。
   'src/lib/game/ai.ts',
+  'src/lib/game/copy-attack.ts',
   'src/lib/version.ts',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.552）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.552 前移：PREV_SHA 從 ca337e75（v6.551）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.552：AI 試打評分加入 prizesGiven（對手拿到的獎賞）與直接輸局的壓底。
+//   'src/lib/game/ai-eval.ts',
+//   'src/lib/game/ai.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.551）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.551 前移：PREV_SHA 從 2853e0d0（v6.550）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -906,31 +916,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/engine.ts',
 //   'src/lib/game/types.ts',
 //   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.540）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.540 前移：PREV_SHA 從 f147c743（v6.539）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.540：從手牌附能的反應唯一入口 applyHandAttachReactions（v3000）＋手動附能由持有人選順序；24 個呼叫點收斂；lint G2；AI 後備 END_TURN 等補位時不送。
-//   'src/lib/game/effects.ts',
-//   'src/lib/game/effects/cards/lopunny_serperior_flareon_festival.ts',
-//   'src/lib/game/effects/cards/m2_dragon_charizard_batch.ts',
-//   'src/lib/game/effects/cards/m6a_wave7.ts',
-//   'src/lib/game/effects/cards/six_decks.ts',
-//   'src/lib/game/effects/cards/v158_energy_chain.ts',
-//   'src/lib/game/effects/cards/v2380_j_abilities_batch.ts',
-//   'src/lib/game/effects/cards/v2380_j_attacks_batch.ts',
-//   'src/lib/game/effects/cards/v2590_i_wave9_misc3.ts',
-//   'src/lib/game/effects/cards/v2610_i_wave11_misc4.ts',
-//   'src/lib/game/effects/cards/v2750_h_wave2_full.ts',
-//   'src/lib/game/effects/cards/v2930_high_use_abilities.ts',
-//   'src/lib/game/effects/cards/v2996_g4_wave2.ts',
-//   'src/lib/game/effects/cards/v3000_g3_wave2.ts',
-//   'src/lib/game/effects/cards/v3050_deferred_wave_a.ts',
-//   'src/lib/game/engine.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

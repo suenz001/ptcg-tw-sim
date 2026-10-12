@@ -36,6 +36,7 @@ import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemo
 import { getPlaybook, benchScoreOf } from './ai-playbook';
 // v6.039 批次4c：場面評估（引擎試打）。方向嚴格單向 ai.ts → ai-eval.ts → engine，
 //   ai-eval 不得反向 import ai.ts（會造成 module-init 循環，見 v5.985 TDZ 事故）。
+import { copyAttackCandidates } from './copy-attack';   // ⭐v6.553 借招候選唯一來源（leaf，不會成環）
 import { actionWeakensAttackThisTurn, estimateIfPromoted, evaluateAttack, isInSimResolve, isPointlessAttack, LOSE_SCORE, PRIZE_SCORE_UNIT, setSimSelectionResolver, type AttackEval } from './ai-eval';
 // ⭐v6.429 呆呆王「牌庫頂借招」打法（站長說明）；只對場上／手上有會耀閃挑戰寶可夢的一方生效
 import {
@@ -461,17 +462,8 @@ export function getAIAction(
       if (printedDmg > 0) return printedDmg;
       // 暗黑底牌（N的索羅亞克ex）— 估算備戰最強招式
       if (card?.name === 'N的索羅亞克ex' && atk.name === '暗黑底牌') {
-        let best = 0;
-        for (const b of player.bench) {
-          const bc = pool.get(b.cardId);
-          if (!bc?.name?.startsWith('N的') || bc.name === 'N的索羅亞克ex') continue;
-          for (const a of bc.attacks ?? []) {
-            if (a.name === '暗黑底牌') continue;
-            const d = parseInt(a.damage ?? '0') || 0;
-            if (d > best) best = d;
-          }
-        }
-        return best;
+        // ⭐v6.553（審查 P3-3）：改走借招候選唯一來源（排除冷卻、使用條件、借用方被鎖的同名招式），不再手寫一份枚舉（Rule 38）
+        return copyAttackCandidates('N的索羅亞克ex|暗黑底牌', state, myIdx, pool).reduce((m, c) => Math.max(m, c.damage), 0);
       }
       return 0;
     };

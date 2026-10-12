@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.553：借招與被鎖住的招式名（2026-10-12 站長裁定）
+
+BASE v6.552。站長 17:03 逐字：「借招不能借『被鎖住的同名招式』，但如果只是鎖該寶可夢不能使用（如月月熊 赫月 ex的招式血月），就可以」；另「2.沒關係不用改的這麼複查」（AI 試打 gameWon／-1e12 不對稱維持現狀）。
+- copy-attack.ts enumerateCopyAttacks（借招候選唯一來源，規則層／UI picker／AI 共用）：借用方（使出借招的戰鬥寶可夢）身上 isAttackNameBlocked 為真的招式名 ⇒ 同名招式不是候選（哨兵 v6553-copy-name-lock）；只看借用方，不看被借的那一隻 ⇒ 血月（被借方自己下回合無法使用招式）照樣可以借。
+- copyAttackCooldownNote 加一句「這隻寶可夢目前無法使用「X」，不能借用同名招式」。
+- 守衛 test-v6553-copy-name-lock：BORROWER_LOCKED、BORROWER_LOCKED_UNTIL_EXIT、ENGINE_LOCKED（完整流程硬送借血月 ⇒ 不使出、紀錄寫原因）（BASE 紅）；正對照 SOURCE_LOCKED_OK、ENGINE_SOURCE_LOCKED_OK（被借方被血月鎖住 ⇒ 照樣打 240）、NO_LOCK。突變 4 個（不檢查、改檢查被借方、不寫說明、只看 ThisTurn）全殺。
+- **Opus 5.5 審查（站長 15:19 指示：Fable 5.1 暫停，改用 Opus 5.5；agent ace0709ec336c99d1）：可合併，無 P1／P2**。確認：8 張借招卡規則層／UI（含手機）／AI 都走 enumerateCopyAttacks；借招過程中戰鬥寶可夢不會換；鎖招旗標記的是借來的招式名（POST 回放被借招式的 key）⇒ 下回合欺詐本身能用、但不能再借 X，與裁定一致；被借方被鎖不會被其他地方擋。
+  - P3-1／P3-2：ENGINE_LOCKED 加 log 斷言、補 ENGINE_SOURCE_LOCKED_OK 完整流程正對照。**已補**。（多招被借方、多層鏈兩個情境由既有 test-v6337／v6339 的中央管線守衛涵蓋，未另加。）
+  - P3-3：ai.ts 暗黑底牌的 estimateDamage 自己手寫一份候選枚舉（不排除冷卻／使用條件／名稱鎖）⇒ **已改**走 copyAttackCandidates（Rule 38）；其他 N 的索羅亞克ex 在備戰時，它除了暗黑底牌以外的招式也列入（與規則層一致）。
+- 全套（6358c732）：FAIL 3 —— test-v6370／v6371／v6301 已知平行／速度假紅（單跑綠）。harness＋免疫測試網全綠。
+
 ## v6.552：AI 自己被打倒的扣分（2026-10-12，v6.551 審查 P3-1）
 
 BASE v6.551。
