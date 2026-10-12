@@ -14,7 +14,7 @@ import { ancientKey, isPlayerLevelAttackOnCooldown } from './player-attack-coold
 import { modalChoicePayloadValid, selectionAllowsCancel } from './selection-ui';   // >>> v6331-modal-choice-payload-import（v6.523 加 selectionAllowsCancel）
 import type { Card, EnergyType, Attack } from '$lib/cards/types';
 // v5.988：平穩境地述詞改從 v3001 既有安全 import 取得(移除此處早期反向 import 卡檔 v3080，杜絕 module-init TDZ)
-import { BENCH_SCRUB_LOCK_FLAGS, OPP_ATTACK_DEBUFF_FLAGS } from './instance-flags';
+import { BENCH_SCRUB_LOCK_FLAGS, OPP_ATTACK_DEBUFF_FLAGS, isAttackNameBlocked } from './instance-flags';
 // ⭐v6.214③ 伺服器單一時鐘（leaf 模組，零 import ⇒ 不可能參與循環 import；沒同步過回 null）
 import { serverNowOrNull } from './server-clock';
 import type {
@@ -6334,9 +6334,9 @@ function handlePlaying(
       const attackDef = eff[attackIdx]?.atk;
       const attackName = attackDef?.name;
       const atkName = pool.get(attacker.active.cardId)?.name ?? '?';
-      if (attackName && attacker.active.blockedAttackNamesThisTurn?.includes(attackName)) {
+      if (isAttackNameBlocked(attacker.active, attackName)) {   // ⭐v6.544 中央判準（含「離開戰鬥場前」）
         return addLog(state,
-          `${atkName} 因上回合效果，本回合無法使用「${attackName}」`,
+          attacker.active.blockedAttackNamesUntilExit?.includes(attackName!) ? `${atkName} 離開戰鬥場前無法使用「${attackName}」` : `${atkName} 因上回合效果，本回合無法使用「${attackName}」`,
           aIdx);
       }
 
@@ -9480,6 +9480,27 @@ function stripBenchActionLockFlags(b: CardInstance): CardInstance {
   return nb as unknown as CardInstance;
 }
 
+// >>> v6544-future-shield-exit
+/**
+ * ⭐v6.544 密勒頓｜防護代碼（小問題批次第 6 項，真 bug）：卡面「若這隻寶可夢離開戰鬥場，則這個效果消除」。
+ *   原本 futureShieldProtects 只看「此刻那隻密勒頓在不在戰鬥場」⇒ 被換下再換回（老大的指令＋頂尖捕捉器）效果會復活。
+ *   ⇒ 每個動作結束時，旗標指向的那隻不在戰鬥場 ⇒ 旗標永久刪除（消除就是消除，換回來不再生效）。
+ */
+function dissipateFutureShieldOnExit(state: GameState): GameState {
+  let changed = false;
+  const players = state.players.map((p) => {
+    const gone = (who?: string) => !!who && p.active?.iid !== who;
+    if (!gone(p.futureShieldNextTurn) && !gone(p.futureShieldThisTurn)) return p;
+    changed = true;
+    const np = { ...p };
+    if (gone(np.futureShieldNextTurn)) delete np.futureShieldNextTurn;
+    if (gone(np.futureShieldThisTurn)) delete np.futureShieldThisTurn;
+    return np;
+  }) as [PlayerState, PlayerState];
+  return changed ? { ...state, players } : state;
+}
+// <<< v6544-future-shield-exit
+
 function scrubBenchStatus(state: GameState): GameState {
   let changed = false;
   const players = state.players.map((p) => {
@@ -10468,6 +10489,7 @@ function applyActionImpl(
 
   // v2.47 防禦層：備戰寶可夢不應持有異常狀態
   next = scrubBenchStatus(next);
+  next = dissipateFutureShieldOnExit(next);   // ⭐v6.544 防護代碼離開戰鬥場即消除
 
   // v2.136 零之大空洞：每次 dispatch 完，重新計算備戰上限。若場地離場/失去太晶 → 自動丟備戰至 5
   next = enforceBenchLimit(next, pool);
@@ -11162,7 +11184,7 @@ export function getAvailableAttacks(
       }
       // <<< v6350-attack-precondition-ui
       // v2.92：單招下回合禁用（例：超級勇氣）— UI 層反白禁按
-      if (player.active!.blockedAttackNamesThisTurn?.includes(atk.name)) return -1;
+      if (isAttackNameBlocked(player.active, atk.name)) return -1;   // ⭐v6.544 與 ATTACK handler 同一個述詞
       // ⭐v6.428 玩家層級冷卻（仙子伊布ex｜天仙石、騎拉帝納｜渾沌匍匐）— 與 ATTACK handler 同一個述詞
       if (isPlayerLevelAttackOnCooldown(state, state.activePlayerIndex as 0 | 1, atk.name)) return -1;
       // v2.219：後攻方最初回合限定招式（吼叫尾ex｜絕叫、甜甜螢｜慢芬香）— UI 層反白

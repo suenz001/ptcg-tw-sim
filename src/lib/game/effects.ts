@@ -2591,15 +2591,18 @@ regR('dominance-chain', (st, idx, iids, params, pool) => {
 
 // 烈火爆進 — 260 傷害，使用後本場上的這隻寶可夢無法再使用「烈火爆進」
 // v2.159：升級為 blockedAttackNamesNextTurn 鎖招式名（之前用 cantAttackPending 鎖整隻過嚴）
+// ⭐v6.544（小問題批次第 2 項，真 bug）：卡面「若使用了這個招式，則這隻寶可夢**離開戰鬥場前**無法使用『烈火爆進』」
+//   ＝不是「下個回合」：原本鎖一回合就解除 ⇒ 再下一個自己回合仍在戰鬥場也能用。改鎖到離開戰鬥場（blockedAttackNamesUntilExit）；
+//   官方 Q&A PTCG_RULES L1518：用寶可夢交替換到備戰、再撤退回場 ⇒「可以」使用（離場清除，CLEAR_ON_EXIT_FLAGS）。
 regPost('破空焰ex|烈火爆進', (state, aIdx, _pool) => {
   const players = [...state.players] as [PlayerState, PlayerState];
   const p = { ...players[aIdx] };
   if (p.active) {
-    const cur = p.active.blockedAttackNamesNextTurn ?? [];
-    p.active = { ...p.active, blockedAttackNamesNextTurn: [...cur, '烈火爆進'] };
+    const cur = p.active.blockedAttackNamesUntilExit ?? [];
+    p.active = { ...p.active, blockedAttackNamesUntilExit: cur.includes('烈火爆進') ? cur : [...cur, '烈火爆進'] };
   }
   players[aIdx] = p;
-  return addLog({ ...state, players }, '烈火爆進：下回合無法再使用「烈火爆進」', aIdx);
+  return addLog({ ...state, players }, '烈火爆進：這隻寶可夢離開戰鬥場前無法再使用「烈火爆進」', aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

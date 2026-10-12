@@ -323,6 +323,12 @@ export interface CardInstance {
    */
   blockedAttackNamesThisTurn?: string[];
   /**
+   * ⭐v6.544：**直到離開戰鬥場前**禁用的招式名（破空焰ex｜烈火爆進「這隻寶可夢離開戰鬥場前無法使用『烈火爆進』」）。
+   *   不隨回合轉換清除；離開戰鬥場（CLEAR_ON_EXIT_FLAGS）／備戰兜底（BENCH_SCRUB_LOCK_FLAGS）時清除。
+   *   判定只問 instance-flags.ts isAttackNameBlocked。
+   */
+  blockedAttackNamesUntilExit?: string[];
+  /**
    * v2.101：**下個對手回合此卡弱點失效**預約旗標（卡片層級）。
    * 卡面範例：「鋁鋼橋龍ex｜金屬防禦強化 — 在下個對手的回合，這隻寶可夢的弱點全部消除。」
    * 由**攻擊方**在自己 ATTACK_POST 設於自己的 active，於擁有者下個 END_TURN 時

@@ -1,5 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.544：離開戰鬥場才消除的效果（2026-10-12，小問題批次 B）
+
+BASE d4e1bed4（v6.543）。調查：子代理以 applyAction 完整流程重現（小問題第 2、6 項）。
+- 破空焰ex｜烈火爆進（**直接卡面**「這隻寶可夢離開戰鬥場前無法使用『烈火爆進』」＋PTCG_RULES L1518 換到備戰再回場「可以」）：原本掛 blockedAttackNamesNextTurn ⇒ 只鎖一回合（真 bug）。新增 CardInstance.blockedAttackNamesUntilExit（進 CLEAR_ON_EXIT_FLAGS 與 BENCH_SCRUB_LOCK_FLAGS），判準收斂成 instance-flags.ts isAttackNameBlocked（哨兵 v6544-attack-name-lock；ATTACK handler 與 getAvailableAttacks 同一個述詞）。全站同措辭的卡只有這一張。
+- 密勒頓｜防護代碼（**直接卡面**「若這隻寶可夢離開戰鬥場，則這個效果消除」；L1979／L1990 沒有直接談換下再換回）：futureShieldProtects 只看「此刻在不在戰鬥場」⇒ 老大的指令換下＋頂尖捕捉器換回會復活（真 bug）。engine 出口 dissipateFutureShieldOnExit（哨兵 v6544-future-shield-exit，與 scrubBenchStatus 同一處）：旗標指向的密勒頓不在戰鬥場 ⇒ 永久刪除 NextTurn／ThisTurn。
+- Rule 40：test-instance-flags-convergence 清單數 67→68、10→11（意圖：精確枚舉、scrub ⊆ clear）；test-opp-debuff-immunity 新旗標歸類 SELF_OR_BUFF（自身罰則，唯一寫入點只寫攻擊方自己）。
+- 守衛 test-v6544-leave-active-effects：SKY_LATER、MIR_SWAP_BACK（BASE 紅）；正對照 SKY_NEXT、SKY_SWAP_BACK（L1518）、MIR_STAY。突變 8 個：7 殺；M5「只從 CLEAR_ON_EXIT 拿掉」由 test-instance-flags-convergence 的子集不變式抓到（本守衛因備戰兜底 scrub 而存活，屬雙層保護）。
+- **Fable 5.1 審查（aec2e45b860dee49e）：可合併，無 P1／P2**。確認：進化（buildEvolvedInstance 白名單）、退化（clearActiveEffects）、回手重打／鬼之假面都不帶新旗標；複製招式的鎖落在實際出招的那隻；防護代碼只在出口判、picker 開著時不會誤刪；blockedAttackNamesThisTurn 的讀者已全部改走 isAttackNameBlocked；Rule 40 無放寬。
+  - P3-1：使用烈火爆進的對戰紀錄仍寫「下回合無法再使用」⇒ **已修**為「這隻寶可夢離開戰鬥場前無法再使用」；守衛補 SKY_LOG（BASE 紅）⇒ 12 PASS。
+  - P3-2（既有、非本版）：借招／複製路徑對被鎖招式名是否過 isAttackNameBlocked，列入下一輪借招 audit。
+  - **複審（5fdcfaec）：可合併**，無 P1／P2／P3。
+- 全套（5fdcfaec）：FAIL 3 —— test-v6370／v6371／v6301 為已知平行／速度假紅（單跑綠）。
+
 ## v6.543：選擇視窗的張數與範圍改由中央驗證（2026-10-12，小問題批次 A）
 
 BASE 67880226（v6.542）。**非規則改動（防作弊／卡面成本）**＋**直接卡面**（杜若「從其中選擇」、高級球「必須將 2 張手牌丟棄」、奇異駭入「改放」＝總數不變）。調查：子代理逐項以 applyAction 完整流程重現（第 3、4、5、10 項的張數部分）。

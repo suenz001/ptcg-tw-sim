@@ -236,6 +236,7 @@ T('⭐⭐帝牙海獅｜凍結獠牙：【薄霧能量】**不可以**解除鎖�
 const SELF_OR_BUFF_FLAGS = new Set([
   'promoteAbilityAsked',                 // ⭐v6.496 自身的時機記錄（這一次放上戰鬥場已詢問過上場時特性），不是對手加的 debuff
   'cantRetreatPendingSelf',             // 自身罰則（反衝類招式寫在攻擊方身上）
+  'blockedAttackNamesUntilExit',        // ⭐v6.544 自身罰則：破空焰ex｜烈火爆進寫在**攻擊方自己**身上（唯一寫入點 effects.ts regPost，只寫 p.active＝自己）
   'damageBonusPending',                 // 自身加傷
   // ⭐v6.414：招式限定的下回合加傷／「傷害改為 N」覆寫 —— 全部都是**攻擊方寫在自己身上**的
   //   增益（卡面「在下個自己的回合，**這隻寶可夢**…的傷害」），不是對手加在受招者身上的

@@ -21,6 +21,7 @@ export const CLEAR_ON_EXIT_FLAGS: readonly (keyof CardInstance)[] = [
   'attackFailureFlipCountPending', 'attackFailureFlipCountThisTurn', 'pointySpinNextTurn',
   'pointySpinThisTurn', 'cantRetreatPendingSelf', 'blockedAttackNamesNextTurn',
   'blockedAttackNamesThisTurn',
+  'blockedAttackNamesUntilExit',   // ⭐v6.544 烈火爆進「離開戰鬥場前」
   // LOCK 其他鎖(退場清,不在 scrub)
   'cantAttachEnergyThisTurn', 'cantAttachEnergyNextTurn', 'paralyzeFangPending',
   'attackCostIncreaseColorlessNextTurn', 'attackCostIncreaseColorlessThisTurn', 'retreatCostIncreaseNextTurn',
@@ -61,6 +62,19 @@ export const CLEAR_ON_EXIT_FLAGS: readonly (keyof CardInstance)[] = [
  *   （進化：buildEvolvedInstance 本來就只帶白名單欄位，這些旗標不會帶到進化後，行為不變。）
  *   ⚠ 招式加在寶可夢身上的效果仍一律放 CLEAR_ON_EXIT_FLAGS（官方規則：離開戰鬥場移除招式效果）。
  */
+// >>> v6544-attack-name-lock
+/**
+ * ⭐v6.544 「這隻寶可夢不能使用某招式」的唯一判準（ATTACK handler 與 getAvailableAttacks 共用，Rule 38）：
+ *   ・blockedAttackNamesThisTurn：下個自己回合禁用（由 NextTurn promote，回合結束清除）；
+ *   ・blockedAttackNamesUntilExit：離開戰鬥場前禁用（破空焰ex｜烈火爆進，PTCG_RULES L1518：換到備戰再回場就可以用）。
+ */
+export function isAttackNameBlocked(inst: CardInstance | null | undefined, attackName: string | undefined): boolean {
+  if (!inst || !attackName) return false;
+  return inst.blockedAttackNamesThisTurn?.includes(attackName) === true
+    || inst.blockedAttackNamesUntilExit?.includes(attackName) === true;
+}
+// <<< v6544-attack-name-lock
+
 export const PERSIST_ON_EXIT_FLAGS: readonly (keyof CardInstance)[] = [
   'immuneToExAttackNextTurn', 'immuneToExAttackThisTurn',
 ];
@@ -76,6 +90,7 @@ for (const k of PERSIST_ON_EXIT_FLAGS) {
 export const BENCH_SCRUB_LOCK_FLAGS: readonly (keyof CardInstance)[] = [
   'cantAttackThisTurn', 'cantAttackPending', 'cantRetreatNextTurn',
   'cantRetreatPendingSelf', 'blockedAttackNamesNextTurn', 'blockedAttackNamesThisTurn',
+  'blockedAttackNamesUntilExit',
   'attackFailureFlipCountPending', 'attackFailureFlipCountThisTurn', 'pointySpinNextTurn',
   'pointySpinThisTurn',
 ];
