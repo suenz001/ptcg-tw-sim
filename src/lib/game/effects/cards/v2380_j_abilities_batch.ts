@@ -35,7 +35,7 @@
  */
 
 import type { CardInstance, PlayerState, GameState } from '../../types';
-import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
+import { applyHandAttachReactions } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import { energyProvidesType } from '../../effects'; // v5.682 host-aware「視為提供X屬性」(含古舊/稜鏡等特殊能量)
 import type { Card } from '$lib/cards/types';

@@ -19,7 +19,7 @@ import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_
 import { joinCardNames, toBareCard } from '../_shared';  // v5.515 丟棄 log 顯示卡名 / v5.993 rescue 回手裸化
 import { attachEnergyFromZoneToOwnPokemon } from '../_shared';  // ⭐ v6.174 附能目標解析失敗一律 no-op（禁半套：能量已離開來源區卻沒附上）
 import { recruitBasicToBenchPost } from '../../effects';  // v6.067 呼朋引伴族中央 helper
-import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
+import { applyHandAttachReactions } from './v3000_g3_wave2';
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
 import { isImmuneToOppTrainer as _v6532ImmuneOppTrainer } from './v3060_deferred_wave_b';   // ⭐v6.532 高溫燃燒器

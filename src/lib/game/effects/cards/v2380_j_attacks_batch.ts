@@ -36,7 +36,7 @@
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { hasOakEye, fireOnHandEnergyAttached } from '../_shared'; // v5.789 監視之眼 gate；v6.164 從手牌附能→對手反應
-import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2'; // v6.164 從手牌附能→自方瑪機雅娜｜自動治癒
+import { applyHandAttachReactions } from './v3000_g3_wave2'; // v6.164 從手牌附能→自方瑪機雅娜｜自動治癒
 
 import { canApplyEffectToTarget } from '../../defense';
 import type { Card } from '$lib/cards/types';

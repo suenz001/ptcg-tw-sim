@@ -13,7 +13,7 @@
 
 import { quickRhythmUsable } from '../../usable-gates'; // ⭐v6.528
 import type { CardInstance, PlayerState, GameState } from '../../types';
-import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
+import { applyHandAttachReactions } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense'; // v5.839 換位免疫 gate // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import { oppBenchSwapTargets, immuneSwapPick } from '../swap-immune';   // ⭐v6.527 特性互換 × 化隱／光之翼 中央判準

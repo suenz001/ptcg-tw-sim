@@ -49,7 +49,7 @@ import {
 //   招式型（滿載心田／熱帶狂燒／幸福禮物）攻擊者本身佔住 active，helper 內部查不到
 //   瑪機雅娜會回 0，統一呼叫是安全的。
 //   ⚠ v3000_g3_wave2 只 import ../_shared，不 import 本檔 ⇒ 無循環 import／TDZ 疑慮。
-import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
+import { applyHandAttachReactions } from './v3000_g3_wave2';
 import { getEffectivePokemonTypes } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
 
 // ══════════════════════════════════════════════════════════════════════════════

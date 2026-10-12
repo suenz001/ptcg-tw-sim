@@ -2727,9 +2727,16 @@ regR('surfer-switch', (st, idx, iids, _params, pool) => {
   const target = prevPlayer.bench.find(c => c.iid === iids[0]);
   const newName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
   const oldName = prevPlayer.active ? (pool.get(prevPlayer.active.cardId)?.name ?? '?') : '?';
+  const demotedIid = prevPlayer.active?.iid;
   st = addLog(st, `衝浪手：將 ${oldName} 換到備戰區，派出 ${newName} 到戰鬥場`, idx);
-  // v5.246：補設 movedToActiveThisTurn flag + ON_PROMOTE_TO_ACTIVE prompt
-  return tryPromptPromoteActive(updatePlayer(st, idx, p => {
+  // >>> v6541-surfer-order
+  // ⭐v6.541 站長裁定（2026-10-12 第 6 項）＋官方 Q&A（PTCG_RULES L1844）：
+  //   Q「若使用支援者卡『衝浪手』，將海豚俠從戰鬥場上退回了備戰區，那麼使用海豚俠的特性『全能變身』與支援者卡『衝浪手』
+  //     從牌庫抽卡，何者先執行？」 A「可由海豚俠的持有者選擇。」
+  //   ⚠ 鋼炮臂蝦｜返回重載 官方是**固定**先抽（L2459「先因支援者卡『衝浪手』從牌庫抽卡至自己的手牌滿5張」）⇒ 不問。
+  //   ⇒ 換下來的是可以用全能變身的海豚俠、而且這一次會抽到牌 ⇒ 先問順序；選「先用全能變身」⇒ 直接發動特性，
+  //     抽牌延後到特性的選擇視窗解完（engine 出口 _surferDeferredDraw）。其他情況照舊同一步換位＋抽牌。
+  const swapped = updatePlayer(st, idx, p => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
     if (bIdx < 0) return p;
@@ -2739,14 +2746,67 @@ regR('surfer-switch', (st, idx, iids, _params, pool) => {
     const newBench = [...p.bench];
     // v2.08：離開戰鬥場清狀態旗標
     newBench[bIdx] = clearActiveEffects(p.active);
-    const drawN = Math.max(0, 5 - p.hand.length);
-    const taken = p.deck.slice(0, drawN);
-    return {
-      ...p, active: newActive, bench: newBench,
-      hand: [...p.hand, ...taken], deck: p.deck.slice(drawN),
-    };
-  }), idx, pool);
+    return { ...p, active: newActive, bench: newBench };
+  });
+  const drawN = Math.max(0, Math.min(5 - swapped.players[idx].hand.length, swapped.players[idx].deck.length));
+  const demoted = demotedIid ? swapped.players[idx].bench.find(c => c.iid === demotedIid) : undefined;
+  const demCard = demoted ? pool.get(demoted.cardId) : undefined;
+  const chooseAbIdx = demCard?.abilities?.findIndex(a => SURFER_ORDER_CHOOSE_ABILITIES.has(a.name)) ?? -1;
+  const canChoose = !!demoted && !!demCard && chooseAbIdx >= 0 && drawN > 0 && !demoted.abilityUsedThisTurn
+    && hasAbilityFn(demCard.name, demCard.abilities![chooseAbIdx].name, chooseAbIdx)
+    && isAbilityHolderEffective(swapped, demoted, demCard, idx, demCard.abilities![chooseAbIdx].name, 'bench', pool);
+  if (canChoose) {
+    const abName = demCard!.abilities![chooseAbIdx].name;
+    return tryPromptPromoteActive(withPending(addLog(swapped, `衝浪手：「${abName}」與抽牌同時可以處理 ⇒ 由持有者選擇順序（官方 Q&A）`, idx), {
+      type: 'modal-choice', actorIdx: idx, sourcePlayerIdx: idx, minCount: 1, maxCount: 1,
+      effectKey: 'surfer-order',
+      params: {
+        label: '衝浪手：選擇處理順序',
+        demotedIid, abilityName: abName, abilityKey: `${demCard!.name}|${chooseAbIdx}`, cardName: demCard!.name,
+        options: [
+          { id: 'draw-first', text: `先抽牌到手牌 5 張（之後再決定要不要使用「${abName}」）` },
+          { id: 'ability-first', text: `先使用「${abName}」，再抽牌到手牌 5 張` },
+        ],
+      },
+    }), idx, pool);
+  }
+  // <<< v6541-surfer-order
+  return tryPromptPromoteActive(updatePlayer(swapped, idx, p => ({
+    ...p, hand: [...p.hand, ...p.deck.slice(0, drawN)], deck: p.deck.slice(drawN),
+  })), idx, pool);
 });
+// >>> v6541-surfer-order
+/** ⭐v6.541 衝浪手換下來時「由持有者選順序」的回備戰特性（L1844 全能變身）。返回重載是固定先抽（L2459），不在這裡。 */
+export const SURFER_ORDER_CHOOSE_ABILITIES = new Set<string>(['全能變身']);
+regR('surfer-order', (st, idx, iids, params, pool) => {
+  const pick = iids[0] === 'ability-first' ? 'ability-first' : 'draw-first';
+  const demotedIid = String(params?.demotedIid ?? '');
+  if (pick === 'draw-first') {
+    const p = st.players[idx];
+    const n = Math.max(0, Math.min(5 - p.hand.length, p.deck.length));
+    // 抽完之後，engine 出口的回備戰特性詢問（v5.335／v6.541 跨動作記錄）照常問要不要用
+    return addLog(updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, ...pl.deck.slice(0, n)], deck: pl.deck.slice(n) })),
+      `衝浪手：從牌庫抽 ${n} 張（抽到手牌 5 張）`, idx);
+  }
+  const p = st.players[idx];
+  const inst = p.bench.find(c => c.iid === demotedIid);
+  const abilityName = String(params?.abilityName ?? '');
+  const cardName = String(params?.cardName ?? '');
+  const abilityKey = String(params?.abilityKey ?? '');
+  const abIdx = parseInt(abilityKey.slice(abilityKey.lastIndexOf('|') + 1), 10) || 0;
+  const fn = getAbilityFn(cardName, abilityName, abIdx);
+  // 特性已經不能用（理論上視窗期間不會變）⇒ 照常抽牌
+  if (!inst || !fn || inst.abilityUsedThisTurn) {
+    const n = Math.max(0, Math.min(5 - p.hand.length, p.deck.length));
+    return updatePlayer(st, idx, pl => ({ ...pl, hand: [...pl.hand, ...pl.deck.slice(0, n)], deck: pl.deck.slice(n) }));
+  }
+  // 標記「本回合已用」（同 resolve-retreat-to-bench-ability-prompt），抽牌延後到特性的視窗解完
+  const marked = updatePlayer({ ...st, _surferDeferredDraw: idx }, idx, pl => ({
+    ...pl, bench: pl.bench.map(c => c.iid === demotedIid ? { ...c, abilityUsedThisTurn: true } : c),
+  }));
+  return fn(marked, idx, pool, { ...inst, abilityUsedThisTurn: true });
+});
+// <<< v6541-surfer-order
 
 // 精靈球 — 擲硬幣，正面則從牌庫選 1 張寶可夢加手牌（物品）
 // ⭐ v6.127 官方判準（PTCG_RULES.md）：**效果完全無法執行時，訓練家卡／特性不能使用**。

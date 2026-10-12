@@ -59,7 +59,7 @@ import {
   shuffle, healResolver, fireOnHandEnergyAttached,
   healOneOwnPokemonPending,   // ⭐v6.348 治癒類中央出口（與 甜點之禮／發酵果汁／激動治癒 同一支）
 } from '../_shared';
-import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
+import { applyHandAttachReactions } from './v3000_g3_wave2';
 import {
   flipCoinsWithLog,
   m6aWingSpec,             // ⭐ 三神鳥「羽擊」三支特性的中央規格（effects.ts，函式宣告 → 無 TDZ）

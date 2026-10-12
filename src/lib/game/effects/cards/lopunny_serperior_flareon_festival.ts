@@ -16,7 +16,7 @@
 
 import type { CardInstance } from '../../types';
 import { hasFestivalDanceActive } from '../../festival';   // ⭐v6.410 祭典樂舞判準中央述詞
-import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
+import { applyHandAttachReactions } from './v3000_g3_wave2';
 import type { Card } from '$lib/cards/types';
 import {
   reg, regR, regG, regA, regPre,

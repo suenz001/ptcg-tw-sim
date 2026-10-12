@@ -38,7 +38,7 @@
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { getEffectiveHP } from '../../engine'; // v5.952 剩餘HP用有效HP
-import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
+import { applyHandAttachReactions } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import { buildDevolvedInstance } from '../_shared'; // v5.984 中央退化建構
 import { canApplyEffectToTarget } from '../../defense'; // v5.984 特性效果免疫 gate(化隱/對戰圓形)

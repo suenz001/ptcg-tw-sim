@@ -1384,6 +1384,11 @@ export interface GameState {
   /** v5.987 美納斯|平穩境地 attack-time snapshot：宣告當時各玩家是否有生效中平穩境地。
    *   PTCG「招式效果同時 resolve」— 即使美納斯被同招 KO，宣告當時有效則回手仍被擋(比照花之帷幔)。 */
   _attackTimeCalmGround?: [boolean, boolean];
+  /** ⭐v6.541「戰鬥寶可夢回到備戰區」偵測的跨動作記錄：某個動作結束時還有選擇視窗開著，就先記下該動作**之前**的戰鬥寶可夢，
+   *  等視窗都解完、沒有視窗的那一個動作出口再比對（急進開關／希嘉娜的信賴 換位後還要選能量，原本前後比對看不到換位）。純量物件。 */
+  _retreatWatch?: { p: 0 | 1; iid: string };
+  /** ⭐v6.541 衝浪手選「先使用全能變身」時延後的「抽到手牌 5 張」：等特性（選擇視窗）解完，由 applyAction 出口補抽。值＝要抽牌的玩家。 */
+  _surferDeferredDraw?: 0 | 1;
   _counterMoveSrcIids?: string[];  // v5.947 本 action 因「移動/改放傷害指示物」(非治療)而減傷的來源 iid;markHealsByDamageDecrease 跳過不誤標 healedThisTurn
   /**
    * ⭐v6.369 站長裁定 六-5：本 action 內「寶可夢檢查的中毒／灼傷」對某隻寶可夢**增加**的

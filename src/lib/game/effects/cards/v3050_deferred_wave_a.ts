@@ -26,7 +26,7 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
-import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2';
+import { applyHandAttachReactions } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import {
   regA, regR,

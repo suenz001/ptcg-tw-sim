@@ -28,7 +28,7 @@ import { getBasicEnergyType } from '../../engine'; // v6.009 resolver 端 re-val
 import { isBasicPokemonOnField } from '../../selection-filter'; // v6.250 場上【基礎】中央述詞（leaf，無循環）
 import { secondPlayerFirstTurnOnlyBlock } from '../../attack-use-precondition'; // ⭐v6.438 後攻最初回合限定（leaf）
 import { cellAwakeningStep } from './v2650_i_wave15_misc8'; // v5.983 收斂「進化全備戰」chain(與人造細胞卵|細胞覺醒共用)
-import { applyMagearnaHandAttachHeal, applyHandAttachReactions } from './v3000_g3_wave2'; // v6.165 從手牌附能→自方瑪機雅娜｜自動治癒
+import { applyHandAttachReactions } from './v3000_g3_wave2'; // v6.165 從手牌附能→自方瑪機雅娜｜自動治癒
 import {
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';

@@ -10331,10 +10331,38 @@ function applyActionImpl(
   //   （玩家回報衝浪手退海豚俠時全能變身不觸發）。此處集中以 before/after 比對覆蓋所有 active→bench
   //   路徑（含未來新增）。gate：playing + 同一玩家回合（END_TURN 換手不算）+ 無 pending
   //   （RETREAT inline 或 swap-site promote prompt 已開 pending 時自動跳過，不重複、不搶 pending）。
+  // >>> v6541-retreat-watch
+  // ⭐v6.541：前後比對只看「同一個動作」⇒ 換位之後還開選擇視窗的卡（急進開關、希嘉娜的信賴：換位後選能量）
+  //   在視窗解完的那一個動作，前後的戰鬥寶可夢都已經是新的，原本**永遠不詢問**全能變身／返回重載。
+  //   改成：動作結束時還有視窗 ⇒ 記下這一連串動作**最早**的戰鬥寶可夢（_retreatWatch）；沒有視窗的出口用它當「之前」。
+  //   換回合或遊戲結束就清掉。
+  if (next._retreatWatch && (next.phase !== 'playing' || state.activePlayerIndex !== next.activePlayerIndex || next._retreatWatch.p !== next.activePlayerIndex)) {
+    const _c = { ...next }; delete _c._retreatWatch; next = _c;
+  }
+  //   ⚠ 已經開出「回備戰特性要不要用」的詢問（撤退的 inline 詢問）就不記：否則玩家選「不使用」後會再被問一次。
+  const _retreatAskOpen = (x: GameState) => x.pendingSelection?.effectKey === 'resolve-retreat-to-bench-ability-prompt'
+    || (x.pendingChainQueue ?? []).some((q) => q?.effectKey === 'resolve-retreat-to-bench-ability-prompt');
+  if (next.phase === 'playing' && next.pendingSelection && state.activePlayerIndex === next.activePlayerIndex && !next._retreatWatch
+      && !_retreatAskOpen(next)) {
+    const _pa = state.players[next.activePlayerIndex]?.active;
+    if (_pa) next = { ...next, _retreatWatch: { p: next.activePlayerIndex, iid: _pa.iid } };
+  }
+  // ⭐v6.541：衝浪手「先使用全能變身」延後的抽牌——視窗都解完才補抽到手牌 5 張（L1844 由持有者選順序）
+  if (next._surferDeferredDraw !== undefined && !next.pendingSelection && next.phase === 'playing') {
+    const _di = next._surferDeferredDraw;
+    const _c = { ...next }; delete _c._surferDeferredDraw; next = _c;
+    next = drawToHandSizeV6541(next, _di, 5, '衝浪手', pool);
+  }
+  // <<< v6541-retreat-watch
   if (next.phase === 'playing' && !next.pendingSelection
       && state.activePlayerIndex === next.activePlayerIndex) {
     const rIdx = next.activePlayerIndex;
-    const prevActiveR = state.players[rIdx]?.active ?? null;
+    // ⭐v6.541：有跨動作記錄就用它當「之前」的戰鬥寶可夢（記錄用完即清）
+    const _watch = next._retreatWatch && next._retreatWatch.p === rIdx ? next._retreatWatch : null;
+    if (next._retreatWatch) { const _c = { ...next }; delete _c._retreatWatch; next = _c; }
+    const prevActiveR = _watch
+      ? ({ iid: _watch.iid } as CardInstance)
+      : (state.players[rIdx]?.active ?? null);
     if (prevActiveR) {
       const stillActiveR = next.players[rIdx].active?.iid === prevActiveR.iid;
       const onBenchR = next.players[rIdx].bench.find(b => b.iid === prevActiveR.iid);
@@ -12531,3 +12559,15 @@ RESOLVERS.set('retreat-energy-discard', (state, actorIdx, selectedIids, params, 
   // v5.243：撤退能量 picker 版同樣加 ON_PROMOTE_TO_ACTIVE prompt
   return tryPromptPromoteActive(afterState, actorIdx, pool);
 });
+
+// >>> v6541-draw-to-hand-size
+/** ⭐v6.541 衝浪手「抽到手牌 N 張」的延後版（全能變身先處理時）。牌庫不足就抽到牌庫空為止（與 surfer-switch 原本寫法相同）。 */
+function drawToHandSizeV6541(state: GameState, idx: 0 | 1, size: number, label: string, _pool: Map<string, Card>): GameState {
+  const p = state.players[idx];
+  const n = Math.max(0, Math.min(size - p.hand.length, p.deck.length));
+  if (n <= 0) return state;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[idx] = { ...p, hand: [...p.hand, ...p.deck.slice(0, n)], deck: p.deck.slice(n) };
+  return addLog({ ...state, players }, `${label}：從牌庫抽 ${n} 張（抽到手牌 ${size} 張）`, idx);
+}
+// <<< v6541-draw-to-hand-size
