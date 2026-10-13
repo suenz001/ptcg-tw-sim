@@ -28,6 +28,7 @@
     sortDecks
   } from '$lib/decks/storage';
   import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
+  import { buildDeckSheetModel, deckSheetHtml } from '$lib/decks/deck-sheet';   // ⭐v6.559 匯出套牌構築表（道館賽報名用）
   import type { Deck } from '$lib/decks/types';
   import { validateDeck, maxCopies, isBasicEnergy, isStandardReprintLegal, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity, sameNameKey, isTwoCardStadium, twoCardStadiumPartnerCardId, twoCardStadiumSide } from '$lib/decks/validation';
   import { isCardMarkStandardLegal, filterDeckSelectable, getCardPolicy, DEFAULT_CARD_POLICY, ALL_REGULATION_MARKS } from '$lib/cards/regulation';
@@ -989,6 +990,28 @@
     URL.revokeObjectURL(url);
   }
 
+  // >>> v6559-deck-sheet
+  // ⭐v6.559（站長 2026-10-13）：匯出可列印的「套牌構築表」（道館賽報名用，版面依官方紙本精神、站長確認過預覽）。
+  //   內容只由 deck-sheet.ts 產生（唯一來源）；開新分頁，頁面上有「列印／另存 PDF」按鈕。
+  //   彈出視窗被擋時改成下載 .html（開啟後一樣能列印）。
+  //   Blob 網址在下一次匯出時才釋放（新分頁還要讀它；不另開計時器，test-v6271 不准 /decks 多計時器）。
+  let lastSheetUrl: string | null = null;
+  function exportDeckSheet() {
+    if (!active || active.entries.length === 0) return;
+    if (lastSheetUrl) { URL.revokeObjectURL(lastSheetUrl); lastSheetUrl = null; }
+    const html = deckSheetHtml(buildDeckSheetModel(active.entries, poolById), { deckName: active.name });
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+    const w = window.open(url, '_blank');
+    if (!w) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `套牌構築表-${active.name || 'deck'}.html`;
+      a.click();
+    }
+    lastSheetUrl = url;
+  }
+  // <<< v6559-deck-sheet
+
   async function importJson(file: File) {
     try {
       const text = await file.text();
@@ -1893,10 +1916,12 @@
               <span class="preset-badge" title="內建預組，僅供檢視">🔒 預組（唯讀）</span>
               <button class="small" onclick={copyPresetToMine}>📋 複製到我的牌組</button>
               <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>🖼️ 匯出文字/圖片</button>
+              <button class="small" onclick={exportDeckSheet} disabled={!active || active.entries.length === 0 || !poolReady} title="產生可列印的套牌構築表（道館賽報名用）">📋 匯出套牌構築表</button>
               <button class="small" onclick={exportJson}>💾 匯出 JSON</button>
             {:else}
               <button class="small" onclick={copyPresetToMine} title="複製一份這副牌組（做 A／B 版用）">📋 複製一份</button>
               <button class="small" onclick={openTextExport} disabled={!active || active.entries.length === 0}>🖼️ 匯出文字/圖片</button>
+              <button class="small" onclick={exportDeckSheet} disabled={!active || active.entries.length === 0 || !poolReady} title="產生可列印的套牌構築表（道館賽報名用）">📋 匯出套牌構築表</button>
               <button class="small" onclick={openTextImport} disabled={!poolReady} title="貼上 PTCG 文字格式（包含官方訓練家網站可透過下方書籤工具一鍵匯入）">📝 匯入文字</button>
               <!-- v3.83: 提供顯眼的官方匯入入口，避免玩家找不到（書籤教學原本藏在「匯入文字」modal 摺疊區內） -->
               <!-- v4.972：官網代碼匯入(🎫)取代了書籤工具流程，舊按鈕隱藏但保留 code -->

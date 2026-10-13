@@ -615,7 +615,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let tProposeOpen = $state(false);
   let tProposeName = $state('');
   let tProposeFormat = $state<'single-elim' | 'swiss'>('single-elim');
-  let tProposeRally = $state(30);
+  // ⭐v6.559（站長 2026-10-13）：社群賽募集時間預設 5 分鐘（原 30 分鐘，大家沒改到就要等很久才開賽）
+  let tProposeRally = $state(5);
   const tHasCommunityEvent = $derived(tEvents.some((e: any) => e.createdByPlayer));
   let tMe = $state<any>({ registered: false });
   // 多賽事：在任一開放賽事報名過即可發言/視為已參賽
@@ -10325,7 +10326,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         {:else}
           <div class="tourn-event">
             <h3>📣 發起社群賽</h3>
-            <p class="muted small">募集時間內皆可報名，時間結束時達門檻（單淘汰 4 人／瑞士 8 人）即自動開賽；但若接近網站預定賽事舉辦時間則不開放。</p>
+            <p class="muted small">募集時間內皆可報名，時間結束時達門檻（單淘汰 4 人／瑞士 8 人）即自動開賽，未達門檻則取消。</p><!-- ⭐v6.559：伺服器 v0.70 起已取消「網站賽避讓」，刪掉過時的說明 -->
             <label class="tourn-field">賽事名稱<input class="name-input" maxlength="30" bind:value={tProposeName} placeholder="例：週五歡樂盃" /></label>
             <label class="tourn-field">賽制
               <select class="deck-select" bind:value={tProposeFormat}>
