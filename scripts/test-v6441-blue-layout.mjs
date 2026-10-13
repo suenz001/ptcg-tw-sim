@@ -276,7 +276,8 @@ import { V6464_GAME_PAIRS } from './lib/revert-v6464-thumbs.mjs';
 // ⭐v6.560（Rule 40）：一般對戰復盤動到獎賞卡翻面條件、播放列、結算視窗（全版面、非藍桌墊），且同樣碰到 V6464 條目的上下文
 //   ⇒ 放在最前面先整段還原成 v6.559（同一個模式；內容由 test-v6560-casual-replay 鎖）。
 import { V6560_GAME_PAIRS } from './lib/revert-v6560-game.mjs';
-const PRE = [...V6560_GAME_PAIRS, ...V6464_GAME_PAIRS];
+import { V6561_GAME_PAIRS } from './lib/revert-v6561-game.mjs';   // ⭐v6.561（Rule 40）：tStartReplay 合併逐動作格（非版面），由新到舊先還原
+const PRE = [...V6561_GAME_PAIRS, ...V6560_GAME_PAIRS, ...V6464_GAME_PAIRS];
 function strip(src) {
   let s = src;
   const bad = [];

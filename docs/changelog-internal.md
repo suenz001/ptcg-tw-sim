@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.561／server patch v1.64：錦標賽回放改成每個動作一格（2026-10-13 站長交辦）
+
+BASE `cb4abe25`（v6.560）。站長 13:59：「也請你順便把錦標賽復盤也改成每個動作一格」。
+- 伺服器 v1.64（全部在錦標賽區塊 TAIL_ANCHOR 之前 ⇒ 28 把鎖一把都不動，test-v6561 K2 逐位元驗）：tActionApplyOnce 寫入成功出口加哨兵 v164-replay-step-hook（`typeof tReplayOnApplied === 'function'` ＋ try/catch，絕不影響對戰；守衛單獨抽出本函式時不存在也不壞）；新哨兵區塊 v164-replay-steps：每個動作的盤面（去 log，與 snapshotTurn 同形）先放記憶體，換行動方／終局／滿 40 格／閒置 10 分鐘／讀取時，以非同步 zlib.gzip 寫成一包進 tournamentReplaySteps（90 天 TTL；索引 matchId＋firstVer）；GET /api/replay/tourn-steps（開放條件同 /api/tournament/replay：已結束或已歸檔）回 base64 gzip 包，由瀏覽器解壓（伺服器不解壓再壓縮），回哨兵 replayStepsApi:1。重賽重用 matchId ⇒ 只取 at ≥ TMATCH.gameStartedAt 的包（不必動區塊內的 deleteMany）。伺服器重啟時遺失的那半回合 ⇒ 前端保留原本的半回合格。
+- 前端：新 leaf src/lib/game/replay-tourn.ts（decodeTournStepBatches、mergeTournReplaySteps：某半回合的逐動作資料從開頭就有才取代半回合格；排序 logLen→半回合格在前→ver；withTournPerActionSteps：404／缺哨兵／網路錯誤一律回原本的半回合格）；tStartReplay 在 openReplayData 之前合併。播放列的上／下一回合（v6.560）直接適用。
+- 守衛 test-v6561-tourn-replay-per-action：S1～S8（抽哨兵區塊接假 collection 實跑整場 AI 對局：逐格內容、每半回合一包、403/404/400、歸檔開放、重賽過濾、閒置寫出、讀取先寫出、休閒房／setup 不記）、K1～K1c（六條路徑只有寫入成功記錄；記錄器丟例外照常寫入；沒有記錄器不 ReferenceError）、K2 錦標賽區塊逐位元＝v6.560、C1～C6、E1～E2 端到端。HEAD-FAIL：S／K1／C／E 在 v6.560 紅，K1b／K1c 安全性質在 BASE 本來就成立。突變 13 個：12 殺、1 等價（拿掉 typeof：try/catch 已吞 ReferenceError）。
+- Rule 40／54：新 lib scripts/lib/sap-revert-admin-v164.mjs（difflib 2 對、逐位元還原 v1.63）串進 test-v6303 H3／test-sap153 S4b／test-sap154 D6 的還原鏈最前面；新 lib scripts/lib/revert-v6561-game.mjs（2 對）串進 test-v6441／test-v6293。
+- **Fable 5.1 審查（agent adc1f589fce33f19a）：可推，無 P1**（實測：64 場同時餵，掛鉤同步耗時 p99 3.8ms、40 格包 stringify 2.6～7.5ms；記憶體典型約 23MB；bson 4.7／5.5／6.10 的 Binary 讀回皆正確；acorn 驗 TMATCH／TARCHIVE／新 handler 同一 BlockStatement；閘與 /replay 相同、內容不超出既有公開範圍）。P2×2、P3×4 處理：S3 改在 GET 之前看（原本被讀取端的清除遮蔽）；C1 逐動作格亂序餵入（穩定排序原本讓 ver 排序突變存活）；新增 S9 上限淘汰；REPLAY_STEPS_MAX_BUFFERS 400→128；三個存活突變補守衛後全紅。P3-2（重賽不經 setup 直接進 playing 時首半回合退回半回合格）現行流程不會發生，記錄備查；P3-4 檔頭 v1.45 標頭是舊債，未動。
+- bump 腳本修正：changelog 封存搬運原本只抓內文第一行（v6.526 多行內文被截斷、殘行留在 bodies）⇒ 已手動修復並改成抓到 </div>（test-v6264 F2 抓到）。
+- 部署：先 update-tournament.bat（server v1.64），再 redeploy-oracle.bat（前端）。前端先上也沒關係（端點 404 ⇒ 照用半回合格）。
+
 ## v6.560：一般對戰復盤（2026-10-13 玩家建議、站長交辦）
 
 BASE v6.559。站長 13:53 轉述玩家建議（一般對戰沒有復盤、只能匯出文字；建議記錄操作含對手獎賞與手牌、結束時提供、存 cookie、畫面同對戰畫面有上一動下一動；或存檔案匯入；放在對戰演練）。我評估後站長 13:59 逐字裁定：「1.線上對戰的復盤能不能看到對手的手牌和獎賞卡?這題我不大確定玩家們的想法，想請你先幫我再admin監控那邊做一個開關，先預設是看不到對方的，如果有很多玩家反應希望能看到的話，我再去admin監控那邊改 2.瀏覽器要保留最近幾場？依你的建議 10 場 3.一步一格的單位：依你的建議每個動作一格，另外加「跳到上／下一回合」的按鈕。也請你順便把錦標賽復盤也改成每個動作一格」。

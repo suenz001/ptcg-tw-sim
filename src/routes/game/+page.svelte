@@ -66,6 +66,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   } from '$lib/game/hand-card-ops';
   import { handOverlapPx, handFanPose, fanOvershootPx, borderBoxSize } from '$lib/game/hand-layout';
   // ⭐v6.560 一般對戰復盤（記錄／遮蔽／跳回合 與 瀏覽器儲存／檔案）
+  import { withTournPerActionSteps } from '$lib/game/replay-tourn';   // v6.561 錦標賽回放逐動作
   import { createReplayRecorder, recordStep, finalizeReplay, stepsForStorage, nextTurnStepIndex, prevTurnStepIndex, type ReplayRecorder, type ReplayData } from '$lib/game/replay-record';
   import { saveReplay, listReplays, loadReplay, deleteReplay, saveInProgress, loadInProgress, downloadReplayFile, parseReplayBytes, MAX_SAVED_REPLAYS, type SavedReplayInfo } from '$lib/game/replay-store';
   import { replayRevealsOpponent } from '$lib/game/replay-policy';   // ⭐v6.557 手牌互疊量依實際寬度計算（唯一判準）
@@ -5747,6 +5748,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const data = await res.json();
       if (data.error) { tError = data.error; return; }
       if ((!data.snapshots || data.snapshots.length === 0) && !data.finalState) { tError = '這場沒有可回放的資料（可能是部署回放功能之前的舊對戰）'; return; }
+      // ⭐v6.561 每個動作一格：伺服器 v1.64 起另存逐動作資料；拿得到就取代對應的半回合格，拿不到（舊對局／舊伺服器）照用半回合格
+      data.snapshots = await withTournPerActionSteps(matchId, data.snapshots || []);
       await openReplayData(data, 'tournament');
     } catch (e: any) { tError = '回放載入失敗：' + (e?.message ?? e); }
   }

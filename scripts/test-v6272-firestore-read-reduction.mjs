@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '14f5c0f59c3e9322c035cd7f51ddafcd9a40dea9';   // v6.559（上一版）
+const PREV_SHA = 'cb4abe258ec1663ede39c21334ac5a279766e061';   // v6.560（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,20 +757,30 @@ const PREV_SHA = '14f5c0f59c3e9322c035cd7f51ddafcd9a40dea9';   // v6.559（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.560 前移：PREV_SHA 從 14f5c0f5（v6.559）起算。
+  // ⚠⚠ v6.561 前移：PREV_SHA 從 cb4abe25（v6.560）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.560：一般對戰復盤：逐動作記錄（replay-record）、瀏覽器儲存與檔案（replay-store）、線上遮蔽開關（replay-policy＋admin）、對戰頁入口與播放。
-  'src/lib/cards/policy-loader.ts',
-  'src/lib/game/replay-policy.ts',
-  'src/lib/game/replay-record.ts',
-  'src/lib/game/replay-store.ts',
+  // ⭐v6.561：錦標賽回放逐動作：新 leaf replay-tourn.ts（解包／合併半回合格與逐動作格）、tStartReplay 先合併再進 openReplayData；首頁 changelog 三步搬運。
+  'src/lib/game/replay-tourn.ts',
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
-  'src/routes/game/MobilePortraitBattle.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.560）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.560 前移：PREV_SHA 從 14f5c0f5（v6.559）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.560：一般對戰復盤：逐動作記錄（replay-record）、瀏覽器儲存與檔案（replay-store）、線上遮蔽開關（replay-policy＋admin）、對戰頁入口與播放。
+//   'src/lib/cards/policy-loader.ts',
+//   'src/lib/game/replay-policy.ts',
+//   'src/lib/game/replay-record.ts',
+//   'src/lib/game/replay-store.ts',
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'src/routes/game/MobilePortraitBattle.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.559）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.559 前移：PREV_SHA 從 d3cc3a50（v6.558）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -891,18 +901,6 @@ const PREV_ALLOWED = [
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
-// ── 上一版（v6.548）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.548 前移：PREV_SHA 從 87b6c996（v6.547）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.548：換位訓練家 × 「回到備戰區時」特性的順序詢問（switchRetreatOrderInfo／switchRetreatOrderPending）；改附視窗排隊浮上時重算上限／候選（PENDING_REFRESH_ON_POP）。
-//   'src/lib/game/effects.ts',
-//   'src/lib/game/effects/cards/items_misc.ts',
-//   'src/lib/game/effects/cards/m6_wave10.ts',
-//   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 更早的 PREV_ALLOWED 歷史宣告已移除（只保留最近 12 版；完整紀錄見 git log，避免連續註解超過 strip-comments 的 200 行護欄）
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + [...PREV_ALLOWED].sort().join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }
   // ⚠⚠ v6.378 C-7：舊寫法是「對**工作樹位元組**算 blob sha1，再跟 BASE tree 的 sha 比」。

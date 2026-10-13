@@ -7503,9 +7503,119 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const fresh = await deps.reload();
         return { kind: 'stale', gs: (fresh && fresh.gameState) || doc.gameState, version: fresh ? fresh.version : doc.version };
       }
+      // >>> v164-replay-step-hook
+      // ⭐server v1.64：錦標賽回放逐動作記錄（定義在下方 v164-replay-steps）。只在寫入成功的這一個出口；typeof ⇒ 守衛單獨抽出本函式時不存在也不會壞；
+      //   記錄只是 push 進記憶體、例外一律吞掉 ⇒ 絕不影響對戰。
+      if (doc.matchId && typeof tReplayOnApplied === 'function') { try { tReplayOnApplied(doc, newGs, nv); } catch (_e) { /* 絕不影響對戰 */ } }
+      // <<< v164-replay-step-hook
       return { kind: 'applied', gs: newGs, version: nv, prevGs: doc.gameState };
     }
     // ── v6.170 CONNECTION RESILIENCE BLOCK END ──
+    // >>> v164-replay-steps
+    // ⭐server v1.64（v6.561，站長 2026-10-13：「也請你順便把錦標賽復盤也改成每個動作一格」）：錦標賽回放的逐動作資料。
+    //   以前只有 snapshotTurn（錦標賽區塊內，每半回合一份完整盤面）⇒ 回放一格就是半個回合。
+    //   ⚠ 刻意放在錦標賽區塊（TAIL_ANCHOR）之前、端點路徑也不用錦標賽前綴 ⇒ 錦標賽區塊 28 把鎖一把都不動；
+    //     掛鉤只在 tActionApplyOnce（v6.170 純函式，也在區塊之前）寫入成功的那一個出口，用 typeof 呼叫（守衛單獨抽出來跑時不存在也不會壞）。
+    //   做法：每個成功套用的動作，把盤面（去掉 log，與 snapshotTurn 同形）先放在記憶體；換半回合／終局／累積 40 格時，
+    //     把那幾格 JSON gzip 成一包寫進 tournamentReplaySteps（每半回合一筆，不是每個動作一筆）。
+    //   ⚠ 對戰路徑零 await：記錄只是 push 進陣列；壓縮用非同步 zlib.gzip、寫入 fire-and-forget，失敗就算了（回放端退回半回合格）。
+    //   ⚠ 伺服器重啟時記憶體裡那半回合會遺失 ⇒ 前端合併時那半回合保留原本的半回合格（不會缺一段）。
+    //   ⚠ 重賽重用 matchId：每包記 at（第一格的時間），讀取時只取 at ≥ TMATCH.gameStartedAt 的包（不必動區塊內的 deleteMany）。
+    //   ⚠ 引擎是純函式（IRON_RULES Rule 72）：newGs 之後不會被改寫 ⇒ 記憶體裡只放淺拷貝。
+    //   讀取端 GET /api/replay/tourn-steps：開放條件與 /api/tournament/replay 完全相同（已結束或賽事已歸檔）；
+    //     回傳 base64 的 gzip 包，由瀏覽器自己解壓（伺服器不做解壓＋再壓縮）；回哨兵 replayStepsApi:1，舊伺服器 404 ⇒ 前端照用半回合格。
+    const TREPSTEP = db.collection('tournamentReplaySteps');
+    TREPSTEP.createIndex({ expireAt: 1 }, { expireAfterSeconds: 0 }).catch(() => { /* TTL best-effort */ });
+    TREPSTEP.createIndex({ matchId: 1, firstVer: 1 }).catch(() => { /* best-effort */ });
+    const REPLAY_STEPS_ENABLED = true;   // 出事一鍵關（只關記錄；讀取端照常回已存的）
+    const REPLAY_STEPS_TTL_MS = 90 * 24 * 3600 * 1000;   // 與 snapshotTurn 的 REPLAY_TTL_MS 相同（90 天）
+    const REPLAY_STEPS_MAX_PER_BATCH = 40;
+    const REPLAY_STEPS_MAX_BUFFERS = 128;   // 同時進行中的對局上限（超過就先寫出最久沒動的那一場；錦標賽同時場次約 64 ⇒ 最壞約 128×40 格×36KB）
+    const REPLAY_STEPS_IDLE_FLUSH_MS = 10 * 60 * 1000;   // 某場 10 分鐘沒有新動作（投降／判負／中斷）⇒ 寫出
+    const _rsBuf = new Map();   // matchId → { eventId, ap, lastAt, steps: [] }
+    let _rsLastSweep = 0;
+    let _rsZlib = null;
+    try { _rsZlib = await import('node:zlib'); } catch (_e) { _rsZlib = null; }
+    function _rsGzip(text) {
+      return new Promise((resolve) => {
+        if (!_rsZlib || typeof _rsZlib.gzip !== 'function') return resolve(Buffer.from(text, 'utf8'));
+        _rsZlib.gzip(Buffer.from(text, 'utf8'), { level: 6 }, (err, out) => resolve(err ? Buffer.from(text, 'utf8') : out));
+      });
+    }
+    /** 把某一場記憶體裡的格子寫出去（回傳 Promise；呼叫端可以不等）。 */
+    function tReplayStepsFlush(matchId) {
+      const b = _rsBuf.get(matchId);
+      if (!b || !b.steps.length) { _rsBuf.delete(matchId); return Promise.resolve(); }
+      const steps = b.steps; b.steps = [];
+      if (b.ended) _rsBuf.delete(matchId);
+      let text;
+      try { text = JSON.stringify(steps); } catch (_e) { return Promise.resolve(); }
+      return _rsGzip(text).then((gz) => TREPSTEP.insertOne({
+        _id: matchId + '_s' + steps[0].ver,
+        matchId, eventId: b.eventId || null,
+        at: steps[0].at, firstVer: steps[0].ver, n: steps.length, gz,
+        expireAt: new Date(Date.now() + REPLAY_STEPS_TTL_MS),
+      })).catch(() => { /* 重複 _id／寫入失敗：回放端退回半回合格 */ });
+    }
+    function _rsSweep(now) {
+      if (now - _rsLastSweep < 60 * 1000) return;
+      _rsLastSweep = now;
+      for (const [mid, b] of _rsBuf) if (now - b.lastAt > REPLAY_STEPS_IDLE_FLUSH_MS) { b.ended = true; tReplayStepsFlush(mid); }
+    }
+    /** tActionApplyOnce 寫入成功後呼叫：只記 playing（setup 的秘密佈局不記；終局由 /replay 的 finalState 補）。 */
+    function tReplayOnApplied(doc, newGs, version) {
+      if (!REPLAY_STEPS_ENABLED || !doc || !doc.matchId || !newGs) return;
+      const matchId = String(doc.matchId);
+      const now = Date.now();
+      _rsSweep(now);
+      let b = _rsBuf.get(matchId);
+      if (newGs.phase !== 'playing') {
+        if (b) { b.ended = true; tReplayStepsFlush(matchId); }
+        return;
+      }
+      const ap = (newGs.activePlayerIndex == null ? 0 : newGs.activePlayerIndex);
+      if (b && (b.ap !== ap || b.steps.length >= REPLAY_STEPS_MAX_PER_BATCH)) tReplayStepsFlush(matchId);
+      if (!b || !_rsBuf.has(matchId)) {
+        if (_rsBuf.size >= REPLAY_STEPS_MAX_BUFFERS) {
+          let oldId = null, oldAt = Infinity;
+          for (const [mid, x] of _rsBuf) if (x.lastAt < oldAt) { oldAt = x.lastAt; oldId = mid; }
+          if (oldId) { _rsBuf.get(oldId).ended = true; tReplayStepsFlush(oldId); }
+        }
+        b = { eventId: doc.eventId || null, ap, lastAt: now, steps: [] };
+        _rsBuf.set(matchId, b);
+      }
+      b.ap = ap; b.lastAt = now;
+      const state = Object.assign({}, newGs); state.log = [];
+      b.steps.push({ turn: newGs.turn || 1, activePlayerIndex: ap, logLen: Array.isArray(newGs.log) ? newGs.log.length : 0, ver: version, at: now, state });
+    }
+    /** Mongo 讀回來的二進位（bson Binary／Uint8Array／Buffer）→ Buffer。
+     *  ⚠ 一律照 byteOffset／byteLength 取（Buffer 常是大塊共用記憶體的一小段；Binary 的 buffer 可能比內容大，要用 value()）。 */
+    function _rsToBuf(g) {
+      try {
+        if (!g) return null;
+        if (Buffer.isBuffer(g)) return g;
+        if (typeof g.value === 'function') { const v = g.value(true); if (v instanceof Uint8Array) return Buffer.from(v.buffer, v.byteOffset, v.byteLength); }
+        if (g instanceof Uint8Array) return Buffer.from(g.buffer, g.byteOffset, g.byteLength);
+      } catch (_e) { /* 讀不出來就略過這一包 */ }
+      return null;
+    }
+    app.get('/api/replay/tourn-steps', async (req, res) => {
+      try {
+        const matchId = String((req.query && req.query.matchId) || '').slice(0, 200);
+        if (!matchId) return res.status(400).json({ error: '需要 matchId' });
+        // ⚠ TMATCH／TARCHIVE 在錦標賽區塊裡才宣告（同一個 try 區塊）：註冊當下不可讀，請求進來時早已初始化
+        const m = await TMATCH.findOne({ _id: matchId }, { projection: { eventId: 1, status: 1, gameStartedAt: 1 } });
+        if (!m) return res.status(404).json({ error: '找不到這場對戰' });
+        const arch = await TARCHIVE.findOne({ _id: 'arch_' + m.eventId }, { projection: { _id: 1 } });
+        if (!arch && m.status !== 'done') return res.status(403).json({ error: '此對戰尚未結束,暫不開放回放' });
+        if (_rsBuf.has(matchId)) { _rsBuf.get(matchId).ended = true; await tReplayStepsFlush(matchId); }
+        const since = Number(m.gameStartedAt) || 0;
+        const docs = await TREPSTEP.find({ matchId, at: { $gte: since } }, { projection: { gz: 1, firstVer: 1 } }).sort({ firstVer: 1 }).limit(400).toArray();
+        const batches = docs.map((d) => { const buf = _rsToBuf(d.gz); return buf ? buf.toString('base64') : ''; }).filter(Boolean);
+        res.json({ replayStepsApi: 1, batches });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    // <<< v164-replay-steps
     // >>> v153-tourn-deck-validate
     // ⭐⭐ server patch v1.53（2026-10-02，站長核准）：錦標賽報名的牌組改在伺服器端也跑完整規則。
     //   以前 /register、/register-and-checkin、/propose 只檢查 60 張 ⇒ 改過的前端或很舊的快取版本
