@@ -349,7 +349,10 @@ const CRITERIA = {
       //   ⚠ 只抓一次（旗標先設再抓）、1.5 秒上限、失敗不重試、抓不到就不擋任何人。
       //   行為面不是靠這裡的字串守的 —— test-v6384 的【H】行為端 harness（H7／H14）
       //   是真的把函式抽出來執行、斷言「有沒有真的建到房」的。
-      'fetch(': 1,
+      // ⭐v6.562（Rule 40）：錦標賽聊天室置頂公告 GET /api/tourn-chat-pin、賽程表對局總時間 GET /api/tourn-match-times
+      //   —— 兩發都跟著本來就在跑的輪詢（聊天室 3 秒、賽程表）順帶抓、自己節流 30 秒；不碰 Firestore（伺服器 Mongo）。
+      //   名實相符由下面 C11d 釘；行為（節流、舊伺服器 404 不顯示）由 test-v6562-chat-pin-and-times 守。
+      'fetch(': 3,
     },
   };
   if (hasBaseCommit(ROOT, BASE_SHA)) {
@@ -383,6 +386,13 @@ const CRITERIA = {
         return g.includes("fetch('/api/client-min-version'")
           && /if \(_casualMinVerFetched\) return;\s*_casualMinVerFetched = true;/.test(g)
           && /Promise\.race\(\[ensureCasualMinVer\(\), new Promise\(\(r\) => setTimeout\(r, 1500\)\)\]\)/.test(g);
+      })());
+    chk('C11d ⭐⭐ v6.562 登記的兩發確實是置頂公告與對局時間，而且都有 30 秒節流',
+      (() => {
+        const g = read('src/routes/game/+page.svelte');
+        return g.includes('await fetch(CHAT_PIN_URL)') && g.includes("await fetch(MATCH_TIMES_URL + '?eventId=' + encodeURIComponent(eventId))")
+          && /if \(!force && now - _tPinAt < CHAT_PIN_REFRESH_MS\) return;/.test(g)
+          && /if \(!force && now - \(_tMatchTimesAt\[eventId\] \?\? 0\) < MATCH_TIMES_REFRESH_MS\) return;/.test(g);
       })());
     // 反安慰劑：判準真的分辨得出差異
     chk('C11b ⭐反安慰劑：countOf 對「多一個 fetch(」判得出來',

@@ -37,7 +37,8 @@ import { revertV6292 } from './lib/tourn-revert-v6292.mjs';
 // ⭐v6.381：鏈又長一節（B 組：歸檔補 gameDraw ＋ 平手公告加「瑞士制仍可繼續」）。
 //   ⚠ 用**別名**把 v6.381 那一節接在最前面 ⇒ 下面每一個既有呼叫點一個字都不必改，
 //     語意也不變（還原後仍是 v6.292 的區塊）。test-v6292 B6 在守這條鏈。
-import { revertV154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365 } from './lib/tourn-revert-v154.mjs';
+import { revertV165, revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365 } from './lib/tourn-revert-v165.mjs';
+const revertV154 = (b) => _rv154(revertV165(b));   // ⭐v1.65（Rule 54）：鏈再長一節（Top Cut 人多取 16 強；既有呼叫點一個字都不必改）
 const revertV6384 = (b) => _rv6384(revertV150(revertV152(revertV153(revertV154(b)))));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）；⭐v1.53 再長一節（報名牌組完整規則）；⭐v1.54 再長一節（全站 audit 降載）
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
 const revertV6365 = (b) => _rv6365(revertV6381(b));   // ⭐v6.381 鏈又長一節（別名：既有呼叫點一個字都不必改）
@@ -128,8 +129,8 @@ const TEV_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
 const OLD_TAIL_SHA = '34a8448b7de92a1f9a3a30c02c01ecd274409e1520fcc73fe5e92d6da47cc12c';
 const OLD_TEV_SHA = '54cd122681c99f050eadf22e7823159bc5f40ecbc88118f49e5de88cb683b196';
 const OLD_TEV_LEN = 218193;
-const NEW_TAIL_SHA = '64c15bd2688f5cb07f68828a8c8355660dbe931a00f47c034dc3678414485a57';
-const NEW_TEV_SHA = '98679fb3f9013b0a7b59971977b7ff13dd1ac03a9c46560c36072cae6aea46ff';
+const NEW_TAIL_SHA = '8af4edb9453d17e6d515f6a6fd85f53cd52dfa2c57c0e7b7e78c8d2765696fdf';
+const NEW_TEV_SHA = '43767585cccbd5fc4c9999b1d43334360633110af4871c4532f37ab1824c7894';
 
 console.log('\n══ 【A】結構（每一條在 BASE v6.275 上都必須紅，見【H】）═══════════════════');
 
@@ -448,7 +449,9 @@ await T('D1 ⭐⭐ 沒有 deckId 的 reg ⇒ 歸檔 player 與 BASE 逐位元相
   const { deckId: _drop, ...rest } = pa;
   assert.ok(!JSON.stringify(rest).includes('deckId'), 'x');
   assert.ok(JSON.stringify(pa).endsWith(',"deckId":"' + UUID + '"}'), 'deckId 應附加在最後：' + JSON.stringify(pa));
-  // matches 一個字都不動
+  // matches 一個字都不動（⭐v1.65 Rule 40：對局時間 gameStartedAt／endedAt 是後來合法加的兩欄，先斷言存在、值來自 fixture（沒有 ⇒ null），再剔除比對）
+  assert.ok(setDoc.matches.every((m) => m.gameStartedAt === null && m.endedAt === null), 'v1.65 歸檔的對局時間欄位不對：' + JSON.stringify(setDoc.matches));
+  setDoc.matches = setDoc.matches.map(({ gameStartedAt: _g, endedAt: _e, ...rest }) => rest);
   assert.strictEqual(JSON.stringify(setDoc.matches),
     '[{"round":1,"idx":0,"p1uid":"u1","p1name":"甲","p2uid":"u2","p2name":"乙","winnerUid":"u1","winnerName":"甲","status":"done","bye":false,"noShow":false,"doubleNoShow":false,"draw":false,"gameDraw":false,"deadlockDraw":false,"forfeit":false,"idleForfeit":false,"timeLimit":false,"adminResolved":false,"doubleDrop":false,"dropForfeit":false}]',
     'matches 映射被動到了：' + JSON.stringify(setDoc.matches));
@@ -807,6 +810,9 @@ await T('H2 ⭐⭐⭐ BASE 的 /register／歸檔函式跑同一份 fixture ⇒ 
       assert.ok(Object.prototype.hasOwnProperty.call(m, 'gameDraw'),
         'v6.381 的 gameDraw 沒有出現在歸檔的 matches 裡（B-2 沒做到／被改掉了）');
       delete m.gameDraw;
+      // ⭐v1.65（Rule 40，同一個宣告式剔除模式）：歸檔 matches 多帶對局時間 gameStartedAt／endedAt（v6.562 賽程對局時間）——先斷言存在再剔除
+      assert.ok(Object.prototype.hasOwnProperty.call(m, 'gameStartedAt') && Object.prototype.hasOwnProperty.call(m, 'endedAt'), 'v1.65 的對局時間沒有出現在歸檔的 matches 裡');
+      delete m.gameStartedAt; delete m.endedAt;
     }
     return d;
   };

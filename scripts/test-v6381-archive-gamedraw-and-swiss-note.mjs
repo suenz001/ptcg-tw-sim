@@ -19,10 +19,11 @@ import { createHash } from 'node:crypto';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
 import {
-  TAIL_ANCHOR, TEV_ANCHOR, revertV154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertToV6292, revertToV6291,
-  NEW_TAIL_SHA_V154 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V154 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V154 as NEW_TEV_LEN_CUR,
+  TAIL_ANCHOR, TEV_ANCHOR, revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertToV6292, revertToV6291,
+  NEW_TAIL_SHA_V165 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V165 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V165 as NEW_TEV_LEN_CUR, revertV165,
   OLD_TAIL_SHA_V6365, OLD_TEV_SHA_V6365, OLD_TEV_LEN_V6365,
-} from './lib/tourn-revert-v154.mjs';
+} from './lib/tourn-revert-v165.mjs';
+const revertV154 = (b) => _rv154(revertV165(b));   // ⭐v1.65（Rule 54）：鏈再長一節（Top Cut 人多取 16 強；既有呼叫點一個字都不必改）
 const revertV6384 = (b) => _rv6384(revertV150(revertV152(revertV153(revertV154(b)))));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）；⭐v1.53 再長一節（報名牌組完整規則）；⭐v1.54 再長一節（全站 audit 降載）
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
 import { NEW_TAIL_SHA_V6292, NEW_TEV_SHA_V6292, NEW_TEV_LEN_V6292 } from './lib/tourn-revert-v6292.mjs';
@@ -91,7 +92,8 @@ if (W && R) {
     w0.gameDraw === false && r0.gameDraw === false, JSON.stringify([w0.gameDraw, r0.gameDraw]));
   chk('★★★ A4 兩端的欄位集合完全一致（寫入端補了、讀出端漏掉就是 v0.96 的原型病灶）',
     JSON.stringify(Object.keys(r)) === JSON.stringify(Object.keys(w).filter((k) => k in r))
-    && Object.keys(w).filter((k) => !(k in r)).every((k) => ['doubleDrop', 'dropForfeit'].includes(k)),
+    // ⭐v1.65（Rule 40）：對局時間 gameStartedAt／endedAt 只給玩家端 /api/tourn-match-times 讀（賽事刪除後的備援），admin stats 不需要 ⇒ 與 doubleDrop／dropForfeit 同列「只寫不回」
+    && Object.keys(w).filter((k) => !(k in r)).every((k) => ['doubleDrop', 'dropForfeit', 'gameStartedAt', 'endedAt'].includes(k)),
     'w=' + Object.keys(w).join(',') + '\n        r=' + Object.keys(r).join(','));
   chk('★★ A5 舊欄位一個都沒被動到（純 additive：draw／deadlockDraw／timeLimit… 值照舊）',
     w.draw === true && w.deadlockDraw === false && w.timeLimit === false

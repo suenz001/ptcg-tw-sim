@@ -1,5 +1,28 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.562／server patch v1.65／admin v1.85：聊天室置頂公告、賽程對局總時間、Top Cut 人多取 16 強（2026-10-13 站長交辦）
+
+BASE `7b88d581`（v6.561）。站長 16:58：①「錦標賽大廳聊天室的最上方，讓我能在admin的賽事分頁裡面，設定一則至頂公告…(玩家看完後可以選擇按X隱藏)」②「賽程回放選單，除了標記誰獲勝外，後面再幫我標記一個該場比賽的對局總時間…有玩家拖時間」③「最近錦標賽都是5輪，而最近報名人數常常都八九十人，幾乎是輸一把就沒機會進複賽…人數比較多的時候，改成取16強打複賽，你覺得呢??這部分由你規劃看看」「記得都要通過審查」。
+- ① server v1.65 哨兵 v165-chat-pin-and-times（錦標賽區塊之前）：GET /api/tourn-chat-pin（公開，回 pinApi:1，記憶體快取 15 秒）、POST（管理員，text 空字串＝取消，最多 500 字，存 tournamentConfig/chatPin，寫入後快取立刻失效）。前端 leaf src/lib/tournament/chat-pin.ts（parseChatPin／chatPinVisible／隱藏紀錄 localStorage ptcg_tchat_pin_dismissed_v1，id＝公告更新時間 ⇒ 新公告會再出現）；對戰頁 tChatLoad 每次順帶 tPinRefresh（30 秒節流），大廳聊天室與浮動聊天室最上方各一列，可按 ×。admin v1.85 賽事分頁「📌 聊天室置頂公告」面板（tevPinPanelHtml／tevPinSave／tevPinClear；舊伺服器沒有 pinApi ⇒ 不顯示）。
+- ② GET /api/tourn-match-times?eventId=（公開；每個賽事一次 find 只取 6 欄、快取 15 秒＋在途合併）：已結束＝endedAt−gameStartedAt（gameStartedAt＝第一位玩家進場建局），進行中＝到現在（live）；輪空、沒有 endedAt（投降／判負等少數路徑沒寫）、負值、超過 12 小時都不回。前端 leaf match-times.ts；tBracketLoad 每個賽事順帶抓（30 秒節流）、tHofOpen 打開時抓；賽程表與名人堂賽程每列在右邊多一欄 ⏱ m:ss（有時間才多一欄，進行中黃色）。
+- ③ swiss.ts topCutSizeForCount(n)：16 人以下 4 強、17～63 人 8 強、64 人以上 16 強。我原本提「依瑞士輪數估一敗者人數＋出賽 40 人以上」，站長 17:17 改 60 人、17:18 再改「取64人才16強，因為我覺得用2的次方來算比較好」⇒ 拿掉估算，單純 2 的次方分段。站長 17:20：「瑞士制的輪次也要配合這次的top cut修改 千萬不要變成，輪次變多，然後還要打16強」⇒ swissRoundsForCount 改成 ≤16→3、17～32→4、33～128→5（原本 49～96→6、97～192→7）、129～256→6、其餘 7；topCutSizeForCount(n, swissRounds?) 在瑞士超過 5 輪（站長手填 6 輪以上）時不取 16 強。總輪數：33～63 人 5＋3＝8、64～128 人 5＋4＝9（與原本 6＋3 相同）。seedEventBracket 帶入實際輪數、另存 swissRoundsAuto；一鍵建立同理只沿用手填的輪數（舊賽事開賽時自動存下的 5 或 6 不再沿用）。錦標賽區塊內（⇒ 28 把鎖重釘）：seedEventBracket 帶入實際輪數、存 topCutAuto／swissRoundsAuto；一鍵建立 dailyScanSources 讀兩個旗標、dailySettingsFrom 只沿用 Auto===false（手填）的輪數與 Top Cut —— 原本開賽時自動算出的 8 會被存進賽事、隔天一鍵建立再沿用，自動規則永遠不會生效（舊賽事沒有旗標一律視為自動）。admin 兩處說明文字更新。
+- 28 把鎖：新 lib scripts/lib/sap-revert-admin-v165.mjs（difflib 5 對，逐位元還原 v1.64）＋ tourn-revert-v165.mjs（NEW_*_V165；revertToV6292/6291 自己包一層）；17 支守衛字面值重釘（tail 8af4edb9…、tev 43767585…、len 240843）；消費者 test-v6276／v6291／v6292／v6381／sap152／sap153／admin-v177 改接 v165（別名 revertV154＝_rv154(revertV165(b))）；sap154 D 節先剝 v1.65；v6303／sap153／sap154 的整份還原鏈內側加 revertAdminV165；sap152／sap153／sap154 D5、v6292 B6 接受 v165 lib；admin-v177 A5 fixture 加 topCutAuto:false 並補「自動／無旗標不沿用」；v6561 K2 先剝 v1.65。
+- 其他 Rule 40：test-v6340 C11 登記兩發新 fetch（C11d 釘名實相符與節流）；test-v6441／v6293 新 lib scripts/lib/revert-v6562-game.mjs（13 對）；test-v6477 淺色主題重新產生。
+- 守衛 test-v6562-chat-pin-times-topcut：P1～P4、T1～T3（伺服器區塊實跑）、C1～C4（leaf）、W1～W4（對戰頁哨兵區塊經 esbuild 轉 JS 注入假 fetch 實跑＋模板）、A1～A2（admin 面板實跑）、X1～X3b（規則表、自動輪數與 16 強的組合掃 2～300 人、seedEventBracket 實跑 88 自動／88 手填 5 輪／88 手填 6 輪／63／30 人、dailySettingsFrom 實跑）；test-swiss 對照表照新規則改。HEAD-FAIL 全部在 v6.561 紅。突變 22 個全殺。
+- **Fable 5.1 審查（agent ae584ea1322da9583）：需修，P1×1、P2×2、P3×7**（實測 18 個突變全殺、revert 表逐位元、acorn 作用域、Playwright 375px 不溢出）。
+  - P1-1 修：v1.64 一鍵建立已把「上一場開賽時自動算出的 6 輪／8 強」複製進尚未開賽的賽事（沒有旗標），原本 seed 用「值 >0」推斷手填 ⇒ 今晚開賽又被釘成手填、新規則永遠不生效。改成**建立／編輯賽事當下**寫 swissRoundsAuto／topCutAuto（insertTournamentEvent 與 /event/update），seed 只有旗標 ===false 才照存下的數字、其餘（含舊賽事無旗標）依人數重算。守衛 X2 加 g（無旗標 6／8 ⇒ 5 輪 16 強且記成自動）、X4（insertTournamentEvent 實跑＋編輯端）。
+  - P2-1 修：投降、中途棄賽（兩種）、管理員裁定、閒置判負補寫 endedAt（未進場不寫：沒有對局）。守衛 X5。
+  - P2-2 修：永久歸檔的 matches 帶 gameStartedAt／endedAt；/api/tourn-match-times 在 TMATCH 找不到（賽事被刪）時改讀歸檔。守衛 T4。Rule 40：test-v6276 D1／H2 與 test-v6381 A4 照既有「先斷言存在再宣告式剔除／只寫不回清單」模式加這兩欄。
+  - P3 處理：置頂公告 × 鈕 32px、公告內容 max-height 6.5em 可捲；時間欄字級 0.7rem（不加媒體查詢，test-v6199／v6449／v6450 釘媒體查詢數；註解裡也不能出現該字面）；test-v6390 A4 註解條數 14→15（.tchat-pin-text 是新的可捲清單）。P3 未改：129 人以上自動 6 輪＋8 強（與「瑞士超過 5 輪不取 16 強」一致，目前人數到不了）、公告重發相同內容會再出現（id＝更新時間，符合說明）、fetch 無逾時（30 秒節流，影響小）。
+  - 其他 Rule 40：test-v6177 tBracketLoad 實跑 harness 補 tMatchTimesLoad 替身；test-v6280 F7 fetch 呼叫點 4→6 並逐一釘名。
+- 站長 18:08：Fable 額度快用完，之後審查改派 Opus 5.5（複審由 Opus 執行）。
+- **Opus 5.5 複審（agent a6754a6061270c12f）：P1-1／P2-1／P2-2 確認修好、28 把鎖與 Rule 40 沒有放寬；需修 P2×1、P3×4**（突變 12 個，存活 1 個）。
+  - P2-A 修：admin 編輯表單原本把 ev.swissRounds／ev.topCut 原樣回填 ⇒ v1.64 沿用來、沒有旗標的 6／8，站長只改名稱按「更新」也會被送回去、記成手填（今晚那場正是這種狀態）。admin v1.85 加 tevManualVal（只回填 Auto===false 的值）與 tevSwissLabel（狀態列開賽前標「輪數自動→Top Cut 自動」）。守衛 A3（兩個 helper 實跑＋表單接線）。
+  - P3-A 修：X4 編輯端原本只比字面（註解掉也綠）⇒ 改成把 /event/update handler 抽出來實跑（留空＝自動、數字＝手填、開賽後不改瑞士欄位）。三個新突變全殺。
+  - P3-B／C 修：match-times.ts 註解改成實情（只剩未進場不記 endedAt）；對戰頁與 test-sap154 的 import 註解歸位。P3-D（管理員裁定的時間含站長處理延遲）記錄備查，不改。
+- 全套（commit 2f65d8f4）：875 支 FAIL 0、escape 0、主樹差異 0。複審修正後（只動 admin.html、守衛、註解）重跑相關守衛。
+- 部署：update-tournament.bat（server v1.65＋admin v1.85＋引擎 bundle 的 swiss 規則）→ redeploy-oracle.bat。
+
 ## v6.561／server patch v1.64：錦標賽回放改成每個動作一格（2026-10-13 站長交辦）
 
 BASE `cb4abe25`（v6.560）。站長 13:59：「也請你順便把錦標賽復盤也改成每個動作一格」。

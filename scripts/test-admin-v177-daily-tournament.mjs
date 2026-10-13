@@ -119,7 +119,7 @@ const withNow = async (ms, fn) => { const real = Date.now; Date.now = () => ms; 
 // 基準資料：最近兩場（149 瑞士、148 單敗），各帶不同設定
 const BASE_EVENTS = () => [
   ev('網站賽-148【19:00 單敗淘汰】', { createdAt: 100, format: 'single-elim', maxPlayers: 32, roundLimitMin: 30, noShowMin: 6, roundCountdownMin: 4, registrationCloseAt: tw(2026, 9, 22, 19, 0) }),
-  ev('網站賽-149【21:00 瑞士制】', { createdAt: 101, format: 'swiss-then-cut', maxPlayers: 24, roundLimitMin: 28, noShowMin: 7, roundCountdownMin: 2, swissRounds: 4, topCut: 8, registrationCloseAt: tw(2026, 9, 22, 21, 0) }),
+  ev('網站賽-149【21:00 瑞士制】', { createdAt: 101, format: 'swiss-then-cut', maxPlayers: 24, roundLimitMin: 28, noShowMin: 7, roundCountdownMin: 2, swissRounds: 4, topCut: 8, topCutAuto: false, swissRoundsAuto: false, registrationCloseAt: tw(2026, 9, 22, 21, 0) }),
 ];
 const NOON = tw(2026, 9, 23, 12, 0);   // 台北 9/23 中午（兩場都還沒到）
 
@@ -166,6 +166,18 @@ await T('A5 ⭐⭐【HEAD-FAIL】參數沿用「最近一場同賽制的網站�
   const [a, b] = S.spy.inserts;
   assert.deepStrictEqual([a.maxPlayers, a.roundLimitMin, a.noShowMin, a.roundCountdownMin], [32, 30, 6, 4]);
   assert.deepStrictEqual([b.maxPlayers, b.roundLimitMin, b.noShowMin, b.roundCountdownMin, b.swissRounds, b.topCut], [24, 28, 7, 2, 4, 8]);
+  // ⭐v1.65（Rule 40，意圖不變＝參數沿用）：Top Cut 只沿用站長「手填」的值（開賽時存 topCutAuto:false）；
+  //   開賽自動算出的（topCutAuto:true）或舊賽事（沒有旗標）⇒ 不沿用、留空，讓新的人數規則生效。其餘欄位照樣沿用。
+  //   ⭐（站長 17:20）瑞士輪數同理（swissRoundsAuto）。
+  if (/topCutAuto/.test(PATCH)) {
+    for (const flag of [true, undefined]) {
+      const evs = BASE_EVENTS().map((e) => (/149/.test(e.name) ? { ...e, topCutAuto: flag, swissRoundsAuto: flag } : e));
+      const S2 = buildServer(PATCH, { events: evs });
+      await withNow(NOON, () => call(S2.handlers['POST /api/tournament/admin/event/create-daily'], { body: {} }));
+      const b2 = S2.spy.inserts[1];
+      assert.deepStrictEqual([b2.swissRounds, b2.topCut, b2.roundLimitMin], [0, 0, 28], 'Auto 旗標=' + flag + ' 時輪數與 Top Cut 都不可沿用（其他欄位照樣沿用）');
+    }
+  }
 });
 await T('A6 ⭐⭐【HEAD-FAIL】台北時區：伺服器 TZ 是 UTC 也要對（19:00 台北 ＝ 11:00 UTC；台北 00:30 算「今天」）', async () => {
   const S = buildServer(PATCH, { events: BASE_EVENTS() });
@@ -464,8 +476,9 @@ console.log('\n【D】錦標賽區塊的 revert-diff 與 28 把鎖重釘（動�
   const RV152 = await import('./lib/tourn-revert-v152.mjs');
   const RV153 = await import('./lib/tourn-revert-v153.mjs');
   const RV154 = await import('./lib/tourn-revert-v154.mjs');   // ⭐v1.54 再先剝一節
-  const tail = RV152.revertV152(RV153.revertV153(RV154.revertV154(PATCH.slice(PATCH.indexOf(RV.TAIL_ANCHOR)))));
-  const tev = RV152.revertV152(RV153.revertV153(RV154.revertV154(PATCH.slice(PATCH.indexOf(RV.TEV_ANCHOR)))));
+  const RV165 = await import('./lib/tourn-revert-v165.mjs');   // ⭐v1.65 再先剝一節
+  const tail = RV152.revertV152(RV153.revertV153(RV154.revertV154(RV165.revertV165(PATCH.slice(PATCH.indexOf(RV.TAIL_ANCHOR))))));
+  const tev = RV152.revertV152(RV153.revertV153(RV154.revertV154(RV165.revertV165(PATCH.slice(PATCH.indexOf(RV.TEV_ANCHOR))))));
   await T('D1 ⭐⭐ 現行區塊（剝掉 v1.52 之後）指紋 ＝ v1.50 的新值（tail／tev／長度）', () => {
     ok(sha(tail) === RV.NEW_TAIL_SHA_V150 && sha(tev) === RV.NEW_TEV_SHA_V150 && tev.length === RV.NEW_TEV_LEN_V150,
       'tail=' + sha(tail) + ' tev=' + sha(tev) + ' len=' + tev.length);

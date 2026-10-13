@@ -7616,6 +7616,93 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
     // <<< v164-replay-steps
+    // >>> v165-chat-pin-and-times
+    // ⭐server v1.65（v6.562，站長 2026-10-13）：
+    //   ① 錦標賽大廳聊天室的「置頂公告」：admin 賽事分頁設定一則，玩家在聊天室最上方看得到（可按 X 隱藏；換一則新公告會再出現）。
+    //   ② 賽程表每一場的「對局總時間」：站長要找出拖時間的對局（gameStartedAt＝第一位玩家進場建局 → endedAt＝分出勝負）。
+    //   ⚠ 刻意放在錦標賽區塊（TAIL_ANCHOR）之前、路徑不用錦標賽前綴 ⇒ 錦標賽區塊 28 把鎖這兩項一把都不動。
+    //   ⚠ 讀取量：公告存在 tournamentConfig 一份文件（記憶體快取 15 秒）；對局時間每個賽事一次 find（只取 6 個欄位，快取 15 秒＋在途合併）。
+    //     前端只在聊天室／賽程表本來就在輪詢時順帶抓、而且自己節流（30 秒一次），不新增常駐輪詢。
+    //   ⚠ TMATCH／TARCHIVE 在錦標賽區塊裡才宣告（同一個 try 區塊）：handler 執行期才讀，註冊當下不讀。
+    const TPIN_DOC_ID = 'chatPin';
+    const TPIN_MAX_LEN = 500;
+    const TPIN_CACHE_MS = 15 * 1000;
+    let _tpinCache = null;   // { at, pin }
+    async function tChatPinGet() {
+      const now = Date.now();
+      if (_tpinCache && now - _tpinCache.at < TPIN_CACHE_MS) return _tpinCache.pin;
+      const d = await db.collection('tournamentConfig').findOne({ _id: TPIN_DOC_ID }, { projection: { text: 1, updatedAt: 1 } });
+      const text = d && typeof d.text === 'string' ? d.text.trim() : '';
+      const pin = text ? { id: String(d.updatedAt || 0), text, at: Number(d.updatedAt) || 0 } : null;
+      _tpinCache = { at: now, pin };
+      return pin;
+    }
+    app.get('/api/tourn-chat-pin', async (req, res) => {
+      try {
+        res.set('Cache-Control', 'no-store');
+        res.json({ pinApi: 1, pin: await tChatPinGet() });
+      } catch (e) { res.status(500).json({ error: 'unavailable' }); }
+    });
+    app.post('/api/tourn-chat-pin', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const b = req.body || {};
+        if (typeof b.text !== 'string') return res.status(400).json({ error: '需要 text（空字串＝取消置頂）' });
+        const text = b.text.replace(/\r\n/g, '\n').trim();
+        if (text.length > TPIN_MAX_LEN) return res.status(400).json({ error: '公告最多 ' + TPIN_MAX_LEN + ' 字（目前 ' + text.length + ' 字）' });
+        const now = Date.now();
+        await db.collection('tournamentConfig').updateOne({ _id: TPIN_DOC_ID },
+          { $set: { text, updatedAt: now, updatedBy: String(id.email || id.uid || '') } }, { upsert: true });
+        _tpinCache = null;   // 立刻生效，不等 15 秒快取
+        res.json({ ok: true, pinApi: 1, pin: await tChatPinGet() });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    const TMT_CACHE_MS = 15 * 1000;
+    const _tmtCache = new Map();     // eventId → { at, rows:[{ r, i, st, s, e }] }
+    const _tmtInflight = new Map();  // eventId → Promise（同時醒來的請求只查一次）
+    async function tMatchTimesRows(eventId) {
+      const now = Date.now();
+      const c = _tmtCache.get(eventId);
+      if (c && now - c.at < TMT_CACHE_MS) return c.rows;
+      if (_tmtInflight.has(eventId)) return _tmtInflight.get(eventId);
+      const p = (async () => {
+        try {
+          let ms = await TMATCH.find({ eventId }, { projection: { round: 1, idx: 1, status: 1, bye: 1, gameStartedAt: 1, endedAt: 1 } }).limit(2000).toArray();
+          // 賽事已被刪除（/event/delete 會清掉 TMATCH）⇒ 改讀永久歸檔裡的同一份欄位（v1.65 起歸檔才有時間；更早的歸檔沒有 ⇒ 不顯示）
+          if (!ms.length) {
+            const arch = await TARCHIVE.findOne({ _id: 'arch_' + eventId }, { projection: { matches: 1 } });
+            ms = (arch && Array.isArray(arch.matches)) ? arch.matches.slice(0, 2000) : [];
+          }
+          const rows = ms.filter((m) => m && !m.bye && Number(m.gameStartedAt) > 0)
+            .map((m) => ({ r: m.round, i: m.idx, st: m.status, s: Number(m.gameStartedAt), e: Number(m.endedAt) || 0 }));
+          if (_tmtCache.size > 200) _tmtCache.clear();   // 上限（每個賽事一筆，正常只有個位數）
+          _tmtCache.set(eventId, { at: Date.now(), rows });
+          return rows;
+        } finally { _tmtInflight.delete(eventId); }
+      })();
+      _tmtInflight.set(eventId, p);
+      return p;
+    }
+    /** 一場的時間：已結束＝endedAt − gameStartedAt；進行中＝現在 − gameStartedAt（live）。缺資料或不合理（負值、超過 12 小時）⇒ 不回。 */
+    function tMatchTimeOf(row, now) {
+      const LIM = 12 * 3600 * 1000;
+      if (row.st === 'done') { const d = row.e - row.s; return (row.e > 0 && d >= 0 && d <= LIM) ? { r: row.r, i: row.i, ms: d, live: false } : null; }
+      if (row.st === 'playing') { const d = now - row.s; return (d >= 0 && d <= LIM) ? { r: row.r, i: row.i, ms: d, live: true } : null; }
+      return null;
+    }
+    app.get('/api/tourn-match-times', async (req, res) => {
+      try {
+        const eventId = String((req.query && req.query.eventId) || '').slice(0, 120);
+        if (!eventId) return res.status(400).json({ error: '需要 eventId' });
+        const rows = await tMatchTimesRows(eventId);
+        const now = Date.now();
+        res.set('Cache-Control', 'no-store');
+        res.json({ matchTimesApi: 1, serverNow: now, times: rows.map((x) => tMatchTimeOf(x, now)).filter(Boolean) });
+      } catch (e) { res.status(500).json({ error: 'unavailable' }); }
+    });
+    // <<< v165-chat-pin-and-times
     // >>> v153-tourn-deck-validate
     // ⭐⭐ server patch v1.53（2026-10-02，站長核准）：錦標賽報名的牌組改在伺服器端也跑完整規則。
     //   以前 /register、/register-and-checkin、/propose 只檢查 60 張 ⇒ 改過的前端或很舊的快取版本
@@ -8692,7 +8779,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
     async function dailyScanSources() {
       const evs = await TEVENTS.find({ createdByPlayer: { $ne: true } },
         { projection: { name: 1, status: 1, format: 1, registrationCloseAt: 1, createdAt: 1,
-          maxPlayers: 1, roundLimitMin: 1, noShowMin: 1, roundCountdownMin: 1, swissRounds: 1, topCut: 1 } })
+          maxPlayers: 1, roundLimitMin: 1, noShowMin: 1, roundCountdownMin: 1, swissRounds: 1, topCut: 1, topCutAuto: 1, swissRoundsAuto: 1 } })   // ⭐v1.65 topCutAuto／swissRoundsAuto
         .sort({ createdAt: -1 }).limit(TDAILY_SCAN_LIMIT).toArray();
       const chs = await TCHAMPS.find({ communityEvent: { $ne: true } }, { projection: { eventName: 1, finishedAt: 1 } })
         .sort({ finishedAt: -1 }).limit(TDAILY_SCAN_LIMIT).toArray();
@@ -8714,8 +8801,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
         from: String(src.name || ''),
         maxPlayers: (src.maxPlayers == null ? '' : src.maxPlayers),
         roundLimitMin: src.roundLimitMin, noShowMin: src.noShowMin, roundCountdownMin: src.roundCountdownMin,
-        swissRounds: (Number(src.swissRounds) > 0 ? Number(src.swissRounds) : ''),
-        topCut: (Number(src.topCut) > 0 ? Number(src.topCut) : ''),
+        // ⭐v1.65 只沿用「站長手填」的輪數與 Top Cut：開賽時自動算出的值會被存進賽事（swissRoundsAuto／topCutAuto），
+        //   舊賽事沒有旗標也一律視為自動 ⇒ 留空、照新規則依人數算（否則自動規則永遠不會生效）
+        swissRounds: (Number(src.swissRounds) > 0 && src.swissRoundsAuto === false ? Number(src.swissRounds) : ''),
+        topCut: (Number(src.topCut) > 0 && src.topCutAuto === false ? Number(src.topCut) : ''),
       };
     }
     /**
@@ -8760,6 +8849,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
         // 瑞士制(swiss-then-cut)專屬：swissRounds/topCut 為 0 = 「依人數自動」(seed 時算)，admin 填數字則覆寫；phase 隨賽程 swiss→cut。
         swissRounds: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? (Number(b.swissRounds) > 0 ? Number(b.swissRounds) : 0) : undefined,
         topCut: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? (Number(b.topCut) > 0 ? Number(b.topCut) : 0) : undefined,
+        // ⭐v1.65：站長有沒有手填（建立當下就知道意圖；開賽時只有 Auto===false 才照填的數字，其餘依人數重算）
+        swissRoundsAuto: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? !(Number(b.swissRounds) > 0) : undefined,
+        topCutAuto: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? !(Number(b.topCut) > 0) : undefined,
         phase: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? 'swiss' : undefined,
         status: initStatus,
         registrationOpenAt: regOpen, registrationCloseAt: regClose,
@@ -8912,6 +9004,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
             if (newFmt === 'swiss-then-cut') {
               set.swissRounds = Number(b.swissRounds) > 0 ? Number(b.swissRounds) : 0;  // 0=依人數自動
               set.topCut = Number(b.topCut) > 0 ? Number(b.topCut) : 0;
+              set.swissRoundsAuto = !(Number(b.swissRounds) > 0); set.topCutAuto = !(Number(b.topCut) > 0);   // ⭐v1.65 編輯時一併記下是不是手填
               set.phase = 'swiss';
             }
             // 切回單敗淘汰：只改 format；瑞士欄位(swissRounds/topCut/phase)在 format=single-elim 時引擎一律忽略，保留無害。
@@ -9444,8 +9537,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
       if (regs.length < 2) return { error: '至少需要 2 位' + (opts.checkedInOnly ? '報到者' : '報名者'), conflictBelowMin: _conflictRemoved || _rawHadRemoved };
       const players = regs.map((r) => ({ uid: r.uid, name: r.name || '玩家', byes: 0 }));
       const sw = ev.format === 'swiss-then-cut';  // 瑞士制（單敗淘汰時 sw=false，行為完全不變）
-      const swissRounds = sw ? ((ev.swissRounds > 0) ? ev.swissRounds : TENG.swissRoundsForCount(players.length)) : 0;
-      const topCut = sw ? ((ev.topCut > 0) ? ev.topCut : TENG.topCutSizeForCount(players.length)) : 0;
+      // ⭐v1.65（Fable 審查 P1-1）：只有站長**明確手填**（建立／編輯時寫下 swissRoundsAuto／topCutAuto === false）才照存下的數字；
+      //   其餘一律依人數重算 —— 含 v1.64 以前一鍵建立「沿用上一場開賽時自動算出的值」而沒有旗標的賽事（否則今晚開賽又把 6 輪＋8 強釘成手填）。
+      const _manualRounds = ev.swissRoundsAuto === false && ev.swissRounds > 0;
+      const _manualCut = ev.topCutAuto === false && ev.topCut > 0;
+      const swissRounds = sw ? (_manualRounds ? ev.swissRounds : TENG.swissRoundsForCount(players.length)) : 0;
+      const topCut = sw ? (_manualCut ? ev.topCut : TENG.topCutSizeForCount(players.length, swissRounds)) : 0;   // ⭐v1.65 帶入實際瑞士輪數（超過 5 輪不取 16 強，見 swiss.ts）
       const rounds = sw ? swissRounds : Math.max(1, Math.ceil(Math.log2(players.length)));  // 單敗＝⌈log2(N)⌉；瑞士＝固定輪數
       const matches = buildRoundMatches(players, ev._id, 1);  // 第 1 輪（瑞士=隨機配對，與單敗第 1 輪相同）
       if (sw) matches.forEach((m) => { m.phase = 'swiss'; });
@@ -9455,7 +9552,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       const cdMin = (ev.roundCountdownMin != null ? ev.roundCountdownMin : 3);
       const roundStartedAt = opts.immediateEnter ? (Date.now() - cdMin * 60000) : Date.now();
       const _set = { status: 'running', currentRound: 1, rounds, roundStartedAt, startedAt: Date.now() };
-      if (sw) { _set.swissRounds = swissRounds; _set.topCut = topCut; _set.phase = 'swiss'; }
+      if (sw) { _set.swissRounds = swissRounds; _set.topCut = topCut; _set.topCutAuto = !_manualCut; _set.swissRoundsAuto = !_manualRounds; _set.phase = 'swiss'; }   // ⭐v1.65 記下輪數／Top Cut 是不是自動算的（一鍵建立只沿用手填的值）
       await TEVENTS.updateOne({ _id: ev._id }, { $set: _set });
       // v0.51：瑞士制確定簽到人數後，廣播預計輪次數 + 取前幾名晉級。
       if (sw) {
@@ -9503,7 +9600,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           //   錦標賽勝率從歸檔算）。⚠⚠ 純 additive：reg 沒有 deckId ⇒ 欄位缺席（絕不寫 null，
           //   sparse 索引 {'players.deckId':1} 才不會把舊形狀收進去）；其餘欄位逐字不動。
           players: regs.map((r) => ({ uid: r.uid, name: r.name, email: r.email || null, deckName: r.deckName || '', coinPref: r.coinPref || 'random', dropped: !!r.dropped, droppedAt: r.droppedAt || null, lateJoin: !!r.lateJoin, deckEntries: r.deckEntries || [], ...(typeof r.deckId === 'string' && r.deckId ? { deckId: r.deckId } : {}) })),
-          matches: matches.map((m) => ({ round: m.round, idx: m.idx, p1uid: m.p1uid, p1name: m.p1name, p2uid: m.p2uid, p2name: m.p2name, winnerUid: m.winnerUid, winnerName: m.winnerName, status: m.status, bye: !!m.bye, noShow: !!m.noShow, doubleNoShow: !!m.doubleNoShow, draw: !!m.draw, gameDraw: !!m.gameDraw, deadlockDraw: !!m.deadlockDraw, forfeit: !!m.forfeit, idleForfeit: !!m.idleForfeit, timeLimit: !!m.timeLimit, adminResolved: !!m.adminResolved, doubleDrop: !!m.doubleDrop, dropForfeit: !!m.dropForfeit })),
+          matches: matches.map((m) => ({ round: m.round, idx: m.idx, p1uid: m.p1uid, p1name: m.p1name, p2uid: m.p2uid, p2name: m.p2name, winnerUid: m.winnerUid, winnerName: m.winnerName, status: m.status, bye: !!m.bye, noShow: !!m.noShow, doubleNoShow: !!m.doubleNoShow, draw: !!m.draw, gameDraw: !!m.gameDraw, deadlockDraw: !!m.deadlockDraw, forfeit: !!m.forfeit, idleForfeit: !!m.idleForfeit, timeLimit: !!m.timeLimit, adminResolved: !!m.adminResolved, doubleDrop: !!m.doubleDrop, dropForfeit: !!m.dropForfeit, gameStartedAt: m.gameStartedAt || null, endedAt: m.endedAt || null })),   // ⭐v1.65 對局時間也進歸檔（賽事被刪掉後名人堂賽程仍看得到）
         } }, { upsert: true });
       } catch (e) { /* best-effort 歸檔 */ }
     }
@@ -9966,7 +10063,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const winSeat = 1 - mySeat;
         const wUid = winSeat === 0 ? m.p1uid : m.p2uid, wName = winSeat === 0 ? m.p1name : m.p2name;
         const lName = mySeat === 0 ? m.p1name : m.p2name;
-        await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', forfeit: true } });
+        await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', forfeit: true, endedAt: Date.now() } });   // ⭐v1.65 endedAt：賽程表顯示對局時間
         if (m.roomId) { try { const room = await TROOMS.findOne({ _id: m.roomId }); if (room && room.gameState) { const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = (lName || '對手') + ' 投降，' + wName + ' 勝'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: Date.now() } }); } } catch (e) { /* best-effort */ } }
         await postSystemChat('🏳 ' + (lName || '一方') + ' 投降，' + wName + ' 獲勝。');
         await advanceOrFinish(m, wUid, wName);
@@ -10020,14 +10117,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
             //   **絕不重用 doubleNoShow**：那個旗標在賽果頁與歸檔裡的語意是「兩人都沒出現」，
             //   混用會讓事後對帳分不出「棄賽」與「掛機沒出現」（v6.156 明確教訓）。
             //   計分邏輯 swiss.ts 現成：status==='done' 且 winnerUid===null ⇒ 雙方各記一敗、都不得分。
-            const _w = await TMATCH.updateOne(_mFilter, { $set: { status: 'done', winnerUid: null, winnerName: null, doubleDrop: true } });
+            const _w = await TMATCH.updateOne(_mFilter, { $set: { status: 'done', winnerUid: null, winnerName: null, doubleDrop: true, endedAt: Date.now() } });   // ⭐v1.65 endedAt
             if (_w && _w.matchedCount === 1) {
               await _forceGameOver(m, null, '雙方皆已棄賽，本場雙敗');
               await postSystemChat('🏳 第 ' + m.round + ' 輪 ' + (m.p1name || 'P1') + ' vs ' + (m.p2name || 'P2') + '：雙方皆已棄賽，本場以雙敗處理。');
             }
           } else {
             // 對戰中棄賽 ⇒ 沿用既有 /match/forfeit 的收場方式（對手勝 + 房間盤面推成 game-over）。
-            const _w = await TMATCH.updateOne(_mFilter, { $set: { winnerUid: oppUid, winnerName: oppName, status: 'done', forfeit: true, dropForfeit: true } });
+            const _w = await TMATCH.updateOne(_mFilter, { $set: { winnerUid: oppUid, winnerName: oppName, status: 'done', forfeit: true, dropForfeit: true, endedAt: Date.now() } });   // ⭐v1.65 endedAt
             if (_w && _w.matchedCount === 1) {
               await _forceGameOver(m, 1 - mySeat, myName + ' 棄賽，' + oppName + ' 勝');
               await postSystemChat('🏳 ' + myName + ' 棄賽，本場由 ' + oppName + ' 獲勝。');
@@ -10056,7 +10153,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (winnerSeat !== 0 && winnerSeat !== 1) return res.status(400).json({ error: 'winnerSeat 需 0 或 1' });
         const wUid = winnerSeat === 0 ? m.p1uid : m.p2uid, wName = winnerSeat === 0 ? m.p1name : m.p2name;
         if (!wUid) return res.status(400).json({ error: '該座位無玩家，無法判勝' });
-        await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', adminResolved: true } });
+        await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', adminResolved: true, endedAt: Date.now() } });   // ⭐v1.65 endedAt
         if (m.roomId) { try { const room = await TROOMS.findOne({ _id: m.roomId }); if (room && room.gameState) { const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winnerSeat; og.winReason = '管理員裁定：' + wName + ' 勝'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: Date.now() } }); } } catch (e) { /* best-effort */ } }
         await postSystemChat('⚖️ 管理員裁定：' + wName + ' 獲勝。');
         await advanceOrFinish(m, wUid, wName);
@@ -11783,7 +11880,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
             if (actor === 0 || actor === 1) {
               const winSeat = 1 - actor;
               const wUid = winSeat === 0 ? m.p1uid : m.p2uid, wName = winSeat === 0 ? m.p1name : m.p2name, lName = actor === 0 ? m.p1name : m.p2name;
-              await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', idleForfeit: true } });
+              await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', idleForfeit: true, endedAt: Date.now() } });   // ⭐v1.65 endedAt
               try { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = (lName || '一方') + ' 閒置逾 ' + idleMin + ' 分鐘判負，' + wName + ' 勝'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now } }); } catch (e) { /* best-effort */ }
               await postSystemChat(swissPhase(ev) ? ('⏰ ' + (lName || '一方') + ' 閒置逾 ' + idleMin + ' 分鐘判負，本場由 ' + wName + ' 獲勝（瑞士制：雙方仍繼續後續輪次）。') : ('⏰ ' + (lName || '一方') + ' 閒置逾 ' + idleMin + ' 分鐘判負，' + wName + ' 獲勝。'));
               await advanceOrFinish(m, wUid, wName);

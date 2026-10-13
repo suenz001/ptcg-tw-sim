@@ -29,6 +29,8 @@ import { revertAdminV156 } from './lib/sap-revert-admin-v156.mjs';   // ⭐serve
 import { revertAdminV162 } from './lib/sap-revert-admin-v162.mjs';   // ⭐server v1.62（v6.525 回到我之前的房間）：先剝較新的（Rule 54）
 import { revertAdminV163 } from './lib/sap-revert-admin-v163.mjs';   // ⭐v1.63（v6.539 補位順序）
 import { revertAdminV164 } from './lib/sap-revert-admin-v164.mjs';   // ⭐v1.64（v6.561 錦標賽回放逐動作，錦標賽區塊之前）：先剝較新的（Rule 54）
+import { revertAdminV165 } from './lib/sap-revert-admin-v165.mjs';   // ⭐v1.65（v6.562 置頂公告／對局時間／Top Cut）：先剝較新的（Rule 54）
+import { revertV165 } from './lib/tourn-revert-v165.mjs';   // ⭐v1.65 D 節先剝較新的一節
 import { revertAdminV161 } from './lib/sap-revert-admin-v161.mjs';   // ⭐server v1.61（總覽先攻座位、卡片勝率未進場不計）：先剝較新的（Rule 54）
 import { revertAdminV160 } from './lib/sap-revert-admin-v160.mjs';   // ⭐server v1.60（套牌／玩家戰績未進場不計）：先剝較新的（Rule 54）
 import { revertAdminV159 } from './lib/sap-revert-admin-v159.mjs';   // ⭐server v1.59（原型未進場不計＋先攻後攻）：先剝較新的（Rule 54）
@@ -290,8 +292,9 @@ async function runBracket(src) {
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n【D】錦標賽區塊 28 把鎖重釘');
 {
-  const tail = CUR.slice(CUR.indexOf(TAIL_ANCHOR)), tev = CUR.slice(CUR.indexOf(TEV_ANCHOR));
-  ok('★★[D1] 現行區塊指紋 ＝ NEW_*_V154', sha(tail) === NEW_TAIL_SHA_V154 && sha(tev) === NEW_TEV_SHA_V154 && tev.length === NEW_TEV_LEN_V154);
+  // ⭐v1.65（Rule 40，意圖不變）：錦標賽區塊之後又被 v1.65（Top Cut 人多取 16 強）合法改過 ⇒ 先剝 v1.65 再比對 v1.54 的值
+  const tail = revertV165(CUR.slice(CUR.indexOf(TAIL_ANCHOR))), tev = revertV165(CUR.slice(CUR.indexOf(TEV_ANCHOR)));
+  ok('★★[D1] 現行區塊（剝掉 v1.65 之後）指紋 ＝ NEW_*_V154', sha(tail) === NEW_TAIL_SHA_V154 && sha(tev) === NEW_TEV_SHA_V154 && tev.length === NEW_TEV_LEN_V154);
   const rt = revertV154(tail), rv = revertV154(tev);
   ok('★★★[D2] revertV154 之後逐位元回到 v1.53 的值', sha(rt) === OLD_TAIL_SHA_V153 && sha(rv) === OLD_TEV_SHA_V153 && rv.length === OLD_TEV_LEN_V153);
   const mut = tail.replace('const CHAT_META_TTL_MS = 60 * 1000;', 'const CHAT_META_TTL_MS = 61 * 1000;');
@@ -310,10 +313,11 @@ console.log('\n【D】錦標賽區塊 28 把鎖重釘');
   ok('★★[D4] v1.53 的舊指紋零殘留（28 把鎖全部重釘）', stale.length === 0, stale.join(', '));
   const CONSUMERS = ['scripts/test-v6276-deck-tournament-stats.mjs', 'scripts/test-v6291-tourn-verified-gate.mjs', 'scripts/test-v6292-tourn-verified-gate2.mjs',
     'scripts/test-v6303-ui-batch.mjs', 'scripts/test-v6381-archive-gamedraw-and-swiss-note.mjs'];
-  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(s.includes("from './lib/tourn-revert-v154.mjs'") && /revert(?:Admin)?V154\(/.test(s)); });
+  // （⭐v1.65 起消費者改接 tourn-revert-v165，它的鏈內含本版；Rule 40 意圖不變）
+  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !((s.includes("from './lib/tourn-revert-v154.mjs'") || s.includes("from './lib/tourn-revert-v165.mjs'")) && /revert(?:Admin)?V154\(/.test(s)); });
   ok('★★[D5] 五支消費者都 import 新 lib 且呼叫 v1.54 的還原器', bad.length === 0, bad.join(', '));
   ok('★[D5b] test-v6303 的 SAP 還原鏈：revertAdminV154 緊接在 revertAdminV153 內側（v1.55 起內側還有更新的還原器，Rule 54 由新到舊）', /revertAdminV153\(revertAdminV154\((?:revertAdminV1\d\d\()*SAP_RAW\)/.test(rd('scripts/test-v6303-ui-batch.mjs')));
-  if (BASE) ok('★★[D6] 整份檔案：revertAdminV154 之後與 v1.53 逐位元相同（沒有夾帶宣告以外的改動）', revertAdminV154(revertAdminV155(revertAdminV156(revertAdminV157(revertAdminV158(revertAdminV159(revertAdminV160(revertAdminV161(revertAdminV162(revertAdminV163(revertAdminV164(CUR))))))))))) === BASE);   // ⭐v1.55 先剝掉較新一版
+  if (BASE) ok('★★[D6] 整份檔案：revertAdminV154 之後與 v1.53 逐位元相同（沒有夾帶宣告以外的改動）', revertAdminV154(revertAdminV155(revertAdminV156(revertAdminV157(revertAdminV158(revertAdminV159(revertAdminV160(revertAdminV161(revertAdminV162(revertAdminV163(revertAdminV164(revertAdminV165(CUR)))))))))))) === BASE);   // ⭐v1.55 先剝掉較新一版
 }
 
 console.log(`\n=== server patch v1.54 全站 audit 降載: ${pass} PASS / ${fail} FAIL ===`);

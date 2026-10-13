@@ -1,7 +1,7 @@
 /**
  * 瑞士制 + 單淘汰 Top Cut 純函式（無副作用、無瀏覽器／Node 依賴）。
  * 供 harness 測試 + 伺服器端配對共用。規則對齊 Play! Pokémon 慣例。
- * Wilson 拍板：不容許平手(時限用獎賞卡判)、依人數自動 Top Cut(≤16→4/≥17→8)、
+ * Wilson 拍板：不容許平手(時限用獎賞卡判)、依人數自動 Top Cut(≤16→4／17～63→8；v6.562 起 ≥64→16)、
  *   輪數自動帶值 admin 可覆寫、每輪設時限、棄賽者後續不再配對。
  */
 
@@ -32,14 +32,25 @@ export function swissRoundsForCount(n: number): number {
   if (n <= 1) return 0;
   if (n <= 16) return 3;   // v5.646：≤16 人 → 3 輪
   if (n <= 32) return 4;   // 17–32 人 → 4 輪
-  if (n <= 48) return 5;   // 33–48 人 → 5 輪
-  if (n <= 96) return 6;   // 49–96 人 → 6 輪
-  if (n <= 192) return 7;
-  return 8;
+  // ⭐v6.562 站長 2026-10-13 17:20：「瑞士制的輪次也要配合這次的top cut修改，千萬不要變成，輪次變多，然後還要打16強」
+  //   ⇒ 33～128 人一律 5 輪（原本 49～96 人是 6 輪、97 人起 7 輪）；64 人以上靠 16 強讓一敗的人有機會，不再加瑞士輪數。
+  //   總輪數：33～63 人 5＋3（8 強）＝8；64～128 人 5＋4（16 強）＝9（與原本 6 輪＋8 強相同）。
+  if (n <= 128) return 5;
+  if (n <= 256) return 6;
+  return 7;
 }
-export function topCutSizeForCount(n: number): number {
+// ⭐v6.562 站長 2026-10-13：「最近報名常常八九十人，5 輪幾乎輸一把就沒機會進複賽，6 輪又打到半夜」⇒ 人多時改取 16 強；
+//   17:18 裁定門檻「取64人才16強，因為我覺得用2的次方來算比較好」⇒ 依出賽人數以 2 的次方分段（只在 admin「Top Cut」留空＝自動時生效；手填數字仍優先）。
+//   16 人以下 4 強；17～63 人 8 強；64 人以上 16 強。代價：16 強比 8 強多打一輪單淘汰。
+//   ⚠ 站長 17:20「千萬不要變成，輪次變多，然後還要打16強」⇒ 瑞士輪數超過 5 輪（admin 手填 6 輪以上）時不取 16 強、維持 8 強。
+export const TOP_CUT_16_MIN_PLAYERS = 64;
+export const TOP_CUT_16_MAX_SWISS_ROUNDS = 5;
+/** swissRounds：實際要打的瑞士輪數（省略＝依人數自動的輪數）。 */
+export function topCutSizeForCount(n: number, swissRounds?: number): number {
   if (n < 4) return Math.min(2, n);   // 極小場
   if (n <= 16) return 4;
+  const r = (swissRounds != null && swissRounds > 0) ? swissRounds : swissRoundsForCount(n);
+  if (n >= TOP_CUT_16_MIN_PLAYERS && r <= TOP_CUT_16_MAX_SWISS_ROUNDS) return 16;
   return 8;
 }
 

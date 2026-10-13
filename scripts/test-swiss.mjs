@@ -22,11 +22,12 @@ const seededRng = (seed) => () => { seed = (seed * 1103515245 + 12345) & 0x7ffff
 T('swissRoundsForCount 對照表', () => {
   const f = S.swissRoundsForCount;
   assert.equal(f(2), 3); assert.equal(f(16), 3); assert.equal(f(17), 4); assert.equal(f(32), 4);
-  assert.equal(f(33), 5); assert.equal(f(48), 5); assert.equal(f(49), 6); assert.equal(f(96), 6); assert.equal(f(97), 7); assert.equal(f(192), 7); assert.equal(f(193), 8);
+  // ⭐v6.562 站長裁定（Rule 40：對照表本身就是站長的規則，照新規則改）：33～128 人一律 5 輪（人多改取 16 強，不加瑞士輪數）
+  assert.equal(f(33), 5); assert.equal(f(48), 5); assert.equal(f(49), 5); assert.equal(f(96), 5); assert.equal(f(128), 5); assert.equal(f(129), 6); assert.equal(f(256), 6); assert.equal(f(257), 7);
 });
-T('topCutSizeForCount 對照表(≤16→4 / ≥17→8)', () => {
+T('topCutSizeForCount 對照表(≤16→4 / 17～63→8 / ≥64→16；瑞士超過 5 輪維持 8)', () => {
   const f = S.topCutSizeForCount;
-  assert.equal(f(3), 2); assert.equal(f(4), 4); assert.equal(f(16), 4); assert.equal(f(17), 8); assert.equal(f(64), 8);
+  assert.equal(f(3), 2); assert.equal(f(4), 4); assert.equal(f(16), 4); assert.equal(f(17), 8); assert.equal(f(63), 8); assert.equal(f(64), 16); assert.equal(f(64, 6), 8);   // ⭐v6.562
 });
 
 // ── 配對：第1輪覆蓋全員、無自我配對、Bye 正確 ──

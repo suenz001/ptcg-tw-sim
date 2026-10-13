@@ -643,7 +643,7 @@ await TA('M7 admin.html 拿掉 msgCounts 參數 ⇒「按開關要帶 msgCounts=
 // ⑨ ⭐⭐ 錦標賽區塊逐位元未動（內嵌 sha256，淺複製下也在守）
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑨ 錦標賽區塊逐位元未動');
-const TOURN_TAIL_SHA256 = '64c15bd2688f5cb07f68828a8c8355660dbe931a00f47c034dc3678414485a57' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
+const TOURN_TAIL_SHA256 = '8af4edb9453d17e6d515f6a6fd85f53cd52dfa2c57c0e7b7e78c8d2765696fdf' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
 function tournTail(src) {
   const i = src.indexOf("app.get('/api/tournament");
   if (i < 0) throw new assert.AssertionError({ message: '找不到第一支 /api/tournament 端點' });
@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'cb4abe258ec1663ede39c21334ac5a279766e061';   // v6.560（上一版）
+const PREV_SHA = '7b88d581f4c36048ca10f849fb4bc921361d64a6';   // v6.561（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,16 +757,28 @@ const PREV_SHA = 'cb4abe258ec1663ede39c21334ac5a279766e061';   // v6.560（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.561 前移：PREV_SHA 從 cb4abe25（v6.560）起算。
+  // ⚠⚠ v6.562 前移：PREV_SHA 從 7b88d581（v6.561）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.561：錦標賽回放逐動作：新 leaf replay-tourn.ts（解包／合併半回合格與逐動作格）、tStartReplay 先合併再進 openReplayData；首頁 changelog 三步搬運。
-  'src/lib/game/replay-tourn.ts',
+  // ⭐v6.562：錦標賽聊天室置頂公告（chat-pin.ts）、賽程對局總時間（match-times.ts）、Top Cut 人多取 16 強（swiss.ts）；對戰頁接線＋淺色主題重新產生；首頁 changelog 三步搬運。
+  'src/lib/tournament/chat-pin.ts',
+  'src/lib/tournament/match-times.ts',
+  'src/lib/tournament/swiss.ts',
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.561）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.561 前移：PREV_SHA 從 cb4abe25（v6.560）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.561：錦標賽回放逐動作：新 leaf replay-tourn.ts（解包／合併半回合格與逐動作格）、tStartReplay 先合併再進 openReplayData；首頁 changelog 三步搬運。
+//   'src/lib/game/replay-tourn.ts',
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.560）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.560 前移：PREV_SHA 從 14f5c0f5（v6.559）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -883,18 +895,6 @@ const PREV_ALLOWED = [
 // ⚠⚠ v6.550 前移：PREV_SHA 從 29a43c5f（v6.549）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
 // ⭐v6.550：END_TURN：「回合結束時」效果區搬到回合快照與寶可夢檢查之前（v6550-turn-end-before-checkup），快照改由 endTurnSnapshotDone 保證只跑一次。
-//   'src/lib/game/engine.ts',
-//   'src/lib/game/types.ts',
-//   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.549）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.549 前移：PREV_SHA 從 b3bbd137（v6.548）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.549：招式進行中的效果昏厥延後（v6549-defer-effect-ko／drainPendingEffectKo）；漸強波反應改附能當下；吃飽先／嫩葉之恩改附能→反應→回復。
-//   'src/lib/game/effects.ts',
-//   'src/lib/game/effects/cards/v2610_i_wave11_misc4.ts',
 //   'src/lib/game/engine.ts',
 //   'src/lib/game/types.ts',
 //   'src/lib/version.ts',

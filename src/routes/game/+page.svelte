@@ -67,6 +67,8 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { handOverlapPx, handFanPose, fanOvershootPx, borderBoxSize } from '$lib/game/hand-layout';
   // ⭐v6.560 一般對戰復盤（記錄／遮蔽／跳回合 與 瀏覽器儲存／檔案）
   import { withTournPerActionSteps } from '$lib/game/replay-tourn';   // v6.561 錦標賽回放逐動作
+  import { CHAT_PIN_URL, CHAT_PIN_REFRESH_MS, parseChatPin, chatPinVisible, loadDismissedPinId, saveDismissedPinId, type ChatPin } from '$lib/tournament/chat-pin';   // v6.562 聊天室置頂公告
+  import { MATCH_TIMES_URL, MATCH_TIMES_REFRESH_MS, parseMatchTimes, matchTimeKey, fmtMatchDuration, matchTimeTitle, type MatchTime } from '$lib/tournament/match-times';   // v6.562 對局總時間
   import { createReplayRecorder, recordStep, finalizeReplay, stepsForStorage, nextTurnStepIndex, prevTurnStepIndex, type ReplayRecorder, type ReplayData } from '$lib/game/replay-record';
   import { saveReplay, listReplays, loadReplay, deleteReplay, saveInProgress, loadInProgress, downloadReplayFile, parseReplayBytes, MAX_SAVED_REPLAYS, type SavedReplayInfo } from '$lib/game/replay-store';
   import { replayRevealsOpponent } from '$lib/game/replay-policy';   // ⭐v6.557 手牌互疊量依實際寬度計算（唯一判準）
@@ -5438,6 +5440,39 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (/^(🔔|⚔|🎲|🏆)/.test(t)) return 'sc-bracket';                    // 賽程／配對／開賽（亮綠）
     return '';                                                            // 其他（維持原黃色）
   }
+  // >>> v6562-chat-pin-and-times
+  // ⭐v6.562 錦標賽大廳聊天室的置頂公告（站長在 admin 賽事分頁設定；玩家按 X 只隱藏這一則）＋賽程表每場的對局總時間。
+  //   兩者都跟著本來就在跑的輪詢順帶抓（聊天室 3 秒、賽程表），自己節流 30 秒，不新增常駐計時器。
+  let tPin = $state<ChatPin | null>(null);
+  let tPinDismissed = $state<string | null>(loadDismissedPinId());
+  let _tPinAt = 0;
+  const tPinShown = $derived(chatPinVisible(tPin, tPinDismissed));
+  async function tPinRefresh(force = false) {
+    const now = Date.now();
+    if (!force && now - _tPinAt < CHAT_PIN_REFRESH_MS) return;
+    _tPinAt = now;
+    try {
+      const res = await fetch(CHAT_PIN_URL);
+      if (!res.ok) return;   // 舊伺服器 404 ⇒ 不顯示
+      tPin = parseChatPin(await res.json());
+    } catch { /* 網路錯誤：沿用上一份 */ }
+  }
+  function tPinDismiss() { if (!tPin) return; tPinDismissed = tPin.id; saveDismissedPinId(tPin.id); }
+  let tMatchTimes = $state<Record<string, Record<string, MatchTime>>>({});
+  const _tMatchTimesAt: Record<string, number> = {};
+  async function tMatchTimesLoad(eventId: string, force = false) {
+    if (!eventId) return;
+    const now = Date.now();
+    if (!force && now - (_tMatchTimesAt[eventId] ?? 0) < MATCH_TIMES_REFRESH_MS) return;
+    _tMatchTimesAt[eventId] = now;
+    try {
+      const res = await fetch(MATCH_TIMES_URL + '?eventId=' + encodeURIComponent(eventId));
+      if (!res.ok) return;
+      const t = parseMatchTimes(await res.json());
+      if (t) tMatchTimes = { ...tMatchTimes, [eventId]: t };
+    } catch { /* 拿不到就不顯示時間 */ }
+  }
+  // <<< v6562-chat-pin-and-times
   async function tChatLoad() {
     // v5.624 防並發重入：tChatLoad 從多處呼叫（3s 輪詢 / 送出後 / 對戰中持續更新），
     //   同時跑會用「同一個 since」重複抓同一批訊息 → tChat 出現重複 id →
@@ -5445,6 +5480,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   錦標賽回合推進/勝利時系統連發多則廣播，最易觸發。
     if (_tChatLoading) return;
     _tChatLoading = true;
+    void tPinRefresh();   // v6.562 置頂公告（自己節流 30 秒）
     try {
       const r = await tApi(`/chat?since=${tChatLastTs}`);
       if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
@@ -5549,6 +5585,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         return { key: String(ev && ev._id), value: ok ? r : null };
       });
       const merged = mergeKeyedOrKeep<any>(tBrackets, (b: any) => String(b && b.event && b.event._id), incoming);
+      for (const ev of evs) void tMatchTimesLoad(String(ev && ev._id));   // v6.562 對局總時間（自己節流 30 秒）
       tBrackets = merged.list;
       tBracketsStale = merged.stale;
       if (!merged.stale && merged.list.length > 0) tBracketsEverOk = true;
@@ -5666,6 +5703,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!c || !c.eventId) { tError = '此冠軍紀錄沒有可顯示的賽程'; return; }
     const seq = ++tHofSeq;
     tHofLoading = true; tHofView = null; tHofPage = 1; tError = ''; tHofEventId = c.eventId || '';
+    void tMatchTimesLoad(String(c.eventId), true);   // v6.562 對局總時間
     try {
       const r = await tApi(`/champion-bracket?eventId=${encodeURIComponent(c.eventId)}`);
       if (seq !== tHofSeq) return;   // 已經被關掉（或又開了別的）⇒ 丟棄這個過期回應
@@ -10424,6 +10462,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <label><input type="checkbox" bind:checked={tChatShowSys} /> 系統</label>
           </span>
         </div>
+        {#if tPinShown && tPin}<div class="tchat-pin" role="note"><span class="tchat-pin-text">📌 {tPin.text}</span><button class="tchat-pin-x" onclick={tPinDismiss} title="隱藏這則公告（有新公告時會再出現）" aria-label="隱藏置頂公告">×</button></div>{/if}
         <div class="tourn-chat-msgs" bind:this={tLobbyChatEl} onscroll={onLobbyChatScroll}>
           {#if tChatFiltered.length === 0}<div class="tcmsg muted">{tChat.length === 0 ? '還沒有人發言，來說聲哈囉吧～' : '目前的篩選把所有訊息都藏起來了 —— 請勾選【聊天】或【系統】。'}</div>{/if}
           {#each tChatFiltered as m (m.id)}
@@ -10682,7 +10721,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 {#each _roundMatches as m (m.round + '_' + m.idx)}
                   {@const _canSpec = m.status === 'playing' && m.roomId && !m.mine}
                   {@const _mid = brk.event._id + '_r' + m.round + '_m' + m.idx}
-                  <div class="tourn-match" class:mine={m.mine} class:done={m.status === 'done'} class:bye={m.bye}>
+                  {@const _mt = tMatchTimes[String(brk.event._id)]?.[matchTimeKey(m.round, m.idx)]}
+                  <div class="tourn-match" class:mine={m.mine} class:done={m.status === 'done'} class:bye={m.bye} class:has-time={!!_mt}>
                     <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
                     {#if _canSpec}
                       <button class="tm-vs tm-vs-spec" title="👁 點此觀戰這場對戰（目前 {m.viewers ?? 0} 人觀戰中）" onclick={() => tSpectate(m.roomId)} disabled={tBusy}>VS👁{(m.viewers ?? 0) > 0 ? '(' + m.viewers + ')' : ''}</button>
@@ -10694,6 +10734,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                       <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
                     {/if}
                     <span class="tm-side tm-p2" class:win={m.winner === 'p2'} title={m.p2name ?? ''}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
+                    {#if _mt}<span class="tm-time" class:live={_mt.live} title={matchTimeTitle(_mt)}>⏱ {fmtMatchDuration(_mt.ms)}</span>{/if}
                   </div>
                 {/each}
               </div>
@@ -10795,7 +10836,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {#if _hrm.length === 0}<div class="muted small" style="text-align:center;padding:14px;">此輪無對戰紀錄</div>{/if}
               {#each _hrm as m}
                 {@const _hasLog = m.status === 'done' && !m.bye && m.p1name && m.p2name}
-                <div class="tourn-match" class:done={m.status === 'done'} class:bye={m.bye} class:tourn-match-log={_hasLog}
+                {@const _mt = tMatchTimes[String(tHofEventId)]?.[matchTimeKey(m.round, m.idx)]}
+                <div class="tourn-match" class:done={m.status === 'done'} class:bye={m.bye} class:tourn-match-log={_hasLog} class:has-time={!!_mt}
                   role={_hasLog ? 'button' : undefined} tabindex={_hasLog ? 0 : undefined}
                   title={_hasLog ? '點擊查看這場對戰戰報' : ''}
                   onclick={() => { if (_hasLog) tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name); }}
@@ -10807,6 +10849,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
                   {/if}
                   <span class="tm-side tm-p2" class:win={m.winner === 'p2'} title={m.p2name ?? ''}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
+                  {#if _mt}<span class="tm-time" class:live={_mt.live} title={matchTimeTitle(_mt)}>⏱ {fmtMatchDuration(_mt.ms)}</span>{/if}
                 </div>
               {/each}
             </div>
@@ -14284,6 +14327,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             onclick={toggleChatPanel}
             title="最小化">×</button>
         </div>
+        {#if isTournament && tPinShown && tPin}<div class="tchat-pin" role="note"><span class="tchat-pin-text">📌 {tPin.text}</span><button class="tchat-pin-x" onpointerdown={(e) => e.stopPropagation()} onclick={tPinDismiss} title="隱藏這則公告（有新公告時會再出現）" aria-label="隱藏置頂公告">×</button></div>{/if}
         <div class="chat-panel-messages" bind:this={chatPanelScrollEl} onscroll={onChatPanelScroll}>
           {#if isTournament}
             {#if tChatFiltered.length === 0}
@@ -15431,6 +15475,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
   /* v5.595 賽程單場改單列橫排：玩家A 〔VS〕 玩家B，grid 三欄置中、贏家高亮 */
   .tourn-match { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; background: #141b2a; border: 1px solid #2a3a55; border-radius: 8px; padding: 7px 12px; margin-bottom: 8px; font-size: 0.9rem; }
   .tourn-match.mine { border-color: #d8b24a; box-shadow: 0 0 0 1px #d8b24a55; }
+  /* v6.562 對局總時間：有時間的那一列多一欄（沒有時間的列維持原本三欄） */
+  .tourn-match.has-time { grid-template-columns: 1fr auto 1fr auto; }
+  .tourn-match .tm-time { font-size: 0.7rem; color: #9fb3d1; white-space: nowrap; font-variant-numeric: tabular-nums; }   /* 小字＋等寬數字：手機 375px 名字欄仍留得下（不加媒體查詢，test-v6199） */
+  .tourn-match .tm-time.live { color: #e8c46a; }
+  /* v6.562 聊天室置頂公告 */
+  .tchat-pin { display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px; background: #3a2f10; border-bottom: 1px solid #8a6d1f; color: #ffe9a8; font-size: 0.85rem; text-align: left; }
+  .tchat-pin-text { flex: 1; white-space: pre-wrap; word-break: break-word; max-height: 6.5em; overflow-y: auto; }   /* 長公告不把聊天區整個推下去 */
+  .tchat-pin-x { flex: none; min-width: 32px; min-height: 32px; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: #ffe9a8; font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0; margin: -6px -6px -6px 0; }   /* 手機好按 */
   .tourn-match.done { opacity: 0.92; }
   .tourn-match.bye { opacity: 0.85; }
   .tourn-match .tm-side { padding: 4px 8px; color: #c8d4e8; border-radius: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -17319,11 +17371,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
        .selection-modal／.prize-view-modal／.pv-inner，語意不同不收）＋
        非 vh 清單 4（.open-room-list 420px／.chat-messages 240px／.log-col 100%／
        .playmat.layout-fable .action-bar > .log-col none）＋ .scroll-list 自己 1。
-     ⚠ **遷移後**現況（守衛 C5 盯住這個數字，不是盯註解）：那 18 條會剩 **14 條** ＝
+     ⚠ **遷移後**現況（守衛 C5 盯住這個數字，不是盯註解）：那 18 條會剩 **15 條** ＝
        modal 容器 9（⭐v6.449 多了 v6449-picker-shell 的桌機 .selection-modal 外框：85dvh＋視窗內捲動；
        ⭐v6.450 多了 v6450-picker-sheet 的手機棄牌區／獎賞 sheet .zoom-modal.discard-modal；
        ⭐v6.454 多了浮動進化選單 .float-evo-menu 的高度上限）＋
-       非 vh 清單 4 ＋ 下面這條群組規則自己 1；被遷移的 7 個清單 class 一條都不在。
+       非 vh 清單 5（⭐v6.562 多了聊天室置頂公告的 .tchat-pin-text 6.5em）＋ 下面這條群組規則自己 1；被遷移的 7 個清單 class 一條都不在。
      ⚠⚠ 這段註解裡**永遠不可以**寫出樣式標籤的開頭字面（角括號 + style）——
        test-v6199／v6284／v6297／v6298／v6299／v6303／v6370 取樣式區塊用的是 lastIndexOf，
        註解裡出現一次就會把區塊起點往後推，7 支守衛一起翻紅（IRON_RULES Rule 48）。
@@ -20148,6 +20200,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-pg-cur { color: #176a34; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-match { background: #f4f5f7; border: 1px solid #a9b9d6; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-match.mine { border-color: #e5c777; }
+    :global(html[data-theme='light']:not([data-battle-view])) .tourn-match .tm-time { color: #2d4261; }
+    :global(html[data-theme='light']:not([data-battle-view])) .tourn-match .tm-time.live { color: #74570f; }
+    :global(html[data-theme='light']:not([data-battle-view])) .lobby .tchat-pin { background: #f7f5f1; border-bottom: 1px solid #e3c472; color: #574100; }
+    :global(html[data-theme='light']:not([data-battle-view])) .lobby .tchat-pin-x { color: #574100; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-match .tm-side { color: #162338; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-match .tm-side.win { color: #0d530f; background: #f0f4f0; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-match .tm-vs { color: #1d3967; background: #eff0f4; border: 1px solid #7395c7; }

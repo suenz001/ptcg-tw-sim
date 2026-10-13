@@ -28,7 +28,8 @@ import {
 } from './lib/tourn-revert-v152.mjs';
 // ⭐v1.53（Rule 40，意圖不變）：錦標賽區塊之後又被 v1.53（報名牌組完整規則）合法改過 ⇒ D 節先剝 v1.53 再比對 v1.52 的值。
 import { revertV153 } from './lib/tourn-revert-v153.mjs';
-import { revertV154 } from './lib/tourn-revert-v154.mjs';   // ⭐v1.54（Rule 40）：再先剝一節
+import { revertV154 as _rv154, revertV165 } from './lib/tourn-revert-v165.mjs';   // ⭐v1.54（Rule 40）：再先剝一節；⭐v1.65 再長一節
+const revertV154 = (b) => _rv154(revertV165(b));   // ⭐v1.65（Rule 54）：鏈再長一節（Top Cut 人多取 16 強；既有呼叫點一個字都不必改）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.459（server patch v1.51）。
@@ -200,7 +201,8 @@ console.log('\n【D】錦標賽區塊 28 把鎖重釘');
   }
   const CONSUMERS = ['scripts/test-v6276-deck-tournament-stats.mjs', 'scripts/test-v6291-tourn-verified-gate.mjs', 'scripts/test-v6292-tourn-verified-gate2.mjs',
     'scripts/test-v6303-ui-batch.mjs', 'scripts/test-v6381-archive-gamedraw-and-swiss-note.mjs'];
-  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(/from '\.\/lib\/tourn-revert-v15\d\.mjs'/.test(s) && s.includes('revertV152(')); });
+  // （⭐v1.65 起消費者改接 tourn-revert-v165，它的鏈內含本版；Rule 40 意圖不變）
+  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(/from '\.\/lib\/tourn-revert-v1[56]\d\.mjs'/.test(s) && s.includes('revertV152(')); });
   ok('D5 五支消費者都 import 新 lib 且呼叫 revertV152(', bad.length === 0, bad.join(', '));
   ok('D5b test-v6303 的 SAP 還原鏈最內層是 revertAdminV152', /revertAdminV150\(revertAdminV152\((?:SAP_RAW|revertAdminV15\d\()/.test(rd('scripts/test-v6303-ui-batch.mjs')));
 }

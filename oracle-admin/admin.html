@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.84</title>
+<title>PTCG Oracle Admin v1.85</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -372,7 +372,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.84</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.85</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -847,6 +847,61 @@ var TEV_ST_LABELS = { draft: '籌備中', registration: '報名中', checkin: '�
  * ⭐v1.77：「每日固定網站賽」面板的 HTML（**純函式**，守衛可以直接餵 preset 驗文字與按鈕狀態）。
  * 回空字串＝不顯示（舊伺服器）。時間一律用台灣時間顯示（twDateStr，固定 UTC+8）。
  */
+/**
+ * ⭐v1.85 錦標賽大廳聊天室的置頂公告（server v1.65 的 /api/tourn-chat-pin；舊伺服器沒有 ⇒ pinApi 缺席 ⇒ 面板不顯示）。
+ *   用途（站長）：例如警告拖時間的玩家。玩家可按 X 隱藏「這一則」；發新的公告會重新出現。
+ */
+/**
+ * ⭐v1.85（Opus 複審 P2-A）：瑞士輪數／Top Cut 只有站長「手填」的（swissRoundsAuto／topCutAuto === false）才回填到編輯表單；
+ *   自動算的（含 v1.64 一鍵建立沿用來、沒有旗標的數字）一律留空 —— 否則只改名稱按「更新」也會把它送回去、被伺服器記成手填，自動規則就失效了。
+ */
+function tevManualVal(ev, key) {
+  if (!ev) return '';
+  const flag = key === 'swissRounds' ? ev.swissRoundsAuto : ev.topCutAuto;
+  const v = Number(ev[key]);
+  return (flag === false && v > 0) ? String(v) : '';
+}
+/** 狀態列的「（N輪→前K）」：已開賽（數字是實際值）或手填才顯示數字，其餘標「自動」（開賽時依報到人數決定）。 */
+function tevSwissLabel(ev) {
+  if (!ev) return '';
+  const seeded = (Number(ev.currentRound) || 0) > 0 || ev.status === 'running' || ev.status === 'finished';
+  const r = ((seeded || ev.swissRoundsAuto === false) && Number(ev.swissRounds) > 0) ? (ev.swissRounds + '輪') : '輪數自動';
+  const c = ((seeded || ev.topCutAuto === false) && Number(ev.topCut) > 0) ? ('前' + ev.topCut) : 'Top Cut 自動';
+  return '（' + r + '→' + c + '）';
+}
+function tevPinPanelHtml(pd, btnS, btnD) {
+  if (!pd || pd.pinApi !== 1) return '';
+  const cur = pd.pin && typeof pd.pin.text === 'string' ? pd.pin.text : '';
+  return '<div id="tev-pin-panel" style="border:1px solid #e0c56a;background:#fffbea;border-radius:8px;padding:10px 12px;margin:0 0 12px;">'
+    + '<div style="font-weight:700;margin-bottom:4px;">📌 聊天室置頂公告　'
+    + (cur ? '<span style="color:#8a6d00;">（置頂中）</span>' : '<span style="color:#888;">（目前沒有）</span>') + '</div>'
+    + '<p style="color:#666;font-size:.82rem;margin:2px 0 6px;">顯示在錦標賽大廳聊天室最上方；玩家可以按 X 隱藏這一則，發布新的內容會重新出現。最多 500 字，可換行；玩家端約 30 秒內更新。</p>'
+    + '<textarea id="tev-pin-text" maxlength="500" rows="3" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #d6dbe3;border-radius:6px;font-size:.9rem;">' + escapeHtml(cur) + '</textarea>'
+    + '<div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;">'
+    + '<button style="' + btnS + '" onclick="tevPinSave(this)">📌 發布置頂</button>'
+    + (cur ? '<button style="' + btnD + '" onclick="tevPinClear(this)">取消置頂</button>' : '')
+    + '</div></div>';
+}
+async function tevPinPost(text, btn) {
+  const _t0 = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '處理中…'; }
+  try {
+    const d = await api('/api/tourn-chat-pin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text }) });
+    if (d && d.error) { alert(d.error); if (btn) { btn.disabled = false; btn.textContent = _t0; } return; }
+  } catch (e) { alert(e.message); if (btn) { btn.disabled = false; btn.textContent = _t0; } return; }
+  loadTournamentAdmin();
+}
+window.tevPinSave = async function (btn) {
+  const el = document.getElementById('tev-pin-text');
+  const text = el ? String(el.value || '').trim() : '';
+  if (!text) { alert('公告內容是空的；要取消置頂請按「取消置頂」。'); return; }
+  if (!confirm('發布這則置頂公告？\n\n' + text)) return;
+  await tevPinPost(text, btn);
+};
+window.tevPinClear = async function (btn) {
+  if (!confirm('確定取消聊天室置頂公告？')) return;
+  await tevPinPost('', btn);
+};
 function tevDailyPanelHtml(preset, btnStyle) {
   if (!preset || !Array.isArray(preset.slots) || !preset.slots.length) return '';
   var names = [];
@@ -916,6 +971,9 @@ async function loadTournamentAdmin() {
     const dp = await api('/api/tournament/admin/daily-preset');
     if (dp && dp.dailyApi === 1 && Array.isArray(dp.slots)) tevDailyPreset = dp;
   } catch (e) { tevDailyPreset = null; }
+  // ⭐v1.85 聊天室置頂公告（舊伺服器沒這支端點 ⇒ 面板不顯示）
+  let pinData = null;
+  try { const pd = await api('/api/tourn-chat-pin'); if (pd && pd.pinApi === 1) pinData = pd; } catch (e) { pinData = null; }
   // v1.62 三個動作按鈕改用全站的語意色（原本是深色底，與 admin 白底頁面格格不入）
   const btnS = 'padding:6px 14px;border:1px solid #a5d6a7;background:#eaf7ea;color:#2e7d32;border-radius:6px;cursor:pointer;font-weight:600;';
   const btnD = 'padding:6px 14px;border:1px solid #ef9a9a;background:#fdecec;color:#c62828;border-radius:6px;cursor:pointer;font-weight:600;';
@@ -923,7 +981,8 @@ async function loadTournamentAdmin() {
   let html = '<div style="max-width:760px;padding:16px;"><h2 style="margin-top:0;">🏆 錦標賽管理</h2>'
     + '<p style="color:#888;font-size:.85rem;">單敗淘汰 · Bo1 · 可同時公布多場（時間不重疊），玩家各自報名。建立後玩家於 /tournament 報名（牌組鎖定）。</p>'
     + '<div style="margin:6px 0 12px;"><button style="' + btnD + '" onclick="tevClearChat(this)">🧹 清除所有聊天室訊息</button></div>'
-    + tevDailyPanelHtml(tevDailyPreset, btnS);   // ⭐v1.77 每日固定網站賽一鍵建立
+    + tevDailyPanelHtml(tevDailyPreset, btnS)   // ⭐v1.77 每日固定網站賽一鍵建立
+    + tevPinPanelHtml(pinData, btnS, btnD);   // ⭐v1.85 聊天室置頂公告
   // v1.45：賽事下拉選單（多場切換顯示各自詳細）
   var _stLabels = TEV_ST_LABELS;   // ⭐v1.77：狀態中文對照表只留一份（面板與賽事下拉共用）
   html += '<div style="margin:4px 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
@@ -951,8 +1010,8 @@ async function loadTournamentAdmin() {
       + '<label style="display:block;margin:8px 0;">未進場判負（分）：<input id="tev-noshow" value="' + escapeHtml(String(L.noShowMin || 5)) + '" style="width:80px;padding:5px;"></label>'
       + '<label style="display:block;margin:8px 0;">輪間休息倒數（分，倒數結束才可進場，預設3）：<input id="tev-countdown" value="' + escapeHtml(String(L.roundCountdownMin != null && L.roundCountdownMin !== '' ? L.roundCountdownMin : 3)) + '" style="width:80px;padding:5px;"></label>'
       + '<label style="display:block;margin:8px 0;">賽制：<select id="tev-format" style="padding:5px;"><option value="single-elim">單敗淘汰 Bo1（輸一場淘汰）</option><option value="swiss">瑞士制 + Top Cut Bo1（全員打固定輪數→前K名單淘汰）</option></select></label>'
-      + '<label style="display:block;margin:8px 0;">瑞士輪數（空白＝依人數自動；僅瑞士制生效）：<input id="tev-swissrounds" value="" placeholder="自動" style="width:80px;padding:5px;"></label>'
-      + '<label style="display:block;margin:8px 0;">Top Cut 取前幾名（空白＝依人數自動：≤16→4、≥17→8；僅瑞士制生效）：<input id="tev-topcut" value="" placeholder="自動" style="width:80px;padding:5px;"></label>'
+      + '<label style="display:block;margin:8px 0;">瑞士輪數（空白＝依人數自動：≤16→3、17～32→4、33～128→5；僅瑞士制生效）：<input id="tev-swissrounds" value="" placeholder="自動" style="width:80px;padding:5px;"></label>'
+      + '<label style="display:block;margin:8px 0;">Top Cut 取前幾名（空白＝依人數自動：≤16→4；17～63→8；≥64→16（瑞士超過 5 輪時維持 8）；僅瑞士制生效）：<input id="tev-topcut" value="" placeholder="自動" style="width:80px;padding:5px;"></label>'
       + '<label style="display:block;margin:8px 0;">報名開始時間（可不填＝立即開放）：<input id="tev-regopen" type="datetime-local" style="padding:5px;"></label>'
       + '<label style="display:block;margin:8px 0;">報名截止時間（可不填＝手動開賽；填了到點自動公布賽程並開賽）：<input id="tev-regclose" type="datetime-local" style="padding:5px;"></label>'
       + '<button style="' + btnS + 'margin-top:8px;" onclick="tevCreate(this)">建立賽事</button>'
@@ -961,7 +1020,7 @@ async function loadTournamentAdmin() {
     const stLabel = ({ draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' })[ev.status] || ev.status;
     html += '<div style="border:1px solid #4a6a4a;border-radius:8px;padding:14px;margin-bottom:14px;">'
       + '<h3 style="margin:0 0 6px;">' + escapeHtml(ev.name) + '</h3>'
-      + '<p style="color:#2e7d32;">狀態：<b>' + stLabel + '</b> ｜ 報名 ' + data.regs.length + (ev.maxPlayers ? (' / ' + ev.maxPlayers) : '（不限）') + ' 人 ｜ ' + (ev.format === 'swiss-then-cut' ? ('瑞士制+TopCut Bo1' + (ev.swissRounds ? ('（' + ev.swissRounds + '輪→前' + (ev.topCut||'?') + '）') : '')) : '單敗淘汰 Bo1') + ' ｜ 每場 ' + ev.roundLimitMin + ' 分 ｜ 未進場 ' + ev.noShowMin + ' 分判負</p>'
+      + '<p style="color:#2e7d32;">狀態：<b>' + stLabel + '</b> ｜ 報名 ' + data.regs.length + (ev.maxPlayers ? (' / ' + ev.maxPlayers) : '（不限）') + ' 人 ｜ ' + (ev.format === 'swiss-then-cut' ? ('瑞士制+TopCut Bo1' + tevSwissLabel(ev)) : '單敗淘汰 Bo1') + ' ｜ 每場 ' + ev.roundLimitMin + ' 分 ｜ 未進場 ' + ev.noShowMin + ' 分判負</p>'
       + (ev.registrationOpenAt ? '<p style="color:#9ab;margin:2px 0;">報名開始：' + new Date(ev.registrationOpenAt).toLocaleString('zh-TW') + '</p>' : '')
       + (ev.registrationCloseAt ? '<p style="color:#9ab;margin:2px 0;">報名截止：' + new Date(ev.registrationCloseAt).toLocaleString('zh-TW') + '（到點自動公布賽程並開賽）</p>' : '')
       + '<p style="color:#9ab;margin:2px 0;">輪間休息倒數：' + (ev.roundCountdownMin != null ? ev.roundCountdownMin : 3) + ' 分 ｜ 未進場判負：' + (ev.noShowMin || 5) + ' 分</p>'
@@ -975,8 +1034,8 @@ async function loadTournamentAdmin() {
       + '<div style="padding:8px 0 2px;">'
       + '<label style="display:block;margin:6px 0;">賽事名稱：<input id="tev-e-name" value="' + escapeHtml(ev.name || '') + '" style="width:60%;padding:5px;"></label>'
       + '<label style="display:block;margin:6px 0;">賽制：<select id="tev-e-format" style="padding:5px;"' + ((ev.status === 'draft' || ev.status === 'registration') ? '' : ' disabled') + '><option value="single-elim"' + (ev.format === 'swiss-then-cut' ? '' : ' selected') + '>單敗淘汰 Bo1</option><option value="swiss-then-cut"' + (ev.format === 'swiss-then-cut' ? ' selected' : '') + '>瑞士制 + Top Cut Bo1</option></select>' + ((ev.status === 'draft' || ev.status === 'registration') ? '' : ' <span style="color:#e88;font-size:.78rem;">已開賽，賽制不可改</span>') + '</label>'
-      + '<label style="display:block;margin:6px 0;">瑞士輪數（空白=依人數自動；僅瑞士制生效）：<input id="tev-e-swissrounds" value="' + escapeHtml(String(ev.swissRounds || '')) + '" placeholder="自動" style="width:80px;padding:5px;"' + ((ev.status === 'draft' || ev.status === 'registration') ? '' : ' disabled') + '></label>'
-      + '<label style="display:block;margin:6px 0;">Top Cut 取前幾名（空白=自動 ≤16→4／≥17→8；僅瑞士制生效）：<input id="tev-e-topcut" value="' + escapeHtml(String(ev.topCut || '')) + '" placeholder="自動" style="width:80px;padding:5px;"' + ((ev.status === 'draft' || ev.status === 'registration') ? '' : ' disabled') + '></label>'
+      + '<label style="display:block;margin:6px 0;">瑞士輪數（空白=依人數自動：≤16→3、17～32→4、33～128→5；僅瑞士制生效）：<input id="tev-e-swissrounds" value="' + escapeHtml(tevManualVal(ev, 'swissRounds')) + '" placeholder="自動" style="width:80px;padding:5px;"' + ((ev.status === 'draft' || ev.status === 'registration') ? '' : ' disabled') + '></label>'
+      + '<label style="display:block;margin:6px 0;">Top Cut 取前幾名（空白=自動 ≤16→4；17～63→8；≥64→16（瑞士超過 5 輪時維持 8）；僅瑞士制生效）：<input id="tev-e-topcut" value="' + escapeHtml(tevManualVal(ev, 'topCut')) + '" placeholder="自動" style="width:80px;padding:5px;"' + ((ev.status === 'draft' || ev.status === 'registration') ? '' : ' disabled') + '></label>'
       + '<label style="display:block;margin:6px 0;">人數上限（空白=不限，≤64）：<input id="tev-e-max" value="' + escapeHtml(String(ev.maxPlayers || '')) + '" placeholder="不限" style="width:120px;padding:5px;"></label>'
       + '<label style="display:block;margin:6px 0;">每場時限（分）：<input id="tev-e-round" value="' + escapeHtml(String(ev.roundLimitMin || 25)) + '" style="width:80px;padding:5px;"></label>'
       + '<label style="display:block;margin:6px 0;">未進場判負（分）：<input id="tev-e-noshow" value="' + escapeHtml(String(ev.noShowMin || 5)) + '" style="width:80px;padding:5px;"></label>'
@@ -3984,7 +4043,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.561';
+window.SITE_VERSION_HINT = '6.562';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

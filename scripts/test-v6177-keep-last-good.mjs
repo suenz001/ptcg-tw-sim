@@ -96,6 +96,8 @@ function makeBracket(prev) {
     var _tTabHidden = false, _tBracketSeq = 0, _tBracketFailStreak = 0;
     function tLobbyResume() { st.resumes++; _tLobbyResumeAt = Date.now(); }
     var tRunningEvents = st.evs;
+    // ⭐v6.562（Rule 40）：tBracketLoad 會順帶呼叫 tMatchTimesLoad（賽程對局時間，自己節流、失敗不影響賽程）；這裡給替身並記次數
+    st.timesCalls = []; async function tMatchTimesLoad(id) { st.timesCalls.push(id); }
     async function tApi(p) {
       if (st.gate) { var g = st.gate; st.gate = null; await g; }   // 測試可控的「這一發很慢」
       if (st.mode === 'fail') throw new Error('boom');
