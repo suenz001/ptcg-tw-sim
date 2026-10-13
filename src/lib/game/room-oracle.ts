@@ -30,6 +30,7 @@ import { auth } from '$lib/firebase';
 import type { GameState } from './types';
 import type { Card } from '$lib/cards/types';
 import { createGame } from './engine';
+import { gameClockNow } from './server-clock';   // ⭐v6.565 棄權／離開的終局紀錄也蓋遊戲時鐘（計時器用它當對局結束時刻；leaf，無循環）
 import { shouldSkipStalePush, mergeForSetupPush } from './sync-guards';
 import { adoptOrKeep } from '$lib/ui/stale-keep';
 
@@ -400,7 +401,7 @@ export async function claimOpponentForfeit(roomCode: string, mySeatIdx: 0 | 1): 
         winReason: oppName + ' 長時間無回應，被宣告棄權',
         log: [
           ...(myGs.log ?? []),
-          { turn: myGs.turn, playerIndex: null, message: oppName + ' 長時間無回應，' + myName + ' 宣告對手棄權獲勝' },
+          { turn: myGs.turn, playerIndex: null, message: oppName + ' 長時間無回應，' + myName + ' 宣告對手棄權獲勝', timestamp: gameClockNow() },
         ],
       };
       return { ...cur, gameState: JSON.parse(JSON.stringify(forfeitGame)), status: 'ended' };
@@ -467,7 +468,7 @@ export async function leaveRoom(roomCode: string): Promise<void> {
           winReason: '對手承認技不如人，先行離開了',
           log: [
             ...(myGs.log ?? []),
-            { turn: myGs.turn, playerIndex: null, message: myName + ' 中途離開遊戲，對手獲勝' },
+            { turn: myGs.turn, playerIndex: null, message: myName + ' 中途離開遊戲，對手獲勝', timestamp: gameClockNow() },
           ],
         };
         return { ...cur, gameState: JSON.parse(JSON.stringify(forfeitGame)), status: 'ended' };

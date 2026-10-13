@@ -280,7 +280,8 @@ import { V6561_GAME_PAIRS } from './lib/revert-v6561-game.mjs';   // ⭐v6.561�
 import { V6562_GAME_PAIRS } from './lib/revert-v6562-game.mjs';   // ⭐v6.562（Rule 40）：聊天室置頂公告／賽程對局時間（非藍桌墊），由新到舊先還原
 import { V6563_GAME_PAIRS } from './lib/revert-v6563-game.mjs';   // ⭐v6.563（Rule 40）：復盤清單改版（非版面分支），由新到舊先還原
 import { V6564_GAME_PAIRS } from './lib/revert-v6564-game.mjs';   // ⭐v6.564（Rule 40）：復盤計時器／自己的獎賞卡／清單收合（非版面分支），由新到舊先還原
-const PRE = [...V6564_GAME_PAIRS, ...V6563_GAME_PAIRS, ...V6562_GAME_PAIRS, ...V6561_GAME_PAIRS, ...V6560_GAME_PAIRS, ...V6464_GAME_PAIRS];
+import { V6565_GAME_PAIRS } from './lib/revert-v6565-game.mjs';   // ⭐v6.565（Rule 40）：遊戲時鐘＋計時器改讀 game-timer（非版面分支），由新到舊先還原
+const PRE = [...V6565_GAME_PAIRS, ...V6564_GAME_PAIRS, ...V6563_GAME_PAIRS, ...V6562_GAME_PAIRS, ...V6561_GAME_PAIRS, ...V6560_GAME_PAIRS, ...V6464_GAME_PAIRS];
 function strip(src) {
   let s = src;
   const bad = [];

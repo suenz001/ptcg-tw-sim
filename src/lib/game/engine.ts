@@ -16,7 +16,7 @@ import type { Card, EnergyType, Attack } from '$lib/cards/types';
 // v5.988：平穩境地述詞改從 v3001 既有安全 import 取得(移除此處早期反向 import 卡檔 v3080，杜絕 module-init TDZ)
 import { BENCH_SCRUB_LOCK_FLAGS, OPP_ATTACK_DEBUFF_FLAGS, isAttackNameBlocked } from './instance-flags';
 // ⭐v6.214③ 伺服器單一時鐘（leaf 模組，零 import ⇒ 不可能參與循環 import；沒同步過回 null）
-import { serverNowOrNull } from './server-clock';
+import { serverNowOrNull, gameClockNow } from './server-clock';   // ⭐v6.565 gameClockNow：對戰計時／紀錄時間戳用遊戲時鐘
 import type {
   GameState, GameAction, CardInstance,
   PlayerState, PendingSelection, LogEntry, TurnPhase, GamePhase, ActionRecord, TurnActionLog} from './types';
@@ -545,7 +545,7 @@ function takeSpecificPrizes(
       phase: 'game-over',
       winner: ownerIdx,
       winReason: `${taker.name} 取得所有獎賞卡`,
-      log: [...newState.log, { turn: newState.turn, playerIndex: null, message: `${taker.name} 取得所有獎賞卡，獲勝！`, timestamp: Date.now() }]
+      log: [...newState.log, { turn: newState.turn, playerIndex: null, message: `${taker.name} 取得所有獎賞卡，獲勝！`, timestamp: gameClockNow() }]   // ⭐v6.565 遊戲時鐘
     };
   }
   return tryPromoteToMainForFestival(newState, pool);
@@ -2401,7 +2401,7 @@ function addLog(
       turn: state.turn,
       playerIndex,
       message,
-      timestamp: Date.now(),  // v5.068：UI 計算 [mm:ss] 對戰相對時間
+      timestamp: gameClockNow(),  // v5.068：UI 計算 [mm:ss] 對戰相對時間
       ...(sourceIid && { sourceIid }),
     }]
   };
@@ -2851,7 +2851,7 @@ export function tryAdvanceToPlaying(input: GameState): GameState {
   // v5.138：任一方還在 post-bench 階段（補抽後加備戰中）→ 不進 playing
   if (state.mulliganPostBenchOpen?.[0] || state.mulliganPostBenchOpen?.[1]) return auditFail(`mulliganPostBenchOpen 未完成: [${state.mulliganPostBenchOpen?.[0]}, ${state.mulliganPostBenchOpen?.[1]}]`);
   // v4.24 對戰計時器 — setup→playing 時起算
-  const timerStart = Date.now();
+  const timerStart = gameClockNow();   // ⭐v6.565 遊戲時鐘
   let next: GameState = {
     ...state,
     phase: 'playing',
@@ -3119,7 +3119,7 @@ function applyAutoDraw(state: GameState): GameState {
       winner: dIdx,
       winReason: `${player.name} 牌組耗盡，無法抽牌`,
       log: [...state.log, { turn: state.turn, playerIndex: null,
-        message: `${player.name} 無法抽牌，${state.players[dIdx].name} 獲勝！`, timestamp: Date.now() }],
+        message: `${player.name} 無法抽牌，${state.players[dIdx].name} 獲勝！`, timestamp: gameClockNow() }],   // ⭐v6.565 遊戲時鐘
     };
   }
   const drawn = player.deck[0];
@@ -6192,7 +6192,7 @@ function handlePlaying(
         ...state, phase: 'game-over',
         winner: dIdx,
         winReason: `${attacker.name} 牌組耗盡，無法抽牌`,
-        log: [...state.log, { turn: state.turn, playerIndex: null, message: `${attacker.name} 無法抽牌，${defender.name} 獲勝！`, timestamp: Date.now() }]
+        log: [...state.log, { turn: state.turn, playerIndex: null, message: `${attacker.name} 無法抽牌，${defender.name} 獲勝！`, timestamp: gameClockNow() }]   // ⭐v6.565 遊戲時鐘
       };
     }
     const drawn = attacker.deck[0];
@@ -9539,7 +9539,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   讓「Turn N = 先攻 → 後攻」的對稱結構與先攻 idx 無關。
     const newTurn = aIdx !== state.firstPlayerIdx ? state.turn + 1 : state.turn;
     // v4.24 對戰計時器 — END_TURN 切換玩家前，累計剛結束回合的時間到 playerTurnTimeMs[aIdx]
-    const _timerNowMs = Date.now();
+    const _timerNowMs = gameClockNow();   // ⭐v6.565 遊戲時鐘
     const _timerPrevStart: number = state.currentTurnStartTime ?? _timerNowMs;
     const _timerElapsed = Math.max(0, _timerNowMs - _timerPrevStart);
     const _timerPrevTimes: [number, number] = state.playerTurnTimeMs ?? [0, 0];
@@ -12932,7 +12932,7 @@ RESOLVERS.set('retreat-energy-discard', (state, actorIdx, selectedIids, params, 
   const afterState: GameState = {
     ...state,
     players,
-    log: [...state.log, { turn: state.turn, playerIndex: actorIdx, message: msg, timestamp: Date.now() }],
+    log: [...state.log, { turn: state.turn, playerIndex: actorIdx, message: msg, timestamp: gameClockNow() }],   // ⭐v6.565 遊戲時鐘
   };
   // v5.243：撤退能量 picker 版同樣加 ON_PROMOTE_TO_ACTIVE prompt
   return tryPromptPromoteActive(afterState, actorIdx, pool);

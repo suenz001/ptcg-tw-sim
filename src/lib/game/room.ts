@@ -34,6 +34,7 @@ import type { GameState } from './types';
 import type { Card } from '$lib/cards/types';
 // v4.60 checkAndAcceptRestart transaction calls createGame internally
 import { createGame } from './engine';
+import { gameClockNow } from './server-clock';   // ⭐v6.565 棄權／離開的終局紀錄也蓋遊戲時鐘（計時器用它當對局結束時刻；leaf，無循環）
 import { shouldSkipStalePush, mergeForSetupPush } from './sync-guards';  // v5.465：pushGameState 終態/防舊守衛（鏡射 Oracle）；v6.309 setup 推送端合併（鏡射 Oracle）
 
 export type DeckEntry = { cardId: string; count: number };
@@ -594,7 +595,7 @@ export async function claimOpponentForfeit(roomCode: string, mySeatIdx: 0 | 1): 
     winReason: `${oppName} 3 分鐘無回應，被宣告棄權`,
     log: [
       ...(myGs.log ?? []),
-      { turn: myGs.turn, playerIndex: null, message: `${oppName} 3 分鐘無回應，${myName} 宣告對手棄權獲勝` },
+      { turn: myGs.turn, playerIndex: null, message: `${oppName} 3 分鐘無回應，${myName} 宣告對手棄權獲勝`, timestamp: gameClockNow() },
     ],
   };
   await updateDoc(ref, {
@@ -637,7 +638,7 @@ export async function leaveRoom(roomCode: string): Promise<void> {
       winReason: '對手承認技不如人，先行離開了',
       log: [
         ...(myGs.log ?? []),
-        { turn: myGs.turn, playerIndex: null, message: `${myName} 中途離開遊戲，對手獲勝` },
+        { turn: myGs.turn, playerIndex: null, message: `${myName} 中途離開遊戲，對手獲勝`, timestamp: gameClockNow() },
       ],
     };
     await updateDoc(ref, {

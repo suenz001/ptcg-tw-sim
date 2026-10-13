@@ -1,4 +1,8 @@
 <details open>
+        <summary><span class="ver-badge">v6.565</span> <b>一般線上對戰的計時改用伺服器時間，終局時最後一回合也會算進去</b><br>一般線上對戰兩邊電腦的時鐘不準時，雙方的累計時間不會再一方多算、一方少算；對局結束時，最後一回合的時間會算進當時行動的那一方。</summary>
+        <div class="log-body">・對戰紀錄每一行前面的 [分:秒] 也改用同一個時鐘，兩邊看到的一樣。<br>・本機雙人和 vs AI 沒有連線，計時照舊。<br>・對局結束時：總時間＝雙方累計時間＋開局準備的時間，看回放也一樣。</div>
+      </details>
+      <details>
         <summary><span class="ver-badge">v6.564</span> <b>回放時計時器停住、復盤看得到自己的獎賞卡、復盤清單可以收合</b><br>看錦標賽回放或一般對戰復盤時，計時器停在那一步當下的時間，不會再自己往上跑；一般對戰復盤可以點開自己的獎賞卡（對手的照樣蓋著）。</summary>
         <div class="log-body">・錦標賽對戰中的計時改用伺服器時間，電腦時鐘不準也不會多算或少算。<br>・開始對戰頁的「🌐 線上連線對戰」與「🏆 我的錦標賽對戰」標題可以點一下收合／展開，這台裝置會記住。<br>・這一版之前存下的復盤檔沒有記錄自己的獎賞卡內容，看到的仍是卡背；新打的對戰才看得到。</div>
       </details>
@@ -45,9 +49,8 @@
         <summary><span class="ver-badge">v6.554</span> <b>丟棄到棄牌區的卡一律寫進對戰紀錄</b><br>探險家的嚮導、丹瑜、撤退費、競技場被換掉等丟進棄牌區的卡，對戰紀錄都會列出是哪幾張。</summary>
         <div class="log-body">・丟進棄牌區的卡一律寫進對戰紀錄：探險家的嚮導、丹瑜、青木的手法、完全體攪拌器、撤退費、招式丟能量、競技場被換掉、燃火能量等原本沒寫的，現在都會列出是哪幾張。</div>
       </details>
-      <details>
+      <details data-ver="v6.553">
         <summary><span class="ver-badge">v6.553</span> <b>借招不能借自己被鎖住的同名招式</b><br>使出借招的寶可夢若被鎖住某個招式（例：下個回合無法使用「X」），就不能借用同名招式；被借的寶可夢自己被鎖住（例：血月）時照樣可以借。</summary>
-        <div class="log-body">・欺詐、揮指等借招：使出借招的寶可夢若被鎖住某個招式（例：下個回合無法使用「X」），就不能借用同名招式，對戰紀錄會說明原因；被借的寶可夢自己被鎖住（例：血月）時照樣可以借。</div>
       </details>
       <details data-ver="v6.552">
         <summary><span class="ver-badge">v6.552</span> <b>電腦對戰：評估招式時計入自己被反擊打倒而送出的獎賞</b><br>電腦評估招式時，若這一擊會讓自己的寶可夢被反擊或自傷打倒，會把對手拿到的獎賞算進去，不再選擇送出獎賞的招式。</summary>
@@ -114,9 +117,6 @@
       </details>
       <details data-ver="v6.531">
         <summary><span class="ver-badge">v6.531</span> <b>監視之眼在場時不能使用腎上腺腦力；同時取完獎賞的勝負判定修正</b><br>探探鼠的監視之眼在場時，腎上腺腦力、火箭腦力的特性按鈕不能按；白日夢在附能的寶可夢昏厥要補位時也會結束回合；同一個動作內雙方都取完獎賞時，改依官方規則判定勝負。</summary>
-      </details>
-      <details data-ver="v6.530">
-        <summary><span class="ver-badge">v6.530</span> <b>依官方判例修正 7 項效果判定（第二批）</b><br>對照官方 Q&A 修正阿塞蘿拉的惡作劇、防護代碼、核心記憶碟、白日夢、靈怪變化、咒詛炸彈、高電壓壓制的效果判定。</summary>
       </details>
       <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
         📚 這裡顯示<b>最近的更新內容</b>。更早的紀錄完整保留在 →

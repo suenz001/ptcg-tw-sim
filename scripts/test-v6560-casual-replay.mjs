@@ -250,7 +250,7 @@ async function scenarios(L, srcRoot) {
   const blk = a >= 0 && b > a ? pg.slice(a, b) : '';
   // ⭐v6.563（Rule 40，站長改需求）：只記休閒線上對戰，本機雙人／vs AI 不記
   r.W1 = /const replayRecordable = \$derived\(!!game && !isTournament && !isTReplay && !isTournSpectator && !isAdminMode\s*&& mode === 'online' && !isSpectator && \(myPlayerIndex === 0 \|\| myPlayerIndex === 1\)\);/.test(blk)
-    && /finalizeReplay\(\{ rec, finalState: g, online: mode === 'online', seat: \(myPlayerIndex === 0 \|\| myPlayerIndex === 1\) \? myPlayerIndex : null,\s*ai: aiPlayerIndex !== null, revealOpp: replayRevealsOpponent\(\), appVersion: VERSION, now: Date\.now\(\) \}\);/.test(blk)
+    && /finalizeReplay\(\{ rec, finalState: g, online: mode === 'online', seat: \(myPlayerIndex === 0 \|\| myPlayerIndex === 1\) \? myPlayerIndex : null,\s*ai: aiPlayerIndex !== null, revealOpp: replayRevealsOpponent\(\), appVersion: VERSION, now: (?:Date\.now|gameClockNow)\(\) \}\);/.test(blk)   // ⭐v6.565（Rule 40）：savedAt 改用遊戲時鐘（跟盤面同一個時鐘），兩種寫法都只代表「現在」，意圖不變
     && /if \(data\) \{ lastSavedReplay = data; void saveReplay\(data\); \}/.test(blk) && /if \(!g \|\| !replayRecordable\) return;\s*untrack\(\(\) => onReplayGameState\(g\)\);/.test(blk)
     && /const toSave = stepsForStorage\(rec\.steps, \{ online: mode === 'online', seat: \(myPlayerIndex === 0 \|\| myPlayerIndex === 1\) \? myPlayerIndex : null, revealOpp: replayRevealsOpponent\(\) \}\);\s*if \(toSave\) void saveInProgress\(rec\.gameId, toSave\);/.test(blk);
   // W5：onReplayGameState 本體實跑（假的存檔函式）：線上＋開關關 ⇒ 存遮蔽版；開關開 ⇒ 攤開；本機 AI ⇒ kind ai；錦標賽條件外不會被呼叫（W6）
@@ -272,6 +272,7 @@ async function scenarios(L, srcRoot) {
           const saveReplay = (d) => { saved.push(d); };
           const replayRevealsOpponent = () => env.reveal;
           const mode = env.mode, myPlayerIndex = env.seat, aiPlayerIndex = env.ai, VERSION = 'T';
+          const gameClockNow = () => Date.now();   // ⭐v6.565（Rule 40）：頁面改用遊戲時鐘，替身＝沒同步過的本機時鐘
           ${fnSrc}
           return onReplayGameState;`);
         const f = make(L, env, saved, prog);

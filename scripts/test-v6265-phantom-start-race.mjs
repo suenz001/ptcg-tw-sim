@@ -100,6 +100,7 @@ function loadRoomOracle(srcText, server) {
     '$lib/firebase': { auth: { currentUser: null } },
     './engine': { createGame: () => ({ id: 'restart-' + (server.restartSeq = (server.restartSeq || 0) + 1), phase: 'setup' }) },
     './sync-guards': { shouldSkipStalePush: () => false },
+    './server-clock': { gameClockNow: () => Date.now() },   // ⭐v6.565（Rule 40）：room-oracle 的棄權／離開紀錄改蓋遊戲時鐘；替身＝沒同步過的本機時鐘
     '$lib/ui/stale-keep': { adoptOrKeep: (p, n) => ({ data: n ?? p, stale: n == null }) },
     './room': {
       SEAT_LAYOUT_VERSION: 1, TOTAL_SEATS: 10, SPECTATOR_SEATS: 8, HEARTBEAT_STALE_MS: 1,

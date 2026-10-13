@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.565：休閒線上計時改用伺服器時鐘＋終局算進最後一回合（2026-10-14 站長）
+
+BASE `ea8cb15c`（v6.564）。站長 00:45：「這兩個好修嗎？好修的話一起修掉，記得要審查 不好修的話，不修也沒關係，畢竟只是小問題」（v6.564 Opus 審查留下的 P2／P3）。
+- 休閒線上時鐘差根因：休閒是雙方各自 applyAction 後推盤面；END_TURN 由結束回合的那一方用本機 Date.now() 寫 currentTurnStartTime，下一回合由另一方減 ⇒ 時鐘差灌進 playerTurnTimeMs（一方多、一方少），對戰紀錄 [mm:ss] 也一樣（紀錄時間戳雙方各寫各的）。
+- 修法：server-clock.ts 新增 gameClockNow()（同步過＝伺服器時鐘，沒同步過＝Date.now()，與舊版逐字相同）；休閒線上本來就會經 oracle-client 同步（v6.214）。engine 的 timerStart／_timerNowMs／全部紀錄時間戳（engine 6 處＋_shared 3 處）與 replay-record 的 at 改用它；createdAt 刻意維持本機時鐘（另有 createdAtSrv）。畫面端休閒／本機的「現在」＝tickTime＋getServerClockOffsetMs()（同一份偏移量）；錦標賽照舊 tClockOffset（伺服器跑 engine，盤面本來就是伺服器時間）。順帶：洗牌／擲幣動畫的 log 游標（取最大時間戳）原本也被雙方時鐘差影響，現在同一個時鐘。
+- 終局最後一回合：引擎只有 END_TURN 才累計回合時間 ⇒ 致勝那一回合（含投降、抽不到牌）永遠沒算進任何一方。新 leaf src/lib/game/game-timer.ts computeTimerView（唯一一份，桌機算好經 timerMs 傳手機）：終局時最後一回合＝紀錄最後一筆時間戳 − 最後一回合開始，算給當時的行動方；紀錄比回合開始還早（舊資料／別的時鐘）不採信，回放用那一格的時間當備用，即時對局沒有備用就 0（同舊版）。總時間＝最後一回合開始＋最後一回合 − 開局 ⇒ 總時間 − 雙方累計＝開局準備。v6.564 的「回放終局用 endedAt」改成同一套（紀錄優先）。
+- 過渡期：對手還在舊版時，對手寫的時間仍是他的本機時鐘（重新整理後即一致）。
+- 守衛 test-v6565-game-clock-final-turn：C1（兩台時鐘各差 5 分鐘輪流 END_TURN，engine 實跑）、C2（沒同步零回歸）、C3、C4（computeTimerView）、C5（頁面 timerNow 實跑）、C6、C7（engine／_shared 剝註解後只剩 createdAt 一處 Date.now()）；HEAD-FAIL 在 v6.564 六條紅（C2 是零回歸對照）；突變 10 個全殺（timerStart 與 _shared 紀錄時間戳兩個只由 C7 靜態掃描抓）。
+- Rule 40：test-v6564 T1 改呼叫 computeTimerView 並鎖頁面接線（意圖：回放停住、錦標賽用伺服器時鐘，不變）；新 scripts/lib/revert-v6565-game.mjs 串進 test-v6441／v6293。
+- 部署：redeploy-oracle.bat（玩家前端；錦標賽伺服器的 engine bundle 沒同步過時鐘 ⇒ gameClockNow＝Date.now()，行為不變，不需 update-tournament）。
+
 ## v6.564：回放計時器停住＋復盤看得到自己的獎賞卡＋復盤清單收合（2026-10-13 站長）
 
 BASE `93582fe0`（v6.563）。站長 22:49：「看錦標賽回放的時候 計時器的時間還會繼續跑，並請你確認計時時間的正確性 另外有玩家回報 新的一般對戰復盤功能無法確認自己的獎賞卡？你幫我確認一下」；22:53：「另外對戰演練裡面顯示的復盤 線上對戰連線 和 我的錦標賽 幫我增加收摺的功能」。

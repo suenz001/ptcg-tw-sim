@@ -11,6 +11,7 @@
 //   每份快照把 log 清空（log 佔盤面約 7 成），播放時用 logLen 從 finalLog 切出「到這一步為止」的紀錄。
 
 import type { GameState } from './types';
+import { gameClockNow } from './server-clock';   // ⭐v6.565 每一格的時間跟盤面時間戳同一個時鐘（leaf，無循環）
 
 export const REPLAY_FORMAT = 'ptcg-tw-sim-replay';
 export const REPLAY_FORMAT_VERSION = 1;
@@ -96,7 +97,7 @@ export function recordStep(rec: ReplayRecorder, state: GameState): boolean {
     if (key === rec.lastKey) return false;   // 退回到的盤面就是剩下的最後一格 ⇒ 不重複記
   }
   if (rec.steps.length >= MAX_REPLAY_STEPS) return false;
-  rec.steps.push({ turn: state.turn ?? 1, activePlayerIndex: (state.activePlayerIndex ?? null) as 0 | 1 | null, logLen, state: snap, at: Date.now() });
+  rec.steps.push({ turn: state.turn ?? 1, activePlayerIndex: (state.activePlayerIndex ?? null) as 0 | 1 | null, logLen, state: snap, at: gameClockNow() });
   rec.lastKey = key;
   return true;
 }

@@ -37,6 +37,8 @@ async function loadLibs(srcRoot) {
   const p = (x) => join(srcRoot, x).replace(/\\/g, '/');
   const parts = [`export * as RR from '${p('src/lib/game/replay-record')}';`, `export * as RT from '${p('src/lib/game/replay-tourn')}';`];
   if (existsSync(join(srcRoot, 'src/lib/game/replay-fold.ts'))) parts.push(`export * as RF from '${p('src/lib/game/replay-fold')}';`);
+  // ⭐v6.565（Rule 40）：計時器四個數字搬進 game-timer.ts（唯一一份）⇒ T1 改呼叫它；BASE 沒有這支 ⇒ T1 照樣紅
+  if (existsSync(join(srcRoot, 'src/lib/game/game-timer.ts'))) parts.push(`export * as GT from '${p('src/lib/game/game-timer')}';`);
   writeFileSync(E, parts.join('\n'));
   try {
     await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node', target: 'node20', alias: { '$lib': join(srcRoot, 'src/lib'), '$app/paths': S, '$app/environment': S }, logLevel: 'silent', nodePaths: [join(ROOT, 'node_modules')] });
@@ -86,16 +88,21 @@ function derivedExpr(pg, name) {
   const m = re.exec(pg);
   return m ? m[1] : null;
 }
-function pageScenarios(pg) {
+function pageScenarios(pg, lib) {
   const r = {};
-  const eNow = derivedExpr(pg, 'timerNow'), eTurn = derivedExpr(pg, 'liveTurnTimeMs'), eTotal = derivedExpr(pg, 'gameTotalMs');
-  if (eNow && eTurn && eTotal) {
+  // ⭐v6.565（Rule 40）：liveTurnTimeMs／gameTotalMs 改成讀 game-timer.ts computeTimerView 的結果 ⇒
+  //   timerNow 照舊從頁面抽出來實跑（休閒那一支多了 getServerClockOffsetMs()，這裡給 null＝沒同步過，與 v6.564 同義），
+  //   回合／總時間改呼叫 lib，並逐字鎖住頁面的接線（傳 timerNow、回放才給 tReplayAt 當備用結束時刻）。意圖（回放停住、錦標賽用伺服器時鐘）不變。
+  const eNow = derivedExpr(pg, 'timerNow');
+  const GT = lib && lib.GT;
+  const wired = /const timerView = \$derived\(computeTimerView\(game, timerNow, isTReplay \? tReplayAt : null\)\);/.test(pg)
+    && /const liveTurnTimeMs = \$derived\(timerView\.live\);/.test(pg) && /const gameTotalMs = \$derived\(timerView\.total\);/.test(pg);
+  if (eNow && GT && wired) {
     const calc = (ctx) => {
       // eslint-disable-next-line no-new-func
-      const now = new Function('isTReplay', 'tReplayAt', 'game', 'tickTime', 'isTournament', 'tClockOffset', 'return (' + eNow + ');')(ctx.isTReplay, ctx.tReplayAt, ctx.game, ctx.tickTime, ctx.isTournament, ctx.tClockOffset);
-      const turn = new Function('game', 'timerNow', 'return (' + eTurn + ');')(ctx.game, now);
-      const total = new Function('game', 'timerNow', 'liveTurnTimeMs', 'isTReplay', 'tReplayAt', 'return (' + eTotal + ');')(ctx.game, now, turn, ctx.isTReplay, ctx.tReplayAt);
-      return { now, turn, total };
+      const now = new Function('isTReplay', 'tReplayAt', 'game', 'tickTime', 'isTournament', 'tClockOffset', 'getServerClockOffsetMs', 'return (' + eNow + ');')(ctx.isTReplay, ctx.tReplayAt, ctx.game, ctx.tickTime, ctx.isTournament, ctx.tClockOffset, () => null);
+      const v = GT.computeTimerView(ctx.game, now, ctx.isTReplay ? ctx.tReplayAt : null);
+      return { now, turn: v.live, total: v.total };
     };
     const g = { phase: 'playing', gameStartTime: 1_000_000, currentTurnStartTime: 1_600_000 };
     const base = { game: g, tickTime: 9_000_000, isTournament: false, tClockOffset: 0, isTReplay: false, tReplayAt: null };
@@ -193,7 +200,7 @@ const PG = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf
 const MP = normEol(readFileSync(join(ROOT, 'src/routes/game/MobilePortraitBattle.svelte'), 'utf8'));
 const L = await loadLibs(ROOT);
 const g = async (fn) => { try { const x = await fn(); return x && typeof x === 'object' ? x : {}; } catch { return {}; } };
-const all = async (pg, lib, mp) => ({ ...(await g(() => mobileScenarios(pg, mp))), ...(await g(() => libScenarios(lib))), ...(await g(() => pageScenarios(pg))), ...(await g(() => foldScenarios(lib))) });
+const all = async (pg, lib, mp) => ({ ...(await g(() => mobileScenarios(pg, mp))), ...(await g(() => libScenarios(lib))), ...(await g(() => pageScenarios(pg, lib))), ...(await g(() => foldScenarios(lib))) });
 const R = await all(PG, L, MP);
 for (const k of Object.keys(LABEL)) ok(LABEL[k], R[k] === true, R[k + 'n']);
 

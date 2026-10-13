@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '93582fe03ebebf5c476d8368a5fcc8cbabab705a';   // v6.563（上一版）
+const PREV_SHA = 'ea8cb15cf45ce0fd0285d5491b279e873904a320';   // v6.564（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,19 +757,35 @@ const PREV_SHA = '93582fe03ebebf5c476d8368a5fcc8cbabab705a';   // v6.563（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.564 前移：PREV_SHA 從 93582fe0（v6.563）起算。
+  // ⚠⚠ v6.565 前移：PREV_SHA 從 ea8cb15c（v6.564）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.564：回放計時器停住（每一格記時間）、錦標賽計時用伺服器時鐘、遮蔽的復盤保留自己的獎賞卡、復盤清單收合（replay-fold.ts）；首頁 changelog 三步搬運。
-  'src/lib/game/replay-fold.ts',
+  // ⭐v6.565：休閒線上計時與對戰紀錄時間戳改用遊戲時鐘（server-clock gameClockNow，engine／_shared／replay-record）、計時器四個數字收斂到 game-timer.ts（終局算進最後一回合）；首頁 changelog 三步搬運。
+  'src/lib/game/effects/_shared.ts',
+  'src/lib/game/engine.ts',
+  'src/lib/game/game-timer.ts',
   'src/lib/game/replay-record.ts',
-  'src/lib/game/replay-tourn.ts',
+  'src/lib/game/room-oracle.ts',   // v6.565 棄權／離開的終局紀錄蓋遊戲時鐘（審查 P3-2）
+  'src/lib/game/room.ts',          // 同上（Firebase 版）
+  'src/lib/game/server-clock.ts',
   'src/lib/version.ts',
-  'src/routes/game/MobilePortraitBattle.svelte',   // v6.564 手機直式計時器改吃父層那一份（審查 P1）
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.564）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.564 前移：PREV_SHA 從 93582fe0（v6.563）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.564：回放計時器停住（每一格記時間）、錦標賽計時用伺服器時鐘、遮蔽的復盤保留自己的獎賞卡、復盤清單收合（replay-fold.ts）；首頁 changelog 三步搬運。
+//   'src/lib/game/replay-fold.ts',
+//   'src/lib/game/replay-record.ts',
+//   'src/lib/game/replay-tourn.ts',
+//   'src/lib/version.ts',
+//   'src/routes/game/MobilePortraitBattle.svelte',   // v6.564 手機直式計時器改吃父層那一份（審查 P1）
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.563）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.563 前移：PREV_SHA 從 c534cdd3（v6.562）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -886,16 +902,6 @@ const PREV_ALLOWED = [
 // ⭐v6.553：借招候選排除借用方被鎖的同名招式（isAttackNameBlocked），copyAttackCooldownNote 說明原因。
 //   'src/lib/game/ai.ts',
 //   'src/lib/game/copy-attack.ts',
-//   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.552）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.552 前移：PREV_SHA 從 ca337e75（v6.551）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.552：AI 試打評分加入 prizesGiven（對手拿到的獎賞）與直接輸局的壓底。
-//   'src/lib/game/ai-eval.ts',
-//   'src/lib/game/ai.ts',
 //   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',

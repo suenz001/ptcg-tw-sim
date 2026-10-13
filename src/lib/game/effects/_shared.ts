@@ -25,6 +25,8 @@ export { isRocketTeamPokemonCard };   // ⭐v6.551 定義搬到 selection-filter
 import { normalizeEvoVariantName } from '../stage2-index';
 // ⭐v6.337 借招（複製他人招式）中央管線；copy-attack 只 import ../types，無循環
 import { withCopyAttackChain } from '../copy-attack';
+// ⭐v6.565 對戰紀錄時間戳用遊戲時鐘（server-clock 是 leaf，零 import，無循環）
+import { gameClockNow } from '../server-clock';
 import type {
   GameState, PlayerState, CardInstance, PendingSelection, GameAction,
   SpecialCondition,
@@ -1722,7 +1724,7 @@ export function addLog(
       turn: state.turn,
       playerIndex: playerIdx,
       message: msg,
-      timestamp: Date.now(),  // v5.068：UI 計算 [mm:ss] 對戰相對時間
+      timestamp: gameClockNow(),  // v5.068：UI 計算 [mm:ss] 對戰相對時間
       ...(sourceIid && { sourceIid }),
     }],
   };
@@ -1774,7 +1776,7 @@ export function addPrivateLog(
       playerIndex: playerIdx,
       message: publicMsg,
       privateMessage: privateMsg,
-      timestamp: Date.now(),  // v5.068：UI 計算 [mm:ss] 對戰相對時間
+      timestamp: gameClockNow(),  // v5.068：UI 計算 [mm:ss] 對戰相對時間
     }],
   };
 }
@@ -2333,7 +2335,7 @@ export function addPendingPrize(state: GameState, ownerIdx: 0 | 1, n: number, po
     s = {
       ...s, phase: 'game-over', winner: ownerIdx,
       winReason: `${taker.name} 取得所有獎賞卡`,
-      log: [...s.log, { turn: s.turn, playerIndex: null, message: `${taker.name} 取得所有獎賞卡，獲勝！`, timestamp: Date.now() }],
+      log: [...s.log, { turn: s.turn, playerIndex: null, message: `${taker.name} 取得所有獎賞卡，獲勝！`, timestamp: gameClockNow() }],
     };
   }
   return s;

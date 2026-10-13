@@ -67,6 +67,8 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { handOverlapPx, handFanPose, fanOvershootPx, borderBoxSize } from '$lib/game/hand-layout';
   // ⭐v6.560 一般對戰復盤（記錄／遮蔽／跳回合 與 瀏覽器儲存／檔案）
   import { withTournPerActionSteps } from '$lib/game/replay-tourn';   // v6.561 錦標賽回放逐動作
+  import { computeTimerView } from '$lib/game/game-timer';   // ⭐v6.565 計時器四個數字的唯一一份
+  import { getServerClockOffsetMs, gameClockNow } from '$lib/game/server-clock';   // ⭐v6.565 休閒／本機的「現在」跟 engine 寫時間戳用同一個時鐘
   import { loadReplayFold, saveReplayFold, toggleReplayFoldState, type ReplayFoldSection } from '$lib/game/replay-fold';   // v6.564 復盤清單收合
   import { CHAT_PIN_URL, CHAT_PIN_REFRESH_MS, parseChatPin, chatPinVisible, loadDismissedPinId, saveDismissedPinId, type ChatPin } from '$lib/tournament/chat-pin';   // v6.562 聊天室置頂公告
   import { MY_TOURN_MATCHES_URL, parseMyTournMatches, myTournMatchLine, type MyTournMatches } from '$lib/tournament/my-matches';   // v6.563 復盤清單：自己最近的錦標賽對戰
@@ -1739,31 +1741,20 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // ⭐v6.564 站長回報「看錦標賽回放的時候計時器還會繼續跑」＋「確認計時時間的正確性」：
   //   ① 回放：「現在」＝這一格記錄當下的時間（tReplayAt；舊資料沒有 ⇒ 那一格的回合開始時間）⇒ 計時器停在那一刻，逐格前進才變。
   //   ② 錦標賽對戰／觀戰：盤面上的時間是**伺服器**寫的（伺服器跑 applyAction）⇒ 用伺服器時鐘（本機時間＋tClockOffset）算，
-  //      原本直接拿本機時鐘減，電腦時鐘快慢幾分鐘就差幾分鐘（甚至算出負數被夾成 0）。休閒對戰由本機套用動作 ⇒ 照舊用本機時鐘。
+  //      原本直接拿本機時鐘減，電腦時鐘快慢幾分鐘就差幾分鐘（甚至算出負數被夾成 0）。
+  //   ③ ⭐v6.565 休閒／本機：盤面時間戳由 engine 用遊戲時鐘（gameClockNow：同步過就是伺服器時鐘）寫 ⇒ 這裡用同一個時鐘的「現在」
+  //      （本機時間＋同一份偏移量；沒同步過偏移量＝0，跟舊版一樣）。原本休閒線上雙方各用自己的時鐘寫、互相減，時鐘差會灌進累計時間。
   const timerNow = $derived(
     isTReplay ? (tReplayAt ?? game?.currentTurnStartTime ?? tickTime)
-      : isTournament ? tickTime + tClockOffset : tickTime
+      : isTournament ? tickTime + tClockOffset : tickTime + (getServerClockOffsetMs() ?? 0)
   );
-  // 當前回合計時（active player 的本回合時間）— phase==='playing' 才 live
-  const liveTurnTimeMs = $derived(
-    game && game.phase === 'playing' && game.currentTurnStartTime !== undefined
-      ? Math.max(0, timerNow - game.currentTurnStartTime)
-      : 0
-  );
-  // 玩家累計時間 = 已記錄 playerTurnTimeMs + 當前回合 live time（僅 active player）
-  function _playerTotal(idx: 0 | 1): number {
-    if (!game) return 0;
-    const stored = game.playerTurnTimeMs?.[idx] ?? 0;
-    const live = (game.phase === 'playing' && game.activePlayerIndex === idx) ? liveTurnTimeMs : 0;
-    return stored + live;
-  }
-  const p0TotalMs = $derived(_playerTotal(0));
-  const p1TotalMs = $derived(_playerTotal(1));
-  const gameTotalMs = $derived(
-    game && game.gameStartTime !== undefined
-      ? Math.max(0, (game.phase === 'game-over' ? ((isTReplay && tReplayAt != null) ? tReplayAt : (game.currentTurnStartTime ?? timerNow) + liveTurnTimeMs) : timerNow) - game.gameStartTime)
-      : 0
-  );
+  // ⭐v6.565 四個數字只算一份（game-timer.ts）：終局時把最後一回合算給當時的行動方（原本永遠漏掉），總時間＝最後一回合開始＋最後一回合。
+  //   回放時拿不到紀錄時間戳 ⇒ 用那一格的時間當結束時刻；即時對局不給備用（拿不到就停在最後一回合開始，同舊版）。
+  const timerView = $derived(computeTimerView(game, timerNow, isTReplay ? tReplayAt : null));
+  const liveTurnTimeMs = $derived(timerView.live);
+  const p0TotalMs = $derived(timerView.p0);
+  const p1TotalMs = $derived(timerView.p1);
+  const gameTotalMs = $derived(timerView.total);
 
   // v4.21 勝負視窗（可拖曳）— 對局結束時 overlay 戰鬥盤面，保留場上狀況檢視。
   // ⭐⭐⭐v6.420：這是站內**第三份**各自為政的拖曳實作，而且完全沒有夾制
@@ -3229,9 +3220,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       finalTurn: g.turn,
       // v6.524：誰先攻（players 索引；0＝p1）—— admin 牌組原型的「先攻／後攻勝率」用（伺服器 v1.59 起收）
       firstPlayerIdx: (g.firstPlayerIdx === 0 || g.firstPlayerIdx === 1) ? g.firstPlayerIdx : null,
-      durationMs: g.gameStartTime ? (Date.now() - g.gameStartTime) : 0,
+      // ⭐v6.565：gameStartTime 是遊戲時鐘寫的 ⇒ 結束時刻也用同一個時鐘（原本本機 Date.now()，休閒回報方時鐘偏就差一個時鐘差、甚至負數）
+      durationMs: g.gameStartTime ? Math.max(0, gameClockNow() - g.gameStartTime) : 0,
       startedAt: g.gameStartTime ?? null,
-      endedAt: Date.now(),
+      endedAt: gameClockNow(),
       p1: {
         name: g.players[0]?.name ?? 'P1',
         email: p1Email,
@@ -5890,7 +5882,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (g.phase === 'game-over' && _replayFinalizedId !== g.id && rec.steps.length > 0) {
       _replayFinalizedId = g.id;
       const data = finalizeReplay({ rec, finalState: g, online: mode === 'online', seat: (myPlayerIndex === 0 || myPlayerIndex === 1) ? myPlayerIndex : null,
-        ai: aiPlayerIndex !== null, revealOpp: replayRevealsOpponent(), appVersion: VERSION, now: Date.now() });
+        ai: aiPlayerIndex !== null, revealOpp: replayRevealsOpponent(), appVersion: VERSION, now: gameClockNow() });   // ⭐v6.565 savedAt＝回放終局格的備用結束時刻，跟盤面同一個時鐘
       if (data) { lastSavedReplay = data; void saveReplay(data); }
     }
   }

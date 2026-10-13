@@ -67,6 +67,17 @@ export function serverNowOrNull(): number | null {
   return _best === null ? null : Math.round(Date.now() + _best.offsetMs);
 }
 
+/**
+ * ⭐v6.565 對戰計時與對戰紀錄時間戳的「遊戲時鐘」：同步過伺服器時鐘就用伺服器時間，沒同步過（本機雙人／vs AI／伺服器端 bundle）退回 Date.now()。
+ *   為什麼：休閒線上是雙方各自套用動作，回合開始時間由「結束回合的那一方」寫、下一回合由另一方減 ⇒
+ *   兩台電腦的時鐘差會直接灌進雙方的累計時間（一方多算、一方少算），對戰紀錄的 [mm:ss] 也一樣。
+ *   雙方都用伺服器時鐘寫 ⇒ 誤差只剩各自的 RTT/2（幾百毫秒以內）。
+ *   畫面端用 tickTime + getServerClockOffsetMs() 讀同一個時鐘（同一支模組、同一份偏移量）。
+ */
+export function gameClockNow(): number {
+  return _best === null ? Date.now() : Math.round(Date.now() + _best.offsetMs);
+}
+
 /** 診斷／守衛用：目前採信樣本的 RTT。 */
 export function getServerClockRttMs(): number | null {
   return _best === null ? null : _best.rttMs;

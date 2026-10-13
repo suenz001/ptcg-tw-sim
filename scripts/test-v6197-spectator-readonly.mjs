@@ -310,12 +310,13 @@ await TA('8a room-oracle.leaveRoom：對戰中的觀戰者離開 ⇒ 座位釋�
   const run = async (status, seatIdx) => {
     let cur = mk(status, seatIdx); const ops = [];
     const leaveRoom = new Function('oracleCurrentUid', 'oracleGetRoom', 'findMySeatIdx', 'computeMemberUids',
-      'oracleTx', 'oracleDeleteRoom', 'console', src)(
+      'oracleTx', 'oracleDeleteRoom', 'console', 'gameClockNow', src)(
       () => 'ME', async () => cur,
       (seats, uid) => seats.findIndex((s) => s.uid === uid),
       (seats) => seats.filter((s) => s.uid).map((s) => s.uid),
       async (_c, f) => { cur = f(cur); ops.push('tx'); return cur; },
-      async () => { ops.push('del'); }, console);
+      async () => { ops.push('del'); }, console,
+      () => Date.now());   // ⭐v6.565（Rule 40）：離場判負的紀錄改蓋遊戲時鐘；替身＝沒同步過的本機時鐘
     await leaveRoom('ABCD');
     return { cur, ops };
   };
