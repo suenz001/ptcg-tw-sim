@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.557：電腦版手牌互疊依實際寬度（2026-10-13 站長回報）
+
+BASE v6.556。站長 08:17 逐字：「電腦版的玩家反應，手牌很多，但旁邊還有空間，但系統卻把手牌都疊在一起」（附藍桌墊截圖：19 張擠在中間約 450px，兩旁空白）。
+- 根因：+page.svelte 手牌列 --hand-overlap 寫死「>9 張每張多疊 7px、最多 58px」（v2.41 起），完全不看手牌列寬度；寬螢幕照疊、窄螢幕可能疊不夠被 overflow:hidden 切掉。
+- 修法：新 leaf src/lib/game/hand-layout.ts handOverlapPx(張數, 卡寬, 可用寬)——放得下（含剛好）不疊；放不下疊 ceil((n·w−avail)/(n−1))；最緊每張露出 18px；量不到（0）退回舊公式（legacyHandOverlapPx，逐字等價）。頁面加量測 action handFit（哨兵 v6557-hand-fit）：ResizeObserver 觀察手牌列與第一張卡，可用寬＝clientWidth 扣左右 padding。四種桌機版面共用；手機直式是另一個元件，不受影響。
+- 守衛 test-v6557-hand-fit-width：A 判準行為、B 頁面接線（含抽出 handFit 本體以假 DOM 實際執行）。HEAD-FAIL：BASE 11 條紅、A0 正對照綠。突變 8 個，7 殺、1 個等價（need<=avail 改 < ：相等時 overlap 公式本來就得 0）。Rule 40：test-v6441 LATER、test-v6293 revertV6557（版面結構不動）。
+- **Opus 5.5 審查（agent ade8fc37c2e4f5248，Chromium 真頁面實測）第一輪：需修**。
+  - P1：經典／桌墊／Fable 手牌有扇形（rotate ±18°，transform-origin 50% 180%），攤滿整列後兩端被 overflow:hidden 切掉約 40～75px（舊公式不會）。**已修**：hand-layout.ts 新增 handFanPose（扇形公式搬家，markup 改讀）、fanOvershootPx（先 translateY 再以原點旋轉，含 hover 上推 14px）、borderBoxSize；handFit 量頭尾兩張實際套用的 --fan-rot／--fan-lift／transformOrigin，可用寬扣兩倍外擴。
+  - P3：卡寬 offsetWidth 取整 ⇒ 改 computed border-box（含小數）；張數改 dedupeByIid(hand).length（與畫面同源）。
+  - 守衛安慰劑：不觀察卡片／update 空／不觀察手牌列／RO 回呼空 4 個突變存活 ⇒ 新增 E 段真瀏覽器（對戰頁三條手牌 CSS 原樣抽出、handFit 原文去型別在 Chromium 實跑；E1 放得下時不超出、E2 攤開、E3 縮放重量、E4 3→13 張外擴變大、E5 只改卡寬重量、E6 正對照拿掉外擴必超出、E7 小數卡寬不得取整）、A10 獨立幾何比對。突變 16＋4 個全殺（等價：<= 改 <）。
+- **複審：可合併**（四種版面 × 1920／1366／2000／1280 × 9～40 張、hover 邊緣卡、逐張加減、縮放，0 張被切；classic 1920 19 張由切 65.9px 變成兩端留 24px）。P3 卡寬取整無守衛 ⇒ 已補 E7（寬度挑在取整會讓 ceil 少 1px 的位置，Math.floor 突變實測翻紅）。
+
 ## v6.556：特殊狀態顯示中央化（2026-10-12 站長追問）
 
 BASE v6.555。站長 20:54 逐字：「你既然知道備戰區狀態小標籤找不到對應圖示時，預設顯示的符號也是 ⚡ 那你為什麼不直接一起處理??」——v6.555 審查列為 P3 另案，應一起處理。

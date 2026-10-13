@@ -64,6 +64,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
     getHandCardOps, handCardDragKind, handCardDraggable, handOpForDropTarget,
     type HandCardOp, type HandDragKind, type HandDropTarget,
   } from '$lib/game/hand-card-ops';
+  import { handOverlapPx, handFanPose, fanOvershootPx, borderBoxSize } from '$lib/game/hand-layout';   // ⭐v6.557 手牌互疊量依實際寬度計算（唯一判準）
   import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemonExCard,
            isBasicEnergyOfType as isBasicEnergyOfTypeCentral } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
@@ -3614,6 +3615,43 @@ function _setupSelfPending(g: any, seat: number): string | null {
     }
     return out;
   });
+
+  // >>> v6557-hand-fit
+  // ⭐v6.557（站長回報：電腦版手牌很多時整排擠在中間互疊，兩旁還有空間）：
+  //   原本互疊量是寫死的「超過 9 張每張多疊 7px、最多 58px」，不看手牌列多寬。
+  //   ⇒ 量手牌列可用寬度（扣左右 padding）與單張卡寬，交給 hand-layout.ts 算「剛好塞滿」的互疊量；量不到時退回舊公式。
+  let handAvailW = $state(0);
+  let handCardW = $state(0);
+  function handFit(node: HTMLElement, _count: number) {
+    let observedCard: Element | null = null;
+    const measure = () => {
+      const cs = getComputedStyle(node);
+      const content = node.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+      const cards = node.querySelectorAll<HTMLElement>(':scope > .hand-card');
+      const card = cards[0] ?? null;
+      // 卡寬用 computed style 算 border-box（有小數；offsetWidth 會取整，審查 P3：張數多時誤差會累積）
+      const box = card ? borderBoxSize(getComputedStyle(card)) : { w: 0, h: 0 };
+      // 扇形外擴（審查 P1）：讀頭尾兩張「實際套用」的角度／下沉／原點，兩邊留出旋轉後甩出去的寬度
+      let fanPad = 0;
+      for (const el of [cards[0], cards[cards.length - 1]]) {
+        if (!el) continue;
+        const ecs = getComputedStyle(el);
+        const [ox, oy] = (ecs.transformOrigin || '').split(' ').map((v) => parseFloat(v) || 0);
+        const o = fanOvershootPx({ w: box.w, h: box.h, rotDeg: parseFloat(ecs.getPropertyValue('--fan-rot')) || 0,
+          liftPx: parseFloat(ecs.getPropertyValue('--fan-lift')) || 0, originX: ox, originY: oy });
+        fanPad = Math.max(fanPad, o.left, o.right);
+      }
+      handAvailW = Math.max(0, content - 2 * Math.ceil(fanPad));
+      handCardW = box.w;
+      // 卡寬會隨版面／卡牌大小滑桿改變，而手牌列本身不一定跟著變寬 ⇒ 也觀察第一張卡
+      if (ro && card && card !== observedCard) { if (observedCard) ro.unobserve(observedCard); ro.observe(card); observedCard = card; }
+    };
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null;
+    ro?.observe(node);
+    measure();
+    return { update() { measure(); }, destroy() { ro?.disconnect(); } };
+  }
+  // <<< v6557-hand-fit
 
   // ⭐⭐⭐v6.200 手牌卡「現在能做哪些操作」的**唯一述詞**（拖曳／點擊／黃框／提示文字全讀它）。
   //   ⚠ 玩家回報：烈箭鷹ex｜激動俯衝 可用時桌機**拖不動**（只能點）。
@@ -12398,8 +12436,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <div class="hand-label">✋ {myPlayer?.name} 的手牌（{myPlayer?.hand.length??0} 張）
       {#if !isMyTurn()}<span class="hand-not-my-turn">（等待對手行動中）</span>{/if}
     </div>
-    <div class="hand-scroll" class:is-dragging={!!dragging?.moved}
-      style="--hand-overlap:{(myPlayer?.hand.length??0)<=9 ? 0 : Math.min(58, ((myPlayer?.hand.length??0)-9)*7)}px;">
+    <div class="hand-scroll" class:is-dragging={!!dragging?.moved} use:handFit={dedupeByIid(myPlayer?.hand).length}
+      style="--hand-overlap:{handOverlapPx(dedupeByIid(myPlayer?.hand).length, handCardW, handAvailW)}px;">
       <!-- v2.43: setup 階段要等硬幣動畫結束才開始發牌（感覺上是硬幣→發 7 張） -->
       <!-- v3.87: 本機雙人換人時用 {#key myIdx} 強制重 mount 手牌 — 修「換人後手牌不顯示」race -->
       {#if !game || game.phase !== 'setup' || coinFlipStage === 'done'}
@@ -12413,10 +12451,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {#each dedupeByIid(myPlayer?.hand) as inst, i (inst.iid)}
         {@const c=getCard(inst.cardId)}
         {@const n=(myPlayer?.hand.length??0)}
-        {@const mid=(n-1)/2}
-        {@const step=Math.min(4, 36/Math.max(1,n))}
-        {@const rot=n>1?(i-mid)*step:0}
-        {@const liftY=Math.abs(i-mid)*(step*0.6)}
+        {@const pose=handFanPose(i, n)}<!-- ⭐v6.557：扇形公式搬進 hand-layout.ts（互疊量要算旋轉外擴，兩邊共用一份） -->
+        {@const rot=pose.rot}
+        {@const liftY=pose.lift}
         {#if c}
           <!-- ⭐⭐⭐v6.200：手牌卡的可用性**只有一份來源** handCardOps（見 $lib/game/hand-card-ops）。
                v6.199 以前這裡是「拖曳一份 dragKind ／ 點擊一份 canHandActivate」的兩份條件，

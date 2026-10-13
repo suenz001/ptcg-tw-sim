@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'a779f628f99b4a6f9238184162354fcbc0076a8d';   // v6.555（上一版）
+const PREV_SHA = '277a20b93ea63d9395118f8ae178c530e138aaa4';   // v6.556（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,20 +757,30 @@ const PREV_SHA = 'a779f628f99b4a6f9238184162354fcbc0076a8d';   // v6.555（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.556 前移：PREV_SHA 從 a779f628（v6.555）起算。
+  // ⚠⚠ v6.557 前移：PREV_SHA 從 277a20b9（v6.556）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.556：特殊狀態顯示收斂到 status-display.ts（statusIcon／statusLabel／statusSlots）；對戰紀錄灼傷用詞。
-  'src/lib/game/effects.ts',
-  'src/lib/game/effects/cards/v2348_j_mark_batch.ts',   // v6.556 複審：狀態名稱對照表改走 STATUS_NAME
-  'src/lib/game/engine.ts',
-  'src/lib/game/status-display.ts',
+  // ⭐v6.557：桌機手牌互疊量改由 hand-layout.ts handOverlapPx 依實際寬度計算（v6557-hand-fit）。
+  'src/lib/game/hand-layout.ts',
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
-  'src/routes/game/MobilePortraitBattle.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.556）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.556 前移：PREV_SHA 從 a779f628（v6.555）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.556：特殊狀態顯示收斂到 status-display.ts（statusIcon／statusLabel／statusSlots）；對戰紀錄灼傷用詞。
+//   'src/lib/game/effects.ts',
+//   'src/lib/game/effects/cards/v2348_j_mark_batch.ts',   // v6.556 複審：狀態名稱對照表改走 STATUS_NAME
+//   'src/lib/game/engine.ts',
+//   'src/lib/game/status-display.ts',
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'src/routes/game/MobilePortraitBattle.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.555）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.555 前移：PREV_SHA 從 6b6f2443（v6.554）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -888,18 +898,6 @@ const PREV_ALLOWED = [
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
 // ⭐v6.545：零之大空洞：持有人先丟（_voidHolderIdx）、超過上限時先丟備戰再結算昏厥（sanityKOSweep 延後）。
 //   'src/lib/game/engine.ts',
-//   'src/lib/game/types.ts',
-//   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.544）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.544 前移：PREV_SHA 從 d4e1bed4（v6.543）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.544：烈火爆進離場前鎖（blockedAttackNamesUntilExit＋中央 isAttackNameBlocked）；防護代碼離場即消除（dissipateFutureShieldOnExit）。
-//   'src/lib/game/effects.ts',
-//   'src/lib/game/engine.ts',
-//   'src/lib/game/instance-flags.ts',
 //   'src/lib/game/types.ts',
 //   'src/lib/version.ts',
 //   'static/changelog-archive.html',
