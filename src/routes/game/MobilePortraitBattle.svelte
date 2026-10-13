@@ -85,6 +85,10 @@
     isTReplay?: boolean;
     /** ⭐v6.560 回放是否攤開蓋著的資訊（遮蔽的一般復盤＝false） */
     replayShowsHidden?: boolean;
+    /** ⭐v6.564 遮蔽的復盤：自己的獎賞卡攤開（只影響按鈕說明，視窗是父層那一份） */
+    replayShowsOwnPrizes?: boolean;
+    /** ⭐v6.564 計時器四個數字由父層算好傳進來（單一來源）：回放停在那一格的時間、錦標賽用伺服器時鐘 */
+    timerMs: { live: number; p0: number; p1: number; total: number };
     // v6.147 錦標賽動作送出往返期間：會送出動作的按鈕一律 disable（父層唯一述詞 actionBusy）
     // ⭐v6.172 `actionBusy` 現在只在「佇列已滿、這一下真的不能做」時為真（原本是「有動作在途」，
     //   最長會鎖 33 秒）。「有動作在網路上」改由 actionSending 表示，它**純視覺、不 disable 任何東西**；
@@ -127,6 +131,8 @@
     isTournSpectator = false,  // v5.895
     isTReplay = false,  // v5.954
     replayShowsHidden = false,  // v6.560
+    replayShowsOwnPrizes = false,  // v6.564
+    timerMs,  // v6.564
     actionBusy = false,  // v6.147
     actionSending = false,  // v6.172
     actionQueued = 0,       // v6.172
@@ -619,12 +625,8 @@
   // 2. v3.871: 額外掛 document 層的 touchmove — 因為 iOS Safari pull-to-refresh
   //    可能在 .mp 外（status bar 下、URL bar 上的瀏覽器 chrome 區）觸發，必須擋全頁。
   // 3. v3.871: 也擋 touchstart 在頁面頂端的事件，proactive 防止 Safari 啟動下拉刷新動畫。
-  // v4.24 對戰計時器 — tickTime 每秒更新
-  let tickTime = $state(Date.now());
-  $effect(() => {
-    const id = setInterval(() => { tickTime = Date.now(); }, 1000);
-    return () => clearInterval(id);
-  });
+  // v4.24 對戰計時器
+  // ⭐v6.564：原本這裡自己用本機 tickTime 再算一份（回放時照跑、錦標賽沒用伺服器時鐘）⇒ 改吃父層的 timerMs，只剩顯示格式。
   function fmtTimerMs(ms: number): string {
     if (!Number.isFinite(ms) || ms < 0) ms = 0;
     const s = Math.floor(ms / 1000);
@@ -634,23 +636,10 @@
     const pad = (n: number) => n.toString().padStart(2, '0');
     return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`;
   }
-  const liveTurnTimeMs = $derived(
-    game.phase === 'playing' && game.currentTurnStartTime !== undefined
-      ? Math.max(0, tickTime - game.currentTurnStartTime)
-      : 0
-  );
-  function _playerTotal(idx: 0 | 1): number {
-    const stored = game.playerTurnTimeMs?.[idx] ?? 0;
-    const live = (game.phase === 'playing' && game.activePlayerIndex === idx) ? liveTurnTimeMs : 0;
-    return stored + live;
-  }
-  const p0TotalMs = $derived(_playerTotal(0));
-  const p1TotalMs = $derived(_playerTotal(1));
-  const gameTotalMs = $derived(
-    game.gameStartTime !== undefined
-      ? Math.max(0, (game.phase === 'game-over' ? (game.currentTurnStartTime ?? tickTime) + liveTurnTimeMs : tickTime) - game.gameStartTime)
-      : 0
-  );
+  const liveTurnTimeMs = $derived(timerMs.live);
+  const p0TotalMs = $derived(timerMs.p0);
+  const p1TotalMs = $derived(timerMs.p1);
+  const gameTotalMs = $derived(timerMs.total);
 
   function preventScroll(node: HTMLElement) {
     const moveHandler = (e: TouchEvent) => {
@@ -965,7 +954,7 @@
     {#if onOpenPrizes}
       <!-- ⭐v6.418：對戰中也可點（視窗只顯示已翻到正面的那幾張，見 +page.svelte 的 v6418-prize-view-in-battle） -->
       <button class="mp-chip mp-clickable" onclick={onOpenPrizes}
-        title={replayShowsHidden ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 {myPlayer.prizes.length} 🔍</button>
+        title={replayShowsHidden ? '查看雙方獎賞卡（回放：全部攤開）' : replayShowsOwnPrizes ? '查看獎賞卡（復盤：自己的攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 {myPlayer.prizes.length} 🔍</button>
     {:else}
       <span class="mp-chip">🎁 {myPlayer.prizes.length}</span>
     {/if}

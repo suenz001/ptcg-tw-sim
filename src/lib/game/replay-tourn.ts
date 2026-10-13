@@ -20,6 +20,8 @@ export interface TournSnap {
   logLen: number | null;
   state: unknown;
   ver?: number;
+  /** ⭐v6.564 伺服器記錄這一格的時間（回放計時器停在這一刻） */
+  at?: number;
 }
 
 const halfKey = (s: { turn?: number; activePlayerIndex?: number | null }) => `${s.turn ?? 0}_${s.activePlayerIndex ?? 'x'}`;
@@ -39,7 +41,7 @@ export async function decodeTournStepBatches(batches: unknown): Promise<TournSna
       for (const s of arr) {
         if (!s || typeof s !== 'object' || !s.state || typeof s.state !== 'object') continue;
         if (!Number.isFinite(s.logLen) || !Number.isFinite(s.turn)) continue;
-        out.push({ turn: s.turn, activePlayerIndex: s.activePlayerIndex ?? null, logLen: s.logLen, state: s.state, ver: Number.isFinite(s.ver) ? s.ver : undefined });
+        out.push({ turn: s.turn, activePlayerIndex: s.activePlayerIndex ?? null, logLen: s.logLen, state: s.state, ver: Number.isFinite(s.ver) ? s.ver : undefined, at: Number.isFinite(s.at) ? s.at : undefined });
       }
     } catch { /* 這一包解不開：略過，其餘照用 */ }
   }

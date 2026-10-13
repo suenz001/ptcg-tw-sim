@@ -188,7 +188,10 @@ const _gameRaw = readFileSync(GAME, 'utf8');
 //   展開前先斷言 derived 的定義**逐字**是這一條（改成別的運算式 ⇒ 這裡紅，不會靜默放行）。
 const _rshDef = _gameRaw.match(/const replayShowsHidden = \$derived\(([^\n]*)\);/);
 const _rshOk = !!_rshDef && _rshDef[1] === 'isTReplay && replayRevealAll';
-const gameSrc = _rshOk ? _gameRaw.replace(/\breplayShowsHidden\b(?! = \$derived)/g, '(isTReplay && true)') : _gameRaw;
+// ⭐v6.564（Rule 40）：下方（自己）那一列改用 replayShowsMyPrizes＝replayShowsHidden || replayShowsOwnPrizes（遮蔽的復盤攤開自己的）。
+//   本守衛的情境（錦標賽回放＝攤開、正式對戰）下它與 replayShowsHidden 同值 ⇒ 兩個定義都逐字斷言後同樣展開；遮蔽復盤那一側由 test-v6564 守。
+const _rsmOk = /const replayShowsOwnPrizes = \$derived\(isTReplay && !replayRevealAll\);/.test(_gameRaw) && /const replayShowsMyPrizes = \$derived\(replayShowsHidden \|\| replayShowsOwnPrizes\);/.test(_gameRaw);
+const gameSrc = _rshOk ? _gameRaw.replace(/\breplayShowsMyPrizes\b(?! = \$derived)/g, _rsmOk ? '(isTReplay && true)' : 'replayShowsMyPrizes').replace(/\breplayShowsHidden\b(?! = \$derived)/g, '(isTReplay && true)') : _gameRaw;
 const mpbSrc  = readFileSync(MPB, 'utf8');
 // 正對照：模板錨點必須還在、腳本／樣式錨點必須不見（helper 內建斷言，抓到就直接炸 —— 這時後面的結論全不可信）
 const gameT = templateOnly(gameSrc, { label: 'game', mustKeep: ['prizeViewOpen'], mustDrop: ['function openPrizeView', '.prize-view-modal{'], allowResidual: [GAME_INLINE_STYLE] });
@@ -263,15 +266,21 @@ let modalIdx = -1, modalNode = null;
       const m = tpl.match(/\{@const\s+_pvcard\s*=\s*([^{}\n]*)\}/);
       if (!m || !m[1].trim()) return { found: false };
       const expr = m[1].trim();
-      const run = (mode, faceUp) => {
+      // ⭐v6.564（Rule 40）：三元式多了「遮蔽的復盤：下方（自己，_pvi===0）那一側攤開」——對戰中 replayShowsOwnPrizes 恆為 false
+      //   ⇒ 原本的 shut／up／rep 都在 replayShowsOwnPrizes=false 下、**雙方兩側**各跑一次（防線意圖不變）；另驗復盤只攤開自己那一側。
+      const run = (mode, faceUp, pvi = 0, own = false) => {
         let calls = 0;
         // eslint-disable-next-line no-new-func
-        const f = new Function('prizeViewMode', '_pvc', 'getCard',
+        const f = new Function('prizeViewMode', '_pvc', 'getCard', '_pvi', 'replayShowsOwnPrizes',
           `"use strict"; return (${expr});`);
         const ret = f(mode, { faceUp, cardId: 'SECRET' },
-          (id) => { calls++; return { id, imageUrl: 'u', name: 'n' }; });
+          (id) => { calls++; return { id, imageUrl: 'u', name: 'n' }; }, pvi, own);
         return { ret, calls };
       };
+      const shut1 = run('battle', false, 1);   // 對戰中＋蓋著（上方）
+      if (!(shut1.ret == null && shut1.calls === 0)) return { found: true, expr, leaks: true, shows: false, replay: false };
+      const ownMine = run('battle', false, 0, true), ownOpp = run('battle', false, 1, true);
+      const ownOk = !!ownMine.ret && ownMine.calls === 1 && ownOpp.ret == null && ownOpp.calls === 0;
       const shut  = run('battle', false);   // 對戰中＋蓋著   ⇒ 必須什麼都查不到
       const up    = run('battle', true);    // 對戰中＋已翻正面 ⇒ 必須看得到（弦月光芒）
       const rep   = run('replay', false);   // 回放           ⇒ 全部攤開
@@ -280,6 +289,7 @@ let modalIdx = -1, modalNode = null;
         leaks: !(shut.ret == null && shut.calls === 0),   // 洩漏＝有回傳值 或 查了卡
         shows: !!up.ret && up.calls === 1,
         replay: !!rep.ret && rep.calls === 1,
+        ownOk,
       };
     };
     const gate = prizeGateProbe(body);
@@ -289,6 +299,7 @@ let modalIdx = -1, modalNode = null;
       chk('B8b ⭐ 對戰中、蓋著的獎賞：連 getCard 都不呼叫（唯一防線）', gate.leaks === false, gate.expr);
       chk('B8c 對戰中、已翻正面的獎賞：看得到（弦月光芒的卡面要求）', gate.shows === true, gate.expr);
       chk('B8d 回放：全部攤開（v6.190 既有行為零回歸）', gate.replay === true, gate.expr);
+      chk('B8e ⭐v6.564 遮蔽的復盤：只攤開下方（自己）那一側，上方（對手）蓋著的照樣查不到', gate.ownOk === true, gate.expr);
     }
     // ⭐ B9 反安慰劑：餵一個「拿掉 faceUp 閘」的樣本，B8b 的判準必須抓得到；
     //   同時餵一個正確樣本，確認判準不是恆真（兩邊都走同一個 prizeGateProbe）。
@@ -422,16 +433,17 @@ let modalIdx = -1, modalNode = null;
   // ⚠ 先剝掉註解再掃：本版的說明註解裡就有這個條件的字面，不剝會多算（掃描器自己要先乾淨）
   const gameNoComment = gameSrc.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
   // ⭐v6.560（Rule 40）：replayShowsHidden 已在讀檔時展開成 (isTReplay && true)，兩種寫法都認
-  const faceHits = [...gameNoComment.matchAll(/\(\s*(!!)?_pz\.faceUp\s*\|\|\s*(?:isTReplay|\(isTReplay && true\))\s*\)/g)];
+  // ⭐v6.564：自己那一列的樣式條件多「&& !!_pc」（舊檔自己的獎賞是卡背時不要畫成翻正面）⇒ 也認這個寫法；求值時 _pc 給一張卡
+  const faceHits = [...gameNoComment.matchAll(/\(\s*(!!)?_pz\.faceUp\s*\|\|\s*(?:isTReplay|\(isTReplay && true\)|\(\(isTReplay && true\) && !!_pc\))\s*\)/g)];
   // 對手側 + 我方側各 2 處（一處決定要不要查卡、一處決定 prize-faceup 樣式）
   chk('G1 桌機獎賞縮圖的翻面條件仍是「faceUp 或 回放」', faceHits.length === 4, `${faceHits.length} 處`);
   for (const h of faceHits) {
     for (const [name, ctx] of Object.entries(SCEN)) {
-      const v = evalExpr(h[0], { ...ctx, _pz: { faceUp: false } }, 'faceup');
+      const v = evalExpr(h[0], { ...ctx, _pz: { faceUp: false }, _pc: { name: 'x' } }, 'faceup');
       if (REPLAY_KEYS.includes(name)) chk(`G2 ${name}：蓋著的獎賞在回放會翻正面`, v === true);
       else chk(`G2 ${name}：蓋著的獎賞**不翻正面**`, v === false);
     }
-    const up = evalExpr(h[0], { ...SCEN['③ 正式對戰：輪到自己'], _pz: { faceUp: true } }, 'faceup');
+    const up = evalExpr(h[0], { ...SCEN['③ 正式對戰：輪到自己'], _pz: { faceUp: true }, _pc: { name: 'x' } }, 'faceup');
     chk('G3 對戰中「卡效果翻開過」的獎賞仍看得到（沒有把既有規則改壞）', up === true);
   }
 }
@@ -470,6 +482,7 @@ if (UNKNOWN_IDS.size) console.log('  （掃描器未建模的識別字，一律�
 {
   // ⭐v6.560（Rule 40）：開回放旗標搬到共用入口 openReplayData（錦標賽 tStartReplay 與一般對戰復盤都走它）；意圖（先清盤面、歸零視窗、唯一一條路）不變
   chk('I0 replayShowsHidden 的定義逐字是 isTReplay && replayRevealAll', _rshOk, _rshDef ? _rshDef[1] : '(找不到)');
+  chk('I0c ⭐v6.564 replayShowsOwnPrizes／replayShowsMyPrizes 的定義逐字正確（遮蔽的復盤才攤開自己那一側）', _rsmOk);
   chk('I0b tStartReplay 走共用入口 openReplayData(data, \'tournament\')', /async function tStartReplay\(matchId: string\)[\s\S]*?await openReplayData\(data, 'tournament'\)/.test(gameSrc));
   const fn = gameSrc.match(/async function openReplayData\(data: any, kind: 'tournament' \| 'casual'\)[\s\S]*?\n  \}/);
   chk('I1 找得到 openReplayData()', !!fn);

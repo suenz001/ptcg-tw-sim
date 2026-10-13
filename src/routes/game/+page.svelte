@@ -67,6 +67,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { handOverlapPx, handFanPose, fanOvershootPx, borderBoxSize } from '$lib/game/hand-layout';
   // ⭐v6.560 一般對戰復盤（記錄／遮蔽／跳回合 與 瀏覽器儲存／檔案）
   import { withTournPerActionSteps } from '$lib/game/replay-tourn';   // v6.561 錦標賽回放逐動作
+  import { loadReplayFold, saveReplayFold, toggleReplayFoldState, type ReplayFoldSection } from '$lib/game/replay-fold';   // v6.564 復盤清單收合
   import { CHAT_PIN_URL, CHAT_PIN_REFRESH_MS, parseChatPin, chatPinVisible, loadDismissedPinId, saveDismissedPinId, type ChatPin } from '$lib/tournament/chat-pin';   // v6.562 聊天室置頂公告
   import { MY_TOURN_MATCHES_URL, parseMyTournMatches, myTournMatchLine, type MyTournMatches } from '$lib/tournament/my-matches';   // v6.563 復盤清單：自己最近的錦標賽對戰
   import { MATCH_TIMES_URL, MATCH_TIMES_REFRESH_MS, parseMatchTimes, matchTimeKey, fmtMatchDuration, matchTimeTitle, type MatchTime } from '$lib/tournament/match-times';   // v6.562 對局總時間
@@ -792,11 +793,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let isTReplay = $state(false);         // v5.939 對戰回放模式
   let tReplay = $state<any>(null);       // { meta, finalLog, finalState, snapshots }
   let tReplayStep = $state(0);
+  let tReplayAt = $state<number | null>(null);   // ⭐v6.564 目前這一格的記錄時間（回放時計時器以它為「現在」）
   // ⭐v6.560 回放來源：'tournament'＝伺服器錦標賽回放；'casual'＝一般對戰的復盤（瀏覽器存檔／匯入的檔案）
   let replayKind = $state<'tournament' | 'casual'>('tournament');
   /** 回放是否攤開蓋著的資訊（獎賞卡、對手手牌）。錦標賽一律攤開；一般對戰看復盤檔的 meta.revealed（線上對戰預設遮住）。 */
   let replayRevealAll = $state(true);
   const replayShowsHidden = $derived(isTReplay && replayRevealAll);
+  // ⭐v6.564 玩家回報「復盤看不到自己的獎賞卡」：遮蔽的復盤（線上、開關關閉）固定記錄者視角（下方＝自己），
+  //   自己那一側的獎賞卡攤開（資料檔 v6.564 起保留自己的獎賞卡；更早存的檔案裡本來就是卡背，照樣顯示卡背）。
+  const replayShowsOwnPrizes = $derived(isTReplay && !replayRevealAll);
+  const replayShowsMyPrizes = $derived(replayShowsHidden || replayShowsOwnPrizes);   // 下方（自己）那一側的獎賞卡要不要翻正面
   // ⭐⭐⭐v6.177 賽程有可能是「上一份好資料」（/bracket 這一發失敗時沿用）⇒ **輪次號碼一律以
   //   /event 的值為準**：/event 是每 3 秒更新的伺服器權威來源，而且 tEvents 只會被成功回應改寫。
   //   少了這條，連續抓不到 /bracket 時畫面會停在舊輪、還把舊輪標成「進行中」——
@@ -1730,10 +1736,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const pad = (n: number) => n.toString().padStart(2, '0');
     return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`;
   }
+  // ⭐v6.564 站長回報「看錦標賽回放的時候計時器還會繼續跑」＋「確認計時時間的正確性」：
+  //   ① 回放：「現在」＝這一格記錄當下的時間（tReplayAt；舊資料沒有 ⇒ 那一格的回合開始時間）⇒ 計時器停在那一刻，逐格前進才變。
+  //   ② 錦標賽對戰／觀戰：盤面上的時間是**伺服器**寫的（伺服器跑 applyAction）⇒ 用伺服器時鐘（本機時間＋tClockOffset）算，
+  //      原本直接拿本機時鐘減，電腦時鐘快慢幾分鐘就差幾分鐘（甚至算出負數被夾成 0）。休閒對戰由本機套用動作 ⇒ 照舊用本機時鐘。
+  const timerNow = $derived(
+    isTReplay ? (tReplayAt ?? game?.currentTurnStartTime ?? tickTime)
+      : isTournament ? tickTime + tClockOffset : tickTime
+  );
   // 當前回合計時（active player 的本回合時間）— phase==='playing' 才 live
   const liveTurnTimeMs = $derived(
     game && game.phase === 'playing' && game.currentTurnStartTime !== undefined
-      ? Math.max(0, tickTime - game.currentTurnStartTime)
+      ? Math.max(0, timerNow - game.currentTurnStartTime)
       : 0
   );
   // 玩家累計時間 = 已記錄 playerTurnTimeMs + 當前回合 live time（僅 active player）
@@ -1747,7 +1761,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   const p1TotalMs = $derived(_playerTotal(1));
   const gameTotalMs = $derived(
     game && game.gameStartTime !== undefined
-      ? Math.max(0, (game.phase === 'game-over' ? (game.currentTurnStartTime ?? tickTime) + liveTurnTimeMs : tickTime) - game.gameStartTime)
+      ? Math.max(0, (game.phase === 'game-over' ? ((isTReplay && tReplayAt != null) ? tReplayAt : (game.currentTurnStartTime ?? timerNow) + liveTurnTimeMs) : timerNow) - game.gameStartTime)
       : 0
   );
 
@@ -5743,6 +5757,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const steps = (tReplay.snapshots || []).map((s: any) => ({
       turn: s.turn, activePlayerIndex: s.activePlayerIndex ?? null,
       logLen: (s.logLen == null ? null : s.logLen), state: s.state, isFinal: false,
+      at: Number.isFinite(s.at) ? s.at : null,   // ⭐v6.564 這一格的記錄時間（沒有 ⇒ 計時器用那一格的回合開始時間）
     }));
     // 依 logLen 升冪=時序(同 turn 的先攻/後攻靠此正確排序);缺 logLen(舊資料)退回 turn
     steps.sort((a: any, b: any) => {
@@ -5753,6 +5768,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (tReplay.finalState) steps.push({
       turn: tReplay.meta?.finalTurn ?? (steps.length ? steps[steps.length - 1].turn : 1),
       activePlayerIndex: null, logLen: finalLogLen, state: tReplay.finalState, isFinal: true,
+      at: Number.isFinite(tReplay.meta?.endedAt) ? tReplay.meta.endedAt : (Number.isFinite(tReplay.meta?.savedAt) ? tReplay.meta.savedAt : null),   // ⭐v6.564 終局＝結束時間
     });
     return steps;
   }
@@ -5762,6 +5778,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const idx = Math.min(Math.max(0, i), steps.length - 1);
     tReplayStep = idx;
     const step = steps[idx];
+    tReplayAt = Number.isFinite(step.at) ? step.at : null;
     const st = JSON.parse(JSON.stringify(step.state));
     // v5.940 對戰 log 逐步顯示:用 logLen 切到「這一步為止」的 log(先攻/後攻各自進度);缺 logLen 退回 turn 過濾
     const fullLog = (tReplay.finalLog || []);
@@ -5894,6 +5911,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let _myTournAt = 0;
   let _myTournSeq = 0;
   let replayLoading = $state(false);   // ⭐（Opus 審查 P3-1）回放載入中：鎖住清單與兩張卡，避免載入完成後蓋掉玩家剛點進去的畫面
+  // ⭐v6.564 站長：「線上對戰連線 和 我的錦標賽 幫我增加收摺的功能」——預設展開，收合狀態記在這台瀏覽器
+  let replayFold = $state(loadReplayFold());
+  function toggleReplayFold(sec: ReplayFoldSection) { replayFold = toggleReplayFoldState(replayFold, sec); saveReplayFold(replayFold); }
   async function loadMyTournMatches() {
     const now = Date.now();
     if (now - _myTournAt < 30 * 1000) return;   // 前端節流（伺服器也有 30 秒快取）
@@ -11171,8 +11191,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <section class="replay-lobby">
         <h3>🎞️ 最近的對戰復盤 <label class="btn-secondary replay-import small">📂 匯入復盤檔<input type="file" accept=".ptcgreplay,.json,application/json,application/octet-stream" onchange={onReplayFileChosen} hidden /></label></h3>
         {#if replayLobbyMsg}<p class="replay-msg">{replayLobbyMsg}</p>{/if}
-        <h4 class="replay-sub">🌐 線上連線對戰<span class="muted replay-hint">（存在這台裝置，最近 {MAX_SAVED_REPLAYS} 場）</span></h4>
-        {#if replayList.length === 0}
+        <h4 class="replay-sub"><button type="button" class="replay-fold-btn" aria-expanded={replayFold.online} onclick={() => toggleReplayFold('online')}><span class="replay-fold-arrow" aria-hidden="true">{replayFold.online ? '▾' : '▸'}</span>🌐 線上連線對戰<span class="muted replay-hint">（存在這台裝置，最近 {MAX_SAVED_REPLAYS} 場{replayFold.online ? '' : '・目前 ' + replayList.length + ' 場'}）</span></button></h4>
+        {#if !replayFold.online}
+          <!-- 收合中 -->
+        {:else if replayList.length === 0}
           <p class="muted replay-hint">還沒有存下的復盤。打完一場線上連線對戰後就會出現在這裡。</p>
         {:else}
           <ul class="replay-list">
@@ -11190,8 +11212,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
           </ul>
         {/if}
         {#if myTournMatches}
-          <h4 class="replay-sub">🏆 我的錦標賽對戰<span class="muted replay-hint">（最近 10 場，跟著帳號）</span></h4>
-          {#if myTournMatches.needLogin}
+          <h4 class="replay-sub"><button type="button" class="replay-fold-btn" aria-expanded={replayFold.tourn} onclick={() => toggleReplayFold('tourn')}><span class="replay-fold-arrow" aria-hidden="true">{replayFold.tourn ? '▾' : '▸'}</span>🏆 我的錦標賽對戰<span class="muted replay-hint">（最近 10 場，跟著帳號{replayFold.tourn || myTournMatches.needLogin ? '' : '・目前 ' + myTournMatches.matches.length + ' 場'}）</span></button></h4>
+          {#if !replayFold.tourn}
+            <!-- 收合中 -->
+          {:else if myTournMatches.needLogin}
             <p class="muted replay-hint">用 email 帳號登入後，這裡會列出自己最近的錦標賽對戰。</p>
           {:else if myTournMatches.matches.length === 0}
             <p class="muted replay-hint">還沒有打完的錦標賽對戰。</p>
@@ -11856,6 +11880,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {isTournSpectator}
       {isTReplay}
       {replayShowsHidden}
+      replayShowsOwnPrizes={replayShowsOwnPrizes}
+      timerMs={{ live: liveTurnTimeMs, p0: p0TotalMs, p1: p1TotalMs, total: gameTotalMs }}
       pendingPrizes={myPendingPrizes}
       version={VERSION}
       roomCode={roomCode}
@@ -12486,10 +12512,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <div class="zone-prizes">
         <!-- ⭐v6.418：對戰中也可點開（只看得到翻正面的那幾張，見 v6418-prize-view-in-battle） -->
         <button class="zone-label-sm prize-view-btn" onclick={openPrizeView}
-          title={replayShowsHidden ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 獎賞 {myPlayer?.prizes.length??0}張 🔍</button>
+          title={replayShowsHidden ? '查看雙方獎賞卡（回放：全部攤開）' : replayShowsOwnPrizes ? '查看獎賞卡（復盤：自己的攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 獎賞 {myPlayer?.prizes.length??0}張 🔍</button>
         <div class="prize-grid">
           {#key prizeAnimKey[myIdx]}
-            {#each Array(6) as _, i (i)}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || replayShowsHidden) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || replayShowsHidden)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={cardThumb(_pc.imageUrl)} alt={_pc.name}
+            {#each Array(6) as _, i (i)}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || replayShowsMyPrizes) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || (replayShowsMyPrizes && !!_pc))} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={cardThumb(_pc.imageUrl)} alt={_pc.name}
               class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.prizes, _pz?.iid ?? '', pool) === 0}
               class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           {/key}
@@ -14861,8 +14887,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <div class="zoom-overlay" onclick={closePrizeView}>
       <div class="zoom-modal discard-modal prize-view-modal" use:modalDrag onclick={(e)=>e.stopPropagation()}>
         <button class="zoom-close" onclick={closePrizeView} aria-label="關閉">✕</button>
-        <h3 class="discard-title modal-drag-handle">{prizeViewMode === 'replay' ? '🎁 獎賞卡（回放：全部攤開）' : '🎁 獎賞卡（只看得到已翻到正面的）'}</h3>
-        {#if prizeViewMode !== 'replay'}
+        <h3 class="discard-title modal-drag-handle">{prizeViewMode === 'replay' ? '🎁 獎賞卡（回放：全部攤開）' : replayShowsOwnPrizes ? '🎁 獎賞卡（復盤：自己的攤開，對手的只看得到翻到正面的）' : '🎁 獎賞卡（只看得到已翻到正面的）'}</h3>
+        {#if prizeViewMode !== 'replay' && replayShowsOwnPrizes}
+          <p class="prize-view-note">復盤是存檔的人自己的視角：自己的獎賞卡全部攤開；對手蓋著的獎賞卡沒有存下來，只看得到被效果翻到正面的那幾張。</p>
+        {:else if prizeViewMode !== 'replay'}
           <p class="prize-view-note">蓋著的獎賞卡對雙方都是機密，這裡只會顯示被「弦月光芒」「火箭隊的妨礙機器人」之類的效果翻到正面的那幾張。</p>
         {/if}
         {#each [myPlayer, oppPlayer] as _pvp, _pvi (_pvi)}
@@ -14872,7 +14900,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               <!-- ⭐⭐⭐v6.418：`_pvcard` 的那道三元式就是**唯一的公平性防線** —— 對戰中
                    （prizeViewMode !== 'replay'）非 faceUp 的卡連 `getCard` 都不呼叫，
                    所以卡名／圖片／zoom 全都拿不到。詳見 v6418-prize-view-in-battle。 -->
-              {#each dedupeByIid(_pvp?.prizes) as _pvc (_pvc.iid)}{@const _pvcard = (prizeViewMode === 'replay' || _pvc.faceUp) ? getCard(_pvc.cardId) : null}
+              {#each dedupeByIid(_pvp?.prizes) as _pvc (_pvc.iid)}{@const _pvcard = (prizeViewMode === 'replay' || _pvc.faceUp || (_pvi === 0 && replayShowsOwnPrizes)) ? getCard(_pvc.cardId) : null}
                 {#if _pvcard}
                   <button class="sel-card" onclick={() => openZoom(_pvc.cardId, _pvc)}>
                     <img use:retryImg={_pvcard.imageUrl} src={cardThumb(_pvcard.imageUrl)} alt={_pvcard.name} loading="lazy"
@@ -15757,6 +15785,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .replay-import{ display:inline-block; cursor:pointer; margin-left:auto; font-weight:normal; font-size:.85rem; }
   .replay-hint{ font-size:.8rem; font-weight:normal; }   /* ⚠ 本元件的 .small 是按鈕樣式（有框），說明文字不可以用 */
   .replay-sub{ margin:.8rem 0 .4rem; font-size:.95rem; display:flex; align-items:baseline; gap:.4rem; flex-wrap:wrap; }
+  /* v6.564 收合鈕：整列標題可按（去掉按鈕外觀，沿用標題字樣） */
+  .replay-fold-btn{ display:flex; align-items:baseline; gap:.4rem; flex-wrap:wrap; background:none; border:none; padding:.15rem 0; margin:0; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+  .replay-fold-btn:hover{ text-decoration:underline; }
+  .replay-fold-arrow{ display:inline-block; width:1em; }
   .replay-msg{ color:#ff9b9b; margin:.3rem 0; }
   .replay-list{ list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:.5rem; }
   .replay-list li{ padding:.55rem .7rem; border:1px solid #2a3a2a; border-radius:8px; background:rgba(0,0,0,.25); }

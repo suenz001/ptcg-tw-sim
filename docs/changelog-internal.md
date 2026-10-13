@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.564：回放計時器停住＋復盤看得到自己的獎賞卡＋復盤清單收合（2026-10-13 站長）
+
+BASE `93582fe0`（v6.563）。站長 22:49：「看錦標賽回放的時候 計時器的時間還會繼續跑，並請你確認計時時間的正確性 另外有玩家回報 新的一般對戰復盤功能無法確認自己的獎賞卡？你幫我確認一下」；22:53：「另外對戰演練裡面顯示的復盤 線上對戰連線 和 我的錦標賽 幫我增加收摺的功能」。
+- 計時器根因：timer 一律用 tickTime（每秒更新的本機時間）減 currentTurnStartTime／gameStartTime ⇒ 回放時盤面停住、時間照跑。新 derived timerNow：回放＝那一格記錄時的時間（tReplayAt；錦標賽逐動作格用伺服器存的 at，一般復盤用 recordStep 新記的 at；舊資料沒有 ⇒ 用那一格的 currentTurnStartTime，顯示該回合 0 秒、總時間到該回合開始；最後一格用 endedAt／savedAt）；錦標賽對戰中＝tickTime + tClockOffset（伺服器寫的時間戳跟本機時鐘比，原本會差一個時鐘偏差）；休閒＝tickTime（盤面時間戳是本機寫的）。終局總時間在回放時用 tReplayAt。
+- 自己的獎賞卡根因：redactStateForSeat（v6.560）把雙方未翻開的獎賞卡都換成卡背 ⇒ 存檔裡根本沒有自己的獎賞卡內容。改成只遮對手的；畫面下方（＝存檔者那一側，復盤固定這個視角）的縮圖與獎賞卡視窗攤開（replayShowsOwnPrizes＝isTReplay && !replayRevealAll；攤開全部的回放照舊）。⚠ v6.564 之前存的檔沒有資料、無法補，照樣顯示卡背。錦標賽回放（伺服器端）不受影響。
+- 手機直式（Opus 5.5 審查 P1）：MobilePortraitBattle.svelte 自己用本機 tickTime 另算一份計時（回放照跑、錦標賽沒用伺服器時鐘）⇒ 刪掉，改吃父層傳進來的 timerMs {live,p0,p1,total}（單一來源）；手機 🎁 按鈕說明、獎賞卡視窗說明文字配合「自己的攤開」。守衛 M1（手機不得再自己算，HEAD-FAIL 紅、3 個突變全殺）。
+- 已知、不在本版處理（審查 P2）：休閒線上是雙方各自套用動作，回合開始時間由結束回合那一方的電腦寫 ⇒ 雙方累計時間會差一個兩台電腦的時鐘差；錦標賽全由伺服器套用，不受影響。終局時總時間含最後一回合、雙方累計不含（引擎只在 END_TURN 累計），回放終局顯示的總時間略大於 P1＋P2。
+- 收合：新 leaf src/lib/game/replay-fold.ts（預設展開、localStorage ptcg_replay_fold_v1、讀寫失敗不丟例外）；兩個 h4 改成 button（aria-expanded），收合時標題顯示「・目前 N 場」、不列清單。
+- 守衛 test-v6564-replay-timer-prizes-fold：R1～R3（lib 實跑）、T1～T2（timerNow／liveTurnTimeMs／gameTotalMs 實跑＋接線）、P1～P2（獎賞卡視窗閘實跑）、F1～F2；HEAD-FAIL 在 v6.563 九條全紅；突變 10 個全殺。
+- Rule 40：test-v6190 prizeGateProbe 加 _pvi／replayShowsOwnPrizes 參數、G1 接受新縮圖條件（新 B8e／I0c）；test-v6560 A4 改成「自己的獎賞卡保留、對手的遮」、W2 計數、E4 改成自己的翻正面／對手的 0 張＋E4b 計時器 2.3 秒不動；新 scripts/lib/revert-v6564-game.mjs 串進 test-v6441／v6293。
+- 部署：redeploy-oracle.bat（只有玩家前端）。
+
 ## v6.563／server patch v1.66：復盤清單直接顯示＋自己最近的錦標賽對戰（2026-10-13 站長）
 
 BASE `c534cdd3`（v6.562）。站長 18:21：「上一版的本機雙人和 vs AI ，我覺得沒有必要放入復盤的紀錄裏面，復盤只要放一般對戰就好，另外你看看能不能把錦標賽的對戰也讓玩家可以在這邊找到自己最近的錦標賽復盤紀錄 然後復盤的頁面好像可以拿掉復盤的那個按鈕，改成直接顯示最近10場的對戰，然後按鈕保持只有本機對戰和線上對戰2個按鈕就好，這樣版面比較簡潔美觀」。

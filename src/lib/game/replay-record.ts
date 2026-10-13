@@ -26,6 +26,8 @@ export interface ReplayStep {
   activePlayerIndex: 0 | 1 | null;
   logLen: number;
   state: GameState;
+  /** ⭐v6.564 記錄當下的時間（回放時計時器停在這一刻，不跟著現在的時間跑）；舊檔沒有 ⇒ 用那一格的回合開始時間。 */
+  at?: number;
 }
 
 export interface ReplayMeta {
@@ -94,7 +96,7 @@ export function recordStep(rec: ReplayRecorder, state: GameState): boolean {
     if (key === rec.lastKey) return false;   // 退回到的盤面就是剩下的最後一格 ⇒ 不重複記
   }
   if (rec.steps.length >= MAX_REPLAY_STEPS) return false;
-  rec.steps.push({ turn: state.turn ?? 1, activePlayerIndex: (state.activePlayerIndex ?? null) as 0 | 1 | null, logLen, state: snap });
+  rec.steps.push({ turn: state.turn ?? 1, activePlayerIndex: (state.activePlayerIndex ?? null) as 0 | 1 | null, logLen, state: snap, at: Date.now() });
   rec.lastKey = key;
   return true;
 }
@@ -141,7 +143,8 @@ type AnyInst = { iid?: string; cardId?: string; faceUp?: boolean } & Record<stri
 /**
  * 只留下 seat 這一側玩家當時看得到的資訊：
  *   ・對手手牌 → 卡背（張數保留）
- *   ・雙方獎賞卡 → 卡背（已翻到正面的 faceUp 保留；正式對戰中雙方本來就看得到）
+ *   ・對手的獎賞卡 → 卡背（已翻到正面的 faceUp 保留；正式對戰中雙方本來就看得到）
+ *   ・⭐v6.564 自己的獎賞卡保留（玩家回報：復盤看不到自己的獎賞卡；那是自己的牌，對局結束後拿來檢討不洩漏對手任何資訊）
  *   ・雙方牌庫 → 卡背（張數保留；牌庫順序本來就是祕密）
  *   ・待選視窗、連鎖待選、牌庫頂已知順序、棄牌監看暫存清掉（裡面可能有隱藏區的卡）
  * ⚠⚠ 被遮住的卡連 iid 都換成不透明編號（審查 P1：只換卡號的話，同一張卡之後被打出、進棄牌區時會帶真卡號出現，
@@ -154,7 +157,7 @@ export function redactStateForSeat(state: GameState, seat: 0 | 1): GameState {
   st.players = st.players.map((p, idx) => {
     const q = { ...p } as typeof p & Record<string, unknown>;
     if (idx !== seat) q.hand = (p.hand ?? []).map((_c, j) => hide(idx, 'h', j)) as unknown as typeof p.hand;
-    q.prizes = (p.prizes ?? []).map((c, j) => ((c as unknown as AnyInst).faceUp ? c : hide(idx, 'p', j))) as unknown as typeof p.prizes;
+    if (idx !== seat) q.prizes = (p.prizes ?? []).map((c, j) => ((c as unknown as AnyInst).faceUp ? c : hide(idx, 'p', j))) as unknown as typeof p.prizes;
     q.deck = (p.deck ?? []).map((_c, j) => hide(idx, 'd', j)) as unknown as typeof p.deck;
     return q;
   }) as unknown as typeof st.players;

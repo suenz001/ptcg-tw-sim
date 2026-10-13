@@ -115,7 +115,8 @@ async function scenarios(L, srcRoot) {
       if (JSON.stringify(P[seat].hand) !== JSON.stringify(OP[seat].hand)) bad.push(i + ':my-hand');
       for (const k of [0, 1]) {
         if (P[k].prizes.length !== OP[k].prizes.length) bad.push(i + ':prize-len');
-        P[k].prizes.forEach((c, j) => { const want = OP[k].prizes[j].faceUp ? OP[k].prizes[j].cardId : H; if (c.cardId !== want) bad.push(i + ':prize'); });
+        // ⭐v6.564（站長／玩家回報，Rule 40）：自己的獎賞卡保留（原卡、原 iid）；對手的未翻開照樣卡背
+        P[k].prizes.forEach((c, j) => { const want = (k === seat || OP[k].prizes[j].faceUp) ? OP[k].prizes[j].cardId : H; if (c.cardId !== want) bad.push(i + ':prize'); if (k === seat && c.iid !== OP[k].prizes[j].iid) bad.push(i + ':my-prize-iid'); });
         if (P[k].deck.length !== OP[k].deck.length || P[k].deck.some((c) => c.cardId !== H)) bad.push(i + ':deck');
         if (JSON.stringify(P[k].discard) !== JSON.stringify(OP[k].discard) || JSON.stringify(P[k].active) !== JSON.stringify(OP[k].active)) bad.push(i + ':public');
       }
@@ -126,7 +127,7 @@ async function scenarios(L, srcRoot) {
       const hiddenOrig = [];
       for (const k of [0, 1]) {
         if (k === other) OP[k].hand.forEach((c) => hiddenOrig.push(c.iid));
-        OP[k].prizes.forEach((c) => { if (!c.faceUp) hiddenOrig.push(c.iid); });
+        if (k === other) OP[k].prizes.forEach((c) => { if (!c.faceUp) hiddenOrig.push(c.iid); });   // ⭐v6.564 只有對手的獎賞卡被遮
         OP[k].deck.forEach((c) => hiddenOrig.push(c.iid));
         for (const z of ['hand', 'prizes', 'deck']) for (const c of P[k][z]) if (c.cardId === H && !/^h[01][hpd]\d+$/.test(c.iid)) bad.push(i + ':opaque');
       }
@@ -303,7 +304,10 @@ async function scenarios(L, srcRoot) {
     && /\{#if game\.phase === 'game-over' && game\.winner !== null && game\.winner !== undefined && !isTReplay\}/.test(pg)
     && (pg.match(/if \(!isTournament && !isTReplay && mode === 'online' && onlineStep === 'join' && (myUid|loggedIn)\)/g) || []).length === 2;
   const codeOnly = pg.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');   // 註解行不算（兩個獎賞列各有卡圖與正面樣式兩處）
-  r.W2 = /const replayShowsHidden = \$derived\(isTReplay && replayRevealAll\);/.test(pg) && (codeOnly.match(/_pz\.faceUp \|\| replayShowsHidden/g) || []).length === 4
+  // ⭐v6.564（Rule 40）：下方（自己）那一列改用 replayShowsMyPrizes＝攤開的回放 或 遮蔽的復盤；上方（對手）兩處照舊只看 replayShowsHidden
+  r.W2 = /const replayShowsHidden = \$derived\(isTReplay && replayRevealAll\);/.test(pg) && (codeOnly.match(/_pz\.faceUp \|\| replayShowsHidden/g) || []).length === 2
+    && /const replayShowsOwnPrizes = \$derived\(isTReplay && !replayRevealAll\);/.test(pg) && /const replayShowsMyPrizes = \$derived\(replayShowsHidden \|\| replayShowsOwnPrizes\);/.test(pg)
+    && (codeOnly.match(/_pz\.faceUp \|\| replayShowsMyPrizes\)/g) || []).length === 1 && (codeOnly.match(/!!_pz\.faceUp \|\| \(replayShowsMyPrizes && !!_pc\)/g) || []).length === 1
     && !/_pz\.faceUp \|\| isTReplay/.test(codeOnly) && /let prizeViewMode = \$derived\(replayShowsHidden \? 'replay' : 'battle'\)/.test(pg);
   r.W3 = /const _lockedView: 'p1' \| 'p2' \| 'auto' = \(!replayRevealAll && \(_seat === 0 \|\| _seat === 1\)\) \? \(_seat === 0 \? 'p1' : 'p2'\) : 'auto';/.test(pg) && /spectatorView = _lockedView;/.test(pg)
     && /await openReplayData\(data, 'tournament'\);/.test(pg) && /await openReplayData\(r\.data, 'casual'\);/.test(pg) && /replayRevealAll = kind === 'tournament' \|\| data\?\.meta\?\.revealed !== false;/.test(pg)
@@ -330,7 +334,7 @@ const LABEL = {
   P2: '★★ P2 policy-loader 從 config/cardPolicy 讀開關（文件不存在也重設為關）',
   P3: '★★★ P3 admin 開關實跑：只寫 replayRevealOpp、merge:true；畫面讀同一欄位、預設按鈕標「看不到」',
   W1: '★★★ W1 對戰頁：記錄條件（v6.563 起只記休閒線上；錦標賽／觀戰／回放／admin／本機不記）、結束走 finalizeReplay＋saveReplay、半回合存進度',
-  W2: '★★★ W2 獎賞卡只在「攤開的回放」翻正面（遮蔽的復盤＝對戰中規則）',
+  W2: '★★★ W2 獎賞卡：攤開的回放雙方翻正面；遮蔽的復盤只翻自己那一側（v6.564）；對手那一側＝對戰中規則',
   W3: '★★ W3 錦標賽與一般復盤走同一個入口；遮蔽時不給切視角；桌機／手機都有跳回合',
   W4: '★★ W4 開始對戰頁直接列出復盤清單（v6.563 拿掉「復盤」卡）、兩個終局視窗都有下載復盤檔、離開復盤回清單',
   W5: '★★★ W5 onReplayGameState 實跑：線上＋開關關 ⇒ 存的復盤與進行中進度都遮住；開關開 ⇒ 攤開；本機 vs AI ⇒ kind ai 攤開',
@@ -377,6 +381,9 @@ else if (chromium) {
         step: document.querySelector('.treplay-step')?.textContent ?? '',
         title: document.querySelector('.treplay-title')?.textContent ?? '',
         faceUpPrizes: document.querySelectorAll('.prize-card.prize-faceup').length,
+        myFaceUp: document.querySelectorAll('.prize-card.my-prize.prize-faceup').length,
+        oppFaceUp: document.querySelectorAll('.prize-card.prize-faceup:not(.my-prize)').length,
+        timer: document.querySelector('.timer-total .t-val')?.textContent ?? null,
         specBtns: document.querySelectorAll('.spec-toolbar .spec-btn').length,
         copyLink: [...document.querySelectorAll('.treplay-btn')].some((b) => /複製連結/.test(b.textContent)),
       }));
@@ -400,7 +407,11 @@ else if (chromium) {
       // 遮蔽版（線上、開關關閉）
       await openFile(R.fixture.gzRed, 'b.ptcgreplay');
       const b0 = await info(); await click(/下一回合/); await click(/下一回合/); const b1 = await info();
-      ok('★★★[E4] 遮蔽的復盤：獎賞卡蓋著、不給切視角', b0.faceUpPrizes === 0 && b1.faceUpPrizes === 0 && b0.specBtns === 0, JSON.stringify({ b0, b1 }));
+      // ⭐v6.564（玩家回報，Rule 40）：遮蔽的復盤＝自己（下方）的獎賞卡攤開、對手的蓋著；不給切視角
+      ok('★★★[E4] 遮蔽的復盤：自己的獎賞卡攤開、對手的蓋著、不給切視角', b0.myFaceUp > 0 && b0.oppFaceUp === 0 && b1.oppFaceUp === 0 && b0.specBtns === 0, JSON.stringify({ b0, b1 }));
+      // ⭐v6.564（站長回報「回放時計時器還會繼續跑」）：停在同一格 2 秒，對戰總時間不可以變
+      await pg.waitForTimeout(2300); const b2 = await info();
+      ok('★★★[E4b] 回放時計時器停住（同一格 2 秒後總時間不變）', b1.timer != null && b1.timer === b2.timer, JSON.stringify({ t1: b1.timer, t2: b2.timer }));
       // 離開 ⇒ 回到復盤清單
       await pg.locator('.treplay-btn', { hasText: '離開' }).click(); await pg.waitForTimeout(400);
       const back = await pg.evaluate(() => !!document.querySelector('.replay-lobby') && !document.querySelector('.treplay-bar'));
