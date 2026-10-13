@@ -1,5 +1,23 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.563／server patch v1.66：復盤清單直接顯示＋自己最近的錦標賽對戰（2026-10-13 站長）
+
+BASE `c534cdd3`（v6.562）。站長 18:21：「上一版的本機雙人和 vs AI ，我覺得沒有必要放入復盤的紀錄裏面，復盤只要放一般對戰就好，另外你看看能不能把錦標賽的對戰也讓玩家可以在這邊找到自己最近的錦標賽復盤紀錄 然後復盤的頁面好像可以拿掉復盤的那個按鈕，改成直接顯示最近10場的對戰，然後按鈕保持只有本機對戰和線上對戰2個按鈕就好，這樣版面比較簡潔美觀」。
+- 記錄：replayRecordable 只剩休閒線上（自己是 P1／P2）；本機雙人／vs AI 不再記錄，之前存下的照樣列出（replayInfoLine 仍認得 local／ai）。
+- 開始對戰頁：拿掉第三張「🎞️ 復盤」卡（.mode-cards 回到兩欄）；卡片下方直接顯示「🎞️ 最近的對戰復盤」：🌐 線上連線對戰（這台裝置最近 10 場）＋ 🏆 我的錦標賽對戰（跟著帳號最近 10 場；未登入顯示提示；舊伺服器 404 整區不顯示）；匯入復盤檔移到標題旁。$effect：回到開始對戰（mode===null、非錦標賽頁）或登入狀態改變就刷新兩份清單。
+- 錦標賽對戰：新 leaf src/lib/tournament/my-matches.ts；playMyTournReplay 走既有 tStartReplay（逐動作回放），replayFromCasualLobby 旗標讓 tExitReplay 回到開始對戰頁（不是錦標賽大廳）；載入失敗把錯誤顯示在清單。
+- server v1.66 哨兵 v166-my-tourn-matches（錦標賽區塊之前，28 把鎖不動）：GET /api/my-tourn-matches，只認 verified 身分（未登入或只有 playerId ⇒ needLogin、空清單，避免拿別人的 uid 查），$or p1uid／p2uid、status done、非輪空、有 gameStartedAt，依開打時間新→舊取 10 場；賽事名稱查 tournamentEvents，被刪的用 tournamentArchives 的名稱；不回 uid 與盤面；每位玩家 30 秒快取＋在途合併。⚠ 新建兩個索引 {p1uid:1, gameStartedAt:-1}、{p2uid:1, gameStartedAt:-1}（直接用 db.collection('tournamentMatches')，因為 TMATCH 是錦標賽區塊裡的 const，註冊當下碰它會 TDZ）；第一次部署時 Mongo 會建索引（一次性）。
+- 守衛 test-v6563-replay-lobby-tourn：S1～S4（伺服器區塊實跑）、L1～L2、W1～W3（含 playMyTournReplay 實跑）、E1～E4（真瀏覽器：兩張卡、清單直接顯示、攔截 API ⇒ ▶ 觀看 ⇒ 回放 ⇒ 離開回開始對戰頁、未登入提示）。HEAD-FAIL 在 v6.562 全紅；突變 5 個全殺。
+- Rule 40：test-v6560 W1／W4／W6／E 開檔流程／E6（本機改成「不記」）照站長新需求改；新 lib scripts/lib/sap-revert-admin-v166.mjs（串進 test-v6303／sap153／sap154／v6561 K2）、scripts/lib/revert-v6563-game.mjs（test-v6441／v6293）。
+- **Opus 5.5 審查（agent a0ea4218d7aa5bbbd）：可推但先修 P2×3、P3×6**（Playwright 實測：離開回放無殘留、URL 乾淨、404 錯誤顯示在清單、手機 375 無水平捲動；acorn 確認 tournIdentity 作用域；安全：只認 verified）。
+  - P2-1 修：本元件 .small 是按鈕樣式（有框有底），清單的說明文字改用 .replay-hint；淺色主題補 .replay-list li 底色（手調區）。E1 斷言清單裡沒有非按鈕的 .small。
+  - P2-2 修：兩個索引改一次 createIndexes（只掃一次全表）；部署請避開比賽時段。
+  - P2-3 修：查詢前自驗兩個索引都在（比照 v1.44：缺席就不查、回空清單、10 分鐘後再驗），同時進來的請求共用同一次檢查（守衛 S5 抓到原本的競態：第二個人會在檢查完成前被當成索引不在）。守衛 S6。
+  - P3-1 修：replayLoading 旗標，載入中兩張卡與觀看鈕停用、連點只打一次（W5）。P3-2 修：查詢排除 noShow／doubleNoShow（S1）。P3-3 修：匿名不打 API、晚到的舊回應不蓋新的、憑證拿不到不顯示「請登入」（W4 實跑 loadMyTournMatches，含 Authorization）。P3-4 修：S5 兩個玩家並發各拿自己的。P3-5 修：test-v6560 E6 加正對照（已打到第 2 回合以上）。P3-6 修：一般對戰頁（含 ?treplay= 分享連結）的回放離開一律回開始對戰頁並清掉網址參數（E2 改走這條，因為測試環境沒有登入帳號）。
+- **Opus 5.5 複審（同一位 agent a0ea4218d7aa5bbbd）：可推，無 P1／P2**；上一輪 P2-1～P2-3、P3-1～P3-6 逐條確認已修（Playwright 桌機／手機 375／淺深色截圖、17 個突變翻紅）。P3 處理：P3-a S6 補「只有一個索引在」情境（.every→.some 突變現在會紅）；P3-b W4 補 Firebase 匿名使用者物件（isAnonymous:true）不打 API 的情境（拿掉 isAnonymous 判斷的突變現在會紅）；P3-c／P3-d（部分只靠 E 段真瀏覽器守、已登入主路徑改由 W1／W2／E2 間接守）記錄備查。
+- 全套（HEAD 9de80dda）：876 支，FAIL 4：test-v6371（沙盒既有偽紅）＋ test-v6119／v6120／v6240（逐行掃「建索引函式名」必須帶 catch，被 v1.66 區塊的一行**註解**觸發）⇒ 註解改寫不提函式名、sap-revert-admin-v166 重新產生；三支與 v1.66 還原鏈消費者單跑全綠。
+- 部署：update-tournament.bat（server v1.66）→ redeploy-oracle.bat。
+
 ## v6.562／server patch v1.65／admin v1.85：聊天室置頂公告、賽程對局總時間、Top Cut 人多取 16 強（2026-10-13 站長交辦）
 
 BASE `7b88d581`（v6.561）。站長 16:58：①「錦標賽大廳聊天室的最上方，讓我能在admin的賽事分頁裡面，設定一則至頂公告…(玩家看完後可以選擇按X隱藏)」②「賽程回放選單，除了標記誰獲勝外，後面再幫我標記一個該場比賽的對局總時間…有玩家拖時間」③「最近錦標賽都是5輪，而最近報名人數常常都八九十人，幾乎是輸一把就沒機會進複賽…人數比較多的時候，改成取16強打複賽，你覺得呢??這部分由你規劃看看」「記得都要通過審查」。

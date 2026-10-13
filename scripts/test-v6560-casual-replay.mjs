@@ -247,7 +247,8 @@ async function scenarios(L, srcRoot) {
   const pg = readFileSync(join(srcRoot, 'src/routes/game/+page.svelte'), 'utf8').replace(/\r\n/g, '\n');
   const a = pg.indexOf('// >>> v6560-casual-replay'), b = pg.indexOf('// <<< v6560-casual-replay');
   const blk = a >= 0 && b > a ? pg.slice(a, b) : '';
-  r.W1 = /const replayRecordable = \$derived\(!!game && !isTournament && !isTReplay && !isTournSpectator && !isAdminMode\s*&& \(mode === 'local' \|\| \(mode === 'online' && !isSpectator && \(myPlayerIndex === 0 \|\| myPlayerIndex === 1\)\)\)\);/.test(blk)
+  // ⭐v6.563（Rule 40，站長改需求）：只記休閒線上對戰，本機雙人／vs AI 不記
+  r.W1 = /const replayRecordable = \$derived\(!!game && !isTournament && !isTReplay && !isTournSpectator && !isAdminMode\s*&& mode === 'online' && !isSpectator && \(myPlayerIndex === 0 \|\| myPlayerIndex === 1\)\);/.test(blk)
     && /finalizeReplay\(\{ rec, finalState: g, online: mode === 'online', seat: \(myPlayerIndex === 0 \|\| myPlayerIndex === 1\) \? myPlayerIndex : null,\s*ai: aiPlayerIndex !== null, revealOpp: replayRevealsOpponent\(\), appVersion: VERSION, now: Date\.now\(\) \}\);/.test(blk)
     && /if \(data\) \{ lastSavedReplay = data; void saveReplay\(data\); \}/.test(blk) && /if \(!g \|\| !replayRecordable\) return;\s*untrack\(\(\) => onReplayGameState\(g\)\);/.test(blk)
     && /const toSave = stepsForStorage\(rec\.steps, \{ online: mode === 'online', seat: \(myPlayerIndex === 0 \|\| myPlayerIndex === 1\) \? myPlayerIndex : null, revealOpp: replayRevealsOpponent\(\) \}\);\s*if \(toSave\) void saveInProgress\(rec\.gameId, toSave\);/.test(blk);
@@ -293,7 +294,8 @@ async function scenarios(L, srcRoot) {
     const m = pg.match(/const replayRecordable = \$derived\(([\s\S]*?)\);\n/);
     const ev = (o) => { try { /* eslint-disable-next-line no-new-func */ return new Function(...Object.keys(o), 'return (' + m[1] + ');')(...Object.values(o)); } catch { return 'ERR'; } };
     const base = { game: { id: 'x' }, isTournament: false, isTReplay: false, isTournSpectator: false, isAdminMode: false, mode: 'local', isSpectator: false, myPlayerIndex: null };
-    r.W6 = !!m && ev(base) === true && ev({ ...base, mode: 'online', myPlayerIndex: 1 }) === true
+    // ⭐v6.563（Rule 40）：本機（含 vs AI）改成不記
+    r.W6 = !!m && ev(base) === false && ev({ ...base, mode: 'online', myPlayerIndex: 1 }) === true && ev({ ...base, mode: 'online', myPlayerIndex: 0 }) === true
       && [{ isTournament: true }, { isTReplay: true }, { isTournSpectator: true }, { isAdminMode: true }, { game: null }, { mode: 'online', myPlayerIndex: null }, { mode: 'online', myPlayerIndex: 0, isSpectator: true }, { mode: null }]
         .every((d) => ev({ ...base, ...d }) === false);
   }
@@ -306,7 +308,9 @@ async function scenarios(L, srcRoot) {
   r.W3 = /const _lockedView: 'p1' \| 'p2' \| 'auto' = \(!replayRevealAll && \(_seat === 0 \|\| _seat === 1\)\) \? \(_seat === 0 \? 'p1' : 'p2'\) : 'auto';/.test(pg) && /spectatorView = _lockedView;/.test(pg)
     && /await openReplayData\(data, 'tournament'\);/.test(pg) && /await openReplayData\(r\.data, 'casual'\);/.test(pg) && /replayRevealAll = kind === 'tournament' \|\| data\?\.meta\?\.revealed !== false;/.test(pg)
     && /\{#if replayRevealAll\}\s*<span class="spec-toolbar">/.test(pg) && (pg.match(/nextTurnStepIndex\(_m?steps, tReplayStep\)/g) || []).length === 2 && (pg.match(/prevTurnStepIndex\(_m?steps, tReplayStep\)/g) || []).length === 2;
-  r.W4 = /onclick=\{openReplayLobby\}/.test(pg) && (pg.match(/onclick=\{downloadLastReplay\}/g) || []).length === 2 && /if \(replayKind === 'casual'\) \{/.test(pg);
+  // ⭐v6.563（Rule 40，站長改版面）：不再有「復盤」卡，清單直接列在開始對戰頁；離開時回清單（含從清單打開的錦標賽回放）
+  r.W4 = !/<div class="mode-title">復盤<\/div>/.test(pg) && /\{#if replayLobbyOpen\}\s*<section class="replay-lobby">/.test(pg)
+    && (pg.match(/onclick=\{downloadLastReplay\}/g) || []).length === 2 && /if \(replayKind === 'casual' \|\| replayFromCasualLobby \|\| !isTournament\) \{/.test(pg);
   return r;
 }
 
@@ -325,12 +329,12 @@ const LABEL = {
   P1: '★★★ P1 線上復盤遮蔽開關：預設關、只有 true 才開',
   P2: '★★ P2 policy-loader 從 config/cardPolicy 讀開關（文件不存在也重設為關）',
   P3: '★★★ P3 admin 開關實跑：只寫 replayRevealOpp、merge:true；畫面讀同一欄位、預設按鈕標「看不到」',
-  W1: '★★★ W1 對戰頁：記錄條件（錦標賽／觀戰／回放／admin 不記）、結束走 finalizeReplay＋saveReplay、半回合存進度',
+  W1: '★★★ W1 對戰頁：記錄條件（v6.563 起只記休閒線上；錦標賽／觀戰／回放／admin／本機不記）、結束走 finalizeReplay＋saveReplay、半回合存進度',
   W2: '★★★ W2 獎賞卡只在「攤開的回放」翻正面（遮蔽的復盤＝對戰中規則）',
   W3: '★★ W3 錦標賽與一般復盤走同一個入口；遮蔽時不給切視角；桌機／手機都有跳回合',
-  W4: '★★ W4 開始對戰有「復盤」入口、兩個終局視窗都有下載復盤檔、離開復盤回清單',
+  W4: '★★ W4 開始對戰頁直接列出復盤清單（v6.563 拿掉「復盤」卡）、兩個終局視窗都有下載復盤檔、離開復盤回清單',
   W5: '★★★ W5 onReplayGameState 實跑：線上＋開關關 ⇒ 存的復盤與進行中進度都遮住；開關開 ⇒ 攤開；本機 vs AI ⇒ kind ai 攤開',
-  W6: '★★★ W6 記錄條件實算：錦標賽／回放／觀戰／admin／線上沒座位都不記',
+  W6: '★★★ W6 記錄條件實算：本機（v6.563）／錦標賽／回放／觀戰／admin／線上沒座位都不記',
   W7: '★★★ W7 回放的終局格不跳勝負／平手視窗；復盤時不在背景輪詢休閒大廳',
   A10: '★★★ A10 遮蔽清掉牌庫頂已知順序、連鎖待選、棄牌監看、待選視窗',
   A11: '★★ A11 進行中存檔的遮蔽快取與逐步現算逐位元相同、座位分開快取、重複呼叫重用（複審 P3：終盤不重遮全部）',
@@ -365,7 +369,7 @@ else if (chromium) {
         const f = join(tmp, name); writeFileSync(f, bytes);
         await pg.goto(`http://localhost:${port}/game`, { waitUntil: 'load' });
         await pg.waitForSelector('.mode-card:not([disabled])', { timeout: 60000 });
-        await pg.locator('.mode-card', { hasText: '復盤' }).click();
+        await pg.waitForSelector('.replay-lobby', { timeout: 20000 });   // ⭐v6.563：清單直接在開始對戰頁
         await pg.locator('.replay-lobby input[type=file]').setInputFiles(f);
         await pg.waitForSelector('.treplay-bar', { timeout: 30000 });
       };
@@ -417,7 +421,8 @@ else if (chromium) {
       await pg.mouse.move(a.x + 20, a.y - 10, { steps: 3 }); await pg.mouse.move(z.x + z.width / 2, z.y + z.height / 2, { steps: 12 }); await pg.mouse.up(); await pg.waitForTimeout(700);
       const sysBtn = pg.locator('button:visible:not([disabled])', { hasText: /^確定|我看完了|不選|確認補抽|完成補抽|準備完成|跳過攻擊|結束回合/ });
       let ip = null;
-      for (let w = 0; w < 120 && !(ip && ip.steps >= 3 && ip.halves >= 3); w++) {
+      // ⭐v6.563（Rule 40，站長：本機不記）：打 15 輪動作後，瀏覽器裡必須**沒有**這一局的記錄（記錄端的正對照在 W5 線上路徑）
+      for (let w = 0; w < 15; w++) {
         if (await sysBtn.count()) await sysBtn.first().click().catch(() => {});
         await pg.waitForTimeout(600);
         if (w % 5 === 4) ip = await pg.evaluate(async () => {
@@ -430,7 +435,10 @@ else if (chromium) {
           return { steps: steps.length, halves: new Set(steps.map((s) => s.turn + '|' + s.activePlayerIndex)).size, gameId: row.gameId, phases: [...new Set(steps.map((s) => s.state.phase))] };
         });
       }
-      ok('★★★[E6] 本機對局進行中：瀏覽器裡有這一局的逐動作記錄（只記 playing）', !!ip && ip.steps >= 3 && ip.halves >= 3 && ip.phases.join() === 'playing', JSON.stringify(ip));
+      // 正對照（Opus 審查 P3-5）：對局真的進入 playing 並換過回合（否則「沒有記錄」可能只是卡在 setup）
+      const turnTxt = await pg.evaluate(() => document.querySelector('.turn-info')?.textContent || '');
+      const turnNo = Number((turnTxt.match(/回合\s*(\d+)/) || [])[1] || 0);
+      ok('★★★[E6] 本機對局（v6.563 起不記）：已經打到第 2 回合以上，瀏覽器裡仍然沒有進行中的記錄', turnNo >= 2 && !!ip && ip.steps === 0, JSON.stringify({ turnNo, ip }));
       ok('★[E7] 沒有 JS 例外', errs.length === 0, errs.slice(0, 3).join(' ｜ '));
       // E8：replay-store 在真的 IndexedDB 上跑（同源頁面注入本版模組）：存 11 場 ⇒ 只留最新 10 場；同一局重存只留一份；存檔後清掉進行中那份；讀回內容一致
       {

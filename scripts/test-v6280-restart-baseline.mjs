@@ -566,11 +566,13 @@ T('F7 ⭐⭐⭐ 零額外請求：整份 +page.svelte 的診斷送出點數量�
   //     進得了房）由 test-v6384 的【H】行為端 harness 守 —— 那裡是真的把函式抽出來跑的。
   // ⭐v6.562 合法新增 2 個 fetch 呼叫點（4 → 6）：錦標賽聊天室置頂公告與賽程對局時間（跟著既有輪詢、各自 30 秒節流；行為端見 test-v6562 W1／W2）。
   //   仍是精確值；下面逐一釘住多出來的是哪兩發。
-  assert.strictEqual(fet, 6, 'fetch 的呼叫點數量變了，實際 ' + fet);
+  // ⭐v6.563 再合法新增 1 個（6 → 7）：開始對戰頁「我的錦標賽對戰」GET /api/my-tourn-matches（下面一併釘名）。
+  assert.strictEqual(fet, 7, 'fetch 的呼叫點數量變了，實際 ' + fet);
   assert.ok(PAGE.includes("fetch('/api/client-min-version'"),
     '多出來的那一發 fetch 不是 v6.384 的版本閘門檻 —— 有人偷渡了別的請求進來');
   assert.ok(PAGE.includes('await fetch(CHAT_PIN_URL)') && PAGE.includes("await fetch(MATCH_TIMES_URL + '?eventId=' + encodeURIComponent(eventId))"),
     'v6.562 登記的兩發 fetch 不是置頂公告／對局時間');
+  assert.ok(PAGE.includes('const res = await fetch(MY_TOURN_MATCHES_URL, { headers });'), 'v6.563 登記的那一發 fetch 不是「我的錦標賽對戰」');
 });
 T('F8 ⭐ 指紋只讀既有 state：本版動過的每一段裡都沒有 fetch/計時器/await/送出點', () => {
   const blk = noteFn(PAGE) + phantomField(PAGE) + seedBlock(PAGE) + subResetBlock(PAGE);

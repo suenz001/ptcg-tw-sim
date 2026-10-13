@@ -7703,6 +7703,86 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: 'unavailable' }); }
     });
     // <<< v165-chat-pin-and-times
+    // >>> v166-my-tourn-matches
+    // ⭐server v1.66（v6.563，站長 2026-10-13 18:21：「你看看能不能把錦標賽的對戰也讓玩家可以在這邊找到自己最近的錦標賽復盤紀錄」）：
+    //   GET /api/my-tourn-matches ⇒ 登入玩家自己最近 10 場「已結束、非輪空、有開打」的錦標賽對戰（給開始對戰頁的復盤清單用；觀看走既有 /api/tournament/replay）。
+    //   ⚠ 刻意放在錦標賽區塊（TAIL_ANCHOR）之前、路徑不用錦標賽前綴 ⇒ 28 把鎖不動。
+    //   ⚠ 這裡直接用 db.collection('tournamentMatches')（＝錦標賽區塊裡的 TMATCH 同一個 collection）：建索引在**註冊當下**就會跑，
+    //     而 TMATCH 是錦標賽區塊裡才宣告的 const（TDZ）⇒ 不可以在這裡碰 TMATCH 這個名字。
+    //   ⚠ 查詢一定要有索引：tournamentMatches 會一直累積（每場還帶整份終局盤面），沒有索引就是全表掃描。
+    //     ⇒ 建 { p1uid:1, gameStartedAt:-1 } 與 { p2uid:1, gameStartedAt:-1 }，$or 兩支各走一個索引、依開打時間合併排序。
+    //   ⚠ 只回公開資訊（雙方暱稱、賽事名稱、輪次、勝方），不回 uid；未登入（匿名／驗證失敗）回空清單＋needLogin。
+    //   ⚠ 每位玩家 30 秒記憶體快取＋在途合併（開始對戰頁每次進來會問一次）。
+    const _mtmCol = db.collection('tournamentMatches');
+    //   ⚠（Opus 審查 P2-2／P2-3）兩個索引一次建好（只掃一次全表；⚠ 註解裡不寫建索引的函式名：test-v6119／v6120／v6240 逐行掃該字樣必須帶 catch）；查詢前自驗兩個索引都在（比照 v1.44 慣例：索引缺席一律不查、不 COLLSCAN），
+    //     驗不過就回空清單，10 分鐘後再驗一次。⚠ 部署請避開比賽時段（第一次建索引會掃整個 collection）。
+    const MTM_IDX_KEYS = [JSON.stringify({ p1uid: 1, gameStartedAt: -1 }), JSON.stringify({ p2uid: 1, gameStartedAt: -1 })];
+    _mtmCol.createIndexes([{ key: { p1uid: 1, gameStartedAt: -1 } }, { key: { p2uid: 1, gameStartedAt: -1 } }]).catch(() => { /* best-effort；下面自驗 */ });
+    let _mtmIdxOk = false, _mtmIdxAt = 0, _mtmIdxCheck = null;
+    async function mtmIndexesReady() {
+      if (_mtmIdxOk) return true;
+      if (_mtmIdxCheck) return _mtmIdxCheck;   // 同時進來的請求等同一次檢查（否則第二個人會在檢查完成前被當成「索引不在」）
+      const now = Date.now();
+      if (now - _mtmIdxAt < 10 * 60 * 1000 && _mtmIdxAt > 0) return false;
+      _mtmIdxAt = now;
+      _mtmIdxCheck = (async () => {
+        try {
+          const have = ((await _mtmCol.indexes()) || []).map((i) => JSON.stringify(i && i.key));
+          _mtmIdxOk = MTM_IDX_KEYS.every((k) => have.includes(k));
+        } catch (e) { _mtmIdxOk = false; }
+        if (!_mtmIdxOk) console.warn('[my-tourn-matches] 索引還沒建好，先不查（避免全表掃描）');
+        return _mtmIdxOk;
+      })();
+      try { return await _mtmIdxCheck; } finally { _mtmIdxCheck = null; }
+    }
+    const MTM_LIMIT = 10;
+    const MTM_CACHE_MS = 30 * 1000;
+    const _mtmCache = new Map();     // uid → { at, list }
+    const _mtmInflight = new Map();  // uid → Promise
+    async function myTournMatchesOf(uid) {
+      const now = Date.now();
+      const c = _mtmCache.get(uid);
+      if (c && now - c.at < MTM_CACHE_MS) return c.list;
+      if (_mtmInflight.has(uid)) return _mtmInflight.get(uid);
+      const p = (async () => {
+        try {
+          if (!(await mtmIndexesReady())) return [];
+          // 未進場（noShow／doubleNoShow）雖然有 gameStartedAt（第一位玩家進場時寫）但沒有對局 ⇒ 不列（Opus 審查 P3-2）
+          const ms = await _mtmCol.find({ $or: [{ p1uid: uid }, { p2uid: uid }], status: 'done', bye: { $ne: true }, noShow: { $ne: true }, doubleNoShow: { $ne: true }, gameStartedAt: { $gt: 0 } },
+            { projection: { eventId: 1, round: 1, idx: 1, p1name: 1, p2name: 1, winnerName: 1, gameStartedAt: 1, endedAt: 1 } })
+            .sort({ gameStartedAt: -1 }).limit(MTM_LIMIT).toArray();
+          const evIds = [...new Set(ms.map((m) => String(m.eventId || '')).filter(Boolean))];
+          const names = new Map();
+          if (evIds.length) {
+            const evs = await db.collection('tournamentEvents').find({ _id: { $in: evIds } }, { projection: { name: 1 } }).toArray();
+            for (const e of evs) names.set(String(e._id), String(e.name || ''));
+            const miss = evIds.filter((x) => !names.has(x));
+            if (miss.length) {   // 賽事被刪掉 ⇒ 用永久歸檔裡的名稱
+              const ars = await db.collection('tournamentArchives').find({ _id: { $in: miss.map((x) => 'arch_' + x) } }, { projection: { eventName: 1 } }).toArray();
+              for (const a of ars) names.set(String(a._id).slice(5), String(a.eventName || ''));
+            }
+          }
+          const list = ms.map((m) => ({
+            matchId: String(m._id), eventName: names.get(String(m.eventId)) || '', round: m.round,
+            p1name: m.p1name || '', p2name: m.p2name || '', winnerName: m.winnerName || null, at: Number(m.endedAt) || Number(m.gameStartedAt) || 0,
+          }));
+          if (_mtmCache.size > 5000) _mtmCache.clear();
+          _mtmCache.set(uid, { at: Date.now(), list });
+          return list;
+        } finally { _mtmInflight.delete(uid); }
+      })();
+      _mtmInflight.set(uid, p);
+      return p;
+    }
+    app.get('/api/my-tourn-matches', async (req, res) => {
+      try {
+        res.set('Cache-Control', 'no-store');
+        const id = await tournIdentity(req);
+        if (!id || id.error || !id.uid || !id.verified) return res.json({ myTournApi: 1, needLogin: true, matches: [] });
+        res.json({ myTournApi: 1, matches: await myTournMatchesOf(String(id.uid)) });
+      } catch (e) { res.status(500).json({ error: 'unavailable' }); }
+    });
+    // <<< v166-my-tourn-matches
     // >>> v153-tourn-deck-validate
     // ⭐⭐ server patch v1.53（2026-10-02，站長核准）：錦標賽報名的牌組改在伺服器端也跑完整規則。
     //   以前 /register、/register-and-checkin、/propose 只檢查 60 張 ⇒ 改過的前端或很舊的快取版本

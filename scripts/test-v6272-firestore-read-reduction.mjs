@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '7b88d581f4c36048ca10f849fb4bc921361d64a6';   // v6.561（上一版）
+const PREV_SHA = 'c534cdd352e71bfa3a42e8172d985ab36f06c438';   // v6.562（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,18 +757,28 @@ const PREV_SHA = '7b88d581f4c36048ca10f849fb4bc921361d64a6';   // v6.561（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.562 前移：PREV_SHA 從 7b88d581（v6.561）起算。
+  // ⚠⚠ v6.563 前移：PREV_SHA 從 c534cdd3（v6.562）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.562：錦標賽聊天室置頂公告（chat-pin.ts）、賽程對局總時間（match-times.ts）、Top Cut 人多取 16 強（swiss.ts）；對戰頁接線＋淺色主題重新產生；首頁 changelog 三步搬運。
-  'src/lib/tournament/chat-pin.ts',
-  'src/lib/tournament/match-times.ts',
-  'src/lib/tournament/swiss.ts',
+  // ⭐v6.563：復盤清單改版：拿掉「復盤」卡、清單直接列在開始對戰頁、自己最近的錦標賽對戰（my-matches.ts）、記錄只留線上；首頁 changelog 三步搬運。
+  'src/lib/tournament/my-matches.ts',
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.562）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.562 前移：PREV_SHA 從 7b88d581（v6.561）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.562：錦標賽聊天室置頂公告（chat-pin.ts）、賽程對局總時間（match-times.ts）、Top Cut 人多取 16 強（swiss.ts）；對戰頁接線＋淺色主題重新產生；首頁 changelog 三步搬運。
+//   'src/lib/tournament/chat-pin.ts',
+//   'src/lib/tournament/match-times.ts',
+//   'src/lib/tournament/swiss.ts',
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.561）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.561 前移：PREV_SHA 從 cb4abe25（v6.560）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -888,16 +898,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/selection-filter.ts',
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.550）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.550 前移：PREV_SHA 從 29a43c5f（v6.549）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.550：END_TURN：「回合結束時」效果區搬到回合快照與寶可夢檢查之前（v6550-turn-end-before-checkup），快照改由 endTurnSnapshotDone 保證只跑一次。
-//   'src/lib/game/engine.ts',
-//   'src/lib/game/types.ts',
-//   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

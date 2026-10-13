@@ -278,7 +278,8 @@ import { V6464_GAME_PAIRS } from './lib/revert-v6464-thumbs.mjs';
 import { V6560_GAME_PAIRS } from './lib/revert-v6560-game.mjs';
 import { V6561_GAME_PAIRS } from './lib/revert-v6561-game.mjs';   // ⭐v6.561（Rule 40）：tStartReplay 合併逐動作格（非版面），由新到舊先還原
 import { V6562_GAME_PAIRS } from './lib/revert-v6562-game.mjs';   // ⭐v6.562（Rule 40）：聊天室置頂公告／賽程對局時間（非藍桌墊），由新到舊先還原
-const PRE = [...V6562_GAME_PAIRS, ...V6561_GAME_PAIRS, ...V6560_GAME_PAIRS, ...V6464_GAME_PAIRS];
+import { V6563_GAME_PAIRS } from './lib/revert-v6563-game.mjs';   // ⭐v6.563（Rule 40）：復盤清單改版（非版面分支），由新到舊先還原
+const PRE = [...V6563_GAME_PAIRS, ...V6562_GAME_PAIRS, ...V6561_GAME_PAIRS, ...V6560_GAME_PAIRS, ...V6464_GAME_PAIRS];
 function strip(src) {
   let s = src;
   const bad = [];

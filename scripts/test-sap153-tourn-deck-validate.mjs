@@ -42,6 +42,7 @@ import { revertAdminV162 } from './lib/sap-revert-admin-v162.mjs';   // ⭐serve
 import { revertAdminV163 } from './lib/sap-revert-admin-v163.mjs';   // ⭐v1.63（v6.539 補位順序）
 import { revertAdminV164 } from './lib/sap-revert-admin-v164.mjs';   // ⭐v1.64（v6.561 錦標賽回放逐動作，錦標賽區塊之前）：先剝較新的（Rule 54）
 import { revertAdminV165 } from './lib/sap-revert-admin-v165.mjs';   // ⭐v1.65（v6.562 置頂公告／對局時間／Top Cut）：先剝較新的（Rule 54）
+import { revertAdminV166 } from './lib/sap-revert-admin-v166.mjs';   // ⭐v1.66（v6.563 自己最近的錦標賽對戰，錦標賽區塊之前）：先剝較新的（Rule 54）
 import { revertAdminV161 } from './lib/sap-revert-admin-v161.mjs';   // ⭐server v1.61（總覽先攻座位、卡片勝率未進場不計）：先剝較新的（Rule 54）
 import { revertAdminV160 } from './lib/sap-revert-admin-v160.mjs';   // ⭐server v1.60（套牌／玩家戰績未進場不計）：先剝較新的（Rule 54）
 import { revertAdminV159 } from './lib/sap-revert-admin-v159.mjs';   // ⭐server v1.59（原型未進場不計＋先攻後攻）：先剝較新的（Rule 54）
@@ -122,7 +123,7 @@ ok('★★[S1] helper 在哨兵內、且在 TAIL_ANCHOR 之前（不進錦標賽
     // 開戰（makeGame）與報到的程式碼在 v1.52 → v1.53 之間逐位元沒變
     const strip = (s) => s.replace(/[ \t]*\/\/ >>> v153-tourn-deck-validate\n[\s\S]*?[ \t]*\/\/ <<< v153-tourn-deck-validate\n/, '');
     ok('★[S4b] 剝掉本版哨兵、三行呼叫與一段說明註解後，整份 server patch 與 v1.52 逐位元相同（沒有夾帶其他改動）',
-      strip(revertAdminV153(revertAdminV154(revertAdminV155(revertAdminV156(revertAdminV157(revertAdminV158(revertAdminV159(revertAdminV160(revertAdminV161(revertAdminV162(revertAdminV163(revertAdminV164(revertAdminV165(CUR)))))))))))))) === BASE);
+      strip(revertAdminV153(revertAdminV154(revertAdminV155(revertAdminV156(revertAdminV157(revertAdminV158(revertAdminV159(revertAdminV160(revertAdminV161(revertAdminV162(revertAdminV163(revertAdminV164(revertAdminV165(revertAdminV166(CUR))))))))))))))) === BASE);
   }
 }
 

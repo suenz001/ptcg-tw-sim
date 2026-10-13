@@ -352,7 +352,8 @@ const CRITERIA = {
       // ⭐v6.562（Rule 40）：錦標賽聊天室置頂公告 GET /api/tourn-chat-pin、賽程表對局總時間 GET /api/tourn-match-times
       //   —— 兩發都跟著本來就在跑的輪詢（聊天室 3 秒、賽程表）順帶抓、自己節流 30 秒；不碰 Firestore（伺服器 Mongo）。
       //   名實相符由下面 C11d 釘；行為（節流、舊伺服器 404 不顯示）由 test-v6562-chat-pin-and-times 守。
-      'fetch(': 3,
+      // ⭐v6.563（Rule 40）：開始對戰頁的「我的錦標賽對戰」GET /api/my-tourn-matches（回到開始對戰才抓、30 秒節流；行為端見 test-v6563 W3／E）。
+      'fetch(': 4,
     },
   };
   if (hasBaseCommit(ROOT, BASE_SHA)) {
@@ -392,7 +393,8 @@ const CRITERIA = {
         const g = read('src/routes/game/+page.svelte');
         return g.includes('await fetch(CHAT_PIN_URL)') && g.includes("await fetch(MATCH_TIMES_URL + '?eventId=' + encodeURIComponent(eventId))")
           && /if \(!force && now - _tPinAt < CHAT_PIN_REFRESH_MS\) return;/.test(g)
-          && /if \(!force && now - \(_tMatchTimesAt\[eventId\] \?\? 0\) < MATCH_TIMES_REFRESH_MS\) return;/.test(g);
+          && /if \(!force && now - \(_tMatchTimesAt\[eventId\] \?\? 0\) < MATCH_TIMES_REFRESH_MS\) return;/.test(g)
+          && g.includes('const res = await fetch(MY_TOURN_MATCHES_URL, { headers });') && /if \(now - _myTournAt < 30 \* 1000\) return;/.test(g);   // ⭐v6.563 第三發
       })());
     // 反安慰劑：判準真的分辨得出差異
     chk('C11b ⭐反安慰劑：countOf 對「多一個 fetch(」判得出來',

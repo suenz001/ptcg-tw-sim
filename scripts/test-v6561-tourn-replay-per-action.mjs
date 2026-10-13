@@ -17,7 +17,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
 import { build } from 'esbuild';
 import { hasBaseCommit, shallowSkip, readBaseBlob } from './lib/base-blob.mjs';
-import { revertAdminV165 } from './lib/sap-revert-admin-v165.mjs';   // ⭐v6.562 K2 先剝較新的一節（Rule 54）
+import { revertAdminV165 } from './lib/sap-revert-admin-v165.mjs';
+import { revertAdminV166 } from './lib/sap-revert-admin-v166.mjs';   // ⭐v6.563 再先剝一節（Rule 54）   // ⭐v6.562 K2 先剝較新的一節（Rule 54）
 import { buildAiBundle, loadLivePool, presetById, playGame, firstPlayerOf } from './lib/ai-sim-harness.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -318,7 +319,7 @@ else {
   const base = readBaseBlob(ROOT, BASE_SHA, 'oracle-admin/server_admin_patch.js').out.replace(/\r\n/g, '\n');
   const tail = (s) => s.slice(s.indexOf(TAIL_ANCHOR));
   // ⭐v6.562（Rule 40，意圖不變＝v1.64 本身沒動錦標賽區塊）：v1.65 合法改了區塊 ⇒ 先用 revertAdminV165 整份還原回 v1.64 再比
-  const SRV164 = revertAdminV165(SRV);
+  const SRV164 = revertAdminV165(revertAdminV166(SRV));
   ok('★★★ K2 錦標賽區塊（TAIL_ANCHOR 起；先剝較新的 v1.65）與 v6.560 逐位元相同', SRV164.indexOf(TAIL_ANCHOR) > 0 && tail(SRV164) === tail(base));
   ok('★ K2b 哨兵都在錦標賽區塊之前', SRV.indexOf('// <<< v164-replay-steps') > 0 && SRV.indexOf('// <<< v164-replay-steps') < SRV.indexOf(TAIL_ANCHOR)
     && SRV.indexOf('// <<< v164-replay-step-hook') > 0 && SRV.indexOf('// <<< v164-replay-step-hook') < SRV.indexOf(TAIL_ANCHOR));

@@ -68,6 +68,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   // ⭐v6.560 一般對戰復盤（記錄／遮蔽／跳回合 與 瀏覽器儲存／檔案）
   import { withTournPerActionSteps } from '$lib/game/replay-tourn';   // v6.561 錦標賽回放逐動作
   import { CHAT_PIN_URL, CHAT_PIN_REFRESH_MS, parseChatPin, chatPinVisible, loadDismissedPinId, saveDismissedPinId, type ChatPin } from '$lib/tournament/chat-pin';   // v6.562 聊天室置頂公告
+  import { MY_TOURN_MATCHES_URL, parseMyTournMatches, myTournMatchLine, type MyTournMatches } from '$lib/tournament/my-matches';   // v6.563 復盤清單：自己最近的錦標賽對戰
   import { MATCH_TIMES_URL, MATCH_TIMES_REFRESH_MS, parseMatchTimes, matchTimeKey, fmtMatchDuration, matchTimeTitle, type MatchTime } from '$lib/tournament/match-times';   // v6.562 對局總時間
   import { createReplayRecorder, recordStep, finalizeReplay, stepsForStorage, nextTurnStepIndex, prevTurnStepIndex, type ReplayRecorder, type ReplayData } from '$lib/game/replay-record';
   import { saveReplay, listReplays, loadReplay, deleteReplay, saveInProgress, loadInProgress, downloadReplayFile, parseReplayBytes, MAX_SAVED_REPLAYS, type SavedReplayInfo } from '$lib/game/replay-store';
@@ -5811,7 +5812,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   function tExitReplay() {
     // ⭐v6.560 一般對戰的復盤：回到「開始對戰 → 🎞️ 復盤」清單（不碰錦標賽的大廳狀態）
-    if (replayKind === 'casual') {
+    // ⭐v6.563：從開始對戰頁打開的錦標賽回放、或在一般對戰頁用分享連結（?treplay=）打開的 ⇒ 都回開始對戰頁（Opus 審查 P3-6）
+    if (replayKind === 'casual' || replayFromCasualLobby || !isTournament) {
+      replayFromCasualLobby = false;
+      try { const u = new URL(window.location.href); if (u.searchParams.has('treplay')) { u.searchParams.delete('treplay'); history.replaceState(null, '', u.toString()); } } catch { /* */ }
       isTReplay = false; tReplay = null; tReplayStep = 0; game = null; isTournSpectator = false; mySeatIdx = -1; myPlayerIndex = null;
       spectatorView = 'auto'; replayRevealAll = true; replayKind = 'tournament'; mode = null; tStep = 'lobby';
       replayLobbyOpen = true; refreshReplayList();
@@ -5835,8 +5839,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let replayLobbyOpen = $state(false);
   let replayList = $state<SavedReplayInfo[]>([]);
   let replayLobbyMsg = $state('');
+  // ⭐v6.563 站長：「本機雙人和 vs AI，我覺得沒有必要放入復盤的紀錄裏面，復盤只要放一般對戰就好」⇒ 只記休閒線上對戰（自己是 P1／P2）
   const replayRecordable = $derived(!!game && !isTournament && !isTReplay && !isTournSpectator && !isAdminMode
-    && (mode === 'local' || (mode === 'online' && !isSpectator && (myPlayerIndex === 0 || myPlayerIndex === 1))));
+    && mode === 'online' && !isSpectator && (myPlayerIndex === 0 || myPlayerIndex === 1));
   $effect(() => {
     const g = game;
     if (!g || !replayRecordable) return;
@@ -5881,8 +5886,49 @@ function _setupSelfPending(g: any, seat: number): string | null {
   function openReplayLobby() {
     replayLobbyOpen = true; replayLobbyMsg = '';
     void refreshReplayList();
+    void loadMyTournMatches();
+  }
+  // ⭐v6.563 開始對戰頁直接列出復盤清單（不再有第三張「復盤」卡）＋自己最近的錦標賽對戰
+  let myTournMatches = $state<MyTournMatches | null>(null);
+  let replayFromCasualLobby = false;   // 從開始對戰頁打開錦標賽回放 ⇒ 離開時回開始對戰頁（不是錦標賽大廳）
+  let _myTournAt = 0;
+  let _myTournSeq = 0;
+  let replayLoading = $state(false);   // ⭐（Opus 審查 P3-1）回放載入中：鎖住清單與兩張卡，避免載入完成後蓋掉玩家剛點進去的畫面
+  async function loadMyTournMatches() {
+    const now = Date.now();
+    if (now - _myTournAt < 30 * 1000) return;   // 前端節流（伺服器也有 30 秒快取）
+    _myTournAt = now;
+    const seq = ++_myTournSeq;   // 換帳號／登出時，晚到的舊回應不可以蓋掉新的
+    // 沒登入或匿名 ⇒ 不必問伺服器（一定是 needLogin）
+    if (!firebaseUser || firebaseUser.isAnonymous) { myTournMatches = { needLogin: true, matches: [] }; return; }
+    try {
+      const headers: Record<string, string> = {};
+      const tok: any = await Promise.race<any>([firebaseUser.getIdToken(), new Promise((r) => setTimeout(() => r(null), 6000))]);
+      if (!tok) { _myTournAt = 0; return; }   // 憑證暫時拿不到：不要顯示「請登入」，下次回來再試
+      headers['Authorization'] = 'Bearer ' + tok;
+      const res = await fetch(MY_TOURN_MATCHES_URL, { headers });
+      if (seq !== _myTournSeq) return;
+      if (!res.ok) return;   // 舊伺服器 404 ⇒ 不顯示錦標賽那一區
+      const parsed = parseMyTournMatches(await res.json());
+      if (seq === _myTournSeq) myTournMatches = parsed;
+    } catch { /* 拿不到就不顯示 */ }
+  }
+  $effect(() => {
+    // 回到「開始對戰」畫面（mode===null、不在錦標賽頁）就刷新清單；登入狀態改變時也重抓錦標賽那一區
+    if (mode !== null || isTournament) return;
+    const _u = firebaseUser?.uid ?? '';
+    untrack(() => { replayLobbyOpen = true; void refreshReplayList(); _myTournAt = 0; void loadMyTournMatches(); });
+    void _u;
+  });
+  async function playMyTournReplay(matchId: string) {
+    if (replayLoading) return;
+    replayLobbyMsg = ''; tError = '';
+    replayFromCasualLobby = true; replayLoading = true;
+    try { await tStartReplay(matchId); } finally { replayLoading = false; }
+    if (!isTReplay) { replayFromCasualLobby = false; replayLobbyMsg = tError || '回放載入失敗'; tError = ''; }
   }
   async function playSavedReplay(id: string) {
+    if (replayLoading) return;
     replayLobbyMsg = '';
     const data = await loadReplay(id);
     if (!data) { replayLobbyMsg = '讀不到這份復盤（可能已被刪除或瀏覽器資料被清除）'; return; }
@@ -5910,7 +5956,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   /** 復盤列表的一行說明 */
   function replayInfoLine(m: any): string {
-    const kind = m?.kind === 'online' ? '線上對戰' : m?.kind === 'ai' ? 'vs AI' : '本機雙人';
+    const kind = m?.kind === 'online' ? '線上對戰' : m?.kind === 'ai' ? 'vs AI' : '本機雙人';   // v6.563 起只記線上；舊的本機／AI 紀錄照樣列出
     const d = new Date(m?.savedAt ?? 0);
     const when = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     return `${when}・${kind}${m?.winnerName ? '・🏆 ' + m.winnerName : ''}${m?.finalTurn ? '・' + m.finalTurn + ' 回合' : ''}${m?.revealed === false ? '・只含自己看得到的資訊' : ''}`;
@@ -11109,45 +11155,57 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <PageHeader title="⚔️ 開始對戰" sub="選擇對戰方式" account={firebaseUser ? lobbyAccount : undefined} />
     {#if !poolReady}<p class="muted">載入卡池中…</p>{/if}
     <div class="mode-cards">
-      <button class="mode-card" onclick={() => mode='local'} disabled={!poolReady}>
+      <button class="mode-card" onclick={() => mode='local'} disabled={!poolReady || replayLoading}>
         <div class="mode-icon">🖥️</div>
         <div class="mode-title">本機雙人對戰</div>
         <div class="mode-desc">同一台裝置輪流操作</div>
       </button>
-      <button class="mode-card online" onclick={onClickOnlineMode} disabled={!poolReady}>
+      <button class="mode-card online" onclick={onClickOnlineMode} disabled={!poolReady || replayLoading}>
         <div class="mode-icon">🌐</div>
         <div class="mode-title">線上連線對戰</div>
         <div class="mode-desc">各自裝置，即時對戰</div>
       </button>
-      <!-- ⭐v6.560 一般對戰復盤（見 v6560-casual-replay） -->
-      <button class="mode-card" onclick={openReplayLobby} disabled={!poolReady}>
-        <div class="mode-icon">🎞️</div>
-        <div class="mode-title">復盤</div>
-        <div class="mode-desc">逐步回看打完的對局</div>
-      </button>
     </div>
+    <!-- ⭐v6.563 站長：拿掉「復盤」卡，開始對戰頁直接列出最近的對戰（只留本機／線上兩個按鈕） -->
     {#if replayLobbyOpen}
       <section class="replay-lobby">
-        <h3>🎞️ 復盤 <button class="small" onclick={() => { replayLobbyOpen = false; }}>收起</button></h3>
-        <p class="muted small">本機雙人、vs AI、線上連線對戰結束時會自動存到這台裝置（最近 {MAX_SAVED_REPLAYS} 場）；也可以匯入別人分享的復盤檔（.ptcgreplay）。</p>
-        <label class="btn-secondary replay-import">📂 匯入復盤檔<input type="file" accept=".ptcgreplay,.json,application/json,application/octet-stream" onchange={onReplayFileChosen} hidden /></label>
+        <h3>🎞️ 最近的對戰復盤 <label class="btn-secondary replay-import small">📂 匯入復盤檔<input type="file" accept=".ptcgreplay,.json,application/json,application/octet-stream" onchange={onReplayFileChosen} hidden /></label></h3>
         {#if replayLobbyMsg}<p class="replay-msg">{replayLobbyMsg}</p>{/if}
+        <h4 class="replay-sub">🌐 線上連線對戰<span class="muted replay-hint">（存在這台裝置，最近 {MAX_SAVED_REPLAYS} 場）</span></h4>
         {#if replayList.length === 0}
-          <p class="muted">這台裝置還沒有存下的復盤。打完一場本機或線上對戰後就會出現在這裡。</p>
+          <p class="muted replay-hint">還沒有存下的復盤。打完一場線上連線對戰後就會出現在這裡。</p>
         {:else}
           <ul class="replay-list">
             {#each replayList as r (r.id)}
               <li>
                 <div class="replay-names"><b>{r.meta?.p1name ?? '?'}</b> vs <b>{r.meta?.p2name ?? '?'}</b></div>
-                <div class="muted small">{replayInfoLine(r.meta)}</div>
+                <div class="muted replay-hint">{replayInfoLine(r.meta)}</div>
                 <div class="replay-actions">
-                  <button class="btn-primary small" onclick={() => playSavedReplay(r.id)}>▶ 觀看</button>
+                  <button class="btn-primary small" onclick={() => playSavedReplay(r.id)} disabled={replayLoading}>▶ 觀看</button>
                   <button class="small" onclick={() => downloadSavedReplay(r.id)}>💾 下載</button>
                   <button class="small" onclick={() => removeSavedReplay(r.id)}>🗑 刪除</button>
                 </div>
               </li>
             {/each}
           </ul>
+        {/if}
+        {#if myTournMatches}
+          <h4 class="replay-sub">🏆 我的錦標賽對戰<span class="muted replay-hint">（最近 10 場，跟著帳號）</span></h4>
+          {#if myTournMatches.needLogin}
+            <p class="muted replay-hint">用 email 帳號登入後，這裡會列出自己最近的錦標賽對戰。</p>
+          {:else if myTournMatches.matches.length === 0}
+            <p class="muted replay-hint">還沒有打完的錦標賽對戰。</p>
+          {:else}
+            <ul class="replay-list">
+              {#each myTournMatches.matches as tm (tm.matchId)}
+                <li>
+                  <div class="replay-names"><b>{tm.p1name || '?'}</b> vs <b>{tm.p2name || '?'}</b></div>
+                  <div class="muted replay-hint">{myTournMatchLine(tm)}</div>
+                  <div class="replay-actions"><button class="btn-primary small" onclick={() => playMyTournReplay(tm.matchId)} disabled={replayLoading}>{replayLoading ? '載入中…' : '▶ 觀看'}</button></div>
+                </li>
+              {/each}
+            </ul>
+          {/if}
         {/if}
       </section>
     {/if}
@@ -15692,11 +15750,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .warn-x:hover{ opacity:1; }
 
   /* 模式選擇卡片 */
-  .mode-cards{ display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:1rem; margin:1.5rem 0; }   /* ⭐v6.560 第三張「復盤」卡 */
+  .mode-cards{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.5rem 0; }   /* ⭐v6.563 復盤改成卡片下方的清單，回到兩張卡 */
   /* ⭐v6.560 復盤清單 */
   .replay-lobby{ margin:0 0 1.5rem; padding:1rem; border:1px solid #2a4a2a; border-radius:10px; background:rgba(10,22,10,.6); }
   .replay-lobby h3{ margin:0 0 .4rem; display:flex; align-items:center; gap:.6rem; }
-  .replay-import{ display:inline-block; cursor:pointer; margin:.3rem 0 .6rem; }
+  .replay-import{ display:inline-block; cursor:pointer; margin-left:auto; font-weight:normal; font-size:.85rem; }
+  .replay-hint{ font-size:.8rem; font-weight:normal; }   /* ⚠ 本元件的 .small 是按鈕樣式（有框），說明文字不可以用 */
+  .replay-sub{ margin:.8rem 0 .4rem; font-size:.95rem; display:flex; align-items:baseline; gap:.4rem; flex-wrap:wrap; }
   .replay-msg{ color:#ff9b9b; margin:.3rem 0; }
   .replay-list{ list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:.5rem; }
   .replay-list li{ padding:.55rem .7rem; border:1px solid #2a3a2a; border-radius:8px; background:rgba(0,0,0,.25); }
@@ -20342,6 +20402,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .auth-link:hover { color: #235aa4; }
     :global(html[data-theme='light']:not([data-battle-view])) .auth-success { color: #1f682c; background: #ebf2ec; border: 1px solid #43a256; }
     :global(html[data-theme='light']:not([data-battle-view])) .auth-error { color: #bd0000; }
+    /* ── 手調：復盤清單每一列（深色版是半透明黑底，產生器不轉 rgba）── */
+    :global(html[data-theme='light']:not([data-battle-view])) .replay-list li { background: var(--ui-bg-elev); }
     /* ── 手調（不是產生器產生的）：選模式的兩張大卡改成白卡＋陰影，跟其他頁的卡片一致 ── */
     :global(html[data-theme='light']:not([data-battle-view])) .mode-card { background: var(--ui-bg-elev); box-shadow: var(--ui-shadow); }
     :global(html[data-theme='light']:not([data-battle-view])) .mode-card:hover:not(:disabled) { background: var(--ui-bg-elev); box-shadow: var(--ui-shadow-hover); }
