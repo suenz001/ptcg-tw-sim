@@ -22,7 +22,7 @@
  *      鏈首的 `pokeIid` + `attackIndex` 必須**真的落在本層的候選裡**才算數；
  *      對不上就整條鏈丟掉走 fallback（fail-safe：深層不會再串味）。
  *
- * ⚠ 本檔的 runtime import 只有 leaf 模組（`./selection-filter`、`./player-attack-cooldown`、`./attack-use-precondition`、`./instance-flags`，都不會回頭 import 本檔）⇒
+ * ⚠ 本檔的 runtime import 只有 leaf 模組（`./selection-filter`、`./player-attack-cooldown`、`./attack-use-precondition`，都不會回頭 import 本檔）⇒
  *   可以被 engine／effects／各卡檔／`+page.svelte` 任意 import 而不會成環
  *   （長期記憶：循環 import 下模組層級 `const` 會 TDZ）。
  */
@@ -30,7 +30,6 @@
 import { isRulePokemon } from './selection-filter';   // ⭐v6.404 卡面「擁有規則的寶可夢」中央述詞（leaf）
 import { isPlayerLevelAttackOnCooldown } from './player-attack-cooldown';   // ⭐v6.435 玩家層級冷卻唯一判準（leaf）
 import { ATTACK_USE_PRECONDITION } from './attack-use-precondition';   // ⭐v6.438 招式使用條件唯一登記處（leaf）
-import { isAttackNameBlocked } from './instance-flags';   // ⭐v6.553 「這隻寶可夢不能使用某招式」唯一判準（leaf）
 import type { GameState, CardInstance } from './types';
 import type { Card } from '$lib/cards/types';
 
@@ -251,7 +250,7 @@ export function copyAttackCooldownNote(
   key: string, state: GameState, aIdx: 0 | 1, pool: Map<string, Card>,
   depth: number = copyAttackDepth(state),
 ): string {
-  const { cooledDown: cooled, preconditionBlocked, nameLocked } = enumerateCopyAttacks(key, state, aIdx, pool, depth);
+  const { cooledDown: cooled, preconditionBlocked } = enumerateCopyAttacks(key, state, aIdx, pool, depth);
   const label = key.slice(key.lastIndexOf('|') + 1);
   const parts: string[] = [];
   if (cooled.length > 0) {
@@ -260,23 +259,16 @@ export function copyAttackCooldownNote(
   }
   // ⭐v6.438 使用條件不符而被排除的招式（原因字串來自中央 ATTACK_USE_PRECONDITION，同一份）
   for (const why of [...new Set(preconditionBlocked)]) parts.push(`${label}：不能借用 —— ${why}`);
-  // ⭐v6.553 借用方自己被鎖住的同名招式
-  if (nameLocked.length > 0) {
-    const names = [...new Set(nameLocked)].map((n) => `「${n}」`).join('、');
-    parts.push(`${label}：這隻寶可夢目前無法使用${names}，不能借用同名招式`);
-  }
   return parts.join('；');
 }
 
 /** 候選枚舉的本體（copyAttackCandidates 與 copyAttackCooldownNote 共用，Rule 38）。 */
 function enumerateCopyAttacks(
   key: string, state: GameState, aIdx: 0 | 1, pool: Map<string, Card>, depth: number,
-): { candidates: CopyCandidate[]; cooledDown: string[]; preconditionBlocked: string[]; nameLocked: string[] } {
+): { candidates: CopyCandidate[]; cooledDown: string[]; preconditionBlocked: string[] } {
   const out: CopyCandidate[] = [];
   const cooledDown: string[] = [];
   const preconditionBlocked: string[] = [];
-  const nameLocked: string[] = [];
-  const borrower = state.players[aIdx]?.active ?? null;   // ⭐v6.553 使出借招的那一隻
   const atDepthCap = depth >= COPY_ATTACK_MAX_DEPTH - 1;
   for (const inst of ownersFor(key, state, aIdx, pool)) {
     const card = pool.get(inst.cardId);
@@ -303,13 +295,15 @@ function enumerateCopyAttacks(
         const why = ATTACK_USE_PRECONDITION.get(`${card.name}|${atk.name}`)?.(state, aIdx, pool) ?? null;
         if (why) { preconditionBlocked.push(why); continue; }
       }
-      // >>> v6553-copy-name-lock
-      // ⭐v6.553 站長裁定（2026-10-12）：「借招不能借『被鎖住的同名招式』，但如果只是鎖該寶可夢不能使用（如月月熊 赫月ex 的招式血月），就可以」
-      //   ⇒ 借用方（使出借招的這一隻）身上被鎖住的招式名（下個回合無法使用「X」、烈火爆進的離場前禁用）⇒ 同名招式不是候選。
-      //   ⇒ 被借的那一隻自己被鎖（血月：這隻寶可夢下回合無法使用招式）不影響借用 —— 這裡只看借用方，不看持有者。
-      //   判準走中央 isAttackNameBlocked（與 ATTACK handler／getAvailableAttacks 同一份）。
-      if (isAttackNameBlocked(borrower, atk.name)) { nameLocked.push(atk.name); continue; }
-      // <<< v6553-copy-name-lock
+      // >>> v6558-copy-name-lock-allowed
+      // ⭐v6.558 站長更正（2026-10-13，推翻 v6.553 的借用方名稱鎖）：
+      //   「如果是揮指等借招，因為皮可西是使用招式揮指 … 下回合，還是能使用揮指，借用超級勇氣（因為皮可西是使用招式揮指，不是使用超級勇氣）」
+      //   ⇒ 借招使出的招式是印在卡上的那一招（揮指、欺詐…），「這隻寶可夢無法使用『X』」鎖的是名為 X 的招式，
+      //     **不會**擋借招借用 X ⇒ 這裡不看借用方的名稱鎖。
+      //   ⇒ 只有 夢幻ex｜記憶螺旋 這種「把別人的招式加進自己的招式清單、直接使出 X」的情況會被鎖住 ——
+      //     那條路不經過本檔，而是 getEffectiveAttacks → getAvailableAttacks／ATTACK handler 的 isAttackNameBlocked（同一個述詞）。
+      //   （類比：官方 L2002～2005 天仙石——借來用不蓋冷卻章，因為使出的是揮指；這是類比，判準來源是站長更正。）
+      // <<< v6558-copy-name-lock-allowed
       out.push({
         ownerIid: inst.iid,
         ownerCardId: inst.cardId,
@@ -320,7 +314,7 @@ function enumerateCopyAttacks(
       });
     }
   }
-  return { candidates: out, cooledDown, preconditionBlocked, nameLocked };
+  return { candidates: out, cooledDown, preconditionBlocked };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

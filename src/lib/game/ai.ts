@@ -462,7 +462,7 @@ export function getAIAction(
       if (printedDmg > 0) return printedDmg;
       // 暗黑底牌（N的索羅亞克ex）— 估算備戰最強招式
       if (card?.name === 'N的索羅亞克ex' && atk.name === '暗黑底牌') {
-        // ⭐v6.553（審查 P3-3）：改走借招候選唯一來源（排除冷卻、使用條件、借用方被鎖的同名招式），不再手寫一份枚舉（Rule 38）
+        // ⭐v6.553（審查 P3-3）：改走借招候選唯一來源（排除冷卻、使用條件；v6.558 起借用方的名稱鎖不影響借招），不再手寫一份枚舉（Rule 38）
         return copyAttackCandidates('N的索羅亞克ex|暗黑底牌', state, myIdx, pool).reduce((m, c) => Math.max(m, c.damage), 0);
       }
       return 0;

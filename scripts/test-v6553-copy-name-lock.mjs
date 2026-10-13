@@ -3,6 +3,10 @@
  * v6.553 守衛（站長 2026-10-12 17:03 裁定逐字：「借招不能借『被鎖住的同名招式』，但如果只是鎖該寶可夢不能使用（如月月熊 赫月 ex的招式血月），就可以」）：
  *   借用方（使出借招的那一隻）身上被鎖住的招式名 ⇒ 同名招式不是借招候選；被借的那一隻自己被鎖（血月）⇒ 照樣可以借。
  * 【H】BASE（v6.552）：NEW 紅、正對照綠。
+ *
+ * ⚠⚠ v6.558 站長更正（2026-10-13）推翻本版裁定：「揮指等借招 … 下回合，還是能使用揮指，借用超級勇氣（因為皮可西是使用招式揮指，不是使用超級勇氣）」，
+ *   只有 夢幻ex｜記憶螺旋（直接使出該招）會被名稱鎖擋。⇒ 本檔的「借用方被鎖 ⇒ 不能借」三條改成「照樣可以借」，
+ *   v6.553 之前（v6.552）的行為與更正後相同 ⇒ HEAD 對照改成「v6.552 全部綠」。HEAD-FAIL 與記憶螺旋正對照見 test-v6558-copy-attack-name-lock-correction。
  */
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -87,17 +91,17 @@ function scenarios(M) {
 }
 
 const judge = (r) => ({
-  BORROWER_LOCKED: !!r.BORROWER_LOCKED && !r.BORROWER_LOCKED.names.includes('血月') && /無法使用「血月」/.test(r.BORROWER_LOCKED.note),
-  BORROWER_LOCKED_UNTIL_EXIT: !!r.BORROWER_LOCKED_UNTIL_EXIT && !r.BORROWER_LOCKED_UNTIL_EXIT.names.includes('血月'),
-  ENGINE_LOCKED: !!r.ENGINE_LOCKED && r.ENGINE_LOCKED.oppDmg === 0 && r.ENGINE_LOCKED.why === true,
+  BORROWER_LOCKED: !!r.BORROWER_LOCKED?.names && r.BORROWER_LOCKED.names.includes('血月') && !/不能借用同名招式/.test(r.BORROWER_LOCKED.note),
+  BORROWER_LOCKED_UNTIL_EXIT: !!r.BORROWER_LOCKED_UNTIL_EXIT?.names && r.BORROWER_LOCKED_UNTIL_EXIT.names.includes('血月'),
+  ENGINE_LOCKED: !!r.ENGINE_LOCKED && r.ENGINE_LOCKED.oppDmg === 240,
   ENGINE_SOURCE_LOCKED_OK: !!r.ENGINE_SOURCE_LOCKED_OK && r.ENGINE_SOURCE_LOCKED_OK.oppDmg === 240,
   SOURCE_LOCKED_OK: !!r.SOURCE_LOCKED_OK && r.SOURCE_LOCKED_OK.names.includes('血月'),
   NO_LOCK: !!r.NO_LOCK && r.NO_LOCK.names.includes('血月'),
 });
 const LABEL = {
-  BORROWER_LOCKED: '★★★ 借用方被鎖住「血月」⇒ 欺詐不能借血月，對戰紀錄說明原因（站長裁定）',
-  BORROWER_LOCKED_UNTIL_EXIT: '★★★ 借用方「離開戰鬥場前」被鎖 ⇒ 同樣不能借',
-  ENGINE_LOCKED: '★★★ 完整流程：硬送借血月 ⇒ 引擎不使出血月（對手不受傷害，對戰紀錄說明原因）',
+  BORROWER_LOCKED: '★★★ （v6.558 更正）借用方被鎖住「血月」⇒ 欺詐照樣可以借血月（使出的是欺詐）',
+  BORROWER_LOCKED_UNTIL_EXIT: '★★★ （v6.558 更正）借用方「離開戰鬥場前」被鎖 ⇒ 同樣照樣可以借',
+  ENGINE_LOCKED: '★★★ （v6.558 更正）完整流程：借用方被鎖時借血月 ⇒ 照樣造成 240',
   ENGINE_SOURCE_LOCKED_OK: '★ 正對照（完整流程）：被借方被血月鎖住 ⇒ 欺詐借血月照樣造成 240',
   SOURCE_LOCKED_OK: '★ 正對照（站長裁定）：被借的月月熊 赫月ex 自己被血月鎖住 ⇒ 照樣可以借血月',
   NO_LOCK: '★ 正對照：沒有鎖 ⇒ 可以借',
@@ -116,12 +120,12 @@ if (hasBaseCommit(ROOT, BASE_SHA)) {
     const BM = await load(tmp);
     const B = scenarios(BM), BJ = judge(B);
     for (const k of Object.keys(LABEL)) {
-      if (NEW.includes(k)) ok(`★★★[H] v6.552：${k} 紅`, BJ[k] === false, JSON.stringify(B[k]));
-      else ok(`★[H 正對照] v6.552：${k} 綠`, BJ[k] === true, JSON.stringify(B[k]));
+      // v6.558 更正後與 v6.553 之前的行為相同 ⇒ v6.552 每一條都必須綠（NEW 清單只剩歷史意義）
+      ok(`★[H 對照] v6.552：${k} 綠（更正後行為＝v6.553 之前）`, BJ[k] === true, JSON.stringify(B[k]));
     }
   } catch (e) { ok('★★★[H] BASE 可打包', false, e.message.split('\n')[0]); }
   finally { try { rmSync(tmp, { recursive: true, force: true }); } catch { /* */ } }
 } else shallowSkip('v6553 H', '需要 v6.552 commit');
 
-console.log(`\n=== v6.553 借招不能借被鎖住的同名招式：${pass} PASS, ${fail} FAIL ===`);
+console.log(`\n=== v6.553（v6.558 更正）借招不受借用方名稱鎖影響：${pass} PASS, ${fail} FAIL ===`);
 process.exit(fail ? 1 : 0);
