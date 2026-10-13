@@ -92,7 +92,8 @@ const CHECKS = [
     S.admin.includes('🖼️ 卡圖來源（全站）') && S.admin.includes(`onclick="monSetThumbSrc(\\'thumb\\', this)"`) && S.admin.includes(`onclick="monSetThumbSrc(\\'official\\', this)"`)],
   ['★★★[C2] 卡牌政策的「儲存」「清除」都改 merge:true（不會洗掉 thumbSource）；全檔寫 cardPolicy 的 setDoc 一律 merge', true, (S) => {
     const all = [...S.admin.matchAll(/setDoc\(doc\(dbF, 'config', 'cardPolicy'\), ([^\n]*)\);/g)].map((m) => m[1]);
-    return all.length === 3 && all.every((x) => /\}, \{ merge: true \}$/.test(x.trim()));
+    // v6.560（Rule 40，意圖不變）：多一支寫 replayRevealOpp 的 setDoc（線上復盤遮蔽開關），同樣必須 merge ⇒ 筆數 3→4
+    return all.length === 4 && all.every((x) => /\}, \{ merge: true \}$/.test(x.trim()));
   }],
 ];
 const load = (g) => ({ loader: g('src/lib/cards/policy-loader.ts'), admin: g('oracle-admin/admin.html') });

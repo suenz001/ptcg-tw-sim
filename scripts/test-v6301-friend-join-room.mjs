@@ -780,12 +780,12 @@ await T('F6 ⭐⭐⭐ 反安慰劑：把三顆搬回常駐層／把房名搬回�
 // ══════════════════════════════════════════════════════════════════════
 console.log('\n【G】大廳輪詢在好友分頁照跑');
 await T('G1 ⭐⭐⭐ 房間訂閱的閘**沒有** lobbyTab：切到好友分頁時 onlineStep 仍是 join ⇒ 條件求值為 true（正對照：進房後為 false）', () => {
-  const m = /if \((![a-zA-Z]+ && mode === 'online' && onlineStep === 'join' && myUid)\) \{/.exec(GAME);
+  const m = /if \(((?:![a-zA-Z]+ && )+mode === 'online' && onlineStep === 'join' && myUid)\) \{/.exec(GAME);   // ⭐v6.560（Rule 40）：閘前段可以有多個否定旗標（多了 !isTReplay），意圖不變
   assert.ok(m, '抽不到大廳房間訂閱的閘（寫法變了？）');
   const cond = m[1];
   assert.ok(!/lobbyTab/.test(cond), '⚠⚠⚠ 閘裡出現 lobbyTab ⇒ 切到好友分頁時房間會停止更新：' + cond);
   const evalCond = (S) => new Function('S', 'with (S) { return (' + cond + '); }')(S);
-  const on = { isTournament: false, mode: 'online', onlineStep: 'join', myUid: 'u', lobbyTab: 'online' };
+  const on = { isTournament: false, isTReplay: false, mode: 'online', onlineStep: 'join', myUid: 'u', lobbyTab: 'online' };
   assert.strictEqual(!!evalCond(on), true, '大廳分頁時竟然不訂閱');
   assert.strictEqual(!!evalCond({ ...on, lobbyTab: 'friends' }), true,
     '⚠⚠⚠ 切到好友分頁時房間訂閱停掉了（好友列的按鈕會整組失效）');
@@ -793,6 +793,7 @@ await T('G1 ⭐⭐⭐ 房間訂閱的閘**沒有** lobbyTab：切到好友分頁
   assert.strictEqual(!!evalCond({ ...on, onlineStep: 'room' }), false, '正對照失效：進房後應該不訂閱');
   assert.strictEqual(!!evalCond({ ...on, isTournament: true }), false, '⚠⚠⚠ 錦標賽頁竟然會訂閱（v6.118 事故重演）');
   assert.strictEqual(!!evalCond({ ...on, myUid: '' }), false, '正對照失效：沒有 uid 時應該不訂閱');
+  assert.strictEqual(!!evalCond({ ...on, isTReplay: true }), false, '⚠ v6.560：看復盤時（借 mode=online）不可以背景訂閱大廳');
 });
 await T('G2 ⭐ 切分頁的函式只改 lobbyTabRaw，不動 onlineStep／mode（實跑）', () => {
   const m = /function lobbySwitchTab\(tab: 'online' \| 'friends'\) \{([^}]*)\}/.exec(GAME);
@@ -888,10 +889,11 @@ await mutT('J6 錦標賽分頁也傳 rooms ⇒ F3 必紅（那是 v6.118 效能�
   assert.ok(!/rooms=/.test(tournMount), '⚠⚠⚠ 錦標賽分頁的掛載點傳了 rooms／onjoinroom');
 });
 await mutT('J7 把房間訂閱的閘加上 lobbyTab ⇒ G1 必紅（切到好友分頁房間會停止更新）',
-  () => mutate(GAME, "if (!isTournament && mode === 'online' && onlineStep === 'join' && myUid) {",
-    "if (!isTournament && mode === 'online' && onlineStep === 'join' && lobbyTab === 'online' && myUid) {"),
+  // ⭐v6.560（Rule 40）：錨點跟著閘多一個 !isTReplay
+  () => mutate(GAME, "if (!isTournament && !isTReplay && mode === 'online' && onlineStep === 'join' && myUid) {",
+    "if (!isTournament && !isTReplay && mode === 'online' && onlineStep === 'join' && lobbyTab === 'online' && myUid) {"),
   'lobbyTab', (g) => {
-    const m = /if \((![a-zA-Z]+ && mode === 'online' && onlineStep === 'join'[^)]*)\) \{/.exec(g);
+    const m = /if \(((?:![a-zA-Z]+ && )+mode === 'online' && onlineStep === 'join'[^)]*)\) \{/.exec(g);
     assert.ok(m, '抽不到閘');
     assert.ok(!/lobbyTab/.test(m[1]), '⚠⚠⚠ 閘裡出現 lobbyTab ⇒ 切到好友分頁時房間會停止更新：' + m[1]);
   });

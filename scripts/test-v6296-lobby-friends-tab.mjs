@@ -274,7 +274,8 @@ await T('D4 ⭐⭐ 切分頁**不動 onlineStep**（房間列表訂閱／輪詢�
   assert.strictEqual(after.onlineStep, 'join', '⚠⚠ onlineStep 被改掉了');
   assert.strictEqual(after.mode, 'online', 'mode 被改掉了');
   // 大廳輪詢的閘仍然只看 mode／onlineStep，沒有把 lobbyTab 加進去
-  const gate = /if \(!isTournament && mode === 'online' && onlineStep === 'join' && myUid\) \{/.exec(GAME);
+  // ⭐v6.560（Rule 40）：閘多一個 !isTReplay（復盤借 mode='online'，不可以背景輪詢大廳）；意圖＝閘不看 lobbyTab，不變
+  const gate = /if \(!isTournament && (?:!isTReplay && )?mode === 'online' && onlineStep === 'join' && myUid\) \{/.exec(GAME);
   assert.ok(gate, '大廳房間訂閱的閘抽不到（寫法變了？）');
   assert.ok(!/lobbyTab/.test(GAME.slice(gate.index - 400, gate.index + 400)), '⚠⚠ 房間訂閱的閘被加上了 lobbyTab（切到好友分頁時房間會停止更新）');
 });

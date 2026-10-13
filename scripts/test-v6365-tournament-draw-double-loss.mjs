@@ -375,9 +375,10 @@ await TA('E2 ⭐⭐ v6.364 平手落敗音還在：單機／休閒平手 ⇒ 雙
     && !a.includes('game-win') && !b.includes('game-win') && !s.includes('game-win'))
     || JSON.stringify([a, b, s]);
 });
+// ⭐v6.560（Rule 40）：平手視窗多一個 && !isTReplay（回放跳到終局格不跳結算視窗；意圖＝非錦標賽有平手視窗，不變）
 await TA('E3 ⭐ 非錦標賽的平手結算視窗（v6.361 新增）逐字還在，本版沒有動到它', () => {
   return (PAGE.includes('>>> v6361-draw-modal') && PAGE.includes('<<< v6361-draw-modal')
-    && PAGE.includes("{#if game.phase === 'game-over' && (game.winner === null || game.winner === undefined) && !isTournament}")
+    && /\{#if game\.phase === 'game-over' && \(game\.winner === null \|\| game\.winner === undefined\) && !isTournament(?: && !isTReplay)?\}/.test(PAGE)
     && PAGE.includes('本局平手！'))
     || '找不到 v6361 平手結算視窗';
 });

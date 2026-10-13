@@ -180,7 +180,15 @@ const SCEN = {
 const REPLAY_KEYS = ['① 回放中（桌機）', '② 回放中（手機直式）'];
 const BATTLE_KEYS = Object.keys(SCEN).filter(k => !REPLAY_KEYS.includes(k));
 
-const gameSrc = readFileSync(GAME, 'utf8');
+const _gameRaw = readFileSync(GAME, 'utf8');
+// ⭐v6.560（Rule 40）：「回放才攤開獎賞卡」的旗標從 isTReplay 收斂成
+//   `replayShowsHidden = $derived(isTReplay && replayRevealAll)`——一般對戰的遮蔽復盤（replayRevealAll=false）
+//   要維持蓋著，錦標賽回放（openReplayData 一律 replayRevealAll=true）行為不變。
+//   本守衛的情境都是錦標賽回放／正式對戰 ⇒ 把 replayShowsHidden 就地展開成 (isTReplay && true) 再沿用原本全部斷言；
+//   展開前先斷言 derived 的定義**逐字**是這一條（改成別的運算式 ⇒ 這裡紅，不會靜默放行）。
+const _rshDef = _gameRaw.match(/const replayShowsHidden = \$derived\(([^\n]*)\);/);
+const _rshOk = !!_rshDef && _rshDef[1] === 'isTReplay && replayRevealAll';
+const gameSrc = _rshOk ? _gameRaw.replace(/\breplayShowsHidden\b(?! = \$derived)/g, '(isTReplay && true)') : _gameRaw;
 const mpbSrc  = readFileSync(MPB, 'utf8');
 // 正對照：模板錨點必須還在、腳本／樣式錨點必須不見（helper 內建斷言，抓到就直接炸 —— 這時後面的結論全不可信）
 const gameT = templateOnly(gameSrc, { label: 'game', mustKeep: ['prizeViewOpen'], mustDrop: ['function openPrizeView', '.prize-view-modal{'], allowResidual: [GAME_INLINE_STYLE] });
@@ -413,7 +421,8 @@ let modalIdx = -1, modalNode = null;
 {
   // ⚠ 先剝掉註解再掃：本版的說明註解裡就有這個條件的字面，不剝會多算（掃描器自己要先乾淨）
   const gameNoComment = gameSrc.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
-  const faceHits = [...gameNoComment.matchAll(/\(\s*(!!)?_pz\.faceUp\s*\|\|\s*isTReplay\s*\)/g)];
+  // ⭐v6.560（Rule 40）：replayShowsHidden 已在讀檔時展開成 (isTReplay && true)，兩種寫法都認
+  const faceHits = [...gameNoComment.matchAll(/\(\s*(!!)?_pz\.faceUp\s*\|\|\s*(?:isTReplay|\(isTReplay && true\))\s*\)/g)];
   // 對手側 + 我方側各 2 處（一處決定要不要查卡、一處決定 prize-faceup 樣式）
   chk('G1 桌機獎賞縮圖的翻面條件仍是「faceUp 或 回放」', faceHits.length === 4, `${faceHits.length} 處`);
   for (const h of faceHits) {
@@ -459,14 +468,17 @@ let modalIdx = -1, modalNode = null;
 if (UNKNOWN_IDS.size) console.log('  （掃描器未建模的識別字，一律當 undefined 處理）:', [...UNKNOWN_IDS].join(', '));
 // ═══ I. 回放進入點：旗標打開前先清盤面 + 歸零視窗（Fable 5 審查） ══════════
 {
-  const fn = gameSrc.match(/async function tStartReplay\(matchId: string\)[\s\S]*?\n  \}/);
-  chk('I1 找得到 tStartReplay()', !!fn);
+  // ⭐v6.560（Rule 40）：開回放旗標搬到共用入口 openReplayData（錦標賽 tStartReplay 與一般對戰復盤都走它）；意圖（先清盤面、歸零視窗、唯一一條路）不變
+  chk('I0 replayShowsHidden 的定義逐字是 isTReplay && replayRevealAll', _rshOk, _rshDef ? _rshDef[1] : '(找不到)');
+  chk('I0b tStartReplay 走共用入口 openReplayData(data, \'tournament\')', /async function tStartReplay\(matchId: string\)[\s\S]*?await openReplayData\(data, 'tournament'\)/.test(gameSrc));
+  const fn = gameSrc.match(/async function openReplayData\(data: any, kind: 'tournament' \| 'casual'\)[\s\S]*?\n  \}/);
+  chk('I1 找得到 openReplayData()', !!fn);
   if (fn) {
     const body = fn[0].replace(/\/\/[^\n]*/g, '');
     const iFlag = body.indexOf('isTReplay = true');
     const iGame = body.indexOf('game = null');
     const iOpen = body.indexOf('prizeViewOpen = false');
-    chk('I2 tStartReplay 內有把 isTReplay 打開', iFlag >= 0);
+    chk('I2 openReplayData 內有把 isTReplay 打開', iFlag >= 0);
     chk('I3 ⚠ 開回放旗標**之前**先把上一份盤面清掉（否則 await 期間會把現役盤面的獎賞翻正面）',
       iGame >= 0 && iGame < iFlag, `game@${iGame} flag@${iFlag}`);
     chk('I4 進入點歸零獎賞卡視窗（離開回放有多條路徑，進入點才是單一來源）',

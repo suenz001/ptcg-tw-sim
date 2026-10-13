@@ -3655,9 +3655,15 @@ async function loadMonitor() {
       try { const snap = await getDoc(doc(dbF, 'config', 'cardPolicy')); return (snap.exists() && snap.data().thumbSource === 'official') ? 'official' : 'thumb'; }
       catch (e) { return null; }
     })(),
+    // ⭐v6.560 線上對戰復盤是否攤開對手手牌與獎賞卡（Firestore config/cardPolicy.replayRevealOpp；只有 true 才算開；讀不到回 null）
+    (async function () {
+      try { const snap = await getDoc(doc(dbF, 'config', 'cardPolicy')); return (snap.exists() && snap.data().replayRevealOpp === true) ? 'on' : 'off'; }
+      catch (e) { return null; }
+    })(),
   ]);
   const lp = _ok(_r[0]), rd = _ok(_r[1]), dg = _ok(_r[2]), mv = _ok(_r[3]), ns = _ok(_r[4]), cg = _ok(_r[5]), fc = _ok(_r[6]), fd = _ok(_r[7]);
   const thumbSrc = _r[8];
+  const replayReveal = _r[9];
   const btnS = 'padding:6px 14px;border:1px solid #a5d6a7;background:#eaf7ea;color:#2e7d32;border-radius:6px;cursor:pointer;font-weight:600;';
   const btnW = 'padding:6px 14px;border:1px solid #e0c56a;background:#fff8e1;color:#8a6d00;border-radius:6px;cursor:pointer;font-weight:600;';
   let html = '<div style="max-width:900px;padding:16px;"><h2 style="margin-top:0;">📡 對戰連線監控</h2>';
@@ -3798,6 +3804,18 @@ async function loadMonitor() {
     + '<br>⚠ 玩家端有 10 分鐘快取：切換後最慢 10 分鐘＋重新整理頁面才生效。設定存在卡牌政策同一份文件（不會多一次讀取）。</p>'
     + '<button style="' + btnS + '" onclick="monSetThumbSrc(\'thumb\', this)">用縮圖站</button> '
     + '<button style="' + btnW + '" onclick="monSetThumbSrc(\'official\', this)">用官方原圖</button>'
+    + '</div>';
+  // ⭐v6.560 線上對戰復盤：要不要攤開對手的手牌與獎賞卡（站長：先預設看不到，玩家反應想看再打開）
+  html += '<div id="mon-replay-reveal" style="border-top:1px dashed #e3e8ef;padding-top:12px;margin-top:12px;">'
+    + '<div style="font-weight:700;margin-bottom:4px;">🎞️ 線上對戰復盤：對手的手牌與獎賞卡　'
+    + (replayReveal === 'on' ? '<span id="mon-replay-reveal-state" style="color:#8a6d00;">看得到（全部攤開）</span>'
+      : replayReveal === 'off' ? '<span id="mon-replay-reveal-state" style="color:#2e7d32;">看不到（只留自己當時看得到的）</span>'
+      : '<span id="mon-replay-reveal-state" style="color:#c62828;">讀不到</span>')
+    + '</div>'
+    + '<p class="small muted" style="margin:2px 0 8px;">只影響「休閒線上對戰」結束後自動存下的復盤：關閉時，對手手牌、雙方蓋著的獎賞卡與牌庫在復盤檔裡就是卡背（不會寫進檔案）。'
+    + '本機雙人／vs AI 一律攤開；錦標賽回放不受影響。<br>⚠ 在存檔當下套用：改開關只影響之後打完的對局；玩家端有 10 分鐘快取。設定存在卡牌政策同一份文件（不會多一次讀取）。</p>'
+    + '<button style="' + btnS + '" onclick="monSetReplayReveal(false, this)">看不到（預設）</button> '
+    + '<button style="' + btnW + '" onclick="monSetReplayReveal(true, this)">看得到</button>'
     + '</div>';
   html += '</div>';
 
@@ -3966,7 +3984,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.559';
+window.SITE_VERSION_HINT = '6.560';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -4030,6 +4048,20 @@ window.monSetThumbSrc = async function (src, btn) {
   await loadMonitor();
 };
 // ⭐v6.287 好友私聊子開關（守衛 test-v6287 實跑：斷言它打 POST /api/friends/admin/dm-config 且 body 只有 {dm}）。
+// ⭐v6.560 線上對戰復盤遮蔽開關：只寫 replayRevealOpp 一個欄位、merge（卡牌政策與卡圖來源同一份文件，不可整份覆寫）
+window.monSetReplayReveal = async function (on, btn) {
+  if (on && !confirm('確定要讓線上對戰的復盤看得到對手的手牌與獎賞卡？（只影響之後打完的對局）')) return;
+  const _t0 = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '處理中…'; }
+  try {
+    await setDoc(doc(dbF, 'config', 'cardPolicy'), { replayRevealOpp: !!on }, { merge: true });
+  } catch (e) {
+    alert('設定失敗：' + ((e && e.message) || e));
+    if (btn) { btn.disabled = false; btn.textContent = _t0; }
+    return;
+  }
+  await loadMonitor();
+};
 window.monSetFriendsDm = async function (enabled, btn) {
   if (enabled && !confirm('確定要開啟好友私聊？開啟後互為好友的玩家可以直接私聊（需要「好友功能」總開關也是啟用狀態；已載入的頁面要重新整理）。')) return;
   const _t0 = btn ? btn.textContent : '';

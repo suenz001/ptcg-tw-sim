@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.560：一般對戰復盤（2026-10-13 玩家建議、站長交辦）
+
+BASE v6.559。站長 13:53 轉述玩家建議（一般對戰沒有復盤、只能匯出文字；建議記錄操作含對手獎賞與手牌、結束時提供、存 cookie、畫面同對戰畫面有上一動下一動；或存檔案匯入；放在對戰演練）。我評估後站長 13:59 逐字裁定：「1.線上對戰的復盤能不能看到對手的手牌和獎賞卡?這題我不大確定玩家們的想法，想請你先幫我再admin監控那邊做一個開關，先預設是看不到對方的，如果有很多玩家反應希望能看到的話，我再去admin監控那邊改 2.瀏覽器要保留最近幾場？依你的建議 10 場 3.一步一格的單位：依你的建議每個動作一格，另外加「跳到上／下一回合」的按鈕。也請你順便把錦標賽復盤也改成每個動作一格」。
+- 量測（AI 對打 3 場）：一場 122～215 個動作，每步完整盤面（去 log）約 16～18KB，全場 1.6～2.9MB，gzip 後 30～50KB ⇒ 逐動作可行。cookie 4KB 且每次連線都送伺服器 ⇒ 改用 IndexedDB。
+- 新 leaf：replay-record.ts（recordStep 只記 playing、去重、log 變短時截斷；finalizeReplay 唯一出口：本機／AI 攤開、線上依開關遮蔽；redactStateForSeat：對手手牌、未翻開獎賞、雙方牌庫 → __HIDDEN__〔與 v6.150 錦標賽遮蔽同一佔位〕、待選視窗清空、對手私有 log 拿掉；next/prevTurnStepIndex）、replay-store.ts（IndexedDB 保留 10 場、同局去重、進行中進度、gzip 檔案匯出入）、replay-policy.ts（config/cardPolicy.replayRevealOpp，只有 true 才開，預設關）。policy-loader 讀同一份文件（不多讀取）。admin 監控加開關（只寫 replayRevealOpp、merge）。
+- 對戰頁（哨兵 v6560-casual-replay）：$effect 記錄（錦標賽／觀戰／回放／admin 不記）、每換半回合存進度、game-over 時 finalizeReplay＋saveReplay；終局兩個視窗加「🎞️ 下載復盤檔」；開始對戰加第三張「🎞️ 復盤」卡與清單（觀看／下載／刪除／匯入）。回放入口收斂成 openReplayData（錦標賽 /replay 也走它）；replayShowsHidden＝isTReplay && replayRevealAll 取代獎賞卡翻正面與獎賞檢視模式的 isTReplay；遮蔽時視角固定記錄者、不給切；桌機／手機回放列加上一回合／下一回合；一般復盤不顯示複製連結；離開回到復盤清單。
+- 守衛 test-v6560-casual-replay：A1～A8（AI 對打真實對局）、S1、P1～P3、W1～W4、E1～E7（Chromium：匯入、逐步、跳回合、攤開／遮蔽、離開回清單、vs AI 進行中記錄寫進 IndexedDB、無例外）。HEAD-FAIL 全紅。
+- **Opus 5.5 審查（agent afabcf046651b577f）第一輪：需修，P1×2**（① iid 連結攻擊：遮蔽卡沿用原 iid，跨快照比對可還原約 50% 隱藏卡 ⇒ 改不透明 iid h{side}{h|p|d}{index}，守衛 A4/A5 實跑攻擊；② 回放跳到終局會出「再來一局／離開房間」⇒ 兩個結算視窗加 !isTReplay）、P2（回放中大廳輪詢、守衛安慰劑 W1/W5/W6/E8、中離留下未遮蔽進行中那份 ⇒ stepsForStorage、pendingChainQueue／deckTopKnown 未剝）、P3（悔棋重複一格、座位未知 fail-closed、獎賞 title）全部修正。
+- **第二輪：可推，P3×3** ⇒ 全處理：E8 改數 IndexedDB 原始列數（listReplays 本身會切 10 筆，保留 15 場的突變原本只靠 E7 撞紅）；stepsForStorage 加 WeakMap 遮蔽快取（207 步每半回合重遮約 33ms＋序列化 ⇒ 只遮新增步，A11 逐位元等價＋座位分開）；revert-v6560-game.mjs 檔頭註解改成實情。審查另提：投降／中離方不存完整復盤（只留遮蔽進行中那份）、手機跑馬燈間歇蓋住回放列右側（舊問題），本版不動。
+- Rule 40：test-v6190（replayShowsHidden 逐字定義斷言後展開；I 節改看 openReplayData＋I0b）、test-v6441／test-v6293（新 lib scripts/lib/revert-v6560-game.mjs，difflib 33 對、逐位元還原 v6.559，放在 V6464 表之前；v6293 E1e 先還原再驗）、test-v6272 PREV_ALLOWED、test-v6472 C2 3→4。
+
 ## v6.559：社群賽募集預設 5 分鐘＋匯出套牌構築表（2026-10-13 站長要求）
 
 BASE v6.558。站長 11:43 逐字：「幫我把錦標賽的玩家建立社群賽預設為5分鐘(目前好像是預設30分鐘，大家都會沒改到，導致一場比賽要等很久才能開賽) 另外請你看一下【套牌構築表.pdf】這個檔案(在e:ptcg-tw-sim資料夾)，我想在 牌組編輯器 匯出的功能，增加匯出牌組構築表的功能，然玩家們去報名道館賽的時候可以直接把這個列印出來，更方便 表格及文字內容你可以調整，但是要符合這個卡表的精神，你可以先出預覽圖讓我確認」；11:48「你的套牌構築表ok，就照這個製作吧」；11:50「本表由本站自動產生，送出前請再核對實體牌組，這個地方再加上我們的網址www.ptcg-tw-sim.com，順便達到宣傳的效果」。

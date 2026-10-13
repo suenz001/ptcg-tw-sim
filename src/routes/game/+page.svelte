@@ -64,7 +64,11 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
     getHandCardOps, handCardDragKind, handCardDraggable, handOpForDropTarget,
     type HandCardOp, type HandDragKind, type HandDropTarget,
   } from '$lib/game/hand-card-ops';
-  import { handOverlapPx, handFanPose, fanOvershootPx, borderBoxSize } from '$lib/game/hand-layout';   // ⭐v6.557 手牌互疊量依實際寬度計算（唯一判準）
+  import { handOverlapPx, handFanPose, fanOvershootPx, borderBoxSize } from '$lib/game/hand-layout';
+  // ⭐v6.560 一般對戰復盤（記錄／遮蔽／跳回合 與 瀏覽器儲存／檔案）
+  import { createReplayRecorder, recordStep, finalizeReplay, stepsForStorage, nextTurnStepIndex, prevTurnStepIndex, type ReplayRecorder, type ReplayData } from '$lib/game/replay-record';
+  import { saveReplay, listReplays, loadReplay, deleteReplay, saveInProgress, loadInProgress, downloadReplayFile, parseReplayBytes, MAX_SAVED_REPLAYS, type SavedReplayInfo } from '$lib/game/replay-store';
+  import { replayRevealsOpponent } from '$lib/game/replay-policy';   // ⭐v6.557 手牌互疊量依實際寬度計算（唯一判準）
   import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemonExCard,
            isBasicEnergyOfType as isBasicEnergyOfTypeCentral } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
@@ -784,6 +788,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let isTReplay = $state(false);         // v5.939 對戰回放模式
   let tReplay = $state<any>(null);       // { meta, finalLog, finalState, snapshots }
   let tReplayStep = $state(0);
+  // ⭐v6.560 回放來源：'tournament'＝伺服器錦標賽回放；'casual'＝一般對戰的復盤（瀏覽器存檔／匯入的檔案）
+  let replayKind = $state<'tournament' | 'casual'>('tournament');
+  /** 回放是否攤開蓋著的資訊（獎賞卡、對手手牌）。錦標賽一律攤開；一般對戰看復盤檔的 meta.revealed（線上對戰預設遮住）。 */
+  let replayRevealAll = $state(true);
+  const replayShowsHidden = $derived(isTReplay && replayRevealAll);
   // ⭐⭐⭐v6.177 賽程有可能是「上一份好資料」（/bracket 這一發失敗時沿用）⇒ **輪次號碼一律以
   //   /event 的值為準**：/event 是每 3 秒更新的伺服器權威來源，而且 tEvents 只會被成功回應改寫。
   //   少了這條，連續抓不到 /bracket 時畫面會停在舊輪、還把舊輪標成「進行中」——
@@ -1939,7 +1948,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //     （不是「不顯示」而已 —— 連 getCard 都不呼叫，卡名、圖片、zoom 全都不給）。
   //   回放（isTReplay）讀的是已結束對局的歸檔快照，攤牌是刻意的（v5.940／v6.135 同一個決定）。
   /** 'replay' ＝ 攤開全部（回放限定）；'battle' ＝ 只看得到翻正面的那幾張。 */
-  let prizeViewMode = $derived(isTReplay ? 'replay' : 'battle');
+  let prizeViewMode = $derived(replayShowsHidden ? 'replay' : 'battle');   // ⭐v6.560 遮蔽的復盤＝與對戰中相同（只看得到翻正面的）
   function openPrizeView() {
     prizeViewOpen = true;
   }
@@ -4998,7 +5007,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //     疊在錦標賽本身的輪詢上就是玩家回報的「人一多就很 lag」。
   //   錦標賽頁根本不顯示休閒大廳列表，這些資料一筆都用不到。
   $effect(() => {
-    if (!isTournament && mode === 'online' && onlineStep === 'join' && myUid) {
+    if (!isTournament && !isTReplay && mode === 'online' && onlineStep === 'join' && myUid) {   // ⭐v6.560 復盤也借 mode='online'，不可以在背景輪詢休閒大廳
       unsubOpenRooms?.();
       openRoomsErr = '';
       unsubOpenRooms = subscribeOpenRooms(
@@ -5039,7 +5048,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   $effect(() => {
     const loggedIn = !!(firebaseUser && !firebaseUser.isAnonymous && firebaseUser.email);
-    if (!isTournament && mode === 'online' && onlineStep === 'join' && loggedIn) {
+    if (!isTournament && !isTReplay && mode === 'online' && onlineStep === 'join' && loggedIn) {   // ⭐v6.560 同上
       void refreshMyEmailOldRoom();
       if (_myRoomTimer) clearInterval(_myRoomTimer);
       _myRoomTimer = setInterval(() => { void refreshMyEmailOldRoom(); }, 30000);
@@ -5738,24 +5747,135 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const data = await res.json();
       if (data.error) { tError = data.error; return; }
       if ((!data.snapshots || data.snapshots.length === 0) && !data.finalState) { tError = '這場沒有可回放的資料（可能是部署回放功能之前的舊對戰）'; return; }
-      tReplay = data;
-      // ⚠⚠v6.190 先把上一份盤面清掉再開回放旗標：isTReplay 一旦為 true，桌機獎賞縮圖就會
-      //   翻正面（(_pz.faceUp || isTReplay)），而底下還有一個 await 才會把 game 換成回放快照。
-      //   進入點同時歸零獎賞卡檢視視窗（離開回放有 7 條路徑，在進入點歸零才是單一來源）。
-      game = null; prizeViewOpen = false;
-      isTReplay = true; isTournSpectator = true; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; battleLogOpen = true; spectatorView = 'auto';  // v5.942 開log面板+視角自動跟當前出牌方(本機雙人;可手動看P1/P2 override)
-      const steps = tReplaySteps();
-      try { await Promise.all(steps.map((s: any) => ensurePoolForStateIds(s.state))); } catch { /* best-effort */ }
-      tReplayGoto(0);
-      tStep = 'playing';
+      await openReplayData(data, 'tournament');
     } catch (e: any) { tError = '回放載入失敗：' + (e?.message ?? e); }
   }
+  // ⭐v6.560 回放的共用入口（錦標賽 /replay 與一般對戰的復盤檔都走這裡，畫面只有一套）。
+  async function openReplayData(data: any, kind: 'tournament' | 'casual') {
+    replayKind = kind;
+    // 一般對戰的復盤：檔案說沒攤開（線上對戰、admin 開關關閉）⇒ 獎賞卡維持蓋著、視角固定在記錄者那一側
+    replayRevealAll = kind === 'tournament' || data?.meta?.revealed !== false;
+    tReplay = data;
+    // ⚠⚠v6.190 先把上一份盤面清掉再開回放旗標：isTReplay 一旦為 true，桌機獎賞縮圖就會
+    //   翻正面（(_pz.faceUp || replayShowsHidden)，v6.560 前是 isTReplay），而底下還有一個 await 才會把 game 換成回放快照。
+    //   進入點同時歸零獎賞卡檢視視窗（離開回放有 7 條路徑，在進入點歸零才是單一來源）。
+    game = null; prizeViewOpen = false;
+    const _seat = data?.meta?.viewerSeat;
+    const _lockedView: 'p1' | 'p2' | 'auto' = (!replayRevealAll && (_seat === 0 || _seat === 1)) ? (_seat === 0 ? 'p1' : 'p2') : 'auto';
+    isTReplay = true; isTournSpectator = true; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; battleLogOpen = true; spectatorView = _lockedView;  // v5.942 開log面板+視角自動跟當前出牌方(本機雙人;可手動看P1/P2 override)；v6.560 遮蔽的復盤固定記錄者視角
+    const steps = tReplaySteps();
+    try { await Promise.all(steps.map((s: any) => ensurePoolForStateIds(s.state))); } catch { /* best-effort */ }
+    tReplayGoto(0);
+    tStep = 'playing';
+  }
   function tExitReplay() {
+    // ⭐v6.560 一般對戰的復盤：回到「開始對戰 → 🎞️ 復盤」清單（不碰錦標賽的大廳狀態）
+    if (replayKind === 'casual') {
+      isTReplay = false; tReplay = null; tReplayStep = 0; game = null; isTournSpectator = false; mySeatIdx = -1; myPlayerIndex = null;
+      spectatorView = 'auto'; replayRevealAll = true; replayKind = 'tournament'; mode = null; tStep = 'lobby';
+      replayLobbyOpen = true; refreshReplayList();
+      return;
+    }
     isTReplay = false; tReplay = null; tReplayStep = 0; game = null; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0; mySeatIdx = -1; myPlayerIndex = null;
     try { const u = new URL(window.location.href); u.searchParams.delete('treplay'); history.replaceState(null, '', u.toString()); } catch { /* */ }
     tStep = 'lobby';
     try { tournLoadEvent(); tBracketLoad(); } catch { /* */ }
   }
+  // >>> v6560-casual-replay
+  // ⭐v6.560 一般對戰（本機雙人／vs AI／休閒線上）的復盤：逐動作記錄 → 結束時存進這台裝置（最近 10 場）＋可下載。
+  //   ・只記 phase==='playing' 的盤面（setup 雙方的秘密佈局不記）；每個不同的盤面記一格（＝每個動作一格）。
+  //   ・線上對戰在存檔當下依 admin 開關遮蔽（預設遮住對手手牌、蓋著的獎賞卡、牌庫）；本機／AI 一律攤開。
+  //   ・每換一個半回合把進度存一份（重新整理頁面後同一局接著記）。
+  //   ・錦標賽、觀戰、回放、admin 隱身都不記。
+  let _replayRec: ReplayRecorder | null = null;
+  let _replayFinalizedId = '';
+  let _replayLastHalf = '';
+  let lastSavedReplay = $state<ReplayData | null>(null);
+  let replayLobbyOpen = $state(false);
+  let replayList = $state<SavedReplayInfo[]>([]);
+  let replayLobbyMsg = $state('');
+  const replayRecordable = $derived(!!game && !isTournament && !isTReplay && !isTournSpectator && !isAdminMode
+    && (mode === 'local' || (mode === 'online' && !isSpectator && (myPlayerIndex === 0 || myPlayerIndex === 1))));
+  $effect(() => {
+    const g = game;
+    if (!g || !replayRecordable) return;
+    untrack(() => onReplayGameState(g));
+  });
+  function onReplayGameState(g: any) {
+    if (!g?.id) return;
+    if (!_replayRec || _replayRec.gameId !== g.id) {
+      const rec = createReplayRecorder(g.id);
+      _replayRec = rec; _replayLastHalf = '';
+      if (_replayFinalizedId !== g.id) lastSavedReplay = null;
+      // 重新整理後的同一局：把之前存的進度接在前面（只取比目前更早的步驟）
+      loadInProgress(g.id).then((prev) => {
+        if (!prev || !prev.length || _replayRec !== rec) return;
+        const firstLen = rec.steps.length ? rec.steps[0].logLen : Infinity;
+        rec.steps = [...prev.filter((x) => x.logLen < firstLen), ...rec.steps];
+      });
+    }
+    const rec = _replayRec;
+    if (recordStep(rec, g)) {
+      const half = (g.turn ?? 0) + '|' + (g.activePlayerIndex ?? '');
+      if (half !== _replayLastHalf) {
+        _replayLastHalf = half;
+        // 線上對戰、遮蔽開關關閉 ⇒ 進行中那份也先遮再存（中離時它會留在瀏覽器裡）
+        const toSave = stepsForStorage(rec.steps, { online: mode === 'online', seat: (myPlayerIndex === 0 || myPlayerIndex === 1) ? myPlayerIndex : null, revealOpp: replayRevealsOpponent() });
+        if (toSave) void saveInProgress(rec.gameId, toSave);
+      }
+    }
+    if (g.phase === 'game-over' && _replayFinalizedId !== g.id && rec.steps.length > 0) {
+      _replayFinalizedId = g.id;
+      const data = finalizeReplay({ rec, finalState: g, online: mode === 'online', seat: (myPlayerIndex === 0 || myPlayerIndex === 1) ? myPlayerIndex : null,
+        ai: aiPlayerIndex !== null, revealOpp: replayRevealsOpponent(), appVersion: VERSION, now: Date.now() });
+      if (data) { lastSavedReplay = data; void saveReplay(data); }
+    }
+  }
+  async function downloadLastReplay() {
+    if (lastSavedReplay) await downloadReplayFile(lastSavedReplay);
+  }
+  async function refreshReplayList() {
+    replayList = await listReplays();
+  }
+  function openReplayLobby() {
+    replayLobbyOpen = true; replayLobbyMsg = '';
+    void refreshReplayList();
+  }
+  async function playSavedReplay(id: string) {
+    replayLobbyMsg = '';
+    const data = await loadReplay(id);
+    if (!data) { replayLobbyMsg = '讀不到這份復盤（可能已被刪除或瀏覽器資料被清除）'; return; }
+    replayLobbyOpen = false;
+    await openReplayData(data, 'casual');
+  }
+  async function downloadSavedReplay(id: string) {
+    const data = await loadReplay(id);
+    if (data) await downloadReplayFile(data); else replayLobbyMsg = '讀不到這份復盤';
+  }
+  async function removeSavedReplay(id: string) {
+    await deleteReplay(id);
+    await refreshReplayList();
+  }
+  async function onReplayFileChosen(ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    const f = input.files?.[0];
+    input.value = '';
+    if (!f) return;
+    replayLobbyMsg = '';
+    const r = await parseReplayBytes(new Uint8Array(await f.arrayBuffer()));
+    if ('error' in r) { replayLobbyMsg = '匯入失敗：' + r.error; return; }
+    replayLobbyOpen = false;
+    await openReplayData(r.data, 'casual');
+  }
+  /** 復盤列表的一行說明 */
+  function replayInfoLine(m: any): string {
+    const kind = m?.kind === 'online' ? '線上對戰' : m?.kind === 'ai' ? 'vs AI' : '本機雙人';
+    const d = new Date(m?.savedAt ?? 0);
+    const when = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    return `${when}・${kind}${m?.winnerName ? '・🏆 ' + m.winnerName : ''}${m?.finalTurn ? '・' + m.finalTurn + ' 回合' : ''}${m?.revealed === false ? '・只含自己看得到的資訊' : ''}`;
+  }
+  // <<< v6560-casual-replay
+
   async function tCopyReplayLink(matchId: string) {
     try {
       const link = window.location.origin + base + '/game?treplay=' + encodeURIComponent(matchId);
@@ -10953,7 +11073,38 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <div class="mode-title">線上連線對戰</div>
         <div class="mode-desc">各自裝置，即時對戰</div>
       </button>
+      <!-- ⭐v6.560 一般對戰復盤（見 v6560-casual-replay） -->
+      <button class="mode-card" onclick={openReplayLobby} disabled={!poolReady}>
+        <div class="mode-icon">🎞️</div>
+        <div class="mode-title">復盤</div>
+        <div class="mode-desc">逐步回看打完的對局</div>
+      </button>
     </div>
+    {#if replayLobbyOpen}
+      <section class="replay-lobby">
+        <h3>🎞️ 復盤 <button class="small" onclick={() => { replayLobbyOpen = false; }}>收起</button></h3>
+        <p class="muted small">本機雙人、vs AI、線上連線對戰結束時會自動存到這台裝置（最近 {MAX_SAVED_REPLAYS} 場）；也可以匯入別人分享的復盤檔（.ptcgreplay）。</p>
+        <label class="btn-secondary replay-import">📂 匯入復盤檔<input type="file" accept=".ptcgreplay,.json,application/json,application/octet-stream" onchange={onReplayFileChosen} hidden /></label>
+        {#if replayLobbyMsg}<p class="replay-msg">{replayLobbyMsg}</p>{/if}
+        {#if replayList.length === 0}
+          <p class="muted">這台裝置還沒有存下的復盤。打完一場本機或線上對戰後就會出現在這裡。</p>
+        {:else}
+          <ul class="replay-list">
+            {#each replayList as r (r.id)}
+              <li>
+                <div class="replay-names"><b>{r.meta?.p1name ?? '?'}</b> vs <b>{r.meta?.p2name ?? '?'}</b></div>
+                <div class="muted small">{replayInfoLine(r.meta)}</div>
+                <div class="replay-actions">
+                  <button class="btn-primary small" onclick={() => playSavedReplay(r.id)}>▶ 觀看</button>
+                  <button class="small" onclick={() => downloadSavedReplay(r.id)}>💾 下載</button>
+                  <button class="small" onclick={() => removeSavedReplay(r.id)}>🗑 刪除</button>
+                </div>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </section>
+    {/if}
   </main>
 
   {:else if mode === 'local'}
@@ -11600,6 +11751,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {isSpectator}
       {isTournSpectator}
       {isTReplay}
+      {replayShowsHidden}
       pendingPrizes={myPendingPrizes}
       version={VERSION}
       roomCode={roomCode}
@@ -11633,11 +11785,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <div class="treplay-mob" role="toolbar" aria-label="回放導覽">
         <button class="treplay-mob-btn treplay-mob-exit" onclick={tExitReplay} aria-label="離開回放">✕</button>
         <button class="treplay-mob-btn" onclick={() => tReplayGoto(0)} disabled={tReplayStep <= 0} aria-label="第一步">⏮</button>
+        <button class="treplay-mob-btn" onclick={() => tReplayGoto(prevTurnStepIndex(_msteps, tReplayStep))} disabled={tReplayStep <= 0} aria-label="上一回合">⏪</button>
         <button class="treplay-mob-btn treplay-mob-main" onclick={() => tReplayGoto(tReplayStep - 1)} disabled={tReplayStep <= 0}>◀ 上一步</button>
         <span class="treplay-mob-step">{_mcur?.isFinal ? '🏁' : (_mact === _mfirst ? '先' : '後') + '·T' + (_mcur?.turn ?? '?')}<br/>{tReplayStep + 1}/{_msteps.length}</span>
         <button class="treplay-mob-btn treplay-mob-main" onclick={() => tReplayGoto(tReplayStep + 1)} disabled={tReplayStep >= _msteps.length - 1}>下一步 ▶</button>
+        <button class="treplay-mob-btn" onclick={() => tReplayGoto(nextTurnStepIndex(_msteps, tReplayStep))} disabled={tReplayStep >= _msteps.length - 1} aria-label="下一回合">⏩</button>
         <button class="treplay-mob-btn" onclick={() => tReplayGoto(_msteps.length - 1)} disabled={tReplayStep >= _msteps.length - 1} aria-label="最後一步">⏭</button>
-        <button class="treplay-mob-btn" onclick={() => tCopyReplayLink(tReplay.meta?.matchId)} aria-label="複製分享連結">🔗</button>
+        {#if replayKind === 'tournament'}<button class="treplay-mob-btn" onclick={() => tCopyReplayLink(tReplay.meta?.matchId)} aria-label="複製分享連結">🔗</button>{/if}
       </div>
     {/if}
   {:else}
@@ -11697,6 +11851,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <!-- v2.276 Phase 3：觀戰模式 — 視角切換 -->
       {#if isSpectator}
         <span class="chip spec-chip">👀 觀戰中（看 P{myIdx + 1}）</span>
+        <!-- ⭐v6.560 遮蔽的復盤（線上對戰、只含記錄者看得到的資訊）固定記錄者視角，不給切 -->
+        {#if replayRevealAll}
         <span class="spec-toolbar">
           <button class="spec-btn {spectatorView === 'p1' ? 'active' : ''}"
             onclick={() => spectatorView = 'p1'}>看 P1</button>
@@ -11705,6 +11861,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <button class="spec-btn {spectatorView === 'auto' ? 'active' : ''}"
             onclick={() => spectatorView = 'auto'}>自動切換</button>
         </span>
+        {/if}
       {/if}
       {#if aiPlayerIndex !== null && aiThinking}<span class="chip ai-chip">🤖 AI 思考中…</span>{/if}
       {#if stadiumCard && game.activeStadium}
@@ -11771,16 +11928,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {@const _isOldFmt = _finalOnly || (tReplay.snapshots || []).every((s: any) => s.logLen == null)}
   <div class="treplay-bar">
     <button class="treplay-btn" onclick={tExitReplay} title="離開回放">✕ 離開</button>
-    <span class="treplay-title">🎬 回放：<b>{tReplay.meta?.p1name ?? '?'}</b> vs <b>{tReplay.meta?.p2name ?? '?'}</b>{#if tReplay.meta?.winnerName} ｜ 🏆 {tReplay.meta.winnerName}{/if}</span>
+    <span class="treplay-title">{replayKind === 'casual' ? '🎞️ 復盤：' : '🎬 回放：'}<b>{tReplay.meta?.p1name ?? '?'}</b> vs <b>{tReplay.meta?.p2name ?? '?'}</b>{#if tReplay.meta?.winnerName} ｜ 🏆 {tReplay.meta.winnerName}{/if}</span>
     {#if _isOldFmt}<span class="treplay-oldfmt" title="這場對戰是在回放系統上線前打的,只存了{_finalOnly ? '終局盤面' : '整回合粒度'}資料,無法逐半回合切換視角。上線後打的新對戰才有完整逐半回合回放。">⚠ {_finalOnly ? '舊對戰（僅終局盤面）' : '舊版快照（整回合粒度）'}</span>{/if}
     <div class="treplay-nav">
       <button class="treplay-btn" onclick={() => tReplayGoto(0)} disabled={tReplayStep <= 0}>⏮</button>
+      <button class="treplay-btn" onclick={() => tReplayGoto(prevTurnStepIndex(_steps, tReplayStep))} disabled={tReplayStep <= 0} title="跳到這個回合的開頭；已在開頭就跳到上一個回合">⏪ 上一回合</button>
       <button class="treplay-btn" onclick={() => tReplayGoto(tReplayStep - 1)} disabled={tReplayStep <= 0}>◀ 上一步</button>
       <span class="treplay-step">{_cur?.isFinal ? '🏁 最終盤面' : ((_cur?.state?.players?.[_actIdx]?.name ?? '?') + '（' + (_actIdx === (_cur?.state?.firstPlayerIdx ?? 0) ? '先攻' : '後攻') + '）的回合')}（{tReplayStep + 1}/{_steps.length}）</span>
       <button class="treplay-btn" onclick={() => tReplayGoto(tReplayStep + 1)} disabled={tReplayStep >= _steps.length - 1}>下一步 ▶</button>
+      <button class="treplay-btn" onclick={() => tReplayGoto(nextTurnStepIndex(_steps, tReplayStep))} disabled={tReplayStep >= _steps.length - 1} title="跳到下一個回合的開頭">下一回合 ⏩</button>
       <button class="treplay-btn" onclick={() => tReplayGoto(_steps.length - 1)} disabled={tReplayStep >= _steps.length - 1}>⏭</button>
     </div>
-    <button class="treplay-btn" onclick={() => tCopyReplayLink(tReplay.meta?.matchId)} title="複製分享連結">🔗 複製連結</button>
+    {#if replayKind === 'tournament'}<button class="treplay-btn" onclick={() => tCopyReplayLink(tReplay.meta?.matchId)} title="複製分享連結">🔗 複製連結</button>{/if}
   </div>
 {/if}
 
@@ -11965,14 +12124,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <div class="zone-prizes">
         {#key prizeAnimKey[oppIdx]}
           <div class="prize-grid">
-            {#each Array(6) as _, i (i)}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={cardThumb(_pc.imageUrl)} alt={_pc.name}
+            {#each Array(6) as _, i (i)}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || replayShowsHidden) ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || replayShowsHidden)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={cardThumb(_pc.imageUrl)} alt={_pc.name}
               class:legend-half-l={twoCardStadiumHalfIndex(oppPlayer?.prizes, _pz?.iid ?? '', pool) === 0}
               class:legend-half-r={twoCardStadiumHalfIndex(oppPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           </div>
         {/key}
         <!-- ⭐v6.418：對戰中也可點開（只看得到翻正面的那幾張，見 v6418-prize-view-in-battle） -->
         <button class="zone-label-sm prize-view-btn" onclick={openPrizeView}
-          title={isTReplay ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 獎賞 {oppPlayer?.prizes.length??0}張 🔍</button>
+          title={replayShowsHidden ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 獎賞 {oppPlayer?.prizes.length??0}張 🔍</button>
       </div>
     </div>
 
@@ -12223,10 +12382,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <div class="zone-prizes">
         <!-- ⭐v6.418：對戰中也可點開（只看得到翻正面的那幾張，見 v6418-prize-view-in-battle） -->
         <button class="zone-label-sm prize-view-btn" onclick={openPrizeView}
-          title={isTReplay ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 獎賞 {myPlayer?.prizes.length??0}張 🔍</button>
+          title={replayShowsHidden ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 獎賞 {myPlayer?.prizes.length??0}張 🔍</button>
         <div class="prize-grid">
           {#key prizeAnimKey[myIdx]}
-            {#each Array(6) as _, i (i)}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={cardThumb(_pc.imageUrl)} alt={_pc.name}
+            {#each Array(6) as _, i (i)}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || replayShowsHidden) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || replayShowsHidden)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={cardThumb(_pc.imageUrl)} alt={_pc.name}
               class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.prizes, _pz?.iid ?? '', pool) === 0}
               class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           {/key}
@@ -14846,7 +15005,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
        錦標賽另有既有的「無勝方」返回列（tourn-return-bar，v6.146 起就在；v6.365 起依站長裁定 六-2
        把平手說成「雙敗」，不再叫玩家等管理員），
        所以這裡 gate 掉 isTournament，不重複渲染、也不改動錦標賽的任何既有行為。 -->
-  {#if game.phase === 'game-over' && (game.winner === null || game.winner === undefined) && !isTournament}
+  {#if game.phase === 'game-over' && (game.winner === null || game.winner === undefined) && !isTournament && !isTReplay}
     <div class="gameover-modal" use:modalDrag>
       <div class="gameover-modal-header modal-drag-handle"
         title="拖曳此處移動平手視窗 — 可看到背後戰鬥盤最終狀態">
@@ -14864,7 +15023,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <button class="btn-secondary" onclick={()=>exportLogAs('json')} title="匯出結構化 log 供外部工具分析">
             🧾 匯出 log（.json）
           </button>
+          {#if lastSavedReplay && !isTReplay}<button class="btn-secondary" onclick={downloadLastReplay} title="下載這場的復盤檔（可在「開始對戰 → 🎞️ 復盤」匯入）">🎞️ 下載復盤檔</button>{/if}
         </div>
+        {#if lastSavedReplay && !isTReplay}<p class="muted small replay-saved-note">🎞️ 這場已自動存到這台裝置的復盤紀錄（最近 {MAX_SAVED_REPLAYS} 場），可到「開始對戰 → 🎞️ 復盤」逐步回看。</p>{/if}
         {#if mode === 'online' || roomCode}
           <div class="lobby-btns">
             <button class="btn-secondary" onclick={() => { game = null; leaveOnlineGame(); }}>離開房間</button>
@@ -14881,7 +15042,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {/if}
   <!-- <<< v6361-draw-modal -->
   <!-- v4.21 對局結束可拖曳勝負視窗 — overlay 在戰鬥盤面上方 -->
-  {#if game.phase === 'game-over' && game.winner !== null && game.winner !== undefined}
+  {#if game.phase === 'game-over' && game.winner !== null && game.winner !== undefined && !isTReplay}<!-- ⭐v6.560 回放的終局格不跳勝負視窗（審查 P1：按「離開房間」會留下回放狀態） -->
     {@const isWin = (
       mode === 'online' ? (myPlayerIndex === game.winner) :
       aiPlayerIndex !== null ? (game.winner === (1 - aiPlayerIndex)) :
@@ -14910,7 +15071,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <button class="btn-secondary" onclick={()=>exportLogAs('json')} title="匯出結構化 log 供外部工具分析">
             🧾 匯出 log（.json）
           </button>
+          {#if lastSavedReplay && !isTReplay}<button class="btn-secondary" onclick={downloadLastReplay} title="下載這場的復盤檔（可在「開始對戰 → 🎞️ 復盤」匯入）">🎞️ 下載復盤檔</button>{/if}
         </div>
+        {#if lastSavedReplay && !isTReplay}<p class="muted small replay-saved-note">🎞️ 這場已自動存到這台裝置的復盤紀錄（最近 {MAX_SAVED_REPLAYS} 場），可到「開始對戰 → 🎞️ 復盤」逐步回看。</p>{/if}
         {#if isTournament}
           <div class="lobby-btns">
             <button class="btn-primary" onclick={tLeaveMatch}>🏆 返回賽事大廳</button>
@@ -15474,7 +15637,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .warn-x:hover{ opacity:1; }
 
   /* 模式選擇卡片 */
-  .mode-cards{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.5rem 0; }
+  .mode-cards{ display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:1rem; margin:1.5rem 0; }   /* ⭐v6.560 第三張「復盤」卡 */
+  /* ⭐v6.560 復盤清單 */
+  .replay-lobby{ margin:0 0 1.5rem; padding:1rem; border:1px solid #2a4a2a; border-radius:10px; background:rgba(10,22,10,.6); }
+  .replay-lobby h3{ margin:0 0 .4rem; display:flex; align-items:center; gap:.6rem; }
+  .replay-import{ display:inline-block; cursor:pointer; margin:.3rem 0 .6rem; }
+  .replay-msg{ color:#ff9b9b; margin:.3rem 0; }
+  .replay-list{ list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:.5rem; }
+  .replay-list li{ padding:.55rem .7rem; border:1px solid #2a3a2a; border-radius:8px; background:rgba(0,0,0,.25); }
+  .replay-actions{ display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.35rem; }
+  .replay-saved-note{ margin:.4rem 0 0; }
   .mode-cards.compact{ max-width:500px; }
   .mode-card{
     background:#2a3a2a; border:1px solid #3a5a3a; border-radius:12px;
@@ -19989,6 +20161,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .back-btn { color: #004477; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby .muted { color: #555555; }
     :global(html[data-theme='light']:not([data-battle-view])) .warn { color: #805407; }
+    :global(html[data-theme='light']:not([data-battle-view])) .replay-lobby { border: 1px solid #add2ad; background: rgba(249,251,249,0.60); }
+    :global(html[data-theme='light']:not([data-battle-view])) .replay-msg { color: #640000; }
+    :global(html[data-theme='light']:not([data-battle-view])) .replay-list li { border: 1px solid #b5cab5; }
     :global(html[data-theme='light']:not([data-battle-view])) .mode-card { background: #eff1ef; border: 1px solid #a4c6a4; color: #0f0f0f; }
     :global(html[data-theme='light']:not([data-battle-view])) .mode-card:hover:not(:disabled) { background: #eaecea; border-color: #74a674; }
     :global(html[data-theme='light']:not([data-battle-view])) .mode-card.online { border-color: #7384b7; }

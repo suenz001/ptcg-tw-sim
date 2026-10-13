@@ -83,6 +83,8 @@
     isTournSpectator?: boolean;
     // v5.954 回放：攤開主視角(行動方)手牌明牌
     isTReplay?: boolean;
+    /** ⭐v6.560 回放是否攤開蓋著的資訊（遮蔽的一般復盤＝false） */
+    replayShowsHidden?: boolean;
     // v6.147 錦標賽動作送出往返期間：會送出動作的按鈕一律 disable（父層唯一述詞 actionBusy）
     // ⭐v6.172 `actionBusy` 現在只在「佇列已滿、這一下真的不能做」時為真（原本是「有動作在途」，
     //   最長會鎖 33 秒）。「有動作在網路上」改由 actionSending 表示，它**純視覺、不 disable 任何東西**；
@@ -124,6 +126,7 @@
     isSpectator = false,  // v5.116
     isTournSpectator = false,  // v5.895
     isTReplay = false,  // v5.954
+    replayShowsHidden = false,  // v6.560
     actionBusy = false,  // v6.147
     actionSending = false,  // v6.172
     actionQueued = 0,       // v6.172
@@ -830,7 +833,7 @@
     {#if onOpenPrizes}
       <!-- ⭐v6.418：對戰中也可點（視窗只顯示已翻到正面的那幾張，見 +page.svelte 的 v6418-prize-view-in-battle） -->
       <button class="mp-chip mp-clickable" onclick={onOpenPrizes}
-        title={isTReplay ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 {oppPlayer.prizes.length} 🔍</button>
+        title={replayShowsHidden ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 {oppPlayer.prizes.length} 🔍</button>
     {:else}
       <span class="mp-chip">🎁 {oppPlayer.prizes.length}</span>
     {/if}
@@ -962,7 +965,7 @@
     {#if onOpenPrizes}
       <!-- ⭐v6.418：對戰中也可點（視窗只顯示已翻到正面的那幾張，見 +page.svelte 的 v6418-prize-view-in-battle） -->
       <button class="mp-chip mp-clickable" onclick={onOpenPrizes}
-        title={isTReplay ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 {myPlayer.prizes.length} 🔍</button>
+        title={replayShowsHidden ? '查看雙方獎賞卡（回放：全部攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 {myPlayer.prizes.length} 🔍</button>
     {:else}
       <span class="mp-chip">🎁 {myPlayer.prizes.length}</span>
     {/if}

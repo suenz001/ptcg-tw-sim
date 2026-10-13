@@ -348,9 +348,10 @@ console.log('\n【F】下游消費端：平手不可丟例外、不可算出負�
     && PAGE.includes('錦標賽平手以「雙敗」計（雙方各記一敗），不需管理員裁定')
     && !PAGE.includes('本場平手，等待管理員裁定'),
     '找不到錦標賽平手返回列（或仍停留在「等待管理員裁定」）');
+  // ⭐v6.560（Rule 40）：平手視窗多一個 && !isTReplay（回放跳到終局格不跳結算視窗；意圖＝非錦標賽有平手視窗，不變）
   chk('F10 ⭐非錦標賽的平手結算視窗（本版新增；沒有它單機／休閒平手會看起來卡住）',
     PAGE.includes('>>> v6361-draw-modal') && PAGE.includes('<<< v6361-draw-modal')
-    && PAGE.includes("{#if game.phase === 'game-over' && (game.winner === null || game.winner === undefined) && !isTournament}")
+    && /\{#if game\.phase === 'game-over' && \(game\.winner === null \|\| game\.winner === undefined\) && !isTournament(?: && !isTReplay)?\}/.test(PAGE)
     && PAGE.includes('本局平手！'),
     '找不到 v6361 平手視窗');
 }

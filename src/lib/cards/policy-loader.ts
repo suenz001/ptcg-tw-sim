@@ -19,6 +19,7 @@
  *   （後台那支 server_admin_patch.js，用 firebase-admin）。兩端讀同一個文件 ⇒
  *   不會出現「前端說不合法、伺服器說合法」的分裂。
  */
+import { setReplayRevealOppPref } from '$lib/game/replay-policy';   // ⭐v6.560 復盤遮蔽開關（同一份 config/cardPolicy）
 import { setCardPolicy, DEFAULT_CARD_POLICY, type CardPolicy } from './regulation';
 import { setThumbSourcePref } from './thumb';   // ⭐v6.472 卡圖來源開關跟著同一份文件讀（不多一次讀取）
 
@@ -92,10 +93,13 @@ export function loadCardPolicyOnce(): Promise<void> {
         import('firebase/firestore'),
       ]);
       const snap = await getDoc(doc(db, 'config', 'cardPolicy'));
+      if (!snap.exists()) setReplayRevealOppPref(undefined);   // ⭐v6.560 文件不存在 ⇒ 復盤遮蔽開關回預設（關）
       if (!snap.exists()) { setThumbSourcePref(undefined); writeCache(null); return; }   // ⭐ 負快取：沒有設定也記下來（這是「查到了，就是沒有」）
       const data = snap.data() as (Partial<CardPolicy> & { thumbSource?: unknown }) | undefined;
       // ⭐v6.472 卡圖來源（與合法性無關；不經 setCardPolicy 驗證，讀到什麼記什麼，非 'official' 一律＝縮圖）
       setThumbSourcePref(data?.thumbSource);
+      // ⭐v6.560 線上對戰復盤要不要攤開對手的手牌與獎賞卡（admin 監控開關；預設關）
+      setReplayRevealOppPref((data as { replayRevealOpp?: unknown } | undefined)?.replayRevealOpp);
       const policy: CardPolicy = {
         allowedMarks: Array.isArray(data?.allowedMarks) ? data!.allowedMarks : DEFAULT_CARD_POLICY.allowedMarks,
         lockedSets: Array.isArray(data?.lockedSets) ? data!.lockedSets : DEFAULT_CARD_POLICY.lockedSets,

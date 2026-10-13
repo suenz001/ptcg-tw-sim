@@ -273,7 +273,10 @@ const LATER = [
 //   ⇒ 在 strip() 的**最前面**先把本版改動整段還原成 v6.463（IRON_RULES Rule 40：保留「藍桌墊只活在哨兵裡」的原意）。
 //   difflib 產生、當場驗證逐位元還原 v6.463；內容正確性由 test-v6464-card-thumbs 鎖。之後的版本若同樣跨哨兵，照這個模式往這裡加。
 import { V6464_GAME_PAIRS } from './lib/revert-v6464-thumbs.mjs';
-const PRE = V6464_GAME_PAIRS;
+// ⭐v6.560（Rule 40）：一般對戰復盤動到獎賞卡翻面條件、播放列、結算視窗（全版面、非藍桌墊），且同樣碰到 V6464 條目的上下文
+//   ⇒ 放在最前面先整段還原成 v6.559（同一個模式；內容由 test-v6560-casual-replay 鎖）。
+import { V6560_GAME_PAIRS } from './lib/revert-v6560-game.mjs';
+const PRE = [...V6560_GAME_PAIRS, ...V6464_GAME_PAIRS];
 function strip(src) {
   let s = src;
   const bad = [];
