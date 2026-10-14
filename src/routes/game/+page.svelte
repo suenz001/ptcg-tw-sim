@@ -8140,7 +8140,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     notifyEnabled = want && getNotifyPermission() === 'granted';
     saveNotifyEnabled(notifyEnabled);
     notifyPerm = getNotifyPermission();
-    if (notifyEnabled) void (async () => { const r = await subscribePush(tApi); if (r.ok) _pushSubDone = true; await refreshNotifyDiag(); })();
+    if (notifyEnabled) void (async () => { const r = await subscribePush(tApi); if (r.ok) { _pushSubDone = true; notifyCommunity = getNotifyCommunity(); }   /* ⭐v6.566 登記後勾選框跟伺服器同步 */ await refreshNotifyDiag(); })();
     else { _pushSubDone = false; void unsubscribePush(tApi); void refreshNotifyDiag(); }
   }
 
@@ -8218,7 +8218,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const u = firebaseUser;
     if (!isTournament || _pushSubDone || !u || u.isAnonymous) return;
     if (!getNotifyEnabled() || getNotifyPermission() !== 'granted') return;
-    void (async () => { const r = await subscribePush(tApi); if (r.ok) _pushSubDone = true; })();
+    void (async () => { const r = await subscribePush(tApi); if (r.ok) { _pushSubDone = true; notifyCommunity = getNotifyCommunity(); }   /* ⭐v6.566 登記後勾選框跟伺服器同步 */ })();
   });
   async function notifyPromptAccept() {
     showNotifyPrompt = false;
@@ -8226,7 +8226,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     notifyEnabled = getNotifyEnabled();
     // v6.023：同時訂閱 Web Push（分頁關閉/iOS 凍結時仍收得到報到與進場通知）
     // v6.026：立即試一次；若此刻登入尚未就緒而失敗，上面依賴 firebaseUser 的 $effect 會補做。
-    if (notifyEnabled) void (async () => { const r = await subscribePush(tApi); if (r.ok) _pushSubDone = true; })();
+    if (notifyEnabled) void (async () => { const r = await subscribePush(tApi); if (r.ok) { _pushSubDone = true; notifyCommunity = getNotifyCommunity(); }   /* ⭐v6.566 登記後勾選框跟伺服器同步 */ })();
   }
   function notifyPromptDecline() { showNotifyPrompt = false; markPrompted(true); }
 

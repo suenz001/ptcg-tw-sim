@@ -92,8 +92,8 @@ await T('A0 HEAD-FAIL 錨點：FRIENDS 區塊與 FRIENDS-DM 區塊都抽得到�
   SRC = FR + '\n' + DM;
 });
 if (!DM) { console.log('\n══ v6.287 守衛：' + pass + ' PASS / ' + fail + ' FAIL（HEAD-FAIL：DM 區塊抽不到，後續無法進行）══'); process.exit(1); }
-const TOURN_TAIL_SHA256 = '8af4edb9453d17e6d515f6a6fd85f53cd52dfa2c57c0e7b7e78c8d2765696fdf';   // 與 test-v6272 ⑨ 同一把
-const TOURN_ANCHOR_SHA256 = '43767585cccbd5fc4c9999b1d43334360633110af4871c4532f37ab1824c7894'; // 與 test-v6278 I1 同一把
+const TOURN_TAIL_SHA256 = '04961a4419fe9af762f4394550d81753880ae4174edd8ac8bc941392fbb2dc6e';   // 與 test-v6272 ⑨ 同一把
+const TOURN_ANCHOR_SHA256 = '41606d319b9b89738f4c75c4af5487e804c89fc258b3343a49efc9ab58106b62'; // 與 test-v6278 I1 同一把
 await T('A1 ⚠⚠ 錦標賽區塊逐位元未動（兩把既有 sha256）；DM 區塊整段在 FRIENDS 之後、第一支 /api/tournament 之前', () => {
   const first = PATCH.indexOf("app.get('/api/tournament");
   assert.ok(first > 0, '找不到第一支 /api/tournament 端點');

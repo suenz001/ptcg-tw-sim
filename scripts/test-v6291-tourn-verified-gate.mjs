@@ -47,9 +47,10 @@ import {
 //   本檔的 revert-diff 從此再串一節：先還原 v6.365 的三段，再往後退。
 //   ⚠ 站長明文禁止把鎖拿掉／改成不驗／只比片段 ⇒ 一律串接，不放水。
 import {
-  NEW_TAIL_SHA_V165 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V165 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V165 as NEW_TEV_LEN_CUR, revertV165,
+  NEW_TAIL_SHA_V167 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V167 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V167 as NEW_TEV_LEN_CUR, revertV165 as _rv165, revertV167,
   revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365, stripDeclaredBlocksNewerThan,
-} from './lib/tourn-revert-v165.mjs';
+} from './lib/tourn-revert-v167.mjs';
+const revertV165 = (b) => _rv165(revertV167(b));   // ⭐v1.67（Rule 54）：鏈再長一節（對局時限判法切換、推播偏好帳號層級；既有呼叫點一個字都不必改）
 const revertV154 = (b) => _rv154(revertV165(b));   // ⭐v1.65（Rule 54）：鏈再長一節（Top Cut 人多取 16 強；既有呼叫點一個字都不必改）
 const revertV6384 = (b) => _rv6384(revertV150(revertV152(revertV153(revertV154(b)))));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）；⭐v1.53 再長一節（報名牌組完整規則）；⭐v1.54 再長一節（全站 audit 降載）
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）

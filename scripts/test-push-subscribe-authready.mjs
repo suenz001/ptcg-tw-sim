@@ -160,7 +160,8 @@ T('對戰頁：補訂閱不得再掛在一次性 _notifyPromptChecked 分支（H
 T('對戰頁：訂閱改由依賴 firebaseUser 的 $effect 觸發，且只有成功才設 guard', () => {
   assert.ok(/const u = firebaseUser;[\s\S]{0,400}subscribePush\(tApi\)/.test(page),
     '應有依賴 firebaseUser 的訂閱 $effect');
-  assert.ok(/if \(r\.ok\) _pushSubDone = true/.test(page), '失敗不可設 guard，否則沒有第二次機會');
+  // ⭐v6.566（Rule 40，意圖不變＝只有成功才設 guard）：成功分支改成區塊 { _pushSubDone = true; notifyCommunity = …; }（登記後同步勾選框）
+  assert.ok(/if \(r\.ok\) (?:\{ )?_pushSubDone = true/.test(page), '失敗不可設 guard，否則沒有第二次機會');
 });
 T('對戰頁：診斷面板要分開顯示「本機訂閱」與「伺服器登記」+ 提供伺服器推播自測', () => {
   assert.ok(page.includes('伺服器登記'), '診斷需顯示伺服器登記狀態');

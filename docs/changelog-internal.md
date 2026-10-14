@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.566／server v1.67／admin v1.86：對局時限判法切換（預設雙方皆判敗）＋社群賽通知關掉仍偶爾收到（2026-10-14 站長）
+
+BASE `695356b2`（v6.565）。站長 09:13：「請幫我在admin再增加一個切換的功能 目前錦標賽如果雙方對局超過25分鐘，會以剩下獎賞卡少的那方獲勝，我希望增加切換的功能，可以讓我調整 錦標賽要使用 超過25分鐘時，獎賞卡少的那方獲勝 or 雙方皆判敗，然後再幫我預設，錦標賽是 超過25分鐘，後攻玩家結束回合後，如果未分出勝負，雙方皆判敗」；「我在手機版 只有在錦標賽個人頁面勾選 報到開始、輪到你可以進場、對戰中輪到你行動時提醒我 未勾選有玩家發起社群賽時也通知我…但偶爾還是會收到玩家發起社群賽的通知耶」。
+- 判法切換：server v1.67 哨兵 v167-time-limit-verdict（錦標賽區塊之前）：tournamentConfig/timeLimitVerdict（'double-loss' 預設／'prizes'），10 秒快取，GET/POST /api/tourn-time-limit-verdict（admin 限定、非法值 400）。錦標賽區塊對局時限掃描：宣布最後回合時把當下判法寫進 TMATCH.timeLimitVerdict（之後切換不影響已宣布的場次）並在公告寫明；最後回合（gs.turn > timeLimitTurn，機制不變）打完後 double-loss ⇒ 不比獎賞卡、雙方皆判敗（draw:true，沿用既有雙敗路徑：bracket 兩人不晉級、瑞士各記一敗＋swissContinueNote）；prizes ⇒ 舊行為（相同仍雙敗、措辭逐字不變）。舊場次沒記 ⇒ 讀目前設定。admin v1.86 賽事分頁加「⏰ 對局時限到的判法」單選（tevTlvPanelHtml／tevTlvSet；舊伺服器不顯示）。
+- 社群賽通知根因：偏好只寫在每一筆訂閱（裝置）上，而 client 每次登記推播後都把「自己那台」localStorage 的值送 /push/prefs（沒動過＝預設開），伺服器又 updateMany 整個帳號 ⇒ 電腦或其他瀏覽器（從沒動過勾選）一打開錦標賽頁登記推播，就把手機的「關」改回「開」，直到手機下次打開錦標賽頁才改回 ⇒「偶爾」收到。修法：server 新集合 tournamentPushPrefs（_id＝uid，只有玩家親手切換才寫）；/push/subscribe 新訂閱繼承帳號層級偏好；新 GET /api/tournament/push/prefs（known＋值）。client notify.ts syncNotifyCommunity：有「親手切換未送到」（dirty）才送本機值；否則讀伺服器並採用；伺服器沒紀錄（舊資料）時只有本機明確設過才送一次；沒設過不送預設值。subscribePush 改走它，對戰頁登記後勾選框同步。⚠ 部署後第一次：手機（本機明確設過「關」）打開錦標賽頁會把「關」寫成帳號層級。
+- Opus 5.5 審查（需修正）後補修：P1-1 讀伺服器失敗時原本會退回送本機值（重演覆蓋）⇒ 讀失敗／回錯誤物件一律不送；伺服器沒紀錄時只補送「關」（P2-3：避免先同步的那台把「開」搶先寫成帳號層級）。P1-2 同一推播端點掛在多個帳號（換帳號登入、登出不退訂）⇒ /push/subscribe 刪掉其他帳號掛在同端點的訂閱；broadcastPush 依端點去重、任何一筆把該端點標成關就不推。P1-3 v6.565 以前的 client 每次登記都無條件送「開」⇒ 新版 client 一律帶 src（user／sync），不帶 src 的「開」一律忽略（「關」照收）。P2-1 v1.67 前就宣布最後回合的舊場次照當時公告用 prizes（不讀目前設定）。P2-2 最後回合打完到下一次掃描（最多 30 秒）之間先攻方還能出招拿下勝利 ⇒ 宣布時在房間頂層記 timeLimitTurn（哨兵 v6566-room-time-limit-turn，條件式寫入），/action 用已讀到的房間 doc 擋 turn 超過的動作（零額外讀取）。P3 admin 戰績標籤：時限雙敗標「時限雙敗」、統計列改「時限判負／雙敗」。Opus 複審 P1：管理員重賽沿用同一個房間，房間上的 timeLimitTurn 會殘留讓新對局被 /action 擋住（還可能被閒置判負）⇒ 重賽時把房間 timeLimitTurn 設 null（/action 只認數字；不用 $unset 是因為 test-v6244 ⑫ 只准 TMATCH 用 $unset）、TMATCH 一併清 timeLimitVerdict（守衛 T7）；/push/subscribe 依端點刪除改走新索引 sub.endpoint（createIndex＋catch）。站長確認負擔：每次進錦標賽頁仍是兩發請求（登記＋讀偏好，原本是登記＋批次改寫），寫入變少。
+- 已知、不在本版處理：決賽／四強時限雙敗 ⇒ 沿用既有路徑（決賽雙敗＝無冠軍、不寫名人堂；四強一場雙敗＝另一場勝者直接奪冠）；登出不退訂推播（換帳號登入時由伺服器清掉舊帳號那一筆）。
+- 28 把鎖重釘：scripts/lib/sap-revert-admin-v167.mjs（12 對，difflib 逐位元還原 v1.66）、tourn-revert-v167.mjs（新 tail 04961a44…／tev 41606d31…／len 245294）；七支消費者（sap152／153／154、v6276、v6291、v6292、v6381）與 admin-v177 改接 v167；SAP 整份還原鏈（v6303、sap153、sap154、v6561）包一層 revertAdminV167；17 支守衛字面值重釘；test-v6379 D3 OLD_VALUES 補 v1.54／v1.65、LIB_DECL 加 v165（11）。
+- Rule 40：test-v6381 B3 時限雙敗公告多了 _dl 變數 ⇒ 兩種都驗（_dl=false 單淘汰逐字不變）。
+- 守衛 test-v6566-time-limit-verdict-push-prefs：S1～S2（設定區塊實跑）、T1～T5（時限掃描整段抽出實跑）、U1～U2（推播三支端點實跑，站長真實流程）、C1～C2（notify.ts 打包實跑）、A1～A3（admin 面板）、T6（/action 擋最後回合後的動作）、U3（同端點換帳號、舊 client 的「開」、廣播去重）；HEAD-FAIL 在 v6.565 逐條紅（T3／T4／T5 是零回歸對照）；突變兩輪共 25 個全殺。
+- 部署：update-tournament.bat（server v1.67＋admin v1.86）→ redeploy-oracle.bat。
+
 ## v6.565：休閒線上計時改用伺服器時鐘＋終局算進最後一回合（2026-10-14 站長）
 
 BASE `ea8cb15c`（v6.564）。站長 00:45：「這兩個好修嗎？好修的話一起修掉，記得要審查 不好修的話，不修也沒關係，畢竟只是小問題」（v6.564 Opus 審查留下的 P2／P3）。

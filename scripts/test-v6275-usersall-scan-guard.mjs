@@ -547,7 +547,7 @@ await T('D3 fetchAllUsers 接線行為端：回應的 cachedAt/capped 真的寫�
 // ═════════════════════════════════════════════════════════════════════════════
 console.log('【E】錦標賽區塊 sha256 ＋【F】BASE 對照');
 
-const TOURN_TAIL_SHA256 = '8af4edb9453d17e6d515f6a6fd85f53cd52dfa2c57c0e7b7e78c8d2765696fdf' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;   // v6.271 起同值
+const TOURN_TAIL_SHA256 = '04961a4419fe9af762f4394550d81753880ae4174edd8ac8bc941392fbb2dc6e' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;   // v6.271 起同值
 function tournTail(src) {
   const i = src.indexOf("app.get('/api/tournament");
   if (i < 0) throw new assert.AssertionError({ message: '找不到第一支 /api/tournament 端點' });

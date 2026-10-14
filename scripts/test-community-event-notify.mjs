@@ -119,7 +119,8 @@ T('前端預設值與伺服器一致（都是「開」）', () => {
 T('訂閱成功後會補送一次偏好（涵蓋上次送失敗／換裝置）', () => {
   const i = notify.indexOf("savePushServerState({ ok: true, stage: 'ok', host });");
   const after = notify.slice(i, i + 500);
-  assert.ok(after.includes("'/push/prefs'"), 'subscribePush 成功後應補送偏好');
+  // ⭐v6.566（Rule 40，意圖不變＝訂閱成功後同步一次偏好）：改走 syncNotifyCommunity（以伺服器為準；親手切過還沒送到才補送本機值）
+  assert.ok(after.includes("'/push/prefs'") || /await syncNotifyCommunity\(api\);/.test(after), 'subscribePush 成功後應補送偏好');
 });
 
 T('UI：勾選框存在，且從屬於通知總開關（總開關關掉時不可用）', () => {

@@ -1,0 +1,9 @@
+// v6.566 社群賽通知偏好以伺服器為準：對戰頁（+page.svelte）的「逐位元還原表」（單一來源；IRON_RULES Rule 38）
+//   v6.566 登記推播成功後同步勾選框（notifyCommunity = getNotifyCommunity()）。
+//   test-v6441／test-v6293 先用這張表還原成 v6.565（695356b2），再接 V6565 之前的表；其餘仍必須逐位元相同（Rule 40，不放寬）。
+//   表由 difflib 產生、當場驗證可逐位元還原 v6.565；行為由 test-v6566 守。
+export const V6566_GAME_PAIRS = [
+  ["    // v6.026：立即試一次；若此刻登入尚未就緒而失敗，上面依賴 firebaseUser 的 $effect 會補做。\n    if (notifyEnabled) void (async () => { const r = await subscribePush(tApi); if (r.ok) { _pushSubDone = true; notifyCommunity = getNotifyCommunity(); }   /* ⭐v6.566 登記後勾選框跟伺服器同步 */ })();\n  }\n", "    // v6.026：立即試一次；若此刻登入尚未就緒而失敗，上面依賴 firebaseUser 的 $effect 會補做。\n    if (notifyEnabled) void (async () => { const r = await subscribePush(tApi); if (r.ok) _pushSubDone = true; })();\n  }\n"],
+  ["    if (!getNotifyEnabled() || getNotifyPermission() !== 'granted') return;\n    void (async () => { const r = await subscribePush(tApi); if (r.ok) { _pushSubDone = true; notifyCommunity = getNotifyCommunity(); }   /* ⭐v6.566 登記後勾選框跟伺服器同步 */ })();\n  });\n", "    if (!getNotifyEnabled() || getNotifyPermission() !== 'granted') return;\n    void (async () => { const r = await subscribePush(tApi); if (r.ok) _pushSubDone = true; })();\n  });\n"],
+  ["    notifyPerm = getNotifyPermission();\n    if (notifyEnabled) void (async () => { const r = await subscribePush(tApi); if (r.ok) { _pushSubDone = true; notifyCommunity = getNotifyCommunity(); }   /* ⭐v6.566 登記後勾選框跟伺服器同步 */ await refreshNotifyDiag(); })();\n    else { _pushSubDone = false; void unsubscribePush(tApi); void refreshNotifyDiag(); }\n", "    notifyPerm = getNotifyPermission();\n    if (notifyEnabled) void (async () => { const r = await subscribePush(tApi); if (r.ok) _pushSubDone = true; await refreshNotifyDiag(); })();\n    else { _pushSubDone = false; void unsubscribePush(tApi); void refreshNotifyDiag(); }\n"],
+];

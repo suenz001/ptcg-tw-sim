@@ -51,9 +51,10 @@ import {
 // ⭐⭐⭐v6.365 站長裁定 六-2（錦標賽平手＝雙敗）：區塊又多了三段，全部以 // >>> v6365-xxx 哨兵宣告。
 //   本檔的 revert-diff 從此再串一節（先還原 v6.365 的三段，再往後退），一律串接、不放水。
 import {
-  NEW_TAIL_SHA_V165 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V165 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V165 as NEW_TEV_LEN_CUR, revertV165,
+  NEW_TAIL_SHA_V167 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V167 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V167 as NEW_TEV_LEN_CUR, revertV165 as _rv165, revertV167,
   revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365, stripDeclaredBlocksNewerThan,
-} from './lib/tourn-revert-v165.mjs';
+} from './lib/tourn-revert-v167.mjs';
+const revertV165 = (b) => _rv165(revertV167(b));   // ⭐v1.67（Rule 54）：鏈再長一節（對局時限判法切換、推播偏好帳號層級；既有呼叫點一個字都不必改）
 const revertV154 = (b) => _rv154(revertV165(b));   // ⭐v1.65（Rule 54）：鏈再長一節（Top Cut 人多取 16 強；既有呼叫點一個字都不必改）
 const revertV6384 = (b) => _rv6384(revertV150(revertV152(revertV153(revertV154(b)))));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）；⭐v1.53 再長一節（報名牌組完整規則）；⭐v1.54 再長一節（全站 audit 降載）
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
@@ -303,7 +304,7 @@ await T('B6 ⚠⚠ 那 14 把鎖仍然「在守」：sha 比對式與自算 sha 
   const SELF = normEol(readFileSync(join(ROOT, 'scripts/test-v6292-tourn-verified-gate2.mjs'), 'utf8'));
   for (const [f2, s2] of [['test-v6276', v76], ['test-v6291', v91], ['test-v6292（本檔）', SELF]]) {
     // ⭐v1.65（Rule 40）：三支改接 tourn-revert-v165（鏈內含 v1.54 以前每一節）
-    assert.ok((s2.includes("from './lib/tourn-revert-v154.mjs'") || s2.includes("from './lib/tourn-revert-v165.mjs'")) && s2.includes('revertV6381('),
+    assert.ok((s2.includes("from './lib/tourn-revert-v154.mjs'") || s2.includes("from './lib/tourn-revert-v165.mjs'") || s2.includes("from './lib/tourn-revert-v167.mjs'")) && s2.includes('revertV6381('),
       f2 + ' 沒有串接 v6.381 的還原器（它的 revert-diff 會被停用）');
     assert.ok(s2.includes('revertV6365('), f2 + ' 掉了 v6.365 那一節（鏈斷了）');
   }

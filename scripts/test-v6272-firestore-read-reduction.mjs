@@ -643,7 +643,7 @@ await TA('M7 admin.html 拿掉 msgCounts 參數 ⇒「按開關要帶 msgCounts=
 // ⑨ ⭐⭐ 錦標賽區塊逐位元未動（內嵌 sha256，淺複製下也在守）
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑨ 錦標賽區塊逐位元未動');
-const TOURN_TAIL_SHA256 = '8af4edb9453d17e6d515f6a6fd85f53cd52dfa2c57c0e7b7e78c8d2765696fdf' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
+const TOURN_TAIL_SHA256 = '04961a4419fe9af762f4394550d81753880ae4174edd8ac8bc941392fbb2dc6e' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
 function tournTail(src) {
   const i = src.indexOf("app.get('/api/tournament");
   if (i < 0) throw new assert.AssertionError({ message: '找不到第一支 /api/tournament 端點' });
@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'ea8cb15cf45ce0fd0285d5491b279e873904a320';   // v6.564（上一版）
+const PREV_SHA = '695356b24743285fb6b7b1cba78fa676149cd6c4';   // v6.565（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,22 +757,32 @@ const PREV_SHA = 'ea8cb15cf45ce0fd0285d5491b279e873904a320';   // v6.564（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.565 前移：PREV_SHA 從 ea8cb15c（v6.564）起算。
+  // ⚠⚠ v6.566 前移：PREV_SHA 從 695356b2（v6.565）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.565：休閒線上計時與對戰紀錄時間戳改用遊戲時鐘（server-clock gameClockNow，engine／_shared／replay-record）、計時器四個數字收斂到 game-timer.ts（終局算進最後一回合）；首頁 changelog 三步搬運。
-  'src/lib/game/effects/_shared.ts',
-  'src/lib/game/engine.ts',
-  'src/lib/game/game-timer.ts',
-  'src/lib/game/replay-record.ts',
-  'src/lib/game/room-oracle.ts',   // v6.565 棄權／離開的終局紀錄蓋遊戲時鐘（審查 P3-2）
-  'src/lib/game/room.ts',          // 同上（Firebase 版）
-  'src/lib/game/server-clock.ts',
+  // ⭐v6.566：社群賽通知偏好以伺服器（帳號層級）為準：notify.ts syncNotifyCommunity、對戰頁登記推播後同步勾選框；首頁 changelog 三步搬運（admin 判法切換只寫內部 changelog）。
+  'src/lib/notify.ts',
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
 ];
+// ── 上一版（v6.565）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.565 前移：PREV_SHA 從 ea8cb15c（v6.564）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.565：休閒線上計時與對戰紀錄時間戳改用遊戲時鐘（server-clock gameClockNow，engine／_shared／replay-record）、計時器四個數字收斂到 game-timer.ts（終局算進最後一回合）；首頁 changelog 三步搬運。
+//   'src/lib/game/effects/_shared.ts',
+//   'src/lib/game/engine.ts',
+//   'src/lib/game/game-timer.ts',
+//   'src/lib/game/replay-record.ts',
+//   'src/lib/game/room-oracle.ts',   // v6.565 棄權／離開的終局紀錄蓋遊戲時鐘（審查 P3-2）
+//   'src/lib/game/room.ts',          // 同上（Firebase 版）
+//   'src/lib/game/server-clock.ts',
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
 // ── 上一版（v6.564）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.564 前移：PREV_SHA 從 93582fe0（v6.563）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -892,16 +902,6 @@ const PREV_ALLOWED = [
 // ⭐v6.554：applyAction 出口中央補寫沒有說明的棄牌（v6554-discard-announce）；燃火能量回合結束當場寫。
 //   'src/lib/game/engine.ts',
 //   'src/lib/game/types.ts',
-//   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.553）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.553 前移：PREV_SHA 從 93c73398（v6.552）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.553：借招候選排除借用方被鎖的同名招式（isAttackNameBlocked），copyAttackCooldownNote 說明原因。
-//   'src/lib/game/ai.ts',
-//   'src/lib/game/copy-attack.ts',
 //   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',

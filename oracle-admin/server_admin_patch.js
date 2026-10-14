@@ -7783,6 +7783,52 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: 'unavailable' }); }
     });
     // <<< v166-my-tourn-matches
+    // >>> v167-time-limit-verdict
+    // ⭐server v1.67（v6.566，站長 2026-10-14）：「錦標賽如果雙方對局超過25分鐘，會以剩下獎賞卡少的那方獲勝，我希望增加切換的功能，
+    //   可以讓我調整 錦標賽要使用 超過25分鐘時，獎賞卡少的那方獲勝 or 雙方皆判敗，然後再幫我預設，錦標賽是 超過25分鐘，
+    //   後攻玩家結束回合後，如果未分出勝負，雙方皆判敗」。
+    //   ・'double-loss'（預設）：最後回合（後攻方結束他的下一個回合）打完仍未分出勝負 ⇒ 雙方皆判敗（不比獎賞卡）。
+    //   ・'prizes'：舊規則 ⇒ 剩餘獎賞卡少的一方獲勝；相同 ⇒ 雙方皆判敗。
+    //   ・「最後回合」的機制（時間到先標記、後攻方結束回合才判）兩種模式完全相同，只差最後怎麼判。
+    //   ・每一場在「時間到、標記最後回合」那一刻記下當時的模式（TMATCH.timeLimitVerdict），之後站長切換不影響已經宣布的場次。
+    //   ⚠ 放在錦標賽區塊（TAIL_ANCHOR）之前、路徑不用錦標賽前綴 ⇒ 設定本身不動 28 把鎖；套用在錦標賽區塊的時限判定那幾行（另有還原表）。
+    //   ⚠ 讀取量：tournamentConfig 一份文件，記憶體快取 10 秒；只有時限掃描（每 30 秒、而且只有超時的場次）和 admin 會讀。
+    const TLV_DOC_ID = 'timeLimitVerdict';
+    const TLV_MODES = ['double-loss', 'prizes'];
+    const TLV_DEFAULT = 'double-loss';
+    let _tlvCache = null;   // { at, mode }
+    async function tTimeLimitVerdict() {
+      const now = Date.now();
+      if (_tlvCache && now - _tlvCache.at < 10000) return _tlvCache.mode;
+      let mode = TLV_DEFAULT;
+      try {
+        const d = await db.collection('tournamentConfig').findOne({ _id: TLV_DOC_ID }, { projection: { mode: 1 } });
+        if (d && TLV_MODES.includes(d.mode)) mode = d.mode;
+      } catch (e) { /* 讀不到就用預設（雙方皆判敗） */ }
+      _tlvCache = { at: now, mode };
+      return mode;
+    }
+    app.get('/api/tourn-time-limit-verdict', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        res.set('Cache-Control', 'no-store');
+        res.json({ tlvApi: 1, mode: await tTimeLimitVerdict(), defaultMode: TLV_DEFAULT, modes: TLV_MODES });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    app.post('/api/tourn-time-limit-verdict', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const mode = req.body && req.body.mode;
+        if (!TLV_MODES.includes(mode)) return res.status(400).json({ error: 'mode 只能是 double-loss 或 prizes' });
+        await db.collection('tournamentConfig').updateOne({ _id: TLV_DOC_ID },
+          { $set: { mode, updatedAt: Date.now(), updatedBy: String(id.email || id.uid || '') } }, { upsert: true });
+        _tlvCache = null;   // 立刻生效，不等 10 秒快取
+        res.json({ ok: true, tlvApi: 1, mode: await tTimeLimitVerdict() });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    // <<< v167-time-limit-verdict
     // >>> v153-tourn-deck-validate
     // ⭐⭐ server patch v1.53（2026-10-02，站長核准）：錦標賽報名的牌組改在伺服器端也跑完整規則。
     //   以前 /register、/register-and-checkin、/propose 只檢查 60 張 ⇒ 改過的前端或很舊的快取版本
@@ -7918,6 +7964,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const gs = doc.gameState;
         if (!gs) return res.json({ error: '對局尚未開始', waiting: true, version: doc.version });
         if (!action || !action.type) return res.status(400).json({ error: 'no action' });
+        // ⭐v1.67 對局時限的最後回合已打完（後攻方結束了他的下一個回合 ⇒ turn 已超過宣布當下的值）⇒ 不再接受任何動作，等時限掃描判定。
+        if (doc.matchId && typeof doc.timeLimitTurn === 'number' && gs.phase === 'playing' && typeof gs.turn === 'number' && gs.turn > doc.timeLimitTurn) {
+          return res.json({ error: '對局時限已到，最後回合已結束，等待判定結果', gameState: _stateForSeat(gs, _vseat), version: doc.version });
+        }
         // ⭐⭐⭐v6.170 冪等鍵（client 產生，跨所有重送 attempt 不變）。舊 client 不送 ⇒ 空字串 ⇒
         //   `tActionApplyOnce` 不查重也不寫紀錄，行為與 v6.169 逐字相同（fail-open）。
         const actId = String((req.body && req.body.actId) || '').slice(0, 64);
@@ -9283,6 +9333,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //   私鑰在 VM 的 /opt/ptcg/api/vapid.json（chmod 600，不進 git）；缺檔/未裝套件則自動停用推播，
     //   絕不影響賽事流程。
     const TPUSH = db.collection('tournamentPushSubs');
+    // ⭐v1.67 推播偏好的「帳號層級」那一份（_id＝uid）。站長 2026-10-14 回報：手機關掉了社群賽通知，偶爾還是收到。
+    //   真因：偏好原本只寫在每一筆訂閱（裝置）上，而 client 每次登記推播都把**自己那台** localStorage 的值送上來
+    //   （沒動過＝預設開）⇒ 另一台從沒動過勾選的裝置一登記，就用 updateMany 把同一個帳號**所有裝置**改回「開」。
+    //   修法：帳號層級存一份（只有玩家親手切換才寫）；新登記的訂閱繼承它；client 改成「讀伺服器」而不是「用本機預設值覆蓋伺服器」。
+    const TPUSHPREF = db.collection('tournamentPushPrefs');
+    TPUSH.createIndex({ 'sub.endpoint': 1 }).catch(() => { /* ⭐v1.67 /push/subscribe 依端點清掉其他帳號的訂閱：有索引就不必掃整個集合 */ });
     try { await TPUSH.createIndex({ uid: 1 }); } catch (e) { /* 索引已存在 */ }
     let _webpush = null;
     try {
@@ -9359,7 +9415,22 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const q = {};
         if (excl.size) q.uid = { $nin: [...excl] };
         if (prefKey) q[prefKey] = { $ne: false };
-        const subs = await TPUSH.find(q).limit(cap).toArray();
+        let subs = await TPUSH.find(q).limit(cap).toArray();
+        // ⭐v1.67（Opus 審查 P1-2）：同一個推播端點可能還掛在別的帳號底下（舊資料）⇒ 依端點去重；
+        //   而且只要有任何一筆把這個端點標成「關」，就不推（寧可少推，不可以推給關掉的人）。
+        if (prefKey && subs.length) {
+          const offEps = new Set();
+          try {
+            const offs = await TPUSH.find({ [prefKey]: false }, { projection: { 'sub.endpoint': 1 } }).limit(5000).toArray();
+            for (const o of offs) if (o && o.sub && o.sub.endpoint) offEps.add(String(o.sub.endpoint));
+          } catch (e) { /* 讀不到就只做去重 */ }
+          const seen = new Set();
+          subs = subs.filter((row) => {
+            const ep = row && row.sub && row.sub.endpoint ? String(row.sub.endpoint) : '';
+            if (!ep || offEps.has(ep) || seen.has(ep)) return false;
+            seen.add(ep); return true;
+          });
+        }
         if (!subs.length) return { sent: 0 };
         const body = JSON.stringify(payload);
         await Promise.allSettled(subs.map(async (row) => {
@@ -9404,7 +9475,16 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const sub = req.body && req.body.subscription;
         if (!sub || !sub.endpoint) return res.status(400).json({ error: 'bad subscription' });
         const key = id.uid + '__' + Buffer.from(String(sub.endpoint)).toString('base64').slice(-40);
-        await TPUSH.updateOne({ _id: key }, { $set: { uid: id.uid, sub, ts: Date.now() } }, { upsert: true });
+        // ⭐v1.67 新裝置（或瀏覽器換了推播端點）繼承帳號層級的偏好；沒有帳號層級紀錄 ⇒ 不寫（維持「缺席＝開啟」）
+        const _set = { uid: id.uid, sub, ts: Date.now() };
+        try {
+          const _pp = await TPUSHPREF.findOne({ _id: id.uid });
+          if (_pp && typeof _pp.notifyCommunity === 'boolean') _set.notifyCommunity = _pp.notifyCommunity;
+        } catch (e) { /* 讀不到偏好不影響登記 */ }
+        await TPUSH.updateOne({ _id: key }, { $set: _set }, { upsert: true });
+        // ⭐v1.67（Opus 審查 P1-2）：同一台裝置（同一個推播端點）換登入別的帳號時，舊帳號那一筆還掛著 ⇒ 舊帳號的通知（含社群賽）照推到這台。
+        //   推播端點代表「這台裝置的這個瀏覽器」，同一時間只屬於一個帳號 ⇒ 刪掉其他帳號掛在同一個端點上的訂閱。
+        try { await TPUSH.deleteMany({ 'sub.endpoint': String(sub.endpoint), uid: { $ne: id.uid } }); } catch (e) { /* best-effort */ }
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -9418,9 +9498,28 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const set = {};
         if (typeof b.notifyCommunity === 'boolean') set.notifyCommunity = b.notifyCommunity;
         if (!Object.keys(set).length) return res.status(400).json({ error: '沒有可更新的偏好' });
+        // ⭐v1.67（Opus 審查 P1-3）：v6.565 以前的 client 每次登記推播都會**無條件**送自己那台的值（沒動過＝開）、不帶 src。
+        //   新版 client 一律帶 src（'user'＝玩家親手切換／'sync'＝補送）。不帶 src 的請求只接受「關」（玩家想關的方向永遠安全）；
+        //   「開」一律忽略（沒有任何紀錄時本來就是開，忽略不會少推）⇒ 舊 client 不會再把別台的「關」改回開。
+        const _src = typeof b.src === 'string' ? b.src : '';
+        if (!_src && set.notifyCommunity === true) return res.json({ ok: true, ignored: true, prefs: {} });
+        // ⭐v1.67 帳號層級先寫（之後新登記的裝置繼承它；GET 讀它）
+        await TPUSHPREF.updateOne({ _id: id.uid }, { $set: Object.assign({ updatedAt: Date.now() }, set) }, { upsert: true });
         // 同一個玩家可能有多台裝置（多筆訂閱）→ 一次全部更新，偏好是「人」層級不是「裝置」層級
         const r = await TPUSH.updateMany({ uid: id.uid }, { $set: set });
         res.json({ ok: true, updated: r.modifiedCount || 0, prefs: set });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    // ⭐v1.67 讀帳號層級的推播偏好（client 登記推播後用它同步勾選框，不再拿本機預設值覆蓋伺服器）。
+    //   known=false ⇒ 這個帳號從沒在新版切換過（舊資料）⇒ client 只有在「本機明確設定過」時才補送一次。
+    app.get('/api/tournament/push/prefs', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        const _pp = await TPUSHPREF.findOne({ _id: id.uid });
+        const known = !!_pp && typeof _pp.notifyCommunity === 'boolean';
+        res.set('Cache-Control', 'no-store');
+        res.json({ prefsApi: 1, known, notifyCommunity: known ? _pp.notifyCommunity : true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -10275,8 +10374,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
         catch (e) { return res.status(500).json({ error: '建立對局失敗：' + e.message }); }
         const roomId = m.roomId || ('mr_' + m._id);
         const prev = await TROOMS.findOne({ _id: roomId });
-        await TROOMS.updateOne({ _id: roomId }, { $set: { _id: roomId, seats: [m.p1uid, m.p2uid], names: [m.p1name, m.p2name], decks: [reg1.deckEntries, reg2.deckEntries], gameState: gs, version: ((prev && prev.version) || 0) + 1, matchId: m._id, eventId: m.eventId, updatedAt: Date.now(), lastActionAt: Date.now(), recentActs: { s0: [], s1: [] }, idleForfeitMin: (ev && ev.idleForfeitMin > 0 ? ev.idleForfeitMin : 3), actorSeat: currentActorSeat(gs) } }, { upsert: true });   // v6.151 初始 actorSeat
-        await TMATCH.updateOne({ _id: m._id }, { $set: { roomId, status: 'playing', winnerUid: null, winnerName: null, gameStartedAt: Date.now(), entered: [true, true] }, $unset: { noShow: '', doubleNoShow: '', forfeit: '', idleForfeit: '', timeLimit: '', adminResolved: '', timeLimitReached: '', timeLimitTurn: '', timeLimitCalledAt: '', draw: '', doubleDrop: '', dropForfeit: '' } });
+        await TROOMS.updateOne({ _id: roomId }, { $set: { _id: roomId, seats: [m.p1uid, m.p2uid], names: [m.p1name, m.p2name], decks: [reg1.deckEntries, reg2.deckEntries], gameState: gs, version: ((prev && prev.version) || 0) + 1, matchId: m._id, eventId: m.eventId, updatedAt: Date.now(), lastActionAt: Date.now(), recentActs: { s0: [], s1: [] }, idleForfeitMin: (ev && ev.idleForfeitMin > 0 ? ev.idleForfeitMin : 3), actorSeat: currentActorSeat(gs), timeLimitTurn: null } }, { upsert: true });   // v6.151 初始 actorSeat；⭐v1.67（Opus 複審 P1）重賽沿用同一個房間 ⇒ 清掉上一局的最後回合標記（設 null：/action 只認數字），否則新對局一打到那個回合數就被 /action 擋住
+        await TMATCH.updateOne({ _id: m._id }, { $set: { roomId, status: 'playing', winnerUid: null, winnerName: null, gameStartedAt: Date.now(), entered: [true, true] }, $unset: { noShow: '', doubleNoShow: '', forfeit: '', idleForfeit: '', timeLimit: '', adminResolved: '', timeLimitReached: '', timeLimitTurn: '', timeLimitCalledAt: '', timeLimitVerdict: '', draw: '', doubleDrop: '', dropForfeit: '' } });
         await TREPLAY.deleteMany({ matchId: m._id }).catch(() => {});  // v0.83 重賽重用 matchId→清舊局快照,避免 $setOnInsert 冪等把兩局混成一場
         await postSystemChat('🔄 管理員將「' + m.p1name + ' vs ' + m.p2name + '」重新開賽（從擲幣重新開始）。');
         res.json({ ok: true });
@@ -12021,20 +12120,33 @@ import('firebase-admin').then(async ({ default: admin }) => {
             // 第一次到時限 → 標記 + 記下當下 turn，進行最後回合（不立即比、不動盤面，避免干擾雙方出招的版本 CAS）
             if (!m.timeLimitReached) {
               const turnAtCall = (typeof gs.turn === 'number') ? gs.turn : 0;
-              await TMATCH.updateOne({ _id: m._id }, { $set: { timeLimitReached: true, timeLimitTurn: turnAtCall, timeLimitCalledAt: now } });
-              await postSystemChat('⏰ 「' + m.p1name + ' vs ' + m.p2name + '」對局時限(' + limitMin + '分)到！進行最後回合：後攻方結束他的下一個回合後，依雙方剩餘獎賞卡判定。');
+              // ⭐v1.67 這一場用哪一種判法，在宣布最後回合的這一刻記下來（之後站長切換不影響已經宣布的場次）
+              const _tlvMode = await tTimeLimitVerdict();
+              await TMATCH.updateOne({ _id: m._id }, { $set: { timeLimitReached: true, timeLimitTurn: turnAtCall, timeLimitCalledAt: now, timeLimitVerdict: _tlvMode } });
+              // >>> v6566-room-time-limit-turn
+              // ⭐v1.67（Opus 審查 P2-2）：房間頂層也記一份 ⇒ /action 用已經讀到的房間 doc 就能擋「最後回合打完後」的動作（零額外讀取）。
+              //   不擋的話，後攻方結束回合到下一次掃描（最多 30 秒）之間，先攻方還能繼續出招拿下最後一張獎賞卡，推翻「未分出勝負 ⇒ 雙敗」。
+              //   條件式寫入：已經 game-over 的房間不寫（只加一個頂層欄位、不碰盤面與 version）。
+              try { await TROOMS.updateOne({ _id: m.roomId, 'gameState.phase': { $ne: 'game-over' } }, { $set: { timeLimitTurn: turnAtCall } }); } catch (e) { /* best-effort：沒寫到就退回 30 秒掃描 */ }
+              // <<< v6566-room-time-limit-turn
+              await postSystemChat('⏰ 「' + m.p1name + ' vs ' + m.p2name + '」對局時限(' + limitMin + '分)到！進行最後回合：後攻方結束他的下一個回合後，'
+                + (_tlvMode === 'prizes' ? '依雙方剩餘獎賞卡判定。' : '若仍未分出勝負，雙方皆判敗。'));
               continue;
             }
             // 最後回合尚未打完（後攻方還沒結束他的下一個回合）→ 繼續等
             if (typeof gs.turn === 'number' && gs.turn <= (m.timeLimitTurn || 0)) continue;
-            // 最後回合已結束 → 依剩餘獎賞卡判定
+            // 最後回合已結束 → 依這一場記下的判法（⭐v1.67）。
+            //   沒記 ⇒ 一定是 v1.67 之前就宣布最後回合的場次（v1.67 起宣布時一定會記），當時公告寫的是「依雙方剩餘獎賞卡判定」⇒ 照公告用 prizes（Opus 審查 P2-1）。
+            const _tlvM = TLV_MODES.includes(m.timeLimitVerdict) ? m.timeLimitVerdict : 'prizes';
             const p0rem = ((gs.players[0] && gs.players[0].prizes) || []).length;
             const p1rem = ((gs.players[1] && gs.players[1].prizes) || []).length;
-            if (p0rem === p1rem) {
-              // 平手 → 自動判雙敗（雙方淘汰，不需管理員）。bracket 對「無 winner 場」天生支援：兩人皆不晉級、下一輪對手輪空。
+            if (_tlvM === 'double-loss' || p0rem === p1rem) {
+              // 雙方皆判敗（雙方淘汰，不需管理員）。bracket 對「無 winner 場」天生支援：兩人皆不晉級、下一輪對手輪空。
+              //   'double-loss'：不比獎賞卡；'prizes'：雙方剩餘獎賞卡相同才會走到這裡。
+              const _dl = _tlvM === 'double-loss';
               await TMATCH.updateOne({ _id: m._id }, { $set: { status: 'done', winnerUid: null, winnerName: null, timeLimit: true, draw: true, endedAt: now } });
-              try { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = null; og.winReason = '對局時限到，最後回合結束後雙方剩餘獎賞卡相同 → 自動判雙敗（雙方淘汰）'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now } }); } catch (e) { /* best-effort */ }
-              await postSystemChat('⏰ 對局時限到，最後回合結束後仍平手 → 自動判雙敗' + (swissPhase(ev) ? swissContinueNote(ev) : '，雙方淘汰（下一輪對手輪空）') + '。');
+              try { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = null; og.winReason = _dl ? '對局時限到，最後回合結束後仍未分出勝負 → 雙方皆判敗（雙方淘汰）' : '對局時限到，最後回合結束後雙方剩餘獎賞卡相同 → 自動判雙敗（雙方淘汰）'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now } }); } catch (e) { /* best-effort */ }
+              await postSystemChat((_dl ? '⏰ 對局時限到，最後回合結束後仍未分出勝負 → 雙方皆判敗' : '⏰ 對局時限到，最後回合結束後仍平手 → 自動判雙敗') + (swissPhase(ev) ? swissContinueNote(ev) : '，雙方淘汰（下一輪對手輪空）') + '。');
               await advanceOrFinish(m, null, null);
               continue;
             }

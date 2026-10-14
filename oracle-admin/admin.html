@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.85</title>
+<title>PTCG Oracle Admin v1.86</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -372,7 +372,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.85</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.86</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -902,6 +902,38 @@ window.tevPinClear = async function (btn) {
   if (!confirm('確定取消聊天室置頂公告？')) return;
   await tevPinPost('', btn);
 };
+/**
+ * ⭐v1.86 對局時限（超過 N 分鐘、最後回合打完仍未分出勝負）的判法切換（server v1.67 的 /api/tourn-time-limit-verdict；
+ *   舊伺服器沒有 ⇒ tlvApi 缺席 ⇒ 面板不顯示）。預設＝雙方皆判敗（站長 2026-10-14）。
+ *   ・純函式（守衛直接餵資料驗文字與按鈕）。
+ */
+function tevTlvPanelHtml(td, btnS) {
+  if (!td || td.tlvApi !== 1) return '';
+  var cur = td.mode === 'prizes' ? 'prizes' : 'double-loss';
+  var opt = function (mode, label, note) {
+    var on = cur === mode;
+    return '<label style="display:block;margin:4px 0;cursor:pointer;">'
+      + '<input type="radio" name="tev-tlv" value="' + mode + '"' + (on ? ' checked' : '') + ' onchange="tevTlvSet(this.value, this)"> '
+      + '<b>' + label + '</b>' + (mode === td.defaultMode ? ' <span style="color:#888;">（預設）</span>' : '')
+      + '<div style="color:#666;font-size:.82rem;margin-left:22px;">' + note + '</div></label>';
+  };
+  return '<div id="tev-tlv-panel" style="border:1px solid #cfe0f5;background:#f4f9ff;border-radius:8px;padding:10px 12px;margin:0 0 12px;">'
+    + '<div style="font-weight:700;margin-bottom:4px;">⏰ 對局時限到的判法　<span style="color:#1a4b8f;">（目前：' + (cur === 'prizes' ? '獎賞卡少的一方獲勝' : '雙方皆判敗') + '）</span></div>'
+    + '<p style="color:#666;font-size:.82rem;margin:2px 0 6px;">時限到先進行最後回合（後攻方結束他的下一個回合），之後還沒分出勝負時怎麼判。'
+    + '每一場在「時限到、宣布最後回合」那一刻決定用哪一種，之後切換不影響已經宣布的場次；約 10 秒內生效。</p>'
+    + opt('double-loss', '雙方皆判敗', '最後回合結束仍未分出勝負 ⇒ 兩人都記敗（不比獎賞卡）。')
+    + opt('prizes', '獎賞卡少的一方獲勝', '最後回合結束後比剩餘獎賞卡，剩得少（拿得多）的一方獲勝；相同才雙方皆判敗。')
+    + '</div>';
+}
+window.tevTlvSet = async function (mode, el) {
+  var label = mode === 'prizes' ? '獎賞卡少的一方獲勝' : '雙方皆判敗';
+  if (!confirm('對局時限到的判法改成「' + label + '」？\n\n已經宣布最後回合的場次照原本的判法。')) { loadTournamentAdmin(); return; }
+  try {
+    const d = await api('/api/tourn-time-limit-verdict', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: mode }) });
+    if (d && d.error) alert(d.error);
+  } catch (e) { alert(e.message); }
+  loadTournamentAdmin();
+};
 function tevDailyPanelHtml(preset, btnStyle) {
   if (!preset || !Array.isArray(preset.slots) || !preset.slots.length) return '';
   var names = [];
@@ -974,6 +1006,9 @@ async function loadTournamentAdmin() {
   // ⭐v1.85 聊天室置頂公告（舊伺服器沒這支端點 ⇒ 面板不顯示）
   let pinData = null;
   try { const pd = await api('/api/tourn-chat-pin'); if (pd && pd.pinApi === 1) pinData = pd; } catch (e) { pinData = null; }
+  // ⭐v1.86 對局時限判法（舊伺服器沒這支端點 ⇒ 面板不顯示）
+  let tlvData = null;
+  try { const td = await api('/api/tourn-time-limit-verdict'); if (td && td.tlvApi === 1) tlvData = td; } catch (e) { tlvData = null; }
   // v1.62 三個動作按鈕改用全站的語意色（原本是深色底，與 admin 白底頁面格格不入）
   const btnS = 'padding:6px 14px;border:1px solid #a5d6a7;background:#eaf7ea;color:#2e7d32;border-radius:6px;cursor:pointer;font-weight:600;';
   const btnD = 'padding:6px 14px;border:1px solid #ef9a9a;background:#fdecec;color:#c62828;border-radius:6px;cursor:pointer;font-weight:600;';
@@ -982,7 +1017,8 @@ async function loadTournamentAdmin() {
     + '<p style="color:#888;font-size:.85rem;">單敗淘汰 · Bo1 · 可同時公布多場（時間不重疊），玩家各自報名。建立後玩家於 /tournament 報名（牌組鎖定）。</p>'
     + '<div style="margin:6px 0 12px;"><button style="' + btnD + '" onclick="tevClearChat(this)">🧹 清除所有聊天室訊息</button></div>'
     + tevDailyPanelHtml(tevDailyPreset, btnS)   // ⭐v1.77 每日固定網站賽一鍵建立
-    + tevPinPanelHtml(pinData, btnS, btnD);   // ⭐v1.85 聊天室置頂公告
+    + tevPinPanelHtml(pinData, btnS, btnD)   // ⭐v1.85 聊天室置頂公告
+    + tevTlvPanelHtml(tlvData, btnS);   // ⭐v1.86 對局時限判法
   // v1.45：賽事下拉選單（多場切換顯示各自詳細）
   var _stLabels = TEV_ST_LABELS;   // ⭐v1.77：狀態中文對照表只留一份（面板與賽事下拉共用）
   html += '<div style="margin:4px 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
@@ -1347,7 +1383,7 @@ function _tsMatchOutcome(m) {
   if (m.noShow) return '未進場判負';
   if (m.forfeit) return '投降判負';
   if (m.idleForfeit) return '閒置判負';
-  if (m.timeLimit) return '時限判負';
+  if (m.timeLimit) return m.winnerUid ? '時限判負' : '時限雙敗';   // ⭐v1.86：時限到雙方皆判敗（沒有勝方）不是判負
   if (m.adminResolved) return '管理員裁定';
   if (m.status === 'done') return '正常分勝負';
   return m.status || '';
@@ -1934,7 +1970,7 @@ function renderTournamentStats(el, data) {
   html += oRow('🏳️ 投降判負', outcome.forfeit, '一方主動投降');
   html += oRow('⏰ 閒置判負', outcome.idleForfeit, '3 分鐘無動作');
   html += oRow('🚫 未進場判負', outcome.noShow, '一方逾時未進場');
-  html += oRow('⌛ 時限判負', outcome.timeLimit, '對局超時');
+  html += oRow('⌛ 時限判負／雙敗', outcome.timeLimit, '對局超時');   // ⭐v1.86：預設改成時限到雙方皆判敗，這一格兩種都算
   html += oRow('💤 雙方未進場', outcome.doubleNoShow, '雙方皆逾時');
   html += oRow('🛠️ 管理員裁定', outcome.adminResolved, '人工強制裁定');
   html += oRow('➖ 輪空晉級', outcome.bye, '人數不足自動晉級');
@@ -4043,7 +4079,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.565';
+window.SITE_VERSION_HINT = '6.566';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

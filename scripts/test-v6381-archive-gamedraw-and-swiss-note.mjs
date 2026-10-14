@@ -20,9 +20,10 @@ import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
 import {
   TAIL_ANCHOR, TEV_ANCHOR, revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertToV6292, revertToV6291,
-  NEW_TAIL_SHA_V165 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V165 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V165 as NEW_TEV_LEN_CUR, revertV165,
+  NEW_TAIL_SHA_V167 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V167 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V167 as NEW_TEV_LEN_CUR, revertV165 as _rv165, revertV167,
   OLD_TAIL_SHA_V6365, OLD_TEV_SHA_V6365, OLD_TEV_LEN_V6365,
-} from './lib/tourn-revert-v165.mjs';
+} from './lib/tourn-revert-v167.mjs';
+const revertV165 = (b) => _rv165(revertV167(b));   // ⭐v1.67（Rule 54）：鏈再長一節（對局時限判法切換、推播偏好帳號層級；既有呼叫點一個字都不必改）
 const revertV154 = (b) => _rv154(revertV165(b));   // ⭐v1.65（Rule 54）：鏈再長一節（Top Cut 人多取 16 強；既有呼叫點一個字都不必改）
 const revertV6384 = (b) => _rv6384(revertV150(revertV152(revertV153(revertV154(b)))));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）；⭐v1.53 再長一節（報名牌組完整規則）；⭐v1.54 再長一節（全站 audit 降載）
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
@@ -145,14 +146,19 @@ let noteFn = null;
   chk('★★ B3a 時限平手公告的表達式抽得出來', !!m, String(m));
   if (m && noteFn) {
     const swissPhase = (ev) => !!(ev && ev.format === 'swiss-then-cut' && ev.phase === 'swiss');
-    const f = new Function('ev', 'swissPhase', 'swissContinueNote', 'return ' + m[1] + ';');
-    const sw = f({ format: 'swiss-then-cut', phase: 'swiss' }, swissPhase, noteFn);
-    const se = f({ format: 'single-elim' }, swissPhase, noteFn);
+    // ⭐v1.67（Rule 40，意圖不變＝瑞士制說「仍可繼續」、單淘汰說「雙方淘汰」）：公告多了判法變數 _dl（true＝「雙方皆判敗」模式、false＝舊的「獎賞卡」模式的平手）。
+    //   兩種都驗；_dl=false 的單淘汰仍必須與舊版逐字相同。
+    const f = new Function('ev', 'swissPhase', 'swissContinueNote', '_dl', 'return ' + m[1] + ';');
+    const sw = f({ format: 'swiss-then-cut', phase: 'swiss' }, swissPhase, noteFn, false);
+    const se = f({ format: 'single-elim' }, swissPhase, noteFn, false);
+    const sw2 = f({ format: 'swiss-then-cut', phase: 'swiss' }, swissPhase, noteFn, true);
+    const se2 = f({ format: 'single-elim' }, swissPhase, noteFn, true);
     chk('★★★ B3 時限平手公告：瑞士制不再說「雙方淘汰」，改說仍可繼續；單淘汰逐字不變',
       sw.includes(NOTE) && !sw.includes('雙方淘汰')
-      && se === '⏰ 對局時限到，最後回合結束後仍平手 → 自動判雙敗，雙方淘汰（下一輪對手輪空）。',
-      JSON.stringify([sw, se]));
-    chk('★★ B3b 加完仍遠低於 200 字上限', sw.length < 200, '長度=' + sw.length);
+      && se === '⏰ 對局時限到，最後回合結束後仍平手 → 自動判雙敗，雙方淘汰（下一輪對手輪空）。'
+      && sw2.includes(NOTE) && !sw2.includes('雙方淘汰') && se2 === '⏰ 對局時限到，最後回合結束後仍未分出勝負 → 雙方皆判敗，雙方淘汰（下一輪對手輪空）。',
+      JSON.stringify([sw, se, sw2, se2]));
+    chk('★★ B3b 加完仍遠低於 200 字上限', sw.length < 200 && sw2.length < 200, '長度=' + sw.length + '/' + sw2.length);
   }
 }
 

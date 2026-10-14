@@ -24,6 +24,8 @@ const KEY_PUSH_SERVER = 'ptcg.notify.pushServer';
 // v0.98 社群賽開辦通知的偏好。⚠localStorage 只是 UI 快取 ——
 //   推播是**伺服器主動發**的，真正決定收不收的是伺服器上訂閱文件的 notifyCommunity 欄位。
 const KEY_COMMUNITY = 'ptcg.notify.community';
+/** ⭐v6.566：玩家親手切換過、但還沒確定送到伺服器（'1'）。只有這種情況才拿本機值去改伺服器。 */
+const KEY_COMMUNITY_DIRTY = 'ptcg.notify.community.dirty';
 
 let _seen: Record<string, number> = {};
 let _loaded = false;
@@ -57,10 +59,55 @@ export function getNotifyCommunity(): boolean {
  * 只寫本機是沒有用的 —— 伺服器不會知道你關掉了，照樣推給你。
  */
 export async function saveNotifyCommunity(on: boolean, api?: (path: string, body?: unknown) => Promise<unknown>): Promise<void> {
-  if (hasWindow()) { try { localStorage.setItem(KEY_COMMUNITY, on ? '1' : '0'); } catch { /* 忽略 */ } }
+  if (hasWindow()) { try { localStorage.setItem(KEY_COMMUNITY, on ? '1' : '0'); localStorage.setItem(KEY_COMMUNITY_DIRTY, '1'); } catch { /* 忽略 */ } }
   if (!api) return;
-  try { await api('/push/prefs', { notifyCommunity: on }); }
+  try { await api('/push/prefs', { notifyCommunity: on, src: 'user' }); clearCommunityDirty(); }
   catch (e) { console.warn('[notify] 社群賽通知偏好送伺服器失敗（本機已記錄，下次進頁會補送）', e); }
+}
+function clearCommunityDirty(): void {
+  if (hasWindow()) { try { localStorage.removeItem(KEY_COMMUNITY_DIRTY); } catch { /* 忽略 */ } }
+}
+function readKey(k: string): string | null {
+  if (!hasWindow()) return null;
+  try { return localStorage.getItem(k); } catch { return null; }
+}
+
+/**
+ * ⭐v6.566 社群賽通知偏好：**以伺服器為準**同步（站長 2026-10-14：手機關掉了，偶爾還是收到）。
+ *   真因：原本每台裝置登記推播後都把「自己那台」的值送上去（從沒動過勾選＝預設開），
+ *   伺服器又是整個帳號一起改 ⇒ 另一台裝置一登記就把手機也改回「開」。
+ *   現在：
+ *   ① 本機有「親手切換、還沒送到」的紀錄（dirty）⇒ 補送本機值（src:'user'，這是玩家的意思）。
+ *   ② 否則讀伺服器：讀不到（逾時／錯誤／舊伺服器）⇒ **什麼都不送**（Opus 審查 P1-1：讀失敗時拿本機值去寫，會重演原本的覆蓋）。
+ *   ③ 伺服器有帳號層級紀錄 ⇒ 採用它（寫回本機，勾選框跟著變）。
+ *   ④ 伺服器沒有紀錄（舊資料，新版還沒切換過）⇒ 只有本機明確設成「關」才補送一次（「開」是伺服器缺席時的預設，不必送；
+ *      也避免先同步的那台用「開」搶先寫成帳號層級 —— Opus 審查 P2-3）。
+ * @returns 同步後應該顯示的值；同步不了回 null（呼叫端維持原狀）。
+ */
+export async function syncNotifyCommunity(api: (path: string, body?: unknown) => Promise<unknown>): Promise<boolean | null> {
+  const local = readKey(KEY_COMMUNITY);
+  try {
+    if (readKey(KEY_COMMUNITY_DIRTY) === '1') {
+      const on = local !== '0';
+      await api('/push/prefs', { notifyCommunity: on, src: 'user' });
+      clearCommunityDirty();
+      return on;
+    }
+    type SrvPrefs = { prefsApi?: number; known?: boolean; notifyCommunity?: boolean };
+    const srv = (await api('/push/prefs')) as SrvPrefs | null;
+    if (!srv || srv.prefsApi !== 1) return null;
+    if (srv.known === true && typeof srv.notifyCommunity === 'boolean') {
+      if (hasWindow()) { try { localStorage.setItem(KEY_COMMUNITY, srv.notifyCommunity ? '1' : '0'); } catch { /* 忽略 */ } }
+      return srv.notifyCommunity;
+    }
+    if (local === '0') {
+      await api('/push/prefs', { notifyCommunity: false, src: 'sync' });
+      return false;
+    }
+    return null;
+  } catch {
+    return null;   // 非關鍵：下次進頁再同步（讀或寫失敗都不拿本機值硬寫）
+  }
 }
 
 export function saveNotifyEnabled(on: boolean): void {
@@ -445,9 +492,9 @@ export async function subscribePush(api: (path: string, body?: unknown) => Promi
     let host = '';
     try { host = new URL(sub.endpoint).hostname; } catch { /* 忽略 */ }
     savePushServerState({ ok: true, stage: 'ok', host });
-    // v0.98：訂閱成功後補送一次偏好——涵蓋「上次送伺服器失敗」與「換了新裝置」兩種情況，
-    //   否則本機顯示已關、伺服器卻還是照推。
-    try { await api('/push/prefs', { notifyCommunity: getNotifyCommunity() }); } catch { /* 非關鍵，下次再補 */ }
+    // v0.98：訂閱成功後同步一次偏好。⭐v6.566：改成以伺服器為準（syncNotifyCommunity）——
+    //   原本無條件送本機值，沒動過勾選的裝置會用預設「開」把同帳號其他裝置的「關」蓋掉。
+    await syncNotifyCommunity(api);
     return { ok: true, stage: 'ok', host };
   } catch (e) {
     const detail = String((e as Error)?.message ?? '').slice(0, 140);

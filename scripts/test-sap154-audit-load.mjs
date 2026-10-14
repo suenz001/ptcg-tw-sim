@@ -30,8 +30,12 @@ import { revertAdminV162 } from './lib/sap-revert-admin-v162.mjs';   // ⭐serve
 import { revertAdminV163 } from './lib/sap-revert-admin-v163.mjs';   // ⭐v1.63（v6.539 補位順序）
 import { revertAdminV164 } from './lib/sap-revert-admin-v164.mjs';   // ⭐v1.64（v6.561 錦標賽回放逐動作，錦標賽區塊之前）：先剝較新的（Rule 54）
 import { revertAdminV165 } from './lib/sap-revert-admin-v165.mjs';   // ⭐v1.65（v6.562 置頂公告／對局時間／Top Cut）：先剝較新的（Rule 54）
-import { revertAdminV166 } from './lib/sap-revert-admin-v166.mjs';   // ⭐v1.66（v6.563 自己最近的錦標賽對戰，錦標賽區塊之前）：先剝較新的（Rule 54）
-import { revertV165 } from './lib/tourn-revert-v165.mjs';   // ⭐v1.65 D 節先剝較新的一節
+import { revertAdminV166 as _revertAdminV166 } from './lib/sap-revert-admin-v166.mjs';
+import { revertAdminV167 } from './lib/sap-revert-admin-v167.mjs';   // ⭐v1.67（v6.566 對局時限判法、推播偏好帳號層級）：先剝較新的（Rule 54）
+const revertAdminV166 = (s) => _revertAdminV166(revertAdminV167(s));   // ⭐v1.67 鏈再長一節（既有呼叫點一個字都不必改）
+   // ⭐v1.66（v6.563 自己最近的錦標賽對戰，錦標賽區塊之前）：先剝較新的（Rule 54）
+import { revertV165 as _rv165, revertV167 } from './lib/tourn-revert-v167.mjs';   // ⭐v1.65 D 節先剝較新的一節
+const revertV165 = (b) => _rv165(revertV167(b));   // ⭐v1.67（Rule 54）：鏈再長一節（對局時限判法切換、推播偏好帳號層級；既有呼叫點一個字都不必改）
 import { revertAdminV161 } from './lib/sap-revert-admin-v161.mjs';   // ⭐server v1.61（總覽先攻座位、卡片勝率未進場不計）：先剝較新的（Rule 54）
 import { revertAdminV160 } from './lib/sap-revert-admin-v160.mjs';   // ⭐server v1.60（套牌／玩家戰績未進場不計）：先剝較新的（Rule 54）
 import { revertAdminV159 } from './lib/sap-revert-admin-v159.mjs';   // ⭐server v1.59（原型未進場不計＋先攻後攻）：先剝較新的（Rule 54）
@@ -315,7 +319,7 @@ console.log('\n【D】錦標賽區塊 28 把鎖重釘');
   const CONSUMERS = ['scripts/test-v6276-deck-tournament-stats.mjs', 'scripts/test-v6291-tourn-verified-gate.mjs', 'scripts/test-v6292-tourn-verified-gate2.mjs',
     'scripts/test-v6303-ui-batch.mjs', 'scripts/test-v6381-archive-gamedraw-and-swiss-note.mjs'];
   // （⭐v1.65 起消費者改接 tourn-revert-v165，它的鏈內含本版；Rule 40 意圖不變）
-  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !((s.includes("from './lib/tourn-revert-v154.mjs'") || s.includes("from './lib/tourn-revert-v165.mjs'")) && /revert(?:Admin)?V154\(/.test(s)); });
+  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !((s.includes("from './lib/tourn-revert-v154.mjs'") || s.includes("from './lib/tourn-revert-v165.mjs'") || s.includes("from './lib/tourn-revert-v167.mjs'")) && /revert(?:Admin)?V154\(/.test(s)); });
   ok('★★[D5] 五支消費者都 import 新 lib 且呼叫 v1.54 的還原器', bad.length === 0, bad.join(', '));
   ok('★[D5b] test-v6303 的 SAP 還原鏈：revertAdminV154 緊接在 revertAdminV153 內側（v1.55 起內側還有更新的還原器，Rule 54 由新到舊）', /revertAdminV153\(revertAdminV154\((?:revertAdminV1\d\d\()*SAP_RAW\)/.test(rd('scripts/test-v6303-ui-batch.mjs')));
   if (BASE) ok('★★[D6] 整份檔案：revertAdminV154 之後與 v1.53 逐位元相同（沒有夾帶宣告以外的改動）', revertAdminV154(revertAdminV155(revertAdminV156(revertAdminV157(revertAdminV158(revertAdminV159(revertAdminV160(revertAdminV161(revertAdminV162(revertAdminV163(revertAdminV164(revertAdminV165(revertAdminV166(CUR))))))))))))) === BASE);   // ⭐v1.55 先剝掉較新一版
