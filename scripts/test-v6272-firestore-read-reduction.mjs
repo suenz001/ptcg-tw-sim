@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'c580331d425f5bd6e45173ff92605f0e293a1a3e';   // v6.567（上一版）
+const PREV_SHA = '2135db938fe4694760e7d15d7bbe1a63f040eba7';   // v6.568（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,17 +757,29 @@ const PREV_SHA = 'c580331d425f5bd6e45173ff92605f0e293a1a3e';   // v6.567（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.568 前移：PREV_SHA 從 c580331d（v6.567）起算。
+  // ⚠⚠ v6.569 前移：PREV_SHA 從 2135db93（v6.568）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.568：休閒房間已不存在（輪詢 404）：oracle-client 404 退避（roomGonePollDelayMs）、對戰頁停聊天輪詢／停卡住自癒重訂閱／提示列＋回大廳；首頁 changelog 三步搬運
-  'src/lib/game/oracle-client.ts',
+  // ⭐v6.569：對戰紀錄玩家暱稱不拆成卡片連結：log_format.ts playerNames 保護（同長度暱稱優先、較長卡名照樣連結、marker 卡片不受影響）；桌機／手機／戰報三處傳入暱稱；首頁 changelog 三步搬運
+  'src/lib/game/log_format.ts',
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
+  'src/routes/game/MobilePortraitBattle.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.568）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.568 前移：PREV_SHA 從 c580331d（v6.567）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.568：休閒房間已不存在（輪詢 404）：oracle-client 404 退避（roomGonePollDelayMs）、對戰頁停聊天輪詢／停卡住自癒重訂閱／提示列＋回大廳；首頁 changelog 三步搬運
+//   'src/lib/game/oracle-client.ts',
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.567）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.567 前移：PREV_SHA 從 63468c82（v6.566）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -890,20 +902,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/hand-layout.ts',
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-// ── 上一版（v6.556）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.556 前移：PREV_SHA 從 a779f628（v6.555）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.556：特殊狀態顯示收斂到 status-display.ts（statusIcon／statusLabel／statusSlots）；對戰紀錄灼傷用詞。
-//   'src/lib/game/effects.ts',
-//   'src/lib/game/effects/cards/v2348_j_mark_batch.ts',   // v6.556 複審：狀態名稱對照表改走 STATUS_NAME
-//   'src/lib/game/engine.ts',
-//   'src/lib/game/status-display.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'src/routes/game/MobilePortraitBattle.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

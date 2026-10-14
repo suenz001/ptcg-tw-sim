@@ -28,6 +28,7 @@
  *
  * Run: node scripts/test-v6441-blue-layout.mjs
  */
+import { V6569_GAME_PAIRS } from './lib/revert-v6569-game.mjs';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -71,6 +72,8 @@ const REVERT = [
 //   這些後續版本的改動在這裡逐條還原（每條恰好命中 1 次；內容正確性由各版自己的守衛鎖：test-v6448…）。
 //   ⚠ 只准放「非藍桌墊」的全版面改動；藍桌墊的改動一律寫進哨兵。
 const LATER = [
+  // ⭐v6.569（Rule 40）：對戰紀錄傳入雙方暱稱（非版面改動）—— 還原表單一來源 scripts/lib/revert-v6569-game.mjs（行為由 test-v6569 鎖）
+  ...V6569_GAME_PAIRS,
   // ⭐v6.568（Rule 40）：休閒房間已不存在（輪詢 404）的提示列＋停聊天輪詢＋停卡住自癒重訂閱（非版面改動；行為由 test-v6568-room-gone-poll 鎖）。由 difflib 產生、當場驗證逐位元還原 v6.567。（淺色主題那一條在 v6477-lobby-light 哨兵內，由哨兵剝除器處理，不列在這裡）
   ["  let unsubMessages: (() => void) | null = null;\n  // >>> v6568-room-gone\n  // ⭐v6.568 房間已不存在（輪詢回 404）：2026-10-14 主機檢查發現單一已刪除房間 5 分鐘被打 479 次 ——\n  //   以前只把 onlineError 設成「房間不存在或連線中斷」，對戰中根本看不到（那行字只在大廳畫面），\n  //   聊天輪詢也照打（伺服器對已刪除房間的 /messages 仍回 200，停不下來）。\n  //   ⇒ ① 房間輪詢在 oracle-client 逐步放慢（roomGonePollDelayMs）；② 這裡停掉聊天輪詢、\n  //     停止「卡住自癒」重訂閱（每次重訂閱都會讓輪詢從頭全速打）、顯示提示列＋【回大廳】；\n  //     ③ 房間又出現（同房號重建）⇒ 自動恢復聊天輪詢、提示列消失。\n  let roomGone = $state(false);\n  function _subscribeChatFor(code: string) {\n    unsubMessages?.();\n    unsubMessages = subscribeMessages(code, msgs => {\n      chatMessages = msgs;\n      setTimeout(() => { if (chatScrollEl) chatScrollEl.scrollTop = chatScrollEl.scrollHeight; }, 50);\n    });\n  }\n  function _setRoomGone(gone: boolean) {\n    if (gone === roomGone) return;\n    roomGone = gone;\n    if (gone) { unsubMessages?.(); unsubMessages = null; }\n    else if (roomCode) _subscribeChatFor(roomCode);\n  }\n  // <<< v6568-room-gone\n  let chatScrollEl: HTMLElement | null = $state(null);", "  let unsubMessages: (() => void) | null = null;\n  let chatScrollEl: HTMLElement | null = $state(null);"],
   ["      if (!roomCode) { oppInactivityWarn = false; return; }\n      // ⭐v6.568 房間已不存在 ⇒ 不做「卡住自癒」重訂閱（每次重訂閱都讓輪詢從頭全速打，等於把 404 退避整個抵銷）\n      if (typeof roomGone !== 'undefined' && roomGone) { oppInactivityWarn = false; return; }\n      // ⭐v6.248 同步一有進展就把重訂閱退避歸零。放在棄權 gate**之前**：我方回合中途也會歸零。", "      if (!roomCode) { oppInactivityWarn = false; return; }\n      // ⭐v6.248 同步一有進展就把重訂閱退避歸零。放在棄權 gate**之前**：我方回合中途也會歸零。"],

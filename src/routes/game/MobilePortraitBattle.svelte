@@ -895,7 +895,7 @@
       {@const _isPrivate = !!(entry.privateMessage && entry.playerIndex === myIdx)}
       {@const _msgText = _isPrivate ? entry.privateMessage : entry.message}
       {@const _lineCls = logLineClass(_msgText ?? '')}
-      {@const _tokens = tokenizeLogMessage(_msgText ?? '', cardNamesSorted)}
+      {@const _tokens = tokenizeLogMessage(_msgText ?? '', cardNamesSorted, [game?.players?.[0]?.name, game?.players?.[1]?.name])}
       {@const _ts = formatLogTimeShort(entry, game?.gameStartTime)}
       <div class="mp-log-line {_lineCls}" class:latest={i === ((game.log ?? []).length - 1)} class:sys={entry.playerIndex === null} class:private={_isPrivate}>
         {#if _ts}<span class="log-time">{_ts}</span>{/if}

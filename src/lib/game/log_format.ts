@@ -89,7 +89,7 @@ const MARKER_RE = /\uE100([^\uE100\uE101\uE102]+)\uE101([^\uE100\uE101\uE102]+)\
  * v4.934：先把 marker 取出（高優先級），再對 marker 間純文字跑既有 RULES + cardNamesByLength 流程。
  * marker 命中 → cls='log-card-link', iid=<marker iid>, text=<displayName>。
  */
-function tokenizeWithMarkers(msg: string, cardNamesByLength?: string[]): LogToken[] {
+function tokenizeWithMarkers(msg: string, cardNamesByLength?: string[], playerNames?: readonly (string | null | undefined)[]): LogToken[] {
   // 找出所有 marker 位置
   const markerHits: { start: number; end: number; iid: string; name: string }[] = [];
   MARKER_RE.lastIndex = 0;
@@ -99,20 +99,20 @@ function tokenizeWithMarkers(msg: string, cardNamesByLength?: string[]): LogToke
   }
   if (markerHits.length === 0) {
     // 無 marker → 純走舊路徑
-    return tokenizeRules(msg, cardNamesByLength);
+    return tokenizeRules(msg, cardNamesByLength, playerNames);
   }
   // 有 marker → 切段：marker 前/後純文字走 RULES，marker 本身直接吐成 log-card-link token
   const out: LogToken[] = [];
   let cur = 0;
   for (const h of markerHits) {
     if (h.start > cur) {
-      out.push(...tokenizeRules(msg.slice(cur, h.start), cardNamesByLength));
+      out.push(...tokenizeRules(msg.slice(cur, h.start), cardNamesByLength, playerNames));
     }
     out.push({ cls: 'log-card-link', text: h.name, iid: h.iid });
     cur = h.end;
   }
   if (cur < msg.length) {
-    out.push(...tokenizeRules(msg.slice(cur), cardNamesByLength));
+    out.push(...tokenizeRules(msg.slice(cur), cardNamesByLength, playerNames));
   }
   return out;
 }
@@ -121,12 +121,17 @@ function tokenizeWithMarkers(msg: string, cardNamesByLength?: string[]): LogToke
  * v4.934 重構：原 tokenizeLogMessage 主體拆出為 tokenizeRules（不處理 marker，只走 RULES + cardName scan）。
  * tokenizeLogMessage 改 wrapper：先 marker 掃描，再 fallback 到此 fn 處理純文字段。
  */
-export function tokenizeLogMessage(msg: string, cardNamesByLength?: string[]): LogToken[] {
+/**
+ * ⭐v6.569 playerNames：雙方玩家的暱稱（站長回報：暱稱取成寶可夢的名字，對戰紀錄裡的玩家名稱也變成可點的卡片連結）。
+ *   卡名子掃描時，玩家暱稱出現的位置**不拆成卡片連結**（見 splitCardNames）；比較長的卡名（例：暱稱「噴火龍」、卡名「噴火龍ex」）照樣是連結。
+ *   ⚠ 只影響「純文字卡名掃描」：addLog 用 marker 明確標記的卡片（帶 iid）一律照樣是連結。
+ */
+export function tokenizeLogMessage(msg: string, cardNamesByLength?: string[], playerNames?: readonly (string | null | undefined)[]): LogToken[] {
   if (!msg) return [];
-  return tokenizeWithMarkers(msg, cardNamesByLength);
+  return tokenizeWithMarkers(msg, cardNamesByLength, playerNames);
 }
 
-function tokenizeRules(msg: string, cardNamesByLength?: string[]): LogToken[] {
+function tokenizeRules(msg: string, cardNamesByLength?: string[], playerNames?: readonly (string | null | undefined)[]): LogToken[] {
   if (!msg) return [];
   const tokens: LogToken[] = [];
   let cursor = 0;
@@ -156,8 +161,9 @@ function tokenizeRules(msg: string, cardNamesByLength?: string[]): LogToken[] {
 
   // v3.02：卡名子掃描 — 只對 cls === '' 的純文字 token 做 longest-match-first
   if (cardNamesByLength && cardNamesByLength.length > 0) {
+    const protect = logProtectedNames(playerNames);
     return tokens.flatMap(tok => tok.cls === ''
-      ? splitCardNames(tok.text, cardNamesByLength)
+      ? splitCardNames(tok.text, cardNamesByLength, protect)
       : [tok]);
   }
   return tokens;
@@ -168,13 +174,35 @@ function tokenizeRules(msg: string, cardNamesByLength?: string[]): LogToken[] {
  * 必須由長到短排序：避免「瑪俐的搗蛋小妖」被切成「瑪俐的」+「搗蛋小妖」link。
  * 名稱長度 < 2 字一律忽略。
  */
-function splitCardNames(text: string, cardNamesByLength: string[]): LogToken[] {
+/** ⭐v6.569 要保護（不拆成卡片連結）的玩家暱稱：去空白、去重，只收 2 字以上（卡名掃描本來就忽略 1 字，1 字暱稱不可能整個被當成卡名）。 */
+export function logProtectedNames(playerNames?: readonly (string | null | undefined)[]): string[] {
+  const out: string[] = [];
+  for (const n of playerNames ?? []) {
+    const t = typeof n === 'string' ? n.trim() : '';
+    if (t.length >= 2 && !out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
+function splitCardNames(text: string, cardNamesByLength: string[], protect: readonly string[] = []): LogToken[] {
   if (!text) return [];
   const out: LogToken[] = [];
   let cursor = 0;
   while (cursor < text.length) {
     let hitName: string | null = null;
     let hitPos = -1;
+    let hitIsPlayer = false;
+    // ⭐v6.569 玩家暱稱也參加「最早出現、同位置取最長」的比賽；**同長度時暱稱優先**（那個位置寫的是玩家，不是卡）。
+    //   暱稱贏了 ⇒ 那一段當純文字輸出，而且不會再從暱稱中間切出卡名（例：暱稱「我的噴火龍」不會把「噴火龍」拆成連結）。
+    for (const name of protect) {
+      const idx = text.indexOf(name, cursor);
+      if (idx < 0) continue;
+      if (hitPos < 0 || idx < hitPos || (idx === hitPos && name.length > (hitName?.length ?? 0))) {
+        hitPos = idx;
+        hitName = name;
+        hitIsPlayer = true;
+      }
+    }
     // 對每個卡名找最早出現位置（已長到短排序，相同位置時長者優先）
     for (const name of cardNamesByLength) {
       if (name.length < 2) continue;  // 過短卡名（極少見，保險過濾）
@@ -183,6 +211,7 @@ function splitCardNames(text: string, cardNamesByLength: string[]): LogToken[] {
       if (hitPos < 0 || idx < hitPos || (idx === hitPos && name.length > (hitName?.length ?? 0))) {
         hitPos = idx;
         hitName = name;
+        hitIsPlayer = false;
       }
     }
     if (!hitName || hitPos < 0) {
@@ -192,7 +221,7 @@ function splitCardNames(text: string, cardNamesByLength: string[]): LogToken[] {
     if (hitPos > cursor) {
       out.push({ cls: '', text: text.slice(cursor, hitPos) });
     }
-    out.push({ cls: 'log-card-link', text: hitName });
+    out.push(hitIsPlayer ? { cls: '', text: hitName } : { cls: 'log-card-link', text: hitName });
     cursor = hitPos + hitName.length;
   }
   return out;

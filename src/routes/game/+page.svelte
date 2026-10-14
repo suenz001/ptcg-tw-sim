@@ -462,6 +462,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   let tMatchLog = $state<any | null>(null);
   let tMatchLogLoading = $state(false);
   let tMatchLogTitle = $state('');
+  let tMatchLogNames = $state<string[]>([]);   // ⭐v6.569 戰報裡的雙方暱稱（不拆成卡片連結）
   let tSpectateRoom = $state('');
   let isTournSpectator = $state(false);
   let tError = $state('');
@@ -3138,6 +3139,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     arr.sort((a, b) => b.length - a.length);
     return arr;
   });
+  // ⭐v6.569 對戰紀錄裡的玩家暱稱不拆成卡片連結（站長回報：暱稱取成寶可夢的名字，玩家名稱也能點、會開卡片）
+  let logPlayerNames = $derived([game?.players?.[0]?.name, game?.players?.[1]?.name]);
   // v5.034：beta 站還原 — 移除 v4.935 加的 github.io → .com 強制 redirect。
   //   現況：github.io 當 beta 測試站（Firebase backend），.com 當正式站（Oracle backend）。
   //   build-time ORACLE_MODE 已自動切後端，按鈕只需切 mode='online' 即可。
@@ -5748,6 +5751,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   async function tMatchLogOpen(round: number, idx: number, p1: string, p2: string) {
     if (!tHofEventId) return;
     tMatchLogTitle = (p1 ?? '?') + ' vs ' + (p2 ?? '?');
+    tMatchLogNames = [p1, p2].filter((x) => typeof x === 'string');
     tMatchLogLoading = true; tMatchLog = null;
     try {
       const r = await tApi(`/match-log?eventId=${encodeURIComponent(tHofEventId)}&round=${round}&idx=${idx}`);
@@ -10947,7 +10951,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               <div class="mlog-list">
                 {#each tMatchLog.log as entry}
                   {@const _mlc = logLineClass(entry.message ?? '')}
-                  {@const _mtk = tokenizeLogMessage(entry.message ?? '', cardNamesSorted)}
+                  {@const _mtk = tokenizeLogMessage(entry.message ?? '', cardNamesSorted, tMatchLogNames)}
                   <div class="log-line {_mlc}" class:log-sys={entry.playerIndex === null}>
                     {#each _mtk as tok}{#if tok.cls === 'log-card-link'}<button type="button" class="log-card-link" onclick={() => openZoomByName(tok.text, tok.iid ?? entry.sourceIid, entry.playerIndex)}>{tok.text}</button>{:else}<span class={tok.cls}>{tok.text}</span>{/if}{/each}
                   </div>
@@ -12504,7 +12508,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {@const _isPrivate = !!(entry.privateMessage && entry.playerIndex === myIdx)}
           {@const _msgText = _isPrivate ? entry.privateMessage : entry.message}
           {@const _lineCls = logLineClass(_msgText ?? '')}
-          {@const _tokens = tokenizeLogMessage(_msgText ?? '', cardNamesSorted)}
+          {@const _tokens = tokenizeLogMessage(_msgText ?? '', cardNamesSorted, logPlayerNames)}
           <div class="log-line {_lineCls}" class:log-sys={entry.playerIndex===null} class:log-latest={i===0} class:log-private={_isPrivate}>
             {#if formatLogTime(entry, game?.gameStartTime)}<span class="log-time">{formatLogTime(entry, game?.gameStartTime)}</span>{/if}
             {#if _isPrivate}<span class="log-private-icon" title="只有你看得到">🔒</span>{/if}

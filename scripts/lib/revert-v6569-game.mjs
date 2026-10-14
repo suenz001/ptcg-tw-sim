@@ -1,0 +1,11 @@
+// v6.569 對戰紀錄的玩家暱稱不拆成卡片連結：對戰頁（+page.svelte）的「逐位元還原表」（單一來源；IRON_RULES Rule 38）
+//   v6.569 把雙方暱稱傳給 tokenizeLogMessage（logPlayerNames／tMatchLogNames 兩個宣告與三個呼叫點）。
+//   test-v6293／test-v6441 先用這張表還原成 v6.568（2135db93），再接更早的表；其餘仍必須逐位元相同（Rule 40，不放寬）。
+//   表由 difflib 產生、當場驗證可逐位元還原 v6.568；行為由 test-v6569 守。
+export const V6569_GAME_PAIRS = [
+  ["  let tMatchLogTitle = $state('');\n  let tMatchLogNames = $state<string[]>([]);   // ⭐v6.569 戰報裡的雙方暱稱（不拆成卡片連結）\n  let tSpectateRoom = $state('');", "  let tMatchLogTitle = $state('');\n  let tSpectateRoom = $state('');"],
+  ["  });\n  // ⭐v6.569 對戰紀錄裡的玩家暱稱不拆成卡片連結（站長回報：暱稱取成寶可夢的名字，玩家名稱也能點、會開卡片）\n  let logPlayerNames = $derived([game?.players?.[0]?.name, game?.players?.[1]?.name]);\n  // v5.034：beta 站還原 — 移除 v4.935 加的 github.io → .com 強制 redirect。", "  });\n  // v5.034：beta 站還原 — 移除 v4.935 加的 github.io → .com 強制 redirect。"],
+  ["    tMatchLogTitle = (p1 ?? '?') + ' vs ' + (p2 ?? '?');\n    tMatchLogNames = [p1, p2].filter((x) => typeof x === 'string');\n    tMatchLogLoading = true; tMatchLog = null;", "    tMatchLogTitle = (p1 ?? '?') + ' vs ' + (p2 ?? '?');\n    tMatchLogLoading = true; tMatchLog = null;"],
+  ["                  {@const _mlc = logLineClass(entry.message ?? '')}\n                  {@const _mtk = tokenizeLogMessage(entry.message ?? '', cardNamesSorted, tMatchLogNames)}\n                  <div class=\"log-line {_mlc}\" class:log-sys={entry.playerIndex === null}>", "                  {@const _mlc = logLineClass(entry.message ?? '')}\n                  {@const _mtk = tokenizeLogMessage(entry.message ?? '', cardNamesSorted)}\n                  <div class=\"log-line {_mlc}\" class:log-sys={entry.playerIndex === null}>"],
+  ["          {@const _lineCls = logLineClass(_msgText ?? '')}\n          {@const _tokens = tokenizeLogMessage(_msgText ?? '', cardNamesSorted, logPlayerNames)}\n          <div class=\"log-line {_lineCls}\" class:log-sys={entry.playerIndex===null} class:log-latest={i===0} class:log-private={_isPrivate}>", "          {@const _lineCls = logLineClass(_msgText ?? '')}\n          {@const _tokens = tokenizeLogMessage(_msgText ?? '', cardNamesSorted)}\n          <div class=\"log-line {_lineCls}\" class:log-sys={entry.playerIndex===null} class:log-latest={i===0} class:log-private={_isPrivate}>"],
+];
