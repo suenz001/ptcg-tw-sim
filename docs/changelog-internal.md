@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.568（上一版 `c580331d`（v6.567））休閒房間已不存在時停止全速輪詢
+
+- 起因：2026-10-14 另一個 AI 的主機檢查報告（handoff_2026-10-14_host_review.md P1-2）——已刪除房間 VHCS 5 分鐘被 GET 479 次（≈1.6 次／秒），8 月 JKJ4 同型；站長：「現在就修第 2 項」。
+- 程式碼查證的根因：oraclePollRoom 收到 404 只 callback(null) 一次、計時器照原節奏一直排；對戰頁只設 onlineError（那行字只在大廳畫面），聊天輪詢照打；等對手時「卡住自癒」每 8～20 秒重訂閱，輪詢又從頭全速。
+- 修法：`roomGonePollDelayMs`（oracle-client.ts，404 連續退避 3→6→12→24→30 秒封頂，只算真的 404、逾時不算；200／204 立刻歸零）；對戰頁 `_setRoomGone`（停聊天輪詢、房間回來恢復）、卡住自癒在 roomGone 時不重訂閱、換房重設、提示列＋【回大廳】（leaveOnlineGame）。聊天訂閱收進 `_subscribeChatFor` 一份。
+- 不改伺服器（伺服器對已刪除房間的 /messages 仍回 200，由前端在房間 404 時一起停）。
+- Opus 5.5 審查：無 P1／P2；P3 處理：changelog 拿掉「同房號重開會自動接回」（休閒房號隨機，接回的會是別人的新房，不可承諾）、提示列文案縮成一行（手機直式不蓋頂欄）、leaveOnlineGame 清 roomGone、守衛【H】段 B4 不再計一行恆真 PASS；心跳（lobby 每 60 秒、對已刪房間 oracleTx 直接失敗）不動。
+- 全套抓到三支（Rule 40）：test-v6265 F4d（oracle-client.ts 整檔位元組釘）加 stripV6568 剝除器（每條恰好命中 1 次）；test-v6477 S5 依產生器重跑淺色主題區塊（多出 .room-gone-btn 一條）；test-v6249 棄權賦值處計數另認 v6.568 那一行（逐字）。
+- 守衛 test-v6568（A／B 實跑 oraclePollRoom＋假計時器／C 實跑 _setRoomGone／D 接線＋HEAD-FAIL＋正對照）；Rule 40：test-v6180 序列化 regex 接受新寫法、test-v6197 一起抽 roomGonePollDelayMs、test-v6220 抽取器拿掉所有 export、test-v6441 LATER 加 v6.568 還原對（difflib 產生、逐位元驗證）。突變 9 個全殺（原有一組互為冗餘的兩道檢查各自存活 ⇒ 拿掉冗餘的 `!unsubMessages`）。
+
 ## v6.567（上一版 `63468c82`（v6.566））首頁更新記錄只給玩家看大標題；admin 完整更新紀錄；hidden 版本
 
 - 站長 2026-10-14：「只要讓大字讓玩家們看就好，小字這些太細節的內容不用給玩家看」「把完整changelog內容…放到admin頁面…更新紀錄的分頁」「admin的更新，與遊戲內容無關的更新就不用寫在changelog了」。

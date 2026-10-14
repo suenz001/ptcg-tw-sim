@@ -720,6 +720,21 @@ await T('F3 ⭐⭐⭐ 伺服器端**零改動**：分帳只看 `casual-` 前綴�
     t = t.split("    _noteDeltaPutSentinel(res);   // ⭐v6.270 輪詢的 GET 也算「最近一次」（哨兵消失＝伺服器撤掉 kill switch）\n").join('');
     return t;
   };
+  // ⭐v6.568（Rule 40，沿用 v6.267／v6.270 的修法）：oracle-client.ts 合法新增「房間 404 退避」
+  //   （哨兵 v6568-room-gone-backoff ＋ oraclePollRoom 內三行；行為由 test-v6568 鎖）。剝掉之後其餘仍必須逐字等於 BASE。
+  //   每一條都必須恰好命中 1 次（命中 0 次＝剝除器過期 ⇒ 直接紅，不會靜默放行）。
+  const stripV6568 = (src) => {
+    let t = src;
+    const rm = (x, y) => { const n = t.split(x).length - 1; assert.strictEqual(n, 1, 'v6568 剝除器過期：' + x.slice(0, 40) + ' 命中 ' + n + ' 次'); t = t.replace(x, y); };
+    const a = t.indexOf('// >>> v6568-room-gone-backoff\n'); const eMark = '// <<< v6568-room-gone-backoff\n\n';
+    const e = t.indexOf(eMark);
+    assert.ok(a >= 0 && e > a, 'v6568 剝除器過期：找不到 v6568-room-gone-backoff 哨兵');
+    t = t.slice(0, a) + t.slice(e + eMark.length);
+    rm("  let goneStreak = 0;   // ⭐v6.568 連續幾發 404（房間不存在）—— 決定下一發要等多久（roomGonePollDelayMs）\n", '');
+    rm("      // ⭐v6.568 404 連續次數：204（版本沒變）與 200 都代表房間還在 ⇒ 歸零；只有真的 404（null）才累加。\n      goneStreak = room === null ? goneStreak + 1 : 0;\n", '');
+    rm("      timer = setTimeout(tick, roomGonePollDelayMs(goneStreak, _d));   // ⭐v6.568 房間不在了 ⇒ 逐步放慢\n", "      timer = setTimeout(tick, _d);\n");
+    return t;
+  };
   // ⚠ v6.280：sync-guards.ts 合法新增了純述詞 `nextRestartBaseline`（幻影 setup 防護的門檻
   //   改成跟著房間走；由 test-v6280 全面接管那一塊的守備，且 resolveRoomUpdate 一個字沒動）。
   //   沿用 v6.267／v6.270 對 F4 的既有修法：把**已知的合法新增**用哨兵剝掉之後，
@@ -769,7 +784,7 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
     //   ⚠ 順便讓底下那些「LF 字面」的剝除器（stripV6310/V6331/V6334/V6348…）真的匹配得到 ——
     //     它們在 CRLF 工作樹是全部落空的（`ok(s1 !== s0, '剝除器過期')` 因此假性翻紅）。
     const raw = normEol(readFileSync(join(ROOT, p), 'utf8'));
-    const cur = stripV6270(raw);   // ⚠ 2026-10-01：原本這裡夾帶一條 engine.ts 的死分支（迴圈只跑 oracle-client.ts），已刪
+    const cur = stripV6270(stripV6568(raw));   // ⚠ 2026-10-01：原本這裡夾帶一條 engine.ts 的死分支（迴圈只跑 oracle-client.ts），已刪
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }
 });

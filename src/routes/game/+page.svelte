@@ -1897,6 +1897,28 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let chatMessages = $state<ChatMessage[]>([]);
   let chatInput = $state('');
   let unsubMessages: (() => void) | null = null;
+  // >>> v6568-room-gone
+  // ⭐v6.568 房間已不存在（輪詢回 404）：2026-10-14 主機檢查發現單一已刪除房間 5 分鐘被打 479 次 ——
+  //   以前只把 onlineError 設成「房間不存在或連線中斷」，對戰中根本看不到（那行字只在大廳畫面），
+  //   聊天輪詢也照打（伺服器對已刪除房間的 /messages 仍回 200，停不下來）。
+  //   ⇒ ① 房間輪詢在 oracle-client 逐步放慢（roomGonePollDelayMs）；② 這裡停掉聊天輪詢、
+  //     停止「卡住自癒」重訂閱（每次重訂閱都會讓輪詢從頭全速打）、顯示提示列＋【回大廳】；
+  //     ③ 房間又出現（同房號重建）⇒ 自動恢復聊天輪詢、提示列消失。
+  let roomGone = $state(false);
+  function _subscribeChatFor(code: string) {
+    unsubMessages?.();
+    unsubMessages = subscribeMessages(code, msgs => {
+      chatMessages = msgs;
+      setTimeout(() => { if (chatScrollEl) chatScrollEl.scrollTop = chatScrollEl.scrollHeight; }, 50);
+    });
+  }
+  function _setRoomGone(gone: boolean) {
+    if (gone === roomGone) return;
+    roomGone = gone;
+    if (gone) { unsubMessages?.(); unsubMessages = null; }
+    else if (roomCode) _subscribeChatFor(roomCode);
+  }
+  // <<< v6568-room-gone
   let chatScrollEl: HTMLElement | null = $state(null);
   // v5.589 大廳聊天室：進入即捲到最新訊息；「釘在底部」——讀歷史往上捲時不打擾，捲回底部恢復自動捲
   let tLobbyChatEl = $state<HTMLElement | null>(null);
@@ -9021,6 +9043,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   $effect(() => {
     const iv = setInterval(() => {
       if (!roomCode) { oppInactivityWarn = false; return; }
+      // ⭐v6.568 房間已不存在 ⇒ 不做「卡住自癒」重訂閱（每次重訂閱都讓輪詢從頭全速打，等於把 404 退避整個抵銷）
+      if (typeof roomGone !== 'undefined' && roomGone) { oppInactivityWarn = false; return; }
       // ⭐v6.248 同步一有進展就把重訂閱退避歸零。放在棄權 gate**之前**：我方回合中途也會歸零。
       // ⚠⚠⚠ v6.249 更正 v6.248 寫在這裡的錯誤結論：它原本寫「⇒ 下一次真的卡住時，第一發
       //   重訂閱仍是 v5.360 的 8 秒，逐字不變」——**不成立**。歸零的條件是「`game.log` 有變動」，
@@ -9198,18 +9222,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //     真正的重設由 handleRoomUpdate 拿到**這一間房**的 restartProposalCount 時才做。
     //     在那之前一律 fail-closed 保留舊值（絕不設 0，那會放行任何幻影 setup 局）。
     _restartBaselineRoom = null;
+    if (typeof roomGone !== 'undefined') roomGone = false;   // ⭐v6.568 換房／重新進房：上一間房的「已不存在」狀態不帶過來
     unsubRoom?.();
     unsubRoom = subscribeRoom(roomCode, handleRoomUpdate, () => myPlayerIndex === null, casualWaitingSelfInput);
     startHeartbeat();
-    // v2.272：訂閱聊天訊息
-    unsubMessages?.();
-    unsubMessages = subscribeMessages(roomCode, msgs => {
-      chatMessages = msgs;
-      // 自動捲到底（用 setTimeout 等 DOM 更新）
-      setTimeout(() => {
-        if (chatScrollEl) chatScrollEl.scrollTop = chatScrollEl.scrollHeight;
-      }, 50);
-    });
+    // v2.272：訂閱聊天訊息（⭐v6.568 收進 _subscribeChatFor：房間不存在後又回來時要用同一份重新訂閱）
+    _subscribeChatFor(roomCode);
   }
 
   // v4.920 觀戰加入/離開改寫到聊天室（不汙染對戰 log）
@@ -9219,7 +9237,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let lastSpectatorMap = new Map<string, string>();
 
   function handleRoomUpdate(room: Room | null) {
-    if (!room) { onlineError = '房間不存在或連線中斷'; return; }
+    if (!room) { onlineError = '房間不存在或連線中斷'; if (typeof _setRoomGone === 'function') _setRoomGone(true); return; }
+    if (typeof _setRoomGone === 'function') _setRoomGone(false);   // ⭐v6.568 房間回來了 ⇒ 恢復聊天輪詢、收掉提示列
     roomData = room;
     // ⭐⭐⭐v6.280 幻影 setup 防護的門檻跟著房間走（判準唯一在 sync-guards.nextRestartBaseline）。
     //   ⚠ 位置必須在下面 resolveRoomUpdate 之前 —— 晚一步就等於這一發還是用舊門檻判。
@@ -9792,6 +9811,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     chatMessages = []; chatInput = '';
     game = null; roomCode = ''; roomData = null;
     onlineStep = 'join'; showCreateForm = false; onlineError = ''; myPlayerIndex = null; mySeatIdx = -1;
+    if (typeof roomGone !== 'undefined') roomGone = false;   // ⭐v6.568（審查 P3）離開就清掉「房間已不存在」狀態，不帶到下一間
     if (_leavingRoomCode) {
       try { await leaveRoom(_leavingRoomCode); }
       catch (e) { console.warn('[leaveRoom] failed:', e); }
@@ -11110,6 +11130,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   </main>
 {:else}
 {#if isTournament && tError}<div class="tourn-toast">{tError}</div>{/if}
+<!-- ⭐v6.568 休閒房間已不存在（被解散／對局結束後刪除）：對戰畫面與大廳都看得到；房間若被重建會自動消失 -->
+{#if !isTournament && roomGone && roomCode}<div class="room-gone-bar" role="alert"><span>⚠️ 房間已不存在</span><button class="room-gone-btn" onclick={leaveOnlineGame}>回大廳</button></div>{/if}
 {#if isTournament && tIdleWarnSec != null && tIdleWarnSec <= 90}<div class="tourn-idle-warn">⏳ 對手閒置中：剩 {tIdleWarnSec} 秒未行動將自動判你勝</div>{/if}
 <!-- ⭐⭐v6.156「我還在」確認框：把「事後看監控」換成「當場問玩家」。
      ⚠⚠ 這個區塊**必須留在手機／桌機版面分支之外**（v6.149 剛踩過：失聯橫幅寫在桌機的
@@ -15360,6 +15382,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tourn-field .deck-select, .tourn-field .name-input { display: block; width: 100%; margin-top: 6px; padding: 10px; border-radius: 8px; border: 1px solid #4a6a4a; background: #142414; color: #eaf5ea; font-size: 1rem; box-sizing: border-box; }
   .tourn-join { margin-top: 8px; }
   .tourn-wait { color: #ffd35a; font-size: 1.05rem; margin: 22px 0; line-height: 1.6; }
+  .room-gone-bar { position: fixed; top: calc(8px + var(--safe-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; background: #7a1f1f; color: #fff; padding: 8px 14px; border-radius: 8px; font-size: 0.9rem; box-shadow: 0 2px 8px rgba(0,0,0,.4); max-width: calc(100vw - 32px); box-sizing: border-box; }
+  .room-gone-btn { background: #fff; color: #7a1f1f; border: none; border-radius: 6px; padding: 4px 12px; font-weight: 700; cursor: pointer; }
   .tourn-toast { position: fixed; top: calc(8px + var(--safe-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 9999; background: #7a1f1f; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 0.9rem; box-shadow: 0 2px 8px rgba(0,0,0,.4); max-width: 90vw; }
   .tourn-gate { color: #ffd35a; max-width: 360px; margin: 8px auto 4px; line-height: 1.5; }
   .tourn-who { color: #9fdca0; margin: 4px auto 10px; }
@@ -20200,6 +20224,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-field { color: #163116; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-field .deck-select, :global(html[data-theme='light']:not([data-battle-view])) .tourn-field .name-input { border: 1px solid #94b694; background: #f5f8f5; color: #0a150a; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-wait { color: #775700; }
+    :global(html[data-theme='light']:not([data-battle-view])) .room-gone-btn { background: #fbfbfb; color: #7c1d1d; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-gate { color: #775700; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-tab { border: 1px solid #a4c6a4; background: #f7f9f7; color: #216223; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-tab:hover { background: #f2f6f3; }

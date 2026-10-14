@@ -1252,6 +1252,7 @@ export function oraclePollRoom(
   //   對不上 → 伺服器回全量 → 鏈重置，絕不會重組出錯的 log。
   let lastLog: unknown[] | null = null;
   let lastExists = true;
+  let goneStreak = 0;   // ⭐v6.568 連續幾發 404（房間不存在）—— 決定下一發要等多久（roomGonePollDelayMs）
   let alive = true;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -1292,6 +1293,8 @@ export function oraclePollRoom(
       //   回應仍會 callback ⇒ handleRoomUpdate 把 roomData/game/mySeatIdx 全部填回去
       //   ⇒ 人已經離開了卻被彈回對戰頁（而且身分欄位是半清狀態）。
       if (!alive) return;
+      // ⭐v6.568 404 連續次數：204（版本沒變）與 200 都代表房間還在 ⇒ 歸零；只有真的 404（null）才累加。
+      goneStreak = room === null ? goneStreak + 1 : 0;
       if (room === ROOM_UNCHANGED) {
         // 版本未變，什麼都不做（等同舊版收到同版本時忽略）
       } else if (room) {
@@ -1315,7 +1318,7 @@ export function oraclePollRoom(
     // v5.347：intervalMs 可為函式 → 每次重排前求值（支援自適應輪詢）
     if (alive) {
       const _d = typeof intervalMs === 'function' ? intervalMs() : intervalMs;
-      timer = setTimeout(tick, _d);
+      timer = setTimeout(tick, roomGonePollDelayMs(goneStreak, _d));   // ⭐v6.568 房間不在了 ⇒ 逐步放慢
     }
   };
 
@@ -1325,6 +1328,20 @@ export function oraclePollRoom(
     if (timer) clearTimeout(timer);
   };
 }
+
+// >>> v6568-room-gone-backoff
+/**
+ * ⭐v6.568 房間已不存在（GET /api/rooms/:code 回 404）時的輪詢間隔（純函式，守衛直接實跑）。
+ *   2026-10-14 主機檢查：單一已刪除房間 5 分鐘被打 479 次（≈1.6 次／秒），8 月的 JKJ4 同型 ——
+ *   房間被刪之後畫面只顯示錯誤，輪詢照原本 0.5～1 秒的節奏一直打。
+ *   ⇒ 連續 404 時逐步放慢：3 → 6 → 12 → 24 → 30 秒封頂；房間一回來（200／204）立刻回到原節奏。
+ *   ⚠ 不是直接停：同房號可能被重建（v6.212），慢慢問還能接回去；而且「真的 404」才算（逾時不算，v6.246）。
+ */
+export function roomGonePollDelayMs(goneStreak: number, normalMs: number): number {
+  if (!(goneStreak > 0)) return normalMs;
+  return Math.max(normalMs, Math.min(30000, 3000 * 2 ** Math.min(goneStreak - 1, 10)));
+}
+// <<< v6568-room-gone-backoff
 
 // ── Messages ──────────────────────────────────────────────────────────
 

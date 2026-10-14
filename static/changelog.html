@@ -1,4 +1,8 @@
 <details open>
+        <summary><span class="ver-badge">v6.568</span> <b>房間被解散後，畫面會提示並可一鍵回大廳</b><br>一般對戰的房間被解散或對局結束後被刪除時，畫面上方會出現提示與【回大廳】按鈕，不再停在沒反應的畫面。</summary>
+        <div class="log-body">以前房間不存在時，只有在大廳畫面才看得到「房間不存在或連線中斷」這行字，對戰畫面看起來就像卡住；背景也會一直向伺服器詢問那個已經不存在的房間。現在對戰畫面與大廳都會顯示提示列與【回大廳】按鈕，背景的詢問也會逐步放慢（最多每 30 秒一次）；房間若恢復，提示會自動消失。</div>
+      </details>
+      <details>
         <summary><span class="ver-badge">v6.566</span> <b>錦標賽時限到仍未分勝負改判雙敗；修正社群賽通知關掉仍收到</b><br>錦標賽對局超過時限後照舊進行最後回合（後攻方結束他的下一個回合），之後若仍未分出勝負，雙方皆判敗（原本是比剩餘獎賞卡）。關掉「有玩家發起社群賽時也通知我」之後，不會再因為在別的裝置打開過錦標賽頁而又收到通知。</summary>
         <div class="log-body">・時限到的時候，聊天室公告會寫明這一場的判法。<br>・社群賽通知的勾選改成跟著帳號：在任何一台裝置勾或不勾，其他裝置都會跟著同步。</div>
       </details>
@@ -45,9 +49,8 @@
         <div class="log-body">・特殊狀態標籤統一圖示與官方用詞（燒傷→灼傷），無法辨識的狀態改顯示 ❓，不再和附能提示 ⚡ 混淆。
 ・修正手機版同時灼傷＋中毒時第二個標籤誤顯示「中毒」；放大檢視補上第三個狀態；撤退視窗不再顯示英文狀態名。</div>
       </details>
-      <details>
+      <details data-ver="v6.555">
         <summary><span class="ver-badge">v6.555</span> <b>備戰區卡片上殘留的附能提示 ⚡ 修正</b><br>點選過的能量卡已經附上、被丟棄或這回合已附過能量時，寶可夢上的 ⚡ 附能提示會自動消失，點卡片也能正常放大。</summary>
-        <div class="log-body">・修正寶可夢卡片上的「⚡ 點此附加」提示殘留：拖曳手牌放開後不會再把那張能量誤選起來；能量已附上、被丟棄或這回合已附過時提示自動消失，點卡片恢復正常放大。</div>
       </details>
       <details data-ver="v6.554">
         <summary><span class="ver-badge">v6.554</span> <b>丟棄到棄牌區的卡一律寫進對戰紀錄</b><br>探險家的嚮導、丹瑜、撤退費、競技場被換掉等丟進棄牌區的卡，對戰紀錄都會列出是哪幾張。</summary>
@@ -114,9 +117,6 @@
       </details>
       <details data-ver="v6.533">
         <summary><span class="ver-badge">v6.533</span> <b>受傷反擊改在招式效果之後結算</b><br>「受到招式的傷害時」觸發的特性、道具、特殊能量（甲殼刺、扣殺能量、毒刺、反擊針、龐克頭盔、幸運頭盔等），改為等招式的效果全部處理完才結算，依官方規則。</summary>
-      </details>
-      <details data-ver="v6.532">
-        <summary><span class="ver-badge">v6.532</span> <b>退化後不再觸發受傷反擊；緊張感對物品與霍米加的演奏生效</b><br>被念力土偶的退化光線退化後，退化前的特性（例如尖刺盔甲）不再反擊；斧牙龍的緊張感現在也擋下粉碎之錘、悠哉尾草棒、火箭隊的驚嚇炸彈、危險光線、百萬噸吹風機、高溫燃燒器與霍米加的演奏。</summary>
       </details>
       <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
         📚 這裡顯示<b>最近的更新內容</b>。更早的紀錄完整保留在 →

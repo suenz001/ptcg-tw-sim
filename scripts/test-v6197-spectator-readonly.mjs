@@ -265,7 +265,9 @@ await TA('7a oraclePollRoom：unsub 後在途回應不得 callback', async () =>
   // v6.212：oraclePollRoom 現在會呼叫同檔的 shouldDeliverRoomPoll ⇒ 一起抽進來，
   //   不要在測試裡重寫一份（重寫＝判準漂移，產品碼改了測試還會綠）。
   const fn = slice(OC, 'export function shouldDeliverRoomPoll(', '\n}\n', 'shouldDeliverRoomPoll')
-    + '\n' + slice(OC, 'export function oraclePollRoom(', '\n}\n', 'oraclePollRoom');
+    + '\n' + slice(OC, 'export function oraclePollRoom(', '\n}\n', 'oraclePollRoom')
+    // ⭐v6.568（Rule 40）：oraclePollRoom 排下一發時呼叫同檔的 roomGonePollDelayMs（404 退避）⇒ 同樣一起抽進來，不在測試裡重寫
+    + '\n' + slice(OC, 'export function roomGonePollDelayMs(', '\n}\n', 'roomGonePollDelayMs');
   let release = null;
   const src = ts(fn).replace(/export\s+/g, '') + `
     ; return oraclePollRoom;`;
@@ -285,7 +287,9 @@ await TA('7b 正對照：沒 unsub 時該 callback 還是要 callback', async ()
   // v6.212：oraclePollRoom 現在會呼叫同檔的 shouldDeliverRoomPoll ⇒ 一起抽進來，
   //   不要在測試裡重寫一份（重寫＝判準漂移，產品碼改了測試還會綠）。
   const fn = slice(OC, 'export function shouldDeliverRoomPoll(', '\n}\n', 'shouldDeliverRoomPoll')
-    + '\n' + slice(OC, 'export function oraclePollRoom(', '\n}\n', 'oraclePollRoom');
+    + '\n' + slice(OC, 'export function oraclePollRoom(', '\n}\n', 'oraclePollRoom')
+    // ⭐v6.568（Rule 40）：oraclePollRoom 排下一發時呼叫同檔的 roomGonePollDelayMs（404 退避）⇒ 同樣一起抽進來，不在測試裡重寫
+    + '\n' + slice(OC, 'export function roomGonePollDelayMs(', '\n}\n', 'roomGonePollDelayMs');
   const src = ts(fn).replace(/export\s+/g, '') + '\n; return oraclePollRoom;';
   const ROOM_UNCHANGED = Symbol('u');
   const oracleGetRoom = async () => ({ _version: 3 });

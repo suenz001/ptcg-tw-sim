@@ -300,7 +300,8 @@ function extractFn(src, startAnchor, endAnchor) {
   ok(e > s, '找不到結尾錨點 ' + endAnchor.slice(0, 30));
   let seg = src.slice(s, e);
   seg = seg.slice(0, seg.lastIndexOf('}') + 1);
-  return seg.replace('export function', 'function');
+  // ⭐v6.568（Rule 40）：oraclePollRoom 之後多了同檔 helper roomGonePollDelayMs（一起被抽進這一段）⇒ 每個 export 都要拿掉
+  return seg.replace(/export function/g, 'function');
 }
 await T('⭐⭐⭐ 輪詢三發實跑：全量→增量→UNCHANGED；送出的請求真的帶 logSince；交給 callback 的一律是完整 log', async () => {
   const pollSrc = extractFn(OC, 'export function oraclePollRoom(', '\n// ── Messages');

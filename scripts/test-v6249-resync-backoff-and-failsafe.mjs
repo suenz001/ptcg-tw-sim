@@ -305,8 +305,13 @@ T('[現況鎖/棄權] 棄權三處逐字不變，而且救援窗只**讀**不寫
   const line = /const _resyncGapMs = casualResyncInLastChance\([^;]*;/.exec(stripComments(IV_BODY));
   assert.ok(line, '救援窗沒有接到 _resyncGapMs 上');
   assert.ok(!/oppInactivityWarn/.test(line[0]), '救援窗那一段竟然碰到 oppInactivityWarn');
-  assert.equal((stripComments(IV_BODY).match(/oppInactivityWarn\s*=/g) || []).length, 3,
-    'oppInactivityWarn 的賦值處數量變了（原本 3 處：無房間、非等對手、門檻判定）');
+  // ⭐v6.568（Rule 40）：多一處「房間已不存在 ⇒ 收掉棄權提示並跳過重訂閱」（房間被刪了，棄權宣告本來就會失敗）。
+  //   棄權的門檻、觸發條件、伺服器再驗證三處仍逐字鎖在上面；這裡只多認那一行（逐字），其餘數量照舊。
+  const _iv = stripComments(IV_BODY);
+  const _gone = "if (typeof roomGone !== 'undefined' && roomGone) { oppInactivityWarn = false; return; }";
+  assert.equal(_iv.split(_gone).length - 1, 1, 'v6.568 房間已不存在的那一行不見了或變形了（由 test-v6568 D2 守行為）');
+  assert.equal((_iv.split(_gone).join('').match(/oppInactivityWarn\s*=/g) || []).length, 3,
+    'oppInactivityWarn 的賦值處數量變了（原本 3 處：無房間、非等對手、門檻判定；v6.568 那一行另計）');
 });
 await TA('[現況鎖/棄權行為] 對手真的掛機 3 分鐘 ⇒ 棄權提示照跳；門檻 60 秒時也照跳', async () => {
   const a = await runStuck({ totalSec: 200 });

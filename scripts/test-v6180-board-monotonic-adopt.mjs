@@ -375,7 +375,8 @@ console.log('\nF. 休閒線上（room-oracle）：結構上不會亂序 ＋ 收�
   const poll = grabFn(ORACLE, 'oraclePollRoom') || '';
   const pc = stripComments(poll);
   ok('★★★休閒房輪詢是**序列化**的（回應處理完才排下一發）⇒ 不存在錦標賽那種同時多發並行的亂序',
-    /timer = setTimeout\(tick, _d\)/.test(pc) && !/setInterval/.test(pc));
+    // ⭐v6.568（Rule 40）：間隔改經 roomGonePollDelayMs（房間 404 時退避）—— 仍是「處理完才 setTimeout 排下一發」，序列化的意圖不變
+    /timer = setTimeout\(tick, (?:_d|roomGonePollDelayMs\(goneStreak, _d\))\)/.test(pc) && !/setInterval/.test(pc));
   // ⭐v6.212：閘從「不等於」收緊成**單調**（較舊的 _version 不再遞送給收端）。
   //   舊寫法讓舊 snapshot 有機會走到 handleRoomUpdate，而 v5.587 的強制自癒是刻意繞過
   //   stale 守衛的 ⇒ 兩者疊起來就是玩家看到的「跳回上一手」。
