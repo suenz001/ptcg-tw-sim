@@ -34,7 +34,8 @@ function ruleFor(sel) {
 }
 
 T('前提：changelog 以 {@html} 插入，且有 :global 樣式（本檢查才有意義）', () => {
-  assert.ok(page.includes('{@html changelogBuiltin}'), 'changelog 應以 {@html} 插入');
+  // ⭐v6.567（Rule 40，意圖不變＝以 {@html} 插入、有 :global 樣式）：首頁改成先轉成「只有大標題」再插入（changelog-titles.ts）
+  assert.ok(page.includes('{@html changelogBuiltin}') || page.includes('{@html changelogTitlesView(changelogBuiltin)}'), 'changelog 應以 {@html} 插入');
   assert.ok(page.includes('.changelog-list :global(summary)'), '應有 summary 的 :global 樣式');
 });
 

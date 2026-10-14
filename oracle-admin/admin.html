@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.86</title>
+<title>PTCG Oracle Admin v1.87</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -372,7 +372,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.86</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.87</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2074,7 +2074,7 @@ window.loadActive = function(forceRefresh = false) {
   else if (currentTab === 'stats') p = loadStats(forceRefresh);  // v0.83: Phase 2a 統計
   else if (currentTab === 'broadcast') p = loadBroadcastAdmin();  // v1.17 系統廣播設定
   else if (currentTab === 'deck-rules') p = loadDeckRules();  // v1.51 牌組原型規則
-  else if (currentTab === 'changelog') p = loadChangelogAdmin();  // 首頁更新記錄編輯
+  else if (currentTab === 'changelog') p = loadChangelogAdmin();  // ⭐v1.87 完整更新紀錄（＋首頁覆蓋編輯收在進階）
   else if (currentTab === 'card-policy') p = loadCardPolicyAdmin();  // v6.340 卡包與賽季容許
   else if (currentTab === 'tournament') p = loadTournamentAdmin();  // 錦標賽管理
   else if (currentTab === 'tournament-stats') p = loadTournamentStats(forceRefresh);  // 賽事統計
@@ -2092,19 +2092,80 @@ window.manualRefresh = async function(btn) {
 };
 
 // ── v1.17 系統廣播設定（寫 Firestore config/broadcast，beta+正式站玩家開戰讀取）──
+// ── ⭐v1.87 完整更新紀錄（站長 2026-10-14：「把完整changelog內容(如現在，有大字和小字說明的)，直接放到admin頁面…讓我可以查閱完整的更新內容」）──
+//   玩家端（首頁、完整更新歷史頁）從 v6.567 起只顯示每一版的大標題；完整內容（大標題＋摘要＋細節）只在這裡看。
+//   資料來源＝網站本身的三個靜態檔（GitHub Pages，和卡片資料同一個來源）：
+//     changelog.html（首頁那幾則；較舊幾則的細節在 changelog-bodies.html，用 data-ver 對回）＋ changelog-archive.html（其餘全部）。
+//   data-internal="1" ＝ 與遊戲內容無關的內部維護版本（玩家看不到），這裡照樣列出並標示。
+const CL_SITE_BASE = 'https://suenz001.github.io/ptcg-tw-sim';
+/** 純函式：三份 HTML ⇒ [{ ver, summaryHtml, bodyHtml, internal, dup }]（依版本由新到舊；data-dup＝同一版的第二份舊紀錄，照樣列出）。 */
+function clParseEntries(recentHtml, bodiesHtml, archiveHtml) {
+  const bodies = {};
+  String(bodiesHtml || '').replace(/<div class="log-body" data-ver="([^"]+)">([\s\S]*?)<\/div>/g, function (_m, v, inner) { bodies[v] = inner; return ''; });
+  const out = [];
+  [recentHtml, archiveHtml].forEach(function (src) {
+    String(src || '').replace(/<details\b([^>]*)>([\s\S]*?)<\/details>/g, function (_m, attrs, inner) {
+      const sm = /<summary>([\s\S]*?)<\/summary>/.exec(inner);
+      if (!sm) return '';
+      const vm = /<span class="ver-badge">([^<]*)<\/span>/.exec(sm[1]);
+      const ver = vm ? vm[1].trim() : '';
+      if (!ver) return '';
+      const bm = /<div class="log-body">([\s\S]*?)<\/div>/.exec(inner);
+      const dv = /data-ver="([^"]+)"/.exec(attrs);
+      out.push({ ver: ver, summaryHtml: sm[1].replace(/<span class="ver-badge">[^<]*<\/span>\s*/, ''), bodyHtml: bm ? bm[1] : (dv && bodies[dv[1]] ? bodies[dv[1]] : ''), internal: /data-internal="1"/.test(attrs), dup: /data-dup="1"/.test(attrs) });
+      return '';
+    });
+  });
+  return out;
+}
+function clEntriesHtml(entries, q) {
+  const needle = String(q || '').trim().toLowerCase();
+  const strip = function (h) { return String(h).replace(/<[^>]+>/g, ''); };
+  const list = needle ? entries.filter(function (e) { return (e.ver + strip(e.summaryHtml) + strip(e.bodyHtml)).toLowerCase().indexOf(needle) >= 0; }) : entries;
+  if (!list.length) return '<p style="color:#888;">沒有符合的更新紀錄。</p>';
+  return list.map(function (e) {
+    return '<details style="border:1px solid #e1e6ee;border-radius:6px;background:#fff;margin:0 0 6px;">'
+      + '<summary style="padding:8px 12px;cursor:pointer;line-height:1.65;"><span style="display:inline-block;min-width:4.2em;margin-right:.5em;padding:.05em .45em;border-radius:4px;background:#e8f0fb;color:#2a5fa8;font-weight:600;font-size:.8rem;text-align:center;">' + escapeHtml(e.ver) + '</span>'
+      + (e.internal ? '<span style="margin-right:.4em;padding:.05em .4em;border-radius:4px;background:#eee;color:#666;font-size:.75rem;">🔒 內部（玩家看不到）</span>' : '')
+      + (e.dup ? '<span style="margin-right:.4em;padding:.05em .4em;border-radius:4px;background:#eee;color:#666;font-size:.75rem;">同一版的第二份紀錄（玩家看不到）</span>' : '')
+      + e.summaryHtml + '</summary>'
+      + (e.bodyHtml ? '<div style="padding:0 12px 10px 2.2rem;color:#444;font-size:.9rem;line-height:1.7;">' + e.bodyHtml + '</div>' : '')
+      + '</details>';
+  }).join('');
+}
+let _clAdminEntries = null;
+window.clAdminFilter = function (q) {
+  const box = document.getElementById('cl-full-list');
+  if (box && _clAdminEntries) box.innerHTML = clEntriesHtml(_clAdminEntries, q);
+};
 async function loadChangelogAdmin() {
   const el = document.getElementById('tab-changelog');
   if (!el) return;
   el.innerHTML = '<div style="padding:16px;color:#aaa;">載入中…</div>';
+  let fullHtml = '';
+  try {
+    const get = async function (f) { const r = await fetch(CL_SITE_BASE + '/' + f, { cache: 'no-cache' }); if (!r.ok) throw new Error(f + ' HTTP ' + r.status); return r.text(); };
+    // 細節檔（changelog-bodies.html）抓不到只會少了較舊幾則的細節，不讓整份紀錄跟著不顯示
+    const parts = await Promise.all([get('changelog.html'), get('changelog-bodies.html').catch(() => ''), get('changelog-archive.html')]);
+    _clAdminEntries = clParseEntries(parts[0], parts[1], parts[2]);
+    fullHtml = '<div style="max-width:900px;padding:16px 16px 4px;">'
+      + '<h2 style="margin-top:0;">📋 完整更新紀錄（' + _clAdminEntries.length + ' 則）</h2>'
+      + '<p style="color:#666;font-size:.88rem;line-height:1.6;margin:2px 0 8px;">玩家在首頁與「完整更新歷史」只看得到每一版的<b>大標題</b>；這裡是完整內容（大標題＋摘要，點開看細節）。標「🔒 內部」的是與遊戲內容無關、玩家看不到的版本。資料來自網站的更新紀錄檔（推送後約數分鐘更新）。</p>'
+      + '<input id="cl-full-q" placeholder="搜尋版本、卡名、關鍵字…" oninput="clAdminFilter(this.value)" style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #d6dbe3;border-radius:6px;margin:0 0 10px;font-size:.92rem;">'
+      + '<div id="cl-full-list">' + clEntriesHtml(_clAdminEntries, '') + '</div></div>';
+  } catch (e) {
+    fullHtml = '<div style="max-width:900px;padding:16px;color:#c00;">完整更新紀錄載入失敗：' + escapeHtml(e.message || String(e)) + '</div>';
+  }
   let html = '';
   try {
     const snap = await getDoc(doc(dbF, 'config', 'homeChangelog'));
     if (snap.exists()) { const d = snap.data(); html = (d && typeof d.html === 'string') ? d.html : ''; }
   } catch(e) { /* 沒設定過 → 空(首頁用程式內建) */ }
-  el.innerHTML =
+  el.innerHTML = fullHtml +
+    '<details style="max-width:900px;margin:8px 16px 16px;border:1px solid #e1e6ee;border-radius:6px;"><summary style="padding:8px 12px;cursor:pointer;color:#666;">🛠️ 進階：首頁更新記錄覆蓋編輯（平常用不到）</summary>' +
     '<div style="max-width:900px;padding:16px;">' +
       '<h2 style="margin-top:0;">📋 首頁更新記錄編輯</h2>' +
-      '<p style="color:#aaa;font-size:.9rem;line-height:1.6;">直接編輯首頁「版本更新記錄」要顯示的內容(HTML)。儲存後首頁(beta 站與正式站共用此設定)會改顯示這份；清空後恢復程式內建版本。<br>每筆格式：&lt;details open&gt;&lt;summary&gt;&lt;span class=&quot;ver-badge&quot;&gt;v X.X&lt;/span&gt; 標題&lt;/summary&gt;&lt;ul&gt;&lt;li&gt;內容&lt;/li&gt;&lt;/ul&gt;&lt;/details&gt;（可向 Claude 索取整段 HTML 再微調文字）。玩家重整首頁後生效。</p>' +
+      '<p style="color:#aaa;font-size:.9rem;line-height:1.6;">直接編輯首頁「版本更新記錄」要顯示的內容(HTML)。儲存後首頁(beta 站與正式站共用此設定)會改顯示這份；清空後恢復程式內建版本。<br>每筆格式：&lt;details open&gt;&lt;summary&gt;&lt;span class=&quot;ver-badge&quot;&gt;vX.X&lt;/span&gt; &lt;b&gt;大標題&lt;/b&gt;&lt;br&gt;摘要&lt;/summary&gt;&lt;div class=&quot;log-body&quot;&gt;細節&lt;/div&gt;&lt;/details&gt;（玩家只看得到 &lt;b&gt; 大標題；可向 Claude 索取整段 HTML 再微調文字）。玩家重整首頁後生效。</p>' +
       '<p style="color:#e9b949;font-size:.88rem;line-height:1.6;">⚠ v6.306 起首頁有「靜態檔閘門」：只有 static/changelog.html 最後一行的 &lt;!-- ptcg-override-gen:N --&gt; 為非 0 時，首頁才會來讀這份設定（N=0 是現況，首頁完全不讀、省最大宗 Firestore 讀取）。要啟用或改內容：儲存後把 N 改成非 0（每改一次內容就 +1）並出一版；清空後把 N 改回 0。</p>' +
       '<textarea id="cl-html" rows="22" style="width:100%;box-sizing:border-box;margin-top:4px;font-family:monospace;font-size:13px;line-height:1.5;" placeholder="貼上首頁更新記錄 HTML…（留空 = 用程式內建版本）">' + escapeHtml(html) + '</textarea>' +
       '<div style="margin-top:12px;">' +
@@ -2112,7 +2173,7 @@ async function loadChangelogAdmin() {
         '<button id="cl-clear" style="padding:9px 18px;background:#888;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:.95rem;">🗑️ 清空（恢復程式內建）</button>' +
         '<span id="cl-status" style="margin-left:14px;"></span>' +
       '</div>' +
-    '</div>';
+    '</div></details>';
   document.getElementById('cl-save').onclick = async () => {
     const val = document.getElementById('cl-html').value;
     const st = document.getElementById('cl-status');
@@ -4079,7 +4140,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.566';
+window.SITE_VERSION_HINT = '6.567';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

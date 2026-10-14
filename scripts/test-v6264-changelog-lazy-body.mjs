@@ -39,7 +39,7 @@ const TMP = mkdtempSync(join(tmpdir(), 'v6264-'));
 //   （BASE 裡沒有 v6.271~v6.273 的條目）。自 v6.275 起：**不動 changelog 的版本**（admin-only）
 //   由下方的 F0 短路涵蓋（三檔與 BASE 逐位元相同即無損成立），pin 只需在**動了 changelog**
 //   的版本前移到上一版。
-const BASE_SHA = '695356b24743285fb6b7b1cba78fa676149cd6c4'; // v6.565（上一版；v6.566 動了首頁 changelog ⇒ pin 必須前移，【F】才驗得到本版的搬運）
+const BASE_SHA = '63468c826cf4767980a7b391852a8619be1d37f5'; // v6.566（上一版；v6.567 動了封存頁（一次性標題遷移，F0d）⇒ pin 必須前移，【F】才驗得到本版的改動）
 // ⚠⚠ BASE_SHA 必須是**留在 main 上的那一顆**（git branch -a --contains <sha> 要印得出 main）——
 //    amend／rebase 前的中途 sha 是懸空的，本機 git gc 後就消失，整個【F】會靜默退化成 SKIP。IRON_RULES Rule 45。
 //   所以 v6.383 動 changelog 時**刻意不把 pin 往前挪**：留在 v6.381 才能讓【F】真的跑一次逐字還原比對，挪到 v6.382 結果一樣但沒有多守到東西）
@@ -562,7 +562,56 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
     && droppedVers.length === _shrinkM
     && arc.entries.length === baseArcSplit.entries.length + _shrinkM;
 
-  if (_clUnchanged) {
+  // ⭐⭐ v6.567 第五種合法情況：**一次性標題遷移**（站長 2026-10-14：首頁與完整更新歷史只給玩家看每一版的大標題）。
+  //   166 則舊格式條目（v5.838～v6.034）摘要開頭沒有 <b> 大標題 ⇒ 補一個；與遊戲無關的內部維護版（v6.524、v6.472）加 data-internal、
+  //   同一版的第二份舊紀錄（28 則）加 data-dup（玩家端不顯示，admin 照樣看得到）；封存頁 <style> 加「只顯示大標題」的規則。
+  //   ⚠ 這不是放寬，比 F1/F2 更嚴：首頁與 bodies **逐位元**相同、封存頁則數相同，而且每一則都必須
+  //     「＝ BASE 那一則」或「＝ BASE 那一則 ＋ 恰好這三種改動」（標題只准插在徽章後面、且 BASE 那一則原本沒有 <b>），多一個位元組就紅。
+  const _TITLE_INS_RE = /^(<details[^>]*>\s*<summary><span class="ver-badge">v[\d.]+<\/span> )<b>([^<>]{1,40})<\/b><br>/;
+  // BASE 那一則的徽章後面已經是 <b>（已有大標題）⇒ 不准再插；句中才有粗體的舊格式（v6.023～v6.044 共 11 則）可以插（審查 P1）。
+  const _baseHasLeadTitle = (bt) => /<summary><span class="ver-badge">[^<]*<\/span> <b>/.test(bt);
+  const _undoMigration = (t, baseT) => {
+    let x = t.replace(/^<details([^>]*)>/, (_m, a) => '<details' + a.replace(' data-internal="1"', '').replace(' data-dup="1"', '') + '>');
+    if (!_baseHasLeadTitle(baseT)) x = x.replace(_TITLE_INS_RE, '$1');
+    return x;
+  };
+  const _clTitleMigration = !_clUnchanged && baseHome.ok && baseArc.ok
+    && baseHome.out === HOME && (baseBodiesRaw.ok ? baseBodiesRaw.out === BODIES : BODIES === '')
+    && arc.entries.length === baseArcSplit.entries.length
+    && arc.entries.some((e, i) => e.text !== baseArcSplit.entries[i].text);
+
+  if (_clTitleMigration) {
+    T('F0d ⭐ 一次性標題遷移：首頁／bodies 逐位元相同；封存頁每一則＝BASE，或只多了「徽章後的 <b>大標題</b><br>」（BASE 原本沒有標題的才可以）／data-internal／data-dup', () => {
+      const bad = [];
+      let titled = 0, flagged = 0;
+      arc.entries.forEach((e, i) => {
+        const b = baseArcSplit.entries[i];
+        if (e.text === b.text) return;
+        if (e.ver !== b.ver) { bad.push(i + ':版本不同 ' + e.ver + '≠' + b.ver); return; }
+        if (_TITLE_INS_RE.test(e.text) && !_baseHasLeadTitle(b.text)) titled++;
+        if (/^<details[^>]*data-(internal|dup)="1"/.test(e.text)) flagged++;
+        if (_undoMigration(e.text, b.text) !== b.text) bad.push(i + ':' + e.ver);
+      });
+      assert.deepStrictEqual(bad, [], '封存頁有遷移以外的改動：' + bad.slice(0, 5).join(', '));
+      assert.ok(titled >= 100 && flagged >= 2, '遷移量不對（標題 ' + titled + '、旗標 ' + flagged + '）—— 判準可能沒在比對');
+      // 每一則都要有大標題，而且緊接在版本徽章後面（玩家端只顯示它；句中的粗體不算）
+      const noTitle = arc.entries.filter((e) => !_baseHasLeadTitle(e.text)).map((e) => e.ver);
+      assert.deepStrictEqual(noTitle, [], '還有條目沒有大標題：' + noTitle.slice(0, 5).join(', '));
+      // 條目以外（檔頭、條目之間、檔尾）：把每一則換回 BASE 那一則後，只准差在 <style> 與副標題那一行（審查 P3：splitEntries 會丟掉 head／檔尾）
+      let rebuilt = ARC;
+      { let pos = 0; arc.entries.forEach((e, i) => { const k = rebuilt.indexOf(e.text, pos); assert.ok(k >= 0, '重建失敗 ' + e.ver);
+          rebuilt = rebuilt.slice(0, k) + baseArcSplit.entries[i].text + rebuilt.slice(k + e.text.length); pos = k + baseArcSplit.entries[i].text.length; }); }
+      const _skel = (h) => h.replace(/<style>[\s\S]*?<\/style>/, '<style/>').replace(/<p class="sub">[^\n]*<\/p>/, '<p class="sub"/>');
+      assert.strictEqual(_skel(rebuilt), _skel(baseArc.out), '封存頁的檔頭／檔尾／條目之間有遷移以外的改動');
+      assert.notStrictEqual(_skel(rebuilt + 'X'), _skel(baseArc.out), '檔頭檔尾比對的正對照失效');
+      // <style> 只准「新增」行：BASE 的每一行原樣保留、順序不變
+      const _st = (h) => ((/<style>([\s\S]*?)<\/style>/.exec(h) || [])[1] || '').split('\n');
+      { const nl = _st(ARC); let j = 0; for (const l of _st(baseArc.out)) { while (j < nl.length && nl[j] !== l) j++; assert.ok(j < nl.length, '<style> 刪改了 BASE 的一行：' + l); j++; } }
+      // 自我驗證：多動一個字一定抓得到
+      const i0 = arc.entries.findIndex((e, i) => e.text !== baseArcSplit.entries[i].text);
+      assert.notStrictEqual(_undoMigration(arc.entries[i0].text.replace('</summary>', 'X</summary>'), baseArcSplit.entries[i0].text), baseArcSplit.entries[i0].text, '正對照失效');
+    });
+  } else if (_clUnchanged) {
     T('F0 ⭐ 本版未動 changelog（admin-only 版）：首頁／封存頁／bodies 三檔與 BASE 逐位元相同', () => {
       assert.strictEqual(HOME, baseHome.out); assert.strictEqual(ARC, baseArc.out);
     });

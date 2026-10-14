@@ -24,7 +24,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  verFromVersionTs, firstChangelogVer, adminHint, evaluate, batsToRun,
+  verFromVersionTs, firstChangelogVer, siteVersionFromTxt, adminHint, evaluate, batsToRun,
 } from './lib/verify-deploy-core.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -51,9 +51,19 @@ const aHint = adminHint(realAdmin);
 chk('A1 解得出本機 version.ts 的版本號', /^\d+\.\d+$/.test(String(aVer)), `拿到 ${aVer}`);
 chk('A2 解得出首頁更新紀錄第一則的版本徽章', /^v\d+\.\d+$/.test(String(aFirst)), `拿到 ${aFirst}`);
 chk('A3 解得出 admin 的版本提示', /^\d+\.\d+$/.test(String(aHint)), `拿到 ${aHint}`);
-chk('A4 ⭐ 這三個值彼此對得上（本機自身一致）',
-  aVer !== null && aHint !== null && aFirst !== null && aVer === aHint && `v${aVer}` === aFirst,
-  `ver=${aVer} hint=${aHint} first=${aFirst}`);
+// ⚠ v6.567（Rule 40）：站長裁定與遊戲無關的版本不寫 changelog（hidden）⇒ 首頁第一則不一定是本版。
+//   「前端版本標記」改由 static/site-version.txt 承擔（verify-deploy ②③ 也改讀它）；本機自身一致的意圖不變。
+const aSite = siteVersionFromTxt(read('static/site-version.txt'));
+chk('A4 ⭐ 這三個值彼此對得上（本機自身一致：version.ts＝admin 提示＝site-version.txt）',
+  aVer !== null && aHint !== null && aSite !== null && aVer === aHint && `v${aVer}` === aSite,
+  `ver=${aVer} hint=${aHint} site=${aSite}`);
+chk('A4b ⭐ runner 的②③讀 site-version.txt（不是 changelog 第一則）',
+  /\$\{TEST\}\/site-version\.txt/.test(read('scripts/verify-deploy.mjs')) && /\$\{PROD\}\/site-version\.txt/.test(read('scripts/verify-deploy.mjs'))
+  && /siteVersionFromTxt\(testR\.text\)/.test(read('scripts/verify-deploy.mjs')) && /siteVersionFromTxt\(prodR\.text\)/.test(read('scripts/verify-deploy.mjs')));
+chk('A4c ★ siteVersionFromTxt：正常一行（含換行）解得出；HTML（例如 404 頁）、多行、垃圾一律 null（fail-closed）',
+  siteVersionFromTxt('6.567\n') === 'v6.567' && siteVersionFromTxt(' 6.567 ') === 'v6.567'
+  && siteVersionFromTxt('<!doctype html><title>404</title>') === null && siteVersionFromTxt('6.567\n6.568') === null
+  && siteVersionFromTxt('6') === null && siteVersionFromTxt(null) === null);
 
 for (const [fn, label] of [[verFromVersionTs, 'verFromVersionTs'], [firstChangelogVer, 'firstChangelogVer'], [adminHint, 'adminHint']]) {
   chk(`A5 ★ 反對照：${label} 餵垃圾要回 null（不可以回假值）`,

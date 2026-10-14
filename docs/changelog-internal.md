@@ -1,5 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.567（上一版 `63468c82`（v6.566））首頁更新記錄只給玩家看大標題；admin 完整更新紀錄；hidden 版本
+
+- 站長 2026-10-14：「只要讓大字讓玩家們看就好，小字這些太細節的內容不用給玩家看」「把完整changelog內容…放到admin頁面…更新紀錄的分頁」「admin的更新，與遊戲內容無關的更新就不用寫在changelog了」。
+- `src/lib/changelog-titles.ts`：`changelogTitlesOnly` 顯示時把每則 `<details>` 換成「版本＋大標題」一行；`data-internal="1"`（內部維護版）與 `data-dup="1"`（同版第二份舊紀錄）不顯示。首頁兩條路徑（內建／後台覆蓋）都套用，結果依輸入字串記憶。
+- 資料檔維持完整：`static/changelog-archive.html` 166 則 v5.838～v6.034 舊條目補 `<b>大標題</b>`；v6.524、v6.472 標 `data-internal`；28 則重複版本標 `data-dup`；樣式只顯示大標題、不可展開。
+- admin v1.87「📋 更新記錄」：讀網站三個檔（changelog／changelog-bodies／changelog-archive），全部條目含摘要與細節、搜尋；舊的首頁覆蓋編輯收進「進階」。
+- `scripts/bump-version.py`（原 /tmp/pw/bump.py 收進 repo）：spec `hidden: true` ⇒ 不寫對外 changelog、test-v6264 pin 不前移。本版即以 hidden 出版。
+- `static/site-version.txt`（新）：每一版由 bump 工具寫入版本號；verify-deploy ②③ 改讀它判斷前端部署（hidden 版本 changelog 第一則不前進，原判法會誤報「已部署」）；test-v6387 A4 依 Rule 40 改為 version.ts＝admin 提示＝site-version.txt，新增 A4b／A4c。
+- admin 完整紀錄的版號徽章改淺色（test-admin-stats-contract：admin 白底不得有深色底）。
+- Opus 5.5 審查（兩輪）：P1 封存頁 41 則顯示錯（CSS 讓摘要中所有 <b> 都顯示；v6.023～v6.044 共 11 則粗體在句中、被當成標題）⇒ CSS 只放大 `summary>b:first-of-type`、11 則補大標題、D1 斷言「大標題緊接徽章」、E2 改逐則量測；P2 hidden 版 verify-deploy 誤報 ⇒ site-version.txt；P3 巢狀 <b> 截斷 ⇒ leadingTitle 依深度配對；F0d 補檔頭／檔尾與 <style> 只增不改的比對；admin bodies 抓不到不再整份失敗、覆蓋編輯說明改新格式；v5.919／v5.946／v5.856 標題修正。複審：可以出版。
+- 突變：changelog-titles.ts／封存 CSS／首頁接線／admin 接線共 12 個全殺。
+- 守衛 test-v6567（L／D／C／H／A／B＋真瀏覽器 E＋HEAD-FAIL）；test-v6264 新增 F0d（一次性標題遷移的逐則還原證明）、pin 前移到 v6.566；test-changelog-render Rule 40 接受 `changelogTitlesView(...)`。
+
 ## v6.566／server v1.67／admin v1.86：對局時限判法切換（預設雙方皆判敗）＋社群賽通知關掉仍偶爾收到（2026-10-14 站長）
 
 BASE `695356b2`（v6.565）。站長 09:13：「請幫我在admin再增加一個切換的功能 目前錦標賽如果雙方對局超過25分鐘，會以剩下獎賞卡少的那方獲勝，我希望增加切換的功能，可以讓我調整 錦標賽要使用 超過25分鐘時，獎賞卡少的那方獲勝 or 雙方皆判敗，然後再幫我預設，錦標賽是 超過25分鐘，後攻玩家結束回合後，如果未分出勝負，雙方皆判敗」；「我在手機版 只有在錦標賽個人頁面勾選 報到開始、輪到你可以進場、對戰中輪到你行動時提醒我 未勾選有玩家發起社群賽時也通知我…但偶爾還是會收到玩家發起社群賽的通知耶」。

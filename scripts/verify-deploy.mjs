@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  verFromVersionTs, firstChangelogVer, adminHint, evaluate, batsToRun,
+  verFromVersionTs, siteVersionFromTxt, adminHint, evaluate, batsToRun,
 } from './lib/verify-deploy-core.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -56,17 +56,18 @@ try {
   localVer = verFromVersionTs(readFileSync(path.join(ROOT, 'src/lib/version.ts'), 'utf8'));
 } catch (e) { P('⚠ 讀不到本機 src/lib/version.ts：' + e.message); }
 try {
-  localFirst = firstChangelogVer(readFileSync(path.join(ROOT, 'static/changelog.html'), 'utf8'));
-} catch (e) { P('⚠ 讀不到本機 static/changelog.html：' + e.message); }
+  // ⭐v6.567：前端版本改看 static/site-version.txt（與遊戲無關的 hidden 版本不寫 changelog，第一則不會前進）
+  localFirst = siteVersionFromTxt(readFileSync(path.join(ROOT, 'static/site-version.txt'), 'utf8'));
+} catch (e) { P('⚠ 讀不到本機 static/site-version.txt：' + e.message); }
 
-P(`本機 repo    版本號 = ${localVer ?? '(讀不到)'}   首頁 changelog 第一則 = ${localFirst ?? '(讀不到)'}`);
+P(`本機 repo    版本號 = ${localVer ?? '(讀不到)'}   前端版本標記（site-version.txt）= ${localFirst ?? '(讀不到)'}`);
 P('');
 P('抓取中（五個公開網址，唯讀）…');
 
 const [ghR, testR, prodR, adminR, verJsonR] = await Promise.all([
   get(`${RAW}/src/lib/version.ts`),
-  get(`${TEST}/changelog.html`),
-  get(`${PROD}/changelog.html`),
+  get(`${TEST}/site-version.txt`),
+  get(`${PROD}/site-version.txt`),
   get(`${PROD}/admin/`),
   get(`${PROD}/_app/version.json`),
 ]);
@@ -75,8 +76,8 @@ const rows = evaluate({
   localVer,
   localFirst,
   ghVer: ghR.ok ? verFromVersionTs(ghR.text) : null,
-  testFirst: testR.ok ? firstChangelogVer(testR.text) : null,
-  prodFirst: prodR.ok ? firstChangelogVer(prodR.text) : null,
+  testFirst: testR.ok ? siteVersionFromTxt(testR.text) : null,
+  prodFirst: prodR.ok ? siteVersionFromTxt(prodR.text) : null,
   prodHint: adminR.ok ? adminHint(adminR.text) : null,
   errs: { gh: ghR.err, test: testR.err, prod: prodR.err, admin: adminR.err },
 });

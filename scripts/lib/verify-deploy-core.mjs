@@ -18,6 +18,16 @@ export const verFromVersionTs = (s) =>
 export const firstChangelogVer = (s) =>
   (String(s ?? '').match(/<span class="ver-badge">(v[0-9][0-9.]*)<\/span>/) || [])[1] ?? null;
 
+/**
+ * ⭐v6.567 從 static/site-version.txt（整個檔就是一行版本號，例：6.567）取「這份前端是哪一版」，回 'v6.567' 形式。取不到回 null。
+ *   為什麼不再用 changelog 第一則：站長 2026-10-14「admin的更新，與遊戲內容無關的更新就不用寫在changelog了」
+ *   ⇒ hidden 版本的 changelog 第一則不前進，用它判斷前端有沒有部署會誤報「已部署」。site-version.txt 每一版都由 bump 工具寫入。
+ */
+export const siteVersionFromTxt = (s) => {
+  const m = /^\s*([0-9]+(?:\.[0-9]+)+)\s*$/.exec(String(s ?? ''));
+  return m ? 'v' + m[1] : null;
+};
+
 /** 從 admin.html 取 window.SITE_VERSION_HINT（例：6.386）。取不到回 null。 */
 export const adminHint = (s) =>
   (String(s ?? '').match(/SITE_VERSION_HINT\s*=\s*'([0-9][0-9.]*)'/) || [])[1] ?? null;
@@ -27,7 +37,7 @@ export const adminHint = (s) =>
  *
  * @param {object} v
  *   localVer / ghVer / prodHint   —— 版本號字串（6.386）或 null
- *   localFirst / testFirst / prodFirst —— changelog 徽章（v6.386）或 null
+ *   localFirst / testFirst / prodFirst —— 前端版本標記（v6.386；v6.567 起取自 site-version.txt，見 siteVersionFromTxt）或 null
  *   errs —— { gh, test, prod, admin } 抓取失敗的原因字串（可缺）
  * @returns {Array<{no,name,want,got,ok,bat,note?}>}
  */

@@ -2685,3 +2685,26 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
 - engine 需要卡檔的 helper：**不要**直接 import 卡檔（anti-pattern-lint O 白名單只准縮）⇒ 經 effects.ts 轉接（例：`isImmuneToOppSupporterFromHand`）或下沉 leaf。
 - 監視之眼（站長 2026-10-11＋L3004）：腎上腺腦力／火箭腦力按鈕不能按（`getUsableAbilities`），但特性沒有被消除（冰冷之帳照放）。
 - 舊哨兵區塊（例：v6421）內的文字被還原器逐字釘住 ⇒ 註解更正寫在新版自己的哨兵區塊裡。
+
+## Rule 88（2026-10-14）：更新紀錄只給玩家看大標題；與遊戲無關的版本用 hidden 出版（v6.567）
+
+站長逐字：「只要讓大字讓玩家們看就好，小字這些太細節的內容不用給玩家看」「admin的更新，與遊戲內容無關的更新就不用寫在changelog了，請你要記住」。
+
+1. **資料完整、顯示時過濾**：`static/changelog.html`／`changelog-bodies.html`／`changelog-archive.html` 保留大標題＋摘要＋細節（admin v1.87「📋 更新記錄」讀同一份）。
+   玩家端：首頁走 `src/lib/changelog-titles.ts` 的 `changelogTitlesOnly`；封存頁靠 CSS（`summary{font-size:0}`、只放大 `summary>b:first-of-type`、`details>:not(summary){display:none}`）。
+2. **格式**：每則 summary 必須是 `<span class="ver-badge">vX</span> <b>大標題</b><br>摘要`；大標題**緊接徽章**（句中粗體會被當成標題）；**新寫的**大標題 ≤40 字、不含 `<`（已出版的舊標題有超過 40 字、含巢狀 `<b>` 的，D1 上限 60，首頁要逐位元不變，不要回頭改）。
+   `data-internal="1"`＝與遊戲無關的內部版、`data-dup="1"`＝同版第二份舊紀錄 ⇒ 玩家端不顯示。
+3. **升版工具在 repo**：`python3 scripts/bump-version.py spec.json`。admin-only／與遊戲內容無關的版本 spec 加 `"hidden": true` ⇒ 三個對外檔都不動。
+   ⭐ 每一版（含 hidden）bump 都會寫 `static/site-version.txt`（一行版本號），verify-deploy ②③ 改讀它判斷前端部署（不再看 changelog 第一則，否則 hidden 版會誤報「已部署」）。
+   手動核對一定要帶 `?_vd=時間戳`（正式站 .txt 有 4 小時快取）；這個檔會被 SW 預快取且 cache-first ⇒ **瀏覽器端程式不可以拿它判斷版本**。
+4. **教訓**：v6.567 第一版的守衛全綠，Opus 審查卻抓到封存頁 41 則顯示錯（CSS 讓摘要裡每個 `<b>` 都顯示；11 則句中粗體被當標題）。
+   顯示型改動的守衛要**逐則**在真瀏覽器量（不是只量第一則），並斷言資料格式本身（大標題緊接徽章）。
+
+## Rule 89（2026-10-14）：伺服器鎖重釘順序與兩條寫入守衛（v6.565～v6.566）
+
+1. 錦標賽區塊（Rule 68）的**所有**伺服器改動——含審查建議、文案——全部做完才重釘 28 把鎖；v6.566 因為邊改邊釘多跑了幾輪全套。
+2. `test-v6292 A4`：新的 TROOMS／TMATCH／TREGS… 寫入路徑必須在 `// >>> v6NNN-` 哨兵內，filter 帶 CAS（例 `'gameState.phase': { $ne: 'game-over' }`）。
+3. `test-v6244 ⑫`：`$unset` 只准用在 TMATCH；其他集合清欄位用 `$set: { 欄位: null }`。
+4. room-oracle 系列 harness（v6265／v6270／v6279／v6310／v6525／v6197）替身伺服器 import ⇒ 新增 import 要逐支補 stub。
+5. 順序是 bump → build → **commit** → 全套：test-v6272 ⑩ 用 `git diff <上一版>` 比，新檔沒 commit 就看不到（會紅）；也不要用 `git add -N`（全套沙盒會跳過 i-t-a 檔）。停全套用 `ps -C node -o pid=,args= | awk '$0 ~ /run-tests\.mjs/ {print $1}' | xargs -r kill`（`pkill -f` 會殺到自己的 shell）。
+6. 產品事實（不要重推）：錦標賽時限預設雙敗（決賽雙敗＝沒有冠軍，admin 可切獎賞卡判）；推播偏好是帳號層級、以伺服器為準；休閒線上計時用 `gameClockNow`；擲幣 RNG 已用 20 萬次實測公平。

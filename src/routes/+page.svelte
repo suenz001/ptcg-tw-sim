@@ -1,6 +1,7 @@
 <script lang="ts">
   import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）
   import { onMount } from 'svelte';
+  import { changelogTitlesOnly } from '$lib/changelog-titles';   // ⭐v6.567 首頁更新記錄只顯示大標題
 
 
   import { base } from '$app/paths';
@@ -40,6 +41,10 @@
   let error = $state<string | null>(null);
   let status = $state('初始化中...');
   let changelogOverride = $state('');  // v5.755 admin 可在後台編輯的首頁更新記錄(Firebase config/homeChangelog);空=用程式內建
+  // ⭐v6.567 站長：首頁更新記錄只給玩家看每一版的大標題（摘要與細節收到 admin「📋 更新記錄」分頁）。
+  //   資料檔不動（完整內容），只在顯示時轉換；內部維護版本（data-internal）整則不顯示。同一份字串只轉一次。
+  let _clvIn = '', _clvOut = '';
+  function changelogTitlesView(html: string): string { if (html !== _clvIn) { _clvIn = html; _clvOut = changelogTitlesOnly(html); } return _clvOut; }
   let changelogBuiltin = $state('');   // v5.969 內建 changelog 改由 static/changelog.html 執行時 fetch(移出 bundle,縮小首頁 route node)
   // v6.166 首頁「最新影片」：影片 ID 在**建置時**就由 scripts/fetch-latest-video.mjs
   //   抓 YouTube 頻道 RSS 寫進 src/lib/home-video.json，這裡由 vite 直接編進 bundle。
@@ -475,8 +480,8 @@
   <section class="changelog-section" bind:this={changelogSectionEl}>
     <details class="changelog-outer">
     <summary><h2>📋 版本更新記錄</h2></summary>
-    {#if changelogOverride}<div class="changelog-list">{@html changelogOverride}</div>
-    {:else if changelogBuiltin}<div class="changelog-list">{@html changelogBuiltin}</div>
+    {#if changelogOverride}<div class="changelog-list">{@html changelogTitlesView(changelogOverride)}</div>
+    {:else if changelogBuiltin}<div class="changelog-list">{@html changelogTitlesView(changelogBuiltin)}</div>
     {:else}<div class="changelog-list"><p class="hint">更新記錄載入中…</p></div>{/if}
     </details>
   </section>
@@ -793,6 +798,8 @@
      ⇒ 新增 `test-changelog-html-classes-have-global-css` 守衛：changelog.html／archive 用到的每個
      class 都必須在這裡有對應的 :global() 規則，不能再靠人記得。 */
   .changelog-list :global(.log-body) { padding: 0 0.85rem 0.7rem 1.95rem; font-size: 0.85rem; color: #555; line-height: 1.7; }
+  /* ⭐v6.567 玩家端每一則只剩「版本＋大標題」（changelog-titles.ts 轉出來的 .log-item），不可展開。 */
+  .changelog-list :global(.log-item) { border: 1px solid #e5e5e5; border-radius: 6px; background: #fff; padding: 0.55rem 0.85rem; font-size: 0.9rem; font-weight: 500; color: #333; line-height: 1.65; overflow-wrap: anywhere; }
   /* 同一個缺陷的第二例（守衛一寫完就抓到）：「查看更早的更新紀錄」連結也沒有 :global 規則。 */
   .changelog-list :global(.changelog-archive-link) { display: block; text-align: center; padding: 0.6rem; font-size: 0.85rem; color: #3a5a8a; text-decoration: none; }
   .changelog-list :global(.changelog-archive-link:hover) { text-decoration: underline; }
@@ -1386,6 +1393,7 @@
     .changelog-list :global(details[open] .ver-badge) { background: var(--ui-bg-elev); color: var(--ui-link); }
     .changelog-list :global(details ul) { color: var(--ui-text); }
     .changelog-list :global(.log-body) { color: var(--ui-text-muted); }
+    .changelog-list :global(.log-item) { background: var(--ui-bg-elev); border-color: var(--ui-border); color: var(--ui-text); }
     .changelog-list :global(.changelog-archive-link) { color: var(--ui-link); }
     .hint { color: var(--ui-text-muted); }
 
