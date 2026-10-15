@@ -170,7 +170,7 @@ function hit(M, atk, def, tool, ai = 0) {
     const s = M.applyAction(st, { type: 'ATTACK', attackIndex: ai, actorIdx: 0 }, pool);
     const a = s.players[0].active;
     return {
-      ko: s.log.some(l => String(l.message ?? '').includes('被擊倒')),
+      ko: s.log.some(l => String(l.message ?? '').includes('昏厥！')),   // v6.571：「被擊倒」→「昏厥」
       atkStatus: a?.status ?? null,
       atkDamage: a?.damage ?? null,
       defHand: s.players[1].hand.length,

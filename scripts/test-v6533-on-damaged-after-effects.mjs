@@ -187,7 +187,7 @@ function scenarios(M) {
     while (s.pendingSelection && guard++ < 6) s = rs(s, [fb.iid]);
     const L = (s.log || []).map((l) => l.message);
     return { pawnGone: ![s.players[0].active, ...s.players[0].bench].some((c) => c?.iid === pw.iid),
-      p2Prizes: s.players[1].prizes.length, viaCentral: L.some((x) => x.includes('反彈傷害')), sysSweep: L.some((x) => x.includes('系統擊倒檢查')) };
+      p2Prizes: s.players[1].prizes.length, viaCentral: L.some((x) => x.includes('反彈傷害')), sysSweep: L.some((x) => /系統擊倒檢查|系統昏厥檢查/.test(x)) };
   });
   // RKO_BENCH：攻擊方換到備戰後被反擊打昏 ⇒ 中央 koTargetAfterAttackDamage（不是系統擊倒檢查）
   T('RKO_BENCH', () => {
@@ -197,7 +197,7 @@ function scenarios(M) {
     while (s.pendingSelection && guard++ < 6) s = rs(s, [kb.iid]);
     const L = (s.log || []).map((l) => l.message);
     return { kGone: ![s.players[0].active, ...s.players[0].bench].some((c) => c?.iid === k.iid), p2Prizes: s.players[1].prizes.length,
-      sysSweep: L.some((x) => x.includes('系統擊倒檢查')) };
+      sysSweep: L.some((x) => /系統擊倒檢查|系統昏厥檢查/.test(x)) };
   });
   // ENDGAME（審查 P2-1）：反擊打昏攻擊方（無備戰）＋防守方被打倒帶古舊能量 ⇒ 攻擊方只拿 1 張、沒取完 ⇒ 對手勝（不是平手）
   T('ENDGAME', () => {

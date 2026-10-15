@@ -303,7 +303,7 @@ regPre('代拉基翁|報仇', (state, aIdx, _pool) => {
   const tookPrize = attackKO > 0;
   const bonus = tookPrize ? 80 : 0;
   const s = tookPrize
-    ? addLog(state, '報仇：上對手回合自方寶可夢被招式 KO → +80', aIdx) : state;
+    ? addLog(state, '報仇：上個對手的回合自己有寶可夢因招式的傷害昏厥 → +80', aIdx) : state;
   return { state: s, damage: 50 + bonus };
 });
 

@@ -2510,7 +2510,7 @@ export function tryPromoteToMainForFestival(
   // (3) 中斷例外
   const player = state.players[pending.idx];
   if (!player.active) {
-    return abortFestivalSecondAttack(state, '攻擊者反擊被擊倒');
+    return abortFestivalSecondAttack(state, '攻擊方已昏厥');
   }
   if (player.active.cardId !== pending.originalCardId) {
     return abortFestivalSecondAttack(state, '攻擊者身分變化（進化解除 / 變身效果）');
@@ -3333,9 +3333,9 @@ function koSweepLogLine(
 ): string {
   const who = `${cardLink(inst.iid, name)}`;
   if (inst._faintReason) {
-    return `${inst._faintReason}：${who} 被昏厥！（${where}）對手獲得 ${prizes} 張獎賞卡`;
+    return `${inst._faintReason}：${who} 昏厥！（${where}）對手獲得 ${prizes} 張獎賞卡`;
   }
-  return `⚠️ 系統擊倒檢查：${who} 被擊倒（${where}，傷害 ${inst.damage} ≥ HP ${hp}）+${prizes} 張獎賞卡`;
+  return `⚠️ 系統昏厥檢查：${who} 昏厥（${where}，傷害 ${inst.damage} ≥ HP ${hp}）+${prizes} 張獎賞卡`;
 }
 
 // >>> v6490-ko-after-attack-effects
@@ -3548,7 +3548,7 @@ function resolveAttackActiveKo(
       if (fnPP && fnPP(attackerCard)) {
         preventPrizeAll = true;
         newState = addLog(newState,
-          `「${ab.name}」啟動：${defenderCard.name} 被 ${attackerCard.name} KO，但對手無法獲得獎賞卡`, null);
+          `「${ab.name}」啟動：${defenderCard.name} 因 ${attackerCard.name} 的招式昏厥，但對手無法獲得獎賞卡`, null);
         break;
       }
     }
@@ -3587,13 +3587,13 @@ function resolveAttackActiveKo(
       newState = addLog(newState, `${defenderCard.name} 因「多餘花粉」遺留效果，+${deferredBonus} 張獎賞卡`, null);
     }
     if (whiteLilyBonus > 0) {
-      newState = addLog(newState, `「白蕾雅」效果發動：太晶寶可夢的招式 KO 對手戰鬥位 +${whiteLilyBonus} 張獎賞卡`, aIdx);
+      newState = addLog(newState, `「白蕾雅」效果發動：太晶寶可夢的招式讓對手的戰鬥寶可夢昏厥 +${whiteLilyBonus} 張獎賞卡`, aIdx);
     }
     if (bagonElenaBonus > 0) {
-      newState = addLog(newState, `「巴貝娜與荷蓮娜」效果發動：「N 的」寶可夢招式 KO 對手戰鬥位 +${bagonElenaBonus} 張獎賞卡`, aIdx);
+      newState = addLog(newState, `「巴貝娜與荷蓮娜」效果發動：「N 的」寶可夢的招式讓對手的戰鬥寶可夢昏厥 +${bagonElenaBonus} 張獎賞卡`, aIdx);
     }
     if (greedyGourmetBonus > 0) {
-      newState = addLog(newState, `「貪婪食客」啟動：${attackerCard.name} 的招式擊倒了對手的【基礎】寶可夢 → ${attacker.name} 多獲得 ${greedyGourmetBonus} 張獎賞卡`, aIdx);
+      newState = addLog(newState, `「貪婪食客」啟動：${attackerCard.name} 的招式讓對手的【基礎】寶可夢昏厥 → ${attacker.name} 多獲得 ${greedyGourmetBonus} 張獎賞卡`, aIdx);
     }
     const _formula = koPrizeFormulaLog(basePrizes, [
       ..._v6471Mods.mods,
@@ -3682,9 +3682,9 @@ function resolveAttackActiveKo(
   //   （原本在這裡無條件印 ⇒ 脆弱蛻殼歸 0 時仍寫「+2 張獎賞卡」、接著又寫「無法取得任何獎賞卡」，敘述與實際不符；
   //    且算式先出現「+1（白蕾雅）」、來源說明在後）。
   if (prizes > 0) {
-    newState = addLog(newState, `${cardLink(koInst?.iid, defenderCard.name)} 被擊倒！${attacker.name} 取得 ${prizes} 張獎賞卡。`, null);
+    newState = addLog(newState, `${cardLink(koInst?.iid, defenderCard.name)} 昏厥！${attacker.name} 取得 ${prizes} 張獎賞卡。`, null);
   } else {
-    newState = addLog(newState, `${cardLink(koInst?.iid, defenderCard.name)} 被擊倒！但 ${attacker.name} 無法取得任何獎賞卡。`, null);
+    newState = addLog(newState, `${cardLink(koInst?.iid, defenderCard.name)} 昏厥！但 ${attacker.name} 無法取得任何獎賞卡。`, null);
   }
 
   // 道具：被 KO 時觸發（希望護身符 / 沉重接力棒）— 阻礙之塔時失效
@@ -7331,7 +7331,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
             lbAtkP.active = { ...lbAtkP.active, damage: lbAtkP.active.damage + 120 };
             lbPlayers[aIdx] = lbAtkP;
             newState = addLog({ ...newState, players: lbPlayers },
-              `豪邁炸彈（holder 被 KO）：${lbAtkCard?.name ?? '?'} 受到 ${baseDamage} 點超級進化ex 招式傷害（≥240）→ 放 12 個傷害指示物（+120）！`, null);
+              `豪邁炸彈（持有者昏厥）：${lbAtkCard?.name ?? '?'} 受到 ${baseDamage} 點超級進化ex 招式傷害（≥240）→ 放 12 個傷害指示物（+120）！`, null);
           }
         }
       }
@@ -7353,7 +7353,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           refPlayers[aIdx] = atkP;
           newState = addLog(
             { ...newState, players: refPlayers },
-            `🔧 龐克頭盔（holder KO）：${attackerCard.name} 受到 ${punkReflectDamage} 傷害反擊！`,
+            `🔧 龐克頭盔（持有者昏厥）：${attackerCard.name} 受到 ${punkReflectDamage} 傷害反擊！`,
             null,
           );
         }
@@ -8449,7 +8449,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         const poisonPrizes = prizesForKO(poisonedCard!);
         // v5.889：取獎收斂到中央 addPendingPrize(與一般 KO / 冰冷之帳一致):有正面朝上獎賞開 picker、
         //   私訊揭示取得的卡名(對手看張數)、取完所有獎賞判勝。原 direct-slice 繞過此三者。
-        let poisonState = addLog({ ...state, players }, `${poisonedCard?.name ?? '?'} 被中毒傷害擊倒！`, null);
+        let poisonState = addLog({ ...state, players }, `${poisonedCard?.name ?? '?'} 因中毒傷害昏厥！`, null);
         poisonState = addPendingPrize(poisonState, oIdx, poisonPrizes, pool);
         players[0] = poisonState.players[0]; players[1] = poisonState.players[1];  // 同步(避免後續 {...state,players} 用 stale players 覆蓋獎賞)
         // ⭐v6.502（Opus 審查 2）：取完獎賞也不在這裡結束——另一方的中毒／灼傷、冰冷之帳還沒結算（同時取完獎賞又沒有寶可夢
@@ -8514,7 +8514,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         players[tIdx] = burnedPlayer;
         const burnPrizes = prizesForKO(burnedCard!);
         // v5.889：取獎收斂到中央 addPendingPrize(同中毒/一般 KO)。
-        let burnState = addLog({ ...state, players }, `${burnedCard?.name ?? '?'} 被灼傷傷害擊倒！`, null);
+        let burnState = addLog({ ...state, players }, `${burnedCard?.name ?? '?'} 因灼傷傷害昏厥！`, null);
         burnState = addPendingPrize(burnState, oIdx, burnPrizes, pool);
         players[0] = burnState.players[0]; players[1] = burnState.players[1];
         burnState = liftEndgameForOnKoV6361(burnState);   // ⭐v6.502（Opus 審查 2）：同中毒那一格
@@ -8775,7 +8775,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         const winnerIdx = (1 - i) as 0 | 1;
         const winner = players[winnerIdx];
         state = addLog({ ...state, players },
-          `冰冷之帳：${players[i].name} 有寶可夢被擊倒，${winner.name} 將取得 ${owed} 張獎賞卡。`,
+          `冰冷之帳：${players[i].name} 有寶可夢昏厥，${winner.name} 將取得 ${owed} 張獎賞卡。`,
           null);
         state = liftEndgameForOnKoV6361(addPendingPrize(state, winnerIdx, owed, pool));   // v6.502：取完獎賞也跑完整個檢查
         // v5.498：addPendingPrize 把獎賞發在 state.players，但本地 players 變數會 stale；
@@ -8876,7 +8876,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         }
         if (sandstormPrizes > 0) {
           state = addLog({ ...state, players },
-            `揚沙：${players[oppIdx].name} 有寶可夢被擊倒，${players[ownerIdx].name} 將取得 ${sandstormPrizes} 張獎賞卡。`,
+            `揚沙：${players[oppIdx].name} 有寶可夢昏厥，${players[ownerIdx].name} 將取得 ${sandstormPrizes} 張獎賞卡。`,
             ownerIdx);
           state = liftEndgameForOnKoV6361(addPendingPrize(state, ownerIdx, sandstormPrizes, pool));   // v6.502 同冰冷之帳
         // v5.498：addPendingPrize 把獎賞發在 state.players，但本地 players 變數會 stale；

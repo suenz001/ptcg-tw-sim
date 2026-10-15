@@ -269,9 +269,9 @@ console.log('\n【C】⭐⭐★兩條 KO 管線等價（v6.347 撤回的就是�
     D0(P1) == null && D0(P2) == null, JSON.stringify([D0(P1), D0(P2)]));
   chk('C0 哨兵：兩條路徑**真的是不同管線**（主管線寫「…取得 N 張獎賞卡。」；'
     + '中央 helper 寫「<招式名>：… 被擊倒！+N 張獎賞卡。」）',
-    LOGS(P1).some((x) => x.includes('被擊倒！') && x.includes('取得 2 張獎賞卡'))
-    && LOGS(P2).some((x) => x.includes('波動突刺：') && x.includes('被擊倒！+2 張獎賞卡')),
-    JSON.stringify([LOGS(P1).filter((x) => x.includes('被擊倒')), LOGS(P2).filter((x) => x.includes('被擊倒'))]));
+    LOGS(P1).some((x) => x.includes('昏厥！') && x.includes('取得 2 張獎賞卡'))   // v6.571：「被擊倒！」→「昏厥！」
+    && LOGS(P2).some((x) => x.includes('波動突刺：') && x.includes('昏厥！+2 張獎賞卡')),
+    JSON.stringify([LOGS(P1).filter((x) => x.includes('昏厥')), LOGS(P2).filter((x) => x.includes('昏厥'))]));
 
   chk('C1 ⭐⭐攻擊方剩餘獎賞兩條管線相同（v6.347：主管線 4、中央 helper 6 ⇒ 不等價）',
     PZ(P1, 0) === PZ(P2, 0) && PZ(P1, 0) === 4, JSON.stringify([PZ(P1, 0), PZ(P2, 0)]));

@@ -79,7 +79,7 @@ T('G1b 丟掉另一張 ⇒ 古舊能量仍在身上昏厥 ⇒ 獎賞 1 張、旗
 T('G1c log 順序：先「丟棄」、後「被擊倒」', () => {
   const { s } = shatter('anc');
   const iDis = s.log.findIndex(l => /粉碎箭：丟棄/.test(l.message));
-  const iKo = s.log.findIndex(l => /被擊倒/.test(l.message));
+  const iKo = s.log.findIndex(l => /昏厥！/.test(l.message));   // v6.571：「被擊倒」→「昏厥」
   assert.ok(iDis >= 0 && iKo >= 0 && iDis < iKo, `丟棄 ${iDis}／擊倒 ${iKo}`);
 });
 
@@ -186,7 +186,7 @@ T('G9 索羅亞克｜欺詐 借 未知圖騰｜神秘信號（J）打昏 ⇒ 多
   s = applyAction(s, { type: 'ATTACK', attackIndex: ai, copyAttackChoice: { pokeIid: s.players[1].active.iid, attackIndex: unown.attacks.findIndex(a => a.name === '神秘信號') } }, pool);
   for (let g = 0; g < 4 && s.pendingSelection; g++) s = resolve(s, s.pendingSelection.actorIdx ?? 0, (s.pendingSelection.params?.validIids ?? []).slice(0, 1));
   noLinger(s, 'G9');
-  assert.ok(s.log.some(l => /神秘信號：擊倒對手/.test(l.message)), '應有神秘信號加碼');
+  assert.ok(s.log.some(l => /神秘信號：讓對手的寶可夢昏厥/.test(l.message)), '應有神秘信號加碼');   // v6.571 用詞
   assert.equal(taken(s), 2);
 });
 T('G10 鐵面忍者｜急速折返 打死 耿鬼ex（死亡宣告正面）⇒ 被昏厥的是鐵面忍者，不是換上來的那隻', () => {
@@ -227,7 +227,7 @@ T('G12 念力土偶｜退化光線 50：傷害當下沒昏厥、退化後不夠 
     noLinger(s, 'G12');
     assert.equal(s.players[1].active, null, '退化後的暖暖豬應昏厥');
     assert.equal(taken(s), 1, withAnc ? '退化後才昏厥不是受到招式的傷害而昏厥 ⇒ 古舊能量不生效，照拿 1 張' : '基本 1 張');
-    assert.ok(!s.log.some(l => /系統擊倒檢查/.test(l.message)), '不可再走 sanityKOSweep 的簡化版');
+    assert.ok(!s.log.some(l => /系統擊倒檢查|系統昏厥檢查/.test(l.message)), '不可再走 sanityKOSweep 的簡化版');
   }
 });
 

@@ -226,6 +226,6 @@ reg('白蕾雅', (st, idx) => {
   if (opp.prizes.length !== 2) {
     return addLog(st, '白蕾雅：對手剩餘獎賞卡不是 2 張，無法使用', idx);
   }
-  st = addLog(st, '白蕾雅：本回合若太晶寶可夢招式 KO 對手戰鬥寶可夢 +1 張獎賞卡', idx);
+  st = addLog(st, '白蕾雅：本回合若太晶寶可夢的招式讓對手的戰鬥寶可夢昏厥 +1 張獎賞卡', idx);
   return updatePlayer(st, idx, pl => ({ ...pl, teraKoBonusPrizeThisTurn: true }));
 });

@@ -231,13 +231,14 @@ console.log('\n【F】engine 主管線＋其他反擊型態（無 picker 的招�
   chk('F5e ⭐【HEAD-FAIL】火箭隊的監視塔（【無】特性全部消除；化石是【無】）⇒ 頭蓋尖刺不觸發（0）', atkDmg(r5t) === 0, `dmg=${atkDmg(r5t)}`);
 
   // F6 耿鬼ex｜死亡宣告（特性來源的效果昏厥）
+  //   ⭐v6.571（Rule 40）：log「X 被昏厥！」改「X 昏厥！」⇒ 正、反兩條比對都收新舊兩種寫法（否定那條若只認舊字樣會變安慰劑）
   const gpre = Number(GENG.hp) - 10;
   const c6 = run(MORT, '尾鞭', inst(GENG.id, { damage: gpre }), [inst(PLAIN.id)]);
   const r6 = run(PIXI, '射攻月亮', inst(GENG.id, { damage: gpre }), [inst(PLAIN.id)]);
   const pixiAlive = r6?.players?.[0]?.active?.cardId === String(PIXI.id);
   chk('F6 ⭐⭐⭐【HEAD-FAIL】耿鬼ex｜死亡宣告（正面）：光之翼 ⇒ 超級皮可西ex 不昏厥（正對照：摩托蜥被昏厥）',
-    koed(c6, GENG.id) && logs(c6).some((m) => /死亡宣告：摩托蜥 被昏厥/.test(m))
-    && koed(r6, GENG.id) && pixiAlive && !logs(r6).some((m) => /死亡宣告：超級皮可西ex 被昏厥/.test(m)),
+    koed(c6, GENG.id) && logs(c6).some((m) => /死亡宣告：摩托蜥 (?:被)?昏厥/.test(m))
+    && koed(r6, GENG.id) && pixiAlive && !logs(r6).some((m) => /死亡宣告：超級皮可西ex (?:被)?昏厥/.test(m)),
     `ctrl=${logs(c6).filter((m) => /死亡宣告/.test(m)).join('|')} pixi=${logs(r6).filter((m) => /死亡宣告/.test(m)).join('|')}`);
 
   // F7 log 不再把不相干的特性列成「無效」（engine 非 KO 分支原本列出防守方全部特性）

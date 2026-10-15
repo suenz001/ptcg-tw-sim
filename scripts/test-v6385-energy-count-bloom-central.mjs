@@ -108,7 +108,7 @@ const norm = (r) => {
     //   ⇒ 抽數字**之前**先把這種字樣整段剝掉（B0d 守著這件事）。
     .map((l) => l.replace(/（繁茂×2[^）]*）/g, ''))
     .filter((l) => /\d/.test(l))
-    .filter((l) => !/獎賞卡|被擊倒|抽了|洗入|放回/.test(l));
+    .filter((l) => !/獎賞卡|被擊倒|昏厥|抽了|洗入|放回/.test(l));   // v6.571：「被擊倒」→「昏厥」
   return (lines.join(' | ').match(/\d+/g) || []).join(',');
 };
 

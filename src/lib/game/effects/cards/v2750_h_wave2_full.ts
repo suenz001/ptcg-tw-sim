@@ -1471,8 +1471,8 @@ regPre('故勒頓|輪番狂攻', (state, aIdx, pool) => {
 //   引擎已有 oppDamageKOdMeInLastOppTurn[me] 計數
 regPre('阿羅拉 嘎啦嘎啦|報仇', (state, aIdx, _pool) => {
   const koCount = (state.oppDamageKOdMeInLastOppTurn ?? [0, 0])[aIdx] ?? 0;
-  if (koCount > 0) return { state: addLog(state, `報仇：上對手回合 KO ${koCount} 隻自方 → 30+90 = 120`, aIdx), damage: 120 };
-  return { state: addLog(state, '報仇：上對手回合無 KO → 30', aIdx), damage: 30 };
+  if (koCount > 0) return { state: addLog(state, `報仇：上個對手的回合自己有 ${koCount} 隻寶可夢昏厥 → 30+90 = 120`, aIdx), damage: 120 };
+  return { state: addLog(state, '報仇：上個對手的回合自己沒有寶可夢昏厥 → 30', aIdx), damage: 30 };
 });
 
 // 鳳王|閃耀火焰 100+ — 自方備戰有「太晶」寶可夢 +100
@@ -2073,7 +2073,7 @@ regPost('凱羅斯|慢嚼碎', (state, aIdx, pool) => {
   return applyOppActiveDebuffPost(
     '慢嚼碎',
     (a) => ({ ...a, koAtMyNextEndOfTurn: true }),
-    '慢嚼碎：defender 下個對手回合結束時 KO',
+    '慢嚼碎：對手的戰鬥寶可夢會在下個對手的回合結束時昏厥',
   )(s, aIdx, pool);
 });
 
@@ -2509,12 +2509,12 @@ regPost('阿羅拉 椰蛋樹ex|嗡嗡榍石', (state, aIdx, pool) => {
     const card = pool.get(da.cardId);
     // ⭐ v6.250 場上視角【基礎】走中央述詞（化石在場上是【基礎】寶可夢，官方 id 783/787）
     if (!isBasicPokemonOnField(da, card)) return addLog(r.state, '嗡嗡榍石：對手戰鬥場非基礎，無效', aIdx);
-    return koTargetByAttackEffect(addLog(r.state, '嗡嗡榍石：正面 → 對手戰鬥場(基礎)KO', aIdx), aIdx, da, true, pool, '嗡嗡榍石');
+    return koTargetByAttackEffect(addLog(r.state, '嗡嗡榍石：正面 → 對手的戰鬥寶可夢（基礎）昏厥', aIdx), aIdx, da, true, pool, '嗡嗡榍石');
   }
   // 反 → 對手選 1 備戰「基礎」KO。⚠v5.996：opp-bench-choose 只認 validIids、忽略 filter 欄 → 用 validIids 限基礎。
   const _benchBasic = r.state.players[dIdx].bench.filter(b => isBasicPokemonOnField(b, pool.get(b.cardId))).map(b => b.iid); // v6.250 場上視角中央述詞
   if (_benchBasic.length === 0) return addLog(r.state, '嗡嗡榍石：反面 → 對手備戰無基礎寶可夢，無效', aIdx);
-  return withPending(addLog(r.state, '嗡嗡榍石：反面 → 選 1 對手備戰(基礎)KO', aIdx), {
+  return withPending(addLog(r.state, '嗡嗡榍石：反面 → 選擇 1 隻對手的備戰寶可夢（基礎）昏厥', aIdx), {
     type: 'opp-bench-choose',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
@@ -2528,7 +2528,7 @@ regR('h-wave2-ko-opp-bench-basic', (state, aIdx, iids, _params, pool) => {
   const targetIid = iids[0];
   const benchTarget = state.players[dIdx].bench.find(b => b.iid === targetIid);
   if (!benchTarget) return state;
-  return koTargetByAttackEffect(addLog(state, '嗡嗡榍石：對手備戰寶可夢 KO', aIdx), aIdx, benchTarget, false, pool, '嗡嗡榍石');
+  return koTargetByAttackEffect(addLog(state, '嗡嗡榍石：對手的備戰寶可夢昏厥', aIdx), aIdx, benchTarget, false, pool, '嗡嗡榍石');
 });
 
 // 謎擬Ｑex|惡作劇之手 — 對手 2 隻寶可夢身上各放 3 個指示物（30 點）

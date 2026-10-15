@@ -18088,6 +18088,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
     border-radius:4px; padding:.4rem; margin:.3rem 0;
     color:#ffe082; font-weight:700;
   }
+  /* ⭐v6.571（站長：「讓『昏厥』那行變紅」）：有寶可夢真的昏厥的那一行（判準在 log_format.ts lineClass） */
+  .log-line.log-ko-line {
+    background:rgba(255,90,90,.10); border-left:3px solid #ff6b6b; padding-left:.3rem; color:#ffb4b4;
+  }
   .log-line.log-private {
     background:rgba(170,140,255,.05); border-left:2px solid rgba(170,140,255,.4); padding-left:.3rem;
   }

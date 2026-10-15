@@ -173,7 +173,7 @@ let lucLog = null, lucFormula = null;
   chk('A1 公式逐字正確（含 [] 括號、極限腰帶、力量蛋白飲、弱點）',
       lucFormula === '[130(基礎) +50(極限腰帶) +30(力量蛋白飲)] ×2(弱點) = 420', lucFormula);
   chk('A3 零新增行：公式黏在既有那一行（同一行同時有「被擊倒」或「造成」）',
-      /被擊倒|造成/.test(fs[0]?.line ?? ''), fs[0]?.line);
+      /昏厥！|造成/.test(fs[0]?.line ?? ''), fs[0]?.line);   // v6.571：「被擊倒！」→「昏厥！」
   // 主管線（超級勇氣）的格式必須長一樣
   const st2 = mkState(BRAVE.card, BRAVE.idx, WEAK_F,
     { attacker: { toolAttached: inst(BELT.id) }, p1: { damageBoostFightingThisTurn: 30 } });

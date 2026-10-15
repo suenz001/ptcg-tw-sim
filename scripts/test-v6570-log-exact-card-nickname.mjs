@@ -59,6 +59,10 @@ function scen(L) {
   const d = tk('阿響 使用 皮卡丘ex', ['阿響', '小明'], other);
   r.X4 = JSON.stringify(links(c2)) === JSON.stringify(links(c)) && JSON.stringify(links(d)) === '["阿響","皮卡丘ex"]';
   r.X4n = JSON.stringify({ c2: links(c2), d: links(d) });
+  // X5（審查 P3-1）：暱稱存成帶空白的「 噴火龍ex 」⇒ 去空白後一字不差 ⇒ 照樣是連結（不可以拿去空白前的字串比卡名）
+  const e = tk('噴火龍ex 派出了 噴火龍ex', [' 噴火龍ex ', '小明']);
+  r.X5 = JSON.stringify(links(e)) === '["噴火龍ex","噴火龍ex"]';
+  r.X5n = JSON.stringify(links(e));
   return r;
 }
 const LABEL = {
@@ -66,6 +70,7 @@ const LABEL = {
   X2: '★★★ X2 暱稱只是含卡名（我的噴火龍）：仍照 v6.569 不拆成連結（零回歸）',
   X3: '★★ X3 兩位玩家各自照規則（一位一字不差、一位含卡名）',
   X4: '★★ X4 卡名集合依清單建立：同清單結果一致、換清單立刻生效（快取不會黏住舊清單）',
+  X5: '★★ X5 帶前後空白的暱稱去空白後一字不差 ⇒ 照樣是連結',
 };
 const ZERO = new Set(['X2']);
 const R = scen(await loadLib(normEol(readFileSync(join(ROOT, LF), 'utf8'))));
@@ -78,7 +83,6 @@ else {
   const B = scen(await loadLib(bb.ok ? normEol(bb.out) : ''));
   for (const k of Object.keys(LABEL)) {
     if (ZERO.has(k)) ok(`★★[正對照] v6.569：${k} 在 BASE 上也是綠`, B[k] === true, B[k + 'n']);
-    else if (k === 'X4') continue;   // X4 驗快取正確性（BASE 沒有快取，不構成 HEAD-FAIL 對照）
     else ok(`★★★[H] v6.569：${k} 紅`, B[k] !== true, B[k + 'n']);
   }
 }

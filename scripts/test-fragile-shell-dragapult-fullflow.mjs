@@ -45,7 +45,7 @@ T('② 脫殼忍者在戰鬥位被幻影奇襲200傷害(ex招式傷害)KO → �
   assert(!r.players[1].active || r.players[1].active.cardId!==SHED,'脫殼忍者(active)應被200傷害KO');
   // active 脫殼忍者被 ex 招式傷害 KO → 脆弱蛻殼擋 → 該 KO 不給獎賞(備戰走路草若也死另計,故只驗脫殼忍者這份)
   // 用 log 驗:不應有「脫殼忍者 被擊倒 A 取得 X 張」的獎賞(脆弱蛻殼=0)
-  const shedKoLog=(r.log||[]).map(l=>typeof l==='string'?l:(l?.message??'')).find(t=>t.includes('脫殼忍者')&&t.includes('擊倒'));
+  const shedKoLog=(r.log||[]).map(l=>typeof l==='string'?l:(l?.message??'')).find(t=>t.includes('脫殼忍者')&&t.includes('昏厥'));
   assert(!shedKoLog || !/取得\s*[1-9]/.test(shedKoLog),'脫殼忍者被ex傷害KO不應給獎賞(脆弱蛻殼);log='+shedKoLog);
 });
 console.log(`\n=== 脆弱蛻殼x幻影奇襲完整流程(v5.910): ${pass} PASS, ${fail} FAIL ===`);

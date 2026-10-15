@@ -93,7 +93,7 @@ T('R5 雙方同時昏厥（昏厥分支的反擊）＋ 波克基斯 正面 ⇒ �
   assert.equal(takenA(s), 2, '攻擊方打昏 ex 拿 2');
   assert.ok(s.players[0].discard.some(c => c.iid === atk.iid), '攻擊方也昏厥');
   assert.equal(takenB(s), 2, '防守方 1＋奇跡之吻 1');
-  assert.ok(!s.log.some(l => /系統擊倒檢查/.test(l.message)), '不可再走 sanityKOSweep 的簡化版');
+  assert.ok(!s.log.some(l => /系統擊倒檢查|系統昏厥檢查/.test(l.message)), '不可再走 sanityKOSweep 的簡化版');
 }));
 T('R6 攻擊方沒有備戰 ⇒ 終局，防守方獲勝', () => withHeads(() => {
   let s = board({ active: attacker(), bench: [] }, { active: inst(KOKO, { toolAttached: inst(HELMET) }) });
@@ -119,7 +119,7 @@ T('R8 特性反擊（磨牙彩皮魚｜反擊，對手沒昏厥 ⇒ 共用反擊
   assert.ok(s.players[0].discard.some(c => c.iid === atk.iid), '前置：攻擊方已昏厥');
   assert.ok(s.log.some(l => /奇跡之吻/.test(l.message)), '應擲奇跡之吻');
   assert.equal(takenB(s), 2);
-  assert.ok(!s.log.some(l => /系統擊倒檢查/.test(l.message)), '不可再走 sanityKOSweep 的簡化版');
+  assert.ok(!s.log.some(l => /系統擊倒檢查|系統昏厥檢查/.test(l.message)), '不可再走 sanityKOSweep 的簡化版');
 }));
 T('R9 特性反擊在昏厥分支（雙方同時昏厥）＋ 波克基斯 正面 ⇒ 攻擊方 1、防守方 1＋1', () => withHeads(() => {
   const atk = inst(CACNEA, { damage: 80, energyAttached: [inst(GRASS), inst(GRASS)] });

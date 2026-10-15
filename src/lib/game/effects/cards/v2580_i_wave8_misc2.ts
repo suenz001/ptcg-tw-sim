@@ -204,7 +204,7 @@ regPre('阿響的凱羅斯|一力反攻', (state, aIdx, _pool) => {
   const tookPrize = attackKO > 0;
   const bonus = tookPrize ? 100 : 0;
   const s = tookPrize
-    ? addLog(state, '一力反攻：上對手回合自方寶可夢被招式 KO → +100', aIdx) : state;
+    ? addLog(state, '一力反攻：上個對手的回合自己的「阿響的寶可夢」因招式的傷害昏厥 → +100', aIdx) : state;
   return { state: s, damage: 70 + bonus };
 });
 
@@ -215,7 +215,7 @@ regPre('赫普的朽木妖|恐怖復仇', (state, aIdx, _pool) => {
   const tookPrize = attackKO > 0;
   const bonus = tookPrize ? 100 : 0;
   const s = tookPrize
-    ? addLog(state, '恐怖復仇：上對手回合「赫普的寶可夢」被招式 KO → +100', aIdx)
+    ? addLog(state, '恐怖復仇：上個對手的回合「赫普的寶可夢」因招式的傷害昏厥 → +100', aIdx)
     : state;
   return { state: s, damage: 30 + bonus };
 });

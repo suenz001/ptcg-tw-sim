@@ -1589,6 +1589,7 @@
   .mp-log-line .log-card-link:hover { color: #a0d0ff; background: rgba(128,192,255,0.1); }
   .mp-log-line .log-card-link:focus { outline: 1px dotted #a0d0ff; outline-offset: 1px; }
   .mp-log-line.log-turn-marker { background: rgba(170,200,255,.08); color:#bcd4ff; font-weight:700; padding: 2px 4px; }
+  .mp-log-line.log-ko-line { background: rgba(255,90,90,.10); border-left: 3px solid #ff6b6b; padding-left: 4px; color:#ffb4b4; }   /* ⭐v6.571 昏厥那一行整行標紅 */
   .mp-log-line.log-victory { background: rgba(255,200,80,.12); color:#ffe082; font-weight:700; padding: 2px 4px; }
   .mp-log-line.private { color: #d0c0ff; }
   .log-private-icon { margin-right:.2rem; opacity:.8; font-size:.85em; }

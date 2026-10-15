@@ -633,7 +633,7 @@ export const DEFENSE_RULES_DOC = [
     scope: 'bench (雙方)',
     via: 'resolveBenchGuard / isBenchProtected + counterPlacement 旗標',
     note: '卡面：雙方備戰不會因招式與特性的效果而被放傷害指示物（會受招式傷害）。'
-        + 'v6.028 前誤擋換位/退化/丟道具/bounce/效果KO（玩家回報：對戰圓形在場時鐵掌力士抓不到備戰）',
+        + 'v6.028 前誤擋換位/退化/丟道具/bounce/效果昏厥（玩家回報：對戰圓形在場時鐵掌力士抓不到備戰）',
   },
   {
     card: '球形盾牌',

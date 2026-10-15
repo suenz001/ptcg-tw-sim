@@ -90,14 +90,14 @@ function scenarios(M) {
     let s = act(mk({ a0: lu, b0: [inst(ID.filler)], a1: inst(ID.landorus), b1: [o] }), { type: 'ATTACK', attackIndex: atkIdx(ID.lucario, '波導彈'), actorIdx: 0 });
     s = drive(s, (ps) => (ps.params?.validIids ?? []).includes(o.iid) ? [o.iid] : (ps.params?.validIids ?? []).slice(0, 1));
     const L = (s.log || []).map((l) => l.message);
-    return { luGone: ![s.players[0].active, ...s.players[0].bench].some((c) => c?.iid === lu.iid), p2Prizes: s.players[1].prizes.length, sys: L.some((x) => x.includes('系統擊倒檢查')) }; });
+    return { luGone: ![s.players[0].active, ...s.players[0].bench].some((c) => c?.iid === lu.iid), p2Prizes: s.players[1].prizes.length, sys: L.some((x) => /系統擊倒檢查|系統昏厥檢查/.test(x)) }; });
   // LUC_KO2：波導彈一擊打倒備戰拖拖蚓ex（當場觸發）、快掃拳返打昏路卡利歐 ⇒ 中央結算
   T('LUC_KO2', () => { const lu = inst(ID.lucario, { energyAttached: many(ID.F, 3), damage: Number(pool.get(ID.lucario).hp) - 40 });
     const o = inst(ID.orth, { energyAttached: many(ID.M, 2), damage: Number(pool.get(ID.orth).hp) - 60 });
     let s = act(mk({ a0: lu, b0: [inst(ID.filler)], a1: inst(ID.landorus), b1: [o] }), { type: 'ATTACK', attackIndex: atkIdx(ID.lucario, '波導彈'), actorIdx: 0 });
     s = drive(s, (ps) => (ps.params?.validIids ?? []).includes(o.iid) ? [o.iid] : (ps.params?.validIids ?? []).slice(0, 1));
     const L = (s.log || []).map((l) => l.message);
-    return { luGone: ![s.players[0].active, ...s.players[0].bench].some((c) => c?.iid === lu.iid), sys: L.some((x) => x.includes('系統擊倒檢查')), viaCentral: L.some((x) => x.includes('快掃拳返') && x.includes('被擊倒')) || L.some((x) => /快掃拳返：.*被擊倒/.test(x)) }; });
+    return { luGone: ![s.players[0].active, ...s.players[0].bench].some((c) => c?.iid === lu.iid), sys: L.some((x) => /系統擊倒檢查|系統昏厥檢查/.test(x)), viaCentral: L.some((x) => x.includes('快掃拳返') && x.includes('昏厥')) || L.some((x) => /快掃拳返：.*昏厥/.test(x))   /* v6.571 用詞 */ }; });
   // LUC_KO3（複審 P3-1）：同 LUC_KO2 但路卡利歐沒有備戰、獎賞 6/1
   //   ⇒ 快掃拳返寫終局後仍要 lift：拖拖蚓ex 照常被擊倒、P1 取 2 張剩 4、P2 取完 ⇒ P2 勝
   T('LUC_KO3', () => { const lu = inst(ID.lucario, { energyAttached: many(ID.F, 3), damage: Number(pool.get(ID.lucario).hp) - 40 });

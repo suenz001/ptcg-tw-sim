@@ -116,7 +116,7 @@ function makeCases({ createGame, applyAction }) {
     assert.equal(tentLogs(s).length, 1, '灼傷昏厥後冰冷之帳同樣在補位之前放');
     assert.equal(s.players[1].bench[0].damage, 10, '對手備戰的波克基斯（有特性）放 1 個');
     assert.equal(s.endTurnContinueAfterKO, 0);
-    const iS = idxOf(s, /(?:灼傷|燒傷)傷害擊倒/  /* v6.556 Rule 40：log 用詞改官方「灼傷」，意圖（灼傷 KO 那行在冰冷之帳之前）不變 */), iT = idxOf(s, /^冰冷之帳：/);
+    const iS = idxOf(s, /(?:灼傷|燒傷)傷害(?:擊倒|昏厥)/  /* v6.556 Rule 40：log 用詞改官方「灼傷」；v6.571 Rule 40：「擊倒」改「昏厥」（BASE 引擎仍是舊字樣 ⇒ 兩者都收）。意圖（灼傷昏厥那行在冰冷之帳之前）不變 */), iT = idxOf(s, /^冰冷之帳：/);
     assert.ok(iS >= 0 && iT > iS, 'log 順序：灼傷昏厥 → 冰冷之帳');
   };
   C.F5 = () => {

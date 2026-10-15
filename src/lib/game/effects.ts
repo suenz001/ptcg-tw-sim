@@ -1256,7 +1256,7 @@ export function koDefenderSidePrizeModifiers(args: {
       const holder = [_p.active, ..._p.bench].find(x => !!x && _v6196HasEffAbilByInst(boardState, defenderIdx, x, pool, '影藏'));
       const holderName = (holder && pool.get(holder.cardId)?.name) || '超級耿鬼ex';
       mods.push({ label: '影藏', delta: -1,
-        log: `👻 影藏（${holderName} 的特性）：${koName} 是【惡】寶可夢，被寶可夢【ex】的招式傷害擊倒 → ${takerName} 獲得的獎賞卡 -1 張` });
+        log: `👻 影藏（${holderName} 的特性）：${koName} 是【惡】寶可夢，因寶可夢【ex】的招式傷害昏厥 → ${takerName} 獲得的獎賞卡 -1 張` });
     }
   }
   return { mods, ancientJustUsed };
@@ -1320,7 +1320,7 @@ export function koPrizesAdjusted(
       const fnPP = PASSIVE_PREVENT_PRIZE.get(ab.name);
       if (fnPP && atkCard && fnPP(atkCard)) {
         // ⭐v6.471：補 log（與 engine 主傷害 KO 分支同一句；原本這條路徑靜默歸 0）
-        s = addLog(s, `「${ab.name}」啟動：${koCard.name} 被 ${atkCard.name} KO，但對手無法獲得獎賞卡`, null);
+        s = addLog(s, `「${ab.name}」啟動：${koCard.name} 因 ${atkCard.name} 的招式昏厥，但對手無法獲得獎賞卡`, null);
         // ⭐v6.493（稽核 B6）：帶出「對手無法獲得獎賞卡」⇒ 呼叫端的奇跡之吻照擲但不加獎賞（與 engine 主傷害分支一致）
         return { prizes: 0, state: s, preventPrizeAll: true };
       }
@@ -1815,7 +1815,7 @@ function hitBenchAll(
   }
   if (koNames.length > 0) {
     // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）
-    s = addLog(s, `${attackLabel}：${koNames.join('、')} 被擊倒，${state.players[koPrizeTaker(targetIdx)].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
+    s = addLog(s, `${attackLabel}：${koNames.join('、')} 昏厥，${state.players[koPrizeTaker(targetIdx)].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
     s = addPendingPrize(s, koPrizeTaker(targetIdx), morePrizes, pool);
     // v2.246 KO cause tracking（self-KO 由 recordOppKO 內部 skip）
     for (const card of koCards) {
@@ -1997,7 +1997,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   }
   if (koNames.length > 0) {
     // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）
-    s = addLog(s, `${label}：${koNames.join('、')} 被擊倒，${st.players[koPrizeTaker(targetIdx)].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
+    s = addLog(s, `${label}：${koNames.join('、')} 昏厥，${st.players[koPrizeTaker(targetIdx)].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
     s = addPendingPrize(s, koPrizeTaker(targetIdx), morePrizes, pool);
     for (const card of koCards) {
       s = recordOppKO(s, targetIdx, card, 'attack');
@@ -7519,7 +7519,7 @@ export function revengeDamageKOPre(base: number, bonus: number, label: string): 
     const tookPrize = attackKO > 0;
     const add = tookPrize ? bonus : 0;
     const s = tookPrize
-      ? addLog(state, `${label}：上個對手主回合自己有寶可夢被招式 KO → +${bonus} 傷害`, aIdx)
+      ? addLog(state, `${label}：上個對手的回合自己有寶可夢因招式的傷害昏厥 → +${bonus} 傷害`, aIdx)
       : state;
     return { state: s, damage: base + add };
   };
@@ -7534,7 +7534,7 @@ regPre('古玉魚|嫉妒業火', (state, aIdx, _pool) => {
   const tookPrize = attackKO > 0;
   const bonus = tookPrize ? 90 : 0;
   const s = tookPrize
-    ? addLog(state, `嫉妒業火：上個對手主回合自己有寶可夢被招式 KO → +90 傷害`, aIdx)
+    ? addLog(state, `嫉妒業火：上個對手的回合自己有寶可夢因招式昏厥 → +90 傷害`, aIdx)
     : state;
   return { state: s, damage: 50 + bonus };
 });
@@ -8564,7 +8564,7 @@ export function applyDamageToAllOpp(
       const p = _ko.prizes;
       prizesTotal += p;
       defender = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
-      s = addLog(s, `${label}：${defCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
+      s = addLog(s, `${label}：${defCard?.name ?? '?'} 昏厥！+${p} 張獎賞卡。`, null);
       s = recordOppKO(s, dIdx, defCard, 'attack', false);
       // >>> v6493-b2-all-opp-miracle-kiss
       // ⭐v6.493（稽核 B2）：v5.830 宣告了這個旗標卻從來沒有設成 true ⇒ 痛楚記憶／侵蝕之風／覆雪 打昏
@@ -8610,7 +8610,7 @@ export function applyDamageToAllOpp(
       const p = _ko.prizes;
       prizesTotal += p;
       defender = { ...defender, discard: [...defender.discard, ...koDiscard] };
-      s = addLog(s, `${label}：${card?.name ?? '?'}（備戰）被擊倒！+${p} 張獎賞卡。`, null);
+      s = addLog(s, `${label}：${card?.name ?? '?'}（備戰）昏厥！+${p} 張獎賞卡。`, null);
       s = recordOppKO(s, dIdx, card, 'attack', false);
       // 不加入 newBench = 移除
     } else {
@@ -9923,7 +9923,7 @@ export function koTargetAfterAttackDamage(
   if (isActive) newDefender.active = null;
   else newDefender.bench = defenderNow.bench.filter(c => c.iid !== targetIid);
   players[dIdx] = newDefender;
-  let s = addLog({ ...st, players }, `${label}：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。${_fSuffix}`, null);
+  let s = addLog({ ...st, players }, `${label}：${targetCard?.name ?? '?'} 昏厥！+${p} 張獎賞卡。${_fSuffix}`, null);
   if (_isk.toHand.length > 0) s = addLog(s, `無限之影：${targetCard?.name ?? '?'} 因對手招式的傷害【昏厥】→ 本體與進化來源卡放回手牌（附加能量/道具丟棄）`, dIdx);
   s = recordOppKO(s, dIdx, targetCard, 'attack', kind === 'attack-damage');
   // v5.495：被 KO 觸發附加道具 TOOL_ON_KO（沉重接力棒移能量 / 希望護身符抽牌）——
@@ -11329,7 +11329,7 @@ regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
     players[aIdx] = { ...att, active: null, discard: [...att.discard, ...ko] };
     // v5.469：自損昏厥（不是「受到對手招式傷害」）⇒ 古舊能量等不觸發，維持基本張數。
     const oppPrizes = card ? (prizesForKOLocal(card)) : 1;
-    s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 也被擊倒，對手待取 ${oppPrizes} 張獎賞卡`, null);
+    s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 也昏厥，對手待取 ${oppPrizes} 張獎賞卡`, null);
     s = addPendingPrize(s, dIdx, oppPrizes, pool);
     s = miracleKissOnActiveFaint(s, aIdx, pool);
     s = liftEndgameForOnKoV6361(s);
@@ -11400,7 +11400,7 @@ regPost('多龍巴魯托ex|幻影奇襲', (state, aIdx, pool) => {
   //   picker UI 因此顯示所有 bench；玩家可選任何一隻，免疫者照 counter 消耗、實際 damage=0。
   const defender = state.players[dIdx];
   const validIids: string[] = defender.bench.map(c => c.iid);
-  const s = addLog(state, '幻影奇襲：將 6 個傷害指示物自由分配到對手備戰寶可夢（必須全部放完，KO/免疫後溢出指示物消耗）', aIdx);
+  const s = addLog(state, '幻影奇襲：將 6 個傷害指示物自由分配到對手備戰寶可夢（必須全部放完，昏厥／免疫後溢出的指示物作廢）', aIdx);
   return withPending(s, {
     type: 'damage-distribute',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
@@ -11501,7 +11501,7 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
       };
       s = addPendingPrize({ ...s, players }, actorIdx, prizes, pool);
       s = addLog(s,
-        `${label}：${targetCard?.name ?? '?'} 累計到第 ${placedBefore + placedThisBatch}/${totalCounters} 個指示物 → 被擊倒！+${prizes} 張獎賞卡`, actorIdx);
+        `${label}：${targetCard?.name ?? '?'} 累計到第 ${placedBefore + placedThisBatch}/${totalCounters} 個指示物 → 昏厥！+${prizes} 張獎賞卡`, actorIdx);
       s = recordOppKO(s, dIdx, targetCard, 'attack', false);
     } else {
       const players = [...s.players] as [PlayerState, PlayerState];
@@ -11535,7 +11535,7 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
       overflowParts.push(`${cnt} 個`);
     }
     s = addLog(s,
-      `${label}：溢出 ${overflowParts.join('、')} 指示物（KO 後消耗，不挪到其他寶可夢）`, actorIdx);
+      `${label}：溢出 ${overflowParts.join('、')} 指示物（昏厥後溢出的作廢，不挪到其他寶可夢）`, actorIdx);
   }
 
   // 還有 counter 要放 + 對手仍有備戰 → 再開 pending
@@ -13271,7 +13271,7 @@ function bonusPrizeIfKOPost(bonus: number, label: string): AttackPostFn {
     //   與復仇家族的 `oppDamageKOdMeInLastOppTurn` 同一份判準（Rule 38：不新增第二個記錄機制）。
     //   ⇒ 招式**效果**造成的昏厥（byDamage=false，如放指示物打死）**不**加碼，完全對齊卡面。
     if ((state.oppDamageKOdMeThisTurn?.[dIdx] ?? 0) <= 0) return state;
-    const s = addLog(state, `${label}：擊倒對手 → 多獲得 ${bonus} 張獎賞卡`, aIdx);
+    const s = addLog(state, `${label}：讓對手的寶可夢昏厥 → 多獲得 ${bonus} 張獎賞卡`, aIdx);
     return addPendingPrize(s, aIdx, bonus, pool);
   };
 }
@@ -13507,7 +13507,7 @@ export function koTargetByAttackEffect(
   if (isActive) newDef.active = null;
   else newDef.bench = s.players[dIdx].bench.filter(b => b.iid !== target.iid);
   players[dIdx] = newDef;
-  s = addLog({ ...s, players }, `${label}：${card?.name ?? '?'} 被昏厥！+${prizes} 張獎賞卡`, attackerIdx);
+  s = addLog({ ...s, players }, `${label}：${card?.name ?? '?'} 昏厥！+${prizes} 張獎賞卡`, attackerIdx);
   s = recordOppKO(s, dIdx, card, 'attack', false);
   if (!deferVerdict && isActive && newDef.bench.length === 0) {
     return { ...s, phase: 'game-over', winner: attackerIdx, winReason: `${def.name} 沒有可上場的寶可夢` };
@@ -15587,7 +15587,7 @@ function oppActiveDeferredPrizeNextPost(bonus: number, label: string): AttackPos
     const guard = canApplyAttackEffectToTarget(state, aIdx, d.active, defCard, pool);
     if (guard.blocked) {
       return addLog(state,
-        `${label}：${defCard?.name ?? '?'}｜${guard.reason}（不施加「KO 多 +${bonus} 張獎賞」）`, aIdx);
+        `${label}：${defCard?.name ?? '?'}｜${guard.reason}（不施加「昏厥時多 +${bonus} 張獎賞卡」）`, aIdx);
     }
     const dName = pool.get(d.active.cardId)?.name ?? '?';
     const players = [...state.players] as [PlayerState, PlayerState];
@@ -15600,7 +15600,7 @@ function oppActiveDeferredPrizeNextPost(bonus: number, label: string): AttackPos
     };
     return addLog(
       { ...state, players },
-      `${label}：${dName} 若在攻擊方下個回合被擊倒，多 +${bonus} 張獎賞卡`,
+      `${label}：${dName} 若在攻擊方下個回合昏厥，多 +${bonus} 張獎賞卡`,
       aIdx,
     );
   };
@@ -15798,7 +15798,7 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
     };
     players[dIdx] = newDefender;
     s = addLog({ ...s, players },
-      `${label}：在 ${targetCard?.name ?? '?'} 身上放 ${counters} 個傷害指示物 → 被擊倒！+${prizes} 張獎賞卡`, actorIdx);
+      `${label}：在 ${targetCard?.name ?? '?'} 身上放 ${counters} 個傷害指示物 → 昏厥！+${prizes} 張獎賞卡`, actorIdx);
     s = addPendingPrize(s, actorIdx, prizes, pool);
     // v2.246：對手主動特性 KO 對手寶可夢（從 dIdx victim 視角是「對手特性 KO 我方」）
     s = recordOppKO(s, dIdx, targetCard, 'ability');

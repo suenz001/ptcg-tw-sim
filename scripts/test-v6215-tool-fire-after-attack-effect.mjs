@@ -120,7 +120,7 @@ console.log('── B) 批1 幸運頭盔 × 磨庫招式（KO 分支）───
               P('P1', { active: mon(C.koupa, 'def', { toolAttached: { iid: 'tool1', cardId: C.helmet } }),
                         bench: [mon(C.hydre, 'db1')], deck: DECK5() }));
   st = mod.applyAction(st, { type: 'ATTACK', attackIndex: 0, actorIdx: 0 }, pool);
-  ok(st.log.some(l => l.message.includes('被擊倒')), 'B0 確實走 KO 分支');
+  ok(st.log.some(l => l.message.includes('昏厥！')), 'B0 確實走 KO 分支');   // v6.571：log 用詞「被擊倒」→「昏厥」
   eq(ids(st.players[1].hand), 'dkD,dkE', 'B1 KO 分支也是「先磨庫、後抽牌」');
   // ⭐v6.490（Rule 40）：昏厥改在招式效果之後才結算 ⇒ 棄牌順序變成「先磨庫 A,B,C、後被擊倒的寶可夢與道具」
   //   （原本 KO 先進棄牌區，所以 A,B,C 在尾端）。意圖（A,B,C 是磨庫丟的、沒有被抽走）不變。
@@ -444,7 +444,7 @@ console.log('── M) 批2 手持循環扇在 KO 分支也要延後、也要帶
   st = mod.applyAction(st, { type: 'ATTACK', attackIndex: 0, actorIdx: 0 }, pool);
   // ⭐v6.490（Rule 40）：昏厥改在招式效果（含延後觸發的受傷道具視窗）全部結束後才結算 ⇒ 此刻受害者是「待結算」，
   //   手持循環扇的視窗解完才被擊倒（M6）。意圖（KO 情境也延後、也帶 iid 快照）不變。
-  ok(st.log.some(l => l.message.includes('被擊倒')) || st._pendingAttackKo?.victimIid === 'def', 'M1 確實是致死一擊（已擊倒或待招式效果結束後結算）');
+  ok(st.log.some(l => l.message.includes('昏厥！')) || st._pendingAttackKo?.victimIid === 'def', 'M1 確實是致死一擊（已擊倒或待招式效果結束後結算）');
   eq(st.pendingSelection?.effectKey ?? null, 'cycle-fan-step1-pick-energy', 'M2 KO 分支也會觸發手持循環扇');
   eq(st.pendingSelection?.params?.attackerIid ?? null, 'atk', 'M3 ⭐ KO 分支的觸發也帶攻擊當下的 iid 快照');
   const li = st.log.map(l => l.message);
@@ -453,7 +453,7 @@ console.log('── M) 批2 手持循環扇在 KO 分支也要延後、也要帶
   st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: ['ae1'], token: st.pendingSelection?.token }, pool);
   st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: ['ab1'], token: st.pendingSelection?.token }, pool);
   eq(ids(st.players[0].bench[0]?.energyAttached), 'ae1', 'M5 能量確實改附到攻擊方備戰');
-  ok(st.log.some(l => l.message.includes('被擊倒')) && !st._pendingAttackKo, 'M6 ⭐v6.490 視窗解完後才被擊倒（不殘留待結算）');
+  ok(st.log.some(l => l.message.includes('昏厥！')) && !st._pendingAttackKo, 'M6 ⭐v6.490 視窗解完後才被擊倒（不殘留待結算）');
 }
 
 console.log('── L) 沒登記 refresher 的排隊 picker 必須照常浮上來（正對照）───────');

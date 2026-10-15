@@ -645,7 +645,7 @@ regG('巴貝娜與荷蓮娜', (st, idx, pool) => {
   return REQUIRED_N_NAMES.every(n => onField.has(n));
 });
 reg('巴貝娜與荷蓮娜', (st, idx, _pool) => {
-  st = addLog(st, '巴貝娜與荷蓮娜：本回合自己的「N 的」寶可夢招式 KO 對手戰鬥場時 +3 獎賞', idx);
+  st = addLog(st, '巴貝娜與荷蓮娜：本回合自己的「N 的」寶可夢的招式讓對手的戰鬥寶可夢昏厥時 +3 張獎賞卡', idx);
   return updatePlayer(st, idx, p => ({ ...p, bagonElenaThisTurn: true }));
 });
 

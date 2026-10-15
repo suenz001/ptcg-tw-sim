@@ -1114,7 +1114,7 @@ regPost('西獅海壬|水迴旋', (state, aIdx) => {
   // 但 toReturn 內第 1 張 (att) 應該是 cleaned 版（不帶 damage / energy / tool / stack）
   toReturn[0] = cleanedActive;
   return updatePlayer(
-    addLog(state, '水迴旋：自身與附加卡放回牌庫並重洗（不算 KO，無獎賞）', aIdx),
+    addLog(state, '水迴旋：自身與附加卡放回牌庫並重洗（不算昏厥，沒有獎賞卡）', aIdx),
     aIdx,
     pl => ({
       ...pl,

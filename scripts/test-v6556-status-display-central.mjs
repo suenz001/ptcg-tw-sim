@@ -193,8 +193,8 @@ async function scenarios(M, srcRoot) {
   };
   const lgHeads = runBurn(0, 0), lgKo = runBurn(0.9, 200);
   r.C3 = /正面：灼傷解除/.test(lgHeads) && !/燒傷/.test(lgHeads);
-  r.C4 = /被灼傷傷害擊倒/.test(lgKo) && !/燒傷/.test(lgKo);
-  r.C4n = (lgKo.match(/.*擊倒.*/) || [''])[0];
+  r.C4 = /因灼傷傷害昏厥/.test(lgKo) && !/燒傷/.test(lgKo);   // v6.571（Rule 40）：「被灼傷傷害擊倒」→「因灼傷傷害昏厥」
+  r.C4n = (lgKo.match(/.*昏厥.*/) || [''])[0];
   Math.random = () => 0;
   let o2; try { o2 = M.coinStatusPost('burned')(st, 1, pool); } finally { Math.random = orig; }
   const l2 = L(o2);

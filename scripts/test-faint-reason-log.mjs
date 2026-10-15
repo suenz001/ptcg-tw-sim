@@ -82,8 +82,8 @@ T('⭐⭐打到自方時，log 要寫「擊斃」而不是「系統擊倒檢查�
   const st = mod.applyAction(mkState('N的索羅亞克ex', [], ['米立龍']),
     { type: 'ATTACK', attackIndex: 0, actorIdx: 0 }, pool);
   const all = logs(st).join('\n');
-  assert.ok(/擊斃：米立龍 被昏厥！/.test(all), '應有「擊斃：米立龍 被昏厥！」，實得：\n' + all);
-  assert.ok(!/系統擊倒檢查/.test(all),
+  assert.ok(/擊斃：米立龍 昏厥！/.test(all), '應有「擊斃：米立龍 昏厥！」（v6.571：「被昏厥」語法不通，改「昏厥」），實得：\n' + all);
+  assert.ok(!/系統擊倒檢查|系統昏厥檢查/.test(all),   // v6.571：兜底檢查改名「系統昏厥檢查」
     '不可再出現「系統擊倒檢查」——那是兜底機制的名字，玩家會誤以為是系統異常：\n' + all);
 });
 
@@ -99,7 +99,7 @@ T('⭐打到對手時維持原路徑（koTargetByAttackEffect，不走 sweep）'
   const st = mod.applyAction(mkState('N的索羅亞克ex', ['N的索羅亞'], []),
     { type: 'ATTACK', attackIndex: 0, actorIdx: 0 }, pool);
   const all = logs(st).join('\n');
-  assert.ok(/擊斃：N的索羅亞 被昏厥！\+1 張獎賞卡/.test(all), '對手側措辭應維持原樣：\n' + all);
+  assert.ok(/擊斃：N的索羅亞 昏厥！\+1 張獎賞卡/.test(all), '對手側措辭應維持原樣：\n' + all);
   assert.equal(st.players[1].bench.length, 0, '對手備戰應被昏厥');
 });
 
@@ -110,7 +110,7 @@ T('⭐⭐沒有來源的 zombie KO 仍寫「系統擊倒檢查」（保住兜底
   st0.players[1].bench[0].damage = 9999;
   const st = mod.applyAction(st0, { type: 'ATTACK', attackIndex: 1, actorIdx: 0 }, pool);  // 用水射擊，不觸發擊斃
   const all = logs(st).join('\n');
-  assert.ok(/系統擊倒檢查/.test(all), '無來源的殭屍 KO 應維持「系統擊倒檢查」：\n' + all);
+  assert.ok(/系統昏厥檢查/.test(all), '無來源的殭屍 KO 應維持兜底的「系統昏厥檢查」（v6.571 起由「系統擊倒檢查」改名）：\n' + all);
 });
 
 T('⭐markFaintByEffect 不傳 reason 時行為不變（向後相容）', () => {
@@ -139,7 +139,7 @@ T('⭐同一條中央管線也涵蓋其他效果昏厥（滲透寒氣／浸蝕�
   // sweep 內不可再各自手刻措辭
   const i = eng.indexOf('function sanityKOSweep(');
   const body = eng.slice(i, eng.indexOf('\n}', i));
-  assert.ok(!/系統擊倒檢查/.test(body), 'sweep 內不可再手刻措辭字串，一律走 koSweepLogLine');
+  assert.ok(!/系統擊倒檢查|系統昏厥檢查/.test(body), 'sweep 內不可再手刻措辭字串，一律走 koSweepLogLine');
 });
 
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);

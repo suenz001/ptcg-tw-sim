@@ -91,7 +91,7 @@ function scenarios(M) {
       let r = act(s, { type: 'ATTACK', attackIndex: 0 });
       let g = 0; while (r.pendingSelection && g++ < 4) { const ps = r.pendingSelection; r = act(r, { type: 'RESOLVE_SELECTION', effectKey: ps.effectKey, selectedIids: (ps.params?.validIids ?? []).slice(0, Math.max(1, ps.minCount || 0)), actorIdx: ps.actorIdx ?? 0, pendingToken: ps.token }); }
       const taken = 3 - r.players[0].prizes.length + (r.pendingPrizes?.[0] ?? 0) * 0;
-      return { taken, ko: !r.players[1].active || r.players[1].active.iid !== top.iid, sweep: msgs(r).some((m) => /系統擊倒檢查/.test(m)) };
+      return { taken, ko: !r.players[1].active || r.players[1].active.iid !== top.iid, sweep: msgs(r).some((m) => /系統擊倒檢查|系統昏厥檢查/.test(m)) };
     };
     out.B1 = run(true, 80);    // 80＋20＝100：銃嘴大鳥 150 沒倒；退化成喇叭啄鳥（90）後昏厥
     out.B2 = run(false, 80);

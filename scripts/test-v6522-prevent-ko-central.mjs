@@ -13,6 +13,7 @@
  * 【N】新行為：狙擊路徑用掉倖存鍛鍊器時也印「🔧 倖存鍛鍊器 已丟棄到棄牌區」（v5.518 主管線早就有，狙擊路徑漏印）
  * 【H】HEAD-FAIL：BASE 的 S、N 逐條紅（A 是零回歸比對，本來就要兩邊一樣）
  */
+import { normalizeLogWording } from './lib/log-wording-normalize.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -67,7 +68,8 @@ function scenarios(M) {
     setupDone: [true, true], log: [], pendingSelection: null, stadiumPlayedThisTurn: [false, false], stadiumUsedThisTurn: [false, false],
     players: [{ name: 'P1', active: null, bench: [], hand: [], deck: [inst(ID.F), inst(ID.F)], discard: [], prizes: [inst(ID.F), inst(ID.F), inst(ID.F)], ...me },
               { name: 'P2', active: null, bench: [inst(ID.snorlax)], hand: [], deck: [inst(ID.F), inst(ID.F)], discard: [], prizes: [inst(ID.F), inst(ID.F), inst(ID.F)], ...opp }], ...extra });
-  const msgs = (s) => (s.log || []).map((l) => String(l?.message ?? l).replace(/[^]*/g, '').replace(/[]/g, ''));
+  // ⭐v6.571（Rule 40）：BASE 的 log 是舊用詞（被擊倒）⇒ 比對前兩邊都正規化成新用詞（scripts/lib/log-wording-normalize.mjs）
+  const msgs = (s) => (s.log || []).map((l) => normalizeLogWording(String(l?.message ?? l)).replace(/[^]*/g, '').replace(/[]/g, ''));
   const snapOf = (s, iid, dropDiscardLog) => {
     const p = s.players[1]; const v = p.active?.iid === iid ? p.active : p.bench.find((b) => b.iid === iid);
     return { alive: !!v, dmg: v?.damage ?? null, taken: v?.damageTakenLastOppTurn ?? null,

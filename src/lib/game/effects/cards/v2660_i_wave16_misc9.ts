@@ -540,7 +540,7 @@ regPost('雙斧戰龍|斧擊衝撞', (state, aIdx, pool) => {
     return addLog(state, '斧擊衝撞：對手戰鬥場非基礎，效果無效', aIdx);
   }
   return koTargetByAttackEffect(
-    addLog(state, '斧擊衝撞：對手戰鬥場為基礎寶可夢 → KO', aIdx),
+    addLog(state, '斧擊衝撞：對手的戰鬥寶可夢是基礎寶可夢 → 昏厥', aIdx),
     aIdx, da, true, pool, '斧擊衝撞');
 });
 
@@ -700,7 +700,7 @@ regPre('蜜集大蛇|大蛇吐息', (state, aIdx, pool) => {
   if (grassBasics.length < 6) {
     return { state: addLog(state, `大蛇吐息：手牌基本草能量 ${grassBasics.length} 張 < 6 → 招式失敗`, aIdx), damage: 0 };
   }
-  return { state: addLog(state, '大蛇吐息：手牌基本草能量 ≥ 6 → 對手戰鬥 KO', aIdx), damage: 0 };
+  return { state: addLog(state, '大蛇吐息：手牌基本草能量 ≥ 6 → 對手的戰鬥寶可夢昏厥', aIdx), damage: 0 };
 });
 regPost('蜜集大蛇|大蛇吐息', (state, aIdx, pool) => {
   const p = state.players[aIdx];

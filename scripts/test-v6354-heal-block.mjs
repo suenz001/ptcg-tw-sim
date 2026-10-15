@@ -345,7 +345,7 @@ console.log('\n【K】卡比獸｜好眠（v6.347）的時序：回血發生在 
   const koC = runSleep([PLAIN], 155, { secondaryStatus: 'poisoned' });
   chk('K3 ⭐⭐damage155＋中毒（160HP）⇒ 有／無伊裴爾塔爾**都**被中毒擊倒（沒有靠回血逃過 KO）',
     A0(koY) == null && A0(koC) == null, `${A0(koY)?.damage}/${A0(koC)?.damage}`);
-  chk('K3b 哨兵：兩側都真的走了中毒 KO 那條路', L(koY).includes('被中毒傷害擊倒') && L(koC).includes('被中毒傷害擊倒'));
+  chk('K3b 哨兵：兩側都真的走了中毒 KO 那條路', L(koY).includes('因中毒傷害昏厥') && L(koC).includes('因中毒傷害昏厥'));   // v6.571 用詞
 
   // K4 ⭐⭐v6.369 站長裁定 六-5（逐字：「要修」）：回捲要回到「**回血發生的前一刻**」。
   //   同一個 END_TURN 內先中毒 +10 再被擋下好眠 ⇒ 必須停在 110（中毒照算、只是不恢復），

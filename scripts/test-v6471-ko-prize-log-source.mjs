@@ -23,6 +23,7 @@
  *
  * Run: node scripts/test-v6471-ko-prize-log-source.mjs
  */
+import { normalizeLogWording } from './lib/log-wording-normalize.mjs';
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -141,7 +142,8 @@ else {
   ok('★★★[F] 張數與 v6.470 逐案相同（A／B／C／G／H／P／effects 招式傷害／effects 效果 KO）',
     ba.taken === a.taken && bb.taken === b.taken && bc.taken === c.taken && bg.taken === g.taken && bh.taken === h.taken && bpp.taken === pp.taken && bdx.prizes === d.prizes && be.prizes === e.prizes,
     JSON.stringify({ base: [ba.taken, bb.taken, bc.taken, bg.taken, bh.taken, bpp.taken, bdx.prizes, be.prizes], cur: [a.taken, b.taken, c.taken, g.taken, h.taken, pp.taken, d.prizes, e.prizes] }));
-  ok('★[F2] 一般 KO（無修正）紀錄與 v6.470 逐字相同', bg.log === g.log, JSON.stringify({ base: bg.log.slice(-200), cur: g.log.slice(-200) }));
+  // ⭐v6.571（Rule 40）：BASE 是舊用詞（被擊倒）⇒ 兩邊都正規化成新用詞再逐字比（意圖：無修正時紀錄內容不變）
+  ok('★[F2] 一般 KO（無修正）紀錄與 v6.470 逐字相同（用詞正規化後）', normalizeLogWording(bg.log) === normalizeLogWording(g.log), JSON.stringify({ base: bg.log.slice(-200), cur: g.log.slice(-200) }));
 }
 
 console.log(`\n=== v6.471 KO 獎賞修正紀錄來源: ${pass} PASS / ${fail} FAIL ===`);

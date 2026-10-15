@@ -40,7 +40,7 @@ regAfterKO('瑪夏多|暗影側踢', (state, aIdx, _pool) => {
   const att = { ...players[aIdx] };
   if (att.active) att.active = { ...att.active, immuneToAllAttackNextTurn: true };
   players[aIdx] = att;
-  return addLog({ ...state, players }, '暗影側踢：成功擊倒對手 → 下回合免疫招式傷害', aIdx);
+  return addLog({ ...state, players }, '暗影側踢：讓對手的寶可夢昏厥 → 下回合免疫招式傷害', aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -83,7 +83,7 @@ regPre('流氓鱷|復仇獠牙', (state, aIdx, _pool) => {
   const tookPrize = attackKO > 0;
   const bonus = tookPrize ? 160 : 0;
   const s = tookPrize
-    ? addLog(state, '復仇獠牙：上對手回合自方寶可夢被招式 KO → +160 傷害', aIdx)
+    ? addLog(state, '復仇獠牙：上個對手的回合自己有寶可夢因招式的傷害昏厥 → +160 傷害', aIdx)
     : state;
   return { state: s, damage: 60 + bonus };
 });
