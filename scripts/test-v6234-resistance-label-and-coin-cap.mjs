@@ -5,7 +5,7 @@
  *  【A】傷害公式的用語從「屬性相剋」改成**卡面官方用語「抵抗力」**（引擎戰鬥紀錄＋預估都改）。
  *       ⇒ 只是顯示文字：釘死「同一盤面前後傷害數值完全相同」，並在完整 clone 時
  *         用**逐位元組回推**證明 engine.ts 除了那一行 label 之外一個字都沒動。
- *  【B】「擲硬幣直到出現反面」型招式的文案改成「傷害依擲幣次數而定」（站長裁定；舊的「0+」讀起來很怪）。
+ *  【B】「擲硬幣直到出現反面」型招式的文案改成「傷害依擲硬幣次數而定」（站長裁定；舊的「0+」讀起來很怪）。
  *       ⇒ 三種情境各斷言一次，並釘死手機／桌機取用的是**同一份字串來源**。
  *  【C】全站「擲到反面為止」的迴圈收斂到中央 `flipCoinsUntilTails`，上限逐處宣告。
  *       ⇒ 行為端證明「把硬幣固定成全正面時會在有限步內結束」，
@@ -266,12 +266,12 @@ const RANGE_CAP = { att: '喵喵', atk: '亂抓' };             // 有上限的�
     console.log(`   〔${tag}〕${c.att}｜${c.atk} → 「${mod.estimateShortText(e)}」`);
   }
   const [z, b, r] = rows;
-  chk('① 基礎 0（胖丁｜滾球）文案 === 「預估：傷害依擲幣次數而定」',
-      !!z && z.e.kind === 'open' && z.txt === '預估：傷害依擲幣次數而定');
-  chk('② 基礎非 0（超級袋獸ex｜機關槍合擊）文案 === 「預估 200 起，傷害依擲幣次數而定」',
-      !!b && b.e.kind === 'open' && b.txt === '預估 200 起，傷害依擲幣次數而定');
-  chk('③ 有上限的擲幣（喵喵｜亂抓）維持範圍寫法 === 「預估 0～60（擲幣）」',
-      !!r && r.e.kind === 'range' && r.txt === '預估 0～60（擲幣）');
+  chk('① 基礎 0（胖丁｜滾球）文案 === 「預估：傷害依擲硬幣次數而定」',
+      !!z && z.e.kind === 'open' && z.txt === '預估：傷害依擲硬幣次數而定');
+  chk('② 基礎非 0（超級袋獸ex｜機關槍合擊）文案 === 「預估 200 起，傷害依擲硬幣次數而定」',
+      !!b && b.e.kind === 'open' && b.txt === '預估 200 起，傷害依擲硬幣次數而定');
+  chk('③ 有上限的擲幣（喵喵｜亂抓）維持範圍寫法 === 「預估 0～60（擲硬幣）」',
+      !!r && r.e.kind === 'range' && r.txt === '預估 0～60（擲硬幣）');
   chk('⚠ 舊文案「0+（擲到反面為止，無上限）」已完全消失',
       rows.every(x => !x || (!x.txt.includes('無上限') && !/\d\+（/.test(x.txt))));
   chk('三種情境都還帶著「預估」二字（不可讓玩家以為是保證值）',
@@ -284,11 +284,11 @@ const RANGE_CAP = { att: '喵喵', atk: '亂抓' };             // 有上限的�
   chk('⭐ 手機直式呼叫 estimateShortText（不自己拼字串）', SRC.mob.includes('estimateShortText('));
   for (const [who, t] of [['桌機 +page.svelte', SRC.page], ['手機 MobilePortraitBattle', SRC.mob]]) {
     chk(`⭐ ${who} 沒有自己寫一份「依擲幣次數」的文案字面量`,
-        !t.includes('依擲幣次數') && !t.includes('擲到反面為止'));
+        !t.includes('依擲幣次數') && !t.includes('依擲硬幣次數') && !t.includes('擲到反面為止'));
   }
   chk('⭐ 新文案字面量全站只出現在 damage-estimate.ts 這一個檔',
-      SRC.est.includes('傷害依擲幣次數而定') &&
-      !SRC.page.includes('傷害依擲幣次數而定') && !SRC.mob.includes('傷害依擲幣次數而定'));
+      SRC.est.includes('傷害依擲硬幣次數而定') &&
+      !SRC.page.includes('傷害依擲硬幣次數而定') && !SRC.mob.includes('傷害依擲硬幣次數而定'));
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -435,7 +435,7 @@ console.log('\n⑧ ⭐ 突變測試（沒有這一段，④⑤⑥可能只是恆
   // 突變 M1：把【B】的新文案改回舊的 ⇒ ④ 必須變紅
   const m1 = await bundleMutated('m1', [[
     'lib/game/damage-estimate.ts',
-    "      return e.min > 0\n        ? `預估 ${e.min} 起，傷害依擲幣次數而定`\n        : '預估：傷害依擲幣次數而定';",
+    "      return e.min > 0\n        ? `預估 ${e.min} 起，傷害依擲硬幣次數而定`\n        : '預估：傷害依擲硬幣次數而定';",
     "      return `預估 ${e.min}+（擲到反面為止，無上限）`;",
   ]]);
   if (m1.err) chk('突變 M1 定位：' + m1.err, false);
@@ -443,7 +443,7 @@ console.log('\n⑧ ⭐ 突變測試（沒有這一段，④⑤⑥可能只是恆
     const s = setup(OPEN_ZERO.att, OPEN_ZERO.atk, NEUTRAL?.name);
     const txt = m1.mod.estimateShortText(m1.mod.estimateAttackDamage(s.state, s.idx, pool, 0));
     chk(`突變 M1：文案改回舊的 ⇒ ④ 的斷言確實不成立（實得「${txt}」）`,
-        txt !== '預估：傷害依擲幣次數而定' && txt.includes('無上限'));
+        txt !== '預估：傷害依擲硬幣次數而定' && txt.includes('無上限'));
   }
 }
 {

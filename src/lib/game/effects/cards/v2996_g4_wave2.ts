@@ -530,14 +530,14 @@ regA('小霞的可達鴨', 0, (st, idx, pool, cardInst) => {
   let s = st;
   let bottomDiscard: CardInstance[] = [];
   if (p.deck.length === 0) {
-    s = addLog(s, '重步跳躍：牌庫已空，跳過丟棄牌庫底', idx);
+    s = addLog(s, '重步跳躍：牌庫已空，跳過丟棄牌庫下方', idx);
   } else {
     const bottomCard = p.deck[p.deck.length - 1];
     const bottomName = pool.get(bottomCard.cardId)?.name ?? '?';
     bottomDiscard = [bottomCard];
     s = addPrivateLog(s,
-      `重步跳躍：牌庫底 1 張入棄牌 — ${bottomName}`,
-      '重步跳躍：牌庫底 1 張入棄牌',
+      `重步跳躍：牌庫下方 1 張丟入棄牌區 — ${bottomName}`,
+      '重步跳躍：牌庫下方 1 張丟入棄牌區',
       idx);
   }
 
@@ -551,7 +551,7 @@ regA('小霞的可達鴨', 0, (st, idx, pool, cardInst) => {
     energyAttached: [],
   }));
   const attachCount = energyDiscard.length + toolDiscard.length + stackDiscard.length;
-  s = addLog(s, `重步跳躍：${myName} 身上附加的 ${attachCount} 張卡全部入棄牌`, idx);
+  s = addLog(s, `重步跳躍：${myName} 身上附加的 ${attachCount} 張卡全部丟入棄牌區`, idx);
 
   // (3) 自身 cardId 放回牌庫上方（unshift）— 用新 iid 避免衝突
   const returnedInst: CardInstance = {

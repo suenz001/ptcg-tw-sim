@@ -2217,7 +2217,7 @@ regPost('美洛耶塔|治癒旋律', (state, aIdx, pool) => {
   if (psychicBench.length === 0) {
     return addLog(state, '治癒旋律：備戰區沒有超屬性寶可夢', aIdx);
   }
-  let s = addLog(state, '治癒旋律：選擇回復 120 HP 的備戰超寶可夢', aIdx);
+  let s = addLog(state, '治癒旋律：選擇恢復 120 HP 的備戰超寶可夢', aIdx);
   return withPending(s, {
     type: 'bench-choose',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -2233,7 +2233,7 @@ regR('heal-120-bench', (st, idx, iids, _params, pool) => {
   if (target) {
     const name = pool.get(target.cardId)?.name ?? '?';
     const actualHeal = Math.min(target.damage, 120);
-    st = addLog(st, `→ ${name} 回復 ${actualHeal} HP`, idx);
+    st = addLog(st, `→ ${name} 恢復 ${actualHeal} HP`, idx);
   }
   return updatePlayer(st, idx, p => ({
     ...p,
@@ -2506,7 +2506,7 @@ regA('米立龍', 0, (st, idx) => {
   const p = st.players[idx];
   const top6 = p.deck.slice(0, 6);
   if (top6.length === 0) return rejectAbilityUse(st, '集客：牌庫為空', idx);
-  st = addLog(st, '集客：查看牌庫頂 6 張，選 1 張支援者加手牌', idx);
+  st = addLog(st, '集客：查看牌庫上方 6 張，選 1 張支援者加手牌', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -2616,7 +2616,7 @@ regG('傷藥', (st, idx) => {
   return all.some(c => c.damage > 0);
 });
 reg('傷藥', (st, idx) => {
-  st = addLog(st, '傷藥：選擇回復 30 HP 的寶可夢', idx);
+  st = addLog(st, '傷藥：選擇恢復 30 HP 的寶可夢', idx);
   return withPending(st, {
     type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1, effectKey: 'heal-30',
@@ -2628,7 +2628,7 @@ regR('heal-30', healResolver);
 // 西餐廚師 — 戰鬥寶可夢回 70 HP（支援者）
 regG('西餐廚師', (st, idx) => !!st.players[idx].active && st.players[idx].active!.damage > 0);
 reg('西餐廚師', (st, idx) => {
-  return updatePlayer(addLog(st, '西餐廚師：戰鬥寶可夢回復 70 HP', idx), idx, p => {
+  return updatePlayer(addLog(st, '西餐廚師：戰鬥寶可夢恢復 70 HP', idx), idx, p => {
     if (!p.active) return p;
     return { ...p, active: { ...p.active, damage: Math.max(0, p.active.damage - 70) } };
   });
@@ -2640,7 +2640,7 @@ regG('真菰', (st, idx) => {
   return all.some(c => c.damage > 0);
 });
 reg('真菰', (st, idx) => {
-  return updatePlayer(addLog(st, '真菰：全體寶可夢各回復 40 HP', idx), idx, p => ({
+  return updatePlayer(addLog(st, '真菰：全體寶可夢各恢復 40 HP', idx), idx, p => ({
     ...p,
     active: p.active ? { ...p.active, damage: Math.max(0, p.active.damage - 40) } : null,
     bench: p.bench.map(c => ({ ...c, damage: Math.max(0, c.damage - 40) })),
@@ -2665,7 +2665,7 @@ reg('白露的真心', (st, idx, pool) => {
     const hp = effectiveHPInline(c, pool, st);  // v5.952 有效HP(含+HP加成)
     if (hp > 0 && (hp - c.damage) <= 30) validIids.push(c.iid);
   }
-  st = addLog(st, '白露的真心：選 1 隻 HP≤30 的寶可夢回復全部 HP', idx);
+  st = addLog(st, '白露的真心：選 1 隻 HP≤30 的寶可夢恢復全部 HP', idx);
   return withPending(st, {
     type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1, effectKey: 'heal-full',
@@ -2681,7 +2681,7 @@ regG('希特隆的機智', (st, idx, pool) => {
 });
 reg('希特隆的機智', (st, idx, pool) => {
   const isLightning = (c: CardInstance) => pool.get(c.cardId)?.pokemonType === 'Lightning';
-  return updatePlayer(addLog(st, '希特隆的機智：全體【雷】寶可夢各回復 60 HP', idx), idx, p => ({
+  return updatePlayer(addLog(st, '希特隆的機智：全體【雷】寶可夢各恢復 60 HP', idx), idx, p => ({
     ...p,
     active: p.active && isLightning(p.active) ? { ...p.active, damage: Math.max(0, p.active.damage - 60) } : p.active,
     bench: p.bench.map(c => isLightning(c) ? { ...c, damage: Math.max(0, c.damage - 60) } : c),
@@ -4285,7 +4285,7 @@ regG('八朔', (st, idx) => {
 });
 reg('八朔', (st, idx) => {
   const top8Iids = st.players[idx].deck.slice(0, 8).map(c => c.iid);
-  st = addLog(st, '八朔：從牌庫頂 8 張選最多 3 張加手牌', idx);
+  st = addLog(st, '八朔：從牌庫上方 8 張選最多 3 張加手牌', idx);
   return withPending(st, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'TOP8', minCount: 0, maxCount: 3,
@@ -4310,7 +4310,7 @@ reg('朵拉塞娜', (st, idx) => {
 // 海岱（支援者）— 手牌選 2 張放牌庫底 + 抽 4（需至少 2 張手牌）
 regG('海岱', (st, idx) => st.players[idx].hand.length >= 3);
 reg('海岱', (st, idx) => {
-  st = addLog(st, '海岱：選 2 張手牌放牌庫底，再抽 4 張', idx);
+  st = addLog(st, '海岱：選 2 張手牌放回牌庫下方，再抽 4 張', idx);
   return withPending(st, {
     type: 'hand-discard', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 2, maxCount: 2, effectKey: 'hydai-bottom-draw4',
@@ -4320,7 +4320,7 @@ regR('hydai-bottom-draw4', (st, idx, iids, _params, pool) => {
   const chosen = st.players[idx].hand.filter(c => iids.includes(c.iid));
   if (chosen.length > 0) {
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addPrivateLog(st, `海岱：${names} 放到牌庫底`, `海岱：將 ${chosen.length} 張手牌放到牌庫底`, idx);
+    st = addPrivateLog(st, `海岱：${names} 放回牌庫下方`, `海岱：將 ${chosen.length} 張手牌放回牌庫下方`, idx);
   }
   return updatePlayer(st, idx, p => {
     // v6.124：卡面「**以任意順序排列**，放回牌庫下方」——順序是玩家的權利，
@@ -4424,7 +4424,7 @@ RESOLVERS.set('brailliant-attach', (st, idx, iids, params, pool) => {
 // ⭐v6.391：改為 export —— M-P（J）批次 1 的 水水獺｜貝殼刃 要用同一份判準（Rule 38）。
 export function coinPlusDmg(base: number, bonus: number): AttackPreFn {
   return (state, aIdx) => {
-    const r = flipCoinsWithLog(state, 1, '招式擲幣', aIdx);
+    const r = flipCoinsWithLog(state, 1, '招式擲硬幣', aIdx);
     const dmg = base + (r.heads ? bonus : 0);
     return { state: addLog(r.state, r.heads ? `→ +${bonus}（${dmg}）` : `→ 無加成（${dmg}）`, aIdx), damage: dmg };
   };
@@ -4447,7 +4447,7 @@ regPre('潤水鴨|燕返', coinPlusDmg(10, 20));
 
 export function coinStatusPost(status: 'poisoned'|'burned'|'asleep'|'confused'|'paralyzed'): AttackPostFn {
   return (state, aIdx, pool) => {
-    const r = flipCoinsWithLog(state, 1, '招式擲幣', aIdx);
+    const r = flipCoinsWithLog(state, 1, '招式擲硬幣', aIdx);
     if (!r.heads) return addLog(r.state, '→ 無附加狀態', aIdx);
     state = r.state;
     const dIdx = (1 - aIdx) as 0 | 1;
@@ -5362,7 +5362,7 @@ export function resolveMultiTargetDamageGuard(
   if (isDamage && !opts.skipCoin) {
     const coin = passiveCoinImmunity(s, actorIdx, target, targetCard, pool);
     s = coin.state;
-    if (coin.immune) return { state: s, blocked: true, reason: '擲幣免疫（正面）' };
+    if (coin.immune) return { state: s, blocked: true, reason: '擲硬幣免疫（正面）' };
   }
 
   return { state: s, blocked: false, reason: '' };
@@ -5969,7 +5969,7 @@ regG('寶可生機劑A', (st, idx) => {
   return all.some(c => c.damage > 0);
 });
 reg('寶可生機劑A', (st, idx) => {
-  st = addLog(st, '寶可生機劑A：選擇回復 150 HP 的寶可夢', idx);
+  st = addLog(st, '寶可生機劑A：選擇恢復 150 HP 的寶可夢', idx);
   return withPending(st, {
     type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1, effectKey: 'heal-150',
@@ -6045,7 +6045,7 @@ reg('推理組合', (st, idx, _pool) => {
   const player = st.players[idx];
   const topN = Math.min(3, player.deck.length);
   const topCards = player.deck.slice(0, topN);
-  st = addLog(st, `推理組合：查看牌庫頂 ${topN} 張，決定排序或重洗放回下方`, idx);
+  st = addLog(st, `推理組合：查看牌庫上方 ${topN} 張，決定排序或重洗放回下方`, idx);
   return withPending(st, {
     type: 'reorder-deck-top',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -6054,7 +6054,7 @@ reg('推理組合', (st, idx, _pool) => {
     params: {
       candidateIids: topCards.map(c => c.iid),
       allowDiscard: false,
-      titleOverride: '推理組合：查看牌庫頂 3 張',
+      titleOverride: '推理組合：查看牌庫上方 3 張',
       // ⭐ v6.123 次要動作：卡面「或者」那一半。id 放在 params 裡（不是全域魔法字串）
       //   ⇒ 沒帶 altAction 的 pending（蕾荷／天眼／攪亂雷達）在**建構上**就不可能觸發這條分支。
       altAction: {
@@ -6077,7 +6077,7 @@ regR('inference-combination-choice', (state, aIdx, iids, _params, _pool) => {
   const topCards = player.deck.slice(0, topN);
   if (choice === 'shuffle-bottom') {
     // (B) 全部翻反洗回底
-    state = addLog(state, `推理組合：將牌庫頂 ${topN} 張翻反並重洗放回下方`, aIdx);
+    state = addLog(state, `推理組合：將牌庫上方 ${topN} 張翻反並重洗放回下方`, aIdx);
     return updatePlayer(state, aIdx, p => {
       const rest = p.deck.slice(topN);
       // v6.124 收斂：卡面是「將**那些卡**（3 張）翻回反面並重洗，放回牌庫下方」，
@@ -6086,7 +6086,7 @@ regR('inference-combination-choice', (state, aIdx, iids, _params, _pool) => {
     });
   }
   // (A) 排序放回頂 — 開 reorder-deck-top picker
-  state = addLog(state, `推理組合：排序牌庫頂 ${topN} 張`, aIdx);
+  state = addLog(state, `推理組合：排序牌庫上方 ${topN} 張`, aIdx);
   return withPending(state, {
     type: 'reorder-deck-top',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -6095,7 +6095,7 @@ regR('inference-combination-choice', (state, aIdx, iids, _params, _pool) => {
     params: {
       candidateIids: topCards.map(c => c.iid),
       allowDiscard: false,
-      titleOverride: '推理組合：排序牌庫頂',
+      titleOverride: '推理組合：排序牌庫上方',
     },
   });
 });
@@ -6430,7 +6430,7 @@ reg('蕾荷', (st, idx, _pool) => {
   const player = st.players[idx];
   const topN = Math.min(5, player.deck.length);
   const topCards = player.deck.slice(0, topN);
-  st = addLog(st, `蕾荷：查看牌庫頂 ${topN} 張，選擇丟棄哪些並排序剩餘`, idx);
+  st = addLog(st, `蕾荷：查看牌庫上方 ${topN} 張，選擇丟棄哪些並排序剩餘`, idx);
   return withPending(st, {
     type: 'reorder-deck-top',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -6509,7 +6509,7 @@ regR('reorder-deck-top-apply', (state, aIdx, iids, params, pool) => {
 
   // log（公開 = 數量；私訊 = 順序與被丟棄的卡名）
   const publicBits: string[] = [];
-  publicBits.push(`保留並排序牌庫頂 ${finalKeep.length} 張`);
+  publicBits.push(`保留並排序牌庫上方 ${finalKeep.length} 張`);
   if (discardIids.length > 0) publicBits.push(`丟棄 ${discardIids.length} 張`);
   const privateBits: string[] = [];
   if (finalKeep.length > 0) privateBits.push(`頂部順序：${ownerNames.join(' → ')}`);
@@ -6692,7 +6692,7 @@ regA('鐵蟻ex', 0, (st, idx, pool) => {
     return rejectAbilityUse(st, '突然削退：對手牌庫為空', idx);
   }
   const _sdTop = st.players[oppIdx].deck.slice(0, 1);
-  st = addLog(st, `突然削退：丟對手牌庫頂 1 張：${joinCardNames(_sdTop, pool)}`, idx);
+  st = addLog(st, `突然削退：丟棄對手牌庫上方 1 張：${joinCardNames(_sdTop, pool)}`, idx);
   return updatePlayer(st, oppIdx, p => {
     const top = p.deck.slice(0, 1);
     return { ...p, deck: p.deck.slice(1), discard: [...p.discard, ...top] };
@@ -7045,7 +7045,7 @@ export function flipCoinsWithLog(
     }
     const isHeads = injected !== undefined ? (injected === '正面') : (Math.random() < 0.5);
     const prefix = count === 1 ? '' : `第 ${i + 1} 次`;
-    const suffix = injected !== undefined ? '〔重試徽章：使用剛才擲幣結果〕' : '';
+    const suffix = injected !== undefined ? '〔重試徽章：使用剛才擲硬幣結果〕' : '';
     s = addLog(s, `${label}：${prefix}擲硬幣 — ${isHeads ? '正面' : '反面'}${suffix}`, aIdx);
     if (isHeads) heads++;
     recordedFlips.push(isHeads ? '正面' : '反面');
@@ -7382,7 +7382,7 @@ regPost('鐵螯龍蝦|喀嚓喀嚓', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 2, '喀嚓喀嚓', aIdx);
   const _kTake = Math.min(r.heads, r.state.players[dIdx].deck.length);
   const _kDiscarded = r.state.players[dIdx].deck.slice(0, _kTake);
-  const s = addLog(r.state, `喀嚓喀嚓：${r.heads} 次正面 → 丟對手牌庫頂 ${_kTake} 張：${joinCardNames(_kDiscarded, pool)}`, aIdx);
+  const s = addLog(r.state, `喀嚓喀嚓：${r.heads} 次正面 → 丟棄對手牌庫上方 ${_kTake} 張：${joinCardNames(_kDiscarded, pool)}`, aIdx);
   return updatePlayer(s, dIdx, p => {
     const take = Math.min(r.heads, p.deck.length);
     if (take === 0) return p;
@@ -8148,7 +8148,7 @@ regPost('巨炭山|山崩', (state, aIdx, pool) => {
   const take = Math.min(2, p.deck.length);
   if (take === 0) return state;
   const discarded = p.deck.slice(0, take);
-  const s = addLog(state, `山崩：丟對手牌庫頂 ${take} 張：${joinCardNames(discarded, pool)}`, aIdx);
+  const s = addLog(state, `山崩：丟棄對手牌庫上方 ${take} 張：${joinCardNames(discarded, pool)}`, aIdx);
   return updatePlayer(s, dIdx, pl => ({
     ...pl, deck: pl.deck.slice(take), discard: [...pl.discard, ...discarded]
   }));
@@ -8170,8 +8170,8 @@ regPost('雄偉牙|地盤崩壞', (state, aIdx, pool) => {
   const discarded = p.deck.slice(0, take);
   const s = addLog(state,
     ancientUsed
-      ? `地盤崩壞：本回合已用過「古代」支援者 → 丟對手牌庫頂 ${take} 張（1 + 3）：${joinCardNames(discarded, pool)}`
-      : `地盤崩壞：丟對手牌庫頂 ${take} 張：${joinCardNames(discarded, pool)}`,
+      ? `地盤崩壞：本回合已用過「古代」支援者 → 丟棄對手牌庫上方 ${take} 張（1 + 3）：${joinCardNames(discarded, pool)}`
+      : `地盤崩壞：丟棄對手牌庫上方 ${take} 張：${joinCardNames(discarded, pool)}`,
     aIdx);
   return updatePlayer(s, dIdx, pl => ({
     ...pl, deck: pl.deck.slice(take), discard: [...pl.discard, ...discarded]
@@ -10511,7 +10511,7 @@ regPre('熔岩蝸牛ex|大地灼燒', (state, aIdx, pool) => {
     if (c?.supertype === 'Energy') energyCount++;
   }
   const dmg = 140 + energyCount * 140;
-  return { state: addLog(state, `大地灼燒：雙方牌庫頂丟棄 ${energyCount} 張能量 → ${dmg}`, aIdx), damage: dmg };
+  return { state: addLog(state, `大地灼燒：雙方牌庫上方各丟棄 1 張，其中能量卡 ${energyCount} 張 → ${dmg}`, aIdx), damage: dmg };
 });
 regPost('熔岩蝸牛ex|大地灼燒', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
@@ -10526,7 +10526,7 @@ regPost('熔岩蝸牛ex|大地灼燒', (state, aIdx, pool) => {
     players[idx] = { ...p, deck: p.deck.slice(1), discard: [...p.discard, top] };
   }
   s = { ...s, players };
-  return addLog(s, `大地灼燒：雙方牌庫頂 1 張丟入棄牌區：${joinCardNames(_bgDiscarded, pool)}`, aIdx);
+  return addLog(s, `大地灼燒：雙方牌庫上方 1 張丟入棄牌區：${joinCardNames(_bgDiscarded, pool)}`, aIdx);
 });
 
 // 薩戮德|叢林鞭打 — 卡面：「若希望，將這隻寶可夢身上附加的能量卡全部放回手牌，增加80點傷害。」
@@ -12127,7 +12127,7 @@ function healAnyOwnPost(amount: number, label: string): AttackPostFn {
     if (!all.some(c => c.damage > 0)) {
       return addLog(state, `${label}：沒有寶可夢需要療傷`, aIdx);
     }
-    let s = addLog(state, `${label}：選擇回復 ${amount} HP 的寶可夢`, aIdx);
+    let s = addLog(state, `${label}：選擇恢復 ${amount} HP 的寶可夢`, aIdx);
     return withPending(s, {
       type: 'heal-target',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -12173,7 +12173,7 @@ export function millOppDeckTopPost(n: number, label: string): AttackPostFn {
     // v5.194：log 加上實際丟棄的卡名（玩家可確認 mill 到什麼牌），仿枇琶 log pattern
     const takenNames = taken.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
     let s = updatePlayer(
-      addLog(state, `${label}：對手牌庫頂 ${taken.length} 張丟入棄牌區 — ${takenNames}`, aIdx),
+      addLog(state, `${label}：對手牌庫上方 ${taken.length} 張丟入棄牌區 — ${takenNames}`, aIdx),
       dIdx,
       pl => ({ ...pl, deck: pl.deck.slice(taken.length), discard: [...pl.discard, ...taken] }),
     );
@@ -12208,7 +12208,7 @@ export function selfHealByDealtPost(attackName: string): AttackPostFn {
     att.active = { ...att.active, damage: newDmg };
     players[aIdx] = att;
     return addLog({ ...state, players },
-      `${attackName}：${attName} 回復 ${realHeal} HP（=本招式造成的 ${actual} 傷害）`, aIdx);
+      `${attackName}：${attName} 恢復 ${realHeal} HP（=本招式造成的 ${actual} 傷害）`, aIdx);
   };
 }
 regPre('鐵毒蛾|吸納', (state, _aIdx, _pool) => ({ state, damage: 30 }));
@@ -14543,7 +14543,7 @@ function benchHandAttachFullHealPost(typeFilter: EnergyType | null, label: strin
     });
     if (cand.length === 0) return addLog(state, `${label}：手牌無符合的基本能量`, aIdx);
     const filterStr = typeFilter ? `Energy:${typeFilter}` : 'BasicEnergy';
-    const s = addLog(state, `${label}：從手牌選 1 張基本能量附於備戰並全回復`, aIdx);
+    const s = addLog(state, `${label}：從手牌選 1 張基本能量附於備戰並全部恢復`, aIdx);
     return withPending(s, {
       type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx,
       filter: filterStr, minCount: 1, maxCount: 1,
@@ -14553,7 +14553,7 @@ function benchHandAttachFullHealPost(typeFilter: EnergyType | null, label: strin
   };
 }
 regR('bench-hand-attach-fullheal-pick-energy', (st, idx, iids, params, pool) => {
-  const label = (params?.label as string) ?? '附能+全回復';
+  const label = (params?.label as string) ?? '附能+全部恢復';
   const p = st.players[idx];
   if (p.bench.length === 0) return st;
   // v5.184：用 benchValidIids（gate 端已過濾詛咒根）；fallback 給舊 caller
@@ -14573,7 +14573,7 @@ regR('bench-hand-attach-fullheal-pick-energy', (st, idx, iids, params, pool) => 
   });
 });
 regR('bench-hand-attach-fullheal-commit', (st, idx, iids, params, pool) => {
-  const label = (params?.label as string) ?? '附能+全回復';
+  const label = (params?.label as string) ?? '附能+全部恢復';
   const energyIids = (params?.energyIids as string[]) ?? [];
   return applyBenchAttachFullHeal(st, idx, energyIids, iids[0], label, pool);
 });
@@ -14597,7 +14597,7 @@ function applyBenchAttachFullHeal(st: GameState, idx: 0 | 1, energyIids: string[
   s = _handAttachReactions(s, idx, targetIid, pool);   // ⭐v6.540 唯一入口（張數沿用原本的 1）
   const t2 = s.players[idx].bench.find(c => c.iid === targetIid);
   if (!t2) return s;
-  s = addLog(s, `${label}：全回復（回 ${t2.damage} HP）`, idx);
+  s = addLog(s, `${label}：全部恢復（恢復 ${t2.damage} HP）`, idx);
   return updatePlayer(s, idx, pl => ({ ...pl, bench: pl.bench.map(c => c.iid === targetIid ? { ...c, damage: 0 } : c) }));
   // <<< v6549-bench-attach-react-then-heal
 }
@@ -17236,7 +17236,7 @@ reg('寶可裝置3.0', (st, idx) => {
   const p = st.players[idx];
   const top7 = p.deck.slice(0, 7);
   if (top7.length === 0) return addLog(st, '寶可裝置3.0：牌庫為空', idx);
-  st = addLog(st, '寶可裝置3.0：查看牌庫頂 7 張，選 1 張支援者加手牌', idx);
+  st = addLog(st, '寶可裝置3.0：查看牌庫上方 7 張，選 1 張支援者加手牌', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -17292,7 +17292,7 @@ reg('捕蟲組合', (st, idx) => {
   const p = st.players[idx];
   const top7 = p.deck.slice(0, 7);
   if (top7.length === 0) return addLog(st, '捕蟲組合：牌庫為空', idx);
-  st = addLog(st, '捕蟲組合：查看牌庫頂 7 張，選最多 2 張基本草寶可夢或基本草能量加手牌', idx);
+  st = addLog(st, '捕蟲組合：查看牌庫上方 7 張，選最多 2 張基本草寶可夢或基本草能量加手牌', idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -17308,9 +17308,9 @@ regR('bug-catcher-set', (st, idx, iids, params, pool) => {
   const chosenIids = new Set(chosen.map(c => c.iid));
   if (chosen.length > 0) {
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addLog(st, `捕蟲組合：${names} 加入手牌，其餘放回牌庫底（重洗）`, idx);
+    st = addLog(st, `捕蟲組合：${names} 加入手牌，其餘放回牌庫並重洗`, idx);
   } else {
-    st = addLog(st, '捕蟲組合：未選擇任何卡，全部放回牌庫底（重洗）', idx);
+    st = addLog(st, '捕蟲組合：未選擇任何卡，全部放回牌庫並重洗', idx);
   }
   return updatePlayer(st, idx, p => ({
     ...p,
@@ -21291,7 +21291,7 @@ export function registerBugPanicAttack(cardName: string) {
       discard: [...pl.discard, ...nonPokemon],
     }));
     return addLog(s,
-      `${BUG_PANIC_ATTACK_NAME}：${pokemon.length} 張寶可夢卡洗回牌庫，${nonPokemon.length} 張其他卡進棄牌堆`,
+      `${BUG_PANIC_ATTACK_NAME}：${pokemon.length} 張寶可夢卡洗回牌庫，${nonPokemon.length} 張其他卡進棄牌區`,
       aIdx);
   });
 }
@@ -21332,8 +21332,8 @@ export function openLureOutOppTopN(
       topIids,
       top5Iids: topIids, // 相容：配樂之笛既有 params 名稱
       titleOverride: placeableN > 0
-        ? `${label}：${opp.name} 牌庫頂 ${topN} 張中的基礎寶可夢（選 0–${placeableN} 隻放對手備戰）`
-        : `${label}：${opp.name} 牌庫頂 ${topN} 張（無基礎寶可夢可放，看過後確認洗回）`,
+        ? `${label}：${opp.name} 牌庫上方 ${topN} 張中的基礎寶可夢（選 0–${placeableN} 隻放對手備戰）`
+        : `${label}：${opp.name} 牌庫上方 ${topN} 張（無基礎寶可夢可放，看過後確認洗回）`,
     },
   });
 }
@@ -21882,7 +21882,7 @@ export function healOneOwnBenchPost(amount: number, label: string): AttackPostFn
 }
 
 regR('heal-bench-one-amount', (state, aIdx, iids, params, _pool) => {
-  const label = (params?.label as string) ?? '回復';
+  const label = (params?.label as string) ?? '恢復';
   const amount = Number(params?.amount ?? 0);
   if (iids.length === 0 || !(amount > 0)) return state;
   const targetIid = iids[0];
@@ -21920,11 +21920,11 @@ export function healOneOwnBenchFullPost(label: string): AttackPostFn {
  *   因此繼續註冊，指到同一支實作。⚠ 舊 pending 的 params 沒有 `label` ⇒ 走下面的 fallback 文案。
  */
 const _healOneOwnBenchFullResolver: Parameters<typeof regR>[1] = (state, aIdx, iids, params, _pool) => {
-  const label = (params?.label as string) ?? '回復';
+  const label = (params?.label as string) ?? '恢復';
   if (iids.length === 0) return state;
   const targetIid = iids[0];
   return updatePlayer(
-    addLog(state, `${label}：選定備戰寶可夢回復至滿 HP`, aIdx),
+    addLog(state, `${label}：選定備戰寶可夢恢復至滿 HP`, aIdx),
     aIdx, p => ({
       ...p,
       bench: p.bench.map(b => b.iid === targetIid ? { ...b, damage: 0 } : b),
@@ -22089,7 +22089,7 @@ function millSelfTopCards(
   if (p.deck.length === 0) return { state: addLog(state, `${label}：自己牌庫為空`, aIdx), taken: [] };
   const taken = p.deck.slice(0, n);
   const s = updatePlayer(
-    addLog(state, `${label}：自己牌庫頂 ${taken.length} 張丟入棄牌區：${joinCardNames(taken, pool)}`, aIdx),
+    addLog(state, `${label}：自己牌庫上方 ${taken.length} 張丟入棄牌區：${joinCardNames(taken, pool)}`, aIdx),
     aIdx,
     pl => ({ ...pl, deck: pl.deck.slice(taken.length), discard: [...pl.discard, ...taken] }),
   );

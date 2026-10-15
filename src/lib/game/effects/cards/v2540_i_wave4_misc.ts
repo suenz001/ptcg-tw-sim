@@ -70,7 +70,7 @@ function selfHealPost(amount: number, label: string): AttackPostFn {
     players[aIdx] = p;
     return addLog(
       { ...state, players },
-      `${label}：自身回復 ${actuallyHealed} HP（${before} → ${after} 傷害）`,
+      `${label}：自身恢復 ${actuallyHealed} HP（${before} → ${after} 傷害）`,
       aIdx,
     );
   };
@@ -166,7 +166,7 @@ regPost('蒂蕾喵|魔法葉', (state, aIdx, _pool) => {
   const after = Math.max(0, before - 30);
   p.active = { ...p.active, damage: after };
   players[aIdx] = p;
-  return addLog({ ...state, players }, `魔法葉：自身回復 30 HP`, aIdx);
+  return addLog({ ...state, players }, `魔法葉：自身恢復 30 HP`, aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -156,7 +156,7 @@ regA('金屬怪', 0, (st, idx, _pool) => {
     effectKey: 'metal-maker-attach',
     params: {
       top4Iids,
-      titleOverride: '金屬製造者：選任意數量基本【鋼】能量附寶可夢（剩餘洗到牌庫底）',
+      titleOverride: '金屬製造者：選任意數量基本【鋼】能量附寶可夢（剩餘洗牌後放回牌庫下方）',
     },
   });
 });
@@ -181,7 +181,7 @@ regR('metal-maker-attach', (st, idx, energyIids, params, pool) => {
     };
   });
   if (energyIids.length === 0) {
-    return addLog(s, '金屬製造者：未選擇能量（4 張全洗回牌庫底）', idx);
+    return addLog(s, '金屬製造者：未選擇能量（4 張全洗牌後放回牌庫下方）', idx);
   }
   // 啟動 chain — source='discard'（已搬好），scope='any-own'
   // v4.29：filterType 'Metal' → 'Any'（卡面無限制屬性，可附給任何自己寶可夢，含【無】）
@@ -217,7 +217,7 @@ reg('超大冰淇淋', (st, idx, pool) => {
     return addLog(st, '超大冰淇淋：戰鬥寶可夢身上不足 3 個能量', idx);
   }
   const name = pool.get(p.active.cardId)?.name ?? '?';
-  return updatePlayer(addLog(st, `超大冰淇淋：${name} 回復 80 HP`, idx), idx, pl => {
+  return updatePlayer(addLog(st, `超大冰淇淋：${name} 恢復 80 HP`, idx), idx, pl => {
     if (!pl.active) return pl;
     return { ...pl, active: { ...pl.active, damage: Math.max(0, pl.active.damage - 80) } };
   });

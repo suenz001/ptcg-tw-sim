@@ -50,7 +50,7 @@ function selfHealPost(amount: number, label: string): AttackPostFn {
     const after = Math.max(0, before - amount);
     const healed = before - after;
     return updatePlayer(
-      addLog(state, `${label}：自身回復 ${healed} HP（${before} → ${after} 傷害）`, aIdx),
+      addLog(state, `${label}：自身恢復 ${healed} HP（${before} → ${after} 傷害）`, aIdx),
       aIdx,
       p => ({ ...p, active: p.active ? { ...p.active, damage: after } : null }),
     );

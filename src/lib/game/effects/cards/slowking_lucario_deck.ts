@@ -65,7 +65,7 @@ regPre('呆呆王|耀閃挑戰', (state, aIdx, pool, action) => {
     deck: rest,
     discard: [...pl.discard, top],
   }));
-  s = addLog(s, `耀閃挑戰：將牌庫頂「${topName}」丟棄`, aIdx);
+  s = addLog(s, `耀閃挑戰：將牌庫上方「${topName}」丟棄`, aIdx);
   // Step 2: 非寶可夢 → 失敗
   if (!topCard || topCard.supertype !== 'Pokemon') {
     return {

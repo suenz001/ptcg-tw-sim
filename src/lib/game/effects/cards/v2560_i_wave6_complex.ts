@@ -130,7 +130,7 @@ regPre('超級暴雪王ex|山崩之錘', (state, aIdx, pool) => {
     }
   }
   const dmg = waterCount * 100;
-  const s = addLog(state, `山崩之錘：棄牌庫頂 ${top6.length} 張，其中 ${waterCount} 張基本【水】 → ${waterCount}×100 = ${dmg}`, aIdx);
+  const s = addLog(state, `山崩之錘：丟棄牌庫上方 ${top6.length} 張，其中 ${waterCount} 張基本【水】 → ${waterCount}×100 = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
 
@@ -138,7 +138,7 @@ regPost('超級暴雪王ex|山崩之錘', (state, aIdx, pool) => {
   // 把牌庫頂 6 張移到棄牌區（已在 pre 用作計算，但要實際移除）
   const top6 = state.players[aIdx].deck.slice(0, 6);
   if (top6.length === 0) return state;
-  return updatePlayer(addLog(state, `山崩之錘：自己牌庫頂 ${top6.length} 張丟入棄牌區：${joinCardNames(top6, pool)}`, aIdx), aIdx, p => ({
+  return updatePlayer(addLog(state, `山崩之錘：自己牌庫上方 ${top6.length} 張丟入棄牌區：${joinCardNames(top6, pool)}`, aIdx), aIdx, p => ({
     ...p, deck: p.deck.slice(top6.length), discard: [...p.discard, ...top6],
   }));
 });

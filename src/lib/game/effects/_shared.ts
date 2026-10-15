@@ -986,7 +986,7 @@ export function triggerOakeyeMillIfApplicable(
   const milled = oppPlayer.deck.slice(0, 8);
   return updatePlayer(
     addLog(state,
-      `整人擊落：堅果啞鈴從牌庫被丟棄 → 對手牌庫頂 ${milled.length} 張丟入棄牌區`,
+      `整人擊落：堅果啞鈴從牌庫被丟棄 → 對手牌庫上方 ${milled.length} 張丟入棄牌區`,
       victimIdx),
     oppIdx,
     pl => ({ ...pl, deck: pl.deck.slice(milled.length), discard: [...pl.discard, ...milled] }),
@@ -2201,7 +2201,7 @@ export function healResolver(
   if (prevTarget) {
     const name = pool.get(prevTarget.cardId)?.name ?? '?';
     const actualHeal = Math.min(prevTarget.damage, healAmount);
-    const parts = [`${name} 回復 ${actualHeal} HP`];
+    const parts = [`${name} 恢復 ${actualHeal} HP`];
     if (discardCount > 0) parts.push(`丟棄 ${discardCount} 個能量`);
     if (clearStatus && (prevTarget.status || prevTarget.secondaryStatus || prevTarget.tertiaryStatus)) {
       parts.push('解除特殊狀態');

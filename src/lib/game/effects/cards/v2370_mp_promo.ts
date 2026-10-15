@@ -101,7 +101,7 @@ regPost('超級妖火紅狐ex|戲法傳送門', (state, aIdx, pool) => {
   const maxPick = Math.min(top9.length, benchSpace);
 
   return withPending(
-    addLog(state, `戲法傳送門：查看牌庫頂 ${top9.length} 張，選任意數量寶可夢放備戰`, aIdx),
+    addLog(state, `戲法傳送門：查看牌庫上方 ${top9.length} 張，選任意數量寶可夢放備戰`, aIdx),
     {
       type: 'deck-search',
       actorIdx: aIdx,
@@ -113,7 +113,7 @@ regPost('超級妖火紅狐ex|戲法傳送門', (state, aIdx, pool) => {
       effectKey: 'bench-basic-from-deck',
       params: {
         top9Iids,
-        titleOverride: `戲法傳送門：從牌庫頂 ${top9.length} 張選任意數量寶可夢放備戰`,
+        titleOverride: `戲法傳送門：從牌庫上方 ${top9.length} 張選任意數量寶可夢放備戰`,
       },
     },
   );

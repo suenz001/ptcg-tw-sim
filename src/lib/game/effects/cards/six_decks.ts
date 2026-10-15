@@ -1038,7 +1038,7 @@ regR('az-peace-swap', (state, aIdx, selectedIids, _params, pool) => {
   const movedOutCard = pool.get(oldActive.cardId);
   if (movedOutCard && isPokemonExCard(movedOutCard)) {   // ⭐v6.403 收斂：卡面「寶可夢【ex】」
     p.bench = p.bench.map((b, i) => i === bIdx ? { ...b, damage: Math.max(0, b.damage - 80) } : b);
-    state = addLog(state, `AZ的平和：${movedOutCard.name} 換入備戰，回復 80 HP`, aIdx);
+    state = addLog(state, `AZ的平和：${movedOutCard.name} 換入備戰，恢復 80 HP`, aIdx);
   }
   players[aIdx] = p;
   // v5.244：自方換位 ON_PROMOTE_TO_ACTIVE prompt（AZ的平和是 Supporter）

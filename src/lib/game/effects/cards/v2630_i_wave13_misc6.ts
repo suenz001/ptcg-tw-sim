@@ -23,10 +23,10 @@ function selfHealPost(amount: number, label: string): AttackPostFn {
     const a = state.players[aIdx].active;
     if (!a) return state;
     const before = a.damage ?? 0;
-    if (before === 0) return addLog(state, `${label}：自身無傷害可回復`, aIdx);
+    if (before === 0) return addLog(state, `${label}：自身無傷害可恢復`, aIdx);
     const after = Math.max(0, before - amount);
     return updatePlayer(
-      addLog(state, `${label}：自身回復 ${before - after} HP`, aIdx),
+      addLog(state, `${label}：自身恢復 ${before - after} HP`, aIdx),
       aIdx, p => ({
         ...p,
         active: p.active ? { ...p.active, damage: after } : null,
@@ -592,7 +592,7 @@ regPost('火箭隊的地鼠|狂潛', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const discardCount = Math.min(heads, s.players[dIdx].deck.length);
   const discarded = s.players[dIdx].deck.slice(0, discardCount);
-  s = addLog(s, `狂潛：丟對手牌庫頂 ${discardCount} 張：${joinCardNames(discarded, pool)}`, aIdx);
+  s = addLog(s, `狂潛：丟棄對手牌庫上方 ${discardCount} 張：${joinCardNames(discarded, pool)}`, aIdx);
   return updatePlayer(s, dIdx, p => ({ ...p, deck: p.deck.slice(discardCount), discard: [...p.discard, ...discarded] }));
 });
 
@@ -604,12 +604,12 @@ type _APT = AttackPostFn;
 // v5.680：「查看牌庫頂 N 張 → 選擇丟棄(可不選=回復原樣，不重洗)」共用 resolver。
 //   供 openDeckTopRevealOptionalDiscard（岩狗狗挖回 / 燭光靈光照燃燒 等）使用。
 regR('deck-top-reveal-discard', (st, idx, iids, params) => {
-  const label = (params?.label as string) ?? '查看牌庫頂';
+  const label = (params?.label as string) ?? '查看牌庫上方';
   if (!iids || iids.length === 0) {
-    return addLog(st, `${label}：保留牌庫頂（回復原樣）`, idx);
+    return addLog(st, `${label}：保留牌庫上方（回復原樣）`, idx);
   }
   return updatePlayer(
-    addLog(st, `${label}：丟棄牌庫頂 ${iids.length} 張`, idx),
+    addLog(st, `${label}：丟棄牌庫上方 ${iids.length} 張`, idx),
     idx,
     p => {
       const sel = new Set(iids);

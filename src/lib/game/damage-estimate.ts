@@ -735,7 +735,7 @@ function estimateCoreText(e: DamageEstimate): string {
       const why = estimateReasonText(e);
       // ⭐v6.239【B】來源是卡面的「若希望」時要講「若希望」——寫成「隨機」會讓玩家
       //   以為自己決定不了，但那正是出招時會被問的那一題。
-      const src = e.optIn ? '若希望' : (e.coin ? '擲幣' : '隨機');
+      const src = e.optIn ? '若希望' : (e.coin ? '擲硬幣' : '隨機');
       return why ? `預估 ${e.min}～${e.max}（${src}；${why}）` : `預估 ${e.min}～${e.max}（${src}）`;
     }
     case 'open':
@@ -744,8 +744,8 @@ function estimateCoreText(e: DamageEstimate): string {
       //     先報起始值再講次數，才不會讓玩家以為那一招真的可能只打 0。
       //   ⚠ 手機直式與桌機都是呼叫這一支，**只有這一份字串**（禁兩份文案）。
       return e.min > 0
-        ? `預估 ${e.min} 起，傷害依擲幣次數而定`
-        : '預估：傷害依擲幣次數而定';
+        ? `預估 ${e.min} 起，傷害依擲硬幣次數而定`
+        : '預估：傷害依擲硬幣次數而定';
     case 'depends':
       return e.why === 'hidden' ? '預估：依看不到的牌而定' : '預估：依選擇而定';
     default:

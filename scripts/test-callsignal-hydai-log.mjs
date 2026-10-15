@@ -39,8 +39,9 @@ T('②海岱:放牌庫底 2 張 → 私訊(對手看到的 public message 不含
   // 走 pending → resolve hydai-bottom-draw4
   const r=mod.RESOLVERS.get('hydai-bottom-draw4');
   out=r(out,0,[c1.iid,c2.iid],{},pool);
-  const koLog=out.log.find(l=>((l.message||'').includes('放到牌庫底')||(l.privateMessage||'').includes('放到牌庫底')));
-  assert(koLog,'應有海岱「放到牌庫底」log');
+  // v6.573（Rule 40）：「牌庫底」改官方「牌庫下方」後，出牌提示那行（選 2 張手牌放回牌庫下方，再抽 4 張）也含同一詞 ⇒ 鎖定結算那一行（公開＝「將 N 張手牌放回牌庫下方」）
+  const koLog=out.log.find(l=>/^海岱：將 \d+ 張手牌放回牌庫下方$/.test(l.message||''));
+  assert(koLog,'應有海岱「放回牌庫下方」log');
   assert(koLog.privateMessage && koLog.privateMessage.includes('走路草'),'私訊(自己)應含卡名;實際 priv='+koLog.privateMessage);
   assert(!koLog.message.includes('走路草') && !koLog.message.includes('拉魯拉絲'),'公開訊息(對手看)不應含卡名;實際 pub='+koLog.message);
 });

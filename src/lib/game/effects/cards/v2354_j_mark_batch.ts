@@ -453,7 +453,7 @@ regA('莉佳的霸王花ex', 0, (st, idx, pool) => {
   const all = [...(p.active ? [p.active] : []), ...p.bench];
   const canHeal = all.some(inst => inst.damage >= 10); // 至少有 1 隻有傷害才有意義
   let healCount = 0;
-  let s = addLog(st, '動人香氣：回復自己所有寶可夢各 30 HP', idx);
+  let s = addLog(st, '動人香氣：恢復自己所有寶可夢各 30 HP', idx);
   return updatePlayer(s, idx, pl => {
     const heal = (inst: CardInstance): CardInstance => {
       if (inst.damage <= 0) return inst;

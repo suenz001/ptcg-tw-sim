@@ -176,7 +176,7 @@ regR('diver-catch-confirm', (state, idx, iids, params) => {
     );
   }
   return updatePlayer(
-    addLog(state, `「潛者捕捉」：選擇不回手 → ${held.length} 張「基本【水】能量」進棄牌堆`, idx),
+    addLog(state, `「潛者捕捉」：選擇不回手 → ${held.length} 張「基本【水】能量」進棄牌區`, idx),
     idx, p => ({ ...p, discard: [...p.discard, ...held] }),
   );
 });

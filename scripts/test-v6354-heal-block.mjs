@@ -187,7 +187,7 @@ console.log('\n【B】⭐⭐伊裴爾塔爾在對手**備戰** ⇒ 對手戰鬥�
   const b1 = potionOnOwnActive(PLAIN, [YVEL]);
   chk('B1 傷藥：damage 一點都沒少（60）', A0(b1.r2)?.damage === 60, String(A0(b1.r2)?.damage));
   chk('B1b 哨兵：傷藥真的執行了（pending 開出來且 log 寫了回復 30 HP）',
-    b1.r1.pendingSelection?.effectKey === 'heal-30' && L(b1.r2).includes('回復 30 HP'),
+    b1.r1.pendingSelection?.effectKey === 'heal-30' && L(b1.r2).includes('恢復 30 HP'),
     `${b1.r1.pendingSelection?.effectKey} | ${L(b1.r2)}`);
 
   const pk = inst(PIKA.id, { damage: 60, energyAttached: eCost(PIKA, '小憩') });

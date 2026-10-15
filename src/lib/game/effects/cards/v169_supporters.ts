@@ -27,7 +27,7 @@ regG('辛俐', (st, idx) => st.players[idx].deck.length > 0);
 reg('辛俐', (st, idx) => {
   const top4 = st.players[idx].deck.slice(0, 4);
   if (top4.length === 0) return addLog(st, '辛俐：牌庫為空', idx);
-  st = addLog(st, `辛俐：查看牌庫頂 ${top4.length} 張，選 2 張加手牌（剩餘洗回）`, idx);
+  st = addLog(st, `辛俐：查看牌庫上方 ${top4.length} 張，選 2 張加手牌（剩餘洗回）`, idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -66,7 +66,7 @@ regG('杜若', (st, idx) => st.players[idx].deck.length > 0);
 reg('杜若', (st, idx) => {
   const top7 = st.players[idx].deck.slice(0, 7);
   if (top7.length === 0) return addLog(st, '杜若：牌庫為空', idx);
-  st = addLog(st, `杜若：查看牌庫頂 ${top7.length} 張，選 1 寶可夢加手（可跳過）`, idx);
+  st = addLog(st, `杜若：查看牌庫上方 ${top7.length} 張，選 1 寶可夢加手（可跳過）`, idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -135,7 +135,7 @@ regG('正輝的輸送', (st, idx) => st.players[idx].deck.length > 0);
 reg('正輝的輸送', (st, idx) => {
   const top8 = st.players[idx].deck.slice(0, 8);
   if (top8.length === 0) return addLog(st, '正輝的輸送：牌庫為空', idx);
-  st = addLog(st, `正輝的輸送：查看牌庫頂 ${top8.length} 張，選任意寶可夢加手`, idx);
+  st = addLog(st, `正輝的輸送：查看牌庫上方 ${top8.length} 張，選任意寶可夢加手`, idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -173,7 +173,7 @@ regG('女服務生', (st, idx) => st.players[idx].deck.length > 0 && (!!st.playe
 reg('女服務生', (st, idx, pool) => {
   const top6 = st.players[idx].deck.slice(0, 6);
   if (top6.length === 0) return addLog(st, '女服務生：牌庫為空', idx);
-  st = addLog(st, `女服務生：查看牌庫頂 ${top6.length} 張，選 1 張基本能量附給自己寶可夢`, idx);
+  st = addLog(st, `女服務生：查看牌庫上方 ${top6.length} 張，選 1 張基本能量附給自己寶可夢`, idx);
   // v5.964：filter 'BasicEnergy' → 'BasicEnergy:TOP_N'(UI/ai 依 params.topIids 交集,否則 picker
   //   顯示整副牌庫的基本能量,違反卡面「上方6張」且可造成同 iid 複製卡)。top6 內有基本能量=已知資訊必選。
   const hasBasicInTop6 = top6.some(c => {
@@ -301,7 +301,7 @@ regG('越橘的一步棋', (st, idx, pool) => {
 reg('越橘的一步棋', (st, idx) => {
   const top7 = st.players[idx].deck.slice(0, 7);
   if (top7.length === 0) return addLog(st, '越橘的一步棋：牌庫為空', idx);
-  st = addLog(st, `越橘的一步棋：查看牌庫頂 ${top7.length} 張，選 1 張【惡】寶可夢放備戰`, idx);
+  st = addLog(st, `越橘的一步棋：查看牌庫上方 ${top7.length} 張，選 1 張【惡】寶可夢放備戰`, idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,

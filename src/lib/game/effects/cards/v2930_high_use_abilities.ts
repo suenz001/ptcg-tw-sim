@@ -403,7 +403,7 @@ regAByName('莫魯貝可', '搜尋點心', (st, idx, pool, _cardInst) => {
     effectKey: 'morpeko-snack-search-v295',
     params: {
       label: '搜尋點心',
-      titleOverride: `搜尋點心：牌庫頂為「${topName}」，要將其丟棄嗎？`,
+      titleOverride: `搜尋點心：牌庫上方為「${topName}」，要將其丟棄嗎？`,
       options: [
         { id: 'keep', text: '保留（回復原樣）' },
         { id: 'discard', text: `將「${topName}」丟棄` },
@@ -414,7 +414,7 @@ regAByName('莫魯貝可', '搜尋點心', (st, idx, pool, _cardInst) => {
 regR('morpeko-snack-search-v295', (st, idx, iids, _params, pool) => {
   const choice = iids[0];
   if (choice === 'keep') {
-    return addLog(st, '搜尋點心：選擇保留，牌庫頂卡片回復原樣', idx);
+    return addLog(st, '搜尋點心：選擇保留，牌庫上方卡片回復原樣', idx);
   }
   // 'discard'
   const p = st.players[idx];

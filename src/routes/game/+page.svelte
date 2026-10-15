@@ -8484,7 +8484,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         alert('提議重新開局失敗：' + (e?.message ?? e));
       });
     } else {
-      if (!confirm('確定要重新開局嗎？目前盤面將清空，從擲幣決定先攻重新開始。')) return;
+      if (!confirm('確定要重新開局嗎？目前盤面將清空，從擲硬幣決定先攻重新開始。')) return;
       aiThinking = false;
       if (aiTimer !== null) { clearTimeout(aiTimer); aiTimer = null; }
       startLocalGame();
@@ -10093,7 +10093,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const label = pendingSelection?.params?.label as string | undefined;
       return label ? `${label}：選擇效果` : '選擇效果';
     }
-    if (type === 'reorder-deck-top') return '排序牌庫頂';
+    if (type === 'reorder-deck-top') return '排序牌庫上方';
     return '請選擇';
   }
 
@@ -10159,7 +10159,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const mKTop = f.match(/^(\w+):TOP(\d+)$/);
     if (mKTop) {
       const inner = map[mKTop[1]] ?? mKTop[1];
-      return `牌庫頂 ${mKTop[2]} 張中的${inner}`;
+      return `牌庫上方 ${mKTop[2]} 張中的${inner}`;
     }
     const mTop = f.match(/^TOP(\d+)$/);
     if (mTop) return `前 ${mTop[1]} 張`;
@@ -10631,7 +10631,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     <option value="first">先攻</option>
                     <option value="second">後攻</option>
                   </select>
-                  <span class="tourn-coin-hint">（贏得開場擲幣時，依此自動安排；輸的話由對手決定）</span>
+                  <span class="tourn-coin-hint">（贏得開場擲硬幣時，依此自動安排；輸的話由對手決定）</span>
                 </label>
                 <div class="tourn-reg-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
                   <button class="btn-primary tourn-join" onclick={() => (lateJoin ? tLateJoin(ev._id) : tournEnroll(ev._id))} disabled={tBusy || !tDeckId || !tNickname.trim()}>{tBusy ? (lateJoin ? '補報名中…' : '報名中…') : (lateJoin ? '✅ 確認補報名並直接報到' : '✅ 確認報名（鎖定暱稱與牌組）')}</button>
@@ -11296,7 +11296,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         {/if}
         <!-- v3.75：先後攻偏好 -->
         <div class="first-pref-group">
-          <div class="first-pref-label">{aiPlayerIndex === 1 ? '先後攻偏好' : '贏擲幣時'}</div>
+          <div class="first-pref-label">{aiPlayerIndex === 1 ? '先後攻偏好' : '贏得擲硬幣時'}</div>
           <label class="first-pref-radio"><input type="radio" value="random" bind:group={p1FirstPref} /><span>🎲 隨機</span></label>
           <label class="first-pref-radio"><input type="radio" value="first" bind:group={p1FirstPref} /><span>⚡ 先攻</span></label>
           <label class="first-pref-radio"><input type="radio" value="second" bind:group={p1FirstPref} /><span>🛡️ 後攻</span></label>
@@ -11351,7 +11351,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <!-- v3.75：P2 先後攻偏好（AI 模式不顯示，因為由 P1 的偏好直接決定） -->
         {#if aiPlayerIndex !== 1}
           <div class="first-pref-group">
-            <div class="first-pref-label">贏擲幣時</div>
+            <div class="first-pref-label">贏得擲硬幣時</div>
             <label class="first-pref-radio"><input type="radio" value="random" bind:group={p2FirstPref} /><span>🎲 隨機</span></label>
             <label class="first-pref-radio"><input type="radio" value="first" bind:group={p2FirstPref} /><span>⚡ 先攻</span></label>
             <label class="first-pref-radio"><input type="radio" value="second" bind:group={p2FirstPref} /><span>🛡️ 後攻</span></label>
@@ -11693,7 +11693,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                       </button>
                       <!-- v3.75：先後攻偏好（只有自己看得到自己的，對手看不到） -->
                       <div class="first-pref-group lobby">
-                        <div class="first-pref-label">贏擲幣時</div>
+                        <div class="first-pref-label">贏得擲硬幣時</div>
                         <label class="first-pref-radio"><input type="radio" name="seat-pref-{i}" value="random" checked={(s.firstChoicePreference ?? 'random') === 'random'} disabled={s.ready} onchange={() => { _saveFirstPref('random'); roomCode && setSeatFirstChoice(roomCode, 'random').catch(console.error); }} /><span>🎲 隨機</span></label>
                         <label class="first-pref-radio"><input type="radio" name="seat-pref-{i}" value="first" checked={s.firstChoicePreference === 'first'} disabled={s.ready} onchange={() => { _saveFirstPref('first'); roomCode && setSeatFirstChoice(roomCode, 'first').catch(console.error); }} /><span>⚡ 先攻</span></label>
                         <label class="first-pref-radio"><input type="radio" name="seat-pref-{i}" value="second" checked={s.firstChoicePreference === 'second'} disabled={s.ready} onchange={() => { _saveFirstPref('second'); roomCode && setSeatFirstChoice(roomCode, 'second').catch(console.error); }} /><span>🛡️ 後攻</span></label>
@@ -13281,15 +13281,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {@const candById = new Map(ownerDeck.filter(c => candidateIids.includes(c.iid)).map(c => [c.iid, c] as const))}
           <div class="reorder-deck-wrap">
             <div class="reorder-section">
-              <div class="reorder-section-title">📥 保留並排序（牌庫頂 → 底）</div>
+              <div class="reorder-section-title">📥 保留並排序（牌庫上方 → 下方）</div>
               <div class="reorder-list">
                 {#each selectionReorderKeep as iid, i (iid)}{@const inst = candById.get(iid)}{@const c = inst ? getCard(inst.cardId) : null}
                   {#if c && inst}
                     <div class="reorder-item">
                       <span class="reorder-pos">#{i + 1}</span>
                       <span class="reorder-name" title={c.name}>{c.name}</span>
-                      <button class="reorder-btn" disabled={i === 0} onclick={() => reorderMoveUp(iid)} title="上移（更接近牌庫頂）">↑</button>
-                      <button class="reorder-btn" disabled={i === selectionReorderKeep.length - 1} onclick={() => reorderMoveDown(iid)} title="下移（更接近牌庫底）">↓</button>
+                      <button class="reorder-btn" disabled={i === 0} onclick={() => reorderMoveUp(iid)} title="上移（更接近牌庫上方）">↑</button>
+                      <button class="reorder-btn" disabled={i === selectionReorderKeep.length - 1} onclick={() => reorderMoveDown(iid)} title="下移（更接近牌庫下方）">↓</button>
                       <button class="reorder-btn" onclick={(e) => {e.stopPropagation(); openZoom(inst.cardId, inst);}} title="放大查看">🔍</button>
                       {#if allowDiscard}
                         <button class="reorder-btn reorder-btn-discard" onclick={() => reorderToDiscard(iid)} title="丟棄這張">🗑</button>
@@ -13350,7 +13350,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <!-- v5.263 重試徽章 modal — 顯示本次擲幣明細 -->
             {#if coinFlips.length > 0}
               <div class="modal-coin-flips">
-                <div class="modal-coin-flips-title">🎲 本次擲幣結果 [{retryAttackName}]（共 {coinFlips.length} 次）</div>
+                <div class="modal-coin-flips-title">🎲 本次擲硬幣結果 [{retryAttackName}]（共 {coinFlips.length} 次）</div>
                 <ul class="modal-coin-flips-list">
                   {#each coinFlips as flip, idx}
                     <li>
@@ -13361,7 +13361,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   {/each}
                 </ul>
                 <div class="modal-coin-flips-note">
-                  ※ 本次招式：「{retryAttackName}」的擲幣結果如上。重試徽章可選擇保留或重擲；保留則套用此結果，重擲則本回合不可再用徽章。
+                  ※ 本次招式：「{retryAttackName}」的擲硬幣結果如上。重試徽章可選擇保留或重擲；保留則套用此結果，重擲則本回合不可再用徽章。
                 </div>
               </div>
             {/if}
@@ -14161,7 +14161,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <div class="copy-attack-poke">
             <img use:retryImg={tp.card.imageUrl} src={cardThumb(tp.card.imageUrl)} alt={tp.card.name} class="copy-attack-img"/>
             <div class="copy-attack-col">
-              <div class="copy-attack-name">{tp.card.name}（牌庫頂）</div>
+              <div class="copy-attack-name">{tp.card.name}（牌庫上方）</div>
               <div class="copy-attack-atks">
                 {#each tp.card.attacks ?? [] as atk, aIdx}
                   {#if !brightChallengePicker.allowed || (brightChallengePicker.allowed.get(tp.inst.iid)?.has(aIdx) ?? false)}
@@ -14196,14 +14196,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <div class="sel-header">
           <!-- v5.181：sourceAttackName 動態 (高傲指令/揮指/試著模仿). 用 inline ?? 避開 svelte 5 @const placement rule -->
           {#if rocketCommandPicker.revealOnly}
-            <h3>{rocketCommandPicker.sourceAttackName ?? '高傲指令'}：對手牌庫頂 10 張無寶可夢（公開揭示）</h3>
+            <h3>{rocketCommandPicker.sourceAttackName ?? '高傲指令'}：對手牌庫上方 10 張無寶可夢（公開揭示）</h3>
             <p class="sel-hint">依照卡面規則，翻到正面的 10 張卡全部公開揭示給對手看。下方為對手牌庫上方 10 張卡的內容（無寶可夢可複製）。確認後放回牌庫並重洗，本次招式 0 傷害。</p>
           {:else if (rocketCommandPicker.sourceAttackName ?? '高傲指令') === '高傲指令'}
             <h3>高傲指令：選擇要使用的招式</h3>
             <p class="sel-hint">對手牌庫上方 10 張卡翻到正面，下列為其中持有招式的寶可夢。請選擇 1 個招式作為這個招式使用（若不希望可按「不複製」）。翻到正面的卡將放回牌庫並重洗。</p>
           {:else}
             <h3>{rocketCommandPicker.sourceAttackName}：選擇要複製的招式</h3>
-            <p class="sel-hint">對手戰鬥場寶可夢持有的招式如下，請選擇 1 個作為此招式使用。{#if rocketCommandPicker.sourceAttackName === '試著模仿'}（注意：必須擲幣為正面才實際生效，反面則 0 傷害）{/if}</p>
+            <p class="sel-hint">對手的戰鬥寶可夢持有的招式如下，請選擇 1 個作為此招式使用。{#if rocketCommandPicker.sourceAttackName === '試著模仿'}（注意：必須擲硬幣為正面才實際生效，反面則 0 傷害）{/if}</p>
           {/if}
         </div>
         {#if rocketCommandPicker.revealOnly && rocketCommandPicker.top10All}
@@ -14784,7 +14784,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 連線對戰：需對手同意。可多次提議
               {/if}
             {:else}
-              將清空目前盤面，從擲幣決定先攻重新開始
+              將清空目前盤面，從擲硬幣決定先攻重新開始
             {/if}
           </div>
           <!-- v5.180 提議返回房間 (仿提議重新開局, 雙方同意後回房間選牌組) -->
@@ -14844,7 +14844,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <div class="zoom-overlay restart-proposal-overlay">
       <div class="restart-proposal-modal" use:modalDrag onclick={(e)=>e.stopPropagation()}>
         <h3 class="modal-drag-handle">🔄 對手提議重新開局</h3>
-        <p>對方希望從擲幣重新開始這場對戰。是否同意？</p>
+        <p>對方希望從擲硬幣重新開始這場對戰。是否同意？</p>
         <p class="restart-countdown-text">倒數 {restartCountdown}s 後自動拒絕</p>
         <div class="restart-proposal-actions">
           <button class="restart-btn-accept" onclick={handleAcceptOppRestart}>✅ 同意</button>

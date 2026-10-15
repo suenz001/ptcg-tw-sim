@@ -253,7 +253,7 @@ regG('好傷藥', (st, idx) => {
 reg('好傷藥', (st, idx) => {
   const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
   const damagedIids = all.filter(c => c.damage > 0).map(c => c.iid);
-  st = addLog(st, '好傷藥：選擇回復 60 HP 的受傷寶可夢（之後可丟棄其身上 1 個能量）', idx);
+  st = addLog(st, '好傷藥：選擇恢復 60 HP 的受傷寶可夢（之後可丟棄其身上 1 個能量）', idx);
   return withPending(st, {
     type: 'heal-target',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -277,7 +277,7 @@ reg('龍之秘藥', (st, idx, pool) => {
   const a = st.players[idx].active;
   if (!a) return st;
   const card = pool.get(a.cardId);
-  st = addLog(st, `龍之秘藥：${card?.name ?? '?'} 回復 60 HP`, idx);
+  st = addLog(st, `龍之秘藥：${card?.name ?? '?'} 恢復 60 HP`, idx);
   return updatePlayer(st, idx, p => ({
     ...p,
     active: p.active ? { ...p.active, damage: Math.max(0, p.active.damage - 60) } : null,
@@ -1430,7 +1430,7 @@ reg('妨害信函', (st, idx, _pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const handCount = st.players[dIdx].hand.length;
   if (handCount === 0) return st;
-  st = addLog(st, `妨害信函：對手手牌 ${handCount} 張全部洗回牌庫底，再抽相同張數`, idx);
+  st = addLog(st, `妨害信函：對手手牌 ${handCount} 張全部洗牌後放回牌庫下方，再抽相同張數`, idx);
   st = updatePlayer(st, dIdx, p => {
     // v6.124 收斂：卡面「全部翻回反面並重洗，放回牌庫下方」——只洗手牌那幾張。
     return { ...p, hand: [], deck: deckWithCardsToBottom(p.deck, p.hand, 'shuffled') };

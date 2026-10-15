@@ -107,7 +107,7 @@ regPost('九尾|靈怪變化', (state, aIdx, pool) => {
     deck: pl.deck.slice(1),
     discard: [...pl.discard, top],
   }));
-  s = addLog(s, `靈怪變化：棄牌庫頂「${topCard?.name ?? '?'}」`, aIdx);
+  s = addLog(s, `靈怪變化：丟棄牌庫上方「${topCard?.name ?? '?'}」`, aIdx);
   // 若是支援者則執行
   if (topCard?.subtype === 'Supporter') {
     const fn = TRAINER_EFFECTS.get(topCard.name ?? '');
@@ -148,7 +148,7 @@ regPre('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool, action) => {
   state = revealTopCardsLog(state, aIdx, top10, pool, '高傲指令');
   const pokemonCards: CardInstance[] = top10.filter(c => pool.get(c.cardId)?.supertype === 'Pokemon');
   if (pokemonCards.length === 0) {
-    return { state: addLog(state, '高傲指令：對手牌庫頂 10 張無寶可夢', aIdx), damage: 0 };
+    return { state: addLog(state, '高傲指令：對手牌庫上方 10 張無寶可夢', aIdx), damage: 0 };
   }
   // skip sentinel：玩家明確選擇不複製（「若希望」= 不希望）
   const choice = (action as Extract<GameAction, { type: 'ATTACK' }> | undefined)?.copyAttackChoice;
@@ -164,7 +164,7 @@ regPre('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool, action) => {
   // ⭐v6.435 冷卻中被排除的招式在對戰紀錄說明（判準與候選同一份：copyAttackCooldownNote）
   { const _cdNote = copyAttackCooldownNote('火箭隊的貓老大ex|高傲指令', state, aIdx, pool); if (_cdNote) state = addLog(state, _cdNote, aIdx); }
   const pick = pickCopiedAttack(cands, action);
-  if (!pick.candidate) return { state: addLog(state, '高傲指令：對手牌庫頂無可複製招式', aIdx), damage: 0 };
+  if (!pick.candidate) return { state: addLog(state, '高傲指令：對手牌庫上方無可複製招式', aIdx), damage: 0 };
   const picked = { cardName: pick.candidate.ownerName, attackName: pick.candidate.attackName, damage: pick.candidate.damage };
   const pickMode = pick.byPlayer ? '玩家選擇' : '自動挑印刷最高';
   const copiedKey = `${picked.cardName}|${picked.attackName}`;

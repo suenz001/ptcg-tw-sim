@@ -517,7 +517,7 @@ regPost('洛奇亞ex|破壞潮旋', (state, aIdx, pool) => {
     return addLog(s0, '破壞潮旋：第 1 次擲就反面 → 不丟能量', aIdx);
   }
   // v5.974：選擇 N=正面數 → 中央 discardOppActiveEnergyPost(count=heads,選擇 picker + 免疫 gate),取代原自動從頭端丟。
-  return discardOppActiveEnergyPost('破壞潮旋', 'any', heads)(addLog(s0, `破壞潮旋：擲幣 ${heads} 次正面`, aIdx), aIdx, pool);
+  return discardOppActiveEnergyPost('破壞潮旋', 'any', heads)(addLog(s0, `破壞潮旋：擲硬幣 ${heads} 次正面`, aIdx), aIdx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -77,12 +77,12 @@ regPre('小霞的暴鯉龍|嘩啦嘩啦恐慌', (state, aIdx, pool) => {
     const card = pool.get(c.cardId);
     if (card?.supertype === 'Pokemon' && card.name?.startsWith('小霞的')) count++;
   }
-  return { state: addLog(state, `嘩啦嘩啦恐慌：牌庫頂 7 中小霞的 ${count} → ${count*70}`, aIdx), damage: count * 70 };
+  return { state: addLog(state, `嘩啦嘩啦恐慌：牌庫上方 7 張中小霞的 ${count} → ${count*70}`, aIdx), damage: count * 70 };
 });
 regPost('小霞的暴鯉龍|嘩啦嘩啦恐慌', (state, aIdx, pool) => {
   const k = Math.min(7, state.players[aIdx].deck.length);
   const top = state.players[aIdx].deck.slice(0, k);
-  return updatePlayer(addLog(state, `嘩啦嘩啦恐慌：自己牌庫頂 ${k} 張丟入棄牌區：${joinCardNames(top, pool)}`, aIdx), aIdx, p => ({
+  return updatePlayer(addLog(state, `嘩啦嘩啦恐慌：自己牌庫上方 ${k} 張丟入棄牌區：${joinCardNames(top, pool)}`, aIdx), aIdx, p => ({
     ...p, deck: p.deck.slice(k), discard: [...p.discard, ...top],
   }));
 });

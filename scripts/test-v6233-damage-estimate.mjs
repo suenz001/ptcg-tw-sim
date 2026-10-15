@@ -278,7 +278,7 @@ console.log('\n⑤ ⭐「擲硬幣直到出現反面」一律不給範圍（行�
   const e = s && mod.estimateAttackDamage(s.state, s.idx, pool, 0);
   // v6.234：文案改成「傷害依擲幣次數而定」（站長裁定；舊的「0+」讀起來很怪）。
   chk('胖丁｜滾球 講「依擲幣次數而定」而不是給假的上界：' + (e ? mod.estimateShortText(e) : '—'),
-      !!e && e.kind === 'open' && mod.estimateShortText(e).includes('傷害依擲幣次數而定'));
+      !!e && e.kind === 'open' && mod.estimateShortText(e).includes('傷害依擲硬幣次數而定'));
 }
 
 // ══════════════════════════════════════════════════════════════════════════

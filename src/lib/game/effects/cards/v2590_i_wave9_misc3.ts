@@ -279,7 +279,7 @@ regPost('超級頭巾混混ex|不法之足', (state, aIdx, pool) => {
   let s = state;
   const top = s.players[dIdx].deck.slice(0, 1);
   if (top.length > 0) {
-    s = addLog(s, `不法之足：棄對手牌庫頂 1 張：${joinCardNames(top, pool)}`, aIdx);
+    s = addLog(s, `不法之足：丟棄對手牌庫上方 1 張：${joinCardNames(top, pool)}`, aIdx);
     s = updatePlayer(s, dIdx, p => ({ ...p, deck: p.deck.slice(1), discard: [...p.discard, ...top] }));
   }
   return oppDiscardChosenConcealedPost(1, '不法之足')(s, aIdx, pool);

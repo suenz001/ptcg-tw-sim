@@ -91,7 +91,7 @@ regR('serperior-mature-charge', (st, idx, iids, params, pool) => {
   const tname = target ? pool.get(target.cardId)?.name ?? '?' : '?';
   // v5.539：從手牌附能後觸發對手附能被動（侵蝕詛咒 等）
   // ⭐v6.540：自動治癒＋對手反應改走唯一入口（順序依官方 Q&A L2036 規則）
-  return applyHandAttachReactions(addLog(s, `熟成充能：將基本【草】能量附於 ${tname}，回復 30 HP`, idx), idx, targetIid, pool);
+  return applyHandAttachReactions(addLog(s, `熟成充能：將基本【草】能量附於 ${tname}，恢復 30 HP`, idx), idx, targetIid, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -102,7 +102,7 @@ function viewOppDeckTopReorderPost(n: number, label: string): AttackPostFn {
     if (opp.deck.length === 0) return addLog(state, `${label}：對手牌庫已空`, aIdx);
     const realN = Math.min(n, opp.deck.length);
     const top = opp.deck.slice(0, realN);
-    const s = addLog(state, `${label}：查看對手牌庫頂 ${realN} 張並重新排序`, aIdx);
+    const s = addLog(state, `${label}：查看對手牌庫上方 ${realN} 張並重新排序`, aIdx);
     return withPending(s, {
       type: 'reorder-deck-top',
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
@@ -112,7 +112,7 @@ function viewOppDeckTopReorderPost(n: number, label: string): AttackPostFn {
         candidateIids: top.map(c => c.iid),
         allowDiscard: false,
         targetIdx: dIdx,  // 排對手牌庫
-        titleOverride: `${label}：排序對手牌庫頂 ${realN} 張`,
+        titleOverride: `${label}：排序對手牌庫上方 ${realN} 張`,
       },
     });
   };

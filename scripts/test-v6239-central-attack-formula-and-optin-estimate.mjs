@@ -253,7 +253,7 @@ let coinState = null;
     const orig = Math.random; Math.random = () => 0.25;          // 正面 ⇒ 免傷
     const out = mod.applyAction(coinState, { type: 'ATTACK', attackIndex: LUC.idx }, pool);
     Math.random = orig;
-    const avoided = (out.log || []).some(l => /擲幣免疫|不受傷害|避免/.test(l.message ?? ''))
+    const avoided = (out.log || []).some(l => /擲幣免疫|擲硬幣免疫|不受傷害|避免/.test(l.message ?? ''))
                  || (out.players[1].active?.damage ?? 0) === 0;
     chk('A5 擲幣免傷盤面確實免傷（正對照：這個盤面真的進得去那個分支）', avoided);
     chk('A5 免傷時不印公式（對不平 ⇒ 不印）', formulasIn(out.log).length === 0,

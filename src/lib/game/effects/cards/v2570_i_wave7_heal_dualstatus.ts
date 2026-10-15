@@ -25,11 +25,11 @@ function selfHealPost(amount: number, label: string): AttackPostFn {
     const a = state.players[aIdx].active;
     if (!a) return state;
     const before = a.damage ?? 0;
-    if (before === 0) return addLog(state, `${label}：自身無傷害可回復`, aIdx);
+    if (before === 0) return addLog(state, `${label}：自身無傷害可恢復`, aIdx);
     const after = Math.max(0, before - amount);
     const actuallyHealed = before - after;
     return updatePlayer(
-      addLog(state, `${label}：自身回復 ${actuallyHealed} HP（${before} → ${after} 傷害）`, aIdx),
+      addLog(state, `${label}：自身恢復 ${actuallyHealed} HP（${before} → ${after} 傷害）`, aIdx),
       aIdx, p => ({
         ...p,
         active: p.active ? { ...p.active, damage: after } : null,
@@ -71,7 +71,7 @@ regPre('食夢夢|睡覺', (s) => ({ state: s, damage: 0 }));
 regPost('食夢夢|睡覺', (state, aIdx, pool) => {
   // v5.675 收斂：自身睡眠走中央自身狀態 helper
   let s = applyStatusToSelfActive(state, aIdx, 'asleep', pool, { label: '睡覺' });
-  s = addLog(s, '睡覺：回復 30 HP', aIdx);
+  s = addLog(s, '睡覺：恢復 30 HP', aIdx);
   return selfHealPost(30, '睡覺')(s, aIdx, pool);
 });
 

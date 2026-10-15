@@ -778,10 +778,10 @@ function deckTopPeekEnergyAttachToAnyPost(peekN: number, maxAttach: number, labe
     const topIids = top.map(c => c.iid);
     const energiesInTop = top.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
     if (energiesInTop.length === 0) {
-      return updatePlayer(addLog(state, `${label}：牌庫頂 ${top.length} 張內無能量；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+      return updatePlayer(addLog(state, `${label}：牌庫上方 ${top.length} 張內無能量；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
     }
     const realMax = Math.min(maxAttach, energiesInTop.length);
-    return withPending(addLog(state, `${label}：查看牌庫頂 ${top.length} 張，選 0~${realMax} 張能量（附到自方任一寶可夢，剩餘洗回）`, aIdx), {
+    return withPending(addLog(state, `${label}：查看牌庫上方 ${top.length} 張，選 0~${realMax} 張能量（附到自方任一寶可夢，剩餘洗回）`, aIdx), {
       type: 'deck-search',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
       filter: 'Energy:TOP_N',
@@ -864,7 +864,7 @@ function deckTopPeekPokemonToBenchPost(peekN: number, label: string): AttackPost
     });
     if (pokemonsInTop.length === 0) {
       // v5.964 卡面「查看…上方N張」是無條件動作:無寶可夢也要讓玩家看到這 N 張(maxCount:0 僅檢視 → 洗回)。
-      return withPending(addLog(state, `${label}：牌庫頂 ${top.length} 張內無寶可夢卡（檢視後洗回重洗）`, aIdx), {
+      return withPending(addLog(state, `${label}：牌庫上方 ${top.length} 張內無寶可夢卡（檢視後洗回重洗）`, aIdx), {
         type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
         filter: 'Pokemon:TOP_N', minCount: 0, maxCount: 0,
         effectKey: 'v311-deck-peek-basic-to-bench',
@@ -877,14 +877,14 @@ function deckTopPeekPokemonToBenchPost(peekN: number, label: string): AttackPost
     const realMax = Math.min(space, pokemonsInTop.length);
     if (realMax === 0) {
       // v5.964 同上:備戰滿也要先讓玩家「查看」上方 N 張(maxCount:0 僅檢視 → 洗回)。
-      return withPending(addLog(state, `${label}：備戰區已滿（檢視牌庫頂 ${top.length} 張後洗回重洗）`, aIdx), {
+      return withPending(addLog(state, `${label}：備戰區已滿（檢視牌庫上方 ${top.length} 張後洗回重洗）`, aIdx), {
         type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
         filter: 'Pokemon:TOP_N', minCount: 0, maxCount: 0,
         effectKey: 'v311-deck-peek-basic-to-bench',
         params: { label, topIids, peekN: top.length },
       });
     }
-    return withPending(addLog(state, `${label}：查看牌庫頂 ${top.length} 張，選 0~${realMax} 隻寶可夢卡放備戰（剩餘洗回）`, aIdx), {
+    return withPending(addLog(state, `${label}：查看牌庫上方 ${top.length} 張，選 0~${realMax} 隻寶可夢卡放備戰（剩餘洗回）`, aIdx), {
       type: 'deck-search',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
       filter: 'Pokemon:TOP_N',
@@ -1082,7 +1082,7 @@ regPost('藏飽栗鼠|強慾尾', drawNPost(2, '強慾尾'));
 // 蟲甲聖ex|相反抽出：從牌庫底抽 3 張
 regPre('蟲甲聖ex|相反抽出', (s) => ({ state: s, damage: 0 }));
 regPost('蟲甲聖ex|相反抽出', (state, aIdx, _pool) => {
-  return updatePlayer(addLog(state, '相反抽出：從牌庫底抽 3 張', aIdx), aIdx, p => {
+  return updatePlayer(addLog(state, '相反抽出：從牌庫下方抽 3 張', aIdx), aIdx, p => {
     const k = Math.min(3, p.deck.length);
     const taken = p.deck.slice(p.deck.length - k);
     return { ...p, deck: p.deck.slice(0, p.deck.length - k), hand: [...p.hand, ...taken] };
@@ -2126,14 +2126,14 @@ regPost('鐵武者|演算', (state, aIdx, _pool) => {
   if (p.deck.length === 0) return state;
   const realN = Math.min(4, p.deck.length);
   const top = p.deck.slice(0, realN);
-  return withPending(addLog(state, `演算：查看牌庫頂 ${realN} 張並排序`, aIdx), {
+  return withPending(addLog(state, `演算：查看牌庫上方 ${realN} 張並排序`, aIdx), {
     type: 'reorder-deck-top',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     minCount: realN, maxCount: realN,
     effectKey: 'h-wave2-reorder-self-deck',
     params: {
       candidateIids: top.map(c => c.iid),
-      titleOverride: `演算：排序自牌庫頂 ${realN} 張`,
+      titleOverride: `演算：排序自己牌庫上方 ${realN} 張`,
     },
   });
 });
@@ -2155,12 +2155,12 @@ regPre('沼王|濕透頭擊', (state, aIdx, pool) => {
     const card = pool.get(c.cardId);
     if (card?.supertype === 'Energy') energyCount++;
   }
-  return { state: addLog(state, `濕透頭擊：牌庫頂 3 張中能量 ${energyCount} → ${energyCount}×80 = ${energyCount*80}`, aIdx), damage: energyCount * 80 };
+  return { state: addLog(state, `濕透頭擊：牌庫上方 3 張中能量 ${energyCount} → ${energyCount}×80 = ${energyCount*80}`, aIdx), damage: energyCount * 80 };
 });
 regPost('沼王|濕透頭擊', (state, aIdx, pool) => {
   const k = Math.min(3, state.players[aIdx].deck.length);
   const top = state.players[aIdx].deck.slice(0, k);
-  return updatePlayer(addLog(state, `濕透頭擊：自己牌庫頂 ${k} 張丟入棄牌區：${joinCardNames(top, pool)}`, aIdx), aIdx, p => ({
+  return updatePlayer(addLog(state, `濕透頭擊：自己牌庫上方 ${k} 張丟入棄牌區：${joinCardNames(top, pool)}`, aIdx), aIdx, p => ({
     ...p, deck: p.deck.slice(k), discard: [...p.discard, ...top],
   }));
 });
@@ -2177,7 +2177,7 @@ function tetsuibaraDeathSqueezePre(label: string): AttackPreFn {
       const card = pool.get(c.cardId);
       if (card?.tags?.includes('未來')) futureCount++;
     }
-    return { state: addLog(s, `${label}：牌庫頂 5 中未來 ${futureCount} → ${futureCount}×70 = ${futureCount*70}`, aIdx), damage: futureCount * 70 };
+    return { state: addLog(s, `${label}：牌庫上方 5 張中未來 ${futureCount} → ${futureCount}×70 = ${futureCount*70}`, aIdx), damage: futureCount * 70 };
   };
 }
 function tetsuibaraDeathSqueezePost(label: string): AttackPostFn {
@@ -2209,7 +2209,7 @@ regPost('好啦魷|惡作劇觸手', (state, aIdx, pool) => {
   const topName = pool.get(opp.deck[0].cardId)?.name ?? '?';
   // v5.794：查看後「回復原樣」放回對手牌庫 → 卡名不應對對手揭露（否則對手得知自己牌庫頂）。
   //   改用中央 addPrivateLog：出招方看到卡名、對手只看到脫敏版。
-  const s = addPrivateLog(state, `惡作劇觸手：查看對手牌庫頂為「${topName}」`, '惡作劇觸手：查看對手牌庫頂 1 張', aIdx);
+  const s = addPrivateLog(state, `惡作劇觸手：查看對手牌庫上方為「${topName}」`, '惡作劇觸手：查看對手牌庫上方 1 張', aIdx);
   return withPending(s, {
     type: 'modal-choice',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -2218,7 +2218,7 @@ regPost('好啦魷|惡作劇觸手', (state, aIdx, pool) => {
     params: {
       label: '惡作劇觸手',
       options: [
-        { id: 'reshuffle', text: `重洗對手牌庫（牌庫頂為「${topName}」）` },
+        { id: 'reshuffle', text: `重洗對手牌庫（牌庫上方為「${topName}」）` },
         { id: 'keep', text: '保留原樣（不重洗）' },
       ],
     },

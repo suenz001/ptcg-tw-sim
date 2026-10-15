@@ -256,7 +256,7 @@ regPost('怪顎龍|亂暴', (state, aIdx, pool) => {
   state = rf.state;
 
   if (heads === 0) {
-    return addLog(state, '亂暴：第 1 次擲幣就反面 → 不丟棄對手牌庫', aIdx);
+    return addLog(state, '亂暴：第 1 次擲硬幣就反面 → 不丟棄對手牌庫', aIdx);
   }
 
   const opp = state.players[dIdx];
@@ -273,7 +273,7 @@ regPost('怪顎龍|亂暴', (state, aIdx, pool) => {
   }));
   return addLog(
     s,
-    `亂暴：擲幣 ${heads} 次正面 → 丟棄對手牌庫頂 ${millCount} 張：${joinCardNames(toDiscard, pool)}`,
+    `亂暴：擲硬幣 ${heads} 次正面 → 丟棄對手牌庫上方 ${millCount} 張：${joinCardNames(toDiscard, pool)}`,
     aIdx,
   );
 });

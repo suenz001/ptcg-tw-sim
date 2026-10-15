@@ -38,7 +38,7 @@ T('★好啦魷|惡作劇觸手:揭示對手牌庫頂不洩漏(message脫敏+pri
              {name:'P2',active:inst(TOP),bench:[],hand:[],deck:[inst(TOP)],discard:[],prizes:[]}]};
   const out=ATTACK_POST.get('好啦魷|惡作劇觸手')(st,0,pool,{});
   // 找揭示那筆(含「查看對手牌庫頂」)
-  const reveal=out.log.find(e=>e.message?.includes('查看對手牌庫頂'));
+  const reveal=out.log.find(e=>e.message?.includes('查看對手牌庫上方'));
   assert.ok(reveal, '應有揭示 log');
   assert.ok(!reveal.message.includes(TOPNAME), `對手可見 message 不可含卡名「${TOPNAME}」: ${reveal.message}`);
   assert.ok(reveal.privateMessage && reveal.privateMessage.includes(TOPNAME), `出招方 privateMessage 應含卡名: ${reveal.privateMessage}`);

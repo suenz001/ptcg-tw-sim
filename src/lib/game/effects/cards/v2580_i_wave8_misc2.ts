@@ -186,7 +186,7 @@ regPost('風妖精|治癒棉絮', healOneOwnBenchFullPost('治癒棉絮'));
 regPre('阿響的鳳王ex|閃耀羽毛', (s) => ({ state: s, damage: 160 }));
 regPost('阿響的鳳王ex|閃耀羽毛', (state, aIdx, _pool) => {
   return updatePlayer(
-    addLog(state, '閃耀羽毛：自方所有寶可夢各回復 50 HP', aIdx),
+    addLog(state, '閃耀羽毛：自方所有寶可夢各恢復 50 HP', aIdx),
     aIdx, p => ({
       ...p,
       active: p.active ? { ...p.active, damage: Math.max(0, (p.active.damage ?? 0) - 50) } : null,

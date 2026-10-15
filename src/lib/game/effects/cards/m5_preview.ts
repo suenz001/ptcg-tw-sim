@@ -1047,13 +1047,13 @@ regPost('熱帶龍|果實香氣', (state, aIdx, pool) => {
   if (pokeIids.length === 0) {
     // 沒有寶可夢候選 — 仍重洗剩餘（卡面：剩餘放回牌庫並重洗）
     return updatePlayer(
-      addLog(state, `果實香氣：牌庫頂 ${peekN} 張中無寶可夢，重洗牌庫`, aIdx),
+      addLog(state, `果實香氣：牌庫上方 ${peekN} 張中無寶可夢，重洗牌庫`, aIdx),
       aIdx,
       p => ({ ...p, deck: shuffle([...p.deck]) }),
     );
   }
   return withPending(
-    addLog(state, `果實香氣：牌庫頂 ${peekN} 張中含 ${pokeIids.length} 隻寶可夢，選任意數量加手牌`, aIdx),
+    addLog(state, `果實香氣：牌庫上方 ${peekN} 張中含 ${pokeIids.length} 隻寶可夢，選任意數量加手牌`, aIdx),
     {
       type: 'deck-search',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -2086,7 +2086,7 @@ regR('m5-mirieton-photon-code', (state, aIdx, iids, params, pool) => {
   // 從 discard 找出對應 iids 的能量卡（KO sweep 時已被 engine 移到 discard）
   const energiesInDiscard = p.discard.filter(c => basicEnergyIids.includes(c.iid));
   if (energiesInDiscard.length === 0) {
-    return addLog(state, '光子纜線：基本能量已不在棄牌堆（異常狀態），效果失敗', aIdx);
+    return addLog(state, '光子纜線：基本能量已不在棄牌區（異常狀態），效果失敗', aIdx);
   }
 
   // v5.846：params.basicEnergyIids 已是「要移的能量」(≤2 全部,或玩家經 discard-search 選的 2 張)。

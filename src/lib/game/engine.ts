@@ -3280,7 +3280,7 @@ function flushDiverCatchQueue(state: GameState, pool: Map<string, Card>): GameSt
   for (const e of q0) {
     if (_calmGroundBlocksReturn(state2, e.ownerIdx, pool)) {
       state2 = updatePlayer(
-        addLog(state2, `「潛者捕捉」：對手場上有【平穩境地】，${e.koName} 身上的「基本【水】能量」${e.heldEnergy.length} 張無法放回手牌 → 進棄牌堆`, e.ownerIdx),
+        addLog(state2, `「潛者捕捉」：對手場上有【平穩境地】，${e.koName} 身上的「基本【水】能量」${e.heldEnergy.length} 張無法放回手牌 → 進棄牌區`, e.ownerIdx),
         e.ownerIdx, p => ({ ...p, discard: [...p.discard, ...e.heldEnergy] }),
       );
     } else {
@@ -3301,7 +3301,7 @@ function flushDiverCatchQueue(state: GameState, pool: Map<string, Card>): GameSt
       koName: e.koName,
       options: [
         { id: 'yes', text: `是（${e.heldEnergy.length} 張「基本【水】能量」放回手牌）` },
-        { id: 'no', text: '否（一併進棄牌堆）' },
+        { id: 'no', text: '否（一併進棄牌區）' },
       ],
     },
   } as PendingSelection));
@@ -3429,7 +3429,7 @@ function resolveAttackActiveKo(
   const _v6196InfShadow = hasEffectiveAbilityByInst(newState, dIdx, newState.players[dIdx].active, pool, '無限之影');
   if (_v6196InfShadow && _isBlockedByCalmGround) {
     newState = addLog(newState,
-      `無限之影：對手場上有【平穩境地】，${defenderCard.name} 無法放回手牌 → 正常進棄牌堆（獎賞照常）`,
+      `無限之影：對手場上有【平穩境地】，${defenderCard.name} 無法放回手牌 → 正常進棄牌區（獎賞照常）`,
       dIdx);
   }
   if (_v6196InfShadow && !_isBlockedByCalmGround) {
@@ -4620,7 +4620,7 @@ function handlePlaying(
             _retryInjectedFlipsQueue: coinFlips ? [...coinFlips] : undefined,  // v5.262 state queue
           };
           const flipsStr = (coinFlips ?? []).map((f, i) => `第${i + 1}次→${f}`).join('、');
-          const withLog = addLog(reverted, `🎲 重試徽章：玩家選擇保留剛才擲幣結果（${flipsStr}），開始套用傷害`, actorIdx);
+          const withLog = addLog(reverted, `🎲 重試徽章：玩家選擇保留剛才擲硬幣結果（${flipsStr}），開始套用傷害`, actorIdx);
           return handlePlaying(withLog, injectedAction, pool);
         } else if (choice === 'retry') {
           // 消耗徽章 + 重新擲幣（不 inject = 走原 random path）+ 避免再次 trigger modal
@@ -4639,7 +4639,7 @@ function handlePlaying(
             ...originalAction,
             _retryBadgeAlreadyAsked: true,
           };
-          const withLog = addLog(reverted, '🎲 重試徽章：消除剛才擲幣結果，重新擲幣！', actorIdx);
+          const withLog = addLog(reverted, '🎲 重試徽章：消除剛才擲硬幣結果，重新擲硬幣！', actorIdx);
           return handlePlaying(withLog, injectedAction, pool);
         }
       }
@@ -4724,7 +4724,7 @@ function handlePlaying(
         } else {
           const _rbFlips = newState._machineGunLastFlips ?? [];
           let _rev: GameState = { ..._preResolveStateForRetry, coinFlippedThisAttack: false, _machineGunLastFlips: undefined };
-          _rev = addLog(_rev, '🎲 重試徽章：本次擲幣可重擲，請選擇', actorIdx);
+          _rev = addLog(_rev, '🎲 重試徽章：本次擲硬幣可重擲，請選擇', actorIdx);
           newState = {
             ..._rev,
             pendingSelection: {
@@ -4738,8 +4738,8 @@ function handlePlaying(
                 coinFlips: _rbFlips,
                 attackName: (typeof params?.attackName === 'string' ? params.attackName : '招式'),
                 options: [
-                  { id: 'keep', text: '✅ 不重擲（使用剛才擲幣結果，套用效果）' },
-                  { id: 'retry', text: '🔄 重擲（消除剛才擲幣結果，重新擲幣）— 本回合 1 次' },
+                  { id: 'keep', text: '✅ 不重擲（使用剛才擲硬幣結果，套用效果）' },
+                  { id: 'retry', text: '🔄 重擲（消除剛才擲硬幣結果，重新擲硬幣）— 本回合 1 次' },
                 ],
               },
             },
@@ -6338,7 +6338,7 @@ function handlePlaying(
       //   也不從「保留結果」佇列拿值（原本：選重擲連混亂一起重擲；選保留時混亂先吃掉第 1 枚，招式的硬幣整排錯位）。
       const _retryReplay = action._retryBadgeAlreadyAsked === true || action._preventKoOrder != null;   // ⭐v6.521 防昏厥順序重跑同理
       const flipResult = _retryReplay
-        ? { state: addLog(state, '混亂：沿用剛才的擲幣結果（正面）〔重試徽章不重擲混亂的硬幣〕', aIdx), heads: 1 }
+        ? { state: addLog(state, '混亂：沿用剛才的擲硬幣結果（正面）〔重試徽章不重擲混亂的硬幣〕', aIdx), heads: 1 }
         : flipCoinsWithLog(state, 1, '混亂', aIdx);
       // <<< v6520-retry-badge-confusion
       state = flipResult.state;
@@ -7049,7 +7049,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           dIdx);
         if (r.heads) {
           // v3.03：擲幣免傷（變隱龍 躲藏高手 / 吉雉雞 腎上腺費洛蒙）→ -before(擲幣避免)
-          if (baseDamage > 0) formula.push({ sign: '-', value: baseDamage, label: `${ab.name}（擲幣避免）` });
+          if (baseDamage > 0) formula.push({ sign: '-', value: baseDamage, label: `${ab.name}（擲硬幣避免）` });
           baseDamage = 0;
           break;
         }
@@ -7916,8 +7916,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
               coinFlips,
               attackName: attack.name,  // v5.263: 動態 attackName 讓 modal 顯示對應招式
               options: [
-                { id: 'keep', text: '✅ 不重擲（使用剛才擲幣結果，套用傷害）' },
-                { id: 'retry', text: '🔄 重擲（消除剛才擲幣結果，重新擲幣）— 本回合 1 次' },
+                { id: 'keep', text: '✅ 不重擲（使用剛才擲硬幣結果，套用傷害）' },
+                { id: 'retry', text: '🔄 重擲（消除剛才擲硬幣結果，重新擲硬幣）— 本回合 1 次' },
               ],
             },
           },

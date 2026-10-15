@@ -31,7 +31,7 @@ function setDefenderAttackFailure(
     const tCard = pool.get(d.active.cardId);
     const guard = canApplyEffectToTarget(state, aIdx, d.active, tCard, 'attack-effect', pool, { isBench: false });
     if (guard.blocked) {
-      return addLog(state, `${label}：${tCard?.name ?? '?'}｜${guard.reason}（不受招式效果，跳過擲幣干擾）`, aIdx);
+      return addLog(state, `${label}：${tCard?.name ?? '?'}｜${guard.reason}（不受招式效果，跳過擲硬幣干擾）`, aIdx);
     }
   }
   d.active = { ...d.active, attackFailureFlipCountPending: flips };

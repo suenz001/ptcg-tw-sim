@@ -38,7 +38,7 @@ regAByName('叉字蝠', '夜間工作', (state, aIdx, pool, inst) => {
     //   從牌庫「任意選擇」（無類別限定）**不可以 1 張都不選**，必須選 1 張以上。
     //   ⚠ 卡面寫「若希望」也一樣（君主蛇ex 正是「若希望，任意選擇最多3張」卻被裁定必選）。
     type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
-    effectKey: 'crobat-night-work', params: { titleOverride: '夜間工作：從牌庫任意選擇 1 張卡放回牌庫頂' }
+    effectKey: 'crobat-night-work', params: { titleOverride: '夜間工作：從牌庫任意選擇 1 張卡放回牌庫上方' }
   });
 });
 // ── 叉字蝠｜怨影使者（SV6a 029 / id 10611）─────────────────────────────────

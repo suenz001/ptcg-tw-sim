@@ -108,7 +108,7 @@ console.log('── A) 批1 幸運頭盔 × 磨庫招式（非 KO 分支）─�
   eq(ids(st.players[1].hand), 'dkD,dkE', 'A2 幸運頭盔後抽，抽到 D,E（舊行為會抽到 A,B）');
   eq(st.players[1].deck.length, 0, 'A3 牌庫清空');
   const li = st.log.map(l => l.message);
-  const iMill = li.findIndex(m => m.includes('粉碎頭：對手牌庫頂'));
+  const iMill = li.findIndex(m => m.includes('粉碎頭：對手牌庫上方'));
   const iDraw = li.findIndex(m => m.includes('幸運頭盔：抽 2 張'));
   ok(iMill >= 0 && iDraw >= 0 && iMill < iDraw, `A4 log 順序：招式效果先於幸運頭盔（mill=${iMill} draw=${iDraw}）`);
 }
@@ -126,7 +126,7 @@ console.log('── B) 批1 幸運頭盔 × 磨庫招式（KO 分支）───
   //   （原本 KO 先進棄牌區，所以 A,B,C 在尾端）。意圖（A,B,C 是磨庫丟的、沒有被抽走）不變。
   ok(ids(st.players[1].discard).startsWith('dkA,dkB,dkC,'), `B2 KO 分支：先磨庫 A,B,C、後才是被擊倒的寶可夢｜實際=${ids(st.players[1].discard)}`);
   const li = st.log.map(l => l.message);
-  ok(li.findIndex(m => m.includes('粉碎頭：對手牌庫頂')) < li.findIndex(m => m.includes('幸運頭盔：抽 2 張')),
+  ok(li.findIndex(m => m.includes('粉碎頭：對手牌庫上方')) < li.findIndex(m => m.includes('幸運頭盔：抽 2 張')),
      'B3 KO 分支 log 順序：招式效果先於幸運頭盔');
 }
 
@@ -171,7 +171,7 @@ console.log('── D) 批1 正對照：沒有這兩張道具時，行為完全�
   s2 = mod.applyAction(s2, { type: 'ATTACK', attackIndex: 0, actorIdx: 0 }, pool);
   const l2 = s2.log.map(l => l.message);
   const iB = l2.findIndex(m => m.includes('凸凸頭盔'));
-  const iM = l2.findIndex(m => m.includes('粉碎頭：對手牌庫頂'));
+  const iM = l2.findIndex(m => m.includes('粉碎頭：對手牌庫上方'));
   ok(iB >= 0 && iM >= 0 && iB > iM, `D6 ⭐v6.533 凸凸頭盔（反傷型）在招式效果**之後**（bumpy=${iB} mill=${iM}）`);
   eq(s2.players[0].active?.damage, 20, 'D7 凸凸頭盔反傷 20 照常');
 }
@@ -448,7 +448,7 @@ console.log('── M) 批2 手持循環扇在 KO 分支也要延後、也要帶
   eq(st.pendingSelection?.effectKey ?? null, 'cycle-fan-step1-pick-energy', 'M2 KO 分支也會觸發手持循環扇');
   eq(st.pendingSelection?.params?.attackerIid ?? null, 'atk', 'M3 ⭐ KO 分支的觸發也帶攻擊當下的 iid 快照');
   const li = st.log.map(l => l.message);
-  ok(li.findIndex(m => m.includes('粉碎頭：對手牌庫頂')) < li.findIndex(m => m.includes('手持循環扇：選 1 個')),
+  ok(li.findIndex(m => m.includes('粉碎頭：對手牌庫上方')) < li.findIndex(m => m.includes('手持循環扇：選 1 個')),
      'M4 KO 分支 log 順序：招式效果先於手持循環扇');
   st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: ['ae1'], token: st.pendingSelection?.token }, pool);
   st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: ['ab1'], token: st.pendingSelection?.token }, pool);
