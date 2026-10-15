@@ -96,7 +96,7 @@ ATTACK_PRE_DISCARD_CHOICE.set('夢幻ex|瞬間移動突擊', {
   baseDamage: 30, damagePerEnergy: 0,
   choicePrompt: '是否將這隻寶可夢與備戰寶可夢互換？',
   choiceYesLabel: '是（換到備戰）',
-  choiceNoLabel: '否（留在戰鬥位）',
+  choiceNoLabel: '否（留在戰鬥場）',
 });
 regPost('夢幻ex|瞬間移動突擊', (state, aIdx, pool, action) => {
   const _chosenIids = action?.discardedEnergyIids;
@@ -117,7 +117,7 @@ ATTACK_PRE_DISCARD_CHOICE.set('飄飄球|飄舞', {
   baseDamage: 20, damagePerEnergy: 0,
   choicePrompt: '是否將這隻寶可夢與附加的卡全部放回牌庫並重洗？',
   choiceYesLabel: '是（自身回牌庫）',
-  choiceNoLabel: '否（留在戰鬥位）',
+  choiceNoLabel: '否（留在戰鬥場）',
 });
 regPost('飄飄球|飄舞', (state, aIdx, pool, action) => {
   const _chosenIids = action?.discardedEnergyIids;

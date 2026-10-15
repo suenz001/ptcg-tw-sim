@@ -277,17 +277,17 @@ regA('巧鍛匠', 0, (st, idx, _pool, _cardInst) => {
   const opp = st.players[oppIdx];
   if (!opp.active) return rejectAbilityUse(st, '臨場之錘：對手戰鬥場無寶可夢', idx);
   if (opp.active.energyAttached.length === 0) {
-    return rejectAbilityUse(st, '臨場之錘：對手戰鬥位沒有能量', idx);
+    return rejectAbilityUse(st, '臨場之錘：對手的戰鬥寶可夢沒有能量', idx);
   }
   const r = flipCoinsWithLog(st, 1, '臨場之錘', idx);
   if (r.heads === 0) return addLog(r.state, '臨場之錘：反面，效果無效', idx);
-  const s = addLog(r.state, '臨場之錘：正面 → 選 1 個對手戰鬥位的能量丟棄', idx);
+  const s = addLog(r.state, '臨場之錘：正面 → 選 1 個對手的戰鬥寶可夢身上的能量丟棄', idx);
   return withPending(s, {
     type: 'active-energy-discard',
     actorIdx: idx, sourcePlayerIdx: oppIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'farfetchd-tcl-hammer-discard',
-    params: { titleOverride: '選擇要丟棄的對手戰鬥位能量' },
+    params: { titleOverride: '選擇對手的戰鬥寶可夢身上要丟棄的能量' },
   });
 });
 regR('farfetchd-tcl-hammer-discard', (st, idx, iids, _params, pool) => {
@@ -299,7 +299,7 @@ regR('farfetchd-tcl-hammer-discard', (st, idx, iids, _params, pool) => {
   const energyInst = opp.active.energyAttached.find(e => e.iid === targetIid);
   if (!energyInst) return st;
   const eName = pool.get(energyInst.cardId)?.name ?? '?';
-  const s = addLog(st, `臨場之錘：丟棄對手戰鬥位的 ${eName}`, idx);
+  const s = addLog(st, `臨場之錘：丟棄對手的戰鬥寶可夢身上的 ${eName}`, idx);
   return updatePlayer(s, oppIdx, pl => ({
     ...pl,
     active: pl.active

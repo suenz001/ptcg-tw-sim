@@ -46,7 +46,7 @@ regPre('代歐奇希斯|精神強念', (state, aIdx, pool) => {
   const count = defActive ? countAttachedEnergyAsUnits(defActive, pool, state, dIdx) : 0;   // ⭐v6.385 補 state/dIdx（繁茂）
   const dmg = 80 + count * 20;
   return {
-    state: addLog(state, `精神強念：對手戰鬥位附加 ${count} 個能量 → ${dmg}`, aIdx),
+    state: addLog(state, `精神強念：對手的戰鬥寶可夢附加 ${count} 個能量 → ${dmg}`, aIdx),
     damage: dmg,
   };
 });
@@ -214,7 +214,7 @@ regR('j-2355-memory-lock', (st, aIdx, iids, params, _pool) => {
   const def = st.players[dIdx];
   // 對手可能已換戰鬥位 → 放棄鎖招
   if (!def.active) {
-    return addLog(st, '記憶之鎖：對手戰鬥位已變動，鎖招失效', aIdx);
+    return addLog(st, '記憶之鎖：對手的戰鬥寶可夢已變動，鎖招失效', aIdx);
   }
 
   const players = [...st.players] as [PlayerState, PlayerState];

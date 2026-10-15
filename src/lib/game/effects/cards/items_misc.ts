@@ -1058,7 +1058,7 @@ reg('火箭隊的驚嚇炸彈', (st, idx, pool) => {
   if (!r.heads) {
     // 反面：自己戰鬥場 +20 傷害（v3.14 補 log）
     if (!st.players[idx].active) return st;
-    st = addLog(st, '火箭隊的驚嚇炸彈：反面 → 自己戰鬥位放 2 個傷害指示物（+20 傷害）', idx);
+    st = addLog(st, '火箭隊的驚嚇炸彈：反面 → 在自己的戰鬥寶可夢身上放置 2 個傷害指示物', idx);
     return updatePlayer(st, idx, p => ({
       ...p,
       active: p.active ? { ...p.active, damage: p.active.damage + 20 } : null,

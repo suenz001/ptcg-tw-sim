@@ -29,6 +29,7 @@
  * Run: node scripts/test-v6441-blue-layout.mjs
  */
 import { V6571_GAME_PAIRS } from './lib/revert-v6571-game.mjs';
+import { V6572_GAME_PAIRS } from './lib/revert-v6572-game.mjs';
 import { V6569_GAME_PAIRS } from './lib/revert-v6569-game.mjs';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -73,6 +74,8 @@ const REVERT = [
 //   這些後續版本的改動在這裡逐條還原（每條恰好命中 1 次；內容正確性由各版自己的守衛鎖：test-v6448…）。
 //   ⚠ 只准放「非藍桌墊」的全版面改動；藍桌墊的改動一律寫進哨兵。
 const LATER = [
+  // ⭐v6.572（Rule 40）：設定說明「戰鬥位置中」→「戰鬥場置中」（用詞統一，非版面改動）—— 還原表單一來源 scripts/lib/revert-v6572-game.mjs（用詞由 test-v6572 鎖）
+  ...V6572_GAME_PAIRS,
   // ⭐v6.571（Rule 40）：昏厥那一行整行標紅的樣式（非版面改動）—— 還原表單一來源 scripts/lib/revert-v6571-game.mjs（行為由 test-v6571 鎖）
   ...V6571_GAME_PAIRS,
   // ⭐v6.569（Rule 40）：對戰紀錄傳入雙方暱稱（非版面改動）—— 還原表單一來源 scripts/lib/revert-v6569-game.mjs（行為由 test-v6569 鎖）

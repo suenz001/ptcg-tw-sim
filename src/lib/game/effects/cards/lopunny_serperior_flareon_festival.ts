@@ -117,7 +117,7 @@ regA('啪咚猴', 0, (st, idx, pool) => {
   if (!hasFestivalDanceActive(st, idx, pool)) {
   // <<< v6410-festival-central-chongchong-effect
     // v5.456 暗夜羽擊：戰鬥位「祭典樂舞」被對手 passive 消除亦視為條件不成立
-    return addLog(st, '衝衝鼓：戰鬥位不是有效的祭典樂舞寶可夢（或已被對手特性消除）', idx);
+    return addLog(st, '衝衝鼓：戰鬥寶可夢不是有效的祭典樂舞寶可夢（或已被對手特性消除）', idx);
   }
   if (st.players[idx].deck.length === 0) {
     return rejectAbilityUse(st, '衝衝鼓：牌庫為空', idx);

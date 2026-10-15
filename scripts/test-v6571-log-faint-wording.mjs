@@ -19,7 +19,7 @@ import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 import { normEol } from './lib/eol-agnostic.mjs';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
-import { createRequire } from 'node:module';
+import { scanStrings, walkSrc } from './lib/src-string-scan.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.570。
@@ -28,54 +28,15 @@ let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c) { pass++; console.log('  PASS ' + n); } else { fail++; console.log('  FAIL ' + n + (x !== undefined ? ' — ' + x : '')); } };
 
 const BAD = /擊倒|(?<![A-Za-z0-9_])KO(?![A-Za-z0-9_])/;
-const require_ = createRequire(import.meta.url);
-const ts = require_('typescript');
-/**
- * 用 TypeScript 自己的 scanner 切出字串字面（含模板字串的每一段文字），不會被巢狀模板、註解裡的引號、regex 打亂
- * （v6.571 第一版用正則切，遇到 `${…`…`}` 巢狀模板就錯位 ⇒ 誤報）。只看含中文的字串（純英文多半是識別字、鍵名）。
- */
 let LOOKBEHIND = [];   // 掃描時順便收集 regex lookbehind（字面或 new RegExp 字串）
+/** ⭐v6.572 起掃描器搬到 scripts/lib/src-string-scan.mjs（與 test-v6572 共用一份，Rule 38）。只看含中文的字串。 */
 function scanSource(src, label) {
-  const code = /\.svelte$/.test(label) ? [...src.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n') : src;
-  const sc = ts.createScanner(ts.ScriptTarget.Latest, true, ts.LanguageVariant.Standard, code);
   const out = [];
-  const K = ts.SyntaxKind;
-  const STRINGY = new Set([K.StringLiteral, K.NoSubstitutionTemplateLiteral, K.TemplateHead, K.TemplateMiddle, K.TemplateTail]);
-  let tok = sc.scan(), depth = 0, prev = K.Unknown;
-  const stack = [];
-  // 前一個 token 是值（識別字、數字、字串、右括號）⇒ 這個 / 是除號，不是 regex（v6.571 審查 P3：a / b 會被當成 regex 吞字）
-  const VALUE_END = new Set([K.Identifier, K.NumericLiteral, K.StringLiteral, K.CloseParenToken, K.CloseBracketToken, K.ThisKeyword,
-    K.NoSubstitutionTemplateLiteral, K.TemplateTail, K.PlusPlusToken, K.MinusMinusToken]);
-  while (tok !== K.EndOfFileToken) {
-    if (tok === K.OpenBraceToken) depth++;
-    if (tok === K.CloseBraceToken) {
-      if (stack.length && stack[stack.length - 1] === depth) { stack.pop(); tok = sc.reScanTemplateToken(false); }
-      else depth--;
-    }
-    if (tok === K.TemplateHead || tok === K.TemplateMiddle) stack.push(depth);
-    if (STRINGY.has(tok)) {
-      const t = sc.getTokenValue();
-      if (/\(\?<[!=]/.test(t)) LOOKBEHIND.push(label + ':' + (code.slice(0, sc.getTokenPos()).split('\n').length) + '（字串，可能是 new RegExp）');
-      if (/[\u4e00-\u9fff]/.test(t) && BAD.test(t)) out.push(label + ':' + (code.slice(0, sc.getTokenPos()).split('\n').length) + ' ' + t.slice(0, 80));
-    }
-    if ((tok === K.SlashToken || tok === K.SlashEqualsToken) && !VALUE_END.has(prev)) {
-      tok = sc.reScanSlashToken();   // 運算式開頭的 / ⇒ regex 字面（整段吃掉，裡面的字不算字串）
-      if (tok === K.RegularExpressionLiteral && /\(\?<[!=]/.test(sc.getTokenText())) LOOKBEHIND.push(label + ':' + (code.slice(0, sc.getTokenPos()).split('\n').length));
-    }
-    prev = tok;
-    tok = sc.scan();
-  }
+  scanStrings(src, label, (t, line) => { if (/[\u4e00-\u9fff]/.test(t) && BAD.test(t)) out.push(label + ':' + line + ' ' + t.slice(0, 80)); },
+    (line) => LOOKBEHIND.push(label + ':' + line));
   return out;
 }
-function walk(dir, acc = []) {
-  for (const f of readdirSync(dir)) {
-    const p = join(dir, f);
-    if (statSync(p).isDirectory()) walk(p, acc);
-    else if (/\.(ts|svelte)$/.test(f)) acc.push(p);
-  }
-  return acc;
-}
-const FILES = walk(join(ROOT, 'src'));
+const FILES = walkSrc(join(ROOT, 'src'));
 
 function scenS(read) {
   const hits = [];

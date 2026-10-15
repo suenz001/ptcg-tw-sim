@@ -14755,7 +14755,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {/if}
           <div class="setting-hint">
             ・經典版 = 目前預設，所有玩家原本看到的版面
-            <br/>・桌墊版 = 仿實體 TCG — 戰鬥位置中、Bench 5 格對稱列、競技場置中央
+            <br/>・桌墊版 = 仿實體 TCG — 戰鬥場置中、Bench 5 格對稱列、競技場置中央
             <br/>・桌墊版仍在測試，窄螢幕（&lt; 1200px）可能變形，會自動退回經典版
             <br/>・只動桌機 — 手機版直立 layout 不受影響
             <br/>・平板（iPad 等）直立時可勾選改用手機版介面；橫放時自動回到電腦版面

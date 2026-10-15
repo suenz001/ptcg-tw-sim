@@ -597,7 +597,7 @@ registerToolOnDamagedAndKO('手持循環扇', (state, dIdx, aIdx, _dmg, pool, at
     actorIdx: dIdx, sourcePlayerIdx: aIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'cycle-fan-step1-pick-energy',
-    params: { label: '手持循環扇：選 1 個攻擊方戰鬥位能量', options: energyOptions, attackerIid: holder.iid },
+    params: { label: '手持循環扇：選 1 個攻擊方的戰鬥寶可夢身上的能量', options: energyOptions, attackerIid: holder.iid },
   });
 });
 /**

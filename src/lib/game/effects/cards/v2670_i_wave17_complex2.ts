@@ -136,7 +136,7 @@ ATTACK_PRE_DISCARD_CHOICE.set('火箭隊的叉字蝠ex|刺殺迴旋', {
   baseDamage: 120, damagePerEnergy: 0,
   choicePrompt: '是否將這隻寶可夢放回手牌？（寶可夢以外的卡全部丟棄）',
   choiceYesLabel: '是（自身回手牌；附加能量/道具棄）',
-  choiceNoLabel: '否（保留戰鬥位）',
+  choiceNoLabel: '否（留在戰鬥場）',
 });
 regPre('火箭隊的叉字蝠ex|刺殺迴旋', (s) => ({ state: s, damage: 120 }));
 regPost('火箭隊的叉字蝠ex|刺殺迴旋', (state, aIdx, _pool, action) => {
@@ -283,7 +283,7 @@ regPost('火箭隊的閃電鳥|阻礙之翼', (state, aIdx, pool, action) => {
       type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
       minCount: 1, maxCount: 1,
       effectKey: 'v3140-zapdos-jamming-pick-energy',
-      params: { fromDiscard: true, validIids: _koE, titleOverride: '選擇要改附的對手能量（已昏厥戰鬥位）' },
+      params: { fromDiscard: true, validIids: _koE, titleOverride: '選擇要改附的對手能量（已昏厥的戰鬥寶可夢）' },
     });
   }
   const opp = state.players[dIdx];
@@ -323,7 +323,7 @@ regR('v3140-zapdos-jamming-attach', (state, aIdx, iids, params, pool) => {
   const eName = pool.get(r.energy.cardId)?.name ?? '?';
   const players = [...state.players] as [PlayerState, PlayerState];
   players[dIdx] = { ...r.player, bench: r.player.bench.map(b => b.iid === targetIid ? { ...b, energyAttached: [...b.energyAttached, r.energy!] } : b) };
-  return addLog({ ...state, players }, `阻礙之翼：將對手戰鬥位 ${eName} 改附對手備戰`, aIdx);
+  return addLog({ ...state, players }, `阻礙之翼：將對手的戰鬥寶可夢身上的 ${eName} 改附於對手的備戰寶可夢`, aIdx);
 });
 
 // 小灰怪｜挪動一下 0 — 對手「場上」寶可夢能量改附對手「其他」寶可夢

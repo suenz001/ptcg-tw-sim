@@ -468,14 +468,14 @@ regPost('章魚桶|水流清洗', (state, aIdx, pool, action) => {
       type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
       minCount: 0, maxCount: _capKO,
       effectKey: 'v327-octopus-water-clean',
-      params: { fromDiscard: true, validIids: _koE, titleOverride: `選擇要放回對手手牌的能量（0∼${_capKO} 張，已昏厥戰鬥位）` },
+      params: { fromDiscard: true, validIids: _koE, titleOverride: `選擇要放回對手手牌的能量（0∼${_capKO} 張，已昏厥的戰鬥寶可夢）` },
     });
   }
   const dp = state.players[dIdx];
   if (!dp.active || dp.active.energyAttached.length === 0) {
-    return addLog(state, '水流清洗：對手戰鬥位沒有能量', aIdx);
+    return addLog(state, '水流清洗：對手的戰鬥寶可夢沒有能量', aIdx);
   }
-  const s = addLog(state, '水流清洗：選擇 0∼1 個對手戰鬥位能量放回對手手牌', aIdx);
+  const s = addLog(state, '水流清洗：選擇 0∼1 個對手的戰鬥寶可夢身上的能量放回對手手牌', aIdx);
   return withPending(s, {
     type: 'active-energy-discard',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
@@ -498,7 +498,7 @@ regR('v327-octopus-water-clean', (st, idx, iids, _params, pool) => {
   const eName = pool.get(r.energy.cardId)?.name ?? '?';
   const players = [...st.players] as [PlayerState, PlayerState];
   players[dIdx] = { ...r.player, hand: [...r.player.hand, r.energy] };
-  return addLog({ ...st, players }, `水流清洗：對手戰鬥位的 ${eName} 放回對手手牌`, idx);
+  return addLog({ ...st, players }, `水流清洗：對手的戰鬥寶可夢身上的 ${eName} 放回對手手牌`, idx);
 });
 
 // 毛崖蟹｜喀嚓鉗 — 擲 2 次, 對手戰鬥場能量 ×N 棄

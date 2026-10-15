@@ -11631,7 +11631,7 @@ export function discardOppActiveEnergyPost(
       }) : p);
     }
     return withPending(
-      addLog(state, `${label}：選擇要丟棄對手戰鬥位的 ${effCount} 張${_fdesc}能量`, aIdx),
+      addLog(state, `${label}：選擇要丟棄對手的戰鬥寶可夢身上的 ${effCount} 張${_fdesc}能量`, aIdx),
       {
         type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
         minCount: effCount, maxCount: effCount,
@@ -11874,7 +11874,7 @@ regPost('高傲雉雞|反轉之風', (state, aIdx, pool, action) => {
       type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
       minCount: 0, maxCount: capKO,
       effectKey: 'v327-unfezant-reverse-wind',
-      params: { fromDiscard: true, validIids: koEnergyIids, titleOverride: `選擇要放回對手手牌的能量（0∼${capKO} 張，已昏厥戰鬥位）` },
+      params: { fromDiscard: true, validIids: koEnergyIids, titleOverride: `選擇要放回對手手牌的能量（0∼${capKO} 張，已昏厥的戰鬥寶可夢）` },
     });
   }
   const da = state.players[dIdx].active;
@@ -11889,7 +11889,7 @@ regPost('高傲雉雞|反轉之風', (state, aIdx, pool, action) => {
     return addLog(state, '反轉之風：對手場上有【平穩境地】，能量回手效果無效', aIdx);
   }
   const cap = Math.min(2, da.energyAttached.length);
-  const s = addLog(state, `反轉之風：選擇 0∼${cap} 個對手戰鬥位能量放回對手手牌`, aIdx);
+  const s = addLog(state, `反轉之風：選擇 0∼${cap} 個對手的戰鬥寶可夢身上的能量放回對手手牌`, aIdx);
   return withPending(s, {
     type: 'active-energy-discard',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
@@ -11914,7 +11914,7 @@ regR('v327-unfezant-reverse-wind', (st, idx, iids, _params, pool) => {
   const names = moved.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
   const players = [...st.players] as [PlayerState, PlayerState];
   players[dIdx] = { ...dp, hand: [...dp.hand, ...moved] };
-  return addLog({ ...st, players }, `反轉之風：將對手戰鬥位的 ${names}（${moved.length} 張）放回對手手牌`, idx);
+  return addLog({ ...st, players }, `反轉之風：將對手的戰鬥寶可夢身上的 ${names}（${moved.length} 張）放回對手手牌`, idx);
 });
 
 // 8. 波士可多拉|發怒猛進 — 自己場上身上有傷害指示物的寶可夢數 × 50
@@ -14474,7 +14474,7 @@ function selfActiveHandAttachHealPost(heal: number, label: string): AttackPostFn
     const cantAttachActive = p.active.cantAttachEnergyThisTurn === true;
     const cand = cantAttachActive ? [] : p.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
     if (cantAttachActive) {
-      state = addLog(state, `${label}：戰鬥位受詛咒根影響，無法附加能量；改為直接執行回血`, aIdx);
+      state = addLog(state, `${label}：戰鬥寶可夢受詛咒根影響，無法附加能量；改為直接執行回血`, aIdx);
     }
     if (cand.length === 0) {
       // 沒能量 (或詛咒根擋) → 只回血
@@ -14998,7 +14998,7 @@ regPost('賽富豪|賽富迴旋', (state, aIdx, pool, action) => {
       label: '賽富迴旋',
       options: [
         { id: 'return', text: '①將自身與附加的卡全部放回牌庫並重洗' },
-        { id: 'skip', text: '②不返回（保留戰鬥位）' },
+        { id: 'skip', text: '②不返回（留在戰鬥場）' },
       ],
     },
   });
@@ -15009,7 +15009,7 @@ regR('sigorhof-back-choice', (state, aIdx, iids, _params, pool) => {
   if (iids[0] === 'return') {
     return selfReturnToDeckPost('賽富迴旋')(state, aIdx, pool);
   }
-  return addLog(state, '賽富迴旋：選擇保留戰鬥位（不返回）', aIdx);
+  return addLog(state, '賽富迴旋：選擇留在戰鬥場（不返回）', aIdx);
 });
 
 // 蚊香泳士｜跳躍衝天 — 卡面：「若希望，增加 120 點傷害。這個情況下，將這隻寶可夢與附加的卡，全部放回自己的牌庫並重洗。」
@@ -15023,7 +15023,7 @@ ATTACK_PRE_DISCARD_CHOICE.set('蚊香泳士|跳躍衝天', {
   baseDamage: 120, damagePerEnergy: 0,  // damagePerEnergy 不適用 binary，僅 placeholder
   choicePrompt: '是否將這隻寶可夢與附加的卡放回牌庫並重洗，增加 120 點傷害？',
   choiceYesLabel: '是（+120 + 回牌庫）',
-  choiceNoLabel: '否（保留戰鬥位）',
+  choiceNoLabel: '否（留在戰鬥場）',
 });
 regPre('蚊香泳士|跳躍衝天', (state, aIdx, _pool, action) => {
   const chosenIids = action?.discardedEnergyIids;
@@ -19471,7 +19471,7 @@ regR('unreasonable-lock-attack', (st, aIdx, iids, params, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = st.players[dIdx];
   // 對手可能在等待期間換戰鬥位 — 若已不在原位則放棄鎖
-  if (!def.active) return addLog(st, `無理取鬧：對手戰鬥位已變動，鎖招失效`, aIdx);
+  if (!def.active) return addLog(st, `無理取鬧：對手的戰鬥寶可夢已變動，鎖招失效`, aIdx);
   // v5.975：resolve 時再過一次招式效果免疫 gate(防等待期間換上免疫者)
   {
     const _g = canApplyEffectToTarget(st, aIdx, def.active, _pool.get(def.active.cardId), 'attack-effect', _pool);
@@ -20353,7 +20353,7 @@ export function trickStepPost(): AttackPostFn {
         params: {
           fromDiscard: true,
           validIids: koEnergyIids,
-          titleOverride: '戲法舞步：選擇要改附的能量（對手已昏厥的戰鬥位）',
+          titleOverride: '戲法舞步：選擇要改附的能量（對手已昏厥的戰鬥寶可夢）',
         },
       });
     }
@@ -20392,7 +20392,7 @@ regR('trick-step-pick', (st, idx, iids, _params, pool) => {
     ?? opp.discard.find(e => e.iid === energyIid);
   if (!energyInst) return st;
   if (opp.bench.length === 0) return st;
-  const oppActiveName = opp.active ? (pool.get(opp.active.cardId)?.name ?? '?') : '已昏厥的戰鬥位';
+  const oppActiveName = opp.active ? (pool.get(opp.active.cardId)?.name ?? '?') : '已昏厥的戰鬥寶可夢';
   const eName = pool.get(energyInst.cardId)?.name ?? '?';
   return withPending(
     addLog(st, `戲法舞步：選擇 ${oppActiveName} 的 ${eName} 要移至的對手備戰寶可夢`, idx),
@@ -20776,7 +20776,7 @@ ATTACK_PRE_DISCARD_CHOICE.set('超級拉帝亞斯ex|狡兔三窟', {
   baseDamage: 40, damagePerEnergy: 0,
   choicePrompt: '是否將這隻寶可夢與備戰寶可夢互換？',
   choiceYesLabel: '是（換到備戰）',
-  choiceNoLabel: '否（留在戰鬥位）',
+  choiceNoLabel: '否（留在戰鬥場）',
 });
 
 ATTACK_PRE_DISCARD_CHOICE.set('古劍豹|狡兔三窟', {
@@ -20784,7 +20784,7 @@ ATTACK_PRE_DISCARD_CHOICE.set('古劍豹|狡兔三窟', {
   baseDamage: 20, damagePerEnergy: 0,
   choicePrompt: '是否將這隻寶可夢與備戰寶可夢互換？',
   choiceYesLabel: '是（換到備戰）',
-  choiceNoLabel: '否（留在戰鬥位）',
+  choiceNoLabel: '否（留在戰鬥場）',
 });
 
 ATTACK_PRE_DISCARD_CHOICE.set('沙漠蜻蜓ex|風暴返', {
@@ -20792,7 +20792,7 @@ ATTACK_PRE_DISCARD_CHOICE.set('沙漠蜻蜓ex|風暴返', {
   baseDamage: 130, damagePerEnergy: 0,
   choicePrompt: '是否將這隻寶可夢與備戰寶可夢互換？',
   choiceYesLabel: '是（換到備戰）',
-  choiceNoLabel: '否（留在戰鬥位）',
+  choiceNoLabel: '否（留在戰鬥場）',
 });
 
 ATTACK_PRE_DISCARD_CHOICE.set('音波龍ex|狡兔三窟', {
@@ -20800,7 +20800,7 @@ ATTACK_PRE_DISCARD_CHOICE.set('音波龍ex|狡兔三窟', {
   baseDamage: 50, damagePerEnergy: 0,
   choicePrompt: '是否將這隻寶可夢與備戰寶可夢互換？',
   choiceYesLabel: '是（換到備戰）',
-  choiceNoLabel: '否（留在戰鬥位）',
+  choiceNoLabel: '否（留在戰鬥場）',
 });
 
 ATTACK_PRE_DISCARD_CHOICE.set('蓋歐卡ex|蜿蜒浪', {
@@ -20928,7 +20928,7 @@ ATTACK_PRE_DISCARD_CHOICE.set('賽富豪|賽富迴旋', {
   baseDamage: 100, damagePerEnergy: 0,
   choicePrompt: '是否將這隻寶可夢與附加的卡全部放回自己的牌庫並重洗？',
   choiceYesLabel: '是（自身回牌庫）',
-  choiceNoLabel: '否（留在戰鬥位）',
+  choiceNoLabel: '否（留在戰鬥場）',
 });
 
 ATTACK_PRE_DISCARD_CHOICE.set('火箭隊的貓老大ex|高傲指令', {

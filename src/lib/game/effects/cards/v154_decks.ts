@@ -208,7 +208,7 @@ regG('超大冰淇淋', (st, idx, pool) => {
 });
 reg('超大冰淇淋', (st, idx, pool) => {
   const p = st.players[idx];
-  if (!p.active) return addLog(st, '超大冰淇淋：戰鬥位無寶可夢', idx);
+  if (!p.active) return addLog(st, '超大冰淇淋：沒有戰鬥寶可夢', idx);
   // v5.251：defensive gate — 滿血時無效果
   if (p.active.damage <= 0) {
     return addLog(st, '超大冰淇淋：戰鬥寶可夢已滿血，無治療對象', idx);

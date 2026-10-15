@@ -347,7 +347,7 @@ regPre('故勒頓|戰鬥爪', (state, aIdx, pool) => {
   const dmg = 30 + bonus;
   return {
     state: addLog(state,
-      `戰鬥爪：對手戰鬥位${isEvolution ? '為進化寶可夢' : '非進化'} → 30${bonus > 0 ? ` + ${bonus}` : ''} = ${dmg}`, aIdx),
+      `戰鬥爪：對手的戰鬥寶可夢${isEvolution ? '為進化寶可夢' : '非進化'} → 30${bonus > 0 ? ` + ${bonus}` : ''} = ${dmg}`, aIdx),
     damage: dmg,
   };
 });
@@ -415,7 +415,7 @@ regPost('蘭螳花ex|葉子防守', (state, aIdx) => {
 //   參考 statusPost 模式 — 不過此處放指示物簡單實作，sanityKOSweep 會處理超 HP KO。
 regPost('斯魔茶|無聲加害', (state, aIdx) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(state, '無聲加害：對手戰鬥位 +1 傷害指示物', aIdx), dIdx, p => {
+  return updatePlayer(addLog(state, '無聲加害：對手的戰鬥寶可夢 +1 傷害指示物', aIdx), dIdx, p => {
     if (!p.active) return p;
     return { ...p, active: { ...p.active, damage: (p.active.damage ?? 0) + 10 } };
   });
@@ -658,12 +658,12 @@ regPre('烏賊王|腦核粉碎', (state, aIdx) => {
   const confused = def?.status === 'confused';
   if (!confused) {
     return {
-      state: addLog(state, '腦核粉碎：對手戰鬥位不處於【混亂】 → 招式失敗', aIdx),
+      state: addLog(state, '腦核粉碎：對手的戰鬥寶可夢不處於【混亂】 → 招式失敗', aIdx),
       damage: 0,
     };
   }
   return {
-    state: addLog(state, '腦核粉碎：對手戰鬥位處於【混亂】 → 130', aIdx),
+    state: addLog(state, '腦核粉碎：對手的戰鬥寶可夢處於【混亂】 → 130', aIdx),
     damage: 130,
   };
 });
@@ -681,7 +681,7 @@ regPost('盾甲龍|碎', (state, aIdx, pool) =>
 regR('m5-bastiodon-shatter', (state, aIdx, iids) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(state, '碎：對手戰鬥位丟 1 能量', aIdx), dIdx, p => {
+  return updatePlayer(addLog(state, '碎：丟棄對手的戰鬥寶可夢身上的 1 個能量', aIdx), dIdx, p => {
     if (!p.active) return p;
     const toDiscard = p.active.energyAttached.filter(e => iids.includes(e.iid));
     return {
@@ -753,7 +753,7 @@ regPre('鍬農炮蟲|終極磁軌炮', (state, aIdx, pool) => {
 regPost('超級捷拉奧拉ex|介秒迴轉', (state, aIdx) => {
   const p = state.players[aIdx];
   if (p.bench.length === 0) return addLog(state, '介秒迴轉：備戰區無寶可夢可換', aIdx);
-  return withPending(addLog(state, '介秒迴轉：選 1 隻備戰寶可夢與戰鬥位互換', aIdx), {
+  return withPending(addLog(state, '介秒迴轉：選 1 隻備戰寶可夢與戰鬥寶可夢互換', aIdx), {
     type: 'bench-choose',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     minCount: 1, maxCount: 1,
@@ -764,7 +764,7 @@ regR('m5-zeraora-teleport', (state, aIdx, iids) => {
   if (iids.length === 0) return state;
   const targetIid = iids[0];
   return updatePlayer(
-    addLog(state, '介秒迴轉：戰鬥位與備戰互換完成', aIdx),
+    addLog(state, '介秒迴轉：戰鬥寶可夢與備戰寶可夢互換完成', aIdx),
     aIdx, p => {
       const benchIdx = p.bench.findIndex(b => b.iid === targetIid);
       if (benchIdx < 0 || !p.active) return p;
@@ -886,7 +886,7 @@ regPre('瑪夏多|影繩結', (state, aIdx, pool) => {
   const retreatCount = computeActiveRetreatCostFor(state, dIdx, pool);
   const dmg = retreatCount * 30;
   return {
-    state: addLog(state, `影繩結：對手戰鬥位撤退所需 ${retreatCount} 個能量 → ${retreatCount}×30 = ${dmg}`, aIdx),
+    state: addLog(state, `影繩結：對手的戰鬥寶可夢撤退所需 ${retreatCount} 個能量 → ${retreatCount}×30 = ${dmg}`, aIdx),
     damage: dmg,
   };
 });
@@ -958,7 +958,7 @@ regPre('超級水晶燈火靈ex|幻影迷宮', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defActive = state.players[dIdx].active;
   if (!defActive) {
-    return { state: addLog(state, '幻影迷宮：對手戰鬥位無寶可夢 → 130', aIdx), damage: 130 };
+    return { state: addLog(state, '幻影迷宮：對手沒有戰鬥寶可夢 → 130', aIdx), damage: 130 };
   }
   // v5.082：用 computeActiveRetreatCostFor 取得「有效撤退費」，
   // 涵蓋咒縛之炎（自身特性 +1）/ 重力之玉（雙方道具 +1）/ 天空徑線 / 磁鐵【鋼】能量 /
@@ -969,7 +969,7 @@ regPre('超級水晶燈火靈ex|幻影迷宮', (state, aIdx, pool) => {
   const dmg = 130 + bonus;
   return {
     state: addLog(state,
-      `幻影迷宮：對手戰鬥位撤退所需 ${retreatCount} 個能量 → 130 + ${retreatCount}×50 = ${dmg}`, aIdx),
+      `幻影迷宮：對手的戰鬥寶可夢撤退所需 ${retreatCount} 個能量 → 130 + ${retreatCount}×50 = ${dmg}`, aIdx),
     damage: dmg,
   };
 });
@@ -1093,7 +1093,7 @@ regR('m5-tropius-fruit-aroma', (state, aIdx, iids, _params, pool) => {
 //   POST 而非 PRE — 確保 120 傷害先結算。
 regPost('西獅海壬|水迴旋', (state, aIdx) => {
   const p = state.players[aIdx];
-  if (!p.active) return addLog(state, '水迴旋：自身已不在戰鬥位', aIdx);
+  if (!p.active) return addLog(state, '水迴旋：自身已不在戰鬥場', aIdx);
   const att = p.active;
   // 收集要回牌庫的所有卡：active 自身、附加能量、附加道具（用 getAllAttachedTools
   // helper 處理 toolAttached + toolAttachedSecondary 雙槽位）、進化堆疊
@@ -1134,9 +1134,9 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   let s = state;
   const def = s.players[dIdx].active;
-  if (!def) return addLog(s, '深淵之瞳：對手無戰鬥位', aIdx);
+  if (!def) return addLog(s, '深淵之瞳：對手沒有戰鬥寶可夢', aIdx);
   if (!def.status) {
-    return addLog(s, '深淵之瞳：對手戰鬥位不處於特殊狀態 → 效果失敗', aIdx);
+    return addLog(s, '深淵之瞳：對手的戰鬥寶可夢不處於特殊狀態 → 效果失敗', aIdx);
   }
   const defCard = pool.get(def.cardId);
   // v5.522：效果KO收斂中央 koTargetByAttackEffect（深淵之瞳原為 inline 手動KO，現統一呼叫中央 helper：
@@ -1246,7 +1246,7 @@ regA('戰槌龍ex', 0, (st, idx, pool, inst) => {
 regR('m5-warlord-destroy-headbutt', (state, aIdx, iids) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(state, '破壞頭錘：對手戰鬥位丟 1 能量', aIdx), dIdx, p => {
+  return updatePlayer(addLog(state, '破壞頭錘：丟棄對手的戰鬥寶可夢身上的 1 個能量', aIdx), dIdx, p => {
     if (!p.active) return p;
     const toDiscard = p.active.energyAttached.filter(e => iids.includes(e.iid));
     return {

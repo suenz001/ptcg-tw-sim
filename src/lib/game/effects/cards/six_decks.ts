@@ -1011,7 +1011,7 @@ regR('full-shaker-discard', (state, aIdx, selectedIids, _params) => {
 regG('AZ的平和', (st, idx) => !!st.players[idx].active && st.players[idx].bench.length > 0);
 reg('AZ的平和', (st, idx, pool) => {
   if (!st.players[idx].active || st.players[idx].bench.length === 0) {
-    return addLog(st, 'AZ的平和：需要戰鬥位 + 備戰區寶可夢', idx);
+    return addLog(st, 'AZ的平和：需要戰鬥寶可夢與備戰寶可夢', idx);
   }
   return withPending(addLog(st, 'AZ的平和：選 1 隻備戰寶可夢與戰鬥寶可夢互換', idx), {
     type: 'bench-choose',

@@ -407,7 +407,7 @@ regPre('捲捲耳|雀躍', (state) => ({ state, damage: 0 }));
 regPost('捲捲耳|雀躍', (state, aIdx, pool) => {
   const player = state.players[aIdx];
   if (player.bench.length === 0) return addLog(state, '雀躍：備戰區無寶可夢可換', aIdx);
-  let s = addLog(state, '雀躍：選 1 隻備戰寶可夢與戰鬥位互換', aIdx);
+  let s = addLog(state, '雀躍：選 1 隻備戰寶可夢與戰鬥寶可夢互換', aIdx);
   return withPending(s, {
     type: 'bench-choose',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -429,7 +429,7 @@ regR('v155-self-swap-active', (st, aIdx, iids, _params, pool) => {
     newBench[benchIdx] = clearActiveEffects(oldActive);
     return { ...p, active: newActive, bench: newBench };
   });
-  return addLog(st, '雀躍：戰鬥位與備戰互換完成', aIdx);
+  return addLog(st, '雀躍：戰鬥寶可夢與備戰寶可夢互換完成', aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -582,7 +582,7 @@ regPre('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, pool, action) => {
   const s2 = queueAttackEnergyPayment(state, aIdx, discarded, 'return-to-deck', '激流水泵');
   return {
     // ⚠ 「放回牌庫並重洗」那一行由 flush 在傷害之後才印（順序即證據），這裡只講選擇與傷害
-    state: addLog(s2, `激流水泵：選了 ${required} 個能量 → 戰鬥位 100 + 對手備戰 1 隻受 120`, aIdx),
+    state: addLog(s2, `激流水泵：選了 ${required} 個能量 → 對手的戰鬥寶可夢受 100 + 對手備戰 1 隻受 120`, aIdx),
     damage: 100,
   };
 });

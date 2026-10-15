@@ -99,7 +99,7 @@ reg('N的謀劃', (st, idx) => {
   //   讓玩家自己挑哪幾張能量；resolver 把選中能量移到戰鬥場。
   const benchEnergyIids = st.players[idx].bench.flatMap(c => c.energyAttached.map(e => e.iid));
   if (benchEnergyIids.length === 0 || !st.players[idx].active) {
-    return addLog(st, 'N的謀劃：備戰無能量或無戰鬥位 → 無效果', idx);
+    return addLog(st, 'N的謀劃：備戰無能量或沒有戰鬥寶可夢 → 無效果', idx);
   }
   st = addLog(st, 'N的謀劃：選擇最多 2 個備戰寶可夢身上的能量，改附到戰鬥場', idx);
   return withPending(st, {

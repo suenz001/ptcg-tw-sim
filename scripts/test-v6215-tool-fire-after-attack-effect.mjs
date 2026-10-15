@@ -250,7 +250,7 @@ console.log('── F) 批2 手持循環扇 × 自我互換招式（伏特替換
     s10 = mod.applyAction(s10, { type: 'ATTACK', attackIndex: 0, actorIdx: 0 }, pool);
     // ⭐v6.533（Rule 40）：扇子不再「先排隊、出列時重算」，而是招式效果解完才當場產生 ⇒ 改驗它浮上來時的身分欄位與蓋章。
     const queued = { type: 'modal-choice', actorIdx: 1, sourcePlayerIdx: 0, minCount: 1, maxCount: 1,
-      params: { attackerIid: 'atk', label: '手持循環扇：選 1 個攻擊方戰鬥位能量' } };
+      params: { attackerIid: 'atk', label: '手持循環扇：選 1 個攻擊方的戰鬥寶可夢身上的能量' } };
     s10 = mod.applyAction(s10, { type: 'RESOLVE_SELECTION', selectedIids: ['ab1'], token: s10.pendingSelection?.token }, pool);
     const popped = s10.pendingSelection;
     eq(popped?.effectKey ?? null, 'cycle-fan-step1-pick-energy', 'F10b 扇子浮上來了');

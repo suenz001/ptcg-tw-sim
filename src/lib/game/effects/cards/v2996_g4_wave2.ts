@@ -794,7 +794,7 @@ regA('毒粉蛾', 0, (st, idx, pool, _cardInst) => {
   const dp = st.players[dIdx];
   if (!dp.active) return rejectAbilityUse(st, '微風吹拂：對手戰鬥場無寶可夢', idx);
   if (dp.active.energyAttached.length === 0) {
-    return rejectAbilityUse(st, '微風吹拂：對手戰鬥位沒有能量', idx);
+    return rejectAbilityUse(st, '微風吹拂：對手的戰鬥寶可夢沒有能量', idx);
   }
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 整個效果無效（仍消耗每回合 1 次？
   //   保守採卡面解讀「效果不發生」→ 直接 short-circuit、不啟動擲幣，避免浪費觸發）
@@ -804,7 +804,7 @@ regA('毒粉蛾', 0, (st, idx, pool, _cardInst) => {
   const r = flipCoinsWithLog(st, 1, '微風吹拂', idx);
   if (r.heads === 0) return addLog(r.state, '微風吹拂：反面，效果無效', idx);
 
-  const s = addLog(r.state, '微風吹拂：正面，選 1 個對手戰鬥位能量放回對手手牌', idx);
+  const s = addLog(r.state, '微風吹拂：正面，選 1 個對手的戰鬥寶可夢身上的能量放回對手手牌', idx);
   return withPending(s, {
     type: 'active-energy-discard',
     actorIdx: idx, sourcePlayerIdx: dIdx,
@@ -822,7 +822,7 @@ regR('dustox-breeze-blow', (st, idx, iids, _params, pool) => {
   const energyInst = dp.active.energyAttached.find(e => e.iid === targetIid);
   if (!energyInst) return st;
   const eName = pool.get(energyInst.cardId)?.name ?? '?';
-  const s = addLog(st, `微風吹拂：將對手戰鬥位的 ${eName} 放回對手手牌`, idx);
+  const s = addLog(st, `微風吹拂：將對手的戰鬥寶可夢身上的 ${eName} 放回對手手牌`, idx);
   return updatePlayer(s, dIdx, pl => ({
     ...pl,
     active: pl.active

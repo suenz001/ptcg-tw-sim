@@ -711,7 +711,7 @@ regPost('帕底亞 肯泰羅|上搗角擊', (state, aIdx, pool, action) => {
       type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
       minCount: 0, maxCount: _capKO,
       effectKey: 'v327-tauros-thrust',
-      params: { fromDiscard: true, validIids: _koE, titleOverride: `選擇要放回對手手牌的能量（0∼${_capKO} 張，已昏厥戰鬥位）` },
+      params: { fromDiscard: true, validIids: _koE, titleOverride: `選擇要放回對手手牌的能量（0∼${_capKO} 張，已昏厥的戰鬥寶可夢）` },
     });
   }
   const da = state.players[dIdx].active;
@@ -729,7 +729,7 @@ regPost('帕底亞 肯泰羅|上搗角擊', (state, aIdx, pool, action) => {
     return addLog(state, '上搗角擊：對手場上有【平穩境地】，能量回手效果無效', aIdx);
   }
   const cap = Math.min(2, da.energyAttached.length);
-  const s = addLog(state, `上搗角擊：選擇 0∼${cap} 個對手戰鬥位能量放回對手手牌`, aIdx);
+  const s = addLog(state, `上搗角擊：選擇 0∼${cap} 個對手的戰鬥寶可夢身上的能量放回對手手牌`, aIdx);
   return withPending(s, {
     type: 'active-energy-discard',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
@@ -754,7 +754,7 @@ regR('v327-tauros-thrust', (st, idx, iids, _params, pool) => {
   const names = moved.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
   const players = [...st.players] as [PlayerState, PlayerState];
   players[dIdx] = { ...dp, hand: [...dp.hand, ...moved] };
-  return addLog({ ...st, players }, `上搗角擊：將對手戰鬥位的 ${names}（${moved.length} 張）放回對手手牌`, idx);
+  return addLog({ ...st, players }, `上搗角擊：將對手的戰鬥寶可夢身上的 ${names}（${moved.length} 張）放回對手手牌`, idx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -866,7 +866,7 @@ regPost('呆呆王|付諸東流', (state, aIdx, pool, action) => {
       type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
       minCount: 0, maxCount: _capKO,
       effectKey: 'v327-slowking-flush',
-      params: { fromDiscard: true, validIids: _koE, titleOverride: `選擇要放回對手手牌的能量（0∼${_capKO} 張，已昏厥戰鬥位）` },
+      params: { fromDiscard: true, validIids: _koE, titleOverride: `選擇要放回對手手牌的能量（0∼${_capKO} 張，已昏厥的戰鬥寶可夢）` },
     });
   }
   const da = state.players[dIdx].active;
@@ -876,7 +876,7 @@ regPost('呆呆王|付諸東流', (state, aIdx, pool, action) => {
     return addLog(state, '付諸東流：對手場上有【平穩境地】，能量回手效果無效', aIdx);
   }
   const cap = Math.min(2, da.energyAttached.length);
-  const s = addLog(state, `付諸東流：選擇 0∼${cap} 個對手戰鬥位能量放回對手手牌`, aIdx);
+  const s = addLog(state, `付諸東流：選擇 0∼${cap} 個對手的戰鬥寶可夢身上的能量放回對手手牌`, aIdx);
   return withPending(s, {
     type: 'active-energy-discard',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
@@ -901,7 +901,7 @@ regR('v327-slowking-flush', (st, idx, iids, _params, pool) => {
   const names = moved.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
   const players = [...st.players] as [PlayerState, PlayerState];
   players[dIdx] = { ...dp, hand: [...dp.hand, ...moved] };
-  return addLog({ ...st, players }, `付諸東流：將對手戰鬥位的 ${names}（${moved.length} 張）放回對手手牌`, idx);
+  return addLog({ ...st, players }, `付諸東流：將對手的戰鬥寶可夢身上的 ${names}（${moved.length} 張）放回對手手牌`, idx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
