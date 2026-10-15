@@ -161,7 +161,10 @@ function tokenizeRules(msg: string, cardNamesByLength?: string[], playerNames?: 
 
   // v3.02：卡名子掃描 — 只對 cls === '' 的純文字 token 做 longest-match-first
   if (cardNamesByLength && cardNamesByLength.length > 0) {
-    const protect = logProtectedNames(playerNames);
+    // ⭐v6.570（站長裁定）：暱稱與某張卡名**一字不差**時不保護（退回舊行為：照樣是卡片連結）——
+    //   紀錄裡大部分卡名是純文字，分不出那一處是人還是卡；寧可玩家名稱也能點，也不要讓那張卡點不開。
+    const cardSet = cardNameSetOf(cardNamesByLength);
+    const protect = logProtectedNames(playerNames).filter((n) => !cardSet.has(n));
     return tokens.flatMap(tok => tok.cls === ''
       ? splitCardNames(tok.text, cardNamesByLength, protect)
       : [tok]);
@@ -174,6 +177,14 @@ function tokenizeRules(msg: string, cardNamesByLength?: string[], playerNames?: 
  * 必須由長到短排序：避免「瑪俐的搗蛋小妖」被切成「瑪俐的」+「搗蛋小妖」link。
  * 名稱長度 < 2 字一律忽略。
  */
+// ⭐v6.570 卡名清單 → Set（同一份陣列只建一次；清單是 $derived 產生的同一個物件，每行 log 共用）
+const _cardSetCache = new WeakMap<readonly string[], Set<string>>();
+function cardNameSetOf(cardNamesByLength: readonly string[]): Set<string> {
+  let set = _cardSetCache.get(cardNamesByLength);
+  if (!set) { set = new Set(cardNamesByLength); _cardSetCache.set(cardNamesByLength, set); }
+  return set;
+}
+
 /** ⭐v6.569 要保護（不拆成卡片連結）的玩家暱稱：去空白、去重，只收 2 字以上（卡名掃描本來就忽略 1 字，1 字暱稱不可能整個被當成卡名）。 */
 export function logProtectedNames(playerNames?: readonly (string | null | undefined)[]): string[] {
   const out: string[] = [];

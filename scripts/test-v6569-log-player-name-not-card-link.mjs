@@ -33,7 +33,7 @@ async function loadLib(src) {
     return await import(pathToFileURL(o).href);
   } catch { return null; } finally { try { rmSync(tmp, { recursive: true, force: true }); } catch { /* */ } }
 }
-const CARDS = ['噴火龍ex', '皮卡丘ex', '噴火龍', '皮卡丘', '雷丘', '伊布'].sort((a, b) => b.length - a.length);
+const CARDS = ['火箭隊的超夢', '噴火龍ex', '皮卡丘ex', '噴火龍', '皮卡丘', '雷丘', '伊布'].sort((a, b) => b.length - a.length);
 const links = (toks) => toks.filter((t) => t.cls === 'log-card-link').map((t) => t.text);
 const joined = (toks) => toks.map((t) => t.text).join('');
 
@@ -42,19 +42,20 @@ function scenT(L) {
   if (!L || typeof L.tokenizeLogMessage !== 'function') return r;
   const tk = (m, names) => L.tokenizeLogMessage(m, CARDS, names);
   // T1 同名：暱稱「皮卡丘」⇒ 開頭的玩家名稱不是連結；後面的卡名照樣是連結
-  const a = tk('皮卡丘 使用了 噴火龍ex 的招式', ['皮卡丘', '小明']);
-  r.T1 = JSON.stringify(links(a)) === '["噴火龍ex"]' && joined(a) === '皮卡丘 使用了 噴火龍ex 的招式';
+  // ⚠ v6.570（站長裁定，Rule 40）：暱稱與卡名「一字不差」時不保護（由 test-v6570 守）⇒ 這裡的暱稱改用「含卡名但不等於卡名」的寫法
+  const a = tk('皮卡丘王 使用了 噴火龍ex 的招式', ['皮卡丘王', '小明']);
+  r.T1 = JSON.stringify(links(a)) === '["噴火龍ex"]' && joined(a) === '皮卡丘王 使用了 噴火龍ex 的招式';
   r.T1n = JSON.stringify(a);
   // T2 暱稱裡含卡名：「我的噴火龍」不可以切出「噴火龍」連結
   const b = tk('回合結束，換 我的噴火龍 行動', ['小明', '我的噴火龍']);
   r.T2 = links(b).length === 0 && joined(b) === '回合結束，換 我的噴火龍 行動';
   r.T2n = JSON.stringify(b);
   // T3 卡名比暱稱長（暱稱「噴火龍」、卡名「噴火龍ex」）⇒ 卡名照樣是連結；暱稱那一段不是
-  const c = tk('噴火龍 派出了 噴火龍ex', ['噴火龍', '小明']);
-  r.T3 = JSON.stringify(links(c)) === '["噴火龍ex"]';
+  const c = tk('火箭隊的 派出了 火箭隊的超夢', ['火箭隊的', '小明']);   // v6.570：暱稱不再取卡名本身（見 T1 註）
+  r.T3 = JSON.stringify(links(c)) === '["火箭隊的超夢"]';
   r.T3n = JSON.stringify(c);
   // T4 marker（帶 iid 的卡片）一律照樣是連結，即使名字跟暱稱一樣
-  const d = tk('皮卡丘 的 iid-1皮卡丘 受到 30 點傷害', ['皮卡丘', '小明']);
+  const d = tk('皮卡丘王 的 iid-1皮卡丘 受到 30 點傷害', ['皮卡丘王', '小明']);
   r.T4 = JSON.stringify(d.filter((t) => t.cls === 'log-card-link').map((t) => [t.text, t.iid])) === '[["皮卡丘","iid-1"]]';
   r.T4n = JSON.stringify(d);
   // T5 零回歸：沒傳暱稱 ⇒ 與舊行為一樣（暱稱位置也是連結）；1 字暱稱、空白、null 不影響卡名
@@ -63,9 +64,9 @@ function scenT(L) {
   r.T5 = JSON.stringify(links(e)) === '["皮卡丘","噴火龍ex"]' && JSON.stringify(links(f)) === '["雷丘"]';
   r.T5n = JSON.stringify({ e: links(e), f: links(f) });
   // T6 暱稱前後有空白也認得（儲存的暱稱可能帶空白）；兩位玩家同名只處理一次
-  const g = tk('伊布 對 伊布 宣告棄權', [' 伊布 ', '伊布']);
-  const g2 = tk('伊布 行動', [' 伊布 ', '小明']);   // 只有帶空白的那一份 ⇒ 要靠 trim 才認得
-  r.T6 = links(g).length === 0 && joined(g) === '伊布 對 伊布 宣告棄權' && links(g2).length === 0
+  const g = tk('伊布王 對 伊布王 宣告棄權', [' 伊布王 ', '伊布王']);
+  const g2 = tk('伊布王 行動', [' 伊布王 ', '小明']);   // 只有帶空白的那一份 ⇒ 要靠 trim 才認得
+  r.T6 = links(g).length === 0 && joined(g) === '伊布王 對 伊布王 宣告棄權' && links(g2).length === 0
     && JSON.stringify(L.logProtectedNames?.([' 伊布 ', '伊布', '雷', null, '小明'])) === '["伊布","小明"]';
   r.T6n = JSON.stringify(g);
   return r;
@@ -85,9 +86,9 @@ function scenW(pg, mp) {
 }
 
 const LABEL = {
-  T1: '★★★ T1 暱稱與寶可夢同名：玩家名稱不是連結，同一行的卡名照樣是連結',
+  T1: '★★★ T1 暱稱含寶可夢名字（皮卡丘王）：玩家名稱不是連結，同一行的卡名照樣是連結',
   T2: '★★★ T2 暱稱裡含卡名（我的噴火龍）：不會從暱稱中間切出卡片連結',
-  T3: '★★ T3 卡名比暱稱長（噴火龍ex vs 暱稱噴火龍）：卡名照樣是連結',
+  T3: '★★ T3 卡名比暱稱長（火箭隊的超夢 vs 暱稱火箭隊的）：卡名照樣是連結',
   T4: '★★ T4 帶 iid 標記的卡片一律照樣是連結（即使名字跟暱稱一樣）',
   T5: '★★ T5 零回歸：沒傳暱稱＝舊行為；1 字／空白／null 暱稱不影響卡名',
   T6: '★ T6 暱稱前後空白也認得；雙方同名只處理一次',
@@ -96,7 +97,7 @@ const LABEL = {
   W3: '★★ W3 錦標賽戰報傳入雙方暱稱',
   W4: '★★ W4 頁面上所有 tokenizeLogMessage 呼叫都有傳暱稱（不漏新顯示處）',
 };
-const ZERO_REGRESSION = new Set(['T5']);
+const ZERO_REGRESSION = new Set(['T5', 'T3']);   // T3：v6.570 起暱稱不取卡名本身，BASE 上本來就是這個結果
 
 const rd = (p) => normEol(readFileSync(join(ROOT, p), 'utf8'));
 const all = async (lf, pg, mp) => {
