@@ -1,5 +1,12 @@
 # 內部改版紀錄（不打包進網站）
 
+## server v1.69（前端仍是 v6.579，未 bump；上一版 `772ecf8c`）重賽的系統訊息「擲幣」→「擲硬幣」
+
+- 站長 2026-10-16 裁定「5.好」：管理員重賽時錦標賽聊天室的系統訊息「（從擲幣重新開始）」改成「（從擲硬幣重新開始）」，與 v6.573 對戰紀錄的用詞一致；端點上方註解同步。admin.html 的按鈕／alert（只有管理員看得到）沒動。
+- 改的是錦標賽區塊內兩行 ⇒ 28 把鎖重釘：scripts/lib/sap-revert-admin-v169.mjs（2 對，當場驗證逐位元還原 v1.68）、tourn-revert-v169.mjs（新 tail 78af6c4c…／tev 9c8db402…／len 245340）；七支消費者（sap152／153／154、v6276、v6291、v6292、v6381）與 admin-v177 改接 v169；SAP 整份還原鏈（v6303、sap153、sap154、v6561）包一層 revertAdminV169；17 支守衛字面值重釘；test-v6379 D3 OLD_VALUES 補 v1.67、LIB_DECL 加 v167（12）；test-v6292／sap154 的 import 路徑 meta 斷言接受 v169。
+- 守衛 test-sap169（A1 重賽端點的 postSystemChat 寫擲硬幣、A2 補丁字串不再有「擲幣」＋自驗、A3 整份還原＝v1.68；D1～D5；HEAD-FAIL）。
+- 部署：update-tournament.bat（server v1.68＋v1.69 一起上）。
+
 ## v6.579（上一版 `5c1ac724`（v6.578））對局中盤面不跳動
 
 - 站長 2026-10-16 裁定：「1. 一起修」（Fable／桌面版／經典版的盤面抖動一起修）。

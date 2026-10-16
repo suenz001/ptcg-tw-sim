@@ -37,7 +37,8 @@ import { revertV6292 } from './lib/tourn-revert-v6292.mjs';
 // ⭐v6.381：鏈又長一節（B 組：歸檔補 gameDraw ＋ 平手公告加「瑞士制仍可繼續」）。
 //   ⚠ 用**別名**把 v6.381 那一節接在最前面 ⇒ 下面每一個既有呼叫點一個字都不必改，
 //     語意也不變（還原後仍是 v6.292 的區塊）。test-v6292 B6 在守這條鏈。
-import { revertV165 as _rv165, revertV167, revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365 } from './lib/tourn-revert-v167.mjs';
+import { revertV165 as _rv165, revertV167 as _rv167, revertV169, revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365 } from './lib/tourn-revert-v169.mjs';
+const revertV167 = (b) => _rv167(revertV169(b));   // ⭐v1.69（Rule 54）：鏈再長一節（重賽系統訊息「擲硬幣」；既有呼叫點一個字都不必改）
 const revertV165 = (b) => _rv165(revertV167(b));   // ⭐v1.67（Rule 54）：鏈再長一節（對局時限判法切換、推播偏好帳號層級；既有呼叫點一個字都不必改）
 const revertV154 = (b) => _rv154(revertV165(b));   // ⭐v1.65（Rule 54）：鏈再長一節（Top Cut 人多取 16 強；既有呼叫點一個字都不必改）
 const revertV6384 = (b) => _rv6384(revertV150(revertV152(revertV153(revertV154(b)))));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）；⭐v1.53 再長一節（報名牌組完整規則）；⭐v1.54 再長一節（全站 audit 降載）
@@ -130,8 +131,8 @@ const TEV_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
 const OLD_TAIL_SHA = '34a8448b7de92a1f9a3a30c02c01ecd274409e1520fcc73fe5e92d6da47cc12c';
 const OLD_TEV_SHA = '54cd122681c99f050eadf22e7823159bc5f40ecbc88118f49e5de88cb683b196';
 const OLD_TEV_LEN = 218193;
-const NEW_TAIL_SHA = '04961a4419fe9af762f4394550d81753880ae4174edd8ac8bc941392fbb2dc6e';
-const NEW_TEV_SHA = '41606d319b9b89738f4c75c4af5487e804c89fc258b3343a49efc9ab58106b62';
+const NEW_TAIL_SHA = '78af6c4cceb0ec9969f49560407e57ad806b7cc0e78ad316bbbcfdbcc0c4a20d';
+const NEW_TEV_SHA = '9c8db4028ca4945afab7abfebcd0a41c04a51ad948b886fc5210024b8a95de88';
 
 console.log('\n══ 【A】結構（每一條在 BASE v6.275 上都必須紅，見【H】）═══════════════════');
 

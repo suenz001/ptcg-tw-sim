@@ -28,7 +28,8 @@ import {
 } from './lib/tourn-revert-v152.mjs';
 // ⭐v1.53（Rule 40，意圖不變）：錦標賽區塊之後又被 v1.53（報名牌組完整規則）合法改過 ⇒ D 節先剝 v1.53 再比對 v1.52 的值。
 import { revertV153 } from './lib/tourn-revert-v153.mjs';
-import { revertV154 as _rv154, revertV165 as _rv165, revertV167 } from './lib/tourn-revert-v167.mjs';   // ⭐v1.54（Rule 40）：再先剝一節；⭐v1.65 再長一節
+import { revertV154 as _rv154, revertV165 as _rv165, revertV167 as _rv167, revertV169 } from './lib/tourn-revert-v169.mjs';   // ⭐v1.54（Rule 40）：再先剝一節；⭐v1.65 再長一節
+const revertV167 = (b) => _rv167(revertV169(b));   // ⭐v1.69（Rule 54）：鏈再長一節（重賽系統訊息「擲硬幣」；既有呼叫點一個字都不必改）
 const revertV165 = (b) => _rv165(revertV167(b));   // ⭐v1.67（Rule 54）：鏈再長一節（對局時限判法切換、推播偏好帳號層級；既有呼叫點一個字都不必改）
 const revertV154 = (b) => _rv154(revertV165(b));   // ⭐v1.65（Rule 54）：鏈再長一節（Top Cut 人多取 16 強；既有呼叫點一個字都不必改）
 

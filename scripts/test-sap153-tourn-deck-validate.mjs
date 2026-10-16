@@ -44,7 +44,9 @@ import { revertAdminV164 } from './lib/sap-revert-admin-v164.mjs';   // ⭐v1.64
 import { revertAdminV165 } from './lib/sap-revert-admin-v165.mjs';   // ⭐v1.65（v6.562 置頂公告／對局時間／Top Cut）：先剝較新的（Rule 54）
 import { revertAdminV166 as _revertAdminV166 } from './lib/sap-revert-admin-v166.mjs';
 import { revertAdminV167 as _revertAdminV167 } from './lib/sap-revert-admin-v167.mjs';   // ⭐v1.67（v6.566 對局時限判法、推播偏好帳號層級）
-import { revertAdminV168 } from './lib/sap-revert-admin-v168.mjs';   // ⭐v1.68（v6.575 聊天室禁止連續相同內容，錦標賽區塊之前）：先剝較新的（Rule 54）
+import { revertAdminV168 as _revertAdminV168 } from './lib/sap-revert-admin-v168.mjs';   // ⭐v1.68（v6.575 聊天室禁止連續相同內容，錦標賽區塊之前）：先剝較新的（Rule 54）
+import { revertAdminV169 } from './lib/sap-revert-admin-v169.mjs';   // ⭐v1.69（重賽系統訊息「擲硬幣」，錦標賽區塊內兩行；前端未 bump）
+const revertAdminV168 = (s) => _revertAdminV168(revertAdminV169(s));   // ⭐v1.69 鏈再長一節（既有呼叫點一個字都不必改）
 const revertAdminV167 = (s) => _revertAdminV167(revertAdminV168(s));   // ⭐v1.68 鏈再長一節（既有呼叫點一個字都不必改）
 const revertAdminV166 = (s) => _revertAdminV166(revertAdminV167(s));   // ⭐v1.67 鏈再長一節（既有呼叫點一個字都不必改）
    // ⭐v1.66（v6.563 自己最近的錦標賽對戰，錦標賽區塊之前）：先剝較新的（Rule 54）
@@ -53,7 +55,8 @@ import { revertAdminV160 } from './lib/sap-revert-admin-v160.mjs';   // ⭐serve
 import { revertAdminV159 } from './lib/sap-revert-admin-v159.mjs';   // ⭐server v1.59（原型未進場不計＋先攻後攻）：先剝較新的（Rule 54）
 import { revertAdminV158 } from './lib/sap-revert-admin-v158.mjs';   // ⭐server v1.58（常用牌組對戰矩陣端點）：先剝較新的（Rule 54）
 import { revertAdminV157 } from './lib/sap-revert-admin-v157.mjs';   // ⭐server v1.57（序位預設 50＋用最新規則重新判定）：先剝較新的（Rule 54）
-import { revertV154 as _rv154, revertV165 as _rv165, revertV167 } from './lib/tourn-revert-v167.mjs';   // ⭐v1.65 再長一節
+import { revertV154 as _rv154, revertV165 as _rv165, revertV167 as _rv167, revertV169 } from './lib/tourn-revert-v169.mjs';   // ⭐v1.65 再長一節
+const revertV167 = (b) => _rv167(revertV169(b));   // ⭐v1.69（Rule 54）：鏈再長一節（重賽系統訊息「擲硬幣」；既有呼叫點一個字都不必改）
 const revertV165 = (b) => _rv165(revertV167(b));   // ⭐v1.67（Rule 54）：鏈再長一節（對局時限判法切換、推播偏好帳號層級；既有呼叫點一個字都不必改）
 const revertV154 = (b) => _rv154(revertV165(b));   // ⭐v1.65（Rule 54）：鏈再長一節（Top Cut 人多取 16 強；既有呼叫點一個字都不必改）
 

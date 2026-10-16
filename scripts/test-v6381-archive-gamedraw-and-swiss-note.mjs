@@ -20,9 +20,10 @@ import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
 import {
   TAIL_ANCHOR, TEV_ANCHOR, revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertToV6292, revertToV6291,
-  NEW_TAIL_SHA_V167 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V167 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V167 as NEW_TEV_LEN_CUR, revertV165 as _rv165, revertV167,
+  NEW_TAIL_SHA_V169 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V169 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V169 as NEW_TEV_LEN_CUR, revertV165 as _rv165, revertV167 as _rv167, revertV169,
   OLD_TAIL_SHA_V6365, OLD_TEV_SHA_V6365, OLD_TEV_LEN_V6365,
-} from './lib/tourn-revert-v167.mjs';
+} from './lib/tourn-revert-v169.mjs';
+const revertV167 = (b) => _rv167(revertV169(b));   // ⭐v1.69（Rule 54）：鏈再長一節（重賽系統訊息「擲硬幣」；既有呼叫點一個字都不必改）
 const revertV165 = (b) => _rv165(revertV167(b));   // ⭐v1.67（Rule 54）：鏈再長一節（對局時限判法切換、推播偏好帳號層級；既有呼叫點一個字都不必改）
 const revertV154 = (b) => _rv154(revertV165(b));   // ⭐v1.65（Rule 54）：鏈再長一節（Top Cut 人多取 16 強；既有呼叫點一個字都不必改）
 const revertV6384 = (b) => _rv6384(revertV150(revertV152(revertV153(revertV154(b)))));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）；⭐v1.53 再長一節（報名牌組完整規則）；⭐v1.54 再長一節（全站 audit 降載）

@@ -10389,7 +10389,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         res.json({ pending: ms.map((m) => ({ matchId: m._id, round: m.round, idx: m.idx, p1name: m.p1name, p2name: m.p2name, hasP1: !!m.p1uid, hasP2: !!m.p2uid, status: m.status })) });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
-    // 管理員：重賽（從擲幣重新開始該場對局；只限尚未結束的場）
+    // 管理員：重賽（從擲硬幣重新開始該場對局；只限尚未結束的場）（⭐v1.69 站長 2026-10-16 裁定：玩家看得到的系統訊息統一寫「擲硬幣」）
     app.post('/api/tournament/admin/match/restart', async (req, res) => {
       try {
         const id = await tournIdentity(req);
@@ -10415,7 +10415,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         await TROOMS.updateOne({ _id: roomId }, { $set: { _id: roomId, seats: [m.p1uid, m.p2uid], names: [m.p1name, m.p2name], decks: [reg1.deckEntries, reg2.deckEntries], gameState: gs, version: ((prev && prev.version) || 0) + 1, matchId: m._id, eventId: m.eventId, updatedAt: Date.now(), lastActionAt: Date.now(), recentActs: { s0: [], s1: [] }, idleForfeitMin: (ev && ev.idleForfeitMin > 0 ? ev.idleForfeitMin : 3), actorSeat: currentActorSeat(gs), timeLimitTurn: null } }, { upsert: true });   // v6.151 初始 actorSeat；⭐v1.67（Opus 複審 P1）重賽沿用同一個房間 ⇒ 清掉上一局的最後回合標記（設 null：/action 只認數字），否則新對局一打到那個回合數就被 /action 擋住
         await TMATCH.updateOne({ _id: m._id }, { $set: { roomId, status: 'playing', winnerUid: null, winnerName: null, gameStartedAt: Date.now(), entered: [true, true] }, $unset: { noShow: '', doubleNoShow: '', forfeit: '', idleForfeit: '', timeLimit: '', adminResolved: '', timeLimitReached: '', timeLimitTurn: '', timeLimitCalledAt: '', timeLimitVerdict: '', draw: '', doubleDrop: '', dropForfeit: '' } });
         await TREPLAY.deleteMany({ matchId: m._id }).catch(() => {});  // v0.83 重賽重用 matchId→清舊局快照,避免 $setOnInsert 冪等把兩局混成一場
-        await postSystemChat('🔄 管理員將「' + m.p1name + ' vs ' + m.p2name + '」重新開賽（從擲幣重新開始）。');
+        await postSystemChat('🔄 管理員將「' + m.p1name + ' vs ' + m.p2name + '」重新開賽（從擲硬幣重新開始）。');
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
