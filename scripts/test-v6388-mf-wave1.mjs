@@ -212,7 +212,7 @@ console.log('\n【A】行為端：逐招實跑');
 {
   const idxOf = (c, n) => (c.attacks || []).findIndex((a) => a.name === n);
   // ⚠ 讀的是 oppDamageKOdMeInLastOppTurn（只計「招式**傷害**KO」）——
-  //   oppAttackKOdMeInLastOppTurn 是**含效果 KO**的另一個欄位，給措辭不同的卡（古玉魚｜嫉妒業火）用，
+  //   oppAttackKOdMeInLastOppTurn 是**含效果 KO**的另一個欄位（v6.577 起古玉魚｜嫉妒業火也改讀傷害 KO 那一格），
   //   兩者不可互換（effects.ts revengeDamageKOPre 的檔頭寫死了這一點）。
   const noKO = hit(HEAD, String(TROPIUS.id), idxOf(TROPIUS, '捲土重來'), { extra: { oppDamageKOdMeInLastOppTurn: [0, 0] } });
   const yesKO = hit(HEAD, String(TROPIUS.id), idxOf(TROPIUS, '捲土重來'), { extra: { oppDamageKOdMeInLastOppTurn: [1, 0] } });

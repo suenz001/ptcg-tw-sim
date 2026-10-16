@@ -7510,7 +7510,8 @@ regPost('豐蜜龍|甜蜜熔化', defCantAttackNextPost());
  *   月亮伊布｜報仇(30+100)。
  * ⚠ 讀的是既有欄位 `oppDamageKOdMeInLastOppTurn`（Rule 38：不得新增第二個記錄機制）——
  *   它只計「招式**傷害**KO」，排除效果昏厥（咒詛炸彈等，_faintByEffect）／checkup KO／自 KO。
- * ⚠ 另有 `oppAttackKOdMeInLastOppTurn`（含效果 KO）給措辭不同的卡（古玉魚｜嫉妒業火）用，
+ *   ⭐v6.577 起古玉魚｜嫉妒業火（卡面同一句）也走這裡。
+ * ⚠ `oppAttackKOdMeInLastOppTurn`（含效果 KO）是給「被招式昏厥」不限傷害的卡用（不公印章等），
  *   兩者**不可互換**（scripts/test-revenge-damage-vs-effect-ko.mjs 在守）。
  */
 export function revengeDamageKOPre(base: number, bonus: number, label: string): AttackPreFn {
@@ -7529,15 +7530,10 @@ regPre('鐵斑葉|復仇刀鋒', revengeDamageKOPre(100, 60, '復仇刀鋒'));
 // 普隆隆姆｜捲土重來 30+90
 regPre('普隆隆姆|捲土重來', revengeDamageKOPre(30, 90, '捲土重來'));
 // 古玉魚｜嫉妒業火 50+90
-regPre('古玉魚|嫉妒業火', (state, aIdx, _pool) => {
-  const attackKO = state.oppAttackKOdMeInLastOppTurn?.[aIdx] ?? 0;
-  const tookPrize = attackKO > 0;
-  const bonus = tookPrize ? 90 : 0;
-  const s = tookPrize
-    ? addLog(state, `嫉妒業火：上個對手的回合自己有寶可夢因招式昏厥 → +90 傷害`, aIdx)
-    : state;
-  return { state: s, damage: 50 + bonus };
-});
+// ⭐v6.577（站長 2026-10-16 裁定「要修」）：卡面（static/cards 12337）是「在上個對手的回合，若自己的寶可夢**因招式的傷害**而【昏厥】了，
+//   則增加90點傷害。」——與復仇刀鋒／捲土重來／報仇**同一句** ⇒ 改走同一個中央 revengeDamageKOPre（只算招式傷害昏厥）。
+//   舊寫法讀 oppAttackKOdMeInLastOppTurn（含招式**效果**昏厥），舊註解說「措辭不同」是誤讀卡面。
+regPre('古玉魚|嫉妒業火', revengeDamageKOPre(50, 90, '嫉妒業火'));
 
 // ── E. 懶人獺｜悠哉 — heal 60 + 自己下回合不能撤退（cantRetreatPendingSelf）──
 regPost('懶人獺|悠哉', (state, aIdx) => {
