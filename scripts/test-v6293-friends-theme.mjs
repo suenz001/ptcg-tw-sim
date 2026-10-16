@@ -30,6 +30,7 @@ import { V6464_GAME_PAIRS, revertPairs } from './lib/revert-v6464-thumbs.mjs';
 import { V6560_GAME_PAIRS } from './lib/revert-v6560-game.mjs';   // ⭐v6.560（Rule 40）：一般對戰復盤的全版面改動（獎賞翻面條件、播放列、結算視窗下載鈕）先還原成 v6.559；內容由 test-v6560 鎖
 import { V6561_GAME_PAIRS } from './lib/revert-v6561-game.mjs';   // ⭐v6.561（Rule 40）：tStartReplay 合併逐動作格（非版面）先還原成 v6.560
 import { V6562_GAME_PAIRS } from './lib/revert-v6562-game.mjs';   // ⭐v6.562（Rule 40）：聊天室置頂公告／賽程對局時間先還原成 v6.561
+import { V6576_GAME_PAIRS } from './lib/revert-v6576-game.mjs';   // ⭐v6.576（Rule 40）：提醒浮動堆疊＋回放控制列浮動可拖曳（全版面盤面不被擠動），由新到舊最先還原；行為由 test-v6576 鎖
 import { V6575_GAME_PAIRS } from './lib/revert-v6575-game.mjs';   // ⭐v6.575（Rule 40）：錦標賽聊天室提示（tChatSend＋輸入框下方提示，非版面分支結構），由新到舊最先還原
 import { V6574_GAME_PAIRS } from './lib/revert-v6574-game.mjs';   // ⭐v6.574（Rule 40）：頁首手牌 chip 名稱／張數拆欄（全版面的張數可讀性修正，不是版面分支的結構改動），由新到舊最先還原；行為由 test-v6574 鎖
 import { V6569_GAME_PAIRS } from './lib/revert-v6569-game.mjs';   // ⭐v6.569（Rule 40）：對戰紀錄傳入雙方暱稱（log 一行呼叫點在版面分支內），由新到舊最先還原
@@ -727,8 +728,8 @@ await T('E1 ⭐⭐⭐ 對戰版面分支區間（手機直式＋三種桌機版�
   if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6293 E1 對戰版面分支逐位元比對', '需要歷史 commit；E1c 的結構斷言不需要歷史，仍在守'); skipped.push('E1（淺複製）'); return; }
   const baseSrc = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':src/routes/game/+page.svelte'], { maxBuffer: 1 << 28 }).toString('utf8');
   // ⭐v6.464（Rule 40）：卡圖縮圖改了對戰區的 <img src>（全版面一致）⇒ 先用共用還原表把整檔還原成 v6.463，再走原本的還原鏈；其餘仍須逐位元等於 BASE。
-  assert.strictEqual(sha256(revertV6557(revertV6556(revertV6555(revertV6441(revertV6425(revertV6418(revertV6389(revertV6321(battleRegionOf(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(GAME, V6575_GAME_PAIRS, 'v6.575'), V6574_GAME_PAIRS, 'v6.574'), V6569_GAME_PAIRS, 'v6.569'), V6566_GAME_PAIRS, 'v6.566'), V6565_GAME_PAIRS, 'v6.565'), V6564_GAME_PAIRS, 'v6.564'), V6563_GAME_PAIRS, 'v6.563'), V6562_GAME_PAIRS, 'v6.562'), V6561_GAME_PAIRS, 'v6.561'), V6560_GAME_PAIRS, 'v6.560'), V6464_GAME_PAIRS))))))))))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
-  assert.strictEqual(sha256(revertV6420Gameover(gameoverRegionOf(stripV6361DrawModal(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(GAME, V6575_GAME_PAIRS, 'v6.575'), V6574_GAME_PAIRS, 'v6.574'), V6569_GAME_PAIRS, 'v6.569'), V6566_GAME_PAIRS, 'v6.566'), V6565_GAME_PAIRS, 'v6.565'), V6564_GAME_PAIRS, 'v6.564'), V6563_GAME_PAIRS, 'v6.563'), V6562_GAME_PAIRS, 'v6.562'), V6561_GAME_PAIRS, 'v6.561'), V6560_GAME_PAIRS, 'v6.560'))))), sha256(gameoverRegionOf(baseSrc)), '⚠⚠ 勝負結算 modal 被動到了');
+  assert.strictEqual(sha256(revertV6557(revertV6556(revertV6555(revertV6441(revertV6425(revertV6418(revertV6389(revertV6321(battleRegionOf(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(GAME, V6576_GAME_PAIRS, 'v6.576'), V6575_GAME_PAIRS, 'v6.575'), V6574_GAME_PAIRS, 'v6.574'), V6569_GAME_PAIRS, 'v6.569'), V6566_GAME_PAIRS, 'v6.566'), V6565_GAME_PAIRS, 'v6.565'), V6564_GAME_PAIRS, 'v6.564'), V6563_GAME_PAIRS, 'v6.563'), V6562_GAME_PAIRS, 'v6.562'), V6561_GAME_PAIRS, 'v6.561'), V6560_GAME_PAIRS, 'v6.560'), V6464_GAME_PAIRS))))))))))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
+  assert.strictEqual(sha256(revertV6420Gameover(gameoverRegionOf(stripV6361DrawModal(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(GAME, V6576_GAME_PAIRS, 'v6.576'), V6575_GAME_PAIRS, 'v6.575'), V6574_GAME_PAIRS, 'v6.574'), V6569_GAME_PAIRS, 'v6.569'), V6566_GAME_PAIRS, 'v6.566'), V6565_GAME_PAIRS, 'v6.565'), V6564_GAME_PAIRS, 'v6.564'), V6563_GAME_PAIRS, 'v6.563'), V6562_GAME_PAIRS, 'v6.562'), V6561_GAME_PAIRS, 'v6.561'), V6560_GAME_PAIRS, 'v6.560'))))), sha256(gameoverRegionOf(baseSrc)), '⚠⚠ 勝負結算 modal 被動到了');
 });
 await T('E1b ⭐ 正對照：把對戰版面分支改一個位元 ⇒ E1 的比對必須不同（不是恆真式）', () => {
   const r = battleRegionOf(GAME);
@@ -757,7 +758,7 @@ await T('E1d ⭐⭐ 正對照：v6.361 平手視窗的哨兵剝除**只**剝哨�
 });
 await T('E1e ⭐⭐ 正對照：v6.418 的還原表少列一條 ⇒ revertV6418 必須紅（不是把改動洗掉）', () => {
   // ⭐v6.560（Rule 40）：本版改到 v6.418 那段獎賞卡的 title（isTReplay → replayShowsHidden）⇒ 先還原 v6.560 再驗 v6.418 的還原表
-  const _G560 = revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(GAME, V6575_GAME_PAIRS, 'v6.575'), V6574_GAME_PAIRS, 'v6.574'), V6569_GAME_PAIRS, 'v6.569'), V6566_GAME_PAIRS, 'v6.566'), V6565_GAME_PAIRS, 'v6.565'), V6564_GAME_PAIRS, 'v6.564'), V6563_GAME_PAIRS, 'v6.563'), V6562_GAME_PAIRS, 'v6.562'), V6561_GAME_PAIRS, 'v6.561'), V6560_GAME_PAIRS, 'v6.560');
+  const _G560 = revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(revertPairs(GAME, V6576_GAME_PAIRS, 'v6.576'), V6575_GAME_PAIRS, 'v6.575'), V6574_GAME_PAIRS, 'v6.574'), V6569_GAME_PAIRS, 'v6.569'), V6566_GAME_PAIRS, 'v6.566'), V6565_GAME_PAIRS, 'v6.565'), V6564_GAME_PAIRS, 'v6.564'), V6563_GAME_PAIRS, 'v6.563'), V6562_GAME_PAIRS, 'v6.562'), V6561_GAME_PAIRS, 'v6.561'), V6560_GAME_PAIRS, 'v6.560');
   const r = battleRegionOf(_G560);
   // ① 還原表不會把無關改動洗掉（否則 E1 變恆真式）
   const mutated = _G560.replace(BATTLE_START, BATTLE_START + '<!-- v6418-probe -->');

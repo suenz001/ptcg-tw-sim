@@ -125,10 +125,12 @@ await T('C5 ⭐手機底部系統手勢區（safeBottom）：把手露出量要�
   assert.strictEqual(B.top + off0.y, 667 - 56);
   assert.strictEqual(B.top + off34.y, 667 - 56 - 34, '沒有把 safeBottom 算進去');
 });
-await T('C4 ⭐五個浮動元件（聊天鈕／聊天面板／對手回合鈕與面板／進化選單）明確帶 contain', () => {
+// ⭐v6.576（Rule 40）：回放控制列也改成浮動可拖曳（clamp:'contain'）⇒ 浮動元件變 6 個；意圖（每個浮動元件都明確帶 contain）不變
+await T('C4 ⭐六個浮動元件（聊天鈕／聊天面板／對手回合鈕與面板／進化選單／回放控制列）明確帶 contain', () => {
   const n = (PAGE.match(/use:modalDrag=\{\{ clamp: 'contain',/g) || []).length;
-  assert.strictEqual(n, 5, '實得 ' + n);
+  assert.strictEqual(n, 6, '實得 ' + n);
   for (const cls of ['float-evo-menu', 'opp-turn-panel-header', 'chat-panel-header']) assert.ok(PAGE.includes(cls), cls);
+  assert.ok(PAGE.includes(`<div class="treplay-bar" use:modalDrag={{ clamp: 'contain', handle: '.treplay-grip, .treplay-title', overlay: false }}>`), 'treplay-bar');
 });
 
 console.log('【D】Playwright：真的拖一次（預設 reachable）');

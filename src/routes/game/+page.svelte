@@ -421,6 +421,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   function _tActSig(a: any): string { try { return JSON.stringify(a); } catch { return String(a && a.type); } }
   /** ⭐ 唯一的「告訴玩家剛剛那一下怎麼了」出口。⚠ 任何擋下手勢的地方都必須呼叫它，不可以只 return。 */
   function tActSay(msg: string, ms = 2600): void {
+    _ntHideNotice = false;   // ⭐v6.576（審查 P1）：每呼叫一次都是一件新事件 ⇒ 玩家先前按過 ✕ 也要重新顯示（同一句固定字串會重複出現）
     tActNotice = msg;
     if (_tActNoticeTimer) clearTimeout(_tActNoticeTimer);
     _tActNoticeTimer = setTimeout(() => { tActNotice = ''; _tActNoticeTimer = null; }, ms);
@@ -506,6 +507,14 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   //   也就永遠無法升級成玩家看得到的警示。節流與「上次真的收到伺服器回應」必須分開記。
   let _tPollStallGuardAt = 0;
   let _tNetBannerDismissAt = $state(0);   // 玩家手動關掉橫幅的時間（同一次失聯不再重複打擾）
+  // >>> v6576-notice-dismiss
+  // ⭐v6.576 浮動提醒每一則都可以按 ✕：關掉後同一件事結束前不再出現；那件事結束（重送停了、排隊清空、對手回來）就重設，
+  //   下一次再發生會重新出現。說明訊息（tActNotice）每次 tActSay 都重設（同一句固定字串再出現也代表新的事件，必須再講）。
+  let _ntHideRetry = $state(false);
+  let _ntHideQueue = $state(false);
+  let _ntHideOppQuiet = $state(false);
+  let _ntHideNotice = $state(false);
+  // <<< v6576-notice-dismiss
   // v6.150：伺服器回 401（登入憑證失效／在別的分頁登出／被撤銷）時為真。與「網路失聯」分開，
   //   因為自救方式不同：這個要重新登入或強制刷新 token，重連是沒有用的。
   let tAuthLost = $state(false);
@@ -7444,6 +7453,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
   const tNetBannerOn = $derived(
     (tOfflineSec >= T_OFFLINE_BANNER_SEC && _tNetBannerDismissAt < _tLastServerOkAt)
     || (_tActionAuthErr && _tNetBannerDismissAt < _tActionAuthErrAt));
+  // >>> v6576-notice-dismiss-reset
+  // ⭐v6.576 浮動提醒的 ✕：那件事結束就重設（下一次再發生會重新出現）
+  $effect(() => { if (!tActRetry) _ntHideRetry = false; });
+  $effect(() => { if (tActQueue.length === 0) _ntHideQueue = false; });
+  $effect(() => { if (!tOppQuietOn) _ntHideOppQuiet = false; });
+  // <<< v6576-notice-dismiss-reset
 
   // ⭐⭐⭐v6.170 動作送出狀態機（B-1 冪等重試 ／ B-2 恢復偵測 ／ B-3 不鎖死）。
   //   v6.169 的行為：逾時 ⇒ 回滾預測畫面 ＋ 紅字「動作可能未送達，請重試」。
@@ -11870,6 +11885,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
          分支裡，手機直式玩家完全看不到，而註解還寫著「不在 isPortraitMobile 分支內」
          （Fable 5 審查抓到：註解與碼相反）。事故當事人很可能就是手機玩家。
          同 v6.122 補位 modal 的既定做法：兩版共用的東西一律放在分支外。 -->
+  <!-- >>> v6576-notice-stack -->
+  <!-- ⭐⭐v6.576（站長 2026-10-16：「出現提醒字樣的時候…就會將現有的畫面往下推，導致對戰區寶可夢的位置會往下跑掉」
+       「建議比照跑馬燈的方式，直接疊在上方儀表板的上面，並且可以按X關閉」「我希望對戰畫面可以固定永遠不會被擠動」）
+       這一排提醒原本在文件流裡、在頁首上面 ⇒ 出現／消失都會把整個盤面往下推／拉回。改成 position:fixed 的浮動堆疊，
+       疊在頁首（儀表板）上方，不佔版面 ⇒ 盤面一個像素都不會動。每一則都有 ✕（關掉後，同一件事結束前不再出現；
+       下一次再發生會重新出現）。容器永遠存在（空的時候不攔滑鼠），桌機與手機直式共用（仍在版面分支外，v6.149 的教訓）。 -->
+  <div class="battle-notice-stack" role="presentation">
+  <!-- <<< v6576-notice-stack -->
   {#if tNetBannerOn}
     <div class="net-warn-banner" role="alert">
       {#if _tActionAuthErr}
@@ -11887,28 +11910,42 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {/if}
   <!-- ⭐⭐v6.170【B-3】重送中的可見狀態。**刻意不做全畫面遮罩**：盤面、設定、放大鏡、離開
        全部照常可用，玩家在等的時候看得到自己的牌。逃生鈕讓「斷流 25 秒 ＝ 被鎖 25 秒」不再成立。 -->
-  {#if tActRetry}
+  {#if tActRetry && !_ntHideRetry}
     <div class="act-retry-banner" role="alert">
       <span>🔁 連線不穩，正在自動重送這個動作（第 {tActRetry.n} / {tActRetry.max} 次）—— 盤面照常可以看，不必重新整理，也不必重按。</span>
       <button class="net-warn-btn" onclick={tActCancel}>停止重送</button>
+      <button class="net-warn-x" title="關閉提示（重送照常進行）" onclick={() => { _ntHideRetry = true; }}>✕</button>
     </div>
   {/if}
   <!-- ⭐⭐⭐v6.172 排隊中的手勢一定要看得見（靜默丟棄是最糟的）。
        ⚠ 與上面兩則同樣放在 isPortraitMobile 分支**之外** —— v6.149 的教訓。 -->
-  {#if tActQueue.length}
+  {#if tActQueue.length && !_ntHideQueue}
     <div class="act-queue-banner" role="status">
       <span>⏳ 已排隊 {tActQueue.length} 個動作 —— 前一個動作送出後會自動依序執行，不必重按。</span>
+      <button class="net-warn-x" title="關閉提示（排隊照常執行）" onclick={() => { _ntHideQueue = true; }}>✕</button>
     </div>
   {/if}
-  {#if tActNotice}
-    <div class="act-notice-banner" role="status"><span>{tActNotice}</span></div>
+  {#if tActNotice && !_ntHideNotice}
+    <div class="act-notice-banner" role="status"><span>{tActNotice}</span>
+      <button class="net-warn-x" title="關閉提示" onclick={() => { _ntHideNotice = true; }}>✕</button>
+    </div>
   {/if}
   <!-- ⭐⭐v6.170【B-4】對手斷線時，我方畫面不該看起來像網站壞掉。判準見 tOppQuietOn。 -->
-  {#if tOppQuietOn}
+  {#if tOppQuietOn && !_ntHideOppQuiet}
     <div class="opp-quiet-banner" role="status">
       <span>📶 對手的連線目前不穩定（已有 {tOppQuietSec} 秒沒有連上伺服器）—— 不是你的網路、也不是網站故障。對手回來後畫面會自動更新；若一直沒回來，系統的閒置判負會照常處理。</span>
+      <button class="net-warn-x" title="關閉提示（對手回來後會自動更新）" onclick={() => { _ntHideOppQuiet = true; }}>✕</button>
     </div>
   {/if}
+  <!-- >>> v6576-notice-stack-end -->
+  {#if abilityRegBroken}
+    <div class="ability-broken-banner" role="alert">
+      <span>⚠ 偵測到版本載入異常（部分卡牌特性未正確載入，可能導致特性按鈕無法顯示）。請點此重新整理以取得完整版本：</span>
+      <button class="net-warn-btn" onclick={hardReloadBrokenReg}>🔄 重新整理</button>
+    </div>
+  {/if}
+  </div>
+  <!-- <<< v6576-notice-stack-end -->
   {#if isPortraitMobile && game}
     <MobilePortraitBattle
       {game}
@@ -11970,12 +12007,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {/if}
   {:else}
 
-  {#if abilityRegBroken}
-    <div style="background:#7a1f1f;color:#fff;padding:0.5rem 0.75rem;font-size:0.85rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;justify-content:center;">
-      ⚠ 偵測到版本載入異常（部分卡牌特性未正確載入，可能導致特性按鈕無法顯示）。請點此重新整理以取得完整版本：
-      <button onclick={hardReloadBrokenReg} style="background:#fff;color:#7a1f1f;border:none;border-radius:4px;padding:0.25rem 0.6rem;font-weight:600;cursor:pointer;">🔄 重新整理</button>
-    </div>
-  {/if}
+  <!-- ⭐v6.576：版本載入異常提示搬進上方的浮動提醒堆疊（battle-notice-stack），不再佔版面把盤面往下推 -->
   <!-- ── 頂部資訊列 ── -->
   <header class="battle-header">
     {#if mode === 'online' && !isSpectator}
@@ -12101,7 +12133,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {@const _actIdx = _cur?.state?.activePlayerIndex ?? _cur?.state?.firstPlayerIdx ?? 0}
   {@const _finalOnly = (tReplay?.snapshots?.length ?? 0) === 0}
   {@const _isOldFmt = _finalOnly || (tReplay.snapshots || []).every((s: any) => s.logLen == null)}
-  <div class="treplay-bar">
+  <!-- ⭐⭐v6.576（站長 2026-10-16：「對戰回放因為在儀表板上方增加上一步、下一步、下一回合等等的按鈕，也會導致畫面也會被往下擠…
+       是不是可以採浮現拖曳視窗的方法?」）：回放控制列原本 position:sticky 在文件流裡 ⇒ 進回放時整個盤面被往下推。
+       改成浮動、可拖曳的小視窗（比照手機版直接蓋住儀表板）：預設疊在頁首正上方置中，按住左邊的 ⠿ 或標題可以拖到任何地方；
+       拖曳與邊界夾制走全站唯一的 use:modalDrag（clamp:'contain' ⇒ 永遠完整留在畫面內、按鈕一定按得到）。 -->
+  <div class="treplay-float-wrap">
+  <div class="treplay-bar" use:modalDrag={{ clamp: 'contain', handle: '.treplay-grip, .treplay-title', overlay: false }}>
+    <span class="treplay-grip" title="按住拖曳，移動回放控制列" aria-hidden="true">⠿</span>
     <button class="treplay-btn" onclick={tExitReplay} title="離開回放">✕ 離開</button>
     <span class="treplay-title">{replayKind === 'casual' ? '🎞️ 復盤：' : '🎬 回放：'}<b>{tReplay.meta?.p1name ?? '?'}</b> vs <b>{tReplay.meta?.p2name ?? '?'}</b>{#if tReplay.meta?.winnerName} ｜ 🏆 {tReplay.meta.winnerName}{/if}</span>
     {#if _isOldFmt}<span class="treplay-oldfmt" title="這場對戰是在回放系統上線前打的,只存了{_finalOnly ? '終局盤面' : '整回合粒度'}資料,無法逐半回合切換視角。上線後打的新對戰才有完整逐半回合回放。">⚠ {_finalOnly ? '舊對戰（僅終局盤面）' : '舊版快照（整回合粒度）'}</span>{/if}
@@ -12115,6 +12153,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <button class="treplay-btn" onclick={() => tReplayGoto(_steps.length - 1)} disabled={tReplayStep >= _steps.length - 1}>⏭</button>
     </div>
     {#if replayKind === 'tournament'}<button class="treplay-btn" onclick={() => tCopyReplayLink(tReplay.meta?.matchId)} title="複製分享連結">🔗 複製連結</button>{/if}
+  </div>
   </div>
 {/if}
 
@@ -15629,7 +15668,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tourn-match .tm-vs-spec:disabled { opacity: .5; cursor: default; }
   .tourn-match .tm-vs-replay { cursor: pointer; color: #ffcf6b; background: #2e2410; border-color: #6a5a2e; font-family: inherit; line-height: 1.2; }
   .tourn-match .tm-vs-replay:hover { background: #4a3a1a; color: #ffe0a0; }
-  .treplay-bar { position: sticky; top: 0; z-index: 500; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: #0f1730; border-bottom: 2px solid #3a5a8a; padding: 8px 12px; box-shadow: 0 3px 12px rgba(0,0,0,.5); }
+  /* ⭐v6.576 回放控制列改成浮動、可拖曳的小視窗（不佔版面 ⇒ 進回放時盤面不會被往下推）：外層固定在頁首正上方置中、不攔滑鼠；
+     控制列本身可點、可拖（use:modalDrag clamp:'contain'）。 */
+  .treplay-float-wrap { position: fixed; top: calc(var(--safe-top, 0px) + 2px); left: 0; right: 0; display: flex; justify-content: center; z-index: 500; pointer-events: none; }
+  .treplay-grip { cursor: grab; color: #8fb0e0; font-size: 1rem; padding: 0 2px; user-select: none; touch-action: none; }
+  .treplay-bar .treplay-title { cursor: grab; }
+  /* ⭐v6.576（審查 P2）：預設位置疊在頁首上，盡量不伸進盤面 ⇒ 外框不換行、標題可以縮成「…」；只有按鈕群在很窄的視窗才會折成兩行。
+     ⚠ 不新增媒體查詢（test-v6187／v6195／v6466 S6 限制本頁媒體查詢數量）；窄螢幕手機橫向另有既有的精簡規則。 */
+  .treplay-float-wrap .treplay-bar { flex-wrap: nowrap; padding: 2px 8px; }
+  .treplay-float-wrap .treplay-btn { padding: 3px 8px; }
+  .treplay-float-wrap .treplay-bar .treplay-title { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .treplay-bar { position: relative; pointer-events: auto; max-width: calc(100vw - 16px); box-sizing: border-box; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: #0f1730; border: 2px solid #3a5a8a; padding: 4px 10px; box-shadow: 0 3px 12px rgba(0,0,0,.5); }
   .treplay-bar .treplay-title { font-weight: 700; color: #cfe0f8; font-size: .9rem; flex: 1 1 160px; min-width: 140px; }
   .treplay-oldfmt { font-size: .72rem; color: #f0c674; background: rgba(240,198,116,.12); border: 1px solid rgba(240,198,116,.35); border-radius: 5px; padding: 2px 7px; white-space: nowrap; cursor: help; }
   .treplay-bar .treplay-nav { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -17214,6 +17263,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .version-chip{ background:#2a1a3a; color:#c0a0e0; border-color:#4a3a6a; font-family:monospace; }
   .wait-chip{ background:#3a2a1a; color:#fa8; border-color:#5a3a1a; }
   .syncing-chip{ background:#3a3a1a; color:#ff8; border-color:#5a5a1a; }
+  /* ⭐v6.576 浮動提醒堆疊：疊在頁首（儀表板）上方、不佔版面 ⇒ 提醒出現／消失時盤面一個像素都不動。
+     容器本身不攔滑鼠（pointer-events:none），只有提醒本體可以點（✕、按鈕）。z-index 在選擇視窗（100）之上、
+     錦標賽提示 toast／房間不存在提示（9999）之下。寬度不超過 760px，置中；每一則加陰影跟底下的頁首分開。 */
+  .battle-notice-stack{ position:fixed; top:calc(var(--safe-top, 0px) + 4px); left:50%; transform:translateX(-50%);
+    width:min(760px, calc(100vw - 16px)); z-index:9500; display:flex; flex-direction:column; gap:4px; pointer-events:none; }
+  .battle-notice-stack > *{ pointer-events:auto; margin:0 !important; box-shadow:0 4px 14px rgba(0,0,0,.45); }
+  .ability-broken-banner{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; justify-content:center;
+    background:#7a1f1f; color:#fff; border:1px solid #a34; border-radius:6px; padding:.45rem .8rem; font-size:.85rem; font-weight:600; }
   /* v6.149 連線健康橫幅（失聯提示）*/
   .net-warn-banner{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; justify-content:center;
     background:#5a1f1f; color:#ffdede; border:1px solid #a34; border-radius:6px;
