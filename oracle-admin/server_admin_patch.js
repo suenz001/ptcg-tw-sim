@@ -7876,6 +7876,44 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: 'unavailable' }); }
     });
     // <<< v155-home-tourn-summary
+    // >>> v168-chat-dedupe
+    // ⭐server v1.68（v6.575，站長 2026-10-16）：「錦標賽聊天室 應該要禁止玩家連續傳送一模一樣的對話內容，造成洗版」。
+    //   同一個帳號送出的內容跟他自己上一則**成功送出**的「比對鍵」相同、且在 10 分鐘內 ⇒ 429「請勿連續傳送相同的內容」，不寫入。
+    //   比對鍵（只拿來比，寫進 DB 的文字照原端點不變）：NFKC（全形英數→半形）→ 拿掉零寬字元 → 空白壓一格 → 去頭尾 → 英文轉小寫 → 前 200 字
+    //   ⇒「hi」「HI」「ｈｉ」「hi＋零寬空白」都算同一句（審查 P3：原本只壓空白，改大小寫或夾零寬字元就繞過）。
+    //   系統管理員不受限（公告可能要重發；判準直接用區塊內的 isTournAdmin，不另抄一份）；
+    //   未驗證身分（沒有 token、只帶 playerId）不進比對 ⇒ 交給原端點回 403（審查 P3：否則可拿 429 探測別人上一則說了什麼）。
+    //   ⚠ 刻意做成「同路徑、先註冊」的前置 handler，放在錦標賽區塊（TAIL_ANCHOR）之前 ⇒ 原本的 /api/tournament/chat
+    //     一個字都不動（28 把鎖不必重釘）。Express 依註冊順序執行：這裡判斷完呼叫 next() 就交給原端點。
+    //   ⚠ 任何判斷不了的情況（沒有內容、身分驗不過、例外）一律 next() ⇒ 由原端點照舊回錯誤，不製造第二套判準。
+    //   ⚠ 「上一則」只在原端點真的回 { ok: true } 時才記（被限速、被擋下的不算），存在記憶體（pm2 單一 fork）；
+    //     重啟後第一則不比對（可接受：只是少擋一次）。上限 5000 個帳號，超過就整個清空重來（不會無限長大）。
+    const CHAT_DUP_WINDOW_MS = 10 * 60 * 1000;
+    const _chatLastText = new Map();   // uid -> { text, ts }
+    const chatDupKey = (t) => String(t || '').normalize('NFKC').replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 200);
+    app.post('/api/tournament/chat', async (req, res, next) => {
+      try {
+        const text = chatDupKey(req.body && req.body.text);
+        if (!text) return next();
+        const id = await tournIdentity(req);
+        if (!id || id.error || !id.uid || id.verified !== true) return next();
+        if (isTournAdmin(id)) return next();
+        const last = _chatLastText.get(id.uid);
+        if (last && last.text === text && Date.now() - last.ts < CHAT_DUP_WINDOW_MS) {
+          return res.status(429).json({ error: '請勿連續傳送相同的內容', code: 'chat-duplicate' });
+        }
+        const _json = res.json.bind(res);
+        res.json = (body) => {
+          if (body && body.ok === true) {
+            if (_chatLastText.size >= 5000) _chatLastText.clear();
+            _chatLastText.set(id.uid, { text, ts: Date.now() });
+          }
+          return _json(body);
+        };
+        return next();
+      } catch (_e) { return next(); }
+    });
+    // <<< v168-chat-dedupe
 
     app.get('/api/tournament/state', async (req, res) => {
       try {

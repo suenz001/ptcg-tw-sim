@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.575／server v1.68：錦標賽聊天室禁止連續傳送相同內容
+
+- 站長 2026-10-16：「錦標賽聊天室 應該要禁止玩家連續傳送一模一樣的對話內容，造成洗版」。
+- server v1.68 哨兵 v168-chat-dedupe（錦標賽區塊 TAIL_ANCHOR 之前）：同路徑、先註冊的前置 handler（Express 依註冊順序），判斷完 next() 交給原 /api/tournament/chat ⇒ 原端點與 28 把鎖一個字都不動。判準：與原端點同一套正規化（空白壓一格、去頭尾、前 200 字）後，與自己上一則**成功送出**（原端點回 ok:true）的一字不差、且 10 分鐘內 ⇒ 429 { error:'請勿連續傳送相同的內容', code:'chat-duplicate' }。系統管理員不擋；身分驗不過／空白內容／例外一律 next() 由原端點照舊回錯誤。記憶體 Map（pm2 單一 fork），上限 5000 帳號超過清空。
+- 玩家端 tChatSend 先擋一次（立即提示、輸入框保留），伺服器回 chat-duplicate 時顯示中文提示（不是 429 原文）。
+- 守衛 test-v6575（V 位置、B1～B5 真的執行哨兵區塊、C1～C4 真的執行 tChatSend）＋HEAD-FAIL；伺服器突變 4 個（拿掉 10 分鐘窗、不看 ok:true 就記、拿掉管理員豁免、拿掉空白正規化）全殺。Rule 40：test-v6441 接上 scripts/lib/revert-v6575-game.mjs。
+- Opus 5.5 審查（真 Express 4.22.1 實跑確認前置 handler 有效）：P1 少了 server 整份還原器 ⇒ 新增 scripts/lib/sap-revert-admin-v168.mjs，接進 test-v6303／test-sap153／test-sap154／test-v6561 的鏈（Rule 54 由新到舊）。P2 提示原本走 tError（大廳印在整頁最底下看不到）⇒ 獨立 tChatErr 顯示在兩個聊天輸入框下方、字改了就不顯示，伺服器擋下時把字還回輸入框；守衛補 C5（被限速的那則不記成上一則）。P3：未驗證身分不進比對（防探測）、管理員判準改呼叫區塊內 isTournAdmin、比對鍵加 NFKC＋去零寬字元＋英文小寫（兩端同一套）。淺色大廳產生器重跑（.tourn-chat-err）。
+- 部署：update-tournament.bat（server v1.68）→ redeploy-oracle.bat。
+
 ## v6.574（上一版 `4c6381de`（v6.573））手牌張數不被長名稱擋住＋淺色【社群】標籤
 
 - 站長 2026-10-16：「windows網頁版手牌顯示的張數，不該被過長的玩家名稱阻礙顯示(尤其使用ipad版的時候)」「社群自辦歷屆冠軍(100)的冠軍紀錄裡面，在淺色模式的時候，【社群】兩個字的底色和字的對比太近了」。

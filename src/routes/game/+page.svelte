@@ -5552,13 +5552,38 @@ function _setupSelfPending(g: any, seat: number): string | null {
     } catch { /* ignore */ }
     finally { _tChatLoadingOlder = false; }
   }
+  // >>> v6575-chat-dedupe
+  // ⭐v6.575（站長 2026-10-16：「錦標賽聊天室 應該要禁止玩家連續傳送一模一樣的對話內容，造成洗版」）
+  //   伺服器（server v1.68 v168-chat-dedupe）才是真正的關卡；這裡先擋一次，讓玩家立刻看到提示、輸入框的字也留著。
+  //   判準與伺服器同一套比對鍵：NFKC → 拿掉零寬字元 → 空白壓一格 → 去頭尾 → 英文小寫 → 前 200 字；
+  //   與自己上一則**成功送出**的相同、且在 10 分鐘內。系統管理員不擋（伺服器同樣放行）。
+  //   ⭐審查 P2：提示不走 tError（大廳的 tError 印在整頁最底下，賽事卡一多就看不到）⇒ 獨立的 tChatErr，
+  //     就顯示在聊天輸入框下方；只要輸入框的字改了就自動不顯示（tChatErrFor 比對）。
+  const T_CHAT_DUP_WINDOW_MS = 10 * 60 * 1000;
+  let _tChatLastSent = { text: '', ts: 0 };
+  let tChatErr = $state('');
+  let tChatErrFor = $state('');
+  const tChatNorm = (x: string) => String(x || '').normalize('NFKC').replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 200);
+  const tChatDupMsg = '請勿連續傳送相同的內容';
+  // <<< v6575-chat-dedupe
   async function tChatSend() {
     const txt = (tChatInput || '').trim();
     if (!txt) return;
+    // >>> v6575-chat-dedupe-send
+    const _norm = tChatNorm(txt);
+    if (!tIsAdmin && _norm && _norm === _tChatLastSent.text && Date.now() - _tChatLastSent.ts < T_CHAT_DUP_WINDOW_MS) { tChatErr = tChatDupMsg; tChatErrFor = txt; return; }
+    tChatErr = '';
+    // <<< v6575-chat-dedupe-send
     tChatInput = '';
-    try { const r = await tApi('/chat', { text: txt }); if (r && r.error) tError = r.error; await tChatLoad(); }
-    catch (e: any) { tError = String(e?.message ?? e); }
+    try { const r = await tApi('/chat', { text: txt }); if (r && r.error) tError = r.error; else _tChatLastSent = { text: _norm, ts: Date.now() }; await tChatLoad(); }
+    catch (e: any) {
+      const _m = String(e?.message ?? e);
+      // 伺服器擋下（重新整理、換分頁或換裝置後，本機沒有上一則的紀錄）⇒ 把字還回輸入框、同樣在輸入框下方提示
+      if (/chat-duplicate/.test(_m)) { if (!tChatInput) tChatInput = txt; tChatErr = tChatDupMsg; tChatErrFor = txt; _tChatLastSent = { text: _norm, ts: Date.now() }; }
+      else tError = _m;
+    }
   }
+
   async function tournLoadEvent() {
     // ⭐⭐⭐v6.161 降頻的「立即恢復」判準：先記下套用這一發回應**之前**的輪次/狀態/我的對戰，
     //   套用後若有任何一項變了，就是「輪次推進／我有新比賽」⇒ 立刻回正常頻率並馬上再抓一次。
@@ -10556,6 +10581,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <input bind:value={tChatInput} maxlength="200" placeholder="說點什麼…（Enter 送出）" onkeydown={(e) => e.key === 'Enter' && tChatSend()} />
             <button class="btn-secondary small" onclick={tChatSend} disabled={!tChatInput.trim()}>送出</button>
           </div>
+          {#if tChatErr && (tChatInput || '').trim() === tChatErrFor}<div class="tourn-chat-err" role="status">⚠ {tChatErr}</div>{/if}
         {:else}
           <div class="tourn-chat-input"><span class="muted small" style="padding:4px 8px;">🔒 請先登入即可在此發言</span></div>
         {/if}
@@ -14456,6 +14482,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             {/each}
           {/if}
         </div>
+        {#if isTournament && tChatErr && (tChatInput || '').trim() === tChatErrFor}<div class="tourn-chat-err" role="status">⚠ {tChatErr}</div>{/if}
         <div class="chat-input-row">
           {#if isTournament}
             <input class="chat-input" type="text" placeholder={(tCanChat || tIsAdmin) ? '與大廳聊天室互動（Enter 送出）' : '🔒 請先登入即可發言，可觀看'} maxlength="200" bind:value={tChatInput} onkeydown={(e) => e.key === 'Enter' && (tCanChat || tIsAdmin) && tChatSend()} disabled={!(tCanChat || tIsAdmin)} />
@@ -17177,6 +17204,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .hand-count-chip .hc-name{ min-width:0; max-width:9em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .hand-count-chip .hc-num{ white-space:nowrap; }
   .hand-label .hl-name{ display:inline-block; max-width:10em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
+  /* ⭐v6.575 錦標賽聊天室「請勿連續傳送相同的內容」：就顯示在輸入框旁邊 */
+  .tourn-chat-err{ color:#ffb4a0; font-size:.78rem; padding:2px 8px; }
   .hand-count-chip.hc-active{ background:#2a3e1a; color:#cfa; border-color:#4a6a2a; box-shadow:0 0 4px rgba(150,255,100,.25); }
   .status-chips{ display:flex; gap:0.3rem; flex-wrap:nowrap; }
   .chip{ font-size:0.68rem; padding:0.1rem 0.35rem; border-radius:10px; background:#1a3a1a; color:#8f8; border:1px solid #2a5a2a; }
@@ -20427,6 +20456,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .idle-timeout-head strong { color: #6b5a00; }
     :global(html[data-theme='light']:not([data-battle-view])) .small { border: 1px solid #a5a5a5; background: #f2f2f2; color: #222222; }
     :global(html[data-theme='light']:not([data-battle-view])) .small.primary { background: #e8efe8; color: #004455; border-color: #73b773; }
+    :global(html[data-theme='light']:not([data-battle-view])) .lobby .tourn-chat-err { color: #5f1400; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby .log-line { color: #446344; border-bottom: 1px solid rgba(173,210,173,0.40); }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby .log-sys { color: #005522; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby .log-line .log-card-link { color: #00407f; }

@@ -19,7 +19,9 @@ import { build } from 'esbuild';
 import { hasBaseCommit, shallowSkip, readBaseBlob } from './lib/base-blob.mjs';
 import { revertAdminV165 } from './lib/sap-revert-admin-v165.mjs';
 import { revertAdminV166 as _revertAdminV166 } from './lib/sap-revert-admin-v166.mjs';
-import { revertAdminV167 } from './lib/sap-revert-admin-v167.mjs';   // ⭐v1.67（v6.566 對局時限判法、推播偏好帳號層級）：先剝較新的（Rule 54）
+import { revertAdminV167 as _revertAdminV167 } from './lib/sap-revert-admin-v167.mjs';   // ⭐v1.67（v6.566 對局時限判法、推播偏好帳號層級）
+import { revertAdminV168 } from './lib/sap-revert-admin-v168.mjs';   // ⭐v1.68（v6.575 聊天室禁止連續相同內容，錦標賽區塊之前）：先剝較新的（Rule 54）
+const revertAdminV167 = (s) => _revertAdminV167(revertAdminV168(s));   // ⭐v1.68 鏈再長一節（既有呼叫點一個字都不必改）
 const revertAdminV166 = (s) => _revertAdminV166(revertAdminV167(s));   // ⭐v1.67 鏈再長一節（既有呼叫點一個字都不必改）
    // ⭐v6.563 再先剝一節（Rule 54）   // ⭐v6.562 K2 先剝較新的一節（Rule 54）
 import { buildAiBundle, loadLivePool, presetById, playGame, firstPlayerOf } from './lib/ai-sim-harness.mjs';
