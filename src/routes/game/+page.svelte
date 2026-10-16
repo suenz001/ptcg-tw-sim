@@ -166,6 +166,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
            deltaPutFuseTripped, deltaPutDiag } from '$lib/game/oracle-client';
   // ⭐⭐⭐v6.197「這個人能不能操作」的唯一述詞（fail-closed）。見 src/lib/game/viewer-role.ts
   import { isViewerSpectator, canViewerAct, isSeatUnknownOnline } from '$lib/game/viewer-role';
+  import { createAnimObserver, makeLocalSeenStore, type AnimObserveResult } from '$lib/game/anim-live';   // ⭐v6.580 動畫只在當下播放
   import {
     createRoom, joinRoom, subscribeRoom, pushGameState, pushUndoRollback, subscribeOpenRooms,
     takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom, claimOpponentForfeit,
@@ -2354,6 +2355,30 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let hoverAttAnchor = $state<{ x: number; y: number } | null>(null);
   let hoverAttBelow = $state<boolean>(false);
 
+  // >>> v6580-anim-live
+  // ⭐v6.580（站長 2026-10-17：「務必確認動畫只會在當下播放，不會有殘留的問題」——觀戰進房會把放獎賞卡、開局擲硬幣再播一次）
+  //   對戰頁所有「比對前後盤面」的動畫一律先問 animObserve(盤面)：
+  //     baseline=true ⇒ 這一份只當基準（記下來、不播）；openingLive=true ⇒ 我自己正在開局，擲硬幣／發牌照常播。
+  //   判準只有一份：src/lib/game/anim-live.ts 的 decideAnimObservation（Rule 38）。同一份盤面物件只判一次（WeakMap），
+  //   所以每個動畫 $effect 不論執行順序都拿到同一個答案。
+  const _animObs = createAnimObserver({
+    seen: makeLocalSeenStore(),
+    now: () => Date.now(),
+    isHidden: () => typeof document !== 'undefined' && document.visibilityState === 'hidden',
+  });
+  function animObserve(g: GameState | null): AnimObserveResult {
+    return _animObs.observe(g, { isSpectatorOrReplay: isSpectator || isTReplay, seat: myIdx });
+  }
+  // 盤面清空（離開觀戰、回大廳、離開房間）⇒ 下一次看到任何一局都當第一次（審查 P1-1：同一頁離開再回到同一局）
+  $effect.pre(() => { if (!game) _animObs.reset(); });
+  // 分頁回到前景：之後 2 秒內從網路補進來的盤面當基準（不把背景期間的動作一口氣補播；自己剛做的動作不受影響）
+  $effect(() => {
+    if (typeof document === 'undefined') return;
+    const onVis = () => { if (document.visibilityState === 'visible') _animObs.onVisible(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  });
+  // <<< v6580-anim-live
   // ── 擲硬幣動畫（Session 34） ────────────────────────────────────────────────
   // 新遊戲開始時播放 2 秒硬幣旋轉 + 1.5 秒結果揭曉
   let coinFlipStage = $state<'flipping' | 'revealing' | 'done'>('done');
@@ -2368,6 +2393,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // 清掉舊 timer
     for (const t of coinFlipTimers) clearTimeout(t);
     coinFlipTimers = [];
+    // >>> v6580-anim-live-coin
+    // ⭐v6.580：只有「我自己正在開局、還沒動過」才播（重新整理、回到房間、觀戰進房、回放都不再重播）
+    if (!animObserve(game).openingLive) { coinFlipStage = 'done'; return; }
+    // <<< v6580-anim-live-coin
     // v5.516：觀戰者進房不重播開場先攻擲硬幣動畫（玩家報每次進房都看到之前的擲幣）。
     //   已標記此 game.id 處理過 → 直接 done、不開 overlay。
     if (isSpectator) { coinFlipStage = 'done'; return; }
@@ -2379,6 +2408,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // ── 獎賞卡放置動畫（開局發牌 0→6）────────────────────────────────────────
   // 偵測雙方 prizes 從 0 → 6 的瞬間，觸發 stagger 動畫重播
   let prizeAnimKey = $state<[number, number]>([0, 0]);
+  // ⭐v6.580：發獎賞卡動畫只在「當下真的發牌」那 2 秒掛上 class（原本 class 永遠掛著 ⇒ 元素一出現就播：觀戰進房、重新整理、切版面、悔棋都會重播）
+  let prizeDealLive = $state<[boolean, boolean]>([false, false]);
+  const prizeDealTimers: ReturnType<typeof setTimeout>[] = [];
   const prevPrizesLen: [number, number] = [0, 0];
   // v5.131：取獎賞 iid snapshot — 偵測 prizes.length 減少 + 對應 iid 進手牌
   const prevPrizesIids: [Set<string>, Set<string>] = [new Set(), new Set()];
@@ -2386,11 +2418,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!game) return;
     let changed = false;
     const next: [number, number] = [prizeAnimKey[0], prizeAnimKey[1]];
+    const _aoPrize = animObserve(game);   // ⭐v6.580 基準盤面不算「剛發牌」
     for (const i of [0, 1] as const) {
       const cur = game.players[i].prizes.length;
-      if (prevPrizesLen[i] === 0 && cur === 6) {
+      if (prevPrizesLen[i] === 0 && cur === 6 && !_aoPrize.baseline) {
         next[i]++;
         changed = true;
+        const live: [boolean, boolean] = [prizeDealLive[0], prizeDealLive[1]]; live[i] = true; prizeDealLive = live;
+        prizeDealTimers.push(setTimeout(() => { const off: [boolean, boolean] = [prizeDealLive[0], prizeDealLive[1]]; off[i] = false; prizeDealLive = off; }, 6 * 90 + 1200 + 300));
       }
       prevPrizesLen[i] = cur;
       // v5.132：不在這裡更新 prevPrizesIids（移到取獎賞 effect 末尾）—
@@ -2434,6 +2469,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       prevPrizesIids[pIdx] = curIids;
       // 第一次 prev 是空（初始化），不觸發動畫；之後 prev>0 且 picked>0 才觸發
       if (!wasInit) continue;
+      if (animObserve(game).baseline) continue;   // ⭐v6.580 基準盤面（進房／重新整理／背景回來）不補播取獎賞
       if (pickedIids.length === 0) continue;
       // 標記 — draw-fly skip 這些 iid
       const newSet = new Set(prizePickIids);
@@ -2569,6 +2605,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // 監聽每隻場上寶可夢 damage 變化，彈出浮動數字
   $effect(() => {
     if (!game) return;
+    const _quietDmg = animObserve(game).baseline;   // ⭐v6.580 基準盤面只記數值、不彈數字
     const seen = new Set<string>();
     for (const p of game.players) {
       const all = [...(p.active ? [p.active] : []), ...p.bench];
@@ -2576,7 +2613,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         seen.add(pk.iid);
         const prev = lastDamageByIid.get(pk.iid);
         if (prev === undefined) { lastDamageByIid.set(pk.iid, pk.damage); continue; }
-        if (pk.damage !== prev) {
+        if (pk.damage !== prev && !_quietDmg) {
           // 用 queueMicrotask 讓 DOM 更新後再查座標（此時 HP bar 已 reactive）
           const diff = pk.damage - prev;
           const iid = pk.iid;
@@ -2622,6 +2659,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   animLogCursor 此時語意為「已處理的最大 timestamp」。
     const fresh = logs.filter((e: any) => (e.timestamp ?? 0) > animLogCursor);
     if (fresh.length) animLogCursor = Math.max(animLogCursor, ...fresh.map((e: any) => e.timestamp ?? 0));
+    if (animObserve(game).baseline) return;   // ⭐v6.580 基準盤面：游標跟上、不補播洗牌
     for (const entry of fresh) {
       if (!/(洗牌|重洗|洗回)/.test(entry.message)) continue;
       const idx = entry.playerIndex;
@@ -2647,9 +2685,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // 監聽 discard 張數變化 → 棄牌脈衝
   $effect(() => {
     if (!game) { prevDiscardLen[0] = 0; prevDiscardLen[1] = 0; return; }
+    const _quietDisc = animObserve(game).baseline;   // ⭐v6.580 基準盤面只記張數、不閃
     for (const i of [0, 1] as const) {
       const cur = game.players[i].discard.length;
-      if (cur > prevDiscardLen[i]) {
+      if (cur > prevDiscardLen[i] && !_quietDisc) {
         const ts = Date.now() + 500;
         const next: [number, number] = [...discardFlashUntil];
         next[i] = ts;
@@ -2708,6 +2747,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (isTReplay) return;  // v5.939 回放:直接落定盤面,不放抽牌飛入動畫(避免 arriving 洩漏/連放)
     // 硬幣動畫還在播時：發牌畫面會被蓋住，不動；等 'done' 後再算 iid 差異
     if (coinFlipStage !== 'done') return;
+    // ⭐v6.580 基準盤面（觀戰進房、重新整理、回到房間、背景回來）：只記下手牌，不讓整手牌從牌庫飛出來
+    if (animObserve(game).baseline) { for (const pIdx of [0, 1] as const) prevHandIids[pIdx] = new Set(game.players[pIdx].hand.map((c) => c.iid)); return; }
     for (const pIdx of [0, 1] as const) {
       const curr = game.players[pIdx].hand;
       const currIids = new Set(curr.map(c => c.iid));
@@ -2871,6 +2912,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const _maxTs = logs.length ? Math.max(...logs.map((e: any) => e.timestamp ?? 0)) : 0;
     // v5.516：觀戰者不播擲硬幣動畫 — 同步游標但不 enqueue，避免進房時把歷史擲幣全部重播一遍。
     if (isSpectator) { lastLogProcessed = _maxTs; return; }
+    // ⭐v6.580：玩家重新整理／回到房間也一樣 —— 第一次看到這一局（基準）只把游標跟上，不重播 log 裡所有擲硬幣
+    if (animObserve(game).baseline) { lastLogProcessed = _maxTs; return; }
     const fresh = logs.filter((e: any) => (e.timestamp ?? 0) > lastLogProcessed);
     lastLogProcessed = _maxTs;
     for (const entry of fresh) {
@@ -5875,6 +5918,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const steps = tReplaySteps();
     if (!steps.length) return;
     const idx = Math.min(Math.max(0, i), steps.length - 1);
+    const _animPrevStep = tReplayStep;   // ⭐v6.580 往回跳或一次跨好幾步 ⇒ 新盤面當基準（不彈回血數字、不閃橫幅）
     tReplayStep = idx;
     const step = steps[idx];
     tReplayAt = Number.isFinite(step.at) ? step.at : null;
@@ -5893,6 +5937,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     st.pendingSelection = null;  // v5.944 兜底:回放不開 picker(避免 turn-start 殘留 pendingSelection)
     coinFlipStage = 'done';
     game = st;
+    if (idx !== _animPrevStep + 1) _animObs.markBaseline(game);
   }
   async function tStartReplay(matchId: string) {
     if (!matchId) return;
@@ -6386,6 +6431,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //     內就會訂閱整棵樹 → 一律包起來 fail-closed。
     const _sharePrev: unknown = game;
     game = (_sharePrev ? untrack(() => shareStateIdentity(_sharePrev, state)) : state) as GameState;
+    if (_dec.reason === 'client-ahead') _animObs.markBaseline(game);   // ⭐v6.580 伺服器把我拉回較舊盤面：倒退不播動畫
     // v5.921：錦標賽盤面由伺服器送來,client 只載過自己牌組的卡包→對手(或促銷卡集如 SV-P-H/SVPN)
     //   的卡 getCard 查不到→無法顯示/同名 fallback 錯版。依盤面實際 cardId 補載其卡包(缺卡才動作)。
     void ensurePoolForStateIds(state);
@@ -7522,7 +7568,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   ⚠ 另一半見 tournamentDispatch：`predictedRef` 必須存**讀回來的** `game`（proxy），存原始物件
   //     的話這個條件恆為 false，整段回滾是死碼（v6.137~v6.179 的實際行為）。
   function _tRestorePrediction(ctx: TActCtx): void {
-    if (ctx.predicted && game === ctx.predictedRef && tVersion === ctx.baseV) game = ctx.prev;
+    if (ctx.predicted && game === ctx.predictedRef && tVersion === ctx.baseV) { game = ctx.prev; _animObs.markBaseline(game); }   // ⭐v6.580 樂觀更新還原：倒退不播動畫
     ctx.predicted = false; ctx.predictedRef = null;
   }
   function _tActDone(ctx: TActCtx): void {
@@ -7701,6 +7747,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const pr = tryPredictAction(game, action, pool, { allowedTypes: OPTIMISTIC_ACTION_TYPES });
       if (pr.ok) {
         game = pr.predicted;
+        _animObs.markLocal(game);   // ⭐v6.580 自己剛做的動作：不受回前景安靜期影響
         // ⚠⚠⚠v6.180（Fable 5 審查抓到，我實跑驗證過）：這裡原本存的是 `pr.predicted`（**原始物件**），
         //   但 `game` 是 Svelte 5 的**深層** `$state` —— 編譯產物是 `$.set(game, pr.predicted, true)`，
         //   第三個參數 `should_proxy=true` 會把值 `proxy()` 成一個**新的 Proxy** 才存進去
@@ -7806,6 +7853,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     }
     // <<< v6416-client-version-stamp-call
     game = newState;
+    _animObs.markLocal(game);   // ⭐v6.580 本機算出來的盤面（自己、本機雙人、AI 的動作）：不受回前景安靜期影響
     floatingEvoMenu = null; floatingRetreatMenu = null; selectedEnergyIid = null;
 
     // 視覺回饋
@@ -8353,7 +8401,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const isMine = newIdx === myIdx;
       const text = isMine ? '你的回合' : '對手回合';
       const ts = Date.now();
-      turnBanner = { text, timestamp: ts };
+      // ⭐v6.580：背景回來補到的回合切換只響音效（原本就有，讓在別的分頁的人聽得到），不再閃橫幅
+      if (!animObserve(game).baseline) turnBanner = { text, timestamp: ts };
       // v3.91：播放回合切換音效（清亮上行三音 C5→E5→G5）
       // v6.048：回放模式不播 —— 逐步導覽時每按一次「下一步」幾乎都會跨半回合，
       //   會變成一直嗶。回放要的是看盤面，不是重播音效。
@@ -8689,6 +8738,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       pool,
       createOpts,
     );
+    _animObs.markLocal(game);   // ⭐v6.580 本機新開的一局：不受回前景安靜期影響
   }
 
   // ── 線上 Lobby（v2.269 座位制重構） ────────────────────────────────────
@@ -9499,6 +9549,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           //   留著的價值：若日後有人把規則 3 移到規則 2 之前，這裡仍是最後一道（test-v6321 C6a 證不可達、C6b 守這一行）。
           if (game && decision.game.id !== game.id) { console.warn('[undo] 拒收異局 rollback', decision.game.id, '!==', game.id); return; }
           game = decision.game;
+          _animObs.markBaseline(game);   // ⭐v6.580 悔棋回到舊盤面：倒退不播「牌飛回手牌、回血數字」
           // ⭐v6.212：悔棋之後，那份「悔棋前的未推送快照」已經作廢 —— 留著會被自癒重推回去
           //   （它的 log 較長，shouldSkipStalePush 只擋嚴格較短的，擋不住）＝ 復活已悔掉的一手。
           _unpushedState = null; _repushAttempts = 0;
@@ -9739,6 +9790,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       _startGameWon = won;   // ⭐v6.265 純診斷紀錄（休閒指紋 casual-phantom-adopt 會帶出來）
       if (won) {
         game = _pendingGame;
+        _animObs.markLocal(game);   // ⭐v6.580 我這端建的新局：不受回前景安靜期影響
         playSfx('ready-go');
         staggerSfx('deal', 7, { delayMs: 350, intervalMs: 110, baseVolume: 0.7 });
       } else {
@@ -10370,6 +10422,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
     // AI / 本機模式（v4.74）：直接回到 snapshot
     game = undoSnapshot;
+    _animObs.markBaseline(game);   // ⭐v6.580 悔棋回到舊盤面：倒退不播動畫
     undoSnapshot = null;
     undoActionDesc = null;
     undoDeniedThisSnapshot = false;
@@ -10421,6 +10474,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       (async () => {
         try {
           game = snap;
+          _animObs.markBaseline(game);   // ⭐v6.580 悔棋回到舊盤面（請求方收到同意）：倒退不播動畫
           // v5.390：atomic 寫 rollback + 清 undoRequest + bump marker（繞過 push/收端 stale guard）
           // ⭐v6.248【問題4】悔棋 rollback 也是一整包盤面的推送，同樣要標記在途
           //   （審查者只點名兩處，全站 git grep 指定 rev 枚舉後發現的第三處）。
@@ -12390,7 +12444,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <div class="zone-prizes">
         {#key prizeAnimKey[oppIdx]}
           <div class="prize-grid">
-            {#each Array(6) as _, i (i)}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || replayShowsHidden) ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || replayShowsHidden)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={cardThumb(_pc.imageUrl)} alt={_pc.name}
+            {#each Array(6) as _, i (i)}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || replayShowsHidden) ? getCard(_pz.cardId) : null}<div class="prize-card" class:prize-anim={prizeDealLive[oppIdx]} class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || replayShowsHidden)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={cardThumb(_pc.imageUrl)} alt={_pc.name}
               class:legend-half-l={twoCardStadiumHalfIndex(oppPlayer?.prizes, _pz?.iid ?? '', pool) === 0}
               class:legend-half-r={twoCardStadiumHalfIndex(oppPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           </div>
@@ -12651,7 +12705,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           title={replayShowsHidden ? '查看雙方獎賞卡（回放：全部攤開）' : replayShowsOwnPrizes ? '查看獎賞卡（復盤：自己的攤開）' : '查看獎賞卡（只看得到已翻到正面的那幾張）'}>🎁 獎賞 {myPlayer?.prizes.length??0}張 🔍</button>
         <div class="prize-grid">
           {#key prizeAnimKey[myIdx]}
-            {#each Array(6) as _, i (i)}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || replayShowsMyPrizes) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || (replayShowsMyPrizes && !!_pc))} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={cardThumb(_pc.imageUrl)} alt={_pc.name}
+            {#each Array(6) as _, i (i)}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || replayShowsMyPrizes) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize" class:prize-anim={prizeDealLive[myIdx]} class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || (replayShowsMyPrizes && !!_pc))} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={cardThumb(_pc.imageUrl)} alt={_pc.name}
               class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.prizes, _pz?.iid ?? '', pool) === 0}
               class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           {/key}

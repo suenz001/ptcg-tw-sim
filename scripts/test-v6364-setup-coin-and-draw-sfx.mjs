@@ -210,7 +210,9 @@ const OVL_B = '  // ── 獎賞卡放置動畫（開局發牌 0→6）';
 function overlayRegion(src) {
   const a = src.indexOf(OVL_A), b = src.indexOf(OVL_B, a);
   if (a < 0 || b <= a) throw new Error('抓不到開局擲幣 overlay 的 $effect 區間');
-  return stripSentinelBlocks(src.slice(a, b), 'v6364-setup-coin');
+  // ⭐v6.580（Rule 40）：本版在 overlay 裡加了一段「只有我自己正在開局才播」（v6580-anim-live-coin 哨兵）——
+  //   驅動來源仍是 game.id（本支要守的意圖不變），所以一起剝掉再比 pin；行為由 test-v6580 守。
+  return stripSentinelBlocks(stripSentinelBlocks(src.slice(a, b), 'v6580-anim-live-coin'), 'v6364-setup-coin');
 }
 // ⭐ 這個 sha256 是 v6.364 當下「由 game.id 驅動」的那一段 $effect 的逐位元指紋。
 //   任何人改動這一段（包含改成由 log 驅動、或把 game.id 換掉）都會翻紅。

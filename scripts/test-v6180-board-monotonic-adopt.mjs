@@ -135,6 +135,7 @@ const mkAdopt = async (src) => {
     const sfx = [];
     const pool = new Map(); const mode = 'online'; const myPlayerIndex = 0; const aiPlayerIndex = null;
     const _tSendClientDiag = (r) => { diag.push(r); };
+    const _animObs = { markLocal() {}, markBaseline() {}, reset() {}, onVisible() {}, observe() { return { baseline: false, openingLive: false }; } };   // ⭐v6.580（Rule 40）：對戰頁新增的動畫觀察器替身（只標記動畫，不影響本支守的同步／悔棋行為）
   `;
   return new Function('decideBoardAdopt', 'shareStateIdentity',
     pre + out.code
@@ -209,6 +210,7 @@ try {
       const pool = new Map(); const mode = 'online'; const myPlayerIndex = 0; const aiPlayerIndex = null;
       const _tSendClientDiag = (r) => { diag.push(r); };
       const tApi = __api;
+      const _animObs = { markLocal() {}, markBaseline() {}, reset() {}, onVisible() {}, observe() { return { baseline: false, openingLive: false }; } };   // ⭐v6.580（Rule 40）：對戰頁新增的動畫觀察器替身（只標記動畫，不影響本支守的同步／悔棋行為）
     `;
     return new Function('decideBoardAdopt', 'shareStateIdentity', '__api',
       pre + out.code
@@ -300,7 +302,7 @@ try {
   const src = grabFn(PAGE, '_tRestorePrediction');
   const out = await transform(src, { loader: 'ts' });
   const mk = (v) => new Function('__v',
-    'let tVersion = __v; let game = null;' + out.code
+    'let tVersion = __v; let game = null; const _animObs = { markLocal() {}, markBaseline() {} };   /* ⭐v6.580（Rule 40）動畫觀察器替身 */' + out.code
     + '; return { _tRestorePrediction, set game(x){game=x;}, get game(){return game;} };')(v);
   const prev = wrap({ id: 'g1', phase: 'playing', log: ['a'], players: [{}, {}] });
   const predicted = wrap({ id: 'g1', phase: 'playing', log: ['a', 'b'], players: [{}, {}] });

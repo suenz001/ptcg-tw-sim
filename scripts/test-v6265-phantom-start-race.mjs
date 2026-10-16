@@ -448,6 +448,7 @@ function diagBlock(src) {
 function makeDiag(src, env) {
   const js = transformSync(diagBlock(src), { loader: 'ts', target: 'node18' }).code;
   const prologue = `
+  const _animObs = { markLocal() {}, markBaseline() {}, reset() {}, onVisible() {}, observe() { return { baseline: false, openingLive: false }; } };   // ⭐v6.580（Rule 40）：對戰頁新增的動畫觀察器替身（只標記動畫，不影響本支守的同步／悔棋行為）
   let isTournament = env.isTournament, isTournSpectator = env.isTournSpectator ?? false;
   let mode = env.mode, roomCode = env.roomCode, firebaseUser = env.firebaseUser;
   let _casualDiagSent = 0, game = env.game, roomData = env.roomData;
@@ -602,6 +603,7 @@ const SG = await (async () => {
 function makeHandler(src, state, hooks) {
   const js = transformSync(hruBlock(src), { loader: 'ts', target: 'node18' }).code;
   const prologue = `
+  const _animObs = { markLocal() {}, markBaseline() {}, reset() {}, onVisible() {}, observe() { return { baseline: false, openingLive: false }; } };   // ⭐v6.580（Rule 40）：對戰頁新增的動畫觀察器替身（只標記動畫，不影響本支守的同步／悔棋行為）
   let game = state.game, lastSeenUndoApplyAt = state.lastSeenUndoApplyAt ?? 0, _forceAdoptNext = state._forceAdoptNext ?? false;
   let _activeGameId = state._activeGameId ?? null, myPlayerIndex = state.myPlayerIndex ?? 0;
   let lastAdoptedRestartCount = state.lastAdoptedRestartCount ?? 0, roomCode = 'ROOM';
