@@ -31,6 +31,7 @@
 import { V6571_GAME_PAIRS } from './lib/revert-v6571-game.mjs';
 import { V6572_GAME_PAIRS } from './lib/revert-v6572-game.mjs';
 import { V6573_GAME_PAIRS } from './lib/revert-v6573-game.mjs';
+import { V6574_GAME_PAIRS } from './lib/revert-v6574-game.mjs';
 import { V6569_GAME_PAIRS } from './lib/revert-v6569-game.mjs';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -75,6 +76,8 @@ const REVERT = [
 //   這些後續版本的改動在這裡逐條還原（每條恰好命中 1 次；內容正確性由各版自己的守衛鎖：test-v6448…）。
 //   ⚠ 只准放「非藍桌墊」的全版面改動；藍桌墊的改動一律寫進哨兵。
 const LATER = [
+  // ⭐v6.574（Rule 40）：頁首手牌 chip 名稱／張數拆欄（全版面的張數可讀性修正；淺色大廳那一條在 v6477-lobby-light 哨兵內由剝除器處理）—— 還原表單一來源 scripts/lib/revert-v6574-game.mjs（行為由 test-v6574 鎖）
+  ...V6574_GAME_PAIRS,
   // ⭐v6.573（Rule 40）：其餘用詞統一（擲幣→擲硬幣、牌庫頂／底→牌庫上方／下方…，非版面改動）—— 還原表單一來源 scripts/lib/revert-v6573-game.mjs（用詞由 test-v6573 鎖）
   ...V6573_GAME_PAIRS,
   // ⭐v6.572（Rule 40）：設定說明「戰鬥位置中」→「戰鬥場置中」（用詞統一，非版面改動）—— 還原表單一來源 scripts/lib/revert-v6572-game.mjs（用詞由 test-v6572 鎖）

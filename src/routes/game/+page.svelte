@@ -11968,8 +11968,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     </span>
     <span class="hand-counts" title="雙方手牌張數（手牌內容仍為隱私，僅顯示張數）">
       {#each game.players as pl, pi}
-        <span class="chip hand-count-chip" class:hc-active={pi === aIdx}>
-          ✋ {pl.name ?? `P${pi+1}`} 手牌 {pl.hand.length} 張
+        <!-- ⭐v6.574（站長：手牌張數不該被過長的玩家名稱擋住，尤其 iPad）：名稱與張數拆成兩欄，只有名稱會縮成「…」，張數永遠完整；完整名稱放 title -->
+        <span class="chip hand-count-chip" class:hc-active={pi === aIdx} title={`${pl.name ?? `P${pi+1}`} 手牌 ${pl.hand.length} 張`}>
+          <span class="hc-name">✋ {pl.name ?? `P${pi+1}`}</span><span class="hc-num">手牌 {pl.hand.length} 張</span>
         </span>
       {/each}
     </span>
@@ -12741,7 +12742,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   <!-- 手牌列（永遠顯示自己的手牌） -->
   <div class="hand-strip">
-    <div class="hand-label">✋ {myPlayer?.name} 的手牌（{myPlayer?.hand.length??0} 張）
+    <div class="hand-label">✋ <span class="hl-name" title={myPlayer?.name ?? ''}>{myPlayer?.name}</span> 的手牌（{myPlayer?.hand.length??0} 張）
       {#if !isMyTurn()}<span class="hand-not-my-turn">（等待對手行動中）</span>{/if}
     </div>
     <div class="hand-scroll" class:is-dragging={!!dragging?.moved} use:handFit={dedupeByIid(myPlayer?.hand).length}
@@ -17171,6 +17172,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .phase-tag{ font-size:0.78rem; color:#aaffaa; background:#0e2e0e; padding:0.18rem 0.5rem; border-radius:4px; }
   .hand-counts{ display:flex; gap:0.28rem; align-items:center; flex-wrap:nowrap; }
   .hand-count-chip{ background:#1a2a3a; color:#9cf; border-color:#2a4a6a; font-size:0.7rem; padding:0.14rem 0.45rem; }
+  /* ⭐v6.574 名稱一欄（至少 1.6em、最多 9em，超出「…」）＋張數一欄（不縮）：張數永遠看得到 */
+  .hand-count-chip{ display:inline-grid; grid-template-columns:minmax(1.6em, max-content) max-content; column-gap:.3em; align-items:center; }
+  .hand-count-chip .hc-name{ min-width:0; max-width:9em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hand-count-chip .hc-num{ white-space:nowrap; }
+  .hand-label .hl-name{ display:inline-block; max-width:10em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
   .hand-count-chip.hc-active{ background:#2a3e1a; color:#cfa; border-color:#4a6a2a; box-shadow:0 0 4px rgba(150,255,100,.25); }
   .status-chips{ display:flex; gap:0.3rem; flex-wrap:nowrap; }
   .chip{ font-size:0.68rem; padding:0.1rem 0.35rem; border-radius:10px; background:#1a3a1a; color:#8f8; border:1px solid #2a5a2a; }
@@ -20470,6 +20476,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .lobby [style*="color:#8fdcc0"] { color: #1a664b !important; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby [style*="color:#9ab"] { color: #4a5a6b !important; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby [style*="color:#dff"] { color: #1a5a5a !important; }
+    /* ⭐v6.574（站長：淺色模式下社群歷屆冠軍的【社群】標籤底色和字太近，看不到字）：行內深色底也要轉成淺底
+       （原本只轉了字色 #dff→#1a5a5a，底色 #2a6a55 留著 ⇒ 深字配深底 1.6:1）。⇒ 淺綠底配深青字 ≥ 4.5 */
+    :global(html[data-theme='light']:not([data-battle-view])) .lobby [style*="background:#2a6a55"] { background: #cfe8de !important; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby [style*="color:#e8a"] { color: #a03070 !important; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby [style*="color:#fd0"] { color: #705600 !important; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby [style*="color:#ff8866"] { color: #a33518 !important; }
