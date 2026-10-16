@@ -1194,7 +1194,7 @@ export interface GameState {
    *   - 4 張原始觸發條件（扭轉乾坤、不公印章、八朔、阿波羅）：
    *     attackKOd + abilityKOd > 0 → 條件滿足
    *   - 3 張 revenge-damage（復仇刀鋒、捲土重來、嫉妒業火）卡面寫「因招式的傷害昏厥」：
-   *     attackKOd > 0（嚴格只算招式）
+   *     oppDamageKOdMe* > 0（嚴格只算招式的「傷害」昏厥；v6.577 起嫉妒業火也是）
    *   - 阿波羅另需 rocket 計數（victim 為「火箭隊的」寶可夢）
    *
    * 計數時機：每次 attack/ability KO 在 engine 內呼叫 recordOppKO helper

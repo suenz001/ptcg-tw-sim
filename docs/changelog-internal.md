@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.578（上一版 `54ddf9e2`（v6.577））浮動可拖曳提醒＋頁首不擠出設定
+
+- 站長 2026-10-16 裁定：「2.一起改成用浮在上方的可關閉可拖曳的視窗顯示」「3.要」。
+- 提醒：外層 battle-notice-wrap 固定在頁首上方置中、不攔滑鼠；堆疊本身 use:modalDrag（clamp:'contain'、wholeNode、threshold 6、overlay:false）⇒ 按住提醒空白處拖走、✕ 與按鈕照常（DRAG_IGNORE），拖過的位置整場保留（堆疊不重新掛載），永遠完整留在畫面內。寬度 ≤560px、字小一級。
+- 頁首（v6578-header-fit，放在 v6441-blue-css 之前；新版桌墊也帶 .layout-fable 所以一份兩用）：status-chips 可縮、次要標籤 min-width 1.6em 縮成「…」，設定／全螢幕／本回合時間與本回合資源不縮；頁首仍單行 ⇒ 高度與盤面不動。不新增媒體查詢。
+- types.ts 復仇家族註解更正（v6.577 審查 P3-2）。
+- Opus 5.5 審查：P1 觀戰「看 P1／看 P2／自動切換」（span 包按鈕）被縮到按不到 ⇒ 列入不縮；P2 計時器 inline-flex 沒有「…」、被切成「⏱ 12」⇒ 所有 .timer-chip 不縮；身分標籤 flex-shrink .3（比房號、版本晚縮）。守衛 D 段假提醒原本 inline pointer-events、沒有作用域 class ⇒ 測不到真規則，改帶堆疊的 svelte class，補 D4 觸控拖曳（CDP touch）；H 段改用玩家／觀戰兩組真實組合（含視角工具列按鈕），加「視角按鈕完整、計時器不被切」判準與 HM2 自驗。對外 changelog 拿掉不實的「滑鼠停留可看完整內容」。
+- 守衛 test-v6578（S1／S2 靜態＋HEAD-FAIL；D1 拖曳跟著動且盤面不動、D2 拖出畫面被夾回、D3 拖過按鈕可按；H1 新版桌墊與 Fable × 6 寬度塞線上標籤後設定／全螢幕／資源都在畫面內、H2 頁首高度與盤面不變、HM 自驗）。Rule 40：test-v6576（固定位置改看外層）、test-v6425（contain 浮動元件 6→7）、test-v6441（PRE 最前面）、test-v6293 接上 scripts/lib/revert-v6578-game.mjs。
+
 ## v6.577（上一版 `f6f7c8a4`（v6.576））古玉魚｜嫉妒業火只算招式傷害昏厥＋v6301 計時門檻放寬
 
 - 站長 2026-10-16 裁定：「4.要修」「6.放寬」。

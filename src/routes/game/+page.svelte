@@ -11891,7 +11891,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
        這一排提醒原本在文件流裡、在頁首上面 ⇒ 出現／消失都會把整個盤面往下推／拉回。改成 position:fixed 的浮動堆疊，
        疊在頁首（儀表板）上方，不佔版面 ⇒ 盤面一個像素都不會動。每一則都有 ✕（關掉後，同一件事結束前不再出現；
        下一次再發生會重新出現）。容器永遠存在（空的時候不攔滑鼠），桌機與手機直式共用（仍在版面分支外，v6.149 的教訓）。 -->
-  <div class="battle-notice-stack" role="presentation">
+  <!-- ⭐v6.578（站長 2026-10-16：「一起改成用浮在上方的可關閉可拖曳的視窗顯示」）：提醒堆疊本身可以拖（按住提醒的空白處拖走，
+       按鈕照常可按）；拖曳與邊界夾制走全站唯一的 use:modalDrag（clamp:'contain' ⇒ 永遠完整留在畫面內、✕ 一定按得到）。
+       外層 battle-notice-wrap 固定在頁首上方置中、不攔滑鼠；拖過的位置在整場對局中保留（堆疊一直存在，不會重新掛載）。 -->
+  <div class="battle-notice-wrap">
+  <div class="battle-notice-stack" role="presentation" use:modalDrag={{ clamp: 'contain', wholeNode: true, threshold: 6, overlay: false }}>
   <!-- <<< v6576-notice-stack -->
   {#if tNetBannerOn}
     <div class="net-warn-banner" role="alert">
@@ -11944,6 +11948,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <button class="net-warn-btn" onclick={hardReloadBrokenReg}>🔄 重新整理</button>
     </div>
   {/if}
+  </div>
   </div>
   <!-- <<< v6576-notice-stack-end -->
   {#if isPortraitMobile && game}
@@ -17266,9 +17271,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
   /* ⭐v6.576 浮動提醒堆疊：疊在頁首（儀表板）上方、不佔版面 ⇒ 提醒出現／消失時盤面一個像素都不動。
      容器本身不攔滑鼠（pointer-events:none），只有提醒本體可以點（✕、按鈕）。z-index 在選擇視窗（100）之上、
      錦標賽提示 toast／房間不存在提示（9999）之下。寬度不超過 760px，置中；每一則加陰影跟底下的頁首分開。 */
-  .battle-notice-stack{ position:fixed; top:calc(var(--safe-top, 0px) + 4px); left:50%; transform:translateX(-50%);
-    width:min(760px, calc(100vw - 16px)); z-index:9500; display:flex; flex-direction:column; gap:4px; pointer-events:none; }
-  .battle-notice-stack > *{ pointer-events:auto; margin:0 !important; box-shadow:0 4px 14px rgba(0,0,0,.45); }
+  .battle-notice-wrap{ position:fixed; top:calc(var(--safe-top, 0px) + 4px); left:0; right:0; display:flex; justify-content:center; z-index:9500; pointer-events:none; }
+  .battle-notice-stack{ width:min(560px, calc(100vw - 16px)); display:flex; flex-direction:column; gap:4px; pointer-events:none; }
+  /* ⭐v6.578 浮動視窗：每則提醒字小一點、可以拖（cursor:grab），✕ 與按鈕照常可按（modalDrag 的 DRAG_IGNORE） */
+  .battle-notice-stack > *{ pointer-events:auto; margin:0 !important; box-shadow:0 4px 14px rgba(0,0,0,.45); cursor:grab; touch-action:none;
+    font-size:.82rem !important; padding:.35rem .6rem !important; }
   .ability-broken-banner{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; justify-content:center;
     background:#7a1f1f; color:#fff; border:1px solid #a34; border-radius:6px; padding:.45rem .8rem; font-size:.85rem; font-weight:600; }
   /* v6.149 連線健康橫幅（失聯提示）*/
@@ -20575,6 +20582,20 @@ function _setupSelfPending(g: any, seat: number): string | null {
     /* ── 手調：錦標賽「進場」大按鈕是最主要的動作，淺色下用實心綠底白字（產生器會把漸層底淡化） ── */
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-enter-btn { background: linear-gradient(135deg, #1d7a4a, #2a9a62); color: #ffffff; border-color: #1d7a4a; }
   /* <<< v6477-lobby-light */
+  /* >>> v6578-header-fit */
+  /* ⭐v6.578（站長 2026-10-16 裁定「要」）：線上／錦標賽的頁首多了身分（我是 P1 · 先手）、等待、同步中、場地、房號等標籤，
+     新版桌墊／Fable 版在 1366 以下會把「⚙️ 設定」「⛶ 全螢幕」與本回合資源擠出畫面（頁首只能橫向滑，沒人會發現）。
+     ⇒ 標籤區可以縮：次要標籤（身分、等待、同步中、場地、房號、版本）各自縮成「…」，設定、全螢幕、計時器、觀戰視角按鈕不縮；頁首仍然單行 ⇒ 高度不變、盤面不動。
+     （新版桌墊本身也帶 .layout-fable ⇒ 這一份同時作用在兩種版面；不新增媒體查詢。放在 v6441-blue-css 之前：藍桌墊 CSS 必須在樣式區塊尾端，test-v6441）。 */
+  .battle-root:has(.playmat.layout-fable) .battle-header > .status-chips{ flex:0 1 auto; min-width:0; overflow:hidden; align-items:center; }
+  .battle-root:has(.playmat.layout-fable) .battle-header > .status-chips > *{ flex:0 1 auto; min-width:1.6em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* 不縮：設定、全螢幕、所有計時器（inline-flex 沒有「…」，縮了會把 12:34 切成 12）、觀戰的「看 P1／看 P2／自動切換」（span 包按鈕，縮了按鈕會被切掉）——審查 P1／P2 */
+  .battle-root:has(.playmat.layout-fable) .battle-header > .status-chips > :is(.settings-chip, .fs-chip, .timer-chip, .spec-toolbar){ flex:none; min-width:auto; }
+  /* 身分（我是 P1 · 先手）比房號、版本晚縮 */
+  .battle-root:has(.playmat.layout-fable) .battle-header > .status-chips > .role-chip{ flex-shrink:.3; }
+  /* 本回合資源本來就縮不到內容寬度以下，這行只是保險（審查 P3） */
+  .battle-root:has(.playmat.layout-fable) .battle-header > .turn-res{ flex:none; }
+  /* <<< v6578-header-fit */
   /* >>> v6441-blue-css */
   /* ═══════════════════════════════════════════════════════════════════
      ⭐v6.442 藍桌墊（重製）— battleLayout === 'blue' → .playmat.layout-fable.layout-blue

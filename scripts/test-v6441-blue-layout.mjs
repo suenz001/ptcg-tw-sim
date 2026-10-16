@@ -34,6 +34,7 @@ import { V6573_GAME_PAIRS } from './lib/revert-v6573-game.mjs';
 import { V6574_GAME_PAIRS } from './lib/revert-v6574-game.mjs';
 import { V6575_GAME_PAIRS } from './lib/revert-v6575-game.mjs';
 import { V6576_GAME_PAIRS } from './lib/revert-v6576-game.mjs';
+import { V6578_GAME_PAIRS } from './lib/revert-v6578-game.mjs';   // ⭐v6.578（Rule 40）：提醒堆疊可拖曳＋頁首標籤區可縮（全版面／Fable 幾何，非藍桌墊專屬），放 PRE 最前面
 import { V6569_GAME_PAIRS } from './lib/revert-v6569-game.mjs';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -312,7 +313,7 @@ import { V6565_GAME_PAIRS } from './lib/revert-v6565-game.mjs';   // ⭐v6.565�
 import { V6566_GAME_PAIRS } from './lib/revert-v6566-game.mjs';   // ⭐v6.566（Rule 40）：登記推播後同步勾選框（非版面分支），由新到舊先還原
 // ⭐v6.576（Rule 40）：提醒浮動堆疊＋回放控制列浮動可拖曳（全版面「盤面不被擠動」，非藍桌墊），且碰到 V6560 條目（回放控制列）的上下文
 //   ⇒ 比照 v6.560 放在 PRE 最前面先整段還原成 v6.575；內容由 test-v6576-no-layout-shift 鎖。
-const PRE = [...V6576_GAME_PAIRS, ...V6566_GAME_PAIRS, ...V6565_GAME_PAIRS, ...V6564_GAME_PAIRS, ...V6563_GAME_PAIRS, ...V6562_GAME_PAIRS, ...V6561_GAME_PAIRS, ...V6560_GAME_PAIRS, ...V6464_GAME_PAIRS];
+const PRE = [...V6578_GAME_PAIRS, ...V6576_GAME_PAIRS, ...V6566_GAME_PAIRS, ...V6565_GAME_PAIRS, ...V6564_GAME_PAIRS, ...V6563_GAME_PAIRS, ...V6562_GAME_PAIRS, ...V6561_GAME_PAIRS, ...V6560_GAME_PAIRS, ...V6464_GAME_PAIRS];
 function strip(src) {
   let s = src;
   const bad = [];

@@ -39,12 +39,13 @@ const SRC = readFileSync(join(ROOT, REL), 'utf8').replace(/\r\n/g, '\n');
 
 function scenS(src) {
   const r = {};
-  const a = src.indexOf('  <div class="battle-notice-stack" role="presentation">');
+  const a = src.indexOf('  <div class="battle-notice-stack" role="presentation"');   // v6.578（Rule 40）：起始標籤後面多了 use:modalDrag
   const b = src.indexOf('  <!-- <<< v6576-notice-stack-end -->');
   const stack = a >= 0 && b > a ? src.slice(a, b) : '';
   const branch = src.indexOf('{#if isPortraitMobile && game}\n    <MobilePortraitBattle');
   const kinds = ['net-warn-banner', 'act-retry-banner', 'act-queue-banner', 'act-notice-banner', 'opp-quiet-banner', 'ability-broken-banner'];
-  const css = /\.battle-notice-stack\{ position:fixed; top:calc\(var\(--safe-top, 0px\) \+ 4px\);[^}]*pointer-events:none; \}/.test(src);
+  // ⭐v6.578（Rule 40）：固定位置改由外層 battle-notice-wrap 負責（堆疊本身要掛 use:modalDrag 拖曳）；意圖（提醒不佔版面）不變
+  const css = /\.battle-notice-wrap\{ position:fixed; top:calc\(var\(--safe-top, 0px\) \+ 4px\);[^}]*pointer-events:none; \}/.test(src);
   r.S1 = !!stack && kinds.every((k) => stack.includes(`<div class="${k}"`)) && kinds.every((k) => (src.match(new RegExp(`<div class="${k}"`, 'g')) || []).length === 1)
     && branch > b && css && !/\{#if abilityRegBroken\}\n    <div style="background:#7a1f1f/.test(src);
   r.S1n = JSON.stringify({ stack: !!stack, css, branchAfter: branch > b });
@@ -90,7 +91,7 @@ else if (chromium) {
     const port = srv.address().port;
     const geo = (pg) => pg.evaluate(() => {
       const q = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return { t: b.top + scrollY, b: b.bottom + scrollY, l: b.left, r: b.right, h: b.height }; };
-      return { pm: q('.playmat'), hd: q('.battle-header'), st: q('.battle-notice-stack'), stPos: (() => { const e = document.querySelector('.battle-notice-stack'); return e ? getComputedStyle(e).position : null; })() };
+      return { pm: q('.playmat'), hd: q('.battle-header'), st: q('.battle-notice-stack'), stPos: (() => { const e = document.querySelector('.battle-notice-wrap'); return e ? getComputedStyle(e).position : null; })()   /* v6.578：外層固定 */ };
     });
     const LONGMSG = '📶 對手的連線目前不穩定（已有 100 秒沒有連上伺服器）—— 不是你的網路、也不是網站故障。對手回來後畫面會自動更新；若一直沒回來，系統的閒置判負會照規則處理。';
     const inject = (pg) => pg.evaluate((m) => { const s = document.querySelector('.battle-notice-stack'); if (!s) return false;
@@ -150,7 +151,7 @@ else if (chromium) {
           ok(`★★[N2] ${layout}：提醒疊在頁首上方（從畫面頂端開始、不在盤面裡）`, !!g1.st && g1.st.t <= g1.hd.b && g1.st.t - scrollYOf(g1) < 40, JSON.stringify({ st: g1.st, hd: g1.hd }));
         }
         await pg.setViewportSize({ width: 1376, height: 958 });
-        const tag = await pg.addStyleTag({ content: '.battle-notice-stack{ position:static !important; transform:none !important; }' });
+        const tag = await pg.addStyleTag({ content: '.battle-notice-wrap{ position:static !important; } .battle-notice-stack{ transform:none !important; }' });
         await pg.waitForTimeout(300);
         const m0 = await geo(pg); await inject(pg); await pg.waitForTimeout(300); const m1 = await geo(pg); await clear(pg);
         ok('★★[NM] 自驗：提醒堆疊改回文件流 ⇒ 盤面真的會被推（量測不是恆真）', m1.pm.t - m0.pm.t > 20, JSON.stringify({ d: m1.pm.t - m0.pm.t }));
