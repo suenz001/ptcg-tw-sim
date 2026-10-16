@@ -15,6 +15,53 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { resolveLogCard } from '$lib/game/log_zoom';
   import { onMount, onDestroy, untrack, tick } from 'svelte';
   import { fly, scale, fade } from 'svelte/transition';
+  // >>> v6579-out-abs
+  // ⭐v6.579（站長 2026-10-16：「1. 一起修」——盤面不可以跳動）：昏厥／離場的卡片縮小淡出動畫（out:scale）播放的 0.3 秒內，
+  //   舊卡片還留在原位佔空間，新的「（無出場）」或補位卡片已經出現 ⇒ 戰鬥區高度瞬間變成兩倍（實測經典版 215→413px），
+  //   整個盤面往下跳再彈回。⇒ 動畫開始時把離場的那張改成 position:absolute 疊在原位（不佔版面），動畫照播、版面不動。
+  //   ⚠ 只改離場那一刻的元素本身（Svelte 的 out 轉場在元素即將移除時才呼叫），不影響任何在場卡片的樣式。
+  //   ⚠ 審查 P1-1：退場被中斷（回放快速來回、悔棋、伺服器狀態覆蓋）時 Svelte 會把同一個節點救回來沿用，而且會快取轉場設定
+  //     ⇒ 用「延遲函式」形式（每次退場都重新量、重新套）＋ 監看 inert：Svelte 中斷退場時把 inert 設回 false ⇒ 立刻還原原本的 style。
+  //   ⚠ 審查 P2-1：量的當下新的空位（.active-empty／.bench-empty）已經插在後面 ⇒ 量之前暫時隱藏它；寬高用 border-box 才不會多算內距。
+  //   ⚠ 複審 P3：「中斷 → 立刻又退場」連續發生時，原本的 style 只在第一次記下（WeakMap），每次退場前先停掉上一個監看 ⇒ 還原的一定是乾淨的原樣。
+  const _outAbsState = new WeakMap<HTMLElement, { style: string | null; mo: MutationObserver | null }>();
+  function outScaleAbs(node: HTMLElement, params: { duration?: number; start?: number; opacity?: number }) {
+    return () => {
+      try {
+        let st = _outAbsState.get(node);
+        if (!st) { st = { style: node.getAttribute('style'), mo: null }; _outAbsState.set(node, st); }
+        st.mo?.disconnect(); st.mo = null;
+        const sib = node.nextElementSibling as HTMLElement | null;
+        const hideSib = !!sib && (sib.classList.contains('active-empty') || sib.classList.contains('bench-empty'));
+        const sibDisp = hideSib && sib ? sib.style.display : '';
+        if (hideSib && sib) sib.style.display = 'none';
+        // offsetTop／offsetLeft 是相對 offsetParent（最近的已定位祖先）⇒ 改成 absolute 後就落在同一個位置；不去動任何祖先的樣式
+        const top = node.offsetTop, left = node.offsetLeft, w = node.offsetWidth, h = node.offsetHeight;
+        if (hideSib && sib) sib.style.display = sibDisp;
+        // 經典版：空的戰鬥場與剛離場那張一樣高（經典版空位的高度是寫死的 min-height，實卡高度隨內容而變 ⇒ 用剛量到的實際高度最準）。
+        //   ⚠ 複審 P1-A：只限經典版——桌面版的 .active-card 有 max-height:160px !important，inline 高度會被夾住反而變矮（實測 −16px）；
+        //     Fable／藍桌墊／桌面版的空位本來就由各自的 CSS 對齊實卡（v5.958、v6579-tabletop-empty-same-h）。
+        //   套完再量一次，對不上就整個撤掉（寧可維持原本 CSS，也不要套出更大的差）。空位元素在補位時整個換掉，inline 不會殘留到別處。
+        if (hideSib && sib && sib.classList.contains('active-empty') && h > 0 && !sib.closest('.layout-tabletop, .layout-fable')) {
+          sib.style.boxSizing = 'border-box'; sib.style.minHeight = h + 'px'; sib.style.height = h + 'px';
+          if (Math.abs(sib.offsetHeight - h) > 0.5) { sib.style.boxSizing = ''; sib.style.minHeight = ''; sib.style.height = ''; }
+        }
+        node.style.position = 'absolute'; node.style.top = top + 'px'; node.style.left = left + 'px'; node.style.boxSizing = 'border-box';
+        node.style.width = w + 'px'; node.style.height = h + 'px'; node.style.margin = '0'; node.style.pointerEvents = 'none'; node.style.zIndex = '1';
+        const cur = st;
+        const mo = new MutationObserver(() => {
+          if (node.inert) return;
+          mo.disconnect(); cur.mo = null;
+          if (cur.style == null) node.removeAttribute('style'); else node.setAttribute('style', cur.style);
+          _outAbsState.delete(node);   // 還原後清掉紀錄：這張卡之後的 style（攻擊特效變數等）可能會變，下次退場重新記
+        });
+        cur.mo = mo;
+        mo.observe(node, { attributes: true, attributeFilter: ['inert'] });
+      } catch { /* 量不到就照舊播（只是少了不佔位這一層保護） */ }
+      return scale(node, params);
+    };
+  }
+  // <<< v6579-out-abs
   import { cubicOut } from 'svelte/easing';
   import { base } from '$app/paths';
   import { isBattleView, setBattleViewAttr } from '$lib/site-theme';   // ⭐v6.475 網頁版頂端列在牌桌畫面收起
@@ -12646,7 +12693,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             style={attackFx && myPlayer.active && attackFx.defenderIid === myPlayer.active.iid ? `--flash-color:${ENERGY_COLOR[attackFx.energyType]}` : undefined}
             data-drop-type="poke"
             data-drop-iid={myPlayer.active.iid}
-            out:scale={{ duration: 360, start: 0.55, opacity: 0 }}
+            out:outScaleAbs={{ duration: 360, start: 0.55, opacity: 0 }}
             onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(myPlayer!.active!.iid)}>
             <img use:retryImg={ac?.imageUrl} src={cardThumb(ac?.imageUrl)} alt={ac?.name} class="active-img"
               class:zoomable={!selectedEnergyIid}
@@ -12724,7 +12771,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               class:energy-pulse={energyAttachPulse===b.iid}
               data-drop-type="poke"
               data-drop-iid={b.iid}
-              out:scale={{ duration: 320, start: 0.55, opacity: 0 }}
+              out:outScaleAbs={{ duration: 320, start: 0.55, opacity: 0 }}
               onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(b.iid)}>
               <!-- v2.49：名字/HP 移到卡牌上方，避免與下方進化按鈕/特性按鈕/能量 pip 擠在一起 -->
               <div class="bench-name">{bc?.name}</div>
@@ -16275,6 +16322,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
     max-height:160px !important;
     overflow:visible;
   }
+  /* >>> v6579-tabletop-empty-same-h */
+  /* ⭐v6.579（站長「盤面不可以跳動」）：空的戰鬥場（昏厥後等補位）比放著卡片時高 7px（上內距 .6rem vs .3rem、虛線框 2px vs 1px）
+     ⇒ 每次昏厥／補位，我方這一列就上下跳。⇒ 空位與實卡用同樣的上下內距與框線寬度，三態同高（同 v5.958 Fable 版的做法）。 */
+  .playmat.layout-tabletop .active-card.active-empty{ padding-top:.3rem !important; border-width:1px !important; }
+  /* 經典版：「我的出場」標籤列在自己回合多出「🚫 撤退」按鈕（14px → 27px）⇒ 戰鬥場每換一次回合就上下移 6.5px。
+     ⇒ 標籤列固定留出按鈕的高度（1.7rem ≈ 27px，跟著畫面縮放一起縮）。新版桌墊／Fable／桌面版的標籤列另有規則，不受影響。 */
+  .playmat:not(.layout-tabletop):not(.layout-fable) .my-active-zone > .zone-label-sm{ min-height:1.7rem; }
+  /* <<< v6579-tabletop-empty-same-h */
   /* v5.112: HP column 垂直置中 (玩家要求大約置中位置) */
   .playmat.layout-tabletop .active-card .active-hpbar-bottom{
     left:.4rem; top:50%; transform:translateY(-50%); right:auto; bottom:auto;
@@ -18380,6 +18435,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .hand-name{ font-size:.68rem; color:#bbb; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
   .hand-hint{ font-size:.65rem; color:#bbb; }
   .hand-hint.hl{ color:#ffd44a; font-weight:600; }
+  /* >>> v6579-hand-hint-overlay */
+  /* ⭐v6.579（站長「盤面不可以跳動」）：手牌上的操作提示（⚡ 拖曳附加、📥 拖到備戰…）只在自己的回合出現 ⇒ 每換一次回合，
+     手牌卡片就長高／縮回一行，手牌列跟著變高，整個盤面被往上推 16px 再彈回。⇒ 提示改成疊在卡圖下緣（卡名上方）的小標籤（不佔版面）。
+     手牌卡片本身有 transform ⇒ 已經是 absolute 的定位基準，不必另加 position。新版桌墊與手機本來就不顯示這些提示。 */
+  /* 審查 P2-2：疊在卡圖下緣（卡名那一行的上方，不蓋住卡名）；只顯示一行，太長的以「…」結尾 */
+  /* 複審 P2-B：卡名固定一行高（1.1rem），提示的位置用同一個數字推算 ⇒ 不靠字型行高運氣、不會壓到卡名 */
+  /*   （只用 .hand-name 一層選擇器：窄螢幕那份 line-height:1／max-height:1.2em 在後面、同權重 ⇒ 照樣生效，窄版卡名最多只高 1～2px；
+        寬螢幕手牌卡固定高 2～3.6px，是固定差距、不會隨回合變動） */
+  .hand-name{ height:1.1rem; line-height:1.1rem; }
+  .hand-card .hand-hint{ position:absolute; left:3px; right:3px; bottom:calc(.25rem + 1.1rem + 2px); z-index:2; background:rgba(0,0,0,.78); border-radius:4px;
+    padding:1px 3px; line-height:1.25; text-align:center; pointer-events:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* <<< v6579-hand-hint-overlay */
   .energy-hint{ color:#aaff44; }
   /* v1.02：統一黃框表示「當下可用」— 涵蓋能量/基礎/訓練家/進化 */
   /* v6.099：.hand-trigger-btn 隨機制 A 的手牌按鈕一起移除（該按鈕已是死碼，見上方說明） */
