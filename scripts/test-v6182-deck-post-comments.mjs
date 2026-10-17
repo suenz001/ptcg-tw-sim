@@ -17,6 +17,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { normEol } from './lib/eol-agnostic.mjs';
 import { sectionInner } from './lib/strip-markup-sections.mjs';   // ⭐v6.317 先剝 HTML 註解再抽 style（開頭標籤限行首）
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -716,7 +717,7 @@ T('⭐⭐ 手機直式：留言區靠 flex-wrap / 100% 寬自適應，沒有新�
   // ⭐ v6.317：改走中央 helper（先剝 HTML 註解、開頭標籤限行首）再剝 CSS 區塊註解；原本用「第一個樣式標籤字面」切，會被更前面的字面騙
   // ⭐v6.476（Rule 40）：網頁版主題＋版面整塊在 v6476-desktop-theme 哨兵裡，而且只能是一個 min-width:1024px（只在桌機加樣式、不是手機開關）
   //   ⇒ 先把哨兵整塊拿掉再數 @media（本條的原意「留言區不靠 @media 切手機版」不變）；哨兵必須恰好一塊、內容必須是 min-width:1024px。
-  const cssRaw = sectionInner(RAW, 'style', { label: 'deck-posts css', minSections: 1 });
+  const cssRaw = normEol(sectionInner(RAW, 'style', { label: 'deck-posts css', minSections: 1 }));
   const RE6476 = /\n  \/\* >>> v6476-desktop-theme \*\/\n[\s\S]*?\n  \/\* <<< v6476-desktop-theme \*\/\n/g;
   const blk6476 = cssRaw.match(RE6476) || [];
   ok(blk6476.length === 1 && blk6476[0].replace(/\/\*[\s\S]*?\*\//g, '').trim().startsWith('@media (min-width: 1024px) {') && (blk6476[0].match(/@media/g) || []).length === 1,

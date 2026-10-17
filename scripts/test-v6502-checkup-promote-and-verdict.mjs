@@ -19,7 +19,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
 import { hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
@@ -193,7 +193,8 @@ for (const [k, f] of Object.entries(CUR)) { try { f(); pass++; console.log('  OK
 console.log('── HEAD-FAIL（v6.501 引擎）──');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const bdir = mkdtempSync(join(tmpdir(), 'v6502-base-')); tmpFiles.push(bdir);
-  execSync(`git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${bdir}"`);
+  const archive = execFileSync('git', ['-C', ROOT, 'archive', BASE_SHA, 'src'], { maxBuffer: 64 * 1024 * 1024 });
+  execFileSync('tar', ['-x', '-f', '-', '-C', bdir], { input: archive });
   const B = makeCases(await loadEngine(bdir));
   const red = [];
   for (const [k, f] of Object.entries(B)) { try { f(); } catch (e) { if (e instanceof assert.AssertionError) red.push(k); else throw e; } }

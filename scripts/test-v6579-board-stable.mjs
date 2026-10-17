@@ -18,7 +18,7 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import http from 'node:http';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
@@ -50,7 +50,7 @@ else { const x = readBaseBlob(ROOT, BASE_SHA, REL); const B = scenS(x.ok ? x.out
 //   在真瀏覽器裡實際觸發「昏厥 → 空位」與「退場被中斷又救回來」。對局 E 組抓不到昏厥（AI 對局取樣窗口很難剛好碰到），所以這裡是主防線。
 const fnOf = (src) => { const a = src.indexOf('// >>> v6579-out-abs'), b = src.indexOf('// <<< v6579-out-abs'); return a >= 0 && b > a ? src.slice(a, b) : null; };
 async function buildMini(fnTs, tag) {
-  const { compile } = await import(join(ROOT, 'node_modules/svelte/src/compiler/index.js'));
+  const { compile } = await import(pathToFileURL(join(ROOT, 'node_modules/svelte/src/compiler/index.js')).href);
   const { transform, build } = await import('esbuild');
   const fnJs = (await transform(fnTs, { loader: 'ts' })).code;
   const app = `<script>\nimport { scale } from 'svelte/transition';\n${fnJs}\nlet active = $state({ name: 'A' });\nwindow.__set = (v) => { active = v; };\n</script>\n`

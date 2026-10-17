@@ -11,7 +11,7 @@
 import { readFileSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
@@ -44,7 +44,7 @@ const require_ = createRequire(import.meta.url);
 const esbuild = require_('esbuild');
 const tmp = mkdtempSync(join(tmpdir(), 'v6488-'));
 await esbuild.build({ entryPoints: [join(ROOT, 'src/lib/game/kbd-shortcuts.ts')], bundle: true, format: 'esm', outfile: join(tmp, 'k.mjs'), logLevel: 'silent' });
-const K = await import(join(tmp, 'k.mjs'));
+const K = await import(pathToFileURL(join(tmp, 'k.mjs')).href);
 console.log('\n【L】按鍵判斷');
 {
   const f = K.kbdActionFor;

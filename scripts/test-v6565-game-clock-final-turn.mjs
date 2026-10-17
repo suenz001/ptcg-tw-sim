@@ -265,7 +265,8 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('v6565 HEAD-FAIL', '需要歷史
 else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6565b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src/lib | tar -x -C "${tmp}"`]);
+    const archive = execFileSync('git', ['-C', ROOT, 'archive', BASE_SHA, 'src/lib'], { maxBuffer: 64 * 1024 * 1024 });
+    execFileSync('tar', ['-x', '-f', '-', '-C', tmp], { input: archive });
     const blob = (p) => normEol(readBaseBlob(ROOT, BASE_SHA, p).out || '');
     const B = await all(tmp, blob('src/routes/game/+page.svelte'), blob('src/lib/game/engine.ts'), blob('src/lib/game/effects/_shared.ts'));
     for (const k of Object.keys(LABEL)) {

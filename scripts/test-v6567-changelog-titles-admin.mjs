@@ -137,7 +137,7 @@ function adminScenarios(H, HOME, BODIES, ARC) {
 function bumpScenarios(srcRoot) {
   const f = join(srcRoot, 'scripts/bump-version.py');
   if (!existsSync(f)) return {};
-  const s = readFileSync(f, 'utf8');
+  const s = normEol(readFileSync(f, 'utf8'));
   return { B1: /HIDDEN = bool\(spec\.get\('hidden'\)\)/.test(s) && /if HIDDEN:\n    print\('hidden version: public changelog untouched'\)\n(?:    .*\n|\s*\n)*else:\n/.test(s)
     && /rw\('static\/site-version\.txt', lambda s: V \+ '\\n'\)/.test(s) && /spec\['allowed'\] = sorted\(set\(spec\['allowed'\]\) \| \{'static\/site-version\.txt'\}\)/.test(s)
     && /if not HIDDEN: rw\('scripts\/test-v6264-changelog-lazy-body\.mjs'/.test(s) && /R = os\.path\.join\(os\.path\.dirname\(os\.path\.abspath\(__file__\)\), '\.\.', ''\)/.test(s) };
