@@ -7,8 +7,11 @@
 - src/lib/game/card-back.css 共用純外觀樣式，由對戰頁匯入，套用桌機四種版面、手機準備階段／遮蔽手牌、機密選擇視窗、獎賞檢視與抽牌／取獎賞／翻牌動畫。舊版牌庫近方形，僅 deck-pile 以 contain 保留圖片比例，框與張數位置不變。排除 prize-faceup／prize-gone；不動引擎、遮蔽判準、正面卡圖、失敗卡圖 fallback、尺寸或操作。
 - 守衛 test-v6585：110 PASS／0 FAIL；四種桌機版面及 320／390／430 手機寬度的真瀏覽器 CSS 量測，包含 8 種卡背、幾何、正面／空獎賞／棄牌正對照、v6.584 HEAD-FAIL 逐項成立，以及 9 個樣式突變全殺。Rule 40：v6441 LATER 只還原新增匯入，原逐位元版面比對保留。
 - 修改前基準：AI harness＋35 支免疫網完成；v6527 起初因 Git bin 的 sh 讓 GNU tar 誤解 Windows 路徑而紅，改成程序 PATH 優先 System32／Git cmd／Git usr/bin，使用原生 bsdtar 後原判準重跑通過，無測試程式修改。
-- 獨立 Codex 審查（本環境無 Opus 5.5，依交接允許的獨立審查替代方式）：P1=0、P2=0、P3=2。P3-1 背景 URI 存在但尺寸為 0 仍被判通過，已補背景尺寸／定位／不重複判準及突變，複審通過；P3-2 實際 UI 截圖確認舊三版牌庫會壓扁卡背，改 contain 並加拉伸突變。初輪全套因本項 src 微調主動停止，不計為通過；待最後 build／全套／複審結果補齊。
-- 部署：僅玩家前端與素材更新，測試站驗收後由站長執行 redeploy-oracle.bat；伺服器仍為 v1.70。
+- 獨立 Codex 審查（本環境無 Opus 5.5，依交接允許的獨立審查替代方式）：P1=0、P2=0、P3=2，均已修正並由同一審查者複審通過。P3-1 背景 URI 存在但尺寸為 0 仍被判通過，補背景尺寸／定位／不重複判準及突變；P3-2 舊三版牌庫會壓扁卡背，改 contain 並加拉伸突變。初輪全套因本項 src 微調主動停止，不計為通過。最後審查亦涵蓋下列七支 Windows 守衛相容性修正及完整報表核對，准推測試站。
+- 最終驗收：BASE_PATH=/ptcg-tw-sim 的實際 production build 成功；以建置結果操作桌機四版、手機準備／獎賞視窗與抽牌翻牌，卡背資源 200、無 pageerror，切換新舊 CSS 量測位置尺寸不變。另由獨立審查者核對編譯 CSS 84 項通過。手機使用 Chromium 響應式模擬，未宣稱 iPhone 實機驗收。
+- 完整 node scripts/run-tests.mjs 執行 933／933 支，原報表有 11 項失敗／逾時（含 2 項逾時），不是原全套零失敗。七支舊守衛的 Windows 啟動相容性修正：v6182／v6567 沿用 normEol；v6488／v6579 動態 import 改 file URL；v6500／v6502／v6565 將 git archive 與 tar 分開 execFileSync，以 stdin 傳原始 archive，避開尾端反斜線引號。保留全部原斷言、BASE、HEAD-FAIL、正負對照與 skip 判準；對戰頁實體行尾恢復 CRLF，canonical src 無額外改動。
+- 原 11 項以同一 runner 單工、600 秒上限逐支復驗，清單與原失敗集合完全相同，全部 exitCode=0／timedOut=false／fail=0；其中 evolve-iid 確實完成 1000 deterministic seeds（542.9 秒），v6571 完成 131.9 秒。兩份報表 mainTree.hard、escape、restoreFailed 皆 0；v6378 原有 ENV=2 未增加。AI harness、35 支免疫網及本版 110 項守衛均通過。紀錄位於 E:\ptcg-tw-sim-local\cardback-6585-full-final 與 cardback-6585-rerun；GitHub CI 仍執行完整 npm test，推送後另等綠燈。
+- 部署：測試站驗收後由站長依序執行 update-tournament.bat → redeploy-oracle.bat，同步 admin 的 SITE_VERSION_HINT 與玩家前端；伺服器補丁仍 v1.70。本輪不代跑任何部署 bat，不改正式站。
 
 ## v6.584（上一版 `6c22e383`（v6.583））／server v1.70 修正 牌組公布欄附加一般對戰復盤一律「上傳格式錯誤」
 
