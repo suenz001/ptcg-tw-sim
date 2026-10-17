@@ -168,11 +168,14 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { isViewerSpectator, canViewerAct, isSeatUnknownOnline } from '$lib/game/viewer-role';
   import { createAnimObserver, makeLocalSeenStore, type AnimObserveResult } from '$lib/game/anim-live';   // ⭐v6.580 動畫只在當下播放
   import { computeRevealEvents, revealLabel, type RevealEvent } from '$lib/game/card-reveal';   // ⭐v6.581 出牌／抽牌放到中間翻開
+  import { DISCARD_TABS, discardTabMatches, discardTabCounts, type DiscardTab } from '$lib/game/discard-filter';   // ⭐v6.582 棄牌區分類頁籤
+  import { buildConcededGame } from '$lib/game/concede';   // ⭐v6.582 認輸並提議重新開局（本機 vs AI 也走同一份認輸盤面）
   import {
     createRoom, joinRoom, subscribeRoom, pushGameState, pushUndoRollback, subscribeOpenRooms,
     takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom, claimOpponentForfeit,
     setRematchReady, checkAndAcceptRematch,
     proposeRestart, respondRestart, cancelRestart, checkAndAcceptRestart,
+    concedeAndProposeRestart,   // ⭐v6.582 認輸並提議重新開局
     // v5.180 提議返回房間
     proposeReturnToRoom, respondReturnToRoom, cancelReturnToRoom, checkAndAcceptReturnToRoom,
     setSpectatorsAllowed, setIdleTimeout,
@@ -2310,6 +2313,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let floatingEvoMenu = $state<{ fromIid: string; evoOpts: CardInstance[]; x: number; y: number } | null>(null);
   let floatingRetreatMenu = $state<{ x: number; y: number } | null>(null);
   let viewDiscardFor = $state<0 | 1 | null>(null);
+  // >>> v6582-discard-tabs
+  // ⭐v6.582 棄牌區分類頁籤：每次打開（或換看另一位玩家）都回到「全部」，不記住上一次的頁籤
+  let discardTab = $state<DiscardTab>('all');
+  $effect.pre(() => { viewDiscardFor; discardTab = 'all'; });
+  // <<< v6582-discard-tabs
 
   // ── 彈出 UI 視窗拖曳（v2.44 起；⭐v6.420 收斂成中央 action）────────────────
   // Leon feedback：選牌 / 選寶可夢 modal 彈出後，玩家想拖曳視窗回去看場上的卡，
@@ -6023,6 +6031,38 @@ function _setupSelfPending(g: any, seat: number): string | null {
     game = st;
     if (idx !== _animPrevStep + 1) _animObs.markBaseline(game);
   }
+  // >>> v6582-replay-autoplay
+  // ⭐v6.582 回放自動播放＋時間軸（站長 2026-10-17：參考 PTCGCodex 的對局回放）
+  //   ・▶ 播放：每一格停 REPLAY_BASE_MS ÷ 速度（0.5x／1x／2x／4x），播到最後一格自動停。
+  //   ・播放中手動按上一步／下一步／拖時間軸都可以，計時從新的位置重新起算（不會連跳兩格）。
+  //   ・離開回放（isTReplay 變 false）一律停；計時器由 $effect 的清理函式收掉，不會殘留到下一場。
+  //   ・一格一格播放走 tReplayGoto(i+1) ⇒ 傷害數字、回合橫幅照常播；拖時間軸一次跨很多格 ⇒ 當基準不播（v6.580）。
+  const REPLAY_BASE_MS = 1200;
+  const REPLAY_SPEEDS = [0.5, 1, 2, 4] as const;
+  let replayPlaying = $state(false);
+  let replaySpeed = $state<number>(1);
+  $effect.pre(() => { if (!isTReplay) replayPlaying = false; });
+  $effect(() => {
+    if (!isTReplay || !tReplay || !replayPlaying) return;
+    const at = tReplayStep;
+    const n = tReplaySteps().length;
+    if (at >= n - 1) { replayPlaying = false; return; }
+    const ms = REPLAY_BASE_MS / (replaySpeed > 0 ? replaySpeed : 1);
+    const t = setTimeout(() => { if (replayPlaying && isTReplay && tReplayStep === at) tReplayGoto(at + 1); }, ms);
+    return () => clearTimeout(t);
+  });
+  function replayTogglePlay() {
+    if (replayPlaying) { replayPlaying = false; return; }
+    const n = tReplaySteps().length;
+    if (n <= 1) return;
+    if (tReplayStep >= n - 1) tReplayGoto(0);   // 已經在最後一格 ⇒ 從頭播
+    replayPlaying = true;
+  }
+  function replayCycleSpeed() {
+    const i = REPLAY_SPEEDS.indexOf(replaySpeed as (typeof REPLAY_SPEEDS)[number]);
+    replaySpeed = REPLAY_SPEEDS[(i + 1) % REPLAY_SPEEDS.length];
+  }
+  // <<< v6582-replay-autoplay
   async function tStartReplay(matchId: string) {
     if (!matchId) return;
     tError = '';
@@ -8718,6 +8758,51 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!roomCode) return;
     respondRestart(roomCode, false).catch((e: any) => alert('拒絕失敗：' + (e?.message ?? e)));
   }
+  // >>> v6582-concede-restart
+  // ⭐v6.582 認輸並提議重新開局（站長 2026-10-17）：我方算敗、對方獲勝，同時提議重開。
+  //   ・休閒線上（P1／P2）：同一筆房間交易裡寫入「我認輸」的終局盤面＋重開提議（concedeAndProposeRestart）；
+  //     兩端看到終局 ⇒ 對戰紀錄照常記；對手同意 ⇒ 同一副牌組從擲硬幣重開，拒絕／逾時 ⇒ 停在結算畫面。
+  //   ・本機 vs AI：沒有人要同意 ⇒ 先把認輸的結果記進對戰紀錄，再直接重新開局。
+  //   ・雙人同機：分不出「我方」是哪一位 ⇒ 不提供（按鈕停用並說明）。
+  //   ・錦標賽、觀戰、回放：不提供（按鈕不顯示）。
+  const concedeRestartAvailable = $derived(
+    !!game && game.phase === 'playing' && !isTournament && !isTReplay && !isSpectator   // 開局（setup）還沒有勝負可言 ⇒ 不提供（審查 P3-3）
+      && (mode === 'online' ? (canAct && (mySeatIdx === 0 || mySeatIdx === 1) && !!roomCode) : aiPlayerIndex !== null)
+  );
+  function handleConcedeRestartButton() {
+    showSettingsModal = false;
+    if (!game || !concedeRestartAvailable) return;
+    if (mode === 'online') {
+      if (!roomCode || !canProposeRestart) return;
+      if (!confirm('確定要認輸並提議重新開局嗎？\n\n・這一局會立刻判你落敗、對手獲勝（記入戰績）。\n・同時向對手提議用同一副牌組重新開局（30 秒回應時間）。\n・對手不同意時，這一局仍然維持你認輸。')) return;
+      concedeAndProposeRestart(roomCode).catch((e: any) => {
+        // ⭐審查 P3-4：同時有人提議、局剛好結束等競態 ⇒ 給看得懂的說明（房間 API 的錯誤字串是英文）
+        const m = String(e?.message ?? e);
+        alert(/proposal already in progress/.test(m) ? '認輸沒有送出：對方剛好也提出了重新開局（或返回房間）的提議，請先回應對方。'
+          : /game not in progress|game already over/.test(m) ? '認輸沒有送出：這一局已經結束了。'
+          : '認輸失敗：' + m);
+      });
+      return;
+    }
+    // 本機 vs AI
+    if (aiPlayerIndex === null) return;
+    const conceded = buildConcededGame(game, (1 - aiPlayerIndex) as 0 | 1, gameClockNow());
+    if (!conceded) return;
+    if (!confirm('確定要認輸並重新開局嗎？\n\n這一局會判你落敗、AI 獲勝（記入戰績），然後從擲硬幣重新開始。')) return;
+    aiThinking = false;
+    if (aiTimer !== null) { clearTimeout(aiTimer); aiTimer = null; }
+    // 直接記錄（不等 game-over 的 $effect：新局一開就換掉盤面，effect 看不到這個終局）。
+    //   ⭐審查 P3-5：等新局真的開成功（game 換成另一局）才記；開不成（牌組不見了等）⇒ 這一局照常繼續、不記敗場。
+    const _oldId = conceded.id;
+    startLocalGame().then(() => {
+      if (!game || game.id === _oldId) return;
+      if (!isAdminMode && recordedMatchId !== _oldId) {
+        recordedMatchId = _oldId;
+        fireMatchRecord(conceded as unknown as GameState);
+      }
+    }).catch((e: unknown) => console.warn('[concede-restart local]', e));
+  }
+  // <<< v6582-concede-restart
   // v5.180 提議返回房間 handlers
   function handleProposeReturnRoomButton() {
     showSettingsModal = false;
@@ -10036,11 +10121,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   還會看到（甚至按得到）不屬於他的按鈕。清乾淨是同步的，不需要等伺服器點頭。
     //   ⚠ roomCode 先存進區域變數再清空 —— 清完才有東西可以送給 leaveRoom。
     const _leavingRoomCode = roomCode;
+    // ⭐v6.582（審查 P2-1）：我有一個還在等回應的重新開局提議（例如剛「認輸並提議重新開局」）⇒ 離開前撤回，
+    //   否則對手按同意會開出一局我根本不在的新局。（typeof 防衛：test-v6197 會抽這支函式原文實跑）
+    const _cancelMyRestart = (typeof myRestartProposed !== 'undefined') && myRestartProposed === true;
     chatMessages = []; chatInput = '';
     game = null; roomCode = ''; roomData = null;
     onlineStep = 'join'; showCreateForm = false; onlineError = ''; myPlayerIndex = null; mySeatIdx = -1;
     if (typeof roomGone !== 'undefined') roomGone = false;   // ⭐v6.568（審查 P3）離開就清掉「房間已不存在」狀態，不帶到下一間
     if (_leavingRoomCode) {
+      if (_cancelMyRestart && typeof cancelRestart === 'function') {
+        try { await cancelRestart(_leavingRoomCode); } catch (e) { console.warn('[leave] cancelRestart failed:', e); }
+      }
       try { await leaveRoom(_leavingRoomCode); }
       catch (e) { console.warn('[leaveRoom] failed:', e); }
     }
@@ -12188,13 +12279,21 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {@const _mfirst = (_mcur?.state?.firstPlayerIdx ?? 0)}
       <div class="treplay-mob" role="toolbar" aria-label="回放導覽">
         <button class="treplay-mob-btn treplay-mob-exit" onclick={tExitReplay} aria-label="離開回放">✕</button>
-        <button class="treplay-mob-btn" onclick={() => tReplayGoto(0)} disabled={tReplayStep <= 0} aria-label="第一步">⏮</button>
+        <!-- ⭐v6.582（審查 P2-2）：維持單一列、高度不變（v5.953：只蓋 .mp-top＋計時細條，不碰對手備戰區）。
+             ⏮／⏭ 改由時間軸取代（拖到兩端即第一步／最後一步），空出的位置放 ▶ 播放與速度；步數字樣疊在時間軸上方。 -->
         <button class="treplay-mob-btn" onclick={() => tReplayGoto(prevTurnStepIndex(_msteps, tReplayStep))} disabled={tReplayStep <= 0} aria-label="上一回合">⏪</button>
-        <button class="treplay-mob-btn treplay-mob-main" onclick={() => tReplayGoto(tReplayStep - 1)} disabled={tReplayStep <= 0}>◀ 上一步</button>
-        <span class="treplay-mob-step">{_mcur?.isFinal ? '🏁' : (_mact === _mfirst ? '先' : '後') + '·T' + (_mcur?.turn ?? '?')}<br/>{tReplayStep + 1}/{_msteps.length}</span>
-        <button class="treplay-mob-btn treplay-mob-main" onclick={() => tReplayGoto(tReplayStep + 1)} disabled={tReplayStep >= _msteps.length - 1}>下一步 ▶</button>
+        <button class="treplay-mob-btn treplay-mob-main" onclick={() => tReplayGoto(tReplayStep - 1)} disabled={tReplayStep <= 0} aria-label="上一步">◀</button>
+        <!-- >>> v6582-replay-timeline-mob -->
+        <span class="treplay-mob-mid">
+          <span class="treplay-mob-step">{_mcur?.isFinal ? '🏁' : (_mact === _mfirst ? '先' : '後') + '·T' + (_mcur?.turn ?? '?')} {tReplayStep + 1}/{_msteps.length}</span>
+          <input class="treplay-range" type="range" min="0" max={Math.max(0, _msteps.length - 1)} step="1" value={tReplayStep}
+            aria-label="回放時間軸" oninput={(e) => tReplayGoto(Number((e.currentTarget as HTMLInputElement).value))} />
+        </span>
+        <!-- <<< v6582-replay-timeline-mob -->
+        <button class="treplay-mob-btn treplay-mob-main" onclick={() => tReplayGoto(tReplayStep + 1)} disabled={tReplayStep >= _msteps.length - 1} aria-label="下一步">▶</button>
         <button class="treplay-mob-btn" onclick={() => tReplayGoto(nextTurnStepIndex(_msteps, tReplayStep))} disabled={tReplayStep >= _msteps.length - 1} aria-label="下一回合">⏩</button>
-        <button class="treplay-mob-btn" onclick={() => tReplayGoto(_msteps.length - 1)} disabled={tReplayStep >= _msteps.length - 1} aria-label="最後一步">⏭</button>
+        <button class="treplay-mob-btn treplay-mob-play" onclick={replayTogglePlay} disabled={_msteps.length <= 1} aria-label={replayPlaying ? '暫停自動播放' : '自動播放'}>{replayPlaying ? '暫停' : '播放'}</button>
+        <button class="treplay-mob-btn treplay-mob-speed" onclick={replayCycleSpeed} aria-label="播放速度">{replaySpeed}x</button>
         {#if replayKind === 'tournament'}<button class="treplay-mob-btn" onclick={() => tCopyReplayLink(tReplay.meta?.matchId)} aria-label="複製分享連結">🔗</button>{/if}
       </div>
     {/if}
@@ -12346,6 +12445,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <button class="treplay-btn" onclick={() => tReplayGoto(_steps.length - 1)} disabled={tReplayStep >= _steps.length - 1}>⏭</button>
     </div>
     {#if replayKind === 'tournament'}<button class="treplay-btn" onclick={() => tCopyReplayLink(tReplay.meta?.matchId)} title="複製分享連結">🔗 複製連結</button>{/if}
+    <!-- >>> v6582-replay-timeline -->
+    <div class="treplay-timeline">
+      <button class="treplay-btn treplay-play" onclick={replayTogglePlay} disabled={_steps.length <= 1}
+        title={replayPlaying ? '暫停自動播放' : '自動播放'} aria-label={replayPlaying ? '暫停' : '播放'}>{replayPlaying ? '⏸ 暫停' : '▶ 播放'}</button>
+      <span class="treplay-tl-n">1</span>
+      <input class="treplay-range" type="range" min="0" max={Math.max(0, _steps.length - 1)} step="1" value={tReplayStep}
+        aria-label="回放時間軸" oninput={(e) => tReplayGoto(Number((e.currentTarget as HTMLInputElement).value))} />
+      <span class="treplay-tl-n">{_steps.length}</span>
+      <span class="treplay-speeds" role="group" aria-label="播放速度">
+        {#each REPLAY_SPEEDS as sp}<button class="treplay-speed" class:active={replaySpeed === sp} onclick={() => replaySpeed = sp}>{sp}x</button>{/each}
+      </span>
+    </div>
+    <!-- <<< v6582-replay-timeline -->
   </div>
   </div>
 {/if}
@@ -14827,6 +14939,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   <!-- Discard Viewer -->
   {#if viewDiscardFor !== null}
     {@const viewPlayer = game!.players[viewDiscardFor]}
+    {@const _dtCounts = discardTabCounts(viewPlayer.discard.map((x) => x.cardId), getCard)}
     {@const discardGrouped = (() => {
       // v5.352：網頁版棄牌區改與手機版一致 — 合併同名卡顯示張數，依
       //   寶可夢→物品→支援者→場地→能量 排序（同類內 count desc 再 name）。
@@ -14856,8 +14969,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <div class="zoom-modal discard-modal" use:modalDrag={{ resetKey: viewDiscardFor }} onclick={(e)=>e.stopPropagation()}>
         <button class="zoom-close" onclick={() => viewDiscardFor = null}>✕</button>
         <h3 class="discard-title modal-drag-handle">🗑 {viewPlayer.name} 的棄牌區（{viewPlayer.discard.length} 張）</h3>
+        <!-- >>> v6582-discard-tabs-markup -->
+        <div class="discard-tabs" role="tablist" aria-label="棄牌區分類">
+          {#each DISCARD_TABS as t (t.key)}
+            <button type="button" role="tab" class="discard-tab" class:active={discardTab === t.key} class:empty={_dtCounts[t.key] === 0}
+              aria-selected={discardTab === t.key} onclick={() => discardTab = t.key}>
+              {#if t.icon}<span class="dt-icon" aria-hidden="true">{t.icon}</span>{/if}{t.label}<b class="dt-n">{_dtCounts[t.key]}</b>
+            </button>
+          {/each}
+        </div>
+        <!-- <<< v6582-discard-tabs-markup -->
         <div class="sel-grid">
-          {#each discardGrouped as g}{@const c=getCard(g.cardId)}
+          {#each discardGrouped.filter((g) => discardTabMatches(discardTab, getCard(g.cardId))) as g}{@const c=getCard(g.cardId)}
             {#if c}
               <button class="sel-card" onclick={() => openZoom(g.cardId)}>
                 <img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name} loading="lazy"
@@ -14867,7 +14990,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               </button>
             {/if}
           {/each}
-          {#if viewPlayer.discard.length === 0}<p class="sel-empty">（棄牌區是空的）</p>{/if}
+          {#if viewPlayer.discard.length === 0}<p class="sel-empty">（棄牌區是空的）</p>{:else if discardTab !== 'all' && _dtCounts[discardTab] === 0}<p class="sel-empty">（這一類沒有卡）</p>{/if}
         </div>
       </div>
     </div>
@@ -15032,13 +15155,24 @@ function _setupSelfPending(g: any, seat: number): string | null {
         {#if game && game.phase !== 'game-over'}
         <details class="settings-section" open>
           <summary>🎮 對局控制</summary>
-          <div class="setting-row">
+          <!-- >>> v6582-concede-restart-markup：左＝原本的提議重新開局（不算勝敗），右＝認輸並提議重新開局（我方算敗） -->
+          <div class="setting-row restart-pair">
             <button class="toggle-btn restart-game-btn"
                     onclick={handleProposeRestartButton}
-                    disabled={mode === 'online' && !canProposeRestart}>
+                    disabled={mode === 'online' && !canProposeRestart}
+                    title="雙方都不算勝敗，從擲硬幣重新開始">
               🔄 提議重新開局
             </button>
+            {#if !isTournament && !isTReplay && !isSpectator}
+            <button class="toggle-btn restart-game-btn concede-restart-btn"
+                    onclick={handleConcedeRestartButton}
+                    disabled={!concedeRestartAvailable || (mode === 'online' && !canProposeRestart)}
+                    title={mode !== 'online' && aiPlayerIndex === null ? '雙人同機分不出哪一方認輸，請改用左邊的「提議重新開局」' : '我方算敗、對方獲勝（記入戰績），並提議重新開局'}>
+              🏳 認輸並提議重新開局
+            </button>
+            {/if}
           </div>
+          <!-- <<< v6582-concede-restart-markup -->
           <div class="setting-hint">
             {#if mode === 'online'}
               {#if myRestartProposed}
@@ -15051,6 +15185,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             {:else}
               將清空目前盤面，從擲硬幣決定先攻重新開始
             {/if}
+            {#if !isTournament && !isTReplay && !isSpectator}<br/>左：雙方都不算勝敗｜右：我方算敗、對方獲勝（記入戰績）{#if mode !== 'online' && aiPlayerIndex === null}；雙人同機不提供認輸{/if}{/if}
           </div>
           <!-- v5.180 提議返回房間 (仿提議重新開局, 雙方同意後回房間選牌組) -->
           <div class="setting-row">
@@ -15108,6 +15243,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {#if oppRestartProposed && mode === 'online'}
     <div class="zoom-overlay restart-proposal-overlay">
       <div class="restart-proposal-modal" use:modalDrag onclick={(e)=>e.stopPropagation()}>
+        {#if roomData?.restartConcededBy === 1 - mySeatIdx && game?.phase === 'game-over'}
+          <!-- ⭐v6.582 對手是「認輸並提議重新開局」：勝負已定，這裡只問要不要重開 -->
+          <h3 class="modal-drag-handle">🏳 對手認輸，並提議重新開局</h3>
+          <p>對手已經認輸，這一局由你獲勝（已記入戰績）。<br/>要用同一副牌組從擲硬幣重新開局嗎？</p>
+          <p class="restart-countdown-text">倒數 {restartCountdown}s 後自動婉拒（勝負不受影響）</p>
+          <div class="restart-proposal-actions">
+            <button class="restart-btn-accept" onclick={handleAcceptOppRestart}>✅ 重新開局</button>
+            <button class="restart-btn-reject" onclick={handleRejectOppRestart}>❌ 不用了</button>
+          </div>
+        {:else}
         <h3 class="modal-drag-handle">🔄 對手提議重新開局</h3>
         <p>對方希望從擲硬幣重新開始這場對戰。是否同意？</p>
         <p class="restart-countdown-text">倒數 {restartCountdown}s 後自動拒絕</p>
@@ -15115,6 +15260,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <button class="restart-btn-accept" onclick={handleAcceptOppRestart}>✅ 同意</button>
           <button class="restart-btn-reject" onclick={handleRejectOppRestart}>❌ 拒絕</button>
         </div>
+        {/if}
       </div>
     </div>
   {/if}
@@ -15900,6 +16046,24 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .treplay-btn { background: #1a2440; color: #cfe0f8; border: 1px solid #3a5a8a; border-radius: 7px; padding: 5px 10px; cursor: pointer; font-size: .82rem; white-space: nowrap; }
   .treplay-btn:disabled { opacity: .4; cursor: default; }
   .treplay-btn:hover:not(:disabled) { background: #24345a; }
+  /* >>> v6582-replay-timeline-css */
+  .treplay-float-wrap .treplay-bar:has(.treplay-timeline) { flex-wrap: wrap; }
+  .treplay-timeline { flex: 1 0 100%; display: flex; align-items: center; gap: 8px; padding: 2px 0 1px; }
+  .treplay-range { flex: 1 1 auto; min-width: 80px; accent-color: #4f8cff; cursor: pointer; height: 18px; margin: 0; }
+  .treplay-tl-n { color: #8fb0e0; font-size: .74rem; min-width: 1.6em; text-align: center; }
+  .treplay-play { min-width: 76px; font-weight: 700; }
+  .treplay-speeds { display: inline-flex; gap: 2px; background: #121b33; border: 1px solid #2c4470; border-radius: 7px; padding: 2px; }
+  .treplay-speed { background: transparent; color: #a9c2e8; border: 0; border-radius: 5px; padding: 2px 7px; font-size: .74rem; cursor: pointer; }
+  .treplay-speed.active { background: #2b5fb8; color: #fff; font-weight: 700; }
+  /* 手機：單一列（高度不變），中間一格＝步數字樣＋時間軸 */
+  .treplay-mob .treplay-mob-btn { padding: 4px 5px; }
+  .treplay-mob .treplay-mob-main { flex: 0 0 auto; min-width: 34px; }
+  .treplay-mob-mid { flex: 1 1 auto; min-width: 50px; display: flex; flex-direction: column; justify-content: center; gap: 1px; }
+  .treplay-mob-mid .treplay-mob-step { flex: 0 0 auto; font-size: .62rem; }
+  .treplay-mob-mid .treplay-range { width: 100%; min-width: 0; height: 22px; }
+  .treplay-mob-play { min-width: 40px; font-weight: 700; }
+  .treplay-mob-speed { min-width: 34px; font-size: .72rem; }
+  /* <<< v6582-replay-timeline-css */
   /* v5.953 手機版回放導覽浮層 — 只在 isPortraitMobile 手機分支渲染(是 <MobilePortraitBattle/> 的兄弟節點)。
      position:fixed 蓋在 .mp-top + 計時細條之上、不佔文檔流→對手機盤面零位移。桌機 .treplay-bar 不動。 */
   .treplay-mob {
@@ -17993,6 +18157,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .restart-game-btn { background:#f59e0b !important; color:#000; font-weight:600; border-color:#d97706 !important; }
   .restart-game-btn:hover { background:#fbbf24 !important; }
   .restart-game-btn:disabled { background:#444 !important; color:#888; cursor:not-allowed; border-color:#444 !important; }
+  /* >>> v6582-concede-restart-css：兩顆並排（左＝提議重新開局，右＝認輸並提議重新開局） */
+  .setting-row.restart-pair { display:flex; gap:8px; align-items:stretch; }
+  .setting-row.restart-pair > .restart-game-btn { flex:1 1 0; min-width:0; white-space:normal; }
+  .concede-restart-btn { background:#e05a4a !important; color:#fff; border-color:#b8392b !important; }
+  .concede-restart-btn:hover { background:#f07060 !important; }
+  .concede-restart-btn:disabled { background:#444 !important; color:#888; border-color:#444 !important; }
+  /* <<< v6582-concede-restart-css */
   .restart-proposal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:9999; display:flex; align-items:center; justify-content:center; }
   .restart-proposal-modal { background:linear-gradient(135deg,#1a2540 0%, #2a3550 100%); border:2px solid #f59e0b; border-radius:12px; padding:24px 32px; min-width:300px; max-width:90vw; color:#fff; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,.6); }
   .restart-proposal-modal h3 { margin:0 0 12px; color:#fbbf24; font-size:1.3em; }
@@ -19109,6 +19280,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
   /* ── Discard Modal ── */
   .discard-modal{ max-width:920px; }
   .discard-title{ margin:0 0 .6rem; color:#aaffaa; font-size:1.05rem; }
+  /* >>> v6582-discard-tabs-css */
+  .discard-tabs{ display:flex; flex-wrap:wrap; gap:5px; margin:0 0 .6rem; }   /* 不加媒體查詢（本頁媒體查詢數量被 test-v6187／v6195／v6199 等釘住）；窄螢幕自然換行 */
+  .discard-tab{ display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:8px; border:1px solid #34507a; background:#16233d; color:#cfe0f8; font-size:.82rem; cursor:pointer; line-height:1.2; }
+  .discard-tab:hover{ border-color:#5a86c4; }
+  .discard-tab.active{ background:#2b5fb8; border-color:#7fb0ff; color:#fff; font-weight:700; }
+  .discard-tab.empty:not(.active){ opacity:.55; }
+  .discard-tab .dt-n{ min-width:1.4em; padding:0 5px; border-radius:6px; background:rgba(0,0,0,.35); font-size:.74rem; text-align:center; }
+  .discard-tab .dt-icon{ font-size:.85rem; }
+  /* <<< v6582-discard-tabs-css */
   /* v2.69：棄牌區卡片圖示放大（Leon 反饋：原本太小考驗眼力） */
   .discard-modal .sel-grid{ grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:.55rem; --scroll-list-max:72vh; }
   .discard-modal .sel-card{ padding:.4rem; font-size:.78rem; }
@@ -19617,6 +19797,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .battle-root{ height:100vh; height:100dvh; min-height:0; overflow:hidden; }
     /* v5.953 平板橫向(601-950)回放列壓成單行,避免 wrap 佔多行擠爆 vh 預算把 action-bar 切掉 */
     .treplay-bar{ padding:2px 6px; gap:4px; flex-wrap:nowrap; overflow-x:auto; }
+    .treplay-bar:has(.treplay-timeline){ flex-wrap:wrap; overflow-x:visible; }   /* ⭐v6.582 時間軸自成一列 */
     .treplay-bar .treplay-title{ display:none; }
     .treplay-bar .treplay-oldfmt{ display:none; }
     .treplay-bar .treplay-btn{ padding:3px 7px; font-size:.7rem; }

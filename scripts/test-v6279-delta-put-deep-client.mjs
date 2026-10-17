@@ -91,9 +91,12 @@ function assertThisIsNotBase(thisSha = THIS_SHA) {
 //   ⚠ 合法新增 Firestore 呼叫點時要同步改表並在 changelog-internal 說明；不可以放寬成 >=。
 const FS_TOKENS = ['getDoc(', 'getDocs(', 'onSnapshot(', 'runTransaction(', 'tx.get(', 'setDoc(', 'updateDoc(', 'deleteDoc(', 'addDoc(', 'query(', 'collection('];
 const FS_EXPECTED = {
-  room: { 'getDoc(': 12, 'getDocs(': 1, 'onSnapshot(': 3, 'runTransaction(': 11, 'tx.get(': 11, 'setDoc(': 1, 'updateDoc(': 19, 'deleteDoc(': 4, 'addDoc(': 1, 'query(': 3, 'collection(': 4 },
+  room: { 'getDoc(': 12, 'getDocs(': 1, 'onSnapshot(': 3, 'runTransaction(': 12, 'tx.get(': 12, 'setDoc(': 1, 'updateDoc(': 19, 'deleteDoc(': 4, 'addDoc(': 1, 'query(': 3, 'collection(': 4 },
   firebase: { 'getDoc(': 0, 'getDocs(': 0, 'onSnapshot(': 0, 'runTransaction(': 0, 'tx.get(': 0, 'setDoc(': 0, 'updateDoc(': 0, 'deleteDoc(': 0, 'addDoc(': 0, 'query(': 0, 'collection(': 0 },
 };
+// ⭐v6.582（Rule 40）：上面是「現況」；v6.278／v6.279 歷史 blob 的值另存（核對抄寫正確用）。
+//   現況比歷史多 runTransaction／tx.get 各 1＝concedeAndProposeRestart（認輸並提議重新開局，只在玩家按按鈕時一次，與 proposeRestart 同形）。
+const FS_EXPECTED_V6279 = { ...FS_EXPECTED, room: { ...FS_EXPECTED.room, 'runTransaction(': 11, 'tx.get(': 11 } };
 const FS_STRIP = {
   room: { label: 'room.ts', minRatio: 0.5, mustKeep: ['getDoc(', 'runTransaction('] },
   firebase: { label: 'firebase.ts', minRatio: 0.5, mustKeep: ['getFirestore('] },
@@ -275,6 +278,7 @@ function loadRoomOracle(roSrc, ocStub) {
     '$lib/firebase': { auth: { currentUser: null } },
     './engine': { createGame: () => ({ id: 'x', phase: 'setup' }) },
     './sync-guards': { shouldSkipStalePush: () => false },
+    './concede': { buildConcededGame: () => null },   // ⭐v6.582（Rule 40）：room-oracle 新增「認輸並提議重新開局」；本守衛不走那條路，替身只為滿足 import
     './server-clock': { gameClockNow: () => Date.now() },   // ⭐v6.565（Rule 40）：room-oracle 的棄權／離開紀錄改蓋遊戲時鐘；替身＝沒同步過的本機時鐘
     '$lib/ui/stale-keep': { adoptOrKeep: (p, n) => ({ data: n ?? p, stale: n == null }) },
     './room': {
@@ -773,7 +777,7 @@ await T('E-e ⭐⭐ Firestore 讀取零增加：room.ts／firebase.ts 與 BASE �
       const b = readBaseBlob(ROOT, BASE_SHA, p), t = readBaseBlob(ROOT, THIS_SHA, p);
       assert.ok(b.ok && t.ok, '讀不到 ' + p);
       assert.equal(sha256(LF(t.out)), sha256(LF(b.out)), 'v6.279 動到了 ' + p + '（Firestore 讀取紅線）');
-      assert.deepStrictEqual(fsCountsOf(LF(b.out), key), FS_EXPECTED[key], '已知答案表與真 BASE 的 ' + p + ' 對不上：' + JSON.stringify(fsCountsOf(LF(b.out), key)));
+      assert.deepStrictEqual(fsCountsOf(LF(b.out), key), FS_EXPECTED_V6279[key], '已知答案表與真 BASE 的 ' + p + ' 對不上：' + JSON.stringify(fsCountsOf(LF(b.out), key)));
     }
   } else {
     shallowSkip('v6279-E-e room.ts/firebase.ts 與 BASE..THIS 固定兩 commit 比對', 'history-free 判準（零 delta 識別字＋已知答案表）仍在守');

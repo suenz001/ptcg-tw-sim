@@ -30,6 +30,7 @@ import { auth } from '$lib/firebase';
 import type { GameState } from './types';
 import type { Card } from '$lib/cards/types';
 import { createGame } from './engine';
+import { buildConcededGame } from './concede';   // ⭐v6.582 認輸並提議重新開局（唯一判準）
 import { gameClockNow } from './server-clock';   // ⭐v6.565 棄權／離開的終局紀錄也蓋遊戲時鐘（計時器用它當對局結束時刻；leaf，無循環）
 import { shouldSkipStalePush, mergeForSetupPush } from './sync-guards';
 import { adoptOrKeep } from '$lib/ui/stale-keep';
@@ -565,9 +566,42 @@ export async function proposeRestart(roomCode: string): Promise<void> {
       restartProposedAt: Date.now(),
       restartProposalCount: count + 1,
       restartRejectedAt: null,
+      restartConcededBy: null,   // ⭐v6.582 一般提議 ⇒ 不是認輸
     } as unknown as RoomData;
   });
 }
+
+// >>> v6582-concede-restart
+/**
+ * ⭐v6.582 認輸並提議重新開局（同一筆交易）：
+ *   ① 這一局立刻結束、對手獲勝（status='ended'，跟投降離開同一種正式結果，對戰紀錄照常記）；
+ *   ② 同時送出重新開局提議（restartProposed[我]=true、count+1 ⇒ 對手端 phantom 防護會放行新局）；
+ *   ③ restartConcededBy 標記是誰認輸，對手端的詢問視窗據此改寫文案。
+ *   對手同意 ⇒ checkAndAcceptRestart 用同一副牌組重開；拒絕／逾時 ⇒ 停在結算畫面（認輸不收回）。
+ */
+export async function concedeAndProposeRestart(roomCode: string): Promise<void> {
+  const uid = await getMyUid();
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    const myIdx = findMySeatIdx(data.seats, uid);
+    if (myIdx < 0 || myIdx > 1) throw new Error('only P1/P2 can concede');
+    if (data.status !== 'playing' || !data.gameState) throw new Error('game not in progress');
+    const cur = data.restartProposed ?? {};
+    if (cur[myIdx] || cur[1 - myIdx]) throw new Error('proposal already in progress');
+    const conceded = buildConcededGame(data.gameState as any, myIdx, gameClockNow());
+    if (!conceded) throw new Error('game already over');
+    return {
+      ...data,
+      gameState: JSON.parse(JSON.stringify(conceded)),
+      status: 'ended',
+      restartProposed: { [myIdx]: true },
+      restartProposedAt: Date.now(),
+      restartProposalCount: (data.restartProposalCount ?? 0) + 1,
+      restartRejectedAt: null,
+      restartConcededBy: myIdx,
+    } as unknown as RoomData;
+  });
+}
+// <<< v6582-concede-restart
 
 export async function respondRestart(roomCode: string, accept: boolean): Promise<void> {
   const uid = await getMyUid();
@@ -584,6 +618,7 @@ export async function respondRestart(roomCode: string, accept: boolean): Promise
       restartProposed: null,
       restartProposedAt: null,
       restartRejectedAt: Date.now(),
+      restartConcededBy: null,   // ⭐v6.582（審查 P3-1）提議結束就清掉認輸標記
     } as unknown as RoomData;
   });
 }
@@ -592,7 +627,7 @@ export async function cancelRestart(roomCode: string): Promise<void> {
   try {
     await oracleTx(roomCode.toUpperCase(), (data) => {
       if (!data.restartProposed) return data;
-      return { ...data, restartProposed: null, restartProposedAt: null } as unknown as RoomData;
+      return { ...data, restartProposed: null, restartProposedAt: null, restartConcededBy: null } as unknown as RoomData;   // ⭐v6.582 一併清認輸標記
     });
   } catch (err) {
     console.warn('[cancelRestart]', err);
@@ -625,8 +660,11 @@ export async function checkAndAcceptRestart(roomCode: string, pool: Map<string, 
       return {
         ...data,
         gameState: JSON.parse(JSON.stringify(newGame)),
+        status: 'playing',          // ⭐v6.582 認輸後重開：房間從 'ended' 回到對戰中（一般重開本來就是 playing，不變）
         restartProposed: null,
         restartProposedAt: null,
+        restartConcededBy: null,
+        rematchReady: null,         // ⭐v6.582（審查 P3-2）認輸後有人先按了「再來一局」⇒ 重開了就清掉，不帶到下一局
       } as unknown as RoomData;
     });
     return didReset;

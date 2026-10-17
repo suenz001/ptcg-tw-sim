@@ -431,6 +431,9 @@ const DISPOSITION = {
                           + '屬於站長裁定「一行都不准動」的棄權三處；終局之後沒有回捲可言。',
   leaveRoom:              'excluded/離開房間：對手中途離開時同樣寫的是終局盤面並把 status 設成 "ended"，'
                           + '終局之後不存在「把玩家的一手退回去」的問題，也屬於棄權語意的一部分。',
+  // ⭐v6.582（Rule 40）認輸並提議重新開局：與 leaveRoom／claimOpponentForfeit 同型
+  concedeAndProposeRestart: 'excluded/認輸：寫的是終局盤面（buildConcededGame）並把 status 設成 "ended"，與棄權同型；'
+                          + '終局之後沒有回捲可言，pushGameState 的 shouldSkipStalePush 也擋「非終局蓋終局」（test-v6582 R1～R7）。',
 };
 T('[HEAD-FAIL⑨/掃描器先驗] 掃描器抓得到「新增的整包盤面寫入」（正對照，否則是安慰劑）', () => {
   const before = gameStateWriters(RO);

@@ -73,6 +73,7 @@ for (const o of ONLINE_ONLY) ok([...winLits.keys()].includes(o), `② 白名單�
 const NON_LITERAL_OK = new Map([
   ['v.reason', '中央終局判定的轉傳；內容由上面的 over:true 物件掃描涵蓋'],
   ["oppName + ' 長時間無回應，被宣告棄權'", '線上限定（room-oracle.ts），AI 對 AI 模擬不會出現'],
+  ['concedeWinReason(loserName)', '⭐v6.582 玩家主動「認輸並提議重新開局」（concede.ts 唯一出口，內容＝「X 認輸」）；只由玩家按鈕觸發，AI 對 AI 模擬不會出現'],
 ]);
 ok(nonLiteral.size >= 1, '② 掃描器下限：非字面 winReason 一個都沒掃到（至少有 v.reason），掃描器可能壞了');
 for (const [expr, where] of nonLiteral) ok(NON_LITERAL_OK.has(expr), `② 非字面的 winReason「${expr}」（${where}）不在白名單——改寫成字面，或確認分類後登記`);

@@ -124,7 +124,11 @@ const ts2js = (s) => {
 //     只有 ORACLE_NON_NET 白名單（純讀模組變數／localStorage，不發請求）例外 —— E3b 用 import 清單實跑核對，
 //     以後多 import 一支請求 helper 卻沒進表會直接紅（H14 突變實證），不再靠人記得。
 const FS_TOKENS = ['getDoc(', 'getDocs(', 'onSnapshot(', 'runTransaction(', 'tx.get(', 'setDoc(', 'updateDoc(', 'deleteDoc(', 'addDoc(', 'query(', 'collection('];
-const FS_ROOM_EXPECTED = { 'getDoc(': 12, 'getDocs(': 1, 'onSnapshot(': 3, 'runTransaction(': 11, 'tx.get(': 11, 'setDoc(': 1, 'updateDoc(': 19, 'deleteDoc(': 4, 'addDoc(': 1, 'query(': 3, 'collection(': 4 };
+// ⭐v6.582（Rule 40）：表拆成「v6.266／v6.267 歷史值」（Gc 拿真 blob 核對抄寫正確）與「現況」（E3）。
+//   現況＝歷史值＋v6.582 合法新增的一個 Firestore 交易：concedeAndProposeRestart（認輸並提議重新開局；
+//   只在玩家按按鈕時發一次 runTransaction＋tx.get，與既有 proposeRestart 同形，不是輪詢、不增加日常讀取）。
+const FS_ROOM_EXPECTED_V6267 = { 'getDoc(': 12, 'getDocs(': 1, 'onSnapshot(': 3, 'runTransaction(': 11, 'tx.get(': 11, 'setDoc(': 1, 'updateDoc(': 19, 'deleteDoc(': 4, 'addDoc(': 1, 'query(': 3, 'collection(': 4 };
+const FS_ROOM_EXPECTED = { ...FS_ROOM_EXPECTED_V6267, 'runTransaction(': 12, 'tx.get(': 12 };
 const ORACLE_TOKENS = ['oracleGetRoom(', 'oracleUpsertRoom(', 'oracleUpsertRoomDelta(', 'oracleDeleteRoom(', 'oracleListRooms(', 'oracleApi(', 'fetch(',
   'oraclePollRoom(', 'oracleListMessages(', 'oracleListRoomsCombined(', 'oracleAuth('];
 const ORACLE_ROOM_EXPECTED = { 'oracleGetRoom(': 3, 'oracleUpsertRoom(': 2, 'oracleUpsertRoomDelta(': 1, 'oracleDeleteRoom(': 2, 'oracleListRooms(': 2, 'oracleApi(': 1, 'fetch(': 0,
@@ -737,8 +741,8 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
     assert.notStrictEqual(roStripped, thisRO, 'room-oracle.ts 的剝除一個字都沒剝到 ⇒ 字面對不上');
     assert.strictEqual(roStripped, bRO.out, 'v6.267 的 room-oracle.ts 除了 deckId 之外還動到別的地方');
     // (3) 已知答案表沒抄錯：BASE／THIS 的 room.ts 都等於表；THIS 的 room-oracle.ts 請求點與 BASE 相同（v6.267 零新增請求）
-    assert.deepStrictEqual(fsCountsRoom(bRT.out), FS_ROOM_EXPECTED, '已知答案表與真 BASE(v6.266) 的 room.ts 對不上：' + JSON.stringify(fsCountsRoom(bRT.out)));
-    assert.deepStrictEqual(fsCountsRoom(thisRT), FS_ROOM_EXPECTED, '已知答案表與 v6.267 的 room.ts 對不上：' + JSON.stringify(fsCountsRoom(thisRT)));
+    assert.deepStrictEqual(fsCountsRoom(bRT.out), FS_ROOM_EXPECTED_V6267, '已知答案表與真 BASE(v6.266) 的 room.ts 對不上：' + JSON.stringify(fsCountsRoom(bRT.out)));
+    assert.deepStrictEqual(fsCountsRoom(thisRT), FS_ROOM_EXPECTED_V6267, '已知答案表與 v6.267 的 room.ts 對不上：' + JSON.stringify(fsCountsRoom(thisRT)));
     assert.deepStrictEqual(oracleCountsRoom(thisRO), oracleCountsRoom(bRO.out), 'v6.267 的 room-oracle.ts 多了請求點');
   }
   const tRT = readBaseBlob(ROOT, THIS_SHA, 'src/lib/game/room.ts');

@@ -204,6 +204,7 @@ function oracleStubs(server, G) {
     '$lib/firebase': { auth: { currentUser: null } },
     './engine': { createGame: () => { throw new Error('不該建局'); } },
     './sync-guards': G,
+    './concede': { buildConcededGame: () => null },   // ⭐v6.582（Rule 40）：room-oracle 新增「認輸並提議重新開局」；本守衛不走那條路，替身只為滿足 import
     './server-clock': { gameClockNow: () => Date.now() },   // ⭐v6.565（Rule 40）：room-oracle 的棄權／離開紀錄改蓋遊戲時鐘；替身＝沒同步過的本機時鐘
     '$lib/ui/stale-keep': { adoptOrKeep: (p, n) => ({ data: n ?? p, stale: n == null }) },
     './room': {
@@ -224,7 +225,7 @@ function firestoreStubs(server, G) {
   const fs = { doc: () => ({}), setDoc: async () => {}, updateDoc: async () => {}, onSnapshot: () => () => {}, getDoc: async () => ({ exists: () => false }), getDocs: async () => ({ docs: [] }),
     serverTimestamp: () => 0, collection: () => ({}), query: () => ({}), where: () => ({}), limit: () => ({}), orderBy: () => ({}), addDoc: async () => {}, deleteDoc: async () => {}, deleteField: () => null,
     runTransaction: async (db, fn) => fn(tx) };
-  return { 'firebase/firestore': fs, '$lib/firebase': { db: {}, auth: { currentUser: null } }, './engine': { createGame: () => { throw new Error('不該建局'); } }, './sync-guards': G, './server-clock': { gameClockNow: () => Date.now() } };   // ⭐v6.565（Rule 40）同上（room.ts）
+  return { 'firebase/firestore': fs, '$lib/firebase': { db: {}, auth: { currentUser: null } }, './engine': { createGame: () => { throw new Error('不該建局'); } }, './sync-guards': G, './server-clock': { gameClockNow: () => Date.now() }, './concede': { buildConcededGame: () => null } };   // ⭐v6.565（Rule 40）同上（room.ts）；⭐v6.582 認輸模組替身
 }
 /** 六步的 ⑤：房間＝哭啦補抽後，Vic 推它的舊 echo S_v2 ⇒ 寫進去的必須保住 8 張、log 含補抽行 */
 async function pushViaOracle(G, oracleSrc) {

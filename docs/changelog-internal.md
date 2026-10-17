@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.582（上一版 `e5fc5464`（v6.581））棄牌區分類、回放自動播放、認輸並提議重新開局
+
+- 站長 2026-10-17：能量圖示、中央比分板、拿獎賞選位置、天梯先暫緩；看了 PTCGCodex 後要求「棄牌區有分類」「對局回放有自動播放和時間軸」，以及把「提議重新開局」拆成兩顆：左＝現有（雙方不算勝敗）、右＝【認輸並提議重新開局】（我方算敗，對方獲勝）。
+- 棄牌區：src/lib/game/discard-filter.ts（discardCategory 唯一判準：Pokemon／PokemonTool＝道具／Supporter／Stadium／其餘 Trainer＝物品／Energy；查不到的卡只在「全部」）。檢視視窗（桌機與手機共用）上方 7 個頁籤＋張數；每次打開或換看另一位玩家都回到「全部」（$effect.pre）。
+- 回放：▶／⏸、0.5x／1x／2x／4x（每格 1.2 秒 ÷ 速度）、range 時間軸；播放的 $effect 每一格 setTimeout 一次、清理函式 clearTimeout，離開回放（isTReplay false）就停，播到最後一格自動停，最後一格按 ▶ 從頭播。一格一格前進走 tReplayGoto(i+1)（傷害數字等照播）、拖時間軸跨格當基準（v6.580）。桌機回放列多一列（浮動視窗，不推版面）；手機回放列多一列（▶＋時間軸＋點一下換速度）。
+- 認輸並提議重新開局：src/lib/game/concede.ts 的 buildConcededGame（純函式；終局、對手獲勝、winReason「X 認輸」、log 多一行）。休閒線上：room-oracle.ts／room.ts 新增 concedeAndProposeRestart，同一筆交易寫入終局＋status ended＋restartProposed[我]＋count+1（對手端 phantom 防護放行新局）＋restartConcededBy；對手視窗改成「對手認輸，並提議重新開局」，同意 ⇒ checkAndAcceptRestart 用同牌組重開並把 status 設回 playing、清掉 restartConcededBy；拒絕／逾時 ⇒ 停在結算畫面（認輸不收回）。一般 proposeRestart 會清掉殘留的 restartConcededBy。兩端照常在終局時送 /api/match-result（伺服器以 matchId 去重）。本機 vs AI：認輸盤面直接 fireMatchRecord 再 startLocalGame。本機雙人（分不出我方）停用；錦標賽、觀戰、回放不顯示。
+- 守衛 test-v6582（U 純函式；R 兩套房間 API 接假後端實跑認輸／同意／拒絕／不合法／一般提議清標記／一般重開不變；Y 接收端採納重開新局；S 接線＋HEAD-FAIL；E 真瀏覽器：棄牌頁籤、兩顆按鈕並排、vs AI 認輸後重開、回放 4x 播放／暫停／時間軸／播到底自動停／離開、手機回放列）。Rule 40：test-v6441（PRE 最前面）、test-v6293 接上 scripts/lib/revert-v6582-game.mjs。
+- Opus 5.5 審查（修完再推）處理：P2-1 認輸後離開房間、對手按同意會開出沒有對手的新局 ⇒ leaveOnlineGame 在 leaveRoom 前先 cancelRestart 撤回自己的提議（守衛 R7、S5）；P2-2 手機回放列兩列蓋到對手備戰區 ⇒ 改回單一列（⏮⏭ 由時間軸取代，空位放「播放」與速度；高度維持 54px，E6 量測不碰 .mp-opp-slot）；P3-1 拒絕／撤回時一併清 restartConcededBy、對手視窗另需 game-over 才顯示認輸文案；P3-2 重開時清 rematchReady；P3-3 開局（setup）不能認輸（buildConcededGame 只收 playing）；P3-4 競態錯誤改中文說明；P3-5 本機認輸等新局真的開成才記敗場。未處理：桌機平板寬度回放列換成三列（浮動、可拖開）、伺服器大廳 digest 未列 restartConcededBy（只多一次 200）、restartProposalCount 被拒後門檻落後一格（既有）。
+- 複審（可以推）後補：手機回放列中間格 min-width 70→50（320 寬不再溢出）。全套後 Rule 40：room-oracle 多 import ./concede ⇒ test-v6265／v6270／v6279／v6310／v6525 的 CJS 替身補 './concede'；test-v6249 處置表登記 concedeAndProposeRestart（excluded／終局，同棄權）；test-v6267、test-v6279 的 Firestore 已知答案表拆成歷史值與現況（現況 runTransaction／tx.get 各 +1＝concedeAndProposeRestart，只在按按鈕時一次）；test-ai-sim-harness 非字面 winReason 白名單登記 concedeWinReason(loserName)（玩家主動，AI 對 AI 不會出現）；棄牌頁籤 CSS 不加媒體查詢（本頁數量被釘住）；test-v6582 的打包失敗改成直接炸（test-v6263 不准靜默）。
+
 ## v6.581（上一版 `13ada543`（v6.580））出牌／抽牌放到中間翻開
 
 - 站長 2026-10-17：看了 PTCGCodex 後「先做你推薦的這項：抽牌、出牌放到中間翻開」，並要求動畫只在當下播放（v6.580 已先做）。

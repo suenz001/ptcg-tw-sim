@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '13ada543d9d6804f9d6916d8e48165200358c29e';   // v6.580（上一版）
+const PREV_SHA = 'e5fc5464a8ef0b046a8f8a0d5c8c80680644a1c4';   // v6.581（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,10 +757,13 @@ const PREV_SHA = '13ada543d9d6804f9d6916d8e48165200358c29e';   // v6.580（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.581 前移：PREV_SHA 從 13ada543（v6.580）起算。
+  // ⚠⚠ v6.582 前移：PREV_SHA 從 e5fc5464（v6.581）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.581：出牌／抽牌放到中間翻開（card-reveal.ts 唯一判準、對戰頁展示層與設定開關）；首頁 changelog 三步搬運
-  'src/lib/game/card-reveal.ts',
+  // ⭐v6.582：棄牌區分類頁籤（discard-filter.ts 唯一判準）、回放自動播放＋時間軸、認輸並提議重新開局（concede.ts 唯一判準＋兩套房間 API）；首頁 changelog 三步搬運
+  'src/lib/game/concede.ts',
+  'src/lib/game/discard-filter.ts',
+  'src/lib/game/room-oracle.ts',
+  'src/lib/game/room.ts',
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
@@ -768,6 +771,17 @@ const PREV_ALLOWED = [
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.581）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.581 前移：PREV_SHA 從 13ada543（v6.580）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.581：出牌／抽牌放到中間翻開（card-reveal.ts 唯一判準、對戰頁展示層與設定開關）；首頁 changelog 三步搬運
+//   'src/lib/game/card-reveal.ts',
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.580）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.580 前移：PREV_SHA 從 b65810ea（v6.579）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -940,18 +954,6 @@ const PREV_ALLOWED = [
 // ⭐v6.570：暱稱與卡名一字不差時不保護（退回舊行為，照樣是卡片連結）：log_format.ts cardNameSetOf＋filter；首頁 changelog 三步搬運
 //   'src/lib/game/log_format.ts',
 //   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.569）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.569 前移：PREV_SHA 從 2135db93（v6.568）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.569：對戰紀錄玩家暱稱不拆成卡片連結：log_format.ts playerNames 保護（同長度暱稱優先、較長卡名照樣連結、marker 卡片不受影響）；桌機／手機／戰報三處傳入暱稱；首頁 changelog 三步搬運
-//   'src/lib/game/log_format.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'src/routes/game/MobilePortraitBattle.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
