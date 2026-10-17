@@ -220,7 +220,13 @@
     let res: Response;
     try { res = await fetch(DPR_API + path, init); } catch { throw new Error('連線失敗，請稍後再試'); }
     const ct = res.headers.get('content-type') || '';
-    if (!ct.includes('application/json')) { if (res.status >= 500) throw new Error('伺服器暫時無法連線，請稍後再試'); return null; }
+    if (!ct.includes('application/json')) {
+      if (res.status >= 500) throw new Error('伺服器暫時無法連線，請稍後再試');
+      // ⭐複審 P2-2：動作（POST）拿到非 JSON 的回應（nginx／Cloudflare 的錯誤頁、express 預設錯誤頁）一律當失敗，
+      //   不可以讓呼叫端以為成功而顯示「已附加」。讀取（GET）維持回 null（舊伺服器沒有端點 ⇒ 這一區不顯示）。
+      if ((init?.method || 'GET').toUpperCase() === 'POST') throw new Error(res.status === 413 ? '復盤檔太大' : '操作失敗（HTTP ' + res.status + '），請稍後再試');
+      return null;
+    }
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error || ('HTTP ' + res.status));
     return data;

@@ -1,11 +1,12 @@
 # 內部改版紀錄（不打包進網站）
 
-## server v1.70 修正（前端仍是 v6.583，只動伺服器補丁）一般對戰復盤上傳一律「上傳格式錯誤」
+## v6.584（上一版 `6c22e383`（v6.583））／server v1.70 修正 牌組公布欄附加一般對戰復盤一律「上傳格式錯誤」
 
 - 站長 2026-10-17 回報：錦標賽回放附加正常，一般對戰復盤上傳出現格式錯誤。
 - 根因：dprReadBody 用 `req.readableEnded || req.complete` 判斷 body 是否已被別的 parser 讀走。Node 的 IncomingMessage 只要整個 body 已經收到就把 complete 設成 true（還沒有人讀）；上傳 handler 先 await 身分與投稿查詢，幾十 KB 的檔早就收完 ⇒ 全部被誤判成「被讀走」⇒ 415「上傳格式錯誤」。實機重現：真 http 伺服器延遲 200ms 讀，`complete:true, readableEnded:false`。
 - 修法：只看 readableEnded（串流真的被讀完才拒收）。sap-revert-admin-v170 的還原對同步更新（仍逐位元還原回 v1.69）。
 - 守衛 test-v6583：假 req 補上 complete:true（跟正式站一樣「收完、沒讀」）；新增 V10 用真的 Node http 伺服器＋fetch 送 octet-stream、handler 延遲 150ms 才讀 ⇒ 必須 200 且存下的檔沒有對手名字。突變（放回 req.complete）⇒ V3～V8、V3b、V10 共 8 條紅、回應 415「上傳格式錯誤」，與正式站症狀一致。舊守衛沒抓到：假 req 沒有 complete 欄位。
+- Opus 5.5 審查（可以推）後一併處理：P2-1 上游若 pause 過串流，on('data') 不會自動 resume ⇒ 掛完監聽器補 req.resume()（V12）；P2-2 公布欄 dprFetch 對動作（POST）拿到非 JSON 回應（nginx／Cloudflare／express 的錯誤頁）原本回 null ⇒ 顯示「✅ 已附加」，改成一律丟錯誤（413 顯示「復盤檔太大」），讀清單（GET）維持回 null（舊伺服器這區不顯示）（P5：dprFetch 原文抽出實跑）；P3-1 V10 改在開始讀之前記 complete／readableEnded；P3-2 HEAD-FAIL 加跑 2a99cc2c（V10、V11、P5 都紅）；P3-3 超過 512KB 不再 destroy（socket 一關 413 送不出去，前端只看到「連線失敗」）⇒ 先回 413、剩下的 body 讀掉丟棄、20 秒計時器收尾（V11 真 http 700KB 收到 413）；P3-4 error 事件清計時器、連線中斷回 400「上傳中斷」不再說成檔案太大；P3-5 415 附 diag（typeof req.body、readableEnded），部署後若仍 415 一次就看得出是哪個 parser 讀走 body。突變 4 個（拿掉 resume／放回 destroy／拿掉 diag／前端拿掉 POST 判斷）各自只紅對應那一條。假 req 補 resume()（伺服器每次都呼叫）。
 
 ## v6.583（上一版 `5f477085`（v6.582））／server v1.70 牌組公布欄的投稿可以附上對戰紀錄
 

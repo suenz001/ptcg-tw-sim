@@ -29,6 +29,8 @@ import { stripCommentsBlank } from './lib/strip-comments.mjs';   // 註解裡提
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠ BASE_SHA 必須留在 main 上（IRON_RULES Rule 45）：v6.582
 const BASE_SHA = '5f47708578333f5c6cf65707865ecd92d87cfd2a';
+// v1.70 第一版（正式站「一般對戰復盤上傳格式錯誤」的那一版）
+const BUG_SHA = '2a99cc2ca89b0c821f8de0e1aef4c8f881d11cc7';
 let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c) { pass++; console.log('  PASS ' + n); } else { fail++; console.log('  FAIL ' + n + (x !== undefined ? ' — ' + String(x).slice(0, 600) : '')); } };
 const R = (p) => normEol(readFileSync(join(ROOT, p), 'utf8'));
@@ -176,7 +178,7 @@ async function serverScenarios(SAP, TENG = SHARE) {
   const G = (p, u, q) => call(routes['GET ' + p], { _u: u, query: q || {}, headers: {} });
   const P = (p, u, body, q) => call(routes['POST ' + p], { _u: u, body, query: q || {}, headers: {} });
   // ⚠ complete: true ＝ 跟正式站一樣「整個 body 已經收到、還沒有人讀」（Node 的 IncomingMessage 在收完時就設 true；v6.583 正式站把它誤判成被讀走 ⇒ 415）
-  const upload = (u, postId, bytes) => { const req = { _u: u, query: { postId }, headers: {}, body: {}, complete: true, readableEnded: false }; req.on = (ev, cb) => { if (ev === 'data') setTimeout(() => cb(Buffer.from(bytes)), 0); if (ev === 'end') setTimeout(cb, 1); }; req.destroy = () => {}; return call(routes['POST /api/deck-posts-replays/upload'], req); };
+  const upload = (u, postId, bytes) => { const req = { _u: u, query: { postId }, headers: {}, body: {}, complete: true, readableEnded: false }; req.on = (ev, cb) => { if (ev === 'data') setTimeout(() => cb(Buffer.from(bytes)), 0); if (ev === 'end') setTimeout(cb, 1); }; req.destroy = () => {}; req.resume = () => {}; return call(routes['POST /api/deck-posts-replays/upload'], req); };
   // V1 候選：只有投稿者；只列已結束、有開打、自己的；牌組相同與否
   const c1 = await G('/api/deck-posts-replays/candidates', 'me', { postId: 'dp_me' });
   const c2 = await G('/api/deck-posts-replays/candidates', 'x', { postId: 'dp_me' });
@@ -271,7 +273,7 @@ async function serverScenarios(SAP, TENG = SHARE) {
   r.V8n = JSON.stringify({ st: u4.status, err: u4.body?.error, opp: t4.includes(OPP), z: t4.includes('Zzz') });
   // V9 穩定性：同時兩份上傳 ⇒ 第二份 429；body 已被讀走（送成 JSON）⇒ 415 不掛住；舊 bundle（沒有 share*）⇒ 503 fail-closed
   const slowReq = { _u: 'me3', query: { postId: 'dp_me3' }, headers: {}, body: {} }; let feed = null;
-  slowReq.on = (ev, cb) => { if (ev === 'data') feed = cb; if (ev === 'end') slowReq._end = cb; }; slowReq.destroy = () => {};
+  slowReq.on = (ev, cb) => { if (ev === 'data') feed = cb; if (ev === 'end') slowReq._end = cb; }; slowReq.destroy = () => {}; slowReq.resume = () => {};
   const p1 = call(routes['POST /api/deck-posts-replays/upload'], slowReq);
   await new Promise((r2) => setTimeout(r2, 20));
   const busy = await upload('me3', 'dp_me3', gz);
@@ -281,24 +283,34 @@ async function serverScenarios(SAP, TENG = SHARE) {
   const savedShare = teng.share; teng.share = null;
   const oldB = await upload('me3', 'dp_me3', gz);
   teng.share = savedShare;
-  r.V9 = busy.status === 429 && p1r.status === 400 && consumed.status === 415 && oldB.status === 503;
+  r.V9 = busy.status === 429 && p1r.status === 400 && consumed.status === 415 && consumed.body?.diag?.ended === true && oldB.status === 503;
   r.V9n = JSON.stringify({ busy: busy.status, p1: p1r.status, consumed: consumed.status, old: oldB.status });
   // V10 真的 Node http 伺服器（不是假 req）：瀏覽器送 octet-stream；handler 先 await 一段時間（正式站要查身分與投稿）⇒ body 早已收完才開始讀
   const srv = http.createServer(async (req, res0) => {
     req._u = 'me5'; req.query = { postId: 'dp_me5' }; req.body = {};
+    if (req.headers['x-pause'] === '1') { req.resume(); req.pause(); }   // V12：上游曾 pause 過串流
     await new Promise((r2) => setTimeout(r2, 150));
+    const pre = { c: req.complete, e: req.readableEnded };   // ⭐複審 P3-1：開始讀之前就要是「收完、沒讀」（事後量一定是 true，證明不了）
     const out = await call(routes['POST /api/deck-posts-replays/upload'], req);
-    res0.writeHead(out.status, { 'content-type': 'application/json' }); res0.end(JSON.stringify({ ...out.body, _complete: req.complete }));
+    res0.writeHead(out.status, { 'content-type': 'application/json' }); res0.end(JSON.stringify({ ...out.body, _pre: pre }));
   });
   await new Promise((r2) => srv.listen(0, '127.0.0.1', r2));
-  let v10 = null;
+  let v10 = null, v11 = null, v12 = null;
+  const send = async (body, extra = {}) => { const t0 = Date.now(); try { const rr = await fetch(`http://127.0.0.1:${srv.address().port}/api/deck-posts-replays/upload?postId=dp_me5`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', ...extra }, body }); return { status: rr.status, body: await rr.json(), ms: Date.now() - t0 }; } catch (e) { return { err: String(e), ms: Date.now() - t0 }; } };
   try {
-    const rr = await fetch(`http://127.0.0.1:${srv.address().port}/api/deck-posts-replays/upload?postId=dp_me5`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: gz });
-    v10 = { status: rr.status, body: await rr.json() };
-  } catch (e) { v10 = { err: String(e) }; } finally { srv.close(); }
+    v10 = await send(gz);
+    // V11 超過 512KB：瀏覽器要收得到 413「復盤檔太大」（不可以被 destroy 成連線失敗）
+    v11 = await send(Buffer.alloc(700 * 1024, 7));
+    // V12 上游 pause 過的串流：不可以等到 20 秒逾時（同一局再傳 ⇒ 讀完整份才會 409）
+    v12 = await send(gz, { 'x-pause': '1' });
+  } finally { srv.close(); }
   const st5 = cols.deckPostReplays.rows.find((d) => d.postId === 'dp_me5' && d.status === 'active');
-  r.V10 = v10?.status === 200 && v10.body?._complete === true && !!st5 && !gunzipSync(Buffer.from(st5.gz, 'base64')).toString('utf8').includes(OPP);
+  r.V10 = v10?.status === 200 && v10.body?._pre?.c === true && v10.body?._pre?.e === false && !!st5 && !gunzipSync(Buffer.from(st5.gz, 'base64')).toString('utf8').includes(OPP);
   r.V10n = JSON.stringify(v10);
+  r.V11 = v11?.status === 413 && v11.body?.error === '復盤檔太大';
+  r.V11n = JSON.stringify(v11);
+  r.V12 = v12?.status === 409 && v12.ms < 5000;
+  r.V12n = JSON.stringify(v12);
   return r;
 }
 const SAP = normEol(readFileSync(join(ROOT, SAP_REL), 'utf8'));
@@ -315,6 +327,8 @@ const VL = {
   V3b: '★★★ V3b 不信檔案自報的遮蔽旗標：攤開版改成「已遮蔽」上傳 ⇒ 伺服器照樣重新遮（對手手牌、蓋著的獎賞卡、牌庫、私有訊息都不見）',
   V8: '★★★ V8 對手名字取所有格子的聯集：終局那一格被改名，其他格的真名也一樣換掉',
   V10: '★★★ V10 真的 Node http 上傳（body 已經整包收到才開始讀，req.complete === true）⇒ 照樣收下，不可以誤判成「被讀走」回 415（v6.583 正式站實例）',
+  V11: '★★★ V11 真 http 上傳超過 512KB ⇒ 瀏覽器收得到 413「復盤檔太大」（不是連線被切斷）',
+  V12: '★★ V12 上游 pause 過的串流照樣讀得完（不會卡到 20 秒逾時、佔著上傳名額）',
   V9: '★★★ V9 穩定性：同時只處理一份（第二份 429）、body 被讀走 415 不掛住、舊 bundle 沒有淨化規則 ⇒ 503（不收沒淨化的檔）',
 };
 for (const k of Object.keys(VL)) ok(VL[k], V[k] === true, V[k + 'n'] ?? V.routes);
@@ -382,6 +396,29 @@ ok('★★★ S1 伺服器區塊在錦標賽區塊（TAIL_ANCHOR）之前、不�
 ok('★★★ S2 公布欄：這一區不走 api()（舊伺服器沒有端點時不會把整頁藏掉）、換篇重置、移除鈕只給 canRemove、本機清單先篩', S.S2 === true);
 ok('★★ S3 回放頁：?dpreplay= 打開復盤、離開回放先回到投稿', S.S3 === true);
 
+// ── P5：公布欄的 dprFetch 原文抽出來實跑（⭐複審 P2-2：動作拿到非 JSON 的錯誤頁不可以當成功）──
+async function dprFetchChecks(svelteSrc) {
+  const i = svelteSrc.indexOf('async function dprFetch(');
+  if (i < 0) return { ok: false, why: 'no dprFetch' };
+  let d = 0, j = svelteSrc.indexOf('{', i);
+  for (let k = j; k < svelteSrc.length; k++) { if (svelteSrc[k] === '{') d++; else if (svelteSrc[k] === '}' && --d === 0) { j = k + 1; break; } }
+  const { transform } = await import('esbuild');
+  const js = (await transform(svelteSrc.slice(i, j), { loader: 'ts' })).code;
+  const resp = (status, ct, body) => ({ status, ok: status >= 200 && status < 300, headers: { get: () => ct }, json: async () => JSON.parse(body) });
+  const run = async (r, init) => { const f = new Function('fetch', 'DPR_API', js + '\nreturn dprFetch;')(async () => r, '/api/deck-posts-replays'); try { return { v: await f('/x', init) }; } catch (e) { return { e: String(e.message) }; } };
+  const html413 = await run(resp(413, 'text/html', '<html>'), { method: 'POST' });
+  const html404post = await run(resp(404, 'text/html', '<html>'), { method: 'POST' });
+  const html404get = await run(resp(404, 'text/html', '<html>'));
+  const json200 = await run(resp(200, 'application/json', '{"ok":true}'), { method: 'POST' });
+  const json415 = await run(resp(415, 'application/json', '{"error":"上傳格式錯誤"}'), { method: 'POST' });
+  const res = { html413, html404post, html404get, json200, json415 };
+  return { ok: html413.e === '復盤檔太大' && /HTTP 404/.test(html404post.e || '') && html404get.v === null && !('e' in html404get) && json200.v?.ok === true && json415.e === '上傳格式錯誤', why: JSON.stringify(res) };
+}
+{
+  const P5 = await dprFetchChecks(R('src/routes/deck-posts/+page.svelte'));
+  ok('★★★ P5 公布欄 dprFetch：上傳／附加／移除拿到非 JSON 的錯誤頁（413 HTML 等）⇒ 顯示錯誤（不是「已附加」）；讀清單拿到非 JSON 仍回 null（舊伺服器這區不顯示）', P5.ok, P5.why);
+}
+
 // ── H：HEAD-FAIL ──
 if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('HEAD-FAIL（缺 BASE ' + BASE_SHA.slice(0, 8) + '）');
 else {
@@ -396,6 +433,13 @@ else {
     const red = [...['R0', 'V1', 'V2', 'V3', 'V3b', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9'].filter((k) => bV[k] !== true), ...['P1', 'P2', 'P3', 'P4'].filter((k) => bP[k] !== true), ...['S1', 'S2', 'S3'].filter((k) => bSt[k] !== true)];
     ok('★★★ HEAD-FAIL：BASE（v6.582／server v1.69）上 R0、V1-9、P1-4、S1-3 全紅（逐條）', red.length === 18, red.join(','));
   } finally { try { rmSync(tmp, { recursive: true, force: true }); } catch { /* */ } }
+  // ⭐複審 P3-2：拿正式站出事的那一版（v1.70 第一版，2a99cc2c，在 main 上）跑真 http 上傳 ⇒ V10 必須紅（415 上傳格式錯誤）
+  if (hasBaseCommit(ROOT, BUG_SHA)) {
+    const gV = await serverScenarios(normEol(readBaseBlob(ROOT, BUG_SHA, SAP_REL).out), SHARE);
+    ok('★★★ HEAD-FAIL：v1.70 第一版（req.complete 誤判）上 V10、V11 紅，V10 回 415', gV.V10 !== true && gV.V11 !== true && /415/.test(gV.V10n || ''), JSON.stringify({ V10: gV.V10n, V11: gV.V11n }));
+    const gP5 = await dprFetchChecks(normEol(readBaseBlob(ROOT, BUG_SHA, 'src/routes/deck-posts/+page.svelte').out));
+    ok('★★ HEAD-FAIL：v1.70 第一版的公布欄 P5 紅（非 JSON 的 413 錯誤頁被當成功）', gP5.ok === false, gP5.why);
+  } else shallowSkip('HEAD-FAIL v1.70 第一版（缺 ' + BUG_SHA.slice(0, 8) + '）');
   ok('★★ 錦標賽區塊逐位元未動（28 把鎖不必重釘）：TAIL_ANCHOR 之後與 BASE 相同', SAP.slice(SAP.indexOf(TAIL_ANCHOR)) === bS.slice(bS.indexOf(TAIL_ANCHOR)));
 }
 
@@ -421,7 +465,7 @@ else if (chromium) {
         { collection: (n) => cols[n] || (cols[n] = Col()) }, { get: (p, h) => { routes['GET ' + p] = h; }, post: (p, h) => { routes['POST ' + p] = h; } }, async () => ({ uid: 'me', verified: true }), () => false, async () => true, SHARE);
       const req = { query: { postId: 'dp_me' }, headers: {}, body: {} };
       const gz = gzipSync(Buffer.from(JSON.stringify(anonGz)));
-      req.on = (ev, cb) => { if (ev === 'data') setTimeout(() => cb(gz), 0); if (ev === 'end') setTimeout(cb, 1); }; req.destroy = () => {};
+      req.on = (ev, cb) => { if (ev === 'data') setTimeout(() => cb(gz), 0); if (ev === 'end') setTimeout(cb, 1); }; req.destroy = () => {}; req.resume = () => {};
       await call(routes['POST /api/deck-posts-replays/upload'], req);
       const row = cols.deckPostReplays.rows[0];
       fileBytes = row ? Buffer.from(row.gz, 'base64') : null;

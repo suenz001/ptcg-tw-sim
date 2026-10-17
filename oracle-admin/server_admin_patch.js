@@ -8003,12 +8003,16 @@ import('firebase-admin').then(async ({ default: admin }) => {
         // ⚠ 只看 readableEnded（串流真的被讀完）。不可以看 req.complete：Node 只要整個 body 已經收到就設 true（還沒有人讀），
         //   handler 先 await 身分與投稿查詢，小檔案早就收完 ⇒ 會被誤判成「被讀走」⇒ 415（v6.583 正式站實例：一般對戰復盤全部「上傳格式錯誤」）。
         if (req.readableEnded) return reject(new Error('consumed'));   // 已被別的 body parser 讀走（例如送成 JSON）⇒ 不會再有 end 事件，直接拒收
-        const chunks = []; let n = 0;
+        const chunks = []; let n = 0, over = false;
         // ⭐審查 P3：慢慢送 body 會一直佔著「同時只處理一份」的名額 ⇒ 20 秒讀不完就放棄
         const timer = setTimeout(() => { reject(new Error('timeout')); try { req.destroy(); } catch (_e) { /* */ } }, 20000);
-        req.on('data', (c) => { n += c.length; if (n > max) { clearTimeout(timer); reject(new Error('too-large')); req.destroy(); } else chunks.push(c); });
-        req.on('end', () => { clearTimeout(timer); resolve(Buffer.concat(chunks)); });
-        req.on('error', reject);
+        // ⭐複審 P3-3：超過上限不馬上 destroy（socket 一關，413 送不出去，前端只會看到「連線失敗」）⇒ 先回 413、剩下的 body 繼續讀掉丟棄；
+        //   惡意的超大 body 由上面的 20 秒計時器收尾。
+        req.on('data', (c) => { if (over) return; n += c.length; if (n > max) { over = true; chunks.length = 0; reject(new Error('too-large')); } else chunks.push(c); });
+        req.on('end', () => { clearTimeout(timer); if (!over) resolve(Buffer.concat(chunks)); });
+        req.on('error', (e) => { clearTimeout(timer); reject(new Error('aborted')); });
+        // ⭐複審 P2-1：上游若曾 pause 過串流，on('data') 不會自動 resume ⇒ 會一路等到 20 秒逾時（期間佔著上傳名額）
+        req.resume();
       });
     }
     function dprPublic(d, canRemove) {
@@ -8096,7 +8100,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (_dprBusy > 0) return res.status(429).json({ error: '伺服器正在處理別的上傳，請幾秒後再試' });
         _dprBusy++; mine = true;
         let buf;
-        try { buf = await dprReadBody(req, DPR_UPLOAD_MAX); } catch (e) { const m = e && e.message; return res.status(m === 'consumed' ? 415 : m === 'timeout' ? 408 : 413).json({ error: m === 'consumed' ? '上傳格式錯誤' : m === 'timeout' ? '上傳逾時，請再試一次' : '復盤檔太大' }); }
+        try { buf = await dprReadBody(req, DPR_UPLOAD_MAX); } catch (e) {
+          const m = e && e.message;
+          // ⭐複審 P3-5：415 附上診斷（正式站的 server.js 看不到；若還是 415，一次上傳就看得出是哪個 parser 先讀走了 body）
+          if (m === 'consumed') return res.status(415).json({ error: '上傳格式錯誤', diag: { body: typeof req.body, ended: !!req.readableEnded } });
+          if (m === 'timeout') return res.status(408).json({ error: '上傳逾時，請再試一次' });
+          if (m === 'too-large') return res.status(413).json({ error: '復盤檔太大' });
+          return res.status(400).json({ error: '上傳中斷，請再試一次' });   // 複審 P3-4：連線中斷不再說成「檔案太大」
+        }
         if (!buf || buf.length < 2) return res.status(400).json({ error: '沒有收到復盤檔' });
         const z = await dprZlib();
         let text;
