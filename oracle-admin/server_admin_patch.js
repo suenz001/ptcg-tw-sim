@@ -8000,7 +8000,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
     function dprReadBody(req, max) {
       return new Promise((resolve, reject) => {
         if (Buffer.isBuffer(req.body)) return req.body.length > max ? reject(new Error('too-large')) : resolve(req.body);
-        if (req.readableEnded || req.complete) return reject(new Error('consumed'));   // 已被別的 body parser 讀走（例如送成 JSON）⇒ 不會再有 end 事件，直接拒收
+        // ⚠ 只看 readableEnded（串流真的被讀完）。不可以看 req.complete：Node 只要整個 body 已經收到就設 true（還沒有人讀），
+        //   handler 先 await 身分與投稿查詢，小檔案早就收完 ⇒ 會被誤判成「被讀走」⇒ 415（v6.583 正式站實例：一般對戰復盤全部「上傳格式錯誤」）。
+        if (req.readableEnded) return reject(new Error('consumed'));   // 已被別的 body parser 讀走（例如送成 JSON）⇒ 不會再有 end 事件，直接拒收
         const chunks = []; let n = 0;
         // ⭐審查 P3：慢慢送 body 會一直佔著「同時只處理一份」的名額 ⇒ 20 秒讀不完就放棄
         const timer = setTimeout(() => { reject(new Error('timeout')); try { req.destroy(); } catch (_e) { /* */ } }, 20000);

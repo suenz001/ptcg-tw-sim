@@ -154,6 +154,7 @@ async function serverScenarios(SAP, TENG = SHARE) {
     { _id: 'dp_me2', uid: 'me2', status: 'published', entries: myDeck },
     { _id: 'dp_me3', uid: 'me3', status: 'published', entries: myDeck },
     { _id: 'dp_me4', uid: 'me4', status: 'published', entries: myDeck },
+    { _id: 'dp_me5', uid: 'me5', status: 'published', entries: myDeck },   // V10 真 http 上傳
   ]);
   const M = (id, extra) => ({ _id: id, eventId: 'E1', round: 2, p1uid: 'me', p2uid: 'x', p1name: '我', p2name: '別人', winnerUid: 'me', finalTurn: 9, status: 'done', gameStartedAt: 1000, endedAt: 2000, ...extra });
   const matches = Col([M('E1_r2_m0'), M('E1_r3_m0', { round: 3, winnerUid: 'x', gameStartedAt: 1200 }), M('E2_r1_m0', { eventId: 'E2', gameStartedAt: 1300 }),
@@ -165,7 +166,7 @@ async function serverScenarios(SAP, TENG = SHARE) {
   const routes = {};
   const app = { get: (p, h) => { routes['GET ' + p] = h; }, post: (p, h) => { routes['POST ' + p] = h; } };
   const IDS = { me: { uid: 'me', verified: true, email: 'me@x' }, x: { uid: 'x', verified: true, email: 'x@x' }, admin: { uid: 'adm', verified: true, email: 'admin@x' }, anon: null,
-    me2: { uid: 'me2', verified: true }, me3: { uid: 'me3', verified: true }, me4: { uid: 'me4', verified: true } };
+    me2: { uid: 'me2', verified: true }, me3: { uid: 'me3', verified: true }, me4: { uid: 'me4', verified: true }, me5: { uid: 'me5', verified: true } };
   const teng = { share: TENG };
   await new Function('db', 'app', 'tournIdentity', 'isTournAdmin', 'mtmIndexesReady', '__T', 'const TENG = new Proxy({}, { get: (_t, k) => (__T.share ? __T.share[k] : undefined) });\nreturn (async () => {\n' + blk + '\nreturn {};\n})();')(
     db, app, async (req) => (IDS[req._u] ? IDS[req._u] : { error: '需要登入', code: 401 }), (id) => !!(id && id.uid === 'adm'), async () => true, teng);
@@ -174,7 +175,8 @@ async function serverScenarios(SAP, TENG = SHARE) {
     && cols.deckPostReplays.calls.idx.includes(JSON.stringify({ postId: 1, status: 1, createdAt: 1 }));
   const G = (p, u, q) => call(routes['GET ' + p], { _u: u, query: q || {}, headers: {} });
   const P = (p, u, body, q) => call(routes['POST ' + p], { _u: u, body, query: q || {}, headers: {} });
-  const upload = (u, postId, bytes) => { const req = { _u: u, query: { postId }, headers: {}, body: {} }; req.on = (ev, cb) => { if (ev === 'data') setTimeout(() => cb(Buffer.from(bytes)), 0); if (ev === 'end') setTimeout(cb, 1); }; req.destroy = () => {}; return call(routes['POST /api/deck-posts-replays/upload'], req); };
+  // ⚠ complete: true ＝ 跟正式站一樣「整個 body 已經收到、還沒有人讀」（Node 的 IncomingMessage 在收完時就設 true；v6.583 正式站把它誤判成被讀走 ⇒ 415）
+  const upload = (u, postId, bytes) => { const req = { _u: u, query: { postId }, headers: {}, body: {}, complete: true, readableEnded: false }; req.on = (ev, cb) => { if (ev === 'data') setTimeout(() => cb(Buffer.from(bytes)), 0); if (ev === 'end') setTimeout(cb, 1); }; req.destroy = () => {}; return call(routes['POST /api/deck-posts-replays/upload'], req); };
   // V1 候選：只有投稿者；只列已結束、有開打、自己的；牌組相同與否
   const c1 = await G('/api/deck-posts-replays/candidates', 'me', { postId: 'dp_me' });
   const c2 = await G('/api/deck-posts-replays/candidates', 'x', { postId: 'dp_me' });
@@ -281,6 +283,22 @@ async function serverScenarios(SAP, TENG = SHARE) {
   teng.share = savedShare;
   r.V9 = busy.status === 429 && p1r.status === 400 && consumed.status === 415 && oldB.status === 503;
   r.V9n = JSON.stringify({ busy: busy.status, p1: p1r.status, consumed: consumed.status, old: oldB.status });
+  // V10 真的 Node http 伺服器（不是假 req）：瀏覽器送 octet-stream；handler 先 await 一段時間（正式站要查身分與投稿）⇒ body 早已收完才開始讀
+  const srv = http.createServer(async (req, res0) => {
+    req._u = 'me5'; req.query = { postId: 'dp_me5' }; req.body = {};
+    await new Promise((r2) => setTimeout(r2, 150));
+    const out = await call(routes['POST /api/deck-posts-replays/upload'], req);
+    res0.writeHead(out.status, { 'content-type': 'application/json' }); res0.end(JSON.stringify({ ...out.body, _complete: req.complete }));
+  });
+  await new Promise((r2) => srv.listen(0, '127.0.0.1', r2));
+  let v10 = null;
+  try {
+    const rr = await fetch(`http://127.0.0.1:${srv.address().port}/api/deck-posts-replays/upload?postId=dp_me5`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: gz });
+    v10 = { status: rr.status, body: await rr.json() };
+  } catch (e) { v10 = { err: String(e) }; } finally { srv.close(); }
+  const st5 = cols.deckPostReplays.rows.find((d) => d.postId === 'dp_me5' && d.status === 'active');
+  r.V10 = v10?.status === 200 && v10.body?._complete === true && !!st5 && !gunzipSync(Buffer.from(st5.gz, 'base64')).toString('utf8').includes(OPP);
+  r.V10n = JSON.stringify(v10);
   return r;
 }
 const SAP = normEol(readFileSync(join(ROOT, SAP_REL), 'utf8'));
@@ -296,6 +314,7 @@ const VL = {
   V7: '★★ V7 不限場次：移除後可以重新附加，同一場只擋「還在的」重複',
   V3b: '★★★ V3b 不信檔案自報的遮蔽旗標：攤開版改成「已遮蔽」上傳 ⇒ 伺服器照樣重新遮（對手手牌、蓋著的獎賞卡、牌庫、私有訊息都不見）',
   V8: '★★★ V8 對手名字取所有格子的聯集：終局那一格被改名，其他格的真名也一樣換掉',
+  V10: '★★★ V10 真的 Node http 上傳（body 已經整包收到才開始讀，req.complete === true）⇒ 照樣收下，不可以誤判成「被讀走」回 415（v6.583 正式站實例）',
   V9: '★★★ V9 穩定性：同時只處理一份（第二份 429）、body 被讀走 415 不掛住、舊 bundle 沒有淨化規則 ⇒ 503（不收沒淨化的檔）',
 };
 for (const k of Object.keys(VL)) ok(VL[k], V[k] === true, V[k + 'n'] ?? V.routes);
