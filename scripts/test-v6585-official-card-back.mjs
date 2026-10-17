@@ -69,7 +69,8 @@ if (browser) {
           const e = document.getElementById(key), s = getComputedStyle(e), r = e.getBoundingClientRect();
           result[key] = {
             official: s.backgroundImage.includes('data:image/jpeg;base64,')
-              && s.backgroundSize === '100% 100%' && s.backgroundRepeat === 'no-repeat' && s.backgroundPosition === '50% 50%',
+              && s.backgroundSize === (key === 'deck' ? 'contain' : '100% 100%')
+              && s.backgroundRepeat === 'no-repeat' && s.backgroundPosition === '50% 50%',
             geometry: [r.x, r.y, r.width, r.height],
             background: s.background, border: s.border, shadow: s.boxShadow,
           };
@@ -110,6 +111,7 @@ if (browser) {
       ['誤蓋公開獎賞', css.replace(':not(.prize-faceup)', ''), 'faceup'],
       ['誤蓋空獎賞', css.replace(':not(.prize-gone)', ''), 'gone'],
       ['卡背縮成不可見', css.replace('center / 100% 100%', 'center / 0 0'), 'back'],
+      ['牌庫卡背拉伸', css.replace('background-size: contain !important;', 'background-size: 100% 100% !important;'), 'deck'],
     ];
     for (const [name, mutant, key] of mutations) {
       ok(`M 前提 ${name} 確實改到樣式`, mutant !== css);

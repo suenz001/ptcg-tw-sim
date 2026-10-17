@@ -12,6 +12,11 @@
   box-shadow: 0 2px 5px rgba(0, 0, 0, .3) !important;
 }
 
+/* 舊版牌庫外框接近正方形，卡背保持原比例，外框與張數位置不變。 */
+.battle-root .deck-pile {
+  background-size: contain !important;
+}
+
 .battle-root .card-back-mark,
 .battle-root .mp-card-back-mark,
 .battle-root .sel-card-back-icon,
