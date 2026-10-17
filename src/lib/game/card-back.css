@@ -1,0 +1,21 @@
+/* v6.585：桌機、手機與動畫共用官方卡背；只替換外觀，沿用既有尺寸與資訊遮蔽。
+   原圖：https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg
+   款式核對：https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/
+   圖片由 Vite 打包成本站資源，支援測試站子路徑，不向外站請求卡背。 */
+.battle-root .card-back,
+.battle-root .mp-card-back,
+.battle-root .sel-card-back,
+.battle-root .prize-card:not(.prize-gone):not(.prize-faceup),
+.battle-root .deck-pile {
+  background: #06477e url('../assets/pokemon-card-back.jpg') center / 100% 100% no-repeat !important;
+  border-color: #174978 !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, .3) !important;
+}
+
+.battle-root .card-back-mark,
+.battle-root .mp-card-back-mark,
+.battle-root .sel-card-back-icon,
+.battle-root .sel-card-back-q,
+.battle-root .deck-pile .pile-icon {
+  visibility: hidden !important;
+}

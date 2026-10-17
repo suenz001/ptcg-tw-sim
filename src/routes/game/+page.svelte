@@ -1,4 +1,5 @@
 <script lang="ts">
+  import "$lib/game/card-back.css";
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
   import { statusIcon, statusLabel, statusSlots } from '$lib/game/status-display';   // ⭐v6.556 特殊狀態圖示與官方用詞的唯一出口
   import { retryImg } from '$lib/img-retry';

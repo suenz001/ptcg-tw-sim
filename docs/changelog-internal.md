@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.585（上一版 `4474367c`（v6.584））桌機與手機統一使用官方卡背
+
+- 站長 2026-10-18 要求桌機與手機改用官方繁中款式卡背，先提供 PNG 模擬圖；本輪確認「外觀可以」後實作並推測試站。
+- 原圖直接取自 Pokémon TCG 官網 https://tcg.pokemon.com/assets/img/global/tcg-card-back-2x.jpg（660×921；SHA-256 37a4df719ed9134a4652c639fea545f549c6cce40647ad5d82909be02a6afeb3），以台灣官網 https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/ 核對款式。未使用 PTCGCodex 圖檔。原檔收進 src/lib/assets，由 Vite 依 base 打包成本地雜湊資源；執行時不連外抓圖。
+- src/lib/game/card-back.css 共用純外觀樣式，由對戰頁匯入，套用桌機四種版面、手機準備階段／遮蔽手牌、機密選擇視窗、獎賞檢視與抽牌／取獎賞／翻牌動畫。排除 prize-faceup／prize-gone；不動引擎、遮蔽判準、正面卡圖、失敗卡圖 fallback、尺寸或操作。
+- 守衛 test-v6585：106 PASS／0 FAIL；四種桌機版面及 320／390／430 手機寬度的真瀏覽器 CSS 量測，包含 8 種卡背、幾何、正面／空獎賞／棄牌正對照、v6.584 HEAD-FAIL 逐項成立，以及 7 個樣式突變全殺。Rule 40：v6441 LATER 只還原新增匯入，原逐位元版面比對保留。
+- 修改前基準：AI harness＋35 支免疫網完成；v6527 起初因 Git bin 的 sh 讓 GNU tar 誤解 Windows 路徑而紅，改成程序 PATH 優先 System32／Git cmd／Git usr/bin，使用原生 bsdtar 後原判準重跑通過，無測試程式修改。
+- 後測、build、全套、獨立審查與 CI：待完成後補上結果。
+- 部署：僅玩家前端與素材更新，測試站驗收後由站長執行 redeploy-oracle.bat；伺服器仍為 v1.70。
+
 ## v6.584（上一版 `6c22e383`（v6.583））／server v1.70 修正 牌組公布欄附加一般對戰復盤一律「上傳格式錯誤」
 
 - 站長 2026-10-17 回報：錦標賽回放附加正常，一般對戰復盤上傳出現格式錯誤。

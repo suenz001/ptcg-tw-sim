@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '6c22e3834781303e5b0045dea012dbfe68b1fe92';   // v6.583（上一版）
+const PREV_SHA = '4474367c96bc1a5aa3d38f15ffed19663195df59';   // v6.584（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,16 +757,28 @@ const PREV_SHA = '6c22e3834781303e5b0045dea012dbfe68b1fe92';   // v6.583（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.584 前移：PREV_SHA 從 6c22e383（v6.583）起算。
+  // ⚠⚠ v6.585 前移：PREV_SHA 從 4474367c（v6.584）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.584：牌組公布欄 dprFetch：動作拿到非 JSON 回應一律當失敗；伺服器 v1.70 上傳讀 body 修正；首頁 changelog 三步搬運
+  // ⭐v6.585：官方卡背共用樣式與本站原圖；既有版面與遊戲判準不變，更新版本及玩家更新紀錄。
+  'src/lib/assets/pokemon-card-back.jpg',
+  'src/lib/game/card-back.css',
   'src/lib/version.ts',
-  'src/routes/deck-posts/+page.svelte',
+  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.584）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.584 前移：PREV_SHA 從 6c22e383（v6.583）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.584：牌組公布欄 dprFetch：動作拿到非 JSON 回應一律當失敗；伺服器 v1.70 上傳讀 body 修正；首頁 changelog 三步搬運
+//   'src/lib/version.ts',
+//   'src/routes/deck-posts/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.583）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.583 前移：PREV_SHA 從 5f477085（v6.582）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -915,32 +927,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/effects/cards/v3000_g3_wave2.ts',
 //   'src/lib/game/effects/cards/v3700_audit_orphans.ts',
 //   'src/lib/game/engine.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.572）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.572 前移：PREV_SHA 從 dc2f8c79（v6.571）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.572：「戰鬥位」→「戰鬥場／戰鬥寶可夢」（約 64 處字串，含 picker 標題與設定說明一處）；首頁 changelog 三步搬運
-//   'src/lib/game/effects.ts',
-//   'src/lib/game/effects/cards/items_misc.ts',
-//   'src/lib/game/effects/cards/lopunny_serperior_flareon_festival.ts',
-//   'src/lib/game/effects/cards/m5_preview.ts',
-//   'src/lib/game/effects/cards/m6a_wave4.ts',
-//   'src/lib/game/effects/cards/six_decks.ts',
-//   'src/lib/game/effects/cards/tools.ts',
-//   'src/lib/game/effects/cards/v154_decks.ts',
-//   'src/lib/game/effects/cards/v155_attacks.ts',
-//   'src/lib/game/effects/cards/v172_hij_batch.ts',
-//   'src/lib/game/effects/cards/v2355_j_mark_batch.ts',
-//   'src/lib/game/effects/cards/v2660_i_wave16_misc9.ts',
-//   'src/lib/game/effects/cards/v2670_i_wave17_complex2.ts',
-//   'src/lib/game/effects/cards/v2760_h_wave3_complex.ts',
-//   'src/lib/game/effects/cards/v2996_g4_wave2.ts',
-//   'src/lib/game/effects/cards/v2998_g2.ts',
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',
