@@ -135,7 +135,7 @@ const mkAdopt = async (src) => {
     const sfx = [];
     const pool = new Map(); const mode = 'online'; const myPlayerIndex = 0; const aiPlayerIndex = null;
     const _tSendClientDiag = (r) => { diag.push(r); };
-    const _animObs = { markLocal() {}, markBaseline() {}, reset() {}, onVisible() {}, observe() { return { baseline: false, openingLive: false }; } };   // ⭐v6.580（Rule 40）：對戰頁新增的動畫觀察器替身（只標記動畫，不影響本支守的同步／悔棋行為）
+    const _animObs = { markLocal() {}, markBaseline() {}, reset() {}, onVisible() {}, observe() { return { baseline: false, openingLive: false }; } }; const cardRevealReset = () => {};   // ⭐v6.580（Rule 40）：對戰頁新增的動畫觀察器替身（只標記動畫，不影響本支守的同步／悔棋行為）
   `;
   return new Function('decideBoardAdopt', 'shareStateIdentity',
     pre + out.code
@@ -210,7 +210,7 @@ try {
       const pool = new Map(); const mode = 'online'; const myPlayerIndex = 0; const aiPlayerIndex = null;
       const _tSendClientDiag = (r) => { diag.push(r); };
       const tApi = __api;
-      const _animObs = { markLocal() {}, markBaseline() {}, reset() {}, onVisible() {}, observe() { return { baseline: false, openingLive: false }; } };   // ⭐v6.580（Rule 40）：對戰頁新增的動畫觀察器替身（只標記動畫，不影響本支守的同步／悔棋行為）
+      const _animObs = { markLocal() {}, markBaseline() {}, reset() {}, onVisible() {}, observe() { return { baseline: false, openingLive: false }; } }; const cardRevealReset = () => {};   // ⭐v6.580（Rule 40）：對戰頁新增的動畫觀察器替身（只標記動畫，不影響本支守的同步／悔棋行為）
     `;
     return new Function('decideBoardAdopt', 'shareStateIdentity', '__api',
       pre + out.code

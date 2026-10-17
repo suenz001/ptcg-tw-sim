@@ -167,6 +167,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   // ⭐⭐⭐v6.197「這個人能不能操作」的唯一述詞（fail-closed）。見 src/lib/game/viewer-role.ts
   import { isViewerSpectator, canViewerAct, isSeatUnknownOnline } from '$lib/game/viewer-role';
   import { createAnimObserver, makeLocalSeenStore, type AnimObserveResult } from '$lib/game/anim-live';   // ⭐v6.580 動畫只在當下播放
+  import { computeRevealEvents, revealLabel, type RevealEvent } from '$lib/game/card-reveal';   // ⭐v6.581 出牌／抽牌放到中間翻開
   import {
     createRoom, joinRoom, subscribeRoom, pushGameState, pushUndoRollback, subscribeOpenRooms,
     takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom, claimOpponentForfeit,
@@ -1061,7 +1062,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
           startTournamentPoll();
         }
         // v5.933 隱形手牌指紋偵測(v5.932 已修根因,此為確認+未來防護):手牌有卡卻一張都不可見+arriving 殘留 → 回傳一次診斷
-        if (tStep === 'playing' && game && !isTournSpectator && !_invisibleHandDiagSent && arrivingIids.size > 0) {
+        // ⭐v6.581（審查 P3-1）：抽到的牌正在畫面中間展示時本來就會暫時隱藏 ⇒ 只算「不是中間展示造成的」arriving，避免假診斷
+        if (tStep === 'playing' && game && !isTournSpectator && !_invisibleHandDiagSent && [...arrivingIids].some((iid) => !revealDrawIids.has(iid))) {
           const _hl = game.players?.[mySeatIdx]?.hand?.length ?? 0;
           if (_hl > 0) {
             // v6.155 ⚠ 原本只認桌機的 .hand-strip .hand-card —— 手機直式用的是 .mp-hand-card，
@@ -2537,6 +2539,88 @@ function _setupSelfPending(g: any, seat: number): string | null {
     }
   });
 
+  // >>> v6581-card-reveal
+  // ⭐v6.581（站長 2026-10-17「先做這項」，參考 PTCGCodex）：對手出牌、我方抽牌時，把那張牌放到畫面中間翻開給你看。
+  //   判準只有一份：src/lib/game/card-reveal.ts 的 computeRevealEvents（只看前後盤面、只展示已經公開的牌；我方抽牌只給自己看）。
+  //   動畫是否該播一律先問 animObserve（v6.580：觀戰進房、重新整理、背景回來、悔棋倒退都不播）。
+  //   一次只顯示一張（1.3 秒；後面有排隊時 0.8 秒；抽牌 0.9 秒）；排隊最多 3 張（滿了丟最舊的），完全不攔滑鼠、不延後任何盤面更新。
+  let cardRevealOn = $state(true);
+  try { if (typeof localStorage !== 'undefined' && localStorage.getItem('ptcg_card_reveal') === '0') cardRevealOn = false; } catch { /* 讀不到＝預設開 */ }
+  function setCardRevealOn(v: boolean) { cardRevealOn = v; if (!v) cardRevealReset(); try { localStorage.setItem('ptcg_card_reveal', v ? '1' : '0'); } catch { /* 存不了就算了 */ } }
+  type CardRevealShow = { id: number; cardId: string; label: string; fromTop: boolean; drawIid: string | null; ms: number };
+  const CARD_REVEAL_MS = 1300;        // 單張、沒有排隊時
+  const CARD_REVEAL_MS_BUSY = 800;    // 後面還有排隊時縮短，跟上盤面（審查 P2-3）
+  const CARD_REVEAL_MS_DRAW = 900;    // 抽到的牌：不讓那張手牌晚太久才點得到（審查 P3-2）
+  const CARD_REVEAL_QUEUE_MAX = 3;
+  let cardRevealCur = $state<CardRevealShow | null>(null);
+  let cardRevealQueue: CardRevealShow[] = [];
+  let cardRevealTimer: ReturnType<typeof setTimeout> | null = null;
+  let cardRevealSeq = 0;
+  let revealDrawIids = $state<Set<string>>(new Set());   // 這幾張抽到的牌改走中間展示，不再另外播抽牌飛入
+  let _revealPrev: GameState | null = null;
+  function _revealReleaseDraw(iid: string | null) {
+    if (!iid) return;
+    if (arrivingIids.has(iid)) { const a = new Set(arrivingIids); a.delete(iid); arrivingIids = a; }
+    if (revealDrawIids.has(iid)) { const r = new Set(revealDrawIids); r.delete(iid); revealDrawIids = r; }
+  }
+  /** 全部清掉（換局、離開、悔棋倒退、關掉開關）—— 不可以把已經作廢的牌繼續播完（審查 P2-5：不可殘留） */
+  function cardRevealReset() {
+    if (cardRevealTimer) { clearTimeout(cardRevealTimer); cardRevealTimer = null; }
+    _revealReleaseDraw(cardRevealCur?.drawIid ?? null);
+    for (const q of cardRevealQueue) _revealReleaseDraw(q.drawIid);
+    cardRevealQueue = [];
+    cardRevealCur = null;
+    if (revealDrawIids.size) { const a = new Set(arrivingIids); for (const iid of revealDrawIids) a.delete(iid); arrivingIids = a; revealDrawIids = new Set(); }
+  }
+  function _cardRevealNext(waited = 0) {
+    if (cardRevealCur) _revealReleaseDraw(cardRevealCur.drawIid);   // 展示完才讓那張手牌出現
+    cardRevealCur = null;
+    cardRevealTimer = null;
+    if (!cardRevealQueue.length) return;
+    // 「你的回合／對手回合」橫幅還在畫面正中央 ⇒ 等它收掉再開始（最多等 1.5 秒；審查 P2-4）
+    if (turnBanner && waited < 1500) { cardRevealTimer = setTimeout(() => _cardRevealNext(waited + 250), 250); return; }
+    const next = cardRevealQueue.shift() as CardRevealShow;
+    if (!next.drawIid && cardRevealQueue.length) next.ms = CARD_REVEAL_MS_BUSY;
+    cardRevealCur = next;
+    cardRevealTimer = setTimeout(() => _cardRevealNext(), next.ms);
+  }
+  $effect(() => () => { if (cardRevealTimer) clearTimeout(cardRevealTimer); });   // 離開頁面時停掉
+  $effect(() => {
+    const g = game;
+    if (!g) { _revealPrev = null; untrack(() => cardRevealReset()); return; }
+    const prev = _revealPrev;
+    _revealPrev = g;
+    if (prev && prev.id !== g.id) untrack(() => cardRevealReset());   // 換局：上一局的牌不再播
+    if (g.phase === 'game-over') { untrack(() => cardRevealReset()); return; }   // 對局結束：不在結算畫面上繼續播
+    if (!cardRevealOn || isTReplay) return;
+    if (untrack(() => animObserve(g)).baseline) return;
+    let evs: RevealEvent[] = [];
+    try { evs = computeRevealEvents(prev, g, { viewerSeat: (isSpectator ? -1 : myIdx), getCard: (id) => getCard(id) as any }); } catch { evs = []; }
+    if (!evs.length) return;
+    untrack(() => {
+      for (const ev of evs) {
+        const isDraw = ev.kind === 'draw';
+        // 我方抽牌優先：還在排隊的對手出牌直接略過（那些已經過時了），抽到的牌最多只等目前那一張播完就出現
+        if (isDraw) cardRevealQueue = cardRevealQueue.filter((x) => !!x.drawIid);
+        // 排滿了 ⇒ 丟掉最舊的（只展示最近幾張；審查 P2-3）
+        while (!isDraw && cardRevealQueue.length >= CARD_REVEAL_QUEUE_MAX) { const old = cardRevealQueue.shift(); _revealReleaseDraw(old?.drawIid ?? null); }
+        const who = isSpectator ? (g.players[ev.side]?.name || ('P' + (ev.side + 1))) : '對手';
+        const show: CardRevealShow = { id: ++cardRevealSeq, cardId: ev.cardId, label: revealLabel(ev, who), fromTop: ev.side !== myIdx, drawIid: isDraw ? ev.iid : null, ms: isDraw ? CARD_REVEAL_MS_DRAW : CARD_REVEAL_MS };
+        if (isDraw) {
+          const r = new Set(revealDrawIids); r.add(ev.iid); revealDrawIids = r;
+          const a = new Set(arrivingIids); a.add(ev.iid); arrivingIids = a;
+          // 安全網：不論計時器發生什麼事，輪到它展示完之後一定讓那張手牌出現（v5.932 手牌永久隱形的教訓）
+          const iid = ev.iid;
+          const waitMs = ((cardRevealCur ? 1 : 0) + cardRevealQueue.length + 1) * CARD_REVEAL_MS + 1500 + 600;
+          setTimeout(() => _revealReleaseDraw(iid), waitMs);
+        }
+        cardRevealQueue.push(show);
+      }
+      if (!cardRevealCur && !cardRevealTimer && cardRevealQueue.length) _cardRevealNext();
+    });
+  });
+  // <<< v6581-card-reveal
+
   function enterHandCard(e: PointerEvent, iid: string) {
     if (dragging) return; // 拖曳中不顯示預覽
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -2756,7 +2840,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const newIids: string[] = [];
       for (const inst of curr) {
         // v5.131：來自獎賞卡的 iid 跳過 draw-fly（改走 prize-pick 大動畫）
-        if (!prev.has(inst.iid) && !prizePickIids.has(inst.iid)) newIids.push(inst.iid);
+        if (!prev.has(inst.iid) && !prizePickIids.has(inst.iid) && !revealDrawIids.has(inst.iid)) newIids.push(inst.iid);   // ⭐v6.581 改走中間展示的抽牌不再另外飛
       }
       prevHandIids[pIdx] = currIids;
       if (newIids.length === 0) continue;
@@ -6431,7 +6515,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //     內就會訂閱整棵樹 → 一律包起來 fail-closed。
     const _sharePrev: unknown = game;
     game = (_sharePrev ? untrack(() => shareStateIdentity(_sharePrev, state)) : state) as GameState;
-    if (_dec.reason === 'client-ahead') _animObs.markBaseline(game);   // ⭐v6.580 伺服器把我拉回較舊盤面：倒退不播動畫
+    if (_dec.reason === 'client-ahead') { _animObs.markBaseline(game); cardRevealReset(); }   // ⭐v6.580 伺服器把我拉回較舊盤面：倒退不播動畫；⭐v6.581 排隊中的展示也清掉
     // v5.921：錦標賽盤面由伺服器送來,client 只載過自己牌組的卡包→對手(或促銷卡集如 SV-P-H/SVPN)
     //   的卡 getCard 查不到→無法顯示/同名 fallback 錯版。依盤面實際 cardId 補載其卡包(缺卡才動作)。
     void ensurePoolForStateIds(state);
@@ -9550,6 +9634,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           if (game && decision.game.id !== game.id) { console.warn('[undo] 拒收異局 rollback', decision.game.id, '!==', game.id); return; }
           game = decision.game;
           _animObs.markBaseline(game);   // ⭐v6.580 悔棋回到舊盤面：倒退不播「牌飛回手牌、回血數字」
+          cardRevealReset();             // ⭐v6.581 悔掉的牌不再展示
           // ⭐v6.212：悔棋之後，那份「悔棋前的未推送快照」已經作廢 —— 留著會被自癒重推回去
           //   （它的 log 較長，shouldSkipStalePush 只擋嚴格較短的，擋不住）＝ 復活已悔掉的一手。
           _unpushedState = null; _repushAttempts = 0;
@@ -10423,6 +10508,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // AI / 本機模式（v4.74）：直接回到 snapshot
     game = undoSnapshot;
     _animObs.markBaseline(game);   // ⭐v6.580 悔棋回到舊盤面：倒退不播動畫
+    cardRevealReset();             // ⭐v6.581 悔掉的牌不再展示
     undoSnapshot = null;
     undoActionDesc = null;
     undoDeniedThisSnapshot = false;
@@ -10475,6 +10561,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         try {
           game = snap;
           _animObs.markBaseline(game);   // ⭐v6.580 悔棋回到舊盤面（請求方收到同意）：倒退不播動畫
+          cardRevealReset();             // ⭐v6.581 悔掉的牌不再展示
           // v5.390：atomic 寫 rollback + 清 undoRequest + bump marker（繞過 push/收端 stale guard）
           // ⭐v6.248【問題4】悔棋 rollback 也是一整包盤面的推送，同樣要標記在途
           //   （審查者只點名兩處，全站 git grep 指定 rev 枚舉後發現的第三處）。
@@ -14907,6 +14994,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
               <option value="blue">🟦 新版桌墊（預設 — 固定格線、能量合併顯示）</option>
             </select>
           </div>
+          <!-- ⭐v6.581 出牌／抽牌放到中間翻開的開關（預設開） -->
+          <div class="setting-row">
+            <label for="card-reveal-on">🃏 對手出牌、我方抽牌時在畫面中間展示：</label>
+            <input id="card-reveal-on" type="checkbox" checked={cardRevealOn} onchange={(e) => setCardRevealOn(e.currentTarget.checked)} />
+          </div>
           {#if isFableGeom}
             <div class="setting-row">
               <label for="fable-card-scale">卡牌大小：{Math.round(fableCardScale * 100)}%</label>
@@ -15269,6 +15361,22 @@ function _setupSelfPending(g: any, seat: number): string | null {
         </div>
       {/each}
     </div>
+  {/if}
+
+  <!-- ⭐v6.581 出牌／抽牌放到中間翻開（不攔滑鼠；一次一張） -->
+  {#if cardRevealCur}
+    {@const _rvc = getCard(cardRevealCur.cardId)}
+    {#key cardRevealCur.id}
+      <div class="card-reveal-layer" aria-hidden="true">
+        <div class="card-reveal" class:from-top={cardRevealCur.fromTop} style="animation-duration:{cardRevealCur.ms}ms">
+          <div class="card-reveal-inner" style="animation-duration:{cardRevealCur.ms}ms">
+            <div class="card-reveal-face card-reveal-back" style="animation-duration:{cardRevealCur.ms}ms"><div class="card-back"><span class="card-back-mark">?</span></div></div>
+            <div class="card-reveal-face card-reveal-front" style="animation-duration:{cardRevealCur.ms}ms">{#if _rvc?.imageUrl}<img use:retryImg={_rvc.imageUrl} src={cardThumb(_rvc.imageUrl)} alt={_rvc?.name ?? ''} />{:else}<div class="card-reveal-noimg">{_rvc?.name ?? ''}</div>{/if}</div>
+          </div>
+          <div class="card-reveal-label">{cardRevealCur.label}{#if _rvc?.name}<b>{_rvc.name}</b>{/if}</div>
+        </div>
+      </div>
+    {/key}
   {/if}
 
   <!-- ══ v5.131 取得獎賞卡動畫 overlay — 從 prize → 中央 → 手牌 ══ -->
@@ -20717,6 +20825,35 @@ function _setupSelfPending(g: any, seat: number): string | null {
   /* 本回合資源本來就縮不到內容寬度以下，這行只是保險（審查 P3） */
   .battle-root:has(.playmat.layout-fable) .battle-header > .turn-res{ flex:none; }
   /* <<< v6578-header-fit */
+  /* >>> v6581-card-reveal-css */
+  /* ⭐v6.581 出牌／抽牌放到中間翻開：固定在畫面正中、不攔滑鼠；對手的牌從上方飛來、我方抽的從下方；卡背翻到正面、停一下、淡出。 */
+  .card-reveal-layer{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:9400; }
+  .card-reveal{ display:flex; flex-direction:column; align-items:center; gap:.45rem; animation-name:cardRevealMove; animation-timing-function:cubic-bezier(.2,.8,.3,1); animation-fill-mode:both; --rv-from:38vh; }
+  .card-reveal.from-top{ --rv-from:-38vh; }
+  .card-reveal-inner{ position:relative; width:min(34vw, 190px); aspect-ratio:63 / 88; transform-style:preserve-3d; animation-name:cardRevealFlip; animation-fill-mode:both; }
+  .card-reveal-face{ position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:8px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,.6), 0 0 0 2px rgba(255,255,255,.18); }
+  .card-reveal-face img{ width:100%; height:100%; object-fit:cover; display:block; }
+  /* 卡背上的圖示自己有 transform，backface-visibility 擋不住 ⇒ 翻到一半時直接把卡背淡掉、正面淡入（不靠 3D 背面隱藏） */
+  .card-reveal-back{ transform:rotateY(0deg); animation-name:cardRevealBackOff; animation-fill-mode:both; animation-timing-function:steps(1, end); }
+  .card-reveal-front{ animation-name:cardRevealFrontOn; animation-fill-mode:both; animation-timing-function:steps(1, end); }
+  .card-reveal-back .card-back{ width:100%; height:100%; }
+  .card-reveal-front{ transform:rotateY(180deg); background:#1b2430; }
+  .card-reveal-noimg{ display:flex; align-items:center; justify-content:center; height:100%; color:#fff; font-weight:700; padding:.5rem; text-align:center; }
+  .card-reveal-label{ background:rgba(10,16,24,.88); color:#e8f0f8; border:1px solid rgba(255,255,255,.2); border-radius:999px; padding:.25rem .8rem; font-size:.85rem; white-space:nowrap; max-width:90vw; overflow:hidden; text-overflow:ellipsis; }
+  .card-reveal-label b{ margin-left:.4rem; color:#ffd44a; }
+  @keyframes cardRevealMove{
+    0%{ opacity:0; transform:translateY(var(--rv-from)) scale(.45); }
+    22%{ opacity:1; transform:translateY(0) scale(1); }
+    82%{ opacity:1; transform:translateY(0) scale(1); }
+    100%{ opacity:0; transform:translateY(0) scale(.92); }
+  }
+  @keyframes cardRevealBackOff{ 0%{ opacity:1; } 31%{ opacity:0; } 100%{ opacity:0; } }
+  @keyframes cardRevealFrontOn{ 0%{ opacity:0; } 31%{ opacity:1; } 100%{ opacity:1; } }
+  @keyframes cardRevealFlip{
+    0%, 22%{ transform:rotateY(0deg); }
+    40%, 100%{ transform:rotateY(180deg); }
+  }
+  /* <<< v6581-card-reveal-css */
   /* >>> v6441-blue-css */
   /* ═══════════════════════════════════════════════════════════════════
      ⭐v6.442 藍桌墊（重製）— battleLayout === 'blue' → .playmat.layout-fable.layout-blue

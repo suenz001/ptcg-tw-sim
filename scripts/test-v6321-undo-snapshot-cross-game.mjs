@@ -348,7 +348,7 @@ function applyUndoCase(src) {
     `let lastSeenUndoApplyAt = 0, _unpushedState = {}, _repushAttempts = 3, undoSnapshot = {}, undoActionDesc = 'x', undoAwaitingResponse = true, undoDeniedThisSnapshot = true;
      let floatingEvoMenu = 1, floatingRetreatMenu = 1, selectedEnergyIid = 'e', prizeAnimKey = [0, 0], arrivingIids = new Set([1]), justArrivedIids = new Set([1]);
      const console = { warn() {}, log() {} };
-     const _animObs = { markLocal() {}, markBaseline() {}, reset() {}, onVisible() {}, observe() { return { baseline: false, openingLive: false }; } };   // ⭐v6.580（Rule 40）：對戰頁新增的動畫觀察器替身（只標記動畫，不影響本支守的同步／悔棋行為）
+     const _animObs = { markLocal() {}, markBaseline() {}, reset() {}, onVisible() {}, observe() { return { baseline: false, openingLive: false }; } }; const cardRevealReset = () => {};   /* ⭐v6.581（Rule 40）中間展示清除的替身 */   // ⭐v6.580（Rule 40）：對戰頁新增的動畫觀察器替身（只標記動畫，不影響本支守的同步／悔棋行為）
      (() => { ${ts(body)} })();
      return { game, lastSeenUndoApplyAt, _unpushedState, undoSnapshot };`);
 }

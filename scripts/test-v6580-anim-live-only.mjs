@@ -103,7 +103,7 @@ function scenS(src) {
   return {
     S1: /function animObserve\(g: GameState \| null\)/.test(src) && src.includes("from '$lib/game/anim-live'") && /createAnimObserver\(\{/.test(src)
       && /\$effect\.pre\(\(\) => \{ if \(!game\) _animObs\.reset\(\); \}\);/.test(src)
-      && /_dec\.reason === 'client-ahead'\) _animObs\.markBaseline\(game\)/.test(src) && (src.match(/_animObs\.markLocal\(game\)/g) || []).length === 4
+      && /_dec\.reason === 'client-ahead'\) \{? ?_animObs\.markBaseline\(game\)/.test(src) && (src.match(/_animObs\.markLocal\(game\)/g) || []).length === 4
       && (src.match(/_animObs\.markBaseline\(game\);   \/\/ ⭐v6\.580 悔棋/g) || []).length === 3
       && /game = ctx\.prev; _animObs\.markBaseline\(game\);/.test(src) && /if \(idx !== _animPrevStep \+ 1\) _animObs\.markBaseline\(game\);/.test(src),
     S2: /coinFlipShownFor = game\.id;[\s\S]{0,400}if \(!animObserve\(game\)\.openingLive\) \{ coinFlipStage = 'done'; return; \}/.test(src),

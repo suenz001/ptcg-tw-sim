@@ -39,7 +39,7 @@ const TMP = mkdtempSync(join(tmpdir(), 'v6264-'));
 //   （BASE 裡沒有 v6.271~v6.273 的條目）。自 v6.275 起：**不動 changelog 的版本**（admin-only）
 //   由下方的 F0 短路涵蓋（三檔與 BASE 逐位元相同即無損成立），pin 只需在**動了 changelog**
 //   的版本前移到上一版。
-const BASE_SHA = 'b65810ea9abf33a25580252397a9ceb127ae7282'; // v6.579（上一版；v6.580 動了首頁 changelog（輪替把舊條目搬進封存頁）⇒ pin 必須前移，【F】才驗得到本版的改動）
+const BASE_SHA = '13ada543d9d6804f9d6916d8e48165200358c29e'; // v6.580（上一版；v6.581 動了首頁 changelog（輪替把舊條目搬進封存頁）⇒ pin 必須前移，【F】才驗得到本版的改動）
 // ⚠⚠ BASE_SHA 必須是**留在 main 上的那一顆**（git branch -a --contains <sha> 要印得出 main）——
 //    amend／rebase 前的中途 sha 是懸空的，本機 git gc 後就消失，整個【F】會靜默退化成 SKIP。IRON_RULES Rule 45。
 //   所以 v6.383 動 changelog 時**刻意不把 pin 往前挪**：留在 v6.381 才能讓【F】真的跑一次逐字還原比對，挪到 v6.382 結果一樣但沒有多守到東西）
