@@ -31,6 +31,9 @@ export { validateDeck } from '$lib/decks/validation';
 //   否則站長把某個標關掉之後，前端說不合法、伺服器照樣放行 ＝ 前後端分裂。
 //   ⚠ 判準本身仍然只有一份（regulation.ts）；這裡只是把 setter 開出去。
 export { setCardPolicy, getCardPolicy, resetCardPolicy, DEFAULT_CARD_POLICY } from '$lib/cards/regulation';
+// ⭐v6.583／server v1.70 牌組公布欄附加「一般對戰復盤」：重新遮蔽、對手改名、牌組比對的規則**只能有一份**（replay-share.ts）。
+//   伺服器 v170-deck-post-replays 區塊逐格呼叫 TENG.share*；舊 bundle 沒有這幾支 ⇒ 上傳 fail-closed（503）。
+export { shareReplayHeader, shareOpponentNames, shareSanitizeState, shareSanitizeLog, shareSanitizeMeta, shareDeckCounts } from '$lib/deck-posts/replay-share';
 `);
 await build({
   entryPoints: [ENTRY],

@@ -353,7 +353,13 @@ const CRITERIA = {
       //   —— 兩發都跟著本來就在跑的輪詢（聊天室 3 秒、賽程表）順帶抓、自己節流 30 秒；不碰 Firestore（伺服器 Mongo）。
       //   名實相符由下面 C11d 釘；行為（節流、舊伺服器 404 不顯示）由 test-v6562-chat-pin-and-times 守。
       // ⭐v6.563（Rule 40）：開始對戰頁的「我的錦標賽對戰」GET /api/my-tourn-matches（回到開始對戰才抓、30 秒節流；行為端見 test-v6563 W3／E）。
-      'fetch(': 4,
+      // ⭐v6.583（Rule 40）：從牌組公布欄打開的對戰紀錄 ?dpreplay=（網址帶這個參數才抓一次檔案；行為端見 test-v6583 E2）。名實相符由 C11e 釘。
+      'fetch(': 5,
+    },
+    'src/routes/deck-posts/+page.svelte': {
+      // ⭐v6.583（Rule 40）：投稿的對戰紀錄區（dprFetch：清單／候選／附加／上傳／移除共用一個 fetch 呼叫點；只在打開明細或按按鈕時才發）。
+      //   ⚠ 刻意不走 api()：舊伺服器沒有端點時只是這一區不顯示。名實相符由 C11e 釘，行為端見 test-v6583 V／E1。
+      'fetch(': 1,
     },
   };
   if (hasBaseCommit(ROOT, BASE_SHA)) {
@@ -395,6 +401,12 @@ const CRITERIA = {
           && /if \(!force && now - _tPinAt < CHAT_PIN_REFRESH_MS\) return;/.test(g)
           && /if \(!force && now - \(_tMatchTimesAt\[eventId\] \?\? 0\) < MATCH_TIMES_REFRESH_MS\) return;/.test(g)
           && g.includes('const res = await fetch(MY_TOURN_MATCHES_URL, { headers });') && /if \(now - _myTournAt < 30 \* 1000\) return;/.test(g);   // ⭐v6.563 第三發
+      })());
+    chk('C11e ⭐⭐ v6.583 登記的兩發確實是公布欄對戰紀錄：對戰頁抓附件檔、公布欄的 dprFetch（只打 /api/deck-posts-replays）',
+      (() => {
+        const g = read('src/routes/game/+page.svelte'), d = read('src/routes/deck-posts/+page.svelte');
+        return g.includes('const url = dprFileUrl(id);') && g.includes('const res = await fetch(url, { headers });')
+          && d.includes('try { res = await fetch(DPR_API + path, init); }') && (d.match(/\bfetch\(DPR_API/g) || []).length === 1;
       })());
     // 反安慰劑：判準真的分辨得出差異
     chk('C11b ⭐反安慰劑：countOf 對「多一個 fetch(」判得出來',

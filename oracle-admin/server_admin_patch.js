@@ -7914,6 +7914,271 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (_e) { return next(); }
     });
     // <<< v168-chat-dedupe
+    // >>> v170-deck-post-replays
+    // ⭐server v1.70（v6.583，站長 2026-10-17）：牌組公布欄的投稿可以附上「這副牌的對戰紀錄」，給其他玩家學習。
+    //   站長裁定：①錦標賽回放＋一般對戰復盤兩種一起做 ②一般對戰復盤裡對手的名字一律改成「對手」
+    //   ③每篇投稿不限場次 ④vs AI（與本機雙人）的復盤不開放 ⑤admin 要能個別移除附加的回放。
+    //   ・錦標賽：只存 matchId 參照（回放資料本來就在伺服器，看的時候走既有 /api/tournament/replay）。
+    //     附加時驗證：投稿者確實是那場的選手、那場已結束且真的有開打、那場登記的牌組與這篇投稿**完全相同**。
+    //   ・一般對戰：玩家上傳瀏覽器裡的復盤檔（gzip）。伺服器解壓、驗格式，只收線上對戰（vs AI／本機雙人不收），
+    //     **不相信檔案自報的遮蔽旗標**：每一格與終局都用 replay-share.ts 重新遮一次（對手手牌、未翻開的獎賞卡、雙方牌庫），
+    //     對戰紀錄拿掉對手的私有訊息、對手名字（所有格子出現過的聯集）一律改成「對手」（只換前後是邊界的地方），
+    //     並檢查投稿者那一側看得到的卡全都在這篇投稿的牌組裡。檔案是玩家端產生的，畫面標示「玩家上傳」。
+    //     ⚠ 處理在主執行緒：全站同時只處理一份、解壓／壓縮用非同步版、每 20 格讓出事件迴圈（錦標賽同一個程序）。
+    //   ・移除：投稿者本人或 admin，軟刪（status: 'removed'），清單與檔案端點立即不再提供。
+    //   ⚠ 刻意放在錦標賽區塊（TAIL_ANCHOR）之前、路徑用 /api/deck-posts-replays（連字號前綴，避開 /api/deck-posts/:id）⇒ 28 把鎖不動。
+    //   ⚠ 錦標賽區塊裡的 const（TMATCH、DPOSTS…）在註冊當下還在 TDZ ⇒ 這裡一律自己拿 db.collection(…) 的 handle（同一個 collection）。
+    //   ⚠ 一般對戰復盤的上傳用 application/octet-stream 原始位元組（不經 express.json 的大小上限），自己讀串流並設上限。
+    const _dprCol = db.collection('deckPostReplays');
+    const _dprPosts = db.collection('deckPosts');
+    const _dprMatches = db.collection('tournamentMatches');
+    _dprCol.createIndexes([{ key: { postId: 1, status: 1, createdAt: 1 } }]).catch(() => { /* best-effort */ });
+    const DPR_UPLOAD_MAX = 512 * 1024;          // 上傳的壓縮檔上限（一般一場 30～60KB）
+    const DPR_RAW_MAX = 8 * 1024 * 1024;        // 解壓後上限（防壓縮炸彈；一場正常對局約 2～3MB）
+    const DPR_STEPS_MAX = 4000;                 // 與 replay-record.ts 的 MAX_REPLAY_STEPS 一致
+    const _dprBuckets = new Map();
+    function dprRate(key, windowMs, max) {
+      const now = Date.now();
+      const arr = (_dprBuckets.get(key) || []).filter((t) => now - t < windowMs);
+      if (arr.length >= max) { _dprBuckets.set(key, arr); return false; }
+      arr.push(now); _dprBuckets.set(key, arr);
+      if (_dprBuckets.size > 5000) { for (const [k, v] of _dprBuckets) if (!v.length || now - v[v.length - 1] > 3600000) _dprBuckets.delete(k); }
+      return true;
+    }
+    let _dprZlib = null;
+    async function dprZlib() { if (!_dprZlib) _dprZlib = await import('node:zlib'); return _dprZlib; }
+    /** 只認 email 帳號（verified）；拿不到回 null */
+    async function dprSoftId(req) {
+      try { const id = await tournIdentity(req); return (id && !id.error && id.verified) ? id : null; } catch (_e) { return null; }
+    }
+    /** 投稿（只取需要的欄位）；刪除的當不存在 */
+    async function dprPost(postId) {
+      if (!postId || typeof postId !== 'string' || postId.length > 80) return null;
+      const p = await _dprPosts.findOne({ _id: postId }, { projection: { uid: 1, status: 1, entries: 1 } });
+      return (p && p.status !== 'deleted') ? p : null;
+    }
+    /** 牌組 → cardId 張數表（忽略其他欄位、同 cardId 合併） */
+    function dprCounts(entries) {
+      const m = new Map();
+      for (const e of (Array.isArray(entries) ? entries : [])) {
+        if (!e) continue;
+        const cid = String(e.cardId == null ? '' : e.cardId); const n = Number(e.count);
+        if (!cid || !Number.isFinite(n) || n <= 0) continue;
+        m.set(cid, (m.get(cid) || 0) + n);
+      }
+      return m;
+    }
+    function dprSameDeck(a, b) {
+      const x = dprCounts(a), y = dprCounts(b);
+      if (x.size === 0 || x.size !== y.size) return false;
+      for (const [k, v] of x) if (y.get(k) !== v) return false;
+      return true;
+    }
+    /** 某位玩家在某場賽事登記的牌組：先看報名表，查不到再看永久歸檔 */
+    async function dprRegDeck(eventId, uid) {
+      const r = await db.collection('tournamentRegistrations').findOne({ _id: eventId + '__' + uid }, { projection: { deckEntries: 1 } });
+      if (r && Array.isArray(r.deckEntries) && r.deckEntries.length) return r.deckEntries;
+      const a = await db.collection('tournamentArchives').findOne({ _id: 'arch_' + eventId }, { projection: { players: 1 } });
+      const me = a && Array.isArray(a.players) ? a.players.find((p) => p && p.uid === uid) : null;
+      return (me && Array.isArray(me.deckEntries)) ? me.deckEntries : null;
+    }
+    /** 一場錦標賽對局能不能被當成「有開打、已結束」的回放 */
+    function dprMatchPlayable(m) {
+      return !!m && m.status === 'done' && m.bye !== true && m.noShow !== true && m.doubleNoShow !== true && Number(m.gameStartedAt) > 0;
+    }
+    function dprResultOf(winnerSide, mySide) {
+      if (winnerSide !== 0 && winnerSide !== 1) return 'draw';
+      return winnerSide === mySide ? 'win' : 'lose';
+    }
+    // ── 一般對戰復盤：淨化規則只有一份（src/lib/deck-posts/replay-share.ts，經引擎 bundle 匯出成 TENG.share*）──
+    //   ⚠ 舊 bundle（還沒跑 update-tournament.bat 重建）沒有這幾支 ⇒ 上傳一律 503（fail-closed：寧可不收，也不可以收下沒淨化的檔）。
+    function dprShareReady() {
+      return !!(TENG && ['shareReplayHeader', 'shareOpponentNames', 'shareSanitizeState', 'shareSanitizeLog', 'shareSanitizeMeta', 'shareDeckCounts'].every((k) => typeof TENG[k] === 'function'));
+    }
+    const dprYield = () => new Promise((r) => setImmediate(r));
+    let _dprBusy = 0;   // 全站同時只處理一份上傳（處理時每 20 格讓出事件迴圈，錦標賽不會被卡住）
+    function dprReadBody(req, max) {
+      return new Promise((resolve, reject) => {
+        if (Buffer.isBuffer(req.body)) return req.body.length > max ? reject(new Error('too-large')) : resolve(req.body);
+        if (req.readableEnded || req.complete) return reject(new Error('consumed'));   // 已被別的 body parser 讀走（例如送成 JSON）⇒ 不會再有 end 事件，直接拒收
+        const chunks = []; let n = 0;
+        // ⭐審查 P3：慢慢送 body 會一直佔著「同時只處理一份」的名額 ⇒ 20 秒讀不完就放棄
+        const timer = setTimeout(() => { reject(new Error('timeout')); try { req.destroy(); } catch (_e) { /* */ } }, 20000);
+        req.on('data', (c) => { n += c.length; if (n > max) { clearTimeout(timer); reject(new Error('too-large')); req.destroy(); } else chunks.push(c); });
+        req.on('end', () => { clearTimeout(timer); resolve(Buffer.concat(chunks)); });
+        req.on('error', reject);
+      });
+    }
+    function dprPublic(d, canRemove) {
+      return { id: d._id, kind: d.kind, matchId: d.kind === 'tournament' ? d.matchId : null, label: d.label || '', result: d.result || 'draw',
+        turns: d.turns || null, steps: d.steps || null, createdAt: d.createdAt || 0, canRemove: !!canRemove };
+    }
+    // 清單（公開）：投稿被下架時只有本人與 admin 看得到
+    app.get('/api/deck-posts-replays', async (req, res) => {
+      try {
+        res.set('Cache-Control', 'no-store');
+        const post = await dprPost(String((req.query && req.query.postId) || ''));
+        const id = await dprSoftId(req);
+        const isOwner = !!(id && post && post.uid === id.uid), isAdmin = !!(id && isTournAdmin(id));
+        if (!post || (post.status !== 'published' && !isOwner && !isAdmin)) return res.status(404).json({ error: '找不到這篇投稿' });
+        const docs = await _dprCol.find({ postId: post._id, status: 'active' }, { projection: { gz: 0 } }).sort({ createdAt: 1 }).limit(500).toArray();
+        res.json({ dprApi: 1, canAttach: isOwner, isAdmin, items: docs.map((d) => dprPublic(d, isOwner || isAdmin)) });
+      } catch (e) { res.status(500).json({ error: 'unavailable' }); }
+    });
+    // 投稿者可以附加的錦標賽對局（最近 30 場；附上「牌組是否相同」「是否已附加」）
+    app.get('/api/deck-posts-replays/candidates', async (req, res) => {
+      try {
+        res.set('Cache-Control', 'no-store');
+        const id = await dprSoftId(req);
+        if (!id) return res.status(401).json({ error: '請用 email 帳號登入' });
+        const post = await dprPost(String((req.query && req.query.postId) || ''));
+        if (!post || post.uid !== id.uid) return res.status(403).json({ error: '只有投稿者可以附加對戰紀錄' });
+        if (!dprRate('c:' + id.uid, 60000, 20)) return res.status(429).json({ error: '請求過於頻繁' });
+        if (!(await mtmIndexesReady())) return res.json({ dprApi: 1, matches: [] });   // 索引沒好 ⇒ 不做全表掃描（沿用 v1.66）
+        const ms = await _dprMatches.find({ $or: [{ p1uid: id.uid }, { p2uid: id.uid }], status: 'done', bye: { $ne: true }, noShow: { $ne: true }, doubleNoShow: { $ne: true }, gameStartedAt: { $gt: 0 } },
+          { projection: { eventId: 1, round: 1, p1uid: 1, p2uid: 1, p1name: 1, p2name: 1, winnerUid: 1, finalTurn: 1, gameStartedAt: 1, endedAt: 1 } })
+          .sort({ gameStartedAt: -1 }).limit(30).toArray();
+        const attached = new Set((await _dprCol.find({ postId: post._id, status: 'active', kind: 'tournament' }, { projection: { matchId: 1 } }).toArray()).map((d) => d.matchId));
+        const decks = new Map(); const names = new Map();
+        for (const evId of [...new Set(ms.map((m) => String(m.eventId || '')).filter(Boolean))]) {
+          decks.set(evId, await dprRegDeck(evId, id.uid));
+          const ev = await db.collection('tournamentEvents').findOne({ _id: evId }, { projection: { name: 1 } });
+          const ar = ev ? null : await db.collection('tournamentArchives').findOne({ _id: 'arch_' + evId }, { projection: { eventName: 1 } });
+          names.set(evId, String((ev && ev.name) || (ar && ar.eventName) || ''));
+        }
+        res.json({ dprApi: 1, matches: ms.map((m) => {
+          return { matchId: String(m._id), eventName: names.get(String(m.eventId)) || '', round: m.round || null,
+            result: m.winnerUid ? (m.winnerUid === id.uid ? 'win' : 'lose') : 'draw', turns: m.finalTurn || null,
+            at: Number(m.endedAt) || Number(m.gameStartedAt) || 0, sameDeck: dprSameDeck(decks.get(String(m.eventId)), post.entries), attached: attached.has(String(m._id)) };
+        }) });
+      } catch (e) { res.status(500).json({ error: 'unavailable' }); }
+    });
+    // 附加一場錦標賽回放
+    app.post('/api/deck-posts-replays/tournament', async (req, res) => {
+      try {
+        const id = await dprSoftId(req);
+        if (!id) return res.status(401).json({ error: '請用 email 帳號登入' });
+        const b = req.body || {};
+        const post = await dprPost(String(b.postId || ''));
+        if (!post || post.uid !== id.uid) return res.status(403).json({ error: '只有投稿者可以附加對戰紀錄' });
+        if (!dprRate('a:' + id.uid, 60000, 20)) return res.status(429).json({ error: '操作太頻繁，請稍候再試' });
+        const matchId = String(b.matchId || '').slice(0, 120);
+        const m = matchId ? await _dprMatches.findOne({ _id: matchId }, { projection: { eventId: 1, round: 1, p1uid: 1, p2uid: 1, winnerUid: 1, finalTurn: 1, status: 1, bye: 1, noShow: 1, doubleNoShow: 1, gameStartedAt: 1 } }) : null;
+        if (!m) return res.status(404).json({ error: '找不到這場對戰' });
+        if (m.p1uid !== id.uid && m.p2uid !== id.uid) return res.status(403).json({ error: '只能附加自己打過的對戰' });
+        if (!dprMatchPlayable(m)) return res.status(400).json({ error: '這場對戰還沒結束或沒有開打，沒有回放' });
+        if (!dprSameDeck(await dprRegDeck(String(m.eventId), id.uid), post.entries)) return res.status(400).json({ error: '這場對戰登記的牌組跟這篇投稿的牌組不一樣' });
+        const dup = await _dprCol.findOne({ postId: post._id, status: 'active', kind: 'tournament', matchId }, { projection: { _id: 1 } });
+        if (dup) return res.status(409).json({ error: '這場對戰已經附加過了' });
+        const ev = await db.collection('tournamentEvents').findOne({ _id: String(m.eventId) }, { projection: { name: 1 } });
+        const ar = ev ? null : await db.collection('tournamentArchives').findOne({ _id: 'arch_' + String(m.eventId) }, { projection: { eventName: 1 } });
+        const evName = String((ev && ev.name) || (ar && ar.eventName) || '網站賽');
+        const now = Date.now();
+        const doc = { _id: 'dpr_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 10), postId: post._id, uid: id.uid, kind: 'tournament', matchId,
+          label: evName + (m.round ? '・第 ' + m.round + ' 輪' : ''), result: m.winnerUid ? (m.winnerUid === id.uid ? 'win' : 'lose') : 'draw', turns: m.finalTurn || null,
+          status: 'active', createdAt: now };
+        await _dprCol.insertOne(doc);
+        res.json({ ok: true, item: dprPublic(doc, true) });
+      } catch (e) { res.status(500).json({ error: 'unavailable' }); }
+    });
+    // 附加一份一般對戰復盤（body＝復盤檔的 gzip 原始位元組）
+    app.post('/api/deck-posts-replays/upload', async (req, res) => {
+      let mine = false;
+      try {
+        const id = await dprSoftId(req);
+        if (!id) return res.status(401).json({ error: '請用 email 帳號登入' });
+        const post = await dprPost(String((req.query && req.query.postId) || ''));
+        if (!post || post.uid !== id.uid) return res.status(403).json({ error: '只有投稿者可以附加對戰紀錄' });
+        if (!dprShareReady()) return res.status(503).json({ error: '伺服器還在更新，暫時不能上傳，請稍後再試' });
+        if (!dprRate('u:' + id.uid, 60000, 10) || !dprRate('ud:' + id.uid, 86400000, 100)) return res.status(429).json({ error: '上傳太頻繁，請稍候再試' });
+        if (_dprBusy > 0) return res.status(429).json({ error: '伺服器正在處理別的上傳，請幾秒後再試' });
+        _dprBusy++; mine = true;
+        let buf;
+        try { buf = await dprReadBody(req, DPR_UPLOAD_MAX); } catch (e) { const m = e && e.message; return res.status(m === 'consumed' ? 415 : m === 'timeout' ? 408 : 413).json({ error: m === 'consumed' ? '上傳格式錯誤' : m === 'timeout' ? '上傳逾時，請再試一次' : '復盤檔太大' }); }
+        if (!buf || buf.length < 2) return res.status(400).json({ error: '沒有收到復盤檔' });
+        const z = await dprZlib();
+        let text;
+        try {
+          text = (buf[0] === 0x1f && buf[1] === 0x8b)
+            ? (await new Promise((ok, ng) => z.gunzip(buf, { maxOutputLength: DPR_RAW_MAX }, (e, r) => (e ? ng(e) : ok(r))))).toString('utf8')
+            : (buf.length > DPR_RAW_MAX ? null : buf.toString('utf8'));
+        } catch (_e) { text = null; }
+        if (text == null) return res.status(400).json({ error: '復盤檔無法解壓縮（或解壓後太大）' });
+        let obj; try { obj = JSON.parse(text); } catch (_e) { return res.status(400).json({ error: '復盤檔格式錯誤' }); }
+        text = null;
+        const h = TENG.shareReplayHeader(obj);
+        if (h.error) return res.status(400).json({ error: h.error });
+        if (obj.snapshots.length > DPR_STEPS_MAX) return res.status(400).json({ error: '復盤檔太長' });
+        const seat = h.seat;
+        const names = TENG.shareOpponentNames(obj, seat);
+        const deck = TENG.shareDeckCounts(post.entries);
+        let kinds = 0;
+        const snaps = [];
+        for (let i = 0; i < obj.snapshots.length; i++) {
+          const sn = obj.snapshots[i];
+          const r = TENG.shareSanitizeState(sn.state, seat, names, deck);
+          if (r.error) return res.status(400).json({ error: r.error });
+          kinds = Math.max(kinds, r.kinds);
+          snaps.push({ turn: sn.turn, activePlayerIndex: sn.activePlayerIndex == null ? null : sn.activePlayerIndex, logLen: sn.logLen, ...(sn.at != null ? { at: sn.at } : {}), state: r.state });
+          obj.snapshots[i] = null;
+          if (i % 20 === 19) await dprYield();
+        }
+        const fr = TENG.shareSanitizeState(obj.finalState, seat, names, deck);
+        if (fr.error) return res.status(400).json({ error: fr.error });
+        kinds = Math.max(kinds, fr.kinds);
+        if (kinds < 3) return res.status(400).json({ error: '這份復盤看得到的卡太少，無法確認是這副牌組' });
+        const data = { format: obj.format, v: obj.v, meta: TENG.shareSanitizeMeta(obj, seat, names), finalLog: TENG.shareSanitizeLog(obj.finalLog, seat, names), finalState: fr.state, snapshots: snaps };
+        obj = null;
+        const gameId = data.meta.gameId || '';
+        if (gameId) {
+          const dup = await _dprCol.findOne({ postId: post._id, status: 'active', kind: 'casual', gameId }, { projection: { _id: 1 } });
+          if (dup) return res.status(409).json({ error: '這場對戰已經附加過了' });
+        }
+        await dprYield();
+        const gz = await new Promise((ok, ng) => z.gzip(Buffer.from(JSON.stringify(data), 'utf8'), (e, r) => (e ? ng(e) : ok(r))));
+        const w = fr.state.winner;
+        const now = Date.now();
+        const doc = { _id: 'dpr_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 10), postId: post._id, uid: id.uid, kind: 'casual',
+          gameId: gameId || null, label: '一般對戰', result: dprResultOf(w, seat), turns: data.meta.finalTurn || Number(fr.state.turn) || null, steps: snaps.length,
+          bytes: gz.length, gz: gz.toString('base64'), status: 'active', createdAt: now };
+        await _dprCol.insertOne(doc);
+        res.json({ ok: true, item: dprPublic(doc, true) });
+      } catch (e) { res.status(500).json({ error: 'unavailable' }); }
+      finally { if (mine) _dprBusy--; }
+    });
+    // 一般對戰復盤的檔案（已改過對手名字的 gzip）
+    app.get('/api/deck-posts-replays/file', async (req, res) => {
+      try {
+        const rid = String((req.query && req.query.id) || '').slice(0, 80);
+        const d = rid ? await _dprCol.findOne({ _id: rid, status: 'active', kind: 'casual' }) : null;
+        if (!d || !d.gz) return res.status(404).json({ error: '找不到這份對戰紀錄（可能已被移除）' });
+        const post = await dprPost(String(d.postId));
+        if (!post) return res.status(404).json({ error: '找不到這份對戰紀錄（可能已被移除）' });
+        if (post.status !== 'published') {
+          const id = await dprSoftId(req);
+          if (!(id && (post.uid === id.uid || isTournAdmin(id)))) return res.status(404).json({ error: '找不到這份對戰紀錄（可能已被移除）' });
+        }
+        res.set('Cache-Control', 'no-store');
+        res.set('Content-Type', 'application/octet-stream');
+        res.send(Buffer.from(d.gz, 'base64'));
+      } catch (e) { res.status(500).json({ error: 'unavailable' }); }
+    });
+    // 移除（投稿者本人或 admin；軟刪）
+    app.post('/api/deck-posts-replays/remove', async (req, res) => {
+      try {
+        const id = await dprSoftId(req);
+        if (!id) return res.status(401).json({ error: '請用 email 帳號登入' });
+        const rid = String((req.body && req.body.id) || '').slice(0, 80);
+        const d = rid ? await _dprCol.findOne({ _id: rid, status: 'active' }, { projection: { postId: 1 } }) : null;
+        if (!d) return res.status(404).json({ error: '找不到這份對戰紀錄（可能已被移除）' });
+        const post = await _dprPosts.findOne({ _id: String(d.postId) }, { projection: { uid: 1 } });
+        const admin = isTournAdmin(id);
+        if (!admin && !(post && post.uid === id.uid)) return res.status(403).json({ error: '只有投稿者或管理員可以移除' });
+        await _dprCol.updateOne({ _id: rid, status: 'active' }, { $set: { status: 'removed', removedAt: Date.now(), removedBy: admin && !(post && post.uid === id.uid) ? 'admin' : 'owner', gz: null } });   // 移除時連檔案內容一起清掉（用 $set 清成 null：test-v6244／v6340 ⑫ 不准新增欄位刪除的寫法）
+        res.json({ ok: true });
+      } catch (e) { res.status(500).json({ error: 'unavailable' }); }
+    });
+    // <<< v170-deck-post-replays
 
     app.get('/api/tournament/state', async (req, res) => {
       try {

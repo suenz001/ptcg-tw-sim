@@ -21,6 +21,7 @@ import {
   NEW_TAIL_SHA_V169, NEW_TEV_SHA_V169, NEW_TEV_LEN_V169, OLD_TAIL_SHA_V167, OLD_TEV_SHA_V167, OLD_TEV_LEN_V167,
 } from './lib/tourn-revert-v169.mjs';
 import { revertAdminV169, ADMIN_V169_PAIRS } from './lib/sap-revert-admin-v169.mjs';
+import { revertAdminV170 } from './lib/sap-revert-admin-v170.mjs';   // ⭐v1.70（Rule 54：先剝較新的；錦標賽區塊之前的新區塊）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const REL = 'oracle-admin/server_admin_patch.js';
@@ -64,7 +65,7 @@ else {
   ok('★★★[H] v1.68：A1 紅', B.A1 !== true);
   ok('★★[H] v1.68：A2 紅', B.A2 !== true);
   // A3：只動了宣告的兩行 ⇒ 整份還原後逐位元等於 v1.68
-  let rv = null; try { rv = revertAdminV169(SRC); } catch (e) { rv = 'ERR ' + e.message; }
+  let rv = null; try { rv = revertAdminV169(revertAdminV170(SRC)); } catch (e) { rv = 'ERR ' + e.message; }
   ok('★★★ A3 revertAdminV169（' + ADMIN_V169_PAIRS.length + ' 對）後逐位元等於 v1.68（其他程式一個字都沒動）', rv === BASE, typeof rv === 'string' ? rv.slice(0, 80) : '');
 }
 

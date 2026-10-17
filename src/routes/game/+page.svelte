@@ -170,6 +170,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { computeRevealEvents, revealLabel, type RevealEvent } from '$lib/game/card-reveal';   // ⭐v6.581 出牌／抽牌放到中間翻開
   import { DISCARD_TABS, discardTabMatches, discardTabCounts, type DiscardTab } from '$lib/game/discard-filter';   // ⭐v6.582 棄牌區分類頁籤
   import { buildConcededGame } from '$lib/game/concede';   // ⭐v6.582 認輸並提議重新開局（本機 vs AI 也走同一份認輸盤面）
+  import { dprFileUrl, dpFromOfSearch, dpReplayIdOfSearch } from '$lib/deck-posts/replays';   // ⭐v6.583 牌組公布欄附加的對戰紀錄
   import {
     createRoom, joinRoom, subscribeRoom, pushGameState, pushUndoRollback, subscribeOpenRooms,
     takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom, claimOpponentForfeit,
@@ -2198,6 +2199,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
   onMount(() => {
     // v5.939 分享回放連結:?treplay=<matchId> 進頁直接進回放(公開端點免登入)
     try { const _rid = new URLSearchParams(window.location.search).get('treplay'); if (_rid) tStartReplay(_rid); } catch { /* ignore */ }
+    // >>> v6583-dp-replay-open
+    // ⭐v6.583 從牌組公布欄打開的對戰紀錄：?dpreplay=<附件 id>（一般對戰復盤，伺服器已把對手名字改成「對手」）；
+    //   ?dpfrom=<投稿 id> ⇒ 離開回放時回到那一篇投稿（錦標賽回放用既有的 ?treplay= 也會帶這個參數）。
+    try {
+      dpReturnPost = dpFromOfSearch(window.location.search);
+      const _dpr = dpReplayIdOfSearch(window.location.search);
+      if (_dpr) void openDeckPostReplay(_dpr);
+    } catch { /* ignore */ }
+    // <<< v6583-dp-replay-open
   });
   // ⭐v6.151 回前景立即與伺服器對一次盤面。背景頁籤的 setInterval 會被瀏覽器節流到分鐘級，
   //   回來時畫面可能已經落後好幾個版本 —— 而閒置判負的倒數是**伺服器**在算，不會跟著暫停。
@@ -6095,12 +6105,42 @@ function _setupSelfPending(g: any, seat: number): string | null {
     tReplayGoto(0);
     tStep = 'playing';
   }
+  // >>> v6583-dp-replay
+  let dpReturnPost: string | null = null;
+  async function openDeckPostReplay(id: string) {
+    const url = dprFileUrl(id);
+    if (!url) return;
+    tError = '';
+    try {
+      const headers: Record<string, string> = {};
+      try { const u = auth.currentUser; if (u && !u.isAnonymous) headers['Authorization'] = 'Bearer ' + (await u.getIdToken()); } catch { /* 沒登入也能看公開的 */ }
+      const res = await fetch(url, { headers });
+      const ct = res.headers.get('content-type') || '';
+      if (!res.ok || ct.includes('application/json') || ct.includes('text/html')) {
+        let msg = '對戰紀錄載入失敗（' + res.status + '）';
+        try { if (ct.includes('application/json')) { const j = await res.json(); if (j?.error) msg = j.error; } } catch { /* */ }
+        dpReturnPost = null; tError = msg; replayLobbyMsg = msg; return;
+      }
+      const r = await parseReplayBytes(new Uint8Array(await res.arrayBuffer()));
+      if ('error' in r) { dpReturnPost = null; tError = '對戰紀錄載入失敗：' + r.error; replayLobbyMsg = tError; return; }
+      replayLobbyOpen = false;
+      await openReplayData(r.data, 'casual');
+    } catch (e: any) { dpReturnPost = null; tError = '對戰紀錄載入失敗：' + (e?.message ?? e); replayLobbyMsg = tError; }
+  }
+  /** 從公布欄打開的回放 ⇒ 離開時回到那一篇投稿（回傳 true＝已經導走） */
+  function dpReturnIfAny(): boolean {
+    if (!dpReturnPost) return false;
+    const pid = dpReturnPost; dpReturnPost = null;
+    try { window.location.href = base + '/deck-posts?post=' + encodeURIComponent(pid); return true; } catch { return false; }
+  }
+  // <<< v6583-dp-replay
   function tExitReplay() {
+    if (dpReturnIfAny()) return;   // ⭐v6.583 從牌組公布欄來的 ⇒ 回到那一篇投稿
     // ⭐v6.560 一般對戰的復盤：回到「開始對戰 → 🎞️ 復盤」清單（不碰錦標賽的大廳狀態）
     // ⭐v6.563：從開始對戰頁打開的錦標賽回放、或在一般對戰頁用分享連結（?treplay=）打開的 ⇒ 都回開始對戰頁（Opus 審查 P3-6）
     if (replayKind === 'casual' || replayFromCasualLobby || !isTournament) {
       replayFromCasualLobby = false;
-      try { const u = new URL(window.location.href); if (u.searchParams.has('treplay')) { u.searchParams.delete('treplay'); history.replaceState(null, '', u.toString()); } } catch { /* */ }
+      try { const u = new URL(window.location.href); if (u.searchParams.has('treplay') || u.searchParams.has('dpreplay')) { u.searchParams.delete('treplay'); u.searchParams.delete('dpreplay'); history.replaceState(null, '', u.toString()); } } catch { /* */ }   // ⭐v6.583 也清 dpreplay
       isTReplay = false; tReplay = null; tReplayStep = 0; game = null; isTournSpectator = false; mySeatIdx = -1; myPlayerIndex = null;
       spectatorView = 'auto'; replayRevealAll = true; replayKind = 'tournament'; mode = null; tStep = 'lobby';
       replayLobbyOpen = true; refreshReplayList();
@@ -6210,6 +6250,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   });
   async function playMyTournReplay(matchId: string) {
     if (replayLoading) return;
+    dpReturnPost = null;   // ⭐v6.583（審查 P3-6）從清單打開的回放不是從公布欄來的
     replayLobbyMsg = ''; tError = '';
     replayFromCasualLobby = true; replayLoading = true;
     try { await tStartReplay(matchId); } finally { replayLoading = false; }
@@ -6217,6 +6258,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   async function playSavedReplay(id: string) {
     if (replayLoading) return;
+    dpReturnPost = null;   // ⭐v6.583（審查 P3-6）
     replayLobbyMsg = '';
     const data = await loadReplay(id);
     if (!data) { replayLobbyMsg = '讀不到這份復盤（可能已被刪除或瀏覽器資料被清除）'; return; }
@@ -6237,6 +6279,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     input.value = '';
     if (!f) return;
     replayLobbyMsg = '';
+    dpReturnPost = null;   // ⭐v6.583（審查 P3-6）
     const r = await parseReplayBytes(new Uint8Array(await f.arrayBuffer()));
     if ('error' in r) { replayLobbyMsg = '匯入失敗：' + r.error; return; }
     replayLobbyOpen = false;

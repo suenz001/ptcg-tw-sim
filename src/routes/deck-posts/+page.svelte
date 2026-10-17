@@ -36,6 +36,8 @@
   void loadCardPolicyOnce();
   // ⚠ 留言載入失敗時「保留上一份好資料」一律走 v6.177 的中央述詞，不另寫一套、也不清空。
   import { adoptOrKeep } from '$lib/ui/stale-keep';
+  // ⭐v6.583 投稿附加對戰紀錄（錦標賽回放＋一般對戰復盤）
+  import { DPR_API, parseDprList, parseDprCandidates, dprWatchUrl, dprResultText, isAttachableLocalReplay, type DprList, type DprCandidate } from '$lib/deck-posts/replays';
 
   type PostSummary = {
     id: string;
@@ -197,6 +199,128 @@
     } catch { /* 路由還沒準備好：不寫網址 */ }
   });
   let shareCopied = $state(false);
+
+  // >>> v6583-deck-post-replays
+  // ⭐v6.583（站長 2026-10-17）：投稿可以附上這副牌的對戰紀錄（錦標賽回放、一般對戰復盤），不限場次；
+  //   一般對戰復盤裡對手的名字由伺服器一律改成「對手」；vs AI／本機雙人不開放；投稿者本人與 admin 可以個別移除。
+  //   ⚠ 這一區的請求**不走 api()**：api() 遇到非 JSON 會把整頁標成「測試站沒有 API」⇒ 舊伺服器沒有這支端點時
+  //     會把整個公布欄藏掉。這裡拿不到就只是這一區不顯示（沒有 dprApi 哨兵＝不支援）。
+  type LocalReplayRow = { id: string; meta: any; bytes: number };
+  let dprList = $state<DprList | null>(null);
+  let dprError = $state('');
+  let dprBusy = $state('');
+  let dprAttachOpen = $state(false);
+  let dprTab = $state<'tournament' | 'casual'>('tournament');
+  let dprCands = $state<DprCandidate[] | null>(null);
+  let dprCandsLoading = $state(false);
+  let dprLocal = $state<LocalReplayRow[] | null>(null);
+  let dprMsg = $state('');
+  let dprSeq = 0;
+  async function dprFetch(path: string, init?: RequestInit): Promise<any | null> {
+    let res: Response;
+    try { res = await fetch(DPR_API + path, init); } catch { throw new Error('連線失敗，請稍後再試'); }
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) { if (res.status >= 500) throw new Error('伺服器暫時無法連線，請稍後再試'); return null; }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || ('HTTP ' + res.status));
+    return data;
+  }
+  function dprReset() {
+    dprSeq++;
+    dprList = null; dprError = ''; dprBusy = ''; dprAttachOpen = false; dprTab = 'tournament';
+    dprCands = null; dprCandsLoading = false; dprLocal = null; dprMsg = '';
+  }
+  async function fetchReplays(postId: string) {
+    const seq = ++dprSeq;
+    try {
+      const r = await dprFetch('?postId=' + encodeURIComponent(postId), { headers: await authHeaders() });
+      if (seq !== dprSeq || openPost?.id !== postId) return;   // ⭐審查 P2-3：換篇後晚到的回應（含別篇動作完成後的重抓）一律作廢
+      dprList = r ? parseDprList(r) : null; dprError = '';
+    } catch (e: any) {
+      if (seq !== dprSeq || openPost?.id !== postId) return;
+      dprError = String(e?.message ?? e);
+    }
+  }
+  /** 動作（附加／上傳／移除）完成時，玩家還停在同一篇嗎？換篇了就什麼都不寫（審查 P2-3） */
+  const dprSamePost = (postId: string) => openPost?.id === postId;
+  async function dprOpenAttach() {
+    if (!openPost) return;
+    dprAttachOpen = !dprAttachOpen; dprMsg = '';
+    if (dprAttachOpen) await dprLoadTab(dprTab);
+  }
+  async function dprLoadTab(t: 'tournament' | 'casual') {
+    dprTab = t; dprMsg = '';
+    const post = openPost; if (!post) return;
+    const seq = dprSeq;
+    if (t === 'tournament') {
+      dprCandsLoading = true;
+      try {
+        const r = await dprFetch('/candidates?postId=' + encodeURIComponent(post.id), { headers: await authHeaders() });
+        if (seq !== dprSeq || !dprSamePost(post.id)) return;
+        dprCands = r ? parseDprCandidates(r) ?? [] : [];
+      } catch (e: any) { if (seq === dprSeq) { dprCands = []; dprMsg = String(e?.message ?? e); } }
+      finally { if (seq === dprSeq) dprCandsLoading = false; }
+    } else {
+      try {
+        const RS = await import('$lib/game/replay-store');
+        const rows = await RS.listReplays();
+        if (seq !== dprSeq) return;
+        dprLocal = rows as LocalReplayRow[];
+      } catch { if (seq === dprSeq) dprLocal = []; }
+    }
+  }
+  async function dprAttachTournament(matchId: string) {
+    const post = openPost; if (!post || dprBusy) return;
+    dprBusy = 'attach'; dprMsg = '';
+    try {
+      await dprFetch('/tournament', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify({ postId: post.id, matchId }) });
+      if (!dprSamePost(post.id)) return;
+      dprMsg = '✅ 已附加';
+      await fetchReplays(post.id); if (dprSamePost(post.id)) await dprLoadTab('tournament');
+    } catch (e: any) { if (dprSamePost(post.id)) dprMsg = String(e?.message ?? e); } finally { if (dprSamePost(post.id)) dprBusy = ''; }
+  }
+  async function dprUpload(bytes: Uint8Array) {
+    const post = openPost; if (!post || dprBusy) return;
+    dprBusy = 'attach'; dprMsg = '';
+    try {
+      await dprFetch('/upload?postId=' + encodeURIComponent(post.id), { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', ...(await authHeaders()) }, body: bytes as BodyInit });
+      if (!dprSamePost(post.id)) return;
+      dprMsg = '✅ 已附加（對手的名字已改成「對手」）';
+      await fetchReplays(post.id);
+    } catch (e: any) { if (dprSamePost(post.id)) dprMsg = String(e?.message ?? e); } finally { if (dprSamePost(post.id)) dprBusy = ''; }
+  }
+  async function dprAttachLocal(id: string) {
+    try {
+      const RS = await import('$lib/game/replay-store');
+      const data = await RS.loadReplay(id);
+      if (!data) { dprMsg = '讀不到這份復盤（可能已被刪除或瀏覽器資料被清除）'; return; }
+      await dprUpload(await RS.gzipText(JSON.stringify(data)));
+    } catch (e: any) { dprMsg = String(e?.message ?? e); }
+  }
+  async function dprAttachFile(ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    const f = input.files?.[0]; input.value = '';
+    if (!f) return;
+    if (f.size > 512 * 1024) { dprMsg = '復盤檔太大'; return; }
+    await dprUpload(new Uint8Array(await f.arrayBuffer()));
+  }
+  async function dprRemove(id: string) {
+    const post = openPost; if (!post || dprBusy) return;
+    if (!confirm('確定要移除這份對戰紀錄嗎？移除後其他玩家就看不到了。')) return;
+    dprBusy = id; dprMsg = '';
+    try {
+      await dprFetch('/remove', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify({ id }) });
+      if (!dprSamePost(post.id)) return;
+      await fetchReplays(post.id);
+      if (dprSamePost(post.id) && dprAttachOpen && dprTab === 'tournament') await dprLoadTab('tournament');
+    } catch (e: any) { if (dprSamePost(post.id)) dprMsg = String(e?.message ?? e); } finally { if (dprSamePost(post.id)) dprBusy = ''; }
+  }
+  function dprWhen(at: number): string {
+    if (!at) return '';
+    const d = new Date(at);
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+  // <<< v6583-deck-post-replays
   async function copyShareLink() {
     if (!openPost) return;
     try {
@@ -299,6 +423,7 @@
     comments = []; commentsHasMore = false; commentStale = false;
     commentError = ''; commentText = ''; commentIsAdmin = false;
     commentsLoading = false; commentsOlderBusy = false;
+    dprReset();   // ⭐v6.583 上一篇的對戰紀錄不可以畫在這一篇
     try {
       const r = await api('/' + encodeURIComponent(id), { headers: await authHeaders() });
       if (seq !== detailSeq) return;           // 玩家已關閉或改點別篇 ⇒ 不得把 modal 彈回來
@@ -310,6 +435,7 @@
       detailMissing = missingIds;
       // ⚠ 不 await：留言慢或掛掉都不該拖住牌表的呈現，錯誤也只會落在留言區。
       void fetchComments(post.id);
+      void fetchReplays(post.id);   // ⭐v6.583 對戰紀錄（同樣不拖住牌表）
     } catch (e: any) {
       if (seq !== detailSeq) return;
       if (String(e?.message) !== 'unavailable') detailError = String(e?.message ?? e);
@@ -325,6 +451,7 @@
     openPost = null; detailLoading = false; detailError = ''; importMsg = ''; importWarn = ''; likeError = '';
     comments = []; commentsLoading = false; commentError = ''; commentText = '';
     commentsHasMore = false; commentStale = false; commentIsAdmin = false; commentsOlderBusy = false;
+    dprReset();   // ⭐v6.583
   }
 
   /** 依卡種分組的牌表（文字，不渲染卡圖）。 */
@@ -967,6 +1094,82 @@
           {/each}
         </div>
 
+        <!-- >>> v6583-deck-post-replays-markup -->
+        {#if dprList}
+          <section class="dpr">
+            <h3 class="dpr-title"><span>📼 對戰紀錄</span><span class="cnum">{dprList.items.length}</span>
+              {#if dprList.canAttach}<button class="small" onclick={dprOpenAttach}>{dprAttachOpen ? '收起' : '＋ 附加對戰紀錄'}</button>{/if}
+            </h3>
+            {#if dprList.items.length === 0}
+              <p class="empty small-note">{dprList.canAttach ? '還沒有附加對戰紀錄。可以附上用這副牌打的錦標賽回放或一般對戰復盤，讓其他玩家學習。' : '投稿者還沒有附上對戰紀錄。'}</p>
+            {:else}
+              <ul class="dpr-list">
+                {#each dprList.items as it (it.id)}
+                  {@const url = dprWatchUrl(base, it, openPost.id)}
+                  <li class="dpr-item">
+                    <span class="dpr-res" class:win={it.result === 'win'} class:lose={it.result === 'lose'}>{dprResultText(it.result)}</span>
+                    <span class="dpr-label">{it.kind === 'tournament' ? '🏆 ' : '🎞️ '}{it.label}{#if it.turns}・{it.turns} 回合{/if}</span>
+                    <span class="dpr-src" title={it.kind === 'tournament' ? '伺服器記錄的錦標賽回放' : '玩家上傳的復盤檔，伺服器無法保證沒有被修改過；對手的名字一律顯示為「對手」'}>{it.kind === 'tournament' ? '伺服器紀錄' : '玩家上傳'}</span>
+                    <span class="spacer"></span>
+                    {#if url}<a class="linkbtn small" href={url}>▶ 觀看</a>{/if}
+                    {#if it.canRemove}<button class="small danger" disabled={dprBusy === it.id} onclick={() => dprRemove(it.id)}>{dprBusy === it.id ? '移除中…' : '移除'}</button>{/if}
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+            {#if dprList.canAttach && dprAttachOpen}
+              <div class="dpr-attach">
+                <div class="dpr-tabs" role="tablist">
+                  <button role="tab" class:active={dprTab === 'tournament'} aria-selected={dprTab === 'tournament'} onclick={() => dprLoadTab('tournament')}>錦標賽</button>
+                  <button role="tab" class:active={dprTab === 'casual'} aria-selected={dprTab === 'casual'} onclick={() => dprLoadTab('casual')}>一般對戰</button>
+                </div>
+                {#if dprTab === 'tournament'}
+                  <p class="small-note">只列出你最近打過、已結束的錦標賽對局；登記的牌組要跟這篇投稿完全相同才能附加。</p>
+                  {#if dprCandsLoading}<p class="empty">載入中…</p>
+                  {:else if !dprCands || dprCands.length === 0}<p class="empty">沒有找到可以附加的錦標賽對局。</p>
+                  {:else}
+                    <ul class="dpr-list">
+                      {#each dprCands as c (c.matchId)}
+                        <li class="dpr-item">
+                          <span class="dpr-res" class:win={c.result === 'win'} class:lose={c.result === 'lose'}>{dprResultText(c.result)}</span>
+                          <span class="dpr-label">{dprWhen(c.at)}・{c.eventName}{#if c.round}・第 {c.round} 輪{/if}{#if c.turns}・{c.turns} 回合{/if}</span>
+                          <span class="spacer"></span>
+                          {#if c.attached}<span class="dpr-src">已附加</span>
+                          {:else if !c.sameDeck}<span class="dpr-src" title="這場登記的牌組跟這篇投稿不一樣">牌組不同</span>
+                          {:else}<button class="small primary" disabled={!!dprBusy} onclick={() => dprAttachTournament(c.matchId)}>附加</button>{/if}
+                        </li>
+                      {/each}
+                    </ul>
+                  {/if}
+                {:else}
+                  <p class="small-note">只開放線上對戰的復盤（vs AI 與本機雙人不開放）；上傳後對手的名字會改成「對手」，對手的手牌與蓋著的獎賞卡一律不會出現（伺服器會重新遮蔽）。看得到的卡必須都在這篇投稿的牌組裡。</p>
+                  {#if dprLocal === null}<p class="empty">載入中…</p>
+                  {:else}
+                    {@const _att = dprLocal.filter((r) => isAttachableLocalReplay(r.meta))}
+                    {#if _att.length === 0}<p class="empty">這個瀏覽器裡沒有可以附加的線上對戰復盤。</p>
+                    {:else}
+                      <ul class="dpr-list">
+                        {#each _att as r (r.id)}
+                          <li class="dpr-item">
+                            <span class="dpr-label">{dprWhen(r.meta?.savedAt ?? 0)}・{r.meta?.p1name ?? '?'} vs {r.meta?.p2name ?? '?'}{#if r.meta?.finalTurn}・{r.meta.finalTurn} 回合{/if}</span>
+                            <span class="spacer"></span>
+                            <button class="small primary" disabled={!!dprBusy} onclick={() => dprAttachLocal(r.id)}>附加</button>
+                          </li>
+                        {/each}
+                      </ul>
+                    {/if}
+                  {/if}
+                  <label class="dpr-file small-note">或上傳下載過的復盤檔：<input type="file" accept=".ptcgreplay,.json,.gz,application/octet-stream" disabled={!!dprBusy} onchange={dprAttachFile} /></label>
+                {/if}
+              </div>
+            {/if}
+            {#if dprMsg}<p class="small-note dpr-msg">{dprMsg}</p>{/if}
+          </section>
+        {:else if dprError}
+          <p class="warn small-note">對戰紀錄載入失敗：{dprError}</p>
+        {/if}
+        <!-- <<< v6583-deck-post-replays-markup -->
+
         {#if importMsg}<p class="ok">{importMsg}</p>{/if}
         {#if importWarn}<p class="warn">{importWarn}</p>{/if}
         {#if likeError}<p class="warn">{likeError}</p>{/if}
@@ -1232,6 +1435,23 @@
      width:100%/box-sizing:border-box 自適應，手機直式與桌機是同一套結構。
      （本站的「手機/桌機兩套獨立分支」規範是給對戰畫面的；這頁一直是單一自適應版面，
      再切一套分支只會多一份會漂移的樣式。） */
+  /* >>> v6583-deck-post-replays-css */
+  .dpr { margin-top: 14px; border-top: 1px solid rgba(128,128,128,.25); padding-top: 10px; }
+  .dpr-title { display: flex; align-items: center; gap: 8px; font-size: .92rem; margin: 0 0 8px; flex-wrap: wrap; }
+  .dpr-title .cnum { font-size: .78rem; opacity: .7; background: rgba(128,128,128,.15); border-radius: 999px; padding: 1px 8px; }
+  .dpr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .dpr-item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px; border-radius: 8px; background: rgba(128,128,128,.08); }
+  .dpr-res { font-size: .78rem; font-weight: 700; padding: 1px 8px; border-radius: 6px; background: rgba(128,128,128,.25); }
+  .dpr-res.win { background: rgba(46,160,90,.25); color: #3cb371; }
+  .dpr-res.lose { background: rgba(200,70,70,.22); color: #e06666; }
+  .dpr-label { font-size: .85rem; min-width: 0; overflow-wrap: anywhere; }
+  .dpr-src { font-size: .72rem; opacity: .7; border: 1px solid rgba(128,128,128,.35); border-radius: 999px; padding: 0 7px; }
+  .dpr-item .spacer { flex: 1 1 auto; }
+  .dpr-attach { margin-top: 8px; padding: 8px; border: 1px dashed rgba(128,128,128,.4); border-radius: 8px; }
+  .dpr-tabs { display: flex; gap: 6px; margin-bottom: 6px; }
+  .dpr-tabs button.active { font-weight: 700; outline: 2px solid rgba(79,140,255,.6); }
+  .dpr-file { display: block; margin-top: 8px; }
+  /* <<< v6583-deck-post-replays-css */
   .comments { margin-top: 18px; border-top: 1px solid rgba(128,128,128,.25); padding-top: 12px; }
   .cmt-title { display: flex; align-items: center; gap: 8px; font-size: .92rem; margin: 0 0 8px; flex-wrap: wrap; }
   .cmt-title .cnum { font-size: .78rem; opacity: .7; background: rgba(128,128,128,.15); border-radius: 999px; padding: 1px 8px; }

@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.583（上一版 `5f477085`（v6.582））／server v1.70 牌組公布欄的投稿可以附上對戰紀錄
+
+- 站長 2026-10-17 裁定：①錦標賽回放＋一般對戰復盤兩階段一起做 ②一般對戰復盤裡對手名字改成「對手」 ③每篇投稿不限場次 ④vs AI 不開放 ⑤admin 要能個別移除附加的回放。
+- 伺服器 v1.70：oracle-admin/server_admin_patch.js 新增哨兵區塊 v170-deck-post-replays，放在錦標賽區塊（TAIL_ANCHOR）之前 ⇒ 28 把鎖不動。新 collection deckPostReplays（索引 postId+status+createdAt）。六支端點：GET /api/deck-posts-replays（清單，公開；下架的投稿只有本人與 admin）、GET …/candidates（投稿者最近 30 場已結束、有開打的錦標賽對局＋牌組是否相同；沿用 v1.66 的 p1uid／p2uid 索引自驗）、POST …/tournament（只存 matchId；驗證是自己打的、已結束有開打、報名牌組與投稿完全相同；同一場只擋還在的重複）、POST …/upload（application/octet-stream 原始 gzip，上限 512KB、解壓上限 12MB；只收 kind online＋revealed false＋viewerSeat 0/1；投稿者那一側每一格看得到的卡張數都不超過投稿牌組、至少看得到 3 種卡；對手名字在 name／p1name／p2name／winnerName 完全相同就換成「對手」、message／privateMessage／winReason 內出現就換掉；刪掉任何 email／uid 欄位；重新 gzip 存 base64；同一 gameId 只擋還在的重複）、GET …/file（回改過名字的 gzip）、POST …/remove（投稿者或 admin 軟刪，清掉檔案內容）。錦標賽區塊的 const 在註冊當下是 TDZ ⇒ 一律自己拿 db.collection(...)。
+- 前端：src/lib/deck-posts/replays.ts（網址組裝、回應正規化、本機復盤預先篩選）。公布欄明細新增「📼 對戰紀錄」區（不走 api()：舊伺服器沒有端點時只是這區不顯示，不會把整頁標成測試站）；投稿者可展開「附加對戰紀錄」（錦標賽候選／瀏覽器復盤清單／上傳檔案），有權限者顯示移除鈕。對戰頁支援 ?dpreplay=<附件 id>（抓檔→parseReplayBytes→openReplayData casual）與 ?dpfrom=<投稿 id>（離開回放回到該篇投稿）。
+- 守衛 test-v6583（V 伺服器區塊原文接假 Mongo 實跑：真引擎整局的遮蔽版復盤上傳後對手名字一個都不剩；各種拒收含壓縮炸彈；權限；移除；P 前端純函式；S 接線；H HEAD-FAIL 逐條紅＋錦標賽區塊逐位元未動；E 真瀏覽器：公布欄明細兩筆、觀看連結、?dpreplay= 打開後找不到對手原名、離開回到投稿）。突變 8 個全殺（kind 判準原本被「只收遮蔽版」遮住，補了遮蔽版 ai／local 檔才殺掉）。Rule 40：sap-revert-admin-v170 接進 sap153／sap154／v6303／v6561 的還原鏈（v1.69 再長一節）、sap169 先剝 v1.70；revert-v6583-game 接進 v6441／v6293。
+- 全套後 Rule 40：上傳端點 /casual 改名 /upload（test-v6269 不准出現休閒端點字樣）；移除改用 $set gz:null（test-v6244／v6340 ⑫ 不准新增 $unset）；replays.ts 註解不提 oracle-admin（test-v6269）；test-v6280 fetch 7→8、test-v6340 C11 登記兩發新 fetch（C11e 釘名）。
+- Opus 5.5 審查（修完再推）處理：P2-1 伺服器只看檔案自報的 revealed、沒有真的遮 ⇒ 淨化規則搬進 src/lib/deck-posts/replay-share.ts（唯一一份，經 scripts/build-server-engine.mjs 匯出成 TENG.share*；舊 bundle 沒有 ⇒ 上傳 503 fail-closed），每一格與終局都用 replay-record 的 redactStateForSeat 重新遮、對戰紀錄拿掉對手私有訊息、只保留已知欄位（守衛 V3b：攤開版改旗標上傳仍被遮）；P2-2 事件迴圈 ⇒ 解壓／壓縮改非同步、全站同時只處理一份（429）、每 20 格讓出（實測一場 207 步：最長一段 2.6ms、JSON.parse 25ms）、解壓上限 12→8MB、拿掉整份深拷貝（V9）；P2-3 公布欄換篇競態 ⇒ fetchReplays 與三個動作都檢查 openPost 還是同一篇（S2）。P3：名字替換只換前後是邊界的地方、不把【】「」當邊界（U1）；對手名字取所有格聯集（V8）；每人每日 100 份上傳上限；body 已被讀走回 415（V9）；?treplay=／?dpreplay= 載入失敗或從清單開別的回放時清掉 dpfrom（S3）；candidates 拿掉沒人用的 side。未處理：捏造的檔案仍可能過關（畫面標「玩家上傳」，設計取捨）、onMount 時 auth 還沒還原只影響本人看未發布投稿的檔（明細頁本來就開不到）。突變 6 個全殺。
+- 複審（可以推）後：上傳讀 body 加 20 秒逾時（408；慢慢送 body 不會一直佔著「一次一份」的名額）；test-v6272 ⑩ 允許清單補 replay-share.ts。全套 932 支：v6371 負載型 flake（單跑 153/0）、v6272 補清單後 42/0。剩下的 P3（盤面沒有欄位白名單、快照 turn／logLen 原樣照抄）只影響投稿者自己的檔、畫面標「玩家上傳」，不處理。
+
 ## v6.582（上一版 `e5fc5464`（v6.581））棄牌區分類、回放自動播放、認輸並提議重新開局
 
 - 站長 2026-10-17：能量圖示、中央比分板、拿獎賞選位置、天梯先暫緩；看了 PTCGCodex 後要求「棄牌區有分類」「對局回放有自動播放和時間軸」，以及把「提議重新開局」拆成兩顆：左＝現有（雙方不算勝敗）、右＝【認輸並提議重新開局】（我方算敗，對方獲勝）。
