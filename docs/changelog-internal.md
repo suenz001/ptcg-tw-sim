@@ -6,7 +6,8 @@
 - 根因：兩格使用動態行內 color:#ffd56b；舊淺色覆寫以 [style*="color:#ffd56b"] 匹配，Svelte cssText 寫入後實際屬性序列化為 rgb（包含空白），導致淺色覆寫落空。改 class:tourn-standing-self={s.mine}，原金黃與700粗體移到同一 class；使用既有 gen-lobby-light.py 重產淺色規則為 #755400，避免依賴 style 字串。本人標記、欄寬、對齊與截字保持。
 - 修改前 AI harness＋35 支免疫網 36/36 通過（swiss-6587-baseline）；新守衛51/0：編譯產品真實排名區塊與 standingsKeyed，搭配原 layout/game CSS 與既有 contrast-scan 量測。320／390／430／1280 四寬淺色本人對比6.49:1、深色13.13:1；另將獨立驗證樹的產品頁換成v6.586、執行完整同支新守衛，30 PASS／9 FAIL、預期exit1，四寬本人對比均1.31且正對照仍綠，沒有整支throw（Rule41）；本人標記／粗體正對照、其他玩家／標題／全表幾何／深色完全不變。手機為 Chromium 響應式模擬，不宣稱iPhone實機。
 - 6個記憶體突變各有指定紅項與正對照：名字漏class、名次漏class、淺色規則消失、淺色仍淡黃、規則外洩牌桌、本人標記遺失，全部捕獲；N1只改註解、原產品 bytes 不變、最後 HEAD 回綠通過。探針 class 僅加在測試 DOM 以避免既有對比掃描器依 selector 去重，不帶樣式、不進產品。
-- Rule40：v6441 引用中央 revert-v6587-game 的3個精確還原對，原剝除與逐位元鎖不放寬（38/0）；產生區仍由既有v6477鎖產生器一致與只改顏色（16/0）；v6296 34/0、反模式lint通過。獨立Codex審查（本環境無Opus5.5，依交接允許獨立替代）：P1=0、P2=0、P3=1已修，複審未解決皆0、程式審查准推；已用完整Svelte scoped CSS再次確認根因與本人6.49／深色13.13；審查提出完整HEAD-FAIL不得因缺少新class整支throw，已改哨兵逐條紅並補外部驗證。完整build／全套／複審結果完成後補入，完成前不推送。
+- Rule40：v6441 引用中央 revert-v6587-game 的3個精確還原對，原剝除與逐位元鎖不放寬（38/0）；產生區仍由既有v6477鎖產生器一致與只改顏色（16/0）；v6296 34/0、反模式lint通過。獨立Codex審查（本環境無Opus5.5，依交接允許獨立替代）：P1=0、P2=0、P3=1已修，複審未解決皆0、程式審查准推；已用完整Svelte scoped CSS再次確認根因與本人6.49／深色13.13；審查提出完整HEAD-FAIL不得因缺少新class整支throw，已改哨兵逐條紅並補外部驗證。
+- 最終驗收：BASE_PATH=/ptcg-tw-sim 的隔離 production build 成功；完整 run-tests 在45eae2c8完成935/935支，24.6分鐘，FAIL／TIMEOUT／主樹硬差異／沙盒外寫入／回復失敗皆0；AI harness與35支免疫網全綠，新守衛51/0。skip逐支與v6.586基準相同：v6378 ENV=2、v6263 PLATFORM=1、SHALLOW=0，無新增。證據：E:\ptcg-tw-sim-local\swiss-6587-full\__rt\full.json、swiss-6587-full.log、swiss-6587-build.log；手機390px改前／改後PNG為明示虛構玩家資料、實際編譯產品排名片段，非正式賽事資料。最終報表另交同一位審查者核對。
 - 部署：只推GitHub測試站；測試確認後站長於無賽事時依序 update-tournament.bat → redeploy-oracle.bat，同步admin SITE_VERSION_HINT與玩家前端。server補丁維持v1.70，AI不代跑部署。
 
 ## v6.586（上一版 `fd81d9b7`（v6.585））全部卡牌分頁與規則文件校正
