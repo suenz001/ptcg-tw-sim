@@ -194,6 +194,24 @@ async function summary(variant, width = 390, allPages = false) {
     await p.locator('.controls input[type=search]').fill('ex');
     await p.waitForFunction(() => new URL(location.href).searchParams.get('q') === 'ex');
     out.filter = !new URL(p.url()).searchParams.has('page') && (await p.locator('.cardBtn').count()) <= 240;
+    // 不同搜尋條件間多次返回，會沿用同一元件；只驗空搜尋的返回抓不到篩選基準遺失。
+    if (out.pager) {
+      await open(p, variant, '&q=ex&page=2');
+      const searched = await keys(p);
+      await p.getByRole('link', { name: '← 卡包列表', exact: true }).click();
+      await p.locator('.setTileAll').waitFor();
+      await p.locator('.setTileAll').click();
+      await p.locator('.cardBtn').first().waitFor();
+      await p.waitForTimeout(350);
+      await p.goBack(); await p.locator('.setTileAll').waitFor();
+      await p.goBack(); await p.locator('.cardBtn').first().waitFor();
+      // 等 URL 寫回的 debounce 結束，避免仍停留舊 URL 時讀出假陽性。
+      await p.waitForTimeout(350);
+      out.filteredHistory = equal(await keys(p), searched)
+        && await top.getByRole('combobox').inputValue() === '2'
+        && await p.locator('.controls input[type=search]').inputValue() === 'ex'
+        && new URL(p.url()).searchParams.get('page') === '2';
+    } else out.filteredHistory = false;
     await open(p, variant, '&page=999999999');
     out.clamp = equal(await keys(p), expected.slice(Math.floor((cards.length - 1) / 240) * 240));
     out.width = await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
@@ -204,7 +222,7 @@ async function summary(variant, width = 390, allPages = false) {
     return out;
   } finally { await ctx.close(); }
 }
-const checks = ['first', 'bounded', 'pager', 'second', 'url', 'modal', 'scroll', 'focus', 'history', 'restore', 'filter', 'clamp', 'width', 'touch', 'dark', 'errors'];
+const checks = ['first', 'bounded', 'pager', 'second', 'url', 'modal', 'scroll', 'focus', 'history', 'restore', 'filter', 'filteredHistory', 'clamp', 'width', 'touch', 'dark', 'errors'];
 try {
   for (const width of [320, 390, 430, 1280]) {
     const result = await summary('head', width, width === 390);
@@ -235,6 +253,7 @@ try {
     ['不捲回新頁頂端', source, helper, pager, 'scroll'],
     ['不移回分頁焦點', source, helper, pager, 'focus'],
     ['不在同路由返回時還原', source, helper, pager, 'history'],
+    ['移除導頁還原篩選基準', source, helper, pager, 'historyFilter'],
   ];
   for (const [name, page, h, ui, kind] of mutations) {
     let next = page, nextUi = ui;
@@ -248,6 +267,7 @@ try {
     if (kind === 'scroll') next = replace(next, "    allPageTop?.scrollIntoView({ block: 'start', behavior: 'instant' });", '');
     if (kind === 'focus') next = replace(next, '    allPageTop?.focus({ preventScroll: true });', '');
     if (kind === 'history') next = replace(next, '  afterNavigate(() => restoreFromUrl(true));', '  afterNavigate(() => {});');
+    if (kind === 'historyFilter') next = replace(next, '    lastAllFilterKey = allFilterKey(); // 導頁還原不是玩家修改篩選，不重設還原的頁碼', '');
     await bundle('mutant', next, h, nextUi);
     const result = await summary('mutant');
     ok('突變被行為守衛抓到：' + name, checks.some(k => result[k] === false), JSON.stringify(result));

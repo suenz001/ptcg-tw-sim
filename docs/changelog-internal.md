@@ -6,9 +6,9 @@
 - /cards?set=ALL 每頁最多 240 張，頂端／底部上一頁、下一頁與頁碼選擇；翻頁後移焦與捲回分頁頂端。頁碼保留在 URL，其他參數與 hash 不丟失；搜尋／篩選改變回第一頁，範圍外頁碼收斂。單一卡包保留原增量追加，原網格與卡片視窗保持。僅界面，不修改引擎、卡牌資料或效果。
 - PTCG RULES/PTCG_RULES.md 僅校正 10 行，原 Q&A 文字與行號保持：先後攻決定順序、回合先抽牌且先攻首回合也抽、先攻首回合限制、可不攻擊結束、同名競技場、普通／ex 完整卡名計數、一般招式效果／昏厥／獎賞順序。官方來源與已完成／保留待辦見 docs/maintenance-status.md；不宣稱全部 Q&A 或全部卡牌已重新審核。
 - 本機 _handoff/ 由 .git/info/exclude 排除，保持私人交接設定；原檔備份至 E:\ptcg-tw-sim-local\cards-6586-private-backup，同步更新 HANDOFF、memory README／01／05。跨機非敏感狀態另收進 docs/maintenance-status.md，未強制加入私人檔案。
-- 修改前 AI harness＋35 支免疫網：36/36 通過；證據 cards-6586-baseline。新守衛 test-v6586-cards-pagination.mjs：96 PASS／0 FAIL，實際編譯 /cards 元件與 5224 張 H/I/J 圖片身分夾具，320／390／430／1280 四寬、全頁遍歷無遺漏／重複、URL／篩選／卡片視窗／深色／單包正對照。8 項 v6.585 HEAD-FAIL、3 項文件 HEAD-FAIL；9 種突變全殺，包括返回頁碼、捲動與焦點。圖片以固定圖回應隔離網路；只證明 DOM 上限，未宣稱真圖片記憶體或 iPhone 實機效能量測。
+- 修改前 AI harness＋35 支免疫網：36/36 通過；證據 cards-6586-baseline。新守衛 test-v6586-cards-pagination.mjs：101 PASS／0 FAIL，實際編譯 /cards 元件與 5224 張 H/I/J 圖片身分夾具，320／390／430／1280 四寬、全頁遍歷無遺漏／重複、URL／篩選／卡片視窗／深色／單包正對照。8 項 v6.585 HEAD-FAIL、3 項文件 HEAD-FAIL；10 種突變全殺，包括返回頁碼、搜尋條件多次返回、捲動與焦點。圖片以固定圖回應隔離網路；只證明 DOM 上限，未宣稱真圖片記憶體或 iPhone 實機效能量測。
 - Rule 40：v6439 引入逐字還原對，剝除本版後仍逐位元比對原 BASE，89 PASS／0 FAIL；v6118 9/0、anti-pattern lint 全綠。真 Vite 路由另驗 ALL 頁2→卡片視窗→卡包列表→瀏覽器返回／前進，頁碼與首張還原，320 寬無溢出、無 pageerror。
-- 獨立 Codex 審查（本環境無 Opus 5.5，依交接允許替代）：初審 P1=0、P2=1、P3=1。P2 返回時同路由元件沿用而頁碼重設，已以 afterNavigate 強制依 URL 還原與篩選基準同步修正；P3 捲動／焦點守衛缺口，已補實際 bottom 翻頁量測及獨立突變。複審與最終建置／全套結果待完成後補入；未完成前不推送。
+- 獨立 Codex 審查（本環境無 Opus 5.5，依交接允許替代）：累計 P1=0、P2=1、P3=2，全部修正。P2 返回時同路由元件沿用而頁碼重設，已以 afterNavigate 強制依 URL 還原與篩選基準同步修正；P3 捲動／焦點守衛缺口，已補實際 bottom 翻頁量測及獨立突變。複審另發現搜尋條件多次返回守衛缺口（P3），已補實際路徑及第 10 突變；同一位獨立審查者驗證新判準可單獨抓到篩選基準同步被刪除，複審未解決 P1／P2／P3 皆 0，程式審查准推。BASE_PATH=/ptcg-tw-sim 的隔離 production build 成功，真建置另驗搜尋 ex／頁2 多次返回、卡片一致與手機／桌機版面，無 pageerror。全套結果待完成後補入，完成前不推送。
 - 部署：測試站驗收後由站長依序 update-tournament.bat → redeploy-oracle.bat，同步 admin SITE_VERSION_HINT 與前端；伺服器補丁維持 v1.70。AI 不執行部署 bat。
 
 ## v6.585（上一版 `4474367c`（v6.584））桌機與手機統一使用官方卡背
