@@ -11,6 +11,7 @@ import { deckReplayServer, functionSource, clone } from './lib/deck-replay-db-fi
 import { postListBundle, openingBundle, fixtureHtml, measureOpening } from './lib/deck-replay-ui-fixture.mjs';
 import { revertAdminV171 } from './lib/sap-revert-admin-v171.mjs';
 import { revertV171, TAIL_ANCHOR, TEV_ANCHOR, NEW_TAIL_SHA_V171, NEW_TEV_SHA_V171, NEW_TEV_LEN_V171 } from './lib/tourn-revert-v171.mjs';
+import { NEW_TAIL_SHA_V169, NEW_TEV_SHA_V169, NEW_TEV_LEN_V169 } from './lib/tourn-revert-v169.mjs';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const PRODUCT = process.env.V6588_PRODUCT_ROOT || ROOT;
@@ -37,6 +38,20 @@ if (hasBaseCommit(ROOT, BASE)) {
 const tail = source.slice(source.indexOf(TAIL_ANCHOR)), tev = source.slice(source.indexOf(TEV_ANCHOR));
 ok('D1 現行三把指紋', sha(tail) === NEW_TAIL_SHA_V171 && sha(tev) === NEW_TEV_SHA_V171 && tev.length === NEW_TEV_LEN_V171);
 ok('D3 指紋突變自驗', sha(tail + ' ') !== NEW_TAIL_SHA_V171);
+const scriptFiles=[];
+function walkScripts(dir='scripts') { for(const e of readdirSync(join(ROOT,dir),{withFileTypes:true})) { const rel=dir+'/'+e.name;if(e.isDirectory())walkScripts(rel);else if(e.name.endsWith('.mjs'))scriptFiles.push(rel); } }
+walkScripts();
+const stale=scriptFiles.filter(p=>p!=='scripts/lib/tourn-revert-v169.mjs').filter(p=>{const s=readFileSync(join(ROOT,p),'utf8');return s.includes(NEW_TAIL_SHA_V169)||s.includes(NEW_TEV_SHA_V169)||new RegExp('const (?:TOURN_LEN\\w*|TEV_LEN\\w*) = '+NEW_TEV_LEN_V169+'\\b').test(s);});
+ok('D4 舊v169指紋在歷史宣告端外零殘留',stale.length===0,stale.join(','));
+const tailConsumers=['test-v6276-deck-tournament-stats.mjs','test-v6291-tourn-verified-gate.mjs','test-v6292-tourn-verified-gate2.mjs','test-v6381-archive-gamedraw-and-swiss-note.mjs'];
+const scriptText=p=>readFileSync(join(ROOT,'scripts',p),'utf8');
+ok('D5 四條區塊鏈及v6303整檔鏈皆先接v171',tailConsumers.every(p=>{const s=scriptText(p);return s.includes("from './lib/tourn-revert-v171.mjs'")&&s.includes('revertV171(');})&&scriptText('test-v6303-ui-batch.mjs').includes('revertAdminV171('));
+const wholeConsumers=['test-v6561-tourn-replay-per-action.mjs','test-sap153-tourn-deck-validate.mjs','test-sap154-audit-load.mjs','test-sap169-restart-coin-wording.mjs','test-v6303-ui-batch.mjs'];
+const wholeTexts=wholeConsumers.map(scriptText);
+const connected=xs=>xs.length===5&&xs.every(s=>s.includes("from './lib/sap-revert-admin-v171.mjs'")&&s.includes('revertAdminV171('));
+ok('D5 五支整檔歷史鎖皆先還原v171',connected(wholeTexts));
+const disconnected=wholeTexts.map((s,i)=>i===0?s.replaceAll('revertAdminV171(','disabled171('):s);
+ok('D5 接線負對照：任一支漏掉最外層便紅',!connected(disconnected));
 ok('卡背：沿用已核對官方位元組', sha(asset) === '37a4df719ed9134a4652c639fea545f549c6cce40647ad5d82909be02a6afeb3');
 ok('卡背：使用 Vite 相對資源', opening.includes("url('../assets/pokemon-card-back.jpg')"));
 ok('卡背：測抽 script、markup 與原版完全相同', !baseOpening || opening.slice(0, opening.indexOf('<style>')) === baseOpening.slice(0, baseOpening.indexOf('<style>')));
@@ -166,7 +181,7 @@ if (browser) {
     const fixedWidth=pageSource.replace('.sorts { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0;', '.sorts { display: flex; flex-wrap: wrap; gap: 6px; min-width: 900px;');
     if(fixedWidth!==pageSource){
       await showPosts(await postListBundle(ROOT,fixedWidth),320,'light');
-      ok('M 手機排序列固定寬度可抓溢出',await page.evaluate(()=>[...document.querySelectorAll('.sorts button')].some(e=>e.getBoundingClientRect().right>innerWidth)));
+      ok('M 手機排序列固定寬度可抓溢出',await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth));
       ok('M 版面突變仍正常載入次數',await page.locator('.replay-stat').count()===20);
     }else ok('M 手機寬度前置結構',false);
     await showPosts(postJs, 390, 'light');

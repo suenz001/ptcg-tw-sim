@@ -22,7 +22,9 @@ import { revertAdminV166 as _revertAdminV166 } from './lib/sap-revert-admin-v166
 import { revertAdminV167 as _revertAdminV167 } from './lib/sap-revert-admin-v167.mjs';   // ⭐v1.67（v6.566 對局時限判法、推播偏好帳號層級）
 import { revertAdminV168 as _revertAdminV168 } from './lib/sap-revert-admin-v168.mjs';   // ⭐v1.68（v6.575 聊天室禁止連續相同內容，錦標賽區塊之前）：先剝較新的（Rule 54）
 import { revertAdminV169 as _revertAdminV169 } from './lib/sap-revert-admin-v169.mjs';   // ⭐v1.69（重賽系統訊息「擲硬幣」，錦標賽區塊內兩行；前端未 bump）
-import { revertAdminV170 } from './lib/sap-revert-admin-v170.mjs';   // ⭐v1.70（v6.583 牌組公布欄附加對戰紀錄，錦標賽區塊之前）：先剝較新的（Rule 54）
+import { revertAdminV170 as _revertAdminV170 } from './lib/sap-revert-admin-v170.mjs';   // ⭐v1.70（v6.583 牌組公布欄附加對戰紀錄，錦標賽區塊之前）：先剝較新的（Rule 54）
+import { revertAdminV171 } from './lib/sap-revert-admin-v171.mjs';
+const revertAdminV170 = (s) => _revertAdminV170(revertAdminV171(s));   // v1.71 先還原本版，再接原整檔逐位元鎖。
 const revertAdminV169 = (s) => _revertAdminV169(revertAdminV170(s));   // ⭐v1.70 鏈再長一節（既有呼叫點一個字都不必改）
 const revertAdminV168 = (s) => _revertAdminV168(revertAdminV169(s));   // ⭐v1.69 鏈再長一節（既有呼叫點一個字都不必改）
 const revertAdminV167 = (s) => _revertAdminV167(revertAdminV168(s));   // ⭐v1.68 鏈再長一節（既有呼叫點一個字都不必改）
