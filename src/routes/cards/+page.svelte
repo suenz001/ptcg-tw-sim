@@ -15,7 +15,12 @@
   import { loadCardPolicyOnce } from '$lib/cards/policy-loader';
   import { isMegaExCard } from '$lib/game/selection-filter'; // v6.210：Mega ex 判定收斂中央述詞
   import CardsMiniBar from '$lib/cards/CardsMiniBar.svelte';   // ⭐v6.480 網頁版：篩選面板捲出畫面後浮出迷你搜尋列
-  import { replaceState } from '$app/navigation';
+  import { replaceState, afterNavigate } from '$app/navigation';
+  // >>> v6586-cards-pagination-imports
+  import { tick } from 'svelte';
+  import CardsPager from '$lib/cards/CardsPager.svelte';
+  import { readCardsPage, cardsPageRange, writeCardsPageSearch } from '$lib/cards/pagination';
+  // <<< v6586-cards-pagination-imports
   import { readCardsUrlState, writeCardsUrlSearch } from '$lib/cards/url-state';   // ⭐v6.483 搜尋／篩選條件寫進網址
   import { cardPageHref } from '$lib/cards/card-page';   // ⭐v6.483 卡片視窗連到單卡頁
   import { MediaQuery } from 'svelte/reactivity';
@@ -88,6 +93,11 @@
    */
   const PAGE_SIZE = 240;
   let visibleCount = $state(PAGE_SIZE);
+  // >>> v6586-cards-pagination-state
+  let currentPage = $state(1);
+  let lastAllFilterKey: string | null = null;
+  let allPageTop = $state<HTMLElement | null>(null);
+  // <<< v6586-cards-pagination-state
   // v2.184：搜尋模式切換
   //   normal  — 只搜卡名 / 招式名 / 特性名 / 卡號（原行為）
   //   keyword — 全文搜尋，含 rulesText、招式 effect、特性 effect、特性 label
@@ -317,22 +327,25 @@
   //   ⚠ 只在卡片列表（data.mode==='set'）做；卡包列表頁（沒有 ?set=）不寫。
   //   ⚠ 寫網址用 query（不是 debouncedQuery）：進頁還原的搜尋字要 150ms 後才進 debouncedQuery，用它會先把 q 洗掉。
   let _urlRestored = false;
-  function restoreFromUrl() {
-    if (_urlRestored || data.mode !== 'set' || typeof location === 'undefined') return;
+  function restoreFromUrl(force = false) {
+    if ((_urlRestored && !force) || data.mode !== 'set' || typeof location === 'undefined') return;
     _urlRestored = true;
     const st = readCardsUrlState(location.search, {
       cat: CATEGORY_ORDER, tag: TAG_ORDER, type: ENERGY_ORDER, stage: STAGE_ORDER, mark: regMarkFilterKeys(),
     });
     query = st.q; debouncedQuery = st.q;
+    if (data.setCode === 'ALL') currentPage = readCardsPage(location.search); // v6.586 保留分享／返回的頁碼
     searchMode = st.mode; keywordScope = st.scope;
     selectedCategories = new Set(st.cat as CategoryKey[]);
     selectedTags = new Set(st.tag as TagKey[]);
     selectedTypes = new Set(st.type as EnergyType[]);
     selectedStages = new Set(st.stage as StageKey[]);
     selectedRegMarks = new Set(st.mark as RegMarkKey[]);
-    if (st.card) { const c = setCards.find((x) => String(x.id) === st.card); if (c) selected = c; }
+    selected = st.card ? setCards.find((x) => String(x.id) === st.card) ?? null : null;
+    lastAllFilterKey = allFilterKey(); // 導頁還原不是玩家修改篩選，不重設還原的頁碼
   }
   restoreFromUrl();
+  afterNavigate(() => restoreFromUrl(true)); // 同 /cards 元件沿用時也還原返回／前進的網址
   $effect(() => {
     if (data.mode !== 'set') return;
     const st = {
@@ -340,9 +353,11 @@
       cat: [...selectedCategories], tag: [...selectedTags], type: [...selectedTypes],
       stage: [...selectedStages], mark: [...selectedRegMarks], card: selected ? String(selected.id) : null,
     };
+    const pageToWrite = data.setCode === 'ALL' ? pageRange.page : null; // v6.586 在 effect 內追蹤頁碼
     const id = setTimeout(() => {
       try {
-        const next = writeCardsUrlSearch(location.search, st);
+        const conditions = writeCardsUrlSearch(location.search, st);
+        const next = pageToWrite === null ? conditions : writeCardsPageSearch(conditions, pageToWrite);
         if (next !== location.search) replaceState(location.pathname + next + location.hash, {});
       } catch { /* 路由還沒準備好等情況：不寫網址，不影響畫面 */ }
     }, 300);
@@ -444,17 +459,29 @@
       return compiledQuery.test(cardSearchFields(c, searchMode, keywordScope));
     });
   });
-  const shown = $derived(filtered.slice(0, visibleCount));
-  const hasMore = $derived(visibleCount < filtered.length);
+  // >>> v6586-cards-pagination-range
+  const pageRange = $derived(cardsPageRange(filtered.length, currentPage, PAGE_SIZE));
+  const shown = $derived(data.setCode === 'ALL'
+    ? filtered.slice(pageRange.start, pageRange.end) : filtered.slice(0, visibleCount));
+  const hasMore = $derived(data.setCode !== 'ALL' && visibleCount < filtered.length);
+  // <<< v6586-cards-pagination-range
   /** 任何會改變 filtered 的輸入變動 → 回到第一頁。 */
+  function allFilterKey() {
+    return JSON.stringify([query, searchMode, keywordScope, data.mode === 'set' ? data.setCode : '',
+      [...selectedCategories], [...selectedTags], [...selectedTypes], [...selectedStages], [...selectedRegMarks]]);
+  }
   $effect(() => {
+    const filterKey = allFilterKey();
+    if (data.setCode === 'ALL' && lastAllFilterKey !== null && lastAllFilterKey !== filterKey) currentPage = 1;
+    lastAllFilterKey = filterKey;
     void debouncedQuery; void selectedCategories; void selectedTags;
     void selectedTypes; void selectedStages; void selectedRegMarks; void data.setCode;
     visibleCount = PAGE_SIZE;
   });
   /** 捲到接近底部時追加下一批（sentinel 進入視窗即觸發）。 */
   function moreSentinel(node: HTMLElement) {
-    if (typeof IntersectionObserver === 'undefined') return;
+    if (data.setCode === 'ALL' || typeof IntersectionObserver === 'undefined') return; // v6.586 全部卡牌固定上限，單包維持追加
+
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) {
         if (e.isIntersecting && visibleCount < filtered.length) visibleCount += PAGE_SIZE;
@@ -463,6 +490,15 @@
     io.observe(node);
     return { destroy() { io.disconnect(); } };
   }
+
+  // >>> v6586-cards-pagination-change
+  async function changeAllPage(page: number) {
+    currentPage = cardsPageRange(filtered.length, page, PAGE_SIZE).page;
+    await tick();
+    allPageTop?.focus({ preventScroll: true });
+    allPageTop?.scrollIntoView({ block: 'start', behavior: 'instant' });
+  }
+  // <<< v6586-cards-pagination-change
 
   function closeModal() {
     selected = null;
@@ -684,6 +720,13 @@
   </div>
 
   <CardsMiniBar bind:query count={filtered.length} target={controlsEl} placeholder="搜尋卡名、招式名、特性名、卡號（與上方搜尋框同步）" />
+  <!-- >>> v6586-cards-pagination-top -->
+  {#if data.setCode === 'ALL' && pageRange.pages > 1}
+    <div class="cards-page-start" bind:this={allPageTop} tabindex="-1" role="group" aria-label="卡牌分頁">
+      <CardsPager range={pageRange} position="top" onchange={changeAllPage} />
+    </div>
+  {/if}
+  <!-- <<< v6586-cards-pagination-top -->
   <div class="grid">
     {#each shown as card (card.id)}
       <button class="cardBtn" onclick={() => (selected = card)} aria-label={card.name}>
@@ -697,7 +740,9 @@
       </button>
     {/each}
   </div>
-  {#if hasMore}
+  {#if data.setCode === 'ALL' && pageRange.pages > 1}
+    <CardsPager range={pageRange} position="bottom" onchange={changeAllPage} />
+  {:else if hasMore}
     <!-- v6.118：捲到這裡就再載一批（不是按鈕，使用者無感） -->
     <div class="moreSentinel" use:moreSentinel>載入更多…（已顯示 {shown.length} / {filtered.length}）</div>
   {/if}
@@ -879,6 +924,9 @@
 {/if}
 
 <style>
+  /* >>> v6586-cards-pagination-css */
+  .cards-page-start { scroll-margin-top: 140px; }
+  /* <<< v6586-cards-pagination-css */
 
   header {
     max-width: 1200px;

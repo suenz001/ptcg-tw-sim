@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { V6586_CARDS_REVERT_PAIRS } from './lib/revert-v6586-cards.mjs';
 /**
  * v6.439 守衛：手機版卡牌資料庫（/cards 卡包頁）不可以左右滑動、「一般搜尋」不可以超出畫面
  *
@@ -113,6 +114,8 @@ const STRIP_RE = /\n  \/\* >>> v6439-cards-mobile \*\/[\s\S]*?\/\* <<< v6439-car
 // ⭐ LATER（IRON_RULES Rule 40：之後版本的合法改動逐字登記、逐字還原，鎖不變鬆）
 //   v6.457：彈出視窗整頁捲動鎖（Rule 76）—— import 一行、兩個遮罩掛 use:pageScrollLock、.modalInner 加 overscroll-behavior:contain。
 const LATER = [
+  // v6.586：全部卡牌分頁；精確還原後繼續原本的整檔逐字比對。
+  ...V6586_CARDS_REVERT_PAIRS,
   // ⭐v6.512（Rule 40）：全站文字對比——屬性色塊字色、標記徽章、篩選鈕選中色、全部卡牌紫字讀色票；difflib 產生、當場驗證逐位元還原 v6.511；內容由 test-v6512 鎖
   ["  import { ENERGY_LABEL, ENERGY_COLOR, ENERGY_TEXT_COLOR } from '$lib/cards/energy';   // ⭐v6.512 屬性色塊上的字色\n", "  import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';\n"],
   ["          style:--type-fg={ENERGY_TEXT_COLOR[etype]}\n", ""],
