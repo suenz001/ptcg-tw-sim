@@ -11126,8 +11126,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <div style="display:grid;grid-template-columns:34px 1fr 60px 48px 60px;gap:3px 8px;font-size:13px;align-items:center;padding:4px 2px;">
               <div style="font-weight:700;color:#9ab;text-align:center;">#</div><div style="font-weight:700;color:#9ab;">玩家</div><div style="font-weight:700;color:#9ab;text-align:center;">戰績</div><div style="font-weight:700;color:#9ab;text-align:center;">OWP</div><div style="font-weight:700;color:#9ab;text-align:center;">OOWP</div>
               {#each standingsKeyed(brk.standings) as s (s._k)}
-                <div style="text-align:center;{s.mine ? 'color:#ffd56b;font-weight:700;' : ''}">{s.rank}</div>
-                <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;{s.mine ? 'color:#ffd56b;font-weight:700;' : ''}">{s.name}{#if s.mine} （你）{/if}</div>
+                <div class:tourn-standing-self={s.mine} style="text-align:center;">{s.rank}</div>
+                <div class:tourn-standing-self={s.mine} style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{s.name}{#if s.mine} （你）{/if}</div>
                 <div style="text-align:center;">{s.w}-{s.l}</div>
                 <div style="text-align:center;color:#9ab;">{s.owp}%</div>
                 <div style="text-align:center;color:#9ab;">{s.oowp}%</div>
@@ -16024,6 +16024,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   .tourn-bracket { max-width: 100%; margin: 12px auto; border: 1px solid #3a4a6a; border-radius: 10px; background: #0f1420; padding: 10px 12px; text-align: left; }
   .tourn-bracket-head { font-weight: 600; color: #cfe0f8; margin-bottom: 8px; }
+  /* v6.587：自己的名次與名字走主題樣式，不依賴動態 style 的色碼序列化。 */
+  .tourn-standing-self { color: #ffd56b; font-weight: 700; }
   /* v6.177 「更新中」輕量提示：inline、字級縮小、不換行、不佔額外高度 ⇒ 不會造成版面跳動 */
   .tourn-stale { margin-left: 8px; font-size: 11px; font-weight: 400; color: #8fa3c4; white-space: nowrap; }
   .tourn-hof { border-color: #6a5a2a; background: #16120a; }
@@ -20854,6 +20856,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-enter-btn { color: #000000; border: 2px solid #ffc525; background: linear-gradient(135deg, #ead5cd, #edddc9); }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-bracket { border: 1px solid #94a5c6; background: #f7f7f9; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-bracket-head { color: #061831; }
+    :global(html[data-theme='light']:not([data-battle-view])) .tourn-standing-self { color: #755400; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-stale { color: #3a4f71; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-hof { border-color: #d7c693; background: #fbfbf9; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-hof .tourn-bracket-head { color: #775700; }

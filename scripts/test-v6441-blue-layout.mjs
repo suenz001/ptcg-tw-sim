@@ -28,6 +28,7 @@
  *
  * Run: node scripts/test-v6441-blue-layout.mjs
  */
+import { V6587_GAME_PAIRS } from './lib/revert-v6587-game.mjs';
 import { V6571_GAME_PAIRS } from './lib/revert-v6571-game.mjs';
 import { V6572_GAME_PAIRS } from './lib/revert-v6572-game.mjs';
 import { V6573_GAME_PAIRS } from './lib/revert-v6573-game.mjs';
@@ -84,6 +85,7 @@ const REVERT = [
 //   這些後續版本的改動在這裡逐條還原（每條恰好命中 1 次；內容正確性由各版自己的守衛鎖：test-v6448…）。
 //   ⚠ 只准放「非藍桌墊」的全版面改動；藍桌墊的改動一律寫進哨兵。
 const LATER = [
+  ...V6587_GAME_PAIRS,
   // v6.585：卡背外觀獨立共用，移除匯入後仍逐位元核對所有既有版面。
   ['  import "$lib/game/card-back.css";\n', ''],
   // ⭐v6.575（Rule 40）：錦標賽聊天室 tChatSend 先擋連續相同內容（非版面改動）—— 還原表單一來源 scripts/lib/revert-v6575-game.mjs（行為由 test-v6575 鎖）

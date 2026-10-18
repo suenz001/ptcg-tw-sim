@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'fd81d9b7aa823ffac0ee7c61cb1e2a207f3e3e25';   // v6.585（上一版）
+const PREV_SHA = '34f59afb705b3a30db7abd1056303b08edbc1f26';   // v6.586（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,18 +757,28 @@ const PREV_SHA = 'fd81d9b7aa823ffac0ee7c61cb1e2a207f3e3e25';   // v6.585（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.586 前移：PREV_SHA 從 fd81d9b7（v6.585）起算。
+  // ⚠⚠ v6.587 前移：PREV_SHA 從 34f59afb（v6.586）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.586：全部卡牌分頁與頁碼還原；單包維持增量載入，未改動引擎或卡牌效果。規則摘要及交接維護僅進 admin 細節與內部紀錄。
-  'src/lib/cards/CardsPager.svelte',
-  'src/lib/cards/pagination.ts',
+  // ⭐v6.587：只修正瑞士制排名本人欄位的主題字色，原版面及排名／對戰行為不變。
   'src/lib/version.ts',
-  'src/routes/cards/+page.svelte',
+  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.586）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.586 前移：PREV_SHA 從 fd81d9b7（v6.585）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.586：全部卡牌分頁與頁碼還原；單包維持增量載入，未改動引擎或卡牌效果。規則摘要及交接維護僅進 admin 細節與內部紀錄。
+//   'src/lib/cards/CardsPager.svelte',
+//   'src/lib/cards/pagination.ts',
+//   'src/lib/version.ts',
+//   'src/routes/cards/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.585）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.585 前移：PREV_SHA 從 4474367c（v6.584）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -885,16 +895,6 @@ const PREV_ALLOWED = [
 // ⚠⚠ v6.575 前移：PREV_SHA 從 0a4e4807（v6.574）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
 // ⭐v6.575：錦標賽聊天室 tChatSend 先擋連續相同內容（伺服器 server v1.68 才是真正的關卡）；首頁 changelog 三步搬運
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.574）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.574 前移：PREV_SHA 從 4c6381de（v6.573）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.574：頁首手牌 chip 名稱／張數拆兩欄（藍桌墊／Fable 最小寬度 min-content）、手牌標題名稱可縮、淺色大廳行內深底轉淺底；首頁 changelog 三步搬運
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',
