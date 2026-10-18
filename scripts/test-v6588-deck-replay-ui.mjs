@@ -75,13 +75,12 @@ function dataSet() {
 const data = dataSet();
 const expectedCount = id => data.deckPostReplays.filter(r => r.postId === id && r.status === 'active').length;
 const expectedOrder = data.deckPosts.filter(p => p.status === 'published').sort((a, b) => expectedCount(b._id) - expectedCount(a._id) || b.createdAt - a.createdAt || a._id.localeCompare(b._id)).map(p => p._id);
-const expectedIntersection = expectedOrder.filter(id=>{const p=data.deckPosts.find(d=>d._id===id);return p.notes.includes('火焰')&&p.tournament&&expectedCount(id)>0;});
+const expectedIntersection = expectedOrder.filter(id=>{const p=data.deckPosts.find(d=>d._id===id);return p.notes.includes('火焰')&&p.tournament;});
 async function serverFacts(text) {
   const s = deckReplayServer(text, data);
   const ranked = await s.request({ sort: 'replays', pageSize: '2' });
   const second = await s.request({ sort: 'replays', page: '2', pageSize: '2' });
-  const filtered = await s.request({ replaysOnly: '1', pageSize: '50' });
-  const intersect = await s.request({ sort: 'replays', replaysOnly: '1', tournamentOnly: '1', q: '火焰', pageSize: '50' });
+  const intersect = await s.request({ sort: 'replays', tournamentOnly: '1', q: '火焰', pageSize: '50' });
   const c0 = s.calls.length, plain = await s.request({ sort: 'new', pageSize: '20' });
   const plainCalls = s.calls.slice(c0);
   return {
@@ -89,7 +88,6 @@ async function serverFacts(text) {
     sorted: equal([...ranked.posts, ...second.posts].map(p => p.id), expectedOrder.slice(0, 4)),
     counts: plain.posts.every(p => p.replayCount === expectedCount(p.id)),
     activeOnly: plain.posts.find(p => p.id === 'dp_24')?.replayCount === 3,
-    filtered: filtered.total === data.deckPosts.filter(p => p.status === 'published' && expectedCount(p._id) > 0).length && filtered.posts.every(p => p.replayCount > 0),
     intersect: intersect.total === expectedIntersection.length && equal(intersect.posts.map(p=>p.id),expectedIntersection),
     private: [...ranked.posts, ...plain.posts].every(p => !('uid' in p || 'email' in p || 'entries' in p || 'gz' in p || 'entriesHash' in p)),
     batch: plainCalls.filter(c => c.op === 'aggregate').length === 1 && plainCalls.filter(c => c.op === 'find').length === 1,
@@ -103,22 +101,22 @@ const cachedCalls = cachedServer.calls.length; await cachedServer.request();
 ok('S 相同列表快取不新增資料庫查詢', cachedServer.calls.length === cachedCalls);
 if (baseSource) {
   const old = await serverFacts(baseSource);
-  for (const k of ['cap', 'sorted', 'counts', 'activeOnly', 'filtered']) ok('H BASE 不具備 ' + k, old[k] === false);
+  for (const k of ['cap', 'sorted', 'counts', 'activeOnly']) ok('H BASE 不具備 ' + k, old[k] === false);
   for (const k of ['intersect', 'private', 'plain']) if (k !== 'intersect') ok('H BASE 正對照 ' + k, old[k]);
 }
 
 // 真實 remove handler 移除最後附件；既有列表快取須失效。
 const lastData = { deckPosts: data.deckPosts.slice(0, 21), deckPostReplays: data.deckPosts.slice(0, 21).map((p, i) => ({ _id: 'one_' + i, postId: p._id, status: 'active', kind: 'casual' })) };
 const removeServer = deckReplayServer(source, lastData);
-const beforeRemoval = await removeServer.request({ replaysOnly: '1', page: '2' });
+const beforeRemoval = await removeServer.request({ sort: 'replays', page: '2' });
 await removeServer.request({}, 'POST', '/api/deck-posts-replays/remove', { identity: { uid: 'owner' }, body: { id: 'one_0' } });
-const afterRemoval = await removeServer.request({ replaysOnly: '1', page: '2' });
-ok('S 真 remove handler 令快取失效／排除移除附件', beforeRemoval.total === 21 && afterRemoval.total === 20);
+const afterRemoval = await removeServer.request({ sort: 'replays', page: '2' });
+ok('S 真 remove handler 令快取失效／排除移除附件', beforeRemoval.total === 21 && afterRemoval.total === 21 && beforeRemoval.posts[0]?.replayCount === 1 && afterRemoval.posts[0]?.id === 'dp_00' && afterRemoval.posts[0]?.replayCount === 0);
 ok('S remove 不修改牌組內容／非目標附件', removeServer.collections.deckPostReplays.filter(r => r.status === 'active').length === 20 && equal(removeServer.collections.deckPosts, lastData.deckPosts));
 
 async function pagingFacts(text) {
   const code = (await transform(functionSource(text, 'fetchList'), { loader: 'ts', format: 'esm' })).code.replace(/^export \{[\s\S]*?\};?\s*$/gm, '');
-  const factory = new Function('api', `let page=2,total=21,posts=[],listSeq=0,loading=false,loadError='',sort='replays',pageSize=20,tournamentOnly=false,replaysOnly=true,replayStatsSupported=true,searchQ='',searchUnsupported=false;${code};return {run:fetchList,state:()=>({page,total,posts,loading}),setPage:n=>{page=n}}`);
+  const factory = new Function('api', `let page=2,total=21,posts=[],listSeq=0,loading=false,loadError='',sort='replays',pageSize=20,tournamentOnly=false,replayStatsSupported=true,searchQ='',searchUnsupported=false;${code};return {run:fetchList,state:()=>({page,total,posts,loading}),setPage:n=>{page=n}}`);
   const queries = [];
   const x = factory(async path => { const p = new URL(path, 'https://fixture').searchParams; queries.push(p.get('page')); return { total: 20, posts: p.get('page') === '1' ? [{ id: 'valid' }] : [], replayStats: 1 }; });
   await x.run(true);
@@ -140,7 +138,6 @@ if(noSequence!==pageSource){const r=await pagingFacts(noSequence);ok('M 舊代�
 const mutations = [
   ['排序方向', source.replace('replayCount: -1, createdAt: -1, _id: 1', 'replayCount: 1, createdAt: -1, _id: 1'), 'sorted'],
   ['把已移除附件計入', source.replace("postId: { $in: docs.map(d => d._id) }, status: 'active'", 'postId: { $in: docs.map(d => d._id) }'), 'activeOnly'],
-  ['漏只看有紀錄', source.replace("...(replaysOnly ? [{ $match: { replayCount: { $gt: 0 } } }] : []),", ''), 'filtered'],
   ['漏每頁次數', source.replace('doc.replayCount = byId.get(doc._id) || 0', 'doc.replayCount = 0'), 'counts'],
   ['先分頁再統計排序', source.replace('{ $match: query },', '{ $match: query }, { $skip: (page - 1) * pageSize }, { $limit: pageSize },'), 'sorted'],
   ['統計忽略搜尋交集',source.replace('{ $match: query },','{ $match: { ...query, $and: [] } },'),'intersect'],
@@ -172,7 +169,7 @@ if (browser) {
         const buttons=[...document.querySelectorAll('.sorts button')],stats=[...document.querySelectorAll('.replay-stat')];
         const within=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.left>=-1&&r.right<=innerWidth+1;};
         return { count:stats.length, layout:[...buttons,...document.querySelectorAll('.filters,.post-card,.post-meta,.post-meta .date,.post-meta .author,.post-stats,.stat')].every(within)&&document.documentElement.scrollWidth<=innerWidth,
-          targets:buttons.every(e=>innerWidth>600||e.getBoundingClientRect().height>=44), controls:buttons.some(e=>e.textContent.includes('最多對戰紀錄'))&&!![...document.querySelectorAll('label')].find(e=>e.textContent.includes('只看有對戰紀錄')) };
+          targets:buttons.every(e=>innerWidth>600||e.getBoundingClientRect().height>=44), controls:buttons.some(e=>e.textContent.includes('最多對戰紀錄'))&&!document.body.textContent.includes('只看有對戰紀錄') };
       });
       ok(`U ${width} ${theme} 顯示20篇附加次數與新按鈕`, measured.count===20 && measured.controls);
       ok(`U ${width} ${theme} 控制／日期／統計無水平溢出`, measured.layout && measured.targets);
@@ -189,10 +186,10 @@ if (browser) {
     if (await sortButton.count()) {
       await sortButton.click(); await page.waitForFunction(()=>document.querySelector('.post-card .deck-name')?.textContent==='測試牌組 1');
       ok('U 點排序真的換成全站最多30場的第1篇', await page.locator('.post-card').first().locator('.replay-stat').textContent()==='📼 30');
-      await page.getByLabel('只看有對戰紀錄',{exact:true}).check();
-      await page.waitForFunction(()=>[...document.querySelectorAll('.replay-stat')].every(e=>!e.textContent.match(/\b0$/)));
-      ok('U 勾選篩選真的送replaysOnly並保留sort', bridge.calls.some(c=>c.op==='aggregate'&&c.stages.some(s=>s.$match?.replayCount?.$gt===0)));
-    } else { ok('U 點排序／篩選前置按鈕',false); }
+      await page.getByLabel('只看賽事名次牌組',{exact:true}).check();
+      await page.waitForFunction(()=>document.querySelector('.post-card .deck-name')?.textContent==='測試牌組 20');
+      ok('U 紀錄排序可搭配原賽事篩選，保留無紀錄投稿', bridge.calls.some(c=>c.op==='aggregate'&&c.stages.some(s=>s.$match?.tournament?.$ne===null)));
+    } else { ok('U 點排序前置按鈕',false); }
     await showPosts(postJs,390,'light',baseSource||source);
     ok('U 舊伺服器無哨兵：保留舊功能、隱藏新控制與未知統計', !(await page.locator('.replay-stat').count())&&!(await page.getByRole('button',{name:'最多對戰紀錄',exact:true}).count())&&await page.locator('.post-card').count()===20);
     if (basePage) {

@@ -89,7 +89,6 @@
   //     一律排在有留言的之後、彼此依發布時間新→舊，名次穩定不亂跳。
   let sort = $state<'new' | 'likes' | 'downloads' | 'comments' | 'replays'>('new');
   let tournamentOnly = $state(false);
-  let replaysOnly = $state(false);
   let replayStatsSupported = $state(false);
   // ── v6.218 關鍵字搜尋 ──────────────────────────────────────────────
   //   同一個輸入框：空白分隔多個關鍵字＝每個都要命中（AND）；單一關鍵字命中＝
@@ -386,7 +385,6 @@
     try {
       const q = new URLSearchParams({ sort, page: String(page), pageSize: String(pageSize) });
       if (tournamentOnly) q.set('tournamentOnly', '1');
-      if (replaysOnly) q.set('replaysOnly', '1');
       // v6.218：空白輸入＝不篩選（不送 q 參數，回到原本列表）。
       const qs = searchQ.trim();
       if (qs) q.set('q', qs);
@@ -412,9 +410,6 @@
   }
   function toggleTournamentOnly() {
     tournamentOnly = !tournamentOnly; page = 1; void fetchList();
-  }
-  function toggleReplaysOnly() {
-    replaysOnly = !replaysOnly; page = 1; void fetchList();
   }
   function goPage(p: number) {
     const np = Math.max(1, Math.min(totalPages, p));
@@ -1002,12 +997,6 @@
           <input type="checkbox" checked={tournamentOnly} onchange={toggleTournamentOnly} />
           只看賽事名次牌組
         </label>
-        {#if replayStatsSupported}
-          <label class="filter">
-            <input type="checkbox" checked={replaysOnly} onchange={toggleReplaysOnly} />
-            只看有對戰紀錄
-          </label>
-        {/if}
       </div>
     </div>
 
@@ -1026,7 +1015,7 @@
       <p class="empty">載入中…</p>
     {:else if posts.length === 0}
       <p class="empty">
-        {#if searchQ.trim()}沒有符合「{searchQ.trim()}」的投稿。{:else if replaysOnly}目前沒有符合條件且附有對戰紀錄的牌組。{:else if tournamentOnly}目前還沒有賽事名次牌組。{:else}目前還沒有人投稿。{/if}
+        {#if searchQ.trim()}沒有符合「{searchQ.trim()}」的投稿。{:else if tournamentOnly}目前還沒有賽事名次牌組。{:else}目前還沒有人投稿。{/if}
       </p>
     {:else}
       <ul class="post-list">

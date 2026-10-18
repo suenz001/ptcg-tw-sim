@@ -8198,11 +8198,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
 
     // >>> v171-deck-post-replay-stats
     // v1.71／v6.588：只讀統計 active 附件；普通列表僅對當頁批次計數，不逐篇請求。
-    // 排序／篩選必須先計數再分頁；Mongo lookup 只回 count，不載入復盤 gz 或私人欄位。
+    // 依紀錄排序必須先計數再分頁；Mongo lookup 只回 count，不載入復盤 gz 或私人欄位。
     app.locals = app.locals || {};
-    app.locals._deckPostReplayStats = async function ({ query, sort, page, pageSize, replaysOnly }) {
+    app.locals._deckPostReplayStats = async function ({ query, sort, page, pageSize }) {
       const projection = { entries: 0, uid: 0, email: 0, entriesHash: 0 };
-      if (sort.replayCount || replaysOnly) {
+      if (sort.replayCount) {
         const pipeline = [
           { $match: query },
           { $lookup: { from: 'deckPostReplays', let: { pid: '$_id' }, pipeline: [
@@ -8210,7 +8210,6 @@ import('firebase-admin').then(async ({ default: admin }) => {
             { $count: 'n' },
           ], as: '_replayStats' } },
           { $addFields: { replayCount: { $ifNull: [{ $arrayElemAt: ['$_replayStats.n', 0] }, 0] } } },
-          ...(replaysOnly ? [{ $match: { replayCount: { $gt: 0 } } }] : []),
           { $sort: sort },
           { $facet: { docs: [{ $skip: (page - 1) * pageSize }, { $limit: pageSize }, { $project: { ...projection, _replayStats: 0 } }], total: [{ $count: 'n' }] } },
         ];
@@ -11125,7 +11124,6 @@ import('firebase-admin').then(async ({ default: admin }) => {
             replays: { replayCount: -1, createdAt: -1, _id: 1 },
           })[String((req.query && req.query.sort) || 'new')] || { createdAt: -1 };
           const replayStats = typeof (app.locals || {})._deckPostReplayStats === 'function';
-          const replaysOnly = replayStats && String((req.query && req.query.replaysOnly) || '') === '1';
           const page = Math.max(1, Math.min(200, parseInt((req.query && req.query.page) || '1', 10) || 1));
           const pageSize = Math.max(1, Math.min(50, parseInt((req.query && req.query.pageSize) || '20', 10) || 20));
           const q = { status: 'published' };
@@ -11137,7 +11135,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           if (qTokens.length && !dpRate('s:' + dpIp(req), 60000, 60)) return res.status(429).json({ error: '搜尋太頻繁，請稍候再試' });
           // ⚠ 快取鍵不可放 q 物件本身：$and 裡若混進 RegExp，JSON.stringify 會把它變 {}，
           //   不同搜尋就撞成同一份快取。改放 token 原文（$regex 也一律用字串形式，雙保險）。
-          const ck = JSON.stringify([sort, page, pageSize, arche, q.tournament ? 1 : 0, qTokens, replaysOnly]);
+          const ck = JSON.stringify([sort, page, pageSize, arche, q.tournament ? 1 : 0, qTokens]);
           const hit = _dpListCache.get(ck);
           if (hit && Date.now() - hit.at < DP_LIST_TTL) return res.json(hit.payload);
           if (qTokens.length) {
@@ -11156,7 +11154,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           }
           // ⚠ 列表**不回 entries**：每筆 60 張 × 每頁 20 筆是純浪費（v6.119 的讀放大教訓）。
           const [docs, total] = replayStats
-            ? await app.locals._deckPostReplayStats({ query: q, sort, page, pageSize, replaysOnly })
+            ? await app.locals._deckPostReplayStats({ query: q, sort, page, pageSize })
             : await Promise.all([
             DPOSTS.find(q, { projection: { entries: 0, uid: 0, email: 0, entriesHash: 0 } }).sort(sort).skip((page - 1) * pageSize).limit(pageSize).toArray(),
             DPOSTS.countDocuments(q),

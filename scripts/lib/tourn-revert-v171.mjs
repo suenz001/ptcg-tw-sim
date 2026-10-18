@@ -3,9 +3,9 @@ import assert from 'node:assert';
 import { ADMIN_V171_PAIRS } from './sap-revert-admin-v171.mjs';
 import * as Prev from './tourn-revert-v169.mjs';
 export * from './tourn-revert-v169.mjs';
-export const NEW_TAIL_SHA_V171 = '0c41d4326191032dcee416e2e28215021f54d10623fb0fa68bb92069a5d98224';
-export const NEW_TEV_SHA_V171 = '65a40443f327d98168f0f07a4c0b751c323ebb139f552c8955e226f891cafb4b';
-export const NEW_TEV_LEN_V171 = 245955;
+export const NEW_TAIL_SHA_V171 = 'eeedf5050ab12d597eb7d8aa6e30565b522e364cb899e8c26519f648b7b7eb9a';
+export const NEW_TEV_SHA_V171 = '60eb4bc20344373c52ed5de253ee4b49d20356302b8b8939b8d1581d398bb97c';
+export const NEW_TEV_LEN_V171 = 245824;
 export function revertV171(block) {
   let result = String(block), touched = 0;
   for (const [now, prev] of ADMIN_V171_PAIRS) {

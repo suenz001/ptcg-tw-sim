@@ -11,11 +11,10 @@ export async function postListBundle(root, source) {
   const end = source.indexOf('    {/if}\n  {/if}\n</main>', start);
   if (start < 0 || end < start) throw new Error('公布欄產品區塊定位失敗');
   const funcs = ['fetchList', 'changeSort', 'toggleTournamentOnly', 'goPage', 'onSearchInput', 'clearSearch', 'fmtDate'];
-  if (source.includes('function toggleReplaysOnly(')) funcs.push('toggleReplaysOnly');
   const script = `<script lang="ts">
     let posts=$state<any[]>([]),total=$state(0),page=$state(1); const pageSize=20;
     let sort=$state<'new'|'likes'|'downloads'|'comments'|'replays'>('new');
-    let tournamentOnly=$state(false),replaysOnly=$state(false),replayStatsSupported=$state(false);
+    let tournamentOnly=$state(false),replayStatsSupported=$state(false);
     let searchQ=$state(''),searchUnsupported=$state(false),searchTimer:any=null;
     let loading=$state(true),loadError=$state(''),postOk=$state(''),listSeq=0;
     const totalPages=$derived(Math.max(1,Math.ceil(total/pageSize)));
