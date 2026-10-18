@@ -22,6 +22,10 @@
 
 - 新範圍同位獨立Codex複審：P1／P2／P3均0，可checkpoint後重跑build/full。審查者獨立實跑完整25篇排序含4篇0紀錄、舊replaysOnly參數不再產生篩選、忽略搜尋突變指定紅、8組還原各命中一次且整份／兩切片等於BASE、舊v171指紋零殘留。最終准推待新build與全套報表核對。
 
+- 新範圍最終驗收：HEAD d97f0bcae81976cc8662fe6522285515b80e6d64 的完整run-tests執行936/936，全部通過，24.77分鐘（一般900支19.53分＋獨占36支5.24分）；FAIL／TIMEOUT／escape／回復失敗／主樹硬差異皆0。AI harness＋35支免疫網全綠，本版守衛134/0；skip逐支與前次全套相同（v6378 ENV=2、v6263 PLATFORM=1、SHALLOW=0），沒有新增。新範圍Pages與Oracle production build皆成功，Oracle真建置原v6583明細／觀看回放／離開返回30/0。證據 E:\ptcg-tw-sim-local\deck-6588-final-scope-full\__rt\full.json、deck-6588-final-scope-full.log、deck-6588-scope-build-pages.log、deck-6588-scope-build-oracle.log、deck-6588-scope-built-replays.log。全套期間未修改tracked檔，之後只補本內部驗收紀錄；舊scope的4支紅報表及兩次復驗仍保留，最終結論採新範圍936全綠。
+
+- 新範圍最終同位獨立Codex複審准推：已獨立核對936唯一項／936結果、36基準、134/0、BASE66/56、兩種build與Oracle回放30/0；產品／守衛與全套HEAD無差異。未解決P1／P2／P3皆0。僅補本驗收紀錄後推GitHub main，CI及線上版本仍須推後另核對；正式部署由站長自行執行update-tournament.bat → redeploy-oracle.bat。
+
 ## v6.587（上一版 `34f59afb`（v6.586））淺色瑞士制排名的本人字色
 
 - 站長回報淺色模式瑞士制積分表，自己的名字呈淺黃而難以辨識。本輪只處理本人名次與名字的外觀，不改排名、配對、積分、賽制或對戰引擎。
