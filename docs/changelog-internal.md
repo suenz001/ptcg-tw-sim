@@ -8,7 +8,8 @@
 - 本機 _handoff/ 由 .git/info/exclude 排除，保持私人交接設定；原檔備份至 E:\ptcg-tw-sim-local\cards-6586-private-backup，同步更新 HANDOFF、memory README／01／05。跨機非敏感狀態另收進 docs/maintenance-status.md，未強制加入私人檔案。
 - 修改前 AI harness＋35 支免疫網：36/36 通過；證據 cards-6586-baseline。新守衛 test-v6586-cards-pagination.mjs：101 PASS／0 FAIL，實際編譯 /cards 元件與 5224 張 H/I/J 圖片身分夾具，320／390／430／1280 四寬、全頁遍歷無遺漏／重複、URL／篩選／卡片視窗／深色／單包正對照。8 項 v6.585 HEAD-FAIL、3 項文件 HEAD-FAIL；10 種突變全殺，包括返回頁碼、搜尋條件多次返回、捲動與焦點。圖片以固定圖回應隔離網路；只證明 DOM 上限，未宣稱真圖片記憶體或 iPhone 實機效能量測。
 - Rule 40：v6439 引入逐字還原對，剝除本版後仍逐位元比對原 BASE，89 PASS／0 FAIL；v6118 9/0、anti-pattern lint 全綠。真 Vite 路由另驗 ALL 頁2→卡片視窗→卡包列表→瀏覽器返回／前進，頁碼與首張還原，320 寬無溢出、無 pageerror。
-- 獨立 Codex 審查（本環境無 Opus 5.5，依交接允許替代）：累計 P1=0、P2=1、P3=2，全部修正。P2 返回時同路由元件沿用而頁碼重設，已以 afterNavigate 強制依 URL 還原與篩選基準同步修正；P3 捲動／焦點守衛缺口，已補實際 bottom 翻頁量測及獨立突變。複審另發現搜尋條件多次返回守衛缺口（P3），已補實際路徑及第 10 突變；同一位獨立審查者驗證新判準可單獨抓到篩選基準同步被刪除，複審未解決 P1／P2／P3 皆 0，程式審查准推。BASE_PATH=/ptcg-tw-sim 的隔離 production build 成功，真建置另驗搜尋 ex／頁2 多次返回、卡片一致與手機／桌機版面，無 pageerror。全套結果待完成後補入，完成前不推送。
+- 獨立 Codex 審查（本環境無 Opus 5.5，依交接允許替代）：累計 P1=0、P2=1、P3=2，全部修正。P2 返回時同路由元件沿用而頁碼重設，已以 afterNavigate 強制依 URL 還原與篩選基準同步修正；P3 捲動／焦點守衛缺口，已補實際 bottom 翻頁量測及獨立突變。複審另發現搜尋條件多次返回守衛缺口（P3），已補實際路徑及第 10 突變；同一位獨立審查者驗證新判準可單獨抓到篩選基準同步被刪除，複審未解決 P1／P2／P3 皆 0，程式審查准推。BASE_PATH=/ptcg-tw-sim 的隔離 production build 成功，真建置另驗搜尋 ex／頁2 多次返回、卡片一致與手機／桌機版面，無 pageerror。全套 934/934 支跑完，932 綠、v6390 原始 CRLF 失敗及 evolve-iid 的 600 秒逾時各一；主樹硬差異、escape、回復失敗皆 0。AI harness＋35 支免疫網全部通過。skip 為 v6378 ENV=2、v6263 PLATFORM=1，無新增。未將原報表描述為全套零失敗，兩項復驗完成前不推送。
+- 全套後僅調整測試：v6390 讀取 SRC 經既有 normEol，原 regex／EXPECTED／行為與 BASE 判準不變。獨立審查確認 LF 與 CRLF 修後均 98/0，群組改名／尾端覆寫高度／刪哨兵突變仍紅；本機 CRLF 單跑 98/0。v6586 突變補明確指定失敗條目與寬度／觸控／深色／JS 正對照、N1 註解對照、磁碟 bytes 不變及最後 HEAD 複驗，沒有修改 src。最終守衛及兩項失敗的隔離復驗結果待補。
 - 部署：測試站驗收後由站長依序 update-tournament.bat → redeploy-oracle.bat，同步 admin SITE_VERSION_HINT 與前端；伺服器補丁維持 v1.70。AI 不執行部署 bat。
 
 ## v6.585（上一版 `4474367c`（v6.584））桌機與手機統一使用官方卡背

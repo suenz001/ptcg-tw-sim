@@ -17,6 +17,8 @@ const PAGINATION = 'src/lib/cards/pagination.ts';
 const PAGER = 'src/lib/cards/CardsPager.svelte';
 const rd = p => readFileSync(join(ROOT, p), 'utf8').replace(/\r\n/g, '\n');
 const source = rd(PAGE), helper = rd(PAGINATION), pager = rd(PAGER);
+// 所有突變只傳給記憶體內的編譯器；保留原始 bytes，最後確認沒有落盤污染。
+const originalBytes = [PAGE, PAGINATION, PAGER].map(p => [p, readFileSync(join(ROOT, p))]);
 let pass = 0, fail = 0;
 function ok(name, yes, detail = '') {
   if (yes) { pass++; console.log('  PASS ' + name); }
@@ -244,18 +246,18 @@ try {
     ok('BASE 正對照：首批卡片、寬度與 JS 載入仍正常', result.first && result.width && result.errors, JSON.stringify(result));
   }
   const mutations = [
-    ['超過上限', source, helper, pager, 'page'],
-    ['永遠顯示第一批', source, helper, pager, 'start'],
-    ['搜尋不重設頁碼', source, helper, pager, 'reset'],
-    ['不還原網址頁碼', source, helper, pager, 'restore'],
-    ['不寫入網址頁碼', source, helper, pager, 'url'],
-    ['下一頁跳兩頁', source, helper, pager, 'skip'],
-    ['不捲回新頁頂端', source, helper, pager, 'scroll'],
-    ['不移回分頁焦點', source, helper, pager, 'focus'],
-    ['不在同路由返回時還原', source, helper, pager, 'history'],
-    ['移除導頁還原篩選基準', source, helper, pager, 'historyFilter'],
+    ['超過上限', source, helper, pager, 'page', 'bounded'],
+    ['永遠顯示第一批', source, helper, pager, 'start', 'second'],
+    ['搜尋不重設頁碼', source, helper, pager, 'reset', 'filter'],
+    ['不還原網址頁碼', source, helper, pager, 'restore', 'restore'],
+    ['不寫入網址頁碼', source, helper, pager, 'url', 'url'],
+    ['下一頁跳兩頁', source, helper, pager, 'skip', 'second'],
+    ['不捲回新頁頂端', source, helper, pager, 'scroll', 'scroll'],
+    ['不移回分頁焦點', source, helper, pager, 'focus', 'focus'],
+    ['不在同路由返回時還原', source, helper, pager, 'history', 'history'],
+    ['移除導頁還原篩選基準', source, helper, pager, 'historyFilter', 'filteredHistory'],
   ];
-  for (const [name, page, h, ui, kind] of mutations) {
+  for (const [name, page, h, ui, kind, red] of mutations) {
     let next = page, nextUi = ui;
     const replace = (s, a, b) => { if (s.split(a).length !== 2) throw new Error('突變錨點不是唯一：' + kind); return s.replace(a, b); };
     if (kind === 'page') next = replace(next, 'filtered.slice(pageRange.start, pageRange.end)', 'filtered.slice(0, PAGE_SIZE * 2)');
@@ -270,8 +272,16 @@ try {
     if (kind === 'historyFilter') next = replace(next, '    lastAllFilterKey = allFilterKey(); // 導頁還原不是玩家修改篩選，不重設還原的頁碼', '');
     await bundle('mutant', next, h, nextUi);
     const result = await summary('mutant');
-    ok('突變被行為守衛抓到：' + name, checks.some(k => result[k] === false), JSON.stringify(result));
+    ok('突變由指定行為抓到：' + name + ' → ' + red, result[red] === false, JSON.stringify(result));
+    // 這些維持綠只能證明頁面仍可操作，不能當作與被破壞行為的邏輯獨立性證據。
+    ok('突變正對照仍綠：' + name, ['width', 'touch', 'dark', 'errors'].every(k => result[k] === true), JSON.stringify(result));
   }
+  await bundle('comment-only', source + '\n<!-- N1：只新增註解，不改產品行為。 -->\n');
+  const commentOnly = await summary('comment-only');
+  ok('N1 只改註解：全部行為仍綠', checks.every(k => commentOnly[k] === true), JSON.stringify(commentOnly));
+  ok('突變沒有改寫磁碟上的產品檔（原始 bytes 相同）', originalBytes.every(([p, bytes]) => bytes.equals(readFileSync(join(ROOT, p)))));
+  const finalHead = await summary('head');
+  ok('突變後複驗 HEAD：全部行為回綠', checks.every(k => finalHead[k] === true), JSON.stringify(finalHead));
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);
 process.exit(fail ? 1 : 0);

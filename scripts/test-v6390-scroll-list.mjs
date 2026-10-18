@@ -23,6 +23,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCss, cascade, cascadeEffective, matchOne, styleBlockOf } from './lib/css-cascade.mjs';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));   // Rule 46：禁 pathname.slice
 const SELF = 'scripts/test-v6390-scroll-list.mjs';
@@ -38,7 +39,7 @@ const chk = (name, ok, extra = '') => {
   return false;
 };
 
-const SRC = readFileSync(join(ROOT, PAGE), 'utf8');
+const SRC = normEol(readFileSync(join(ROOT, PAGE), 'utf8'));
 
 // ── 常數 ────────────────────────────────────────────────────────────────────
 const LISTS = ['mlog-list', 'reorder-deck-wrap', 'copy-attack-list', 'sel-grid', 'full-deck-list', 'rocket-command-scroll', 'retreat-grid'];
