@@ -101,7 +101,7 @@
   .ohs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
   .ohs-card { margin: 0; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .ohs-card img, .ohs-back { width: 100%; aspect-ratio: 63 / 88; border-radius: 6px; object-fit: cover; background: var(--ui-bg-sunken, #eee); display: block; }
-  .ohs-back { background: repeating-linear-gradient(45deg, #1d4ed8, #1d4ed8 6px, #2563eb 6px, #2563eb 12px); border: 2px solid #1e3a8a; box-sizing: border-box; }
+  .ohs-back { background: #06477e url('../assets/pokemon-card-back.jpg') center / cover no-repeat; border: 2px solid #1e3a8a; box-sizing: border-box; }
   .ohs-card.basic img { outline: 3px solid #3dbb7a; outline-offset: -1px; }
   .ohs-card.drawn img { outline: 3px dashed #f59e0b; outline-offset: -1px; }
   .ohs-card figcaption { font-size: 0.72rem; line-height: 1.25; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

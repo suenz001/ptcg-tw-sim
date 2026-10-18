@@ -643,7 +643,7 @@ await TA('M7 admin.html 拿掉 msgCounts 參數 ⇒「按開關要帶 msgCounts=
 // ⑨ ⭐⭐ 錦標賽區塊逐位元未動（內嵌 sha256，淺複製下也在守）
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑨ 錦標賽區塊逐位元未動');
-const TOURN_TAIL_SHA256 = '78af6c4cceb0ec9969f49560407e57ad806b7cc0e78ad316bbbcfdbcc0c4a20d' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
+const TOURN_TAIL_SHA256 = '0c41d4326191032dcee416e2e28215021f54d10623fb0fa68bb92069a5d98224' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
 function tournTail(src) {
   const i = src.indexOf("app.get('/api/tournament");
   if (i < 0) throw new assert.AssertionError({ message: '找不到第一支 /api/tournament 端點' });
@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '34f59afb705b3a30db7abd1056303b08edbc1f26';   // v6.586（上一版）
+const PREV_SHA = '5106824ec21b4bbf01340876d9cc85b551c6b5c8';   // v6.587（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,16 +757,27 @@ const PREV_SHA = '34f59afb705b3a30db7abd1056303b08edbc1f26';   // v6.586（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.587 前移：PREV_SHA 從 34f59afb（v6.586）起算。
+  // ⚠⚠ v6.588 前移：PREV_SHA 從 5106824e（v6.587）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.587：只修正瑞士制排名本人欄位的主題字色，原版面及排名／對戰行為不變。
+  // ⭐v6.588：公布欄對戰紀錄統計、排序、篩選與響應式分組，測抽沿用官方卡背；不動遊戲引擎。
+  'src/lib/decks/OpeningHandSim.svelte',
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
+  'src/routes/deck-posts/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.587）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.587 前移：PREV_SHA 從 34f59afb（v6.586）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.587：只修正瑞士制排名本人欄位的主題字色，原版面及排名／對戰行為不變。
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.586）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.586 前移：PREV_SHA 從 fd81d9b7（v6.585）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -885,16 +896,6 @@ const PREV_ALLOWED = [
 // ⚠⚠ v6.576 前移：PREV_SHA 從 a18f19e1（v6.575）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
 // ⭐v6.576：對戰中提醒改固定位置浮動堆疊（每則可 ✕）、回放控制列改浮動可拖曳小視窗（use:modalDrag contain）、版本載入異常提示搬進堆疊；首頁 changelog 三步搬運
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.575）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.575 前移：PREV_SHA 從 0a4e4807（v6.574）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.575：錦標賽聊天室 tChatSend 先擋連續相同內容（伺服器 server v1.68 才是真正的關卡）；首頁 changelog 三步搬運
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',

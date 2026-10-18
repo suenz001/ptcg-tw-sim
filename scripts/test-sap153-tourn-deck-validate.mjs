@@ -57,7 +57,8 @@ import { revertAdminV160 } from './lib/sap-revert-admin-v160.mjs';   // ⭐serve
 import { revertAdminV159 } from './lib/sap-revert-admin-v159.mjs';   // ⭐server v1.59（原型未進場不計＋先攻後攻）：先剝較新的（Rule 54）
 import { revertAdminV158 } from './lib/sap-revert-admin-v158.mjs';   // ⭐server v1.58（常用牌組對戰矩陣端點）：先剝較新的（Rule 54）
 import { revertAdminV157 } from './lib/sap-revert-admin-v157.mjs';   // ⭐server v1.57（序位預設 50＋用最新規則重新判定）：先剝較新的（Rule 54）
-import { revertV154 as _rv154, revertV165 as _rv165, revertV167 as _rv167, revertV169 } from './lib/tourn-revert-v169.mjs';   // ⭐v1.65 再長一節
+import { revertV154 as _rv154, revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 } from './lib/tourn-revert-v171.mjs';   // ⭐v1.65 再長一節
+const revertV169 = (b) => _rv169(revertV171(b));   // v1.71 先逐字還原新修改，再接既有鎖。
 const revertV167 = (b) => _rv167(revertV169(b));   // ⭐v1.69（Rule 54）：鏈再長一節（重賽系統訊息「擲硬幣」；既有呼叫點一個字都不必改）
 const revertV165 = (b) => _rv165(revertV167(b));   // ⭐v1.67（Rule 54）：鏈再長一節（對局時限判法切換、推播偏好帳號層級；既有呼叫點一個字都不必改）
 const revertV154 = (b) => _rv154(revertV165(b));   // ⭐v1.65（Rule 54）：鏈再長一節（Top Cut 人多取 16 強；既有呼叫點一個字都不必改）

@@ -51,6 +51,7 @@
     // ⚠ 宣告成選填：伺服器一定會回，但玩家瀏覽器可能還握著上一版（或 30 秒列表快取）
     //   的舊 payload，全部讀取點一律 `?? 0`。
     commentCount?: number;
+    replayCount?: number;
     createdAt: number;
     tournament: null | { eventId: string; eventName: string; finishedAt: number; placementLabel: string };
   };
@@ -86,8 +87,10 @@
   // ⭐v6.185 新增 'comments' =「最新留言」（最近有人留言的牌組排最前面）。
   //   ⚠ 伺服器端照 deckPosts.lastCommentAt 排，沒有任何留言的投稿該欄位是 0 ⇒
   //     一律排在有留言的之後、彼此依發布時間新→舊，名次穩定不亂跳。
-  let sort = $state<'new' | 'likes' | 'downloads' | 'comments'>('new');
+  let sort = $state<'new' | 'likes' | 'downloads' | 'comments' | 'replays'>('new');
   let tournamentOnly = $state(false);
+  let replaysOnly = $state(false);
+  let replayStatsSupported = $state(false);
   // ── v6.218 關鍵字搜尋 ──────────────────────────────────────────────
   //   同一個輸入框：空白分隔多個關鍵字＝每個都要命中（AND）；單一關鍵字命中＝
   //   牌組名∨作者∨說明∨留言 含該字，∨ 牌組裡有卡名含該字的卡（都是部分比對）。
@@ -280,6 +283,7 @@
     dprBusy = 'attach'; dprMsg = '';
     try {
       await dprFetch('/tournament', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify({ postId: post.id, matchId }) });
+      void fetchList(true);   // 附加／移除後安靜更新列表計數，不收起明細。
       if (!dprSamePost(post.id)) return;
       dprMsg = '✅ 已附加';
       await fetchReplays(post.id); if (dprSamePost(post.id)) await dprLoadTab('tournament');
@@ -290,6 +294,7 @@
     dprBusy = 'attach'; dprMsg = '';
     try {
       await dprFetch('/upload?postId=' + encodeURIComponent(post.id), { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', ...(await authHeaders()) }, body: bytes as BodyInit });
+      void fetchList(true);   // 附加／移除後安靜更新列表計數，不收起明細。
       if (!dprSamePost(post.id)) return;
       dprMsg = '✅ 已附加（對手的名字已改成「對手」）';
       await fetchReplays(post.id);
@@ -316,6 +321,7 @@
     dprBusy = id; dprMsg = '';
     try {
       await dprFetch('/remove', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify({ id }) });
+      void fetchList(true);   // 附加／移除後安靜更新列表計數，不收起明細。
       if (!dprSamePost(post.id)) return;
       await fetchReplays(post.id);
       if (dprSamePost(post.id) && dprAttachOpen && dprTab === 'tournament') await dprLoadTab('tournament');
@@ -374,17 +380,21 @@
     return data;
   }
 
-  async function fetchList() {
+  async function fetchList(quiet = false) {
     const seq = ++listSeq;
-    loading = true; loadError = '';
+    if (!quiet) loading = true; loadError = '';
     try {
       const q = new URLSearchParams({ sort, page: String(page), pageSize: String(pageSize) });
       if (tournamentOnly) q.set('tournamentOnly', '1');
+      if (replaysOnly) q.set('replaysOnly', '1');
       // v6.218：空白輸入＝不篩選（不送 q 參數，回到原本列表）。
       const qs = searchQ.trim();
       if (qs) q.set('q', qs);
       const r = await api('?' + q.toString());
       if (seq !== listSeq) return;              // 已經有更新的一發，這份結果作廢
+      const lastPage = Math.max(1, Math.ceil((r.total || 0) / pageSize));
+      if (page > lastPage) { page = lastPage; await fetchList(quiet); return; }
+      replayStatsSupported = r.replayStats === 1;
       posts = r.posts || [];
       total = r.total || 0;
       searchUnsupported = !!qs && typeof r.q === 'undefined';
@@ -396,12 +406,15 @@
     }
   }
 
-  function changeSort(s: 'new' | 'likes' | 'downloads' | 'comments') {
+  function changeSort(s: 'new' | 'likes' | 'downloads' | 'comments' | 'replays') {
     if (sort === s) return;
     sort = s; page = 1; void fetchList();
   }
   function toggleTournamentOnly() {
     tournamentOnly = !tournamentOnly; page = 1; void fetchList();
+  }
+  function toggleReplaysOnly() {
+    replaysOnly = !replaysOnly; page = 1; void fetchList();
   }
   function goPage(p: number) {
     const np = Math.max(1, Math.min(totalPages, p));
@@ -982,11 +995,20 @@
         <button class:active={sort === 'likes'} onclick={() => changeSort('likes')}>最多讚</button>
         <button class:active={sort === 'downloads'} onclick={() => changeSort('downloads')}>最多人收藏</button>
         <button class:active={sort === 'comments'} onclick={() => changeSort('comments')}>最新留言</button>
+        {#if replayStatsSupported}<button class:active={sort === 'replays'} onclick={() => changeSort('replays')}>最多對戰紀錄</button>{/if}
       </div>
-      <label class="filter">
-        <input type="checkbox" checked={tournamentOnly} onchange={toggleTournamentOnly} />
-        只看賽事名次牌組
-      </label>
+      <div class="filters">
+        <label class="filter">
+          <input type="checkbox" checked={tournamentOnly} onchange={toggleTournamentOnly} />
+          只看賽事名次牌組
+        </label>
+        {#if replayStatsSupported}
+          <label class="filter">
+            <input type="checkbox" checked={replaysOnly} onchange={toggleReplaysOnly} />
+            只看有對戰紀錄
+          </label>
+        {/if}
+      </div>
     </div>
 
     {#if searchUnsupported}
@@ -1004,7 +1026,7 @@
       <p class="empty">載入中…</p>
     {:else if posts.length === 0}
       <p class="empty">
-        {#if searchQ.trim()}沒有符合「{searchQ.trim()}」的投稿。{:else if tournamentOnly}目前還沒有賽事名次牌組。{:else}目前還沒有人投稿。{/if}
+        {#if searchQ.trim()}沒有符合「{searchQ.trim()}」的投稿。{:else if replaysOnly}目前沒有符合條件且附有對戰紀錄的牌組。{:else if tournamentOnly}目前還沒有賽事名次牌組。{:else}目前還沒有人投稿。{/if}
       </p>
     {:else}
       <ul class="post-list">
@@ -1021,13 +1043,17 @@
                 {/if}
               </div>
               <div class="row2">
-                <span class="author">{p.authorName}</span>
-                <span class="dot">·</span>
-                <span class="date">{fmtDate(p.createdAt)}</span>
-                <span class="spacer"></span>
-                <span class="stat" title="有多少位玩家按讚">♥ {p.likeCount}</span>
-                <span class="stat" title="有多少位不同玩家收藏過這副牌">⬇ {p.downloadCount}</span>
-                <span class="stat" title="這副牌組的留言數">💬 {p.commentCount ?? 0}</span>
+                <span class="post-meta">
+                  <span class="author">{p.authorName}</span>
+                  <span class="dot">·</span>
+                  <span class="date">{fmtDate(p.createdAt)}</span>
+                </span>
+                <span class="post-stats">
+                  <span class="stat" title="有多少位玩家按讚">♥ {p.likeCount}</span>
+                  <span class="stat" title="有多少位不同玩家收藏過這副牌">⬇ {p.downloadCount}</span>
+                  <span class="stat" title="這副牌組的留言數">💬 {p.commentCount ?? 0}</span>
+                  {#if replayStatsSupported}<span class="stat replay-stat" title="這副牌組附加的對戰紀錄數" aria-label={'對戰紀錄：' + (p.replayCount ?? 0) + ' 場'}>📼 {p.replayCount ?? 0}</span>{/if}
+                </span>
               </div>
               {#if p.notes}
                 <p class="notes">{p.notes}</p>
@@ -1331,7 +1357,8 @@
   .empty { opacity: .6; padding: 24px 0; text-align: center; }
 
   .toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
-  .sorts { display: flex; gap: 6px; }
+  .sorts { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px 16px; flex-basis: 100%; }
   .sorts button { padding: 5px 12px; border-radius: 999px; border: 1px solid rgba(128,128,128,.35); background: transparent; cursor: pointer; font-size: .85rem; }
   .sorts button.active { background: rgba(80,140,255,.18); border-color: rgba(80,140,255,.6); font-weight: 600; }
   .filter { font-size: .85rem; display: flex; align-items: center; gap: 6px; cursor: pointer; }
@@ -1351,6 +1378,10 @@
   /* ⭐v6.468：作者名稱很長時日期被折成「2026-10-」「03」兩行 ⇒ 日期不換行、作者名稱用省略號 */
   .row2 .date { white-space: nowrap; flex-shrink: 0; }
   .row2 .author { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* v6.588：作者／日期與統計分組換行，狹窄螢幕不互相擠壓。 */
+  .post-card .row2 { flex-wrap: wrap; gap: 5px 12px; }
+  .post-meta { display: flex; align-items: center; gap: 6px; flex: 1 1 160px; min-width: 0; }
+  .post-stats { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px 10px; min-width: 0; margin-left: auto; font-variant-numeric: tabular-nums; }
   .spacer { flex: 1; }
   .stat { white-space: nowrap; }
   .dot { opacity: .5; }
@@ -1497,6 +1528,8 @@
                max(12px, var(--safe-left, 0px));
     }
     .to-decks { margin-left: 0; }
+    .sorts button { min-height: 44px; }
+    .filter { min-height: 32px; }
   }
 
   /* ⭐v6.468（全站 audit）：「← 首頁」只有 16～21px 高，手機上很難點。用 padding＋等量負 margin 放大可點範圍，

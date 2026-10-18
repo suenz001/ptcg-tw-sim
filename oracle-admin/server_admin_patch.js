@@ -8084,6 +8084,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           label: evName + (m.round ? '・第 ' + m.round + ' 輪' : ''), result: m.winnerUid ? (m.winnerUid === id.uid ? 'win' : 'lose') : 'draw', turns: m.finalTurn || null,
           status: 'active', createdAt: now };
         await _dprCol.insertOne(doc);
+        if (app.locals && app.locals._deckPostReplayInvalidate) app.locals._deckPostReplayInvalidate();
         res.json({ ok: true, item: dprPublic(doc, true) });
       } catch (e) { res.status(500).json({ error: 'unavailable' }); }
     });
@@ -8155,6 +8156,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           gameId: gameId || null, label: '一般對戰', result: dprResultOf(w, seat), turns: data.meta.finalTurn || Number(fr.state.turn) || null, steps: snaps.length,
           bytes: gz.length, gz: gz.toString('base64'), status: 'active', createdAt: now };
         await _dprCol.insertOne(doc);
+        if (app.locals && app.locals._deckPostReplayInvalidate) app.locals._deckPostReplayInvalidate();
         res.json({ ok: true, item: dprPublic(doc, true) });
       } catch (e) { res.status(500).json({ error: 'unavailable' }); }
       finally { if (mine) _dprBusy--; }
@@ -8188,11 +8190,48 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const admin = isTournAdmin(id);
         if (!admin && !(post && post.uid === id.uid)) return res.status(403).json({ error: '只有投稿者或管理員可以移除' });
         await _dprCol.updateOne({ _id: rid, status: 'active' }, { $set: { status: 'removed', removedAt: Date.now(), removedBy: admin && !(post && post.uid === id.uid) ? 'admin' : 'owner', gz: null } });   // 移除時連檔案內容一起清掉（用 $set 清成 null：test-v6244／v6340 ⑫ 不准新增欄位刪除的寫法）
+        if (app.locals && app.locals._deckPostReplayInvalidate) app.locals._deckPostReplayInvalidate();
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: 'unavailable' }); }
     });
     // <<< v170-deck-post-replays
 
+    // >>> v171-deck-post-replay-stats
+    // v1.71／v6.588：只讀統計 active 附件；普通列表僅對當頁批次計數，不逐篇請求。
+    // 排序／篩選必須先計數再分頁；Mongo lookup 只回 count，不載入復盤 gz 或私人欄位。
+    app.locals = app.locals || {};
+    app.locals._deckPostReplayStats = async function ({ query, sort, page, pageSize, replaysOnly }) {
+      const projection = { entries: 0, uid: 0, email: 0, entriesHash: 0 };
+      if (sort.replayCount || replaysOnly) {
+        const pipeline = [
+          { $match: query },
+          { $lookup: { from: 'deckPostReplays', let: { pid: '$_id' }, pipeline: [
+            { $match: { status: 'active', $expr: { $eq: ['$postId', '$$pid'] } } },
+            { $count: 'n' },
+          ], as: '_replayStats' } },
+          { $addFields: { replayCount: { $ifNull: [{ $arrayElemAt: ['$_replayStats.n', 0] }, 0] } } },
+          ...(replaysOnly ? [{ $match: { replayCount: { $gt: 0 } } }] : []),
+          { $sort: sort },
+          { $facet: { docs: [{ $skip: (page - 1) * pageSize }, { $limit: pageSize }, { $project: { ...projection, _replayStats: 0 } }], total: [{ $count: 'n' }] } },
+        ];
+        const result = (await _dprPosts.aggregate(pipeline).toArray())[0];
+        return [result ? result.docs : [], result && result.total[0] ? result.total[0].n : 0];
+      }
+      const [docs, total] = await Promise.all([
+        _dprPosts.find(query, { projection }).sort(sort).skip((page - 1) * pageSize).limit(pageSize).toArray(),
+        _dprPosts.countDocuments(query),
+      ]);
+      if (docs.length) {
+        const counts = await _dprCol.aggregate([
+          { $match: { postId: { $in: docs.map(d => d._id) }, status: 'active' } },
+          { $group: { _id: '$postId', n: { $sum: 1 } } },
+        ]).toArray();
+        const byId = new Map(counts.map(d => [d._id, d.n]));
+        for (const doc of docs) doc.replayCount = byId.get(doc._id) || 0;
+      }
+      return [docs, total];
+    };
+    // <<< v171-deck-post-replay-stats
     app.get('/api/tournament/state', async (req, res) => {
       try {
         const room = String(req.query.room || 'TOURNAMENT-TEST');
@@ -10982,6 +11021,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           //   —— 那就是每頁 20 次的 N+1（v6.119 讀放大的同一個教訓）。
           //   夾在 0 以下是防守性的：真正的權威是明細表，admin 的 recount 端點負責修正漂移。
           commentCount: Math.max(0, doc.commentCount || 0),
+          replayCount: Math.max(0, doc.replayCount || 0),
           // ⭐v6.185 最近一則留言時間（0 = 從來沒有留言）。「最新留言」排序就是照它排。
           lastCommentAt: Math.max(0, doc.lastCommentAt || 0),
           createdAt: doc.createdAt || 0,
@@ -11067,6 +11107,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
 
       // ════════ 公開讀 ════════
       const _dpListCache = new Map();   // key -> { at, payload }
+      app.locals = app.locals || {};
+      app.locals._deckPostReplayInvalidate = () => _dpListCache.clear();
       app.get('/api/deck-posts', async (req, res) => {
         try {
           // ⚠ 正式站走 Cloudflare tunnel，公開 GET 曾被快取住（index.json 被快取 4 天）。
@@ -11080,7 +11122,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
             likes: { likeCount: -1, createdAt: -1 },
             downloads: { downloadCount: -1, createdAt: -1 },
             comments: { lastCommentAt: -1, createdAt: -1 },
+            replays: { replayCount: -1, createdAt: -1, _id: 1 },
           })[String((req.query && req.query.sort) || 'new')] || { createdAt: -1 };
+          const replayStats = typeof (app.locals || {})._deckPostReplayStats === 'function';
+          const replaysOnly = replayStats && String((req.query && req.query.replaysOnly) || '') === '1';
           const page = Math.max(1, Math.min(200, parseInt((req.query && req.query.page) || '1', 10) || 1));
           const pageSize = Math.max(1, Math.min(50, parseInt((req.query && req.query.pageSize) || '20', 10) || 20));
           const q = { status: 'published' };
@@ -11092,7 +11137,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           if (qTokens.length && !dpRate('s:' + dpIp(req), 60000, 60)) return res.status(429).json({ error: '搜尋太頻繁，請稍候再試' });
           // ⚠ 快取鍵不可放 q 物件本身：$and 裡若混進 RegExp，JSON.stringify 會把它變 {}，
           //   不同搜尋就撞成同一份快取。改放 token 原文（$regex 也一律用字串形式，雙保險）。
-          const ck = JSON.stringify([sort, page, pageSize, arche, q.tournament ? 1 : 0, qTokens]);
+          const ck = JSON.stringify([sort, page, pageSize, arche, q.tournament ? 1 : 0, qTokens, replaysOnly]);
           const hit = _dpListCache.get(ck);
           if (hit && Date.now() - hit.at < DP_LIST_TTL) return res.json(hit.payload);
           if (qTokens.length) {
@@ -11110,12 +11155,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
             }));
           }
           // ⚠ 列表**不回 entries**：每筆 60 張 × 每頁 20 筆是純浪費（v6.119 的讀放大教訓）。
-          const [docs, total] = await Promise.all([
+          const [docs, total] = replayStats
+            ? await app.locals._deckPostReplayStats({ query: q, sort, page, pageSize, replaysOnly })
+            : await Promise.all([
             DPOSTS.find(q, { projection: { entries: 0, uid: 0, email: 0, entriesHash: 0 } }).sort(sort).skip((page - 1) * pageSize).limit(pageSize).toArray(),
             DPOSTS.countDocuments(q),
           ]);
           // ⚠ q 欄位是**哨兵**：舊伺服器的回應沒有它，前端據此分辨「伺服器還不支援搜尋」。
-          const payload = { posts: docs.map((d) => dpPublic(d)), total, page, pageSize, q: qTokens.join(' ') };
+          const payload = { posts: docs.map((d) => dpPublic(d)), total, page, pageSize, q: qTokens.join(' '), ...(replayStats ? { replayStats: 1 } : {}) };
           _dpListCache.set(ck, { at: Date.now(), payload });
           if (_dpListCache.size > 200) _dpListCache.clear();
           res.json(payload);

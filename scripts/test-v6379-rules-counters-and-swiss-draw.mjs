@@ -336,7 +336,9 @@ const SRV = rd(SRV_REL);
   const RV167 = await import('./lib/tourn-revert-v167.mjs');   // ⭐v1.69：v1.67 的「新值」現在也是舊值
   const RV92 = await import('./lib/tourn-revert-v6292.mjs');
   const RV91 = await import('./lib/tourn-revert-v6291.mjs');
+  const RV169 = await import('./lib/tourn-revert-v169.mjs');
   const OLD_VALUES = [
+    ['v1.69 tail', RV169.NEW_TAIL_SHA_V169], ['v1.69 tev', RV169.NEW_TEV_SHA_V169],
     ['v6.290 tail', RV91.OLD_TAIL_SHA_V6290], ['v6.290 tev', RV91.OLD_TEV_SHA_V6290],
     ['v6.291 tail', RV91.NEW_TAIL_SHA_V6291], ['v6.291 tev', RV91.NEW_TEV_SHA_V6291],
     ['v6.292 tail', RV92.NEW_TAIL_SHA_V6292], ['v6.292 tev', RV92.NEW_TEV_SHA_V6292],
@@ -370,9 +372,10 @@ const SRV = rd(SRV_REL);
     'scripts/lib/tourn-revert-v154.mjs',    // ⭐v1.54 新節點（全站 audit 降載）
     'scripts/lib/tourn-revert-v165.mjs',    // ⭐v1.67：v1.65 節點（它宣告的 v1.65 新值現在是舊值）
     'scripts/lib/tourn-revert-v167.mjs',    // ⭐v1.69：v1.67 節點（它宣告的 v1.67 新值現在是舊值）
+    'scripts/lib/tourn-revert-v169.mjs',
     'scripts/test-v6292-tourn-verified-gate2.mjs']);
   chk('★★ D3-前提：被豁免的 ' + LIB_DECL.size + ' 個檔案**每一個**都真的是還原鏈的一員（豁免不能隨便加）',
-    LIB_DECL.size === 12 && [...LIB_DECL]   /* ⭐v1.67 納入 v1.65 節點 ⇒ 11；⭐v1.69 納入 v1.67 節點 ⇒ 12 */.every((rel) => {   // ⭐v1.50 鏈多一節 ⇒ 7；⭐v1.52 再一節 ⇒ 8；⭐v1.53 再一節 ⇒ 9；⭐v1.54 再一節 ⇒ 10
+    LIB_DECL.size === 13 && [...LIB_DECL]   /* ⭐v1.67 納入 v1.65 節點 ⇒ 11；⭐v1.69 納入 v1.67 節點 ⇒ 12 */.every((rel) => {   // ⭐v1.50 鏈多一節 ⇒ 7；⭐v1.52 再一節 ⇒ 8；⭐v1.53 再一節 ⇒ 9；⭐v1.54 再一節 ⇒ 10
       const s = rd(rel);
       const isLib = /^scripts\/lib\/tourn-revert-v\d+\.mjs$/.test(rel);
       const isConsumer = /from '\.\/lib\/tourn-revert-v\d+\.mjs'/.test(s);

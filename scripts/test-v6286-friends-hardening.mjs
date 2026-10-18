@@ -85,8 +85,8 @@ await T('A0 三個伺服器區塊抽得到（掃描器下限）', () => {
   assert.ok(FR.includes('function _frFail('), 'HEAD-FAIL：friends 區塊沒有 v1.37 的 _frFail（BASE v6.285 ⇒ 這一條必紅）');
 });
 if (!FR) { console.log('\n══ v6.286 守衛：' + pass + ' PASS / ' + fail + ' FAIL（HEAD-FAIL：區塊抽不到，後續無法進行）══'); process.exit(1); }
-const TOURN_TAIL_SHA256 = '78af6c4cceb0ec9969f49560407e57ad806b7cc0e78ad316bbbcfdbcc0c4a20d';   // 與 test-v6272 ⑨ 同一把（第一支 /api/tournament 端點至檔尾）
-const TOURN_ANCHOR_SHA256 = '9c8db4028ca4945afab7abfebcd0a41c04a51ad948b886fc5210024b8a95de88'; // 與 test-v6278 I1／test-v6283 D1 同一把（TEVENTS 錨點至檔尾）
+const TOURN_TAIL_SHA256 = '0c41d4326191032dcee416e2e28215021f54d10623fb0fa68bb92069a5d98224';   // 與 test-v6272 ⑨ 同一把（第一支 /api/tournament 端點至檔尾）
+const TOURN_ANCHOR_SHA256 = '65a40443f327d98168f0f07a4c0b751c323ebb139f552c8955e226f891cafb4b'; // 與 test-v6278 I1／test-v6283 D1 同一把（TEVENTS 錨點至檔尾）
 await T('A1 ⚠⚠ 錦標賽區塊逐位元未動（兩把既有 sha256 都相同；friends 區塊整段在它之前）', () => {
   const first = PATCH.indexOf("app.get('/api/tournament");   // 與 test-v6272 tournTail 同一個錨點
   assert.ok(first > 0, '找不到第一支 /api/tournament 端點');

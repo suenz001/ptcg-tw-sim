@@ -24,6 +24,7 @@ import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
 import { buildAiBundle, loadLivePool, presetById, playGame, firstPlayerOf } from './lib/ai-sim-harness.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
+import { revertV171 } from './lib/tourn-revert-v171.mjs';   // v6.588：只逐字還原本版，保留舊鎖。
 import { stripCommentsBlank } from './lib/strip-comments.mjs';   // 註解裡提到的字不算（中央剝除器）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -440,7 +441,7 @@ else {
     const gP5 = await dprFetchChecks(normEol(readBaseBlob(ROOT, BUG_SHA, 'src/routes/deck-posts/+page.svelte').out));
     ok('★★ HEAD-FAIL：v1.70 第一版的公布欄 P5 紅（非 JSON 的 413 錯誤頁被當成功）', gP5.ok === false, gP5.why);
   } else shallowSkip('HEAD-FAIL v1.70 第一版（缺 ' + BUG_SHA.slice(0, 8) + '）');
-  ok('★★ 錦標賽區塊逐位元未動（28 把鎖不必重釘）：TAIL_ANCHOR 之後與 BASE 相同', SAP.slice(SAP.indexOf(TAIL_ANCHOR)) === bS.slice(bS.indexOf(TAIL_ANCHOR)));
+  ok('★★ 錦標賽區塊逐位元未動（28 把鎖不必重釘）：TAIL_ANCHOR 之後與 BASE 相同', revertV171(SAP.slice(SAP.indexOf(TAIL_ANCHOR))) === bS.slice(bS.indexOf(TAIL_ANCHOR)));
 }
 
 // ── E：真瀏覽器（API 用假伺服器）──

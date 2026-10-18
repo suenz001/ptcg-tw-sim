@@ -175,10 +175,10 @@ function makeEnv() {
   const sec = section(DP, "app.get('/api/deck-posts',", "app.get('/api/deck-posts/:id'");
   const fnText = sec.slice(sec.indexOf('async (req, res)'), sec.lastIndexOf(');'));
   env.handler = new Function(
-    'DPOSTS', 'DPCOMM', 'dpRate', 'dpIp', '_dpListCache', 'dpPublic', 'DP_LIST_TTL',
+    'app', 'DPOSTS', 'DPCOMM', 'dpRate', 'dpIp', '_dpListCache', 'dpPublic', 'DP_LIST_TTL',
     'dpSearchTokens', 'dpSearchEscape', 'dpCardIdsForToken', 'dpTokenOr', 'dpCardNamePairs',
     'return (' + fnText + ')',
-  )(env.DPOSTS, env.DPCOMM, env.dpRate, env.dpIp, env.cache, (d) => d, 30000,
+  )({ locals: {} }, env.DPOSTS, env.DPCOMM, env.dpRate, env.dpIp, env.cache, (d) => d, 30000,
     dpSearchTokens, dpSearchEscape, dpCardIdsForToken, dpTokenOr, () => PAIRS);
   env.call = async (query) => {
     const res = { code: 200, payload: null, set() {}, json(p) { this.payload = p; }, status(c) { this.code = c; return this; } };
@@ -250,12 +250,12 @@ await TA('搜尋限流：帶 q 才消耗 s: 額度；限流觸發回 429', async
   env.dpRate2 = env.dpRate;
   const env2 = makeEnv();
   env2.handler = new Function(
-    'DPOSTS', 'DPCOMM', 'dpRate', 'dpIp', '_dpListCache', 'dpPublic', 'DP_LIST_TTL',
+    'app', 'DPOSTS', 'DPCOMM', 'dpRate', 'dpIp', '_dpListCache', 'dpPublic', 'DP_LIST_TTL',
     'dpSearchTokens', 'dpSearchEscape', 'dpCardIdsForToken', 'dpTokenOr', 'dpCardNamePairs',
     'return (' + section(DP, "app.get('/api/deck-posts',", "app.get('/api/deck-posts/:id'").slice(
       section(DP, "app.get('/api/deck-posts',", "app.get('/api/deck-posts/:id'").indexOf('async (req, res)'),
       section(DP, "app.get('/api/deck-posts',", "app.get('/api/deck-posts/:id'").lastIndexOf(');')) + ')',
-  )(env2.DPOSTS, env2.DPCOMM, () => false, () => 't', new Map(), (d) => d, 30000,
+  )({ locals: {} }, env2.DPOSTS, env2.DPCOMM, () => false, () => 't', new Map(), (d) => d, 30000,
     dpSearchTokens, dpSearchEscape, dpCardIdsForToken, dpTokenOr, () => PAIRS);
   const res = { code: 200, payload: null, set() {}, json(p) { this.payload = p; }, status(c) { this.code = c; return this; } };
   await env2.handler({ query: { q: 'x' }, headers: {} }, res);
@@ -278,7 +278,7 @@ function stripComments(src) {
 const PG = stripComments(PAGE);
 
 T('⭐ 搜尋走伺服器端：fetchList 帶 ?q=，且空字串不送（空白輸入＝不篩選）', () => {
-  const fl = section(PG, 'async function fetchList()', 'function changeSort');
+  const fl = section(PG, 'async function fetchList(', 'function changeSort');
   ok(/const qs = searchQ\.trim\(\);/.test(fl), 'fetchList 沒有讀 searchQ');
   ok(/if \(qs\) q\.set\('q', qs\);/.test(fl), '沒有「非空才送 q」的守門 —— 空搜尋會多送參數');
   ok(!/posts\s*=\s*posts\.filter/.test(PG), '出現前端過濾 posts 的寫法 —— 只搜得到當頁，成敗關鍵違反');

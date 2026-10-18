@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { revertAdminV171 } from './lib/sap-revert-admin-v171.mjs';
 /**
  * server patch v1.69 守衛：管理員「重賽」時，錦標賽聊天室的系統訊息「（從擲幣重新開始）」→「（從擲硬幣重新開始）」
  *   （站長 2026-10-16 裁定「5.好」：玩家看得到的字一律寫「擲硬幣」，與 v6.573 對戰紀錄用詞統一一致）
@@ -30,7 +31,7 @@ const BASE_SHA = '772ecf8c4e413b0046c598348e34e6563305d596';
 let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c) { pass++; console.log('  PASS ' + n); } else { fail++; console.log('  FAIL ' + n + (x !== undefined ? ' — ' + x : '')); } };
 const sha = (s) => createHash('sha256').update(s, 'utf8').digest('hex');
-const SRC = readFileSync(join(ROOT, REL), 'utf8').replace(/\r\n/g, '\n');
+const SRC = revertAdminV171(readFileSync(join(ROOT, REL), 'utf8').replace(/\r\n/g, '\n'));
 
 // 重賽端點本體：從 app.post('/api/tournament/admin/match/restart' 起，大括號配對到 handler 結束
 function restartHandler(src) {
@@ -95,7 +96,7 @@ ok('★★★ D1 現行區塊指紋＝v1.69 新值（tail／tev／長度）', sh
 }
 {
   const CONSUMERS = ['test-v6276-deck-tournament-stats', 'test-v6291-tourn-verified-gate', 'test-v6292-tourn-verified-gate2', 'test-v6381-archive-gamedraw-and-swiss-note', 'test-sap152-bracket-light', 'test-sap153-tourn-deck-validate', 'test-sap154-audit-load'];
-  const bad = CONSUMERS.filter((f) => { const s = readFileSync(join(ROOT, 'scripts', f + '.mjs'), 'utf8'); return !(s.includes("from './lib/tourn-revert-v169.mjs'") && s.includes('revertV169(')); });
+  const bad = CONSUMERS.filter((f) => { const s = readFileSync(join(ROOT, 'scripts', f + '.mjs'), 'utf8'); return !(s.includes("from './lib/tourn-revert-v171.mjs'") && s.includes('revertV169(')); });
   ok('★★ D5 七支消費者都 import tourn-revert-v169 且呼叫 revertV169(', bad.length === 0, bad.join(', '));
 }
 console.log(`\n=== server v1.69 重賽系統訊息「擲硬幣」：${pass} PASS / ${fail} FAIL ===`);

@@ -478,9 +478,10 @@ console.log('\n【D】錦標賽區塊的 revert-diff 與 28 把鎖重釘（動�
   const RV154 = await import('./lib/tourn-revert-v154.mjs');   // ⭐v1.54 再先剝一節
   const RV165 = await import('./lib/tourn-revert-v165.mjs');   // ⭐v1.65 再先剝一節
   const RV167 = await import('./lib/tourn-revert-v167.mjs');   // ⭐v1.67 再先剝一節（Rule 54）
+  const RV171 = await import('./lib/tourn-revert-v171.mjs');
   const RV169 = await import('./lib/tourn-revert-v169.mjs');   // ⭐v1.69 再先剝一節（Rule 54）
-  const tail = RV152.revertV152(RV153.revertV153(RV154.revertV154(RV165.revertV165(RV167.revertV167(RV169.revertV169(PATCH.slice(PATCH.indexOf(RV.TAIL_ANCHOR))))))));
-  const tev = RV152.revertV152(RV153.revertV153(RV154.revertV154(RV165.revertV165(RV167.revertV167(RV169.revertV169(PATCH.slice(PATCH.indexOf(RV.TEV_ANCHOR))))))));
+  const tail = RV152.revertV152(RV153.revertV153(RV154.revertV154(RV165.revertV165(RV167.revertV167(RV169.revertV169(RV171.revertV171(PATCH.slice(PATCH.indexOf(RV.TAIL_ANCHOR)))))))));
+  const tev = RV152.revertV152(RV153.revertV153(RV154.revertV154(RV165.revertV165(RV167.revertV167(RV169.revertV169(RV171.revertV171(PATCH.slice(PATCH.indexOf(RV.TEV_ANCHOR)))))))));
   await T('D1 ⭐⭐ 現行區塊（剝掉 v1.52 之後）指紋 ＝ v1.50 的新值（tail／tev／長度）', () => {
     ok(sha(tail) === RV.NEW_TAIL_SHA_V150 && sha(tev) === RV.NEW_TEV_SHA_V150 && tev.length === RV.NEW_TEV_LEN_V150,
       'tail=' + sha(tail) + ' tev=' + sha(tev) + ' len=' + tev.length);
