@@ -19,8 +19,8 @@ function ok(name,value,details=''){if(value){pass++;console.log('PASS '+name);}e
 function replaceOne(s,a,b){if(s.split(a).length!==2)throw new Error('錨點不是唯一：'+a.slice(0,80));return s.replace(a,b);}
 const baseRead=()=>{const x=readBaseBlob(ROOT,BASE,PAGE);if(!x.ok)throw new Error('BASE讀取失敗');return x.out.replace(/\r\n/g,'\n');};
 const lightRules=[...source.matchAll(/:global\(html\[data-theme='light'\]:not\(\[data-battle-view\]\)\) \.tourn-standing-self \{ color: #[0-9a-fA-F]{6}; \}/g)];
-if(lightRules.length!==1)throw new Error('本人淺色規則必須唯一');
-const lightRule=lightRules[0][0];
+ok('本人淺色規則恰好一條',lightRules.length===1);
+const lightRule=lightRules.length===1?lightRules[0][0]:null;
 // 還原色彩產生區，再用精確字面還原本版 markup；整頁原始意圖不放寬。
 if(hasBaseCommit(ROOT,BASE)){
   const base=baseRead();
@@ -28,8 +28,12 @@ if(hasBaseCommit(ROOT,BASE)){
   const old=base.match(block),current=source.match(block);
   if(old?.length!==1||current?.length!==1)throw new Error('淺色哨兵必須唯一');
   let restored=source.replace(current[0],old[0]);
-  for(const [now,prev]of V6587_GAME_PAIRS)restored=replaceOne(restored,now,prev);
-  ok('Rule40 本版字面還原後逐位元等於上一版',restored!==source&&restored===base);
+  let unique=true;
+  for(const [now,prev]of V6587_GAME_PAIRS){
+    if(restored.split(now).length!==2){unique=false;continue;}
+    restored=restored.replace(now,prev);
+  }
+  ok('Rule40 本版字面還原後逐位元等於上一版',unique&&restored!==source&&restored===base);
 }else shallowSkip('v6587 還原與 HEAD-FAIL','需要v6.586歷史');
 
 const browser=await pwLaunch('v6.587 瑞士制本人字色對比');
@@ -69,14 +73,17 @@ if(browser){
     }
     const nameLine='class:tourn-standing-self={s.mine} style="overflow:hidden;';
     const rankLine='class:tourn-standing-self={s.mine} style="text-align:center;"';
-    const mutations=[
+    const mutationReady=[nameLine,rankLine,lightRule,'{s.name}{#if s.mine} （你）{/if}'].every(x=>x&&source.split(x).length===2);
+    ok('突變前提：產品錨點各恰好一處',mutationReady);
+    // BASE 沒有新版結構時，前提已判紅；仍完成下方對比與正對照，不因缺少 class 整支 throw。
+    const mutations=mutationReady?[
       ['名字漏套樣式',s=>replaceOne(s,nameLine,'style="overflow:hidden;'),'readable'],
       ['名次漏套樣式',s=>replaceOne(s,rankLine,'style="text-align:center;"'),'readable'],
       ['淺色規則消失',s=>replaceOne(s,lightRule,''),'readable'],
       ['淺色仍用淡黃色',s=>replaceOne(s,lightRule,lightRule.replace(/#[0-9a-fA-F]{6}/,'#ffd56b')),'readable'],
       ['淺色規則外洩牌桌',s=>replaceOne(s,lightRule,lightRule.replace(':not([data-battle-view])','')),'scoped'],
       ['本人標記遺失',s=>replaceOne(s,'{s.name}{#if s.mine} （你）{/if}','{s.name}'),'own'],
-    ];
+    ]:[];
     for(const [name,mutate,red]of mutations){
       const m=await checks(await standingsFixture(ROOT,mutate(source),layout));
       ok('指定突變紅項：'+name+' → '+red,m[red]===false);
