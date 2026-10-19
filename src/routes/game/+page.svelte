@@ -15140,7 +15140,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <summary>🖥️ 畫面縮放</summary>
           <div class="setting-row">
             <label for="res-mode">解析度模式：</label>
-            <select id="res-mode" value={resolutionMode} onchange={(e) => setResolutionMode(e.currentTarget.value as 'auto' | '100' | '90' | '80' | '75' | '70' | '65' | '60')}>
+            <select id="res-mode" disabled={isPortraitMobile} value={resolutionMode} onchange={(e) => setResolutionMode(e.currentTarget.value as 'auto' | '100' | '90' | '80' | '75' | '70' | '65' | '60')}>
               <option value="auto">自動（推薦）</option>
               <option value="100">100% — 原始尺寸</option>
               <option value="90">90% — 微縮</option>
@@ -15153,8 +15153,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
           </div>
           <div class="setting-hint">
             目前縮放：{Math.round(gameZoom * 100)}%
-            <br/>・自動模式依視窗自動算（基準 1366×768）；1024×576 約落在 75%
-            <br/>・若還是看到卡牌被切，可手動往下調 70% / 65% / 60%
+            {#if isPortraitMobile}
+              <br/>手機畫面自動適配；此設定僅套用桌機。
+            {:else}
+              <br/>・自動模式依視窗自動算（基準 1366×768）；1024×576 約落在 75%
+              <br/>・若還是看到卡牌被切，可手動往下調 70% / 65% / 60%
+            {/if}
           </div>
         </details>
 

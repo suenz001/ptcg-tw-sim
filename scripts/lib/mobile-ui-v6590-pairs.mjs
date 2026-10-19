@@ -20,6 +20,14 @@ export const MOBILE_UI_V6590_PAIRS = {
     [
       "      // 手機 portrait 走另一個元件，不縮放\n      if (isPortraitMobile) { gameZoom = 1; return; }\n",
       ""
+    ],
+    [
+      "<select id=\"res-mode\" value={resolutionMode}",
+      "<select id=\"res-mode\" disabled={isPortraitMobile} value={resolutionMode}"
+    ],
+    [
+      "            <br/>・自動模式依視窗自動算（基準 1366×768）；1024×576 約落在 75%\n            <br/>・若還是看到卡牌被切，可手動往下調 70% / 65% / 60%",
+      "            {#if isPortraitMobile}\n              <br/>手機畫面自動適配；此設定僅套用桌機。\n            {:else}\n              <br/>・自動模式依視窗自動算（基準 1366×768）；1024×576 約落在 75%\n              <br/>・若還是看到卡牌被切，可手動往下調 70% / 65% / 60%\n            {/if}"
     ]
   ],
   "src/routes/game/MobilePortraitBattle.svelte": [
