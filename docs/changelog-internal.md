@@ -12,6 +12,8 @@ BASE `4101927d`（v6.590）。站長要求Google搜尋不要再出現GitHub Page
 
 最終完整驗收：b0c49c392144c21c12d4b5a176172e26263c3a18 完整939/939全綠、27.72分（一般903＋獨占36），FAIL/TIMEOUT/escape/回復失敗/主樹硬差異均0、statusChanged=false；新守衛56/0，千局進化1000 deterministic seeds與harness＋35免疫皆綠。skip逐支與6.590完整報表相同（v6378 ENV2、v6263 PLATFORM1、SHALLOW0）。本輪載入既有duration歷史，未縮減任何樣本。證據 E:\ptcg-tw-sim-local\noindex-6591-full\__rt\full.json、__rt/out、noindex-6591-full.log。全套後只補docs指引：無尾斜線根網址僅可「移除此網址」，不可前綴移除以免波及姊妹卡圖站。獨立noindex_6591_review已核939報表、雙建置、4962頁產物與最終docsdiff，准推，未解決P1/P2/P3皆0。僅補本驗收紀錄後推main，再驗CI與線上noindex。此設定隨Pages發布生效，不需站長為此執行正式站bat；admin紀錄隨下次後台部署出現。Google現有結果仍需重新抓取，或由站長登入SearchConsole按指引加速移除，AI未代登入帳號或提交移除。
 
+211ab51a推後自查發現新guard把當前正式SEO與公開三紀錄永久釘BASE，會擋後續正常改版；只修五檔歷史契約作用域：VERSION6.591仍驗工作樹，後續版驗main已發布211ab51a完整SHA的五檔真blob。CI接線與noindex功能始終驗當前版本，不做歷史快照放行。五檔當前判準、未來6.592+假新內容正對照、BASE加換行負對照共用unchanged helper。守衛66/0；e5b25ab4同runner隔離重驗1/1、66/0，timeout/escape/restore/hard/SKIP皆0、statusChanged=false。證據noindex-6591-rerun-final/__rt/rerun.json與log；第一e2d06364的66/0亦保留。相對原939全套只有docs與此守衛修改、產品及建置不變；同位獨立審查核對最終diff和新報表後再次准推，未解決0。舊Deploy39245836238由AI主動取消，避免舊提交發布/排隊；不是測試失敗，不宣稱該次CI完成。最終提交重新驗完整CI與線上標籤後結案。
+
 ## v6.590 — 手機UI程式檢查六項修正
 
 BASE `3c8a3da9`（v6.589）。站長授權處理五項程式缺陷與既知手機手動縮放，要求獨立審查。
