@@ -13,6 +13,12 @@ BASE `3c8a3da9`（v6.589）。站長授權處理五項程式缺陷與既知手�
 - 限制：本版不宣稱已確認／修復iPhone主畫面原生頂端模糊；程式缺陷與系統顯示層分開驗收。
 - 部署：僅前端，預計站長自行redeploy-oracle.bat；AI不代跑部署。
 
+- 最終完整驗收：30f0f3dd 跑938/938支、21.16分，931綠／4FAIL／3TIMEOUT，不描述為原全套零失敗。harness＋35免疫全綠，新守衛74/0；escape／回復失敗／主樹硬差異0、statusChanged=false；skip逐支與v6.589基準一致（v6378 ENV2、v6263 PLATFORM1、SHALLOW0）。未載入既有duration歷史，三支長測試誤用120秒下限而逾時；不減樣本、不改判準，改帶既有history單工完整補驗。
+- 全套後只改4份測試：新guard／mutcheck根宣告分行以符合既有跨平台掃描器；v6190僅辨識包住MobilePortraitBattle的版面分支，新增無關提示／缺失／重複對照，原C2～C6不動；v6587精確還原路徑先剝本版，視覺仍讀真source，另加略過接線與額外差異兩負對照。產品無變化、原build有效；同位獨立複審通過。
+- 最後098b1f80以同runner單工隔離複驗7原紅＋新guard，8/8全綠、17.6分：千局進化回歸完整完成682.9秒、v6571 12/0、v6310 17/0、v6378 44/0、v6371 155/0、v6590 74/0、v6587 53/0、v6190 186/0。無TIMEOUT／escape／回復失敗／主樹硬差異，statusChanged=false，ENV2與原同支一致。原完整報表與早停證據均保留；結論採完整938項加原紅全部隔離複驗，未把only誤稱完整驗收。證據 E:\ptcg-tw-sim-local\mobile-6590-full-accepted\__rt\full.json、mobile-6590-rerun\__rt\rerun.json與__rt/out、mobile-6590-build-final.log、mobile-6590-mutants-release/results.json。正式站原生模糊仍需實機確認，不宣稱本版已根治。
+
+- 最終同位獨立審查已核對兩份報表、1000 deterministic seeds、全部七原紅補齊、產品無差異，准推；未解決P1/P2/P3均0。僅補本紀錄後推main並驗CI，正式部署由站長自行執行。
+
 ## v6.589（上一版 `d1e945ca`（v6.588））admin完整帳號統計（hidden）
 
 - 站長指定首頁不要再將50,000掃描上限當總數，並明確選擇「取得完整帳號總數，接受增加查詢與更新時間」。只更動後台；公開首頁三份changelog逐字不變，admin v1.88更新記錄內建本版內部條目，server v1.72。
