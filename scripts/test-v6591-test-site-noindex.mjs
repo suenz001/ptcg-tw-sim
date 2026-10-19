@@ -97,9 +97,21 @@ try {
   if (hasBaseCommit(ROOT, BASE)) {
     const old = readBaseBlob(ROOT, BASE, WF); if (!old.ok) throw Error('讀取BASE workflow失敗');
     ok('HEAD-FAIL 真BASE未接禁收錄步驟', !wiring(old.out, pkg).wired);
+    const currentVersion = rd('src/lib/version.ts').match(/VERSION = '([^']+)'/)?.[1];
+    if (!currentVersion) throw Error('讀不到產品版本');
+    // 僅驗本版維持正式SEO與隱藏紀錄；未來版可正常更新玩家公告與正式SEO。
+    const releaseText = (p, version, readCurrent = rd) => {
+      if (version === '6.591') return readCurrent(p);
+      const released = readBaseBlob(ROOT, '211ab51adb8555390dd1256ecf63db98b8a0e1cd', p);
+      if (!released.ok) throw Error('讀取v6.591發布內容失敗 ' + p);
+      return released.out;
+    };
     for (const p of ['src/app.html', 'static/robots.txt', 'static/changelog.html', 'static/changelog-bodies.html', 'static/changelog-archive.html']) {
       const b = readBaseBlob(ROOT, BASE, p); if (!b.ok) throw Error('讀取BASE失敗 ' + p);
-      ok('正式SEO與公開紀錄不變 ' + p, rd(p).replace(/\r\n/g, '\n') === b.out.replace(/\r\n/g, '\n'));
+      const before = b.out.replace(/\r\n/g, '\n'), after = releaseText(p, currentVersion).replace(/\r\n/g, '\n');
+      ok('v6.591正式SEO與公開紀錄不變 ' + p, after === before);
+      ok('未來版新增內容不破壞本版歷史契約 ' + p, releaseText(p, '6.592', () => '未來改版內容').replace(/\r\n/g, '\n') === before);
+      ok('本版額外內容突變必紅 ' + p, after + '\n' !== before);
     }
     const oldScript = readBaseBlob(ROOT, BASE, SCRIPT);
     const oldMod = oldScript.ok ? (await moduleFrom(oldScript.out, 'base')).mod : { noindexHtml: s => s, protectTestBuild: () => 0 };
