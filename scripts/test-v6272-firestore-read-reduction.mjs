@@ -764,6 +764,9 @@ const PREV_ALLOWED = [
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'src/routes/game/MobilePortraitBattle.svelte',
+  'static/changelog-archive.html',
+  'static/changelog-bodies.html',
+  'static/changelog.html',
   'static/site-version.txt',
 ];
 // ── 上一版（v6.589）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
