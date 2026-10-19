@@ -644,7 +644,7 @@
   function preventScroll(node: HTMLElement) {
     const moveHandler = (e: TouchEvent) => {
       const t = e.target as Element | null;
-      if (t?.closest('.mp-row, .mp-hand, .mp-log, .mp-chips, .mp-sheet, .chat-panel-messages')) return;
+      if (t?.closest('.mp-row, .mp-hand, .mp-log, .mp-chips, .mp-sheet, .mp-active-info, .chat-panel-messages')) return;
       e.preventDefault();
     };
     // v3.871 / v3.872: document 層也擋 — 處理 .mp 外的 pull-to-refresh
@@ -655,7 +655,7 @@
       const t = e.target as Element | null;
       // 落在 .mp 外（瀏覽器邊界區）或非 scrollable 內部 → 擋
       if (!t || !t.closest(
-        '.mp-row, .mp-hand, .mp-log, .mp-chips, .mp-sheet, ' +
+        '.mp-row, .mp-hand, .mp-log, .mp-chips, .mp-sheet, .mp-active-info, ' +
         '.selection-overlay, .selection-modal, ' +
         '.lightbox-overlay, ' +
         '.zoom-overlay, .zoom-modal, ' +
@@ -690,6 +690,7 @@
     }
     function onMove(e: PointerEvent) {
       if (!down) return;
+      if (e.buttons === 0) { onCancel(); return; }
       const dx = e.clientX - startX;
       if (Math.abs(dx) > 4) moved = true;
       if (moved) { node.scrollLeft = startScroll - dx; e.preventDefault(); }
@@ -705,12 +706,22 @@
         setTimeout(() => node.removeEventListener('click', eat, true), 0);
       }
     }
+    // v6.590：取消／失焦不能留下拖曳狀態，也不能吞掉下一次真正的點擊。
+    function onCancel() {
+      down = false; moved = false;
+      node.classList.remove('mp-dragging');
+    }
     node.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointercancel', onCancel);
+    window.addEventListener('blur', onCancel);
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     return {
       destroy() {
         node.removeEventListener('pointerdown', onDown);
+        window.removeEventListener('pointercancel', onCancel);
+        window.removeEventListener('blur', onCancel);
+        onCancel();
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
       },
@@ -1190,6 +1201,11 @@
     /* v6.186 全站手機直式「卡面長寬比」單一來源 — 戰鬥位卡圖與卡背都讀這個變數，
        不再各自寫死數字（實體卡 63mm x 88mm）。 */
     --mp-card-ar: 63 / 88;
+    /* v6.590：只在可用高度不足時壓縮彈性區；一般直式維持原尺寸。655px 包含計時列。 */
+    --mp-shortfall: clamp(0px, calc(655px - (100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px))), 360px);
+    --mp-hand-size: max(48px, calc(96px - var(--mp-shortfall) * 0.16));
+    container: mobile-battle / size;
+    --mp-field-pad: max(0px, calc(4px - var(--mp-shortfall) * 0.02));
     /* v6.187：改讀全站唯一來源 --safe-* （定義在 src/routes/+layout.svelte 的 :root）。
        數值與行為與 env(safe-area-inset-*) 完全相同，只是不再各自寫一份。 */
     padding-top: var(--safe-top, 0px);
@@ -1291,10 +1307,10 @@
   /* ── Bench rows（橫向縮小） ─────────────────────────────────────── */
   .mp-row {
     flex: 0.8; /* 備戰區彈性，但比例低於戰鬥區 */
-    min-height: 80px;
+    min-height: max(8px, calc(80px - var(--mp-shortfall) * 0.25));
     max-height: 110px;
     display: flex; gap: 4px;
-    padding: 4px 6px;
+    padding: var(--mp-field-pad) 6px;
     overflow-x: auto;
   }
   .mp-row::-webkit-scrollbar { display: none; }
@@ -1382,13 +1398,20 @@
   button.mp-chip:disabled { opacity: 0.4; cursor: default; }
   button.mp-clickable { background: rgba(60,40,80,0.5); border-color: rgba(180,140,220,0.3); }
 
+  /* v6.590：短視窗資訊改兩欄，HP仍顯示；過多狀態在卡內捲動，不搶相鄰chips的點擊。 */
+  @container mobile-battle (max-height: 633px) {
+    .mp .mp-active-info { flex-flow: row wrap; align-items: center; gap: 2px 6px; }
+    .mp-active-name { flex: 1 1 110px; min-width: 0; }
+    .mp-hp { flex: 1 0 90px; }
+    .mp-meta { flex: 1 1 auto; }
+  }
   /* ── Active 大圖 ─────────────────────────────────────────────────── */
   .mp-active-row {
     flex: 1.2;
-    min-height: 88px;
+    min-height: max(44px, calc(88px - var(--mp-shortfall) * 0.25));
     max-height: 160px;
     display: flex; justify-content: center;
-    padding: 4px 8px;
+    padding: var(--mp-field-pad) 8px;
     position: relative; /* v5.383：給先攻/後攻徽章絕對定位用 */
   }
   /* v5.383：先攻/後攻直書徽章，放左側空白處，不影響卡片置中 */
@@ -1456,6 +1479,7 @@
   .mp-active-info {
     flex: 1; min-width: 0;
     display: flex; flex-direction: column; gap: 4px;
+    max-height: 100%; overflow-y: auto; touch-action: pan-y;
   }
   .mp-active-name {
     font-size: 0.85rem; font-weight: 700;
@@ -1547,7 +1571,7 @@
 
   /* ── Log（撐空間） ─────────────────────────────────────────────── */
   .mp-log {
-    flex: 1; min-height: 50px; max-height: 120px;
+    flex: 1; min-height: max(28px, calc(50px - var(--mp-shortfall) * 0.1)); max-height: 120px;
     overflow-y: auto;
     padding: 3px 8px;
     font-size: 0.65rem;
@@ -1596,7 +1620,7 @@
 
   /* ── 手牌底部橫向 scroll ─────────────────────────────────────── */
   .mp-hand {
-    flex: 0 0 96px;
+    flex: 0 0 var(--mp-hand-size);
     display: flex; gap: 4px;
     overflow-x: auto;
     padding: 4px 6px;
@@ -1614,7 +1638,7 @@
     /* v6.186 同理：觀戰/回放的卡背用 <div class="mp-hand-card">，一般手牌是 <button> */
     box-sizing: border-box;
     flex-shrink: 0;
-    width: 64px; height: 86px;
+    width: calc((var(--mp-hand-size) - 10px) * 0.7441860465); height: calc(var(--mp-hand-size) - 10px);
     border: 1px solid #3a5a3a;
     border-radius: 4px;
     padding: 0;

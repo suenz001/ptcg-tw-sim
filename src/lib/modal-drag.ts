@@ -82,6 +82,7 @@ export function clampModalOffset(
   base: ModalRect, off: ModalOffset, vw: number, vh: number, mode: ModalClampMode = 'reachable',
   safeBottom = 0,
   minVisibleW = MODAL_MIN_VISIBLE,
+  safeTop = 0,
 ): ModalOffset {
   // 視窗左上角允許落在 [lo, hi]（畫面座標），再換算回位移。
   let loLeft: number, hiLeft: number, hiTop: number;
@@ -106,7 +107,9 @@ export function clampModalOffset(
   // ⚠ 垂直**不允許**負值（兩種模式都一樣）：把手與關閉鈕都在視窗頂端，上緣一出畫面就再也抓不回來
   //   （審查者實測：500×900 的視窗被允許拖到 top=-233 之後，從畫面內任何一點都抓不到把手）。
   //   視窗比畫面高時靠**內部捲動**看下半部 —— 站內每個視窗都有 max-height ＋ overflow。
-  const loTop = 0;
+  // v6.590：把手不能進入狀態列；安全區比可用高度大時仍以可達的上緣為準。
+  const loTop = Math.max(0, safeTop || 0);
+  hiTop = Math.max(loTop, hiTop);
   const clamp = (v: number, lo: number, hi: number) => (lo > hi ? lo : Math.min(Math.max(v, lo), hi));
   return {
     x: clamp(off.x, loLeft - base.left, hiLeft - base.left),
@@ -203,10 +206,10 @@ const OVERLAY_SELECTOR = '[class*="overlay"], [class*="backdrop"]';
  * 量出站內 `--safe-bottom`（底部系統手勢區）目前是幾 px（沒有就是 0）。
  * ⚠ CSS 變數的值常是 `env(safe-area-inset-bottom)` 這種要瀏覽器才算得出來的字串 ⇒ 用一個探針元素量實際高度。
  */
-function safeBottomPx(): number {
+function safeInsetPx(side: 'top' | 'bottom'): number {
   if (typeof document === 'undefined' || !document.body) return 0;
   const probe = document.createElement('div');
-  probe.style.cssText = 'position:fixed;left:0;top:0;width:0;visibility:hidden;pointer-events:none;height:var(--safe-bottom, 0px);';
+  probe.style.cssText = `position:fixed;left:0;top:0;width:0;visibility:hidden;pointer-events:none;height:var(--safe-${side}, 0px);`;
   document.body.appendChild(probe);
   const h = probe.getBoundingClientRect().height || 0;
   probe.remove();
@@ -223,7 +226,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
   /** 拖曳結束後緊接著的那一個 click 要吃掉（否則浮動按鈕拖完就被當成點擊而打開面板）。 */
   let swallowClick = false;
   let appliedMode: 'translate' | 'margin' = opts.mode ?? 'translate';
-  let safeB = 0;   // 拖曳開始／重夾時量一次（不在 pointermove 裡量，避免每一格都動 DOM）
+  let safeB = 0, safeT = 0;   // v6.590：上下安全區只在拖曳開始／重夾時量，不在 pointermove 量。
   let collapseBtn: HTMLButtonElement | null = null;
   let collapsed = false;
   let minVisW = MODAL_MIN_VISIBLE;
@@ -291,7 +294,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
     }
     if (opts.stopPropagation) e.stopPropagation();
     base = measure();
-    safeB = safeBottomPx();
+    safeB = safeInsetPx('bottom'); safeT = safeInsetPx('top');
     minVisW = measureMinVisible();
     start = { sx: e.clientX, sy: e.clientY, ox: off.x, oy: off.y, pid: e.pointerId };
     moved = false;
@@ -319,7 +322,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
     if (opts.threshold !== undefined && !moved) return;
     const { vw, vh } = view();
     const want = { x: start.ox + (e.clientX - start.sx), y: start.oy + (e.clientY - start.sy) };
-    off = clampModalOffset(base, want, vw, vh, opts.clamp ?? 'reachable', safeB, minVisW);
+    off = clampModalOffset(base, want, vw, vh, opts.clamp ?? 'reachable', safeB, minVisW, safeT);
     apply();
   }
   function onUp(e: PointerEvent) {
@@ -356,10 +359,10 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
     if (start) return;   // 拖曳中由 onMove 負責
     const { vw, vh } = view();
     base = measure();
-    safeB = safeBottomPx();
+    safeB = safeInsetPx('bottom'); safeT = safeInsetPx('top');
     const before = off;
     minVisW = measureMinVisible();
-    off = clampModalOffset(base, off, vw, vh, opts.clamp ?? 'reachable', safeB, minVisW);
+    off = clampModalOffset(base, off, vw, vh, opts.clamp ?? 'reachable', safeB, minVisW, safeT);
     apply();
     if (before.x !== off.x || before.y !== off.y) opts.onEnd?.({ x: off.x, y: off.y });
   }
@@ -401,9 +404,9 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
       apply();
     }
     base = measure();
-    safeB = safeBottomPx();
+    safeB = safeInsetPx('bottom'); safeT = safeInsetPx('top');
     minVisW = measureMinVisible();
-    off = clampModalOffset(base, off, vw, vh, opts.clamp ?? 'reachable', safeB, minVisW);
+    off = clampModalOffset(base, off, vw, vh, opts.clamp ?? 'reachable', safeB, minVisW, safeT);
     apply();
   }
   function setCollapsed(v: boolean, anchor = false) {
@@ -420,9 +423,9 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
         apply();
         const { vw, vh } = view();
         base = measure();
-        safeB = safeBottomPx();
+        safeB = safeInsetPx('bottom'); safeT = safeInsetPx('top');
         minVisW = measureMinVisible();
-        off = clampModalOffset(base, off, vw, vh, opts.clamp ?? 'reachable', safeB, minVisW);
+        off = clampModalOffset(base, off, vw, vh, opts.clamp ?? 'reachable', safeB, minVisW, safeT);
         apply();
       }
       if (!v) offBeforeCollapse = null;

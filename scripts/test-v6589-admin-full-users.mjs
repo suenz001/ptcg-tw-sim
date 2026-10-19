@@ -132,6 +132,14 @@ if(browser)try{
 ok('原始產品bytes不變',[SAP,ADM].every((p,i)=>readFileSync(join(ROOT,p)).equals(original[i])));
 ok('最後HEAD完整統計回綠',Object.values(await facts(product)).every(Boolean));
 if(hasBaseCommit(ROOT,BASE))for(const p of ['static/changelog.html','static/changelog-bodies.html','static/changelog-archive.html']){
- const b=readBaseBlob(ROOT,BASE,p);if(!b.ok)throw Error('公開紀錄BASE失敗');ok('公開更新紀錄完全不變 '+p,rd(p)===b.out.replace(/\r\n/g,'\n'));
+ // v6.590 Rule40：守的是v6.589隱藏版沒有公開紀錄；後續玩家版可正常新增公開條目。
+ const b=readBaseBlob(ROOT,BASE,p);if(!b.ok)throw Error('公開紀錄BASE失敗');
+ const currentVersion=rd('src/lib/version.ts').match(/VERSION = '([^']+)'/)?.[1];
+ if(!currentVersion)throw Error('讀不到產品版本');
+ const release=currentVersion==='6.589'?{ok:true,out:rd(p)}:readBaseBlob(ROOT,'3c8a3da9477244fcd0ac9912a3cc55246f76f6fb',p);
+ if(!release.ok)throw Error('隱藏版發布紀錄失敗');
+ const before=b.out.replace(/\r\n/g,'\n'),after=release.out.replace(/\r\n/g,'\n');
+ ok('v6.589公開更新紀錄完全不變 '+p,after===before);
+ ok('公開紀錄位元組突變必紅 '+p,after+'\n'!==before);
 }
 console.log(`\n=== v6.589 ${pass} PASS / ${fail} FAIL ===`);process.exit(fail?1:0);

@@ -2117,8 +2117,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   玩家回報手機版右滑（iOS Safari 邊緣返回 / Android 左滑）會跳出對戰。
   //   修法：進對戰時 history.pushState dummy state；popstate 觸發時再 push 回。
   //   用戶要離開請走 UI 內的「←」離開按鈕（不經 history.back）。
+  // v6.590：綁定是否進入盤面；出牌換掉 game 物件不再新增歷史項目。
+  const battleHistoryActive = $derived(!!game);
   $effect(() => {
-    if (!game || typeof window === 'undefined') return;
+    if (!battleHistoryActive || typeof window === 'undefined') return;
     // 進對戰：push dummy state（marker 用 timestamp 確保唯一）
     try { history.pushState({ ptcgGameLock: Date.now() }, ''); } catch { /* ignore */ }
     const onPop = (_e: PopStateEvent) => {
@@ -2167,12 +2169,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   function recomputeZoom() {
     if (typeof window === 'undefined') return;
+    // v6.590：手機固定盤面一律原比例；手動解析度仍保存，回桌機時照原設定套用。
+    if (isPortraitMobile) { gameZoom = 1; return; }
     if (battleLayout === 'fable' || battleLayout === 'blue') { gameZoom = 1; return; }  // fable／藍桌墊自帶 clamp/vw/vh 尺寸,鎖 gameZoom=1 避免雙重縮放
     const w = window.innerWidth;
     const h = window.innerHeight;
     if (resolutionMode === 'auto') {
-      // 手機 portrait 走另一個元件，不縮放
-      if (isPortraitMobile) { gameZoom = 1; return; }
       // v2.463：基準改為 1366×768（之前 1280×720 對 1024×576 zoom 0.8 仍切到右側，
       //   特別是 Mac Safari 瀏覽器 UI 額外吃高度）。
       //   1366×768 → 1.0；1280×720 → ~0.94；1024×576 → ~0.75
@@ -3726,6 +3728,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   - iOS Safari：API 不支援 → silent fail，依靠 CSS overlay 提示用戶手動旋轉
   //   - 桌機 / 平板：API 也會 silent fail（沒手機 sensor），不影響
   // 離開戰鬥（game === null，回 lobby）→ unlock orientation
+  // >>> v6590-mobile-body-lock
+  const mobileBattleLocked = $derived(isPortraitMobile && !!game);
+  $effect(() => {
+    if (typeof document === 'undefined') return;
+    document.body.classList.toggle('mp-locked', mobileBattleLocked);
+    return () => document.body.classList.remove('mp-locked');
+  });
+  // <<< v6590-mobile-body-lock
   let orientationLocked = $state(false);
   $effect(() => {
     if (typeof window === 'undefined') return;
@@ -10760,7 +10770,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
 <svelte:window onkeydown={onGlobalKey} onpointermove={onWindowPointerMove} onpointerup={onWindowPointerUp} />
 
 <!-- v2.288：手機直式 + 戰鬥中時鎖 body 滑動，禁止 iOS Safari 整頁 bounce / pull-to-refresh -->
-<svelte:body class:mp-locked={isPortraitMobile && !!game} />
+<!-- v6.590：body class 改由上方 effect 實際管理；svelte:body 的 class directive 不會產生 client JS。 -->
 
 <!-- v5.585 跨房錦標賽入場提醒：一般對戰中，我的錦標賽對戰可入場時頂部固定橫幅 -->
 {#if tAlertReady}
