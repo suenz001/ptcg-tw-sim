@@ -15,6 +15,11 @@
 
 - 初次全套450221ac在前段由v6378子測v6244抓到新增首行註記不符既有server版本檔頭格式；立即停止唯一runner、teardown釋放P～U，原失敗輸出與log保留admin-6589-full.log，不計完整驗收。僅將新增首行改為既有標準版本格式、保留歷史首行為第二行，重產中央4pairs；新增檔頭判準，v6244 14/0、v6378 44/0、新guard62/0。中止後發現guard有非預期差異，已從checkpoint450221ac恢復原6項history／排序／HEAD回綠／公開紀錄不變檢查再僅加檔頭斷言；不推定差異來源，確認無本任務殘留node、guard相對checkpoint只1行新增，交同位再核。新完整BASE33/19正常exit1、無throw。之後以新checkpoint重新全937，結果另記。
 
+- 最終完整驗收在a2dfc58fe5f78fa1eff3131a1f2b75b1ecdc7ab6跑937/937，26.63分；936通過、唯一新guard讀到啟動命令遺留的V6589_PRODUCT_ROOT=main（用於前一步HEAD-FAIL），因而33/19，並非原全套零失敗。全套TIMEOUT／escape／回復失敗／主樹硬差異皆0、statusChanged=false，harness＋35immun全綠，skip逐支與6.588基準相同（v6378 ENV2、v6263 PLATFORM1、SHALLOW0）。該env只由新guard使用，其他936項不受影響，產品與守衛未再修改。同位審查確認可保留原報表並隔離補驗，不必為此重跑全套。
+- 新命令明確移除V6589_PRODUCT_ROOT與V6589_ARTIFACT_DIR後，同一runner單工only新guard隔離複驗：同HEAD a2dfc58f，全1/1、62 PASS/0 FAIL、exit0、無TIMEOUT／escape／回復失敗／主樹硬差異／skip，statusChanged=false。最終HEAD-FAIL33/19正常exit1；production build成功；公開三份更新紀錄完全不變，版本6.589僅hidden升版。證據 E:\ptcg-tw-sim-local\admin-6589-full-final\__rt\full.json、admin-6589-rerun\__rt\rerun.json、admin-6589-build.log、admin-6589-headfail-final.log。第一次提早停止的header失敗及這輪單項環境設定失敗均保留，不覆寫或隱藏。最終報表交同位審查者核對，僅補本紀錄後推送。
+
+- 最終同位獨立Codex核報表准推：全套與隔離補驗同HEAD、936項原綠＋新guard62/0、兩報表隔離硬判準0、skip一致、build與BASE反例皆核對；產品／guard相對全套HEAD無內容差異，未解決P1/P2/P3皆0。只補本docs後推main，CI與測試站版本推後另驗。部署由站長無賽事時自行update-tournament.bat（後台／伺服器），如要同步玩家頁首版本再redeploy-oracle.bat，AI不代跑。
+
 ## v6.588（上一版 `5106824e`（v6.587））公布欄紀錄次數與測抽官方卡背
 
 - 站長要求公布欄新增對戰紀錄排序按鈕與小圖示統計，兼顧桌機手機；另指定測抽獎賞卡使用既有官方卡背。統計口徑為該投稿仍active的附加紀錄（一般對戰與錦標賽合計），不是播放次數。
