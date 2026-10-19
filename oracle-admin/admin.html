@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.87</title>
+<title>PTCG Oracle Admin v1.88</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -372,7 +372,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.87</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.88</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2098,6 +2098,11 @@ window.manualRefresh = async function(btn) {
 //     changelog.html（首頁那幾則；較舊幾則的細節在 changelog-bodies.html，用 data-ver 對回）＋ changelog-archive.html（其餘全部）。
 //   data-internal="1" ＝ 與遊戲內容無關的內部維護版本（玩家看不到），這裡照樣列出並標示。
 const CL_SITE_BASE = 'https://suenz001.github.io/ptcg-tw-sim';
+// 只隨admin發布，永不寫入玩家首頁／公開更新檔。
+const CL_ADMIN_ONLY_ENTRIES = [{ ver: 'v6.589', internal: true, dup: false,
+  summaryHtml: '<b>後台完整帳號統計</b>',
+  bodyHtml: '首頁帳號統計改為掃完 Firebase Auth 所有分頁，不再停在 50,000；包含會員與匿名 UID，並非同時在線人數。保留五分鐘共用快取與背景更新，玩家名單仍有保護上限。完整掃描會增加 Auth 查詢與首次等待時間。' }];
+
 /** 純函式：三份 HTML ⇒ [{ ver, summaryHtml, bodyHtml, internal, dup }]（依版本由新到舊；data-dup＝同一版的第二份舊紀錄，照樣列出）。 */
 function clParseEntries(recentHtml, bodiesHtml, archiveHtml) {
   const bodies = {};
@@ -2147,10 +2152,13 @@ async function loadChangelogAdmin() {
     const get = async function (f) { const r = await fetch(CL_SITE_BASE + '/' + f, { cache: 'no-cache' }); if (!r.ok) throw new Error(f + ' HTTP ' + r.status); return r.text(); };
     // 細節檔（changelog-bodies.html）抓不到只會少了較舊幾則的細節，不讓整份紀錄跟著不顯示
     const parts = await Promise.all([get('changelog.html'), get('changelog-bodies.html').catch(() => ''), get('changelog-archive.html')]);
-    _clAdminEntries = clParseEntries(parts[0], parts[1], parts[2]);
+    _clAdminEntries = [...CL_ADMIN_ONLY_ENTRIES, ...clParseEntries(parts[0], parts[1], parts[2])].sort(function (a, b) {
+      const av = a.ver.replace(/^v/, '').split('.').map(Number), bv = b.ver.replace(/^v/, '').split('.').map(Number);
+      return bv[0] - av[0] || bv[1] - av[1];
+    });
     fullHtml = '<div style="max-width:900px;padding:16px 16px 4px;">'
       + '<h2 style="margin-top:0;">📋 完整更新紀錄（' + _clAdminEntries.length + ' 則）</h2>'
-      + '<p style="color:#666;font-size:.88rem;line-height:1.6;margin:2px 0 8px;">玩家在首頁與「完整更新歷史」只看得到每一版的<b>大標題</b>；這裡是完整內容（大標題＋摘要，點開看細節）。標「🔒 內部」的是與遊戲內容無關、玩家看不到的版本。資料來自網站的更新紀錄檔（推送後約數分鐘更新）。</p>'
+      + '<p style="color:#666;font-size:.88rem;line-height:1.6;margin:2px 0 8px;">玩家在首頁與「完整更新歷史」只看得到每一版的<b>大標題</b>；這裡是完整內容（大標題＋摘要，點開看細節）。標「🔒 內部」的是與遊戲內容無關、玩家看不到的版本。公開版本來自網站更新檔，後台專用版本隨 admin 更新。</p>'
       + '<input id="cl-full-q" placeholder="搜尋版本、卡名、關鍵字…" oninput="clAdminFilter(this.value)" style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #d6dbe3;border-radius:6px;margin:0 0 10px;font-size:.92rem;">'
       + '<div id="cl-full-list">' + clEntriesHtml(_clAdminEntries, '') + '</div></div>';
   } catch (e) {
@@ -2370,7 +2378,7 @@ window.loadBroadcastAdmin = loadBroadcastAdmin;
 // ── Tab: Overview (v0.4 三大類別) ────────────────────────────────
 async function loadOverview() {
   const el = document.getElementById('tab-overview');
-  el.innerHTML = '<h2>📊 系統總覽</h2><div class="empty">Loading…（用戶 / 對戰 / 意見回饋統計；伺服器重啟後第一次約 15 秒，其後數秒）</div>';
+  el.innerHTML = '<h2>📊 系統總覽</h2><div class="empty">Loading…（用戶 / 對戰 / 意見回饋統計；首次需完整掃描帳號，帳號越多等待越久；之後使用五分鐘快取）</div>';
   const stats = await api('/api/admin/stats');
   if (!stats || stats.error) { el.innerHTML = '<div class="empty">Error: ' + (stats?.error || 'unknown') + '</div>'; return; }
   const u = stats.users || {};
@@ -2386,10 +2394,11 @@ async function loadOverview() {
   el.innerHTML = `
     <h2>📊 系統總覽</h2>
 
-    <div class="stat-section-label">👤 用戶統計${u.at ? '<span style="font-weight:400;font-size:.78rem;color:#9aa3b0;margin-left:8px;">資料時間 ' + new Date(u.at).toLocaleString('zh-TW') + '（最多 5 分鐘更新一次）</span>' : ''}</div>
+    <div class="stat-section-label">👤 用戶統計${u.at ? '<span style="font-weight:400;font-size:.78rem;color:#9aa3b0;margin-left:8px;">資料時間 ' + new Date(u.at).toLocaleString('zh-TW') + '（五分鐘快取，過期後背景更新）</span>' : ''}</div>
     ${u.enabled === false || u.error ? `<div class="empty">${u.error || 'Firebase auth 未初始化'}</div>` : `
+      ${u.complete === true ? '<p class="small">完整掃描 Firebase Auth 帳號 UID，包含會員與匿名帳號；不是同時在線人數，也不等於實際玩家人數。</p>' : '<p class="small" style="color:#b45309;">舊版伺服器統計可能受 50,000 筆上限截斷，請更新伺服器後查看完整總數。</p>'}
       <div class="stats-grid">
-        <div class="stat-card"><div class="stat-label">總人數 (Unique UID)</div><div class="stat-value">${u.total ?? '?'}</div></div>
+        <div class="stat-card"><div class="stat-label">${u.complete === true ? '帳號總數（含匿名）' : '已掃描帳號數（舊版）'}</div><div class="stat-value">${u.total ?? '?'}</div></div>
         <div class="stat-card"><div class="stat-label">會員 (有 Email)</div><div class="stat-value">${u.members ?? '?'}</div></div>
         <div class="stat-card"><div class="stat-label">匿名</div><div class="stat-value">${u.anonymous ?? '?'}</div></div>
         <div class="stat-card"><div class="stat-label">過去 24h 登入</div><div class="stat-value">${u.active24h ?? '?'}</div></div>
@@ -4140,7 +4149,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.588';
+window.SITE_VERSION_HINT = '6.589';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -7082,7 +7091,7 @@ function renderUsers(el) {
   //   搜尋框放在 mount 容器外，否則每敲一鍵重繪就會失去輸入焦點。
   // v6.275：50,000 掃描上限截斷警示（capped 才顯示）＋資料時間（伺服器 5 分鐘快取）
   const cappedWarn = _usersMeta.capped
-    ? '<div id="users-capped-warn" style="background:#fdecea;border:1px solid #e57373;border-radius:6px;padding:8px 12px;margin:8px 0;color:#b71c1c;">⚠⚠ 名單已達伺服器 50,000 筆掃描上限，此列表<b>不是全部帳號</b>（上方總數統計同樣被截斷）。</div>'
+    ? '<div id="users-capped-warn" style="background:#fdecea;border:1px solid #e57373;border-radius:6px;padding:8px 12px;margin:8px 0;color:#b71c1c;">⚠⚠ 名單已達伺服器 50,000 筆掃描上限，此列表<b>不是全部帳號</b>；請至首頁查看完整帳號統計（需新版伺服器）。</div>'
     : '';
   const dataAt = _usersMeta.cachedAt
     ? '｜<span id="users-data-at">資料時間 ' + new Date(_usersMeta.cachedAt).toLocaleTimeString('zh-TW') + '（每 5 分鐘背景更新；按 Refresh 立即重抓）</span>'

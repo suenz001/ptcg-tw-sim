@@ -9,6 +9,7 @@ import { pwLaunch } from './lib/pw.mjs';
 import { readBaseBlob, hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
 import { deckReplayServer, functionSource, clone } from './lib/deck-replay-db-fixture.mjs';
 import { postListBundle, openingBundle, fixtureHtml, measureOpening } from './lib/deck-replay-ui-fixture.mjs';
+import { revertAdminV172 } from './lib/sap-revert-admin-v172.mjs';
 import { revertAdminV171 } from './lib/sap-revert-admin-v171.mjs';
 import { revertV171, TAIL_ANCHOR, TEV_ANCHOR, NEW_TAIL_SHA_V171, NEW_TEV_SHA_V171, NEW_TEV_LEN_V171 } from './lib/tourn-revert-v171.mjs';
 import { NEW_TAIL_SHA_V169, NEW_TEV_SHA_V169, NEW_TEV_LEN_V169 } from './lib/tourn-revert-v169.mjs';
@@ -28,7 +29,7 @@ const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 let baseSource, basePage, baseOpening;
 if (hasBaseCommit(ROOT, BASE)) {
   [baseSource, basePage, baseOpening] = paths.map(p => { const r = readBaseBlob(ROOT, BASE, p); if (!r.ok) throw new Error('讀取 BASE 失敗 ' + p); return r.out.replace(/\r\n/g, '\n'); });
-  let reverted = ''; try { reverted = revertAdminV171(source); } catch { /* 舊版完整守衛必須逐條紅，不整支 throw。 */ }
+  let reverted = ''; try { reverted = revertAdminV171(revertAdminV172(source)); } catch { /* 舊版完整守衛必須逐條紅，不整支 throw。 */ }
   ok('D2 精確還原整份 server＝BASE，其他行不變', reverted === baseSource);
   for (const anchor of [TAIL_ANCHOR, TEV_ANCHOR]) {
     let result = ''; try { result = revertV171(source.slice(source.indexOf(anchor))); } catch { /* 明確紅項。 */ }

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-import { revertAdminV171 } from './lib/sap-revert-admin-v171.mjs';
+import { revertAdminV171 as _revertAdminV171 } from './lib/sap-revert-admin-v171.mjs';
+import { revertAdminV172 } from './lib/sap-revert-admin-v172.mjs';
+const revertAdminV171 = s => _revertAdminV171(revertAdminV172(s));
 /**
  * server patch v1.69 守衛：管理員「重賽」時，錦標賽聊天室的系統訊息「（從擲幣重新開始）」→「（從擲硬幣重新開始）」
  *   （站長 2026-10-16 裁定「5.好」：玩家看得到的字一律寫「擲硬幣」，與 v6.573 對戰紀錄用詞統一一致）

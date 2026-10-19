@@ -144,7 +144,12 @@ function scanReads(rawSrc) {
     const item = { at: k, win: stmtWindow(s, k).slice(0, 120) };
     const looped = /(while|do)\s*[({]/.test(body) && body.includes('pageToken');
     if (!looped) item.kind = 'paged';                                    // 單頁：pageToken 交還呼叫端
-    else if (/<\s*RAW_USERS_MAX/.test(body) || /<\s*50000/.test(body)) item.kind = 'capped-loop';
+    else if (/function scanAllAuthUsers\(/.test(body) &&
+      body.includes('const stats = createUsersStatsAccumulator()') &&
+      body.includes('if (users.length < RAW_USERS_MAX) users.push(...result.users)') &&
+      body.includes('seenTokens.has(pageToken)') && body.includes('stats.finish(at)') &&
+      /do\s*\{/.test(body) && /while\s*\(pageToken\)/.test(body)) item.kind = 'full-stats-bounded-list';
+    else if (/while\s*\([^)]*<\s*(?:RAW_USERS_MAX|50000)/.test(body)) item.kind = 'capped-loop';
     else item.kind = 'unbounded-loop';
     out.listUsers.push(item);
   }
@@ -239,6 +244,7 @@ await T('A3 ⭐⭐⭐ 全站無上限讀取＝0（白名單外）；每條白名
       '白名單「' + w.name + '」命中 ' + claims.get(w.name) + ' 筆（應 ' + w.expect + '）—— 死條目或新增消費點');
   }
   // listUsers：不得有無上限迴圈
+  assert.strictEqual(scan.listUsers.filter(x => x.kind === 'full-stats-bounded-list').length, 1, '完整統計例外必須只有一個具名掃描來源且保留名單保護與游標防護');
   const badLU = scan.listUsers.filter((x) => x.kind === 'unbounded-loop');
   assert.deepStrictEqual(badLU.map((x) => x.win), [], '無上限的 listUsers 全量迴圈（v6.272 漏掉的那一類）');
 });
@@ -431,7 +437,10 @@ await T('B4 ⭐ capped：掃描達上限時回 capped:true（受控降上限副�
   await env.handler({ query: {} }, res);
   assert.strictEqual(res.body.capped, true, '達上限應回 capped:true（絕不靜默截斷）');
   assert.strictEqual(res.body.users.length, 3000, '上限退出點應在 3000 筆（迴圈語義），實得 ' + res.body.users.length);
-  assert.ok(auth.calls < 10, '達上限後不得把 10 頁全掃完（實掃 ' + auth.calls + ' 頁）');
+  assert.strictEqual(auth.calls, 10, '站長指定完整統計，必須繼續掃完所有頁');
+  const stats = await env.getUsersStatsCached();
+  assert.strictEqual(stats.total, 10000, '名單保護不可截斷首頁統計');
+  assert.strictEqual(stats.complete, true, '完整掃描完成哨兵');
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
