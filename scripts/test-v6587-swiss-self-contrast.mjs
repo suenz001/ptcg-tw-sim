@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { pwLaunch } from './lib/pw.mjs';
 import { readBaseBlob,hasBaseCommit,shallowSkip } from './lib/base-blob.mjs';
 import { standingsFixture,measureStandings } from './lib/swiss-standings-fixture.mjs';
+import { revertMobileUiV6590 } from './lib/mobile-ui-v6590-pairs.mjs';
 import { V6587_GAME_PAIRS } from './lib/revert-v6587-game.mjs';
 
 const ROOT=dirname(dirname(fileURLToPath(import.meta.url)));
@@ -27,13 +28,18 @@ if(hasBaseCommit(ROOT,BASE)){
   const block=/\/\* >>> v6477-lobby-light \*\/[\s\S]*?\/\* <<< v6477-lobby-light \*\//g;
   const old=base.match(block),current=source.match(block);
   if(old?.length!==1||current?.length!==1)throw new Error('淺色哨兵必須唯一');
-  let restored=source.replace(current[0],old[0]);
+  const revertForRule40=(input,pre=revertMobileUiV6590)=>{
+  let restored=pre(input,PAGE).replace(current[0],old[0]);
   let unique=true;
   for(const [now,prev]of V6587_GAME_PAIRS){
     if(restored.split(now).length!==2){unique=false;continue;}
     restored=restored.replace(now,prev);
   }
-  ok('Rule40 本版字面還原後逐位元等於上一版',unique&&restored!==source&&restored===base);
+  return unique&&restored!==input&&restored===base;
+  };
+  ok('Rule40 本版字面還原後逐位元等於上一版',revertForRule40(source));
+  ok('Rule40 接線負對照：略過本版還原必須失敗',!revertForRule40(source,x=>x));
+  ok('Rule40 負對照：額外差異不得被還原吞掉',!revertForRule40(source+'\n/* 未授權差異 */\n'));
 }else shallowSkip('v6587 還原與 HEAD-FAIL','需要v6.586歷史');
 
 const browser=await pwLaunch('v6.587 瑞士制本人字色對比');

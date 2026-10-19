@@ -361,7 +361,17 @@ let modalIdx = -1, modalNode = null;
 
 // ═══ C. ⚠⚠ 視窗必須在**所有版面分支之外**（v6.167 教訓） ═════════════════
 {
-  const mobHits = [...gameT.matchAll(/\{#if\s+isPortraitMobile[^}]*\}/g)];
+  // v6.590：設定提示也有手機條件；僅辨識實際包住手機盤面的版面分支。
+  const findMobileLayout=(text,tree)=>[...text.matchAll(/\{#if\s+isPortraitMobile[^}]*\}/g)].filter(h=>{
+    const node=pathTo(tree.root,h.index+5).pop();
+    return node&&/<MobilePortraitBattle\b/.test(text.slice(node.start,node.end));
+  });
+  const mobHits = findMobileLayout(gameT,gameTree);
+  const fixture='{#if isPortraitMobile}<MobilePortraitBattle />{:else}<div>桌機</div>{/if}';
+  const withHint=fixture+'{#if isPortraitMobile}<p>設定提示</p>{/if}';
+  chk('C1a 其他手機條件不誤算版面',findMobileLayout(withHint,parseBlocks(withHint)).length===1);
+  chk('C1b 缺少盤面分支仍拒絕',findMobileLayout('{#if isPortraitMobile}<p>提示</p>{/if}',parseBlocks('{#if isPortraitMobile}<p>提示</p>{/if}')).length===0);
+  chk('C1c 重複盤面分支仍抓出',findMobileLayout(fixture+fixture,parseBlocks(fixture+fixture)).length===2);
   chk('C1 找得到手機直式／桌機的版面分支', mobHits.length === 1, `找到 ${mobHits.length} 個`);
   if (mobHits.length === 1 && modalIdx >= 0) {
     const mobNode = pathTo(gameTree.root, mobHits[0].index + 5).pop();
