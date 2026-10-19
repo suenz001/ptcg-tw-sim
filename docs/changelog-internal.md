@@ -6,12 +6,14 @@
 - scanAllAuthUsers完整讀完Firebase Auth全部分頁，UID去重統計會員／匿名／近24h登入；原始帳號清單仍保留50,000整頁上限，之後只保留計數所需UID及活躍候選時間，整輪成功後僅發布數字與上限內raw。每頁原生setImmediate讓路，重複游標明確失敗，不寫任何Auth或遊戲資料、不改部署與設定。完整掃描增加Auth請求及首次等待時間；不是Firestore文件讀取。
 - 五分鐘TTL／single-flight／過期回舊值背景更新／強制刷新等新值均保留；中途失敗不覆蓋舊cache，冷啟失敗不發布假完整結果。首頁改帳號總數（含匿名），明示不是同時在線／實際玩家人數，complete哨兵缺席則警示舊版可能截斷；玩家清單截斷提示不再錯稱首頁同樣不完整。
 - 修改前基準使用BASE d1e945ca產品與d97f0bca一致的前版完整936/936報表：AI harness＋35immun全綠。主repo另有兩項既有Swiss測試未提交修改，均留在main不搬入本版；本版隔離工作樹E:\ptcg-tw-sim-local\admin-6589。
-- 新guard61/0：真產品helpers／admin loadOverview／loadChangelogAdmin，55,001及100,001帳號、0/999/50,000邊界、UID去重與24h邊界、共用請求／快取、後頁失敗／重試／循環游標、名單保護，320/390/1280真CSS版面、admin專用記錄與未來版排序、公開三份紀錄不變。7server功能突變＋1首頁語意突變、N1及產品bytes不變；最終完整HEAD-FAIL／全套／build補後記。
+- 新guard62/0：真產品helpers／admin loadOverview／loadChangelogAdmin，55,001及100,001帳號、0/999/50,000邊界、UID去重與24h邊界、共用請求／快取、後頁失敗／重試／循環游標、名單保護，320/390/1280真CSS版面、admin專用記錄與未來版排序、公開三份紀錄不變。7server功能突變＋1首頁語意突變、N1及產品bytes不變；最終完整HEAD-FAIL／全套／build補後記。
 - 獨立Codex初審P1=0/P2=0/P3=2：長掃描active24h視窗開始/完成時間不一致，改候選Map在finish(at)依完成時計算並補26小時跨界行為；新掃描讓路缺少突變，已補每頁委派原生setImmediate的spy計數及移除讓路指定紅／隱私正對照。同位複審通過，未解決P1/P2/P3皆0，可進全套。
 - Rule40：4組中央sap-revert-admin-v172精確還原BASE，5支整檔歷史消費者及v6588 D2先剝本版；錦標賽28鎖整段逐字不變。舊v6275 B4依站長新授權改為列表仍capped但掃完全部10頁、總數10000/complete=true；掃描器僅許唯一具名完整統計＋原始名單保護＋游標防護例外，其他不受界限的讀取仍拒，19/0。v6219快取守衛6/0。
 - SSH僅曾用預設驗證唯讀probe，回Permission denied(publickey)；站長提供bat會指定私鑰，未取用私鑰、未登入主機、未代跑bat。部署請站長自己update-tournament.bat；hidden版若也要玩家頁首版本同步再redeploy-oracle.bat。正式部署仍由站長於無賽事時執行。
 
 - 真BASE d1e945ca執行相同完整guard的前一版為32 PASS／18 FAIL，正常exit1，沒有整支throw；最後增加HEAD統計回綠檢查後重新記錄。hidden bump用python -X utf8執行，避免Windows預設cp950讀取UTF8 spec失敗；首次bump在讀spec階段即停止、沒有部分改檔。測試／建置／全套最終結果待補。
+
+- 初次全套450221ac在前段由v6378子測v6244抓到新增首行註記不符既有server版本檔頭格式；立即停止唯一runner、teardown釋放P～U，原失敗輸出與log保留admin-6589-full.log，不計完整驗收。僅將新增首行改為既有標準版本格式、保留歷史首行為第二行，重產中央4pairs；新增檔頭判準，v6244 14/0、v6378 44/0、新guard62/0。中止後發現guard有非預期差異，已從checkpoint450221ac恢復原6項history／排序／HEAD回綠／公開紀錄不變檢查再僅加檔頭斷言；不推定差異來源，確認無本任務殘留node、guard相對checkpoint只1行新增，交同位再核。新完整BASE33/19正常exit1、無throw。之後以新checkpoint重新全937，結果另記。
 
 ## v6.588（上一版 `5106824e`（v6.587））公布欄紀錄次數與測抽官方卡背
 

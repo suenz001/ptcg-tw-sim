@@ -42,6 +42,7 @@ async function facts(text){
     complete:stats.complete===true,retained:raw.users.length===50000&&raw.capped===true,
     oneScan:calls===56,yields:state.yields===56,cache:state.calls===calls&&again===stats,private:!('users' in stats)&&!('email' in stats),at:stats.at===now};
 }
+ok('D 伺服器版本檔頭符合既有格式',/^\/\/ === ORACLE ADMIN ENDPOINTS === v\d+\.\d+ /.test(product));
 const f=await facts(product);for(const [k,v]of Object.entries(f))ok('S 完整55,001帳號 '+k,v);
 for(const size of [0,999,50000,100001]){
   const {env,state}=setup(product,{size});const stats=await env.getUsersStatsCached();const raw=await env.getRawUsersCached(false);
