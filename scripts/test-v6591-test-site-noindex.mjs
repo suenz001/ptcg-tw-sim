@@ -108,10 +108,11 @@ try {
     };
     for (const p of ['src/app.html', 'static/robots.txt', 'static/changelog.html', 'static/changelog-bodies.html', 'static/changelog-archive.html']) {
       const b = readBaseBlob(ROOT, BASE, p); if (!b.ok) throw Error('讀取BASE失敗 ' + p);
-      const before = b.out.replace(/\r\n/g, '\n'), after = releaseText(p, currentVersion).replace(/\r\n/g, '\n');
-      ok('v6.591正式SEO與公開紀錄不變 ' + p, after === before);
-      ok('未來版新增內容不破壞本版歷史契約 ' + p, releaseText(p, '6.592', () => '未來改版內容').replace(/\r\n/g, '\n') === before);
-      ok('本版額外內容突變必紅 ' + p, after + '\n' !== before);
+      const before = b.out.replace(/\r\n/g, '\n');
+      const unchanged = (version, readCurrent = rd) => releaseText(p, version, readCurrent).replace(/\r\n/g, '\n') === before;
+      ok('v6.591正式SEO與公開紀錄不變 ' + p, unchanged(currentVersion));
+      ok('未來版新增內容不破壞本版歷史契約 ' + p, unchanged('6.592', () => '未來改版內容'));
+      ok('本版額外內容突變必紅 ' + p, !unchanged('6.591', () => before + '\n'));
     }
     const oldScript = readBaseBlob(ROOT, BASE, SCRIPT);
     const oldMod = oldScript.ok ? (await moduleFrom(oldScript.out, 'base')).mod : { noindexHtml: s => s, protectTestBuild: () => 0 };
