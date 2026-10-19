@@ -68,6 +68,9 @@ jobs:
         run: npm run build
         env:
           BASE_PATH: /ptcg-tw-sim
+      # 僅測試站禁止搜尋收錄；正式站一般 build 保持原 SEO。
+      - name: Exclude test site from search indexing
+        run: node scripts/set-test-site-noindex.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

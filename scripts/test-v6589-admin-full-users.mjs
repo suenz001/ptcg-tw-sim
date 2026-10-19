@@ -118,11 +118,11 @@ if(browser)try{
   await page.evaluate(async code=>{
    window.escapeHtml=x=>String(x).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
    window.getDoc=async()=>({exists:()=>false});window.doc=()=>({});window.dbF={};
-   window.fetch=async()=>({ok:true,text:async()=>'<details><summary><span class="ver-badge">v6.590</span>未來玩家版本</summary></details>'});
+   window.fetch=async()=>({ok:true,text:async()=>'<details><summary><span class="ver-badge">v99.0</span>未來玩家版本</summary></details>'});
    return(new Function("const CL_SITE_BASE='https://fixture.invalid';let _clAdminEntries=null;"+code+';return loadChangelogAdmin();'))();
   },code);
   ok('U 真admin更新記錄載入並列出內部版本',await page.locator('#cl-full-list').textContent().then(s=>s.includes('v6.589')&&s.includes('後台完整帳號統計')&&s.includes('內部')));
-  ok('U 內部與未來公開版本依版號排序',await page.locator('#cl-full-list details').first().textContent().then(s=>s.includes('v6.590')));
+  ok('U 內部與未來公開版本依版號排序',await page.locator('#cl-full-list details').first().textContent().then(s=>s.includes('v99.0')));
  }
  if(!productRoot){
   const bad=productAdmin.replace('不是同時在線人數','目前在線人數');await show({enabled:true,total:55001,complete:true},390,bad);ok('M 在線語意突變會紅',!(await page.locator('main').textContent()).includes('不是同時在線人數'));

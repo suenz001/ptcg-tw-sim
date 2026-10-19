@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.591 — 測試站搜尋收錄排除（hidden）
+
+BASE `4101927d`（v6.590）。站長要求Google搜尋不要再出現GitHub Pages測試站。只在Pages build成功後、artifact上傳前呼叫set-test-site-noindex，遍歷所有內容HTML加入noindex, follow；正式站npm run build與src/app.html/robots.txt不動。保留檔名與單行內容精確相符的Google擁有權驗證檔；不是一般內容頁。空建置或任一轉換驗證失敗會擋住發布。公開三changelog不動，新增admin內部條目。
+
+修改前基準沿用同產品4101927d的v6.590完整938與8項補驗報表：harness＋35免疫全綠，產品至本輪BASE僅docs提交。新守衛56/0，真CLI與磁碟fixture涵蓋8內容HTML、驗證檔與非HTML不變、冪等、空建置失敗；6功能突變全殺＋4接線/隔離負對照，真BASE workflow未接線、8頁缺noindex逐條反證、原內容正對照均綠。獨立Codex noindex_6591_review初輪P2=1（註解假接線被誤認真步驟），已剝註解與錨行並補存活突變，獨立scratch重跑56/0，複審未解決P1/P2/P3皆0；產品程式審查通過，完整驗收待補。
+
+舊6589守衛的排序fixture把6.590寫死為未來版，新增6.591內部條目後不再成立；僅將合成未來版提高為99.0，仍斷言未來公開版排第一、6.589內部條目存在，產品排序函式不動。
+
+一般build與BASE_PATH=/ptcg-tw-sim的Pages build皆成功。真建置4963份HTML，4962內容頁全有唯一head noindex；唯一Google驗證檔原文保留。逐頁body與canonical不變、非HTML bytes不變、全站重跑冪等，failures=[]；一般build首頁與卡片仍index且canonical正式站不變（原封存頁既有noindex保留）。證據noindex-6591-normal-build-proof.json、noindex-6591-pages-artifact-proof.json、兩build.log。完整驗收接續執行。
+
 ## v6.590 — 手機UI程式檢查六項修正
 
 BASE `3c8a3da9`（v6.589）。站長授權處理五項程式缺陷與既知手機手動縮放，要求獨立審查。
