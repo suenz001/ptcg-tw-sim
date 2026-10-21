@@ -1,5 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.593 — iPhone 主畫面對戰頂部模糊相容避讓
+
+BASE `c7c4aa8b`（v6.592）。站長提供玩家開啟『減少透明度』後模糊消失、普通Safari正常的回報，授權網站端立即修正。
+
+- 程式確認工具列為實色底、沒有直接filter；現有padding僅safe-top。主畫面系統效果超出安全區是最吻合的假設，沒有受影響iPhone的遠端偵錯，不能宣稱已證實根因。參考第一手實機案例 https://github.com/Yeraze/meshmonitor/pull/5309 的約20px延伸；不照抄其OS27門檻，因本站玩家版本未知。
+- 僅MobilePortraitBattle偵測iPhone/iPod UA且navigator.standalone嚴格true，增加min(20px,max(0px,safe-top))留白；安全區0不加、一般Safari/Android/iPad不加。所有iPhone主畫面版本保守避讓，未受影響的舊版也可能多20px，屬明確取捨。
+- gap同時納入shortfall以避免手牌被擠掉；不改全站safe-top、meta、桌機橫向版、遊戲規則或伺服器。
+- Rule40：6590歷史手機位元組守衛先經5組唯一精確替換還原；額外diff保留、缺失/重複錨點throw，不更換舊BASE或放寬比對。
+- 基準harness+35免疫36/36綠。新guard65/0、舊手機6590 74/0；真BASE正常exit1的7項行為失敗，負例正常；6個突變皆有行為FAIL（不只還原器拒絕）。證據E:/ptcg-tw-sim-local/pwa-6593-mutants/results.json。
+- 驗證限制：Chromium量測編譯後真條件/class接線與產品CSS，並非iPhone原生系統模糊重現。原生效果仍待正式實機確認。
+- build、修改後基準、全套、獨立審查及CI結果待補。審查者為未參與修改的獨立Codex pwa_6593_review（Opus不可用，依交接替代）。
+- 部署：僅玩家前端，由站長自行redeploy-oracle.bat，AI不代部署。
+
 ## v6.592 — 錦標賽個人操作時計（預設關閉）
 
 BASE `eb5a4503`（v6.591）。server v1.73／admin v1.89。站長核准：每場各自15分鐘，可在admin監控調整1～120分鐘或關閉；額度用完每半回合30秒，逾時只由AI完成必要選擇、取獎賞、補位與正常END_TURN，不開始新的主階段出牌或攻擊。預設OFF；關閉不撤回已完成動作，既有整場時限與閒置規則保留。開啟舊局不追溯，重新啟用換epoch；調低先給完整30秒。政策有generation防舊refresh覆蓋OFF。

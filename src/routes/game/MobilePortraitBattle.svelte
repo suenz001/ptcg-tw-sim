@@ -34,6 +34,13 @@
   - Modal（pendingSelection / zoom-modal 等）由 +page.svelte 的既有 modal 處理
 -->
 <script lang="ts">
+  // >>> v6593-ios-top-clearance
+  // 主畫面版的系統模糊可能超出安全區；僅 iPhone/iPod 留額外空間。
+  // 玩家 iOS 版本未知，不依版本猜測；這是版面避讓，不是關閉系統特效。
+  const isIPhoneStandalone = typeof navigator !== 'undefined'
+    && /iPhone|iPod/.test(navigator.userAgent)
+    && (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  // <<< v6593-ios-top-clearance
   import type { GameState, CardInstance, PendingSelection } from '$lib/game/types';
   import { retryImg } from '$lib/img-retry';
   import { cardThumb } from '$lib/cards/thumb'; // v6.464 小尺寸顯示改用縮圖（失敗由 retryImg 立刻退回官方原圖）
@@ -729,7 +736,7 @@
   }
 </script>
 
-<div class="mp" use:preventScroll>
+<div class="mp" class:mp-ios-standalone={isIPhoneStandalone} use:preventScroll>
 
   <!-- v4.22 場地卡在場時的背景圖層（手機版同樣只抓上半藝術圖區） -->
   {#if stadiumCard}
@@ -1202,16 +1209,22 @@
        不再各自寫死數字（實體卡 63mm x 88mm）。 */
     --mp-card-ar: 63 / 88;
     /* v6.590：只在可用高度不足時壓縮彈性區；一般直式維持原尺寸。655px 包含計時列。 */
-    --mp-shortfall: clamp(0px, calc(655px - (100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px))), 360px);
+    --mp-top-clearance: 0px;
+    --mp-shortfall: clamp(0px, calc(655px - (100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - var(--mp-top-clearance))), 360px);
     --mp-hand-size: max(48px, calc(96px - var(--mp-shortfall) * 0.16));
     container: mobile-battle / size;
     --mp-field-pad: max(0px, calc(4px - var(--mp-shortfall) * 0.02));
     /* v6.187：改讀全站唯一來源 --safe-* （定義在 src/routes/+layout.svelte 的 :root）。
        數值與行為與 env(safe-area-inset-*) 完全相同，只是不再各自寫一份。 */
-    padding-top: var(--safe-top, 0px);
+    padding-top: calc(var(--safe-top, 0px) + var(--mp-top-clearance));
     padding-bottom: var(--safe-bottom, 0px);
     padding-left: var(--safe-left, 0px);
     padding-right: var(--safe-right, 0px);
+  }
+  /* v6.593：額外避讓系統模糊帶；安全區為零時不增加空白。
+     20px 為相似實機案例的避讓量，仍需受影響 iPhone 確認效果。 */
+  .mp.mp-ios-standalone {
+    --mp-top-clearance: min(20px, max(0px, var(--safe-top, 0px)));
   }
   /* v4.24 對戰計時器細條 — mp-top 下方 ~20px，4 欄資訊 */
   .mp-timer-strip {
