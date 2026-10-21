@@ -1,5 +1,7 @@
 # 內部改版紀錄（不打包進網站）
 
+站長核准個人額度15分鐘（可調1～120）、用完每半回合30秒、必要AI收尾、admin監控即時開關，預設OFF。BASE `eb5a4503`（v6.591）。server1.73/admin1.89。先前審查發現回應亂序/關閉通知/設定暫停actor漂移/refresh覆蓋OFF競態，均已修；核心12+runtime17行為測試通過、獨立核心複審無P1/P2。完整驗收與最終審查待補，尚未推送。
+
 ## v6.591 — 測試站搜尋收錄排除（hidden）
 
 BASE `4101927d`（v6.590）。站長要求Google搜尋不要再出現GitHub Pages測試站。只在Pages build成功後、artifact上傳前呼叫set-test-site-noindex，遍歷所有內容HTML加入noindex, follow；正式站npm run build與src/app.html/robots.txt不動。保留檔名與單行內容精確相符的Google擁有權驗證檔；不是一般內容頁。空建置或任一轉換驗證失敗會擋住發布。公開三changelog不動，新增admin內部條目。

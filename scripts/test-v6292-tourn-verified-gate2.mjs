@@ -51,9 +51,11 @@ import {
 // ⭐⭐⭐v6.365 站長裁定 六-2（錦標賽平手＝雙敗）：區塊又多了三段，全部以 // >>> v6365-xxx 哨兵宣告。
 //   本檔的 revert-diff 從此再串一節（先還原 v6.365 的三段，再往後退），一律串接、不放水。
 import {
-  NEW_TAIL_SHA_V171 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V171 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V171 as NEW_TEV_LEN_CUR, revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171,
+  NEW_TAIL_SHA_V173 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V173 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V173 as NEW_TEV_LEN_CUR, revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171, revertV173,
   revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365, stripDeclaredBlocksNewerThan,
-} from './lib/tourn-revert-v171.mjs';
+} from './lib/tourn-revert-v173.mjs';
+const revertV171 = b => _rv171(revertV173(b));
+
 const revertV169 = (b) => _rv169(revertV171(b));   // v1.71 先逐字還原新修改，再接既有鎖。
 const revertV167 = (b) => _rv167(revertV169(b));   // ⭐v1.69（Rule 54）：鏈再長一節（重賽系統訊息「擲硬幣」；既有呼叫點一個字都不必改）
 const revertV165 = (b) => _rv165(revertV167(b));   // ⭐v1.67（Rule 54）：鏈再長一節（對局時限判法切換、推播偏好帳號層級；既有呼叫點一個字都不必改）
@@ -306,7 +308,7 @@ await T('B6 ⚠⚠ 那 14 把鎖仍然「在守」：sha 比對式與自算 sha 
   const SELF = normEol(readFileSync(join(ROOT, 'scripts/test-v6292-tourn-verified-gate2.mjs'), 'utf8'));
   for (const [f2, s2] of [['test-v6276', v76], ['test-v6291', v91], ['test-v6292（本檔）', SELF]]) {
     // ⭐v1.65（Rule 40）：三支改接 tourn-revert-v165（鏈內含 v1.54 以前每一節）
-    assert.ok((s2.includes("from './lib/tourn-revert-v154.mjs'") || s2.includes("from './lib/tourn-revert-v165.mjs'") || s2.includes("from './lib/tourn-revert-v167.mjs'") || s2.includes("from './lib/tourn-revert-v171.mjs'")) && s2.includes('revertV6381('),
+    assert.ok((s2.includes("from './lib/tourn-revert-v154.mjs'") || s2.includes("from './lib/tourn-revert-v165.mjs'") || s2.includes("from './lib/tourn-revert-v167.mjs'") || s2.includes("from './lib/tourn-revert-v173.mjs'")) && s2.includes('revertV6381('),
       f2 + ' 沒有串接 v6.381 的還原器（它的 revert-diff 會被停用）');
     assert.ok(s2.includes('revertV6365('), f2 + ' 掉了 v6.365 那一節（鏈斷了）');
   }

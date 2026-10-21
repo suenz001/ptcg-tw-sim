@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.88</title>
+<title>PTCG Oracle Admin v1.89</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -372,7 +372,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.88</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.89</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2099,7 +2099,7 @@ window.manualRefresh = async function(btn) {
 //   data-internal="1" ＝ 與遊戲內容無關的內部維護版本（玩家看不到），這裡照樣列出並標示。
 const CL_SITE_BASE = 'https://suenz001.github.io/ptcg-tw-sim';
 // 只隨admin發布，永不寫入玩家首頁／公開更新檔。
-const CL_ADMIN_ONLY_ENTRIES = [{ ver: 'v6.591', internal: true, dup: false,
+const CL_ADMIN_ONLY_ENTRIES = [{ ver: 'v6.592', internal: true, dup: true, summaryHtml: '<b>個人操作時間控制</b>', bodyHtml: '監控分頁新增個人限時開關與1～120分鐘設定（初始15分鐘）；預設關閉。開啟、關閉及調整即時套用。玩家回合限時30秒與電腦必要收尾由伺服器管理。' }, { ver: 'v6.591', internal: true, dup: false,
   summaryHtml: '<b>測試站搜尋收錄排除</b>',
   bodyHtml: '僅 GitHub Pages 發布時，替所有內容頁、卡片頁、404 與更新紀錄片段加入 noindex；正式站一般建置維持原搜尋設定。Google 擁有權驗證檔保持原文。現有搜尋結果需等爬蟲重新讀取，或由站長在 Search Console 提交暫時移除。' }, { ver: 'v6.589', internal: true, dup: false,
   summaryHtml: '<b>後台完整帳號統計</b>',
@@ -3796,6 +3796,16 @@ function monCasualBlock(cg) {
   }
   return h + '</div>' + tail;
 }
+window.monSavePlayerClock = async function (btn) {
+  btn.disabled = true;
+  try {
+    const enabled = document.getElementById('mon-clock-enabled').checked;
+    const minutes = Number(document.getElementById('mon-clock-minutes').value);
+    const r = await api('/api/tourn-player-clock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled, minutes }) });
+    if (!r || r.error || !r.ok) { alert((r && r.error) || '儲存失敗，設定未確認'); return; }
+    await loadMonitor();
+  } finally { btn.disabled = false; }
+};
 async function loadMonitor() {
   const el = document.getElementById('tab-monitor');
   if (el) el.innerHTML = '<div style="padding:24px;color:#888;">載入中…</div>';
@@ -3831,9 +3841,24 @@ async function loadMonitor() {
   const lp = _ok(_r[0]), rd = _ok(_r[1]), dg = _ok(_r[2]), mv = _ok(_r[3]), ns = _ok(_r[4]), cg = _ok(_r[5]), fc = _ok(_r[6]), fd = _ok(_r[7]);
   const thumbSrc = _r[8];
   const replayReveal = _r[9];
+  const pc = _ok(await api('/api/tourn-player-clock'));
   const btnS = 'padding:6px 14px;border:1px solid #a5d6a7;background:#eaf7ea;color:#2e7d32;border-radius:6px;cursor:pointer;font-weight:600;';
   const btnW = 'padding:6px 14px;border:1px solid #e0c56a;background:#fff8e1;color:#8a6d00;border-radius:6px;cursor:pointer;font-weight:600;';
   let html = '<div style="max-width:900px;padding:16px;"><h2 style="margin-top:0;">📡 對戰連線監控</h2>';
+
+  html += '<section style="border:2px solid #55725d;border-radius:8px;padding:14px;margin-bottom:18px;">'
+    + '<h3>⏱ 錦標賽個人操作時間</h3>';
+  if (!pc || pc.playerClockApi !== 1) {
+    html += '<p>無法取得設定，請確認伺服器已更新；目前狀態未知。</p>';
+  } else {
+    const cp = pc.policy;
+    html += '<label><input id="mon-clock-enabled" type="checkbox" ' + (cp.enabled ? 'checked' : '') + '> 啟用個人時間限制</label>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0;">'
+      + '<label>每人每場 <input id="mon-clock-minutes" type="number" min="1" max="120" step="1" value="' + Number(cp.minutes) + '" style="width:70px;"> 分鐘</label>'
+      + '<button onclick="monSavePlayerClock(this)">儲存設定</button></div>'
+      + '<p class="small muted">預設關閉。額度用完後每回合 30 秒；逾時由電腦完成必要收尾。關閉即解除個人限制，整場時限與閒置規則仍照舊。開啟對進行中的對局從啟用後計時；調低額度先給 30 秒收尾。</p>';
+  }
+  html += '</section>';
 
   // ── ① 連線設定 ──────────────────────────────────────────────────────
   html += '<div style="border:1px solid #e3e8ef;border-radius:8px;padding:14px;margin-bottom:18px;">'
@@ -4151,7 +4176,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.591';
+window.SITE_VERSION_HINT = '6.592';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

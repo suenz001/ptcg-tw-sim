@@ -218,7 +218,9 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6527b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    // Windows Git Bash 的 tar 不接受 C:\...；直接以原生程序傳遞參數及封存 bytes。
+    const archive = execFileSync('git', ['-C', ROOT, 'archive', BASE_SHA, 'src'], { maxBuffer: 64 * 1024 * 1024 });
+    execFileSync(process.platform === 'win32' ? 'C:/Windows/System32/tar.exe' : 'tar', ['-x', '-C', tmp], { input: archive });
     const BM = await load(tmp);
     const B = scenarios(BM), BJ = judge(B);
     const red = ['Ge_hide', 'Ge_fairy', 'GeLog', 'Gb_doll', 'Gb_fairy'];

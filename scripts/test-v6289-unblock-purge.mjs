@@ -28,7 +28,7 @@ const P_PAGE = join(ROOT, 'src/lib/friends/FriendsPanel.svelte');
 const P_FRPAGE = join(ROOT, 'src/routes/friends/+page.svelte');
 const DM_START = '// >>> PTCG-FRIENDS-DM-BLOCK-START';
 const DM_END = '// <<< PTCG-FRIENDS-DM-BLOCK-END';
-const TOURN_TAIL_SHA256 = 'eeedf5050ab12d597eb7d8aa6e30565b522e364cb899e8c26519f648b7b7eb9a';   // 與 test-v6272 ⑨／test-v6288 A1 同一把
+const TOURN_TAIL_SHA256 = '6b85eed22cfdef8cbfbb6e7bff1b630fa1fda67a3f6f1ba8fcc7128a89a459aa';   // 與 test-v6272 ⑨／test-v6288 A1 同一把
 const TOURN_ANCHOR_SHA256 = '60eb4bc20344373c52ed5de253ee4b49d20356302b8b8939b8d1581d398bb97c'; // 與 test-v6278 I1／test-v6288 A1 同一把
 const UNBLOCK_PURGE_LINE = "        if (del && del.deletedCount > 0) await _frPurgeDm(cur.fid || _frFid(cur._id), 'unblock');\n";
 const UNBLOCK_DEL_LINE = "        const del = await c.deleteOne({ _id: cur._id, status: 'blocked', blockedBy: me.email });\n";

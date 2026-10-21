@@ -643,7 +643,7 @@ await TA('M7 admin.html 拿掉 msgCounts 參數 ⇒「按開關要帶 msgCounts=
 // ⑨ ⭐⭐ 錦標賽區塊逐位元未動（內嵌 sha256，淺複製下也在守）
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑨ 錦標賽區塊逐位元未動');
-const TOURN_TAIL_SHA256 = 'eeedf5050ab12d597eb7d8aa6e30565b522e364cb899e8c26519f648b7b7eb9a' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
+const TOURN_TAIL_SHA256 = '6b85eed22cfdef8cbfbb6e7bff1b630fa1fda67a3f6f1ba8fcc7128a89a459aa' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
 function tournTail(src) {
   const i = src.indexOf("app.get('/api/tournament");
   if (i < 0) throw new assert.AssertionError({ message: '找不到第一支 /api/tournament 端點' });
@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '4101927dcc120789f1f27b52c9d63b9784569030';   // v6.590（上一版）
+const PREV_SHA = 'eb5a4503b8a74781017df129423ba3e3be57e554';   // v6.591（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,12 +757,27 @@ const PREV_SHA = '4101927dcc120789f1f27b52c9d63b9784569030';   // v6.590（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.591 前移：PREV_SHA 從 4101927d（v6.590）起算。
+  // ⚠⚠ v6.592 前移：PREV_SHA 從 eb5a4503（v6.591）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.591：測試站SEO排除，玩家程式只升隱藏版本，正式SEO與公開紀錄不變。
+  // ⭐v6.592：站長核准：個人操作計時、受限AI收尾及倒數浮窗。
+  'src/lib/game/action-responsibility.ts',
+  'src/lib/game/timeout-action.ts',
+  'src/lib/tournament/player-clock-runtime.ts',
+  'src/lib/tournament/player-clock.ts',
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
+  'src/routes/game/PlayerClockNotice.svelte',
+  'static/changelog-archive.html',
+  'static/changelog-bodies.html',
+  'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.591）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.591 前移：PREV_SHA 從 4101927d（v6.590）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.591：測試站SEO排除，玩家程式只升隱藏版本，正式SEO與公開紀錄不變。
+//   'src/lib/version.ts',
+//   'static/site-version.txt',
 // ── 上一版（v6.590）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.590 前移：PREV_SHA 從 3c8a3da9（v6.589）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -879,16 +894,6 @@ const PREV_ALLOWED = [
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
 // ⭐v6.580：動畫只在當下播放（anim-live.ts 唯一判準、對戰頁各動畫接線、獎賞卡發牌 class）；首頁 changelog 三步搬運
 //   'src/lib/game/anim-live.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.579）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.579 前移：PREV_SHA 從 5c1ac724（v6.578）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.579：退場動畫 outScaleAbs、手牌提示疊在卡圖上、桌面版空戰鬥場同高；首頁 changelog 三步搬運
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',

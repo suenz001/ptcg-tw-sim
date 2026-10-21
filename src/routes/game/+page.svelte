@@ -1,4 +1,17 @@
 <script lang="ts">
+  import PlayerClockNotice from "./PlayerClockNotice.svelte";
+  import type { PlayerClockState } from "$lib/tournament/player-clock";
+  let tPlayerClock = $state<PlayerClockState | null>(null);
+  let playerClockSeen = { room: '', version: -1, revision: -1, at: -1 };
+  function adoptPlayerClock(r: any) {
+    if (!r || typeof r.version !== 'number' || r.version < tVersion) return;
+    if (playerClockSeen.room !== tActiveRoom) playerClockSeen = { room: tActiveRoom, version: -1, revision: -1, at: -1 };
+    const revision = Number(r.playerClockRevision ?? 0), at = Number(r.serverNow ?? 0);
+    if (r.version < playerClockSeen.version || revision < playerClockSeen.revision || at < playerClockSeen.at) return;
+    playerClockSeen = { room: tActiveRoom, version: r.version, revision, at };
+    tPlayerClock = r.playerClock ?? null;
+  }
+
   import "$lib/game/card-back.css";
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
   import { statusIcon, statusLabel, statusSlots } from '$lib/game/status-display';   // ⭐v6.556 特殊狀態圖示與官方用詞的唯一出口
@@ -5887,6 +5900,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       if (sst && typeof sst.lastActionAt === 'number') tLastActionAt = sst.lastActionAt;
       if (sst && typeof sst.idleForfeitMin === 'number') tIdleMin = sst.idleForfeitMin;
       if (sst && 'actorSeat' in sst) tServerActorSeat = (typeof sst.actorSeat === 'number' ? sst.actorSeat : null);   // v6.151 伺服器權威
+      adoptPlayerClock(sst);
       if (sst && typeof sst.longPoll === 'boolean') tLongPollReady = sst.longPoll;   // v6.152
       if (sst && typeof sst.serverNow === 'number') tClockOffset = sst.serverNow - Date.now();
       tNow = Date.now() + tClockOffset;
@@ -5896,6 +5910,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   // 對戰結束 → 返回賽事大廳（清本地對局、刷新賽程）
   function tLeaveMatch() {
+    tPlayerClock = null; playerClockSeen = { room: '', version: -1, revision: -1, at: -1 };
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
     // v6.151 跨場次殘留清乾淨：actorSeat 帶著上一場的值，會讓下一場在第一個輪詢回來之前
     //   用錯的方向算倒數；RTT 樣本混到上一場則會讓 slow-rtt 指紋掛在錯誤的場次上。
@@ -7421,6 +7436,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       }
       if (fr && typeof fr.lastActionAt === 'number') tLastActionAt = fr.lastActionAt;
       if (fr && 'actorSeat' in fr) tServerActorSeat = (typeof fr.actorSeat === 'number' ? fr.actorSeat : null);   // v6.151 伺服器權威
+      adoptPlayerClock(fr);
       if (fr && typeof fr.longPoll === 'boolean') tLongPollReady = fr.longPoll;   // v6.152
       if (fr && typeof fr.serverNow === 'number') { tClockOffset = fr.serverNow - Date.now(); tNow = Date.now() + tClockOffset; }
       tAuthLost = false;   // v6.150 同步成功 ⇒ 身分是好的
@@ -7651,6 +7667,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         if (r && typeof r.lastActionAt === 'number') tLastActionAt = r.lastActionAt;
         if (r && typeof r.idleForfeitMin === 'number') tIdleMin = r.idleForfeitMin;
         if (r && 'actorSeat' in r) tServerActorSeat = (typeof r.actorSeat === 'number' ? r.actorSeat : null);   // v6.151 伺服器權威
+      adoptPlayerClock(r);
         if (r && typeof r.longPoll === 'boolean') tLongPollReady = r.longPoll;   // v6.152 伺服器宣告是否已啟用長輪詢
         // ⭐v6.170 欄位**缺席就是 0**（伺服器未達門檻／沒紀錄時刻意省略這個鍵）⇒ 提示自然收掉。
         tOppQuietSec = (r && typeof r.oppQuietSec === 'number') ? r.oppQuietSec : 0;
@@ -10768,6 +10785,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
 <LobbyUnify />
 
 <svelte:window onkeydown={onGlobalKey} onpointermove={onWindowPointerMove} onpointerup={onWindowPointerUp} />
+
+{#if isTournament && !isTournSpectator && game?.phase === "playing" && tPlayerClock && tPlayerClock.gameStart === game.gameStartTime && (mySeatIdx === 0 || mySeatIdx === 1)}
+  <PlayerClockNotice clock={tPlayerClock} seat={mySeatIdx} now={tNow} />
+{/if}
 
 <!-- v2.288：手機直式 + 戰鬥中時鎖 body 滑動，禁止 iOS Safari 整頁 bounce / pull-to-refresh -->
 <!-- v6.590：body class 改由上方 effect 實際管理；svelte:body 的 class directive 不會產生 client JS。 -->

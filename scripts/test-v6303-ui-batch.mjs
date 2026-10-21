@@ -55,7 +55,9 @@ import { revertAdminV168 as _revertAdminV168 } from './lib/sap-revert-admin-v168
 import { revertAdminV169 as _revertAdminV169 } from './lib/sap-revert-admin-v169.mjs';   // ⭐v1.69（重賽系統訊息「擲硬幣」，錦標賽區塊內兩行；前端未 bump）
 import { revertAdminV170 as _revertAdminV170 } from './lib/sap-revert-admin-v170.mjs';   // ⭐v1.70（v6.583 牌組公布欄附加對戰紀錄，錦標賽區塊之前）：先剝較新的（Rule 54）
 import { revertAdminV171 as _revertAdminV171 } from './lib/sap-revert-admin-v171.mjs';
-import { revertAdminV172 } from './lib/sap-revert-admin-v172.mjs';
+import { revertAdminV172 as _revertAdminV172 } from './lib/sap-revert-admin-v172.mjs';
+import { revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
+const revertAdminV172 = s => _revertAdminV172(revertAdminV173(s));
 const revertAdminV171 = s => _revertAdminV171(revertAdminV172(s));
 const revertAdminV170 = (s) => _revertAdminV170(revertAdminV171(s));
 const revertAdminV169 = (s) => _revertAdminV169(revertAdminV170(s));   // ⭐v1.70 鏈再長一節（既有呼叫點一個字都不必改）

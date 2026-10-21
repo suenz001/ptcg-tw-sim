@@ -96,7 +96,7 @@ if (!FR || !FR.includes('async function _frTournPlayingEmails(')) {
   console.log('\n══ v6.300 守衛：' + pass + ' PASS / ' + (fail || 1) + ' FAIL（HEAD-FAIL：本版改動不在，後續無法進行）══');
   process.exit(1);
 }
-const TOURN_TAIL_SHA256 = 'eeedf5050ab12d597eb7d8aa6e30565b522e364cb899e8c26519f648b7b7eb9a';   // 與 test-v6272 ⑨ 同一把
+const TOURN_TAIL_SHA256 = '6b85eed22cfdef8cbfbb6e7bff1b630fa1fda67a3f6f1ba8fcc7128a89a459aa';   // 與 test-v6272 ⑨ 同一把
 const TOURN_ANCHOR_SHA256 = '60eb4bc20344373c52ed5de253ee4b49d20356302b8b8939b8d1581d398bb97c'; // 與 test-v6278 I1 同一把
 await T('A1 ⚠⚠ 錦標賽區塊逐位元未動（兩把既有 sha256）；好友區塊整段在第一支 /api/tournament 之前', () => {
   const first = PATCH.indexOf("app.get('/api/tournament");
