@@ -3,6 +3,7 @@ import type { GameAction, GameState } from './types';
 import type { Seat } from './modal-slots';
 import { actionResponsibility } from './action-responsibility';
 import { getAIAction } from './ai';
+import { damageDistributeCandidates } from './selection-candidates';
 
 /**
  * 超時收尾入口：每次只產生一個必要動作，由伺服器經版本 CAS 套用後再重新判斷。
@@ -12,6 +13,19 @@ export function timeoutAction(g: GameState, pool: Map<string, Card>, seat: Seat)
   if (!actionResponsibility(g).includes(seat)) return null;
   if (g.pendingSelection) {
     const action = getAIAction(g, pool, seat);
+    const sel = g.pendingSelection;
+    // 既有對戰 AI 的分配策略偏好備戰；必要收尾必須尊重視窗真正允許的候選（也可能只有戰鬥位）。
+    // minCount>0 的分配不可用空選擇跳過，更不能讓多於六張的能量分配只搬六張。
+    // 不碰 abraRemove 的移除上限／可選零語意，只補一般放置／能量改附的合法選擇。
+    if (action?.type === 'RESOLVE_SELECTION' && sel.type === 'damage-distribute'
+      && sel.params?.abraRemove !== true && action.selectedIids.length < sel.minCount) {
+      const candidates = damageDistributeCandidates(sel.params, g.players[sel.sourcePlayerIdx]);
+      if (candidates.length) {
+        return { type: 'RESOLVE_SELECTION', selectedIids: Array.from({ length: sel.maxCount }, () => candidates[0].iid),
+          senderIdx: seat, pendingToken: sel.token };
+      }
+      return null;
+    }
     return action?.type === 'RESOLVE_SELECTION' ? { ...action, senderIdx: seat } : null;
   }
   const owed = g.pendingPrizes?.[seat] ?? 0;

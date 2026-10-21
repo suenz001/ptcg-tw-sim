@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { buildAiBundle, loadLivePool, nextAction, seeded } from './lib/ai-sim-harness.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const mod = await buildAiBundle(ROOT, { extraExports: [
   "export { createPlayerClockRuntime } from './src/lib/tournament/player-clock-runtime';",
   "export { timeoutAction } from './src/lib/game/timeout-action';",
+  "export { ATTACK_POST } from './src/lib/game/effects/_shared';",
 ] });
 const pool = loadLivePool(ROOT);
 const deck = mod.PRESET_DECKS[0];
@@ -173,6 +177,35 @@ await test('設定前已在途的舊refresh不能覆蓋新設定', async () => {
   await Promise.all([refresh, saving]);
   assert.equal(f.runtime.currentPolicy().enabled, false); assert.equal(f.runtime.currentPolicy().minutes, 18);
 });
+await test('油之機關槍只有戰鬥位目標，接管不能用空選擇跳過傷害', async () => {
+  const f = fixture(), actor = f.room.gameState.activePlayerIndex, defender = 1 - actor;
+  const g = f.room.gameState; g.players[defender].bench = [];
+  const create = mod.ATTACK_POST.get('奧利瓦ex|油之機關槍'); assert.equal(typeof create, 'function');
+  f.room.gameState = create(g, actor, pool);
+  assert.equal(f.room.gameState.pendingSelection.effectKey, 'olive-oil-distribute');
+  const action = mod.timeoutAction(f.room.gameState, pool, actor);
+  assert.equal(action.selectedIids.length, 6);
+  assert.ok(action.selectedIids.every(id => id === g.players[defender].active.iid));
+  const done = mod.applyAction(f.room.gameState, action, pool);
+  assert.notEqual(done.pendingSelection?.effectKey, 'olive-oil-distribute');
+  assert.ok(done.log.some(l => l.message.includes('油之機關槍') && /120|昏厥|傷害/.test(l.message)));
+});
+await test('大於六張的必要分配仍全數改附，戰鬥位可作合法目標', () => {
+  const g = structuredClone(game), actor = g.activePlayerIndex, iid = g.players[actor].active.iid;
+  const metal = [...pool.values()].find(c => c.name === '基本【鋼】能量'); assert.ok(metal);
+  const template = g.players[actor].hand[0]; assert.ok(template);
+  g.players[actor].active.energyAttached = Array.from({ length: 8 }, (_, i) => ({ ...structuredClone(template), iid: `clock-metal-${i}`, cardId: String(metal.id) }));
+  g.players[actor].bench = [];
+  const create = mod.ATTACK_POST.get('佛烈托斯|鐵之震動'); assert.equal(typeof create, 'function');
+  const pending = create(g, actor, pool);
+  assert.equal(pending.pendingSelection.minCount, 8);
+  const action = mod.timeoutAction(pending, pool, actor);
+  assert.equal(action.selectedIids.length, 8); assert.ok(action.selectedIids.every(id => id === iid));
+  const done = mod.applyAction(pending, action, pool);
+  assert.equal(done.players[actor].active.energyAttached.length, 8);
+  assert.equal(new Set(done.players[actor].active.energyAttached.map(e => e.iid)).size, 8);
+  assert.notEqual(done.pendingSelection?.effectKey, 'h-energy-redistribute');
+});
 await test('真實出牌產生的選擇由AI完成必要結算', async () => {
   let st = structuredClone(game), found = 0;
   for (let n = 0; n < 250 && st.phase === 'playing'; n++) {
@@ -190,5 +223,38 @@ await test('真實出牌產生的選擇由AI完成必要結算', async () => {
     st = mod.applyAction(st, act, pool);
   }
   assert.ok(found >= 3, `必須真的覆蓋選擇，實際 ${found}`);
+});
+await test('真伺服器接線：自動CAS寫盤面、時計、紀錄並通知回放與換回合快照', async () => {
+  const source = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8').replace(/\r\n/g, '\n');
+  const begin = source.indexOf('    // >>> v6592-player-clock\n'), end = source.indexOf('    // <<< v6592-player-clock\n', begin);
+  assert.ok(begin >= 0 && end > begin);
+  let now = 1000, policy = null;
+  let room = { _id: 'r', matchId: 'm', eventId: 'e', version: 1, gameState: structuredClone(game) };
+  const events = { notify: 0, replay: 0, snapshot: 0, over: 0 };
+  const rooms = {
+    findOne: async () => structuredClone(room),
+    updateOne: async (filter, update) => {
+      assert.equal(filter.version.$eq, room.version, '自動寫入必須版本CAS');
+      assert.equal(filter['gameState.phase'], 'playing'); assert.ok('timeLimitTurn' in filter);
+      if (room.gameState.phase !== 'playing' || filter.timeLimitTurn !== (room.timeLimitTurn ?? null)) return { matchedCount: 0 };
+      room = { ...room, ...structuredClone(update.$set) }; return { matchedCount: 1 };
+    },
+  };
+  const config = { findOne: async () => policy, updateOne: async (f, u) => { policy = structuredClone(u.$set); } };
+  const ctx = { TENG: mod, TPOOL: pool, TROOMS: rooms,
+    db: { collection: name => name === 'tournamentConfig' ? config : { find: () => ({ limit() { return this; }, toArray: async () => [{ roomId: 'r' }] }) } },
+    app: { get() {}, post() {} }, Date: { now: () => now }, console,
+    currentActorSeat: g => g.activePlayerIndex,
+    _lpNotify: () => events.notify++, tReplayOnApplied: () => events.replay++, snapshotTurn: () => events.snapshot++, onMatchGameOver: async () => events.over++,
+    setInterval: () => ({ unref() {} }), setTimeout: () => ({ unref() {} }),
+  };
+  runInNewContext(source.slice(begin, end) + '\nglobalThis.service = playerClockRuntime;', ctx);
+  await ctx.service.refresh(); assert.equal(events.notify, 0);
+  await ctx.service.configure(true, 15); await ctx.service.refresh();
+  const actor = room.gameState.activePlayerIndex, notifyBefore = events.notify;
+  now += 930000; await ctx.service.work('r');
+  assert.equal(room.gameState.activePlayerIndex, 1 - actor); assert.equal(room.playerClock.spent[actor], 930000);
+  assert.equal(room.lastActionAt, now); assert.ok(room.gameState.log.some(l => l.message.includes('電腦完成必要收尾')));
+  assert.equal(events.replay, 1); assert.equal(events.snapshot, 1); assert.equal(events.notify, notifyBefore + 1); assert.equal(events.over, 0);
 });
 console.log(`${passed} PASS`);

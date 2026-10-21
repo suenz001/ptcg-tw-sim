@@ -1,6 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
-站長核准個人額度15分鐘（可調1～120）、用完每半回合30秒、必要AI收尾、admin監控即時開關，預設OFF。BASE `eb5a4503`（v6.591）。server1.73/admin1.89。先前審查發現回應亂序/關閉通知/設定暫停actor漂移/refresh覆蓋OFF競態，均已修；核心12+runtime17行為測試通過、獨立核心複審無P1/P2。完整驗收與最終審查待補，尚未推送。
+## v6.592 — 錦標賽個人操作時計（預設關閉）
+
+BASE `eb5a4503`（v6.591）。server v1.73／admin v1.89。站長核准：每場各自15分鐘，可在admin監控調整1～120分鐘或關閉；額度用完每半回合30秒，逾時只由AI完成必要選擇、取獎賞、補位與正常END_TURN，不開始新的主階段出牌或攻擊。預設OFF；關閉不撤回已完成動作，既有整場時限與閒置規則保留。開啟舊局不追溯，重新啟用換epoch；調低先給完整30秒。政策有generation防舊refresh覆蓋OFF。
+
+- 操作權：沿用引擎實際允許的責任集合；選擇視窗只計owner，雙方同時取獎或不同必要待辦各算自己，雙方補位沿用下一回合方優先。不直接使用舊閒置判負的單一actor當個人時間。
+- 保存與接管：真人時計與盤面同一個版本CAS；自動提交再比timeLimitTurn，沿用replay／半回合快照／終局晉級。純記憶體投影倒數，只有動作／初始化／政策變更等才寫房間；OFF不掃盤面、不啟動AI。設定讀取失敗暫停強制處理，真人操作仍正確移交actor。
+- AI收尾：不消耗三次拒絕保護來跳效果；無合法進展保留盤面並標記可手動恢復。自查補齊damage-distribute只有戰鬥位候選、或必要數量超過六個時的timeout專用候選回退，使用中央候選並排除abraRemove；原AI與卡牌resolver未改。真實油之機關槍與8張基本【鋼】能量改附均跑原引擎確認；另直接執行SAP接線，確認自動CAS、紀錄、通知、回放與快照。
+- UI：admin監控提供開關／分鐘數，設定異常明確顯示未知；公開更新不含admin操作細節。桌機／手機使用可拖動、無遮罩、不攔截下方操作的浮窗；30逐秒到0、最後10秒高對比、等對手暫停。clock採納有盤面版本／政策revision／serverNow防亂序，關閉喚醒等待中的長輪詢。
+- 獨立審查：clock_runtime_review找出2項UI P2、1項暫停期間actor漂移P2、1項refresh覆蓋OFF P1，均重現修正並複審結案；checkpoint發布／鎖鏈與後續分配fallback亦複審通過，沒有未解決P1/P2。初始clock_design_review僅完成設計審查，後續因額度錯誤未視為產品通過。
+- 守衛：core12＋runtime20＋真endpoint／CAS／UI採納／精確還原接線10，共42項行為檢查綠。真BASE隔離樹缺新功能，core12逐條紅、exit1（新功能不存在，非宣稱BASE已有此功能的行為bug）。核心8突變＋必要分配2突變全殺，正對照皆綠。8組SAP逐字還原回BASE；tail守衛與五個還原消費端串接，TEVENTS以下逐位元不動。
+- 測試環境：既有v6527的HEAD-FAIL使用Git Bash tar處理Windows路徑失敗，改為原生git archive bytes→tar程序參數；BASE卡牌行為檢查52/0，不改其判準。前置harness＋35免疫其餘通過。首次全套因自查必要分配缺口於8/904階段主動停止，未當成通過；完整驗收重新執行。
+- 桌機1280／手機390之實際Svelte元件各驗普通／最後9秒／等待3狀態，共6張PNG，拖曳與pointer穿透通過，pageerror0；屬元件測試，不冒稱iPhone實機或整場瀏覽器測試。
+- 證據：`E:/ptcg-tw-sim-local/clock-*`（核心／runtime／wiring日誌、mutants與choice-mutants、headfail、visual/proof.json）。完整全套與最終建置／CI驗證結果待完成後補入，尚未推送。
 
 ## v6.591 — 測試站搜尋收錄排除（hidden）
 
