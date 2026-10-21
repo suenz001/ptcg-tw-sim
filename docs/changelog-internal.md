@@ -14,7 +14,10 @@ BASE `eb5a4503`（v6.591）。server v1.73／admin v1.89。站長核准：每場
 - 第二次全套於前段主動停止：新浮窗改用中央safe-top、守衛ROOT改標準宣告、抽取頁面先normEol、BASE blob改中央helper。既有v6377/v6378負對照依舊腳本CRLF選fixture；本機兩產品檔曾為LF造成混合行尾假紅，僅將工作樹game頁/admin頁回復CRLF（Git索引LF不變），不改舊守衛與判準。修後v6371 155/0、v6377 29/0、v6378 46/0、safe-area 97/0與靜態lint皆綠，獨立複審確認修正。將以最終checkpoint重新完整940支，不將中止輪次列為通過。
 - 完整940於c1d4fdfe跑完27.43分，881綠／59失敗，TIMEOUT0，不能稱全綠。45支舊測試使用shell封存而新shell找不到Bash；補PATH後仍遭Git tar不認Windows暫存路徑，改共用base-archive原生git bytes→tar及junction，BASE／路徑／行為判斷均不動。其餘14支為歷史SAP／game整頁還原或新增顯示元件分類接線：精確串v173／game六組、兩個舊窗口長度檢查先還原已宣告插入，再驗原區段；六組缺失/重複拒絕與額外差異保留另有斷言。Notice仍列全檔名凍結，單獨限定中央clock來源與無卡牌動作，兩版面六述詞檢查不變。新檢查增加game還原及真原生封存（文字/二進位/中文空白/錯ref/錯目錄/真link），core12＋runtime20＋wiring12共44綠；手牌原紅獨立44/0。接續同runner補驗全部原紅與受影響完整性守衛，原報表保留。
 - 桌機1280／手機390之實際Svelte元件各驗普通／最後9秒／等待3狀態，共6張PNG，拖曳與pointer穿透通過，pageerror0；屬元件測試，不冒稱iPhone實機或整場瀏覽器測試。
-- 證據：`E:/ptcg-tw-sim-local/clock-*`（核心／runtime／wiring日誌、mutants與choice-mutants、headfail、visual/proof.json）。完整全套與最終建置／CI驗證結果待完成後補入，尚未推送。
+- 最終驗收：完整940項＋兩輪受影響項補驗後全項通過，不稱原單輪零失敗。c1d4fdfe完整940為881綠／59紅、27.43分；d4f422e0補68為62綠／6紅、3.17分；34e8d350單工補17/17全綠、3.12分。六項餘紅補齊：三個歷史D5只新增精確v173可用但仍須呼叫舊還原器、v6583先v173→v171、v6566 action fixture明確注入關閉的playerClockRuntime=null，另6378子6276間歇紅單工46/0，未改6378/6276。三報表按script合併940全覆蓋，unresolved=[]；TIMEOUT／escape／restoreFailed／主樹hard均0、statusChanged=false；千局進化1000seeds、harness與35免疫網均完成通過。
+- skip逐支核：v6378 ENV1僅無未追蹤音樂檔、v6263 PLATFORM1、SHALLOW0；前版ENV2額外有grep可用的跳過，本次PATH沒有grep而實際跑完該BASE反例，沒有增加skip。最終Pages／Oracle雙release build均exit0與SEO完成，src/static/oracle-admin/package/server-engine-builder對c1d4fdfe後續零差異，原build有效；safe-top修正後六組實際元件畫面與拖曳已重驗。
+- 最終獨立審查：原clock_runtime_review完成產品多輪複審後遇額度錯誤，未算最終准推；新的clock_final_review獨立重跑新守衛、核63檔測試diff與後5檔修正，逐條驗45個archive BASE／paths／ln需求等價，核六組精確還原、三報表聯集、雙release建置／visual／admin／10突變。34e8d350最終准推，未解決P1/P2/P3均0；僅補本內部紀錄後推main，再等CI，AI不代跑部署。
+- 證據：`E:/ptcg-tw-sim-local/clock-*`：full-final2.json、rerun-final.json、rerun-final2.json及原始log／各沙盒__rt/logs，acceptance-proof.json、build-release-pages/oracle.log、mutants/results.json、choice-mutants、headfail.log、visual/proof.json與admin-proof.json。正式發布由站長在無賽事時自行update-tournament.bat→redeploy-oracle.bat；初次設定預設OFF。GitHub Pages不代表新版Oracle後端已部署。
 
 ## v6.591 — 測試站搜尋收錄排除（hidden）
 
