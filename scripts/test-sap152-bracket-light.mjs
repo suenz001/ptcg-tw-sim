@@ -207,7 +207,7 @@ console.log('\n【D】錦標賽區塊 28 把鎖重釘');
   const CONSUMERS = ['scripts/test-v6276-deck-tournament-stats.mjs', 'scripts/test-v6291-tourn-verified-gate.mjs', 'scripts/test-v6292-tourn-verified-gate2.mjs',
     'scripts/test-v6303-ui-batch.mjs', 'scripts/test-v6381-archive-gamedraw-and-swiss-note.mjs'];
   // （⭐v1.65 起消費者改接 tourn-revert-v165，它的鏈內含本版；Rule 40 意圖不變）
-  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(/from '\.\/lib\/tourn-revert-v1(?:[56]\d|71)\.mjs'/.test(s) && s.includes('revertV152(')); });
+  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(/from '\.\/lib\/tourn-revert-v1(?:[56]\d|7[13])\.mjs'/.test(s) && s.includes('revertV152(')); });
   ok('D5 五支消費者都 import 新 lib 且呼叫 revertV152(', bad.length === 0, bad.join(', '));
   ok('D5b test-v6303 的 SAP 還原鏈最內層是 revertAdminV152', /revertAdminV150\(revertAdminV152\((?:SAP_RAW|revertAdminV15\d\()/.test(rd('scripts/test-v6303-ui-batch.mjs')));
 }

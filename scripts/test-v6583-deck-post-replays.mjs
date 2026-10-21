@@ -25,7 +25,9 @@ import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
 import { buildAiBundle, loadLivePool, presetById, playGame, firstPlayerOf } from './lib/ai-sim-harness.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
-import { revertV171 } from './lib/tourn-revert-v171.mjs';   // v6.588：只逐字還原本版，保留舊鎖。
+import { revertV171 as _rv171 } from './lib/tourn-revert-v171.mjs';
+import { revertV173 } from './lib/tourn-revert-v173.mjs';
+const revertV171 = block => _rv171(revertV173(block));   // v6.588：只逐字還原本版，保留舊鎖。
 import { stripCommentsBlank } from './lib/strip-comments.mjs';   // 註解裡提到的字不算（中央剝除器）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');

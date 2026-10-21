@@ -334,7 +334,7 @@ console.log('\n【D】錦標賽區塊 28 把鎖重釘');
   const CONSUMERS = ['scripts/test-v6276-deck-tournament-stats.mjs', 'scripts/test-v6291-tourn-verified-gate.mjs', 'scripts/test-v6292-tourn-verified-gate2.mjs',
     'scripts/test-v6303-ui-batch.mjs', 'scripts/test-v6381-archive-gamedraw-and-swiss-note.mjs'];
   // （⭐v1.65 起消費者改接 tourn-revert-v165，它的鏈內含本版；Rule 40 意圖不變）
-  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !((s.includes("from './lib/tourn-revert-v154.mjs'") || s.includes("from './lib/tourn-revert-v165.mjs'") || s.includes("from './lib/tourn-revert-v167.mjs'") || s.includes("from './lib/tourn-revert-v171.mjs'")) && /revert(?:Admin)?V154\(/.test(s)); });
+  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !((s.includes("from './lib/tourn-revert-v154.mjs'") || s.includes("from './lib/tourn-revert-v165.mjs'") || s.includes("from './lib/tourn-revert-v167.mjs'") || s.includes("from './lib/tourn-revert-v171.mjs'") || s.includes("from './lib/tourn-revert-v173.mjs'")) && /revert(?:Admin)?V154\(/.test(s)); });
   ok('★★[D5] 五支消費者都 import 新 lib 且呼叫 v1.54 的還原器', bad.length === 0, bad.join(', '));
   ok('★[D5b] test-v6303 的 SAP 還原鏈：revertAdminV154 緊接在 revertAdminV153 內側（v1.55 起內側還有更新的還原器，Rule 54 由新到舊）', /revertAdminV153\(revertAdminV154\((?:revertAdminV1\d\d\()*SAP_RAW\)/.test(rd('scripts/test-v6303-ui-batch.mjs')));
   if (BASE) ok('★★[D6] 整份檔案：revertAdminV154 之後與 v1.53 逐位元相同（沒有夾帶宣告以外的改動）', revertAdminV154(revertAdminV155(revertAdminV156(revertAdminV157(revertAdminV158(revertAdminV159(revertAdminV160(revertAdminV161(revertAdminV162(revertAdminV163(revertAdminV164(revertAdminV165(revertAdminV166(CUR))))))))))))) === BASE);   // ⭐v1.55 先剝掉較新一版

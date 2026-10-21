@@ -200,9 +200,9 @@ async function actionScenarios(P) {
   const run = async (doc) => {
     let applied = 0;
     const TROOMS = { findOne: async () => clone(doc) };
-    const h = new Function('TROOMS', 'tournIdentity', '_stateForSeat', 'TSEAT_NO_REDACT', 'tActionApplyOnce', 'canSeatAct', 'TENG', 'normalizeAction', 'TPOOL', 'currentActorSeat', '_lpNotify', 'snapshotTurn', 'onMatchGameOver',
+    const h = new Function('TROOMS', 'tournIdentity', '_stateForSeat', 'TSEAT_NO_REDACT', 'tActionApplyOnce', 'canSeatAct', 'TENG', 'normalizeAction', 'TPOOL', 'currentActorSeat', '_lpNotify', 'snapshotTurn', 'onMatchGameOver', 'playerClockRuntime',
       'return ' + src + ';')(TROOMS, async () => ({ uid: 'a', verified: true }), (g) => g, -1,
-      async (d) => { applied++; return { kind: 'ok', gs: d.gameState, version: d.version + 1 }; }, () => true, {}, (x) => x, null, () => 0, () => {}, () => {}, async () => {});
+      async (d) => { applied++; return { kind: 'ok', gs: d.gameState, version: d.version + 1 }; }, () => true, {}, (x) => x, null, () => 0, () => {}, () => {}, async () => {}, null);
     const out = await call(h, { body: { room: 'R', action: { type: 'END_TURN' } } });
     return { out, applied };
   };
