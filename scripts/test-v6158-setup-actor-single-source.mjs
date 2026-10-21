@@ -21,6 +21,7 @@
 //      「⏳ 等待對手決定補抽」是 position:fixed;inset:0 的全螢幕遮罩。
 //      對手一按【準備完成】規則上就輪到重抽方放出場了（actorSeat 指向他），
 //      遮罩卻還在 ⇒ 他什麼都按不到，伺服器同時在倒數判他閒置敗。
+import { revertV6592Game } from './lib/revert-v6592-game.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -225,8 +226,9 @@ T('⭐⭐stale-version 必須 per-stall 去重（否則一次長考就燒光每�
   assert.ok(/_staleDiagVersion !== tVersion/.test(seg), '沒有「這個版本已回報過就不再送」的去重條件');
   assert.ok(seg.indexOf('_staleDiagVersion = tVersion') < seg.indexOf("_tSendClientDiag('stale-version')"),
     '去重旗標必須在送出**之前**寫入，否則早退／例外時等於沒去重');
-  const li = P.indexOf('function tLeaveMatch()');
-  assert.ok(/_staleDiagVersion = -1/.test(P.slice(li, li + 1200)), 'tLeaveMatch 沒有把去重旗標歸零 → 下一場漏報');
+  const legacyPage = revertV6592Game(P);
+  const li = legacyPage.indexOf('function tLeaveMatch()');
+  assert.ok(/_staleDiagVersion = -1/.test(legacyPage.slice(li, li + 1200)), 'tLeaveMatch 沒有把去重旗標歸零 → 下一場漏報');
 });
 
 // ── 5. Fable 5 審查補強②：/action 被拒（401/403）不得靜默 ─────────────────

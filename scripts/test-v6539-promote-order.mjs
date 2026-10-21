@@ -7,6 +7,7 @@
  *   ONE_SIDE／NO_BENCH 正對照（不排序）
  * 【H】BASE（v6.538）：ATK、CHECKUP 紅；正對照兩版綠。
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -148,7 +149,7 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6539b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src oracle-admin/server_admin_patch.js | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src", "oracle-admin/server_admin_patch.js"], tmp);
     const BM = await load(tmp);
     const B = scenarios(BM, readFileSync(join(tmp, 'oracle-admin/server_admin_patch.js'), 'utf8')), BJ = judge(B);
     for (const k of Object.keys(LABEL)) {

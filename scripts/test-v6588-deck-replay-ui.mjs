@@ -9,6 +9,8 @@ import { pwLaunch } from './lib/pw.mjs';
 import { readBaseBlob, hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
 import { deckReplayServer, functionSource, clone } from './lib/deck-replay-db-fixture.mjs';
 import { postListBundle, openingBundle, fixtureHtml, measureOpening } from './lib/deck-replay-ui-fixture.mjs';
+import { revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
+import { revertV173 } from './lib/tourn-revert-v173.mjs';
 import { revertAdminV172 } from './lib/sap-revert-admin-v172.mjs';
 import { revertAdminV171 } from './lib/sap-revert-admin-v171.mjs';
 import { revertV171, TAIL_ANCHOR, TEV_ANCHOR, NEW_TAIL_SHA_V171, NEW_TEV_SHA_V171, NEW_TEV_LEN_V171 } from './lib/tourn-revert-v171.mjs';
@@ -29,14 +31,14 @@ const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 let baseSource, basePage, baseOpening;
 if (hasBaseCommit(ROOT, BASE)) {
   [baseSource, basePage, baseOpening] = paths.map(p => { const r = readBaseBlob(ROOT, BASE, p); if (!r.ok) throw new Error('讀取 BASE 失敗 ' + p); return r.out.replace(/\r\n/g, '\n'); });
-  let reverted = ''; try { reverted = revertAdminV171(revertAdminV172(source)); } catch { /* 舊版完整守衛必須逐條紅，不整支 throw。 */ }
+  let reverted = ''; try { reverted = revertAdminV171(revertAdminV172(revertAdminV173(source))); } catch { /* 舊版完整守衛必須逐條紅，不整支 throw。 */ }
   ok('D2 精確還原整份 server＝BASE，其他行不變', reverted === baseSource);
   for (const anchor of [TAIL_ANCHOR, TEV_ANCHOR]) {
-    let result = ''; try { result = revertV171(source.slice(source.indexOf(anchor))); } catch { /* 明確紅項。 */ }
+    let result = ''; try { result = revertV171(revertV173(source.slice(source.indexOf(anchor)))); } catch { /* 明確紅項。 */ }
     ok('D2 精確還原區塊 ' + anchor, result === baseSource.slice(baseSource.indexOf(anchor)));
   }
 } else shallowSkip('v6588 BASE', '需要 main v6.587 歷史');
-const tail = source.slice(source.indexOf(TAIL_ANCHOR)), tev = source.slice(source.indexOf(TEV_ANCHOR));
+const tail = revertV173(source.slice(source.indexOf(TAIL_ANCHOR))), tev = revertV173(source.slice(source.indexOf(TEV_ANCHOR)));
 ok('D1 現行三把指紋', sha(tail) === NEW_TAIL_SHA_V171 && sha(tev) === NEW_TEV_SHA_V171 && tev.length === NEW_TEV_LEN_V171);
 ok('D3 指紋突變自驗', sha(tail + ' ') !== NEW_TAIL_SHA_V171);
 const scriptFiles=[];
@@ -46,7 +48,7 @@ const stale=scriptFiles.filter(p=>p!=='scripts/lib/tourn-revert-v169.mjs').filte
 ok('D4 舊v169指紋在歷史宣告端外零殘留',stale.length===0,stale.join(','));
 const tailConsumers=['test-v6276-deck-tournament-stats.mjs','test-v6291-tourn-verified-gate.mjs','test-v6292-tourn-verified-gate2.mjs','test-v6381-archive-gamedraw-and-swiss-note.mjs'];
 const scriptText=p=>readFileSync(join(ROOT,'scripts',p),'utf8');
-ok('D5 四條區塊鏈及v6303整檔鏈皆先接v171',tailConsumers.every(p=>{const s=scriptText(p);return s.includes("from './lib/tourn-revert-v171.mjs'")&&s.includes('revertV171(');})&&scriptText('test-v6303-ui-batch.mjs').includes('revertAdminV171('));
+ok('D5 四條區塊鏈及v6303整檔鏈皆先接v171',tailConsumers.every(p=>{const s=scriptText(p);return s.includes("from './lib/tourn-revert-v173.mjs'")&&s.includes('revertV171(');})&&scriptText('test-v6303-ui-batch.mjs').includes('revertAdminV171('));
 const wholeConsumers=['test-v6561-tourn-replay-per-action.mjs','test-sap153-tourn-deck-validate.mjs','test-sap154-audit-load.mjs','test-sap169-restart-coin-wording.mjs','test-v6303-ui-batch.mjs'];
 const wholeTexts=wholeConsumers.map(scriptText);
 const connected=xs=>xs.length===5&&xs.every(s=>s.includes("from './lib/sap-revert-admin-v171.mjs'")&&s.includes('revertAdminV171('));

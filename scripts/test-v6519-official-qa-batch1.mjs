@@ -13,6 +13,7 @@
  * 【D】鐵掌力士｜大力捕捉器：可以選化隱的備戰寶可夢，但不會互換；選一般寶可夢照常互換
  * 【H】HEAD-FAIL：同樣的盤面餵 v6.518 的引擎逐條紅
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -163,7 +164,7 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6519b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src"], tmp);
     const BM = await loadEngine(tmp);
     const B = scenarios(BM), BJ = judge(B);
     ok('★★★[H1] v6.518：A、B、C、D 逐條紅（而且不是例外）', !BJ.A && !BJ.B && !BJ.C && !BJ.D && !B.Aerr && !B.Berr && !B.Cerr && !B.Derr, JSON.stringify({ BJ, B }));

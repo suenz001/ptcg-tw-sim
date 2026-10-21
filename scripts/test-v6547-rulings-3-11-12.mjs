@@ -6,6 +6,7 @@
  *   12. 手持循環扇改附的候選排除使用招式的那一隻（中央 cycleFanTargetIids）。
  * 【H】BASE（v6.546）：第 12 項兩條紅；第 3、11 項是「現況已符合裁定」的行為釘（兩版都綠）。
  */
+import { extractBaseArchive, linkBaseModules } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -153,7 +154,8 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6547b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src scripts static/cards | tar -x -C "${tmp}" && ln -s "${join(ROOT, 'node_modules')}" "${tmp}/node_modules"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src", "scripts", "static/cards"], tmp);
+    linkBaseModules(ROOT, tmp);
     const BM = await load(tmp);
     const B = scenarios(BM), BJ = judge(B);
     for (const k of Object.keys(LABEL)) {

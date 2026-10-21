@@ -49,7 +49,8 @@ import { revertAdminV169 as _revertAdminV169 } from './lib/sap-revert-admin-v169
 import { revertAdminV170 as _revertAdminV170 } from './lib/sap-revert-admin-v170.mjs';   // ⭐v1.70（v6.583 牌組公布欄附加對戰紀錄，錦標賽區塊之前）：先剝較新的（Rule 54）
 import { revertAdminV171 as _revertAdminV171 } from './lib/sap-revert-admin-v171.mjs';
 import { revertAdminV172 } from './lib/sap-revert-admin-v172.mjs';
-const revertAdminV171 = s => _revertAdminV171(revertAdminV172(s));
+import { revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
+const revertAdminV171 = s => _revertAdminV171(revertAdminV172(revertAdminV173(s)));
 const revertAdminV170 = (s) => _revertAdminV170(revertAdminV171(s));   // v1.71 先還原本版，再接原整檔逐位元鎖。
 const revertAdminV169 = (s) => _revertAdminV169(revertAdminV170(s));   // ⭐v1.70 鏈再長一節（既有呼叫點一個字都不必改）
 const revertAdminV168 = (s) => _revertAdminV168(revertAdminV169(s));   // ⭐v1.69 鏈再長一節（既有呼叫點一個字都不必改）
@@ -61,7 +62,9 @@ import { revertAdminV160 } from './lib/sap-revert-admin-v160.mjs';   // ⭐serve
 import { revertAdminV159 } from './lib/sap-revert-admin-v159.mjs';   // ⭐server v1.59（原型未進場不計＋先攻後攻）：先剝較新的（Rule 54）
 import { revertAdminV158 } from './lib/sap-revert-admin-v158.mjs';   // ⭐server v1.58（常用牌組對戰矩陣端點）：先剝較新的（Rule 54）
 import { revertAdminV157 } from './lib/sap-revert-admin-v157.mjs';   // ⭐server v1.57（序位預設 50＋用最新規則重新判定）：先剝較新的（Rule 54）
-import { revertV154 as _rv154, revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 } from './lib/tourn-revert-v171.mjs';   // ⭐v1.65 再長一節
+import { revertV154 as _rv154, revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171 } from './lib/tourn-revert-v171.mjs';   // ⭐v1.65 再長一節
+import { revertV173 } from './lib/tourn-revert-v173.mjs';
+const revertV171 = b => _rv171(revertV173(b));
 const revertV169 = (b) => _rv169(revertV171(b));   // v1.71 先逐字還原新修改，再接既有鎖。
 const revertV167 = (b) => _rv167(revertV169(b));   // ⭐v1.69（Rule 54）：鏈再長一節（重賽系統訊息「擲硬幣」；既有呼叫點一個字都不必改）
 const revertV165 = (b) => _rv165(revertV167(b));   // ⭐v1.67（Rule 54）：鏈再長一節（對局時限判法切換、推播偏好帳號層級；既有呼叫點一個字都不必改）

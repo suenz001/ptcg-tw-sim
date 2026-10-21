@@ -13,6 +13,7 @@
  *
  * Run: node scripts/test-v6583-deck-post-replays.mjs
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, existsSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -428,7 +429,7 @@ else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6583b-'));
   try {
     const { execFileSync } = await import('node:child_process');
-    execFileSync('bash', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src"], tmp);
     const bP = clientChecks(await loadClient(tmp));
     const bSt = staticChecks(bS, normEol(readFileSync(join(tmp, 'src/routes/deck-posts/+page.svelte'), 'utf8')), normEol(readFileSync(join(tmp, 'src/routes/game/+page.svelte'), 'utf8')), normEol(readBaseBlob(ROOT, BASE_SHA, 'scripts/build-server-engine.mjs').out || ''));
     const red = [...['R0', 'V1', 'V2', 'V3', 'V3b', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9'].filter((k) => bV[k] !== true), ...['P1', 'P2', 'P3', 'P4'].filter((k) => bP[k] !== true), ...['S1', 'S2', 'S3'].filter((k) => bSt[k] !== true)];

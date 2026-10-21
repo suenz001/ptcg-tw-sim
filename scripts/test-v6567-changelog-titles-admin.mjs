@@ -14,6 +14,7 @@
  *   E：真瀏覽器（build/）：首頁只看到大標題；封存頁摘要與細節看不到、內部版本不顯示。
  * 【H】BASE（v6.566）：L／D／C／H／A／B 逐條紅。
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { build } from 'esbuild';
 import { readFileSync, existsSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -236,7 +237,7 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('v6567 HEAD-FAIL', '需要歷史
 else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6567b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src/lib scripts | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src/lib", "scripts"], tmp);
     const B = await all(tmp, (p) => { const x = readBaseBlob(ROOT, BASE_SHA, p); return x.ok ? normEol(x.out) : ''; });
     for (const k of Object.keys(LABEL)) ok(`★★★[H] v6.566：${k} 紅`, B[k] !== true, String(B[k]));
   } finally { try { rmSync(tmp, { recursive: true, force: true }); } catch { /* */ } }

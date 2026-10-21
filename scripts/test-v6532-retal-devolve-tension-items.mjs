@@ -14,6 +14,7 @@
  *   HM_play 從手牌使出 ⇒ 旗標寫 true；HM_copy 作為招式的效果使出 ⇒ 'as-attack-effect'
  * 【H】BASE（v6.531）：RT、CH、CH_ctl、LT、SB、SB_ctl、DR、MB、MB_gate、HB、HB_gate、SB_payload、HM、HM_copy、HM_merge 逐條紅；其餘（含 HM_atk：BASE 一律鎖）兩版綠。
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -222,7 +223,7 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6532b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src"], tmp);
     const BM = await load(tmp);
     const B = scenarios(BM), BJ = judge(B);
     for (const k of Object.keys(LABEL)) {

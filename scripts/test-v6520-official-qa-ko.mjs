@@ -11,6 +11,7 @@
  *      保留（混亂正、招式 正反）＝ 250；重擲時招式從頭擲、不會重擲混亂（不會變成自傷 30、攻擊失敗）
  * 【H】HEAD-FAIL：同樣盤面餵 v6.519 的引擎逐條紅
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -135,7 +136,7 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6520b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src"], tmp);
     const B = scenarios(await loadEngine(tmp)), BJ = judge(B);
     ok('★★★[H1] v6.519：A、B、C 逐條紅（而且不是例外）', !BJ.A && !BJ.B && !BJ.C && !B.Aerr && !B.Berr && !B.Cerr, JSON.stringify({ BJ, B }));
   } catch (e) { ok('★★★[H1] BASE 引擎可打包', false, e.message.split('\n')[0]); }

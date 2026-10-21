@@ -9,6 +9,7 @@
  *   C：夢幻ex 用記憶螺旋使出備戰皮可西的「揮指」借 X ⇒ 使出的是揮指 ⇒ 照樣可以借。
  * 【H】BASE（v6.557，仍有 v6.553 的借用方名稱鎖）：A、C 紅；B 正對照綠。
  */
+import { extractBaseArchive, linkBaseModules } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -191,7 +192,8 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6558b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src static/cards | tar -x -C "${tmp}" && ln -s "${join(ROOT, 'node_modules')}" "${tmp}/node_modules"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src", "static/cards"], tmp);
+    linkBaseModules(ROOT, tmp);
     const B = scenarios(await load(tmp)), BJ = judge(B);
     for (const k of Object.keys(LABEL)) {
       if (NEW.includes(k)) ok(`★★★[H] v6.557：${k} 紅`, BJ[k] === false, JSON.stringify(B[k]));

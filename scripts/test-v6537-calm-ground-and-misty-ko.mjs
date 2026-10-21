@@ -11,6 +11,7 @@
  * 【H】BASE（v6.536）：MAX、VORTEX、CLOCK、WING、BREEZE、THRUST_SNAP 逐條紅；其餘兩版綠。
  *   ⚠ THRUST_KO 在 BASE 已綠：v6.533 起主管線昏厥延後到招式效果之後，走到效果時戰鬥寶可夢還在、由 v6.528 那條擋下 ⇒ 裁定 3 在一般流程本來就成立，本版只補縱深防禦。
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -203,7 +204,7 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6537b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src"], tmp);
     const BM = await load(tmp);
     const B = scenarios(BM), BJ = judge(B);
     for (const k of Object.keys(LABEL)) {

@@ -5,6 +5,7 @@
  *   密勒頓｜防護代碼「離開戰鬥場則這個效果消除」⇒ 換下再換回效果不復活。
  * 【H】BASE（v6.543）：SKY_LATER、MIR_SWAP_BACK 紅；正對照綠。
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -134,7 +135,7 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6544b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src"], tmp);
     const BM = await load(tmp);
     const B = scenarios(BM), BJ = judge(B);
     for (const k of Object.keys(LABEL)) {

@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { functionSource } from './lib/deck-replay-db-fixture.mjs';
 import { readBaseBlob, hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
 import { pwLaunch } from './lib/pw.mjs';
+import { revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
+import { revertV173 } from './lib/tourn-revert-v173.mjs';
 import { revertAdminV172 } from './lib/sap-revert-admin-v172.mjs';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -89,8 +91,8 @@ if(hasBaseCommit(ROOT,BASE)){
  const oldText=old.out.replace(/\r\n/g,'\n'),before=await facts(oldText);
  ok('H BASE總數停在50000，完整統計會紅',!before.total&&!before.complete&&before.retained&&before.cache);
  const tail="app.get('/api/tournament",i=source.indexOf(tail),j=oldText.indexOf(tail);
- ok('D 錦標賽28鎖所守整段完全不變',i>=0&&j>=0&&source.slice(i)===oldText.slice(j));
- let reverted='';try{reverted=revertAdminV172(product);}catch{}
+ ok('D 錦標賽28鎖所守整段完全不變',i>=0&&j>=0&&revertV173(source.slice(i))===oldText.slice(j));
+ let reverted='';try{reverted=revertAdminV172(revertAdminV173(product));}catch{}
  ok('D 整份SAP精確還原BASE',reverted===oldText);
 }else shallowSkip('v6589 BASE','需要完整main歷史');
 const browser=await pwLaunch('v6.589 admin完整帳號統計');

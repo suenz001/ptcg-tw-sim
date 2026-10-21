@@ -306,11 +306,27 @@ function checkSameSource(srcs) {
 }
 // ⚠ 用 glob 取檔（寫死檔名的話，日後新增第三個版面分支＝零偵測）。
 const UI_FILES = readdirSync(join(ROOT, 'src/routes/game')).filter((f) => f.endsWith('.svelte')).sort();
-T('⭐⭐ 對戰版面檔凍結為 2 個（新增第三個版面分支時本守衛必須被回來更新，不能靜默漏掉）', () => {
-  eq(JSON.stringify(UI_FILES), JSON.stringify(['+page.svelte', 'MobilePortraitBattle.svelte']),
+T('⭐⭐ 兩個對戰版面與一個時計顯示元件的檔名清單凍結（新增檔仍必須評估）', () => {
+  eq(JSON.stringify(UI_FILES), JSON.stringify(['+page.svelte', 'MobilePortraitBattle.svelte', 'PlayerClockNotice.svelte']),
     '對戰版面檔清單變了 —— 新版面也必須讀同一批中央述詞，請把它加進來一起檢查');
 });
-const UI_SRCS = UI_FILES.map((f) => [f, readFileSync(join(ROOT, 'src/routes/game', f), 'utf8')]);
+// 時計只讀秒數並提供拖曳，不能成為另一份卡牌動作判準；任何新頁面仍會觸發清單凍結。
+const clockDisplayOnly = raw => {
+  const src = stripComments(raw);
+  const imports = [...src.matchAll(/import[\s\S]*?from\s*['"]([^'"]+)['"]/g)].map(m => m[1]);
+  return imports.length === 1 && imports[0] === '$lib/tournament/player-clock'
+    && src.includes('projectPlayerClock(clock, now)')
+    && !/\b(?:GameState|GameAction|applyAction|dispatch|tournamentDispatch|getAvailableAttacks|getEffectiveAttacks|canRetreat|getUsableAbilities|getEvolvableTargets|getHandCardOps)\b/.test(src);
+};
+const clockSource = readFileSync(join(ROOT, 'src/routes/game/PlayerClockNotice.svelte'), 'utf8');
+T('時計顯示元件只讀中央時計、不包含卡牌動作判準', () => {
+  ok(clockDisplayOnly(clockSource), '時計元件不再只是顯示，須納入版面同源檢查');
+});
+T('時計分類負對照：混入本地卡牌動作判準必須被拒', () => {
+  ok(!clockDisplayOnly(clockSource + '\n<script>function canRetreat(){return true;}</script>'), '錯把動作判準當成顯示元件');
+  ok(!clockDisplayOnly(clockSource.replace('$lib/tournament/player-clock', './local-clock')), '放過本地時計來源');
+});
+const UI_SRCS = UI_FILES.filter(f => f !== 'PlayerClockNotice.svelte').map((f) => [f, readFileSync(join(ROOT, 'src/routes/game', f), 'utf8')]);
 const GOOD_PROBE = "import { getAvailableAttacks, getEffectiveAttacks, canRetreat, getUsableAbilities, getEvolvableTargets } from '$lib/game/engine';\n"
   + "import { getHandCardOps } from '$lib/game/hand-card-ops';\n"
   + "getAvailableAttacks(); getEffectiveAttacks(); canRetreat(); getUsableAbilities(); getEvolvableTargets(); getHandCardOps();\n";

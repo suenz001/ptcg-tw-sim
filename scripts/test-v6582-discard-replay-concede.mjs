@@ -14,6 +14,7 @@
  *
  * Run: node scripts/test-v6582-discard-replay-concede.mjs
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, existsSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -289,7 +290,7 @@ else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6582b-'));
   try {
     const { execFileSync } = await import('node:child_process');
-    execFileSync('bash', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src"], tmp);
     const B = await loadLib(tmp);
     const BR = await loadRooms(tmp);
     const bu = unitScenarios(B), bo = await roomScenarios(BR.O, 'O'), bf = await roomScenarios(BR.F, 'F');

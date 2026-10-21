@@ -12,6 +12,7 @@
  * 【T】startRoomSubscription 與 leaveOnlineGame 一開始就清掉 _startGraceTimer
  * 【H】BASE（v6.525）：A1、U、T 逐條紅
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -123,7 +124,7 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6526b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src"], tmp);
     const BM = await load(tmp);
     const B = scenarios(BM), BJ = judgeA(B);
     const BS = judgeSrc(readFileSync(join(tmp, 'src/routes/game/+page.svelte'), 'utf8').replace(/\r\n/g, '\n'));

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { extractBaseArchive, linkBaseModules } from './lib/base-archive.mjs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { parse } from 'acorn';
@@ -9,6 +11,7 @@ import { createHash } from 'node:crypto';
 import { revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
 import { NEW_TAIL_SHA_V173, NEW_TEV_SHA_V173, NEW_TEV_LEN_V173, revertV173 } from './lib/tourn-revert-v173.mjs';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { revertV6592Game, V6592_GAME_PAIRS } from './lib/revert-v6592-game.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const src = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
@@ -113,6 +116,36 @@ await test('五個既有守衛真的呼叫新版還原器，不接受註解假�
       for (const v of Object.values(n)) if (Array.isArray(v)) v.forEach(scan); else if (v && typeof v === 'object') scan(v);
     }
     scan(tree); assert.ok(imported && invoked, name);
+  }
+});
+await test('遊戲頁六組逐字還原BASE、缺失與重複錨點拒絕、額外差異保留', () => {
+  if (!hasBaseCommit(ROOT, 'eb5a4503')) { shallowSkip('v6592 game exact-revert', '需要上一版 eb5a4503'); return; }
+  const page = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
+  const base = readBaseBlob(ROOT, 'eb5a4503', 'src/routes/game/+page.svelte');
+  assert.ok(base.ok); assert.equal(V6592_GAME_PAIRS.length, 6);
+  assert.equal(revertV6592Game(page), normEol(base.out));
+  for (const [current] of V6592_GAME_PAIRS) {
+    assert.throws(() => revertV6592Game(page.replace(current, '')));
+    assert.throws(() => revertV6592Game(page + current));
+  }
+  assert.equal(revertV6592Game(page + '\n<!-- 額外差異 -->'), normEol(base.out) + '\n<!-- 額外差異 -->');
+});
+await test('原生BASE封存保留文字與二進位、中文空白路徑、真連結，錯ref或目的地必須失敗', () => {
+  if (!hasBaseCommit(ROOT, 'eb5a4503')) { shallowSkip('v6592 archive', '需要上一版 eb5a4503'); return; }
+  const temp = mkdtempSync(join(tmpdir(), 'v6592 archive 中文 '));
+  try {
+    extractBaseArchive(ROOT, 'eb5a4503', ['static/site-version.txt', 'src/lib/assets/pokemon-card-back.jpg'], temp);
+    assert.equal(readFileSync(join(temp, 'static/site-version.txt'), 'utf8').trim(), '6.591');
+    assert.deepEqual(readFileSync(join(temp, 'src/lib/assets/pokemon-card-back.jpg')), readFileSync(join(ROOT, 'src/lib/assets/pokemon-card-back.jpg')));
+    linkBaseModules(ROOT, temp);
+    assert.ok(statSync(join(temp, 'node_modules')).isDirectory());
+    assert.deepEqual(readFileSync(join(temp, 'node_modules/svelte/package.json')), readFileSync(join(ROOT, 'node_modules/svelte/package.json')));
+    assert.throws(() => extractBaseArchive(ROOT, 'v6592-no-such-ref', ['static/site-version.txt'], temp));
+    assert.throws(() => extractBaseArchive(ROOT, 'eb5a4503', ['static/site-version.txt'], join(temp, 'missing-directory')));
+    assert.throws(() => linkBaseModules(ROOT, temp));
+  } finally {
+    assert.ok(temp.startsWith(join(tmpdir(), 'v6592 archive 中文 ')));
+    rmSync(temp, { recursive: true, force: true });
   }
 });
 console.log(`${passed} PASS`);

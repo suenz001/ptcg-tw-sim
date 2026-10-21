@@ -8,6 +8,7 @@
  *   只有 夢幻ex｜記憶螺旋（直接使出該招）會被名稱鎖擋。⇒ 本檔的「借用方被鎖 ⇒ 不能借」三條改成「照樣可以借」，
  *   v6.553 之前（v6.552）的行為與更正後相同 ⇒ HEAD 對照改成「v6.552 全部綠」。HEAD-FAIL 與記憶螺旋正對照見 test-v6558-copy-attack-name-lock-correction。
  */
+import { extractBaseArchive, linkBaseModules } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -116,7 +117,8 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6553b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src scripts static/cards | tar -x -C "${tmp}" && ln -s "${join(ROOT, 'node_modules')}" "${tmp}/node_modules"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src", "scripts", "static/cards"], tmp);
+    linkBaseModules(ROOT, tmp);
     const BM = await load(tmp);
     const B = scenarios(BM), BJ = judge(B);
     for (const k of Object.keys(LABEL)) {

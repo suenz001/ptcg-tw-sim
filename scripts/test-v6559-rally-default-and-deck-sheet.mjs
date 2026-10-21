@@ -10,6 +10,7 @@
  *   E：真瀏覽器——每一副預組的構築表印成 A4 都是 1 頁、沒有欄位超出紙張。
  * 【H】BASE（v6.558）：R1／R5／R6、D 全紅；R2～R4 綠。
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -267,7 +268,7 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('v6559 H', '需要 v6.558 commit
 else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6559b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src oracle-admin/server_admin_patch.js | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src", "oracle-admin/server_admin_patch.js"], tmp);
     const BR = rally(readFileSync(join(tmp, 'src/routes/game/+page.svelte'), 'utf8').replace(/\r\n/g, '\n'), readFileSync(join(tmp, 'oracle-admin/server_admin_patch.js'), 'utf8'));
     const BD = await sheet(await loadSheet(tmp), tmp);
     for (const k of ['R1', 'R5', 'R6']) ok(`★★★[H] v6.558：${k} 紅`, BR[k] === false, BR.info);

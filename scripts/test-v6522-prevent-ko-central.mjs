@@ -13,6 +13,7 @@
  * 【N】新行為：狙擊路徑用掉倖存鍛鍊器時也印「🔧 倖存鍛鍊器 已丟棄到棄牌區」（v5.518 主管線早就有，狙擊路徑漏印）
  * 【H】HEAD-FAIL：BASE 的 S、N 逐條紅（A 是零回歸比對，本來就要兩邊一樣）
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { normalizeLogWording } from './lib/log-wording-normalize.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -199,7 +200,7 @@ console.log('\n【A】／【H】與 BASE 比對');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6522b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src"], tmp);
     const B = scenarios(await loadEngine(tmp));
     const keys = Object.keys(H);   // 含果實盤面：BASE 本來就保留果實，HEAD 必須一樣
     const diffs = keys.filter((k) => {

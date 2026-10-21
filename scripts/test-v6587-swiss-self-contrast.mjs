@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // v6.587：真實 Svelte 排名欄位與實際 CSS 的字色、對比與不變性。
+import { revertV6592Game } from './lib/revert-v6592-game.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname,join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,7 +29,7 @@ if(hasBaseCommit(ROOT,BASE)){
   const block=/\/\* >>> v6477-lobby-light \*\/[\s\S]*?\/\* <<< v6477-lobby-light \*\//g;
   const old=base.match(block),current=source.match(block);
   if(old?.length!==1||current?.length!==1)throw new Error('淺色哨兵必須唯一');
-  const revertForRule40=(input,pre=revertMobileUiV6590)=>{
+  const revertForRule40=(input,pre=(x,p)=>revertMobileUiV6590(revertV6592Game(x),p))=>{
   let restored=pre(input,PAGE).replace(current[0],old[0]);
   let unique=true;
   for(const [now,prev]of V6587_GAME_PAIRS){
@@ -39,6 +40,7 @@ if(hasBaseCommit(ROOT,BASE)){
   };
   ok('Rule40 本版字面還原後逐位元等於上一版',revertForRule40(source));
   ok('Rule40 接線負對照：略過本版還原必須失敗',!revertForRule40(source,x=>x));
+  ok('Rule40 接線負對照：只略過v6592還原必須失敗',!revertForRule40(source,revertMobileUiV6590));
   ok('Rule40 負對照：額外差異不得被還原吞掉',!revertForRule40(source+'\n/* 未授權差異 */\n'));
 }else shallowSkip('v6587 還原與 HEAD-FAIL','需要v6.586歷史');
 

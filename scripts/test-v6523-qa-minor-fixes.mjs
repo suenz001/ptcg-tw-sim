@@ -20,6 +20,7 @@
  *   L3 傳說的海溝：手牌兩張同一半 ⇒ 擋下訊息講清楚「左半與右半各 1 張」
  * 【H】HEAD-FAIL：同樣盤面餵 v6.522 引擎，G1、G2、G4、A1、A2、L1、L2、L3 逐條紅；G3、A3 在 BASE 也綠
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -222,7 +223,7 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6523b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src"], tmp);
     const B = scenarios(await loadEngine(tmp)), BJ = judge(B);
     ok('★★★[H1] v6.522：G1、G2、G4、A1、A2、L1、L2、L3 逐條紅；G3、A3 在 BASE 也綠（不是例外）',
       !BJ.G1 && !BJ.G2 && !BJ.G4 && !BJ.A1 && !BJ.A2 && !BJ.L1 && !BJ.L2 && !BJ.L3 && BJ.G3 && BJ.A3 && !B.Gerr && !B.Aerr, JSON.stringify({ BJ, B }));

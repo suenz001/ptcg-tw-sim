@@ -11,6 +11,7 @@
  *   E：真瀏覽器（build/）：匯入復盤檔 → 逐步／跳回合／遮蔽時獎賞卡蓋著且視角固定；開一局 vs AI 打幾步 ⇒ 瀏覽器裡有進行中的記錄。
  * 【H】BASE（v6.559）：A／S／P／W 紅。
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, existsSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -487,7 +488,7 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('v6560 H', '需要 v6.559 commit
 else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6560b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src oracle-admin/admin.html | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src", "oracle-admin/admin.html"], tmp);
     const B = await scenarios(await loadLib(tmp), tmp);
     for (const k of Object.keys(LABEL)) ok(`★★★[H] v6.559：${k} 紅`, B[k] === false || B[k] === undefined);
   } finally { try { rmSync(tmp, { recursive: true, force: true }); } catch { /* */ } }

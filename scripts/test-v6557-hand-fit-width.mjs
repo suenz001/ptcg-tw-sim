@@ -8,6 +8,7 @@
  *         量旋轉後每張卡是否超出手牌列（審查 P1：扇形兩端被切）、是否攤開、縮放／張數／卡寬變動是否重量。
  * 【H】BASE（v6.556）：A／B 紅、A0（舊公式正對照）綠。
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, writeFileSync, rmSync, mkdtempSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -243,7 +244,7 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('v6557 HEAD-FAIL');
 else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6557b-'));
   try {
-    execFileSync('bash', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src"], tmp);
     const B = await scenarios(await load(tmp), tmp);
     console.log('\n── BASE（v6.556）HEAD-FAIL 對照 ──');
     for (const k of ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7']) ok(`H ${k} 在 BASE 為紅`, !B[k]);

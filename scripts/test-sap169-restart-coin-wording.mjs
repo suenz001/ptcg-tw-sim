@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { revertAdminV171 as _revertAdminV171 } from './lib/sap-revert-admin-v171.mjs';
 import { revertAdminV172 } from './lib/sap-revert-admin-v172.mjs';
-const revertAdminV171 = s => _revertAdminV171(revertAdminV172(s));
+import { revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
+const revertAdminV171 = s => _revertAdminV171(revertAdminV172(revertAdminV173(s)));
 /**
  * server patch v1.69 守衛：管理員「重賽」時，錦標賽聊天室的系統訊息「（從擲幣重新開始）」→「（從擲硬幣重新開始）」
  *   （站長 2026-10-16 裁定「5.好」：玩家看得到的字一律寫「擲硬幣」，與 v6.573 對戰紀錄用詞統一一致）
@@ -98,7 +99,7 @@ ok('★★★ D1 現行區塊指紋＝v1.69 新值（tail／tev／長度）', sh
 }
 {
   const CONSUMERS = ['test-v6276-deck-tournament-stats', 'test-v6291-tourn-verified-gate', 'test-v6292-tourn-verified-gate2', 'test-v6381-archive-gamedraw-and-swiss-note', 'test-sap152-bracket-light', 'test-sap153-tourn-deck-validate', 'test-sap154-audit-load'];
-  const bad = CONSUMERS.filter((f) => { const s = readFileSync(join(ROOT, 'scripts', f + '.mjs'), 'utf8'); return !(s.includes("from './lib/tourn-revert-v171.mjs'") && s.includes('revertV169(')); });
+  const bad = CONSUMERS.filter((f) => { const s = readFileSync(join(ROOT, 'scripts', f + '.mjs'), 'utf8'); return !(s.includes("from './lib/tourn-revert-v173.mjs'") && s.includes('revertV169(')); });
   ok('★★ D5 七支消費者都 import tourn-revert-v169 且呼叫 revertV169(', bad.length === 0, bad.join(', '));
 }
 console.log(`\n=== server v1.69 重賽系統訊息「擲硬幣」：${pass} PASS / ${fail} FAIL ===`);

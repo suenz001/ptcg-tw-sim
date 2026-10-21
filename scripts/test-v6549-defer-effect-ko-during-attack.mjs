@@ -6,6 +6,7 @@
  *   漸強波的附能反應改回附能當下觸發；吃飽先／嫩葉之恩改成「附能 → 反應 → 然後回復」。
  * 【H】BASE（v6.548）：NEW 紅、正對照綠。
  */
+import { extractBaseArchive, linkBaseModules } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -155,7 +156,8 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6549b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src scripts static/cards | tar -x -C "${tmp}" && ln -s "${join(ROOT, 'node_modules')}" "${tmp}/node_modules"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src", "scripts", "static/cards"], tmp);
+    linkBaseModules(ROOT, tmp);
     const BM = await load(tmp);
     const B = scenarios(BM), BJ = judge(B);
     for (const k of Object.keys(LABEL)) {

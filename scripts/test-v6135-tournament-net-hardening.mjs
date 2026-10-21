@@ -15,6 +15,7 @@
  *
  * 每一項都附反向對照（舊寫法不得存在），並含掃描器下限斷言。
  */
+import { revertV6592Game } from './lib/revert-v6592-game.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
@@ -118,9 +119,10 @@ else no('⑤ 缺 _timedOut 旗標 —— 外部 abort 會被誤報成「連線�
 
 // tEnterMatch 的兩發必須放寬：它的 catch 會 tStep='lobby' 把玩家踢回大廳，
 // 8s 誤殺代價 = 慢網路玩家進不了場（可能吃 noShow 判負）
-const entIdx = SRC.indexOf('async function tEnterMatch');
+const enterSource = revertV6592Game(SRC);
+const entIdx = enterSource.indexOf('async function tEnterMatch');
 if (entIdx > 0) {
-  const win = SRC.slice(entIdx, entIdx + 1400);
+  const win = enterSource.slice(entIdx, entIdx + 1400);
   const widened = (win.match(/timeoutMs:\s*20000/g) || []).length;
   if (widened >= 2) ok('⑤ tEnterMatch 的 /match/enter 與 /state?v=-1 都放寬到 20s');
   else no('⑤ tEnterMatch 只有 ' + widened + ' 處放寬（需 2 處）—— 進場失敗會踢回大廳');

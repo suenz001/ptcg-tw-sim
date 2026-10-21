@@ -10,6 +10,7 @@
  *   C 段：對戰紀錄（引擎寶可夢檢查的灼傷、擲幣附加狀態）用官方用詞。
  * 【H】BASE（v6.555）：A／B1／B2／B4／B5／C 紅、B3 正對照綠。
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -254,7 +255,7 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('v6556 HEAD-FAIL');
 else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6556b-'));
   try {
-    execFileSync('bash', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src"], tmp);
     const B = await scenarios(await load(tmp), tmp);
     console.log('\n── BASE（v6.555）HEAD-FAIL 對照 ──');
     const mustRed = ['A1', 'A2', 'A3', 'A4', 'A5', 'B1', 'B2', 'B4', 'B5', 'B6', 'B7', 'C1', 'C2', 'C3', 'C4', 'D1', 'D2'];

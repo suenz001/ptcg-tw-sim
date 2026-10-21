@@ -8,6 +8,7 @@
  * 原本：存成 0 費招式＋「下回合」旗標 ⇒ 不按就沒有免疫、按了浪費攻擊、只免疫一回合、備戰永遠沒有免疫。
  * 【H】BASE（v6.537 引擎＋卡池）：ACTIVE、ACTIVE_MC、BENCH、NO_ATTACK 紅；正對照與 NULL_CAVE 兩版綠。
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -140,7 +141,7 @@ console.log('\n【H】HEAD-FAIL（BASE 引擎＋BASE 卡池）');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6538b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src static/cards | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src", "static/cards"], tmp);
     const BM = await load(tmp);
     const B = scenarios(BM, loadPool(join(tmp, 'static/cards'))), BJ = judge(B);
     for (const k of Object.keys(LABEL)) {

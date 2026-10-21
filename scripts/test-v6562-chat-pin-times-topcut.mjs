@@ -14,6 +14,7 @@
  *      dailySettingsFrom 實跑：只沿用 topCutAuto===false 的 Top Cut。
  * 【H】BASE（v6.561）：P／T／C／W／A／X 全紅（X0 舊表的 ≤16→4／17→8 在 BASE 也成立，不列）。
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { build, transform } from 'esbuild';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -451,7 +452,7 @@ else {
     const rd = (p) => { const x = readBaseBlob(ROOT, BASE_SHA, p); return x.ok ? normEol(x.out) : ''; };
     // BASE 沒有兩支 leaf ⇒ 只有 swiss.ts；另外 bundle 一份 BASE 的 swiss 給 X 用
     const { execFileSync } = await import('node:child_process');
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src/lib/tournament | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src/lib/tournament"], tmp);
     const LB = await loadLeaves(tmp);
     let LBs = null;
     try {

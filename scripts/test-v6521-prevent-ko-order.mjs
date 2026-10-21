@@ -17,6 +17,7 @@
  *   C1 判準表逐格實跑；C2 engine 與 effects 都呼叫它、不再就地寫「tool && ability」
  * 【H】HEAD-FAIL：同樣盤面餵 v6.520 的引擎逐條紅（M1、M2、E1）
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -176,7 +177,7 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6521b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src"], tmp);
     const B = scenarios(await loadEngine(tmp)), BJ = judge(B);
     ok('★★★[H1] v6.520：M1、M2、E1 逐條紅（而且不是例外）；零回歸的 M5、M6、E3 在 BASE 也綠',
       !BJ.M1 && !BJ.M2 && !BJ.E1 && BJ.M5 && BJ.M6 && BJ.E3 && !B.M1err && !B.Merr && !B.Eerr, JSON.stringify({ BJ, B }));

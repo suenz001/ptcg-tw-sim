@@ -13,6 +13,7 @@
  *   A：admin 面板 tevTlvPanelHtml 實跑、tevTlvSet 注入假 api 實跑。
  * 【H】BASE（v6.565）：S／T／U／C／A 逐條紅（T3、T4、T5 是舊行為零回歸對照，BASE 也必須綠）。
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { build } from 'esbuild';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -427,7 +428,7 @@ else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6566b-'));
   try {
     const rd = (p) => { const x = readBaseBlob(ROOT, BASE_SHA, p); return x.ok ? normEol(x.out) : ''; };
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src/lib | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src/lib"], tmp);
     const B = await all(rd('oracle-admin/server_admin_patch.js'), rd('oracle-admin/admin.html'), rd('src/lib/notify.ts'), await loadNotify(tmp));
     for (const k of Object.keys(LABEL)) {
       // T3（prizes 判法本來就是舊行為）、T5 是零回歸對照：BASE 也必須綠（「之後切換不影響」由 T2 守，T2 在 BASE 必紅）

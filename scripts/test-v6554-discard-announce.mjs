@@ -5,6 +5,7 @@
  *   能量鏈暫放棄牌區不誤報、昏厥時身上的卡不重複列、已經寫過的（高級球）不重複寫。
  * 【H】BASE（v6.553）：NEW 紅、正對照綠。
  */
+import { extractBaseArchive, linkBaseModules } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -210,7 +211,8 @@ console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6554b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src scripts static/cards | tar -x -C "${tmp}" && ln -s "${join(ROOT, 'node_modules')}" "${tmp}/node_modules"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src", "scripts", "static/cards"], tmp);
+    linkBaseModules(ROOT, tmp);
     const BM = await load(tmp);
     const B = scenarios(BM), BJ = judge(B);
     for (const k of Object.keys(LABEL)) {

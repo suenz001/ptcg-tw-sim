@@ -14,6 +14,7 @@
  *   （真瀏覽器：test-v6560 E4／E4b 驗遮蔽復盤自己攤開、對手蓋著、計時器停住。）
  * 【H】BASE（v6.563）：R／T／P／F 全紅。
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { build } from 'esbuild';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -209,7 +210,7 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('v6564 HEAD-FAIL', '需要歷史
 else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6564b-'));
   try {
-    execFileSync('sh', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src/lib | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ["src/lib"], tmp);
     const LB = await loadLibs(tmp);
     const BP = normEol(readBaseBlob(ROOT, BASE_SHA, 'src/routes/game/+page.svelte').out || '');
     const BM = normEol(readBaseBlob(ROOT, BASE_SHA, 'src/routes/game/MobilePortraitBattle.svelte').out || '');
