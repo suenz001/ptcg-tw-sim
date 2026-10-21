@@ -37,7 +37,7 @@
 </div>
 
 <style>
-  .clock-notice { position:fixed; right:12px; top:calc(env(safe-area-inset-top, 0px) + 172px); z-index:10010;
+  .clock-notice { position:fixed; right:12px; top:calc(var(--safe-top, 0px) + 172px); z-index:10010;
     width:210px; max-width:62vw; border:2px solid #55725d; border-radius:12px; background:#15271e;
     color:#fff; box-shadow:0 3px 14px #0006; text-align:center; pointer-events:none; padding:0 8px 8px; }
   .handle { width:100%; border:0; background:transparent; color:inherit; font-weight:700; padding:8px 0;

@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-const root = resolve(process.env.V6592_PRODUCT_ROOT || fileURLToPath(new URL('..', import.meta.url)));
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const root = resolve(process.env.V6592_PRODUCT_ROOT || ROOT);
 const temp = mkdtempSync(join(tmpdir(), 'ptcg-clock-'));
 let passed = 0, failed = 0;
 function test(name, fn) { try { fn(); passed++; console.log('PASS ' + name); } catch (e) { failed++; console.error('FAIL ' + name + ': ' + e.message); } }

@@ -11,6 +11,7 @@ BASE `eb5a4503`（v6.591）。server v1.73／admin v1.89。站長核准：每場
 - 獨立審查：clock_runtime_review找出2項UI P2、1項暫停期間actor漂移P2、1項refresh覆蓋OFF P1，均重現修正並複審結案；checkpoint發布／鎖鏈與後續分配fallback亦複審通過，沒有未解決P1/P2。初始clock_design_review僅完成設計審查，後續因額度錯誤未視為產品通過。
 - 守衛：core12＋runtime20＋真endpoint／CAS／UI採納／精確還原接線10，共42項行為檢查綠。真BASE隔離樹缺新功能，core12逐條紅、exit1（新功能不存在，非宣稱BASE已有此功能的行為bug）。核心8突變＋必要分配2突變全殺，正對照皆綠。8組SAP逐字還原回BASE；tail守衛與五個還原消費端串接，TEVENTS以下逐位元不動。
 - 測試環境：既有v6527的HEAD-FAIL使用Git Bash tar處理Windows路徑失敗，改為原生git archive bytes→tar程序參數；BASE卡牌行為檢查52/0，不改其判準。前置harness＋35免疫其餘通過。首次全套因自查必要分配缺口於8/904階段主動停止，未當成通過；完整驗收重新執行。
+- 第二次全套於前段主動停止：新浮窗改用中央safe-top、守衛ROOT改標準宣告、抽取頁面先normEol、BASE blob改中央helper。既有v6377/v6378負對照依舊腳本CRLF選fixture；本機兩產品檔曾為LF造成混合行尾假紅，僅將工作樹game頁/admin頁回復CRLF（Git索引LF不變），不改舊守衛與判準。修後v6371 155/0、v6377 29/0、v6378 46/0、safe-area 97/0與靜態lint皆綠，獨立複審確認修正。將以最終checkpoint重新完整940支，不將中止輪次列為通過。
 - 桌機1280／手機390之實際Svelte元件各驗普通／最後9秒／等待3狀態，共6張PNG，拖曳與pointer穿透通過，pageerror0；屬元件測試，不冒稱iPhone實機或整場瀏覽器測試。
 - 證據：`E:/ptcg-tw-sim-local/clock-*`（核心／runtime／wiring日誌、mutants與choice-mutants、headfail、visual/proof.json）。完整全套與最終建置／CI驗證結果待完成後補入，尚未推送。
 

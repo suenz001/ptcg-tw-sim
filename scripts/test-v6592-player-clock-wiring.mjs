@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { parse } from 'acorn';
 import { runInNewContext } from 'node:vm';
 import { transform } from 'esbuild';
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
 import { NEW_TAIL_SHA_V173, NEW_TEV_SHA_V173, NEW_TEV_LEN_V173, revertV173 } from './lib/tourn-revert-v173.mjs';
-import { hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
+import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const src = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
 const ast = parse(src, { ecmaVersion: 'latest', sourceType: 'module' });
@@ -73,7 +73,7 @@ await test('真人動作的盤面與時計同一筆CAS保存，寫入成功後�
   assert.deepEqual(Array.from(saved.playerClock.stalled), [false, false]); assert.equal(calculated, 1); assert.equal(remembered, 1);
 });
 await test('clock新鮮度採納拒絕舊版本、舊政策及晚到舊關閉前回應', async () => {
-  const page = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+  const page = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
   const start = page.indexOf('  function adoptPlayerClock('), end = page.indexOf('\n  }', start) + 4;
   assert.ok(start >= 0 && end > start);
   const js = (await transform(page.slice(start, end), { loader: 'ts', target: 'es2022' })).code;
@@ -89,7 +89,9 @@ await test('clock新鮮度採納拒絕舊版本、舊政策及晚到舊關閉前
 await test('區塊指紋與完整精確還原，TEV保持逐位元一致', () => {
   if (!hasBaseCommit(ROOT, 'eb5a4503')) { shallowSkip('v6592 exact-revert', '需要上一版 eb5a4503'); return; }
   const normalized = src.replace(/\r\n/g, '\n');
-  const base = execFileSync('git', ['show', 'eb5a4503:oracle-admin/server_admin_patch.js'], { cwd: ROOT, maxBuffer: 64 * 1024 * 1024 }).toString().replace(/\r\n/g, '\n');
+  const blob = readBaseBlob(ROOT, 'eb5a4503', 'oracle-admin/server_admin_patch.js');
+  assert.ok(blob.ok, '必須成功取得上一版補丁');
+  const base = normEol(blob.out);
   const tailAnchor = "app.get('/api/tournament", tevAnchor = "const TEVENTS = db.collection('tournamentEvents');";
   const tail = normalized.slice(normalized.indexOf(tailAnchor)), tev = normalized.slice(normalized.indexOf(tevAnchor));
   const sha = s => createHash('sha256').update(s).digest('hex');
