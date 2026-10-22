@@ -10,7 +10,14 @@ BASE `c7c4aa8b`（v6.592）。站長提供玩家開啟『減少透明度』後�
 - Rule40：6590歷史手機位元組守衛先經5組唯一精確替換還原；額外diff保留、缺失/重複錨點throw，不更換舊BASE或放寬比對。
 - 基準harness+35免疫36/36綠。新guard65/0、舊手機6590 74/0；真BASE正常exit1的7項行為失敗，負例正常；6個突變皆有行為FAIL（不只還原器拒絕）。證據E:/ptcg-tw-sim-local/pwa-6593-mutants/results.json。
 - 驗證限制：Chromium量測編譯後真條件/class接線與產品CSS，並非iPhone原生系統模糊重現。原生效果仍待正式實機確認。
-- build、修改後基準、全套、獨立審查及CI結果待補。審查者為未參與修改的獨立Codex pwa_6593_review（Opus不可用，依交接替代）。
+- 獨立審查：未參與修改的 Codex pwa_6593_review（Opus不可用，依交接替代）。產品P1/P2=0；P3兩項為新guard pwLaunch參數位置、舊guard shebang，均已修並複審。7340efd1產品及升版配套複審無新增問題；後續6333維護頁辨識b5bc1ad0已複審；審查者核對最終報表、8/8補驗、聯集941未解決0及本紀錄後，明確核准提交docs並推main，未解決P1/P2/P3=0。
+- 真BASE c7c4aa8b正常exit1有7項幾何行為FAIL，負例可通過；6個產品突變均被行為斷言抓到。新guard65/0、6590舊手機guard74/0。5組精確還原與BASE逐字相同，缺失/重複錨點拒絕、額外差異保留。
+- 建置：首輪npm run build成功，但bump初次因Windows預設cp950失敗（在任何寫入前中止），改python -X utf8完成升版。正式驗收以6.593的vite build＋seo-prerender-meta＋route-preload成功為準，log E:/ptcg-tw-sim-local/pwa-6593-build-release.log；保留repo既有home-video資料，首輪自動抓片產物已具名還原，不帶入本版。
+- 真build本機網頁進入vsAI對戰：Chromium偽裝iPhone UA/standalone並注入safe-top59/bottom34，主畫面工具列top79、一般Safari模擬top59、兩者手牌bottom810且body鎖生效，pageerror0；等待擲幣遮罩消失再截圖。證據pwa-6593-built/proof.json與兩張PNG；不是原生iPhone驗收。
+- 全套7340efd1完整941支／28.29分：940綠、1紅（test-v6333-m6a-unmarked）。紅項同runner單工重跑仍31/1；查證官方卡頁19978回HTTP200但轉到首頁291字維護頁，body為This website is under maintenance，無evolution。不是本版產品回歸。僅修舊guard的live額外檢查：非2xx或重新導向離開指定URL才明確列報不可用，真原URL的解析比對及離線fixture不變；部分不可用也列出id。b5bc1ad0後同runner補8支8/8綠（6333、6593、6590、6370、6371、6378、sourceencoding、lint），1.11分。兩報表聯集941支未解決=[]，不宣稱首次全套941全綠。完整報表E:/sb-pwa-6593/__rt/full.json、補驗E:/sb-pwa-6593-final/__rt/final.json；匯總E:/ptcg-tw-sim-local/pwa-6593-acceptance.json。
+- 6333外部scratch三對照：原URL正常卡片fixture32/0、維護頁轉址32/0、原URL錯HTML仍正常exit1，三者離線fixture皆有執行；證據pwa-6593-network-controls/proof.json與logs。此修正未改任何產品，故既有build與940支綠仍有效。
+- 修改前harness+35免疫36/36綠，修改後完整全套內36支皆exit0；1000 deterministic evolve seeds全過。完整與補驗均TIMEOUT/escape/restoreFailed/mainHard=0、statusChanged=false。完整skip為6378 ENV1（未追蹤音樂）、6263 PLATFORM1／SHALLOW0，與6.592基準相同；補8支只有相同6378 ENV1。
+- CI及線上驗證待推送後核對。
 - 部署：僅玩家前端，由站長自行redeploy-oracle.bat，AI不代部署。
 
 ## v6.592 — 錦標賽個人操作時計（預設關閉）
