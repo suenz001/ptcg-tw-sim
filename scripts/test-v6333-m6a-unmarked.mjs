@@ -193,9 +193,11 @@ await TA('行為級：直接呼叫 resolveEvolvesFrom 跑官方真頁面（露�
   for (const [id, want] of cases) {
     let html;
     try {
-      const r = await fetch('https://asia.pokemon-card.com/tw/card-search/detail/' + id + '/',
+      const url = 'https://asia.pokemon-card.com/tw/card-search/detail/' + id + '/';
+      const r = await fetch(url,
         { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'zh-TW' } });
-      if (!r.ok) { offline.push(id); continue; }
+      // 官網維護時會轉往首頁並回200；這不是可供解析的指定卡片頁。
+      if (!r.ok || r.url !== url) { offline.push(id); continue; }
       html = await r.text();
     } catch { offline.push(id); continue; }
     const got = mod.resolveEvolvesFrom(cheerio.load(html));
@@ -208,10 +210,11 @@ await TA('行為級：直接呼叫 resolveEvolvesFrom 跑官方真頁面（露�
   //   ⇒ 連不上就**大聲跳過**。語義本身由下一條「離線 fixture」保證（決定性、永遠會跑），
   //     這一條只是額外的「我方資料是否仍與官網一致」的加值檢查。
   if (offline.length === cases.length) {
-    console.log('      ⚠ 連不到官網（' + offline.join(',') + '）⇒ 這一條跳過；'
+    console.log('      ⚠ 官網指定卡頁不可用（網路／HTTP／重新導向：' + offline.join(',') + '）⇒ 這一條跳過；'
       + '語義由離線 fixture 那一條保證');
   } else {
-    console.log('      官網實測 ' + (cases.length - offline.length) + '/' + cases.length + ' 張相符');
+    console.log('      官網實測 ' + (cases.length - offline.length) + '/' + cases.length + ' 張相符'
+      + (offline.length ? '；卡頁不可用（網路／HTTP／重新導向）：' + offline.join(',') : ''));
   }
 });
 
