@@ -212,7 +212,10 @@ function staticChecks(ENG, PAGE, TO) {
     && /matchIdOfTournRoom\(tActiveRoom\)/.test(p) && /tournReplayToData\(j, \{ matchId: mid/.test(p) && /await downloadReplayFile\(data\);/.test(p.slice(p.indexOf('async function downloadTournReplay')));
   // S6（審查 P2-2）：接回只在出招那張卡已經載入時才試；真的開了視窗或送出動作才記「開過了」
   const _e0 = p.indexOf('let _gateOpenedFor = '), eff = _e0 > 0 ? p.slice(_e0, p.indexOf('function handleProposeRestartButton', _e0)) : '';   // p 已剝註解 ⇒ 用程式碼當錨點
-  r.S6 = eff.length > 200 && eff.length < 4000 && /if \(!_act \|\| !_field\.every\(\(c\) => !c \|\| _pool\.has\(c\.cardId\)\)\) return;/.test(eff) && /game\.players\.flatMap\(\(pl\) => \[pl\.active, \.\.\.\(pl\.bench \?\? \[\]\)\]\)/.test(eff)
+  // ⭐v6.596（Rule 40）：同一個判準抽成 attack-gate.ts 的 gateFieldCardsLoaded（接回與提示列按鈕共用）⇒ 舊寫法（就地 _field.every）與新寫法擇一；判準本身由 test-v6596 U2 守
+  const s6Old = /if \(!_act \|\| !_field\.every\(\(c\) => !c \|\| _pool\.has\(c\.cardId\)\)\) return;/.test(eff) && /game\.players\.flatMap\(\(pl\) => \[pl\.active, \.\.\.\(pl\.bench \?\? \[\]\)\]\)/.test(eff);
+  const s6New = /if \(!game \|\| !gateFieldCardsLoaded\(game, game\.activePlayerIndex, \(id\) => _pool\.has\(id\)\)\) return;/.test(eff);
+  r.S6 = eff.length > 200 && eff.length < 4000 && (s6Old || s6New)
     && /initiateAttack\(t\.attackIndex\);\s*\n[^\n]*\n\s*if \(game !== _g0 \|\| preAttackDiscard[^\n]*\) _gateOpenedFor = t\.tag;/.test(eff)
     && !/_gateOpenedFor = t\.tag;\s*\n\s*untrack/.test(eff);
   // S7：錦標賽 /replay 只有一個網路呼叫點（回放與下載共用）

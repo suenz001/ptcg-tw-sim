@@ -10,6 +10,7 @@
 import fs from 'node:fs';
 import { N_HOME } from './lib/changelog-policy.mjs';
 import path from 'node:path';
+import { transformSync } from 'esbuild';
 
 const ROOT = process.env.V6223_SRC_ROOT || '.';
 const gamePath = path.join(ROOT, 'src/routes/game/+page.svelte');
@@ -66,17 +67,29 @@ const clM = SRC.match(/(const savedLayout = localStorage\.getItem\('ptcg_battle_
 check(!!clM, '預設版面初始化區塊可定位');
 if (clM) {
   let runDefault = null;
+  // ⭐v6.596（Rule 40）：預設判準搬到 $lib/game/battle-layout-default.ts（直立大螢幕也預設新版桌墊）⇒
+  //   載入**真的那一份**注入（不在這裡抄一份，Rule 38）；視窗補上高度。意圖（只給從未選過的玩家、已選者不覆蓋、不落盤）不變。
+  let defaultBattleLayout = null;
   try {
-    runDefault = new Function('saved', 'width', `
+    const modSrc = fs.readFileSync(path.join(ROOT, 'src/lib/game/battle-layout-default.ts'), 'utf8');
+    const js = transformSync(modSrc, { loader: 'ts', format: 'cjs' }).code;
+    const m = { exports: {} }; new Function('module', 'exports', js)(m, m.exports);
+    defaultBattleLayout = m.exports.defaultBattleLayout;
+  } catch { /* 舊版沒有這個檔 ⇒ 下面的初始化區塊也不會呼叫它 */ }
+  try {
+    runDefault = new Function('saved', 'width', 'height', 'defaultBattleLayout', `
       let battleLayout = 'classic';
       const localStorage = {
         getItem: (k) => (k === 'ptcg_battle_layout' ? saved : null),
         setItem: () => { throw new Error('初始化不可寫 localStorage（預設值不算玩家選擇）'); },
       };
-      const window = { innerWidth: width };
+      const window = { innerWidth: width, innerHeight: height };
       ${clM[1]}
       return battleLayout;
     `);
+    const _run = runDefault;
+    // 高度省略 ⇒ 橫向（寬×0.6），與 v6.596 之前這支守衛的情境相同（窄視窗＝窄的橫向視窗）
+    runDefault = (saved, width, height) => _run(saved, width, height ?? Math.round(width * 0.6), defaultBattleLayout);
   } catch (e) { check(false, '初始化區塊可包裝執行: ' + e.message); }
   if (runDefault) {
     check(runDefault('classic', 1920) === 'classic', '已選 classic 的玩家 → 維持 classic（絕不覆蓋＝正對照）');
@@ -86,7 +99,9 @@ if (clM) {
     check(runDefault(null, 1920) === 'blue', '從未選過＋桌機寬 → 預設新版桌墊 blue（v6.446 站長裁定；v6.223～v6.445 是 fable）');
     check(runDefault('fable', 1920) === 'fable', '已選 fable 的玩家（桌機寬）→ 維持 fable（改預設不覆蓋玩家的選擇）');
     check(runDefault('blue', 820) === 'blue', '已選新版桌墊的玩家 → 維持 blue');
-    check(runDefault(null, 820) === 'classic', '從未選過＋窄視窗(<1024) → 維持 classic 預設');
+    check(runDefault(null, 820) === 'classic', '從未選過＋窄的橫向視窗(<1024) → 維持 classic 預設');
+    check(runDefault(null, 704, 830) === 'blue', '從未選過＋直立大螢幕（Fold 展開 704×830）→ 新版桌墊 blue（v6.596 站長裁定）');
+    check(runDefault('classic', 704, 830) === 'classic', '已選 classic 的玩家在直立大螢幕 → 維持 classic（不覆蓋）');
     let threw = false;
     try { runDefault(null, 1920); } catch { threw = true; }
     check(!threw, '初始化過程沒有寫 localStorage（預設值不落盤）');

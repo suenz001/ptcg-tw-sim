@@ -29,6 +29,7 @@
  * Run: node scripts/test-v6441-blue-layout.mjs
  */
 // v6.590 Rule40：先精確還原手機生命週期；新行為由test-v6590守，不放寬既有比對。
+import { revertV6596Game } from './lib/revert-v6596-game.mjs';   // ⭐v6.596（Rule 40）：對戰頁先還原 v6.596（直立大螢幕填滿、擲幣後提示）再接 v6.595
 import { revertV6595Game } from './lib/revert-v6595-game.mjs';   // ⭐v6.595（Rule 40）
 import { revertV6592Game } from './lib/revert-v6592-game.mjs';
 import { revertMobileUiV6590 } from './lib/mobile-ui-v6590-pairs.mjs';
@@ -328,7 +329,7 @@ import { V6566_GAME_PAIRS } from './lib/revert-v6566-game.mjs';   // ⭐v6.566�
 //   ⇒ 比照 v6.560 放在 PRE 最前面先整段還原成 v6.575；內容由 test-v6576-no-layout-shift 鎖。
 const PRE = [...V6583_GAME_PAIRS, ...V6582_GAME_PAIRS, ...V6581_GAME_PAIRS, ...V6580_GAME_PAIRS, ...V6579_GAME_PAIRS, ...V6578_GAME_PAIRS, ...V6576_GAME_PAIRS, ...V6566_GAME_PAIRS, ...V6565_GAME_PAIRS, ...V6564_GAME_PAIRS, ...V6563_GAME_PAIRS, ...V6562_GAME_PAIRS, ...V6561_GAME_PAIRS, ...V6560_GAME_PAIRS, ...V6464_GAME_PAIRS];
 function strip(src) {
-  let s = revertMobileUiV6590(revertV6592Game(revertV6595Game(src)), 'src/routes/game/+page.svelte');   // ⭐v6.595 最先還原（Rule 40；行為由 test-v6595 鎖）
+  let s = revertMobileUiV6590(revertV6592Game(revertV6595Game(revertV6596Game(src))), 'src/routes/game/+page.svelte');   // ⭐v6.595 最先還原（Rule 40；行為由 test-v6595 鎖）
   const bad = [];
   for (const [a, b] of PRE) { const c = s.split(a).length - 1; if (c !== 1) bad.push(`PRE 條目命中 ${c} 次：${a.slice(0, 50)}`); s = s.split(a).join(b); }
   // ① 哨兵區塊（helper／snippet／CSS）與 isFableGeom 宣告
@@ -413,7 +414,9 @@ ok('★★[HEAD-FAIL] 藍桌墊鎖 gameZoom=1（避免與 --card-w 雙重縮放�
 ok('★[HEAD-FAIL] 藍桌墊與平板縮放絕緣', SRC.includes('class:tablet-layout={isTabletLayout && !isFableGeom}'));
 ok('★[HEAD-FAIL] 藍桌墊也有卡牌大小滑桿', SRC.includes('{#if isFableGeom}\n            <div class="setting-row">\n              <label for="fable-card-scale">'));
 // ⭐v6.446 站長裁定（Rule 40：原本守「預設仍是 Fable」，站長改判預設＝新版桌墊）：只影響從未選過版面的桌機玩家（行為另由 test-v6223【C】實跑）。
-ok('★[站長裁定 v6.446] 桌機新玩家的預設版面是新版桌墊（blue），而且只寫在「從未選過」的分支', SRC.includes("      else if (typeof window !== 'undefined' && window.innerWidth >= 1024) battleLayout = 'blue';\n") && !SRC.includes("battleLayout = 'fable';"));
+ok('★[站長裁定 v6.446] 桌機新玩家的預設版面是新版桌墊（blue），而且只寫在「從未選過」的分支', (SRC.includes("      else if (typeof window !== 'undefined' && window.innerWidth >= 1024) battleLayout = 'blue';\n")
+  // ⭐v6.596（Rule 40）：預設判準搬到 battle-layout-default.ts（寬 ≥1024 仍是 blue，另加直立大螢幕）；意圖（只寫在「從未選過」的分支、預設是新版桌墊）不變，判準本身由 test-v6596 守
+  || SRC.includes("      else if (typeof window !== 'undefined' && defaultBattleLayout(window.innerWidth, window.innerHeight) === 'blue') battleLayout = 'blue';\n")) && !SRC.includes("battleLayout = 'fable';"));
 {
   const db = /      \/\/ >>> v6446-default-blue\n([\s\S]*?)      \/\/ <<< v6446-default-blue\n/.exec(SRC);
   ok('★[哨兵內容] v6446-default-blue 哨兵內只有註解', !!db && db[1].split('\n').filter((l) => l.trim()).every((l) => /^\s*\/\//.test(l)));

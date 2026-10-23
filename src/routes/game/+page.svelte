@@ -183,7 +183,8 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { createAnimObserver, makeLocalSeenStore, type AnimObserveResult } from '$lib/game/anim-live';   // ⭐v6.580 動畫只在當下播放
   import { computeRevealEvents, revealLabel, type RevealEvent } from '$lib/game/card-reveal';   // ⭐v6.581 出牌／抽牌放到中間翻開
   import { DISCARD_TABS, discardTabMatches, discardTabCounts, type DiscardTab } from '$lib/game/discard-filter';   // ⭐v6.582 棄牌區分類頁籤
-  import { attackGatePendingFor, uiAttackStep, gateReopenTarget } from '$lib/game/attack-gate';   // ⭐v6.595 出招前擲幣判定（混亂／招式失敗）在選擇之前
+  import { attackGatePendingFor, uiAttackStep, gateReopenTarget, gateFieldCardsLoaded } from '$lib/game/attack-gate';   // ⭐v6.595 出招前擲幣判定（混亂／招式失敗）在選擇之前
+  import { defaultBattleLayout } from '$lib/game/battle-layout-default';   // ⭐v6.596 直立大螢幕預設新版桌墊
   import { buildConcededGame } from '$lib/game/concede';   // ⭐v6.582 認輸並提議重新開局（本機 vs AI 也走同一份認輸盤面）
   import { dprFileUrl, dpFromOfSearch, dpReplayIdOfSearch } from '$lib/deck-posts/replays';   // ⭐v6.583 牌組公布欄附加的對戰紀錄
   import {
@@ -2290,7 +2291,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //   與 v6.223 同一規則：只影響從未選過版面的玩家（localStorage 沒有 ptcg_battle_layout）；
       //   已選過 fable／classic／tabletop 的玩家維持原選擇；窄視窗（<1024）仍是 classic；不寫 localStorage。
       // <<< v6446-default-blue
-      else if (typeof window !== 'undefined' && window.innerWidth >= 1024) battleLayout = 'blue';
+      // ⭐v6.596 站長裁定：寬 <1024 但直立／接近正方形的大螢幕（Fold 展開、直向 iPad）也預設新版桌墊（判準見 battle-layout-default.ts）
+      else if (typeof window !== 'undefined' && defaultBattleLayout(window.innerWidth, window.innerHeight) === 'blue') battleLayout = 'blue';
     } catch { /* SSR / quota / private mode：保持預設 classic */ }
     // v5.012：battle log side panel 開關狀態（桌墊版用）
     try {
@@ -2305,6 +2307,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   ⚠ 必須在下面 onResize() 初始化之前讀好，否則第一幀會先走桌機版再跳成手機版。
     try { forceMobileBattleUI = localStorage.getItem('ptcg_force_mobile_battle_ui') === '1'; } catch { /* ignore */ }
 
+    let _layoutDefaultW = -1;   // ⭐v6.596 上次重算預設版面時的視窗寬度
     const onResize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -2316,6 +2319,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
       // ⭐ v6.313：開關關閉時 computeIsPortraitMobile 就是原本的 Math.min(w, h) <= 600（單一來源，見函式註解）
       isSmallScreen = Math.min(w, h) <= 600;
       isPortraitMobile = computeIsPortraitMobile(w, h, forceMobileBattleUI);
+      // >>> v6596-default-on-resize
+      // ⭐v6.596（審查 P2-2）從沒選過版面的玩家：視窗尺寸改變（Fold 從封面螢幕展開、旋轉）就重算一次預設（仍不寫回 localStorage）。
+      //   玩家選過（localStorage 有值）⇒ 一律照玩家的選擇，不動。
+      //   只在「寬度」改變時重算（展開／旋轉一定會改寬度；叫出螢幕鍵盤只改高度，不該讓版面跳來跳去）。
+      if (w !== _layoutDefaultW) {
+        _layoutDefaultW = w;
+        try {
+          const _savedL = localStorage.getItem('ptcg_battle_layout');
+          if (!_savedL) battleLayout = defaultBattleLayout(w, h);
+        } catch { /* 私密模式等讀不到 ⇒ 不動 */ }
+      }
+      // <<< v6596-default-on-resize
       
       // 極小手機橫屏（交給原本的 @media max-width: 950px and orientation: landscape 處理）
       const isLandscapeMobile = w <= 950 && w > h;
@@ -8012,6 +8027,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
       console.log('[Spectator] action blocked:', action.type);
       return;
     }
+    // >>> v6596-gate-nudge
+    // ⭐v6.596（v6.595 審查 P3-2，站長同意）：已通過出招前擲幣、正在等選擇時，引擎只接受那一招 ⇒
+    //   其他動作（結束回合、撤退、打出卡片…）按了原本是靜靜沒反應；改成直接提示，並把選擇視窗叫回來。
+    if (attackGateLocked && action.type !== 'ATTACK') { gateNudge(); return; }
+    // <<< v6596-gate-nudge
     if (isTournament) { await tournamentDispatch(action); return; }
     const prevState = game;
     // v5.345：引擎可能 throw（最常見：getCard 找不到卡 — ?卡 / 舊版 id 漏遷移 / 尚未載入的 set），
@@ -8858,10 +8878,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⭐（審查 P2-2／複審 P2-A）雙方場上（戰鬥＋備戰）的卡還沒全部載進卡池（換裝置／重新整理接回時 pool 是非同步補的）⇒ 先不試：
     //   借對手招式的候選是從對手場上的卡找的，缺卡會變成 0 個候選而直接出招、不讓玩家選。
     //   pool 是 $state，補完會換成新的 Map ⇒ 這個 effect 自動重跑。
-    const _act = game?.players[game.activePlayerIndex]?.active;
     const _pool = pool;
-    const _field = game ? game.players.flatMap((pl) => [pl.active, ...(pl.bench ?? [])]) : [];
-    if (!_act || !_field.every((c) => !c || _pool.has(c.cardId))) return;
+    if (!game || !gateFieldCardsLoaded(game, game.activePlayerIndex, (id) => _pool.has(id))) return;   // ⭐v6.596 判準抽成唯一一份
     if (_gateTried.tag === t.tag && _gateTried.pool === _pool) return;
     _gateTried = { tag: t.tag, pool: _pool };
     untrack(() => {
@@ -8872,6 +8890,29 @@ function _setupSelfPending(g: any, seat: number): string | null {
     });
   });
   // <<< v6595-attack-gate-reopen
+  // >>> v6596-gate-banner
+  // ⭐v6.596 停在「已擲完硬幣、等選擇」而選擇視窗沒開著（例如被關掉、或還在等卡片載入）⇒ 畫面上方一條提示＋「打開選擇視窗」鈕（手機與桌機共用）。
+  const attackGatePickerOpen = $derived(!!(preAttackDiscard || copyAttackPicker || personateAttackPicker || brightChallengePicker || rocketCommandPicker));
+  const attackGateName = $derived.by(() => {
+    if (!attackGateLocked || !game) return '';
+    const ai = attackGatePendingFor(game, game.activePlayerIndex);
+    const act = game.players[game.activePlayerIndex]?.active;
+    const c = act ? pool.get(act.cardId) : undefined;
+    return (ai != null && c?.attacks?.[ai]?.name) || '招式';
+  });
+  let gateNudgeAt = $state(0);
+  function gateNudge() {
+    gateNudgeAt = Date.now();
+    reopenGatePicker();
+  }
+  // 卡片還沒載完 ⇒ 不開（v6.595 複審 P2-A；開了會變成 0 個借招候選而直接出招），按鈕顯示「載入卡片中…」並停用
+  const attackGateReady = $derived(!!game && gateFieldCardsLoaded(game, game.activePlayerIndex, (id) => pool.has(id)));
+  function reopenGatePicker() {
+    if (!game || !attackGateLocked || attackGatePickerOpen || !attackGateReady) return;
+    const ai = attackGatePendingFor(game, game.activePlayerIndex);
+    if (ai != null) initiateAttack(ai);
+  }
+  // <<< v6596-gate-banner
 
   // v4.60 propose-restart handlers
   function handleProposeRestartButton() {
@@ -11618,7 +11659,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
      v5.609：game-over / 觀戰時不顯示 — 此提示是 z-index:99999 全螢幕遮罩(無 pointer-events:none)，
        在 601~950px 直向觸控裝置會蓋住「返回賽事大廳 / 離開觀戰」鈕(z-9999)→ 按不了。
        這兩種狀態玩家只需按離開/返回、不需橫向，故不顯示提示。對戰進行中(參戰者)維持提示不變。 -->
-{#if game && game.phase !== 'game-over' && !isSpectator && !isPortraitMobile}
+{#if game && game.phase !== 'game-over' && !isSpectator && !isPortraitMobile && battleLayout !== 'blue'}
+  <!-- ⭐v6.596 站長裁定（2026-10-24）：新版桌墊（自己選的或預設的）直立時會填滿畫面 ⇒ 不再蓋「請旋轉」遮罩；經典版／桌墊版／Fable 版照舊 -->
   <!-- ⭐ v6.313 加 !isPortraitMobile：平板直立開了手機版介面後（744～950px 直式觸控裝置），這張 z-index 99999 的
        全螢幕遮罩會整個蓋在 MobilePortraitBattle 上面、什麼都按不到（v6.313 實測 rotate-prompt display=flex）。
        真手機（min(w,h) <= 600）本來就被 @media min-width:601px 擋掉，這個條件對它是 no-op。 -->
@@ -15454,6 +15496,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
       ❌ 對方拒絕了返回房間的提議
     </div>
   {/if}
+  <!-- >>> v6596-gate-banner-markup：已擲完硬幣、選擇視窗沒開著時的提示（版面分支之外 ⇒ 手機與桌機共用） -->
+  {#if attackGateLocked && !attackGatePickerOpen}
+    {#key gateNudgeAt}
+    <div class="gate-pending-strip" class:nudged={gateNudgeAt > 0} role="status">
+      <span>🎲 已通過出招前的擲硬幣：請先完成「{attackGateName}」的選擇（宣告了就要出招）</span>
+      <button class="restart-cancel-btn gate-reopen-btn" disabled={!attackGateReady} onclick={reopenGatePicker}>{attackGateReady ? '打開選擇視窗' : '載入卡片中…'}</button>
+    </div>
+    {/key}
+  {/if}
+  <!-- <<< v6596-gate-banner-markup -->
 
   <!-- ⭐⭐⭐v6.190 獎賞卡檢視（回放限定） —— 位置刻意放在
        `{#if isPortraitMobile && game}` … `{:else}` … `{/if}` 這組版面分支**之外**，
@@ -18333,6 +18385,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .restart-waiting-strip { position:fixed; top:calc(60px + var(--safe-top, 0px)); left:50%; transform:translateX(-50%); z-index:9998; background:rgba(245,158,11,.95); color:#000; padding:8px 18px; border-radius:20px; display:flex; align-items:center; gap:12px; box-shadow:0 4px 12px rgba(0,0,0,.4); font-weight:600; font-size:.92em; }
   .restart-cancel-btn { background:#000; color:#fbbf24; border:none; padding:4px 12px; border-radius:12px; font-size:.85em; cursor:pointer; font-weight:600; }
   .restart-cancel-btn:hover { background:#222; }
+  /* ⭐v6.596 已擲完硬幣、等選擇的提示列（位置在 .restart-waiting-strip 附近；被擋下動作時閃兩下） */
+  .gate-pending-strip { position:fixed; top:calc(56px + var(--safe-top, 0px)); left:50%; transform:translateX(-50%); z-index:9997; max-width:calc(100vw - 24px); box-sizing:border-box;
+    display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:8px 12px; padding:8px 14px; border-radius:10px;
+    background:rgba(30,41,82,.96); color:#fff; border:1px solid #7fb0ff; box-shadow:0 4px 14px rgba(0,0,0,.45); font-size:.9rem; font-weight:600; }
+  .gate-pending-strip.nudged { animation:gateNudgeFlash .6s ease 2; }
+  .gate-pending-strip .gate-reopen-btn { min-height:44px; padding:8px 16px; font-size:.95em; }   /* 觸控好按（審查 P3） */
+  @keyframes gateNudgeFlash { 50% { background:rgba(180,83,9,.96); border-color:#fbbf24; } }
   .restart-rejected-toast { position:fixed; bottom:calc(80px + var(--safe-bottom, 0px)); left:50%; transform:translateX(-50%); z-index:9998; background:rgba(239,68,68,.95); color:#fff; padding:12px 24px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.4); font-weight:600; animation:rejectedToastFade 4s ease; }
   @keyframes rejectedToastFade { 0% { opacity:0; transform:translate(-50%, 20px); } 10% { opacity:1; transform:translate(-50%, 0); } 85% { opacity:1; transform:translate(-50%, 0); } 100% { opacity:0; transform:translate(-50%, -10px); } }
   @media (max-width: 768px) { .restart-proposal-modal { padding:18px 20px; min-width:260px; } .restart-waiting-strip { top:calc(50px + var(--safe-top, 0px)); font-size:.85em; padding:6px 14px; } .restart-rejected-toast { font-size:.9em; padding:10px 18px; } }
@@ -20859,6 +20918,24 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .playmat.layout-blue.layout-fable .opponent-row > .turn-order-chip,
     .playmat.layout-blue.layout-fable .my-row > .turn-order-chip{ position:absolute; top:auto; right:auto; left:18px; bottom:14px; z-index:5; }
     /* <<< v6442-blue-fallback */
+    /* >>> v6596-blue-portrait-fill */
+    /* ⭐v6.596（站長 2026-10-24，玩家回報 Fold 8 展開）新版桌墊在 <1024 直排時要剛好填滿一個畫面：
+       ・原本紀錄自成滿寬一列（最高 220px）⇒ 接近正方形的螢幕（704×830）整頁比視窗高約 100px，手牌被擠出畫面；
+         高的螢幕則是紀錄停在 220px、剩下的高度沒用到。
+       ・改成：紀錄放在行動鈕／競技場的右邊（同一列）；對戰區佔滿頁首與手牌之間的高度，
+         多出來（或不夠）的高度全部由中間這一列吸收（紀錄最矮 120px，再矮就照舊整頁捲動，不會蓋到別的東西）。
+       ・卡片大小不變：試過依高度放大卡寬，但窄螢幕的備戰區會被擠小（704 寬時備戰卡只剩約 32px），反而更難看。
+       ・競技場卡與「使用競技場」鈕位置不變（行動列左側），只是紀錄不再佔一整列。
+       不新增媒體查詢（本頁數量被守衛釘住），寫在既有的 max-width:1023px 區塊裡。 */
+    .battle-root:has(.playmat.layout-blue) > .playmat.layout-blue.layout-fable{ flex:1 0 auto; grid-template-rows:auto minmax(0, 1fr) auto; }
+    .playmat.layout-blue.layout-fable > .opponent-row{ grid-row:1; }
+    .playmat.layout-blue.layout-fable > .action-bar{ grid-row:2; align-items:flex-start; align-content:stretch; min-height:130px; }
+    .playmat.layout-blue.layout-fable > .my-row{ grid-row:3; }
+    /* contain:size ⇒ 紀錄的內容多寡不會把這一列撐高（否則整場的紀錄一長，整頁又比視窗高）；紀錄自己捲動 */
+    .playmat.layout-blue.layout-fable .action-bar > .log-col{ flex:1 1 240px; align-self:stretch; height:auto; min-height:120px; max-height:none; contain:size; }
+    /* 直排時沒有收合鈕（.log-toggle-btn 隱藏）⇒ 之前在桌機收合過紀錄的玩家，這裡也照樣顯示（不然沒有鈕打得開；審查 P3） */
+    .playmat.layout-blue.layout-fable.log-collapsed .action-bar > .log-col{ display:flex; }
+    /* <<< v6596-blue-portrait-fill */
     /* >>> v6470-fable-fallback */
     /* ⭐v6.470 Fable 版在 <1024 後備直排（直向 iPad）：行動列沿用基礎樣式的固定 180px 高，
        裝不下「行動鈕＋滿寬紀錄（最高 220px）」⇒ 紀錄溢出、蓋到我方場地（v6.466 只修了新版桌墊）。改成跟著內容長高。 */

@@ -67,6 +67,26 @@ export function uiAttackStep(
 }
 
 /**
+ * ⭐v6.596 打開選擇視窗之前，雙方場上（戰鬥＋備戰）的卡是否都已經載進卡池（v6.595 複審 P2-A 的判準，抽成唯一一份）。
+ *   借對手招式的候選是從對手場上的卡找的；缺卡時會變成 0 個候選而直接出招、不讓玩家選。
+ *   自動接回（$effect）與提示列的「打開選擇視窗」鈕／被擋下動作時的重開都問它（v6.596 審查 P2-1）。
+ */
+export function gateFieldCardsLoaded(
+  state: { players: ReadonlyArray<{ active?: { cardId: string } | null; bench?: ReadonlyArray<{ cardId: string } | null> | null } | null> } | null | undefined,
+  activeIdx: number,
+  has: (cardId: string) => boolean,
+): boolean {
+  if (!state) return false;
+  const act = state.players[activeIdx]?.active;
+  if (!act) return false;
+  for (const pl of state.players) {
+    if (!pl) continue;
+    for (const c of [pl.active, ...(pl.bench ?? [])]) if (c && !has(c.cardId)) return false;
+  }
+  return true;
+}
+
+/**
  * 對戰頁：引擎記下 attackGatePassed 之後要不要（重新）打開那一招的選擇視窗。
  *   回傳 { attackIndex, tag } ⇒ 打開並記住 tag；null ⇒ 不動作（不是自己、已經開過、別的視窗開著）。
  *   重新整理頁面後 openedTag 是空的 ⇒ 會接回來（宣告了就要出招，不能卡在半路）。

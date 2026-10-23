@@ -82,6 +82,11 @@ function extractOnResize(src) {
     const { window, forceMobileBattleUI } = env;
     const recomputeZoom = () => {}; const clampChatFabPos = (p) => p;
     const computeIsPortraitMobile = env.compute;
+    // ⭐v6.596（Rule 40）：onResize 多了「從沒選過版面 ⇒ 寬度改變時重算預設版面」那一段 ⇒ 補它用到的名字。
+    //   這支守的是三個旗標（isPortraitMobile／isSmallScreen／isTabletLayout）與單一來源，跟預設版面無關；預設版面由 test-v6596 守。
+    let _layoutDefaultW = -1, battleLayout = 'classic';
+    const localStorage = { getItem: () => null };
+    const defaultBattleLayout = () => 'classic';
     (() => {${body}\n})();
     return { isPortraitMobile, isSmallScreen, isTabletLayout };
   `);
@@ -100,7 +105,8 @@ function rotatePromptCond(src) {
   return cond;
 }
 function evalCond(cond, env) {
-  return new Function('env', `const { game, isSpectator, isPortraitMobile } = env; return !!(${cond});`)(env);
+  // ⭐v6.596（Rule 40）：條件多了 battleLayout !== 'blue'（站長裁定：新版桌墊不顯示旋轉提示，由 test-v6596 S5／B4 守）⇒ 這裡預設經典版，原本三個條件的逐格比對不變
+  return new Function('env', `const { game, isSpectator, isPortraitMobile, battleLayout = 'classic' } = env; return !!(${cond});`)(env);
 }
 function settingsBlock(src) {
   const s = once(src, '<div class="zoom-modal settings-modal"', '設定 modal');
@@ -318,7 +324,8 @@ await T('M4 突變：初始化改成 !== \'0\'（沒設過的人全部被打開�
 await T('M5 突變：setter 不派發 resize ⇒ D 紅', () =>
   mutantMustBreak('不重算', () => assertSetter(mut("if (typeof window !== 'undefined') window.dispatchEvent(new Event('resize'));", '')), /沒派發 resize/));
 await T('M6 突變：rotate-prompt 條件拿掉 !isPortraitMobile（＝BASE）⇒ E 紅', () =>
-  mutantMustBreak('遮罩蓋死手機版', () => assertRotate(mut("{#if game && game.phase !== 'game-over' && !isSpectator && !isPortraitMobile}", "{#if game && game.phase !== 'game-over' && !isSpectator}")), /遮罩蓋死/));
+  // ⭐v6.596（Rule 40）：條件尾端多了 battleLayout !== 'blue' ⇒ 突變錨點跟著改，突變內容（拿掉 !isPortraitMobile）不變
+  mutantMustBreak('遮罩蓋死手機版', () => assertRotate(mut("{#if game && game.phase !== 'game-over' && !isSpectator && !isPortraitMobile && battleLayout !== 'blue'}", "{#if game && game.phase !== 'game-over' && !isSpectator && battleLayout !== 'blue'}")), /遮罩蓋死/));
 await T('M7 突變：設定 modal 開關拿掉 {#if !isSmallScreen} ⇒ F 紅', () =>
   mutantMustBreak('真手機也顯示', () => assertSettings(mut('          {#if !isSmallScreen}\n          <!-- ⭐ v6.313', '          <!-- ⭐ v6.313').replace(/\n          \{\/if\}\n          <div class="setting-hint">\n            ・經典版/, '\n          <div class="setting-hint">\n            ・經典版')), /沒有被 \{#if !isSmallScreen\} 直接包住/));
 await T('M8 突變：onResize 裡 isSmallScreen 改成跟 isPortraitMobile 一樣（開關開時真手機判定被污染）⇒ B 紅', () =>
