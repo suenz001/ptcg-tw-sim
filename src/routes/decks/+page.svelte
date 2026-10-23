@@ -30,6 +30,7 @@
   import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
   import { buildDeckSheetModel, deckSheetHtml } from '$lib/decks/deck-sheet';   // ⭐v6.559 匯出套牌構築表（道館賽報名用）
   import type { Deck } from '$lib/decks/types';
+  import { compareDeckCards } from '$lib/decks/deck-order';   // ⭐v6.594 牌組卡片順序（與牌組公布欄共用）
   import { validateDeck, maxCopies, isBasicEnergy, isStandardReprintLegal, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity, sameNameKey, isTwoCardStadium, twoCardStadiumPartnerCardId, twoCardStadiumSide } from '$lib/decks/validation';
   import { isCardMarkStandardLegal, filterDeckSelectable, getCardPolicy, DEFAULT_CARD_POLICY, ALL_REGULATION_MARKS } from '$lib/cards/regulation';
   // ⭐ v6.340：可選的標跟著後台政策走 ⇒ 這一頁也要載入政策（同一個分頁只會真的讀一次）
@@ -1782,20 +1783,8 @@
     }
     // v5.363：細分類排序 寶可夢 → 物品 → 支援者 → 競技場 → 能量（與棄牌區 / 牌庫 picker 同一套順序），
     //   同類內依卡名。原本訓練家全歸一類(物品/支援者/競技場混在一起)，現在分開方便檢視。
-    const rank = (c: Card) => {
-      if (c.supertype === 'Pokemon') return 0;
-      if (c.supertype === 'Trainer') {
-        if (c.subtype === 'Supporter') return 2;
-        if (c.subtype === 'Stadium') return 3;
-        return 1;  // 物品（含工具 / 化石 等其他訓練家物品）
-      }
-      return 4;  // 能量
-    };
-    result.sort((a, b) => {
-      const r = rank(a.card) - rank(b.card);
-      if (r !== 0) return r;
-      return a.card.name.localeCompare(b.card.name, 'zh-Hant');
-    });
+    // ⭐v6.594：判準搬到 $lib/decks/deck-order.ts（牌組公布欄明細共用同一份，站長選「共用一份」），行為不變。
+    result.sort((a, b) => compareDeckCards(a.card, b.card));
     return result;
   });
 </script>

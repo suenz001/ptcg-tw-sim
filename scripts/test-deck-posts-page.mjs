@@ -83,9 +83,26 @@ T('⭐⭐⭐ 明細走 loadDeckSets（只載這副牌用到的卡包），不得
     '用了 loadAllSets —— 每開一副牌就拉 40 個卡包約 4.6MB（v6.118 的 /cards 全量渲染教訓）');
 });
 
-T('⭐ 牌表是文字列表，不渲染 60 張卡圖', () => {
-  ok(!/<img/.test(P), '出現了 <img> —— v1 明細刻意不渲染卡圖');
-  ok(!/retryImg/.test(P), '掛了卡圖重試 —— 表示有在載圖');
+// ⭐v6.594 Rule 40：站長 2026-10-23 核准明細加「縮圖／文字」牌表與大圖（計畫第一期）⇒ 原本「整頁不得有 <img>」的呈現限制被新需求取代。
+//   這一條原本要守的意圖是**效能**：打開一副牌不可以拉一大堆卡圖（v6.118 /cards 全量渲染的教訓）。改成守住同一件事：
+//   ・縮圖只在牌表區塊、每個「條目」一張（不依張數展開成 60 張）、走縮圖站（cardThumb）＋失敗退路（retryImg）＋lazy＋預留尺寸
+//   ・官方原圖（大圖）只有一張，而且只在點開大圖時才渲染（zoomItem 有值）
+//   ・文字模式不渲染任何 <img>；列表（沒打開明細）一張卡圖都沒有
+//   行為端（真瀏覽器：列表 0 張、文字模式 0 張、縮圖只載縮圖站、大圖只載 1 張原圖）在 test-v6594-deck-post-thumbs。
+T('⭐ 卡圖不會被大量載入（v6.594 起：縮圖只在明細牌表、一個條目一張、lazy；原圖只在點開大圖時一張）', () => {
+  const imgs = P.match(/<img\b[^>]*>/g) || [];
+  ok(imgs.length === 2, '頁面上有 ' + imgs.length + ' 個 <img> —— 預期只有明細縮圖與大圖各一個樣板');
+  const thumb = imgs.find((x) => /cardThumb\(/.test(x));
+  ok(thumb && /use:retryImg=/.test(thumb) && /loading="lazy"/.test(thumb) && /width="245" height="342"/.test(thumb),
+    '明細縮圖沒有走 cardThumb＋retryImg＋lazy＋預留尺寸 —— 會直接拉官方原圖或版面跳動');
+  const markup = P.slice(P.indexOf('<main'));
+  const listPart = markup.slice(0, markup.indexOf('{#if openPost || detailLoading || detailError}'));
+  ok(listPart.length > 1000 && !/<img/.test(listPart), '列表區出現 <img> —— 外層列表的卡圖（第二期）沒有核准');
+  const eachThumb = markup.slice(markup.indexOf('{#each g.items as it (it.key)}'), markup.indexOf(thumb));
+  ok(eachThumb.length > 0 && eachThumb.length < 400 && !/\{#each[^}]*count/.test(eachThumb), '縮圖不是「每個條目一張」（可能依張數展開）');
+  const zoomImg = imgs.find((x) => x !== thumb);
+  const zoomBlock = markup.slice(markup.indexOf('{#if zoomItem}'), markup.indexOf(zoomImg));
+  ok(zoomBlock.length > 0 && zoomBlock.length < 900, '官方原圖（大圖）不在 {#if zoomItem} 裡 —— 沒點開就會載');
 });
 
 T('⭐ 列表不依賴 entries 欄位（後端列表的 projection 刻意排除它）', () => {

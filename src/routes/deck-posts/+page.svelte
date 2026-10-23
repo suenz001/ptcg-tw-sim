@@ -18,6 +18,11 @@
   import { postIdFromSearch, postShareUrl, withPostParam } from '$lib/deck-posts/share-link';   // ⭐v6.484 每篇投稿有自己的網址
   import type { Card } from '$lib/cards/types';
   import { loadDeckSets, buildCardIndex } from '$lib/cards/pool';
+  // >>> v6594-deck-post-thumbs
+  import { cardThumb } from '$lib/cards/thumb';   // ⭐v6.594 明細縮圖（全站單一來源；後台切官方原圖時照政策走原圖）
+  import { retryImg } from '$lib/img-retry';     // ⭐v6.594 縮圖失敗立刻改官方原圖；最後還是失敗 ⇒ 全站共用的「暗框＋卡名」外觀（不換卡背）
+  import { buildDetailGroups, zoomableItems, stepZoomKey, loadDetailView, saveDetailView, type DetailView } from '$lib/deck-posts/detail-view';
+  // <<< v6594-deck-post-thumbs
   import { migrateDeck, migrateCardId } from '$lib/decks/cardIdMigration';
   import { newDeck, upsertDeck, loadDecks } from '$lib/decks/storage';
   import { syncDeckToCloud } from '$lib/decks/cloud';
@@ -111,6 +116,12 @@
   let detailError = $state('');
   let detailCards = $state<Map<string, Card>>(new Map());
   let detailMissing = $state<string[]>([]);
+  // >>> v6594-deck-post-thumbs-state
+  // ⭐v6.594 牌表顯示方式（縮圖／文字，瀏覽器記住；預設縮圖）與大圖檢視（記 key，不記物件：換篇後找不到就自動關閉）
+  let detailView = $state<DetailView>(loadDetailView());
+  let zoomKey = $state<string | null>(null);
+  function setDetailView(v: DetailView) { detailView = v; saveDetailView(v); }
+  // <<< v6594-deck-post-thumbs-state
   let importMsg = $state('');
   let importWarn = $state('');
   let likeBusy = $state(false);
@@ -431,7 +442,7 @@
     const seq = ++detailSeq;
     urlPostId = id;   // ⭐v6.484
     detailLoading = true; detailError = ''; importMsg = ''; importWarn = '';
-    openPost = null; detailCards = new Map(); detailMissing = [];
+    openPost = null; detailCards = new Map(); detailMissing = []; zoomKey = null;   // ⭐v6.594 上一篇的大圖不可以留在這一篇
     // 留言區重置：⚠ 用 commentSeq 讓上一篇還在飛的留言回應作廢，否則會把 A 篇的留言畫在 B 篇上。
     commentSeq++;
     comments = []; commentsHasMore = false; commentStale = false;
@@ -462,35 +473,61 @@
     detailSeq++;
     urlPostId = null;   // ⭐v6.484
     commentSeq++;                       // 還在飛的留言回應作廢（不然關掉後才到的會寫進下一篇）
-    openPost = null; detailLoading = false; detailError = ''; importMsg = ''; importWarn = ''; likeError = '';
+    openPost = null; detailLoading = false; detailError = ''; importMsg = ''; importWarn = ''; likeError = ''; zoomKey = null;   // ⭐v6.594
     comments = []; commentsLoading = false; commentError = ''; commentText = '';
     commentsHasMore = false; commentStale = false; commentIsAdmin = false; commentsOlderBusy = false;
     dprReset();   // ⭐v6.583
   }
 
-  /** 依卡種分組的牌表（文字，不渲染卡圖）。 */
+  /** ⭐v6.594 依類型分組的牌表（縮圖與文字模式共用同一份；分組／順序判準在 $lib/deck-posts/detail-view.ts）。
+   *  順序：寶可夢 → 物品 → 支援者 → 競技場 → 能量，同類依卡名（與牌組編輯器共用 $lib/decks/deck-order.ts，站長 2026-10-23）。 */
   const detailRows = $derived.by(() => {
     const p = openPost;
-    if (!p) return [] as { group: string; items: { name: string; count: number; sub: string }[] }[];
-    const groups = new Map<string, { name: string; count: number; sub: string }[]>();
-    for (const e of p.entries) {
-      // v6.193：舊投稿可能引用已下架的重複卡 id（港版）⇒ 退而查對照後的保留版，
-      //   查得到就照常顯示卡名（查不到才顯示「本站沒有這張卡」，維持既有降級）。
-      const c = detailCards.get(e.cardId) ?? detailCards.get(migrateCardId(e.cardId));
-      const g = !c ? '未知卡片' : c.supertype === 'Pokemon' ? '寶可夢' : c.supertype === 'Trainer' ? '訓練家' : '能量';
-      if (!groups.has(g)) groups.set(g, []);
-      groups.get(g)!.push({
-        name: c ? c.name : '（本站沒有這張卡 · id ' + e.cardId + '）',
-        count: e.count,
-        sub: c ? [c.setCode, c.collectorNumber].filter(Boolean).join(' ') : '',
-      });
-    }
-    const order = ['寶可夢', '訓練家', '能量', '未知卡片'];
-    return order.filter((g) => groups.has(g)).map((g) => ({
-      group: g,
-      items: groups.get(g)!.sort((a, b) => (b.count - a.count) || a.name.localeCompare(b.name, 'zh-Hant')),
-    }));
+    if (!p) return [];
+    // v6.193：舊投稿可能引用已下架的重複卡 id（港版）⇒ 退而查對照後的保留版，
+    //   查得到就照常顯示卡名（查不到才顯示「本站沒有這張卡」，維持既有降級）。
+    return buildDetailGroups(p.entries, (id) => detailCards.get(id) ?? detailCards.get(migrateCardId(id)));
   });
+  // >>> v6594-deck-post-zoom
+  /** 可以開大圖的卡（依畫面順序）與目前開著的那一張；換篇或關明細時 key 對不上 ⇒ 自動是 null（遲到的回應不會讓舊卡復活） */
+  const zoomList = $derived(zoomableItems(detailRows));
+  const zoomItem = $derived(zoomKey ? zoomList.find((x) => x.key === zoomKey) ?? null : null);
+  const zoomPos = $derived(zoomItem ? zoomList.indexOf(zoomItem) : -1);
+  const zoomPrev = $derived(stepZoomKey(zoomList, zoomKey, -1));
+  const zoomNext = $derived(stepZoomKey(zoomList, zoomKey, 1));
+  function openZoom(key: string) { if (zoomList.some((x) => x.key === key)) zoomKey = key; }
+  function closeZoom() { zoomKey = null; }
+  let zoomPrevBtn = $state<HTMLButtonElement | null>(null);
+  let zoomNextBtn = $state<HTMLButtonElement | null>(null);
+  /** 上一張／下一張（按鈕與 ← → 共用）。⚠ 換完之後那顆按鈕若變成 disabled（到頭／到尾），焦點會掉到 body（審查 P3-5）
+   *  ⇒ 焦點移到反方向那顆（複審 P3：放到「關閉」的話，鍵盤連按 Enter 多按一下就把大圖關掉）；只有一張卡時才放「關閉」。 */
+  function zoomStep(dir: -1 | 1) {
+    const k = dir < 0 ? zoomPrev : zoomNext;
+    if (!k) return;
+    const hadFocus = typeof document !== 'undefined' && !!document.activeElement && !!(zoomPrevBtn?.contains(document.activeElement) || zoomNextBtn?.contains(document.activeElement));
+    zoomKey = k;
+    if (hadFocus && !stepZoomKey(zoomList, k, dir)) {
+      const other = dir < 0 ? zoomNextBtn : zoomPrevBtn;
+      (stepZoomKey(zoomList, k, (dir < 0 ? 1 : -1) as -1 | 1) && other ? other : zoomCloseBtn)?.focus({ preventScroll: true });
+    }
+  }
+  /** 大圖開著時：Esc 只關大圖（明細留著）、← → 換上一張／下一張 */
+  function onZoomKey(e: KeyboardEvent) {
+    if (!zoomItem) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeZoom(); }
+    else if (e.key === 'ArrowLeft' && zoomPrev) { e.preventDefault(); zoomStep(-1); }   // 複審 P3：方向鍵也走 zoomStep（到底時焦點不掉到 body）
+    else if (e.key === 'ArrowRight' && zoomNext) { e.preventDefault(); zoomStep(1); }
+  }
+  let zoomCloseBtn = $state<HTMLButtonElement | null>(null);
+  // 打開大圖時把焦點放到「關閉」（鍵盤使用者）；關掉後由 pageScrollLock 把焦點還給剛按的那張縮圖
+  //   ⚠ 只在「剛打開」那一下移焦點：按上一張／下一張時焦點要留在那顆按鈕上（可以連按）
+  let zoomWasOpen = false;
+  $effect(() => {
+    const open = !!zoomItem && !!zoomCloseBtn;
+    if (open && !zoomWasOpen) zoomCloseBtn!.focus({ preventScroll: true });
+    zoomWasOpen = open;
+  });
+  // <<< v6594-deck-post-zoom
 
   const detailCounts = $derived.by(() => {
     const p = openPost;
@@ -1098,22 +1135,61 @@
           <p class="warn">有 {detailMissing.length} 張卡片在本站卡庫查不到（可能已輪替或尚未收錄），匯入後會顯示為未知卡片。</p>
         {/if}
 
-        <div class="deck-table">
+        <!-- >>> v6594-deck-post-thumbs-markup -->
+        <!-- ⭐v6.594 牌表：縮圖／文字切換（預設縮圖、瀏覽器記住）。一個條目一格（精確卡號、×張數），點卡看大圖。
+             ⚠ 流量靠的是「一個條目一張＋縮圖站 webp」與「只在打開明細時才渲染」：loading=lazy 在明細這種捲動容器裡門檻很大
+               （Chromium 4G 約 1250px），一般 ≤35 種卡的牌組打開就幾乎全載，不能當效能保證（審查 P3-3 實測）。
+               大圖（官方原圖）只在點開時才載；文字模式完全不載圖。 -->
+        <div class="dpv-bar" role="group" aria-label="牌表顯示方式">
+          <button type="button" class:active={detailView === 'thumb'} aria-pressed={detailView === 'thumb'} onclick={() => setDetailView('thumb')}>🖼 縮圖</button>
+          <button type="button" class:active={detailView === 'text'} aria-pressed={detailView === 'text'} onclick={() => setDetailView('text')}>☰ 文字</button>
+        </div>
+        <div class="deck-table" class:thumbs={detailView === 'thumb'}>
           {#each detailRows as g (g.group)}
             <section>
-              <h3>{g.group}</h3>
-              <ul>
-                {#each g.items as it, i (g.group + '_' + i)}
-                  <li>
-                    <span class="cnt">{it.count}</span>
-                    <span class="nm">{it.name}</span>
-                    {#if it.sub}<span class="sub">{it.sub}</span>{/if}
-                  </li>
-                {/each}
-              </ul>
+              <h3><span>{g.group}</span><span class="gtotal">{g.total} 張</span></h3>
+              {#if detailView === 'thumb'}
+                <ul class="dpv-grid">
+                  {#each g.items as it (it.key)}
+                    <li>
+                      {#if it.imageUrl}
+                        <button type="button" class="dpv-tile" onclick={() => openZoom(it.key)} aria-label={`${it.name}${it.sub ? '（' + it.sub + '）' : ''} ${it.count} 張，看大圖`}>
+                          <span class="dpv-img">
+                            <img src={cardThumb(it.imageUrl)} use:retryImg={it.imageUrl} alt={it.name} loading="lazy" decoding="async" width="245" height="342" />
+                            <span class="dpv-cnt">×{it.count}</span>
+                          </span>
+                          <span class="dpv-nm">{it.name}</span>
+                          {#if it.sub}<span class="dpv-sub">{it.sub}</span>{/if}
+                        </button>
+                      {:else}
+                        <div class="dpv-tile dpv-noimg-tile">
+                          <span class="dpv-img dpv-noimg"><span class="dpv-noimg-txt">沒有卡圖</span><span class="dpv-cnt">×{it.count}</span></span>
+                          <span class="dpv-nm">{it.name}</span>
+                          {#if it.sub}<span class="dpv-sub">{it.sub}</span>{/if}
+                        </div>
+                      {/if}
+                    </li>
+                  {/each}
+                </ul>
+              {:else}
+                <ul>
+                  {#each g.items as it (it.key)}
+                    <li>
+                      <span class="cnt">{it.count}</span>
+                      {#if it.imageUrl}
+                        <button type="button" class="nm nm-link" onclick={() => openZoom(it.key)} aria-label={`${it.name} ${it.count} 張，看大圖`}>{it.name}</button>
+                      {:else}
+                        <span class="nm">{it.name}</span>
+                      {/if}
+                      {#if it.sub}<span class="sub">{it.sub}</span>{/if}
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
             </section>
           {/each}
         </div>
+        <!-- <<< v6594-deck-post-thumbs-markup -->
 
         <!-- >>> v6583-deck-post-replays-markup -->
         {#if dprList}
@@ -1274,6 +1350,34 @@
     </div>
   </div>
 {/if}
+
+<!-- >>> v6594-deck-post-zoom-markup -->
+<!-- ⭐v6.594 大圖檢視：疊在明細上面（pageScrollLock 有引用計數，手機背景照樣鎖住）。點背景／關閉／Esc 只關這一層。
+     上一張／下一張只在這副牌、目前順序、有圖片的卡之間移動。大圖用官方原圖（放大檢視的全站規則）。 -->
+{#if zoomItem}
+  <div use:pageScrollLock class="dpz-backdrop" role="presentation" onclick={closeZoom}>
+    <div class="dpz" role="dialog" aria-modal="true" aria-label={`卡片大圖：${zoomItem.name}`} onclick={(e) => e.stopPropagation()}>
+      <div class="dpz-img">
+        <!-- 審查 P3-6：官方原圖還在下載時，先用已經載過的縮圖當底圖（瀏覽器快取，零額外請求），不會是空白框。
+             ⚠ 只在縮圖模式：文字模式沒有載過縮圖，加底圖會多一個請求（守衛 B3：文字模式點開大圖只能載一張原圖） -->
+        <img src={zoomItem.imageUrl} use:retryImg={{ url: zoomItem.imageUrl, width: 900 }} alt={zoomItem.name} decoding="async" style:background-image={detailView === 'thumb' ? `url("${cardThumb(zoomItem.imageUrl)}")` : null} />
+      </div>
+      <div class="dpz-info">
+        <b class="dpz-name">{zoomItem.name}</b>
+        {#if zoomItem.sub}<span class="dpz-sub">{zoomItem.sub}</span>{/if}
+        <span class="dpz-cnt">此牌組 {zoomItem.count} 張</span>
+        <span class="dpz-pos">{zoomPos + 1} / {zoomList.length}</span>
+      </div>
+      <div class="dpz-nav">
+        <button type="button" bind:this={zoomPrevBtn} disabled={!zoomPrev} onclick={() => zoomStep(-1)} aria-label="上一張">◀ 上一張</button>
+        <button type="button" class="dpz-close" bind:this={zoomCloseBtn} onclick={closeZoom}>✕ 關閉</button>
+        <button type="button" bind:this={zoomNextBtn} disabled={!zoomNext} onclick={() => zoomStep(1)} aria-label="下一張">下一張 ▶</button>
+      </div>
+    </div>
+  </div>
+{/if}
+<svelte:window onkeydown={onZoomKey} />
+<!-- <<< v6594-deck-post-zoom-markup -->
 
 {#if postOpen}
   <div use:pageScrollLock class="modal-backdrop" role="presentation" onclick={closePostModal}>
@@ -1620,4 +1724,53 @@
   :global(html) .notice { background: var(--ui-accent-soft); border-color: var(--ui-border); color: var(--ui-text); }
   :global(html) .badge.arche { background: var(--ui-accent-soft); border-color: var(--ui-border); }
   /* <<< v6504-unify */
+  /* >>> v6594-deck-post-thumbs-css */
+  /* ⭐v6.594 牌組明細：縮圖／文字切換、縮圖格、大圖檢視（站長 2026-10-23 核准第一期）。
+     ・不用媒體查詢（本頁的數量有守衛在釘）：格子用 auto-fill＋minmax 依明細寬度自己排 ——
+       明細內容寬 252px（320 寬手機）⇒ 2 欄、322～362px（390／430 寬）⇒ 3 欄、桌機（明細上限 720）⇒ 6 欄（上限 6 欄寫在 minmax 下限）。
+     ・顏色一律讀 --ui-*（layout 的淺色＝:root、深色＝data-theme='dark'，所有寬度都有）⇒ 深淺色自動跟著。
+     ・卡面完整不裁切（63:88、object-fit: contain）、張數徽章比照牌組編輯器「匯出圖片」（右下黑底白字）。
+     ・按鈕至少 44px 高（手機觸控）。 */
+  .dpv-bar { display: inline-flex; gap: 0; margin: 0 0 10px; border: 1px solid var(--ui-border, rgba(128,128,128,.35)); border-radius: 10px; overflow: hidden; }
+  .dpv-bar button { min-height: 44px; min-width: 88px; padding: 0 14px; border: 0; background: transparent; color: inherit; font: inherit; font-size: .88rem; cursor: pointer; }
+  .dpv-bar button + button { border-left: 1px solid var(--ui-border, rgba(128,128,128,.35)); }
+  .dpv-bar button.active { background: var(--ui-chip-active-bg, #236447); color: var(--ui-chip-active-text, #fff); font-weight: 600; }
+  .deck-table section h3 { display: flex; align-items: baseline; gap: 8px; }
+  .gtotal { font-weight: 400; font-size: .78rem; opacity: .85; font-variant-numeric: tabular-nums; }
+  .deck-table .dpv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(max(96px, calc((100% - 40px) / 6)), 1fr)); gap: 10px 8px; }   /* 一列最多 6 張（minmax 下限至少是 1/6 寬）、最少 96px */
+  .deck-table .dpv-grid > li { display: block; padding: 0; min-width: 0; }
+  .dpv-tile { display: flex; flex-direction: column; align-items: stretch; gap: 3px; width: 100%; min-height: 44px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 8px; }
+  .dpv-tile:hover .dpv-img { box-shadow: 0 0 0 2px var(--ui-accent, #2f7d57); }
+  .dpv-tile:focus-visible { outline: 2px solid var(--ui-accent, #2f7d57); outline-offset: 2px; }
+  .dpv-noimg-tile { cursor: default; }
+  .dpv-img { position: relative; display: block; width: 100%; aspect-ratio: 63 / 88; border-radius: 6px; overflow: hidden; background: rgba(128,128,128,.14); }
+  .dpv-img img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .dpv-cnt { position: absolute; right: 4px; bottom: 4px; min-width: 26px; padding: 2px 6px; border-radius: 6px; background: rgba(0,0,0,.85); color: #fff; font-weight: 700; font-size: .85rem; line-height: 1.3; text-align: center; font-variant-numeric: tabular-nums; pointer-events: none; }
+  .dpv-noimg { display: flex; align-items: center; justify-content: center; border: 1px dashed var(--ui-border, rgba(128,128,128,.45)); box-sizing: border-box; }
+  .dpv-noimg-txt { font-size: .72rem; opacity: .7; padding: 0 6px; text-align: center; }
+  .dpv-nm { font-size: .78rem; line-height: 1.3; overflow-wrap: anywhere; }
+  .dpv-sub { font-size: .66rem; opacity: .6; line-height: 1.2; }
+  .nm-link { flex: 1; min-width: 0; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--ui-link, inherit); font: inherit; text-align: left; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
+  /* 大圖：疊在明細（z-index 60）上面；高度扣掉安全區與資訊列，短螢幕也看得到整張卡與按鈕 */
+  .dpz-backdrop {
+    position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.82);
+    display: flex; align-items: center; justify-content: center;
+    padding: calc(var(--safe-top, 0px) + 10px) max(10px, var(--safe-right, 0px)) calc(var(--safe-bottom, 0px) + 10px) max(10px, var(--safe-left, 0px));
+  }
+  .dpz { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: min(520px, 100%); width: 100%; max-height: 100%; background: var(--ui-bg-elev, #fff); color: var(--ui-text, inherit); border: 1px solid var(--ui-border, transparent); border-radius: 12px; padding: 10px; box-sizing: border-box; }
+  .dpz-img { flex: 0 1 auto; min-height: 0; width: 100%; display: flex; justify-content: center; }
+  /* 複審 P2：寬度由「可用高度 × 63/88」推出（不用 width/height:auto＋max-height）⇒ 原圖還在下載時 img 就有尺寸，
+     縮圖底圖看得到、視窗不會先塌掉再跳大。先寫 vh 再寫 dvh（iOS 15.4 以前不認 dvh，審查 P3-7）。 */
+  .dpz-img img { display: block; height: auto; aspect-ratio: 63 / 88; object-fit: contain; border-radius: 10px; background: center / contain no-repeat;
+    width: min(100%, calc((100vh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 150px) * 63 / 88));
+    width: min(100%, calc((100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 150px) * 63 / 88)); }
+  .dpz-info { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 4px 10px; font-size: .88rem; text-align: center; }
+  .dpz-name { font-size: .98rem; overflow-wrap: anywhere; }
+  .dpz-sub, .dpz-pos { font-size: .76rem; opacity: .7; }
+  .dpz-cnt { font-weight: 600; }
+  .dpz-nav { display: flex; gap: 8px; width: 100%; }
+  .dpz-nav button { flex: 1 1 0; min-height: 44px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--ui-border, rgba(128,128,128,.35)); background: transparent; color: inherit; font: inherit; font-size: .88rem; cursor: pointer; }
+  .dpz-nav button:disabled { opacity: .4; cursor: default; }
+  .dpz-nav .dpz-close { background: var(--ui-chip-active-bg, #236447); color: var(--ui-chip-active-text, #fff); border-color: var(--ui-chip-active-bg, #236447); font-weight: 600; }
+  /* <<< v6594-deck-post-thumbs-css */
 </style>
