@@ -127,7 +127,7 @@
   .dm-title { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dm-nick { overflow-wrap: anywhere; }
   .dm-slow { font-size: .72rem; color: var(--fr-dim); }
-  .dm-close { border: 0; background: transparent; color: inherit; font-size: 1.1rem; cursor: pointer; padding: 4px 8px; }
+  .dm-close { border: 0; background: transparent; color: inherit; font-size: 1.1rem; cursor: pointer; padding: 4px 8px; min-width: 44px; min-height: 44px; }   /* ⭐v6.598 手機全面檢查：關閉鈕觸控範圍 44×44 */
   .dm-list { flex: 1; overflow-y: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
   .dm-msg { display: flex; flex-direction: column; max-width: 85%; }
   .dm-msg.mine { align-self: flex-end; align-items: flex-end; }

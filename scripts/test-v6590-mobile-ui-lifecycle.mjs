@@ -2,6 +2,7 @@
 import { revertIosTopV6593 } from './lib/revert-ios-top-v6593.mjs';
 // v6.590：編譯後生命週期、真正 CSS 幾何與產品 action；不連正式站、不寫產品檔。
 import { revertV6592Game } from './lib/revert-v6592-game.mjs';
+import { revertV6598Game, revertV6598Cards, revertV6598Decks, V6598_CARDS_PAIRS } from './lib/revert-v6598-pages.mjs';   // ⭐v6.598（Rule 40）：手機彈出視窗上緣／關閉鈕，先還原成 v6.597
 import { revertV6596Game } from './lib/revert-v6596-game.mjs';   // ⭐v6.596（Rule 40）：對戰頁先還原 v6.596（直立大螢幕填滿、擲幣後提示）再接 v6.595
 import { revertV6595Game } from './lib/revert-v6595-game.mjs';   // ⭐v6.595（Rule 40）：對戰頁先還原 v6.595 的出招前擲幣與錦標賽復盤下載
 import {readFileSync} from 'node:fs';
@@ -22,7 +23,7 @@ const originalBytes=paths.map(p=>readFileSync(join(PRODUCT,p))),read=p=>readFile
 const [game,mobile,drag]=paths.map(read);let pass=0,fail=0;
 const ok=(name,yes,detail='')=>{if(yes){pass++;console.log('PASS '+name)}else{fail++;console.error('FAIL '+name+' '+detail)}};
 const sha=s=>createHash('sha256').update(s).digest('hex');
-if(hasBaseCommit(ROOT,BASE)){for(let i=0;i<paths.length;i++){const b=readBaseBlob(ROOT,BASE,paths[i]);if(!b.ok)throw Error('BASE讀取失敗');let restored='';try{restored=revertMobileUiV6590(i===0?revertV6592Game(revertV6595Game(revertV6596Game(game))):i===1?revertIosTopV6593(mobile):drag,paths[i])}catch{}ok('R 精確還原 '+paths[i],restored===b.out.replace(/\r\n/g,'\n'));}}else shallowSkip('v6590 BASE','需v6.589歷史');
+if(hasBaseCommit(ROOT,BASE)){for(let i=0;i<paths.length;i++){const b=readBaseBlob(ROOT,BASE,paths[i]);if(!b.ok)throw Error('BASE讀取失敗');let restored='';try{restored=revertMobileUiV6590(i===0?revertV6592Game(revertV6595Game(revertV6596Game(revertV6598Game(game)))):i===1?revertIosTopV6593(mobile):drag,paths[i])}catch{}ok('R 精確還原 '+paths[i],restored===b.out.replace(/\r\n/g,'\n'));}}else shallowSkip('v6590 BASE','需v6.589歷史');
 function historyCode(s){const end=s.indexOf("return () => { window.removeEventListener('popstate', onPop); };");if(end<0)throw Error('history終點缺失');const start=s.lastIndexOf('  $effect(() => {',end);if(start<0)throw Error('history起點缺失');const derived=s.includes('const battleHistoryActive = $derived(!!game);')?'const battleHistoryActive = $derived(!!game);':'';return derived+s.slice(start,s.indexOf('  });',end)+5);}
 const bodyStart=game.indexOf('// >>> v6590-mobile-body-lock'),bodyEnd=game.indexOf('// <<< v6590-mobile-body-lock');
 const bodyCode=bodyStart>=0&&bodyEnd>bodyStart?game.slice(bodyStart,bodyEnd):'';

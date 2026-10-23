@@ -3501,6 +3501,7 @@
     justify-content: center;
     padding: 1rem;
     padding-top: calc(var(--safe-top, 0px) + 1rem);
+    padding-bottom: calc(var(--safe-bottom, 0px) + 1rem);   /* ⭐v6.598（審查 P3-2）下方也讓開 iPhone 底部橫條 */
     cursor: zoom-out;
   }
   .pv-inner {
@@ -3509,7 +3510,8 @@
     border-radius: 12px;
     max-width: 1170px;
     width: 100%;
-    max-height: calc(100vh - var(--safe-top, 0px) - 3rem);
+    max-height: calc(100vh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 2rem - 3rem);   /* iOS 15.4 以前不認 dvh 的備援（同樣扣掉內距，複審 P3-b） */
+    max-height: calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 2rem - 3rem);   /* ⭐v6.598 扣掉遮罩上下 1rem 與自己的上下內距 1.5rem（content-box；不改 border-box 以免桌機變窄） */
     margin: auto;
     overflow-y: auto;
     overflow-x: hidden; /* v4.999: 同 cards modalInner — 強制阻擋水平 scrollbar */
@@ -3518,10 +3520,13 @@
     cursor: default;
     box-shadow: 0 20px 60px rgba(0,0,0,0.4);
   }
+  /* ⭐v6.598 手機全面檢查（站長 2026-10-24）：①內容很長往下捲時，✕ 原本跟著捲走（捲到一半會停在狀態列底下按不到）⇒ 改成 sticky，一直固定在視窗右上角；
+     ②視窗是 content-box，上下內距加在 max-height 外面 ⇒ 底部跑進 iPhone 底部橫條底下 ⇒ dvh 那一行把內距一起扣掉。 */
   .pv-close {
-    position: absolute;
-    top: 1.25rem;
-    right: 1.25rem;
+    position: sticky;
+    top: -0.25rem;   /* sticky 的上限是內容框 ⇒ 用負值才回到原本 top:1.25rem 的位置（審查 P3-1） */
+    display: block;
+    margin: -0.25rem -0.25rem -2.35rem auto;   /* 不佔版面高度，右邊與原本 right:1.25rem 相同 */
     width: 2.6rem;
     height: 2.6rem;
     border-radius: 50%;
@@ -4026,10 +4031,14 @@
     z-index: 9999;
     cursor: zoom-out;
     padding: 1rem;
+    /* ⭐v6.598 手機全面檢查：卡圖放大時上下讓開狀態列／底部橫條（iPhone 加到主畫面時，原本卡圖上緣會跑進狀態列底下） */
+    padding-top: calc(var(--safe-top, 0px) + 1rem);
+    padding-bottom: calc(var(--safe-bottom, 0px) + 1rem);
   }
   .lightboxImg {
     max-width: min(600px, 95vw);
     max-height: 92vh;
+    max-height: calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 2rem);
     object-fit: contain;
     border-radius: 12px;
     box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);

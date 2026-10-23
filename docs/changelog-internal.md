@@ -1,5 +1,23 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.598 — 手機彈出視窗上緣不進狀態列、關閉鈕一直按得到（全站手機視窗檢查）
+
+BASE `7e26ff39`（v6.597）。站長 2026-10-24 iPhone 截圖：牌組公布欄明細視窗頂端跑進狀態列底下（標題被模糊、✕ 很難按），要求確認並做整體手機排版檢查，「其他功能不會佔用到上方的話可作為修正參考」。
+
+- 真兇（Chromium 模擬 iPhone 393×852＋動態島安全區 59／34 就量得到）：deck-posts 的 .modal-backdrop 用 `align-items:center`，而 .modal 是 content-box ⇒ 上下內距 34px 加在 max-height 外面，視窗永遠比可用高度多 34px，置中後上緣被推出 17px（上緣 58 < 狀態列 59＋16）；iOS Safari 的 100vh 比看得到的高度大時推得更多。長牌組往下捲時 ✕（不是 sticky）跟著捲走。
+- 參考寫法：/decks、/cards 的預覽視窗本來就是 `align-items:flex-start`＋視窗 `margin:auto`（放得下照樣置中，放不下從上緣往下排，上緣永遠不被推出去）——正是站長說的「不會佔用到上方的功能」。
+- 修正（哨兵 v6598-modal-top-safe）：公布欄明細／投稿視窗改 flex-start＋margin:auto；max-height 先 vh 再 dvh，dvh 那一行把上下內距 34px 一起扣掉（不改成 border-box：那會讓桌機視窗變窄 36px，被 test-v6303 的版面量測抓到）；標題列 sticky（top:-16px、background:inherit），✕ 44×44；大圖 .dpz-backdrop 同樣 flex-start、.dpz margin:auto。
+- 全站手機檢查（同一個模擬環境，逐頁開視窗量）：首頁、牌組編輯器、公布欄列表、好友、錦標賽、開始對戰頁首都有讓開狀態列（上緣 84）；/cards 卡片視窗與 /decks 預覽視窗上緣 OK，但 ✕ 是 absolute ⇒ 往下捲會捲走（捲到一半停在狀態列底下）、視窗 content-box ⇒ 底部進 iPhone 底部橫條 ⇒ ✕ 改 sticky（不佔版面）、dvh 扣掉遮罩與內距（同樣不改 border-box，桌機寬度不變）；兩頁卡圖放大（lightbox）上下讓開安全區、圖高 dvh；錦標賽名人堂視窗（.hof-modal，86vh 置中、沒讓開狀態列）改 flex-start＋margin:auto＋安全區＋dvh；好友私聊面板 ✕ 加到 44×44。對戰中的選擇視窗（.selection-modal 85vh 置中）屬於對戰頁 picker 規格（v6.448～v6.457），這版不動，已列入回報。
+- Opus 5.5 獨立審查（第一輪）：根因與公布欄修法確認正確，桌機寬度／置中不變。修正：
+  - P2-1 名人堂／戰報視窗（.hof-modal，content-box、內距 14＋邊框 1 共 30px）同樣要從 dvh 扣掉內距（手機長賽程下緣原本進底部橫條 14px）；標題列（.tourn-bracket-head，含 ✕）在視窗裡 sticky，✕ 觸控範圍 44×44（原本 27×20、會跟著捲走）。
+  - P3-1 /cards、/decks 的 ✕ 改 sticky 後桌機下移 8／4px（sticky 的上限是內容框）⇒ top 改負值（-0.5rem／-0.25rem），回到原本 absolute 的位置（守衛 B4 量 1366×768）。
+  - P3-2 /cards、/decks 卡片視窗遮罩下方也讓開底部橫條（padding-bottom：safe-bottom＋1rem）。
+  - P3-4 測抽視窗底部讓開底部橫條。P3-5 公布欄 vh 備援行也扣內距。P3-6 守衛檔頭註解更新。
+  - 已知、刻意：公布欄明細標題列與私聊面板標題列因 ✕ 44×44 在桌機也變高（約 +27px／+14px），寬度與置中不變。test-v6213 的 CSS（整支，不只指紋）改讀還原 v6.598 後的原始碼——只還原本版那幾處，其餘檢查仍對到現行碼。對戰頁 .gameover-modal（88vh＋translate 置中，內容很長時上緣約 49）與 .selection-modal（85dvh 置中，上緣約 64）不動，已列入回報。
+- Opus 5.5 複審：名人堂／戰報手機 75→802、sticky 標題列三種主題不透、拖曳正常、桌機位置寬度逐像素相同；/cards、/decks ✕ 位置與 BASE 相同。順手修：①名人堂 ✕ 下方負 margin -12px 會凸出標題列 11px、蓋住「下一輪 ▶」上緣 3px（點到會關視窗）⇒ 下方只收 1px ②/cards、/decks 的 vh 備援行也扣掉安全區底部與內距（iOS 15.4 以前）。
+- 守衛 test-v6598-mobile-modal-top（9 項，含 B4 桌機 ✕ 位置）：S1～S4 靜態；B1 明細（上緣 ≥ 75、下緣 ≤ 802、✕ 44×44 在畫面內，往下捲仍在）、B2 內容超高（模擬 iOS 100vh 偏大）上緣不被推出、B3 /cards 卡片視窗；HEAD-FAIL BASE 上 S1～S4 逐條紅；B1～B3 把同一支守衛放到 BASE 的 build 上跑三條全紅（明細上緣 58、超高時上緣 -1457、/cards 下緣 868 且捲動後 ✕ 不見）。突變 5 個全殺（明細回到置中、不扣內距、標題列不固定、cards ✕ 不固定、名人堂置中）。
+- Rule 40：對戰頁還原鏈（test-v6293／v6441／v6587／v6590／v6592-wiring）最前面串上 revertV6598Game；/cards 的 test-v6586 先 revertV6598Cards、test-v6439 LATER 最前面登記 V6598_CARDS_PAIRS；/decks 的 test-v6213 桌機 CSS 指紋改從 revertV6598Decks 還原後的原始碼取（三份表在 scripts/lib/revert-v6598-pages.mjs，difflib 產生、逐位元驗證）；test-v6297 G1 的 BASE_MIGRATIONS 登記私聊面板 ✕ 那一行。
+
 ## v6.597 — 牌組卡片順序分出寶可夢道具；牌組公布欄訓練家小標題
 
 BASE `c9922ba3`（v6.596）。站長 2026-10-24 問「之前是不是裁示過訓練家要區分物品、支援者、寶可夢道具、競技場」——長期記憶、專案文件、內部紀錄都查無此裁示（v6.594 的裁定是「寶可夢 → 物品 → 支援者 → 競技場 → 能量」，寶可夢道具算在物品裡；v6.559 套牌構築表依官方格式是「物品／寶可夢道具」同一欄），已如實回報。站長當場裁定：①順序「寶可夢 → 物品 → 寶可夢道具 → 支援者 → 競技場 → 能量」（寶可夢道具緊接物品，與官方構築表同欄相鄰）②牌組編輯器（含匯出圖片）一起改（仍共用 deck-order.ts 一份）③牌組公布欄明細的訓練家加小標題 ④改好與 v6.596 一起推。

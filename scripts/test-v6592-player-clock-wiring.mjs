@@ -12,6 +12,7 @@ import { revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
 import { NEW_TAIL_SHA_V173, NEW_TEV_SHA_V173, NEW_TEV_LEN_V173, revertV173 } from './lib/tourn-revert-v173.mjs';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { revertV6592Game, V6592_GAME_PAIRS } from './lib/revert-v6592-game.mjs';
+import { revertV6598Game, revertV6598Cards, revertV6598Decks, V6598_CARDS_PAIRS } from './lib/revert-v6598-pages.mjs';   // ⭐v6.598（Rule 40）：手機彈出視窗上緣／關閉鈕，先還原成 v6.597
 import { revertV6596Game } from './lib/revert-v6596-game.mjs';   // ⭐v6.596（Rule 40）：對戰頁先還原 v6.596（直立大螢幕填滿、擲幣後提示）再接 v6.595
 import { revertV6595Game } from './lib/revert-v6595-game.mjs';   // ⭐v6.595（Rule 40）：對戰頁先還原 v6.595 再驗 v6.592 的六組還原
 import { normEol } from './lib/eol-agnostic.mjs';
@@ -122,7 +123,7 @@ await test('五個既有守衛真的呼叫新版還原器，不接受註解假�
 });
 await test('遊戲頁六組逐字還原BASE、缺失與重複錨點拒絕、額外差異保留', () => {
   if (!hasBaseCommit(ROOT, 'eb5a4503')) { shallowSkip('v6592 game exact-revert', '需要上一版 eb5a4503'); return; }
-  const page = revertV6595Game(revertV6596Game(normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'))));
+  const page = revertV6595Game(revertV6596Game(revertV6598Game(normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8')))));
   const base = readBaseBlob(ROOT, 'eb5a4503', 'src/routes/game/+page.svelte');
   assert.ok(base.ok); assert.equal(V6592_GAME_PAIRS.length, 6);
   assert.equal(revertV6592Game(page), normEol(base.out));

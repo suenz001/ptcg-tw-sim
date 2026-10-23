@@ -1503,9 +1503,17 @@
 
   /* modal 同樣要避開動態島：手機上 modal 貼齊上緣時關閉鈕會被蓋住。
      比照 /decks 的 .pv-overlay / .pv-inner 寫法。 */
+  /* >>> v6598-modal-top-safe */
+  /* ⭐v6.598（站長 2026-10-24 iPhone 截圖：明細視窗頂端跑進狀態列底下、標題被模糊、✕ 很難按）：
+     原因是 align-items:center —— 視窗比遮罩可用高度高時，flex 置中會把多出來的一半推到上緣「之外」。
+     視窗會比可用高度高有兩個來源：① .modal 是 content-box，上下內距 34px 加在 max-height 外面（必定發生，iPhone 量到上緣 58 < 狀態列 59＋16）；
+     ② iOS Safari 的 100vh 比實際看得到的高度大。
+     改成與 /decks、/cards 的預覽視窗相同的寫法：align-items:flex-start＋視窗 margin:auto
+     ⇒ 放得下時照樣置中；放不下時從上緣（已讓開狀態列）往下排，頂端永遠不會被推出去。
+     max-height 先寫 vh 再寫 dvh（看得到的高度；iOS 15.4 以前不認 dvh 就用前一行）。 */
   .modal-backdrop {
     position: fixed; inset: 0; background: rgba(0,0,0,.55);
-    display: flex; align-items: center; justify-content: center;
+    display: flex; align-items: flex-start; justify-content: center;
     padding: 16px;
     padding-top: calc(var(--safe-top, 0px) + 16px);
     padding-bottom: calc(var(--safe-bottom, 0px) + 16px);
@@ -1514,10 +1522,18 @@
   .modal {
     background: var(--bg, #fff); color: inherit; border-radius: 12px;
     max-width: 720px; width: 100%;
-    max-height: calc(100vh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 32px);
+    max-height: calc(100vh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 32px - 34px);
+    /* ⭐v6.598 真兇之一：視窗是 content-box ⇒ 上下內距 34px（16＋18）加在 max-height 外面，原本視窗比可用高度多 34px，置中後上緣跑進狀態列 17px。
+       dvh 這一行把內距一起扣掉（不改成 border-box：那會讓桌機視窗變窄 36px） */
+    max-height: calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 32px - 34px);
+    margin: auto;
     overflow-y: auto; padding: 16px 18px 18px;
     overscroll-behavior: contain; /* ⭐v6.457 捲到底不把整頁帶走 */
   }
+  /* 標題列（含 ✕）在視窗裡捲動時固定在上方：長牌組往下看也隨時按得到關閉；✕ 放大到 44×44（手機好按，同 /cards 的關閉鈕尺寸） */
+  .modal-head { position: sticky; top: -16px; z-index: 2; background: inherit; padding: 6px 0; margin-top: -6px; }
+  .modal-head .close { min-width: 44px; min-height: 44px; font-size: 1.25rem; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+  /* <<< v6598-modal-top-safe */
   :global(html.dark) .modal { background: #1c1f24; }
   .modal-head { display: flex; align-items: center; gap: 12px; }
   .modal-head h2 { margin: 0; font-size: 1.1rem; flex: 1; }
@@ -1771,10 +1787,10 @@
   /* 大圖：疊在明細（z-index 60）上面；高度扣掉安全區與資訊列，短螢幕也看得到整張卡與按鈕 */
   .dpz-backdrop {
     position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.82);
-    display: flex; align-items: center; justify-content: center;
+    display: flex; align-items: flex-start; justify-content: center;   /* ⭐v6.598 同上：放不下時不往上緣外推 */
     padding: calc(var(--safe-top, 0px) + 10px) max(10px, var(--safe-right, 0px)) calc(var(--safe-bottom, 0px) + 10px) max(10px, var(--safe-left, 0px));
   }
-  .dpz { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: min(520px, 100%); width: 100%; max-height: 100%; background: var(--ui-bg-elev, #fff); color: var(--ui-text, inherit); border: 1px solid var(--ui-border, transparent); border-radius: 12px; padding: 10px; box-sizing: border-box; }
+  .dpz { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: min(520px, 100%); width: 100%; max-height: 100%; margin: auto; background: var(--ui-bg-elev, #fff); color: var(--ui-text, inherit); border: 1px solid var(--ui-border, transparent); border-radius: 12px; padding: 10px; box-sizing: border-box; }
   .dpz-img { flex: 0 1 auto; min-height: 0; width: 100%; display: flex; justify-content: center; }
   /* 複審 P2：寬度由「可用高度 × 63/88」推出（不用 width/height:auto＋max-height）⇒ 原圖還在下載時 img 就有尺寸，
      縮圖底圖看得到、視窗不會先塌掉再跳大。先寫 vh 再寫 dvh（iOS 15.4 以前不認 dvh，審查 P3-7）。 */

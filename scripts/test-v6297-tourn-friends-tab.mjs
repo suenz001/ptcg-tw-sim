@@ -625,6 +625,10 @@ await T('G1 ⭐⭐ `/friends` 這條獨立路由與 DmPanel.svelte **逐位元�
       // v6.508 網頁版善用版面（站長：「windows 網頁版仍然沒有有效利用版面，仍然是手機版的風格」）：好友頁網頁版 main 放寬到 1200px。difflib 產生、當場驗證逐位元前進到現況。
       ["  :global(html[data-ui-wide]) main { padding-top: 24px; }   /* ⭐v6.507 網頁版：頁首卡片離頂端列 24px（與牌組編輯器、卡牌資料庫、公布欄一致） */\n  /* <<< v6504-unify */\n", "  :global(html[data-ui-wide]) main { padding-top: 24px; }   /* ⭐v6.507 網頁版：頁首卡片離頂端列 24px（與牌組編輯器、卡牌資料庫、公布欄一致） */\n  :global(html[data-ui-wide]) main { max-width: 1200px; }   /* ⭐v6.508 網頁版：與卡牌資料庫／牌組公布欄／對戰大廳同寬（原本 760px 是手機風格的窄欄） */\n  /* <<< v6504-unify */\n"],
     ],
+    'src/routes/friends/DmPanel.svelte': [
+      // v6.598 手機彈出視窗全面檢查（站長 2026-10-24）：私聊面板 ✕ 的觸控範圍加到 44×44（只加 min-width／min-height，版面其餘不動）。內容由 test-v6598 S4 鎖。
+      ["  .dm-close { border: 0; background: transparent; color: inherit; font-size: 1.1rem; cursor: pointer; padding: 4px 8px; }\n", "  .dm-close { border: 0; background: transparent; color: inherit; font-size: 1.1rem; cursor: pointer; padding: 4px 8px; min-width: 44px; min-height: 44px; }   /* ⭐v6.598 手機全面檢查：關閉鈕觸控範圍 44×44 */\n"],
+    ],
   };
   for (const [p, rel] of [[P_FRPAGE, 'src/routes/friends/+page.svelte'], [P_DMPANEL, 'src/routes/friends/DmPanel.svelte']]) {
     const b = readBaseBlob(ROOT, BASE_SHA, rel);

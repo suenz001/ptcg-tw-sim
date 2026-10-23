@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // v6.587：真實 Svelte 排名欄位與實際 CSS 的字色、對比與不變性。
 import { revertV6592Game } from './lib/revert-v6592-game.mjs';
+import { revertV6598Game, revertV6598Cards, revertV6598Decks, V6598_CARDS_PAIRS } from './lib/revert-v6598-pages.mjs';   // ⭐v6.598（Rule 40）：手機彈出視窗上緣／關閉鈕，先還原成 v6.597
 import { revertV6596Game } from './lib/revert-v6596-game.mjs';   // ⭐v6.596（Rule 40）：對戰頁先還原 v6.596（直立大螢幕填滿、擲幣後提示）再接 v6.595
 import { revertV6595Game } from './lib/revert-v6595-game.mjs';   // ⭐v6.595（Rule 40）：對戰頁先還原 v6.595 的出招前擲幣與錦標賽復盤下載
 import { readFileSync } from 'node:fs';
@@ -31,7 +32,7 @@ if(hasBaseCommit(ROOT,BASE)){
   const block=/\/\* >>> v6477-lobby-light \*\/[\s\S]*?\/\* <<< v6477-lobby-light \*\//g;
   const old=base.match(block),current=source.match(block);
   if(old?.length!==1||current?.length!==1)throw new Error('淺色哨兵必須唯一');
-  const revertForRule40=(input,pre=(x,p)=>revertMobileUiV6590(revertV6592Game(revertV6595Game(revertV6596Game(x))),p))=>{
+  const revertForRule40=(input,pre=(x,p)=>revertMobileUiV6590(revertV6592Game(revertV6595Game(revertV6596Game(revertV6598Game(x)))),p))=>{
   let restored=pre(input,PAGE).replace(current[0],old[0]);
   let unique=true;
   for(const [now,prev]of V6587_GAME_PAIRS){

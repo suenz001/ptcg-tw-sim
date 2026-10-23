@@ -16199,9 +16199,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tourn-hof-row.tourn-hof-clickable { cursor: pointer; }
   .tourn-hof-row.tourn-hof-clickable:hover { background: #1f1a0c; border-radius: 6px; }
   .tourn-hof-go { margin-left: auto; color: #ffd35a; font-size: 12px; white-space: nowrap; }
-  .hof-modal-backdrop { position: fixed; inset: 0; z-index: 100000; background: rgba(0,0,0,.62); display: flex; align-items: center; justify-content: center; padding: 16px; }
-  .hof-modal { background: #0f1420; border: 1px solid #3a4a6a; border-radius: 12px; padding: 14px; max-width: 560px; width: 100%; max-height: 86vh; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,.6); }
+  /* ⭐v6.598 手機全面檢查：錦標賽名人堂等視窗上下讓開狀態列／底部橫條；放不下時從上往下排（align-items:flex-start＋margin:auto），
+     不會像置中那樣把上緣推出畫面（iOS 的 86vh 比看得到的高度大）。放得下時與原本一樣置中。 */
+  .hof-modal-backdrop { position: fixed; inset: 0; z-index: 100000; background: rgba(0,0,0,.62); display: flex; align-items: flex-start; justify-content: center; padding: 16px; padding-top: calc(var(--safe-top, 0px) + 16px); padding-bottom: calc(var(--safe-bottom, 0px) + 16px); }
+  .hof-modal { background: #0f1420; border: 1px solid #3a4a6a; border-radius: 12px; padding: 14px; max-width: 560px; width: 100%; max-height: 86vh; max-height: min(86dvh, calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 32px - 30px)); margin: auto; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,.6); }
   .hof-modal-x { float: right; background: transparent; border: none; color: #cfe0f8; font-size: 1.15rem; cursor: pointer; line-height: 1; }
+  /* ⭐v6.598（審查 P2-1）名人堂／戰報視窗：視窗 content-box 的內距＋邊框 30px 也要從 dvh 扣掉（上一行的 - 30px）；
+     標題列（含 ✕）在視窗裡捲動時固定在上方（top:-14px＝貼齊視窗內距外緣，背景跟視窗一樣），✕ 觸控範圍 44×44 */
+  .hof-modal > .tourn-bracket-head { position: sticky; top: -14px; z-index: 2; background: inherit; margin-top: -14px; padding-top: 14px; }
+  .hof-modal-x { min-width: 44px; min-height: 44px; margin: -12px -10px -1px 0; }   /* 下方只收 1px：不能凸出標題列，否則會蓋住「下一輪 ▶」上緣（複審 P3-a） */
   .tourn-mymatch { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #1a2440; border: 1px solid #3a5a8a; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; flex-wrap: wrap; }
   .tourn-rounds { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 4px; }
   .tourn-round { width: 100%; }

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { revertV6598Game, revertV6598Cards, revertV6598Decks, V6598_CARDS_PAIRS } from './lib/revert-v6598-pages.mjs';   // ⭐v6.598（Rule 40）：手機彈出視窗上緣／關閉鈕，先還原成 v6.597
 import { V6586_CARDS_REVERT_PAIRS } from './lib/revert-v6586-cards.mjs';
 /**
  * v6.439 守衛：手機版卡牌資料庫（/cards 卡包頁）不可以左右滑動、「一般搜尋」不可以超出畫面
@@ -114,6 +115,8 @@ const STRIP_RE = /\n  \/\* >>> v6439-cards-mobile \*\/[\s\S]*?\/\* <<< v6439-car
 // ⭐ LATER（IRON_RULES Rule 40：之後版本的合法改動逐字登記、逐字還原，鎖不變鬆）
 //   v6.457：彈出視窗整頁捲動鎖（Rule 76）—— import 一行、兩個遮罩掛 use:pageScrollLock、.modalInner 加 overscroll-behavior:contain。
 const LATER = [
+  // ⭐v6.598（Rule 40）：手機彈出視窗——✕ sticky、視窗 dvh 扣內距、卡圖放大讓開安全區；difflib 產生、逐位元還原 v6.597；內容由 test-v6598 鎖（由新到舊，放最前面）
+  ...V6598_CARDS_PAIRS,
   // v6.586：全部卡牌分頁；精確還原後繼續原本的整檔逐字比對。
   ...V6586_CARDS_REVERT_PAIRS,
   // ⭐v6.512（Rule 40）：全站文字對比——屬性色塊字色、標記徽章、篩選鈕選中色、全部卡牌紫字讀色票；difflib 產生、當場驗證逐位元還原 v6.511；內容由 test-v6512 鎖

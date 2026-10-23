@@ -43,6 +43,7 @@
  *
  * Run: node scripts/test-v6213-mobile-deck-editor.mjs
  */
+import { revertV6598Game, revertV6598Cards, revertV6598Decks, V6598_CARDS_PAIRS } from './lib/revert-v6598-pages.mjs';   // ⭐v6.598（Rule 40）：手機彈出視窗上緣／關閉鈕，先還原成 v6.597
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -177,7 +178,8 @@ console.log('0) 解析器自我驗證（找不到就綠 ＝ 最會騙人的守�
 // ⚠ 這份清單是**逐一對著 markup 的 <input>/<select>/<textarea> 列出來的**，
 //   不是隨便挑幾個 —— 少列一個就等於留一個會放大的入口。
 const FOCUSABLE = ['.pk-search', '.pk-mode-select', '.pk-set-select', '.deck-title', '.text-area', '.bm-code', '.auth-form input'];
-const CSS_RAW = styleBlock(DECKS);
+// ⭐v6.598（Rule 40）：預覽視窗 ✕ sticky、dvh 扣內距、卡圖放大讓開安全區（都是刻意的、內容由 test-v6598 鎖）⇒ 先逐位元還原成 v6.597 再取 CSS 與指紋，鎖不變鬆
+const CSS_RAW = styleBlock(revertV6598Decks(DECKS));
 const CSS = stripCssComments(CSS_RAW);
 ok('[前提] 抓得到 /decks 的 <style> 區塊', CSS.length > 20000, String(CSS.length));
 const SP = splitMedia(CSS);

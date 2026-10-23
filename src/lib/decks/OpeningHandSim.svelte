@@ -81,7 +81,7 @@
 </div>
 
 <style>
-  .ohs-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-start; justify-content: center; padding: calc(var(--safe-top, 0px) + 1.5rem) 0.75rem 1.5rem; overflow-y: auto; }
+  .ohs-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-start; justify-content: center; padding: calc(var(--safe-top, 0px) + 1.5rem) 0.75rem calc(var(--safe-bottom, 0px) + 1.5rem); overflow-y: auto; }   /* ⭐v6.598 底部讓開 iPhone 底部橫條 */
   .ohs-backdrop { position: fixed; inset: 0; border: 0; padding: 0; margin: 0; background: rgba(0, 0, 0, 0.72); cursor: pointer; }
   .ohs-inner {
     position: relative; overscroll-behavior: contain; width: 100%; max-width: 860px; box-sizing: border-box;
