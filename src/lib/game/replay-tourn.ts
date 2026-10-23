@@ -11,6 +11,8 @@
 // 所有函式都不會 throw：解不開 ⇒ 回空陣列，呼叫端照用原本的半回合格。
 
 import { gunzipText } from './replay-store';
+import { REPLAY_FORMAT, REPLAY_FORMAT_VERSION, validateReplayData, type ReplayData } from './replay-record';
+import type { GameState } from './types';
 
 export const TOURN_STEPS_URL = '/api/replay/tourn-steps';
 
@@ -76,3 +78,52 @@ export async function withTournPerActionSteps(matchId: string, halfTurn: TournSn
     return mergeTournReplaySteps(halfTurn, acts);
   } catch { return halfTurn; }
 }
+
+// >>> v6595-tourn-replay-file
+/**
+ * ⭐v6.595 錦標賽對戰結束時下載復盤檔（玩家建議、站長 2026-10-23：「跟一般對戰的下載方式一樣」）。
+ * 伺服器的錦標賽回放（GET /api/tournament/replay，對戰結束後才開放；逐動作格已合併）→ 一般對戰同一種復盤檔格式，
+ *   之後一樣可以在「開始對戰 → 🎞️ 復盤」匯入觀看。
+ *   ・錦標賽回放本來就是公開、雙方都看得到（?treplay= 分享連結）⇒ revealed=true，不另外遮蔽，也沒有多洩漏任何東西。
+ *   ・meta.kind＝'tournament'；viewerSeat＝下載的人坐哪一側（看不出來 ⇒ null，播放時視角自動跟出牌方）。
+ *   ・格子缺 logLen（很舊的資料）⇒ 用順序當 logLen；轉完再用 validateReplayData 驗一次，不合格回 null。
+ */
+export function tournReplayToData(
+  server: { meta?: Record<string, unknown> | null; finalLog?: unknown; finalState?: unknown; snapshots?: unknown } | null | undefined,
+  opts: { matchId: string; viewerSeat: 0 | 1 | null; appVersion: string; now: number },
+): ReplayData | null {
+  if (!server || typeof server !== 'object') return null;
+  const m = (server.meta ?? {}) as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+  const snaps = (Array.isArray(server.snapshots) ? server.snapshots : []) as TournSnap[];
+  const data: ReplayData = {
+    format: REPLAY_FORMAT,
+    v: REPLAY_FORMAT_VERSION,
+    meta: {
+      kind: 'tournament',
+      gameId: String(opts.matchId).slice(0, 120),
+      p1name: str(m.p1name), p2name: str(m.p2name), winnerName: str(m.winnerName),
+      finalTurn: typeof m.finalTurn === 'number' ? m.finalTurn : null,
+      savedAt: typeof m.endedAt === 'number' && m.endedAt > 0 ? m.endedAt : opts.now,
+      appVersion: opts.appVersion,
+      viewerSeat: opts.viewerSeat,
+      revealed: true,
+    },
+    finalLog: (Array.isArray(server.finalLog) ? server.finalLog : []) as GameState['log'],
+    finalState: (server.finalState && typeof server.finalState === 'object' ? server.finalState : null) as GameState | null,
+    snapshots: snaps.filter((x) => x && x.state && typeof x.state === 'object').map((x, i) => ({
+      turn: Number.isFinite(x.turn) ? x.turn : 0,
+      activePlayerIndex: x.activePlayerIndex === 0 || x.activePlayerIndex === 1 ? x.activePlayerIndex : null,
+      logLen: Number.isFinite(x.logLen) ? (x.logLen as number) : i,
+      state: x.state as GameState,
+      ...(Number.isFinite(x.at) ? { at: x.at as number } : {}),
+    })),
+  };
+  return validateReplayData(data) ? null : data;
+}
+
+/** 錦標賽對戰房 id（'mr_<matchId>'）→ matchId；測試房或其他 ⇒ null */
+export function matchIdOfTournRoom(roomId: string | null | undefined): string | null {
+  return typeof roomId === 'string' && roomId.startsWith('mr_') && roomId.length > 3 ? roomId.slice(3) : null;
+}
+// <<< v6595-tourn-replay-file

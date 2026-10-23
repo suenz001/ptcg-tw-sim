@@ -27,18 +27,21 @@ const css = (src) => { try { return styleBlockOf(src).replace(/\/\*[\s\S]*?\*\//
 function between(src, a, b) { const i = src.indexOf(a); if (i < 0) return ''; const j = src.indexOf(b, i + a.length); return j > i ? src.slice(i, j) : ''; }
 const preStepper = (p) => between(p, "{#if preAttackDiscard && game && preDiscardModalKind(preAttackDiscard.spec.scope) === 'stepper'}", '\n  {/if}\n');
 const preBinary = (p) => between(p, "{#if preAttackDiscard && game && preDiscardModalKind(preAttackDiscard.spec.scope) === 'binary'}", '\n  {/if}\n');
-const CANCEL = '<button class="btn-act secondary pre-attack-cancel" title="不使用這個招式，回到出招前（這回合還能做別的事）" onclick={cancelPreAttackDiscard}>取消出招</button>';
+// ⭐v6.595（Rule 40）：已通過出招前擲幣（attackGatePassed）時取消鈕會被停用（宣告了就要出招）⇒ 兩種寫法二選一，
+//   意圖（取消出招鈕存在、在按鈕列、只呼叫 cancelPreAttackDiscard）不變；v6.595 的鎖由 test-v6595 守。
+const CANCEL_TXT = (lock) => '<button class="btn-act secondary pre-attack-cancel" title="不使用這個招式，回到出招前（這回合還能做別的事）"' + (lock ? ' disabled={attackGateLocked}' : '') + ' onclick={cancelPreAttackDiscard}>取消出招</button>';
+const CANCEL_OF = (p) => (p.includes(CANCEL_TXT(true)) ? CANCEL_TXT(true) : CANCEL_TXT(false));
 
 const CHECKS = [
   ['★★★[①stepper] 攻擊前數字視窗有「取消出招」（在按鈕列裡）', true, (p) => {
-    const b = preStepper(p); return b.includes('<div class="sel-footer">\n          ' + CANCEL);
+    const b = preStepper(p); return b.includes('<div class="sel-footer">\n          ' + CANCEL_OF(p));
   }],
   ['★★★[①是否] 攻擊前是否視窗有「取消出招」（與是／否同一個按鈕列）', true, (p) => {
     const b = preBinary(p); const f = b.indexOf('<div class="sel-footer">');
-    return f > 0 && b.indexOf(CANCEL, f) > f && (b.match(/pre-attack-cancel/g) || []).length === 1;
+    return f > 0 && b.indexOf(CANCEL_OF(p), f) > f && (b.match(/pre-attack-cancel/g) || []).length === 1;
   }],
   ['★★[①行為] cancelPreAttackDiscard 只清掉 preAttackDiscard、不送出任何動作', false, (p) =>
-    /  function cancelPreAttackDiscard\(\) \{\n    preAttackDiscard = null;\n  \}\n/.test(p)],
+    /  function cancelPreAttackDiscard\(\) \{\n(    if \(attackGateLocked\) return;[^\n]*\n)?    preAttackDiscard = null;\n  \}\n/.test(p)],   // v6.595：允許「宣告後鎖住」那一行（不送出任何動作的意圖不變）
   ['★★[②排序] 「取消出招」排在最左（特異度要贏過次要鈕的 order:-1）；警告列仍獨佔第一行', true, (p) => {
     const c = css(p);
     return /\.sel-footer > \.btn-act\.secondary\.pre-attack-cancel\{ order:-3; \}/.test(c) && /\.sel-footer > \.sel-hint-warn\{ order:-4;/.test(c);
@@ -48,7 +51,7 @@ const CHECKS = [
     return b.includes('dispatch(GameActions.attack(ai, [], cc, ccChain));') && b.includes("dispatch(GameActions.attack(ai, ['yes-token'], cc, ccChain));");
   }],
   ['[前提] 攻擊前選能量的視窗本來就有取消（這次是補齊另外兩種）', false, (p) =>
-    p.includes('<button class="btn-act secondary" onclick={cancelPreAttackDiscard}>取消</button>')],
+    (p.includes('<button class="btn-act secondary" onclick={cancelPreAttackDiscard}>取消</button>') || p.includes('<button class="btn-act secondary" disabled={attackGateLocked} onclick={cancelPreAttackDiscard}>取消</button>'))],   // v6.595 Rule 40
 ];
 
 function runAll(src) { return CHECKS.map(([name, headFail, fn]) => { let r = false; try { r = !!fn(src); } catch { r = false; } return { name, headFail, r }; }); }

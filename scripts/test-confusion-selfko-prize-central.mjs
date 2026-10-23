@@ -25,7 +25,10 @@ const forceTails = () => { const o = Math.random; Math.random = () => 0.9; retur
 
 // 混亂 attacker(HP120,已受100傷)自傷+30=130≥120→自KO;對手有 faceUp 獎賞
 function mk(oppPrizes) {
-  const active = inst(CR, { status: 'confused', damage: 100 });
+  // ⭐v6.595（Rule 40）：官方「使出招式的順序」⇒ 不能宣告的招式（能量不足）不擲混亂。原盤面沒附能量，以前是靠
+  //   「先擲混亂、後檢查能量」才測得到自 KO；本守衛的意圖（混亂自 KO 的取獎收斂）不變 ⇒ 附上治癒之舞需要的 1 個【超】能量。
+  const PSY = [...pool.values()].find((c) => c.supertype === 'Energy' && c.name === '基本【超】能量').id;
+  const active = inst(CR, { status: 'confused', damage: 100, energyAttached: [inst(PSY)] });
   return {
     id:'t', phase:'playing', turnPhase:'main', activePlayerIndex:0, firstPlayerIdx:0, turn:5, isFirstTurn:false,
     log:[], pendingSelection:null, setupDone:[true,true], pendingPrizes:[0,0],

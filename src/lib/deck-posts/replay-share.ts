@@ -24,6 +24,7 @@ export function shareReplayHeader(obj: unknown): { seat: 0 | 1 } | { error: stri
   const d = obj as ReplayData;
   if (d.format !== REPLAY_FORMAT || !(d.v >= 1 && d.v <= REPLAY_FORMAT_VERSION)) return { error: '這不是本站的復盤檔（或版本不支援）' };
   const m = d.meta || ({} as ReplayData['meta']);
+  if (m.kind === 'tournament') return { error: '錦標賽的復盤檔不能用上傳檔案的方式附加（只開放線上休閒對戰的復盤）' };   // ⭐v6.595 審查 P3-7
   if (m.kind !== 'online') return { error: '只開放附加線上對戰的復盤（vs AI 與本機雙人不開放）' };
   if (m.viewerSeat !== 0 && m.viewerSeat !== 1) return { error: '復盤檔缺少記錄者座位' };
   if (!d.finalState || typeof d.finalState !== 'object' || !Array.isArray((d.finalState as GameState).players)) return { error: '復盤檔內容不完整' };

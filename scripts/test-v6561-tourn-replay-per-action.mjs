@@ -253,7 +253,7 @@ async function clientScenarios(C, pageSrc, srvSrc) {
   const body = fn ? fn[0] : '';
   const iMerge = body.indexOf('data.snapshots = await withTournPerActionSteps(matchId, data.snapshots || [])');
   const iOpen = body.indexOf("await openReplayData(data, 'tournament')");
-  r.C6 = iMerge > 0 && iOpen > iMerge && /import \{ withTournPerActionSteps \} from '\$lib\/game\/replay-tourn'/.test(pageSrc);
+  r.C6 = iMerge > 0 && iOpen > iMerge && /import \{ withTournPerActionSteps(, [\w, ]+)? \} from '\$lib\/game\/replay-tourn'/.test(pageSrc)   // v6.595（Rule 40）：同一行多 import 下載用的函式，意圖（對戰頁從 replay-tourn 取合併函式）不變;
   return r;
 }
 

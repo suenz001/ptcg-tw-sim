@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'b23f5147c33f1e5ec918f1bc78f47a923bf62333';   // v6.593（上一版）
+const PREV_SHA = '63787814511a2c16516222999e75be0f1624d19b';   // v6.594（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,19 +757,36 @@ const PREV_SHA = 'b23f5147c33f1e5ec918f1bc78f47a923bf62333';   // v6.593（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.594 前移：PREV_SHA 從 b23f5147（v6.593）起算。
+  // ⚠⚠ v6.595 前移：PREV_SHA 從 63787814（v6.594）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.594：牌組公布欄明細縮圖／文字牌表與大圖（deck-posts 頁、detail-view.ts）；牌組卡片排序判準抽成共用 deck-order.ts（/decks 改引用）；首頁 changelog 三步搬運
-  'src/lib/deck-posts/detail-view.ts',
-  'src/lib/decks/deck-order.ts',
+  // ⭐v6.595：出招前擲幣判準中央模組 attack-gate.ts、引擎官方順序與兩步出招、錦標賽逾時收尾、錦標賽回放轉復盤檔與結束視窗下載鈕；首頁 changelog 三步搬運
+  'src/lib/game/attack-gate.ts',
+  'src/lib/audio/sfx-events.ts',   // v6.595 審查 P3-3：第一步停下來時不播攻擊音
+  'src/lib/deck-posts/replay-share.ts',   // v6.595 審查 P3-7：錦標賽復盤檔附加的錯誤訊息
+  'src/lib/game/engine.ts',
+  'src/lib/game/replay-tourn.ts',
+  'src/lib/game/timeout-action.ts',
+  'src/lib/game/types.ts',
   'src/lib/version.ts',
-  'src/routes/deck-posts/+page.svelte',
-  'src/routes/decks/+page.svelte',
+  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.594）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.594 前移：PREV_SHA 從 b23f5147（v6.593）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.594：牌組公布欄明細縮圖／文字牌表與大圖（deck-posts 頁、detail-view.ts）；牌組卡片排序判準抽成共用 deck-order.ts（/decks 改引用）；首頁 changelog 三步搬運
+//   'src/lib/deck-posts/detail-view.ts',
+//   'src/lib/decks/deck-order.ts',
+//   'src/lib/version.ts',
+//   'src/routes/deck-posts/+page.svelte',
+//   'src/routes/decks/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.593）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.593 前移：PREV_SHA 從 c7c4aa8b（v6.592）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -882,20 +899,6 @@ const PREV_ALLOWED = [
 //   'src/lib/deck-posts/replay-share.ts',   // v6.583 一般對戰復盤的淨化規則（伺服器引擎 bundle 也用同一支）
 //   'src/lib/version.ts',
 //   'src/routes/deck-posts/+page.svelte',
-//   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.582）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.582 前移：PREV_SHA 從 e5fc5464（v6.581）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.582：棄牌區分類頁籤（discard-filter.ts 唯一判準）、回放自動播放＋時間軸、認輸並提議重新開局（concede.ts 唯一判準＋兩套房間 API）；首頁 changelog 三步搬運
-//   'src/lib/game/concede.ts',
-//   'src/lib/game/discard-filter.ts',
-//   'src/lib/game/room-oracle.ts',
-//   'src/lib/game/room.ts',
-//   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',

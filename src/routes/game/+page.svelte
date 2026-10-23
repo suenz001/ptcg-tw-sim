@@ -127,7 +127,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   } from '$lib/game/hand-card-ops';
   import { handOverlapPx, handFanPose, fanOvershootPx, borderBoxSize } from '$lib/game/hand-layout';
   // ⭐v6.560 一般對戰復盤（記錄／遮蔽／跳回合 與 瀏覽器儲存／檔案）
-  import { withTournPerActionSteps } from '$lib/game/replay-tourn';   // v6.561 錦標賽回放逐動作
+  import { withTournPerActionSteps, tournReplayToData, matchIdOfTournRoom } from '$lib/game/replay-tourn';   // v6.561 錦標賽回放逐動作
   import { computeTimerView } from '$lib/game/game-timer';   // ⭐v6.565 計時器四個數字的唯一一份
   import { getServerClockOffsetMs, gameClockNow } from '$lib/game/server-clock';   // ⭐v6.565 休閒／本機的「現在」跟 engine 寫時間戳用同一個時鐘
   import { loadReplayFold, saveReplayFold, toggleReplayFoldState, type ReplayFoldSection } from '$lib/game/replay-fold';   // v6.564 復盤清單收合
@@ -183,6 +183,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { createAnimObserver, makeLocalSeenStore, type AnimObserveResult } from '$lib/game/anim-live';   // ⭐v6.580 動畫只在當下播放
   import { computeRevealEvents, revealLabel, type RevealEvent } from '$lib/game/card-reveal';   // ⭐v6.581 出牌／抽牌放到中間翻開
   import { DISCARD_TABS, discardTabMatches, discardTabCounts, type DiscardTab } from '$lib/game/discard-filter';   // ⭐v6.582 棄牌區分類頁籤
+  import { attackGatePendingFor, uiAttackStep, gateReopenTarget } from '$lib/game/attack-gate';   // ⭐v6.595 出招前擲幣判定（混亂／招式失敗）在選擇之前
   import { buildConcededGame } from '$lib/game/concede';   // ⭐v6.582 認輸並提議重新開局（本機 vs AI 也走同一份認輸盤面）
   import { dprFileUrl, dpFromOfSearch, dpReplayIdOfSearch } from '$lib/deck-posts/replays';   // ⭐v6.583 牌組公布欄附加的對戰紀錄
   import {
@@ -6103,7 +6104,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!matchId) return;
     tError = '';
     try {
-      const res = await fetch(T_API + '/replay?matchId=' + encodeURIComponent(matchId));
+      const res = await fetchTournReplay(matchId);
       if (!res.ok) { tError = '回放載入失敗（' + res.status + '）'; return; }
       const data = await res.json();
       if (data.error) { tError = data.error; return; }
@@ -6231,6 +6232,35 @@ function _setupSelfPending(g: any, seat: number): string | null {
   async function downloadLastReplay() {
     if (lastSavedReplay) await downloadReplayFile(lastSavedReplay);
   }
+  // >>> v6595-tourn-replay-download
+  // ⭐v6.595 錦標賽對戰結束當下就能下載這一場的復盤檔（玩家建議；跟一般對戰同一種檔案、同一顆按鈕的位置）。
+  //   來源是伺服器的錦標賽回放（對戰結束後才開放；與賽後在大廳看的回放同一份），轉成一般對戰的復盤檔格式下載。
+  const tournReplayMatchId = $derived(isTournament && !isTReplay && game?.phase === 'game-over' ? matchIdOfTournRoom(tActiveRoom) : null);
+  let tournReplayDl = $state<{ busy: boolean; msg: string; mid: string }>({ busy: false, msg: '', mid: '' });   // msg 綁在那一場（換場就不顯示）
+  async function downloadTournReplay() {
+    const mid = tournReplayMatchId;
+    if (!mid || tournReplayDl.busy) return;
+    tournReplayDl = { busy: true, msg: '', mid };
+    try {
+      const res = await fetchTournReplay(mid);
+      const j = await res.json().catch(() => null);
+      if (!res.ok || !j || j.error) {
+        tournReplayDl = { busy: false, mid, msg: res.status === 403 ? '伺服器還在整理這場的紀錄，請幾秒後再按一次' : ('下載失敗：' + ((j && j.error) || ('HTTP ' + res.status))) };
+        return;
+      }
+      j.snapshots = await withTournPerActionSteps(mid, j.snapshots || []);
+      const seat = (mySeatIdx === 0 || mySeatIdx === 1) ? mySeatIdx : null;
+      const data = tournReplayToData(j, { matchId: mid, viewerSeat: seat, appVersion: VERSION, now: gameClockNow() });
+      if (!data) { tournReplayDl = { busy: false, mid, msg: '這場沒有可下載的紀錄' }; return; }
+      await downloadReplayFile(data);
+      tournReplayDl = { busy: false, msg: '', mid };
+    } catch (e: any) { tournReplayDl = { busy: false, mid, msg: '下載失敗：' + (e?.message ?? e) }; }
+  }
+  // 錦標賽 /replay 的唯一取用點（回放與結束時下載共用；不多一個網路呼叫點）
+  function fetchTournReplay(matchId: string): Promise<Response> {
+    return fetch(T_API + '/replay?matchId=' + encodeURIComponent(matchId));
+  }
+  // <<< v6595-tourn-replay-download
   async function refreshReplayList() {
     replayList = await listReplays();
   }
@@ -8129,6 +8159,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const entry = eff[attackIndex];
     if (!entry) return;
     const { atk, sourceCardName } = entry;
+    // >>> v6595-attack-gate-ui
+    // ⭐v6.595 官方「使出招式的順序」：先擲招式失敗／混亂的硬幣，正面才進到招式的「若希望…／借哪一招」選擇。
+    //   這招出招前要選擇、而且要擲上述硬幣 ⇒ 先送 _gateOnly（引擎擲幣；反面照常失敗、正面記下 attackGatePassed），
+    //   選擇視窗等引擎通過後由下方的 $effect 再打開（重新整理頁面也會接回來）。不需要擲幣或不用選擇的招式流程不變。
+    {
+      const _k = `${sourceCardName}|${atk.name}`;
+      const _needsChoice = isCopyAttackKey(_k) || !!ATTACK_PRE_DISCARD_CHOICE.get(_k);
+      if (uiAttackStep(game, activePlayer.active, attackIndex, _needsChoice) === 'gate') {
+        dispatch({ type: 'ATTACK', attackIndex, _gateOnly: true });
+        return;
+      }
+    }
+    // <<< v6595-attack-gate-ui
     // ⭐⭐⭐ v6.339：**第 1 層借招也走同一個推進點**。
     //   v6.337 只把第 2 層以後收斂掉，第 1 層仍有 6 份手寫的「可以借誰」：
     //     暗黑底牌手寫 startsWith('N的')、扮晶晶酒手寫 tags.includes('太晶')、
@@ -8334,7 +8377,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     copyAttackPicker = null;
     dispatchBorrowedAttack(src, pokeIid, attackIndex, card);
   }
-  function cancelCopyAttack() { copyAttackPicker = null; }
+  function cancelCopyAttack() { if (attackGateLocked) return; copyAttackPicker = null; }   // ⭐v6.595 宣告了就要出招
 
   // ⭐v6.389 招式清單溢出：招式數 > ATTACK_LIST_INLINE_MAX 時，行動列收成一顆按鈕，
   //   點開這個 picker（沿用借招家族既有的 .selection-modal / .copy-attack-list，
@@ -8374,7 +8417,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     personateAttackPicker = null;
     dispatchBorrowedAttack(src, pokeIid, attackIndex, oppPoke.card); // v5.721 收斂
   }
-  function cancelPersonateAttack() { personateAttackPicker = null; }
+  function cancelPersonateAttack() { if (attackGateLocked) return; personateAttackPicker = null; }   // ⭐v6.595 宣告了就要出招
 
   // v3.895 耀閃挑戰 picker：peek 自己牌庫頂的寶可夢，列出該卡的所有招式讓玩家挑
   //   topPoke.inst 是 myDeck[0]（尚未丟棄；UI 為了開 picker 必須提前知道 — 連線對戰時對手看不到 deck 順序，無資訊洩漏問題）
@@ -8398,7 +8441,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   但保留 general-purpose fix 以防將來新增非規則寶可夢的 picker 招式。
     dispatchBorrowedAttack(src, pokeIid, attackIndex, topPoke.card); // v5.721 收斂
   }
-  function cancelBrightChallenge() { brightChallengePicker = null; }
+  function cancelBrightChallenge() { if (attackGateLocked) return; brightChallengePicker = null; }   // ⭐v6.595 宣告了就要出招
 
   // v4.39 火箭隊的貓老大ex|高傲指令 picker：對手牌庫頂 10 張寶可夢的招式
   //   pokeList = top10 中有招式的寶可夢清單（攻擊方可看見 — 卡面「翻到正面」）
@@ -8444,7 +8487,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     rocketCommandPicker = null;
     dispatch(GameActions.attack(src, undefined, chain[0], chain.slice(1)));
   }
-  function cancelRocketCommand() { rocketCommandPicker = null; }
+  function cancelRocketCommand() { if (attackGateLocked) return; rocketCommandPicker = null; }   // ⭐v6.595 宣告了就要出招
 
   // v3.900 回合切換 banner：每次 game.activePlayerIndex 變化時，全螢幕中央彈 1.5s 大字
   //   - text='你的回合' if new active === myIdx else '對手回合'
@@ -8800,8 +8843,35 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
 
   function cancelPreAttackDiscard() {
+    if (attackGateLocked) return;   // ⭐v6.595 已通過出招前擲幣 ⇒ 宣告了就要出招，不能取消
     preAttackDiscard = null;
   }
+  // >>> v6595-attack-gate-reopen
+  // ⭐v6.595 引擎記下 attackGatePassed（自己、輪到自己）⇒ 打開那一招的選擇視窗；選擇視窗不能取消（宣告了就要出招）。
+  const attackGateLocked = $derived(!!game && canAct && game.activePlayerIndex === myIdx && attackGatePendingFor(game, game.activePlayerIndex) != null);
+  let _gateOpenedFor = '';
+  let _gateTried: { tag: string; pool: unknown } = { tag: '', pool: null };   // 一般變數（不觸發重跑）：同一個 tag、同一份卡池只試一次
+  $effect(() => {
+    const t = gateReopenTarget(game, { canAct, myIdx }, _gateOpenedFor,
+      !!(preAttackDiscard || copyAttackPicker || personateAttackPicker || brightChallengePicker || rocketCommandPicker));
+    if (!t) return;
+    // ⭐（審查 P2-2／複審 P2-A）雙方場上（戰鬥＋備戰）的卡還沒全部載進卡池（換裝置／重新整理接回時 pool 是非同步補的）⇒ 先不試：
+    //   借對手招式的候選是從對手場上的卡找的，缺卡會變成 0 個候選而直接出招、不讓玩家選。
+    //   pool 是 $state，補完會換成新的 Map ⇒ 這個 effect 自動重跑。
+    const _act = game?.players[game.activePlayerIndex]?.active;
+    const _pool = pool;
+    const _field = game ? game.players.flatMap((pl) => [pl.active, ...(pl.bench ?? [])]) : [];
+    if (!_act || !_field.every((c) => !c || _pool.has(c.cardId))) return;
+    if (_gateTried.tag === t.tag && _gateTried.pool === _pool) return;
+    _gateTried = { tag: t.tag, pool: _pool };
+    untrack(() => {
+      const _g0 = game;
+      initiateAttack(t.attackIndex);
+      // 真的打開了選擇視窗、或已經送出動作，才記下「開過了」；沒開成（例如還缺借招候選的卡）⇒ 卡池更新後再試
+      if (game !== _g0 || preAttackDiscard || copyAttackPicker || personateAttackPicker || brightChallengePicker || rocketCommandPicker) _gateOpenedFor = t.tag;
+    });
+  });
+  // <<< v6595-attack-gate-reopen
 
   // v4.60 propose-restart handlers
   function handleProposeRestartButton() {
@@ -14273,7 +14343,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <!-- ⭐v6.452 站長裁定（2026-09-30）：攻擊前的數字視窗補「取消」——按了回到出招前（這回合還能做別的事），
              與攻擊前選能量的視窗一致；避免手滑按錯招式就非出不可。 -->
         <div class="sel-footer">
-          <button class="btn-act secondary pre-attack-cancel" title="不使用這個招式，回到出招前（這回合還能做別的事）" onclick={cancelPreAttackDiscard}>取消出招</button>
+          <button class="btn-act secondary pre-attack-cancel" title="不使用這個招式，回到出招前（這回合還能做別的事）" disabled={attackGateLocked} onclick={cancelPreAttackDiscard}>取消出招</button>
         </div>
       </div>
     </div>
@@ -14350,7 +14420,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               dispatch(GameActions.attack(ai, [], cc, ccChain));
             }}>{noLabel}</button>
           <!-- ⭐v6.452 站長裁定：是否視窗也補「取消」（回到出招前；「否」是這個招式的一個選項，會照樣出招） -->
-          <button class="btn-act secondary pre-attack-cancel" title="不使用這個招式，回到出招前（這回合還能做別的事）" onclick={cancelPreAttackDiscard}>取消出招</button>
+          <button class="btn-act secondary pre-attack-cancel" title="不使用這個招式，回到出招前（這回合還能做別的事）" disabled={attackGateLocked} onclick={cancelPreAttackDiscard}>取消出招</button>
         </div>
       </div>
     </div>
@@ -14456,7 +14526,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {/if}
             </button>
           {/if}
-          <button class="btn-act secondary" onclick={cancelPreAttackDiscard}>取消</button>
+          <button class="btn-act secondary" disabled={attackGateLocked} onclick={cancelPreAttackDiscard}>取消</button>
         </div>
       </div>
     </div>
@@ -14500,7 +14570,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {/each}
         </div>
         <div class="sel-footer">
-          <button class="btn-act secondary" onclick={cancelCopyAttack}>取消</button>
+          <button class="btn-act secondary" disabled={attackGateLocked} onclick={cancelCopyAttack}>取消</button>
         </div>
       </div>
     </div>
@@ -14588,7 +14658,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           </div>
         </div>
         <div class="sel-footer">
-          <button class="btn-act secondary" onclick={cancelPersonateAttack}>取消</button>
+          <button class="btn-act secondary" disabled={attackGateLocked} onclick={cancelPersonateAttack}>取消</button>
         </div>
       </div>
     </div>
@@ -14629,7 +14699,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           </div>
         </div>
         <div class="sel-footer">
-          <button class="btn-act secondary" onclick={cancelBrightChallenge}>取消</button>
+          <button class="btn-act secondary" disabled={attackGateLocked} onclick={cancelBrightChallenge}>取消</button>
         </div>
       </div>
     </div>
@@ -15681,7 +15751,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
             🧾 匯出 log（.json）
           </button>
           {#if lastSavedReplay && !isTReplay}<button class="btn-secondary" onclick={downloadLastReplay} title="下載這場的復盤檔（可在「開始對戰 → 🎞️ 復盤」匯入）">🎞️ 下載復盤檔</button>{/if}
+          {#if tournReplayMatchId}<button class="btn-secondary" disabled={tournReplayDl.busy} onclick={downloadTournReplay} title="下載這場錦標賽的復盤檔（可在「開始對戰 → 🎞️ 復盤」匯入）">{tournReplayDl.busy ? '⏳ 下載中…' : '🎞️ 下載復盤檔'}</button>{/if}<!-- ⭐v6.595 -->
         </div>
+        {#if tournReplayMatchId && tournReplayDl.msg && tournReplayDl.mid === tournReplayMatchId}<p class="muted small replay-saved-note">{tournReplayDl.msg}</p>{/if}
         {#if lastSavedReplay && !isTReplay}<p class="muted small replay-saved-note">🎞️ 這場已自動存到這台裝置的復盤紀錄（最近 {MAX_SAVED_REPLAYS} 場），可到「開始對戰 → 🎞️ 復盤」逐步回看。</p>{/if}
         {#if mode === 'online' || roomCode}
           <div class="lobby-btns">
@@ -15729,7 +15801,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
             🧾 匯出 log（.json）
           </button>
           {#if lastSavedReplay && !isTReplay}<button class="btn-secondary" onclick={downloadLastReplay} title="下載這場的復盤檔（可在「開始對戰 → 🎞️ 復盤」匯入）">🎞️ 下載復盤檔</button>{/if}
+          {#if tournReplayMatchId}<button class="btn-secondary" disabled={tournReplayDl.busy} onclick={downloadTournReplay} title="下載這場錦標賽的復盤檔（可在「開始對戰 → 🎞️ 復盤」匯入）">{tournReplayDl.busy ? '⏳ 下載中…' : '🎞️ 下載復盤檔'}</button>{/if}<!-- ⭐v6.595 -->
         </div>
+        {#if tournReplayMatchId && tournReplayDl.msg && tournReplayDl.mid === tournReplayMatchId}<p class="muted small replay-saved-note">{tournReplayDl.msg}</p>{/if}
         {#if lastSavedReplay && !isTReplay}<p class="muted small replay-saved-note">🎞️ 這場已自動存到這台裝置的復盤紀錄（最近 {MAX_SAVED_REPLAYS} 場），可到「開始對戰 → 🎞️ 復盤」逐步回看。</p>{/if}
         {#if isTournament}
           <div class="lobby-btns">

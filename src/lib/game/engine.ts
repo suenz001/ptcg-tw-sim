@@ -8,6 +8,7 @@
  *   - M3 多人連線時只需傳送動作序列
  */
 
+import { attackGateMatches, attackGateAllows } from './attack-gate';   // ⭐v6.595 出招前擲幣判定與兩步出招
 import { promoteWaitSeat } from './modal-slots';   // ⭐v6.539 雙方同時補位的順序（leaf，唯一判準）
 import { quickRhythmUsable, bigWingUsable, toolAttackUsableBy } from './usable-gates'; // ⭐v6.528 快節奏／大飛翅 gate 唯一判準（leaf）
 import { ancientKey, isPlayerLevelAttackOnCooldown } from './player-attack-cooldown';   // ⭐v6.435 leaf（玩家層級冷卻唯一判準）
@@ -368,6 +369,11 @@ function recordTurnAction(
     justPlayedIid = undefined;
   }
   // <<< v6369-illegal-play-not-recorded
+  // >>> v6595-gate-not-recorded
+  // ⭐v6.595（審查 P2-1）：兩步出招的第一步正面時只是「通過擲幣、停下來等玩家選擇」，招式還沒使出 ⇒ 不記「攻擊」，
+  //   等第二步真的出招才記一筆（不然對手的回合面板會出現兩筆同一招）。混亂反面那一步照記（招式宣告了、只是失敗）。
+  if (rec !== null && action.type === 'ATTACK' && action._gateOnly === true && after.attackGatePassed) rec = null;
+  // <<< v6595-gate-not-recorded
   // v5.055：先 push 主要 action record（如果有）
   let state = rec ? pushCurrentTurnAction(after, aIdx, rec) : after;
 
@@ -6329,62 +6335,7 @@ function handlePlaying(
       return addLog({ ...state, players, turnPhase: 'end' },
         `${atkNameForStatus} 正在麻痺，無法使用招式！`, aIdx);
     }
-    // 特殊狀態：混亂 — 擲硬幣，反面自身受 30 傷害且攻擊失敗
-    // v2.182：補上「自傷致 KO」流程 — 30 自傷可能讓寶可夢昏厥（HP ≤ 30 + 已有傷害指示物）
-    if (attacker.active.status === 'confused') {
-      // >>> v6520-retry-badge-confusion
-      // ⭐v6.520（官方 Q&A 深淵之瞳：重試徽章只能重擲「因招式」擲的硬幣，混亂的擲幣不是）：
-      //   重試徽章的重跑（_retryBadgeAlreadyAsked）一定是第一次混亂擲出正面、招式才有擲幣 ⇒ 沿用正面，不重擲、
-      //   也不從「保留結果」佇列拿值（原本：選重擲連混亂一起重擲；選保留時混亂先吃掉第 1 枚，招式的硬幣整排錯位）。
-      const _retryReplay = action._retryBadgeAlreadyAsked === true || action._preventKoOrder != null;   // ⭐v6.521 防昏厥順序重跑同理
-      const flipResult = _retryReplay
-        ? { state: addLog(state, '混亂：沿用剛才的擲硬幣結果（正面）〔重試徽章不重擲混亂的硬幣〕', aIdx), heads: 1 }
-        : flipCoinsWithLog(state, 1, '混亂', aIdx);
-      // <<< v6520-retry-badge-confusion
-      state = flipResult.state;
-      const coin = flipResult.heads === 1;
-      if (!coin) {
-        const selfDmg = (attacker.active.damage ?? 0) + (attacker.active.confusionSelfDamageCounters ?? 3) * 10; // v5.679 自傷指示物可被改寫(錯亂閃光=8)
-        const atkHP = getEffectiveHP(attacker.active, pool, state);
-        const atkCard = pool.get(attacker.active.cardId);
-        if (atkHP > 0 && selfDmg >= atkHP) {
-          // 混亂自傷致 KO → 對手取獎賞
-          const koDiscard: CardInstance[] = [
-            { ...attacker.active, damage: selfDmg },
-            ...attacker.active.energyAttached,
-            ...getAllAttachedTools(attacker.active),
-            ...(attacker.active.evolvedFromStack ?? []),
-          ];
-          const newAttacker: PlayerState = {
-            ...attacker,
-            discard: [...attacker.discard, ...koDiscard],
-            active: null,
-          };
-          players[aIdx] = newAttacker;
-          const koPrizes = atkCard ? prizesForKO(atkCard) : 1;
-          // v5.882：取獎收斂到中央 addPendingPrize(與一般 KO 一致):有正面朝上獎賞開逐張 picker 讓
-          //   取獎方選、私訊揭示取得的卡名(對手看張數)、取完獎賞勝負判定。原 direct-slice 繞過此三者。
-          let s = addLog({ ...state, players, turnPhase: 'end' as const },
-            `${atkNameForStatus} 陷入混亂，自身受到 30 傷害並昏厥！`, aIdx);
-          s = addPendingPrize(s, dIdx, koPrizes, pool);
-          if (s.phase === 'game-over') return s;  // addPendingPrize 內部已判「取完所有獎賞獲勝」
-          // >>> v6493-kiss-confusion
-          // ⭐v6.493 站長裁定 2：對手的戰鬥寶可夢自己把自己弄昏厥（混亂自傷）⇒ 對手擲奇跡之吻
-          s = miracleKissOnActiveFaint(s, aIdx, pool);
-          if (s.phase === 'game-over') return s;
-          // <<< v6493-kiss-confusion
-          if (newAttacker.bench.length === 0) {
-            return { ...s, phase: 'game-over', winner: dIdx, winReason: `${newAttacker.name} 沒有可上場的寶可夢` };
-          }
-          return s;  // active=null → UI 自動 popup SEND_NEW_ACTIVE(prize picker 未解時會被 gate 擋到取完)
-        }
-        // 沒 KO：扣 30 傷然後 turnPhase=end
-        players[aIdx] = { ...attacker, active: { ...attacker.active, damage: selfDmg } };
-        return addLog({ ...state, players, turnPhase: 'end' },
-          `${atkNameForStatus} 陷入混亂，自身受到 30 傷害，攻擊失敗！`, aIdx);
-      }
-      // 正面：繼續正常攻擊
-    }
+    // ⭐v6.595：【混亂】的擲硬幣搬到下方 v6595-attack-gate（官方順序：宣告檢查 → 招式失敗擲幣 → 混亂）。
 
     // 檢查是否因上回合效果而無法攻擊（個卡）
     if (attacker.active.cantAttackThisTurn) {
@@ -6401,24 +6352,6 @@ function handlePlaying(
     //     ——「無法使用招式」不該連回合都耗掉；同維度另兩張（力量抑制者／啟動限制）
     //     都只是拒絕並寫 log。三張統一成同一種行為。
 
-    // 潑沙 / 墨汁噴射類：下次使用招式時擲 N 次硬幣，只要有反面則招式失敗。
-    if (attacker.active.attackFailureFlipCountThisTurn && attacker.active.attackFailureFlipCountThisTurn > 0) {
-      const flipCount = attacker.active.attackFailureFlipCountThisTurn;
-      let s = state;
-      let hasTails = false;
-      for (let i = 1; i <= flipCount; i++) {
-        const heads = Math.random() < 0.5;
-        if (!heads) hasTails = true;
-        s = addLog(s, `干擾命中判定：第 ${i}/${flipCount} 次擲硬幣 — ${heads ? '正面' : '反面'}`, aIdx);
-      }
-      const nextActive = { ...attacker.active };
-      delete nextActive.attackFailureFlipCountThisTurn;
-      players[aIdx] = { ...attacker, active: nextActive };
-      if (hasTails) {
-        return addLog({ ...s, players, turnPhase: 'end' }, '干擾命中判定：出現反面，招式失敗！', aIdx);
-      }
-      state = addLog({ ...s, players }, '干擾命中判定：全部正面，招式繼續', aIdx);
-    }
 
     // v2.92：單招下回合禁用（例：超級勇氣）
     // 檢查當前招式名是否在 blockedAttackNamesThisTurn 中 → 禁用
@@ -6511,6 +6444,96 @@ function handlePlaying(
         '[凍結獠牙]能量 ≤ 2 的寶可夢無法使用招式（自動進入結束階段）', aIdx);
     }
     if (!canAffordAttack(attacker.active, attack.cost, pool, state, aIdx, attack.name)) return state;
+    // >>> v6595-attack-gate
+    // ⭐v6.595 出招前的擲硬幣判定（站長 2026-10-23 核對官方後裁定修正；判準見 $lib/game/attack-gate.ts）。
+    //   官方《進階玩家規則教學手冊》「使出招式的順序」：1 宣告（上面所有「能不能使用」的檢查；不能宣告就不擲任何硬幣）
+    //   → 2a「招式失敗」類硬幣（潑沙／墨汁噴射）→ 2b【混亂】→ 3 招式效果。Q&A L604 潑油、L1121 潑膠：先擲那個效果的硬幣，正面才擲混亂。
+    //   原本：混亂在所有宣告檢查之前、也在 2a 之前擲 ⇒ 不能宣告的招式也會擲混亂、反面吃 30；2a 會失敗的局面先吃混亂自傷。
+    //   兩步出招：第二步（attackGatePassed 對得上）不重擲；`_gateOnly` 正面就記下 attackGatePassed 停下來等玩家選擇。
+    const _gatePassedBefore = attackGateMatches(state, aIdx, action.attackIndex);
+    if (state.attackGatePassed) state = { ...state, attackGatePassed: null };
+    if (!_gatePassedBefore) {
+      // 潑沙 / 墨汁噴射類：下次使用招式時擲 N 次硬幣，只要有反面則招式失敗。
+      if (attacker.active.attackFailureFlipCountThisTurn && attacker.active.attackFailureFlipCountThisTurn > 0) {
+        const flipCount = attacker.active.attackFailureFlipCountThisTurn;
+        let s = state;
+        let hasTails = false;
+        for (let i = 1; i <= flipCount; i++) {
+          const heads = Math.random() < 0.5;
+          if (!heads) hasTails = true;
+          s = addLog(s, `干擾命中判定：第 ${i}/${flipCount} 次擲硬幣 — ${heads ? '正面' : '反面'}`, aIdx);
+        }
+        const nextActive = { ...attacker.active };
+        delete nextActive.attackFailureFlipCountThisTurn;
+        players[aIdx] = { ...attacker, active: nextActive };
+        if (hasTails) {
+          return addLog({ ...s, players, turnPhase: 'end' }, '干擾命中判定：出現反面，招式失敗！', aIdx);
+        }
+        state = addLog({ ...s, players }, '干擾命中判定：全部正面，招式繼續', aIdx);
+      }
+      // 特殊狀態：混亂 — 擲硬幣，反面自身受 30 傷害且攻擊失敗
+      // v2.182：補上「自傷致 KO」流程 — 30 自傷可能讓寶可夢昏厥（HP ≤ 30 + 已有傷害指示物）
+      if (attacker.active.status === 'confused') {
+        // >>> v6520-retry-badge-confusion
+        // ⭐v6.520（官方 Q&A 深淵之瞳：重試徽章只能重擲「因招式」擲的硬幣，混亂的擲幣不是）：
+        //   重試徽章的重跑（_retryBadgeAlreadyAsked）一定是第一次混亂擲出正面、招式才有擲幣 ⇒ 沿用正面，不重擲、
+        //   也不從「保留結果」佇列拿值（原本：選重擲連混亂一起重擲；選保留時混亂先吃掉第 1 枚，招式的硬幣整排錯位）。
+        const _retryReplay = action._retryBadgeAlreadyAsked === true || action._preventKoOrder != null;   // ⭐v6.521 防昏厥順序重跑同理
+        const flipResult = _retryReplay
+          ? { state: addLog(state, '混亂：沿用剛才的擲硬幣結果（正面）〔重試徽章不重擲混亂的硬幣〕', aIdx), heads: 1 }
+          : flipCoinsWithLog(state, 1, '混亂', aIdx);
+        // <<< v6520-retry-badge-confusion
+        state = flipResult.state;
+        const coin = flipResult.heads === 1;
+        if (!coin) {
+          const selfDmg = (attacker.active.damage ?? 0) + (attacker.active.confusionSelfDamageCounters ?? 3) * 10; // v5.679 自傷指示物可被改寫(錯亂閃光=8)
+          const atkHP = getEffectiveHP(attacker.active, pool, state);
+          const atkCard = pool.get(attacker.active.cardId);
+          if (atkHP > 0 && selfDmg >= atkHP) {
+            // 混亂自傷致 KO → 對手取獎賞
+            const koDiscard: CardInstance[] = [
+              { ...attacker.active, damage: selfDmg },
+              ...attacker.active.energyAttached,
+              ...getAllAttachedTools(attacker.active),
+              ...(attacker.active.evolvedFromStack ?? []),
+            ];
+            const newAttacker: PlayerState = {
+              ...attacker,
+              discard: [...attacker.discard, ...koDiscard],
+              active: null,
+            };
+            players[aIdx] = newAttacker;
+            const koPrizes = atkCard ? prizesForKO(atkCard) : 1;
+            // v5.882：取獎收斂到中央 addPendingPrize(與一般 KO 一致):有正面朝上獎賞開逐張 picker 讓
+            //   取獎方選、私訊揭示取得的卡名(對手看張數)、取完獎賞勝負判定。原 direct-slice 繞過此三者。
+            let s = addLog({ ...state, players, turnPhase: 'end' as const },
+              `${atkNameForStatus} 陷入混亂，自身受到 30 傷害並昏厥！`, aIdx);
+            s = addPendingPrize(s, dIdx, koPrizes, pool);
+            if (s.phase === 'game-over') return s;  // addPendingPrize 內部已判「取完所有獎賞獲勝」
+            // >>> v6493-kiss-confusion
+            // ⭐v6.493 站長裁定 2：對手的戰鬥寶可夢自己把自己弄昏厥（混亂自傷）⇒ 對手擲奇跡之吻
+            s = miracleKissOnActiveFaint(s, aIdx, pool);
+            if (s.phase === 'game-over') return s;
+            // <<< v6493-kiss-confusion
+            if (newAttacker.bench.length === 0) {
+              return { ...s, phase: 'game-over', winner: dIdx, winReason: `${newAttacker.name} 沒有可上場的寶可夢` };
+            }
+            return s;  // active=null → UI 自動 popup SEND_NEW_ACTIVE(prize picker 未解時會被 gate 擋到取完)
+          }
+          // 沒 KO：扣 30 傷然後 turnPhase=end
+          // ⭐v6.595 以目前的 players[aIdx] 為底（上面 2a 已清掉「招式失敗」旗標；用 attacker 會把它寫回去）
+          players[aIdx] = { ...players[aIdx], active: { ...(players[aIdx].active ?? attacker.active), damage: selfDmg } };
+          return addLog({ ...state, players, turnPhase: 'end' },
+            `${atkNameForStatus} 陷入混亂，自身受到 30 傷害，攻擊失敗！`, aIdx);
+        }
+        // 正面：繼續正常攻擊
+      }
+    }
+    if (action._gateOnly) {
+      return addLog({ ...state, attackGatePassed: { idx: aIdx as 0 | 1, attackIndex: action.attackIndex, turn: state.turn, at: (state.log ?? []).length } },
+        `${atkNameForStatus}：出招前的擲硬幣判定通過，請選擇「${attack.name}」的內容`, aIdx);
+    }
+    // <<< v6595-attack-gate
 
     // v4.898 重試徽章：snapshot pre-ATTACK 狀態（用於玩家選「重擲」時 revert）
     // 並 clear coinFlippedThisAttack flag（flipCoinsWithLog 若被呼叫會設回 true）
@@ -10351,6 +10374,10 @@ export function applyAction(
   action: GameAction,
   pool: Map<string, Card>
 ): GameState {
+  // >>> v6595-attack-gate-lock
+  // ⭐v6.595 已通過出招前的擲幣、正在等玩家選擇 ⇒ 宣告了就要出招：只接受同一招的 ATTACK（其他動作原樣不動）
+  if (!attackGateAllows(state, action)) return state;
+  // <<< v6595-attack-gate-lock
   let raw = applyActionImpl(state, action, pool);
   // ⭐⭐⭐ v6.181 單一「拒絕出口」——「動作被拒絕」與「動作做了一半」從此不可能混淆。
   //   效果層只要回 `rejectAbilityUse(st, 原因, idx)`，這裡就**原樣回傳動作前的 state**，

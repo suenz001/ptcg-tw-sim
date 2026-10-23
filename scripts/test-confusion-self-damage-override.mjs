@@ -22,6 +22,9 @@ const pool = new Map();
 for (const f of readdirSync(dir)) { if (!f.endsWith('.json') || f === 'index.json' || !live.has(f.slice(0, -5))) continue; for (const c of JSON.parse(readFileSync(join(dir, f), 'utf8'))) if (c?.id != null) pool.set(String(c.id), c); }
 
 const LANTURN = '10926' /*電燈怪 錯亂閃光*/, DEF = '14705';
+// ⭐v6.595（Rule 40）：官方「使出招式的順序」⇒ 不能宣告的招式（能量不足）不擲混亂。原盤面沒附能量，以前是靠「先擲混亂、後檢查能量」
+//   才測得到自傷；本守衛的意圖（錯亂閃光的自傷指示物數）不變 ⇒ 附上錯亂閃光需要的 2 個能量（【無】×2）。
+const WATER_E = [...pool.values()].find((c) => c.supertype === 'Energy' && c.name === '基本【水】能量').id;
 let nn = 0;
 const inst = (cid, x = {}) => ({ iid: 'i' + (++nn), cardId: String(cid), damage: 0, energyAttached: [], ...x });
 const hasConf = (c) => c.status === 'confused' || c.secondaryStatus === 'confused' || c.tertiaryStatus === 'confused';
@@ -47,7 +50,7 @@ function runConfusedSelfHit(counters) {
   const st = { ...s, phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 1, isFirstTurn: false,
     setupDone: [true, true], pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0], pendingSelection: null,
     players: [
-      { ...s.players[0], active: inst(LANTURN, { status: 'confused', damage: 0, ...extra }), bench: [inst(DEF)], deck: [inst(DEF)], discard: [], prizes: Array.from({ length: 6 }, () => inst(DEF)) },
+      { ...s.players[0], active: inst(LANTURN, { status: 'confused', damage: 0, energyAttached: [inst(WATER_E), inst(WATER_E)], ...extra }), bench: [inst(DEF)], deck: [inst(DEF)], discard: [], prizes: Array.from({ length: 6 }, () => inst(DEF)) },
       { ...s.players[1], active: inst(DEF), bench: [], deck: [inst(DEF)], discard: [], prizes: Array.from({ length: 6 }, () => inst(DEF)) }] };
   const orig = Math.random; Math.random = () => 0.99; // 反面（tails）→ 混亂自傷
   try { return applyAction(st, { type: 'ATTACK', attackIndex: 0 }, pool); } finally { Math.random = orig; }

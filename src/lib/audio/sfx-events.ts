@@ -22,6 +22,7 @@
  * 只有「玩家操作的手勢感」（點擊、放卡、撤退…）才依賴 action。
  */
 import type { GameState, CardInstance, SpecialCondition } from '$lib/game/types';
+import { liveAttackGate } from '$lib/game/attack-gate';   // ⭐v6.595 停在「已通過擲幣」的判準（唯一一份）
 import type { Card } from '$lib/cards/types';
 import type { EnergyType } from '$lib/cards/types';
 import type { SfxName } from './sfx';
@@ -218,7 +219,8 @@ export function computeSfxEvents(
   }
 
   // ── B. 攻擊音：實際造成傷害才用「打擊」音，純效果招式另有一個音 ──────────
-  if (action?.type === 'ATTACK') {
+  //   ⭐v6.595（審查 P3-3）：兩步出招第一步停在「已通過擲幣、等玩家選擇」⇒ 招式還沒使出，不播攻擊音（第二步才播）
+  if (action?.type === 'ATTACK' && !liveAttackGate(next)) {
     const attacker = prev.players[actorIdx].active;
     const atkCard = attacker ? pool.get(attacker.cardId) : undefined;
     const etype: EnergyType = (atkCard?.pokemonType as EnergyType) ?? 'Colorless';

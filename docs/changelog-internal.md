@@ -1,5 +1,29 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.595 — 出招前擲幣照官方順序（兩步出招）＋錦標賽結束當下下載復盤檔
+
+BASE `63787814`（v6.594）。站長 2026-10-23 回報超級甲賀忍蛙ex（新衝天能量）混亂時使出忍者飛旋「能量先回手才判斷混亂」。引擎實測：字面情境（能量先回手）重現不出來——放回能量的選擇在 RESOLVE 之前是對戰頁先問的，引擎在 ATTACK 一開頭就擲混亂；但查官方《進階玩家規則教學手冊》「使出招式的順序」（1 宣告 → 2a 招式失敗類硬幣 → 2b 混亂 → 3 招式效果；Q&A L604 潑油、L1121 潑膠）後找到三個順序錯誤，站長裁定「依你的建議 A＋B＋C 一起做成 v6.595」；另加玩家建議 D。
+
+- A：2a（attackFailureFlipCountThisTurn：潑沙、墨汁噴射）原本在混亂之後擲 ⇒ 改成先擲 2a、全正面才擲混亂。
+- B：混亂原本在所有「能不能使用」檢查之前擲 ⇒ 不能宣告的招式（能量不足、被封鎖等）也會擲混亂、反面吃 30。改到 canAffordAttack 之後（哨兵 v6595-attack-gate）。
+- C：「若希望…」放回能量／借招選擇原本在擲混亂之前就問玩家 ⇒ 兩步出招：需要選擇且需要擲幣時，對戰頁先送 `ATTACK{_gateOnly:true}`，引擎做 1→2a→2b，反面照常失敗，正面記下 `attackGatePassed{idx,attackIndex,turn}` 停下；對戰頁再開選擇視窗（`gateReopenTarget`，重新整理後接回），選完送一般 ATTACK，引擎看到對得上就不重擲。宣告了就要出招：attackGatePassed 還在時引擎入口只接受同一招的一般 ATTACK（`attackGateAllows`），6 個選擇視窗的取消鈕停用。錦標賽逾時收尾（timeout-action）停在這一步時用預設選擇把同一招打完、不是結束回合。不需要擲幣或不需要選擇 ⇒ 流程完全不變；AI 一次送出（結果相同）。判準唯一一份：`src/lib/game/attack-gate.ts`（Rule 38）。
+- D：錦標賽對戰結束的兩個結束視窗加「下載復盤檔」：抓 /replay＋逐動作格（沿用 withTournPerActionSteps），`tournReplayToData` 轉成與一般對戰相同的 ReplayData（kind tournament、revealed true——錦標賽回放本來就公開；viewerSeat＝下載者座位），走同一個下載出口。
+- 順帶：2a 執行後混亂自傷非 KO 分支以 players[aIdx] 為底寫回（原本用 attacker 會把剛清掉的招式失敗旗標寫回去）。
+- Rule 40：test-v6293／test-v6441 還原鏈串上 revert-v6595-game（difflib 產生、逐位元還原到 BASE）；test-confusion-selfko-prize-central、test-confusion-self-damage-override 的盤面補足能量（現在要先通過宣告檢查才擲混亂，意圖不變）；test-v6452 取消鈕允許 `disabled={attackGateLocked}` 與鎖住那一行；test-v6561 C6 允許同一行多 import。
+- 守衛 test-v6595-attack-gate-and-tourn-replay（24 項：U 判準、A 順序、B 不能宣告不擲、C 兩步出招與鎖、T 逾時、R 復盤轉換、S 接線、HEAD-FAIL 在 BASE 上 17 項逐條紅＋C2/C3 正對照）。突變 13 個全殺（混亂不需擲幣、閘不比回合、閘鎖放行、允許重送第一步、第二步重擲、第一步不停下、引擎不套鎖、逾時不補出招、UI 永遠一步、重開不看 tag、回放不揭示、視角寫死、2a 後寫回舊旗標）。harness＋35 支免疫網修改前後皆綠。
+- 部署：引擎與 timeout-action 在錦標賽伺服器 bundle 裡 ⇒ 站長先跑 update-tournament.bat，再 redeploy-oracle.bat。
+- Opus 5.5 獨立審查（第一輪）：無 P1。修正：
+  - P2-1 第一步停下來時 recordTurnAction 也記了一筆「攻擊」⇒ 對手回合面板同一招兩筆。引擎在 `_gateOnly` 且結果帶 attackGatePassed 時不記（哨兵 v6595-gate-not-recorded）；混亂反面照記。守衛 C4／C5。
+  - P2-2 接回 $effect 先記 tag 才開視窗 ⇒ 卡池還沒載到那張卡時（換裝置／重新整理，pool 非同步補）開不成也不再試。改成：出招的卡不在 pool 先不試（pool 是 $state，補完自動重跑）、真的開了視窗或送出動作才記 tag；同一 tag＋同一份 pool 只試一次（防重跑迴圈）。attackGatePassed 多記 `at`（通過時的 log 長度）放進 tag ⇒ 祭典樂舞同回合同招第二次通過也會接回。守衛 C6、U3、S6。
+  - P3-1 attackGateAllows／attackGatePendingFor／attackGateMatches 一律走 `liveAttackGate`（必須是這一回合、輪到出招方記的）⇒ 過期紀錄（例如休閒對戰有一端是舊版 client）不鎖任何人、下一回合不硬開視窗。守衛 U5。
+  - P3-3 第一步停下來時不播攻擊音（sfx-events）。守衛 C4。
+  - P3-7 錦標賽復盤檔拿去牌組公布欄附加時的錯誤訊息改成正確說明（replay-share.ts）。
+  - 另：錦標賽 /replay 的網路呼叫收斂成一個 fetchTournReplay（回放與結束時下載共用），test-v6340 C11／test-v6280 F7 的呼叫點數量不變（不改守衛）。守衛 S7。
+  - 未改、待站長裁定：P3-4 vs AI 悔棋在兩步出招後只會回到「選擇視窗、不能取消」（ATTACK 在悔棋清單裡，第二步蓋掉快照）；P3-2 鎖住時其他按鈕沒有提示；P3-5 部署順序（先 update-tournament 再 redeploy-oracle，反過來時新 client 配舊伺服器整招不讓玩家選就打完）。
+- Opus 5.5 複審（第二輪）：P2-1、P3-1、祭典樂舞 tag 確認解決；$effect 不會無限重跑、`_gateTried` 用一般變數正確。新發現 P2-A：只等「出招那張卡」載入不夠——借對手招式的候選從對手場上的卡找，對手的卡還沒補進卡池時會 0 個候選而直接出招。改成等雙方場上（戰鬥＋備戰）的卡都在卡池才試（守衛 S6、突變 M20b）。P3：sfx 改用中央 liveAttackGate（突變 M19b）。卡池永遠缺卡時沒有出口（整個盤面本來就壞了；錦標賽有逾時收尾、休閒可投降），維持。
+- Rule 40（全套抓到）：test-v6587／test-v6590／test-v6592-player-clock-wiring 的對戰頁還原鏈前面串上 revertV6595Game（還原表重新以 difflib 產生、逐位元驗證）；test-v6272 允許清單加 sfx-events.ts、replay-share.ts。
+- 突變 23 個全殺（原 13 個＋過期紀錄不看回合／不看座位、第一步也記攻擊、tag 不含 at、引擎不記 at、音效不判停下、接回不等卡池、只等出招那張、先記 tag 再開、下載另開 fetch）。新守衛 30 項，HEAD-FAIL 在 BASE 上 22 項逐條紅＋C2／C3／C5 正對照。
+
 ## v6.594 — 牌組公布欄明細：縮圖／文字牌表與大圖檢視（計畫第一期）
 
 BASE `b23f5147`（v6.593）。站長 2026-10-23 核准 E:\ptcg-tw-sim-local\deck-posts-ui-plan\plan.md 第一期（Astra 6.0 規劃）；第二期（外層列表卡圖封面，要改伺服器）等站長看過正式站效果再決定。

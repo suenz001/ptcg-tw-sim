@@ -1097,6 +1097,11 @@ export interface GameState {
    *   通常在同一個動作的出口就刪掉；只有效果還開著選擇視窗時才暫留到解完那個動作。
    */
   daydreamEndTurnPending?: 0 | 1;
+  /**
+   * ⭐v6.595 兩步出招：已通過出招前的擲硬幣判定（招式失敗／混亂，正面），正在等玩家做「若希望／借哪一招」的選擇。
+   *   引擎只接受同一招的 ATTACK（見 $lib/game/attack-gate.ts）；那一次 ATTACK 不重擲、用完就清掉。
+   */
+  attackGatePassed?: { idx: 0 | 1; attackIndex: number; turn: number; at?: number } | null;   // at＝通過時的 log 長度（只用來區分同回合同招的兩次通過）
   /** 目前場上的競技場牌（Stadium） */
   activeStadium?: CardInstance;
   /**
@@ -1617,6 +1622,11 @@ export type GameAction =
        * 防守方在選擇視窗選完後，引擎帶著這個欄位與剛才的擲幣結果重跑同一招：'ability'＝先特性、'tool'＝先道具。
        */
       _preventKoOrder?: 'ability' | 'tool';
+      /**
+       * ⭐v6.595 兩步出招的第一步：只做「宣告檢查 → 招式失敗擲幣 → 混亂擲幣」，正面就記下 attackGatePassed 停下來
+       * （對戰頁接著開選擇視窗），反面照常失敗。見 $lib/game/attack-gate.ts。
+       */
+      _gateOnly?: boolean;
     }
   | { type: 'TAKE_PRIZES'; count: number; playerIdx: 0 | 1; senderIdx?: 0 | 1 }
   | { type: 'SEND_NEW_ACTIVE'; iid: string; senderIdx?: 0 | 1 }

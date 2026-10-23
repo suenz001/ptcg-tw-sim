@@ -4,6 +4,7 @@ import type { Seat } from './modal-slots';
 import { actionResponsibility } from './action-responsibility';
 import { getAIAction } from './ai';
 import { damageDistributeCandidates } from './selection-candidates';
+import { attackGatePendingFor } from './attack-gate';
 
 /**
  * 超時收尾入口：每次只產生一個必要動作，由伺服器經版本 CAS 套用後再重新判斷。
@@ -34,5 +35,9 @@ export function timeoutAction(g: GameState, pool: Map<string, Card>, seat: Seat)
     const action = getAIAction(g, pool, seat);
     return action?.type === 'SEND_NEW_ACTIVE' ? { ...action, senderIdx: seat } : null;
   }
+  // ⭐v6.595 已通過出招前的擲幣、正在等選擇（宣告了就要出招，引擎此時不接受 END_TURN）⇒ 用預設選擇把那一招打完
+  //   （不帶選擇內容 ＝ 引擎各招的既定預設：「若希望」型不付、借招自動挑）
+  const gatedAttack = attackGatePendingFor(g, seat);
+  if (gatedAttack != null) return { type: 'ATTACK', attackIndex: gatedAttack };
   return g.activePlayerIndex === seat ? { type: 'END_TURN' } : null;
 }

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // v6.587：真實 Svelte 排名欄位與實際 CSS 的字色、對比與不變性。
 import { revertV6592Game } from './lib/revert-v6592-game.mjs';
+import { revertV6595Game } from './lib/revert-v6595-game.mjs';   // ⭐v6.595（Rule 40）：對戰頁先還原 v6.595 的出招前擲幣與錦標賽復盤下載
 import { readFileSync } from 'node:fs';
 import { dirname,join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,7 +30,7 @@ if(hasBaseCommit(ROOT,BASE)){
   const block=/\/\* >>> v6477-lobby-light \*\/[\s\S]*?\/\* <<< v6477-lobby-light \*\//g;
   const old=base.match(block),current=source.match(block);
   if(old?.length!==1||current?.length!==1)throw new Error('淺色哨兵必須唯一');
-  const revertForRule40=(input,pre=(x,p)=>revertMobileUiV6590(revertV6592Game(x),p))=>{
+  const revertForRule40=(input,pre=(x,p)=>revertMobileUiV6590(revertV6592Game(revertV6595Game(x)),p))=>{
   let restored=pre(input,PAGE).replace(current[0],old[0]);
   let unique=true;
   for(const [now,prev]of V6587_GAME_PAIRS){
