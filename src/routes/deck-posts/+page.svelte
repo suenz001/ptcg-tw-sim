@@ -21,7 +21,7 @@
   // >>> v6594-deck-post-thumbs
   import { cardThumb } from '$lib/cards/thumb';   // ⭐v6.594 明細縮圖（全站單一來源；後台切官方原圖時照政策走原圖）
   import { retryImg } from '$lib/img-retry';     // ⭐v6.594 縮圖失敗立刻改官方原圖；最後還是失敗 ⇒ 全站共用的「暗框＋卡名」外觀（不換卡背）
-  import { buildDetailGroups, zoomableItems, stepZoomKey, loadDetailView, saveDetailView, type DetailView } from '$lib/deck-posts/detail-view';
+  import { buildDetailGroups, zoomableItems, stepZoomKey, loadDetailView, saveDetailView, type DetailView, type DetailItem } from '$lib/deck-posts/detail-view';
   // <<< v6594-deck-post-thumbs
   import { migrateDeck, migrateCardId } from '$lib/decks/cardIdMigration';
   import { newDeck, upsertDeck, loadDecks } from '$lib/decks/storage';
@@ -480,7 +480,8 @@
   }
 
   /** ⭐v6.594 依類型分組的牌表（縮圖與文字模式共用同一份；分組／順序判準在 $lib/deck-posts/detail-view.ts）。
-   *  順序：寶可夢 → 物品 → 支援者 → 競技場 → 能量，同類依卡名（與牌組編輯器共用 $lib/decks/deck-order.ts，站長 2026-10-23）。 */
+   *  順序：寶可夢 → 物品 → 寶可夢道具 → 支援者 → 競技場 → 能量，同類依卡名（與牌組編輯器共用 $lib/decks/deck-order.ts；站長 2026-10-23，寶可夢道具 2026-10-24 分出來）。
+   *  ⭐v6.597 訓練家底下另有小類別（g.subs）。 */
   const detailRows = $derived.by(() => {
     const p = openPost;
     if (!p) return [];
@@ -1144,47 +1145,59 @@
           <button type="button" class:active={detailView === 'thumb'} aria-pressed={detailView === 'thumb'} onclick={() => setDetailView('thumb')}>🖼 縮圖</button>
           <button type="button" class:active={detailView === 'text'} aria-pressed={detailView === 'text'} onclick={() => setDetailView('text')}>☰ 文字</button>
         </div>
+        <!-- ⭐v6.597 一張卡片清單（縮圖或文字）—— 大類別與訓練家的小類別共用同一份標記 -->
+        {#snippet cardList(items: DetailItem[])}
+          {#if detailView === 'thumb'}
+            <ul class="dpv-grid">
+              {#each items as it (it.key)}
+                <li>
+                  {#if it.imageUrl}
+                    <button type="button" class="dpv-tile" onclick={() => openZoom(it.key)} aria-label={`${it.name}${it.sub ? '（' + it.sub + '）' : ''} ${it.count} 張，看大圖`}>
+                      <span class="dpv-img">
+                        <img src={cardThumb(it.imageUrl)} use:retryImg={it.imageUrl} alt={it.name} loading="lazy" decoding="async" width="245" height="342" />
+                        <span class="dpv-cnt">×{it.count}</span>
+                      </span>
+                      <span class="dpv-nm">{it.name}</span>
+                      {#if it.sub}<span class="dpv-sub">{it.sub}</span>{/if}
+                    </button>
+                  {:else}
+                    <div class="dpv-tile dpv-noimg-tile">
+                      <span class="dpv-img dpv-noimg"><span class="dpv-noimg-txt">沒有卡圖</span><span class="dpv-cnt">×{it.count}</span></span>
+                      <span class="dpv-nm">{it.name}</span>
+                      {#if it.sub}<span class="dpv-sub">{it.sub}</span>{/if}
+                    </div>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          {:else}
+            <ul>
+              {#each items as it (it.key)}
+                <li>
+                  <span class="cnt">{it.count}</span>
+                  {#if it.imageUrl}
+                    <button type="button" class="nm nm-link" onclick={() => openZoom(it.key)} aria-label={`${it.name} ${it.count} 張，看大圖`}>{it.name}</button>
+                  {:else}
+                    <span class="nm">{it.name}</span>
+                  {/if}
+                  {#if it.sub}<span class="sub">{it.sub}</span>{/if}
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        {/snippet}
         <div class="deck-table" class:thumbs={detailView === 'thumb'}>
           {#each detailRows as g (g.group)}
             <section>
               <h3><span>{g.group}</span><span class="gtotal">{g.total} 張</span></h3>
-              {#if detailView === 'thumb'}
-                <ul class="dpv-grid">
-                  {#each g.items as it (it.key)}
-                    <li>
-                      {#if it.imageUrl}
-                        <button type="button" class="dpv-tile" onclick={() => openZoom(it.key)} aria-label={`${it.name}${it.sub ? '（' + it.sub + '）' : ''} ${it.count} 張，看大圖`}>
-                          <span class="dpv-img">
-                            <img src={cardThumb(it.imageUrl)} use:retryImg={it.imageUrl} alt={it.name} loading="lazy" decoding="async" width="245" height="342" />
-                            <span class="dpv-cnt">×{it.count}</span>
-                          </span>
-                          <span class="dpv-nm">{it.name}</span>
-                          {#if it.sub}<span class="dpv-sub">{it.sub}</span>{/if}
-                        </button>
-                      {:else}
-                        <div class="dpv-tile dpv-noimg-tile">
-                          <span class="dpv-img dpv-noimg"><span class="dpv-noimg-txt">沒有卡圖</span><span class="dpv-cnt">×{it.count}</span></span>
-                          <span class="dpv-nm">{it.name}</span>
-                          {#if it.sub}<span class="dpv-sub">{it.sub}</span>{/if}
-                        </div>
-                      {/if}
-                    </li>
-                  {/each}
-                </ul>
+              {#if g.subs && g.subs.length}
+                <!-- ⭐v6.597 站長裁定：訓練家底下分小標題（物品／寶可夢道具／支援者／競技場，各自張數） -->
+                {#each g.subs as sb (sb.name)}
+                  <h4 class="dpv-subh"><span>{sb.name}</span><span class="gtotal">{sb.total} 張</span></h4>
+                  {@render cardList(sb.items)}
+                {/each}
               {:else}
-                <ul>
-                  {#each g.items as it (it.key)}
-                    <li>
-                      <span class="cnt">{it.count}</span>
-                      {#if it.imageUrl}
-                        <button type="button" class="nm nm-link" onclick={() => openZoom(it.key)} aria-label={`${it.name} ${it.count} 張，看大圖`}>{it.name}</button>
-                      {:else}
-                        <span class="nm">{it.name}</span>
-                      {/if}
-                      {#if it.sub}<span class="sub">{it.sub}</span>{/if}
-                    </li>
-                  {/each}
-                </ul>
+                {@render cardList(g.items)}
               {/if}
             </section>
           {/each}
@@ -1737,6 +1750,10 @@
   .dpv-bar button.active { background: var(--ui-chip-active-bg, #236447); color: var(--ui-chip-active-text, #fff); font-weight: 600; }
   .deck-table section h3 { display: flex; align-items: baseline; gap: 8px; }
   .gtotal { font-weight: 400; font-size: .78rem; opacity: .85; font-variant-numeric: tabular-nums; }
+  /* >>> v6597-deck-post-subheads：訓練家的小類別標題（物品／寶可夢道具／支援者／競技場）——比大類別小一級、左邊一條細線，顏色讀主題變數（深淺色自動） */
+  .deck-table section h4.dpv-subh { display: flex; align-items: baseline; gap: 8px; margin: 8px 0 4px; padding-left: 7px; border-left: 3px solid var(--ui-border, rgba(127,127,127,.45)); font-size: .8rem; font-weight: 600; opacity: .85; }
+  .deck-table section h4.dpv-subh:first-of-type { margin-top: 2px; }
+  /* <<< v6597-deck-post-subheads */
   .deck-table .dpv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(max(96px, calc((100% - 40px) / 6)), 1fr)); gap: 10px 8px; }   /* 一列最多 6 張（minmax 下限至少是 1/6 寬）、最少 96px */
   .deck-table .dpv-grid > li { display: block; padding: 0; min-width: 0; }
   .dpv-tile { display: flex; flex-direction: column; align-items: stretch; gap: 3px; width: 100%; min-height: 44px; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 8px; }

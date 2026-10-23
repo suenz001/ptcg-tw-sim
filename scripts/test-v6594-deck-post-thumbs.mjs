@@ -105,7 +105,8 @@ async function unitChecks(M) {
     && ranks.every((v, i) => i === 0 || ranks[i - 1] <= v)
     && G.every((g) => g.total === g.items.reduce((n, x) => n + x.count, 0))
     && G.reduce((n, g) => n + g.total, 0) === ENTRIES.reduce((n, e) => n + e.count, 0)
-    && flat.filter((x) => x.g === '訓練家').map((x) => rankOf(x.cardId)).join('') === '11223';
+    // ⭐v6.597（Rule 40）：站長裁定寶可夢道具從物品分出來（物品 1 → 寶可夢道具 2 → 支援者 3 → 競技場 4 → 能量 5）⇒ 序號跟著換；這副測試牌組沒有寶可夢道具，意圖（物品 2、支援者 2、競技場 1 依序）不變
+    && flat.filter((x) => x.g === '訓練家').map((x) => rankOf(x.cardId)).join('') === (typeof M.DECK_RANK === 'object' ? '11334' : '11223');
   r.U1n = JSON.stringify({ groups: G.map((g) => [g.group, g.total, g.items.length]), ranks });
   // U2 精確卡號：一個條目一格（不依張數展開、不合併）、圖片就是那張印刷；舊卡號用對照後的卡
   const mig = flat.find((x) => x.cardId === MIG_FROM);
@@ -152,7 +153,12 @@ async function unitChecks(M) {
     let seed = 7; const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
     for (let k = 0; k < 5 && same; k++) {
       const shuffled = cards.map((c) => ({ c, r: rnd() })).sort((a, b) => a.r - b.r).map((x) => ({ entry: { cardId: String(x.c.id), count: 1 }, card: x.c }));
-      const A = baseSort(shuffled.slice()).map((x) => x.entry.cardId).join();
+      // ⭐v6.597（Rule 40）：站長裁定寶可夢道具從物品分出來、排在物品後面，牌組編輯器一起改 ⇒ 期望值＝BASE 的順序再把寶可夢道具整段移到物品之後
+      //   （對 BASE 結果依新序號做穩定排序：同類別內仍是 BASE 的卡名順序）。意圖（兩頁同一份、其他順序與 BASE 逐張相同）不變。
+      const baseOut = baseSort(shuffled.slice());
+      //   ⚠（v6.597 審查 P3-1）重排用守衛自己寫的固定類別表（依 supertype／subtype 字串），不用被測的 M.deckCardRank ⇒ 不自我參照
+      const fixedRank = (c) => (c.supertype === 'Pokemon' ? 0 : c.supertype !== 'Trainer' ? 5 : c.subtype === 'PokemonTool' ? 2 : c.subtype === 'Supporter' ? 3 : c.subtype === 'Stadium' ? 4 : 1);
+      const A = (typeof M.DECK_RANK === 'object' ? baseOut.slice().sort((a, b) => fixedRank(a.card) - fixedRank(b.card)) : baseOut).map((x) => x.entry.cardId).join();
       const B = shuffled.slice().sort((a, b) => M.compareDeckCards(a.card, b.card)).map((x) => x.entry.cardId).join();
       same = A === B;
     }
@@ -172,7 +178,9 @@ function staticChecks(DP, DECKS) {
   // S2 明細：每一張 <img> 都在本版區塊內；縮圖走 cardThumb＋retryImg＋lazy＋預留尺寸；大圖走 retryImg；文字模式不渲染 <img>
   const imgs = dp.match(/<img\b[^>]*>/g) || [];
   const thumbImg = (markup.match(/<img\b[^>]*>/g) || []);
-  const textBranch = markup.slice(markup.indexOf('{:else}\n                <ul>'));
+  // ⭐v6.597（Rule 40）：清單標記搬進 {#snippet cardList}（大類別與訓練家小類別共用）⇒ 縮排改了，錨點不看縮排
+  const _tb = markup.search(/\{:else\}\n\s*<ul>/);
+  const textBranch = _tb >= 0 ? markup.slice(_tb) : '';
   r.S2 = imgs.length === 2 && thumbImg.length === 1 && /src=\{cardThumb\(it\.imageUrl\)\}/.test(thumbImg[0]) && /use:retryImg=\{it\.imageUrl\}/.test(thumbImg[0])
     && /loading="lazy"/.test(thumbImg[0]) && /width="245" height="342"/.test(thumbImg[0])
     && (zoomMk.match(/<img\b[^>]*>/g) || []).length === 1 && /use:retryImg=\{\{ url: zoomItem\.imageUrl/.test(zoomMk)

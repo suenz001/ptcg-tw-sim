@@ -1781,7 +1781,7 @@
       const card = poolById.get(entry.cardId);
       if (card) result.push({ entry, card });
     }
-    // v5.363：細分類排序 寶可夢 → 物品 → 支援者 → 競技場 → 能量（與棄牌區 / 牌庫 picker 同一套順序），
+    // v5.363：細分類排序 寶可夢 → 物品 → 支援者 → 競技場 → 能量（當時與棄牌區 / 牌庫 picker 同一套順序；⭐v6.597 起寶可夢道具分出來排在物品後面，對戰頁的 picker 沒有跟著改），
     //   同類內依卡名。原本訓練家全歸一類(物品/支援者/競技場混在一起)，現在分開方便檢視。
     // ⭐v6.594：判準搬到 $lib/decks/deck-order.ts（牌組公布欄明細共用同一份，站長選「共用一份」），行為不變。
     result.sort((a, b) => compareDeckCards(a.card, b.card));

@@ -2,13 +2,15 @@
 //
 // 這支只放「純邏輯」（分組、排序、前後卡、顯示方式的記憶），畫面在 src/routes/deck-posts/+page.svelte。
 //   ・一個牌組條目＝一格（精確卡號，同名不同印刷不合併；不依張數展開成 60 張）。
-//   ・順序：寶可夢 → 物品 → 支援者 → 競技場 → 能量，同類依卡名 —— 判準只有一份（$lib/decks/deck-order.ts，
+//   ・順序：寶可夢 → 物品 → 寶可夢道具 → 支援者 → 競技場 → 能量，同類依卡名 —— 判準只有一份（$lib/decks/deck-order.ts，
 //     與牌組編輯器、匯出圖片相同）。分組標題沿用寶可夢／訓練家／能量／未知卡片，並顯示每組總張數。
+//   ・⭐v6.597 站長裁定：訓練家底下再分小標題「物品／寶可夢道具／支援者／競技場」（各自張數；沒有的類別不顯示）。
+//     items 仍是整組攤平的順序（大圖前後卡照這個順序走），subs 只是同一批卡依類別切開來顯示。
 //   ・查不到的卡（已輪替、尚未收錄）放最後「未知卡片」，維持原本條目順序；沒有圖片網址 ⇒ 不能開大圖。
 //   ・大圖的上一張／下一張只在「這副牌、目前顯示順序、有圖片」的卡之間移動（不跳到同名的其他版本）。
 
 import type { Card } from '$lib/cards/types';
-import { compareDeckCards, deckCardRank } from '$lib/decks/deck-order';
+import { compareDeckCards, deckCardRank, DECK_RANK } from '$lib/decks/deck-order';
 
 export type DetailGroupName = '寶可夢' | '訓練家' | '能量' | '未知卡片';
 export interface DetailItem {
@@ -22,12 +24,17 @@ export interface DetailItem {
   /** 官方卡圖網址；空字串＝沒有圖（未知卡片或資料缺圖）⇒ 只顯示文字、不能開大圖 */
   imageUrl: string;
 }
-export interface DetailGroup { group: DetailGroupName; total: number; items: DetailItem[] }
+export type DetailSubName = '物品' | '寶可夢道具' | '支援者' | '競技場';
+export interface DetailSub { name: DetailSubName; total: number; items: DetailItem[] }
+export interface DetailGroup { group: DetailGroupName; total: number; items: DetailItem[]; subs?: DetailSub[] }
 
 const GROUP_ORDER: DetailGroupName[] = ['寶可夢', '訓練家', '能量', '未知卡片'];
 function groupOfRank(rank: number): DetailGroupName {
-  return rank === 0 ? '寶可夢' : rank === 4 ? '能量' : '訓練家';
+  return rank === DECK_RANK.pokemon ? '寶可夢' : rank === DECK_RANK.energy ? '能量' : '訓練家';
 }
+const SUB_OF_RANK: Record<number, DetailSubName> = {
+  [DECK_RANK.item]: '物品', [DECK_RANK.tool]: '寶可夢道具', [DECK_RANK.supporter]: '支援者', [DECK_RANK.stadium]: '競技場',
+};
 
 /**
  * 投稿的 entries ＋ 查卡函式 → 分組後的牌表。
@@ -52,15 +59,25 @@ export function buildDetailGroups(
   // Array.prototype.sort 是穩定排序 ⇒ 同類同名（不同印刷）維持投稿裡的先後
   known.sort((a, b) => compareDeckCards(a.card, b.card));
   const groups = new Map<DetailGroupName, DetailItem[]>();
+  const subs = new Map<DetailSubName, DetailItem[]>();   // 訓練家的小類別（已排序 ⇒ 依序出現就是 物品 → 寶可夢道具 → 支援者 → 競技場）
   for (const k of known) {
-    const g = groupOfRank(deckCardRank(k.card));
+    const rank = deckCardRank(k.card);
+    const g = groupOfRank(rank);
     if (!groups.has(g)) groups.set(g, []);
     groups.get(g)!.push(k.item);
+    const sub = SUB_OF_RANK[rank];
+    if (g === '訓練家' && sub) {
+      if (!subs.has(sub)) subs.set(sub, []);
+      subs.get(sub)!.push(k.item);
+    }
   }
   if (unknown.length) groups.set('未知卡片', unknown);
+  const sum = (items: DetailItem[]) => items.reduce((n, x) => n + x.count, 0);
   return GROUP_ORDER.filter((g) => groups.has(g)).map((g) => {
     const items = groups.get(g)!;
-    return { group: g, total: items.reduce((n, x) => n + x.count, 0), items };
+    const out: DetailGroup = { group: g, total: sum(items), items };
+    if (g === '訓練家') out.subs = [...subs.entries()].map(([name, its]) => ({ name, total: sum(its), items: its }));
+    return out;
   });
 }
 

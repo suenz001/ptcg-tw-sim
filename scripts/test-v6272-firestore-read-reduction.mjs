@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '641eb9fe838b38a68a21ace6799f1e6701c10d5d';   // v6.595（上一版）
+const PREV_SHA = 'c9922ba3e029b46ec2a1ecf3d02ab5bf5b8284a3';   // v6.596（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,18 +757,31 @@ const PREV_SHA = '641eb9fe838b38a68a21ace6799f1e6701c10d5d';   // v6.595（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.596 前移：PREV_SHA 從 641eb9fe（v6.595）起算。
+  // ⚠⚠ v6.597 前移：PREV_SHA 從 c9922ba3（v6.596）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.596：直立大螢幕預設新版桌墊（battle-layout-default.ts）、新版桌墊 <1024 直排填滿一個畫面、已擲完硬幣的提示列；首頁 changelog 三步搬運
-  'src/lib/game/battle-layout-default.ts',
-  'src/lib/game/attack-gate.ts',   // v6.596 審查 P2-1：「雙方場上的卡都已載入」判準抽成 gateFieldCardsLoaded
+  // ⭐v6.597：共用牌組卡片順序分出寶可夢道具（deck-order.ts）、牌組公布欄明細訓練家小類別（detail-view.ts、deck-posts 頁）；首頁 changelog 三步搬運
+  'src/lib/deck-posts/detail-view.ts',
+  'src/lib/decks/deck-order.ts',
+  'src/routes/decks/+page.svelte',   // v6.597 審查 P3：v5.363 排序註解更新（只有註解）
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
+  'src/routes/deck-posts/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.596）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.596 前移：PREV_SHA 從 641eb9fe（v6.595）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.596：直立大螢幕預設新版桌墊（battle-layout-default.ts）、新版桌墊 <1024 直排填滿一個畫面、已擲完硬幣的提示列；首頁 changelog 三步搬運
+//   'src/lib/game/battle-layout-default.ts',
+//   'src/lib/game/attack-gate.ts',   // v6.596 審查 P2-1：「雙方場上的卡都已載入」判準抽成 gateFieldCardsLoaded
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.595）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.595 前移：PREV_SHA 從 63787814（v6.594）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -889,16 +902,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/card-back.css',
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.584）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.584 前移：PREV_SHA 從 6c22e383（v6.583）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.584：牌組公布欄 dprFetch：動作拿到非 JSON 回應一律當失敗；伺服器 v1.70 上傳讀 body 修正；首頁 changelog 三步搬運
-//   'src/lib/version.ts',
-//   'src/routes/deck-posts/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

@@ -98,7 +98,9 @@ T('⭐ 卡圖不會被大量載入（v6.594 起：縮圖只在明細牌表、一
   const markup = P.slice(P.indexOf('<main'));
   const listPart = markup.slice(0, markup.indexOf('{#if openPost || detailLoading || detailError}'));
   ok(listPart.length > 1000 && !/<img/.test(listPart), '列表區出現 <img> —— 外層列表的卡圖（第二期）沒有核准');
-  const eachThumb = markup.slice(markup.indexOf('{#each g.items as it (it.key)}'), markup.indexOf(thumb));
+  // ⭐v6.597（Rule 40）：清單收進 {#snippet cardList(items)}（大類別與訓練家小類別共用）⇒ 迴圈改成 {#each items as it (it.key)}；意圖（每個條目一張、不依張數展開）不變
+  const _eachAt = markup.indexOf('{#each g.items as it (it.key)}') >= 0 ? markup.indexOf('{#each g.items as it (it.key)}') : markup.indexOf('{#each items as it (it.key)}');
+  const eachThumb = _eachAt >= 0 ? markup.slice(_eachAt, markup.indexOf(thumb)) : '';
   ok(eachThumb.length > 0 && eachThumb.length < 400 && !/\{#each[^}]*count/.test(eachThumb), '縮圖不是「每個條目一張」（可能依張數展開）');
   const zoomImg = imgs.find((x) => x !== thumb);
   const zoomBlock = markup.slice(markup.indexOf('{#if zoomItem}'), markup.indexOf(zoomImg));
