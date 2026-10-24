@@ -83,7 +83,12 @@ function matchBlock(src, startIdx, open, close) {
   }
   assert.fail('括號沒有配對到底');
 }
+// ⭐v6.599（Rule 40，審查 P3-1）：handleSetDeck 改回傳「牌組有沒有套上座位」（Promise<boolean>），簽名多了型別註記。
+//   意圖（第三個引數是 deck.id、60 張以外一發都不送）不變 ⇒ 兩種簽名都認（BASE 與 HEAD-FAIL 用舊的、現行用新的），其餘斷言逐字不動。
+const HSD_NEW = '  async function handleSetDeck(): Promise<boolean> {', HSD_OLD = '  async function handleSetDeck() {';
+const hsdHeader = (src) => (src.includes(HSD_NEW) ? HSD_NEW : HSD_OLD);
 function extractFn(src, header, minLen, label) {
+  if (header === HSD_OLD) header = hsdHeader(src);
   const i = src.indexOf(header);
   assert.ok(i >= 0, '抽不到 ' + label + '（找不到 ' + header.trim().slice(0, 50) + '）');
   const body = matchBlock(src, i, '{', '}');

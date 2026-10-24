@@ -26,6 +26,11 @@ export interface Deck {
   notes?: string;
   /** v5.352：玩家自訂排序索引（牌組編輯器上下移動寫入）。未設者排在已設者之後（沿用 createdAt）。 */
   order?: number;
+  /**
+   * ⭐v6.599 先後攻偏好（贏得開場擲硬幣時）。未設定＝undefined ⇒ 選牌組時不改動入口目前的選擇。
+   * 讀取一律經 `coin-pref.ts` 的 normalizeDeckCoinPref（雲端／匯入資料未消毒）。
+   */
+  coinPref?: import('./coin-pref').DeckCoinPref;
 }
 
 export interface DeckValidationResult {

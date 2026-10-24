@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.599 — 牌組先後攻偏好，選牌組時自動帶入（玩家建議）
+
+BASE `a337fea7`（v6.598）。玩家建議：牌組編輯器就能設定先攻／後攻／隨機，一般對戰與錦標賽自動帶入。站長 2026-10-24 裁定：只有新報名才帶入（已報名不回溯）、手動改的不反存回牌組。
+
+- 中央 `src/lib/decks/coin-pref.ts`：`normalizeDeckCoinPref`（只收 random／first／second；雲端與匯入 JSON 都是未消毒輸入）、`deckCoinPrefOr(deck, current)`（牌組沒設定 ⇒ 原封回傳入口目前的值）、`DECK_COIN_PREF_OPTIONS`。
+- Deck 型別加 `coinPref?`；本機 localStorage 與雲端 setDoc 都是整份牌組 ⇒ 不用另外處理同步，Firestore 規則不限欄位。
+- 牌組編輯器：獨立元件 `DeckCoinPref.svelte`（自己的樣式，避開 test-v6213 桌機 CSS 指紋；比照 DeckNotes），「不設定」刪欄位；複製一份、匯入 JSON 經消毒帶上；預組唯讀不顯示。
+- 對戰頁四個入口：本機 P1／P2 牌組選單 onchange；線上座位 handleDeckChange（setSeatDeck 之後才送 setSeatFirstChoice；已準備不送；不呼叫 _saveFirstPref，「上次選的偏好」只記玩家手動選的）；錦標賽兩個報名表選單（tApplyDeckCoinPref）。
+- 刻意的設計：沒設定過的牌組（舊牌組、內建預組）完全不動入口原本的選擇——本機／線上原本會記住上次選的偏好，若把「沒設定」當成隨機會讓所有舊牌組使用者的偏好被洗掉。
+- 守衛 test-v6599-deck-coin-pref（16 項）：U1～U3 純函式；S1～S6 接線；三個接線突變正對照；B1～B3 /decks 桌機淺色＋手機深色真瀏覽器（設定、切換、清除、手機 44px／16px／不溢出）；B4 /game 本機選牌組帶入、沒設定不動、手動改不反存；HEAD-FAIL BASE 上 8 條逐條紅。
+- Opus 5.5 審查：P1 無。P2-1 本機 `$effect` 跟著 p1FirstPref 存「上次選的偏好」⇒ 牌組帶入的值被記成上次選的（之後進線上房間也帶過去）——改成只在四個單選鈕 onchange 存（與線上座位一致）；P3-1 線上牌組沒套上座位（張數不對／寫入失敗）仍送偏好 ⇒ handleSetDeck 回傳成功與否；P3-3 補 import 斷言（少 import 執行期 ReferenceError，ts2304 掃描只掃 src/lib）、元件 onchange 傳出值、B4 驗 lastFirstPref；P3-4 S3 改驗 `const _deckSet = … await handleSetDeck()`。P3-2（準備完成與偏好寫入的極小競態，既有單選鈕同性質）只記錄。守衛增為 18 項，HEAD-FAIL 10 條逐條紅。複審：P1／P2 無；P3-a（handleSetDeck 失敗分支）、P3-b（任何寫法的 $effect 存偏好）兩條判準補強，突變「張數不對改回 true」現在紅。Rule 40：test-v6267 抽 handleSetDeck 的錨點改成兩種簽名都認（意圖：第三個引數是 deck.id、60 張以外不送，斷言逐字不動）。全套 947 支：只剩已知抖動 test-v6370（單跑 91／0）。
+
 ## v6.598 — 手機彈出視窗上緣不進狀態列、關閉鈕一直按得到（全站手機視窗檢查）
 
 BASE `7e26ff39`（v6.597）。站長 2026-10-24 iPhone 截圖：牌組公布欄明細視窗頂端跑進狀態列底下（標題被模糊、✕ 很難按），要求確認並做整體手機排版檢查，「其他功能不會佔用到上方的話可作為修正參考」。

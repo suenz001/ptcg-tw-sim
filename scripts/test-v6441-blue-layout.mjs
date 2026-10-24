@@ -29,7 +29,9 @@
  * Run: node scripts/test-v6441-blue-layout.mjs
  */
 // v6.590 Rule40：先精確還原手機生命週期；新行為由test-v6590守，不放寬既有比對。
-import { revertV6598Game, revertV6598Cards, revertV6598Decks, V6598_CARDS_PAIRS } from './lib/revert-v6598-pages.mjs';   // ⭐v6.598（Rule 40）：手機彈出視窗上緣／關閉鈕，先還原成 v6.597
+import { revertV6599Game } from './lib/revert-v6599-pages.mjs';   // ⭐v6.599（Rule 40）：牌組先後攻偏好接線（行為由 test-v6599 守）
+import { revertV6598Game as _rv6598Game, revertV6598Cards, revertV6598Decks, V6598_CARDS_PAIRS } from './lib/revert-v6598-pages.mjs';   // ⭐v6.598（Rule 40）：手機彈出視窗上緣／關閉鈕，先還原成 v6.597
+const revertV6598Game = (x) => _rv6598Game(revertV6599Game(x));   // ⭐v6.599：鏈又長一節（既有呼叫點一個字都不必改）
 import { revertV6596Game } from './lib/revert-v6596-game.mjs';   // ⭐v6.596（Rule 40）：對戰頁先還原 v6.596（直立大螢幕填滿、擲幣後提示）再接 v6.595
 import { revertV6595Game } from './lib/revert-v6595-game.mjs';   // ⭐v6.595（Rule 40）
 import { revertV6592Game } from './lib/revert-v6592-game.mjs';

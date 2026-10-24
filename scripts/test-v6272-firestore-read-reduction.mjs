@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '7e26ff39ce3427e4b4e86bba479869eda079925c';   // v6.597（上一版）
+const PREV_SHA = 'a337fea772dd1a5e5394c527d037d8bcdec7fd62';   // v6.598（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,21 +757,35 @@ const PREV_SHA = '7e26ff39ce3427e4b4e86bba479869eda079925c';   // v6.597（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.598 前移：PREV_SHA 從 7e26ff39（v6.597）起算。
+  // ⚠⚠ v6.599 前移：PREV_SHA 從 a337fea7（v6.598）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.598：手機彈出視窗上緣與關閉鈕（deck-posts、cards、decks、game 名人堂、friends 私聊）；首頁 changelog 三步搬運
+  // ⭐v6.599：牌組先後攻偏好（中央 coin-pref.ts、編輯器元件、對戰頁四個入口）；首頁 changelog 三步搬運
+  'src/lib/decks/DeckCoinPref.svelte',
+  'src/lib/decks/coin-pref.ts',
+  'src/lib/decks/types.ts',
   'src/lib/version.ts',
-  'src/routes/cards/+page.svelte',
-  'src/routes/deck-posts/+page.svelte',
   'src/routes/decks/+page.svelte',
-  'src/routes/friends/DmPanel.svelte',
-  'src/lib/decks/OpeningHandSim.svelte',   // v6.598 審查 P3-4：測抽視窗底部讓開 iPhone 底部橫條
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.598）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.598 前移：PREV_SHA 從 7e26ff39（v6.597）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.598：手機彈出視窗上緣與關閉鈕（deck-posts、cards、decks、game 名人堂、friends 私聊）；首頁 changelog 三步搬運
+//   'src/lib/version.ts',
+//   'src/routes/cards/+page.svelte',
+//   'src/routes/deck-posts/+page.svelte',
+//   'src/routes/decks/+page.svelte',
+//   'src/routes/friends/DmPanel.svelte',
+//   'src/lib/decks/OpeningHandSim.svelte',   // v6.598 審查 P3-4：測抽視窗底部讓開 iPhone 底部橫條
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.597）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.597 前移：PREV_SHA 從 c9922ba3（v6.596）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -893,18 +907,6 @@ const PREV_ALLOWED = [
 // ⭐v6.587：只修正瑞士制排名本人欄位的主題字色，原版面及排名／對戰行為不變。
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.586）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.586 前移：PREV_SHA 從 fd81d9b7（v6.585）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.586：全部卡牌分頁與頁碼還原；單包維持增量載入，未改動引擎或卡牌效果。規則摘要及交接維護僅進 admin 細節與內部紀錄。
-//   'src/lib/cards/CardsPager.svelte',
-//   'src/lib/cards/pagination.ts',
-//   'src/lib/version.ts',
-//   'src/routes/cards/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

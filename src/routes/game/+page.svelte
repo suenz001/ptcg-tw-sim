@@ -91,6 +91,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   // v4.925：雲端 sync — 同帳號切換時 game 頁需重載牌組
   import { loadDecksFromCloud, cloudDecksUnchanged, recordCloudDecksRev } from '$lib/decks/cloud';  // v6.273 讀取減量
   import type { Deck } from '$lib/decks/types';
+  import { deckCoinPrefOr, normalizeDeckCoinPref } from '$lib/decks/coin-pref';   // ⭐v6.599 牌組先後攻偏好（唯一判準）
   import { PRESET_DECKS } from '$lib/decks/presets';
   import { validateDeck, hasIneligibleCardIssue } from '$lib/decks/validation';
   // ⭐ v6.340：牌組合法性吃後台政策（哪些標可打／哪些卡包暫不開放）——
@@ -277,6 +278,11 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   // v5.724：報名顯示先後攻偏好。server /event 未回傳 myCoinPref 時用 localStorage(玩家報名時本機存的)fallback。
   const COIN_PREF_LABEL: Record<string, string> = { random: '隨機', first: '先攻', second: '後攻', opponent: '對手決定' };
   function coinPrefLabel(p: string | undefined | null): string { return COIN_PREF_LABEL[p ?? 'random'] ?? '隨機'; }
+  // ⭐v6.599 報名表選牌組時帶入牌組的先後攻偏好（牌組沒設定 ⇒ 不改動）。
+  //   只有這兩個報名表的選單會呼叫 ⇒ 天然只影響「新報名」（站長裁定：已報名不回溯）；玩家之後手動改照樣以手動為準。
+  function tApplyDeckCoinPref(deckId: string): void {
+    tCoinPref = deckCoinPrefOr(allDecks.find((d) => d.id === deckId), tCoinPref);
+  }
   function readCoinPref(eventId: string): string { try { return localStorage.getItem(`ptcg_tourn_coinpref_${eventId}`) ?? 'random'; } catch { return 'random'; } }
   function saveCoinPref(eventId: string, pref: string): void { try { localStorage.setItem(`ptcg_tourn_coinpref_${eventId}`, pref); } catch { /* ignore */ } }
   let tNow = $state(Date.now()); // 倒數計時用（輪詢時更新）
@@ -1327,7 +1333,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let p1FirstPref = $state<'random' | 'first' | 'second' | 'opponent'>(_readLastFirstPref());
   let p2FirstPref = $state<'random' | 'first' | 'second' | 'opponent'>('random');
   // v5.476：本機/我方先後攻偏好變更時持久化（線上由 seat radio onchange 存）
-  $effect(() => { _saveFirstPref(p1FirstPref); });
+  // ⭐v6.599（審查 P2-1）：改成只在玩家「手動按單選鈕」時存（與線上座位一致）。
+  //   原本是 $effect 跟著 p1FirstPref 存 ⇒ 選牌組時自動帶入的值也會被當成「上次選的偏好」，
+  //   之後選沒設定的牌組、或進線上房間（_readLastFirstPref）都會沿用牌組的值，蓋掉玩家自己選的。
   /** AI 控制哪個玩家（null = 無 AI） */
   let aiPlayerIndex = $state<0 | 1 | null>(1);
   /** AI 是否正在思考（防止連擊） */
@@ -10212,21 +10220,22 @@ function _setupSelfPending(g: any, seat: number): string | null {
     catch (e: any) { onlineError = e.message ?? '移動座位失敗'; }
   }
 
-  async function handleSetDeck() {
-    if (!roomCode || !myDeckId) { return; }
+  /** ⭐v6.599（審查 P3-1）回傳「牌組有沒有真的套上座位」——沒套上就不帶入先後攻偏好。 */
+  async function handleSetDeck(): Promise<boolean> {
+    if (!roomCode || !myDeckId) { return false; }
     const deck = allDecks.find(d => d.id === myDeckId);
-    if (!deck) return;
+    if (!deck) return false;
     const totalCards = countDeckCards(deck.entries);
     if (totalCards !== 60) {
       onlineError = `所選牌組張數為 ${totalCards}（應為 60 張），請選別的牌組`;
-      return;
+      return false;
     }
     onlineError = '';
     // v6.267 套牌戰績：連同 `deck.id` 一起寫進座位。
     //   ⚠ 這是「client 送新欄位」——伺服器 v6.266 已經先上線收下了，順序正確。
     //   ⚠ 本機雙人／vsAI 走不到這裡（沒有房間）⇒ 天然不記，與站長「只算線上」的裁定一致。
-    try { await setSeatDeck(roomCode, deck.entries, deck.id); }
-    catch (e: any) { onlineError = e.message ?? '設定牌組失敗'; }
+    try { await setSeatDeck(roomCode, deck.entries, deck.id); return true; }
+    catch (e: any) { onlineError = e.message ?? '設定牌組失敗'; return false; }
   }
   // v3.9993：偵測「🎲 隨機牌組」option（value="__random__"）並回傳隨機抽選的 deck id。
   //   - 抽選範圍：玩家自己的「我的牌組」(decks)，不含內建預組(PRESET_DECKS)。
@@ -10250,7 +10259,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // 若回傳值與 select 不同（剛剛抽 random），同步 DOM 顯示對應 option
     if (resolved !== t.value) t.value = resolved;
     myDeckId = resolved;
-    if (myDeckId) await handleSetDeck();
+    const _deckSet = myDeckId ? await handleSetDeck() : false;
+    // ⭐v6.599 帶入牌組的先後攻偏好（牌組沒設定 ⇒ 不動）。只在「玩家這一刻選牌組」時套用；
+    //   不寫進「上次選的偏好」（_saveFirstPref 只記玩家手動選的），也不反存回牌組（站長裁定）。
+    //   ⚠ 已按準備完成時選單是 disabled，走不到這裡；牌組沒套上座位（張數不對、寫入失敗）⇒ 不送（審查 P3-1）。
+    const _cp = myDeckId ? normalizeDeckCoinPref(allDecks.find((d) => d.id === myDeckId)?.coinPref) : undefined;
+    const _seat = roomData?.seats?.[mySeatIdx];
+    if (_deckSet && roomCode && _cp && _seat && !_seat.ready && (_seat.firstChoicePreference ?? 'random') !== _cp) {
+      setSeatFirstChoice(roomCode, _cp).catch(console.error);
+    }
   }
 
   async function handleToggleReady() {
@@ -11094,7 +11111,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             </label>
             <label class="tourn-field">你的暱稱<input class="name-input" maxlength="16" bind:value={tNickname} placeholder="輸入暱稱（最多 16 字）" /></label>
             <label class="tourn-field">你的牌組（需 60 張）
-              <select class="deck-select" bind:value={tDeckId}>
+              <select class="deck-select" bind:value={tDeckId} onchange={(e) => tApplyDeckCoinPref((e.target as HTMLSelectElement).value)}>
                 <option value="" disabled>— 請選擇牌組 —</option>
                 {#if decks.length > 0}<optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>{/if}
                 {#if PRESET_DECKS.length > 0}<optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>{/if}
@@ -11120,7 +11137,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   <input class="name-input" maxlength="16" bind:value={tNickname} placeholder="輸入暱稱（最多 16 字）" />
                 </label>
                 <label class="tourn-field">選擇牌組（需 60 張）
-                  <select class="deck-select" bind:value={tDeckId}>
+                  <select class="deck-select" bind:value={tDeckId} onchange={(e) => tApplyDeckCoinPref((e.target as HTMLSelectElement).value)}>
                     <option value="" disabled>— 請選擇牌組 —</option>
                     {#if decks.length > 0}
                       <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
@@ -11772,7 +11789,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <div class="setup-card">
         <h2>玩家 1</h2>
         <input class="name-input" placeholder="玩家名稱" aria-label="玩家 1 名稱" bind:value={p1Name} />
-        <select aria-label="玩家 1 牌組" bind:value={p1DeckId} onchange={() => { p1DeckId = resolveDeckSelection(p1DeckId); }}>
+        <select aria-label="玩家 1 牌組" bind:value={p1DeckId} onchange={() => { p1DeckId = resolveDeckSelection(p1DeckId); p1FirstPref = deckCoinPrefOr(allDecks.find((d) => d.id === p1DeckId), p1FirstPref); }}>
           <option value="">— 選擇牌組 —</option>
           <option value="__random__" disabled={decks.length === 0}>🎲 隨機牌組（從「我的牌組」抽選）{decks.length === 0 ? '— 尚無我的牌組' : ''}</option>
           {#if decks.length > 0}
@@ -11804,10 +11821,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <!-- v3.75：先後攻偏好 -->
         <div class="first-pref-group">
           <div class="first-pref-label">{aiPlayerIndex === 1 ? '先後攻偏好' : '贏得擲硬幣時'}</div>
-          <label class="first-pref-radio"><input type="radio" value="random" bind:group={p1FirstPref} /><span>🎲 隨機</span></label>
-          <label class="first-pref-radio"><input type="radio" value="first" bind:group={p1FirstPref} /><span>⚡ 先攻</span></label>
-          <label class="first-pref-radio"><input type="radio" value="second" bind:group={p1FirstPref} /><span>🛡️ 後攻</span></label>
-          <label class="first-pref-radio"><input type="radio" value="opponent" bind:group={p1FirstPref} /><span>🤝 對手決定</span></label>
+          <label class="first-pref-radio"><input type="radio" value="random" bind:group={p1FirstPref} onchange={() => _saveFirstPref(p1FirstPref)} /><span>🎲 隨機</span></label>
+          <label class="first-pref-radio"><input type="radio" value="first" bind:group={p1FirstPref} onchange={() => _saveFirstPref(p1FirstPref)} /><span>⚡ 先攻</span></label>
+          <label class="first-pref-radio"><input type="radio" value="second" bind:group={p1FirstPref} onchange={() => _saveFirstPref(p1FirstPref)} /><span>🛡️ 後攻</span></label>
+          <label class="first-pref-radio"><input type="radio" value="opponent" bind:group={p1FirstPref} onchange={() => _saveFirstPref(p1FirstPref)} /><span>🤝 對手決定</span></label>
         </div>
       </div>
       <div class="vs-badge">VS</div>
@@ -11826,7 +11843,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         {#if aiPlayerIndex !== 1}
           <input class="name-input" placeholder="玩家名稱" aria-label="玩家 2 名稱" bind:value={p2Name} />
         {/if}
-        <select aria-label="玩家 2 牌組" bind:value={p2DeckId} onchange={() => { p2DeckId = resolveDeckSelection(p2DeckId); }}>
+        <select aria-label="玩家 2 牌組" bind:value={p2DeckId} onchange={() => { p2DeckId = resolveDeckSelection(p2DeckId); p2FirstPref = deckCoinPrefOr(allDecks.find((d) => d.id === p2DeckId), p2FirstPref); }}>
           <option value="">— 選擇牌組 —</option>
           <option value="__random__" disabled={decks.length === 0}>🎲 隨機牌組（從「我的牌組」抽選）{decks.length === 0 ? '— 尚無我的牌組' : ''}</option>
           {#if decks.length > 0}

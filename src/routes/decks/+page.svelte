@@ -30,6 +30,8 @@
   import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
   import { buildDeckSheetModel, deckSheetHtml } from '$lib/decks/deck-sheet';   // ⭐v6.559 匯出套牌構築表（道館賽報名用）
   import type { Deck } from '$lib/decks/types';
+  import { normalizeDeckCoinPref } from '$lib/decks/coin-pref';   // ⭐v6.599 牌組先後攻偏好（唯一判準）
+  import DeckCoinPref from '$lib/decks/DeckCoinPref.svelte';      // ⭐v6.599 先後攻偏好選單（獨立元件、自己的樣式）
   import { compareDeckCards } from '$lib/decks/deck-order';   // ⭐v6.594 牌組卡片順序（與牌組公布欄共用）
   import { validateDeck, maxCopies, isBasicEnergy, isStandardReprintLegal, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity, sameNameKey, isTwoCardStadium, twoCardStadiumPartnerCardId, twoCardStadiumSide } from '$lib/decks/validation';
   import { isCardMarkStandardLegal, filterDeckSelectable, getCardPolicy, DEFAULT_CARD_POLICY, ALL_REGULATION_MARKS } from '$lib/cards/regulation';
@@ -898,6 +900,16 @@
     setDirty(updated.id);
   }
 
+  /** ⭐v6.599 牌組先後攻偏好。'' ＝ 不設定（欄位整個拿掉，選牌組時不改動入口目前的選擇）。 */
+  function setActiveCoinPref(v: string) {
+    if (!active || isPresetActive) return;
+    const p = normalizeDeckCoinPref(v);
+    const updated: Deck = { ...active };
+    if (p) updated.coinPref = p; else delete updated.coinPref;
+    decks = upsertDeck(updated);
+    setDirty(updated.id);
+  }
+
   function renameActive(name: string) {
     if (!active || isPresetActive) return;
     const updated = { ...active, name };
@@ -971,6 +983,7 @@
       ...newDeck(`${active.name}（複製）`),
       entries: active.entries.map((e) => ({ ...e })),
       notes: active.notes,
+      ...(normalizeDeckCoinPref(active.coinPref) ? { coinPref: normalizeDeckCoinPref(active.coinPref) } : {}),   // ⭐v6.599
     };
     addDeckOnTop(copy);
     activeId = copy.id;
@@ -1024,7 +1037,8 @@
       const incoming: Deck = {
         ...newDeck(parsed.name),
         entries: parsed.entries,
-        notes: parsed.notes
+        notes: parsed.notes,
+        ...(normalizeDeckCoinPref(parsed.coinPref) ? { coinPref: normalizeDeckCoinPref(parsed.coinPref) } : {}),   // ⭐v6.599 匯入的值未消毒
       };
       addDeckOnTop(incoming);
       activeId = incoming.id;
@@ -1932,6 +1946,11 @@
             {/if}
           </div>
         </div>
+
+        <!-- ⭐v6.599 先後攻偏好：選這副牌組對戰／報名錦標賽時自動帶入（仍可手動改）。預組唯讀不顯示。 -->
+        {#if !isPresetActive}
+          {#key active.id}<DeckCoinPref value={active.coinPref} onchange={setActiveCoinPref} />{/key}
+        {/if}
 
         {#if validation}
           <div class="validation" class:ok={validation.legal}>
