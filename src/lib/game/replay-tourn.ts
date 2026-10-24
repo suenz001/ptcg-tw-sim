@@ -11,7 +11,7 @@
 // 所有函式都不會 throw：解不開 ⇒ 回空陣列，呼叫端照用原本的半回合格。
 
 import { gunzipText } from './replay-store';
-import { REPLAY_FORMAT, REPLAY_FORMAT_VERSION, validateReplayData, type ReplayData } from './replay-record';
+import { REPLAY_FORMAT, REPLAY_FORMAT_VERSION, validateReplayData, replayLabelFields, type ReplayData } from './replay-record';
 import type { GameState } from './types';
 
 export const TOURN_STEPS_URL = '/api/replay/tourn-steps';
@@ -90,7 +90,7 @@ export async function withTournPerActionSteps(matchId: string, halfTurn: TournSn
  */
 export function tournReplayToData(
   server: { meta?: Record<string, unknown> | null; finalLog?: unknown; finalState?: unknown; snapshots?: unknown } | null | undefined,
-  opts: { matchId: string; viewerSeat: 0 | 1 | null; appVersion: string; now: number },
+  opts: { matchId: string; viewerSeat: 0 | 1 | null; appVersion: string; now: number; myDeckName?: unknown },
 ): ReplayData | null {
   if (!server || typeof server !== 'object') return null;
   const m = (server.meta ?? {}) as Record<string, unknown>;
@@ -108,6 +108,8 @@ export function tournReplayToData(
       appVersion: opts.appVersion,
       viewerSeat: opts.viewerSeat,
       revealed: true,
+      // ⭐v6.600 勝敗＋自己的牌組名稱（報名時鎖定的那副）；對手牌組伺服器沒有給 ⇒ 不寫（顯示「未知」、檔名用對手暱稱）
+      ...replayLabelFields((server.finalState && typeof server.finalState === 'object' ? server.finalState : null) as GameState | null, opts.viewerSeat, { my: opts.myDeckName }),
     },
     finalLog: (Array.isArray(server.finalLog) ? server.finalLog : []) as GameState['log'],
     finalState: (server.finalState && typeof server.finalState === 'object' ? server.finalState : null) as GameState | null,

@@ -135,6 +135,8 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { CHAT_PIN_URL, CHAT_PIN_REFRESH_MS, parseChatPin, chatPinVisible, loadDismissedPinId, saveDismissedPinId, type ChatPin } from '$lib/tournament/chat-pin';   // v6.562 聊天室置頂公告
   import { MY_TOURN_MATCHES_URL, parseMyTournMatches, myTournMatchLine, type MyTournMatches } from '$lib/tournament/my-matches';   // v6.563 復盤清單：自己最近的錦標賽對戰
   import { MATCH_TIMES_URL, MATCH_TIMES_REFRESH_MS, parseMatchTimes, matchTimeKey, fmtMatchDuration, matchTimeTitle, type MatchTime } from '$lib/tournament/match-times';   // v6.562 對局總時間
+  import ReplayRowLabel from '$lib/game/ReplayRowLabel.svelte';
+  import { canAskOppArchetype, oppArchetypeFrom } from '$lib/game/replay-label';   // ⭐v6.600 問對手原型的時機與取值（唯一判準）   // ⭐v6.600 復盤清單：勝敗＋雙方牌組（獨立元件、自己的樣式）
   import { createReplayRecorder, recordStep, finalizeReplay, stepsForStorage, nextTurnStepIndex, prevTurnStepIndex, type ReplayRecorder, type ReplayData } from '$lib/game/replay-record';
   import { saveReplay, listReplays, loadReplay, deleteReplay, saveInProgress, loadInProgress, downloadReplayFile, parseReplayBytes, MAX_SAVED_REPLAYS, type SavedReplayInfo } from '$lib/game/replay-store';
   import { replayRevealsOpponent } from '$lib/game/replay-policy';   // ⭐v6.557 手牌互疊量依實際寬度計算（唯一判準）
@@ -6211,6 +6213,29 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let _replayFinalizedId = '';
   let _replayLastHalf = '';
   let lastSavedReplay = $state<ReplayData | null>(null);
+  // ⭐v6.600 復盤要標的雙方牌組（站長：我方＝自己取的牌組名稱、對手＝牌組原型）。
+  //   對手原型只能在「對戰中」問伺服器（/api/rooms-archetypes 只回 status=playing 的房間；大廳本來就公開顯示，不是新的洩漏）
+  //   ⇒ 開打超過 5 分鐘後（審查 P2-1：伺服器快取只用房號當 key，太早問可能拿到同房上一局的）每換半回合問一次，拿到就停，最多 6 次。
+  //   時機判準在 replay-label.ts 的 canAskOppArchetype（唯一來源）。
+  let _replayDecks: { gameId: string; my: string | null; opp: string | null; tries: number; busy: boolean } = { gameId: '', my: null, opp: null, tries: 0, busy: false };
+  function replayMyDeckName(): string | null {
+    const seat = roomData?.seats?.[mySeatIdx] as { deckId?: string | null } | undefined;
+    const id = seat?.deckId || myDeckId;
+    return (id && allDecks.find((d) => d.id === id)?.name) || null;
+  }
+  function replayFetchOppArchetype(g: any) {
+    const d = _replayDecks;
+    const me = myPlayerIndex;
+    if (!g || d.gameId !== g.id || (me !== 0 && me !== 1)) return;
+    if (!canAskOppArchetype({ opp: d.opp, busy: d.busy, tries: d.tries, oracle: ORACLE_MODE, roomCode, seat: me, gameStartTime: g.gameStartTime, now: gameClockNow(), clockSynced: getServerClockOffsetMs() !== null })) return;
+    d.tries += 1; d.busy = true;
+    const code = String(roomCode).toUpperCase();
+    oracleRoomArchetypes([code]).then((m) => {
+      if (_replayDecks !== d) return;   // 換局了 ⇒ 舊回應不寫
+      const name = oppArchetypeFrom(m, code, me);
+      if (name) d.opp = name;
+    }).catch(() => { /* 拿不到就顯示「未知」 */ }).finally(() => { d.busy = false; });
+  }
   let replayLobbyOpen = $state(false);
   let replayList = $state<SavedReplayInfo[]>([]);
   let replayLobbyMsg = $state('');
@@ -6227,6 +6252,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!_replayRec || _replayRec.gameId !== g.id) {
       const rec = createReplayRecorder(g.id);
       _replayRec = rec; _replayLastHalf = '';
+      _replayDecks = { gameId: g.id, my: replayMyDeckName(), opp: null, tries: 0, busy: false };   // ⭐v6.600
+      replayFetchOppArchetype(g);
       if (_replayFinalizedId !== g.id) lastSavedReplay = null;
       // 重新整理後的同一局：把之前存的進度接在前面（只取比目前更早的步驟）
       loadInProgress(g.id).then((prev) => {
@@ -6240,6 +6267,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const half = (g.turn ?? 0) + '|' + (g.activePlayerIndex ?? '');
       if (half !== _replayLastHalf) {
         _replayLastHalf = half;
+        if (!_replayDecks.my) _replayDecks.my = replayMyDeckName();   // ⭐v6.600 重新整理後牌組清單較晚載入
+        replayFetchOppArchetype(g);
         // 線上對戰、遮蔽開關關閉 ⇒ 進行中那份也先遮再存（中離時它會留在瀏覽器裡）
         const toSave = stepsForStorage(rec.steps, { online: mode === 'online', seat: (myPlayerIndex === 0 || myPlayerIndex === 1) ? myPlayerIndex : null, revealOpp: replayRevealsOpponent() });
         if (toSave) void saveInProgress(rec.gameId, toSave);
@@ -6248,7 +6277,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (g.phase === 'game-over' && _replayFinalizedId !== g.id && rec.steps.length > 0) {
       _replayFinalizedId = g.id;
       const data = finalizeReplay({ rec, finalState: g, online: mode === 'online', seat: (myPlayerIndex === 0 || myPlayerIndex === 1) ? myPlayerIndex : null,
-        ai: aiPlayerIndex !== null, revealOpp: replayRevealsOpponent(), appVersion: VERSION, now: gameClockNow() });   // ⭐v6.565 savedAt＝回放終局格的備用結束時刻，跟盤面同一個時鐘
+        ai: aiPlayerIndex !== null, revealOpp: replayRevealsOpponent(), appVersion: VERSION, now: gameClockNow(),
+        decks: _replayDecks.gameId === g.id ? { my: _replayDecks.my ?? replayMyDeckName(), opp: _replayDecks.opp } : { my: replayMyDeckName() } });   // ⭐v6.600 勝敗＋雙方牌組   // ⭐v6.565 savedAt＝回放終局格的備用結束時刻，跟盤面同一個時鐘
       if (data) { lastSavedReplay = data; void saveReplay(data); }
     }
   }
@@ -6273,7 +6303,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       }
       j.snapshots = await withTournPerActionSteps(mid, j.snapshots || []);
       const seat = (mySeatIdx === 0 || mySeatIdx === 1) ? mySeatIdx : null;
-      const data = tournReplayToData(j, { matchId: mid, viewerSeat: seat, appVersion: VERSION, now: gameClockNow() });
+      const _evId = j && j.meta && typeof j.meta.eventId === 'string' ? j.meta.eventId : null;   // ⭐v6.600 自己報名鎖定的牌組名稱
+      const data = tournReplayToData(j, { matchId: mid, viewerSeat: seat, appVersion: VERSION, now: gameClockNow(),
+        myDeckName: _evId && seat !== null ? (tEvents.find((e) => e && e._id === _evId)?.myDeckName ?? null) : null });   // 審查 P3-3：不是 P1／P2 就不帶
       if (!data) { tournReplayDl = { busy: false, mid, msg: '這場沒有可下載的紀錄' }; return; }
       await downloadReplayFile(data);
       tournReplayDl = { busy: false, msg: '', mid };
@@ -6366,7 +6398,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   /** 復盤列表的一行說明 */
   function replayInfoLine(m: any): string {
-    const kind = m?.kind === 'online' ? '線上對戰' : m?.kind === 'ai' ? 'vs AI' : '本機雙人';   // v6.563 起只記線上；舊的本機／AI 紀錄照樣列出
+    const kind = m?.kind === 'online' ? '線上對戰' : m?.kind === 'ai' ? 'vs AI' : '本機雙人';   // v6.563 起只記線上（⭐v6.600 舊的本機／AI 紀錄不再列出；這裡只剩匯入舊檔時會用到）
     const d = new Date(m?.savedAt ?? 0);
     const when = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     return `${when}・${kind}${m?.winnerName ? '・🏆 ' + m.winnerName : ''}${m?.finalTurn ? '・' + m.finalTurn + ' 回合' : ''}${m?.revealed === false ? '・只含自己看得到的資訊' : ''}`;
@@ -11742,7 +11774,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <ul class="replay-list">
             {#each replayList as r (r.id)}
               <li>
-                <div class="replay-names"><b>{r.meta?.p1name ?? '?'}</b> vs <b>{r.meta?.p2name ?? '?'}</b></div>
+                <ReplayRowLabel meta={r.meta} />   <!-- ⭐v6.600 勝敗＋雙方牌組 -->
                 <div class="muted replay-hint">{replayInfoLine(r.meta)}</div>
                 <div class="replay-actions">
                   <button class="btn-primary small" onclick={() => playSavedReplay(r.id)} disabled={replayLoading}>▶ 觀看</button>

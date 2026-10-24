@@ -11,7 +11,8 @@
 //   每份快照把 log 清空（log 佔盤面約 7 成），播放時用 logLen 從 finalLog 切出「到這一步為止」的紀錄。
 
 import type { GameState } from './types';
-import { gameClockNow } from './server-clock';   // ⭐v6.565 每一格的時間跟盤面時間戳同一個時鐘（leaf，無循環）
+import { gameClockNow } from './server-clock';
+import { computeReplayResult, cleanReplayDeckName } from './replay-label';   // ⭐v6.600 勝敗／牌組標示的唯一判準（leaf，無循環）   // ⭐v6.565 每一格的時間跟盤面時間戳同一個時鐘（leaf，無循環）
 
 export const REPLAY_FORMAT = 'ptcg-tw-sim-replay';
 export const REPLAY_FORMAT_VERSION = 1;
@@ -44,6 +45,12 @@ export interface ReplayMeta {
   viewerSeat: 0 | 1 | null;
   /** true＝雙方手牌、獎賞卡都看得到；false＝已遮住記錄者當時看不到的資訊 */
   revealed: boolean;
+  /** ⭐v6.600 記錄者的勝敗（舊檔沒有 ⇒ replay-label.ts 盡量推回來）。 */
+  result?: 'win' | 'loss' | 'draw';
+  /** ⭐v6.600 記錄者自己取的牌組名稱（站長：玩家比較喜歡自己取的）。 */
+  myDeckName?: string;
+  /** ⭐v6.600 對手的牌組原型（伺服器分類，只有名稱；查不到就沒有這個欄位）。 */
+  oppDeckName?: string;
 }
 
 export interface ReplayData {
@@ -126,16 +133,32 @@ export function buildReplayData(rec: ReplayRecorder, finalState: GameState, meta
  *   ・線上對戰：revealOpp（admin 開關）為 false ⇒ 只留記錄者（seat）看得到的資訊。
  *   ・本機雙人／vs AI：同一個人在操作 ⇒ 一律攤開。
  */
-export function finalizeReplay(o: { rec: ReplayRecorder; finalState: GameState; online: boolean; seat: 0 | 1 | null; ai: boolean; revealOpp: boolean; appVersion: string; now: number }): ReplayData | null {
+export function finalizeReplay(o: { rec: ReplayRecorder; finalState: GameState; online: boolean; seat: 0 | 1 | null; ai: boolean; revealOpp: boolean; appVersion: string; now: number; decks?: { my?: unknown; opp?: unknown } }): ReplayData | null {
+  const viewerSeat = o.online ? o.seat : null;
   const data = buildReplayData(o.rec, o.finalState, {
     kind: o.online ? 'online' : (o.ai ? 'ai' : 'local'),
-    savedAt: o.now, appVersion: o.appVersion, viewerSeat: o.online ? o.seat : null, revealed: true,
+    savedAt: o.now, appVersion: o.appVersion, viewerSeat, revealed: true,
+    ...replayLabelFields(o.finalState, viewerSeat, o.decks),   // ⭐v6.600 勝敗＋雙方牌組（選填欄位）
   });
   if (o.online && !o.revealOpp) {
     if (o.seat !== 0 && o.seat !== 1) return null;   // 要遮卻不知道記錄者坐哪 ⇒ 寧可不存（審查 P3：不可以退回攤開版）
     return redactReplayForSeat(data, o.seat);
   }
   return data;
+}
+
+/**
+ * ⭐v6.600 復盤的勝敗＋雙方牌組欄位（線上連線對戰與錦標賽下載共用）。
+ *   沒有值的欄位不寫（舊版網站讀到新檔也不會多出 undefined 欄位）；記錄者不是 P1／P2 ⇒ 不標勝敗。
+ */
+export function replayLabelFields(finalState: GameState | null | undefined, seat: 0 | 1 | null, decks?: { my?: unknown; opp?: unknown }): Pick<ReplayMeta, 'result' | 'myDeckName' | 'oppDeckName'> {
+  const out: Pick<ReplayMeta, 'result' | 'myDeckName' | 'oppDeckName'> = {};
+  const r = computeReplayResult(finalState as unknown as { winner?: unknown; phase?: unknown }, seat);
+  if (r) out.result = r;
+  const my = cleanReplayDeckName(decks?.my), opp = cleanReplayDeckName(decks?.opp);
+  if (my) out.myDeckName = my;
+  if (opp) out.oppDeckName = opp;
+  return out;
 }
 
 // ── 遮蔽（線上對戰、admin 開關關閉時）──────────────────────────────────────────

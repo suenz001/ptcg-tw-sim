@@ -192,7 +192,7 @@ function pageScenarios(pg) {
       && /const timerView = \$derived\(computeTimerView\(game, timerNow, isTReplay \? tReplayAt : null\)\);/.test(pg)
       // 審查 P2-1／P3-1：對戰結果回報的時長／結束時刻、復盤 savedAt 與 gameStartTime 同一個時鐘
       && /durationMs: g\.gameStartTime \? Math\.max\(0, gameClockNow\(\) - g\.gameStartTime\) : 0,/.test(pg) && /endedAt: gameClockNow\(\),/.test(pg)
-      && /appVersion: VERSION, now: gameClockNow\(\) \}\);/.test(pg);
+      && /appVersion: VERSION, now: gameClockNow\(\)(?: \}\);|,\s*decks: )/.test(pg);   // ⭐v6.600（Rule 40）：後面多交雙方牌組，savedAt 仍是遊戲時鐘
     r.C5n = JSON.stringify({ casual: casual - T0, casualUnsynced: casualUnsynced - T0, tourn: tourn - T0, replay: replay - T0 });
   }
   return r;

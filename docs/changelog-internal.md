@@ -1,5 +1,21 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.600 — 復盤標出勝敗與雙方牌組，下載檔名也帶上；本機對戰完全不留紀錄（玩家建議）
+
+BASE `4e3c1af5`（v6.599）。玩家建議：復盤顯示這場是勝是敗、我用什麼牌組對上什麼牌組，下載預設檔名也帶上。站長 2026-10-24 裁定：我方顯示自己取的牌組名稱（玩家比較喜歡）、對手顯示牌組原型；錦標賽對手查不到顯示「未知」可接受；字數變多要檢查手機排版；本機的對戰（本機雙人、vs AI）完全不需要任何紀錄。
+
+- 中央 `src/lib/game/replay-label.ts`（leaf）：computeReplayResult（結束時記錄者視角：同側勝、異側敗、沒有勝者＝平手；觀戰不標）、replayResultOf（新檔讀 meta.result；舊檔從 viewerSeat＋winnerName 推回，雙方同名不標）、replayResultLabel（錦標賽沒有勝者＝「雙敗」）、replayDeckLine、replayFileName、cleanReplayDeckName、isLocalReplayKind。
+- ReplayMeta 加選填欄位 result／myDeckName／oppDeckName；REPLAY_FORMAT_VERSION 不升（舊版網站讀新檔只是忽略多的欄位）。finalizeReplay 與 tournReplayToData 共用 replayLabelFields（空值不寫）。
+- 對手原型：大廳既有的 /api/rooms-archetypes（只回名稱、只回 status=playing 的房間，大廳本來就公開）⇒ 一局開始記錄時問一次，還不知道就每換半回合再問，最多 6 次；伺服器 5 分鐘快取，不改伺服器。錦標賽房間不在 rooms 集合 ⇒ 查不到，檔名用對手暱稱、畫面顯示「未知」。
+- 我方牌組：座位上的 deckId（v6.267 起寫在座位）或目前選的 myDeckId 對到 allDecks 的名稱；錦標賽用 /replay meta.eventId 對到 tEvents 的 myDeckName（報名鎖定的那副）。
+- 本機對戰：v6.563 起就只記線上連線對戰（replayRecordable 條件不變）；這版 listReplays 不列 kind=local／ai 的舊紀錄，saveReplay 存新的一場時順便刪掉。匯入舊的本機復盤檔照樣能播放。
+- 清單：獨立元件 ReplayRowLabel.svelte（勝／敗標籤白字對底色對比 ≥ 4.5、淺深主題共用；長名稱 overflow-wrap:anywhere）。
+- 「我的錦標賽對戰」清單沒標勝敗：伺服器 /api/tournament/my-matches 沒回傳自己坐哪一側，要標得改錦標賽區塊（28 把鎖），這版不做，已回報站長。
+- 守衛 test-v6600-replay-result-decks：U1～U6 純函式（含檔名四種格式、遮蔽版保留欄位、格式版本沒升）；S1～S5 接線；正對照兩個突變；B1～B3 真瀏覽器（IndexedDB 存本機／舊檔／新檔三場 ⇒ 本機被清掉、清單兩場、勝敗與牌組行、下載檔名、手機 390 寬長名稱不溢出）；HEAD-FAIL BASE 上 10 條逐條紅。
+- Opus 5.5 審查：P1 無。P2-1 伺服器 /api/rooms-archetypes 的快取只用房號當 key、存 5 分鐘 ⇒ 同房號 5 分鐘內再開一局會拿到上一局的原型，而復盤會永久存下 ⇒ 不改伺服器：開打滿 310 秒才問（中央 canAskOppArchetype；那時任何快取都是這一局開打後算的），代價是 5 分鐘內結束的對局對手顯示「未知」（對外 changelog 已註明）。P3：守衛補 W1（抽出 replayFetchOppArchetype 用假 oracleRoomArchetypes 實跑）、U7、U3 控制字元；檔名片段的 ^\.+ 規則刪掉（不會在檔名開頭）；錦標賽下載不是 P1／P2 不帶牌組名稱；changelog 改成「舊復盤能判斷勝敗的會補標」；註解與實作對齊；看不見的字元改寫成跳脫序列。P3-7（UTF-16 截斷可能切半個 emoji，舊檔名本來就這樣）不改。測試站不是 Oracle 模式，對手一律顯示「未知」。守衛 19 項，HEAD-FAIL 11 條逐條紅。
+- 複審：P1／P2 無（P2-1 推理成立：gameStartTime 只在 setup→playing 寫一次＝gameClockNow()；伺服器快取 TTL 5 分鐘）。P3：還沒跟伺服器對時（重新整理後、自己第一次 PUT 前）不問（clockSynced）；對外 changelog 改成「約 5 分鐘內就結束（或之後沒有再換手）」。全套 948 支：只剩已知抖動 test-v6371。
+- Rule 40：對戰頁還原表 scripts/lib/revert-v6600-game.mjs（8 對，逐位元還原 v6.599）接進 v6441／v6587／v6590／v6592-wiring 與 v6293（v6293 同時補上 v6.599 那一節）；test-v6560 W1 接受 finalizeReplay 多交 decks、W5 補中性替身、E8 改用線上紀錄驗儲存機制（本機紀錄不再保留）；test-v6565 C5 接受 now: gameClockNow() 後面多交 decks。
+
 ## v6.599 — 牌組先後攻偏好，選牌組時自動帶入（玩家建議）
 
 BASE `a337fea7`（v6.598）。玩家建議：牌組編輯器就能設定先攻／後攻／隨機，一般對戰與錦標賽自動帶入。站長 2026-10-24 裁定：只有新報名才帶入（已報名不回溯）、手動改的不反存回牌組。

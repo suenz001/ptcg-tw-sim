@@ -251,7 +251,7 @@ async function scenarios(L, srcRoot) {
   const blk = a >= 0 && b > a ? pg.slice(a, b) : '';
   // ⭐v6.563（Rule 40，站長改需求）：只記休閒線上對戰，本機雙人／vs AI 不記
   r.W1 = /const replayRecordable = \$derived\(!!game && !isTournament && !isTReplay && !isTournSpectator && !isAdminMode\s*&& mode === 'online' && !isSpectator && \(myPlayerIndex === 0 \|\| myPlayerIndex === 1\)\);/.test(blk)
-    && /finalizeReplay\(\{ rec, finalState: g, online: mode === 'online', seat: \(myPlayerIndex === 0 \|\| myPlayerIndex === 1\) \? myPlayerIndex : null,\s*ai: aiPlayerIndex !== null, revealOpp: replayRevealsOpponent\(\), appVersion: VERSION, now: (?:Date\.now|gameClockNow)\(\) \}\);/.test(blk)   // ⭐v6.565（Rule 40）：savedAt 改用遊戲時鐘（跟盤面同一個時鐘），兩種寫法都只代表「現在」，意圖不變
+    && /finalizeReplay\(\{ rec, finalState: g, online: mode === 'online', seat: \(myPlayerIndex === 0 \|\| myPlayerIndex === 1\) \? myPlayerIndex : null,\s*ai: aiPlayerIndex !== null, revealOpp: replayRevealsOpponent\(\), appVersion: VERSION, now: (?:Date\.now|gameClockNow)\(\)(?: \}\);|,\s*decks: _replayDecks\.gameId === g\.id \? [^\n]*\}\);)/.test(blk)   /* ⭐v6.600（Rule 40）：多交雙方牌組（test-v6600 守）；其餘條件逐字不變 */   // ⭐v6.565（Rule 40）：savedAt 改用遊戲時鐘（跟盤面同一個時鐘），兩種寫法都只代表「現在」，意圖不變
     && /if \(data\) \{ lastSavedReplay = data; void saveReplay\(data\); \}/.test(blk) && /if \(!g \|\| !replayRecordable\) return;\s*untrack\(\(\) => onReplayGameState\(g\)\);/.test(blk)
     && /const toSave = stepsForStorage\(rec\.steps, \{ online: mode === 'online', seat: \(myPlayerIndex === 0 \|\| myPlayerIndex === 1\) \? myPlayerIndex : null, revealOpp: replayRevealsOpponent\(\) \}\);\s*if \(toSave\) void saveInProgress\(rec\.gameId, toSave\);/.test(blk);
   // W5：onReplayGameState 本體實跑（假的存檔函式）：線上＋開關關 ⇒ 存遮蔽版；開關開 ⇒ 攤開；本機 AI ⇒ kind ai；錦標賽條件外不會被呼叫（W6）
@@ -274,6 +274,9 @@ async function scenarios(L, srcRoot) {
           const replayRevealsOpponent = () => env.reveal;
           const mode = env.mode, myPlayerIndex = env.seat, aiPlayerIndex = env.ai, VERSION = 'T';
           const gameClockNow = () => Date.now();   // ⭐v6.565（Rule 40）：頁面改用遊戲時鐘，替身＝沒同步過的本機時鐘
+          // ⭐v6.600（Rule 40）：記錄時多帶雙方牌組（行為由 test-v6600 守）⇒ 這裡給中性替身，本條守的遮蔽／攤開／kind 不受影響
+          let _replayDecks = { gameId: '', my: null, opp: null, tries: 0, busy: false };
+          const replayMyDeckName = () => null, replayFetchOppArchetype = () => {};
           ${fnSrc}
           return onReplayGameState;`);
         const f = make(L, env, saved, prog);
@@ -466,7 +469,7 @@ else if (chromium) {
             const RS = window.RSX;
             await new Promise((r) => { const q = indexedDB.deleteDatabase('ptcg-tw-sim-replays'); q.onsuccess = q.onerror = q.onblocked = () => r(); });
             await RS.saveInProgress('g-live', [{ turn: 1, activePlayerIndex: 0, logLen: 1, state: base.snapshots[0].state }]);
-            const mk = (i, gid) => ({ ...base, meta: { ...base.meta, gameId: gid, savedAt: 1000 + i } });
+            const mk = (i, gid) => ({ ...base, meta: { ...base.meta, kind: 'online', gameId: gid, savedAt: 1000 + i } });   // ⭐v6.600（Rule 40）：本機（local／ai）的紀錄不再保留 ⇒ 儲存機制改用線上對戰的紀錄驗（意圖：留 10 場、同局一份、清進行中、讀回一致）
             for (let i = 0; i < 11; i++) await RS.saveReplay(mk(i, 'g' + i));
             const afterInProg = await RS.loadInProgress('g-live');
             await RS.saveReplay(mk(20, 'g5'));   // 同一局重存

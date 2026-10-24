@@ -30,7 +30,10 @@ import { V6464_GAME_PAIRS, revertPairs } from './lib/revert-v6464-thumbs.mjs';
 import { V6560_GAME_PAIRS } from './lib/revert-v6560-game.mjs';   // ⭐v6.560（Rule 40）：一般對戰復盤的全版面改動（獎賞翻面條件、播放列、結算視窗下載鈕）先還原成 v6.559；內容由 test-v6560 鎖
 import { V6561_GAME_PAIRS } from './lib/revert-v6561-game.mjs';   // ⭐v6.561（Rule 40）：tStartReplay 合併逐動作格（非版面）先還原成 v6.560
 import { V6562_GAME_PAIRS } from './lib/revert-v6562-game.mjs';   // ⭐v6.562（Rule 40）：聊天室置頂公告／賽程對局時間先還原成 v6.561
-import { revertV6598Game, revertV6598Cards, revertV6598Decks, V6598_CARDS_PAIRS } from './lib/revert-v6598-pages.mjs';   // ⭐v6.598（Rule 40）：手機彈出視窗上緣／關閉鈕，先還原成 v6.597
+import { revertV6599Game } from './lib/revert-v6599-pages.mjs';   // ⭐v6.599（Rule 40）
+import { revertV6600Game } from './lib/revert-v6600-game.mjs';   // ⭐v6.600（Rule 40）
+import { revertV6598Game as _rv6598Game, revertV6598Cards, revertV6598Decks, V6598_CARDS_PAIRS } from './lib/revert-v6598-pages.mjs';   // ⭐v6.598（Rule 40）：手機彈出視窗上緣／關閉鈕，先還原成 v6.597
+const revertV6598Game = (x) => _rv6598Game(revertV6599Game(revertV6600Game(x)));   // ⭐v6.599／v6.600：鏈又長兩節（既有呼叫點一個字都不必改）
 import { revertV6596Game } from './lib/revert-v6596-game.mjs';   // ⭐v6.596（Rule 40）：對戰頁先還原 v6.596（直立大螢幕填滿、擲幣後提示）再接 v6.595
 import { revertV6595Game } from './lib/revert-v6595-game.mjs';   // ⭐v6.595（Rule 40）：出招前擲幣（兩步出招、取消鎖）＋錦標賽結束下載復盤檔，由新到舊最先還原；行為由 test-v6595 鎖
 import { V6583_GAME_PAIRS } from './lib/revert-v6583-game.mjs';   // ⭐v6.583（Rule 40）：牌組公布欄附加對戰紀錄，由新到舊最先還原；行為由 test-v6583 鎖

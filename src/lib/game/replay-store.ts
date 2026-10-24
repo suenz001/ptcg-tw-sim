@@ -8,6 +8,7 @@
 // 所有函式都不會 throw：瀏覽器不支援／私密模式寫不進去 ⇒ 回 null／false，呼叫端照常運作。
 
 import { validateReplayData, type ReplayData, type ReplayMeta, type ReplayStep } from './replay-record';
+import { replayFileName, isLocalReplayKind } from './replay-label';   // ⭐v6.600 下載檔名與「本機對戰不留紀錄」的唯一判準
 
 export const MAX_SAVED_REPLAYS = 10;
 const DB_NAME = 'ptcg-tw-sim-replays';
@@ -80,10 +81,11 @@ export async function saveReplay(data: ReplayData): Promise<string | null> {
     const all = ((await tx<Row[]>(db, 'readonly', (s) => s.getAll() as IDBRequest<Row[]>)) ?? []).filter((r) => r.id !== IN_PROGRESS_ID);
     const id = 'r_' + data.meta.savedAt + '_' + String(data.meta.gameId).slice(0, 12);
     const dupes = all.filter((r) => r.meta?.gameId === data.meta.gameId).map((r) => r.id);
-    const keep = all.filter((r) => !dupes.includes(r.id)).sort((a, b) => b.savedAt - a.savedAt);
+    const locals = all.filter((r) => isLocalReplayKind(r.meta?.kind)).map((r) => r.id);   // ⭐v6.600 舊的本機紀錄順便清掉
+    const keep = all.filter((r) => !dupes.includes(r.id) && !locals.includes(r.id)).sort((a, b) => b.savedAt - a.savedAt);
     const drop = keep.slice(MAX_SAVED_REPLAYS - 1).map((r) => r.id);
     await tx(db, 'readwrite', (s) => {
-      for (const x of [...dupes, ...drop]) s.delete(x);
+      for (const x of [...dupes, ...locals, ...drop]) s.delete(x);
       s.put({ id, meta: data.meta, gz, savedAt: data.meta.savedAt } as Row);
       s.delete(IN_PROGRESS_ID);
     });
@@ -95,7 +97,8 @@ export async function saveReplay(data: ReplayData): Promise<string | null> {
 export async function listReplays(): Promise<SavedReplayInfo[]> {
   const db = await openDb(); if (!db) return [];
   try {
-    const all = ((await tx<Row[]>(db, 'readonly', (s) => s.getAll() as IDBRequest<Row[]>)) ?? []).filter((r) => r.id !== IN_PROGRESS_ID && r.meta);
+    // ⭐v6.600 站長：本機的對戰（本機雙人、vs AI）完全不需要復盤紀錄 ⇒ v6.563 以前留下的舊紀錄不列出（存新的一場時順便清掉）
+    const all = ((await tx<Row[]>(db, 'readonly', (s) => s.getAll() as IDBRequest<Row[]>)) ?? []).filter((r) => r.id !== IN_PROGRESS_ID && r.meta && !isLocalReplayKind(r.meta.kind));
     return all.sort((a, b) => b.savedAt - a.savedAt).slice(0, MAX_SAVED_REPLAYS).map((r) => ({ id: r.id, meta: r.meta as ReplayMeta, bytes: r.gz?.byteLength ?? 0 }));
   } finally { db.close(); }
 }
@@ -139,11 +142,10 @@ export async function downloadReplayFile(data: ReplayData): Promise<void> {
   const gz = await gzipText(JSON.stringify(data));
   const d = new Date(data.meta.savedAt);
   const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
-  const safe = (s: string | null) => String(s ?? '?').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 16);
   const url = URL.createObjectURL(new Blob([gz as BlobPart], { type: 'application/octet-stream' }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `復盤-${safe(data.meta.p1name)}-vs-${safe(data.meta.p2name)}-${ymd}.ptcgreplay`;
+  a.download = replayFileName(data.meta, ymd);   // ⭐v6.600 勝敗＋雙方牌組（舊檔沒有這些資訊 ⇒ 維持舊格式）
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
