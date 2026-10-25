@@ -8,14 +8,17 @@ import { parse } from 'acorn';
 import { runInNewContext } from 'node:vm';
 import { transform } from 'esbuild';
 import { createHash } from 'node:crypto';
-import { revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
+import { revertAdminV173 as _revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
+import { revertAdminV174 } from './lib/sap-revert-admin-v174.mjs';   // ⭐v6.601（server v1.74，Rule 40）：我的錦標賽對戰回傳 result（行為由 test-v6601 守）
+const revertAdminV173 = (s) => _revertAdminV173(revertAdminV174(s));   // 鏈又長一節（既有呼叫點一個字都不必改）
 import { NEW_TAIL_SHA_V173, NEW_TEV_SHA_V173, NEW_TEV_LEN_V173, revertV173 } from './lib/tourn-revert-v173.mjs';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { revertV6592Game, V6592_GAME_PAIRS } from './lib/revert-v6592-game.mjs';
 import { revertV6599Game } from './lib/revert-v6599-pages.mjs';   // ⭐v6.599（Rule 40）：牌組先後攻偏好接線（行為由 test-v6599 守）
 import { revertV6598Game as _rv6598Game, revertV6598Cards, revertV6598Decks, V6598_CARDS_PAIRS } from './lib/revert-v6598-pages.mjs';   // ⭐v6.598（Rule 40）：手機彈出視窗上緣／關閉鈕，先還原成 v6.597
 import { revertV6600Game } from './lib/revert-v6600-game.mjs';   // ⭐v6.600（Rule 40）：復盤勝敗與雙方牌組接線（行為由 test-v6600 守）
-const revertV6598Game = (x) => _rv6598Game(revertV6599Game(revertV6600Game(x)));   // ⭐v6.599／v6.600：鏈又長一節（既有呼叫點一個字都不必改）
+import { revertV6601Game } from './lib/revert-v6601-game.mjs';   // ⭐v6.601（Rule 40）：我的錦標賽對戰標勝敗（行為由 test-v6601 守）
+const revertV6598Game = (x) => _rv6598Game(revertV6599Game(revertV6600Game(revertV6601Game(x))));   // ⭐v6.599～v6.601：鏈一版一節（既有呼叫點一個字都不必改）
 import { revertV6596Game } from './lib/revert-v6596-game.mjs';   // ⭐v6.596（Rule 40）：對戰頁先還原 v6.596（直立大螢幕填滿、擲幣後提示）再接 v6.595
 import { revertV6595Game } from './lib/revert-v6595-game.mjs';   // ⭐v6.595（Rule 40）：對戰頁先還原 v6.595 再驗 v6.592 的六組還原
 import { normEol } from './lib/eol-agnostic.mjs';

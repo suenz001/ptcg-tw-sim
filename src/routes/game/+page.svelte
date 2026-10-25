@@ -11797,7 +11797,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <ul class="replay-list">
               {#each myTournMatches.matches as tm (tm.matchId)}
                 <li>
-                  <div class="replay-names"><b>{tm.p1name || '?'}</b> vs <b>{tm.p2name || '?'}</b></div>
+                  <ReplayRowLabel meta={{ kind: 'tournament', p1name: tm.p1name, p2name: tm.p2name, result: tm.result }} />   <!-- ⭐v6.601 勝／敗／雙敗（伺服器 v1.74 起才有） -->
                   <div class="muted replay-hint">{myTournMatchLine(tm)}</div>
                   <div class="replay-actions"><button class="btn-primary small" onclick={() => playMyTournReplay(tm.matchId)} disabled={replayLoading}>{replayLoading ? '載入中…' : '▶ 觀看'}</button></div>
                 </li>

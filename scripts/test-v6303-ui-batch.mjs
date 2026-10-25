@@ -56,7 +56,9 @@ import { revertAdminV169 as _revertAdminV169 } from './lib/sap-revert-admin-v169
 import { revertAdminV170 as _revertAdminV170 } from './lib/sap-revert-admin-v170.mjs';   // ⭐v1.70（v6.583 牌組公布欄附加對戰紀錄，錦標賽區塊之前）：先剝較新的（Rule 54）
 import { revertAdminV171 as _revertAdminV171 } from './lib/sap-revert-admin-v171.mjs';
 import { revertAdminV172 as _revertAdminV172 } from './lib/sap-revert-admin-v172.mjs';
-import { revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
+import { revertAdminV173 as _revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
+import { revertAdminV174 } from './lib/sap-revert-admin-v174.mjs';   // ⭐v6.601（server v1.74，Rule 40）：我的錦標賽對戰回傳 result（行為由 test-v6601 守）
+const revertAdminV173 = (s) => _revertAdminV173(revertAdminV174(s));   // 鏈又長一節（既有呼叫點一個字都不必改）
 const revertAdminV172 = s => _revertAdminV172(revertAdminV173(s));
 const revertAdminV171 = s => _revertAdminV171(revertAdminV172(s));
 const revertAdminV170 = (s) => _revertAdminV170(revertAdminV171(s));

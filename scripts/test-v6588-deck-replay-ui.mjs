@@ -9,7 +9,9 @@ import { pwLaunch } from './lib/pw.mjs';
 import { readBaseBlob, hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
 import { deckReplayServer, functionSource, clone } from './lib/deck-replay-db-fixture.mjs';
 import { postListBundle, openingBundle, fixtureHtml, measureOpening } from './lib/deck-replay-ui-fixture.mjs';
-import { revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
+import { revertAdminV173 as _revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
+import { revertAdminV174 } from './lib/sap-revert-admin-v174.mjs';   // ⭐v6.601（server v1.74，Rule 40）：我的錦標賽對戰回傳 result（行為由 test-v6601 守）
+const revertAdminV173 = (s) => _revertAdminV173(revertAdminV174(s));   // 鏈又長一節（既有呼叫點一個字都不必改）
 import { revertV173 } from './lib/tourn-revert-v173.mjs';
 import { revertAdminV172 } from './lib/sap-revert-admin-v172.mjs';
 import { revertAdminV171 } from './lib/sap-revert-admin-v171.mjs';

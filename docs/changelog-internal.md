@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.601 — 「我的錦標賽對戰」也標出勝敗（server v1.74）
+
+BASE `ac3f40a4`（v6.600）。站長 2026-10-25：「我的錦標賽對戰也要標勝敗」。
+
+- 伺服器 v1.74：GET /api/my-tourn-matches（哨兵 v166-my-tourn-matches，在錦標賽區塊 TAIL_ANCHOR 之前 ⇒ 28 把鎖不動）projection 多拿 winnerUid，每場多回 result：有勝者 ⇒ 是不是自己（uid 只在伺服器比對，不回傳）；沒有勝者（時限雙敗、雙方棄權 doubleDrop）⇒ draw。判法與既有賽事戰績寫法相同（'lose' 改用前端一致的 'loss'）。未進場（noShow）本來就不列。每位玩家 30 秒快取不變，查詢只多一個欄位。
+- 前端：parseMyTournMatches 只收 win／loss／draw；清單改用 v6.600 的 ReplayRowLabel（kind:'tournament' ⇒ draw 顯示「雙敗」）。舊伺服器沒有 result ⇒ 不標（錦標賽清單沒有座位資訊，不從暱稱猜）。
+- 部署：要先跑 update-tournament.bat（伺服器 v1.74），再跑 redeploy-oracle.bat；順序反了也不會壞，只是標籤要等伺服器更新後才出現。
+- 守衛 test-v6601-my-tourn-result：S1 伺服器哨兵接假 Mongo（會套用 projection）實跑 P1／P2 勝敗、雙敗、同暱稱靠 uid、不回 uid；正對照（projection 沒拿 winnerUid ⇒ 紅）；U1 解析；U2 清單判準；W1 接線；HEAD-FAIL BASE 上 S1、U1、W1 逐條紅。
+- Rule 40：server_admin_patch.js 還原表 scripts/lib/sap-revert-admin-v174.mjs（3 對，逐位元還原 v1.73）以「revertAdminV173 外包一層」接進 sap153／sap154／sap169／v6303／v6561／v6588／v6589／v6592-wiring（既有呼叫點不改）；對戰頁還原表 revert-v6601-game.mjs（1 對）接進 v6441／v6587／v6590／v6592-wiring／v6293。
+- Opus 5.5 審查：P1／P2 無（逐一核對所有 TMATCH 結束路徑：有勝者的路徑 winnerUid／winnerName 都取自同一座位；時限雙敗、gameDraw、doubleDrop＝draw；noShow／deadlock／restart 不列；錦標賽區塊 tail／tev sha 與 v1.73 相同）。P3：只有 winnerName 沒有 winnerUid 的舊資料不回 result（不標）；說明行在標籤已是「雙敗」時不重複；消費者註解對齊。守衛 8 項，HEAD-FAIL 4 條逐條紅。全套 949 支 0 FAIL。
+
 ## v6.600 — 復盤標出勝敗與雙方牌組，下載檔名也帶上；本機對戰完全不留紀錄（玩家建議）
 
 BASE `4e3c1af5`（v6.599）。玩家建議：復盤顯示這場是勝是敗、我用什麼牌組對上什麼牌組，下載預設檔名也帶上。站長 2026-10-24 裁定：我方顯示自己取的牌組名稱（玩家比較喜歡）、對手顯示牌組原型；錦標賽對手查不到顯示「未知」可接受；字數變多要檢查手機排版；本機的對戰（本機雙人、vs AI）完全不需要任何紀錄。

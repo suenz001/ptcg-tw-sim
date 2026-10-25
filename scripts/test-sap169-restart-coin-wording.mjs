@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { revertAdminV171 as _revertAdminV171 } from './lib/sap-revert-admin-v171.mjs';
 import { revertAdminV172 } from './lib/sap-revert-admin-v172.mjs';
-import { revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
+import { revertAdminV173 as _revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
+import { revertAdminV174 } from './lib/sap-revert-admin-v174.mjs';   // ⭐v6.601（server v1.74，Rule 40）：我的錦標賽對戰回傳 result（行為由 test-v6601 守）
+const revertAdminV173 = (s) => _revertAdminV173(revertAdminV174(s));   // 鏈又長一節（既有呼叫點一個字都不必改）
 const revertAdminV171 = s => _revertAdminV171(revertAdminV172(revertAdminV173(s)));
 /**
  * server patch v1.69 守衛：管理員「重賽」時，錦標賽聊天室的系統訊息「（從擲幣重新開始）」→「（從擲硬幣重新開始）」
