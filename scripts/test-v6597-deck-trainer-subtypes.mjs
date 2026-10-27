@@ -124,7 +124,7 @@ ok('★★ S1 牌組編輯器仍只用共用的 compareDeckCards（沒有第二�
 ok('★★★ S2 明細用同一個 cardList 片段畫大類別與小類別；小標題只在訓練家出現；頁面仍只有兩個 <img> 樣板', S.S2 === true);
 
 // ── B：真瀏覽器 ──
-const BUILD = join(ROOT, 'build');
+const BUILD = process.env.PTCG_ACCEPTANCE_BUILD || join(ROOT, 'build');
 if (!existsSync(join(BUILD, '404.html'))) shallowSkip('B（沒有 build/；CI 的 build 步驟之後才有）');
 else {
   const chromium = pwChromium('v6.597');

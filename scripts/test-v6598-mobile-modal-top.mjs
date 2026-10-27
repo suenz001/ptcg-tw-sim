@@ -70,7 +70,7 @@ ok('★★ S3 /cards、/decks 卡圖放大：上下讓開狀態列與底部橫�
 ok('★★ S4 錦標賽名人堂／戰報視窗不往上緣外推、dvh 扣內距、標題列 sticky、✕ 44×44；私聊面板 ✕ 44×44；測抽底部讓開底部橫條', S.S4 === true);
 
 // ── B：真瀏覽器 ──
-const BUILD = join(ROOT, 'build');
+const BUILD = process.env.PTCG_ACCEPTANCE_BUILD || join(ROOT, 'build');
 if (!existsSync(join(BUILD, '404.html'))) shallowSkip('B（沒有 build/；CI 的 build 步驟之後才有）');
 else {
   const chromium = pwChromium('v6.598');

@@ -202,7 +202,7 @@ ok('★★★ S5 下載檔名與「本機不留」只呼叫中央', S.S5 === tru
 }
 
 // ── B：真瀏覽器 ──
-const BUILD = join(ROOT, 'build');
+const BUILD = process.env.PTCG_ACCEPTANCE_BUILD || join(ROOT, 'build');
 if (!existsSync(join(BUILD, '404.html'))) shallowSkip('B（沒有 build/；CI 的 build 步驟之後才有）');
 else {
   const chromium = pwChromium('v6.600');

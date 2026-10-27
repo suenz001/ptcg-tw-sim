@@ -139,7 +139,7 @@ ok('★★ S8 對戰頁與牌組編輯器真的 import 中央函式與元件', S
 }
 
 // ── B：真瀏覽器 ──
-const BUILD = join(ROOT, 'build');
+const BUILD = process.env.PTCG_ACCEPTANCE_BUILD || join(ROOT, 'build');
 if (!existsSync(join(BUILD, '404.html'))) shallowSkip('B（沒有 build/；CI 的 build 步驟之後才有）');
 else {
   const chromium = pwChromium('v6.599');
