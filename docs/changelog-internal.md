@@ -2,7 +2,18 @@
 
 ## v6.603 — 錦標賽賽季（server v1.76／admin v1.91）
 
-BASE `1f23f4e2`（v6.602）。初始2026第一季，admin賽事立即或台灣日期00:00換季，確認預覽、CAS與冪等；同年序號遞增，跨年第一季。歸檔依startedAt，缺失用createdAt，兩者異常固定初季；不依finishedAt。六類排行按季聚合，個人生涯與玩家資料保留。驗收與獨立複審進行中，未推送。
+BASE `598f5d61`（v6.602，已推送且兩CI成功／測試站HTTP版本6.602）。站長同意台灣日期00:00生效、跨季按startedAt歸舊季、個人頁維持生涯累計。
+
+- 單文件`tournamentSeasonState/state`保存不可變時間線、revision CAS、單筆排程與最近32筆含操作者/動作/時間/前後狀態稽核。初始2026第一季，同年依次增加不限四季、跨年第一季；不因跨年自行換季。admin賽事頁先伺服器預覽再確認提交，立即/排程/改期/取消；多管理員衝突與年度跨越拒絕舊確認。普通讀取合併/五秒cache，到期繞快取；舊30秒tick與排行讀取會補執行，停機後依原定日期生效。
+- 六類排行先按季過濾再聚合與前20切片，有界8季/60秒cache與in-flight合併，新增/刪除歸檔與換季失效、epoch擋舊請求回填。startedAt缺失用createdAt，兩者異常固定首季；跨季未完賽不漂季，社群主辦依createdAt。保留原聚合判準及個人生涯，不清空玩家/報名/對戰/歸檔/名人堂。
+- 新季索引首次排行建立並await，三項Promise.all集中catch；失敗回500、不查歸檔，下次重試。不是舊索引的啟動best-effort模式。真正Mongo7.0.14本機15006合成資料，三季每筆恰一次、初始全歷史相同；後續季日期分支hint/min/max避免multikey跨季掃描，第二/第三季各回5001、檢視10001/10002；首季unknown仍全掃15006，60秒cache只降頻，限制已寫使用文件。Mongo測完已shutdown exit0，未接正式DB。
+- 玩家賽季下拉44px/16px，預設本季、只列已生效季；切季先清舊資料並擋亂序。重進排行超過30秒刷新，明確選舊季保留。同季失敗保留好資料並示警、異季失敗不殘留舊榜。管理操作細節只記admin內部6.603，首頁只寫玩家排行功能。
+- 新guard22/0；真正admin授權403/過期409/預覽不寫、取消確認零提交、確認帶revision與年度、併發CAS、排程補執行、六榜真聚合/limit/快取失效、索引失敗重試、Svelte手機桌機重進/race/失敗保留均通過。BASE f786反證20紅/2正對照，10個功能突變均正常exit1且有行為斷言失敗。
+- 獨立seasons_6603_review首輪P2重進排行未刷新已修並複審；稽核缺前後狀態與Mongo量測P3亦完成。359d產品與db4f最終產品零diff，十檔歷史守衛修正另經獨立複審，未降低斷言。
+- 完整951支第一輪942成功/9失敗（29.30分），1000seeds成功972.2秒，harness+35免疫綠。9紅來自版本比較基準、sap152/153消費者清單、三索引逐行catch、6177新季清資料否定、6299替身缺時間欄。只對齊真正6.602基準、准許精確176、精確還原舊判準並由新guard承接新行為、補時間替身。db4f單工15/15成功，951聯集未解決0。兩報表escape/mainHard/restoreFailed0、statusChanged=false；SHALLOW0、6378 ENV1未追蹤音樂、6263 PLATFORM1，未增加skip。
+- Pages與Oracle release build皆exit0，server-engine與5224卡池建置成功。實際Oracle建置/tournament頁攔截Firebase與API以本機假資料登入，390/1280×深淺四組真操作切舊季、空新季、無溢出/44px/pageerror0；沒有向正式站送帳號、牌組或賽事。沒有實體iPhone/正式DB驗收宣稱。
+- 證據根`E:/ptcg-tw-sim-local/season-presets-implementation`：guard6603-final.log、mutants6603.json、headfail6603.log、mongo-audit/explain-bounded.json、visual6603/proof.json與PNG、build6603.log、build6603-oracle.log、acceptance6603.json。全套`E:/sb-seasons-6603/__rt/full.json`、補驗`E:/sb-seasons-6603-supp/__rt/supp.json`。
+- seasons_6603_review已核最終文件/951聯集/10突變/兩build及實頁面，核准推送，剩餘P1/P2/P3=0；推送後仍驗CI。正式部署由站長自行先update-tournament.bat，再redeploy-oracle.bat；本輪AI未執行bat、未讀D:/ai。使用/保留資料及回退注意事項見docs/season-presets-admin.md。
 
 ## v6.602 — 管理預設牌組（server v1.75／admin v1.90）
 
@@ -14,7 +25,7 @@ BASE `5c403f90`（v6.601）。站長授權分版實作預組管理與賽季；�
 - 修改前harness+35免疫36/36；f786完整950支第一次940成功/10失敗。歷史6支Bash解壓改既有native archive，保留原BASE/paths/斷言；v6272補缺少version.ts宣告；五舊UI守衛允許指向已驗build，不增加skip。27c15補15支為14成功/1 evolve1000逾時，其他原紅已成功、五個缺build的原skip已跑真瀏覽器且skip0。最後一支原1000seeds獨立完整成功exit0（evolve1000-final.log）；950支聯集未解決項目0。
 - 全套與補驗的escape/mainHard/restoreFailed皆0、statusChanged=false。6378 ENV1為未追蹤音樂，6263 PLATFORM1；首次五個SHALLOW標記實為舊UI守衛缺build，並非git缺歷史，已在補驗消除。
 - Pages與隔離Oracle release build成功；390/1280真頁面載入管理清單、下架後重新載入、唯讀及選單不溢出、pageerror0。admin圖為新面板隔離預覽，不冒稱完整登入後台。
-- 證據根：`E:/ptcg-tw-sim-local/season-presets-implementation` 的mutants6602.json、headfail6602.log、visual6602/proof.json、visual6602-pages/proof.json、removed-handlers.json、build與補驗log；全套`E:/sb-presets-6602/__rt/full.json`、補驗`E:/sb-presets-6602-supp/__rt/supp.json`。推送前最終驗收完成；正式bat由站長先update-tournament再redeploy-oracle。
+- 證據根：`E:/ptcg-tw-sim-local/season-presets-implementation` 的mutants6602.json、headfail6602.log、visual6602/proof.json、visual6602-pages/proof.json、removed-handlers.json、build與補驗log；全套`E:/sb-presets-6602/__rt/full.json`、補驗`E:/sb-presets-6602-supp/__rt/supp.json`。598f5d61已推送；Deploy40461326918與Audit40461326914皆success，測試站HTTP200/version6.602/noindex保留（ci6602.json、online6602.json）。正式bat由站長先update-tournament再redeploy-oracle。
 
 ## v6.601 — 「我的錦標賽對戰」也標出勝敗（server v1.74）
 
