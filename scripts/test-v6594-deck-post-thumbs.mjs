@@ -15,6 +15,7 @@
  *
  * Run: node scripts/test-v6594-deck-post-thumbs.mjs
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, existsSync, writeFileSync, mkdtempSync, rmSync, statSync, createReadStream } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -226,7 +227,7 @@ else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6594b-'));
   try {
     const { execFileSync } = await import('node:child_process');
-    execFileSync('bash', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ['src'], tmp);
     const bU = await unitChecks(await loadMods(tmp));
     const bS = staticChecks(normEol(readFileSync(join(tmp, DP_REL), 'utf8')), normEol(readFileSync(join(tmp, DECKS_REL), 'utf8')));
     const red = [...['U1', 'U2', 'U2b', 'U3', 'U4', 'U5', 'U6'].filter((k) => bU[k] !== true), ...['S1', 'S2', 'S3'].filter((k) => bS[k] !== true)];

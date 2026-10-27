@@ -16,6 +16,7 @@
  *      手機觸控高度 ≥44px、字級 16px、不撐出橫向捲動
  * 【H】HEAD-FAIL：BASE（v6.598）上 U、S 逐條紅
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, existsSync, mkdtempSync, rmSync, writeFileSync, createReadStream, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -138,7 +139,7 @@ ok('★★ S8 對戰頁與牌組編輯器真的 import 中央函式與元件', S
 }
 
 // ── B：真瀏覽器 ──
-const BUILD = join(ROOT, 'build');
+const BUILD = process.env.PTCG_ACCEPTANCE_BUILD || join(ROOT, 'build');
 if (!existsSync(join(BUILD, '404.html'))) shallowSkip('B（沒有 build/；CI 的 build 步驟之後才有）');
 else {
   const chromium = pwChromium('v6.599');
@@ -244,7 +245,7 @@ else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6599b-'));
   try {
     const { execFileSync } = await import('node:child_process');
-    execFileSync('bash', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ['src'], tmp);
     const bU = unitChecks(await loadMod(tmp));
     const bg = readBaseBlob(ROOT, BASE_SHA, 'src/routes/game/+page.svelte'), bd = readBaseBlob(ROOT, BASE_SHA, 'src/routes/decks/+page.svelte');
     const bS = staticChecks(normEol(bg.out), normEol(bd.out), '');

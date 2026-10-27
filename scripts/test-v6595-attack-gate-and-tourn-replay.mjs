@@ -18,6 +18,7 @@
  *
  * Run: node scripts/test-v6595-attack-gate-and-tourn-replay.mjs
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, readdirSync, existsSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -267,7 +268,7 @@ else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6595b-'));
   try {
     const { execFileSync } = await import('node:child_process');
-    execFileSync('bash', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ['src'], tmp);
     const bM = await loadMods(tmp);
     const bU = gateUnit(bM.GATE), bE = await engineChecks(bM), bR = await tournReplayChecks(bM);
     const bS = staticChecks(normEol(readFileSync(join(tmp, 'src/lib/game/engine.ts'), 'utf8')), normEol(readFileSync(join(tmp, 'src/routes/game/+page.svelte'), 'utf8')), normEol(readFileSync(join(tmp, 'src/lib/game/timeout-action.ts'), 'utf8')));

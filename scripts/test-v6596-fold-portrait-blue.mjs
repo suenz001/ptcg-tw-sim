@@ -245,7 +245,7 @@ async function browserChecks(buildDir) {
   } finally { await browser.close(); srv.close(); }
   return r;
 }
-const BUILD = join(ROOT, 'build');
+const BUILD = process.env.PTCG_ACCEPTANCE_BUILD || join(ROOT, 'build');
 if (!existsSync(join(BUILD, '404.html'))) shallowSkip('B（沒有 build/；CI 的 build 步驟之後才有）');
 else {
   const B = await browserChecks(BUILD);
