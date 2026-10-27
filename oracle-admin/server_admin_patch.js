@@ -1,3 +1,4 @@
+// === ORACLE ADMIN ENDPOINTS === v1.75 (v6.602 管理預設牌組)
 // === ORACLE ADMIN ENDPOINTS === v1.74 (v6.601 我的錦標賽對戰清單回傳自己的勝敗)
 // === ORACLE ADMIN ENDPOINTS === v1.73 (v6.592 錦標賽個人操作時計，預設關閉)
 // === ORACLE ADMIN ENDPOINTS === v1.72 (v6.589 admin 完整帳號統計；名單仍保留上限，站長同意增加 Auth 分頁查詢)
@@ -7929,6 +7930,49 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
     // <<< v167-time-limit-verdict
+    // >>> v175-managed-presets
+    let managedPresetService;
+    function presetService() {
+      if (!TENG.createPresetService || !TENG.parsePresetText || !TENG.presetPublicCatalog || !Array.isArray(TENG.PRESET_DECKS)) throw new Error('請先更新伺服器引擎');
+      return managedPresetService || (managedPresetService = TENG.createPresetService(db.collection('managedPresetDecks'), TENG.PRESET_DECKS));
+    }
+    let presetCache = null, presetFlight = null;
+    app.get('/api/preset-decks', async (req, res) => {
+      try {
+        if (!presetCache || Date.now() - presetCache.at > 30000) {
+          if (!presetFlight) presetFlight = presetService().read().then(d => ({ at: Date.now(), data: TENG.presetPublicCatalog(d) })).finally(() => { presetFlight = null; });
+          const next = await presetFlight;
+          if (!presetCache || next.data.revision >= presetCache.data.revision) presetCache = next;
+        }
+        res.set('Cache-Control', 'no-cache');
+        res.json(presetCache.data);
+      } catch (e) { res.status(503).json({ error: e.message }); }
+    });
+    app.get('/api/admin-preset-decks', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error || !isTournAdmin(id)) return res.status(403).json({ error: '需要管理員權限' });
+        res.set('Cache-Control', 'no-store');
+        const d = await presetService().read();
+        res.json({ revision: d.revision, decks: d.decks });
+      } catch (e) { res.status(503).json({ error: e.message }); }
+    });
+    app.post('/api/admin-preset-decks', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error || !isTournAdmin(id)) return res.status(403).json({ error: '需要管理員權限' });
+        const b = req.body || {};
+        const parse = () => TENG.parsePresetText(b.name, b.text, TPOOL);
+        if (b.action === 'preview') {
+          const d = parse();
+          return res.json({ deck: d, cards: d.entries.map(e => ({ name: TPOOL.get(e.cardId).name, setCode: TPOOL.get(e.cardId).setCode, collectorNumber: TPOOL.get(e.cardId).collectorNumber, cardId: e.cardId, count: e.count })) });
+        }
+        const d = await presetService().mutate(b, String(id.uid || id.email), parse);
+        presetCache = { at: Date.now(), data: TENG.presetPublicCatalog(d) };
+        res.json({ ok: true, revision: d.revision });
+      } catch (e) { res.status(400).json({ error: e.message }); }
+    });
+    // <<< v175-managed-presets
     // >>> v153-tourn-deck-validate
     // ⭐⭐ server patch v1.53（2026-10-02，站長核准）：錦標賽報名的牌組改在伺服器端也跑完整規則。
     //   以前 /register、/register-and-checkin、/propose 只檢查 60 張 ⇒ 改過的前端或很舊的快取版本

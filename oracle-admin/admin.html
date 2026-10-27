@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.89</title>
+<title>PTCG Oracle Admin v1.90</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -372,7 +372,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.89</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.90</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -394,6 +394,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div class="tab" data-tab="tournament" onclick="switchTab('tournament')">🏆 賽事</div>
     <div class="tab" data-tab="tournament-stats" onclick="switchTab('tournament-stats')">📈 賽事統計</div>
     <div class="tab" data-tab="monitor" onclick="switchTab('monitor')">📡 監控</div>
+    <div class="tab" data-tab="preset-decks" onclick="switchTab('preset-decks')">📚 預設牌組</div>
     <div class="tab" data-tab="deck-rules" onclick="switchTab('deck-rules')">🎴 牌組原型</div>
     <div class="tab" data-tab="changelog" onclick="switchTab('changelog')">📋 更新記錄</div>
       <div class="tab" data-tab="card-policy" onclick="switchTab('card-policy')">🗂️ 卡包與賽季</div>
@@ -410,6 +411,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div id="tab-broadcast" class="tab-content" style="display:none;"></div>
     <div id="tab-tournament" class="tab-content" style="display:none;"></div>
     <div id="tab-tournament-stats" class="tab-content" style="display:none;"></div>
+    <div id="tab-preset-decks" class="tab-content" style="display:none;"></div>
     <div id="tab-deck-rules" class="tab-content" style="display:none;"></div>
     <div id="tab-changelog" class="tab-content" style="display:none;"></div>
     <div id="tab-card-policy" class="tab-content" style="display:none;"></div>
@@ -833,6 +835,52 @@ async function api(path, options = {}) {
     return { error: err.message };
   }
 }
+
+// >>> v6602-admin-presets
+let presetAdminData = null, presetAdminBusy = false;
+async function loadPresetDecks() {
+  const el = document.getElementById('tab-preset-decks');
+  const data = await api('/api/admin-preset-decks');
+  if (data.error) { el.textContent = '無法載入：' + data.error; return; }
+  presetAdminData = data;
+  el.innerHTML = '<h2>預設牌組</h2><p>下架不會刪除玩家已複製、報名或對戰中的牌表。</p>'
+    + '<label>牌組名稱 <input id="preset-name" maxlength="100"></label><p>文字格式：張數 卡名 #卡片ID，或 張數 卡名 卡包 卡號。單一卡名有多個版本時請填精確卡號。</p>'
+    + '<textarea id="preset-text" rows="12" style="width:100%;box-sizing:border-box;" aria-label="牌表文字"></textarea>'
+    + '<button onclick="presetPreview()">預覽並匯入</button><div id="preset-preview" style="white-space:pre-wrap;"></div><div id="preset-list"></div>';
+  const list = document.getElementById('preset-list');
+  data.decks.forEach(d => {
+    const row = document.createElement('p');
+    const label = document.createElement('span');
+    label.textContent = d.name + '（' + d.entries.reduce((s,e) => s+e.count,0) + ' 張）' + (d.deleted ? ' 已下架 ' : ' ');
+    const button = document.createElement('button'); button.textContent = d.deleted ? '復原' : '下架';
+    button.onclick = () => presetChange(d.deleted ? 'restore' : 'delete', d);
+    row.append(label, button); list.append(row);
+  });
+}
+window.presetPreview = async function() {
+  if (presetAdminBusy) return;
+  presetAdminBusy = true;
+  try {
+    const name = document.getElementById('preset-name').value, text = document.getElementById('preset-text').value;
+    const revision = presetAdminData.revision;
+    const r = await api('/api/admin-preset-decks', { method:'POST', body:JSON.stringify({ action:'preview', name, text }) });
+    if (r.error) { alert(r.error); return; }
+    const view = document.getElementById('preset-preview');
+    view.textContent = r.cards.map(c => c.count + ' ' + c.name + ' ' + c.setCode + ' ' + c.collectorNumber + ' #' + c.cardId).join('\n');
+    if (!confirm('確認新增「' + r.deck.name + '」共 ' + r.cards.reduce((s,c) => s+c.count,0) + ' 張？')) return;
+    const result = await api('/api/admin-preset-decks', { method:'POST', body:JSON.stringify({ action:'add', name, text, revision, requestId:crypto.randomUUID() }) });
+    if (result.error) alert(result.error); else await loadPresetDecks();
+  } finally { presetAdminBusy = false; }
+};
+async function presetChange(action, deck) {
+  if (presetAdminBusy || !confirm('確認' + (action === 'delete' ? '下架' : '復原') + '「' + deck.name + '」？')) return;
+  presetAdminBusy = true;
+  try {
+    const r = await api('/api/admin-preset-decks', { method:'POST', body:JSON.stringify({ action, id:deck.id, revision:presetAdminData.revision, requestId:crypto.randomUUID() }) });
+    if (r.error) alert(r.error); else await loadPresetDecks();
+  } finally { presetAdminBusy = false; }
+}
+// <<< v6602-admin-presets
 
 // ── Tab switching ────────────────────────────────────────────────
 // ── 🏆 錦標賽管理（呼叫 /api/tournament/admin/* 端點，admin token）──
@@ -2073,6 +2121,7 @@ window.loadActive = function(forceRefresh = false) {
   else if (currentTab === 'matches') p = loadMatchRecords(forceRefresh);  // v0.80: 對戰歷史
   else if (currentTab === 'stats') p = loadStats(forceRefresh);  // v0.83: Phase 2a 統計
   else if (currentTab === 'broadcast') p = loadBroadcastAdmin();  // v1.17 系統廣播設定
+  else if (currentTab === 'preset-decks') p = loadPresetDecks();
   else if (currentTab === 'deck-rules') p = loadDeckRules();  // v1.51 牌組原型規則
   else if (currentTab === 'changelog') p = loadChangelogAdmin();  // ⭐v1.87 完整更新紀錄（＋首頁覆蓋編輯收在進階）
   else if (currentTab === 'card-policy') p = loadCardPolicyAdmin();  // v6.340 卡包與賽季容許
@@ -4176,7 +4225,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.601';
+window.SITE_VERSION_HINT = '6.602';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

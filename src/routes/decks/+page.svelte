@@ -27,7 +27,12 @@
     newDeck,
     sortDecks
   } from '$lib/decks/storage';
-  import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
+  // >>> v6602-managed-presets
+  import { PRESET_DECKS as BUILTIN_PRESET_DECKS } from '$lib/decks/presets';
+  import PresetCatalog from '$lib/decks/PresetCatalog.svelte';
+  let PRESET_DECKS = $state<Deck[]>(import.meta.env.VITE_ORACLE_API_URL ? [] : BUILTIN_PRESET_DECKS);
+  const PRESET_IDS = $derived(new Set([...BUILTIN_PRESET_DECKS.map(d => d.id), ...PRESET_DECKS.map(d => d.id)]));
+  // <<< v6602-managed-presets
   import { buildDeckSheetModel, deckSheetHtml } from '$lib/decks/deck-sheet';   // ⭐v6.559 匯出套牌構築表（道館賽報名用）
   import type { Deck } from '$lib/decks/types';
   import { normalizeDeckCoinPref } from '$lib/decks/coin-pref';   // ⭐v6.599 牌組先後攻偏好（唯一判準）
@@ -1806,6 +1811,7 @@
 <svelte:window onkeydown={onKeydown} />
 
 <main>
+<PresetCatalog onupdate={(items) => { PRESET_DECKS = items; }} />
   <!-- ⭐v6.507 全站頁首統一：標題＋捷徑 → 副標 → 帳號列（PageHeader／AccountBar 共用元件） -->
   <PageHeader title="🧩 牌組編輯器" sub={`Standard · ${REG_MARK_ORDER.join(' / ')} 標`} cls="page-head">
     {#snippet actions()}

@@ -92,7 +92,11 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { loadDecksFromCloud, cloudDecksUnchanged, recordCloudDecksRev } from '$lib/decks/cloud';  // v6.273 讀取減量
   import type { Deck } from '$lib/decks/types';
   import { deckCoinPrefOr, normalizeDeckCoinPref } from '$lib/decks/coin-pref';   // ⭐v6.599 牌組先後攻偏好（唯一判準）
-  import { PRESET_DECKS } from '$lib/decks/presets';
+  // >>> v6602-managed-presets
+  import { PRESET_DECKS as BUILTIN_PRESET_DECKS } from '$lib/decks/presets';
+  import PresetCatalog from '$lib/decks/PresetCatalog.svelte';
+  let PRESET_DECKS = $state<Deck[]>(import.meta.env.VITE_ORACLE_API_URL ? [] : BUILTIN_PRESET_DECKS);
+  // <<< v6602-managed-presets
   import { validateDeck, hasIneligibleCardIssue } from '$lib/decks/validation';
   // ⭐ v6.340：牌組合法性吃後台政策（哪些標可打／哪些卡包暫不開放）——
   //   開戰前一定要先載好，否則會拿舊政策判定。
@@ -10945,6 +10949,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
 <LobbyUnify />
 
 <svelte:window onkeydown={onGlobalKey} onpointermove={onWindowPointerMove} onpointerup={onWindowPointerUp} />
+<PresetCatalog onupdate={(items) => { PRESET_DECKS = items; }} />
 
 {#if isTournament && !isTournSpectator && game?.phase === "playing" && tPlayerClock && tPlayerClock.gameStart === game.gameStartTime && (mySeatIdx === 0 || mySeatIdx === 1)}
   <PlayerClockNotice clock={tPlayerClock} seat={mySeatIdx} now={tNow} />

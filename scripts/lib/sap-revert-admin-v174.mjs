@@ -1,3 +1,4 @@
+import { revertAdminV175 } from './sap-revert-admin-v175.mjs';
 // server v1.74（v6.601）我的錦標賽對戰回傳 result：server_admin_patch.js 的「逐位元還原表」（單一來源；IRON_RULES Rule 38）。
 //   在錦標賽區塊（TAIL_ANCHOR）之前 ⇒ 28 把鎖不動；釘整檔位元組的舊守衛先用這裡還原成 v1.73（ac3f40a4）。行為由 test-v6601 守。
 import assert from 'node:assert/strict';
@@ -16,7 +17,7 @@ export const ADMIN_V174_PAIRS = [
  ]
 ];
 export function revertAdminV174(source) {
- let s=source;
+ let s=revertAdminV175(source);
  for(const [now,prev] of ADMIN_V174_PAIRS){assert.equal(s.split(now).length-1,1,'v174還原錨點必須恰一處');s=s.replace(now,prev);}
  return s;
 }
