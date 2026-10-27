@@ -118,7 +118,8 @@ async function scenarios(L, srcRoot) {
         if (P[k].prizes.length !== OP[k].prizes.length) bad.push(i + ':prize-len');
         // ⭐v6.564（站長／玩家回報，Rule 40）：自己的獎賞卡保留（原卡、原 iid）；對手的未翻開照樣卡背
         P[k].prizes.forEach((c, j) => { const want = (k === seat || OP[k].prizes[j].faceUp) ? OP[k].prizes[j].cardId : H; if (c.cardId !== want) bad.push(i + ':prize'); if (k === seat && c.iid !== OP[k].prizes[j].iid) bad.push(i + ':my-prize-iid'); });
-        if (P[k].deck.length !== OP[k].deck.length || P[k].deck.some((c) => c.cardId !== H)) bad.push(i + ':deck');
+        // v6.604 玩家要求復盤查看己方原牌序；對手原有cardId/iid隱私判準完整保留。
+        if (k === seat ? JSON.stringify(P[k].deck) !== JSON.stringify(OP[k].deck) : P[k].deck.length !== OP[k].deck.length || P[k].deck.some((c) => c.cardId !== H)) bad.push(i + ':deck');
         if (JSON.stringify(P[k].discard) !== JSON.stringify(OP[k].discard) || JSON.stringify(P[k].active) !== JSON.stringify(OP[k].active)) bad.push(i + ':public');
       }
       if (st.pendingSelection != null) bad.push(i + ':pending');
@@ -129,7 +130,7 @@ async function scenarios(L, srcRoot) {
       for (const k of [0, 1]) {
         if (k === other) OP[k].hand.forEach((c) => hiddenOrig.push(c.iid));
         if (k === other) OP[k].prizes.forEach((c) => { if (!c.faceUp) hiddenOrig.push(c.iid); });   // ⭐v6.564 只有對手的獎賞卡被遮
-        OP[k].deck.forEach((c) => hiddenOrig.push(c.iid));
+        if (k === other) OP[k].deck.forEach((c) => hiddenOrig.push(c.iid));
         for (const z of ['hand', 'prizes', 'deck']) for (const c of P[k][z]) if (c.cardId === H && !/^h[01][hpd]\d+$/.test(c.iid)) bad.push(i + ':opaque');
       }
       for (const iid of hiddenOrig) if (js.includes('"' + iid + '"')) { bad.push(i + ':iid-leak:' + iid); break; }

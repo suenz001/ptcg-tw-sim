@@ -43,7 +43,7 @@ export interface ReplayMeta {
   appVersion: string;
   /** 線上對戰：記錄者坐哪一側（復盤時固定這一側在下方）；本機雙人／AI＝null */
   viewerSeat: 0 | 1 | null;
-  /** true＝雙方手牌、獎賞卡都看得到；false＝已遮住記錄者當時看不到的資訊 */
+  /** true＝雙方手牌、獎賞卡都看得到；false＝已遮住對手的隱藏資訊（己方牌庫原序供復盤使用） */
   revealed: boolean;
   /** ⭐v6.600 記錄者的勝敗（舊檔沒有 ⇒ replay-label.ts 盡量推回來）。 */
   result?: 'win' | 'loss' | 'draw';
@@ -165,11 +165,11 @@ export function replayLabelFields(finalState: GameState | null | undefined, seat
 type AnyInst = { iid?: string; cardId?: string; faceUp?: boolean } & Record<string, unknown>;
 
 /**
- * 只留下 seat 這一側玩家當時看得到的資訊：
+ * 保留 seat 本人的資料供復盤，遮蔽對手的隱藏資訊：
  *   ・對手手牌 → 卡背（張數保留）
  *   ・對手的獎賞卡 → 卡背（已翻到正面的 faceUp 保留；正式對戰中雙方本來就看得到）
  *   ・⭐v6.564 自己的獎賞卡保留（玩家回報：復盤看不到自己的獎賞卡；那是自己的牌，對局結束後拿來檢討不洩漏對手任何資訊）
- *   ・雙方牌庫 → 卡背（張數保留；牌庫順序本來就是祕密）
+ *   ・v6.604：自己的牌庫保留原順序供復盤檢討；對手牌庫仍為卡背（張數保留）
  *   ・待選視窗、連鎖待選、牌庫頂已知順序、棄牌監看暫存清掉（裡面可能有隱藏區的卡）
  * ⚠⚠ 被遮住的卡連 iid 都換成不透明編號（審查 P1：只換卡號的話，同一張卡之後被打出、進棄牌區時會帶真卡號出現，
  *   拿 iid 對照就能還原約一半的對手手牌與牌庫順序）。編號只依「哪一側／哪一區／第幾張」，不帶任何原本的資訊。
@@ -182,7 +182,7 @@ export function redactStateForSeat(state: GameState, seat: 0 | 1): GameState {
     const q = { ...p } as typeof p & Record<string, unknown>;
     if (idx !== seat) q.hand = (p.hand ?? []).map((_c, j) => hide(idx, 'h', j)) as unknown as typeof p.hand;
     if (idx !== seat) q.prizes = (p.prizes ?? []).map((c, j) => ((c as unknown as AnyInst).faceUp ? c : hide(idx, 'p', j))) as unknown as typeof p.prizes;
-    q.deck = (p.deck ?? []).map((_c, j) => hide(idx, 'd', j)) as unknown as typeof p.deck;
+    if (idx !== seat) q.deck = (p.deck ?? []).map((_c, j) => hide(idx, 'd', j)) as unknown as typeof p.deck;
     return q;
   }) as unknown as typeof st.players;
   st.pendingSelection = null as unknown as GameState['pendingSelection'];

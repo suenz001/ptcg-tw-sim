@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { replayDeckOrder } from '$lib/game/replay-deck';
   import PlayerClockNotice from "./PlayerClockNotice.svelte";
   import type { PlayerClockState } from "$lib/tournament/player-clock";
   let tPlayerClock = $state<PlayerClockState | null>(null);
@@ -2058,6 +2059,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //     伺服器的 _redactStateForSeat 對觀戰端永遠遮，但玩家端遮蔽是灰度旗標（v6.153 預設關），
   //     也就是說「對戰中的 client 手上就有對手獎賞的 cardId」⇒ 這道 client 端的閘是唯一防線。
   //   ⇒ 三道閘：① openPrizeView 早退 ② 觸發按鈕包在 isTReplay 內 ③ 視窗本體 {#if isTReplay ...}。
+  // >>> v6604-replay-deck
+  let replayDeckSeat = $state<0 | 1 | null>(null);
+  const replayDeck = $derived(replayDeckOrder(isTReplay, game, replayDeckSeat, replayRevealAll, tReplay?.meta?.viewerSeat));
+  function openReplayDeck(seat: 0 | 1) {
+    if (!isTReplay || !game) return;
+    replayPlaying = false;
+    replayDeckSeat = seat;
+  }
+  function closeReplayDeck() { replayDeckSeat = null; }
+  // <<< v6604-replay-deck
   let prizeViewOpen = $state(false);
   // >>> v6418-prize-view-in-battle
   // ⭐⭐⭐v6.418（站長需求）：對戰中也能點開獎賞卡檢視 —— 但**只看得到已翻到正面的那幾張**。
@@ -3525,6 +3536,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       if (lightboxUrl) { closeLightboxImg(); return; }
       // 若 zoom 有堆疊，Escape 先彈回上一層，沒堆疊才全關
       if (zoomCard && zoomStack.length > 0) { popZoom(); return; }
+      if (isTReplay && replayDeckSeat !== null && !zoomCard) { closeReplayDeck(); return; }
       closeZoom(); floatingEvoMenu = null; floatingRetreatMenu = null;
       viewDiscardFor = null; selectionPicked = new Set(); selectionCounts = {};
     }
@@ -6166,7 +6178,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⚠⚠v6.190 先把上一份盤面清掉再開回放旗標：isTReplay 一旦為 true，桌機獎賞縮圖就會
     //   翻正面（(_pz.faceUp || replayShowsHidden)，v6.560 前是 isTReplay），而底下還有一個 await 才會把 game 換成回放快照。
     //   進入點同時歸零獎賞卡檢視視窗（離開回放有 7 條路徑，在進入點歸零才是單一來源）。
-    game = null; prizeViewOpen = false;
+    game = null; prizeViewOpen = false; replayDeckSeat = null;
     const _seat = data?.meta?.viewerSeat;
     const _lockedView: 'p1' | 'p2' | 'auto' = (!replayRevealAll && (_seat === 0 || _seat === 1)) ? (_seat === 0 ? 'p1' : 'p2') : 'auto';
     isTReplay = true; isTournSpectator = true; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; battleLogOpen = true; spectatorView = _lockedView;  // v5.942 開log面板+視角自動跟當前出牌方(本機雙人;可手動看P1/P2 override)；v6.560 遮蔽的復盤固定記錄者視角
@@ -11542,7 +11554,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <div class="tourn-lb-bar"><label class="tourn-lb-toplbl">賽季 <select class="tourn-lb-topsel" style="min-height:44px;font-size:16px;max-width:100%;" aria-label="排行賽季" value={tLeaderboard.season.id} onchange={(e) => tSeasonSelect(e.currentTarget.value)}>
               {#each tLeaderboard.seasons as season (season.id)}<option value={season.id}>{season.name}</option>{/each}
             </select></label></div>
-            <p class="muted small">依開賽時間計入賽季；本季尚無戰績時各榜顯示尚無資料。社群主辦榜依建立時間。</p>
           {/if}
           {#if tLbLoading && !tLeaderboard}
             <p class="muted small" style="text-align:center;padding:18px;">載入排行榜中…</p>
@@ -12522,6 +12533,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       attackEstimates={damageEstimates}
       onOpenZoom={openZoom}
       onOpenPrizes={openPrizeView}
+      onOpenReplayDeck={isTReplay ? openReplayDeck : undefined}
       onOpenDiscard={(who) => { viewDiscardFor = who === 'me' ? myIdx : oppIdx; }}
       onOpenRetreat={() => { floatingRetreatMenu = { x: innerWidth / 2, y: innerHeight / 2 }; }}
       onOpenSettings={() => showSettingsModal = true}
@@ -12774,7 +12786,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
         </div>
       {/if}
       <div class="zone-pile">
-        <div class="pile-slot deck-pile" class:shuffling={shuffleFlashUntil[oppIdx] > 0}>
+        <div class="pile-slot deck-pile" class:shuffling={shuffleFlashUntil[oppIdx] > 0} role={isTReplay ? "button" : undefined} tabindex={isTReplay ? 0 : undefined}
+          onclick={() => { if (isTReplay) openReplayDeck(oppIdx); }}
+          onkeydown={(e) => { if (isTReplay && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openReplayDeck(oppIdx); } }}
+          title={isTReplay ? "查看此步驟的牌庫順序" : undefined}>
           <span class="pile-icon">🃏</span>
           <span class="pile-count">{oppPlayer?.deck.length??0}</span>
           <span class="pile-label">牌庫</span>
@@ -13357,7 +13372,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       </div>
 
       <div class="zone-pile">
-        <div class="pile-slot deck-pile" class:shuffling={shuffleFlashUntil[myIdx] > 0}>
+        <div class="pile-slot deck-pile" class:shuffling={shuffleFlashUntil[myIdx] > 0} role={isTReplay ? "button" : undefined} tabindex={isTReplay ? 0 : undefined}
+          onclick={() => { if (isTReplay) openReplayDeck(myIdx); }}
+          onkeydown={(e) => { if (isTReplay && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openReplayDeck(myIdx); } }}
+          title={isTReplay ? "查看此步驟的牌庫順序" : undefined}>
           <span class="pile-icon">🃏</span>
           <span class="pile-count">{myPlayer?.deck.length??0}</span>
           <span class="pile-label">牌庫</span>
@@ -15624,6 +15642,37 @@ function _setupSelfPending(g: any, seat: number): string | null {
       </div>
     </div>
   {/if}
+
+  <!-- >>> v6604-replay-deck-modal -->
+  {#if isTReplay && game && replayDeckSeat !== null && replayDeck}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="zoom-overlay" onclick={closeReplayDeck}>
+      <div class="zoom-modal discard-modal" use:modalDrag onclick={(e)=>e.stopPropagation()}>
+        <button class="zoom-close" onclick={closeReplayDeck} aria-label="關閉牌庫順序">✕</button>
+        <h3 class="discard-title modal-drag-handle">📚 {game.players[replayDeckSeat].name}的牌庫（剩 {replayDeck.rows.length} 張）</h3>
+        <p class="prize-view-note">依目前復盤步驟的牌頂到牌底排列；第 1 張是下一張抽到的牌。</p>
+        {#if replayDeck.hidden > 0}
+          <p class="prize-view-note">{replayDeck.hidden === replayDeck.rows.length ? '此復盤未儲存或未公開牌庫內容，無法還原牌序。' : '部分牌庫內容未提供，未知位置以卡背顯示。'}</p>
+        {/if}
+        <div class="sel-grid" aria-label="牌庫原始順序">
+          {#each replayDeck.rows as row (row.position)}
+            {@const card = row.cardId ? getCard(row.cardId) : null}
+            {#if card}
+              <button class="sel-card" onclick={() => { if (row.cardId) openZoom(row.cardId, null); }} aria-label={`${row.position === 1 ? '下一張' : '第 ' + row.position + ' 張'}：${card.name}`}>
+                <span class="sel-name">{row.position === 1 ? '① 下一張' : '第 ' + row.position + ' 張'}</span>
+                <img use:retryImg={card.imageUrl} src={cardThumb(card.imageUrl)} alt={card.name} loading="lazy"/><span class="sel-name">{card.name}</span>
+              </button>
+            {:else}
+              <div class="sel-card prize-view-back"><span class="sel-name">第 {row.position} 張</span><div class="card-back prize-view-cardback"><span class="card-back-mark">?</span></div><span class="sel-name">未提供</span></div>
+            {/if}
+          {/each}
+          {#if replayDeck.rows.length === 0}<p class="sel-empty">牌庫已空，沒有下一張牌。</p>{/if}
+        </div>
+      </div>
+    </div>
+  {/if}
+  <!-- <<< v6604-replay-deck-modal -->
 
   <!-- Zoom -->
   {#if zoomCard}

@@ -137,12 +137,12 @@ const REP = makeReplay('online', false);
 const REP_AI = makeReplay('ai', false);
 const REP_REVEALED = makeReplay('online', true);
 
-/** 每一格與終局：對手手牌、對手未翻開的獎賞卡、雙方牌庫都是卡背；對戰紀錄沒有對手的私有訊息 */
+/** 每一格與終局：對手手牌、對手未翻開的獎賞卡、對手牌庫是卡背（v6.604己方原序保留，新guard另驗）；對戰紀錄沒有對手的私有訊息 */
 function hiddenOk(d) {
   const H = RR.HIDDEN_CARD_ID;
   const states = [...d.snapshots.map((s) => s.state), d.finalState];
   return states.every((st) => st.players[1].hand.every((c) => c.cardId === H) && st.players[1].prizes.every((c) => c.faceUp || c.cardId === H)
-      && st.players[0].deck.every((c) => c.cardId === H) && st.players[1].deck.every((c) => c.cardId === H) && st.pendingSelection == null && !('deckTopKnown' in st))
+      && st.players[1].deck.every((c) => c.cardId === H) && st.pendingSelection == null && !('deckTopKnown' in st))
     && d.finalLog.every((e) => !(e.playerIndex === 1 && e.privateMessage != null)) && d.meta.revealed === false;
 }
 // ── 伺服器情境 ──
@@ -226,7 +226,8 @@ async function serverScenarios(SAP, TENG = SHARE) {
   bad.push((await upload('me', 'dp_me', bomb)).status);
   // 看得到的卡太少（投稿者那一側全空）⇒ 無法確認牌組
   const emptySide = JSON.parse(JSON.stringify(REP)); emptySide.snapshots = [];
-  Object.assign(emptySide.finalState.players[0], { hand: [], discard: [], lostZone: [], prizes: [], active: null, bench: [] });
+  // v6.604己方牌庫也屬可見資訊；空側替身必須連牌庫一併清空。
+  Object.assign(emptySide.finalState.players[0], { deck: [], hand: [], discard: [], lostZone: [], prizes: [], active: null, bench: [] });
   bad.push((await upload('me3', 'dp_me3', gzipSync(Buffer.from(JSON.stringify(emptySide))))).status);
   r.V4 = bad.join(',') === '400,400,400,400,400,409,403,400,400';
   r.V4n = bad.join(',') + ' ' + (wrongDeck.body?.error || '');

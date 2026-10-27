@@ -115,6 +115,7 @@
     // ⭐v6.190 回放限定：開啟「雙方獎賞卡」檢視視窗。視窗本體畫在父層（版面分支之外），
     //   這裡只負責觸發。⚠ 父層沒傳＝按鈕不出現（不會靜默變成點了沒反應）。
     onOpenPrizes?: () => void;
+    onOpenReplayDeck?: (seat: 0 | 1) => void;
     // ⭐v6.451：棄牌區改用父層那一份檢視視窗（手機直式時它是底部 sheet，v6.450）——原本這裡自己做了一份棄牌 sheet。
     onOpenDiscard: (who: 'me' | 'opp') => void;
     // ⭐v6.453：撤退改開父層那一份「選擇換入的寶可夢」（與補位同一種卡片格子；手機直式時是底部 sheet）——原本這裡自己做了一份。
@@ -145,6 +146,7 @@
     actionQueued = 0,       // v6.172
     attackEstimates = null, // v6.233
     onAction, onInitiateAttack, onOpenZoom, onOpenSettings, onLeave,
+    onOpenReplayDeck,
     onOpenPrizes,   // v6.190（回放限定）
     onOpenDiscard,  // v6.451
     onOpenRetreat,  // v6.453
@@ -844,7 +846,7 @@
     {:else}
       <span class="mp-chip">🎁 {oppPlayer.prizes.length}</span>
     {/if}
-    <span class="mp-chip">📚 {oppPlayer.deck.length}</span>
+    {#if isTReplay && onOpenReplayDeck}<button class="mp-chip mp-clickable" onclick={() => onOpenReplayDeck?.(oppIdx)} title="查看此步驟的牌庫順序">📚 {oppPlayer.deck.length} 🔍</button>{:else}<span class="mp-chip">📚 {oppPlayer.deck.length}</span>{/if}
     <button class="mp-chip mp-clickable" onclick={() => onOpenDiscard('opp')} disabled={oppPlayer.discard.length === 0}>🗑 {oppPlayer.discard.length}</button>
     <span class="mp-chip">✋ {oppPlayer.hand.length}</span>
     {#if stadiumCard && game.activeStadium}
@@ -976,7 +978,7 @@
     {:else}
       <span class="mp-chip">🎁 {myPlayer.prizes.length}</span>
     {/if}
-    <span class="mp-chip">📚 {myPlayer.deck.length}</span>
+    {#if isTReplay && onOpenReplayDeck}<button class="mp-chip mp-clickable" onclick={() => onOpenReplayDeck?.(myIdx)} title="查看此步驟的牌庫順序">📚 {myPlayer.deck.length} 🔍</button>{:else}<span class="mp-chip">📚 {myPlayer.deck.length}</span>{/if}
     <button class="mp-chip mp-clickable" onclick={() => onOpenDiscard('me')} disabled={myPlayer.discard.length === 0}>🗑 {myPlayer.discard.length}</button>
     <span class="mp-chip mp-mine">✋ {myPlayer.hand.length}</span>
     {#if canUseStadium && isMyTurn}
