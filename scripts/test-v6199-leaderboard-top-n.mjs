@@ -1,3 +1,5 @@
+import {revertAdminV176} from './lib/sap-revert-admin-v176.mjs';
+import {revertV6603Game} from './lib/revert-v6603-game.mjs';
 // ⭐⭐⭐v6.199 守衛：錦標賽「📊 排行榜」顯示筆數（5 / 10 / 20）
 //   跑法：node scripts/test-v6199-leaderboard-top-n.mjs
 //
@@ -22,9 +24,11 @@ import { styleTagIndex } from './lib/svelte-style-block.mjs';
 
 const ROOT = process.env.V6199_ROOT || join(dirname(fileURLToPath(import.meta.url)), '..');
 const readOr = (p) => { try { return readFileSync(join(ROOT, p), 'utf8'); } catch { return ''; } };
-const PAGE = readOr('src/routes/game/+page.svelte');
+const PAGE_RAW = readOr('src/routes/game/+page.svelte');
+const PAGE = PAGE_RAW.includes('// >>> v6603-season-picker') ? revertV6603Game(PAGE_RAW) : PAGE_RAW;
 const LBT  = readOr('src/lib/ui/leaderboard-top.ts');
-const SRV  = readOr('oracle-admin/server_admin_patch.js');
+const SRV_RAW = readOr('oracle-admin/server_admin_patch.js');
+const SRV = SRV_RAW.includes('// >>> v176-tournament-seasons') ? revertAdminV176(SRV_RAW) : SRV_RAW;
 
 let pass = 0; const fails = [];
 const T = (name, fn) => { try { fn(); pass++; } catch (e) { fails.push(name + ' — ' + (e && e.message)); } };

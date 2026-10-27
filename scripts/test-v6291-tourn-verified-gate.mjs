@@ -47,9 +47,9 @@ import {
 //   本檔的 revert-diff 從此再串一節：先還原 v6.365 的三段，再往後退。
 //   ⚠ 站長明文禁止把鎖拿掉／改成不驗／只比片段 ⇒ 一律串接，不放水。
 import {
-  NEW_TAIL_SHA_V173 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V173 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V173 as NEW_TEV_LEN_CUR, revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171, revertV173,
+  NEW_TAIL_SHA_V176 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V176 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V176 as NEW_TEV_LEN_CUR, revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171, revertV173,
   revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365, stripDeclaredBlocksNewerThan,
-} from './lib/tourn-revert-v173.mjs';
+} from './lib/tourn-revert-v176.mjs';
 const revertV171 = b => _rv171(revertV173(b));
 
 const revertV169 = (b) => _rv169(revertV171(b));   // v1.71 先逐字還原新修改，再接既有鎖。

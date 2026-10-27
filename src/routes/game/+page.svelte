@@ -5973,14 +5973,28 @@ function _setupSelfPending(g: any, seat: number): string | null {
     catch { /* ignore：保留畫面上那一份 */ }
   }
   // v5.691 排行榜 / 個人資料載入（後端聚合端點，掃 TARCHIVE）
+  // >>> v6603-season-picker
+  let tSeasonId = $state('');
+  let tSeasonError = $state('');
+  let tSeasonGeneration = 0;
+  let tSeasonLastLoad = 0;
   async function tLeaderboardLoad() {
-    if (tLbLoading) return; tLbLoading = true;
-    // v6.177 抓失敗不再把排行榜指回 null（會讓整塊變成「排行榜尚未開放」的假空狀態）。
-    // v6.199 固定要上限那一份（伺服器沒帶 limit 仍是 5，舊 client 行為不變）；筆數切換在本地做。
-    try { const _k = adoptOrKeep<any>(tLeaderboard, (await tApi('/leaderboard?limit=' + LB_TOP_MAX)) ?? null); tLeaderboard = _k.data; tLeaderboardStale = _k.stale; }
-    catch { tLeaderboardStale = true; }
-    finally { tLbLoading = false; }
+    const generation = ++tSeasonGeneration;
+    const selected = tSeasonId;
+    tLbLoading = true; tSeasonError = '';
+    try {
+      const response = await tApi('/leaderboard?limit=' + LB_TOP_MAX + (selected ? '&seasonId=' + encodeURIComponent(selected) : ''));
+      if (generation !== tSeasonGeneration) return;
+      if (selected && (response?.seasonApi !== 1 || response?.season?.id !== selected)) throw new Error('伺服器尚未支援此賽季，請重新載入');
+      const kept = adoptOrKeep<any>(tLeaderboard, response ?? null);
+      tLeaderboard = kept.data; tLeaderboardStale = kept.stale;
+      if (!response) tSeasonError = '排行榜載入失敗，請重試';
+    } catch {
+      if (generation === tSeasonGeneration) { tLeaderboardStale = true; tSeasonError = '排行榜載入失敗，請重試'; }
+    } finally { if (generation === tSeasonGeneration) { tLbLoading = false; tSeasonLastLoad = Date.now(); } }
   }
+  function tSeasonSelect(id: string) { tSeasonId = id; tLeaderboard = null; void tLeaderboardLoad(); }
+  // <<< v6603-season-picker
   async function tProfileLoad() {
     if (tProfileLoading) return; tProfileLoading = true;
     // v6.177 同上：抓失敗保留上一份個人資料，只標 stale。
@@ -6001,7 +6015,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     tError = ''; tCheckinErrId = '';
     tTabRaw = tab;
     // v6.177 保留舊資料後，失敗不再把它清成 null ⇒ 重試條件要改看 stale，否則切回分頁不會重抓。
-    if (tab === 'leaderboard' && (!tLeaderboard || tLeaderboardStale)) tLeaderboardLoad();
+    if (tab === 'leaderboard' && (!tLeaderboard || tLeaderboardStale || Date.now() - tSeasonLastLoad > 30000)) tLeaderboardLoad();
     if (tab === 'profile') {
       if (!tProfile || tProfileStale) tProfileLoad();   // v6.177 同上
       // v6.032 進分頁即刷新診斷：少了這行，notifyDiag 是 null → 'server-missing' 永遠偵測不到，
@@ -11523,6 +11537,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {/if}
       {:else if tTab === 'leaderboard'}
         <div class="tourn-lb">
+          {#if tSeasonError}<p role="status">{tSeasonError} <button onclick={tLeaderboardLoad}>重試</button></p>{/if}
+          {#if tLeaderboard?.seasonApi === 1}
+            <div class="tourn-lb-bar"><label class="tourn-lb-toplbl">賽季 <select class="tourn-lb-topsel" style="min-height:44px;font-size:16px;max-width:100%;" aria-label="排行賽季" value={tLeaderboard.season.id} onchange={(e) => tSeasonSelect(e.currentTarget.value)}>
+              {#each tLeaderboard.seasons as season (season.id)}<option value={season.id}>{season.name}</option>{/each}
+            </select></label></div>
+            <p class="muted small">依開賽時間計入賽季；本季尚無戰績時各榜顯示尚無資料。社群主辦榜依建立時間。</p>
+          {/if}
           {#if tLbLoading && !tLeaderboard}
             <p class="muted small" style="text-align:center;padding:18px;">載入排行榜中…</p>
           {:else if !tLeaderboard}
@@ -11582,6 +11603,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         </div>
       {:else if tTab === 'profile'}
         <div class="tourn-profile">
+          <p class="muted small">個人戰績為生涯累計，不受賽季切換影響。</p>
           <!-- ══ v6.032 🔔 賽事通知（自設定視窗搬來）══════════════════════════════
                ⚠必須放在 tProfileLoading / tProfile 的判斷**之外**：tProfile 為 null 的新玩家
                  （還沒有已結束的賽事紀錄）整個分頁只會顯示一行「尚未開放」，

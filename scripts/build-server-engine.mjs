@@ -19,6 +19,7 @@ import type { Card } from '$lib/cards/types';
 //   ⇒ 伺服器的閒置掃描要能自己 level-triggered 地補推一次，故必須 export 出去。
 export { createGame, applyAction, tryAdvanceToPlaying };
 export * from '$lib/tournament/player-clock';
+export * from '$lib/tournament/seasons';
 export { actionResponsibility } from '$lib/game/action-responsibility';
 export { timeoutAction } from '$lib/game/timeout-action';
 export { createPlayerClockRuntime } from '$lib/tournament/player-clock-runtime';

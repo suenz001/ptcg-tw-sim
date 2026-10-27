@@ -64,7 +64,7 @@ await T('A1 三個區塊都抽得到且長度合理（掃描器下限）', () =>
   }
 });
 const TOURN_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
-const TOURN_SHA = '60eb4bc20344373c52ed5de253ee4b49d20356302b8b8939b8d1581d398bb97c';   // 與 test-v6278 I1 同一把（凍結區塊）
+const TOURN_SHA = '1d483b89ae99fb5af927183ddf2583bb1f3247a3fcdfec4884b4f0b2daf8d813';   // 與 test-v6278 I1 同一把（凍結區塊）
 await T('A2 ⚠⚠ 錦標賽區塊逐位元未動（anchor 至檔尾 sha256 與 test-v6278 I1 同一把）', () => {
   const i = PATCH.indexOf(TOURN_ANCHOR);
   assert.ok(i > 0, '找不到錦標賽區塊錨點');

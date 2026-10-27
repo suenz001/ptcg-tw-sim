@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto';
 import { revertAdminV173 as _revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
 import { revertAdminV174 } from './lib/sap-revert-admin-v174.mjs';   // ⭐v6.601（server v1.74，Rule 40）：我的錦標賽對戰回傳 result（行為由 test-v6601 守）
 const revertAdminV173 = (s) => _revertAdminV173(revertAdminV174(s));   // 鏈又長一節（既有呼叫點一個字都不必改）
-import { NEW_TAIL_SHA_V173, NEW_TEV_SHA_V173, NEW_TEV_LEN_V173, revertV173 } from './lib/tourn-revert-v173.mjs';
+import { NEW_TAIL_SHA_V176, NEW_TEV_SHA_V176, NEW_TEV_LEN_V176, revertV173 } from './lib/tourn-revert-v176.mjs';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { revertV6592Game, V6592_GAME_PAIRS } from './lib/revert-v6592-game.mjs';
 import { revertV6599Game } from './lib/revert-v6599-pages.mjs';   // ⭐v6.599（Rule 40）：牌組先後攻偏好接線（行為由 test-v6599 守）
@@ -107,10 +107,10 @@ await test('區塊指紋與完整精確還原，TEV保持逐位元一致', () =>
   const tailAnchor = "app.get('/api/tournament", tevAnchor = "const TEVENTS = db.collection('tournamentEvents');";
   const tail = normalized.slice(normalized.indexOf(tailAnchor)), tev = normalized.slice(normalized.indexOf(tevAnchor));
   const sha = s => createHash('sha256').update(s).digest('hex');
-  assert.equal(sha(tail), NEW_TAIL_SHA_V173); assert.equal(sha(tev), NEW_TEV_SHA_V173); assert.equal(tev.length, NEW_TEV_LEN_V173);
+  assert.equal(sha(tail), NEW_TAIL_SHA_V176); assert.equal(sha(tev), NEW_TEV_SHA_V176); assert.equal(tev.length, NEW_TEV_LEN_V176);
   assert.equal(revertAdminV173(normalized), base); assert.equal(revertV173(tail), base.slice(base.indexOf(tailAnchor)));
   assert.equal(revertV173(tev), base.slice(base.indexOf(tevAnchor)));
-  assert.notEqual(sha(tail.replace('playerClockRevision', 'playerClockRevisionMutated')), NEW_TAIL_SHA_V173);
+  assert.notEqual(sha(tail.replace('playerClockRevision', 'playerClockRevisionMutated')), NEW_TAIL_SHA_V176);
 });
 await test('五個既有守衛真的呼叫新版還原器，不接受註解假接線', () => {
   for (const name of ['test-v6276-deck-tournament-stats.mjs', 'test-v6291-tourn-verified-gate.mjs', 'test-v6292-tourn-verified-gate2.mjs', 'test-v6381-archive-gamedraw-and-swiss-note.mjs', 'test-v6303-ui-batch.mjs']) {

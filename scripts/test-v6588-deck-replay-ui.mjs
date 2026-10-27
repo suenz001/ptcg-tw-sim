@@ -12,7 +12,7 @@ import { postListBundle, openingBundle, fixtureHtml, measureOpening } from './li
 import { revertAdminV173 as _revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
 import { revertAdminV174 } from './lib/sap-revert-admin-v174.mjs';   // ⭐v6.601（server v1.74，Rule 40）：我的錦標賽對戰回傳 result（行為由 test-v6601 守）
 const revertAdminV173 = (s) => _revertAdminV173(revertAdminV174(s));   // 鏈又長一節（既有呼叫點一個字都不必改）
-import { revertV173 } from './lib/tourn-revert-v173.mjs';
+import { revertV173 } from './lib/tourn-revert-v176.mjs';
 import { revertAdminV172 } from './lib/sap-revert-admin-v172.mjs';
 import { revertAdminV171 } from './lib/sap-revert-admin-v171.mjs';
 import { revertV171, TAIL_ANCHOR, TEV_ANCHOR, NEW_TAIL_SHA_V171, NEW_TEV_SHA_V171, NEW_TEV_LEN_V171 } from './lib/tourn-revert-v171.mjs';
@@ -50,7 +50,7 @@ const stale=scriptFiles.filter(p=>p!=='scripts/lib/tourn-revert-v169.mjs').filte
 ok('D4 舊v169指紋在歷史宣告端外零殘留',stale.length===0,stale.join(','));
 const tailConsumers=['test-v6276-deck-tournament-stats.mjs','test-v6291-tourn-verified-gate.mjs','test-v6292-tourn-verified-gate2.mjs','test-v6381-archive-gamedraw-and-swiss-note.mjs'];
 const scriptText=p=>readFileSync(join(ROOT,'scripts',p),'utf8');
-ok('D5 四條區塊鏈及v6303整檔鏈皆先接v171',tailConsumers.every(p=>{const s=scriptText(p);return s.includes("from './lib/tourn-revert-v173.mjs'")&&s.includes('revertV171(');})&&scriptText('test-v6303-ui-batch.mjs').includes('revertAdminV171('));
+ok('D5 四條區塊鏈及v6303整檔鏈皆先接v171',tailConsumers.every(p=>{const s=scriptText(p);return s.includes("from './lib/tourn-revert-v176.mjs'")&&s.includes('revertV171(');})&&scriptText('test-v6303-ui-batch.mjs').includes('revertAdminV171('));
 const wholeConsumers=['test-v6561-tourn-replay-per-action.mjs','test-sap153-tourn-deck-validate.mjs','test-sap154-audit-load.mjs','test-sap169-restart-coin-wording.mjs','test-v6303-ui-batch.mjs'];
 const wholeTexts=wholeConsumers.map(scriptText);
 const connected=xs=>xs.length===5&&xs.every(s=>s.includes("from './lib/sap-revert-admin-v171.mjs'")&&s.includes('revertAdminV171('));

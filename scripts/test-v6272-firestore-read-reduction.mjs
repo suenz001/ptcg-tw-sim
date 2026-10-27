@@ -643,7 +643,7 @@ await TA('M7 admin.html 拿掉 msgCounts 參數 ⇒「按開關要帶 msgCounts=
 // ⑨ ⭐⭐ 錦標賽區塊逐位元未動（內嵌 sha256，淺複製下也在守）
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑨ 錦標賽區塊逐位元未動');
-const TOURN_TAIL_SHA256 = '6b85eed22cfdef8cbfbb6e7bff1b630fa1fda67a3f6f1ba8fcc7128a89a459aa' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
+const TOURN_TAIL_SHA256 = '9a5029795679c6946db5406f9f991f20ab6f7e9337f32bfb21b0ec8b502a9e1f' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
 function tournTail(src) {
   const i = src.indexOf("app.get('/api/tournament");
   if (i < 0) throw new assert.AssertionError({ message: '找不到第一支 /api/tournament 端點' });

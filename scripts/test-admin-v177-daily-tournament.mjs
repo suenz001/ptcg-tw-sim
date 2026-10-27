@@ -479,7 +479,7 @@ console.log('\n【D】錦標賽區塊的 revert-diff 與 28 把鎖重釘（動�
   const RV165 = await import('./lib/tourn-revert-v165.mjs');   // ⭐v1.65 再先剝一節
   const RV167 = await import('./lib/tourn-revert-v167.mjs');   // ⭐v1.67 再先剝一節（Rule 54）
   const RV171 = await import('./lib/tourn-revert-v171.mjs');
-  const RV173 = await import('./lib/tourn-revert-v173.mjs');
+  const RV173 = await import('./lib/tourn-revert-v176.mjs');
   const RV169 = await import('./lib/tourn-revert-v169.mjs');   // ⭐v1.69 再先剝一節（Rule 54）
   const tail = RV152.revertV152(RV153.revertV153(RV154.revertV154(RV165.revertV165(RV167.revertV167(RV169.revertV169(RV171.revertV171(RV173.revertV173(PATCH.slice(PATCH.indexOf(RV.TAIL_ANCHOR))))))))));
   const tev = RV152.revertV152(RV153.revertV153(RV154.revertV154(RV165.revertV165(RV167.revertV167(RV169.revertV169(RV171.revertV171(RV173.revertV173(PATCH.slice(PATCH.indexOf(RV.TEV_ANCHOR))))))))));

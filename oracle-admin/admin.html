@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.90</title>
+<title>PTCG Oracle Admin v1.91</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -372,7 +372,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.90</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.91</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -836,6 +836,38 @@ async function api(path, options = {}) {
   }
 }
 
+// >>> v6603-admin-seasons
+let seasonAdminBusy = false;
+async function loadSeasonPanel() {
+  const data = await api('/api/admin-tourn-seasons');
+  const el = document.getElementById('admin-season-panel'); if (!el) return;
+  if (data.error || data.seasonApi !== 1) { el.textContent = '賽季管理尚未載入，請重新整理賽事分頁。'; return; }
+  el.innerHTML = '<h3>賽季管理</h3><p id="season-current"></p><p id="season-pending"></p>'
+    + '<button onclick="seasonAdminAction(\'next\')">立即開始下一季</button> '
+    + '<label>開始日期（台灣 00:00）<input type="date" id="season-date"></label> '
+    + '<button onclick="seasonAdminAction(\'schedule\')">設定下一季日期</button> '
+    + '<button onclick="seasonAdminAction(\'cancel\')">取消排程</button>'
+    + '<p>換季後各排行重新統計，歷史資料保留。跨季比賽依開賽時間歸屬；個人分頁保留生涯累計。</p>';
+  document.getElementById('season-current').textContent = '目前：' + data.seasons[data.seasons.length-1].name;
+  document.getElementById('season-pending').textContent = data.pending ? '已排程：' + data.pending.next.name + '，' + new Date(data.pending.next.startAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}) : '目前無換季排程';
+}
+window.seasonAdminAction = async function(action) {
+  if (seasonAdminBusy) return; seasonAdminBusy = true;
+  try {
+    const date = document.getElementById('season-date').value;
+    const p = await api('/api/admin-tourn-seasons',{method:'POST',body:JSON.stringify({action,date,preview:true})});
+    if (p.error) { alert(p.error); return; }
+    const message = action === 'cancel' ? '確認取消「' + p.next.name + '」的換季排程？' :
+      '確認「' + p.current.name + '」→「' + p.next.name + '」？\n' + (action === 'next' ? '立即生效' : new Date(p.next.startAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}))
+      + '\n各排行重新統計，歷史與玩家資料保留。跨季比賽依開賽時間歸屬。' + (p.pending ? '\n將取代目前的換季排程。' : '');
+    if (!confirm(message)) return;
+    const result = await api('/api/admin-tourn-seasons',{method:'POST',body:JSON.stringify({action,date,revision:p.revision,expectedId:p.next.id,requestId:crypto.randomUUID()})});
+    if (result.error) alert(result.error);
+    await loadSeasonPanel();
+  } finally { seasonAdminBusy = false; }
+};
+// <<< v6603-admin-seasons
+
 // >>> v6602-admin-presets
 let presetAdminData = null, presetAdminBusy = false;
 async function loadPresetDecks() {
@@ -1190,7 +1222,10 @@ async function loadTournamentAdmin() {
   }
   html += '</div>';
   html += '</div>';
-  el.innerHTML = html;
+  // >>> v6603-season-admin-panel
+  el.innerHTML = '<section id="admin-season-panel"></section>' + html;
+  void loadSeasonPanel();
+  // <<< v6603-season-admin-panel
 }
 window.tevCreate = async function (btn) {
   btn.disabled = true;

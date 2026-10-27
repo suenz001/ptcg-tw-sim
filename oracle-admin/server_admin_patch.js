@@ -1,3 +1,4 @@
+// === ORACLE ADMIN ENDPOINTS === v1.76 (v6.603 錦標賽賽季)
 // === ORACLE ADMIN ENDPOINTS === v1.75 (v6.602 管理預設牌組)
 // === ORACLE ADMIN ENDPOINTS === v1.74 (v6.601 我的錦標賽對戰清單回傳自己的勝敗)
 // === ORACLE ADMIN ENDPOINTS === v1.73 (v6.592 錦標賽個人操作時計，預設關閉)
@@ -7930,6 +7931,36 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
     // <<< v167-time-limit-verdict
+    // >>> v176-tournament-seasons
+    let seasonServiceInstance;
+    function seasonService() {
+      if (!TENG.createSeasonService) throw new Error('請先更新賽季引擎');
+      return seasonServiceInstance || (seasonServiceInstance = TENG.createSeasonService(db.collection('tournamentSeasonState')));
+    }
+    const seasonRankCache = new Map(), seasonRankFlight = new Map();
+    let seasonRankEpoch = 0;
+    function seasonRankInvalidate() { seasonRankEpoch++; seasonRankCache.clear(); seasonRankFlight.clear(); }
+    app.get('/api/admin-tourn-seasons', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error || !isTournAdmin(id)) return res.status(403).json({error:'需要管理員權限'});
+        const s = await seasonService().load(true);
+        res.set('Cache-Control','no-store');
+        res.json({seasonApi:1,revision:s.revision,seasons:s.seasons,pending:s.pending});
+      } catch(e) { res.status(503).json({error:e.message}); }
+    });
+    app.post('/api/admin-tourn-seasons', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error || !isTournAdmin(id)) return res.status(403).json({error:'需要管理員權限'});
+        const b = req.body || {};
+        if (b.preview === true) return res.json(await seasonService().preview(b));
+        const s = await seasonService().commit(b,String(id.uid || id.email));
+        seasonRankInvalidate();
+        res.json({ok:true,seasonApi:1,revision:s.revision,seasons:s.seasons,pending:s.pending});
+      } catch(e) { res.status(409).json({error:e.message}); }
+    });
+    // <<< v176-tournament-seasons
     // >>> v175-managed-presets
     let managedPresetService;
     function presetService() {
@@ -10293,6 +10324,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
           players: regs.map((r) => ({ uid: r.uid, name: r.name, email: r.email || null, deckName: r.deckName || '', coinPref: r.coinPref || 'random', dropped: !!r.dropped, droppedAt: r.droppedAt || null, lateJoin: !!r.lateJoin, deckEntries: r.deckEntries || [], ...(typeof r.deckId === 'string' && r.deckId ? { deckId: r.deckId } : {}) })),
           matches: matches.map((m) => ({ round: m.round, idx: m.idx, p1uid: m.p1uid, p1name: m.p1name, p2uid: m.p2uid, p2name: m.p2name, winnerUid: m.winnerUid, winnerName: m.winnerName, status: m.status, bye: !!m.bye, noShow: !!m.noShow, doubleNoShow: !!m.doubleNoShow, draw: !!m.draw, gameDraw: !!m.gameDraw, deadlockDraw: !!m.deadlockDraw, forfeit: !!m.forfeit, idleForfeit: !!m.idleForfeit, timeLimit: !!m.timeLimit, adminResolved: !!m.adminResolved, doubleDrop: !!m.doubleDrop, dropForfeit: !!m.dropForfeit, gameStartedAt: m.gameStartedAt || null, endedAt: m.endedAt || null })),   // ⭐v1.65 對局時間也進歸檔（賽事被刪掉後名人堂賽程仍看得到）
         } }, { upsert: true });
+        // >>> v6603-season-archive
+        seasonRankInvalidate();
+        // <<< v6603-season-archive
       } catch (e) { /* best-effort 歸檔 */ }
     }
     // 某場結束（winner 已由 caller 設好）→ 交給 checkRoundAdvance 判斷本輪是否打完、要不要動態建下一輪或產生冠軍。
@@ -12014,21 +12048,61 @@ import('firebase-admin').then(async ({ default: admin }) => {
         limit,
       };
     }
-    let _lbCache = { at: 0, data: null };
+    // >>> v6603-season-rank
+    let seasonIndexes;
+    async function ensureSeasonIndexes() {
+      if (!seasonIndexes) seasonIndexes = Promise.all([
+        TARCHIVE.createIndex({startedAt:1}), TARCHIVE.createIndex({createdAt:1}),
+        TEVENTS.createIndex({createdByPlayer:1,createdAt:1})
+      ]).catch(e => { seasonIndexes = null; throw e; });
+      await seasonIndexes;
+    }
+    async function seasonArchivesFor(startAt,endAt) {
+      const query = TENG.seasonArchiveQuery(startAt,endAt);
+      const options = {projection:{'players.deckEntries':0}};
+      if (startAt===0 || !query.$or) return TARCHIVE.find(query,options).toArray();
+      const chunks = [];
+      for (let i=0;i<query.$or.length;i++) {
+        let cursor = TARCHIVE.find(query.$or[i],options);
+        if (i<2) {
+          const field=i===0?'startedAt':'createdAt';
+          cursor=cursor.hint({[field]:1}).min({[field]:startAt}).max({[field]:endAt===null?8640000000000000:endAt});
+        }
+        chunks.push(await cursor.toArray());
+      }
+      return chunks.flat();
+    }
+    // <<< v6603-season-rank
     app.get('/api/tournament/leaderboard', async (req, res) => {
       try {
         const _limit = _lbClampLimit(req.query && req.query.limit);
-        if (_lbCache.data && (Date.now() - _lbCache.at) < 60000) return res.json(_lbSliceResult(_lbCache.data, _limit));
-        const archives = await TARCHIVE.find({}, { projection: { 'players.deckEntries': 0 } }).toArray();
+        const state = await seasonService().load();
+        const selectedSeason = req.query && req.query.seasonId;
+        if (selectedSeason !== undefined && (typeof selectedSeason !== 'string' || !state.seasons.some(s => s.id === selectedSeason))) return res.status(400).json({error:'找不到賽季，請重新載入'});
+        const window = TENG.seasonWindow(state, selectedSeason);
+        const key = state.revision + ':' + window.season.id;
+        const cached = seasonRankCache.get(key);
+        if (cached && Date.now()-cached.at < 60000) return res.json(_lbSliceResult(cached.data,_limit));
+        if (seasonRankFlight.has(key)) return res.json(_lbSliceResult(await seasonRankFlight.get(key),_limit));
+        if (seasonRankFlight.size >= 8) throw new Error('排行榜更新中，請稍後重試');
+        const epoch = seasonRankEpoch;
+        const compute = async () => {
+        await ensureSeasonIndexes();
+        const archives = await seasonArchivesFor(window.season.startAt,window.endAt);
         const all = [..._aggregateArchives(archives).values()];
         const topN = (key, atKey) => all.filter((x) => x[key] > 0).sort((a, b) => (b[key] - a[key]) || ((b[atKey] || 0) - (a[atKey] || 0))).slice(0, _LB_MAX).map((x) => ({ displayName: x.displayName || '（未命名）', count: x[key] }));
-        const commEvents = await TEVENTS.find({ createdByPlayer: true }).toArray();
+        const commEvents = await TEVENTS.find(TENG.seasonHostQuery(window.season.startAt, window.endAt)).toArray();
         const hostMap = new Map();
         for (const ev of commEvents) { const e = ev.createdBy; if (!e) continue; if (!hostMap.has(e)) hostMap.set(e, { displayName: ev.proposerName || e, count: 0, last: -1 }); const h = hostMap.get(e); h.count++; if ((ev.createdAt || 0) > h.last) { h.last = ev.createdAt || 0; h.displayName = ev.proposerName || h.displayName; } }
         const communityHost = [...hostMap.values()].sort((a, b) => (b.count - a.count) || ((b.last || 0) - (a.last || 0))).slice(0, _LB_MAX).map((x) => ({ displayName: x.displayName, count: x.count }));
-        const result = { champions: { official: topN('champOfficial', 'champOfficialAt'), community: topN('champCommunity', 'champCommunityAt') }, wins: topN('wins', 'winsAt'), top8: topN('top8', 'top8At'), finals: topN('finals', 'finalsAt'), communityHost };
-        _lbCache = { at: Date.now(), data: result };
-        res.json(_lbSliceResult(result, _limit));
+        const result = { seasonApi:1, season:window.season, seasons:state.seasons, seasonRevision:state.revision, champions: { official: topN('champOfficial', 'champOfficialAt'), community: topN('champCommunity', 'champCommunityAt') }, wins: topN('wins', 'winsAt'), top8: topN('top8', 'top8At'), finals: topN('finals', 'finalsAt'), communityHost };
+        if (seasonRankCache.size >= 8) seasonRankCache.delete(seasonRankCache.keys().next().value);
+        if (epoch === seasonRankEpoch) seasonRankCache.set(key, { at:Date.now(), data:result });
+        return result;
+        };
+        const flight = compute(); seasonRankFlight.set(key,flight);
+        try { res.json(_lbSliceResult(await flight, _limit)); }
+        finally { if (seasonRankFlight.get(key)===flight) seasonRankFlight.delete(key); }
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -12244,6 +12318,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const eventId = String((req.body && req.body.eventId) || '');
         if (!eventId) return res.status(400).json({ error: '缺少 eventId' });
         await TARCHIVE.deleteOne({ _id: 'arch_' + eventId });
+        // >>> v6603-season-delete
+        seasonRankInvalidate();
+        // <<< v6603-season-delete
         await TCHAMPS.deleteOne({ _id: 'champ_' + eventId });  // 一併移除名人堂該筆，統計與冠軍榜都不再計入
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
@@ -12707,6 +12784,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //   (v0.46 CAS 只防同場;並發 seed 會讓 seed 前去重的 TMATCH 判據誤判)。單一 in-flight。
     let _schedTicking = false;
     setInterval(async () => {
+      // >>> v6603-season-tick
+      try { await seasonService().load(); } catch(e) { console.warn('[season] 無法檢查換季排程'); }
+      // <<< v6603-season-tick
       if (_schedTicking) return;
       _schedTicking = true;
       try { await tournamentSchedulerTick(); } catch (e) { /* tick 內各步驟已自帶 try/catch */ } finally { _schedTicking = false; }
