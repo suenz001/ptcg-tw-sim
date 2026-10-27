@@ -12,7 +12,7 @@ BASE `d3a0a2fc`（v6.603）。復盤點牌庫檢視目前步驟由牌頂到牌�
 
 Pages與Oracle發行建置exit0，server-engine與5224張卡池成功。真建置整頁390/1366雙入口、下一抽與步驟更新、放大後Esc返回，Oracle另驗新redacted己方可見／對手hidden及舊hidden不可補推；頁面error0、水平溢出0，卡圖使用替代圖並阻擋外部Auth／API，非原生iPhone實機測試。真Svelte視窗320/390/橫屏844/桌機1366，60張長清單捲動與關閉均驗。精確還原game9／mobile4pairs，完整等BASE、額外差異保留、18／8缺失或重複錨點皆拒絕。
 
-獨立replay_6604_review：首審Esc與分享註解已修；複審抓固定P1突變存活，補P2、live與實際AST雙入口後，由審查者獨立確認13綠1紅。ROOT與mobile還原修法再審，預先修正shebang位置；6564新預期再審，確認不放寬對手隱私。完整驗收報表已送最終核准，未准推前不推。
+獨立replay_6604_review：首審Esc與分享註解已修；複審抓固定P1突變存活，補P2、live與實際AST雙入口後，由審查者獨立確認13綠1紅。ROOT與mobile還原修法再審，預先修正shebang位置；6564新預期再審，確認不放寬對手隱私。最終獨立解析原full／supp報表確認952聯集未解決0、所有受影響項目補驗齊全，核准49acb94c及後續僅核准紀錄docs commit可推，P1/P2/P3未解決=0。
 
 證據E:/ptcg-tw-sim-local/replay-deck-6604-evidence（acceptance.json、mutants.json、reverter-proof.json、release-ui與release-ui-oracle/proof.json、build與guard logs）；原全套E:/sb-replay-6604/__rt/full.json、補驗E:/sb-replay-6604-supp/__rt/supp.json。保留站長主工作樹兩份預設牌組檔的原始位元組，不納入提交。因共享復盤處理及前端皆更新，站長測試確認後自行先update-tournament.bat，再redeploy-oracle.bat；AI未跑部署bat、未讀D:/ai。CI與線上驗收結果續記本機交接與證據。
 
