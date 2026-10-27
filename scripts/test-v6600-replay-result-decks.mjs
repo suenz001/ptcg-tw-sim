@@ -17,6 +17,7 @@
  *      下載檔名；手機 390 寬不溢出
  * 【H】HEAD-FAIL：BASE（v6.599）上 U、S 逐條紅
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, existsSync, mkdtempSync, rmSync, writeFileSync, createReadStream, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -295,7 +296,7 @@ else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6600h-'));
   try {
     const { execFileSync } = await import('node:child_process');
-    execFileSync('bash', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ['src'], tmp);
     const bU = unitChecks(await loadMods(tmp));
     const bg = readBaseBlob(ROOT, BASE_SHA, 'src/routes/game/+page.svelte'), bs = readBaseBlob(ROOT, BASE_SHA, 'src/lib/game/replay-store.ts');
     const bS = staticChecks(normEol(bg.out), normEol(bs.out));

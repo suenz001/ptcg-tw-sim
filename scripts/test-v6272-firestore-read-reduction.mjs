@@ -757,6 +757,7 @@ const PREV_SHA = '5c403f9060bfeab614b66a8251840f0193c01469';   // v6.601（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
+  'src/lib/version.ts',
   // ⚠⚠ v6.602 前移：PREV_SHA 從 5c403f90（v6.601）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
   // ⭐v6.602：管理預組共用目錄及兩頁消費端，非卡牌規則變更

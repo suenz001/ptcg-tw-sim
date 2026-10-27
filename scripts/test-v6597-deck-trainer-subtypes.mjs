@@ -13,6 +13,7 @@
  * 【B】真瀏覽器（build/）：縮圖與文字兩種模式都有四個小標題、順序與張數正確、小標題底下的卡就是那一類
  * 【H】HEAD-FAIL：BASE（v6.596）上 U1～U3、S2 逐條紅
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, existsSync, mkdtempSync, rmSync, writeFileSync, createReadStream, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -183,7 +184,7 @@ else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6597b-'));
   try {
     const { execFileSync } = await import('node:child_process');
-    execFileSync('bash', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ['src'], tmp);
     const bU = unitChecks(await loadMods(tmp));
     const bp = readBaseBlob(ROOT, BASE_SHA, 'src/routes/deck-posts/+page.svelte'), bd = readBaseBlob(ROOT, BASE_SHA, 'src/routes/decks/+page.svelte');
     const bS = staticChecks(normEol(bp.out), normEol(bd.out));

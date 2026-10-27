@@ -13,6 +13,7 @@
  * 【W】對戰頁清單接線
  * 【H】HEAD-FAIL：BASE（v6.600）上 S1、U1、W1 逐條紅
  */
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { readFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -157,7 +158,7 @@ else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6601h-'));
   try {
     const { execFileSync } = await import('node:child_process');
-    execFileSync('bash', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ['src'], tmp);
     const bS = await serverChecks(normEol(readBaseBlob(ROOT, BASE_SHA, 'oracle-admin/server_admin_patch.js').out));
     const bU = unitChecks(await loadMods(tmp));
     const bW = staticChecks(normEol(readBaseBlob(ROOT, BASE_SHA, 'src/routes/game/+page.svelte').out));
