@@ -2183,7 +2183,7 @@ window.manualRefresh = async function(btn) {
 //   data-internal="1" ＝ 與遊戲內容無關的內部維護版本（玩家看不到），這裡照樣列出並標示。
 const CL_SITE_BASE = 'https://suenz001.github.io/ptcg-tw-sim';
 // 只隨admin發布，永不寫入玩家首頁／公開更新檔。
-const CL_ADMIN_ONLY_ENTRIES = [{ ver:'v6.602', internal:true, dup:true, summaryHtml:'<b>預設牌組管理</b>', bodyHtml:'新增預設牌組分頁，可文字貼上牌表、預覽精確卡號與合法性後匯入，下架與復原均需確認。管理清單統一提供給編輯器、一般對戰及錦標賽；不更動玩家副本或既有報名／對戰牌表。' }, { ver: 'v6.592', internal: true, dup: true, summaryHtml: '<b>個人操作時間控制</b>', bodyHtml: '監控分頁新增個人限時開關與1～120分鐘設定（初始15分鐘）；預設關閉。開啟、關閉及調整即時套用。玩家回合限時30秒與電腦必要收尾由伺服器管理。' }, { ver: 'v6.591', internal: true, dup: false,
+const CL_ADMIN_ONLY_ENTRIES = [{ ver:'v6.603', internal:true, dup:true, summaryHtml:'<b>錦標賽賽季管理</b>', bodyHtml:'賽事分頁新增立即換季、台灣日期00:00排程、改期及取消。提交前確認舊新賽季與生效時間；同年序號累加、跨年第一季。歷史與玩家資料保留，個人頁維持生涯累計。' }, { ver:'v6.602', internal:true, dup:true, summaryHtml:'<b>預設牌組管理</b>', bodyHtml:'新增預設牌組分頁，可文字貼上牌表、預覽精確卡號與合法性後匯入，下架與復原均需確認。管理清單統一提供給編輯器、一般對戰及錦標賽；不更動玩家副本或既有報名／對戰牌表。' }, { ver: 'v6.592', internal: true, dup: true, summaryHtml: '<b>個人操作時間控制</b>', bodyHtml: '監控分頁新增個人限時開關與1～120分鐘設定（初始15分鐘）；預設關閉。開啟、關閉及調整即時套用。玩家回合限時30秒與電腦必要收尾由伺服器管理。' }, { ver: 'v6.591', internal: true, dup: false,
   summaryHtml: '<b>測試站搜尋收錄排除</b>',
   bodyHtml: '僅 GitHub Pages 發布時，替所有內容頁、卡片頁、404 與更新紀錄片段加入 noindex；正式站一般建置維持原搜尋設定。Google 擁有權驗證檔保持原文。現有搜尋結果需等爬蟲重新讀取，或由站長在 Search Console 提交暫時移除。' }, { ver: 'v6.589', internal: true, dup: false,
   summaryHtml: '<b>後台完整帳號統計</b>',
@@ -4260,7 +4260,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.602';
+window.SITE_VERSION_HINT = '6.603';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

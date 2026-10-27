@@ -66,6 +66,25 @@ try{
     assert.equal(docs.filter(x=>matchesQuery(x,M.seasonArchiveQuery(0,null))).length,4);
     assert.deepEqual(docs.map(x=>[matchesQuery(x,M.seasonArchiveQuery(0,boundary)),matchesQuery(x,M.seasonArchiveQuery(boundary,null))]),[[true,false],[true,false],[true,false],[false,true]]);
   });
+  await test('真admin動作：取消確認不提交，接受確認才附revision/年度提交',async()=>{
+    const admin=readFileSync(join(PRODUCT,'oracle-admin/admin.html'),'utf8');
+    const logic=admin.split('// >>> v6603-admin-seasons')[1]?.split('// <<< v6603-admin-seasons')[0];assert.ok(logic);
+    const browser=await pwLaunch('v6603管理確認');assert.ok(browser);
+    try{
+      const page=await browser.newPage();await page.route('https://season-admin.test/**',r=>r.fulfill({contentType:'text/html',body:'<div id="admin-season-panel"></div>'}));await page.goto('https://season-admin.test/');
+      await page.evaluate(({logic})=>{
+        window.calls=[];window.accept=false;window.messages=[];
+        window.confirm=m=>{window.messages.push(m);return window.accept;};window.alert=m=>{throw Error(m);};
+        window.api=async(path,options)=>{const b=options?JSON.parse(options.body):null;window.calls.push(b);if(!b)return{seasonApi:1,seasons:[{name:'2026 年第一季'}],pending:null};if(b.preview)return{revision:7,current:{name:'2026 年第一季'},next:{id:'2027-1',name:'2027 年第一季',startAt:Date.UTC(2026,11,31,16)}};return{ok:true};};
+        (0,eval)(logic+';window.renderSeasons=loadSeasonPanel;');
+      },{logic});
+      await page.evaluate(()=>window.renderSeasons());await page.locator('#season-date').fill('2027-01-01');
+      await page.evaluate(()=>window.seasonAdminAction('schedule'));assert.equal(await page.evaluate(()=>window.calls.filter(x=>x&&!x.preview).length),0);
+      await page.evaluate(async()=>{window.accept=true;await window.seasonAdminAction('schedule');});
+      const submitted=await page.evaluate(()=>window.calls.filter(x=>x&&!x.preview));assert.equal(submitted.length,1);assert.equal(submitted[0].revision,7);assert.equal(submitted[0].expectedId,'2027-1');assert.equal(submitted[0].date,'2027-01-01');assert.ok(submitted[0].requestId.length>=8);
+      assert.ok((await page.evaluate(()=>window.messages[0])).includes('2026 年第一季'));
+    }finally{await browser.close();}
+  });
   await test('真排行端點：六類榜按季聚合、limit後切片、同季查詢合併、不回email',async()=>{
     const agg=sap.slice(sap.indexOf('    function _aggregateArchives('),sap.indexOf('    // ── v0.66 公開：排行榜'));
     const cut=sap.slice(sap.indexOf('    function _detectCutPlacements('),sap.indexOf('    // ⭐ v6.111：名次推導'));
