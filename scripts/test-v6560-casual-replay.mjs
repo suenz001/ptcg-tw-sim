@@ -104,7 +104,7 @@ async function scenarios(L, srcRoot) {
       && onRev.meta.revealed === true && onRev.meta.viewerSeat === 0
       && local.snapshots.length === rec.steps.length && local.finalLog.length === final.log.length && local.finalState.log.length === 0
       && local.meta.p1name === final.players[0].name && local.meta.winnerName === final.players[final.winner].name && local.meta.savedAt === now;
-    // A4：遮蔽規則（每一份快照＋終局）：對手手牌、雙方未翻開的獎賞、雙方牌庫 → __HIDDEN__；張數不變；自己手牌、棄牌、場上保留；待選視窗清空
+    // A4：遮蔽規則（每一份快照＋終局）：對手手牌、未翻開獎賞、牌庫 → __HIDDEN__；張數不變；自己牌庫原序、手牌、獎賞與公開區保留；待選視窗清空
     const H = RR.HIDDEN_CARD_ID;
     const all = [...onRed.snapshots.map((s) => s.state), onRed.finalState];
     const orig = [...local.snapshots.map((s) => s.state), local.finalState];
@@ -330,7 +330,7 @@ const LABEL = {
   A1: '★★★ A1 逐動作記錄：只記 playing、快照清掉 log、log 長度不遞減、無重複盤面、步數遠多於半回合',
   A2: '★★★ A2 重複盤面不記、log 變短（退回）先截斷再記、別局與 setup 拒記',
   A3: '★★★ A3 結束組資料：本機／AI 一律攤開；線上依開關（預設遮蔽、記錄者視角）；名稱、勝者、步數、終局正確',
-  A4: '★★★ A4 遮蔽：對手手牌、未翻開的獎賞、雙方牌庫變卡背（張數不變、iid 換成不透明編號、原 iid 不出現在該快照任何地方）；公開區不動；待選／連鎖待選／牌庫頂已知／棄牌監看清掉',
+  A4: '★★★ A4 遮蔽：對手手牌、未翻開的獎賞與牌庫變卡背（張數不變、iid 換成不透明編號、原 iid 不出現在該快照任何地方）；己方牌序及公開區保留；待選／連鎖待選／牌庫頂已知／棄牌監看清掉',
   A5: '★★★ A5 iid 對照攻擊：用檔案裡公開位置的 iid 對照被遮住的卡，一張都還原不了（正對照：舊遮法能還原兩成以上）',
   A6: '★★★ A6 對戰紀錄：對手的私有訊息拿掉、自己的保留',
   A7: '★★ A7 復盤檔驗證：合格的通過、格式／版本／損毀被擋',

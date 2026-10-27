@@ -8,7 +8,8 @@ import {createRequire} from 'node:module';
 import {tmpdir} from 'node:os';
 import {pwLaunch} from './lib/pw.mjs';
 import {extractCss} from './lib/zoom-modal-fixture.mjs';
-const ROOT=join(dirname(fileURLToPath(import.meta.url)),'..'),PRODUCT=process.env.V6604_PRODUCT_ROOT||ROOT;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const PRODUCT = process.env.V6604_PRODUCT_ROOT || ROOT;
 const scratch=mkdtempSync(join(tmpdir(),'replay-deck-6604-'));let pass=0,fail=0;
 async function test(name,fn){try{await fn();pass++;console.log('PASS '+name);}catch(e){fail++;console.log('FAIL '+name+': '+e.message);}}
 const inst=n=>({iid:'original-'+n,cardId:String(n)});
