@@ -2,7 +2,19 @@
 
 ## v6.604 — 復盤牌庫原序與精簡賽季說明
 
-BASE `d3a0a2fc`（v6.603）。玩家要求復盤點牌庫查看每格下一抽與後續原順序；移除指定賽季說明。只在isTReplay提供入口與modal，記實際seat，開窗暫停autoplay；己方新存牌庫保留原序，對手照既有遮蔽，舊hidden資料不推算。共用redaction影響公開分享，因此兩seat/60張跨區與附件/對手opaque iid均驗。修改前harness+35免疫36/36；新guard14/0，BASE正對照2綠／新功能12紅。獨立replay_6604_review首審P3（Esc關窗優先與分享註解）已修，複審發現固定P1突變存活，補真P2/live呼叫與AST實際雙入口後，審查者獨立確認13綠1行為紅，未解決P1/P2/P3=0。最終建置、實頁與完整952套待驗收，尚未准推。己方牌序也會隨進行中存檔保存，公開分享保留本人牌序；對手隱藏資訊政策不變。正式站需站長先update-tournament.bat再redeploy-oracle.bat。
+BASE `d3a0a2fc`（v6.603）。復盤點牌庫檢視目前步驟由牌頂到牌底的原序，逐張顯示位置與下一抽，點卡可放大；桌機與手機皆有雙方入口。僅復盤三道閘，開窗暫停播放、保存實際seat避免自動切視角後換人；Esc先關放大卡再關牌庫。移除站長指定賽季說明，保留賽季選單。
+
+新存一般復盤保留己方牌庫原序；進行中存檔及公開分享也保留己方牌序，對手隱藏手牌／未翻獎賞／牌庫及opaque iid規則不變。舊hidden檔無法還原，不推算補牌；空牌庫與部分缺失分別提示。未改卡牌效果或對戰操作規則。
+
+驗收：修改前後harness＋35免疫皆36/36。新guard14/0，BASE正對照2綠／新功能12紅，10功能突變全殺（含P2固定P1、上下入口接錯、live閘移除、反序與洩漏）。完整952首輪949綠3紅，27.35分鐘；3紅為6371新guard ROOT同const宣告、6590手機全檔還原未接新入口、6564己方牌庫舊遮蔽預期。只修測試接線／預期與診斷，對手隱私斷言及BASE不變；產品對c4ccfbbf逐位元零diff。
+
+首輪有9支ESCAPE與mainHard3，均為本次實頁驗收工具buildAiBundle在主工作樹建立／刪除.x-aish-24660、25908暫存檔的並行干擾，不能當首輪0。改成外部快照驗收後，所有失敗／受干擾項目及相關守衛18支安靜單工補驗18/18（含千局580.8秒）、ESCAPE/mainHard/restoreFailed/timeout皆0、statusChanged=false；兩輪952支聯集未解決0。原始full／supp報表保留，SHALLOW=0、既有6378未追蹤音樂ENV1與6263 Windows PLATFORM1如實保留。舊6560無build的E段另在Oracle發行建置以外網阻擋方式實跑54/0，涵蓋匯入／跳格／獎賞遮蔽／終局／IndexedDB及本機不留紀錄。
+
+Pages與Oracle發行建置exit0，server-engine與5224張卡池成功。真建置整頁390/1366雙入口、下一抽與步驟更新、放大後Esc返回，Oracle另驗新redacted己方可見／對手hidden及舊hidden不可補推；頁面error0、水平溢出0，卡圖使用替代圖並阻擋外部Auth／API，非原生iPhone實機測試。真Svelte視窗320/390/橫屏844/桌機1366，60張長清單捲動與關閉均驗。精確還原game9／mobile4pairs，完整等BASE、額外差異保留、18／8缺失或重複錨點皆拒絕。
+
+獨立replay_6604_review：首審Esc與分享註解已修；複審抓固定P1突變存活，補P2、live與實際AST雙入口後，由審查者獨立確認13綠1紅。ROOT與mobile還原修法再審，預先修正shebang位置；6564新預期再審，確認不放寬對手隱私。完整驗收報表已送最終核准，未准推前不推。
+
+證據E:/ptcg-tw-sim-local/replay-deck-6604-evidence（acceptance.json、mutants.json、reverter-proof.json、release-ui與release-ui-oracle/proof.json、build與guard logs）；原全套E:/sb-replay-6604/__rt/full.json、補驗E:/sb-replay-6604-supp/__rt/supp.json。保留站長主工作樹兩份預設牌組檔的原始位元組，不納入提交。因共享復盤處理及前端皆更新，站長測試確認後自行先update-tournament.bat，再redeploy-oracle.bat；AI未跑部署bat、未讀D:/ai。CI與線上驗收結果續記本機交接與證據。
 
 ## v6.603 — 錦標賽賽季（server v1.76／admin v1.91）
 
