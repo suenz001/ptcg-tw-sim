@@ -1,6 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
-BASE `5c403f90`（v6.601）。admin預組文字預覽匯入/下架/復原、單文件revision CAS、既有種子隨引擎bundle部署；兩頁共用反應目錄。修改前harness+35免疫36/36綠。獨立審查與最終驗收進行中，未推送。
+## v6.602 — 管理預設牌組（server v1.75／admin v1.90）
+
+BASE `5c403f90`（v6.601）。站長授權分版實作預組管理與賽季；本版只處理預組。admin文字預覽匯入、下架及復原，既有種子隨server-engine部署；`managedPresetDecks/catalog`單文件revision CAS及requestId防重送。兩玩家頁共用目錄、有效快照與錯誤提示；空清單不復活內建預組。伺服器以精確卡號與中央validateDeck重驗，不改卡片效果。原玩家副本/報名/對戰快照不改。
+
+- 玩家首頁僅列清單更新，管理細節只在admin內部條目。GitHub Pages無Oracle端點時使用56副編譯種子，無管理API請求；正式Oracle模式才讀管理清單。
+- 新守衛23/0；BASE反證19紅/4正對照；六個功能突變全部exit1且行為斷言失敗。真編譯Svelte驗畸形快照、無快照失敗、合法空清單、過期快照及下架提示；抽出五個真入口驗下架ID停止新寫入。後者不冒稱既存比賽快照的端到端整合測試。
+- 獨立審查 presets_6602_review 首輪3個P2（快照形狀、刪除後ID重用、首次載入狀態）全部修復複審；另補E11000初始化競爭、避免讀取noop更新與精確卡號預覽。最終產品與測試修改未發現P1/P2；審查者在1000seeds完整成功、文件如實更新且沒有未審產品改動的條件下核准推送，三條現已滿足。
+- 修改前harness+35免疫36/36；f786完整950支第一次940成功/10失敗。歷史6支Bash解壓改既有native archive，保留原BASE/paths/斷言；v6272補缺少version.ts宣告；五舊UI守衛允許指向已驗build，不增加skip。27c15補15支為14成功/1 evolve1000逾時，其他原紅已成功、五個缺build的原skip已跑真瀏覽器且skip0。最後一支原1000seeds獨立完整成功exit0（evolve1000-final.log）；950支聯集未解決項目0。
+- 全套與補驗的escape/mainHard/restoreFailed皆0、statusChanged=false。6378 ENV1為未追蹤音樂，6263 PLATFORM1；首次五個SHALLOW標記實為舊UI守衛缺build，並非git缺歷史，已在補驗消除。
+- Pages與隔離Oracle release build成功；390/1280真頁面載入管理清單、下架後重新載入、唯讀及選單不溢出、pageerror0。admin圖為新面板隔離預覽，不冒稱完整登入後台。
+- 證據根：`E:/ptcg-tw-sim-local/season-presets-implementation` 的mutants6602.json、headfail6602.log、visual6602/proof.json、visual6602-pages/proof.json、removed-handlers.json、build與補驗log；全套`E:/sb-presets-6602/__rt/full.json`、補驗`E:/sb-presets-6602-supp/__rt/supp.json`。推送前最終驗收完成；正式bat由站長先update-tournament再redeploy-oracle。
 
 ## v6.601 — 「我的錦標賽對戰」也標出勝敗（server v1.74）
 
