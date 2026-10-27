@@ -56,12 +56,12 @@ async function libScenarios(L) {
     phase: 'playing', turn: 3, activePlayerIndex: 0, log: [],
     players: [0, 1].map((k) => ({ name: 'P' + k, hand: [{ iid: 'h' + k, cardId: 'c' + k }], prizes: [{ iid: 'p' + k + 'a', cardId: 'pz' + k + 'a' }, { iid: 'p' + k + 'b', cardId: 'pz' + k + 'b', faceUp: true }], deck: [{ iid: 'd' + k, cardId: 'dk' + k }], discard: [], bench: [], active: null })),
   });
-  // R1：遮蔽：自己的獎賞卡原樣保留（卡號、iid）；對手未翻開的變卡背、翻開的保留；牌庫雙方照樣卡背；對手手牌卡背
+  // R1：遮蔽：自己的獎賞卡原樣保留（卡號、iid）；對手未翻開的變卡背、翻開的保留；自己的牌庫保留原序；對手牌庫與手牌卡背
   const red = L.RR.redactStateForSeat(mk(), 1);
   const me = red.players[1], opp = red.players[0];
   r.R1 = me.prizes[0].cardId === 'pz1a' && me.prizes[0].iid === 'p1a' && me.prizes[1].cardId === 'pz1b'
     && opp.prizes[0].cardId === H && opp.prizes[0].iid !== 'p0a' && opp.prizes[1].cardId === 'pz0b'
-    && me.deck[0].cardId === H && opp.deck[0].cardId === H && opp.hand[0].cardId === H && me.hand[0].cardId === 'c1'
+    && JSON.stringify(me.deck) === JSON.stringify(mk().players[1].deck) && opp.deck[0].cardId === H && opp.hand[0].cardId === H && me.hand[0].cardId === 'c1'
     && !JSON.stringify(red).includes('"p0a"') && !JSON.stringify(red).includes('pz0a');
   r.R1n = JSON.stringify({ me: me.prizes, opp: opp.prizes });
   // R2：記錄每一格都帶 at（記錄當下的時間）
@@ -187,7 +187,7 @@ function foldScenarios(L) {
 }
 
 const LABEL = {
-  R1: '★★★ R1 遮蔽保留自己的獎賞卡（原卡號、原 iid）；對手未翻開的照樣卡背、原 iid 不外洩；牌庫與對手手牌照舊遮',
+  R1: '★★★ R1 遮蔽保留自己的獎賞卡（原卡號、原 iid）；對手未翻開的照樣卡背、原 iid 不外洩；己方牌庫原序保留，對手牌庫與手牌照舊遮',
   R2: '★★ R2 一般復盤每一格記下記錄當下的時間（at）', R3: '★★ R3 錦標賽逐動作格解包保留伺服器的 at（壞值不帶）',
   T1: '★★★ T1 計時器實跑：回放停在那一格的時間（隔多久都不變）／舊資料用回合開始／終局用結束時間；錦標賽用伺服器時鐘；休閒用本機',
   T2: '★★ T2 接線：回放每一格帶 at、終局用 endedAt／savedAt、跳格時更新 tReplayAt',
