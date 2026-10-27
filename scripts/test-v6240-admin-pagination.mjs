@@ -1,3 +1,4 @@
+import { revertAdminV176 } from './lib/sap-revert-admin-v176.mjs';
 // v6.240 守衛：admin 兩支「撈太多」的端點必須真的在**伺服器端**分頁／全量統計。
 //
 // 站長回報兩件事：
@@ -235,7 +236,9 @@ await T('【B】⑥ 索引：{status:1,updatedAt:-1} 在啟動時就真的被建
   await call(h, { status: 'ended', range: '7d', page: '2' });
   assert.strictEqual(spy.indexes.length, 1, 'createIndex 跑進 request handler 了（每發都建一次：' + spy.indexes.length + '）');
   // v6.119 守衛的既有要求：每個 createIndex 那一行都要有 catch（索引已存在會拋）
-  for (const l of pat.split('\n').filter((x) => x.includes('createIndex'))) {
+  // v6.603新索引由test-v6603驗集中拒絕/重試；精確還原後保留舊索引的原判準。
+  const legacy = pat.includes('// >>> v6603-season-rank') ? revertAdminV176(pat) : pat;
+  for (const l of legacy.split('\n').filter((x) => x.includes('createIndex'))) {
     assert.ok(/catch/.test(l), 'createIndex 沒有 catch：' + l.trim().slice(0, 80));
   }
 });

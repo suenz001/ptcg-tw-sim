@@ -1,3 +1,4 @@
+import { revertV6603Game } from './lib/revert-v6603-game.mjs';
 // ⭐⭐⭐v6.177 守衛：「重新抓取／抓取失敗時，不清空已經顯示過的資料」
 //   跑法：node scripts/test-v6177-keep-last-good.mjs
 //
@@ -17,7 +18,9 @@ import assert from 'node:assert/strict';
 import { transformSync } from 'esbuild';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const PAGE = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+const RAW_PAGE = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+// v6.603切季必須清除異季資料；同季保留/跨季失敗行為另由test-v6603驗證。舊判準精確還原後保留。
+const PAGE = RAW_PAGE.includes('// >>> v6603-season-picker') ? revertV6603Game(RAW_PAGE) : RAW_PAGE;
 const KEEP = readFileSync(join(ROOT, 'src/lib/ui/stale-keep.ts'), 'utf8');
 const ROOM = readFileSync(join(ROOT, 'src/lib/game/room-oracle.ts'), 'utf8');
 

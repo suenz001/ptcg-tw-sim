@@ -94,17 +94,18 @@ try{
     const matches=[...Array.from({length:4},(_,i)=>({round:1,p1uid:String(i*2),p2uid:String(i*2+1),winnerUid:String(i*2),status:'done'})),{round:2,p1uid:'0',p2uid:'2',winnerUid:'0',status:'done'},{round:2,p1uid:'4',p2uid:'6',winnerUid:'4',status:'done'},{round:3,p1uid:'0',p2uid:'4',winnerUid:'0',status:'done'}];
     const archives=[{startedAt:boundary-1,finishedAt:boundary+100,championUid:'0',players,matches},{startedAt:boundary,finishedAt:boundary+200,championUid:'0',players,matches},{startedAt:boundary+1,finishedAt:boundary+300,communityEvent:true,championUid:'0',players,matches}];
     const hosts=[{createdByPlayer:true,createdAt:boundary-1,createdBy:'private',proposerName:'主辦'},{createdByPlayer:true,createdAt:boundary,createdBy:'private',proposerName:'主辦'}];
-    let reads=0;
-    const col=docs=>({createIndex:async()=>{},find(q){reads++;const selected=docs.filter(d=>matchesQuery(d,q));const cursor={hint(){return cursor;},min(){return cursor;},max(){return cursor;},toArray:async()=>{await new Promise(r=>setTimeout(r,10));return selected;}};return cursor;}});
+    let reads=0,indexCalls=0,indexShouldFail=true;
+    const col=docs=>({createIndex:async()=>{indexCalls++;if(indexShouldFail)throw Error('fixture index failure');},find(q){reads++;const selected=docs.filter(d=>matchesQuery(d,q));const cursor={hint(){return cursor;},min(){return cursor;},max(){return cursor;},toArray:async()=>{await new Promise(r=>setTimeout(r,10));return selected;}};return cursor;}});
 
     const state={revision:2,seasons:[M.FIRST_SEASON,{...M.nextSeason([M.FIRST_SEASON],boundary),startAt:boundary}],pending:null};
     let handler;
     const archiveHelper=sap.slice(sap.indexOf('    async function seasonArchivesFor('),sap.indexOf('    // <<< v6603-season-rank'));
     const invalidate=new Function('app','TENG','TARCHIVE','TEVENTS','seasonService','seasonRankCache','seasonRankFlight','seasonRankEpoch',cut+agg+lb+';return ()=>{seasonRankEpoch++;seasonRankCache.clear();seasonRankFlight.clear();};')(
       {get:(p,h)=>{handler=h;}},M,col(archives),col(hosts),()=>({load:async()=>state}),new Map(),new Map(),0);
-    async function call(seasonId,limit=20){let code=200,data;await handler({query:{seasonId,limit}},{status(n){code=n;return this;},json(x){data=x;return this;}});assert.equal(code,200,JSON.stringify(data));return data;}
-    const [old,again]=await Promise.all([call('2026-1'),call('2026-1',5)]);assert.equal(reads,2,'同季併發只有一組歸檔+主辦查詢');assert.equal(old.champions.official[0].count,1);assert.equal(old.wins[0].count,3);assert.equal(old.top8.length,8);assert.equal(old.finals.length,2);assert.equal(old.communityHost[0].count,1);assert.equal(old.champions.community.length,0);assert.equal(again.top8.length,5);
-    const recent=await call('2026-2');assert.equal(recent.wins[0].count,6);assert.equal(recent.champions.official[0].count,1);assert.equal(recent.champions.community[0].count,1);assert.equal(recent.communityHost[0].count,1);assert.ok(!JSON.stringify(recent).includes('@'));assert.equal(recent.season.id,'2026-2');
+    async function call(seasonId,limit=20,expected=200){let code=200,data;await handler({query:{seasonId,limit}},{status(n){code=n;return this;},json(x){data=x;return this;}});assert.equal(code,expected,JSON.stringify(data));return data;}
+    assert.ok((await call('2026-1',20,500)).error.includes('fixture index failure'));assert.equal(reads,0);assert.equal(indexCalls,3);indexShouldFail=false;
+    const [old,again]=await Promise.all([call('2026-1'),call('2026-1',5)]);assert.equal(indexCalls,6,'索引失敗後可重試且合併');assert.equal(reads,2,'同季併發只有一組歸檔+主辦查詢');assert.equal(old.champions.official[0].count,1);assert.equal(old.wins[0].count,3);assert.equal(old.top8.length,8);assert.equal(old.finals.length,2);assert.equal(old.communityHost[0].count,1);assert.equal(old.champions.community.length,0);assert.equal(again.top8.length,5);
+    const recent=await call('2026-2');assert.equal(recent.wins[0].count,6);assert.equal(recent.champions.official[0].count,1);assert.equal(recent.champions.community[0].count,1);assert.equal(recent.communityHost[0].count,1);assert.ok(!JSON.stringify(recent).includes('@'));assert.equal(recent.season.id,'2026-2');assert.equal(indexCalls,6,'成功後跨季查詢不再建索引');
     invalidate();const pending=call('2026-2');await new Promise(r=>setTimeout(r,1));archives.push({...archives[1],startedAt:boundary+3});invalidate();await pending;
     assert.equal((await call('2026-2')).champions.official[0].count,2,'失效前的舊inflight不准回填cache');
   });
@@ -136,10 +137,11 @@ try{
     const browser=await pwLaunch('v6603賽季排行');assert.ok(browser);
     try {
       for(const width of [390,1280]){
-        const page=await browser.newPage({viewport:{width,height:844}});let current=1;const errors=[];page.on('pageerror',e=>errors.push(e.message));
+        const page=await browser.newPage({viewport:{width,height:844}});let current=1,offline=false;const errors=[];page.on('pageerror',e=>errors.push(e.message));
         const seasons=[M.FIRST_SEASON,M.nextSeason([M.FIRST_SEASON],boundary)];
         await page.route('http://season.test/**',async route=>{
           const u=new URL(route.request().url());if(u.pathname.startsWith('/api')){
+            if(offline)return route.fulfill({status:503,contentType:'application/json',body:'{}'});
             const id=u.searchParams.get('seasonId')||seasons[current-1].id;
             if(u.searchParams.has('seasonId'))await new Promise(r=>setTimeout(r,id===seasons[0].id?200:10));
             return route.fulfill({contentType:'application/json',body:JSON.stringify({seasonApi:1,season:seasons.find(s=>s.id===id),seasons:seasons.slice(0,current),limit:20,champions:{official:[],community:[]},wins:[{displayName:id===seasons[0].id?'舊季玩家':'新季玩家',count:1}],top8:[],finals:[],communityHost:[]})});
@@ -150,7 +152,9 @@ try{
         current=2;await page.getByRole('button',{name:'離開排行'}).click();await page.getByRole('button',{name:'進入排行'}).click();await page.waitForFunction(()=>document.querySelector('select[aria-label="排行賽季"]')?.querySelectorAll('option').length===2);assert.equal(await page.getByRole('combobox',{name:'排行賽季'}).inputValue(),seasons[1].id);
         await page.getByRole('combobox',{name:'排行賽季'}).selectOption(seasons[0].id);await page.getByText('舊季玩家',{exact:true}).waitFor();
         await page.evaluate(ids=>{window.chooseSeason(ids[0]);window.chooseSeason(ids[1]);},seasons.map(s=>s.id));await page.getByText('新季玩家',{exact:true}).waitFor();await page.waitForTimeout(250);assert.equal(await page.getByText('舊季玩家',{exact:true}).count(),0);
-        const rect=await page.getByRole('combobox',{name:'排行賽季'}).boundingBox();assert.ok(rect.height>=44);assert.ok(rect.x+rect.width<=width);assert.deepEqual(errors,[]);await page.close();
+        const rect=await page.getByRole('combobox',{name:'排行賽季'}).boundingBox();assert.ok(rect.height>=44);assert.ok(rect.x+rect.width<=width);assert.deepEqual(errors,[]);
+        offline=true;await page.getByRole('button',{name:'離開排行'}).click();await page.getByRole('button',{name:'進入排行'}).click();await page.waitForTimeout(100);assert.equal(await page.getByText('新季玩家',{exact:true}).count(),1,'同季載入失敗保留好資料');
+        await page.evaluate(()=>window.chooseSeason('2026-1'));await page.waitForTimeout(100);assert.equal(await page.getByText('新季玩家',{exact:true}).count(),0,'異季失敗不得顯示上一季資料');await page.close();
       }
     }finally{await browser.close();}
   });

@@ -131,7 +131,7 @@ function switchTabBody(src) {
 function runSwitchTab(body, tab, init) {
   const calls = [];
   const S = Object.assign({
-    tTabRaw: 'events', tError: '', tCheckinErrId: '',
+    tTabRaw: 'events', tError: '', tCheckinErrId: '', tSeasonLastLoad: Date.now(), // v6.603新增的載入時間替身；本守衛仍驗切頁清錯誤
     tLeaderboard: null, tLeaderboardStale: false, tProfile: null, tProfileStale: false,
     tLeaderboardLoad: () => calls.push('lb'), tProfileLoad: () => calls.push('pf'),
     refreshNotifyDiag: () => calls.push('diag'),

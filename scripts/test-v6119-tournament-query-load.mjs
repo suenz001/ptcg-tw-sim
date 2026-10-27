@@ -1,3 +1,4 @@
+import { revertAdminV176 } from './lib/sap-revert-admin-v176.mjs';
 // v6.119 守衛：錦標賽伺服器端的查詢負載改動，以及「絕對不能加 projection」的那一處。
 //
 // 背景：30 人賽 lag 的伺服器側。v6.118 已修掉前端那條（錦標賽頁誤訂閱休閒大廳輪詢），
@@ -42,7 +43,9 @@ T('⭐ TREPLAY 要有 matchId 索引（回放快照是最大的 collection 之�
 });
 
 T('索引一律建在啟動時、且 best-effort（不得放進 request handler）', () => {
-  const lines = P.split('\n').filter((l) => l.includes('createIndex'));
+  // v6.603新索引由test-v6603行為驗證集中拒絕與重試；此處精確還原，維持舊啟動索引判準。
+  const legacy = P.includes('// >>> v6603-season-rank') ? revertAdminV176(P) : P;
+  const lines = legacy.split('\n').filter((l) => l.includes('createIndex'));
   ok(lines.length >= 8, 'createIndex 數量異常：' + lines.length);
   for (const l of lines) {
     ok(/catch/.test(l), 'createIndex 沒有 catch（索引已存在會拋）：' + l.trim().slice(0, 80));

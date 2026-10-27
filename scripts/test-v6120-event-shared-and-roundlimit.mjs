@@ -11,6 +11,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { revertAdminV176 } from './lib/sap-revert-admin-v176.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -132,7 +133,10 @@ T('⭐ TMATCH 要有 (eventId,status) 與 (eventId,round) 複合索引', () => {
 });
 
 T('索引一律 best-effort 且建在啟動時（不得放進 request handler）', () => {
-  const lines = P.split('\n').filter((l) => l.includes('createIndex'));
+  // v6.603 新季索引首次排行才建立、合併同Promise並await，集中catch；失敗不查歸檔且可重試。
+  // 新策略由test-v6603真端點行為驗證；此處先精確還原v1.76，保留原啟動索引的best-effort判準。
+  const legacy = P.includes('// >>> v6603-season-rank') ? revertAdminV176(P) : P;
+  const lines = legacy.split('\n').filter((l) => l.includes('createIndex'));
   ok(lines.length >= 11, 'createIndex 數量異常（少於預期）：' + lines.length);
   for (const l of lines) ok(/catch/.test(l), 'createIndex 沒有 catch：' + l.trim().slice(0, 80));
 });
