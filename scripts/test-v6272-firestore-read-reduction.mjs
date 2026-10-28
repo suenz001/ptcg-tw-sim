@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '92520fbeead27901caa3dbe9811ed7349c178935';   // v6.604（上一版）
+const PREV_SHA = '9d427ed528d920aee3549d7d07a096bd7135ae26';   // v6.605（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,12 +757,19 @@ const PREV_SHA = '92520fbeead27901caa3dbe9811ed7349c178935';   // v6.604（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.605 前移：PREV_SHA 從 92520fbe（v6.604）起算。
+  // ⚠⚠ v6.606 前移：PREV_SHA 從 9d427ed5（v6.605）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.605：帳號處分管理屬admin維護，玩家前端僅升版。
+  // ⭐v6.606：只改共用卡背CSS尺寸，維持原有卡片顯示權限。
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.605）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.605 前移：PREV_SHA 從 92520fbe（v6.604）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.605：帳號處分管理屬admin維護，玩家前端僅升版。
+//   'src/lib/version.ts',
+//   'static/site-version.txt',
 // ── 上一版（v6.604）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.604 前移：PREV_SHA 從 d3a0a2fc（v6.603）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -908,16 +915,6 @@ const PREV_ALLOWED = [
 //   'src/lib/version.ts',
 //   'src/routes/deck-posts/+page.svelte',
 //   'src/routes/decks/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.593）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.593 前移：PREV_SHA 從 c7c4aa8b（v6.592）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.593：僅iPhone/iPod主畫面對戰頂部相容避讓與高度預算；不動遊戲規則、伺服器或全站狀態列。
-//   'src/lib/version.ts',
-//   'src/routes/game/MobilePortraitBattle.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

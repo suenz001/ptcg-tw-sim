@@ -19712,7 +19712,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .float-evo-menu{ max-height:calc((100vh - 16px) / 1.05); overflow-y:auto; box-sizing:border-box; }  /* ⭐v6.455：border-box（內距＋框線原本多出 8px，1366×657 仍超出頂端，複審量到） */
   /* 純瀏覽的密集清單（牌庫剩餘全覽）小一級：72px */
   .full-deck-list{ grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); }
-  .prize-view-cardback{ width:var(--pk-card); height:calc(var(--pk-card) * 1.397); max-width:100%; }
+  .prize-view-cardback{ width:var(--pk-card); height:auto; aspect-ratio:660 / 921; max-width:100%; box-sizing:border-box; } /* v6.606：窄格縮寬時高度同步等比例縮小。 */
 
   /* ③ 按鈕列：次要在左、主要在右（::before 當彈簧；警告文字獨佔第一行） */
   .sel-footer{ justify-content:flex-start; align-items:center; }
