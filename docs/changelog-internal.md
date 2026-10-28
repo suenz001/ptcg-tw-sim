@@ -1,12 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
-BASE `b13354f3`（v6.606）。手機共用log的RAF晚於DOM更新，native scroll可用新scrollHeight誤把mpLogPinned設false，之後永久停留舊位置。以DOM observer同步跟隨及ResizeObserver延續底部意圖，手動上捲暫停、回底恢復、卸載清理。僅MobilePortraitBattle及新action，桌機反向排版初步正常，仍驗真建置雙角色。前harness+35免疫36/36，新guard12/0，BASE9正對照綠3行為紅，6突變全殺、N1與逐位元還原回綠。獨立log_follow_6607_review產品初審P1/P2/P3未解0，最終build/full/實頁待完成。
+## v6.607（2026-10-28～29）修正手機對戰紀錄跟隨
 
-獨立審查 log_follow_6607_review（全新代理、未參與實作；非Opus）先核12/0與6突變、15組真正發行頁測試。首輪full因將配置假API域的Oracle專用build交給通用守衛，6596無預組catalog而早停，保留原full.log與原紅；改正常Pages快照後6596單獨18/0，0bbca779完整955/955成功，escape/mainHard/restore/timeout0、statusChanged=false。但推前補查抓到P2×1：短紀錄不可捲時wheel/touch無位移仍誤關pin，Ctrl縮放事件亦同。修成僅可實際上捲且非Ctrl才預先關pin，多指清touchY；7d8218ba複審通過，未解P1/P2/P3=0。新增A10/A11真wheel/CDPtouch及A12修飾事件，對修前產品三條明確紅（gap1202/1202/990），修後15/0；先前955綠不能冒稱是修後驗收，修後新guard15/0、9功能突變全殺（M7/A10、M8/A11、M9/A12），N1與逐位元還原回綠；BASE12正對照綠3行為紅，Pages／Oracle修後發行建置皆成功。完整回歸與15實頁正在重驗。
+BASE `b13354f3`（v6.606）。手機共用log的RAF晚於DOM更新，native scroll可用新scrollHeight誤把mpLogPinned設false，之後永久停留舊位置。以DOM observer同步跟隨及ResizeObserver延續底部意圖，手動上捲暫停、回底恢復、卸載清理。僅MobilePortraitBattle及新action，桌機反向排版經四桌墊、雙方與觀戰實頁確認正常。前harness+35免疫36/36；最終新guard15/0，BASE12正對照綠3行為紅，9突變全殺、N1與逐位元還原回綠。最終完整955/955及獨立複審通過。
+
+獨立審查 log_follow_6607_review（全新代理、未參與實作；非Opus）先核12/0與6突變、15組真正發行頁測試。首輪full因將配置假API域的Oracle專用build交給通用守衛，6596無預組catalog而早停，保留原full.log與原紅；改正常Pages快照後6596單獨18/0，0bbca779完整955/955成功，escape/mainHard/restore/timeout0、statusChanged=false。但推前補查抓到P2×1：短紀錄不可捲時wheel/touch無位移仍誤關pin，Ctrl縮放事件亦同。修成僅可實際上捲且非Ctrl才預先關pin，多指清touchY；7d8218ba複審通過，未解P1/P2/P3=0。新增A10/A11真wheel/CDPtouch及A12修飾事件，對修前產品三條明確紅（gap1202/1202/990），修後15/0；先前955綠不能冒稱是修後驗收，修後新guard15/0、9功能突變全殺（M7/A10、M8/A11、M9/A12），N1與逐位元還原回綠；BASE12正對照綠3行為紅，Pages／Oracle修後發行建置皆成功。其後完成以下修後完整回歸與15實頁驗收。
 
 修後最終驗收（2026-10-29）：完整955/955成功，28.63分鐘，報告E:/sb-log-6607-reviewed/__rt/full.json；escape/mainHard/restoreFailed/timeout均0，statusChanged=false，沙盒暫存殘檔87支均已還原，非未清理外寫。SHALLOW0；既有6378未追蹤音樂ENV1與6263 Windows PLATFORM1保留。產品對7d8218ba逐位元Git零diff，最新驗收HEAD20ada681僅增加紀錄。修後Pages／Oracle雙建置成功，15組真正/game經既有房號加入與輪詢：390px P1/P2/觀戰＋1366px四桌墊各三角色，實際class及column/column-reverse均核對；每組三批新增紀錄gap0、往上閱讀同文字列視覺位置保留、回底後恢復、errors[]。全部API攔截假資料且外網阻擋，未動正式資料，非iPhone實機。復盤390/1366步驟增加紀錄的跟隨／閱讀保留／恢復亦綠。
 
-最終證據位於外部log-follow-6607-evidence/acceptance-reviewed.json、guard-edge-fixed.log（15/0）、head-fail.log（BASE12綠3紅）、edge-before.log（三個新增邊界對修前12綠3紅）、mutants-reviewed.log（9/9、N1及逐位元還原）、build-reviewed-*.log、release-reviewed.log／release-ui.json及online-reviewed-local.log。獨立審查已確認原P2解除、修後守衛／突變／雙build／15實頁，最終完整報表准推待確認。只由MobilePortraitBattle匯入UI跟隨helper，未改engine/server、權限或API，正式前端部署由站長自行redeploy-oracle.bat；AI不跑部署。
+最終證據位於外部log-follow-6607-evidence/acceptance-reviewed.json、guard-edge-fixed.log（15/0）、head-fail.log（BASE12綠3紅）、edge-before.log（三個新增邊界對修前12綠3紅）、mutants-reviewed.log（9/9、N1及逐位元還原）、build-reviewed-*.log、release-reviewed.log／release-ui.json及online-reviewed-local.log。獨立審查已確認原P2解除、修後守衛／突變／雙build／15實頁，並獨立解析最終955支完整報表與acceptance-reviewed.json；P1/P2/P3未解均0，最終准推。只由MobilePortraitBattle匯入UI跟隨helper，未改engine/server、權限或API，正式前端部署由站長自行redeploy-oracle.bat；AI不跑部署。
 
 ## v6.606（2026-10-28）修正獎賞檢視卡背比例
 
