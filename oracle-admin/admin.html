@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.91</title>
+<title>PTCG Oracle Admin v1.92</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -353,6 +353,10 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
   .mx-t .mx-c { min-width: 46px; text-align: center; padding: 3px 2px; border-radius: 4px; font-weight: 600; line-height: 1.2; }
   .mx-t .mx-n { font-weight: 400; font-size: 10px; opacity: .75; }
   .mx-f td { padding: 4px 6px; border-bottom: 1px solid #eef1f5; }
+  /* v6.605 處分管理：手機欄位寬度。 */
+  #tab-moderation label { display:block; margin:10px 0 5px; }
+  #tab-moderation select { width:100%; max-width:100%; }
+  #tab-moderation button { white-space:normal; }
 </style>
 </head>
 <body>
@@ -372,7 +376,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.91</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.92</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -387,6 +391,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div class="tab" data-tab="oracle-rooms" onclick="switchTab('oracle-rooms')">🎮 Oracle 對戰</div>
     <div class="tab" data-tab="firebase-rooms" onclick="switchTab('firebase-rooms')">🔥 Firebase 對戰</div>
     <div class="tab" data-tab="users" onclick="switchTab('users')">👤 玩家帳號</div>
+    <div class="tab" data-tab="moderation" onclick="switchTab('moderation')">🛡️ 處分管理</div>
     <div class="tab" data-tab="feedback" onclick="switchTab('feedback')">💬 意見回饋</div>
     <div class="tab" data-tab="matches" onclick="switchTab('matches')">📜 對戰歷史</div>
     <div class="tab" data-tab="stats" onclick="switchTab('stats')">📊 統計</div>
@@ -405,6 +410,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div id="tab-oracle-rooms" class="tab-content" style="display:none;"></div>
     <div id="tab-firebase-rooms" class="tab-content" style="display:none;"></div>
     <div id="tab-users" class="tab-content" style="display:none;"></div>
+    <div id="tab-moderation" class="tab-content" style="display:none;"></div>
     <div id="tab-feedback" class="tab-content" style="display:none;"></div>
     <div id="tab-matches" class="tab-content" style="display:none;"></div>
     <div id="tab-stats" class="tab-content" style="display:none;"></div>
@@ -756,6 +762,131 @@ function showApp() {
   // v1.16：移除 30 秒自動刷新 — 一律手動按 Refresh 重刷（Wilson 偏好手動，
   //   且避免「總覽」頁在沒按 Refresh 時自己重整）。
 }
+
+// >>> v6605-account-moderation-ui
+const modState = {user:null, seq:0, busy:false, pending:null, next:null, items:[], active:[], truncated:false};
+const modLabel = scope => scope === 'chat' ? '禁言（聊天／私訊／公布欄留言）' : '限制參賽入口';
+const modTime = at => at === null ? '永久，直到解除' : new Date(at).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'});
+const modEl = id => document.getElementById('mod-' + id);
+function modMessage(message) { modEl('message').textContent = message; }
+function modBusy(value) {
+  modState.busy = value;
+  document.querySelectorAll('#tab-moderation button, #tab-moderation input, #tab-moderation select, #tab-moderation textarea').forEach(el => { el.disabled = value; });
+}
+window.loadModeration = async function() {
+  const panel = document.getElementById('tab-moderation');
+  if (!modEl('query')) panel.innerHTML = `
+    <div class="card"><h2>🛡️ 帳號處分管理</h2>
+      <p>以已註冊的 Firebase 帳號 UID 執行。禁言涵蓋錦標賽聊天、私訊及公布欄留言；不限制讀取或刪除自己的留言。</p>
+      <p><b>限制參賽入口：</b>禁止新報名、補報、報到、發起社群賽。已完成報到的席位與既有賽程仍保留進場、重連及退出，不會自動取消資格；賽中判負請另用賽事裁定。</p>
+      <p class="small">第一階段不封鎖 IP、裝置或休閒對戰，也不刪除帳號資料。時間皆為台灣時間；多筆有效處分各自生效，須逐筆解除。</p>
+      <label for="mod-query">Email 或 Firebase UID</label>
+      <div class="toolbar"><input id="mod-query" type="text" maxlength="320" placeholder="輸入 Email 或 UID" oninput="modQueryChanged()" style="flex:1;min-width:0"><button onclick="modLookup()">查詢帳號</button></div>
+      <p id="mod-message" role="status" style="white-space:pre-wrap;overflow-wrap:anywhere"></p>
+      <div id="mod-user" style="overflow-wrap:anywhere"></div>
+    </div>
+    <div id="mod-form" class="card" style="display:none">
+      <h3>新增處分</h3>
+      <label for="mod-scope">範圍</label><select id="mod-scope"><option value="chat">禁言（聊天／私訊／公布欄留言）</option><option value="tournament-entry">禁止新報名／補報／報到／發起社群賽</option></select>
+      <label for="mod-duration">期限</label><select id="mod-duration" onchange="modDurationChanged()"><option value="3600000">1 小時</option><option value="86400000" selected>1 天</option><option value="604800000">7 天</option><option value="2592000000">30 天</option><option value="custom">指定台灣日期時間</option><option value="permanent">永久（直到解除）</option></select>
+      <input id="mod-expiry" type="datetime-local" aria-label="到期時間（台灣時間）" style="display:none">
+      <label for="mod-reason">對玩家顯示的原因（必填，最多 300 字）</label><textarea id="mod-reason" maxlength="300" rows="2" style="width:100%;box-sizing:border-box"></textarea>
+      <label for="mod-note">管理員內部備註（不對玩家公開）</label><textarea id="mod-note" maxlength="2000" rows="2" style="width:100%;box-sizing:border-box"></textarea>
+      <label for="mod-evidence">證據／事件編號（文字，不對玩家公開）</label><textarea id="mod-evidence" maxlength="2000" rows="2" style="width:100%;box-sizing:border-box"></textarea>
+      <button onclick="modGrant()">確認新增處分…</button>
+    </div>
+    <div id="mod-active" class="card" style="display:none;overflow-wrap:anywhere"></div>
+    <div id="mod-history" class="card" style="display:none;overflow-wrap:anywhere"></div>`;
+  if (modState.user && !modState.busy) await window.modLookup();
+};
+window.modQueryChanged = function() {
+  if (modState.busy) return;
+  modState.seq++; modState.user = null; modState.pending = null; modState.items = []; modState.active = []; modState.next = null;
+  modEl('user').textContent = ''; modMessage('');
+  for (const id of ['form','active','history']) modEl(id).style.display = 'none';
+};
+window.modDurationChanged = function() { modEl('expiry').style.display = modEl('duration').value === 'custom' ? 'block' : 'none'; };
+function modAssertResponse(data) {
+  if (data.error) throw new Error(data.error);
+  if (data.moderationApi !== 1) throw new Error('目前伺服器尚未提供處分功能，請先更新伺服器。');
+  return data;
+}
+window.modLookup = async function() {
+  if (modState.busy) return;
+  const query = modEl('query').value.trim(), seq = ++modState.seq;
+  modState.user = null; modState.pending = null;
+  for (const id of ['form','active','history']) modEl(id).style.display = 'none';
+  modEl('user').textContent = ''; modMessage('查詢中…');
+  if (!query) { modMessage('請先輸入 Email 或 UID。'); return; }
+  try {
+    const data = modAssertResponse(await api('/api/admin/moderation/lookup',{method:'POST',body:JSON.stringify({query})}));
+    if (seq !== modState.seq) return;
+    modState.user = data.user; modState.truncated = data.activeTruncated; modState.active = data.active; modState.items = data.items; modState.next = data.next;
+    const u = data.user;
+    modEl('user').innerHTML = `<p><b>${escapeHtml(u.name || '未設定名稱')}</b><br>${escapeHtml(u.email)}<br>UID：${escapeHtml(u.uid)}</p>${u.protected ? '<p>此為管理員帳號，禁止新增處分。</p>' : ''}`;
+    modEl('form').style.display = u.protected || u.uid === currentUser.uid ? 'none' : 'block';
+    modRenderCases(data.activeTruncated);
+    modMessage('帳號已確認。' + (u.disabled ? '（Firebase 帳號目前停用）' : ''));
+    return true;
+  } catch (e) { if (seq === modState.seq) modMessage('查詢失敗，未開放操作：' + e.message); return false; }
+};
+function modCaseCard(item) {
+  const active = item.revokedAt === null && (item.expiresAt === null || item.expiresAt > Date.now());
+  const status = item.revokedAt !== null ? '已解除' : active ? '生效中' : '已到期';
+  const safeId = /^[a-zA-Z0-9_-]{16,80}$/.test(item._id) ? item._id : '';
+  return `<div style="border-top:1px solid var(--border,#555);padding:12px 0"><b>${escapeHtml(modLabel(item.scope))} · ${status}</b>
+    <p>建立：${escapeHtml(modTime(item.createdAt))}／到期：${escapeHtml(modTime(item.expiresAt))}<br>處分編號：${escapeHtml(item._id)}<br>建立者：${escapeHtml(item.createdBy.email || item.createdBy.uid)}</p>
+    <div style="white-space:pre-wrap">公開原因：${escapeHtml(item.publicReason)}<br>內部備註：${escapeHtml(item.privateNote || '無')}<br>證據：${escapeHtml(item.evidence || '無')}</div>
+    ${item.revokedAt !== null ? `<p>解除：${escapeHtml(modTime(item.revokedAt))}／${escapeHtml(item.revokedBy.email || item.revokedBy.uid)}<br>解除原因：${escapeHtml(item.revokeReason)}</p>` : active && safeId ? `<button onclick="modRevoke('${safeId}')">解除此筆處分…</button>` : ''}</div>`;
+}
+function modRenderCases(truncated = modState.truncated) {
+  modEl('active').style.display = 'block'; modEl('history').style.display = 'block';
+  modEl('active').innerHTML = '<h3>有效處分</h3>' + (truncated ? '<p>有效處分超過 100 筆，以下僅顯示前 100 筆；其他處分仍生效。</p>' : '') + (modState.active.map(modCaseCard).join('') || '<p>目前無有效處分。</p>');
+  modEl('history').innerHTML = '<h3>處分歷史（含到期與解除）</h3>' + (modState.items.map(modCaseCard).join('') || '<p>尚無紀錄。</p>') + (modState.next ? '<button onclick="modMore()">載入更多歷史</button>' : '');
+}
+window.modGrant = async function() {
+  if (modState.busy || !modState.user) return;
+  const subjectUid = modState.user.uid, duration = modEl('duration').value;
+  const publicReason = modEl('reason').value.trim(), privateNote = modEl('note').value.trim(), evidence = modEl('evidence').value.trim(), scope = modEl('scope').value;
+  if (!publicReason) { modMessage('請填寫玩家可見的原因。'); return; }
+  const fieldsKey = JSON.stringify([subjectUid,duration,modEl('expiry').value,publicReason,privateNote,evidence,scope]);
+  // 網路結果不明時保留同一份內容與 requestId；管理員重按不會重複新增。
+  if (!modState.pending || modState.pending.fieldsKey !== fieldsKey) {
+    const expiresAt = duration === 'permanent' ? null : duration === 'custom' ? Date.parse(modEl('expiry').value + '+08:00') : Date.now() + Number(duration);
+    if (expiresAt !== null && (!Number.isSafeInteger(expiresAt) || expiresAt <= Date.now())) { modMessage('請填寫有效的未來台灣日期時間。'); return; }
+    modState.pending = {fieldsKey, body:{subjectUid,scope,expiresAt,publicReason,privateNote,evidence,requestId:crypto.randomUUID()}};
+  }
+  const body = modState.pending.body;
+  if (!confirm(`確認處分 ${modState.user.email}？\nUID：${subjectUid}\n${modLabel(scope)}\n期限：${modTime(body.expiresAt)}（台灣時間）\n公開原因：${publicReason}\n限制參賽入口不會取消已完成報到的席位。`)) return;
+  modBusy(true); modMessage('新增中…');
+  let saved = false;
+  try { modAssertResponse(await api('/api/admin/moderation/grant',{method:'POST',body:JSON.stringify(body)})); modState.pending = null; saved = true; }
+  catch (e) { modMessage('新增未確認成功，請保留欄位後重試：' + e.message); }
+  finally { modBusy(false); }
+  if (saved) { const refreshed = await window.modLookup(); modMessage(refreshed ? '處分已保存；已重新查詢。' : '處分已保存，但重新查詢失敗，請再次查詢。'); }
+};
+window.modRevoke = async function(caseId) {
+  if (modState.busy || !modState.user) return;
+  const reason = prompt('請填寫解除此筆處分的原因（必填，最多 300 字）：');
+  if (reason === null) return;
+  if (!reason.trim() || reason.length > 300) { modMessage('解除原因必須為 1～300 字。'); return; }
+  if (!confirm('確認解除處分 ' + caseId + '？其他有效處分仍會生效，歷史紀錄會保留。')) return;
+  modBusy(true); let saved = false;
+  try { modAssertResponse(await api('/api/admin/moderation/revoke',{method:'POST',body:JSON.stringify({caseId,subjectUid:modState.user.uid,reason:reason.trim()})})); saved = true; }
+  catch (e) { modMessage('解除未確認成功，請重新查詢或重試：' + e.message); }
+  finally { modBusy(false); }
+  if (saved) { const refreshed = await window.modLookup(); modMessage(refreshed ? '此筆處分已解除；其他有效處分仍生效。' : '此筆已解除，但重新查詢失敗，請再次查詢。'); }
+};
+window.modMore = async function() {
+  if (modState.busy || !modState.user || !modState.next) return;
+  modBusy(true);
+  try {
+    const data = modAssertResponse(await api('/api/admin/moderation/history',{method:'POST',body:JSON.stringify({subjectUid:modState.user.uid,cursor:modState.next})}));
+    modState.items.push(...data.items); modState.next = data.next; modRenderCases();
+  } catch (e) { modMessage('歷史載入失敗：' + e.message); }
+  finally { modBusy(false); }
+};
+// <<< v6605-account-moderation-ui
 
 // ── API wrapper (Firebase ID token) ──────────────────────────────
 let _forbiddenAlerted = false;  // v0.3: 只在第一次 403 跳 alert，避免連環彈窗
@@ -2152,6 +2283,7 @@ window.loadActive = function(forceRefresh = false) {
   else if (currentTab === 'oracle-rooms') p = loadOracleRooms();
   else if (currentTab === 'firebase-rooms') p = loadFirebaseRooms();
   else if (currentTab === 'users') p = loadUsers(forceRefresh);  // v0.21: 切 tab 用 cache，按 Refresh 才 reset
+  else if (currentTab === 'moderation') p = loadModeration();
   else if (currentTab === 'feedback') p = loadFeedback();
   else if (currentTab === 'matches') p = loadMatchRecords(forceRefresh);  // v0.80: 對戰歷史
   else if (currentTab === 'stats') p = loadStats(forceRefresh);  // v0.83: Phase 2a 統計
@@ -4260,7 +4392,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.604';
+window.SITE_VERSION_HINT = '6.605';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

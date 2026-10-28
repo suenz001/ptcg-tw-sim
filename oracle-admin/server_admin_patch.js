@@ -1,3 +1,4 @@
+// === ORACLE ADMIN ENDPOINTS === v1.77 (v6.605 帳號處分管理)
 // === ORACLE ADMIN ENDPOINTS === v1.76 (v6.603 錦標賽賽季)
 // === ORACLE ADMIN ENDPOINTS === v1.75 (v6.602 管理預設牌組)
 // === ORACLE ADMIN ENDPOINTS === v1.74 (v6.601 我的錦標賽對戰清單回傳自己的勝敗)
@@ -4882,6 +4883,152 @@ import('firebase-admin').then(async ({ default: admin }) => {
     }
     // ── v6.291 TOURN VERIFIED GATE END ──
 
+    // >>> v6605-account-moderation
+    // 第一階段僅限制發言與參賽入口；已完成報到的賽程、重連與退出不受影響。
+    function createAccountModeration(collection, auth, isProtected, now = () => Date.now()) {
+      const scopes = ['chat', 'tournament-entry'];
+      let indexes;
+      const fail = (status, message) => { const e = new Error(message); e.status = status; throw e; };
+      const text = (value, max, required = false) => {
+        if (typeof value !== 'string' || value.length > max || (required && !value.trim())) fail(400, '文字欄位格式或長度不正確');
+        return value.trim();
+      };
+      const uid = value => text(value, 128, true);
+      const caseId = value => { if (typeof value !== 'string' || !/^[a-zA-Z0-9_-]{16,80}$/.test(value)) fail(400, '處分識別碼格式不正確'); return value; };
+      async function ready() {
+        if (!indexes) indexes = Promise.all([
+          collection.createIndex({subjectUid:1, scope:1, revokedAt:1, expiresAt:1}, {name:'moderation_active'}),
+          collection.createIndex({subjectUid:1, createdAt:-1, _id:-1}, {name:'moderation_history'}),
+        ]).catch(e => { indexes = null; throw e; });
+        await indexes;
+      }
+      async function target(input, byUid = false) {
+        const key = text(input, 320, true);
+        let user;
+        try { user = !byUid && key.includes('@') ? await auth.getUserByEmail(key) : await auth.getUser(uid(key)); }
+        catch (e) { if (e.code === 'auth/user-not-found') fail(404, '找不到此帳號'); throw e; }
+        if (!user || !user.uid || !user.email) fail(400, '此功能僅適用已註冊的 Email 帳號');
+        return {uid:user.uid, email:user.email, name:user.displayName || '', disabled:!!user.disabled,
+          protected:isProtected(user)};
+      }
+      async function active(subjectUid, scope) {
+        await ready();
+        // 不快取允許結果：管理員寫入成功後，下一次受限操作直接查詢索引。
+        return collection.find({subjectUid:uid(subjectUid), ...(scope ? {scope} : {}), revokedAt:null,
+          $or:[{expiresAt:null}, {expiresAt:{$gt:now()}}]}).sort({createdAt:-1, _id:-1}).limit(101).toArray();
+      }
+      async function history(subjectUid, cursor) {
+        await ready();
+        const filter = {subjectUid:uid(subjectUid)};
+        if (cursor) {
+          if (!Number.isSafeInteger(cursor.at) || cursor.at < 0) fail(400, '歷史分頁格式不正確');
+          const id = caseId(cursor.id);
+          filter.$or = [{createdAt:{$lt:cursor.at}}, {createdAt:cursor.at, _id:{$lt:id}}];
+        }
+        const rows = await collection.find(filter).sort({createdAt:-1, _id:-1}).limit(21).toArray();
+        const items = rows.slice(0,20), last = items[items.length-1];
+        return {items, next:rows.length > 20 ? {at:last.createdAt, id:last._id} : null};
+      }
+      async function grant(body, actor) {
+        await ready();
+        const id = caseId(body.requestId), subjectUid = uid(body.subjectUid);
+        if (!scopes.includes(body.scope)) fail(400, '處分範圍不正確');
+        const expiresAt = body.expiresAt;
+        if (expiresAt !== null && (!Number.isSafeInteger(expiresAt) || !Number.isFinite(new Date(expiresAt).getTime()))) fail(400, '到期時間不正確');
+        const publicReason = text(body.publicReason, 300, true), privateNote = text(body.privateNote, 2000), evidence = text(body.evidence, 2000);
+        const requestKey = JSON.stringify([subjectUid, body.scope, expiresAt, publicReason, privateNote, evidence, actor.uid]);
+        const prior = await collection.findOne({_id:id});
+        const retry = row => { if (row.requestKey !== requestKey) fail(409, '同一識別碼已用於不同內容，請重新查詢再操作'); return row; };
+        if (prior) return retry(prior);
+        const user = await target(subjectUid,true);
+        if (subjectUid === actor.uid || user.protected) fail(403, '不能處分自己或管理員帳號');
+        const at = now();
+        if (expiresAt !== null && expiresAt <= at) fail(400, '到期時間必須在未來');
+        const row = {_id:id, subjectUid, subjectEmail:user.email, scope:body.scope, createdAt:at, expiresAt,
+          publicReason, privateNote, evidence, createdBy:{uid:actor.uid, email:actor.email}, requestKey,
+          revokedAt:null, revokedBy:null, revokeReason:null};
+        try { await collection.insertOne(row); }
+        catch (e) { if (e.code !== 11000) throw e; const existing = await collection.findOne({_id:id}); if (!existing) throw e; return retry(existing); }
+        return row;
+      }
+      async function revoke(body, actor) {
+        await ready();
+        const id = caseId(body.caseId), subjectUid = uid(body.subjectUid), reason = text(body.reason, 300, true);
+        const row = await collection.findOne({_id:id, subjectUid});
+        if (!row) fail(404, '找不到指定帳號的處分');
+        // 解除以單一文件 CAS 保存稽核，重送不得覆寫第一次解除者及原因。
+        await collection.updateOne({_id:id, subjectUid, revokedAt:null}, {$set:{revokedAt:now(), revokedBy:{uid:actor.uid,email:actor.email}, revokeReason:reason}});
+        const saved = await collection.findOne({_id:id, subjectUid});
+        if (!saved || saved.revokedAt === null) throw new Error('revoke not confirmed');
+        if (saved.revokedBy.uid !== actor.uid || saved.revokeReason !== reason) fail(409, '此處分已由其他操作解除，請重新查詢原始解除紀錄');
+        return saved;
+      }
+      return {target, active, history, grant, revoke};
+    }
+    // 與 Firebase admin 區塊為不同 IIFE；使用本區既有 TADMIN 與中央 isTournAdmin，延遲到請求時存取。
+    const moderationAuth = {
+      getUser: id => { if (!TADMIN || !TADMIN.apps.length) throw new Error('auth unavailable'); return TADMIN.auth().getUser(id); },
+      getUserByEmail: email => { if (!TADMIN || !TADMIN.apps.length) throw new Error('auth unavailable'); return TADMIN.auth().getUserByEmail(email); },
+    };
+    const accountModeration = createAccountModeration(db.collection('accountSanctions'), moderationAuth, user => isTournAdmin({verified:true,email:user.email}));
+    async function moderationRequireAdmin(req, res, next) {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({error:id.error});
+        if (!isTournAdmin(id)) return res.status(403).json({error:'需要管理員權限'});
+        req.adminUser = {uid:id.uid,email:id.email};
+        return next();
+      } catch (e) { moderationError(res,e); }
+    }
+    const moderationError = (res, e) => res.status(e.status || 503).json({error:e.status ? e.message : '處分服務暫時無法使用，請稍後再試'});
+    app.post('/api/admin/moderation/lookup', moderationRequireAdmin, async (req, res) => {
+      try {
+        const user = await accountModeration.target((req.body || {}).query);
+        const active = await accountModeration.active(user.uid);
+        const history = await accountModeration.history(user.uid);
+        res.set('Cache-Control','no-store');
+        res.json({moderationApi:1, user, active:active.slice(0,100), activeTruncated:active.length > 100, ...history});
+      } catch (e) { moderationError(res,e); }
+    });
+    app.post('/api/admin/moderation/history', moderationRequireAdmin, async (req, res) => {
+      try { const b = req.body || {}; res.set('Cache-Control','no-store'); res.json({moderationApi:1, ...await accountModeration.history(b.subjectUid,b.cursor)}); }
+      catch (e) { moderationError(res,e); }
+    });
+    app.post('/api/admin/moderation/grant', moderationRequireAdmin, async (req, res) => {
+      try { const item = await accountModeration.grant(req.body || {},req.adminUser); res.set('Cache-Control','no-store'); res.json({moderationApi:1,item}); }
+      catch (e) { moderationError(res,e); }
+    });
+    app.post('/api/admin/moderation/revoke', moderationRequireAdmin, async (req, res) => {
+      try { const item = await accountModeration.revoke(req.body || {},req.adminUser); res.set('Cache-Control','no-store'); res.json({moderationApi:1,item}); }
+      catch (e) { moderationError(res,e); }
+    });
+    // 註冊順序必須早於私訊、兩個聊天室 handler 及公布欄留言。
+    const moderationRoutes = new Map([
+      ['/api/tournament/chat','chat'], ['/api/friends/dm/send','chat'], ['/api/deck-posts-comments','chat'],
+      ['/api/tournament/register','tournament-entry'], ['/api/tournament/register-and-checkin','tournament-entry'],
+      ['/api/tournament/checkin','tournament-entry'], ['/api/tournament/propose','tournament-entry'],
+    ]);
+    app.use(async function accountModerationGate(req, res, next) {
+      // 與 Express 預設大小寫不敏感／可有尾斜線的路由語意一致。
+      const path = String(req.path || '').replace(/\/+$/,'').toLowerCase();
+      const scope = req.method === 'POST' ? moderationRoutes.get(path) : null;
+      if (!scope) return next();
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({error:id.error});
+        if (!id.verified || !id.uid) return res.status(403).json({error:'請先登入 Email 帳號再操作'});
+        const rows = await accountModeration.active(id.uid,scope);
+        if (rows.length) {
+          const row = rows[0];
+          const end = rows.some(x => x.expiresAt === null) ? null : Math.max(...rows.map(x => x.expiresAt));
+          const until = rows.length > 100 ? '多筆處分生效中，完整期限請洽管理員' : end === null ? '永久，直到管理員解除所有有效處分' : new Date(end).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}) + '（台灣時間）';
+          const label = scope === 'chat' ? '發言權限暫停' : '暫停新報名、補報、報到與發起社群賽';
+          return res.status(403).json({error:label + '。期限：' + until + '。最近一筆原因：' + row.publicReason + '。如有疑問請聯絡站長。'});
+        }
+        return next();
+      } catch (e) { moderationError(res,e); }
+    });
+    // <<< v6605-account-moderation
     // ── 工具：用雙方真實牌組建一局完整遊戲（引擎 createGame → setup 階段）──
     function makeGame(decks, names, prefs) {
       const d0 = { name: (names && names[0]) || 'P1', entries: decks[0] };
