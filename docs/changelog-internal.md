@@ -6,9 +6,9 @@ BASE：`92520fbe`（v6.604）。以 Firebase 驗證 UID 管理禁言、限制參
 
 每筆處分為 Mongo accountSanctions 永久單文件，保留公開原因、內部備註、證據、建立者及原子 CAS 解除稽核；到期不刪證據。相同 requestId 與完整內容重送冪等，內容衝突409；多筆有效處分 OR；有效期限按最晚／永久顯示。只由 Firebase Admin 查詢 UID／Email，禁止處分自己與管理員。不快取允許判斷；索引／DB異常503，不放行受限寫入。管理端僅依管理員操作查詢；新索引按 UID／scope／解除時間／期限、UID／建立時間／case ID。admin支援1小時／1天／7天／30天／指定台灣日期時間／永久、確認視窗、逐筆解除及歷史分頁。
 
-審查：獨立 GPT-6.1 Sol 代理 moderation_6605_review（非 Opus，另開代理未參與實作）。第一輪 P1×1：跨 IIFE auth 變數啟動錯誤，已改用本閉包 TADMIN 與中央 isTournAdmin；P2×2：解除衝突及多處分期限，已修正；P3×2：保存後刷新失敗誤報及截斷提示消失，已修正。第二輪複審已確認五項產品修正、新guard23/0；另P3×1「有限期限只取最近一筆」存活突變，已補較新短期／較舊長期對照並確認M10紅在C6。完整驗收與最終准推仍待完成。
+審查：獨立 GPT-6.1 Sol 代理 moderation_6605_review（非 Opus，另開代理未參與實作）。第一輪 P1×1：跨 IIFE auth 變數啟動錯誤，已改用本閉包 TADMIN 與中央 isTournAdmin；P2×2：解除衝突及多處分期限，已修正；P3×2：保存後刷新失敗誤報及截斷提示消失，已修正。第二輪複審已確認五項產品修正、新guard23/0；另P3×1「有限期限只取最近一筆」存活突變，已補較新短期／較舊長期對照並確認M10紅在C6。最後只調整新測試 ROOT 為專案官方跨平台形狀、改走中央 pwLaunch，未動產品／既有守衛判準；第三輪獨立審查已核對完整補丁啟動與產品零差異，同一位審查者已核對原始及補驗報告、最終10項突變，最終准許推送；未解決P1／P2／P3皆0。
 
-新守衛 test-v6605-account-moderation：目前23條行為／接線／完整補丁啟動／390與1280px真瀏覽器檢查；BASE正對照2綠、功能21紅。突變10/10功能突變殺死、N1註解變更仍綠，逐位元還原及回綠；修改前harness＋35免疫36/36，修改後連同admin／sap／lint相關共46/46，escape/mainHard/restore/timeout均0。全套結果待補。原錦標賽尾段逐位元保持，sap-v177精確還原並接至v176。部署由站長執行 update-tournament.bat；玩家版本標示若須同步再執行 redeploy-oracle.bat，不由 AI 執行。
+新守衛 test-v6605-account-moderation：目前23條行為／接線／完整補丁啟動／390與1280px真瀏覽器檢查；BASE正對照2綠、功能21紅。突變10/10功能突變殺死、N1註解變更仍綠，逐位元還原及回綠；修改前harness＋35免疫36/36，修改後連同admin／sap／lint相關共46/46，escape/mainHard/restore/timeout均0。全套953支30.08分鐘：首輪951成功、2紅（6371不識別新測試ROOT形狀；pw-gate要求走中央瀏覽器閘），沒有產品失敗。只改兩個新測試接線後，受影響與相依8支單工strict補驗8/8（6371 155/0、6303 40/0、6272 42/0、pw-gate26/0、6387 48/0、chain16/0、admin-inline4/0、新守衛23/0）；953支兩輪聯集未解決0。兩輪escape/mainHard/restoreFailed/timeout均0、statusChanged=false。首輪SHALLOW0，既有6378 ENV1與6263 Windows PLATFORM1如實保留；補驗skip0。Pages、Oracle發行建置及伺服器引擎5224卡池建置成功；最後中央PW strict下10突變全殺，N1及還原回綠。驗收報告保留於外部 account-moderation-6605-evidence、E:/sb-mod-6605-full/__rt/full.json 與 E:/sb-mod-6605-supp/__rt/supp.json。產品對完整測試3aa2a2c0逐位元零diff。原錦標賽尾段逐位元保持，sap-v177精確還原並接至v176。部署由站長執行 update-tournament.bat；玩家版本標示若須同步再執行 redeploy-oracle.bat，不由 AI 執行。
 
 ## v6.604 — 復盤牌庫原序與精簡賽季說明
 
