@@ -6,8 +6,8 @@ import {resolve, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import vm from 'node:vm';
-import {createRequire} from 'node:module';
-const ROOT = resolve(fileURLToPath(new URL('..',import.meta.url)));
+import {pwLaunch} from './lib/pw.mjs';
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PRODUCT = process.env.V6605_PRODUCT || ROOT;
 const read = p => readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n');
 const sap = read('oracle-admin/server_admin_patch.js'), html = read('oracle-admin/admin.html');
@@ -103,8 +103,7 @@ await test('D1 完整補丁啟動可註冊後續錦標賽／好友／公布欄',
 await test('D2 admin模組語法與分頁接線',()=>{assert.ok(html.includes('data-tab="moderation"'));assert.ok(html.includes("currentTab === 'moderation') p = loadModeration()"));const script=html.split('<script type="module">')[1].split('</script>')[0].replace(/^import .*;\s*$/gm,'');new Function(script);});
 await test('D3 admin真瀏覽器確認、重試、解除、失敗訊息與手機排版',async()=>{
   const ui=html.split('// >>> v6605-account-moderation-ui\n')[1]?.split('// <<< v6605-account-moderation-ui')[0];assert.ok(ui);
-  const {chromium}=createRequire(import.meta.url)('playwright');
-  const browser=await chromium.launch({headless:true});
+  const browser=await pwLaunch('v6605處分管理');assert.ok(browser,'管理介面驗收必須有瀏覽器');
   try {
     for(const width of [390,1280]) {
       const page=await browser.newPage({viewport:{width,height:900}});

@@ -5,7 +5,7 @@ import {join,resolve,dirname} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
-const ROOT=resolve(fileURLToPath(new URL('..',import.meta.url)));
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const scratch=mkdtempSync(join(tmpdir(),'moderation-6605-mut-'));
 const files=['oracle-admin/server_admin_patch.js','oracle-admin/admin.html','static/changelog.html','static/changelog-bodies.html','static/changelog-archive.html'];
 const originals=new Map(files.map(p=>[p,readFileSync(join(ROOT,p),'utf8').replace(/\r\n/g,'\n')]));
