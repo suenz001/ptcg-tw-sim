@@ -4,7 +4,11 @@
 
 BASE `9d427ed5`（v6.605）。手機直式4欄使prize-view-cardback寬度被max-width:100%縮小，height卻仍按--pk-card96固定134.1px，官方背景100%100%因此被拉長；不是名稱列造成。390px Blue原65.8×134.1，應約65.8×91.8；classic另有content-box邊框差。僅把共用CSS rule改為height:auto、aspect-ratio:660/921及border-box，保留96px上限，未動任何DOM／資訊遮蔽／遊戲邏輯。獎賞檢視與復盤未知牌庫共用此class，均修正。
 
-新守衛涵蓋4桌墊×320/390/430直式、844橫式、1366桌機，含混合正反面、名稱有無、未知牌庫卡背、寬度上限與無溢出；整頁除單一尺寸規則外與BASE逐位元相同，原圖及共用官方外觀不變。精確還原revert-v6606接至v6604，舊版全檔判準不放寬。審查prize_ratio_6606_review獨立瀏覽器30組成功，P3歷史讀取建議已改中央base-blob。新守衛10/0，BASE4正對照通過／6條失敗；5功能突變逐條A行為殺死，P1/P2仍綠，N1純測試註解與逐位元還原回綠。前harness＋35免疫36/36，修改後連同相關版面／守衛42/42，escape/mainHard/restore/timeout均0。Pages與Oracle發行建置成功。審查目前P1/P2/P3未解0，全套與最終准推待完成。
+新守衛涵蓋4桌墊×320/390/430直式、844橫式、1366桌機，含混合正反面、名稱有無、未知牌庫卡背、寬度上限與無溢出；整頁除單一尺寸規則外與BASE逐位元相同，原圖及共用官方外觀不變。精確還原revert-v6606接至v6604，舊版全檔判準不放寬。審查prize_ratio_6606_review獨立瀏覽器30組成功，P3歷史讀取建議已改中央base-blob。新守衛10/0，BASE4正對照通過／6條失敗；5功能突變逐條A行為殺死，P1/P2仍綠，N1純測試註解與逐位元還原回綠。前harness＋35免疫36/36，修改後連同相關版面／守衛42/42，escape/mainHard/restore/timeout均0。Pages與Oracle發行建置成功。獨立審查為 GPT-6.1 Sol 代理（非 Opus，未參與實作），目前 P1/P2/P3 未解0。
+
+完整954支首輪950綠4紅，30.21分鐘；6272漏列三個合法公開changelog、6377/6378的CRLF負對照因本次game工作樹單獨改成LF失真、6605 P2鎖住上一hidden版公開紀錄。保留首輪報告，不宣稱全綠。補齊6272清單，6605 P2僅精確還原本版公開紀錄後仍逐位元比原925 BASE，其他異動不放行；3檔7pairs完整還原、14缺失／重複錨點皆拒絕，額外異動保留且仍不等BASE。恢復本次game原本CRLF：21945單LF→21945CRLF，raw位元組不同，但正規化SHA256同為9cdf72e3b7ce8a578b3a831009bdbc6e3255b64d9acac5bd1bd3041d2cdd9652，產品Git blob及發行建置不變。獨立審查確認屬測試接線／checkout環境，無須重跑全套；15支受影響及相依守衛安靜單工補驗15/15，954聯集未解決0。全／補兩輪escape/mainHard/restoreFailed/timeout0、statusChanged=false；SHALLOW0，原全套既有6378 ENV1／6263 Windows PLATFORM1，補驗6378 ENV1，均保留。
+
+Pages與Oracle雙發行建置成功；Oracle/game完整頁匯入純測試遮蔽復盤，390／1366px真瀏覽器驗卡背等比例、己方正面保留、蓋牌不可放大、overflow/pageerror0；外部Auth/API均阻擋，未動正式資料，非iPhone實機。完整原始結果E:/sb-prize-6606-full/__rt/full.json、補E:/sb-prize-6606-supp/__rt/supp.json；外部prize-cardback-6606-evidence保留acceptance.json、eol-proof.json、game-before-eol.bin、changelog-reverter.json、mutants-final.log及release-ui.json／截圖。產品相對完整驗收020d917a零Git diff，未改遊戲效果／權限。審查者已核對所有修正與還原反證，最終報告准推待確認。此版僅玩家前端，站長自行執行redeploy-oracle.bat，AI未部署正式站。
 
 ## v6.605（2026-10-28）帳號處分第一階段（admin v1.92／server v1.77，hidden）
 
