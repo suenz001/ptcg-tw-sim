@@ -762,6 +762,9 @@ const PREV_ALLOWED = [
   // ⭐v6.606：只改共用卡背CSS尺寸，維持原有卡片顯示權限。
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
+  'static/changelog.html',
+  'static/changelog-bodies.html',
+  'static/changelog-archive.html',
   'static/site-version.txt',
 ];
 // ── 上一版（v6.605）的宣告，保留當歷史紀錄（不再被程式使用）──────────────

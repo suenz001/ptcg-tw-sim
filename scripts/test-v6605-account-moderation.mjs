@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import vm from 'node:vm';
 import {pwLaunch} from './lib/pw.mjs';
+import {revertV6606Changelog} from './lib/revert-v6606-changelog.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PRODUCT = process.env.V6605_PRODUCT || ROOT;
 const read = p => readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n');
@@ -55,7 +56,7 @@ function setup() {
 }
 const baseFile=p=>execFileSync('git',['show','92520fbe:'+p],{cwd:ROOT,encoding:'utf8',maxBuffer:8*1024*1024}).replace(/\r\n/g,'\n');
 await test('P1 既有錦標賽尾段逐位元相同',()=>{const anchor="app.get('/api/tournament";assert.equal(sap.slice(sap.indexOf(anchor)),baseFile('oracle-admin/server_admin_patch.js').split(anchor).slice(1).join(anchor).replace(/^/,anchor));});
-await test('P2 對外更新紀錄保持原文',()=>{for(const p of ['static/changelog.html','static/changelog-bodies.html','static/changelog-archive.html'])assert.equal(read(p),baseFile(p));});
+await test('P2 對外更新紀錄精確還原後保持原文',()=>{for(const p of ['static/changelog.html','static/changelog-bodies.html','static/changelog-archive.html']){const source=read(p),base=baseFile(p);assert.equal(source===base?source:revertV6606Changelog(p,source),base);}});
 await test('A1 服務插入先於私訊與兩段聊天',()=>{assert.ok(block);const gate=sap.indexOf('async function accountModerationGate');for(const path of ["app.post('/api/friends/dm/send'","app.post('/api/tournament/chat'","app.post('/api/deck-posts-comments'"])assert.ok(gate<sap.indexOf(path));});
 await test('A2 管理端點拒絕普通會員與偽造UID',async()=>{const f=setup();for(const action of ['lookup','history','grant','revoke']){assert.equal((await f.call(action,f.body(),player)).code,403);assert.equal((await f.call(action,f.body(),{...admin,verified:false})).code,403);}assert.equal(f.c.reads+f.c.writes,0);});
 await test('A3 UID與Email查詢由Auth解析，不信任body email',async()=>{const f=setup();assert.equal((await f.call('lookup',{query:player.email})).data.user.uid,player.uid);assert.equal((await f.call('lookup',{query:'missing'})).code,404);await f.service.grant(f.body({subjectUid:'uid@literal'}),admin);assert.equal(f.c.rows[0].subjectEmail,'literal@example.test');});
