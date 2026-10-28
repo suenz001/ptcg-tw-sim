@@ -1,5 +1,7 @@
 # 內部改版紀錄（不打包進網站）
 
+BASE `b13354f3`（v6.606）。手機共用log的RAF晚於DOM更新，native scroll可用新scrollHeight誤把mpLogPinned設false，之後永久停留舊位置。以DOM observer同步跟隨及ResizeObserver延續底部意圖，手動上捲暫停、回底恢復、卸載清理。僅MobilePortraitBattle及新action，桌機反向排版初步正常，仍驗真建置雙角色。前harness+35免疫36/36，新guard12/0，BASE9正對照綠3行為紅，6突變全殺、N1與逐位元還原回綠。獨立log_follow_6607_review產品初審P1/P2/P3未解0，最終build/full/實頁待完成。
+
 ## v6.606（2026-10-28）修正獎賞檢視卡背比例
 
 BASE `9d427ed5`（v6.605）。手機直式4欄使prize-view-cardback寬度被max-width:100%縮小，height卻仍按--pk-card96固定134.1px，官方背景100%100%因此被拉長；不是名稱列造成。390px Blue原65.8×134.1，應約65.8×91.8；classic另有content-box邊框差。僅把共用CSS rule改為height:auto、aspect-ratio:660/921及border-box，保留96px上限，未動任何DOM／資訊遮蔽／遊戲邏輯。獎賞檢視與復盤未知牌庫共用此class，均修正。

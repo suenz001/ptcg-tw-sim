@@ -1,3 +1,4 @@
+import { revertV6607Changelog } from './revert-v6607-changelog.mjs';
 // v6.606：只精確還原本版合法公開更新紀錄，其他差異保留交給舊鎖檢查。
 const PAIRS = {
   "static/changelog.html": [
@@ -36,7 +37,7 @@ const PAIRS = {
   ]
 };
 export function revertV6606Changelog(path, source) {
-  let s = source.replace(/\r\n/g, '\n');
+  let s = revertV6607Changelog(path, source).replace(/\r\n/g, '\n');
   const pairs = PAIRS[path];
   if (!pairs) throw new Error('未知更新紀錄路徑：' + path);
   for (const [after, before] of pairs) {
