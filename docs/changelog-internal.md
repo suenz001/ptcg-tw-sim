@@ -4,6 +4,10 @@ BASE `b13354f3`（v6.606）。手機共用log的RAF晚於DOM更新，native scro
 
 獨立審查 log_follow_6607_review（全新代理、未參與實作；非Opus）先核12/0與6突變、15組真正發行頁測試。首輪full因將配置假API域的Oracle專用build交給通用守衛，6596無預組catalog而早停，保留原full.log與原紅；改正常Pages快照後6596單獨18/0，0bbca779完整955/955成功，escape/mainHard/restore/timeout0、statusChanged=false。但推前補查抓到P2×1：短紀錄不可捲時wheel/touch無位移仍誤關pin，Ctrl縮放事件亦同。修成僅可實際上捲且非Ctrl才預先關pin，多指清touchY；7d8218ba複審通過，未解P1/P2/P3=0。新增A10/A11真wheel/CDPtouch及A12修飾事件，對修前產品三條明確紅（gap1202/1202/990），修後15/0；先前955綠不能冒稱是修後驗收，修後新guard15/0、9功能突變全殺（M7/A10、M8/A11、M9/A12），N1與逐位元還原回綠；BASE12正對照綠3行為紅，Pages／Oracle修後發行建置皆成功。完整回歸與15實頁正在重驗。
 
+修後最終驗收（2026-10-29）：完整955/955成功，28.63分鐘，報告E:/sb-log-6607-reviewed/__rt/full.json；escape/mainHard/restoreFailed/timeout均0，statusChanged=false，沙盒暫存殘檔87支均已還原，非未清理外寫。SHALLOW0；既有6378未追蹤音樂ENV1與6263 Windows PLATFORM1保留。產品對7d8218ba逐位元Git零diff，最新驗收HEAD20ada681僅增加紀錄。修後Pages／Oracle雙建置成功，15組真正/game經既有房號加入與輪詢：390px P1/P2/觀戰＋1366px四桌墊各三角色，實際class及column/column-reverse均核對；每組三批新增紀錄gap0、往上閱讀同文字列視覺位置保留、回底後恢復、errors[]。全部API攔截假資料且外網阻擋，未動正式資料，非iPhone實機。復盤390/1366步驟增加紀錄的跟隨／閱讀保留／恢復亦綠。
+
+最終證據位於外部log-follow-6607-evidence/acceptance-reviewed.json、guard-edge-fixed.log（15/0）、head-fail.log（BASE12綠3紅）、edge-before.log（三個新增邊界對修前12綠3紅）、mutants-reviewed.log（9/9、N1及逐位元還原）、build-reviewed-*.log、release-reviewed.log／release-ui.json及online-reviewed-local.log。獨立審查已確認原P2解除、修後守衛／突變／雙build／15實頁，最終完整報表准推待確認。只由MobilePortraitBattle匯入UI跟隨helper，未改engine/server、權限或API，正式前端部署由站長自行redeploy-oracle.bat；AI不跑部署。
+
 ## v6.606（2026-10-28）修正獎賞檢視卡背比例
 
 BASE `9d427ed5`（v6.605）。手機直式4欄使prize-view-cardback寬度被max-width:100%縮小，height卻仍按--pk-card96固定134.1px，官方背景100%100%因此被拉長；不是名稱列造成。390px Blue原65.8×134.1，應約65.8×91.8；classic另有content-box邊框差。僅把共用CSS rule改為height:auto、aspect-ratio:660/921及border-box，保留96px上限，未動任何DOM／資訊遮蔽／遊戲邏輯。獎賞檢視與復盤未知牌庫共用此class，均修正。
