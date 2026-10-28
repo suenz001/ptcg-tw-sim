@@ -21,11 +21,11 @@ export function followBattleLog(node: HTMLElement) {
     pinned = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
     rememberSize();
   }
-  function onWheel(event: WheelEvent) { if (event.deltaY < 0) pinned = false; }
-  function onTouchStart(event: TouchEvent) { touchY = event.touches[0]?.clientY ?? null; }
+  function onWheel(event: WheelEvent) { if (!event.ctrlKey && node.scrollTop > 0 && event.deltaY < 0) pinned = false; }
+  function onTouchStart(event: TouchEvent) { touchY = event.touches.length === 1 ? event.touches[0].clientY : null; }
   function onTouchMove(event: TouchEvent) {
-    const y = event.touches[0]?.clientY ?? null;
-    if (touchY !== null && y !== null && y > touchY + 1) pinned = false;
+    const y = event.touches.length === 1 ? event.touches[0].clientY : null;
+    if (node.scrollTop > 0 && touchY !== null && y !== null && y > touchY + 1) pinned = false;
     touchY = y;
   }
   function onTouchEnd() { touchY = null; }

@@ -19,7 +19,10 @@ const variants=[
  ['M4不監看容器高度','resize.observe(node);','void node;','A4'],
  ['M5錯捲到頂端','if (pinned) node.scrollTop = node.scrollHeight;','if (pinned) node.scrollTop = 0;','A1'],
  ['M6不接收捲動意圖',"node.addEventListener('scroll', onScroll, { passive: true });",'void node;','A2'],
+ ['M7短紀錄滾輪誤停','node.scrollTop > 0 && event.deltaY','event.deltaY','A10'],
+ ['M8短紀錄觸控誤停','node.scrollTop > 0 && touchY','touchY','A11'],
+ ['M9縮放誤停','!event.ctrlKey && ','','A12'],
 ];
 try{for(const [id,a,b,assertion]of variants){assert.equal(source.split(a).length,2,id+'唯一錨點');writeFileSync(join(copy,path),source.replace(a,b));const r=run();assert.notEqual(r.status,0,id+'存活');assert.match(r.stdout,new RegExp('FAIL '+assertion+' '),id+'必須行為紅');assert.match(r.stdout,/PASS P1 /);assert.match(r.stdout,/PASS P2 /);console.log('KILLED '+id+' -> '+assertion);}
- writeFileSync(join(copy,path),source+'\n// 無行為影響的註解正對照。\n');assert.equal(run().status,0,'N1註解不得失敗');writeFileSync(join(copy,path),originals.get(path));assert.equal(run().status,0,'還原必須回綠');for(const[p,b]of originals)assert.deepEqual(readFileSync(join(copy,p)),b);console.log('6/6功能突變全殺；N1及逐位元還原回綠');
+ writeFileSync(join(copy,path),source+'\n// 無行為影響的註解正對照。\n');assert.equal(run().status,0,'N1註解不得失敗');writeFileSync(join(copy,path),originals.get(path));assert.equal(run().status,0,'還原必須回綠');for(const[p,b]of originals)assert.deepEqual(readFileSync(join(copy,p)),b);console.log('9/9功能突變全殺；N1及逐位元還原回綠');
 }finally{rmSync(copy,{recursive:true,force:true});}
