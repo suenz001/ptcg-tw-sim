@@ -1,12 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
-## v6.608（2026-10-29）私看條件式能量可不選
+## v6.608（2026-10-29）私看牌庫選牌與公開資訊修正
 
-修後驗收進度：guard增完整招式雙座位換手與取消提示，50/0；BASE32正對照綠18行為紅（正常跑到底非throw）；14有效功能突變全殺，N1/逐位元還原回綠。獨立52/0與privacy17全部有/無命中空選公開紀錄一致，原P2目標驗證及4個私看資訊P2已修，未解P1/P2/P3=0。前36/36harness免疫，後48/48相關（含35免疫）通過，escape/mainHard/restoreFailed/timeout0、statusChanged=false，1沙盒暫存均還原。初輪相關11/12唯一6272漏列version.ts已精確補清單，未放寬；後48已驗。此時未完成最終雙build/full，不能准推。
+BASE `8939a61d`（v6.607），最終產品`b72f8e3a`。台灣官方寶可裝置3.0 Q&A（起始組合ex；PTCG_RULES.md L951）直接允許私下查看頂7張即使有支援者仍可不選；霸者咆哮／女服務生採同型類推改minCount0。霸者仍限頂4基本能量（不限火雷）、只附自己，未選卡只洗後放底，深層順序不變。女服務生已選能量後的目標仍必選，補validIids使既有中央閘擋空送與非法目標。IRON_RULES26b與本機工作手冊校正舊「自己看過＝公開資訊」誤述；6091相反斷言依Rule40改正，6104只校正誤述、掃描未放寬。
 
-補充audit：17種有命中／零命中空選的公開message比較，熱帶龍／拉普拉斯ex／人造細胞卵／米立龍ex四種洩漏候選數或零命中，獨立privacy-17已重現；另熱帶/拉普零命中跳過本人查看，熱帶缺topIids看不到非候選。已改公開僅固定查看N張/可任意選，零命中保持檢視；熱帶改既有Pokemon:TOP_N+topIids/validIids，不改選到後結果。屬公開log與查看流程修正，非另創規則裁定。原本聲稱只改兩卡已被此完整scope取代：產品四個檔，六張卡。首輪Pages build成功、複製中止，Oracle未開始，不算最終build；本輪重建後才驗收。新guard41/0，HEAD-FAIL及14突變待核。舊guard37/0、8mutants仍留作早期紀錄，不冒稱最終。
+跨卡母體44 live sets、卡片H/I/J、完整三欄，95去重效果／217印刷效果；主維護者與獨立審查者重建95鍵完全一致。真正查看28種，17種私看帶條件（杜若含兩階段18picker），其餘按卡面分類保留。17種有／無命中都不選的public message比較，額外抓熱帶龍、拉普拉斯ex、人造細胞卵、米立龍ex四卡洩漏候選數／零命中；現改公開只固定查看N張及動作。熱帶／拉普零命中仍開檢視，熱帶補既有Pokemon:TOP_N+topIids/validIids使非候選也可查看。選到後既有加手／附能／放備戰及應公開卡名保持。產品共4檔6卡；未改中央engine/skip/filter、AI、權限或server補丁，不聲稱既存raw payload/遮蔽/preAttackState另案全解。八朔原最多型min0未據本次類推更動，未找到直接判例而不另裁定。完整逐卡表見docs/audit-private-top-choice.md。
 
-BASE `8939a61d`（v6.607）。本輪audit為H/I/J live卡「私下查看牌庫上/下方後帶條件選牌」，不是聲稱所有遊戲規則全無錯誤。依台灣官方寶可裝置3.0直接Q&A（即使有支援者可不選），霸者咆哮與女服務生同型類推改minCount0；自己查看不等於公開資訊，修正IRON_RULES26b舊摘要。霸者仍可選所有基本能量、只附自身、未選top4只洗後放底，不限火雷。女服務生後續已選能量的目標仍必選，補validIids使中央閘擋空送及非法目標；獨立審查重現原P2且修後解除。新guard完整applyAction雙座位/4印刷/短空庫/正向附能/不選/資訊/守恆及17leafproducer，37/0；BASE27綠10紅；突變/雙build/完整全套/最終審查待完成。跨卡95去重效果217印刷，真正查看28種中17同型，其他保留，細節docs/audit-private-top-choice.md。
+最終新guard50/0；BASE32綠18行為紅（逐條跑到底），14有效功能突變全殺、N1與逐位元還原回綠。早期M3僅改log不影響attach是無效突變，M5去局部候選限制被中央消毒／底部去重涵蓋屬等價存活，原報告保留，後改實際attach／火雷錯限等可觀測突變，不冒稱早期全殺。前harness+35免疫36/36，後相關48/48（含35免疫）全綠，escape/mainHard/restoreFailed/timeout0、statusChanged=false，1沙盒暫存均還原。首輪12only唯一6272漏列version.ts已具名補清單，後48含該項全綠，未放寬。最新50新增完整招式雙座位/換手與取消提示，會再進完整956驗收。
+
+獨立private_top_6608_review（非Opus，未參與實作）已52/0獨驗及privacy17全相同；原目標空送P2與4卡公開資訊P2修後解除，未解P1/P2/P3=0。原審查scratch把RESOLVE誤當立刻換手已按真正END_TURN契約修測，非產品缺陷。changelog三檔6pair精確還原BASE、缺失／重複拒絕、額外差異保留已獨驗。
+
+最終Pages／Oracle雙build成功（build-reviewed-*.log，兩個immutable快照），server bundle5224卡成功且require真產物8項applyAction驗證全綠。原第一輪Pages build成功而複製中止、Oracle未開始，與舊產品快照均不算最終。實際Oracle發行/game以假API完整加入房號，390／1366兩卡各雙座位＋4卡零命中，共16scene皆不選鈕可見可點且在viewport、點擊關閉並真寫入假room、pageerrors[]；卡池已按fixture seats載入，非未知卡假畫面。早期fixture缺載卡／桌機等到hidden名字的失敗保留，僅修外部測試接線。非iPhone實機，所有外部API攔截及非測試請求阻擋，未動正式資料。
+
+證據E:/ptcg-tw-sim-local/private-top-6608-evidence：guard-final.log、head-fail-final.log、mutants-final-50.log、inventory-proof.json、picker-audit.json、server-proof.json、build-reviewed-*.log、release-ui-final.log／release-ui.json／16張PNG；前36報表E:/sb-private-6608-base/__rt/base.json，後48 E:/sb-private-6608-post/__rt/post.json。完整956測試及最終准推待完成。部署腳本已唯讀核實，站長無賽事時自行先update-tournament.bat再redeploy-oracle.bat，AI不跑BAT／不讀D:/ai。
 
 ## v6.607（2026-10-28～29）修正手機對戰紀錄跟隨
 
