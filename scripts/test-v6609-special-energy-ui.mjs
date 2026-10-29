@@ -60,6 +60,7 @@ await T('B7 經典戰鬥區17種特殊能量不擠掉HP且可捲到最後一種'
  assert.ok(r.info>=100&&r.col<=90&&!r.overflow&&r.badgeHeight<=110,JSON.stringify(r));
  await page.locator('#badges button').last().scrollIntoViewIfNeeded();await page.locator('#badges button').last().click();assert.deepEqual(await page.evaluate(()=>window.inspect),['host-p2']);
 });
+await T('B8 手機戰鬥卡維持原按鈕的置中文字對齊',async()=>{await page.setContent(`<style>${css}</style><div class="mp-active" style="height:100px"><div class="mp-active-info"><div class="mp-active-name">測試寶可夢</div></div></div>`);assert.equal(await page.locator('.mp-active-name').evaluate(e=>getComputedStyle(e).textAlign),'center');});
 await T('P 無能量時不產生假徽章',async()=>{await mount([]);assert.equal(await page.locator('#badges button').count(),0);assert.deepEqual(errors,[]);});
 }finally{await browser.close();}
 console.log(`v6609 PASS ${pass} / FAIL ${fail}`);if(fail)process.exitCode=1;

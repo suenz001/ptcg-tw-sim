@@ -1986,7 +1986,7 @@
   .mp-hand-card img.legend-half-l { object-position: 0% 50%; }
   .mp-hand-card img.legend-half-r { object-position: 100% 50%; }
   /* v6.609：卡面操作與能量檢視各用原生按鈕，不互相觸發。 */
-  .mp-active { position:relative; }
+  .mp-active { position:relative; text-align:center; }
   .mp-card-open { position:absolute; inset:0; z-index:0; width:100%; height:100%; padding:0; border:0; background:transparent; cursor:pointer; border-radius:inherit; }
   .mp-card-open:focus-visible { outline:2px solid #ffe1a0; outline-offset:-3px; }
   .mp-active-info { position:relative; z-index:1; }

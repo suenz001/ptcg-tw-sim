@@ -24,6 +24,7 @@ const mutations=[
  ['M8 點徽章誤觸卡面',badge,'e.preventDefault(); e.stopPropagation();','e.preventDefault();','B3'],
  ['M9 基本圖示不讓出空間',mobile,'.mp-slot-basic { display:flex; min-width:0; overflow:hidden; }','.mp-slot-basic { display:flex; flex:none; }','B5'],
  ['M10 未知卡錯誤合併',helper,'card?.name ?? energy.cardId',"card?.name ?? 'unknown'",'A4'],
+ ['M13 手機對齊回歸',mobile,'position:relative; text-align:center;','position:relative;','B8'],
  ['M12 經典欄位不限寬',badge,'max-width:90px;max-height:110px;','max-width:none;max-height:none;','B7'],
  ['M11 同iid重複算',helper,'if (seen.has(energy.iid)) continue;','if (false) continue;','A6'],
 ];
