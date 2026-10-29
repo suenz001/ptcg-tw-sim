@@ -38,6 +38,16 @@ const BUG_SHA = '2a99cc2ca89b0c821f8de0e1aef4c8f881d11cc7';
 let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c) { pass++; console.log('  PASS ' + n); } else { fail++; console.log('  FAIL ' + n + (x !== undefined ? ' — ' + String(x).slice(0, 600) : '')); } };
 const R = (p) => normEol(readFileSync(join(ROOT, p), 'utf8'));
+// Check field names, not random IDs or labels that can legitimately contain "gz".
+function hasPrivateListField(value) {
+  if (!value || typeof value !== 'object') return false;
+  return Object.entries(value).some(([key, child]) => key === 'uid' || key === 'gz' || hasPrivateListField(child));
+}
+ok('V5p field checker accepts gz in values and rejects private keys at every depth',
+  !hasPrivateListField({ items: [{ id: 'dpr_gz123', label: 'gz uid' }] })
+  && ['gz', 'uid'].every(key => hasPrivateListField({ [key]: '' })
+    && hasPrivateListField({ items: [{ [key]: null }] })
+    && hasPrivateListField({ items: [{ nested: { [key]: [] } }] })));
 const SAP_REL = 'oracle-admin/server_admin_patch.js';
 const TAIL_ANCHOR = "app.get('/api/tournament";
 
@@ -240,7 +250,7 @@ async function serverScenarios(SAP, TENG = SHARE) {
   const del = await G('/api/deck-posts-replays', 'me', { postId: 'dp_del' });
   r.V5 = l1.status === 200 && l1.body.dprApi === 1 && l1.body.items.length === 2 && l1.body.items.every((x) => !x.canRemove) && !l1.body.canAttach
     && l2.body.canAttach && l2.body.items.every((x) => x.canRemove) && !l3.body.canAttach && l3.body.items.every((x) => x.canRemove) && l3.body.isAdmin
-    && hidAnon.status === 404 && hidMe.status === 200 && del.status === 404 && !JSON.stringify(l1.body).includes('"uid"') && !JSON.stringify(l1.body).includes('gz');
+    && hidAnon.status === 404 && hidMe.status === 200 && del.status === 404 && !hasPrivateListField(l1.body);
   r.V5n = JSON.stringify({ l1: l1.body, hidAnon: hidAnon.status, hidMe: hidMe.status, del: del.status });
   // V6 檔案：公開拿得到（就是改過名字的那份）；移除後 404；admin 能移除別人的、路人不能
   const cid = stored?._id;
