@@ -1033,10 +1033,8 @@ regR('m5-flamigo-delivery', (state, aIdx, iids, params) => {
 // ── C1. 熱帶龍|果實香氣 — 牌庫頂 6 張選任意數量寶可夢加手牌（給對手看過後）─
 //   卡面：「查看自己的牌庫上方 6 張卡，從其中選擇任意數量的寶可夢，
 //          給對手看過後加入手牌。剩餘的卡放回牌庫並重洗。」
-//   實裝：用 deck-search filter='Pokemon' minCount=0 — 但範圍只限牌庫頂 6 張。
-//   既有 picker 無 top-N 限制，改用 reorder-deck-top picker (v2.164) 但 reorder
-//   不適合「選任意拿走」場景。最務實做法：先 peek 6 張，把 6 張視為候選清單，
-//   開 deck-search picker 但 params 限定候選 iids。
+//   v6.608：用既有 Pokemon:TOP_N + topIids 限定查看上方6張，validIids 限可選寶可夢。
+//   其餘非候選卡也能私下檢視；零命中仍先查看，再選0並重洗，公開log不透露命中數。
 regPre('熱帶龍|果實香氣', (state) => ({ state, damage: 0 }));
 regPost('熱帶龍|果實香氣', (state, aIdx, pool) => {
   const p = state.players[aIdx];
