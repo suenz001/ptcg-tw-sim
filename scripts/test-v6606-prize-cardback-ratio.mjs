@@ -8,6 +8,7 @@ import {createHash} from 'node:crypto';
 import {extractCss,pageHtml} from './lib/zoom-modal-fixture.mjs';
 import {pwLaunch} from './lib/pw.mjs';
 import {revertV6606Game} from './lib/revert-v6606-game.mjs';
+import {revertV6609Game} from './lib/revert-v6609-energy-ui.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PRODUCT=process.env.V6606_PRODUCT || ROOT;
 const gamePath='src/routes/game/+page.svelte';
@@ -17,7 +18,7 @@ const base=p=>{const r=readBaseBlob(ROOT,'9d427ed528d920aee3549d7d07a096bd7135ae
 const rule=/  \.prize-view-cardback\{[^\n]*\n(?=\n  \/\* ③)/g;
 let pass=0,fail=0;
 async function test(id,fn){try{await fn();pass++;console.log('PASS '+id);}catch(e){fail++;console.log('FAIL '+id+' '+e.message);}}
-await test('P1 整頁僅允許卡背尺寸規則改動，機密條件與DOM逐位元不變',()=>{assert.equal([...source.matchAll(rule)].length,1);assert.equal(source.replace(rule,''),base(gamePath).replace(rule,''));});
+await test('P1 整頁僅允許卡背尺寸規則改動，機密條件與DOM逐位元不變',()=>{assert.equal([...source.matchAll(rule)].length,1);assert.equal((source.includes('$lib/ui/SpecialEnergyBadges.svelte') ? revertV6609Game(source) : source).replace(rule,''),base(gamePath).replace(rule,''));});
 await test('P2 官方卡背共用外觀與資產保持原樣',()=>{assert.equal(official,base('src/lib/game/card-back.css'));assert.equal(createHash('sha256').update(readFileSync(join(PRODUCT,'src/lib/assets/pokemon-card-back.jpg'))).digest('hex'),'37a4df719ed9134a4652c639fea545f549c6cce40647ad5d82909be02a6afeb3','官方原圖資產不變');});
 await test('R1 精確還原整頁回上一版',()=>assert.equal(revertV6606Game(source),base(gamePath)));
 const image=readFileSync(join(PRODUCT,'src/lib/assets/pokemon-card-back.jpg'));
