@@ -2,8 +2,8 @@
   import type { Card } from '$lib/cards/types';
   import type { CardInstance } from '$lib/game/types';
   import { attachedEnergyGroups } from '$lib/cards/attached-energy';
-  let { inst, pool, compact = false, disabled = false, oninspect }: {
-    inst: CardInstance; pool: ReadonlyMap<string, Card>; compact?: boolean; disabled?: boolean;
+  let { inst, pool, compact = false, mobile = false, disabled = false, oninspect }: {
+    inst: CardInstance; pool: ReadonlyMap<string, Card>; compact?: boolean; mobile?: boolean; disabled?: boolean;
     oninspect: (iid: string) => void;
   } = $props();
   const groups = $derived(attachedEnergyGroups(inst, pool).filter(g => g.special));
@@ -20,7 +20,7 @@
       <button type="button" aria-label={`查看附加能量：${group.name} ${group.count}張`}
         title="{group.name} ×{group.count}張，點擊查看卡片" disabled={disabled} tabindex={disabled ? -1 : 0}
         onclick={(e) => { e.preventDefault(); e.stopPropagation(); oninspect(inst.iid); }}
-        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); }} onpointerdown={(e) => e.stopPropagation()}>{group.shortName}{compact ? '' : ' ×'}{group.count}</button>
+        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); }} onpointerdown={(e) => e.stopPropagation()}>{group.shortName}{group.count > 1 ? `${mobile ? '' : ' ×'}${group.count}` : ''}</button>
     {/each}
   {/if}
 </span>

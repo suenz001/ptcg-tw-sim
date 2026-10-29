@@ -817,7 +817,7 @@
               <span class="mp-slot-eg">
                 <span class="mp-slot-basic">{#each energyPips(basicEnergyOnly(inst, pool)) as pip}
                   <span class="mp-pip mp-pip-sm" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`}>{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
-                {/each}</span><SpecialEnergyBadges {inst} {pool} compact={true} oninspect={onOpenEnergy}/>
+                {/each}</span><SpecialEnergyBadges {inst} {pool} compact={true} mobile oninspect={onOpenEnergy}/>
               </span>
             {/if}
           </div>
@@ -885,7 +885,7 @@
                 <span class="mp-meta-pips">
                   {#each energyPips(basicEnergyOnly(inst, pool)) as pip}
                     <span class="mp-pip" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
-                  {/each}<SpecialEnergyBadges {inst} {pool} compact={false} oninspect={onOpenEnergy}/>
+                  {/each}<SpecialEnergyBadges {inst} {pool} compact={false} mobile oninspect={onOpenEnergy}/>
                 </span>
               {/if}
               {#if inst.toolAttached || (inst.extraTools && inst.extraTools.length > 0)}<span>🔧{(inst.extraTools && inst.extraTools.length > 0) ? `×${1 + inst.extraTools.length}` : ''}</span>{/if}
@@ -945,7 +945,7 @@
               <span class="mp-meta-pips">
                 {#each energyPips(basicEnergyOnly(inst, pool)) as pip}
                   <span class="mp-pip" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
-                {/each}<SpecialEnergyBadges {inst} {pool} compact={false} oninspect={onOpenEnergy}/>
+                {/each}<SpecialEnergyBadges {inst} {pool} compact={false} mobile oninspect={onOpenEnergy}/>
               </span>
             {/if}
             {#if inst.toolAttached || (inst.extraTools && inst.extraTools.length > 0)}<span>🔧{(inst.extraTools && inst.extraTools.length > 0) ? `×${1 + inst.extraTools.length}` : ''}</span>{/if}
@@ -1014,7 +1014,7 @@
             <span class="mp-slot-eg">
               <span class="mp-slot-basic">{#each energyPips(basicEnergyOnly(inst, pool)) as pip}
                 <span class="mp-pip mp-pip-sm" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`}>{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
-              {/each}</span><SpecialEnergyBadges {inst} {pool} compact={true} oninspect={onOpenEnergy}/>
+              {/each}</span><SpecialEnergyBadges {inst} {pool} compact={true} mobile oninspect={onOpenEnergy}/>
             </span>
           {/if}
           {#if hasUsableAbility}<span class="mp-slot-ab">✨</span>{/if}

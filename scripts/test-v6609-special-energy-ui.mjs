@@ -29,7 +29,7 @@ await T('A1 同名異圖合併且不同特殊能量不混合',()=>{assert.ok(M);
 await T('A2 新衝天一張仍只算一張卡',()=>{assert.ok(M);assert.equal(M.attachedEnergyGroups(host(['f']),pool)[0].count,1);});
 await T('A3 基本圖示不重複計特殊能量且輸入不變',()=>{assert.ok(M);assert.deepEqual(M.basicEnergyOnly(h,pool).energyAttached.map(e=>e.cardId),['e']);assert.equal(JSON.stringify(h),original);});
 await T('A4 未知卡保留並可查看而不捏造名稱',()=>{assert.ok(M);assert.deepEqual(M.attachedEnergyGroups(host(['missing','missing2']),pool).map(g=>[g.name,g.count]),[['未知能量',1],['未知能量',1]]);});
-await T('A5 不一律取前兩字、新卡保留可辨認名稱',()=>{assert.ok(M);const p=new Map([['new',card('new','未來測試能量')]]);assert.equal(M.attachedEnergyGroups(host(['new']),p)[0].shortName,'未來測試');assert.equal(M.SPECIAL_ENERGY_NAMES['新衝天能量'],'新衝天');assert.equal(M.SPECIAL_ENERGY_NAMES['火箭隊能量'],'火箭隊');});
+await T('A5 明確兩字短名、未映射卡使用通稱',()=>{assert.ok(M);const p=new Map([['new',card('new','未來測試能量')]]);assert.equal(M.attachedEnergyGroups(host(['new']),p)[0].shortName,'特殊');assert.equal(M.SPECIAL_ENERGY_NAMES['新衝天能量'],'衝天');assert.equal(M.SPECIAL_ENERGY_NAMES['火箭隊能量'],'火箭');});
 await T('A6 重複iid不重複算張數',()=>{assert.ok(M);const x=host(['a']);x.energyAttached.push(x.energyAttached[0]);assert.equal(M.attachedEnergyGroups(x,pool)[0].count,1);});
 await T('A7 現行H/I/J所有特殊能量均有唯一明確短名',()=>{assert.ok(M);const names=new Set();for(const set of JSON.parse(read('static/cards/index.json')))for(const c of JSON.parse(read('static/cards/'+set.code+'.json')))if(c.supertype==='Energy'&&c.subtype==='Special'&&['H','I','J'].includes(c.regulationMark))names.add(c.name);assert.equal(names.size,17);assert.equal(new Set([...names].map(n=>M.SPECIAL_ENERGY_NAMES[n])).size,names.size);for(const n of names)assert.ok(M.SPECIAL_ENERGY_NAMES[n],n);});
 await T('W1 桌機四位置八處舊能量列不重複顯示特殊卡',()=>{assert.equal((game.match(/energyPips\(basicEnergyOnly\(/g)||[]).length,8);assert.equal((game.match(/oninspect=\{openEnergyView\}/g)||[]).length,9);assert.ok(game.includes("_chips.filter(ch => ch.key !== 'special')"));});
@@ -53,8 +53,8 @@ const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];pa
 const css=mobile.match(/<style>([\s\S]*)<\/style>/)[1];
 async function mount(ids,compact=false,n=0){await page.setContent(`<style>${css}</style><div style="width:60px;height:80px"><div class="mp-slot" onclick="document.body.dataset.action='yes'"><button class="mp-card-open"></button><span class="mp-slot-eg"><span class="mp-slot-basic">${'<span class="mp-pip mp-pip-sm">鬥</span>'.repeat(n)}</span><span id="badges" style="display:contents"></span></span></div></div>`);await page.addScriptTag({content:js});await page.evaluate(spec=>mountEnergy(spec),{inst:host(ids),cards:[...pool],compact});}
 try{
-await T('B1 戰鬥區硬岩古舊富裕顯示名稱與卡片張數',async()=>{await mount(['a','d','b','c']);assert.deepEqual(await page.locator('#badges button').allTextContents(),['硬岩 ×2','古舊 ×1','富裕 ×1']);});
-await T('B2 備戰單種顯示完整短名、多種合成種類數',async()=>{await mount(['a','d'],true);assert.equal(await page.locator('#badges').innerText(),'硬岩2');await mount(['a','d','b','c'],true);assert.equal(await page.locator('#badges').innerText(),'特3種');});
+await T('B1 戰鬥區硬岩古舊富裕顯示名稱與卡片張數',async()=>{await mount(['a','d','b','c']);assert.deepEqual(await page.locator('#badges button').allTextContents(),['硬岩 ×2','古舊','富裕']);});
+await T('B2 備戰單種顯示完整短名、多種合成種類數',async()=>{await mount(['a','d'],true);assert.equal(await page.locator('#badges').innerText(),'硬岩 ×2');await mount(['a','d','b','c'],true);assert.equal(await page.locator('#badges').innerText(),'特3種');});
 await T('B3 點特殊徽章回傳正確host、不誤觸主卡',async()=>{await mount(['a'],true);const b=page.locator('#badges button');assert.equal(await b.count(),1);await b.click();assert.deepEqual(await page.evaluate(()=>window.inspect),['host-p2']);assert.equal(await page.locator('body').getAttribute('data-action'),null);});
 await T('B4 鍵盤Enter可開啟、Escape冒泡可關閉',async()=>{await mount(['a'],true);assert.equal(await page.locator('#badges button').count(),1);await page.evaluate(()=>window.addEventListener('keydown',e=>{if(e.key==='Escape')document.body.dataset.open='no'}));await page.locator('#badges button').focus();await page.keyboard.press('Enter');assert.equal(await page.locator('body').getAttribute('data-open'),'yes');await page.keyboard.press('Escape');assert.equal(await page.locator('body').getAttribute('data-open'),'no');});
 await T('B5 多種基本能量不能把備戰特殊徽章壓至零或推出卡位',async()=>{for(const n of [0,1,2,3,4,8]){await mount(['f'],true,n);assert.equal(await page.locator('#badges button').count(),1);const result=await page.locator('#badges button').evaluate(e=>{const r=e.getBoundingClientRect(),s=e.closest('.mp-slot').getBoundingClientRect();return{w:r.width,inside:r.right<=s.right&&r.left>=s.left,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===e}});assert.ok(result.w>25&&result.inside&&result.hit,JSON.stringify({n,...result}));}});
@@ -77,7 +77,7 @@ await T('B9 真Svelte檢視器追蹤當步能量與換備戰，離場或跨局�
  assert.deepEqual(await call('remove'),{open:false,stored:false,count:0,playing:false});assert.equal((await call('restore')).open,false);
  await call('open');assert.equal((await call('id','game-b')).open,false);assert.equal((await call('id','game-a')).open,false);
 });
-await T('B10 窄戰鬥欄三種特殊能量逐枚完整可見且可點、三字短名不截斷',async()=>{
+await T('B10 窄戰鬥欄三種特殊能量逐枚完整可見且可點、兩字短名不截斷',async()=>{
  for(const ids of [['a','b','c'],[...Array(12).fill('f'),'b','c']]){
   await page.setContent('<div class="playmat"><div style="width:90px;height:110px;overflow:hidden" id="badges"></div></div>');
   await page.addScriptTag({content:js});await page.evaluate(spec=>mountEnergy(spec),{inst:host(ids),cards:[...pool],compact:false});
