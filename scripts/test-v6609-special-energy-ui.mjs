@@ -77,6 +77,26 @@ await T('B9 真Svelte檢視器追蹤當步能量與換備戰，離場或跨局�
  assert.deepEqual(await call('remove'),{open:false,stored:false,count:0,playing:false});assert.equal((await call('restore')).open,false);
  await call('open');assert.equal((await call('id','game-b')).open,false);assert.equal((await call('id','game-a')).open,false);
 });
+await T('B10 窄戰鬥欄三種特殊能量逐枚完整可見且可點、三字短名不截斷',async()=>{
+ for(const ids of [['a','b','c'],[...Array(12).fill('f'),'b','c']]){
+  await page.setContent('<div class="playmat"><div style="width:90px;height:110px;overflow:hidden" id="badges"></div></div>');
+  await page.addScriptTag({content:js});await page.evaluate(spec=>mountEnergy(spec),{inst:host(ids),cards:[...pool],compact:false});
+  assert.equal(await page.locator('#badges button').count(),3);
+  for(const button of await page.locator('#badges button').all()){
+   const r=await button.evaluate(e=>{const b=e.getBoundingClientRect(),parent=e.closest('#badges').getBoundingClientRect(),hit=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2);return{text:e.textContent,full:e.scrollWidth<=e.clientWidth+1,inside:b.left>=parent.left&&b.right<=parent.right+1&&b.top>=parent.top&&b.bottom<=parent.bottom+1,hit:hit===e||e.contains(hit)};});
+   assert.ok(r.full&&r.inside&&r.hit,JSON.stringify(r));await button.click();
+  }
+  assert.deepEqual(await page.evaluate(()=>window.inspect),['host-p2','host-p2','host-p2']);
+ }
+});
+await T('B11 桌墊旁置只作用於特殊能量、純基本保持原位',async()=>{
+ for(const [layout,offset]of [['tabletop',208],['fable',238]])for(const ids of [['e'],['a']]){
+  await page.setContent(`<style>.active-card{position:relative;width:200px;height:160px}.tt-attach-overlay{position:absolute;left:12px;bottom:10px}</style><div class="playmat layout-${layout}"><div class="active-card"><div class="tt-attach-overlay" id="badges"></div></div></div>`);
+  await page.addScriptTag({content:js});await page.evaluate(spec=>mountEnergy(spec),{inst:host(ids),cards:[...pool],compact:false});
+  const position=await page.locator('.tt-attach-overlay').evaluate(e=>parseFloat(getComputedStyle(e).left));
+  assert.equal(position,ids[0]==='e'?12:offset,JSON.stringify({layout,ids,position}));
+ }
+});
 await T('P 無能量時不產生假徽章',async()=>{await mount([]);assert.equal(await page.locator('#badges button').count(),0);assert.deepEqual(errors,[]);});
 }finally{await browser.close();}
 console.log(`v6609 PASS ${pass} / FAIL ${fail}`);if(fail)process.exitCode=1;

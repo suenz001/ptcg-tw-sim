@@ -12,6 +12,12 @@ BASE `e0abc828`（v6.608）。站長批准對戰特殊能量短名稱／金棕�
 
 證據E:/ptcg-tw-sim-local/special-energy-6609-evidence：guard-lifecycle.log、head-fail-final-lifecycle.log、mutants-lifecycle.log、reverter-proof.json、build-final-*.log、release-ui.log/release-ui.json與19張實頁PNG；完整957及最終准推待完成。獨立special_energy_6609_review已核全部產品/守衛修正，最終仍須其解析全套與最新build/UI才准推。本版未改engine/effects/AI/server/API，BAT唯讀核redeploy-oracle.bat呼叫遠端前端部署、update-tournament會重建引擎；本版只需站長自行redeploy-oracle.bat，AI不執行部署。
 
+
+後續獨立視覺複審發現P2：原21scene僅驗互動、只點第一枚，blue/tabletop/fable同時三種時其餘標記裁切，不能稱視覺驗收通過。完整957首輪僅跑2支即明確停止（full-pre-visual-incomplete.log），非完整驗收；相關程序及P~U映射已釋放。現將標記換行並限制高度、保留classic垂直捲/備戰合併；Tabletop/Fable帶特殊標記的overlay移至既有附加卡扇形區，避開名稱與HP。外部注入試量1024/1366三桌墊各三枚完整文字/命中/祖先裁切/HP名字動作交疊均綠，另三字新衝天12張六組綠；審查者親看PNG未見新增遮擋，要求正式建置及附加卡露出區命中再驗。新B10每枚完整/命中/點擊含三字12張，guard27/0、BASE6綠21紅；M15移除換行必由B10行為攔下，最終15/15、N1與位元還原綠（guard-visual/head-fail-visual/mutants-visual.log）。產品修後新雙build及真發行頁/完整957/最終准推仍待完成，舊744建置不能冒稱修後驗收。
+
+
+視覺修正再複審P3：空span亦命中:has造成純基本能量列右移；改偵測真正特殊button，B11以真Svelte CSS測Tabletop/Fable原位left12正對照與特殊旁置208/238。guard-position28/0、head-fail-position BASE6綠22紅，mutants-position16/16（新增M16回退空span須B11紅）、N1及逐位元還原綠。獨立同審查者核B11是真CSS且正對照有效，P3解除。前一visual建置因此停止，新的build-reviewed-pages/oracle取代為驗收目標。精確reverter再次24hunks/48拒絕/extra保留綠（reverter-reviewed.log）。外部release-reviewed-ui另含純基本原位4組及每張附加卡露出上緣命中，實跑結果待補。
+
 ## v6.608（2026-10-29）私看牌庫選牌與公開資訊修正
 
 BASE `8939a61d`（v6.607），最終產品`b72f8e3a`。台灣官方寶可裝置3.0 Q&A（起始組合ex；PTCG_RULES.md L951）直接允許私下查看頂7張即使有支援者仍可不選；霸者咆哮／女服務生採同型類推改minCount0。霸者仍限頂4基本能量（不限火雷）、只附自己，未選卡只洗後放底，深層順序不變。女服務生已選能量後的目標仍必選，補validIids使既有中央閘擋空送與非法目標。IRON_RULES26b與本機工作手冊校正舊「自己看過＝公開資訊」誤述；6091相反斷言依Rule40改正，6104只校正誤述、掃描未放寬。

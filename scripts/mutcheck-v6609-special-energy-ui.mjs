@@ -14,6 +14,8 @@ const helper='src/lib/cards/attached-energy.ts',badge='src/lib/ui/SpecialEnergyB
 const originals=new Map([helper,badge,mobile,game].map(p=>[p,readFileSync(join(copy,p))]));
 const run=()=>{const r=spawnSync(process.execPath,[join(ROOT,'scripts/test-v6609-special-energy-ui.mjs')],{cwd:ROOT,env:{...process.env,V6609_PRODUCT:copy},encoding:'utf8',timeout:90000,maxBuffer:8*1024*1024});assert.ifError(r.error);return r;};
 const mutations=[
+ ['M16 空徽章誤移基本能量列',badge,':has(.special-energy-badges button)',':has(.special-energy-badges)','B11'],
+ ['M15 戰鬥區不換行裁掉後方種類',badge,'align-items:center;flex-wrap:wrap;gap:4px;','align-items:center;flex-wrap:nowrap;gap:4px;','B10'],
  ['M1 同名異圖不合併',helper,'${card?.name ?? energy.cardId}','${energy.cardId}','A1'],
  ['M2 特殊卡重複算入基本圖示',helper,"inst.energyAttached.filter(e => pool.get(e.cardId)?.subtype === 'Basic')",'inst.energyAttached','A3'],
  ['M3 把供能誤當張數',helper,'count: 1','count: 2','A2'],
