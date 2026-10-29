@@ -18,6 +18,12 @@ BASE `e0abc828`（v6.608）。站長批准對戰特殊能量短名稱／金棕�
 
 視覺修正再複審P3：空span亦命中:has造成純基本能量列右移；改偵測真正特殊button，B11以真Svelte CSS測Tabletop/Fable原位left12正對照與特殊旁置208/238。guard-position28/0、head-fail-position BASE6綠22紅，mutants-position16/16（新增M16回退空span須B11紅）、N1及逐位元還原綠。獨立同審查者核B11是真CSS且正對照有效，P3解除。前一visual建置因此停止，新的build-reviewed-pages/oracle取代為驗收目標。精確reverter再次24hunks/48拒絕/extra保留綠（reverter-reviewed.log）。外部release-reviewed-ui另含純基本原位4組及每張附加卡露出上緣命中，實跑結果待補。
 
+產品9467b133修後驗收：Pages與Oracle雙build-reviewed均exit0、SEO4951成功，兩home-video normalized與HEAD相同後只具名恢復EOL。未注入的真Oracle發行頁聯集35scene：正常23（390深淺×三角色6、1366四桌墊三角色12+blue淺1、1024四桌墊4）＋三字新衝天/火箭隊12張6＋純基本維持原位4＋復盤2。每枚特殊徽章全文/祖先clip/中心命中/點擊皆驗、名字HP不交疊，正常動作鈕幾何不交疊；所有查看新增gameState寫入0、pageerrors[]。classic每枚捲至可見後驗，不宣稱17枚同時可見。備戰清單/放大/Esc回清單/原主卡動作/當步跟隨/離場跨局關閉仍綠。
+
+外部驗收fixture三次邊界校正保留原紅：正常1024tabletop末兩張基本能量頂緣被備戰蓋住但下段仍可點，改掃每張圖至少一可點露出點（正常6張仍全可點）；12張三字特殊造成15張既有扇形部分延伸視窗外，改同頁visibility隱藏overlay的局部基線，要求原可點卡修後仍可點，不能聲稱所有扇形卡可點；fable大量扇形原已蓋動作鈕的矩形，改逐點保留基線動作鈕的原可點區，六組lostPoints均0，非放行新增阻擋。隱藏測量只增刪外部style標籤，未改產品。審查者親看PNG並核方法；名字HP/徽章全文/祖先clip/hit判準未放寬。23正常組保留release-before-action-baseline.json/log，最新6長名4基本2復盤在release-reviewed-ui.log，35聯集release-reviewed-ui.json帶verifiedIn；不是單次35全跑。大量扇形可操作限制屬既存框架，本版不另改。非iPhone實機、API皆隔離假房/外網阻擋、官方圖用等比例占位，未動正式資料。
+
+guard-position28/0、BASE6綠22紅、16有效突變/N1/位元還原綠、精確24hunk/48拒絕/extra保留均已完成；完整957即將以此產品凍結重跑，最終獨立准推尚待完整報表，不採先前僅2支的中止輪。
+
 ## v6.608（2026-10-29）私看牌庫選牌與公開資訊修正
 
 BASE `8939a61d`（v6.607），最終產品`b72f8e3a`。台灣官方寶可裝置3.0 Q&A（起始組合ex；PTCG_RULES.md L951）直接允許私下查看頂7張即使有支援者仍可不選；霸者咆哮／女服務生採同型類推改minCount0。霸者仍限頂4基本能量（不限火雷）、只附自己，未選卡只洗後放底，深層順序不變。女服務生已選能量後的目標仍必選，補validIids使既有中央閘擋空送與非法目標。IRON_RULES26b與本機工作手冊校正舊「自己看過＝公開資訊」誤述；6091相反斷言依Rule40改正，6104只校正誤述、掃描未放寬。
