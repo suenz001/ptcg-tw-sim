@@ -1,4 +1,7 @@
 <script lang="ts">
+  // v6.609：卡片張數與特殊能量身分顯示，與引擎供能計算分離。
+  import SpecialEnergyBadges from '$lib/ui/SpecialEnergyBadges.svelte';
+  import { attachedEnergyGroups, basicEnergyOnly } from '$lib/cards/attached-energy';
   import { replayDeckOrder } from '$lib/game/replay-deck';
   import PlayerClockNotice from "./PlayerClockNotice.svelte";
   import type { PlayerClockState } from "$lib/tournament/player-clock";
@@ -2069,6 +2072,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   function closeReplayDeck() { replayDeckSeat = null; }
   // <<< v6604-replay-deck
+  // >>> v6609-energy-view
+  let energyView = $state<{ gameId: string; iid: string } | null>(null);
+  const energyViewHost = $derived(game && energyView?.gameId === game.id
+    ? game.players.flatMap(p => [p.active, ...p.bench]).find(c => c?.iid === energyView?.iid) ?? null : null);
+  const energyViewGroups = $derived(energyViewHost ? attachedEnergyGroups(energyViewHost, pool) : []);
+  function openEnergyView(iid: string) {
+    if (!game || !game.players.some(p => [p.active, ...p.bench].some(c => c?.iid === iid))) return;
+    if (isTReplay) replayPlaying = false;
+    energyView = { gameId: game.id, iid };
+  }
+  // <<< v6609-energy-view
   let prizeViewOpen = $state(false);
   // >>> v6418-prize-view-in-battle
   // ⭐⭐⭐v6.418（站長需求）：對戰中也能點開獎賞卡檢視 —— 但**只看得到已翻到正面的那幾張**。
@@ -3530,12 +3544,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
 
   function onGlobalKey(e: KeyboardEvent) {
+    if (energyViewHost && e.key !== 'Escape') return;
     if (runKbdShortcut(e)) return;   // ⭐v6.488 鍵盤快捷鍵（設定裡打開才生效；只按畫面上唯一一顆能按的按鈕）
     if (e.key === 'Escape') {
       // v2.129：lightbox 最上層，Esc 先關 lightbox
       if (lightboxUrl) { closeLightboxImg(); return; }
       // 若 zoom 有堆疊，Escape 先彈回上一層，沒堆疊才全關
       if (zoomCard && zoomStack.length > 0) { popZoom(); return; }
+      if (energyViewHost) { if (zoomCard) closeZoom(); else energyView = null; return; }
       if (isTReplay && replayDeckSeat !== null && !zoomCard) { closeReplayDeck(); return; }
       closeZoom(); floatingEvoMenu = null; floatingRetreatMenu = null;
       viewDiscardFor = null; selectionPicked = new Set(); selectionCounts = {};
@@ -12532,6 +12548,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       onInitiateAttack={initiateAttack}
       attackEstimates={damageEstimates}
       onOpenZoom={openZoom}
+      onOpenEnergy={openEnergyView}
       onOpenPrizes={openPrizeView}
       onOpenReplayDeck={isTReplay ? openReplayDeck : undefined}
       onOpenDiscard={(who) => { viewDiscardFor = who === 'me' ? myIdx : oppIdx; }}
@@ -12738,7 +12755,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
 {/if}
 
 <!-- >>> v6441-blue-snippet -->
-{#snippet blueDeco(inst: CardInstance | null | undefined)}
+{#snippet blueDeco(inst: CardInstance | null | undefined, compact = false)}
   <!-- ⭐v6.441 藍桌墊專用：只在 battleLayout === 'blue' 時由四個卡位呼叫；其他版面不 render。
        pointer-events:none（見 CSS）⇒ 不擋點擊、不擋拖放落點。 -->
   {#if inst}
@@ -12748,8 +12765,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {#if _bt.length > 0}{@const _tc = getCard(_bt[0].cardId)}
       <span class="bl-tool" title="寶可夢道具：{_bt.map((t) => getCard(t.cardId)?.name ?? '道具').join('、')}"><img use:retryImg={_tc?.imageUrl} src={cardThumb(_tc?.imageUrl)} alt={_tc?.name ?? '道具'} onpointerenter={(e)=>enterAttCard(e, _bt[0].cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(_bt[0].cardId,null);}}} /><i class="bl-tn">{_tc?.name ?? '道具'}</i>{#if _bt.length > 1}<b>+{_bt.length - 1}</b>{/if}</span>
     {/if}
-    {#if _chips.length > 0}
-      <span class="bl-chips">{#each _chips as ch (ch.key)}<span class="bl-chip" title="{ch.key === 'special' ? '特殊能量' : ch.label + '能量'} × {ch.count}"><i class="bl-e" class:bl-sp={ch.key === 'special'} style={ch.color ? `background:${ch.color}` : undefined}>{ch.label}</i>{#if ch.count > 1}<b>×{ch.count}</b>{/if}</span>{/each}</span>
+    {#if inst.energyAttached.length > 0}
+      <span class="bl-chips">{#each _chips.filter(ch => ch.key !== 'special') as ch (ch.key)}<span class="bl-chip" title="{ch.key === 'special' ? '特殊能量' : ch.label + '能量'} × {ch.count}"><i class="bl-e" class:bl-sp={ch.key === 'special'} style={ch.color ? `background:${ch.color}` : undefined}>{ch.label}</i>{#if ch.count > 1}<b>×{ch.count}</b>{/if}</span>{/each}<SpecialEnergyBadges {inst} {pool} {compact} disabled={!!selectedEnergyIid || !!dragging} oninspect={openEnergyView}/></span>
     {/if}
   {/if}
 {/snippet}
@@ -12821,7 +12838,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 <div class="bench-name">{bc?.name}</div>
                 <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
                 <div class="bench-middle">
-                  <img use:retryImg={bc?.imageUrl} src={cardThumb(bc?.imageUrl)} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable" onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(b)}{/if}
+                  <img use:retryImg={bc?.imageUrl} src={cardThumb(bc?.imageUrl)} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable" onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(b, true)}{/if}
                   <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
                   {#if battleLayout !== 'classic'}
                     {@const _attOB = attachedCardsOf(b)}
@@ -12834,14 +12851,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
                         {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="top:{(i+1) * _stepOB}px;z-index:{110-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={cardThumb(_c.imageUrl)} alt={_c.name} title={_c.name}/>{/if}{/each}
                       </div>
                       <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
-                      <div class="tt-attach-overlay">{#each energyPips(b) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if b.toolAttached || (b.extraTools && b.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{b.extraTools && b.extraTools.length > 0 ? `×${1 + b.extraTools.length}` : ''}</span>{/if}</div>
+                      <div class="tt-attach-overlay">{#each energyPips(basicEnergyOnly(b, pool)) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}<SpecialEnergyBadges inst={b} {pool} compact={true} disabled={!!selectedEnergyIid || !!dragging} oninspect={openEnergyView}/>{#if b.toolAttached || (b.extraTools && b.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{b.extraTools && b.extraTools.length > 0 ? `×${1 + b.extraTools.length}` : ''}</span>{/if}</div>
                     {/if}
                   {/if}
-                  {#if energyPips(b).length > 0}
+                  {#if b.energyAttached.length > 0}
                     <div class="bench-nrg">
-                      {#each energyPips(b) as pip}
+                      {#each energyPips(basicEnergyOnly(b, pool)) as pip}
                         <span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
-                      {/each}
+                      {/each}<SpecialEnergyBadges inst={b} {pool} compact={true} disabled={!!selectedEnergyIid || !!dragging} oninspect={openEnergyView}/>
                     </div>
                   {/if}
                 </div>
@@ -12886,16 +12903,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="left:calc(var(--fan-step, 32px) * {i+1});z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={cardThumb(_c.imageUrl)} alt={_c.name} title={_c.name}/>{/if}{/each}
                   </div>
                   <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
-                  <div class="tt-attach-overlay">{#each energyPips(oppPlayer.active) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if oppPlayer.active.toolAttached || (oppPlayer.active.extraTools && oppPlayer.active.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{oppPlayer.active.extraTools && oppPlayer.active.extraTools.length > 0 ? `×${1 + oppPlayer.active.extraTools.length}` : ''}</span>{/if}</div>
+                  <div class="tt-attach-overlay">{#each energyPips(basicEnergyOnly(oppPlayer.active, pool)) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}<SpecialEnergyBadges inst={oppPlayer.active} {pool} compact={false} disabled={!!selectedEnergyIid || !!dragging} oninspect={openEnergyView}/>{#if oppPlayer.active.toolAttached || (oppPlayer.active.extraTools && oppPlayer.active.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{oppPlayer.active.extraTools && oppPlayer.active.extraTools.length > 0 ? `×${1 + oppPlayer.active.extraTools.length}` : ''}</span>{/if}</div>
                 {/if}
               {/if}
               <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）
                    v2.53：無能量時不渲染（避免空欄佔寬度） -->
-              {#if energyPips(oppPlayer.active).length > 0}
+              {#if oppPlayer.active.energyAttached.length > 0}
                 <div class="active-nrg-col">
-                  {#each energyPips(oppPlayer.active) as pip}
+                  {#each energyPips(basicEnergyOnly(oppPlayer.active, pool)) as pip}
                     <span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
-                  {/each}
+                  {/each}<SpecialEnergyBadges inst={oppPlayer.active} {pool} compact={false} disabled={!!selectedEnergyIid || !!dragging} oninspect={openEnergyView}/>
                 </div>
               {/if}
               <div class="active-info">
@@ -13238,16 +13255,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="left:calc(var(--fan-step, 32px) * {i+1});z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={cardThumb(_c.imageUrl)} alt={_c.name} title={_c.name}/>{/if}{/each}
                 </div>
                 <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
-                <div class="tt-attach-overlay">{#each energyPips(myPlayer.active) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if myPlayer.active.toolAttached || (myPlayer.active.extraTools && myPlayer.active.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{myPlayer.active.extraTools && myPlayer.active.extraTools.length > 0 ? `×${1 + myPlayer.active.extraTools.length}` : ''}</span>{/if}</div>
+                <div class="tt-attach-overlay">{#each energyPips(basicEnergyOnly(myPlayer.active, pool)) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}<SpecialEnergyBadges inst={myPlayer.active} {pool} compact={false} disabled={!!selectedEnergyIid || !!dragging} oninspect={openEnergyView}/>{#if myPlayer.active.toolAttached || (myPlayer.active.extraTools && myPlayer.active.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{myPlayer.active.extraTools && myPlayer.active.extraTools.length > 0 ? `×${1 + myPlayer.active.extraTools.length}` : ''}</span>{/if}</div>
               {/if}
             {/if}
             <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）
                  v2.53：無能量時不渲染（避免空欄佔寬度） -->
-            {#if energyPips(myPlayer.active).length > 0}
+            {#if myPlayer.active.energyAttached.length > 0}
               <div class="active-nrg-col">
-                {#each energyPips(myPlayer.active) as pip}
+                {#each energyPips(basicEnergyOnly(myPlayer.active, pool)) as pip}
                   <span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
-                {/each}
+                {/each}<SpecialEnergyBadges inst={myPlayer.active} {pool} compact={false} disabled={!!selectedEnergyIid || !!dragging} oninspect={openEnergyView}/>
               </div>
             {/if}
             <div class="active-info">
@@ -13313,7 +13330,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 <img use:retryImg={bc?.imageUrl} src={cardThumb(bc?.imageUrl)} alt={bc?.name}
                   class:zoomable={!selectedEnergyIid}
                   onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}
-                  onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(b)}{/if}
+                  onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>{#if battleLayout === 'blue'}{@render blueDeco(b, true)}{/if}
                 <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
                 {#if battleLayout !== 'classic'}
                   {@const _attMB = attachedCardsOf(b)}
@@ -13324,14 +13341,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
                       {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="top:{-(i+1) * _stepMB}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={cardThumb(_c.imageUrl)} alt={_c.name} title={_c.name}/>{/if}{/each}
                     </div>
                     <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
-                    <div class="tt-attach-overlay">{#each energyPips(b) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if b.toolAttached || (b.extraTools && b.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{b.extraTools && b.extraTools.length > 0 ? `×${1 + b.extraTools.length}` : ''}</span>{/if}</div>
+                    <div class="tt-attach-overlay">{#each energyPips(basicEnergyOnly(b, pool)) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}<SpecialEnergyBadges inst={b} {pool} compact={true} disabled={!!selectedEnergyIid || !!dragging} oninspect={openEnergyView}/>{#if b.toolAttached || (b.extraTools && b.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{b.extraTools && b.extraTools.length > 0 ? `×${1 + b.extraTools.length}` : ''}</span>{/if}</div>
                   {/if}
                 {/if}
-                {#if energyPips(b).length > 0}
+                {#if b.energyAttached.length > 0}
                   <div class="bench-nrg">
-                    {#each energyPips(b) as pip}
+                    {#each energyPips(basicEnergyOnly(b, pool)) as pip}
                       <span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
-                    {/each}
+                    {/each}<SpecialEnergyBadges inst={b} {pool} compact={true} disabled={!!selectedEnergyIid || !!dragging} oninspect={openEnergyView}/>
                   </div>
                 {/if}
               </div>
@@ -15642,6 +15659,31 @@ function _setupSelfPending(g: any, seat: number): string | null {
       </div>
     </div>
   {/if}
+
+  <!-- >>> v6609-energy-modal -->
+  {#if energyViewHost}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="zoom-overlay" onclick={() => energyView = null}>
+      <div class="zoom-modal discard-modal" use:modalDrag={{ resetKey: energyViewHost.iid }} onclick={(e)=>e.stopPropagation()} role="dialog" aria-modal="true" aria-label="附加的能量" tabindex="-1">
+        <button class="zoom-close" onclick={() => energyView = null} aria-label="關閉附加能量">✕</button>
+        <h3 class="discard-title modal-drag-handle">附加的能量・{getCard(energyViewHost.cardId)?.name ?? '寶可夢'}</h3>
+        <p class="prize-view-note">數字表示卡片張數；點卡圖查看完整卡面。</p>
+        <div class="sel-grid" aria-label="附加能量清單">
+          {#each energyViewGroups as group (group.key)}
+            {@const card = getCard(group.cardId)}
+            <button class="sel-card" onclick={() => card && openZoom(group.cardId, null)} disabled={!card}>
+              {#if card?.imageUrl}<img use:retryImg={card.imageUrl} src={cardThumb(card.imageUrl)} alt={group.name} loading="lazy"/>{/if}
+              <span class="sel-name">{group.name} ×{group.count}張</span>
+              <span class="sel-name">{group.special ? '特殊能量' : '基本能量'}</span>
+            </button>
+          {/each}
+          {#if energyViewGroups.length === 0}<p class="sel-empty">目前沒有附加能量。</p>{/if}
+        </div>
+      </div>
+    </div>
+  {/if}
+  <!-- <<< v6609-energy-modal -->
 
   <!-- >>> v6604-replay-deck-modal -->
   {#if isTReplay && game && replayDeckSeat !== null && replayDeck}

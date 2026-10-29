@@ -8,13 +8,14 @@ import {build} from 'esbuild';
 import {pwLaunch} from './lib/pw.mjs';
 import {readBaseBlob} from './lib/base-blob.mjs';
 import {revertV6607Mobile} from './lib/revert-v6607-mobile.mjs';
+import {revertV6609Game} from './lib/revert-v6609-energy-ui.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PRODUCT=process.env.V6607_PRODUCT || ROOT,BASE='b13354f3f5c82038f47cdb47d34277bfb73bfe48';
 const read=p=>readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n');
 const mobile=read('src/routes/game/MobilePortraitBattle.svelte');let pass=0,fail=0;
 async function T(id,fn){try{await fn();console.log('PASS '+id);pass++;}catch(e){if(!(e instanceof assert.AssertionError))throw e;console.log('FAIL '+id+' '+e.message);fail++;}}
 const baseFile=p=>{const x=readBaseBlob(ROOT,BASE,p);assert.ok(x.ok,'完整BASE必須可讀');return x.out.replace(/\r\n/g,'\n');};
-await T('P1 桌機對戰與觀戰頁逐位元不變',()=>assert.equal(read('src/routes/game/+page.svelte'),baseFile('src/routes/game/+page.svelte')));
+await T('P1 桌機對戰與觀戰頁逐位元不變',()=>assert.equal(revertV6609Game(read('src/routes/game/+page.svelte')),baseFile('src/routes/game/+page.svelte')));
 await T('P2 手機只改紀錄跟隨，卡片與資訊顯示不變',()=>{const base=baseFile('src/routes/game/MobilePortraitBattle.svelte');assert.equal(mobile===base?mobile:revertV6607Mobile(mobile),base);});
 const fresh=mobile.includes('use:followBattleLog');const begin=fresh?mobile.indexOf('  // v6.607：'):mobile.indexOf('  // v5.194：log 容器');assert.ok(begin>=0);const finish=mobile.indexOf('  // ── Derived state',begin);assert.ok(finish>begin);
 const opening=mobile.match(/<section class="mp-log"[^>]*>/)?.[0];assert.ok(opening);

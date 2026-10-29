@@ -1,3 +1,4 @@
+import {revertV6609Changelog} from './revert-v6609-changelog.mjs';
 // 僅還原v6.608合法更新紀錄，缺失／重複錨點均拒絕，其他差異保留。
 const PAIRS = {
   "static/changelog.html": [
@@ -31,4 +32,4 @@ const PAIRS = {
     ]
   ]
 };
-export function revertV6608Changelog(path, source) {let s=source.replace(/\r\n/g,"\n");const pairs=PAIRS[path];if(!pairs)throw Error("未知路徑 "+path);for(const[a,b]of pairs){if(s.split(a).length!==2)throw Error("6608更新紀錄錨點缺失或重複 "+path);s=s.replace(a,b);}return s;}
+export function revertV6608Changelog(path, source) {let s=revertV6609Changelog(path,source).replace(/\r\n/g,"\n");const pairs=PAIRS[path];if(!pairs)throw Error("未知路徑 "+path);for(const[a,b]of pairs){if(s.split(a).length!==2)throw Error("6608更新紀錄錨點缺失或重複 "+path);s=s.replace(a,b);}return s;}

@@ -45,6 +45,9 @@
   import { retryImg } from '$lib/img-retry';
   import { cardThumb } from '$lib/cards/thumb'; // v6.464 小尺寸顯示改用縮圖（失敗由 retryImg 立刻退回官方原圖）
   import { modalDrag } from '$lib/modal-drag';   // ⭐v6.420：與桌機版共用同一份拖曳＋邊界夾制
+  // v6.609：卡片張數與特殊能量身分顯示，與引擎供能計算分離。
+  import SpecialEnergyBadges from '$lib/ui/SpecialEnergyBadges.svelte';
+  import { attachedEnergyGroups, basicEnergyOnly } from '$lib/cards/attached-energy';
   import type { Card } from '$lib/cards/types';
   import {
     getEffectiveAttacks, getAvailableAttacks, getEvolvableTargets, getUsableAbilities,
@@ -112,6 +115,7 @@
     onAction: (action: ReturnType<(typeof GameActions)[keyof typeof GameActions]>) => void | Promise<void>;
     onInitiateAttack: (attackIndex: number) => void;
     onOpenZoom: (cardId: string, inst: CardInstance | null) => void;
+    onOpenEnergy: (iid: string) => void;
     // ⭐v6.190 回放限定：開啟「雙方獎賞卡」檢視視窗。視窗本體畫在父層（版面分支之外），
     //   這裡只負責觸發。⚠ 父層沒傳＝按鈕不出現（不會靜默變成點了沒反應）。
     onOpenPrizes?: () => void;
@@ -146,6 +150,7 @@
     actionQueued = 0,       // v6.172
     attackEstimates = null, // v6.233
     onAction, onInitiateAttack, onOpenZoom, onOpenSettings, onLeave,
+    onOpenEnergy,
     onOpenReplayDeck,
     onOpenPrizes,   // v6.190（回放限定）
     onOpenDiscard,  // v6.451
@@ -802,17 +807,20 @@
             <span class="mp-card-back-mark">?</span>
           </div>
         {:else}
-          <button class="mp-slot mp-opp-slot" onclick={() => onOpenZoom(inst.cardId, inst)}>
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="mp-slot mp-opp-slot" onclick={() => onOpenZoom(inst.cardId, inst)}>
+          <button class="mp-card-open" type="button" aria-label={c?.name ?? '查看寶可夢'}></button>
             {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name}/>{/if}
             <span class="mp-slot-hp">{hpRemaining(inst)}</span>
             {#if inst.energyAttached.length > 0}
               <span class="mp-slot-eg">
-                {#each energyPips(inst) as pip}
+                <span class="mp-slot-basic">{#each energyPips(basicEnergyOnly(inst, pool)) as pip}
                   <span class="mp-pip mp-pip-sm" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`}>{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
-                {/each}
+                {/each}</span><SpecialEnergyBadges {inst} {pool} compact={true} oninspect={onOpenEnergy}/>
               </span>
             {/if}
-          </button>
+          </div>
         {/if}
       {:else}
         <div class="mp-slot mp-empty"></div>
@@ -861,7 +869,10 @@
           </div>
         </div>
       {:else}
-        <button class="mp-active mp-active-opp mp-status-{inst.status ?? 'none'}" onclick={() => onOpenZoom(inst.cardId, inst)}>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="mp-active mp-active-opp mp-status-{inst.status ?? 'none'}" onclick={() => onOpenZoom(inst.cardId, inst)}>
+          <button class="mp-card-open" type="button" aria-label={c?.name ?? '查看寶可夢'}></button>
           {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name}/>{/if}
           <div class="mp-active-info">
             <div class="mp-active-name">{c?.name ?? '?'}</div>
@@ -872,9 +883,9 @@
             <div class="mp-meta">
               {#if inst.energyAttached.length > 0}
                 <span class="mp-meta-pips">
-                  {#each energyPips(inst) as pip}
+                  {#each energyPips(basicEnergyOnly(inst, pool)) as pip}
                     <span class="mp-pip" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
-                  {/each}
+                  {/each}<SpecialEnergyBadges {inst} {pool} compact={false} oninspect={onOpenEnergy}/>
                 </span>
               {/if}
               {#if inst.toolAttached || (inst.extraTools && inst.extraTools.length > 0)}<span>🔧{(inst.extraTools && inst.extraTools.length > 0) ? `×${1 + inst.extraTools.length}` : ''}</span>{/if}
@@ -883,7 +894,7 @@
               {#if inst.secondaryStatus}<span class="mp-status mp-status-chip-{inst.secondaryStatus}">{statusLabel(inst.secondaryStatus)}</span>{/if}{#if inst.tertiaryStatus}<span class="mp-status mp-status-chip-{inst.tertiaryStatus}">{statusLabel(inst.tertiaryStatus)}</span>{/if}
             </div>
           </div>
-        </button>
+        </div>
       {/if}
     {:else}
       <div class="mp-active-empty">（對手戰鬥場空）</div>
@@ -917,9 +928,11 @@
     {#if myPlayer.active}
       {@const inst = myPlayer.active}
       {@const c = cardOf(inst)}
-      <button class="mp-active mp-active-mine mp-status-{inst.status ?? 'none'}"
-        class:mp-actionable={isPlaying && isMyTurn && isMainPhase && !pendingSelection}
-        onclick={() => sheet = { type: 'active' }}>
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="mp-active mp-active-mine mp-status-{inst.status ?? 'none'}"
+        class:mp-actionable={isPlaying && isMyTurn && isMainPhase && !pendingSelection} onclick={() => sheet = { type: 'active' }}>
+          <button class="mp-card-open" type="button" aria-label={c?.name ?? '查看寶可夢'}></button>
         {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name}/>{/if}
         <div class="mp-active-info">
           <div class="mp-active-name">{c?.name ?? '?'}</div>
@@ -930,9 +943,9 @@
           <div class="mp-meta">
             {#if inst.energyAttached.length > 0}
               <span class="mp-meta-pips">
-                {#each energyPips(inst) as pip}
+                {#each energyPips(basicEnergyOnly(inst, pool)) as pip}
                   <span class="mp-pip" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
-                {/each}
+                {/each}<SpecialEnergyBadges {inst} {pool} compact={false} oninspect={onOpenEnergy}/>
               </span>
             {/if}
             {#if inst.toolAttached || (inst.extraTools && inst.extraTools.length > 0)}<span>🔧{(inst.extraTools && inst.extraTools.length > 0) ? `×${1 + inst.extraTools.length}` : ''}</span>{/if}
@@ -944,7 +957,7 @@
             {/if}
           </div>
         </div>
-      </button>
+      </div>
     {:else if isSetup}
       <div class="mp-active-empty">點手牌的基礎寶可夢 → 放到戰鬥場</div>
     {:else}
@@ -990,20 +1003,22 @@
         {@const c = cardOf(inst)}
         {@const hasUsableAbility = usableAbilities.some(u => u.iid === inst.iid)}
         {@const isEvoTarget = evolvableTargets.some(e => e.fromIid === inst.iid)}
-        <button class="mp-slot mp-my-slot"
-          class:mp-actionable={hasUsableAbility || isEvoTarget}
-          onclick={() => sheet = { type: 'bench', inst }}>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="mp-slot mp-my-slot"
+          class:mp-actionable={hasUsableAbility || isEvoTarget} onclick={() => sheet = { type: 'bench', inst }}>
+          <button class="mp-card-open" type="button" aria-label={c?.name ?? '查看寶可夢'}></button>
           {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name}/>{/if}
           <span class="mp-slot-hp">{hpRemaining(inst)}</span>
           {#if inst.energyAttached.length > 0}
             <span class="mp-slot-eg">
-              {#each energyPips(inst) as pip}
+              <span class="mp-slot-basic">{#each energyPips(basicEnergyOnly(inst, pool)) as pip}
                 <span class="mp-pip mp-pip-sm" class:mp-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`}>{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>
-              {/each}
+              {/each}</span><SpecialEnergyBadges {inst} {pool} compact={true} oninspect={onOpenEnergy}/>
             </span>
           {/if}
           {#if hasUsableAbility}<span class="mp-slot-ab">✨</span>{/if}
-        </button>
+        </div>
       {:else}
         <div class="mp-slot mp-empty"></div>
       {/if}
@@ -1970,4 +1985,13 @@
   .mp-hand-card img.legend-half-r { aspect-ratio: 868 / 1212; object-fit: cover; }
   .mp-hand-card img.legend-half-l { object-position: 0% 50%; }
   .mp-hand-card img.legend-half-r { object-position: 100% 50%; }
+  /* v6.609：卡面操作與能量檢視各用原生按鈕，不互相觸發。 */
+  .mp-active { position:relative; }
+  .mp-card-open { position:absolute; inset:0; z-index:0; width:100%; height:100%; padding:0; border:0; background:transparent; cursor:pointer; border-radius:inherit; }
+  .mp-card-open:focus-visible { outline:2px solid #ffe1a0; outline-offset:-3px; }
+  .mp-active-info { position:relative; z-index:1; }
+  .mp-slot-hp, .mp-slot-ab { pointer-events:none; }
+  .mp-meta-pips, .mp-slot-eg { pointer-events:none; }
+  .mp-slot-basic { display:flex; min-width:0; overflow:hidden; }
+  .mp-slot-eg { display:flex; align-items:center; gap:1px; max-width:calc(100% - 2px); overflow:hidden; }
 </style>
