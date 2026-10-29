@@ -40,6 +40,14 @@ await T('W5 未知卡不被桌機原屬性圖示gate漏掉',()=>{for(const n of 
 const source=present?read('src/lib/ui/SpecialEnergyBadges.svelte'):'<span>特</span>';
 const compiled=compile(source,{generate:'client',dev:false,css:'injected',filename:'EnergyBadge.svelte'}).js.code;
 const js=(await build({stdin:{contents:compiled+`\nimport{mount,unmount,tick}from'svelte';let mounted;window.inspect=[];window.mountEnergy=async(spec)=>{if(mounted)await unmount(mounted);mounted=mount(EnergyBadge,{target:document.querySelector('#badges'),props:{inst:spec.inst,pool:new Map(spec.cards),compact:spec.compact,oninspect:iid=>{window.inspect.push(iid);document.body.dataset.open='yes'}}});await tick();};`,resolveDir:ROOT,sourcefile:'EnergyBadge.js'},bundle:true,write:false,format:'iife',platform:'browser',conditions:['browser'],define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'product',setup(b){b.onResolve({filter:/^\$lib\//},a=>({path:join(PRODUCT,'src/lib',a.path.slice(5)+'.ts')}));}}]})).outputFiles[0].text;
+let viewerJs=null;
+if(present){
+ const logic=game.match(/\/\/ >>> v6609-energy-view([\s\S]*?)\/\/ <<< v6609-energy-view/)?.[1];
+ assert.ok(logic,'真正頁面的檢視生命週期必須可抽出');
+ const probe=`<script lang="ts">import{tick}from'svelte';import{attachedEnergyGroups}from'$lib/cards/attached-energy';const seed=${JSON.stringify({id:'game-a',players:[{active:host(['a','b']),bench:[]},{active:null,bench:[]}]})};let game=$state(structuredClone(seed));const pool=new Map(${JSON.stringify([...pool])});const isTReplay=true;let replayPlaying=$state(true);${logic}\nwindow.viewerProbe={open:()=>openEnergyView('host-p2'),removeEnergy:()=>game.players[0].active.energyAttached.shift(),bench(){game.players[0].bench=[game.players[0].active];game.players[0].active=null;},remove(){game.players[0].active=null;game.players[0].bench=[];},restore(){game=structuredClone(seed);},id(x){game.id=x;},state:()=>({open:!!energyViewHost,stored:!!energyView,count:energyViewGroups.length,playing:replayPlaying}),tick};</script><main>{#if energyViewHost}<p>能量視窗</p>{/if}</main>`;
+ const output=compile(probe,{generate:'client',dev:false,filename:'ViewerProbe.svelte'}).js.code;
+ viewerJs=(await build({stdin:{contents:output+"\nimport{mount}from'svelte';mount(ViewerProbe,{target:document.querySelector('#viewer')});",resolveDir:ROOT,sourcefile:'ViewerProbe.js'},bundle:true,write:false,platform:'browser',format:'iife',conditions:['browser'],define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'product',setup(b){b.onResolve({filter:/^\$lib\//},a=>({path:join(PRODUCT,'src/lib',a.path.slice(5)+'.ts')}));}}]})).outputFiles[0].text;
+}
 const browser=await pwLaunch('v6609特殊能量顯示與手機命中');assert.ok(browser);
 const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
 const css=mobile.match(/<style>([\s\S]*)<\/style>/)[1];
@@ -61,6 +69,14 @@ await T('B7 經典戰鬥區17種特殊能量不擠掉HP且可捲到最後一種'
  await page.locator('#badges button').last().scrollIntoViewIfNeeded();await page.locator('#badges button').last().click();assert.deepEqual(await page.evaluate(()=>window.inspect),['host-p2']);
 });
 await T('B8 手機戰鬥卡維持原按鈕的置中文字對齊',async()=>{const tag=mobile.includes('class="mp-card-open"')?'div':'button';await page.setContent(`<style>${css}</style><${tag} class="mp-active" style="height:100px"><div class="mp-active-info"><div class="mp-active-name">測試寶可夢</div></div></${tag}>`);assert.equal(await page.locator('.mp-active-name').evaluate(e=>getComputedStyle(e).textAlign),'center');});
+await T('B9 真Svelte檢視器追蹤當步能量與換備戰，離場或跨局關閉且不自行重開',async()=>{
+ assert.ok(viewerJs);await page.setContent('<div id="viewer"></div>');await page.addScriptTag({content:viewerJs});
+ const call=async(method,value)=>page.evaluate(async({method,value})=>{viewerProbe[method](value);await viewerProbe.tick();return viewerProbe.state();},{method,value});
+ assert.deepEqual(await call('open'),{open:true,stored:true,count:2,playing:false});
+ assert.equal((await call('removeEnergy')).count,1);assert.equal((await call('bench')).open,true);
+ assert.deepEqual(await call('remove'),{open:false,stored:false,count:0,playing:false});assert.equal((await call('restore')).open,false);
+ await call('open');assert.equal((await call('id','game-b')).open,false);assert.equal((await call('id','game-a')).open,false);
+});
 await T('P 無能量時不產生假徽章',async()=>{await mount([]);assert.equal(await page.locator('#badges button').count(),0);assert.deepEqual(errors,[]);});
 }finally{await browser.close();}
 console.log(`v6609 PASS ${pass} / FAIL ${fail}`);if(fail)process.exitCode=1;

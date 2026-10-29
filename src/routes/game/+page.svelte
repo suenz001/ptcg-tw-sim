@@ -2077,6 +2077,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   const energyViewHost = $derived(game && energyView?.gameId === game.id
     ? game.players.flatMap(p => [p.active, ...p.bench]).find(c => c?.iid === energyView?.iid) ?? null : null);
   const energyViewGroups = $derived(energyViewHost ? attachedEnergyGroups(energyViewHost, pool) : []);
+  $effect(() => { if (energyView && !energyViewHost) energyView = null; });
   function openEnergyView(iid: string) {
     if (!game || !game.players.some(p => [p.active, ...p.bench].some(c => c?.iid === iid))) return;
     if (isTReplay) replayPlaying = false;

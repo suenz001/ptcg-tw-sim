@@ -10,8 +10,8 @@ assert.equal(process.env.V6609_MUTATION_SANDBOX,'1');
 const copy=mkdtempSync(join(tmpdir(),'ptcg-v6609-mut-'));
 const clean=()=>rmSync(copy,{recursive:true,force:true});process.once('exit',clean);for(const sig of ['SIGINT','SIGTERM'])process.once(sig,()=>{clean();process.exit(130);});
 cpSync(join(ROOT,'src'),join(copy,'src'),{recursive:true});mkdirSync(join(copy,'static'));cpSync(join(ROOT,'static/cards'),join(copy,'static/cards'),{recursive:true});
-const helper='src/lib/cards/attached-energy.ts',badge='src/lib/ui/SpecialEnergyBadges.svelte',mobile='src/routes/game/MobilePortraitBattle.svelte';
-const originals=new Map([helper,badge,mobile].map(p=>[p,readFileSync(join(copy,p))]));
+const helper='src/lib/cards/attached-energy.ts',badge='src/lib/ui/SpecialEnergyBadges.svelte',mobile='src/routes/game/MobilePortraitBattle.svelte',game='src/routes/game/+page.svelte';
+const originals=new Map([helper,badge,mobile,game].map(p=>[p,readFileSync(join(copy,p))]));
 const run=()=>{const r=spawnSync(process.execPath,[join(ROOT,'scripts/test-v6609-special-energy-ui.mjs')],{cwd:ROOT,env:{...process.env,V6609_PRODUCT:copy},encoding:'utf8',timeout:90000,maxBuffer:8*1024*1024});assert.ifError(r.error);return r;};
 const mutations=[
  ['M1 同名異圖不合併',helper,'${card?.name ?? energy.cardId}','${energy.cardId}','A1'],
@@ -24,6 +24,7 @@ const mutations=[
  ['M8 點徽章誤觸卡面',badge,'e.preventDefault(); e.stopPropagation();','e.preventDefault();','B3'],
  ['M9 基本圖示不讓出空間',mobile,'.mp-slot-basic { display:flex; min-width:0; overflow:hidden; }','.mp-slot-basic { display:flex; flex:none; }','B5'],
  ['M10 未知卡錯誤合併',helper,'card?.name ?? energy.cardId',"card?.name ?? 'unknown'",'A4'],
+ ['M14 離場後清單會自行重開',game,'$effect(() => { if (energyView && !energyViewHost) energyView = null; });','$effect(() => { void energyViewHost; });','B9'],
  ['M13 手機對齊回歸',mobile,'position:relative; text-align:center;','position:relative;','B8'],
  ['M12 經典欄位不限寬',badge,'max-width:90px;max-height:110px;','max-width:none;max-height:none;','B7'],
  ['M11 同iid重複算',helper,'if (seen.has(energy.iid)) continue;','if (false) continue;','A6'],
