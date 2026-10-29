@@ -8,6 +8,8 @@ BASE `9aa83ddd`（v6.609）。站長指定：特殊能量一張省略數量、�
 
 修後58acbe71產品未變。最新guard-reviewed16/0、head-fail-reviewed BASE10綠6紅、mutants-reviewed6/6（anchor次數先核）、N1及位元還原綠。normalFirebase/root供完整守衛的build-pages與fakeOracle/build-oracle均exit0、SEO4951成功，官方站未部署；兩home-video只EOL且normalized等HEAD後具名還原。真Oracle發行/game隔離假房19情境：手機390深淺×P1/P2/觀戰6、桌機1366四桌墊×三角色12加blue淺1；逐枚驗單張不顯數量、桌機×N/手機N、兩字短名、完整aria/卡片張數、窄框全文及中心命中並開viewer核全名；桌機備戰hard2必×2、手機hard2必2，classic17種實卡覆蓋衝天/火箭/回力。classic逐枚捲至可見檢查，非17枚同時顯示。viewer放大/Esc/原主卡動作與復盤兩組當步更新、換備戰、離場/跨局關閉皆綠，共21scene單次通過，inspectionWrites0、errors[]；API假資料且外網阻擋、卡圖等比例占位、非iPhone實機。證據release-ui.json/log及19PNG。所有產品src/static/oracle-admin對58acbe71無新變，完整958即將凍結執行，最終准推仍待報表。
 
+完整驗收於91b37700完成：958/958全部通過，28.62分鐘；E:/sb-energy-6610-reviewed/__rt/full.json，full.log。escape/mainHard/restoreFailed/timeout皆0、statusChanged=false；87支共260項暫存差異全部還原，SHALLOW0，既有6378 ENV1與6263 Windows PLATFORM1逐項與前版一致。包含修後harness+35免疫及新16條守衛，無only代替全套。產品src/static/oracle-admin對58acbe71逐位元Git零diff，雙build與21真頁仍有效，所有程序結束、subst釋放、tracked乾淨。外部彙總acceptance-reviewed.json。最終獨立energy_labels_6610_review（獨立Codex、非Opus且未參與實作）自行解析完整958報表、各skip/還原數、16/0與舊29/0、六條BASE真行為紅/六有效突變/N1還原、雙build/21真頁/產品零diff，明確准推；P1/P2/P3未解均0。後續僅本段docs提交，不需重跑產品驗收。push後再核GitHub雙CI與線上；正式站由站長自行redeploy-oracle.bat，AI不執行部署。
+
 ## v6.609（2026-10-29）特殊能量標記與附加卡片檢視
 
 BASE `e0abc828`（v6.608）。站長批准對戰特殊能量短名稱／金棕配色／備戰一種具名多種合併、點選查看官方卡圖。卡片張數與供能單位分離；17種H/I/J明確短名，異圖同名合併，未知卡不猜。中央附加能量viewer依gameId+iid追蹤當步公開場上卡，復盤開窗暫停、Esc逐層關圖再清單。手機原卡片動作用原生主按鈕，徽章為兄弟不嵌套；桌機4桌墊雙方、觀戰/復盤共用。初審special_energy_6609_review：P2×2備戰特殊徽章縮寬/鍵盤Esc被吞、P3×2資訊欄手勢/未知卡桌機gate皆修，獨立scratch複測修後0~8種基本混合均可點；最終守衛／突變／build／全套／准推待驗。未改engine/能量供應/AI/server/API，部署僅前端。
