@@ -1,3 +1,4 @@
+import { revertV6609Game } from './lib/revert-v6609-energy-ui.mjs';
 // v6.293 守衛：/friends 頁（含私聊面板）改成墨綠配色 ＋ 頂端假分頁列
 //
 // 守什麼（⚠ 不只驗字串存在：色票對齊、分頁列版面、變數是否真的解析得出來，全部走 DOM／求值）：
@@ -782,8 +783,10 @@ await T('E1e ⭐⭐ 正對照：v6.418 的還原表少列一條 ⇒ revertV6418 
     '合法改動不存在時 revertV6418 沒有紅');
 });
 await T('E1g ⭐⭐ 正對照：v6.441 的還原表不會洗掉無關改動；哨兵或呼叫點不見時必須紅', () => {
-  const r = battleRegionOf(GAME);
-  const mutated = GAME.replace(BATTLE_START, BATTLE_START + '<!-- v6441-probe -->');
+  // Rule 40：只精確剝除609的blueDeco compact接線，再測原6441還原器。
+  const raw = GAME.includes('// >>> v6609-energy-view') ? revertV6609Game(GAME) : GAME;
+  const r = battleRegionOf(raw);
+  const mutated = raw.replace(BATTLE_START, BATTLE_START + '<!-- v6441-probe -->');
   assert.notStrictEqual(sha256(revertV6441(battleRegionOf(mutated))), sha256(revertV6441(r)), 'revertV6441 把無關改動洗掉了 ⇒ E1 恆真');
   assert.throws(() => revertV6441(r.replace('>>> ' + V6441_BLUE_TAG, 'xxx')), /恰出現一次/, '哨兵消失時沒有紅');
   assert.throws(() => revertV6441(r.replace(V6441_BATTLE_EDITS[2][0], V6441_BATTLE_EDITS[2][1])), /恰出現/, '呼叫點不見時沒有紅');

@@ -97,6 +97,24 @@ await T('B11 桌墊旁置只作用於特殊能量、純基本保持原位',async
   assert.equal(position,ids[0]==='e'?12:offset,JSON.stringify({layout,ids,position}));
  }
 });
+await T('B12 真頁面快捷鍵：關窗保留、開窗抑制Enter/L、Esc先關卡圖再清清單',async()=>{
+ const fn=game.match(/function onGlobalKey\(e: KeyboardEvent\) \{[\s\S]*?^  \}/m)?.[0];assert.ok(fn);
+ const code=(await build({stdin:{contents:fn,loader:'ts'},write:false,format:'esm'})).outputFiles[0].text;
+ const execute=new Function('seed',`
+  let energyViewHost=seed.host?{}:null,energyView=seed.host?{iid:'test'}:null,zoomCard=seed.zoom?{}:null;
+  let lightboxUrl=null,zoomStack=[],isTReplay=false,replayDeckSeat=null,floatingEvoMenu='keep',floatingRetreatMenu='keep',viewDiscardFor=1,selectionPicked=new Set(['keep']),selectionCounts={keep:1};
+  const calls=[];const runKbdShortcut=e=>{calls.push(e.key);return e.key!=='Escape';};
+  const closeZoom=()=>{calls.push('closeZoom');zoomCard=null;};
+  const popZoom=()=>{calls.push('popZoom');};const closeLightboxImg=()=>{calls.push('lightbox');};const closeReplayDeck=()=>{calls.push('replayDeck');};
+  ${code}
+  onGlobalKey({key:seed.key});return{calls,list:!!energyView,zoom:!!zoomCard,picks:selectionPicked.size};`);
+ for(const key of ['Enter','l','L']){
+  assert.deepEqual(execute({key,host:false,zoom:false}).calls,[key]);
+  assert.deepEqual(execute({key,host:true,zoom:false}),{calls:[],list:true,zoom:false,picks:1});
+ }
+ assert.deepEqual(execute({key:'Escape',host:true,zoom:true}),{calls:['Escape','closeZoom'],list:true,zoom:false,picks:1});
+ assert.deepEqual(execute({key:'Escape',host:true,zoom:false}),{calls:['Escape'],list:false,zoom:false,picks:1});
+});
 await T('P 無能量時不產生假徽章',async()=>{await mount([]);assert.equal(await page.locator('#badges button').count(),0);assert.deepEqual(errors,[]);});
 }finally{await browser.close();}
 console.log(`v6609 PASS ${pass} / FAIL ${fail}`);if(fail)process.exitCode=1;

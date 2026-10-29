@@ -226,6 +226,8 @@ if (setupBox && playBox) {
 {
   const markup = markupBeforeStyle(src);
   const cssNoCmt = stripCssComments(style);
+  // 同一掃描器用合成正負對照自證，不把真元件混用class的數量釘死。
+  function scanMixed(markup) {
   const tagsOf = new Map();
   for (const m of markup.matchAll(/<(div|span|button|section|footer|header|label|a)\b([^>]*)>/g)) {
     const tag = m[1];
@@ -236,7 +238,13 @@ if (setupBox && playBox) {
     }
   }
   const mixed = [...tagsOf.entries()].filter(([, s]) => s.has('button') && [...s].some(t => t !== 'button')).map(([c]) => c);
-  chk('家族掃描：有掃到 div/button 混用的 class（掃描器沒空轉）', mixed.length >= 3, mixed.join(','));
+    return { tagsOf, mixed };
+  }
+  const { tagsOf, mixed } = scanMixed(markup);
+  chk('家族掃描正對照：同class的div/button必須列入',
+      JSON.stringify(scanMixed('<div class="mp-probe"></div><button class="mp-probe"></button>').mixed) === '["mp-probe"]');
+  chk('家族掃描負對照：同tag或不同class不能誤列混用',
+      scanMixed('<div class="mp-probe"></div><div class="mp-probe"></div><button class="mp-other"></button>').mixed.length === 0);
   for (const c of mixed) {
     const rules = cssNoCmt.split('}').filter(r => new RegExp('\\.' + c + '(?![\\w-])').test(r.split('{')[0] || ''));
     const joined = rules.join('}');

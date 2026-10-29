@@ -8,6 +8,7 @@
  * HEAD-FAIL：靜態判準餵 v6.487 必須紅。
  * Run: node scripts/test-v6488-kbd-shortcuts.mjs
  */
+import { revertV6609Game } from './lib/revert-v6609-energy-ui.mjs';
 import { readFileSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -24,7 +25,9 @@ let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c) { pass++; console.log('  PASS ' + n); } else { fail++; console.log('  FAIL ' + n + (x !== undefined ? ' — ' + x : '')); } };
 
 const judge = (get) => {
-  const g = get('src/routes/game/+page.svelte');
+  const raw = get('src/routes/game/+page.svelte');
+  // Rule 40：609開啟檢視器時優先隔離快捷鍵；新gate另由609真函式行為測試守住。
+  const g = raw.includes('// >>> v6609-energy-view') ? revertV6609Game(raw) : raw;
   return {
     S1: /function onGlobalKey\(e: KeyboardEvent\) \{\n\s*if \(runKbdShortcut\(e\)\) return;/.test(g),
     S2: /<KbdShortcutsSetting \/>\n\s*<\/div>\n\s*<\/div>\n\s*\{\/if\}/.test(g),

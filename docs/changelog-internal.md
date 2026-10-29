@@ -24,6 +24,10 @@ BASE `e0abc828`（v6.608）。站長批准對戰特殊能量短名稱／金棕�
 
 guard-position28/0、BASE6綠22紅、16有效突變/N1/位元還原綠、精確24hunk/48拒絕/extra保留均已完成；完整957即將以此產品凍結重跑，最終獨立准推尚待完整報表，不採先前僅2支的中止輪。
 
+完整957於91c016e4跑完32.47分鐘：951綠6紅，原報不改（E:/sb-energy-6609-reviewed/__rt/full.json / full-reviewed.log）。runner escape/mainHard/restoreFailed/timeout皆0、statusChanged=false；87支共260項暫存差異全部還原，6378 ENV1及6263 Windows PLATFORM1與前版相同。三支6596/6599/6600的本機HTTP fixture只服務root，而我提供BASE_PATH=/ptcg-tw-sim的正常Pages快照導致資產404與等待超時；此為建置使用方式不符，將用同產品Firebase模式BASE_PATH=''重新建置補驗，並非Oracle fake API問題。另三支舊測試：6293 E1g直接還原6441，漏先精確剝本版blueDeco compact；6488要求快捷鍵第一行，但本版能量清單優先隔離；6186把混用標籤class種類數>=3當自證，本版mp-active合理改全div後剩2種。皆只改測試：6293 E1g與6488判準先精確剝609，保留原regex/BASE/缺失/無關差異；6186共用scanner合成正負對照，實檔仍遍歷所有mixed且幾何需box-sizing，沒有改threshold成2。單跑39/0、12/0、24/0，真mp-chip移除box-sizing的外部MPB_FILE突變確1紅。
+
+同獨立審查者要求補新gate行為，B12抽真onGlobalKey透過esbuild轉JS，以spy驗關窗Enter/l/L照舊、開窗抑制、Esc先關圖不清list再清list且保原selection。最終guard-keyboard29/0、head-fail-keyboard BASE6綠23紅，mutants-keyboard17/17有效突變（M17移除gate由B12紅）＋N1＋位元還原全綠。五檔test-only已複審通過；src/static/oracle-admin產品對9467完全未改，先前雙build及35實頁仍有效。normal root acceptance build及runner相關補驗、最終准推尚待完成；不得稱此輪957一次全綠。
+
 ## v6.608（2026-10-29）私看牌庫選牌與公開資訊修正
 
 BASE `8939a61d`（v6.607），最終產品`b72f8e3a`。台灣官方寶可裝置3.0 Q&A（起始組合ex；PTCG_RULES.md L951）直接允許私下查看頂7張即使有支援者仍可不選；霸者咆哮／女服務生採同型類推改minCount0。霸者仍限頂4基本能量（不限火雷）、只附自己，未選卡只洗後放底，深層順序不變。女服務生已選能量後的目標仍必選，補validIids使既有中央閘擋空送與非法目標。IRON_RULES26b與本機工作手冊校正舊「自己看過＝公開資訊」誤述；6091相反斷言依Rule40改正，6104只校正誤述、掃描未放寬。
