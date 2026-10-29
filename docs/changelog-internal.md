@@ -1,5 +1,9 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.608（2026-10-29）私看條件式能量可不選
+
+BASE `8939a61d`（v6.607）。本輪audit為H/I/J live卡「私下查看牌庫上/下方後帶條件選牌」，不是聲稱所有遊戲規則全無錯誤。依台灣官方寶可裝置3.0直接Q&A（即使有支援者可不選），霸者咆哮與女服務生同型類推改minCount0；自己查看不等於公開資訊，修正IRON_RULES26b舊摘要。霸者仍可選所有基本能量、只附自身、未選top4只洗後放底，不限火雷。女服務生後續已選能量的目標仍必選，補validIids使中央閘擋空送及非法目標；獨立審查重現原P2且修後解除。新guard完整applyAction雙座位/4印刷/短空庫/正向附能/不選/資訊/守恆及17leafproducer，37/0；BASE27綠10紅；突變/雙build/完整全套/最終審查待完成。跨卡95去重效果217印刷，真正查看28種中17同型，其他保留，細節docs/audit-private-top-choice.md。
+
 ## v6.607（2026-10-28～29）修正手機對戰紀錄跟隨
 
 BASE `b13354f3`（v6.606）。手機共用log的RAF晚於DOM更新，native scroll可用新scrollHeight誤把mpLogPinned設false，之後永久停留舊位置。以DOM observer同步跟隨及ResizeObserver延續底部意圖，手動上捲暫停、回底恢復、卸載清理。僅MobilePortraitBattle及新action，桌機反向排版經四桌墊、雙方與觀戰實頁確認正常。前harness+35免疫36/36；最終新guard15/0，BASE12正對照綠3行為紅，9突變全殺、N1與逐位元還原回綠。最終完整955/955及獨立複審通過。

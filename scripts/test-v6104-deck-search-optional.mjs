@@ -10,8 +10,8 @@
  * **早於 v4.942 的統一裁定**；當年按 `hasX ? 1 : 0` 字面 grep 修 13 處時，這兩個等價拼法
  * （`validIids.length > 0 ? 1 : 0`）倖存了下來。
  *
- * ⚠ 對照組（**不可**一併改成可不選）：女服務生、霸者咆哮 —— 那是「查看牌庫上方 N 張」，
- *   N 張已攤開＝**已知資訊**，卡面沒有「可以」就是必選；那類的動態 minCount 是正確的。
+ * v6.608 校正：私下查看頂N張並選特定類別也可不選，女服務生／霸者咆哮由新行為守衛驗證。
+ *   本支掃描僅守整副牌庫搜尋，不拿TOP標記推定私看必選。
  */
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
@@ -109,7 +109,7 @@ ok('賽吉：牌庫有可進化的卡時 minCount 仍為 0', () => {
 
 console.log('② 靜態端：牌庫搜尋不得再出現動態 minCount（含等價拼法）');
 
-ok('全站掃描：整副牌庫搜尋不得用動態 minCount（看頂 N 張的已知資訊型除外）', () => {
+ok('全站掃描：整副牌庫搜尋不得用動態 minCount（看頂 N 張另由逐卡行為驗證）', () => {
   const stack = [join(ROOT, 'src/lib/game')];
   const hits = [];
   while (stack.length) {
@@ -123,7 +123,7 @@ ok('全站掃描：整副牌庫搜尋不得用動態 minCount（看頂 N 張的�
       const lines = readFileSync(full, 'utf8').split('\n');
       lines.forEach((ln, i) => {
         if (!/minCount:\s*(has\w+|\w+\.length\s*>\s*0)\s*\?\s*1\s*:\s*0/.test(ln)) return;
-        // 同一個 withPending 區塊內出現「看頂 N 張」的標記 ⇒ 已知資訊型，合法
+        // 同一個 withPending 區塊內出現「看頂 N 張」的標記 ⇒ 不在本支整副搜尋掃描範圍；不能據此判定必選
         const ctx = lines.slice(Math.max(0, i - 12), i + 13).join('\n');
         if (/TOP_?\d|TOP_N|top\d*Iids/.test(ctx)) return;
         hits.push(`${ent.name}:${i + 1}: ${ln.trim()}`);

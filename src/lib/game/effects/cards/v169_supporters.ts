@@ -173,18 +173,21 @@ regG('女服務生', (st, idx) => st.players[idx].deck.length > 0 && (!!st.playe
 reg('女服務生', (st, idx, pool) => {
   const top6 = st.players[idx].deck.slice(0, 6);
   if (top6.length === 0) return addLog(st, '女服務生：牌庫為空', idx);
-  st = addLog(st, `女服務生：查看牌庫上方 ${top6.length} 張，選 1 張基本能量附給自己寶可夢`, idx);
+  st = addLog(st, `女服務生：查看牌庫上方 ${top6.length} 張，可選 1 張基本能量附給自己寶可夢`, idx);
   // v5.964：filter 'BasicEnergy' → 'BasicEnergy:TOP_N'(UI/ai 依 params.topIids 交集,否則 picker
-  //   顯示整副牌庫的基本能量,違反卡面「上方6張」且可造成同 iid 複製卡)。top6 內有基本能量=已知資訊必選。
-  const hasBasicInTop6 = top6.some(c => {
-    const card = pool.get(c.cardId);
-    return !!card && card.supertype === 'Energy' && card.subtype === 'Basic';
-  });
+  //   顯示整副牌庫的基本能量,違反卡面「上方6張」且可造成同 iid 複製卡)。
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'BasicEnergy:TOP_N',
-    minCount: hasBasicInTop6 ? 1 : 0, maxCount: 1,
+    // >>> v6608-private-typed-peek
+    // 同型類推：起始組合ex官方Q&A（寶可裝置3.0）：
+    // Q：使用物品卡「寶可裝置3.0」，查看自己的牌庫上方7張卡中，即使有「支援者」卡，也可以不加入手牌中嗎？
+    // A：可以。
+    // https://asia.pokemon-card.com/tw/rules/search/?keyword=寶可裝置3.0
+    // 自己查看仍是非公開資訊；基本能量的條件式選取可不選，與無條件任選／公開區域不同。
+    minCount: 0, maxCount: 1,
+    // <<< v6608-private-typed-peek
     effectKey: 'waitress-pick-energy',
     params: { topIids: top6.map(c => c.iid) },
   });
@@ -216,7 +219,11 @@ regR('waitress-pick-energy', (st, idx, iids, params, pool) => {
     actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'waitress-attach',
-    params: { includeActive: true, energyIid, energyName, topIids },
+    // >>> v6608-waitress-required-target
+    // 能量已選定後，附加目標仍必選；宣告己方場上候選，交由中央閘阻擋空送／非法目標。
+    params: { includeActive: true, energyIid, energyName, topIids,
+      validIids: [st.players[idx].active, ...st.players[idx].bench].filter((c): c is CardInstance => !!c).map(c => c.iid) },
+    // <<< v6608-waitress-required-target
   });
 });
 regR('waitress-attach', (st, idx, iids, params, pool) => {

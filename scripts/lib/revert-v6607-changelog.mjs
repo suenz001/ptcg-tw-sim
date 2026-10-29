@@ -1,3 +1,4 @@
+import { revertV6608Changelog } from './revert-v6608-changelog.mjs';
 // v6.607合法公開更新紀錄的精確還原；額外異動不移除。
 const PAIRS = {
   "static/changelog.html": [
@@ -35,4 +36,4 @@ const PAIRS = {
     ]
   ]
 };
-export function revertV6607Changelog(path, source) {let s=source.replace(/\r\n/g,'\n');const pairs=PAIRS[path];if(!pairs)throw Error('未知路徑 '+path);for(const[a,b]of pairs){if(s.split(a).length!==2)throw Error('6607更新紀錄錨點缺失或重複 '+path);s=s.replace(a,b);}return s;}
+export function revertV6607Changelog(path, source) {let s=revertV6608Changelog(path, source).replace(/\r\n/g,'\n');const pairs=PAIRS[path];if(!pairs)throw Error('未知路徑 '+path);for(const[a,b]of pairs){if(s.split(a).length!==2)throw Error('6607更新紀錄錨點缺失或重複 '+path);s=s.replace(a,b);}return s;}

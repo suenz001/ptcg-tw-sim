@@ -1,7 +1,7 @@
 /**
  * v6.091 三件事的守衛
  *  A) 「傳說」兩張合一競技場的切半顯示擴到 picker／棄牌區／牌組編輯器（Wilson 交辦）
- *  B) 霸者咆哮 minCount：卡面「選擇1張」＋4 張已被玩家看過（已知資訊）→ 有候選時必選
+ *  B) 霸者咆哮 minCount：v6.608校正：私看帶條件選取可不選（類推官方寶可裝置3.0 Q&A）
  *  C) 補 4 個零測試覆蓋（M6 全卡 Fable 審查指出）：三個自傷招式 + 主持人的帶動
  */
 import { build } from 'esbuild';
@@ -128,13 +128,13 @@ const mkState = () => { const m = () => ({ name: 'P', active: null, bench: [], h
   const fn = mod.getAbilityFn?.('超級烈空坐ex', '霸者咆哮', 0);
   ok(!!ray && !!fire && !!fn, 'B 前置：找得到超級烈空坐ex／霸者咆哮');
   if (ray && fire && fn) {
-    // 牌庫上方 4 張含基本能量 → 必選（minCount 1）
+    // v6.608 Rule 40：舊斷言本身是bug；私下查看不等於公開，可選0
     const s1 = mkState();
     s1.players[0].active = inst(ray);
     s1.players[0].deck = [inst(fire), inst(potion), inst(potion), inst(potion), inst(potion)];
     const r1 = fn(s1, 0, pool, s1.players[0].active);
-    ok(r1.pendingSelection?.minCount === 1,
-      `⭐ B 上方4張有基本能量 → minCount=1（必選），實得 ${r1.pendingSelection?.minCount}`);
+    ok(r1.pendingSelection?.minCount === 0,
+      `⭐ B 上方4張有基本能量 → minCount=0（可不選），實得 ${r1.pendingSelection?.minCount}`);
     ok(r1.pendingSelection?.maxCount === 1, 'B maxCount 仍是 1');
     // 上方 4 張完全沒有基本能量 → minCount 0（否則玩家會卡在關不掉的 picker）
     const s2 = mkState();
@@ -193,5 +193,5 @@ const mkState = () => { const m = () => ({ name: 'P', active: null, bench: [], h
   }
 }
 
-console.log(`v6091 切半顯示 + 霸者咆哮必選 + 補覆蓋：PASS ${pass} / FAIL ${fail}`);
+console.log(`v6091 切半顯示 + 霸者咆哮可不選 + 補覆蓋：PASS ${pass} / FAIL ${fail}`);
 if (fail > 0) process.exit(1);

@@ -129,7 +129,7 @@ regAByName('超級烈空坐ex', '霸者咆哮', (st, idx, pool, cardInst) => {
   const basicEnergyIids = top4
     .filter(c => { const cc = pool.get(c.cardId); return cc?.supertype === 'Energy' && cc.subtype === 'Basic'; })
     .map(c => c.iid);
-  const s = addLog(st, `霸者咆哮：查看牌庫上方 ${top4.length} 張，選 1 張基本能量附於自己`, idx);
+  const s = addLog(st, `霸者咆哮：查看牌庫上方 ${top4.length} 張，可選 1 張基本能量附於自己`, idx);
   return withPending(s, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     // ⭐ v6.109（玩家回報）：只把「翻到的 4 張裡的基本能量」放進可勾區，
@@ -138,17 +138,21 @@ regAByName('超級烈空坐ex', '霸者咆哮', (st, idx, pool, cardInst) => {
     //   ⚠ 用既有中央 filter 'BasicEnergy:TOP_N'（讀 params.topIids），不新增 filter 字面量
     //   ——新字面量要 UI／ai.ts／lint Check S 三處都接，是漂移的來源。
     filter: 'BasicEnergy:TOP_N',
-    // v6.091：卡面「從其中**選擇1張**基本能量卡」沒有「最多」字樣，且這 4 張已經被玩家看過
-    //   ＝已知資訊 → 有候選時必選（站內既有規則：已知資訊的選擇不給「不選」鈕）。
-    //   4 張裡完全沒有基本能量時 minCount 必須是 0，否則玩家會被卡在關不掉的 picker。
-    minCount: basicEnergyIids.length > 0 ? 1 : 0, maxCount: 1,
+    // >>> v6608-private-typed-peek
+    // 同型類推：起始組合ex官方Q&A（寶可裝置3.0）：
+    // Q：使用物品卡「寶可裝置3.0」，查看自己的牌庫上方7張卡中，即使有「支援者」卡，也可以不加入手牌中嗎？
+    // A：可以。
+    // https://asia.pokemon-card.com/tw/rules/search/?keyword=寶可裝置3.0
+    // 自己查看仍是非公開資訊；基本能量的條件式選取可不選，與無條件任選／公開區域不同。
+    minCount: 0, maxCount: 1,
+    // <<< v6608-private-typed-peek
     effectKey: 'm6-overlord-roar',
     params: {
       topIids: top4.map(c => c.iid),
       top4Iids: top4.map(c => c.iid),
       validIids: basicEnergyIids,
       selfIid,
-      titleOverride: '霸者咆哮：牌庫上方 4 張中的基本能量（選 1 張附於這隻寶可夢）',
+      titleOverride: '霸者咆哮：牌庫上方 4 張中的基本能量（可不選；選 1 張附於這隻寶可夢）',
     },
   });
 });
