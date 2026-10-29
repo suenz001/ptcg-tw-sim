@@ -4,6 +4,14 @@
 
 BASE `e0abc828`（v6.608）。站長批准對戰特殊能量短名稱／金棕配色／備戰一種具名多種合併、點選查看官方卡圖。卡片張數與供能單位分離；17種H/I/J明確短名，異圖同名合併，未知卡不猜。中央附加能量viewer依gameId+iid追蹤當步公開場上卡，復盤開窗暫停、Esc逐層關圖再清單。手機原卡片動作用原生主按鈕，徽章為兄弟不嵌套；桌機4桌墊雙方、觀戰/復盤共用。初審special_energy_6609_review：P2×2備戰特殊徽章縮寬/鍵盤Esc被吞、P3×2資訊欄手勢/未知卡桌機gate皆修，獨立scratch複測修後0~8種基本混合均可點；最終守衛／突變／build／全套／准推待驗。未改engine/能量供應/AI/server/API，部署僅前端。
 
+本版最終產品744a3c3e，後續僅測試與紀錄。主代理自查：derived原只隱藏離場視窗但保留選取，復盤跳回會自行重開；已加effect清除缺失host/跨局選取，B9抽實際頁面runes驗更新、active換bench、離場清空、恢復不自開與跨局往返，獨立複審通過。審查另P3原button轉div的文字對齊與本節標題已修；B8以BASE真button/HEAD新div證明都置中，移除對齊突變確紅。最終guard26/0、BASE6正對照綠20紅，14有效突變全由指定非P的A/B行為斷言攔下、N1與逐位元還原回綠。早期11/12/13突變與中途測試保留，不混充最終14。精確game10/mobile8/changelog6個hunks共24，五檔全等BASE、48缺失/重複拒絕、無關額外差異保留（reverter-proof.json）。
+
+前harness+35免疫36/36；初後相關47首45綠2紅：6606整頁比對未剝本版UI、6604抽Escape的舊fixture漏energyViewHost。35334僅補精確還原與空態，不放寬原卡背/私密資料/分層關閉斷言；完整957驗收將覆蓋修後產品與兩支測試。最終Pages/Oracle雙build及SEO4951皆成功，immutable build-final-pages/oracle；Oracle只配置假API域供測試，非正式部署。此前因對齊及生命週期修正中止的兩次建置保留pre-align/pre-lifecycle logs，不能當最終。建置兩home-video僅EOL，normalized等HEAD後具名恢復，不提交外來內容。
+
+真正最終Oracle發行頁19room情境：390px深淺×P1/P2/觀戰，1366px四桌墊×三角色及新版桌墊淺色；戰鬥區具名、備戰多種類合併、完整名稱/張數、點卡放大、Esc先回清單再關、主卡原動作保留，查看沒有新增gameState寫入、pageerrors[]。classic夾17種特殊，另B7幾何限制及捲動測試。實際匯入復盤390/1366兩組，當步能量變化/同iid換備戰/離場關閉/跨game關閉皆綠，共21scene。初外部fixture兩次把進房初始化同步誤算為查看寫入，已紀錄join stage且確認changedKeys=[]後以進房穩定後的基線驗查看新增寫入0；另classic沒有layout-classic class、卡池非同步尚未載入的判斷已校正外部fixture，原log保留，未改產品。所有API為隔離假房、外網阻擋、卡圖以等比例替代圖，非iPhone實機、未碰正式資料。
+
+證據E:/ptcg-tw-sim-local/special-energy-6609-evidence：guard-lifecycle.log、head-fail-final-lifecycle.log、mutants-lifecycle.log、reverter-proof.json、build-final-*.log、release-ui.log/release-ui.json與19張實頁PNG；完整957及最終准推待完成。獨立special_energy_6609_review已核全部產品/守衛修正，最終仍須其解析全套與最新build/UI才准推。本版未改engine/effects/AI/server/API，BAT唯讀核redeploy-oracle.bat呼叫遠端前端部署、update-tournament會重建引擎；本版只需站長自行redeploy-oracle.bat，AI不執行部署。
+
 ## v6.608（2026-10-29）私看牌庫選牌與公開資訊修正
 
 BASE `8939a61d`（v6.607），最終產品`b72f8e3a`。台灣官方寶可裝置3.0 Q&A（起始組合ex；PTCG_RULES.md L951）直接允許私下查看頂7張即使有支援者仍可不選；霸者咆哮／女服務生採同型類推改minCount0。霸者仍限頂4基本能量（不限火雷）、只附自己，未選卡只洗後放底，深層順序不變。女服務生已選能量後的目標仍必選，補validIids使既有中央閘擋空送與非法目標。IRON_RULES26b與本機工作手冊校正舊「自己看過＝公開資訊」誤述；6091相反斷言依Rule40改正，6104只校正誤述、掃描未放寬。
