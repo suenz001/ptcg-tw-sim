@@ -4,7 +4,7 @@
 
 BASE `e0abc828`（v6.608）。站長批准對戰特殊能量短名稱／金棕配色／備戰一種具名多種合併、點選查看官方卡圖。卡片張數與供能單位分離；17種H/I/J明確短名，異圖同名合併，未知卡不猜。中央附加能量viewer依gameId+iid追蹤當步公開場上卡，復盤開窗暫停、Esc逐層關圖再清單。手機原卡片動作用原生主按鈕，徽章為兄弟不嵌套；桌機4桌墊雙方、觀戰/復盤共用。初審special_energy_6609_review：P2×2備戰特殊徽章縮寬/鍵盤Esc被吞、P3×2資訊欄手勢/未知卡桌機gate皆修，獨立scratch複測修後0~8種基本混合均可點；最終守衛／突變／build／全套／准推待驗。未改engine/能量供應/AI/server/API，部署僅前端。
 
-本版最終產品744a3c3e，後續僅測試與紀錄。主代理自查：derived原只隱藏離場視窗但保留選取，復盤跳回會自行重開；已加effect清除缺失host/跨局選取，B9抽實際頁面runes驗更新、active換bench、離場清空、恢復不自開與跨局往返，獨立複審通過。審查另P3原button轉div的文字對齊與本節標題已修；B8以BASE真button/HEAD新div證明都置中，移除對齊突變確紅。最終guard26/0、BASE6正對照綠20紅，14有效突變全由指定非P的A/B行為斷言攔下、N1與逐位元還原回綠。早期11/12/13突變與中途測試保留，不混充最終14。精確game10/mobile8/changelog6個hunks共24，五檔全等BASE、48缺失/重複拒絕、無關額外差異保留（reverter-proof.json）。
+本版初期產品744a3c3e，後續另有9467b133視覺修正版（最終結果見本節後段）。主代理自查：derived原只隱藏離場視窗但保留選取，復盤跳回會自行重開；已加effect清除缺失host/跨局選取，B9抽實際頁面runes驗更新、active換bench、離場清空、恢復不自開與跨局往返，獨立複審通過。審查另P3原button轉div的文字對齊與本節標題已修；B8以BASE真button/HEAD新div證明都置中，移除對齊突變確紅。最終guard26/0、BASE6正對照綠20紅，14有效突變全由指定非P的A/B行為斷言攔下、N1與逐位元還原回綠。早期11/12/13突變與中途測試保留，不混充最終14。精確game10/mobile8/changelog6個hunks共24，五檔全等BASE、48缺失/重複拒絕、無關額外差異保留（reverter-proof.json）。
 
 前harness+35免疫36/36；初後相關47首45綠2紅：6606整頁比對未剝本版UI、6604抽Escape的舊fixture漏energyViewHost。35334僅補精確還原與空態，不放寬原卡背/私密資料/分層關閉斷言；完整957驗收將覆蓋修後產品與兩支測試。最終Pages/Oracle雙build及SEO4951皆成功，immutable build-final-pages/oracle；Oracle只配置假API域供測試，非正式部署。此前因對齊及生命週期修正中止的兩次建置保留pre-align/pre-lifecycle logs，不能當最終。建置兩home-video僅EOL，normalized等HEAD後具名恢復，不提交外來內容。
 
@@ -27,6 +27,10 @@ guard-position28/0、BASE6綠22紅、16有效突變/N1/位元還原綠、精確2
 完整957於91c016e4跑完32.47分鐘：951綠6紅，原報不改（E:/sb-energy-6609-reviewed/__rt/full.json / full-reviewed.log）。runner escape/mainHard/restoreFailed/timeout皆0、statusChanged=false；87支共260項暫存差異全部還原，6378 ENV1及6263 Windows PLATFORM1與前版相同。三支6596/6599/6600的本機HTTP fixture只服務root，而我提供BASE_PATH=/ptcg-tw-sim的正常Pages快照導致資產404與等待超時；此為建置使用方式不符，將用同產品Firebase模式BASE_PATH=''重新建置補驗，並非Oracle fake API問題。另三支舊測試：6293 E1g直接還原6441，漏先精確剝本版blueDeco compact；6488要求快捷鍵第一行，但本版能量清單優先隔離；6186把混用標籤class種類數>=3當自證，本版mp-active合理改全div後剩2種。皆只改測試：6293 E1g與6488判準先精確剝609，保留原regex/BASE/缺失/無關差異；6186共用scanner合成正負對照，實檔仍遍歷所有mixed且幾何需box-sizing，沒有改threshold成2。單跑39/0、12/0、24/0，真mp-chip移除box-sizing的外部MPB_FILE突變確1紅。
 
 同獨立審查者要求補新gate行為，B12抽真onGlobalKey透過esbuild轉JS，以spy驗關窗Enter/l/L照舊、開窗抑制、Esc先關圖不清list再清list且保原selection。最終guard-keyboard29/0、head-fail-keyboard BASE6綠23紅，mutants-keyboard17/17有效突變（M17移除gate由B12紅）＋N1＋位元還原全綠。五檔test-only已複審通過；src/static/oracle-admin產品對9467完全未改，先前雙build及35實頁仍有效。normal root acceptance build及runner相關補驗、最終准推尚待完成；不得稱此輪957一次全綠。
+
+補驗完成：3137e306的同產品normal root build成功SEO4951，E:/sb-energy-6609-supp/__rt/supp.json單工9/9全部exit0，2.3分鐘，涵蓋原6紅及新guard29、anti-pattern lint、runner-chain hygiene。6596/6599/6600各18/18/19，6293/6488/6186各39/12/24皆0紅；6186的runner計數器不識lowercase passed而顯示0/0，實際out有24 passed/0 failed，非少跑。supp的escape/mainHard/restoreFailed/timeout均0、statusChanged=false、leak0、skip0。full＋supp以script鍵合併957唯一支全部exit0、未解0，非單次957全綠；舊87支260項暫存全還原，skip仍前版ENV1/PLATFORM1。驗收彙總acceptance-reviewed.json及原兩報表保留。產品src/static/oracle-admin對9467逐位元Git零diff，三建置與35實頁有效；所有程序已結束、subst釋放、工作樹乾淨。最後獨立報表核准待補，尚未push。
+
+最終獨立審查special_energy_6609_review（未參與實作；無Opus工具，採獨立代理）已自行解析full與supp、逐script合併957未解0，核29/0、BASE6/23、17有效突變/N1/還原、35實頁聯集、雙發行build及root acceptance、24hunk/48拒絕與產品零diff，明確准推；未解P1/P2/P3皆0。本節前段「待驗／待准推」是各輪當時狀態，以此最終結論為準。原桌機裁切P2、空span移基本列P3及早期其他P2/P3皆已修正複審，後續僅紀錄提交。GitHub CI與線上驗收在push後確認；正式站僅站長自行redeploy-oracle.bat，AI未執行部署。
 
 ## v6.608（2026-10-29）私看牌庫選牌與公開資訊修正
 
