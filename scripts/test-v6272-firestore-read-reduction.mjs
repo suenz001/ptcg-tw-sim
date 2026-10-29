@@ -760,8 +760,10 @@ const PREV_ALLOWED = [
   // ⚠⚠ v6.608 前移：PREV_SHA 從 8939a61d（v6.607）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
   // ⭐v6.608：私看條件式能量選取可不選，及女服務生附加目標驗證；三份公開更新紀錄按政策輪替。
+  'src/lib/game/effects/cards/m5_preview.ts',
   'src/lib/game/effects/cards/m6_wave14.ts',
   'src/lib/game/effects/cards/v169_supporters.ts',
+  'src/lib/game/effects/cards/v2750_h_wave2_full.ts',
   'src/lib/version.ts',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',

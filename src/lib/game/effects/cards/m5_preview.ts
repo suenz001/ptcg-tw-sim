@@ -1044,23 +1044,16 @@ regPost('熱帶龍|果實香氣', (state, aIdx, pool) => {
   const peekN = Math.min(6, p.deck.length);
   const top6 = p.deck.slice(0, peekN);
   const pokeIids = top6.filter(c => pool.get(c.cardId)?.supertype === 'Pokemon').map(c => c.iid);
-  if (pokeIids.length === 0) {
-    // 沒有寶可夢候選 — 仍重洗剩餘（卡面：剩餘放回牌庫並重洗）
-    return updatePlayer(
-      addLog(state, `果實香氣：牌庫上方 ${peekN} 張中無寶可夢，重洗牌庫`, aIdx),
-      aIdx,
-      p => ({ ...p, deck: shuffle([...p.deck]) }),
-    );
-  }
+  // v6.608：私下查看不公開候選數；無命中仍須讓本人查看這些卡，再選0並重洗。
   return withPending(
-    addLog(state, `果實香氣：牌庫上方 ${peekN} 張中含 ${pokeIids.length} 隻寶可夢，選任意數量加手牌`, aIdx),
+    addLog(state, `果實香氣：查看牌庫上方 ${peekN} 張，選任意數量寶可夢加手牌`, aIdx),
     {
       type: 'deck-search',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: 'Pokemon',
+      filter: 'Pokemon:TOP_N',
       minCount: 0, maxCount: pokeIids.length,
       effectKey: 'm5-tropius-fruit-aroma',
-      params: { validIids: pokeIids, titleOverride: '果實香氣：選任意數量寶可夢加手牌' },
+      params: { topIids: top6.map(c => c.iid), validIids: pokeIids, titleOverride: '果實香氣：選任意數量寶可夢加手牌' },
     },
   );
 });
