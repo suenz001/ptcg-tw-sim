@@ -1,3 +1,4 @@
+// ⚠ v6.611 起：這支只適用 v6.609／v6.610 當時的 SpecialEnergyBadges 元件（是那兩版的突變證據，不在測試鏈）；元件已改成一顆膠囊，現在跑會因錨點缺失而失敗，屬預期。
 import assert from 'node:assert/strict';
 import {cpSync,mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';

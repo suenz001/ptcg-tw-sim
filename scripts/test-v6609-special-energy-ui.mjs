@@ -53,17 +53,20 @@ const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];pa
 const css=mobile.match(/<style>([\s\S]*)<\/style>/)[1];
 async function mount(ids,compact=false,n=0){await page.setContent(`<style>${css}</style><div style="width:60px;height:80px"><div class="mp-slot" onclick="document.body.dataset.action='yes'"><button class="mp-card-open"></button><span class="mp-slot-eg"><span class="mp-slot-basic">${'<span class="mp-pip mp-pip-sm">鬥</span>'.repeat(n)}</span><span id="badges" style="display:contents"></span></span></div></div>`);await page.addScriptTag({content:js});await page.evaluate(spec=>mountEnergy(spec),{inst:host(ids),cards:[...pool],compact});}
 try{
-await T('B1 戰鬥區硬岩古舊富裕顯示名稱與卡片張數',async()=>{await mount(['a','d','b','c']);assert.deepEqual(await page.locator('#badges button').allTextContents(),['硬岩 ×2','古舊','富裕']);});
-await T('B2 備戰單種顯示完整短名、多種合成種類數',async()=>{await mount(['a','d'],true);assert.equal(await page.locator('#badges').innerText(),'硬岩 ×2');await mount(['a','d','b','c'],true);assert.equal(await page.locator('#badges').innerText(),'特3種');});
+// ⭐v6.611（Rule 40，站長 2026-10-30 看過對照圖同意）：戰鬥區的特殊能量合成一顆膠囊；桌機超過兩種寫「第一種 等N種」。
+//   意圖（看得到名稱與張數）保留：膠囊文字＋aria-label 逐種列出完整卡名與張數。
+await T('B1 戰鬥區硬岩古舊富裕顯示名稱與卡片張數',async()=>{await mount(['a','d','b','c']);assert.deepEqual(await page.locator('#badges button').allTextContents(),['硬岩×2 等3種']);const al=await page.locator('#badges button').getAttribute('aria-label');for(const t of ['硬岩【鬥】能量 2張','古舊能量 1張','富裕能量 1張'])assert.ok(al.includes(t),al);});
+await T('B2 備戰單種顯示完整短名、多種合成種類數',async()=>{await mount(['a','d'],true);assert.equal(await page.locator('#badges').innerText(),'硬岩×2');   /* ⭐v6.611（Rule 40）：膠囊內不留空格 */await mount(['a','d','b','c'],true);assert.equal(await page.locator('#badges').innerText(),'特3種');});
 await T('B3 點特殊徽章回傳正確host、不誤觸主卡',async()=>{await mount(['a'],true);const b=page.locator('#badges button');assert.equal(await b.count(),1);await b.click();assert.deepEqual(await page.evaluate(()=>window.inspect),['host-p2']);assert.equal(await page.locator('body').getAttribute('data-action'),null);});
 await T('B4 鍵盤Enter可開啟、Escape冒泡可關閉',async()=>{await mount(['a'],true);assert.equal(await page.locator('#badges button').count(),1);await page.evaluate(()=>window.addEventListener('keydown',e=>{if(e.key==='Escape')document.body.dataset.open='no'}));await page.locator('#badges button').focus();await page.keyboard.press('Enter');assert.equal(await page.locator('body').getAttribute('data-open'),'yes');await page.keyboard.press('Escape');assert.equal(await page.locator('body').getAttribute('data-open'),'no');});
 await T('B5 多種基本能量不能把備戰特殊徽章壓至零或推出卡位',async()=>{for(const n of [0,1,2,3,4,8]){await mount(['f'],true,n);assert.equal(await page.locator('#badges button').count(),1);const result=await page.locator('#badges button').evaluate(e=>{const r=e.getBoundingClientRect(),s=e.closest('.mp-slot').getBoundingClientRect();return{w:r.width,inside:r.right<=s.right&&r.left>=s.left,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===e}});assert.ok(result.w>25&&result.inside&&result.hit,JSON.stringify({n,...result}));}});
-await T('B6 已知特殊能量完整可及名稱及金色統一樣式',async()=>{await mount(['a']);assert.equal(await page.locator('#badges button').count(),1);assert.match(await page.locator('#badges button').getAttribute('aria-label'),/硬岩【鬥】能量 1張/);const c=await page.locator('#badges button').evaluate(e=>({fg:getComputedStyle(e).color,bg:getComputedStyle(e).backgroundColor}));assert.deepEqual(c,{fg:'rgb(255, 225, 160)',bg:'rgb(65, 54, 42)'});});
+await T('B6 已知特殊能量完整可及名稱及金色統一樣式',async()=>{await mount(['a']);assert.equal(await page.locator('#badges button').count(),1);assert.match(await page.locator('#badges button').getAttribute('aria-label'),/硬岩【鬥】能量 1張/);await page.mouse.move(0,0);/* ⭐v6.611：膠囊有 hover 底色 ⇒ 先把滑鼠移開再量（前一條點擊後滑鼠可能停在同一位置） */const c=await page.locator('#badges button').evaluate(e=>({fg:getComputedStyle(e).color,bg:getComputedStyle(e).backgroundColor}));assert.deepEqual(c,{fg:'rgb(255, 217, 138)',bg:'rgba(28, 22, 14, 0.86)'});   /* ⭐v6.611（Rule 40）：統一改成膠囊的金字＋深色半透明底（仍是同一組、所有種類一致） */});
 await T('B7 經典戰鬥區17種特殊能量不擠掉HP且可捲到最後一種',async()=>{
  const many=Object.keys(M?.SPECIAL_ENERGY_NAMES??{}).map((name,i)=>card('many-'+i,name));
  await page.setContent('<style>#slot{display:flex;width:320px;height:180px}#art{width:80px;flex:none}#info{flex:1;min-width:0}.active-nrg-col{display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;line-height:1}</style><div id="slot"><div id="art">卡圖</div><div class="active-nrg-col" id="badges"></div><div id="info">寶可夢名稱・HP</div></div>');
  await page.addScriptTag({content:js});await page.evaluate(spec=>mountEnergy(spec),{inst:host(many.map(c=>c.id)),cards:many.map(c=>[c.id,c]),compact:false});
- assert.equal(await page.locator('#badges button').count(),17);
+ // ⭐v6.611（Rule 40）：17 種合成一顆膠囊「… 等17種」；意圖（不擠掉 HP、最後一種也查得到）改驗：欄寬與高度上限照舊，aria-label 含最後一種、點一下開檢視
+ assert.equal(await page.locator('#badges button').count(),1);assert.match(await page.locator('#badges button').innerText(),/ 等17種$/);assert.ok((await page.locator('#badges button').getAttribute('aria-label')).includes(many[16].name+' 1張'));
  const r=await page.evaluate(()=>({info:document.querySelector('#info').getBoundingClientRect().width,col:document.querySelector('.active-nrg-col').getBoundingClientRect().width,overflow:document.querySelector('#slot').scrollWidth>320,badgeHeight:document.querySelector('.special-energy-badges').getBoundingClientRect().height}));
  assert.ok(r.info>=100&&r.col<=90&&!r.overflow&&r.badgeHeight<=110,JSON.stringify(r));
  await page.locator('#badges button').last().scrollIntoViewIfNeeded();await page.locator('#badges button').last().click();assert.deepEqual(await page.evaluate(()=>window.inspect),['host-p2']);
@@ -81,12 +84,13 @@ await T('B10 窄戰鬥欄三種特殊能量逐枚完整可見且可點、兩字�
  for(const ids of [['a','b','c'],[...Array(12).fill('f'),'b','c']]){
   await page.setContent('<div class="playmat"><div style="width:90px;height:110px;overflow:hidden" id="badges"></div></div>');
   await page.addScriptTag({content:js});await page.evaluate(spec=>mountEnergy(spec),{inst:host(ids),cards:[...pool],compact:false});
-  assert.equal(await page.locator('#badges button').count(),3);
+  // ⭐v6.611（Rule 40）：三種合成一顆膠囊「… 等3種」——意圖（窄欄完整可見、不截斷、可點）照驗這一顆
+  assert.equal(await page.locator('#badges button').count(),1);assert.match(await page.locator('#badges button').innerText(),/ 等3種$/);
   for(const button of await page.locator('#badges button').all()){
    const r=await button.evaluate(e=>{const b=e.getBoundingClientRect(),parent=e.closest('#badges').getBoundingClientRect(),hit=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2);return{text:e.textContent,full:e.scrollWidth<=e.clientWidth+1,inside:b.left>=parent.left&&b.right<=parent.right+1&&b.top>=parent.top&&b.bottom<=parent.bottom+1,hit:hit===e||e.contains(hit)};});
    assert.ok(r.full&&r.inside&&r.hit,JSON.stringify(r));await button.click();
   }
-  assert.deepEqual(await page.evaluate(()=>window.inspect),['host-p2','host-p2','host-p2']);
+  assert.deepEqual(await page.evaluate(()=>window.inspect),['host-p2']);
  }
 });
 await T('B11 桌墊旁置只作用於特殊能量、純基本保持原位',async()=>{
