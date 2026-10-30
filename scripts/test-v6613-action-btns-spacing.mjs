@@ -66,6 +66,18 @@ function staticChecks(src) {
   r.S1 = !!inBlock && allBlue && /gap:6px/.test(box) && /flex-wrap:nowrap/.test(box) && /align-items:stretch/.test(box) && !/contain:size/.test(body)
     && /flex:1 1 0/.test(btn) && /min-height:22px/.test(btn) && /max-height:32px/.test(btn) && /max-height:38px/.test(big) && /flex-grow:4/.test(big) && /margin-top:6px/.test(sep);
   r.S1n = JSON.stringify({ inBlock: !!inBlock, allBlue, n: sels.length, box, btn, big, sep });
+  // ⭐v6.614（Rule 40）：站長 2026-10-31 裁定新版桌墊 <1024 改用電腦版格線，上面那段直排規則已移除。
+  //   本支要守的意圖（直排大螢幕的行動鈕：可伸縮、最小 22／24、最大 38／32、間距 6、撐滿槽位、只限新版桌墊）改由 v6614 哨兵承擔，
+  //   數值一個都不放寬；只接受「v6614 哨兵在 1023 區塊內且寫的是同一組數值」這一種替代，不是任意寫法都放行。
+  if (!r.S1) {
+    const a = src.indexOf('/* >>> v6614-blue-narrow-desktop */'), b = src.indexOf('/* <<< v6614-blue-narrow-desktop */');
+    const blk = blocks.find((x) => a > x.start && b < x.end);
+    const seg = blk && b > a ? p.slice(a, b) : '';
+    const g = decl(seg, '.battle-root:has(.playmat.layout-blue) .playmat.layout-blue.layout-fable .action-bar > .action-btns') || '';
+    r.S1 = !!blk && /grid-template-rows:minmax\(24px, 38px\) minmax\(24px, 38px\) minmax\(auto, 38px\) minmax\(24px, 38px\) minmax\(22px, 32px\);/.test(g)
+      && /grid-auto-rows:minmax\(22px, 32px\);/.test(g) && /gap:6px;/.test(g) && /align-items:stretch;/.test(g);
+    r.S1n += ' ／ v6614 替代：' + JSON.stringify({ inBlock: !!blk, g });
+  }
   // S2 ≥1024 固定槽位列高不動（媒體查詢之外的兩條原規則逐字仍在）
   r.S2 = /\.playmat\.layout-fable \.action-bar > \.action-btns\{\s*grid-area:actions;[^}]*grid-template-rows:38px 38px 38px 34px 34px;[^}]*gap:3px;/.test(p)
     && /\.playmat\.layout-blue \.action-bar > \.action-btns\{ grid-template-rows:34px 34px 34px 30px 30px; grid-auto-rows:30px; \}/.test(p);
@@ -137,7 +149,8 @@ async function browserChecks(buildDir) {
       if (!g.myTurn || !m) issues.push('沒有打到自己的回合');
       else {
         const { btns, zoom, atkCount } = m;
-        if (m.disp !== 'flex') issues.push('不是直排（' + m.disp + '）');
+        // ⭐v6.614（Rule 40）：新版桌墊 <1024 改用電腦版格線 ⇒ 行動框可以是直排（flex）或格線（grid）；下面的高度／寬度／間距斷言一條都不改
+        if (m.disp !== 'flex' && m.disp !== 'grid') issues.push('行動框排版不明（' + m.disp + '）');
         if (btns.length < 3 || atkCount < 1) issues.push('按鈕太少 ' + btns.length);
         for (const x of btns) if (x.h < (x.big ? 37.5 : 31.5)) issues.push(`${x.t} 只有 ${x.h}px 高`);
         for (const x of btns) if (x.h > (x.big ? 38.5 : 32.5)) issues.push(`${x.t} 長到 ${x.h}px（超過上限）`);
@@ -178,17 +191,23 @@ async function browserChecks(buildDir) {
       const R = (e) => e.getBoundingClientRect();
       const items = [...box.querySelectorAll(':scope > .btn-act, :scope > .atk-slot')].map((e) => ({ big: e.matches('.atk-slot, .secondary, .primary'), h: R(e).height, b: R(e).bottom }));
       return { n: items.length, minH: Math.min(...items.map((x) => x.h)), bigMin: Math.min(...items.filter((x) => x.big).map((x) => x.h)), smallMax: Math.max(...items.filter((x) => !x.big).map((x) => x.h)),
-        bottom: Math.max(...items.map((x) => x.b)), myTop: R(document.querySelector('.my-row')).top, sh: document.documentElement.scrollHeight, H: innerHeight };
+        bottom: Math.max(...items.map((x) => x.b)),
+        // ⭐v6.614（Rule 40）：「不壓到我方場地」改成逐一比對我方各區塊（新排列裡我方戰鬥寶可夢就在行動欄旁邊，.my-row 本身沒有方框）
+        hitsMine: (() => { const zs = [...document.querySelectorAll('.my-row > .zone-active, .my-row > .zone-bench, .my-row > .zone-pile, .my-row > .zone-prizes, .hand-strip')].map(R).filter((z) => z.width > 0);
+          const bs = [...box.querySelectorAll(':scope > .btn-act, :scope > .atk-slot')].map(R);
+          return zs.length >= 4 && bs.some((b) => zs.some((z) => Math.min(b.right, z.right) - Math.max(b.left, z.left) > 1 && Math.min(b.bottom, z.bottom) - Math.max(b.top, z.top) > 1)); })(),
+        mineZones: [...document.querySelectorAll('.my-row > .zone-active, .my-row > .zone-bench, .my-row > .zone-pile, .my-row > .zone-prizes')].filter((z) => z.getBoundingClientRect().width > 0).length,
+        sh: document.documentElement.scrollHeight, H: innerHeight };
     }, target);
     { const res = {}; r.B4 = true;
       for (const target of [6, 8]) {
         const g = await openGame({ width: 704, height: 830 }, true); const m = g.myTurn ? await inject(g.pg, target) : null; res[target] = { myTurn: g.myTurn, ...m };
-        if (!(m && m.n === target && m.sh <= m.H + 1 && m.minH >= 21.5 && m.bigMin >= m.smallMax - 0.5 && m.bottom <= m.myTop)) r.B4 = false;
+        if (!(m && m.n === target && m.sh <= m.H + 1 && m.minH >= 21.5 && m.bigMin >= m.smallMax - 0.5 && m.mineZones >= 4 && !m.hitsMine)) r.B4 = false;
         await g.ctx.close();
       }
       r.B4n = JSON.stringify(res); }
     { const g = await openGame({ width: 704, height: 704 }, true); const m = g.myTurn ? await inject(g.pg, 8) : null;
-      r.B5 = !!(m && m.n === 8 && m.bottom <= m.myTop); r.B5n = JSON.stringify({ myTurn: g.myTurn, ...m });
+      r.B5 = !!(m && m.n === 8 && m.mineZones >= 4 && !m.hitsMine); r.B5n = JSON.stringify({ myTurn: g.myTurn, ...m });
       await g.ctx.close(); }
   } finally { await browser.close(); srv.close(); }
   return r;

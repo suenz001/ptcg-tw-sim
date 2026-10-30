@@ -53,6 +53,13 @@ const stripCss = (css) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 /** v6466 區塊（去註解）；沒有就回空字串 */
 const blockOf = (src) => { const m = /\/\* >>> v6466-blue-ipad \*\/([\s\S]*?)\/\* <<< v6466-blue-ipad \*\//.exec(src); return m ? stripCss(m[1]) : ''; };
 const fallbackOf = (src) => { const m = /\/\* >>> v6442-blue-fallback \*\/([\s\S]*?)\/\* <<< v6442-blue-fallback \*\//.exec(src); return m ? stripCss(m[1]) : ''; };
+// ⭐v6.614（Rule 40）：站長 2026-10-31 裁定新版桌墊 <1024 改用電腦版格線，v6442-blue-fallback 直排段已整段移除。
+//   S4c／S5a～S5c 守的是那段直排的細節（紀錄外距、行動列高度、戰鬥框道具欄、先攻小標）——在電腦版格線裡由電腦版本身的規則負責，
+//   實際「互不重疊、紀錄不蓋到場地、一個畫面」由 test-v6614 的真瀏覽器 B1（11 種直立尺寸）守。
+//   只在「直排段確實不在、且換成 v6614 哨兵（在 1023 區塊內）」時放行；其他情況（例如直排段還在但寫錯）照舊比對。
+const replacedByV6614 = (src) => !src.includes('/* >>> v6442-blue-fallback */') && (() => {
+  const a = src.indexOf('/* >>> v6614-blue-narrow-desktop */'), m = src.lastIndexOf('@media (max-width: 1023px){', a);
+  return a > 0 && m > 0 && src.slice(m, a).split('{').length - src.slice(m, a).split('}').length > 0; })();
 /** 拆出 @container blhdr (max-width: Npx){ … } ⇒ [{ max, body }]，以及剩下的頂層規則 */
 function splitContainers(css) {
   const out = []; let rest = css; const re = /@container\s+blhdr\s*\(max-width:\s*(\d+)px\)\s*\{/g; let m;
@@ -108,10 +115,10 @@ const CHECKS = [
     const tb = r.find((x) => x.sels.some((s) => s.includes(':not(.log-collapsed)') && s.endsWith('.log-toggle-btn')));
     return !!tb && /flex-direction\s*:\s*row/.test(tb.body) && /top\s*:\s*calc\(44px \+ var\(--safe-top, 0px\)\)/.test(tb.body);
   }],
-  ['★★[S4c] <1024 後備還原紀錄欄外距（收合鈕在直排本來就隱藏）', true, (src) => /:not\(\.log-collapsed\) > \.action-bar > \.log-col\{ margin-top:0; \}/.test(fallbackOf(src))],
-  ['★★★[S5a] <1024 後備：行動列高度 auto（紀錄不再蓋到我方那一列）', true, (src) => /\.playmat\.layout-blue\.layout-fable > \.action-bar\{ height:auto; \}/.test(fallbackOf(src))],
-  ['★★[S5b] <1024 後備：戰鬥框右側保留道具欄（padding-right 用 --active-w）', true, (src) => /\.my-row > \.zone-active\{ padding-right:calc\(var\(--active-w\) \* \.42 \+ \d+px\); \}/.test(fallbackOf(src))],
-  ['★[S5c] <1024 後備：先攻／後攻小標浮起（不再佔列首一欄）', true, (src) => /\.my-row > \.turn-order-chip\{ position:absolute;/.test(fallbackOf(src))],
+  ['★★[S4c] <1024 後備還原紀錄欄外距（收合鈕在直排本來就隱藏）', true, (src) => /:not\(\.log-collapsed\) > \.action-bar > \.log-col\{ margin-top:0; \}/.test(fallbackOf(src)) || replacedByV6614(src)],
+  ['★★★[S5a] <1024 後備：行動列高度 auto（紀錄不再蓋到我方那一列）', true, (src) => /\.playmat\.layout-blue\.layout-fable > \.action-bar\{ height:auto; \}/.test(fallbackOf(src)) || replacedByV6614(src)],
+  ['★★[S5b] <1024 後備：戰鬥框右側保留道具欄（padding-right 用 --active-w）', true, (src) => /\.my-row > \.zone-active\{ padding-right:calc\(var\(--active-w\) \* \.42 \+ \d+px\); \}/.test(fallbackOf(src)) || replacedByV6614(src)],
+  ['★[S5c] <1024 後備：先攻／後攻小標浮起（不再佔列首一欄）', true, (src) => /\.my-row > \.turn-order-chip\{ position:absolute;/.test(fallbackOf(src)) || replacedByV6614(src)],
 ];
 
 function runAll(src) { return CHECKS.map(([name, headFail, fn]) => { let r = false; try { r = !!fn(src); } catch { r = false; } return { name, headFail, r }; }); }

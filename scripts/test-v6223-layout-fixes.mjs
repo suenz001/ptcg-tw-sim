@@ -173,7 +173,8 @@ check(iMedia > 0, 'fable fallback media 區塊存在');
 const mediaWin = SRC.slice(iMedia, iMedia + 5000);
 const iBaseBench = SRC.indexOf('flex:none; width:auto; min-width:0; max-width:none;');
 check(iBaseBench > 0, '（對手規則）fable 基礎 bench 槽 width:auto 仍在（>=1024 grid 用）');
-const mBench = mediaWin.match(/\.playmat\.layout-fable \.zone-bench \.bench-slot,[\s\S]*?\.bench-empty\{([^}]*)\}/);
+// ⭐v6.614（Rule 40）：Fable 後備規則加上 :not(.layout-blue)（新版桌墊 <1024 改用電腦版格線），意圖（Fable 版 <1024 後備）不變 ⇒ 兩種寫法都認
+const mBench = mediaWin.match(/\.playmat\.layout-fable(?::not\(\.layout-blue\))? \.zone-bench \.bench-slot,[\s\S]*?\.bench-empty\{([^}]*)\}/);
 check(!!mBench, 'fallback bench 槽固定寬規則存在於 media 區塊內');
 if (mBench) {
   check(/flex:0 0 var\(--card-w\)/.test(mBench[1]) && /width:var\(--card-w\)/.test(mBench[1]),
@@ -181,9 +182,9 @@ if (mBench) {
   check(mediaWin.includes('.zone-bench.bench-extended .bench-slot'), 'bench-extended 變體也涵蓋（8 備戰）');
   check(iMedia > iBaseBench, 'cascade：media 區塊在基礎規則之後（同 specificity 靠順序取勝）');
 }
-check(/\.playmat\.layout-fable \.action-bar > \.log-col\{ flex:1 1 100%;[^}]*max-height:220px/.test(mediaWin),
+check(/\.playmat\.layout-fable(?::not\(\.layout-blue\))? \.action-bar > \.log-col\{ flex:1 1 100%;[^}]*max-height:220px/.test(mediaWin),
   'fallback log-col 滿寬限高（不再浮在畫面中間）');
-check(mediaWin.includes('.playmat.layout-fable > .action-bar{ flex-wrap:wrap; }'), 'fallback action-bar 可換行');
+check(mediaWin.includes('.playmat.layout-fable > .action-bar{ flex-wrap:wrap; }') || mediaWin.includes('.playmat.layout-fable:not(.layout-blue) > .action-bar{ flex-wrap:wrap; }'), 'fallback action-bar 可換行');
 
 // ─────────────────────── 手機直式分支純淨 ───────────────────────
 console.log('手機直式分支純淨');

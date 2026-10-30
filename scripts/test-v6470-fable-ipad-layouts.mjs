@@ -62,7 +62,8 @@ const CHECKS = [
   }],
   ['★★★[S3] <1024 後備：行動列高度跟內容走；側欄調整全部還原成 v6.469 的值（72px、置中、0.4／0.56 卡寬）', true, (src) => {
     const b = blk(src, 'v6470-fable-fallback');
-    return /\.playmat\.layout-fable > \.action-bar\{ height:auto; \}/.test(b)
+    // ⭐v6.614（Rule 40）：這條本來就只為 Fable 版（v6.466 只修了新版桌墊）；v6.614 加上 :not(.layout-blue)，意圖不變 ⇒ 兩種寫法都認
+    return /\.playmat\.layout-fable(?::not\(\.layout-blue\))? > \.action-bar\{ height:auto; \}/.test(b)
       && /\.zone-pile\{ align-self:center; justify-content:normal; container:none; width:72px; \}/.test(b)
       && /\.zone-prizes\{ align-self:center; justify-content:normal; \}/.test(b)
       && /\.prize-card\{ width:calc\(var\(--card-w\) \* 0\.4\); height:calc\(var\(--card-w\) \* 0\.56\); \}/.test(b);

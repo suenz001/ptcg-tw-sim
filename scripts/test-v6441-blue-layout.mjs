@@ -436,13 +436,16 @@ ok('[正對照] 手機直式元件不讀 battleLayout（手機版面維持現況
 console.log('\nC) 範圍：藍桌墊的 CSS 不外洩');
 const m0 = /  \/\* >>> v6441-blue-css \*\/([\s\S]*?)  \/\* <<< v6441-blue-css \*\//.exec(SRC);
 const mg = /  \/\* >>> v6441-blue-geom \*\/([\s\S]*?)  \/\* <<< v6441-blue-geom \*\//.exec(SRC);
-const mf = /    \/\* >>> v6442-blue-fallback \*\/([\s\S]*?)    \/\* <<< v6442-blue-fallback \*\//.exec(SRC);
+// ⭐v6.614（Rule 40）：<1024 那一塊從直排段（v6442-blue-fallback）換成「改用電腦版格線」的 v6614 哨兵 ⇒ 兩者擇一（下方的外洩／無 @media 檢查照樣套在它身上）
+const mf = /    \/\* >>> v6442-blue-fallback \*\/([\s\S]*?)    \/\* <<< v6442-blue-fallback \*\//.exec(SRC) || /    \/\* >>> v6614-blue-narrow-desktop \*\/([\s\S]*?)    \/\* <<< v6614-blue-narrow-desktop \*\//.exec(SRC);
 const m = m0 && mg && mf ? [null, m0[1] + '\n' + mg[1] + '\n' + mf[1]] : null;
 ok('★★[HEAD-FAIL] 找得到藍桌墊 CSS 區塊（外觀＋幾何＋<1024 後備三塊）', !!m);
 if (m) {
   ok('★★[媒體查詢] 藍桌墊的兩塊 CSS 一個 @media 都沒有（本頁 @media 數量被 v6187／v6195／v6199 釘住：不准新增媒體查詢當手機開關）', !/@media/.test(m[1]));
   const iG = SRC.indexOf('/* >>> v6441-blue-geom */');
-  const iFb = SRC.indexOf('  @media (max-width: 1023px){\n    .playmat.layout-fable{ --card-w-cap:9999px;');
+  // ⭐v6.614（Rule 40）：後備區塊第一行加上 :not(.layout-blue) ⇒ 兩種寫法都認
+  let iFb = SRC.indexOf('  @media (max-width: 1023px){\n    .playmat.layout-fable{ --card-w-cap:9999px;');
+  if (iFb < 0) iFb = SRC.indexOf('  @media (max-width: 1023px){\n    .playmat.layout-fable:not(.layout-blue){ --card-w-cap:9999px;');
   ok('★★[順序] 幾何區塊在 Fable 基礎規則之後、Fable 後備排版（<1024）之前 ⇒ 桌機吃藍桌墊 grid、窄視窗由後備排版蓋回',
     iG > SRC.indexOf('.playmat.layout-fable{') && iFb > iG && SRC.slice(SRC.indexOf('/* <<< v6441-blue-geom */') + 26, iFb).replace(/  \/\* >>> v6470-fable-side \*\/[\s\S]*?  \/\* <<< v6470-fable-side \*\/\n/, '').trim() === '', `${iG} ${iFb}`);
   // v6.470（Rule 40，意圖不變）：兩者之間只允許夾一段只作用在 Fable 版（:not(.layout-blue)）的 v6470-fable-side 哨兵區塊（內容由 test-v6470 鎖）

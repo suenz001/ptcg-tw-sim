@@ -81,13 +81,25 @@ function staticChecks(PAGE) {
     && /else if \(typeof window !== 'undefined' && defaultBattleLayout\(window\.innerWidth, window\.innerHeight\) === 'blue'\) battleLayout = 'blue';/.test(p)
     && !/window\.innerWidth >= 1024\) battleLayout = 'blue'/.test(p);
   // 填滿規則：在既有的 @media (max-width: 1023px) 區塊裡（不新增媒體查詢）
-  const mq = PAGE.indexOf('  @media (max-width: 1023px){\n    .playmat.layout-fable{ --card-w-cap:9999px;');
+  // ⭐v6.614（Rule 40）：區塊第一行的 Fable 後備規則加上了 :not(.layout-blue)（新版桌墊 <1024 改用電腦版格線）⇒ 兩種寫法都認
+  let mq = PAGE.indexOf('  @media (max-width: 1023px){\n    .playmat.layout-fable{ --card-w-cap:9999px;');
+  if (mq < 0) mq = PAGE.indexOf('  @media (max-width: 1023px){\n    .playmat.layout-fable:not(.layout-blue){ --card-w-cap:9999px;');
   const blkEnd = mq > 0 ? PAGE.indexOf('\n  }\n', mq) : -1;
   const blk = mq > 0 && blkEnd > mq ? PAGE.slice(mq, blkEnd) : '';
   const fill = blk.slice(blk.indexOf('/* >>> v6596-blue-portrait-fill */'), blk.indexOf('/* <<< v6596-blue-portrait-fill */'));
   r.S2 = blk.length > 2000 && fill.length > 300
     && /\.battle-root:has\(\.playmat\.layout-blue\) > \.playmat\.layout-blue\.layout-fable\{ flex:1 0 auto; grid-template-rows:auto minmax\(0, 1fr\) auto; \}/.test(fill)
     && /\.playmat\.layout-blue\.layout-fable \.action-bar > \.log-col\{[^}]*flex:1 1 240px;[^}]*min-height:120px;[^}]*contain:size; \}/.test(fill);
+  // ⭐v6.614（Rule 40）：站長 2026-10-31 裁定新版桌墊 <1024 改用電腦版格線，v6596 填滿段已移除。
+  //   本條要守的意圖（直立大螢幕剛好一個畫面：對戰區吃滿剩餘高度、紀錄的內容多寡不可撐高整頁）改由 v6614 哨兵承擔：
+  //   整頁鎖在一個畫面＋紀錄欄 contain:size。只接受這一種替代（逐字比對），B3 的實測量測一條都不改。
+  if (!r.S2) {
+    const a = blk.indexOf('/* >>> v6614-blue-narrow-desktop */'), b = blk.indexOf('/* <<< v6614-blue-narrow-desktop */');
+    const seg = a > 0 && b > a ? blk.slice(a, b) : '';
+    r.S2 = blk.length > 2000 && seg.length > 300
+      && seg.includes('.battle-root:has(.playmat.layout-blue){ height:100vh; height:100dvh; min-height:0; overflow:hidden; }')
+      && seg.includes('.battle-root:has(.playmat.layout-blue) .playmat.layout-blue.layout-fable .action-bar > .log-col{ contain:size; min-height:0; }');
+  }
   // dispatch：canAct 之後、錦標賽送出之前就擋（錦標賽也走這裡）
   const d0 = p.indexOf('async function dispatch(');
   const dBody = d0 > 0 ? p.slice(d0, p.indexOf('const prevState = game;', d0)) : '';
