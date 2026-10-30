@@ -591,7 +591,10 @@ await T('E2 ⭐⭐ 手機／桌機是 JS 分支：DmPanel.svelte **零 @media**�
   assert.ok(m, '/friends 頁沒有 JS 手機開關');
   // ⭐v6.313 起門檻搬進單一來源 computeIsPortraitMobile(w, h, force)（回傳 Math.min(w, h) <= N || …）；仍抽同一個 N 比對，判準不變。
   const g = /function computeIsPortraitMobile\(w: number, h: number, force: boolean\): boolean \{\s*return Math\.min\(w, h\) <= (\d+)/.exec(GAME)
-    || /isPortraitMobile = Math\.min\(w, h\) <= (\d+);/.exec(GAME);
+    || /isPortraitMobile = Math\.min\(w, h\) <= (\d+);/.exec(GAME)
+    // ⭐v6.612（Rule 40）：對戰頁的手機門檻搬到 battle-view-mode.ts 的 MOBILE_EDGE（computeIsPortraitMobile 改呼叫 decideMobileBattle）；仍抽同一個 N 比對，判準不變
+    || (/decideMobileBattle\(w, h, force, coarsePointerNow\(\), battleViewMode\)/.test(GAME)
+        && /export const MOBILE_EDGE = (\d+);/.exec(readFileSync(join(ROOT, 'src/lib/game/battle-view-mode.ts'), 'utf8')));
   assert.ok(g, 'game/+page.svelte 的 isPortraitMobile 門檻抽不到（寫法變了？）');
   assert.strictEqual(m[1], g[1], '手機門檻與對戰頁不一致：' + m[1] + ' vs ' + g[1]);
   assert.ok(/<DmPanel [^>]*mobile=\{isMobile\}/.test(PAGE), 'DmPanel 沒接 mobile={isMobile}');

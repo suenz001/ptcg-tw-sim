@@ -27,11 +27,22 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 import { styleBlockOf } from './lib/svelte-style-block.mjs';
+import { existsSync } from 'node:fs';
+import { build } from 'esbuild';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GAME = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
 const MPB = normEol(readFileSync(join(ROOT, 'src/routes/game/MobilePortraitBattle.svelte'), 'utf8'));
 
+// ⭐v6.612（Rule 40，站長 2026-10-30：筆電顯示成手機版）：computeIsPortraitMobile 改呼叫 battle-view-mode.ts 的 decideMobileBattle，
+//   多了兩個輸入：主要指標是不是手指（coarse）與玩家選的畫面模式（自動／電腦版／手機版）。
+//   這支守的意圖（開關關＝BASE 公式、開關開只在直式多切、onResize 走單一來源、isSmallScreen＝真手機）對「觸控裝置＋自動模式」原封不動
+//   ⇒ 抽出來執行時注入真模組、coarse 固定 true、模式固定 'auto'，矩陣與斷言一個字都不改。
+//   滑鼠／觸控板裝置（筆電）矮螢幕改走電腦版、以及手動模式，由 test-v6612 守。
+const BVM_PATH = join(ROOT, 'src/lib/game/battle-view-mode.ts');
+const BVM = existsSync(BVM_PATH)
+  ? await import('data:text/javascript;base64,' + Buffer.from((await build({ entryPoints: [BVM_PATH], bundle: true, write: false, format: 'esm', platform: 'node', logLevel: 'silent' })).outputFiles[0].text).toString('base64'))
+  : {};
 let pass = 0, fail = 0;
 const T = async (name, fn) => {
   try { await fn(); console.log('  PASS ' + name); pass++; }
@@ -61,10 +72,18 @@ const MATRIX = [
 const BASE_FORMULA = (w, h) => Math.min(w, h) <= 600;
 
 // ── 抽函式／區塊 ─────────────────────────────────────────────────────────────
-function extractCompute(src) {
+// ⭐v6.612：公式本體搬到 battle-view-mode.ts ⇒ 公式類突變（M1／M2／M10）改成突變模組原文再打包
+const BVM_SRC = existsSync(BVM_PATH) ? normEol(readFileSync(BVM_PATH, 'utf8')) : '';
+async function bvmMut(a, b) {
+  assert.strictEqual(BVM_SRC.split(a).length - 1, 1, '突變錨點不唯一：' + a.slice(0, 60));
+  const code = (await build({ stdin: { contents: BVM_SRC.replace(a, b), loader: 'ts', resolveDir: ROOT }, bundle: true, write: false, format: 'esm', platform: 'node', logLevel: 'silent' })).outputFiles[0].text;
+  return import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
+}
+function extractCompute(src, bvm = BVM) {
   const m = /function computeIsPortraitMobile\(w: number, h: number, force: boolean\): boolean \{([\s\S]*?)\n  \}/.exec(src);
   assert.ok(m, '找不到 computeIsPortraitMobile');
-  return new Function('w', 'h', 'force', m[1]);
+  const f = new Function('decideMobileBattle', 'coarsePointerNow', 'battleViewMode', 'w', 'h', 'force', m[1]);
+  return (w, h, force) => f(bvm.decideMobileBattle, () => true, 'auto', w, h, force);   // ⭐v6.612：觸控裝置＋自動模式
 }
 function extractSetter(src) {
   const m = /function setForceMobileBattleUI\(on: boolean\) \{([\s\S]*?)\n  \}/.exec(src);
@@ -82,6 +101,8 @@ function extractOnResize(src) {
     const { window, forceMobileBattleUI } = env;
     const recomputeZoom = () => {}; const clampChatFabPos = (p) => p;
     const computeIsPortraitMobile = env.compute;
+    // ⭐v6.612（Rule 40）：onResize 改用 isPhoneSized／coarsePointerNow／MOBILE_EDGE（觸控裝置）並多設 isNarrowScreen
+    let isNarrowScreen = null; const isPhoneSized = env.bvm.isPhoneSized, coarsePointerNow = () => true, MOBILE_EDGE = env.bvm.MOBILE_EDGE;
     // ⭐v6.596（Rule 40）：onResize 多了「從沒選過版面 ⇒ 寬度改變時重算預設版面」那一段 ⇒ 補它用到的名字。
     //   這支守的是三個旗標（isPortraitMobile／isSmallScreen／isTabletLayout）與單一來源，跟預設版面無關；預設版面由 test-v6596 守。
     let _layoutDefaultW = -1, battleLayout = 'classic';
@@ -90,7 +111,7 @@ function extractOnResize(src) {
     (() => {${body}\n})();
     return { isPortraitMobile, isSmallScreen, isTabletLayout };
   `);
-  return (w, h, force, compute) => fn({ window: { innerWidth: w, innerHeight: h }, forceMobileBattleUI: force, compute });
+  return (w, h, force, compute) => fn({ window: { innerWidth: w, innerHeight: h }, forceMobileBattleUI: force, compute, bvm: BVM });
 }
 function extractInit(src) {
   const m = /(try \{ forceMobileBattleUI = localStorage\.getItem\('ptcg_force_mobile_battle_ui'\)[^\n]*\n)/.exec(src);
@@ -124,8 +145,8 @@ function layoutSection(src) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('【A】computeIsPortraitMobile：開關關＝BASE 公式逐格相同；開關開＝只在直式多切');
-function assertCompute(src) {
-  const f = extractCompute(src);
+function assertCompute(src, bvm = BVM) {
+  const f = extractCompute(src, bvm);
   for (const [w, h] of MATRIX) {
     assert.strictEqual(f(w, h, false), BASE_FORMULA(w, h), `開關關 ${w}×${h}：與 BASE 公式 Math.min(w,h)<=600 不同`);
     const expectOn = BASE_FORMULA(w, h) || (h > w);
@@ -276,7 +297,8 @@ function assertSettings(src) {
   assert.ok(i > 0, '「🎴 對戰版面（測試）」section 內找不到 force-mobile-ui 開關');
   assert.strictEqual(src.split('id="force-mobile-ui"').length - 1, 1, 'force-mobile-ui 全檔不是恰一處');
   const before = sec.slice(0, i);
-  const wrapAt = before.lastIndexOf('{#if !isSmallScreen}');
+  // ⭐v6.612（Rule 40）：包裝條件多了「&& battleViewMode === 'auto'」（手動選了電腦版／手機版時開關沒作用、不顯示）；!isSmallScreen 仍必須在
+  const wrapAt = Math.max(before.lastIndexOf('{#if !isSmallScreen}'), before.lastIndexOf("{#if !isSmallScreen && battleViewMode === 'auto'}"));
   assert.ok(wrapAt >= 0 && !/\{\/if\}/.test(before.slice(wrapAt)), '開關沒有被 {#if !isSmallScreen} 直接包住（真手機上顯示這個開關沒有意義）');
   const row = sec.slice(i, sec.indexOf('</div>', i));
   assert.ok(/checked=\{forceMobileBattleUI\}/.test(row), 'checkbox 沒綁 forceMobileBattleUI');
@@ -314,27 +336,27 @@ await T('G1 分支 {#if} 恰一處、旗標賦值恰一處、MobilePortraitBattl
 console.log('\n【M】突變測試（只捕 AssertionError，且要紅在預期那一條）');
 const mut = (a, b) => { assert.strictEqual(GAME.split(a).length - 1, 1, '突變錨點不唯一：' + a.slice(0, 60)); return GAME.replace(a, b); };
 await T('M1 突變：公式改成 force || min<=600（橫式也切）⇒ A 紅在「橫式不切」', () =>
-  mutantMustBreak('橫式也切', () => assertCompute(mut('return Math.min(w, h) <= 600 || (force && h > w);', 'return Math.min(w, h) <= 600 || force;')), /橫式不切|不得切到手機版/));
+  mutantMustBreak('橫式也切', async () => assertCompute(GAME, await bvmMut('return isPhoneSized(w, h, coarse) || (force && h > w);', 'return isPhoneSized(w, h, coarse) || force;')), /橫式不切|不得切到手機版/));   // ⭐v6.612（Rule 40）：突變點搬到模組
 await T('M2 突變：公式改成 (min<=600 || force) && h > w（真手機橫放不再是手機版＝破壞既有行為）⇒ A 紅在「與 BASE 公式不同」', () =>
-  mutantMustBreak('破壞 BASE', () => assertCompute(mut('return Math.min(w, h) <= 600 || (force && h > w);', 'return (Math.min(w, h) <= 600 || force) && h > w;')), /與 BASE 公式/));
+  mutantMustBreak('破壞 BASE', async () => assertCompute(GAME, await bvmMut('return isPhoneSized(w, h, coarse) || (force && h > w);', 'return (isPhoneSized(w, h, coarse) || force) && h > w;')), /與 BASE 公式/));
 await T('M3 突變：onResize 改回舊公式（不走單一來源）⇒ B 紅', () =>
   mutantMustBreak('onResize 另抄公式', () => assertOnResize(mut('isPortraitMobile = computeIsPortraitMobile(w, h, forceMobileBattleUI);', 'isPortraitMobile = Math.min(w, h) <= 600;')), /不等於 computeIsPortraitMobile|沒有呼叫 computeIsPortraitMobile/));
 await T('M4 突變：初始化改成 !== \'0\'（沒設過的人全部被打開）⇒ C 紅', () =>
   mutantMustBreak('預設變開', () => assertInit(mut("localStorage.getItem('ptcg_force_mobile_battle_ui') === '1'", "localStorage.getItem('ptcg_force_mobile_battle_ui') !== '0'")), /必須當關/));
 await T('M5 突變：setter 不派發 resize ⇒ D 紅', () =>
-  mutantMustBreak('不重算', () => assertSetter(mut("if (typeof window !== 'undefined') window.dispatchEvent(new Event('resize'));", '')), /沒派發 resize/));
+  mutantMustBreak('不重算', () => assertSetter(mut("    // 立刻重算：與旋轉裝置走同一條 onResize 路徑（不另抄一份判定）\n    if (typeof window !== 'undefined') window.dispatchEvent(new Event('resize'));", '')), /沒派發 resize/));   // ⭐v6.612（Rule 40）：v6.612 的畫面模式 setter 也派發同一行 ⇒ 錨點帶上前一行註解，只突變這支 setter
 await T('M6 突變：rotate-prompt 條件拿掉 !isPortraitMobile（＝BASE）⇒ E 紅', () =>
   // ⭐v6.596（Rule 40）：條件尾端多了 battleLayout !== 'blue' ⇒ 突變錨點跟著改，突變內容（拿掉 !isPortraitMobile）不變
   mutantMustBreak('遮罩蓋死手機版', () => assertRotate(mut("{#if game && game.phase !== 'game-over' && !isSpectator && !isPortraitMobile && battleLayout !== 'blue'}", "{#if game && game.phase !== 'game-over' && !isSpectator && battleLayout !== 'blue'}")), /遮罩蓋死/));
 await T('M7 突變：設定 modal 開關拿掉 {#if !isSmallScreen} ⇒ F 紅', () =>
-  mutantMustBreak('真手機也顯示', () => assertSettings(mut('          {#if !isSmallScreen}\n          <!-- ⭐ v6.313', '          <!-- ⭐ v6.313').replace(/\n          \{\/if\}\n          <div class="setting-hint">\n            ・經典版/, '\n          <div class="setting-hint">\n            ・經典版')), /沒有被 \{#if !isSmallScreen\} 直接包住/));
+  mutantMustBreak('真手機也顯示', () => assertSettings(mut("          {#if !isSmallScreen && battleViewMode === 'auto'}\n          <!-- ⭐ v6.313", '          <!-- ⭐ v6.313').replace(/\n          \{\/if\}\n          <div class="setting-hint">\n            ・經典版/, '\n          <div class="setting-hint">\n            ・經典版')), /沒有被 \{#if !isSmallScreen\} 直接包住/));
 await T('M8 突變：onResize 裡 isSmallScreen 改成跟 isPortraitMobile 一樣（開關開時真手機判定被污染）⇒ B 紅', () =>
-  mutantMustBreak('isSmallScreen 污染', () => assertOnResize(mut('isSmallScreen = Math.min(w, h) <= 600;', 'isSmallScreen = computeIsPortraitMobile(w, h, forceMobileBattleUI);')), /isSmallScreen 不等於 BASE 公式/));
+  mutantMustBreak('isSmallScreen 污染', () => assertOnResize(mut('isSmallScreen = isPhoneSized(w, h, coarsePointerNow());', 'isSmallScreen = computeIsPortraitMobile(w, h, forceMobileBattleUI);')), /isSmallScreen 不等於 BASE 公式/));   // ⭐v6.612（Rule 40）：錨點改成新寫法
 await T('M9 突變：多一個 isPortraitMobile 賦值點（例如 setter 直接寫旗標）⇒ G 紅', () =>
   mutantMustBreak('雙寫入點', () => assertStructure(mut('    forceMobileBattleUI = on;\n', '    forceMobileBattleUI = on;\n    isPortraitMobile = on;\n'), MPB), /賦值點必須恰一處/));
 // ⭐ v6.315 補的三條（審查者證明 v6.313 守衛對前兩條全綠）
 await T('M10 突變：h > w 改成 h >= w（正方形也算直式）⇒ A 紅在「正方形」那格（v6.313 守衛對這條全綠）', () =>
-  mutantMustBreak('正方形也切', () => assertCompute(mut('return Math.min(w, h) <= 600 || (force && h > w);', 'return Math.min(w, h) <= 600 || (force && h >= w);')), /700×700|正方形/));
+  mutantMustBreak('正方形也切', async () => assertCompute(GAME, await bvmMut('return isPhoneSized(w, h, coarse) || (force && h > w);', 'return isPhoneSized(w, h, coarse) || (force && h >= w);')), /700×700|正方形/));
 await T('M11 突變：rotate-prompt 的 min-width: 601px 改成 0px（真手機也命中）⇒ H 紅在「真手機 CSS 層」（v6.313 守衛對這條 16 條全綠）', () =>
   mutantMustBreak('真手機也命中', () => assertRotateCss(mut('@media (min-width: 601px) and (max-width: 950px) and (orientation: portrait)', '@media (min-width: 0px) and (max-width: 950px) and (orientation: portrait)')), /真手機 .* CSS 層自己就要擋/));
 await T('M12 突變：rotate-prompt 的 max-width: 950px 改成 1400px（1024×1366 現況改變）⇒ H 紅', () =>

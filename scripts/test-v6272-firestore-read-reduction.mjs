@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '29eeb4cf015e9eb929e0c3d58f2b8cfba15d22cd';   // v6.610（上一版）
+const PREV_SHA = '30094e83b2b496b0e01991fa3293b2f84734aa7d';   // v6.611（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,16 +757,28 @@ const PREV_SHA = '29eeb4cf015e9eb929e0c3d58f2b8cfba15d22cd';   // v6.610（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.611 前移：PREV_SHA 從 29eeb4cf（v6.610）起算。
+  // ⚠⚠ v6.612 前移：PREV_SHA 從 30094e83（v6.611）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.611：特殊能量標記合成一顆膠囊（只改 SpecialEnergyBadges.svelte）；首頁 changelog 三步搬運
-  'src/lib/ui/SpecialEnergyBadges.svelte',
+  // ⭐v6.612：對戰手機版／電腦版判斷（中央 battle-view-mode.ts、對戰頁接線與設定選單）；首頁 changelog 三步搬運
+  'src/lib/game/battle-layout-default.ts',   // ⭐v6.612 審查 P3：只更新檔頭過時註解（手機尺寸改由 battle-view-mode.ts 判斷）
+  'src/lib/game/battle-view-mode.ts',
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.611）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.611 前移：PREV_SHA 從 29eeb4cf（v6.610）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.611：特殊能量標記合成一顆膠囊（只改 SpecialEnergyBadges.svelte）；首頁 changelog 三步搬運
+//   'src/lib/ui/SpecialEnergyBadges.svelte',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.610）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.610 前移：PREV_SHA 從 9aa83ddd（v6.609）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -892,20 +904,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/replay-store.ts',
 //   'src/lib/game/replay-tourn.ts',
 //   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.599）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.599 前移：PREV_SHA 從 a337fea7（v6.598）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.599：牌組先後攻偏好（中央 coin-pref.ts、編輯器元件、對戰頁四個入口）；首頁 changelog 三步搬運
-//   'src/lib/decks/DeckCoinPref.svelte',
-//   'src/lib/decks/coin-pref.ts',
-//   'src/lib/decks/types.ts',
-//   'src/lib/version.ts',
-//   'src/routes/decks/+page.svelte',
 //   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',

@@ -11,7 +11,8 @@
 //   ・其他（窄的橫向視窗，例如 1000×700）⇒ 經典版（維持原本預設）。
 //   ⚠ 只決定「預設」：玩家選過的版面（localStorage 'ptcg_battle_layout'）一律照玩家的選擇；預設值不寫回 localStorage。
 //   ⚠（審查 P2-2）從沒選過版面的玩家，視窗尺寸改變（Fold 從封面螢幕展開、旋轉）時對戰頁會重算一次預設。
-//   ⚠ 短邊 ≤ 600 的裝置走手機版（MobilePortraitBattle），不讀 battleLayout，這裡回什麼都不影響它。
+//   ⚠ 手機尺寸走手機版（MobilePortraitBattle），不讀 battleLayout，這裡回什麼都不影響它。
+//     ⭐v6.612 起「手機尺寸」由 battle-view-mode.ts 判斷：寬 ≤ 600，或高 ≤ 600 且（觸控或寬 < 1024）；寬 ≥ 1024 的滑鼠矮視窗走電腦版（這裡回 blue）。
 
 export type DefaultBattleLayout = 'blue' | 'classic';
 

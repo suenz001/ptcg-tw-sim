@@ -1,6 +1,7 @@
 <script lang="ts">
   // v6.609：卡片張數與特殊能量身分顯示，與引擎供能計算分離。
   import SpecialEnergyBadges from '$lib/ui/SpecialEnergyBadges.svelte';
+  import { decideMobileBattle, isPhoneSized, coarsePointerNow, normalizeBattleViewMode, BATTLE_VIEW_MODE_KEY, MOBILE_EDGE, type BattleViewMode } from '$lib/game/battle-view-mode';   // ⭐v6.612 手機版／電腦版的唯一判準
   import { attachedEnergyGroups, basicEnergyOnly } from '$lib/cards/attached-energy';
   import { replayDeckOrder } from '$lib/game/replay-deck';
   import PlayerClockNotice from "./PlayerClockNotice.svelte";
@@ -2196,16 +2197,26 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let isTabletLayout = $state(false);
   // ⭐ v6.313 平板（iPad 等）直立時可選用手機版對戰介面 —— 玩家自選的開關，預設關、不動任何現有玩家的畫面。
   //   forceMobileBattleUI：localStorage 'ptcg_force_mobile_battle_ui' === '1' 才算開。
-  //   isSmallScreen：min(w,h) <= 600（本來就走手機版的裝置）—— 開關對它沒有作用，設定 modal 用它決定不顯示開關。
+  //   isSmallScreen：手機尺寸（⭐v6.612 起由 battle-view-mode.ts 的 isPhoneSized 判斷）—— 開關對它沒有作用，設定 modal 用它決定不顯示開關。
   let forceMobileBattleUI = $state(false);
   let isSmallScreen = $state(false);
+  // ⭐v6.612 對戰畫面模式（自動／電腦版／手機版，玩家在設定裡選；判準在 battle-view-mode.ts）＋「寬度 ≤ 600」（這時一定是手機版、不顯示選單）
+  let battleViewMode = $state<BattleViewMode>('auto');
+  let isNarrowScreen = $state(false);
   // 手機版分支判定的**單一來源**（守衛 test-v6313 把這個函式抽出來跑尺寸矩陣）：
   //   開關關 ⇒ 逐格等於 v6.312 之前的 Math.min(w, h) <= 600；
   //   開關開 ⇒ 額外只在「直式」（h > w）切到手機版。橫放仍走桌機版 ——
   //   MobilePortraitBattle 是為 ≤600px 寬設計的，v6.313 實測 iPad 直式 744～1024 寬零溢出／零重疊，
   //   橫式 1180×820 雖也不爆版但兩側大片留白、沒有比桌機版好，而玩家要的也只有「直立的時候」。
+  //   ⭐v6.612（站長：筆電顯示成手機版）：改呼叫 battle-view-mode.ts 的唯一判準——寬 ≤ 600 一定是手機；
+  //   自動模式下「高 ≤ 600」還要主要是手指觸控才算手機（筆電用滑鼠／觸控板 ⇒ 電腦版）；玩家可在設定手動選電腦版／手機版。
   function computeIsPortraitMobile(w: number, h: number, force: boolean): boolean {
-    return Math.min(w, h) <= 600 || (force && h > w);
+    return decideMobileBattle(w, h, force, coarsePointerNow(), battleViewMode);
+  }
+  function setBattleViewMode(m: string) {
+    battleViewMode = normalizeBattleViewMode(m);
+    try { localStorage.setItem(BATTLE_VIEW_MODE_KEY, battleViewMode); } catch { /* ignore */ }
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('resize'));   // 與 setForceMobileBattleUI 同一條 onResize 路徑
   }
   function setForceMobileBattleUI(on: boolean) {
     forceMobileBattleUI = on;
@@ -2346,6 +2357,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⭐ v6.313 平板直立用手機版：只認 '1'，其他值（含沒設過）一律當關 —— 預設不變。
     //   ⚠ 必須在下面 onResize() 初始化之前讀好，否則第一幀會先走桌機版再跳成手機版。
     try { forceMobileBattleUI = localStorage.getItem('ptcg_force_mobile_battle_ui') === '1'; } catch { /* ignore */ }
+    try { battleViewMode = normalizeBattleViewMode(localStorage.getItem(BATTLE_VIEW_MODE_KEY)); } catch { /* ignore */ }   // ⭐v6.612 同理：onResize 之前讀好
 
     let _layoutDefaultW = -1;   // ⭐v6.596 上次重算預設版面時的視窗寬度
     const onResize = () => {
@@ -2357,7 +2369,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //   原條件只在 portrait（h>w）才切手機版，玩家不小心橫放會跳到桌機版
       //   新條件：任一邊 ≤ 600px 就視為手機（含手機橫放、平板大小手機）
       // ⭐ v6.313：開關關閉時 computeIsPortraitMobile 就是原本的 Math.min(w, h) <= 600（單一來源，見函式註解）
-      isSmallScreen = Math.min(w, h) <= 600;
+      // ⭐v6.612：isSmallScreen＝真的是手機尺寸（筆電矮螢幕不算）；isNarrowScreen＝寬 ≤ 600（一定手機版）
+      isSmallScreen = isPhoneSized(w, h, coarsePointerNow());
+      isNarrowScreen = w <= MOBILE_EDGE;
       isPortraitMobile = computeIsPortraitMobile(w, h, forceMobileBattleUI);
       // >>> v6596-default-on-resize
       // ⭐v6.596（審查 P2-2）從沒選過版面的玩家：視窗尺寸改變（Fold 從封面螢幕展開、旋轉）就重算一次預設（仍不寫回 localStorage）。
@@ -2386,8 +2400,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
     };
     
     window.addEventListener('resize', onResize);
+    // ⭐v6.612（審查 P3）主要指標改變（外接／拔掉滑鼠、觸控筆電切平板模式）時視窗尺寸可能沒變 ⇒ 也重算一次
+    let _pointerMq: MediaQueryList | null = null;
+    try { _pointerMq = matchMedia('(pointer: coarse)'); _pointerMq.addEventListener('change', onResize); } catch { _pointerMq = null; }
     onResize(); // 初始化
-    return () => window.removeEventListener('resize', onResize);
+    return () => { window.removeEventListener('resize', onResize); try { _pointerMq?.removeEventListener('change', onResize); } catch { /* ignore */ } };
   });
   let zoomInst = $state<CardInstance | null>(null);
   // 堆疊：之前開過的 zoom — 用於「返回上一層」按鈕
@@ -15433,8 +15450,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 oninput={(e) => setFableCardScale(parseFloat(e.currentTarget.value))} />
             </div>
           {/if}
-          {#if !isSmallScreen}
-          <!-- ⭐ v6.313 平板（iPad 等）直立時改用手機版對戰介面。只在「本來就不是手機版」的裝置顯示：
+          {#if !isNarrowScreen}
+          <!-- ⭐v6.612 對戰畫面模式（站長：筆電顯示成手機版 ⇒ 改判斷＋加手動開關）。寬度 ≤ 600 一定是手機版，不顯示。 -->
+          <div class="setting-row">
+            <label for="battle-view-mode">🖥️ 對戰畫面：</label>
+            <select id="battle-view-mode" value={battleViewMode} onchange={(e) => setBattleViewMode(e.currentTarget.value)}>
+              <option value="auto">自動（依螢幕判斷）</option>
+              <option value="desktop">電腦版</option>
+              <option value="mobile">手機版</option>
+            </select>
+          </div>
+          {/if}
+          {#if !isSmallScreen && battleViewMode === 'auto'}
+          <!-- ⭐ v6.313 平板（iPad 等）直立時改用手機版對戰介面。（⭐v6.612：手動選了電腦版／手機版時沒有作用 ⇒ 只在「自動」時顯示）只在「本來就不是手機版」的裝置顯示：
                min(w,h) <= 600 的裝置無論如何都走手機版，這個開關對它沒有作用，顯示出來只會讓人困惑。
                零新 CSS（沿用 .setting-row／.small）。 -->
           <div class="setting-row">
@@ -15450,6 +15478,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <br/>・桌墊版仍在測試，窄螢幕（&lt; 1200px）可能變形，會自動退回經典版
             <br/>・只動桌機 — 手機版直立 layout 不受影響
             <br/>・平板（iPad 等）直立時可勾選改用手機版介面；橫放時自動回到電腦版面
+            <br/>・對戰畫面選「自動」時，筆電即使螢幕較矮也會用電腦版；想固定用哪一種可以改選電腦版或手機版
             <br/>・iPad 直立時若被「請將裝置旋轉至橫向」提示遮住而按不到設定，請先橫放再進來勾選
           </div>
         </details>

@@ -10,15 +10,16 @@ import { PAIRS, revertV6610File } from './lib/revert-v6610-energy-labels.mjs';
 // ⭐v6.611（Rule 40）：標記元件改成「一顆膠囊」——釘位元組的 P 段先用 v6.611 還原表還原成 v6.610 再比（意圖：v6.610 只改那六檔、CSS 沒動）；
 //   B 段仍然測現行元件，只把觀測點換成一顆膠囊的文字（數量格式「一張省略、多張桌機×N／手機N」與完整卡名、可點、不冒泡等意圖逐條保留）。
 import { revertV6611File, hasV6611File } from './lib/revert-v6611-energy-pill.mjs';
+import { revertV6612File, hasV6612File } from './lib/revert-v6612-view-mode.mjs';   // ⭐v6.612（Rule 40）
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PRODUCT = process.env.V6610_PRODUCT || ROOT;
 const BASE='9aa83ddd54e2ba286957ebd7b9eabd0a5f669478';
 const rd=p=>readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n');
-const rdP=p=>hasV6611File(p,rd(p))?revertV6611File(p,rd(p)):rd(p);   // ⭐v6.611（Rule 40）：只給 P 段用（標記元件與 changelog 三檔先還原成 v6.610）
+const rdP=p=>{let x=rd(p);if(hasV6612File(p,x))x=revertV6612File(p,x);return hasV6611File(p,x)?revertV6611File(p,x):x;};   // ⭐v6.611（Rule 40）：只給 P 段用（標記元件與 changelog 三檔先還原成 v6.610）
 const base=p=>{const r=readBaseBlob(ROOT,BASE,p);assert.ok(r.ok);return r.out.replace(/\r\n/g,'\n');};
 let pass=0,fail=0;
 async function T(name,fn){try{await fn();pass++;console.log('PASS '+name);}catch(e){if(!(e instanceof assert.AssertionError))throw e;fail++;console.log('FAIL '+name+' '+e.message);}}
-for(const path of ['src/lib/game/engine.ts','src/lib/game/effects.ts','src/lib/game/damage-estimate.ts','src/routes/game/+page.svelte'])await T('P 遊戲與桌機接線不變 '+path,()=>assert.equal(rd(path),base(path)));
+for(const path of ['src/lib/game/engine.ts','src/lib/game/effects.ts','src/lib/game/damage-estimate.ts','src/routes/game/+page.svelte'])await T('P 遊戲與桌機接線不變 '+path,()=>assert.equal(rdP(path),base(path)));   // ⭐v6.612（Rule 40）：對戰頁先還原 v6.612 的手機／電腦版接線
 await T('P 只精確移除本版六檔差異、無關內容保留、缺失重複拒絕',()=>{
  for(const[path,pairs]of Object.entries(PAIRS)){
   const s=rdP(path);if(s===base(path))continue;

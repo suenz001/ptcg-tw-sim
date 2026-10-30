@@ -1,5 +1,19 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.612（2026-10-30）筆電不再被當成手機，對戰畫面可手動選
+
+BASE `30094e83`（v6.611）。站長 2026-10-30：「如果是用筆電的螢幕，似乎還是會顯示手機版的畫面，沒辦法顯示出windows網頁版」；看過研究結果（真網站 1093×520 前後截圖）後同意「改判斷＋加手動開關」。站長筆電：1366×768、1920×1080（桌面圖示偏大＝高縮放）。
+
+- 真因：對戰頁 computeIsPortraitMobile＝Math.min(w,h) <= 600（v5.194 為了手機橫放）。筆電可用高度扣掉工作列／分頁列／網址列常不到 600（1366×768@125% ≈ 1093×520；1920×1080@150% ≈ 1280×590）⇒ 被當成手機橫放。其他頁面用寬度 ≥ 1024 判斷，這兩種縮放都不受影響。
+- 唯一判準 src/lib/game/battle-view-mode.ts：寬 ≤ 600 一定手機（手動也改不了）；手動「手機版／電腦版」照選；自動時「高 ≤ 600」還要 pointer: coarse 才算手機（手機橫放仍手機版、滑鼠／觸控板筆電走電腦版；電腦版本來就依視窗自動縮放）；v6.313 平板直立開關照舊。
+- 對戰頁：computeIsPortraitMobile 改呼叫 decideMobileBattle(w,h,force,coarsePointerNow(),battleViewMode)；初始化在 onResize 之前讀 'ptcg_battle_view_mode'（只認 desktop／mobile，其餘＝auto）；setBattleViewMode 寫 key＋派發 resize（與 v6.313 setter 同一條路徑）；isSmallScreen 改成真手機（isPhoneSized），新 isNarrowScreen＝寬 ≤ 600；設定「🎴 對戰版面」加「🖥️ 對戰畫面」三選一（寬 ≤ 600 不顯示）。/friends 私訊面板仍用 min(w,h) ≤ 600（不在本次範圍）。
+- 已知取捨：電腦版塞進 520 高的畫面，卡片較小；新版桌墊會整體縮放、整個盤面看得到，經典版在這麼矮時會被切（研究截圖已給站長看過）。從沒選過版面的玩家寬 ≥ 1024 本來就預設新版桌墊。
+- 守衛 test-v6612-battle-view-mode（12 項）：U1～U3 模組矩陣；S1～S5 對戰頁片段抽出執行；B1～B3 真瀏覽器（1093×520、1280×590 滑鼠電腦版；844×390 觸控手機版；手動模式三種）；HEAD-FAIL BASE 上 U、S 八條逐條紅。
+- Rule 40：test-v6313 抽 computeIsPortraitMobile／onResize 執行時注入真模組、觸控裝置、自動模式（矩陣與斷言一字不改；該支守的就是觸控裝置的行為）；公式類突變 M1／M2／M10 改突變模組原文；M5 錨點帶上前一行註解（新 setter 也派發同一行）；M8 錨點改新寫法。test-v6288 對戰頁手機門檻改從 battle-view-mode.ts 的 MOBILE_EDGE 抽（仍與 /friends 的 600 比對）。
+- Opus 5.5 審查：P1 無。P2 寬 601～1023 又矮的滑鼠視窗（半邊視窗 640×590、900×500）改走電腦版後，新版桌墊套到「≤ 950 橫向」舊樣式、手牌整排在畫面外且捲不到 ⇒ isPhoneSized 改成「高 ≤ 600 且（觸控或寬 < 1024）」：這段寬度維持 v6.611 以前的手機版，站長兩台筆電（1093×520、1280×590）都 ≥ 1024 照樣走電腦版（新增常數 DESKTOP_SHORT_MIN_W）；U1 與真瀏覽器 B1b（900×500 ⇒ 手機版）補上。P3：主要指標改變（外接／拔滑鼠、切平板模式）時 matchMedia change 也觸發 onResize、卸載時移除；平板直立開關只在「自動」時顯示；新 U4 用替身驗 coarsePointerNow（CI 沒有 build 也守得到）；過時註解（isSmallScreen、battle-layout-default.ts 檔頭）更新。/friends 私訊面板仍是 min ≤ 600（不在範圍）。守衛 15 項，HEAD-FAIL 10 條逐條紅。
+- 第一輪全套 960 支 14 紅：對戰頁位元組被釘的舊守衛接上 scripts/lib/revert-v6612-view-mode.mjs（對戰頁 11 對、battle-layout-default.ts 註解、對外 changelog 三檔）——依前幾版的寫法串在 revert-v6609-energy-ui（對戰頁）與 revert-v6609-changelog（changelog）最前面，test-v6610 的 P 段（rdP）先還原 v6.612 再還原 v6.611；test-v6313 F1／M7 的包裝條件多認「&& battleViewMode === 'auto'」。其餘（v6370、v6592 的 tar 訊息屬於該守衛的負對照）單跑皆綠。
+- 複審：P1／P2 無（1024×600、1093×520 各桌墊手牌都在畫面內）。第二輪全套 960 支：test-v6272 補列 battle-layout-default.ts（只改註解）；v6370 單跑 91/0。玩家手動選「電腦版」又把視窗縮到 601～950 寬、≤ 600 高時新版桌墊手牌會被推出畫面——是玩家自選、⚙ 仍點得到可切回，記錄不改。
+
 ## v6.611（2026-10-30）特殊能量標記改成一顆膠囊
 
 BASE `29eeb4cf`（v6.610）。站長 2026-10-30：「特殊能量的顯示還是佔太大的版面，幫我想一下有沒有辦法弄的更好看」；看過真網站前後對照圖（新版桌墊／經典版／手機）後同意。
