@@ -21149,6 +21149,30 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .playmat.layout-fable:not(.layout-blue) .zone-prizes > .prize-grid{ flex:0 1 auto; min-height:auto; container:none; width:auto; align-content:normal; justify-content:normal; }
     .playmat.layout-fable:not(.layout-blue) .zone-prizes .prize-card{ width:calc(var(--card-w) * 0.4); height:calc(var(--card-w) * 0.56); }
     /* <<< v6470-fable-fallback */
+    /* >>> v6613-action-btns-spacing */
+    /* ⭐v6.613（站長 2026-10-30，玩家回報）新版桌墊直排（直向平板、摺疊機展開）時行動鈕太擠、容易誤按：
+       原本沿用 Fable 的 gap:3px，按鈕只有 27px 高、寬度各自不同，招式鈕的放大鏡還凸進「跳過攻擊」上方的縫。
+       ⇒ 只在新版桌墊 <1024 直排生效：按鈕統一滿寬、間距 6px；招式、「跳過攻擊」與「結束回合」（直接結束回合，最不該按錯；
+         primary 也含招式收合鈕）最高 38px、其他按鈕最高 32px，「跳過攻擊」緊接招式時再多空 6px。
+       ⭐ 站長 2026-10-31 裁定「寧可按鈕小一點，保證不捲動」：
+         按鈕改成 flex:1 1 0 ＋ 最小 22px ＋ 最大 38／32px ⇒ 這一列需要的高度只算「最小高度」，不會把整頁撐高；
+         行動框撐滿中間那一列，有空間時按鈕再長大到最大值；招式／跳過攻擊／結束回合 flex-grow:4，空間不夠時優先分給它們。
+         ⚠ 刻意不用 contain:size：極矮的視窗（704×704）連最小高度都放不下時，要退回整頁捲動，不可以讓按鈕疊到我方場地上（誤按）。
+         ⚠ 不可換欄（flex-wrap 會把多出來的按鈕排到右邊、蓋到競技場與紀錄）。
+       ⚠ 只套 .layout-blue：Fable 版直排的行動框只有 130px 寬，又不隱藏能量圖示，滿寬後招式名稱會被擠到看不見（審查 P1）。
+       ⚠ 寬 ≥1024 的固定槽位（v5.958 站長裁定位置鎖死）完全不動。 */
+    .playmat.layout-blue.layout-fable .action-bar > .action-btns{ flex-wrap:nowrap; gap:6px; align-items:stretch; align-self:stretch; justify-content:center; }
+    .playmat.layout-blue.layout-fable .action-bar > .action-btns > .btn-act,
+    .playmat.layout-blue.layout-fable .action-bar > .action-btns > .atk-slot{ flex:1 1 0; min-height:22px; max-height:32px; margin-left:0; }
+    .playmat.layout-blue.layout-fable .action-bar > .action-btns > .btn-act{ justify-content:center; }
+    .playmat.layout-blue.layout-fable .action-bar > .action-btns > .btn-act.secondary,
+    .playmat.layout-blue.layout-fable .action-bar > .action-btns > .btn-act.primary,
+    .playmat.layout-blue.layout-fable .action-bar > .action-btns > .atk-slot{ max-height:38px; flex-grow:4; }
+    .playmat.layout-blue.layout-fable .action-bar > .action-btns > .atk-slot{ display:flex; width:100%; }
+    .playmat.layout-blue.layout-fable .action-bar > .action-btns > .atk-slot > .btn-act{ min-height:0; }
+    .playmat.layout-blue.layout-fable .action-bar > .action-btns > .atk-slot + .btn-act.secondary,
+    .playmat.layout-blue.layout-fable .action-bar > .action-btns > .btn-act.atk-overflow + .btn-act.secondary{ margin-top:6px; }
+    /* <<< v6613-action-btns-spacing */
   }
 
 
