@@ -23,6 +23,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { V6616_MP_IDS } from './lib/revert-v6616-svi-mp.mjs';   // ⭐v6.616（Rule 40）
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));   // Rule 46：禁 pathname.slice
 const SELF = 'scripts/test-v6391-mp-j-wave1.mjs';
@@ -385,7 +386,8 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
       JSON.stringify(headArr.slice(0, baseArr.length)) === JSON.stringify(baseArr),
       JSON.stringify({ base: baseArr.length, head: headArr.length }));
     chk('E4b ⭐ 而且新增的就是那 32 張（順序＝抓回來的 id 由小到大）',
-      JSON.stringify(headArr.slice(baseArr.length).map((c) => String(c.id))) === JSON.stringify(NEW_IDS),
+      // ⭐v6.616（Rule 40）：v6.616 又在後面追加 M-P 特典卡 ⇒ 先拿掉 v6.616 那幾張再比（原意：v6.391 新增的就是這 32 張）
+      JSON.stringify(headArr.slice(baseArr.length).map((c) => String(c.id)).filter((id) => !V6616_MP_IDS.includes(id))) === JSON.stringify(NEW_IDS),
       JSON.stringify(headArr.slice(baseArr.length).map((c) => String(c.id))));
   }
 }

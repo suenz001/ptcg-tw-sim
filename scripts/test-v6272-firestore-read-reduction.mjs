@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '1f30545ccfb83f8c490b8fd01bb43cf673cdd8ef';   // v6.614（上一版）
+const PREV_SHA = '8e8423151c07a6b0fe7827c83ceb8f156413592a';   // v6.615（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,21 +757,37 @@ const PREV_SHA = '1f30545ccfb83f8c490b8fd01bb43cf673cdd8ef';   // v6.614（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.615 前移：PREV_SHA 從 1f30545c（v6.614）起算。
+  // ⚠⚠ v6.616 前移：PREV_SHA 從 8e842315（v6.615）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.615：卡牌資料庫收錄戰術牌組四副（卡表、卡包索引、卡號對應）；首頁 changelog 三步搬運
+  // ⭐v6.616：卡牌資料庫收錄 SVI 58 張與 M-P 17 張（卡表、卡包索引、卡號對應）、SVI 6 招實裝（新卡檔＋多麗米亞｜能量支援抽成中央 helper）；首頁 changelog 三步搬運
+  'src/lib/game/effects.ts',
+  'src/lib/game/effects/cards/svi_wave1.ts',
   'src/lib/version.ts',
   'static/card-set-map.json',
-  'static/cards/MTH.json',
-  'static/cards/MTK.json',
-  'static/cards/MTL.json',
-  'static/cards/MTS.json',
+  'static/cards/M-P-I.json',
+  'static/cards/M-P-J.json',
+  'static/cards/SVI.json',
   'static/cards/index.json',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.615）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.615 前移：PREV_SHA 從 1f30545c（v6.614）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.615：卡牌資料庫收錄戰術牌組四副（卡表、卡包索引、卡號對應）；首頁 changelog 三步搬運
+//   'src/lib/version.ts',
+//   'static/card-set-map.json',
+//   'static/cards/MTH.json',
+//   'static/cards/MTK.json',
+//   'static/cards/MTL.json',
+//   'static/cards/MTS.json',
+//   'static/cards/index.json',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.614）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.614 前移：PREV_SHA 從 42b129cc（v6.613）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -889,17 +905,6 @@ const PREV_ALLOWED = [
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
 //   'src/routes/game/MobilePortraitBattle.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.603）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.603 前移：PREV_SHA 從 598f5d61（v6.602）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.603：賽季排行選單與中央季別查詢；不改卡牌效果或玩家資料
-//   'src/lib/tournament/seasons.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

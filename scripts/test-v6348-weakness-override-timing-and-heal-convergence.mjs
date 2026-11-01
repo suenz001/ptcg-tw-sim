@@ -73,9 +73,11 @@ const deckOf = (card, n = 12) => Array.from({ length: n }, () => inst(card.id));
 // ── fixtures ────────────────────────────────────────────────────────────────
 const PIKA = findAtk('皮卡丘', '覆蓋伏特', 'M6a');     // Lightning, 覆蓋伏特 10
 const SIMI = findAtk('智揮猩', '掌握弱點');            // Colorless, 掌握弱點 0 / 掌擊 80
-/** 靶：Basic／無特性／HP 夠高吃得下 160／原生弱點**不是**【雷】也不是【無】。 */
+/** 靶：Basic／無特性／HP 夠高吃得下 160／原生弱點**不是**【雷】也不是【無】。
+ *  ⭐v6.616（Rule 40）：B4 會累計 160＋80 ＝ 240 ⇒ HP 必須 > 240 才不會在 B4 被打倒（原本 ≥200 只是剛好挑到夠厚的卡；
+ *  v6.616 在 M-P-I 補了萊希拉姆ex 20084（HP 230），掃描順序先遇到它 ⇒ B4 時已昏厥、D0 讀不到）。意圖不變，只是把前置條件寫對。 */
 const TGT = all.find((c) => c.supertype === 'Pokemon' && c.stage === 'Basic' && !(c.abilities || []).length
-  && !(c.tags || []).includes('太晶') && Number(c.hp) >= 200
+  && !(c.tags || []).includes('太晶') && Number(c.hp) > 240
   && c.weakness?.type !== 'Lightning' && c.weakness?.type !== 'Colorless');
 const PLAIN = all.find((c) => c.supertype === 'Pokemon' && c.stage === 'Basic' && !(c.abilities || []).length
   && !(c.tags || []).includes('太晶') && Number(c.hp) >= 60 && c.pokemonType === 'Colorless');

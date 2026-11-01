@@ -12797,23 +12797,30 @@ regR('v312-attach-energy-to-active', (st, idx, iids, params, pool) => {
 });
 
 regPre('多麗米亞|能量支援', (state, _aIdx, _pool) => ({ state, damage: 30 }));
-regPost('多麗米亞|能量支援', (state, aIdx, pool) => {
-  // 棄牌 1 張基本能量 → 附於備戰寶可夢
-  const p = state.players[aIdx];
-  if (p.bench.length === 0) return addLog(state, '能量支援：備戰區沒有寶可夢', aIdx);
-  const cand = p.discard.filter(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic';
-  });
-  if (cand.length === 0) return addLog(state, '能量支援：棄牌區沒有基本能量', aIdx);
-  const s = addLog(state, '能量支援：從棄牌區選 1 張基本能量', aIdx);
-  return withPending(s, {
-    type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'BasicEnergy', minCount: 1, maxCount: 1,
-    effectKey: 'discard-energy-attach-bench-only',
-    params: { label: '能量支援' },
-  });
-});
+// >>> v6616-discard-energy-to-bench
+// ⭐ v6.616：卡面「從自己的棄牌區選擇1張基本能量卡，附於備戰寶可夢身上。」抽成中央 helper
+//   （多麗米亞｜能量支援、SVI 基拉祈｜充溢祈願 共用；log 字串逐字沿用，label 由呼叫端帶入）。
+export function discardBasicEnergyToBenchPost(label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    // 棄牌 1 張基本能量 → 附於備戰寶可夢
+    const p = state.players[aIdx];
+    if (p.bench.length === 0) return addLog(state, `${label}：備戰區沒有寶可夢`, aIdx);
+    const cand = p.discard.filter(c => {
+      const card = pool.get(c.cardId);
+      return card?.supertype === 'Energy' && card.subtype === 'Basic';
+    });
+    if (cand.length === 0) return addLog(state, `${label}：棄牌區沒有基本能量`, aIdx);
+    const s = addLog(state, `${label}：從棄牌區選 1 張基本能量`, aIdx);
+    return withPending(s, {
+      type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'BasicEnergy', minCount: 1, maxCount: 1,
+      effectKey: 'discard-energy-attach-bench-only',
+      params: { label },
+    });
+  };
+}
+regPost('多麗米亞|能量支援', discardBasicEnergyToBenchPost('能量支援'));
+// <<< v6616-discard-energy-to-bench
 regR('discard-energy-attach-bench-only', (st, idx, iids, params, pool) => {
   const label = (params?.label as string) ?? '棄牌附能';
   const p = st.players[idx];
@@ -22071,6 +22078,7 @@ import './effects/cards/m6a_wave7'; // v6.347 M6a **特性**實裝 批次7（主
 import './effects/cards/mf_wave1';  // v6.388 MF 招式實裝 批次1（純類推既有中央 helper）
 import './effects/cards/mf_wave2';  // v6.388 MF 招式實裝 批次2（6 招，需要新的中央 helper）
 import './effects/cards/mp_j_wave1'; // v6.391 M-P（J 標）招式實裝 批次1（11 招，全部純類推既有中央 helper）
+import './effects/cards/svi_wave1'; // v6.616 SVI「Trianers Camp」招式實裝（6 招，全部純類推既有中央 helper）
 // ══════════════════════════════════════════════════════════════════════════════
 // ⭐ v6.345 M6a 批次5 —— 牌庫／手牌／棄牌區操作的中央出口
 //   （BRIEF §2 Rule 38：同一個判準只能有一份；卡檔只負責「哪一張卡用哪一支」。）

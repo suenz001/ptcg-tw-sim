@@ -28,6 +28,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { revertV6616Index, revertV6616Map } from './lib/revert-v6616-svi-mp.mjs';   // ⭐v6.616（Rule 40）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_SHA = '1f30545c';
@@ -173,9 +174,11 @@ else {
   ok('★★★ HEAD-FAIL：BASE（v6.614）上 D1、D3、D4 紅', base.r.D1 !== true && base.r.D3 !== true && base.r.D4 !== true, JSON.stringify(base.r));
   // 既有資料逐字未動
   const bIdx = rb('static/cards/index.json');
-  ok('★★ index.json 既有筆數逐字等於 BASE（只在後面追加四筆）', JSON.stringify(cur.idx.slice(0, bIdx.length)) === JSON.stringify(bIdx) && cur.idx.length === bIdx.length + 4);
+  // ⭐v6.616（Rule 40）：v6.616 追加 SVI、改了 M-P 兩筆張數 ⇒ 先用 v6.616 的還原表拿掉，再守「v6.615 只在後面追加四筆」這個原意
+  const idx615 = revertV6616Index(cur.idx), map615 = revertV6616Map(cur.map);
+  ok('★★ index.json 既有筆數逐字等於 BASE（只在後面追加四筆）', JSON.stringify(idx615.slice(0, bIdx.length)) === JSON.stringify(bIdx) && idx615.length === bIdx.length + 4);
   const bMap = rb('static/card-set-map.json');
-  ok('★★ card-set-map.json 既有鍵值逐字等於 BASE（只新增 94 筆）', Object.entries(bMap).every(([k, v]) => cur.map[k] === v) && Object.keys(cur.map).length === Object.keys(bMap).length + 94);
+  ok('★★ card-set-map.json 既有鍵值逐字等於 BASE（只新增 94 筆）', Object.entries(bMap).every(([k, v]) => map615[k] === v) && Object.keys(map615).length === Object.keys(bMap).length + 94);
 }
 
 console.log(`\n=== v6.615 戰術牌組四副收錄：${pass} PASS / ${fail} FAIL ===`);

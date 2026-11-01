@@ -1,5 +1,20 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.616（2026-11-01）SVI 收錄、M-P 補 17 張、新卡包偵測連官方商品清單
+
+BASE `8e842315`（v6.615）。站長 2026-11-01：「官方有，站上沒有的卡，只要補h i j表的卡就好，已經退標的卡不用管」「新卡包偵測改成連官方商品清單一起比對。」「H i j標的話都要收」「我查到的阿球是D標啊、觀光客是D標？都不用收啊」「只有h i j標要收 收之前，先確認是不是h i j標！ 這是最基本的」。
+
+- ⭐⭐⭐ 教訓：官網 detail 頁的「標記」欄位對舊商品的重印不可靠——它標的是現行可用的標記，不是卡上印的。實例：S4a 阿球顯示 I（站長查證是 D）、AS5D 觀光客顯示 J、AC1a 能量再利用顯示 I（卡圖印 A，©2018）、SVI 的訓練家顯示 I／J（卡圖印 G）、基本能量顯示 J（卡圖無標記）。⇒ 補卡前一律看卡圖左下角；本版也重看了 v6.615 戰術牌組 94 張與 M-P 17 張的卡圖，印的標記與站上資料一致。官網 detail 頁的其他欄位（階段、弱點）也出錯過，新卡面一律逐張對照卡圖。
+- M-P 特典卡補 17 張（20083～20092、20096～20098、20100～20103；M-P-I 51→62、M-P-J 135→141）：全部是站上同名同卡面的既有印刷（含 tags 逐字相同），零新程式碼；20102 依 2026-09-15 裁定改名「老大的指令」（audit 例外表同步登記）。
+- SVI「Trianers Camp」（2024-08-22，商品名照官網原文）：官方 133 張，卡圖印 H 的 58 張收錄（寶可夢 53、西餐廚師、野餐女孩×4）；印 G 的訓練家 20 張與無標記的基本能量 37 張不收，列在快照新表 printedMarkOverrides（printed＝卡圖實際標記、verifiedAt），官網直接標 G 的 18 張照舊進 knownNonHIJ。超能豔鴕 11317：官網 detail 頁階段欄位寫「基礎」，但卡圖左上角印「1階進化 從飄飄雛進化」（第一版照官網改成基礎，被 test-evolution-chain-integrity F 跨印刷一致性抓到，看卡圖後改回 Stage1 ← 飄飄雛；同 v6.076 大力鱷教訓）。
+- SVI 新卡面 14 張（招式不同；逐張看卡圖核對 HP／屬性／招式／費用／弱點／抵抗／撤退）。⚠ 官網 detail 頁的資料錯了兩處：超能豔鴕 11317 階段（見上）、密勒頓 11313 弱點寫【火】但卡圖印【鬥】⇒ 照卡圖，11313 與 MC 16754 同卡面，有效果的 6 招全部與既有卡逐字相同，指向既有中央 helper（新檔 effects/cards/svi_wave1.ts）：瑪力露麗｜泡沫光線 coinStatusPost、布撥｜瞄準電光 chooseOppPokemonDamage、恰雷姆｜雙重粉碎 coinHeadsMultiplyPre、故勒頓｜覺悟之牙 defIsExPre、肯泰羅｜破壞之角 discardOppActiveEnergyPost、基拉祈｜充溢祈願 ⇒ 把多麗米亞｜能量支援的本體抽成 effects.ts 中央 discardBasicEnergyToBenchPost(label)（log 逐字不變，test-v6616 C3 與 BASE 引擎逐字比對）。同名卡沒有同招式名的其他印刷 ⇒ 沒有 reg key 撞號。
+- 新卡包偵測（refresh-official-set-manifest.mjs）：讀官方檢索頁商品清單（136 個勾選項、134 個不重複代號；代號大小寫不敏感，svhk＝SVHK），未收錄的商品用官方「標準」篩選（regulation=1）列卡，逐張比對站上是否有同名同卡面（唯一判準 scripts/lib/official-reprint-match.mjs：寶可夢比階段／HP／屬性／弱點／抵抗／撤退／招式名稱費用傷害效果／特性，訓練家與能量比名稱與種類，名稱只去空白與【】、不去括號；evolvesFrom 與 tags 刻意不比，parseCard 單張讀不準）。結果寫進快照 products（standardCount／reprintOf＝{官方 id: {site, name}}／newFaces）；newFaces 中不在裁定 ruledNewFaces 裡的 ⇒ 離線守衛 test-official-set-completeness ③ 紅（裁定只涵蓋當時那幾張，之後同一商品多出的新卡面照樣報）。
+- 站長裁定不收（productsNotCollected，附理由、日期、ruledNewFaces）：SVT* 六副（「朱紫的戰術牌組很多都退標了，不用更新」；其中 SVTM 謝米 #10749 卡圖印 H、與站上 SV5K 9776／MC 16510 只差精刺奇襲效果文字多一個「也」字，站長 2026-11-01 裁定：「謝米只差一個字 是官方筆誤不用特別為了它再收」）；舊譯名／附角色名 27 項（老大的指令（赤日／坂木／魁奇思／弗拉達利）、寶可齒輪3.0、基礎【惡】／【鋼】能量、基本【炎】能量：「視為重印，不收」）；S4a 阿球、AS5D／AS6D 觀光客（「都不用收」）；AC1a 能量再利用（卡圖 A 標，比照同一裁定）。其餘約 450 張是站上同名同卡面的重印，不另收。
+- Rule 40：test-v6348 的靶（現查第一張 HP≥200 的基礎寶可夢）被新補的萊希拉姆ex 20084（HP 230）搶到，B4 累計 240 會打倒它 ⇒ 前置條件改成 HP>240（意圖不變）；test-v6609 P 段 effects.ts 逐位元比對先套 v6.616 還原表（原意：v6.609 沒動 effects.ts）；test-v6251 lint B 白名單補 discardBasicEnergyToBenchPost（基本**能量**）；test-v6232 的 M-P-I 51 改自洽＋下限（同 v6.391 對 M-P-J）；test-v6241 ⑨ 快照數字 M-P-I 62／M-P-J 141；test-v6615 的「既有逐字等於 BASE」、test-v6391 E4b 先用 v6.616 還原表拿掉本版追加再比；changelog 與 effects.ts 還原表 scripts/lib/revert-v6616-svi-mp.mjs 接進 revert-v6609-changelog 與 test-v6610 rdP。
+- 審查（Opus 5.5，35a2fffa）：P1-1 M-P 17 張 id 寫成數字（全庫唯一），前端卡池用原始 id 當 key、查卡一律 String ⇒ 牌組有這幾張就判「還沒載入」一直全量重載；守衛因先 String() 而安慰劑 ⇒ 改字串，新增 D6 全卡庫 id 型別。P1-2 SVTM 裁定理由附加了不實的括號斷言（謝米 #10749 是站上沒有的卡面）⇒ 看卡圖（印 H）、理由改寫成實測事實。P2 裁定改釘 ruledNewFaces；重印判準補階段與招式費用；reprintOf 存官方卡名讓守衛真的核「同名」。P3 svi_wave1 檔頭數字、C2b 驗 20 傷害、商品數 134、對外 changelog「無標記的基本能量」。
+- 守衛 test-v6616（HEAD-FAIL：BASE 上 D1／D2／D3／C2g 紅）；突變 8 個全殺（刪註冊、加成數字、幣數、狀態種類、不擲幣、helper 忽略 label、helper 不擋沒備戰、重印判準不看弱點）。
+- 部署（站長自己跑）：卡庫有變動 ⇒ 先 update-tournament.bat（重建錦標賽卡池）再 redeploy-oracle.bat；縮圖 python scripts\gen-card-thumbs.py --out E:\ptcg-tw-sim-img 後推縮圖 repo。
+
 ## v6.615（2026-11-01）卡牌資料庫收錄戰術牌組四副
 
 BASE `1f30545c`（v6.614）。站長 2026-11-01 轉述玩家建議：「希望卡牌資料庫中加入對戰的內建牌組中已有的戰術牌組（超級噴火龍Xex、超級沙奈朵ex、超級巨牙鯊ex、超級快龍ex）」，要求 audit 並使用相關 skill（ptcg-guard-hygiene 補卡流程；前例 v6.388 MF）。

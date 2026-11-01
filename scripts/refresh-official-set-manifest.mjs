@@ -15,6 +15,7 @@
 //   scripts/data/official-set-manifest.json
 //   scripts/data/official-tag-manifest.json（--tags）
 //   stdout：缺的 H/I/J 卡逐張列出（卡名／編號／標）——這就是「該補哪幾張」的清單。
+//   stdout：⭐ v6.616 官方商品清單比對 —— 站上沒收錄、但官方「標準」篩選有卡的新商品（全新商品不會再漏掉）。
 //
 // ⚠ 只有 list 頁是 server-rendered；detail 頁也吃得到（parse-card.js 直接解 HTML）。
 // ⚠ regulationMark 一律由官方 detail 頁決定，禁憑印象、禁外部 Wiki。
@@ -23,6 +24,7 @@ import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCard } from './scrape/parse-card.js';
+import { findSameFace } from './lib/official-reprint-match.mjs';
 // ⭐ v6.205：tag（古代105／未來106／ACE SPEC104）**只存在於 list filter**，單張 detail 頁看不到
 //   （scripts/scrape/tag-filters.js 開頭已載明）⇒ 想查證某張卡有沒有 tag，唯一官方來源就是這個 filter。
 import { TAG_FILTERS, collectTaggedIds } from './scrape/tag-filters.js';
@@ -138,6 +140,51 @@ async function collectIds(expansionCode) {
   return [...ids].sort((a, b) => +a - +b);
 }
 
+// ⭐ v6.616（站長 2026-11-01：「新卡包偵測改成連官方商品清單一起比對」）
+// ─────────────────────────────────────────────────────────────────────────────
+// 舊版只走「站上已有的卡包」⇒ 官方出了全新商品（例：v6.615 的戰術牌組 MTL／MTS／MTH／MTK）永遠抓不到。
+// 現在多一步：讀官方卡牌檢索頁的「商品」勾選清單（value＝expansionCode、label＝商品名），
+// 對每一個「站上沒有收錄」的商品，用官方自己的「標準」賽制篩選（regulation=1）列出卡片，再逐張比對：
+//   ・0 張 ⇒ 全部已退標，不必收
+//   ・⚠ 2026-11-01 實測：regulation=1 也會列出舊商品裡、官方認定標準賽可用的重印
+//     （例：AC1a 的高級球、SVD 的寶可夢交替）⇒ 不能只看張數，要逐張看「站上有沒有同名同卡面」
+//     （判準唯一一份：scripts/lib/official-reprint-match.mjs）
+//   ・站上找不到的卡面（newFaces）非空 ⇒ 要嘛收錄、要嘛由站長裁定不收（快照的 productsNotCollected，附理由）
+// 結果寫進快照的 products，由離線守衛 test-official-set-completeness ③ 檢查（CI 不連官網）。
+
+/** 官方卡牌檢索頁的商品清單（勾選框 class="expansionCode"）：[{ code, label }] */
+async function collectProducts() {
+  const $ = cheerio.load(await html(`${BASE}/tw/card-search/`));
+  const out = [];
+  $('input.expansionCode').each((_, el) => {
+    const code = $(el).attr('value');
+    const label = $(`label[for="${$(el).attr('id')}"]`).text().trim();
+    if (code) out.push({ code, label });
+  });
+  return out;
+}
+
+/** 某商品在官方「標準」賽制篩選下的卡片 id（regulation=1；走完分頁） */
+async function collectStandardIds(expansionCode) {
+  const ids = new Set();
+  let pageNo = 1;
+  while (true) {
+    const url = `${BASE}/tw/card-search/list/?expansionCodes=${encodeURIComponent(expansionCode)}&regulation=1&pageNo=${pageNo}`;
+    const $ = cheerio.load(await html(url));
+    const before = ids.size;
+    $('a[href*="/detail/"]').each((_, el) => {
+      const m = ($(el).attr('href') || '').match(/\/detail\/(\d+)/);
+      if (m) ids.add(m[1]);
+    });
+    if (ids.size === before) break;
+    const hasNext = $(`a[href*="pageNo=${pageNo + 1}"]`).length > 0;
+    pageNo++;
+    if (!hasNext) break;
+    await sleep(delayMs);
+  }
+  return [...ids].sort((a, b) => +a - +b);
+}
+
 // live 卡包 → 官方 expansionCode（M-P-H/I/J 與 SV-P-H/I/J 是我方為了濾標拆的檔）
 const dir = join(ROOT, 'static/cards');
 const INDEX = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'));
@@ -176,9 +223,17 @@ for (const [code, localSetCodes] of [...groups.entries()].sort()) {
 }
 
 // 缺的卡逐張抓 detail，用官方 regulationMark 分流
+// ⭐ v6.616：官方 detail 頁的標記欄位對「舊商品裡的重印」不可靠——它會標成現行可用的 I／J
+//   （2026-11-01 實測：S4a 阿球顯示 I、AS5D 觀光客顯示 J，站長查證卡面是 D 標；
+//    SVI 的訓練家卡圖印 G、基本能量卡圖無標記，官網卻標 I／J）。
+//   ⇒ 人工看過卡圖、確認印的不是 H／I／J 的，列在快照的 printedMarkOverrides（人工維護，refresh 原樣保留），
+//     這裡直接跳過，不當成待補卡。
+const _prevForOverrides = (() => { try { return JSON.parse(readFileSync(OUT, 'utf8')); } catch { return {}; } })();
+const printedMarkOverrides = _prevForOverrides.printedMarkOverrides ?? {};
 const knownNonHIJ = {};
 const todo = [];
 for (const [code, id] of missingIds) {
+  if (printedMarkOverrides[String(id)]) continue;
   try {
     const url = `${BASE}/tw/card-search/detail/${id}/`;
     const card = parseCard(await html(url), id, url);
@@ -196,6 +251,56 @@ for (const c of todo) {
   console.log(`  ${c.code} #${c.id} ${c.name}  ${c.collectorNumber}  ${c.regulationMark}  ${c.supertype}/${c.subtype}`);
 }
 console.log('（非 H/I/J 的 ' + Object.keys(knownNonHIJ).length + ' 張已列入 knownNonHIJ 豁免表）');
+console.log('（卡圖印的不是 H/I/J、人工列管的 ' + Object.keys(printedMarkOverrides).length + ' 張已跳過）');
+console.log('⚠ 補卡前一定要看卡圖上印的標記：官網標記欄位對舊商品的重印不可靠（站長 2026-11-01：「收之前，先確認是不是h i j標！」）');
+
+// ⭐ v6.616：官方商品清單 —— 站上沒收錄的商品，用官方「標準」篩選數張數
+const prevManifest = (() => { try { return JSON.parse(readFileSync(OUT, 'utf8')); } catch { return {}; } })();
+const notCollected = prevManifest.productsNotCollected ?? {};   // 站長裁定不收的商品（人工維護，附理由）
+const officialProducts = await collectProducts();
+// ⚠ 官方代號大小寫會改：站上的 svhk／svhm 在官方商品清單是 SVHK／SVHM ⇒ 一律大小寫不敏感比對
+const groupsLC = new Set([...groups.keys()].map((k) => k.toLowerCase()));
+const productsLC = new Set(officialProducts.map((p) => p.code.toLowerCase()));
+const products = {};
+const newProducts = [];
+for (const p of officialProducts) {
+  const covered = groupsLC.has(p.code.toLowerCase());
+  const entry = { label: p.label, covered };
+  if (!covered) {
+    await sleep(delayMs);
+    const std = await collectStandardIds(p.code);
+    entry.standardCount = std.length;
+    // 逐張比對：站上已有同 id ⇒ 已收錄；同名同卡面 ⇒ 重印（記下對應的站上 id，守衛離線核對）；
+    // 其餘 ⇒ newFaces（站上找不到的卡面，要嘛收錄、要嘛站長裁定不收）
+    const reprintOf = {};
+    const newFaces = [];
+    for (const id of std) {
+      if (OURS.has(String(id))) continue;
+      await sleep(delayMs);
+      const url = `${BASE}/tw/card-search/detail/${id}/`;
+      const card = parseCard(await html(url), id, url);
+      const same = findSameFace(card, OURS_CARD.values());
+      if (same) reprintOf[String(id)] = { site: same, name: card.name };   // 存官方卡名 ⇒ 守衛離線可核「同名」
+      else newFaces.push({ id: String(id), name: card.name, regulationMark: card.regulationMark ?? null, supertype: card.supertype });
+    }
+    entry.reprintOf = reprintOf;
+    entry.newFaces = newFaces;
+    // ⭐ 站長裁定不收是「當時那幾張」：裁定釘住 ruledNewFaces（id 清單），之後同一商品多出新卡面照樣要報
+    const ruled = new Set(notCollected[p.code]?.ruledNewFaces ?? []);
+    const unruled = newFaces.filter((f) => !ruled.has(f.id));
+    if (unruled.length > 0) newProducts.push({ ...p, standardCount: std.length, newFaces: unruled });
+  }
+  products[p.code] = entry;
+}
+const uncovered = Object.values(products).filter((v) => !v.covered).length;
+console.log('\n=== 官方商品清單：' + officialProducts.length + ' 項（站上已收錄 ' + (officialProducts.length - uncovered) + '、未收錄 ' + uncovered + '）===');
+for (const [code, r] of Object.entries(notCollected)) console.log(`  站長裁定不收：${code} ${products[code]?.label ?? '（官方清單已無此商品）'}（標準賽 ${products[code]?.standardCount ?? '?'} 張）— ${r.reason}`);
+if (newProducts.length === 0) console.log('  ✓ 沒有「未收錄、且有站上沒有的標準賽卡面」的商品（其餘未收錄商品的標準賽卡不是 0 張，就是站上已有同名同卡面的重印）');
+for (const p of newProducts) {
+  console.log(`  ★ 新商品待處理：${p.code} ${p.label} —— 標準賽可用 ${p.standardCount} 張，其中站上沒有的卡面 ${p.newFaces.length} 張（收錄，或由站長裁定後列入 productsNotCollected）`);
+  for (const f of p.newFaces) console.log(`      #${f.id} ${f.name}（${f.regulationMark ?? '?'}／${f.supertype}）`);
+}
+for (const code of groups.keys()) if (!productsLC.has(code.toLowerCase())) console.log(`  ⚠ 站上的卡包 ${code} 不在官方商品清單裡（官方改了代號？）`);
 
 if (write) {
   const prev = (() => { try { return JSON.parse(readFileSync(OUT, 'utf8')); } catch { return {}; } })();
@@ -206,6 +311,12 @@ if (write) {
     sets,
     _knownNonHIJNote: prev._knownNonHIJNote ?? '官方有、我們沒收錄，但 regulationMark 不是 H/I/J ⇒ 列管豁免。',
     knownNonHIJ: Object.fromEntries(Object.entries(knownNonHIJ).sort((a, b) => +a[0] - +b[0])),
+    _printedMarkOverridesNote: prev._printedMarkOverridesNote ?? '官網標成 H／I／J、但卡圖上印的標記不是 H／I／J 的卡（人工看卡圖確認；refresh 原樣保留）。printed＝卡圖實際印的標記（none＝無標記，例：基本能量）。',
+    printedMarkOverrides,
+    _productsNote: '官方卡牌檢索頁的商品清單（expansionCode → 商品名）。covered＝站上已收錄；未收錄的附 standardCount＝官方「標準」賽制篩選（regulation=1）的張數、reprintOf＝站上已有同名同卡面的重印（官方 id → 站上 id）、newFaces＝站上找不到的卡面。守衛：newFaces 非空的未收錄商品必須列在 productsNotCollected（站長裁定，附理由）。',
+    products,
+    _productsNotCollectedNote: prev._productsNotCollectedNote ?? '站長裁定不收的商品（人工維護；refresh 會原樣保留）。',
+    productsNotCollected: notCollected,
   };
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(OUT, JSON.stringify(manifest, null, 1) + '\n', 'utf8');

@@ -4713,5 +4713,117 @@
    "Colorless"
   ],
   "illustrator": "YOSHIROTTEN"
+ },
+ {
+  "id": "20089",
+  "name": "寶可平板",
+  "supertype": "Trainer",
+  "subtype": "Item",
+  "setCode": "M-P-J",
+  "collectorNumber": "113/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020089.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20089/",
+  "scrapedAt": "2026-11-01T09:00:06.073Z",
+  "regulationMark": "J",
+  "rulesText": "從自己的牌庫選擇1張寶可夢卡（「擁有規則的寶可夢」除外），在給對手看過後加入手牌。並且重洗牌庫。",
+  "illustrator": "Studio Bora Inc."
+ },
+ {
+  "id": "20090",
+  "name": "寶可平板",
+  "supertype": "Trainer",
+  "subtype": "Item",
+  "setCode": "M-P-J",
+  "collectorNumber": "113/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020090.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20090/",
+  "scrapedAt": "2026-11-01T09:00:06.775Z",
+  "regulationMark": "J",
+  "rulesText": "從自己的牌庫選擇1張寶可夢卡（「擁有規則的寶可夢」除外），在給對手看過後加入手牌。並且重洗牌庫。",
+  "illustrator": "Studio Bora Inc."
+ },
+ {
+  "id": "20096",
+  "name": "勝利之證",
+  "supertype": "Trainer",
+  "subtype": "Item",
+  "setCode": "M-P-J",
+  "collectorNumber": "M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020096.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20096/",
+  "scrapedAt": "2026-11-01T09:00:08.787Z",
+  "regulationMark": "J",
+  "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+  "illustrator": "5ban Graphics"
+ },
+ {
+  "id": "20097",
+  "name": "勝利之證",
+  "supertype": "Trainer",
+  "subtype": "Item",
+  "setCode": "M-P-J",
+  "collectorNumber": "M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020097.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20097/",
+  "scrapedAt": "2026-11-01T09:00:09.480Z",
+  "regulationMark": "J",
+  "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+  "illustrator": "5ban Graphics"
+ },
+ {
+  "id": "20098",
+  "name": "勝利之證",
+  "supertype": "Trainer",
+  "subtype": "Item",
+  "setCode": "M-P-J",
+  "collectorNumber": "M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020098.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20098/",
+  "scrapedAt": "2026-11-01T09:00:10.162Z",
+  "regulationMark": "J",
+  "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+  "illustrator": "5ban Graphics"
+ },
+ {
+  "id": "20103",
+  "name": "喵喵ex",
+  "supertype": "Pokemon",
+  "subtype": "ex",
+  "setCode": "M-P-J",
+  "collectorNumber": "226/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020103.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20103/",
+  "scrapedAt": "2026-11-01T09:00:12.892Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 170,
+  "pokemonType": "Colorless",
+  "abilities": [
+   {
+    "label": "特性",
+    "name": "殺手鐧捕捉",
+    "effect": "在自己的回合，從手牌將這張卡放置於備戰區時，可使用1次。從自己的牌庫選擇1張支援者卡，在給對手看過後加入手牌。並且重洗牌庫。在這個回合，若已經使出了名稱中有「殺手鐧」的特性，則這個特性無法使用。"
+   }
+  ],
+  "attacks": [
+   {
+    "name": "夾尾巴逃跑",
+    "cost": [
+     "Colorless",
+     "Colorless",
+     "Colorless"
+    ],
+    "damage": "60",
+    "effect": "將這隻寶可夢與附加的卡，全部放回手牌。"
+   }
+  ],
+  "weakness": {
+   "type": "Fighting",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "illustrator": "5ban Graphics"
  }
 ]

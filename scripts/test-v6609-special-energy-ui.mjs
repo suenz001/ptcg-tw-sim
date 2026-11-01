@@ -7,6 +7,7 @@ import {compile} from 'svelte/compiler';
 import {pwLaunch} from './lib/pw.mjs';
 import {readBaseBlob} from './lib/base-blob.mjs';
 import {revertV6609Game,revertV6609Mobile} from './lib/revert-v6609-energy-ui.mjs';
+import {revertV6616File,hasV6616File} from './lib/revert-v6616-svi-mp.mjs';   // ⭐v6.616（Rule 40）：effects.ts 先還原 v6.616（多麗米亞抽成中央 helper、接上 svi_wave1），再守「v6.609 沒動到 effects.ts」的原意
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PRODUCT = process.env.V6609_PRODUCT || ROOT;
 const BASE='e0abc828e1cf96cb2d15084f5d9a86718723c2d6';
@@ -14,7 +15,7 @@ const read=p=>readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n');
 let pass=0,fail=0;
 async function T(name,fn){try{await fn();pass++;console.log('PASS '+name);}catch(e){if(!(e instanceof assert.AssertionError))throw e;fail++;console.log('FAIL '+name+' '+e.message);}}
 const base=p=>{const x=readBaseBlob(ROOT,BASE,p);assert.ok(x.ok);return x.out.replace(/\r\n/g,'\n');};
-for(const p of ['src/lib/game/engine.ts','src/lib/game/effects.ts','src/lib/game/damage-estimate.ts'])await T('P '+p+'逐位元不變',()=>assert.equal(read(p),base(p)));
+for(const p of ['src/lib/game/engine.ts','src/lib/game/effects.ts','src/lib/game/damage-estimate.ts'])await T('P '+p+'逐位元不變',()=>{let x=read(p);if(p==='src/lib/game/effects.ts'){assert.ok(hasV6616File(p,x),'v6616 還原錨點不在（還原表過期）');x=revertV6616File(p,x);}assert.equal(x,base(p));});
 const game=read('src/routes/game/+page.svelte'),mobile=read('src/routes/game/MobilePortraitBattle.svelte');
 await T('P 僅精確還原本版即可得到BASE兩頁',()=>{for(const[p,s,f]of [['src/routes/game/+page.svelte',game,revertV6609Game],['src/routes/game/MobilePortraitBattle.svelte',mobile,revertV6609Mobile]])assert.equal(s===base(p)?s:f(s),base(p));});
 const present=existsSync(join(PRODUCT,'src/lib/cards/attached-energy.ts'));

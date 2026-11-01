@@ -151,12 +151,15 @@ T('⭐⭐⭐ 9 張全部：標=J、setCode=M-P-J、在 M-P-J.json、不在 M-P-I
   }
 });
 
-T('⭐⭐⭐ index.json 定點數字＝實際檔案（M-P-I 51／M-P-J 103；總數 4938、未重生）', () => {
+T('⭐⭐⭐ index.json 定點數字＝實際檔案（M-P-I／M-P-J 自洽＋只准增加；總數 4938、未重生）', () => {
   const mi = INDEX.find((e) => e.code === 'M-P-I'), mj = INDEX.find((e) => e.code === 'M-P-J');
-  eq(mi.cardCount, 51, 'M-P-I cardCount'); eq(mi.count, 51, 'M-P-I count');   // v6.329 +麻麻小魚 211
-  eq(MPI.length, 51, 'M-P-I.json 實際張數');
+  // ⭐v6.616（Rule 40，同下方 M-P-J 在 v6.391 的作法）：原本釘死 51，v6.616 補 M-P 特典卡 11 張（I 標）就紅。
+  //   意圖是「index.json ＝ 實際檔案、資料沒有被重生洗掉」⇒ 改成自洽 ＋ 只准增加的下限；
+  //   「既有 51 筆逐字未動」由 test-v6616 D4b（BASE blob 逐字比對）接手。
+  eq(mi.cardCount, MPI.length, 'M-P-I cardCount'); eq(mi.count, MPI.length, 'M-P-I count');   // v6.329 +麻麻小魚 211
+  ok(MPI.length >= 51, 'M-P-I 只准增加（v6.329 現查 51），實際 ' + MPI.length);
   ok(!('Energy' in (mi.supertypeCounts || {})), 'M-P-I 不該再有 Energy 供應數');
-  eq(Object.values(mi.supertypeCounts).reduce((a, b) => a + b, 0), 51, 'M-P-I supertypeCounts 加總');
+  eq(Object.values(mi.supertypeCounts).reduce((a, b) => a + b, 0), MPI.length, 'M-P-I supertypeCounts 加總');
   // ⭐v6.391（Rule 40，與本檔 164~168 行同一套想法）：原本釘死 103，每補一次卡就要手改。
   //   改成「index.json ＝ 實際檔案」的自洽判準 ＋ 只准增加的下限。
   eq(mj.cardCount, MPJ.length, 'M-P-J cardCount'); eq(mj.count, MPJ.length, 'M-P-J count');

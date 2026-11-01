@@ -356,30 +356,30 @@
   "code": "M-P-I",
   "name": "M-P特典卡(I)",
   "regulationMark": "I",
-  "cardCount": 51,
+  "cardCount": 62,
   "supertypeCounts": {
-   "Pokemon": 36,
-   "Trainer": 15
+   "Pokemon": 39,
+   "Trainer": 23
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014090.png",
   "scrapedAt": "2026-04-25T00:00:00.000Z",
   "releaseDate": null,
-  "count": 51
+  "count": 62
  },
  {
   "code": "M-P-J",
   "name": "M-P特典卡(J)",
   "regulationMark": "J",
-  "cardCount": 135,
+  "cardCount": 141,
   "supertypeCounts": {
-   "Pokemon": 107,
-   "Trainer": 10,
+   "Pokemon": 108,
+   "Trainer": 15,
    "Energy": 18
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018077.png",
   "scrapedAt": "2026-04-25T00:00:00.000Z",
   "releaseDate": null,
-  "count": 135
+  "count": 141
  },
  {
   "code": "M3",
@@ -707,5 +707,19 @@
   "scrapedAt": "2026-11-01T08:41:01.087Z",
   "releaseDate": "2026-07-17",
   "count": 25
+ },
+ {
+  "code": "SVI",
+  "name": "Trianers Camp",
+  "regulationMark": "H",
+  "cardCount": 58,
+  "supertypeCounts": {
+   "Pokemon": 53,
+   "Trainer": 5
+  },
+  "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/products/twhk_SVI_exp.png",
+  "scrapedAt": "2026-11-01T10:47:59.591Z",
+  "releaseDate": "2024-08-22",
+  "count": 58
  }
 ]

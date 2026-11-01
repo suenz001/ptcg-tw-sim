@@ -1698,5 +1698,252 @@
     "pokedexNumber": 602,
     "species": "電魚寶可夢",
     "illustrator": "Saboteri"
+  },
+  {
+    "id": "20083",
+    "name": "氣球",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
+    "setCode": "M-P-I",
+    "collectorNumber": "038/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020083.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20083/",
+    "scrapedAt": "2026-11-01T09:00:01.463Z",
+    "regulationMark": "I",
+    "rulesText": "附有這張卡的寶可夢，【撤退】所需的能量減少2個。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "20084",
+    "name": "萊希拉姆ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "M-P-I",
+    "collectorNumber": "039/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020084.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20084/",
+    "scrapedAt": "2026-11-01T09:00:02.229Z",
+    "regulationMark": "I",
+    "stage": "Basic",
+    "hp": 230,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "劈開",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "50",
+        "effect": ""
+      },
+      {
+        "name": "火爆發",
+        "cost": [
+          "Fire",
+          "Fire",
+          "Colorless"
+        ],
+        "damage": "130+",
+        "effect": "增加對手已經獲得的獎賞卡的張數×50點傷害。選擇1個這隻寶可夢身上附加的能量，將其丟棄。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "illustrator": "5ban Graphics"
+  },
+  {
+    "id": "20085",
+    "name": "滿充的體貼",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "M-P-I",
+    "collectorNumber": "040/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020085.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20085/",
+    "scrapedAt": "2026-11-01T09:00:02.945Z",
+    "regulationMark": "I",
+    "rulesText": "將自己的1隻「超級進化寶可夢【ex】」的HP全部恢復。然後，將恢復的寶可夢身上附加的能量卡全部放回手牌。",
+    "illustrator": "Iori Suzuki"
+  },
+  {
+    "id": "20086",
+    "name": "捷克羅姆ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "M-P-I",
+    "collectorNumber": "041/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020086.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20086/",
+    "scrapedAt": "2026-11-01T09:00:03.977Z",
+    "regulationMark": "I",
+    "stage": "Basic",
+    "hp": 230,
+    "pokemonType": "Lightning",
+    "attacks": [
+      {
+        "name": "劈開",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "50",
+        "effect": ""
+      },
+      {
+        "name": "電爆發",
+        "cost": [
+          "Lightning",
+          "Lightning",
+          "Colorless"
+        ],
+        "damage": "130+",
+        "effect": "增加對手已經獲得的獎賞卡的張數×50點傷害。這隻寶可夢也受到30點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "illustrator": "takuyoa"
+  },
+  {
+    "id": "20087",
+    "name": "道具拆除器",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "M-P-I",
+    "collectorNumber": "083/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020087.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20087/",
+    "scrapedAt": "2026-11-01T09:00:04.646Z",
+    "regulationMark": "I",
+    "rulesText": "選擇最多2張雙方的場上寶可夢身上附加的「寶可夢道具」卡，將其丟棄。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "20088",
+    "name": "小光",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "M-P-I",
+    "collectorNumber": "084/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020088.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20088/",
+    "scrapedAt": "2026-11-01T09:00:05.363Z",
+    "regulationMark": "I",
+    "rulesText": "從自己的牌庫選擇「【基礎】寶可夢」卡「【1階進化】寶可夢」卡「【2階進化】寶可夢」卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Yuu Nishida"
+  },
+  {
+    "id": "20091",
+    "name": "超級信號",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "M-P-I",
+    "collectorNumber": "049/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020091.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20091/",
+    "scrapedAt": "2026-11-01T09:00:07.442Z",
+    "regulationMark": "I",
+    "rulesText": "從自己的牌庫選擇1張「超級進化寶可夢【ex】」，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "inose yukie"
+  },
+  {
+    "id": "20092",
+    "name": "莉莉艾的決意",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "M-P-I",
+    "collectorNumber": "050/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020092.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20092/",
+    "scrapedAt": "2026-11-01T09:00:08.108Z",
+    "regulationMark": "I",
+    "rulesText": "將自己的手牌全部放回牌庫並重洗。然後，從牌庫抽出6張卡。若自己剩餘獎賞卡的張數為6張，則改為抽出8張卡。",
+    "tags": [
+      "訓練家冠名"
+    ],
+    "illustrator": "Atsushi Furusawa"
+  },
+  {
+    "id": "20100",
+    "name": "猛攻手鐲",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
+    "setCode": "M-P-I",
+    "collectorNumber": "223/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020100.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20100/",
+    "scrapedAt": "2026-11-01T09:00:10.828Z",
+    "regulationMark": "I",
+    "rulesText": "附有這張卡的寶可夢（「擁有規則的寶可夢」除外）使用的招式，對對手的戰鬥場的「寶可夢【ex】」造成的傷害「+30」點。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "20101",
+    "name": "花舞鳥ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "M-P-I",
+    "collectorNumber": "224/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020101.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20101/",
+    "scrapedAt": "2026-11-01T09:00:11.507Z",
+    "regulationMark": "I",
+    "stage": "Basic",
+    "hp": 190,
+    "pokemonType": "Fire",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "激動渦輪",
+        "effect": "若自己的場上有【火】屬性的「超級進化寶可夢【ex】」，則在自己的回合時，可不限次數使用。從自己的手牌選擇1張「基本【火】能量」卡，附於備戰區的【火】寶可夢身上。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "火焰之翼",
+        "cost": [
+          "Fire",
+          "Fire",
+          "Colorless"
+        ],
+        "damage": "110",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "illustrator": "akagi"
+  },
+  {
+    "id": "20102",
+    "name": "老大的指令",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "M-P-I",
+    "collectorNumber": "225/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020102.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20102/",
+    "scrapedAt": "2026-11-01T09:00:12.218Z",
+    "regulationMark": "I",
+    "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
+    "illustrator": "akagi"
   }
 ]

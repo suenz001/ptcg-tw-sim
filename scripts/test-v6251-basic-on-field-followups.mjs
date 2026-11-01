@@ -432,6 +432,7 @@ const ALLOW_B = [
   ['/src/lib/game/ai.ts', 'isBasicGrass', '基本【草】**能量**'],
   ['/src/lib/game/ai.ts', 'isBasicGrass2', '基本【草】**能量**'],
   ['/src/lib/game/effects.ts', 'isRocketBasicTarget', '抵抗之幕：要求卡名含「火箭隊的」⇒ 化石恆不符合'],
+  ['/src/lib/game/effects.ts', 'discardBasicEnergyToBenchPost', '基本**能量**（v6.616 多麗米亞｜能量支援／SVI 基拉祈｜充溢祈願共用）'],
   ['/src/lib/game/effects.ts', 'rcHasFieldBasic', '神奇糖果：靠 evolvesFrom **鏈結**逐字比對卡名（canEvolveOnto），不是【基礎】判定；化石可正常被糖果進化'],
   ['/src/lib/game/effects/cards/m2_dragon_charizard_batch.ts', 'isBasicEnergyOf', '基本**能量**'],
   ['/src/lib/game/effects/cards/m6_wave14.ts', 'isBasicOf', '基本**能量**'],
