@@ -2711,3 +2711,23 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
 4. room-oracle 系列 harness（v6265／v6270／v6279／v6310／v6525／v6197）替身伺服器 import ⇒ 新增 import 要逐支補 stub。
 5. 順序是 bump → build → **commit** → 全套：test-v6272 ⑩ 用 `git diff <上一版>` 比，新檔沒 commit 就看不到（會紅）；也不要用 `git add -N`（全套沙盒會跳過 i-t-a 檔）。停全套用 `ps -C node -o pid=,args= | awk '$0 ~ /run-tests\.mjs/ {print $1}' | xargs -r kill`（`pkill -f` 會殺到自己的 shell）。
 6. 產品事實（不要重推）：錦標賽時限預設雙敗（決賽雙敗＝沒有冠軍，admin 可切獎賞卡判）；推播偏好是帳號層級、以伺服器為準；休閒線上計時用 `gameClockNow`；擲幣 RNG 已用 20 萬次實測公平。
+
+## Rule 90（2026-11-01）：補卡一律以「卡圖」為準，官網 detail 頁的欄位不可盡信（v6.615～v6.616）
+
+站長逐字：「只有h i j標要收 收之前，先確認是不是h i j標！ 這是最基本的」「官方有，站上沒有的卡，只要補h i j表的卡就好，已經退標的卡不用管」「新卡包偵測改成連官方商品清單一起比對。」「我查到的阿球是D標啊、觀光客是D標？都不用收啊」「謝米只差一個字 是官方筆誤不用特別為了它再收」。
+
+1. **官網 detail 頁會出錯，而且錯的方向很固定**：
+   - **標記**：舊商品裡的重印，官網標的是「現在還能用的標記」，不是卡上印的。實例：S4a 阿球顯示 I、AS5D 觀光客顯示 J（站長查證是 D）、AC1a 能量再利用顯示 I（卡圖印 A，©2018）、SVI 的訓練家顯示 I／J（卡圖印 G）、基本能量顯示 J（卡圖沒有標記）。官方「標準」篩選（`regulation=1`）用的是同一份資料 ⇒ 也會把這些列進來。
+   - **階段**：SVI 超能豔鴕 11317 官網寫「基礎」，卡圖左上角印「1階進化 從飄飄雛進化」（同 v6.076 大力鱷）。
+   - **弱點**：SVI 密勒頓 11313 官網寫【火】，卡圖印【鬥】。
+   ⇒ **補卡前逐張看卡圖**：左下角標記決定收不收；站上沒有的新卡面再核 HP／屬性／階段與進化來源／招式名稱費用傷害效果／弱點／抵抗／撤退。卡圖網址就是卡片的 `imageUrl`，用 PIL 裁切拼圖後用 Read 看（左下角約 y 0.92～0.98、x 0～0.45）。
+2. **收錄範圍**：只收卡圖印 H／I／J 的卡；同名同卡面的重印（約 450 張散在舊商品裡）不另收；舊譯名或附角色名（老大的指令（赤日）、寶可齒輪3.0、基礎【惡】能量…）視為重印不收；只差一個字的官方筆誤不收。
+3. **新卡包偵測**（`scripts/refresh-official-set-manifest.mjs`）：讀官方檢索頁的商品清單（代號大小寫不敏感，svhk＝SVHK），未收錄的商品逐張比對重印（**唯一判準** `scripts/lib/official-reprint-match.mjs`：寶可夢比階段／HP／屬性／弱點／抵抗／撤退／招式名稱費用傷害效果／特性；訓練家與能量比名稱與種類；名稱只去空白與【】、**不去括號**）。快照欄位：
+   - `products[code]`：`standardCount`、`reprintOf`（官方 id → `{site, name}`）、`newFaces`；
+   - `productsNotCollected[code]`：`reason`（**只引用站長原話＋可驗證的實測事實，不可以替站長下結論**）、`ruledAt`、`ruledNewFaces`（裁定只涵蓋當時那幾張，之後多出的新卡面照樣紅）；
+   - `printedMarkOverrides[id]`：官網標 H／I／J、卡圖印的不是（`printed`、`verifiedAt`），refresh 原樣保留。
+   離線守衛 `test-official-set-completeness` ②③ 檢查這三者。
+4. **資料格式地雷**：卡片 `id` 一律是**字串**（前端卡池 `pool.set(c.id)` 用原始 id、查卡一律 `String(cardId)` ⇒ 數字 id 的卡永遠查不到，牌組有它就一直全量重載；v6.616 第一版 M-P 17 張就是數字，守衛因為先 `String()` 再比而沒抓到 ⇒ test-v6616 D6 掃全卡庫型別）。
+   寫回卡檔前做空操作自證（各檔縮排不同：MT*／M-P-I／SVI 縮排 2、M-P-J 與 index.json 縮排 1）；card-set-map.json 走文字層追加；manifest 縮排 1＋檔尾換行。
+5. **既有守衛會被「補卡」以意想不到的方式弄紅**（v6.616 一次踩到四支）：現查挑 fixture 的守衛會挑到新卡（v6348 靶從 HP≥200 挑到新的萊希拉姆ex 230，扛不住 240）；釘張數的快照（v6232、v6241 ⑨）；「既有逐字等於 BASE」（v6615、v6391 E4b）；整檔位元組釘（v6609 effects.ts）。照 Rule 40 先用本版還原表（`scripts/lib/revert-v6616-svi-mp.mjs` 同時提供 changelog／effects.ts 位元組還原與 index／card-set-map 資料層還原）拿掉本版改動再比，或把前置條件寫對。
+6. **跨印刷一致性守衛（test-evolution-chain-integrity F）比官網單一欄位可靠**：它紅了先看卡圖，不要急著加白名單或改資料去配合官網。
