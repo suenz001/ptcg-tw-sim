@@ -1,5 +1,24 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.615（2026-11-01）卡牌資料庫收錄戰術牌組四副
+
+BASE `1f30545c`（v6.614）。站長 2026-11-01 轉述玩家建議：「希望卡牌資料庫中加入對戰的內建牌組中已有的戰術牌組（超級噴火龍Xex、超級沙奈朵ex、超級巨牙鯊ex、超級快龍ex）」，要求 audit 並使用相關 skill（ptcg-guard-hygiene 補卡流程；前例 v6.388 MF）。
+
+- 官方代號（2026-11-01 現查 asia.pokemon-card.com/tw/card-search/ 的 expansionCode 與發售日）：MTL 戰術牌組「超級噴火龍Xex」、MTS「超級沙奈朵ex」、MTH「超級巨牙鯊ex」、MTK「超級快龍ex」，發售日皆 2026-07-17。refresh-official-set-manifest.mjs 只比對站上已有的卡包，所以抓不到全新商品（下一步可改成連官方商品清單一起比）。
+- 抓卡：node scripts/scrape/scrape-set.js MTL/MTS/MTH/MTK --delay 500 ⇒ 24／24／21／25 張，0 失敗；全部 H／I／J（MTL I18 H3 J3、MTS I15 H4 J5、MTH H6 I12 J3、MTK I14 J7 H4）；id 與站上無撞號；檔案格式與 MBD 等預組卡包相同（縮排 2、LF、檔尾無換行）。
+- 卡面比對：94 張中 89 張與站上同名既有印刷逐欄相同（supertype／subtype／stage／hp／屬性／evolvesFrom／特性／招式／弱點／抵抗／撤退／rulesText）；小光（MTL 19303）只差「各1張／各一張」一字；四張「老大的指令（烏羽）」依站長 2026-09-15 裁定（括號是官網弄錯，同 v6.193 M-P 215、v6.388 MF）改名為「老大的指令」，rulesText 與既有逐字相同 ⇒ 吃 registerGustSupporter 中央註冊、牌組 4 張上限自動正確。⇒ 零新程式碼。
+- 行為端實作盤點（打包引擎讀實際註冊表）：有效果的招式 31 全部已註冊、純傷害 16；特性 20（主動 14 走 hasAbilityFn、被動 6 走各自的表：小火龍｜一身輕、莉莉艾的皮皮ex｜妖精領域、拉帝亞斯ex｜天空徑線、胖嘟嘟ex｜海之詛咒、超級蒂安希ex｜鑽石膜、飯匙蛇｜激動力量）；訓練家 51 全部在 TRAINER_EFFECTS。對戰預組四副的卡名集合與官方商品卡表完全一致（60 張）。
+- 資料層（全部手術式，既有內容逐字不動）：static/cards/MTL/MTS/MTH/MTK.json 新檔；index.json 末尾追加四筆（標記 J、封面＝各副主角超級進化 ex 的官方卡圖，同 MF 作法；空操作自證格式相同）；card-set-map.json 文字層追加 94 筆（5224 → 5318）；scripts/data/official-set-manifest.json 只加四副（ids 即官方 list 頁走完分頁的結果）。regulation.ts 的 SET_REGULATION_MARK 不登記（同 MF；每張卡有自己的標記）。卡牌政策預設不鎖新卡包。
+- 順帶 audit：官方還有朱紫世代 6 副戰術牌組（SVTL／SVTS／SVTM／SVTR／SVTG／SVTH），大多是 F／G 標，其中 H／I／J 卡在站上都有同名印刷 ⇒ 依「只維護 H／I／J」不收。官方快照另有 M-P 17 張、SV-P 134 張、SV8a 46 張、SV11B 1 張「官方有、我們沒有」（既有缺口，非本版範圍，列給站長）。
+- 守衛 test-v6615-tactic-deck-sets（12 項，C4 見下方審查段）：D1 張數／標記／id 不重複；D2 與官方快照雙向一致；D3 index 四筆欄位；D4 卡號對應；D5 無括號卡名＋老大的指令 rulesText 逐字相同；C1 每張都有同名同卡面的既有印刷（小光一字例外逐字釘住）；C2 行為端（招式全註冊、訓練家全有效果、被動特性剛好 6 個已知）；C3 對戰預組＝官方卡表；HEAD-FAIL BASE 上 D1／D3／D4 紅；index 與 card-set-map 既有內容逐字等於 BASE。突變：改回「老大的指令（烏羽）」⇒ D5／C1／C2／C3 紅（C2 證明不改名的話訓練家查不到效果）；MTK 刪一張 ⇒ D1／D2／D3／C1／C3 紅；發售日改錯 ⇒ D3 紅。
+- 審查（Opus 5.5，0a1b9e25）：P1-1 五張卡少了 tags——MTL 19297 貴重手推車、MTS 19345 英雄斗篷、MTH 19319 頂尖捕捉器、MTK 19370 極限腰帶少「ACE SPEC」，MTS 19329 莉莉艾的皮皮ex 少「訓練家冠名」。根因：爬蟲的 tag 從官方 list 篩選（trainersTag[0]=104 等）回填，而官方 ACE SPEC 篩選頁（52 個 id）沒收這四張；C1 的比對欄位漏了 tags ⇒ 安慰劑。實測 validateDeck：19297×4、19297＋MC 頂尖捕捉器、四張各 1 全被判合法（ACE SPEC 一副 1 張失效，錦標賽報名／公布欄同一支）；蓋諾賽克特｜ACE消弭也讀 tags。既有守衛 test-v6205 6b／6c 紅。⇒ 從同名既有印刷逐字照抄 tags（放在 regulationMark 之後，同既有卡的鍵順序），test-v6205 31/0；C1 比對欄位加 tags；新增 C4（打包 validateDeck 實跑三種組合都必須違規）。P1-2 部署少了 update-tournament.bat（已改上方部署行）。P2 C2 的被動特性只比名單 ⇒ 改成剝註解後 src/lib/game 程式碼裡必須真的有該特性名的字串字面。P3 audit-card-data-vs-official.mjs 的 KNOWN_INTENTIONAL_DIVERGENCES 補登 19709（MF）與 19305／19349／19326／19374（同一個裁定）。P3 未改：MT 四副未登記 SET_REGULATION_MARK（同 MF／M5／M6a，build-sets-index 重生會變 null，既有地雷）；縮圖待站長跑 gen-card-thumbs.py。
+  突變：拿掉 19297 的 ACE SPEC ⇒ C1、C4 紅；把 effects.ts 的 '鑽石膜' 改名 ⇒ C2 紅。
+  ⭐ 教訓：補卡包時 tags 要和同名既有印刷做一致性核對（官方 tag 篩選頁對新商品可能沒更新）。
+- 複審（cb825fa2）：無 P1。全欄位重掃（排除 id／setCode／collectorNumber／imageUrl／sourceUrl／scrapedAt／illustrator／regulationMark）：93/94 逐欄相同，只剩小光一字例外。C4 實測非安慰劑（拿掉 19345 的 ACE SPEC、或 isAceSpec 改 return false 都紅）。P2：C2 的字面檢查對「激動力量」無效（3 處字面，2 處只是分類表）⇒ 激動力量／鑽石膜／一身輕／天空徑線改成直接查引擎實際的表（PASSIVE_ATTACK_BONUS／PASSIVE_DAMAGE_REDUCE／ABILITY_RETREAT_MOD／FREE_RETREAT_BASIC_ABILITY_NAMES），妖精領域／海之詛咒寫在函式裡維持字面；突變「激動力量的實作改名、分類表字面保留」⇒ C2 紅。稽核腳本實跑 MTH、MF：19326／19709 落在白名單，遊戲性差異 0。P3（不改）：稽核把 tags 列為非遊戲性欄位，可考慮把 ACE SPEC／訓練家冠名升級成遊戲性欄位。
+- 真瀏覽器：/cards 卡包列表 J 標區出現四副（依發售日排在 M6 之後、M5 之前），點進 MTK 顯示 25 張，頁面零錯誤。
+- Rule 40：新增 scripts/lib/revert-v6615-tactic-sets.mjs（只有 changelog 三檔），接進 revert-v6609-changelog（最先還原）與 test-v6610 rdP。
+- 部署：卡 DB 有動 ⇒ **update-tournament.bat（先，重建錦標賽伺服器卡池 tournament-pool.json）→ redeploy-oracle.bat（後）**（審查 P1-2；前例 M6a、v6.232）。只跑前端的話，用 MT 新印刷組的牌報名錦標賽（tournDeckIssue）或投稿公布欄（dpValidateDeck）會被擋成「牌組含有本站沒有的卡片」。卡圖縮圖：站長電腦跑 python scripts\gen-card-thumbs.py --out E:\ptcg-tw-sim-img 再推縮圖 repo（沒跑也不會破圖，新卡走官方原圖）。
+
 ## v6.614（2026-10-31）摺疊機、直立平板的新版桌墊改用電腦版排列
 
 BASE `42b129cc`（v6.613）。站長 2026-10-31：「摺疊機有沒有更好的排版方式 更貼近windows網頁版的排版 雙方的戰鬥寶可夢在中間第一排 備戰寶可夢在第二排的配置 你研究看看」；看過研究原型（704×830、820×1180 對照圖）後：「要做，但你要檢查直立平板的解析度和排版是否合適，是否需要再客製化」；「對戰log的位置，記得也要和windows桌面版一致(都在右側)」；紀錄窄螢幕預設：「預設展開 避免玩家以為沒有對戰log」（＝沿用站內預設，不另改）。

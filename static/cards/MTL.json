@@ -1,0 +1,558 @@
+[
+  {
+    "id": "19284",
+    "name": "小火龍",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "MTL",
+    "collectorNumber": "001/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019284.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19284/",
+    "scrapedAt": "2026-11-01T08:38:02.939Z",
+    "regulationMark": "I",
+    "stage": "Basic",
+    "hp": 80,
+    "pokemonType": "Fire",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "一身輕",
+        "effect": "若這隻寶可夢身上沒有附加能量卡，則這隻寶可夢【撤退】所需的能量全部消除。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "火種",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 4,
+    "species": "蜥蜴寶可夢",
+    "illustrator": "HYOGONOSUKE"
+  },
+  {
+    "id": "19285",
+    "name": "火恐龍",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "MTL",
+    "collectorNumber": "002/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019285.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19285/",
+    "scrapedAt": "2026-11-01T08:38:03.722Z",
+    "regulationMark": "I",
+    "stage": "Stage1",
+    "hp": 110,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "吐火",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "40",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 5,
+    "species": "火焰寶可夢",
+    "evolvesFrom": "小火龍",
+    "illustrator": "Uninori"
+  },
+  {
+    "id": "19286",
+    "name": "超級噴火龍Xex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "MTL",
+    "collectorNumber": "003/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019286.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19286/",
+    "scrapedAt": "2026-11-01T08:38:04.487Z",
+    "regulationMark": "I",
+    "stage": "Stage2",
+    "hp": 360,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "烈獄狂火X",
+        "cost": [
+          "Fire",
+          "Fire"
+        ],
+        "damage": "90×",
+        "effect": "將自己的場上寶可夢身上附加的任意數量的【火】能量卡丟棄，造成其張數×90點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom": "火恐龍",
+    "illustrator": "takuyoa"
+  },
+  {
+    "id": "19287",
+    "name": "比克提尼",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "MTL",
+    "collectorNumber": "004/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019287.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19287/",
+    "scrapedAt": "2026-11-01T08:38:05.217Z",
+    "regulationMark": "I",
+    "stage": "Basic",
+    "hp": 80,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "V戰力",
+        "cost": [
+          "Fire",
+          "Fire"
+        ],
+        "damage": "120",
+        "effect": "若自己的備戰寶可夢為4隻以下，則這個招式失敗。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 494,
+    "species": "勝利寶可夢",
+    "illustrator": "Natsumi Yoshida"
+  },
+  {
+    "id": "19288",
+    "name": "熔蟻獸",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "MTL",
+    "collectorNumber": "005/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019288.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19288/",
+    "scrapedAt": "2026-11-01T08:38:05.902Z",
+    "regulationMark": "I",
+    "stage": "Basic",
+    "hp": 120,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "舔舔捕捉",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "",
+        "effect": "從自己的牌庫選擇【火】寶可夢卡與「基本【火】能量」卡合計最多3張，在給對手看過後加入手牌。並且重洗牌庫。"
+      },
+      {
+        "name": "火之爪",
+        "cost": [
+          "Fire",
+          "Fire"
+        ],
+        "damage": "60",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 631,
+    "species": "食蟻獸寶可夢",
+    "illustrator": "Minahamu"
+  },
+  {
+    "id": "19289",
+    "name": "萊希拉姆",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "MTL",
+    "collectorNumber": "006/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019289.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19289/",
+    "scrapedAt": "2026-11-01T08:38:06.585Z",
+    "regulationMark": "I",
+    "stage": "Basic",
+    "hp": 130,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "烈焰",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "30",
+        "effect": ""
+      },
+      {
+        "name": "燃燒閃焰",
+        "cost": [
+          "Fire",
+          "Fire",
+          "Fire",
+          "Fire"
+        ],
+        "damage": "240",
+        "effect": "這隻寶可夢也受到60點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 643,
+    "species": "白陽寶可夢",
+    "illustrator": "AKIRA EGAWA"
+  },
+  {
+    "id": "19290",
+    "name": "花舞鳥ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "MTL",
+    "collectorNumber": "007/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019290.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19290/",
+    "scrapedAt": "2026-11-01T08:38:07.371Z",
+    "regulationMark": "I",
+    "stage": "Basic",
+    "hp": 190,
+    "pokemonType": "Fire",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "激動渦輪",
+        "effect": "若自己的場上有【火】屬性的「超級進化寶可夢【ex】」，則在自己的回合時，可不限次數使用。從自己的手牌選擇1張「基本【火】能量」卡，附於備戰區的【火】寶可夢身上。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "火焰之翼",
+        "cost": [
+          "Fire",
+          "Fire",
+          "Colorless"
+        ],
+        "damage": "110",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "illustrator": "akagi"
+  },
+  {
+    "id": "19291",
+    "name": "吉雉雞ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "MTL",
+    "collectorNumber": "008/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019291.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19291/",
+    "scrapedAt": "2026-11-01T08:38:08.114Z",
+    "regulationMark": "H",
+    "stage": "Basic",
+    "hp": 210,
+    "pokemonType": "Darkness",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "扭轉乾坤",
+        "effect": "在上個對手的回合，若自己的寶可夢【昏厥】了，則在自己的回合時可使用1次。從自己的牌庫抽出3張卡。在這個回合，若已經使出了其他的「扭轉乾坤」，則這個特性無法使用。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "殘酷箭",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "對手的1隻寶可夢受到100點傷害。[在備戰區不計算弱點・抵抗力。]"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "illustrator": "takuyoa"
+  },
+  {
+    "id": "19292",
+    "name": "能量回收",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTL",
+    "collectorNumber": "009/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019292.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19292/",
+    "scrapedAt": "2026-11-01T08:38:08.788Z",
+    "regulationMark": "I",
+    "rulesText": "從自己的棄牌區選擇最多2張基本能量卡，在給對手看過後加入手牌。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "19293",
+    "name": "能量回收器",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTL",
+    "collectorNumber": "010/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019293.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19293/",
+    "scrapedAt": "2026-11-01T08:38:09.786Z",
+    "regulationMark": "I",
+    "rulesText": "從自己的棄牌區選擇最多5張基本能量卡，在給對手看過後放回牌庫並重洗。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "19294",
+    "name": "特殊紅牌",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTL",
+    "collectorNumber": "011/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019294.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19294/",
+    "scrapedAt": "2026-11-01T08:38:10.538Z",
+    "regulationMark": "J",
+    "rulesText": "這張卡只有在對手剩餘獎賞卡的張數為3張以下時才可使用。\n\n對手將對手自己的手牌全部翻回反面並重洗，放回牌庫下方。然後，對手從牌庫抽出3張卡。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "19295",
+    "name": "高級球",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTL",
+    "collectorNumber": "012/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019295.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19295/",
+    "scrapedAt": "2026-11-01T08:38:11.249Z",
+    "regulationMark": "I",
+    "rulesText": "這張卡必須將自己的2張手牌丟棄才可使用。\n \n從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Ayaka Yoshida"
+  },
+  {
+    "id": "19296",
+    "name": "神奇糖果",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTL",
+    "collectorNumber": "013/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019296.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19296/",
+    "scrapedAt": "2026-11-01T08:38:11.960Z",
+    "regulationMark": "I",
+    "rulesText": "從自己的手牌選擇1張【2階進化】寶可夢卡，放置於自己的場上的可進化成那隻寶可夢的【基礎】寶可夢身上，跳過【1階進化】完成進化。（無法對自己的最初回合或剛使出的寶可夢使用。）",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "19297",
+    "name": "貴重手推車",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTL",
+    "collectorNumber": "014/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019297.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19297/",
+    "scrapedAt": "2026-11-01T08:38:12.628Z",
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ],
+    "rulesText": "從自己的牌庫選擇任意數量的【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。",
+    "illustrator": "inose yukie"
+  },
+  {
+    "id": "19298",
+    "name": "寶可平板",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTL",
+    "collectorNumber": "015/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019298.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19298/",
+    "scrapedAt": "2026-11-01T08:38:13.330Z",
+    "regulationMark": "J",
+    "rulesText": "從自己的牌庫選擇1張寶可夢卡（「擁有規則的寶可夢」除外），在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "19299",
+    "name": "寶可夢交替",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTL",
+    "collectorNumber": "016/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019299.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19299/",
+    "scrapedAt": "2026-11-01T08:38:14.045Z",
+    "regulationMark": "I",
+    "rulesText": "將自己的戰鬥寶可夢與備戰寶可夢互換。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "19300",
+    "name": "夜間擔架",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTL",
+    "collectorNumber": "017/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019300.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19300/",
+    "scrapedAt": "2026-11-01T08:38:14.754Z",
+    "regulationMark": "H",
+    "rulesText": "從自己的棄牌區選擇1張寶可夢卡或者基本能量卡，在給對手看過後加入手牌。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "19301",
+    "name": "氣球",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
+    "setCode": "MTL",
+    "collectorNumber": "018/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019301.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19301/",
+    "scrapedAt": "2026-11-01T08:38:15.464Z",
+    "regulationMark": "I",
+    "rulesText": "附有這張卡的寶可夢，【撤退】所需的能量減少2個。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "19302",
+    "name": "艾莉絲的鬥志",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "MTL",
+    "collectorNumber": "019/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019302.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19302/",
+    "scrapedAt": "2026-11-01T08:38:16.201Z",
+    "regulationMark": "I",
+    "rulesText": "這張卡必須將自己的1張手牌丟棄才可使用。\n\n從牌庫抽卡直到自己的手牌滿6張為止。",
+    "illustrator": "yuu"
+  },
+  {
+    "id": "19303",
+    "name": "小光",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "MTL",
+    "collectorNumber": "020/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019303.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19303/",
+    "scrapedAt": "2026-11-01T08:38:17.073Z",
+    "regulationMark": "I",
+    "rulesText": "從自己的牌庫選擇「【基礎】寶可夢」卡「【1階進化】寶可夢」卡「【2階進化】寶可夢」卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Yuu Nishida"
+  },
+  {
+    "id": "19304",
+    "name": "吹火人",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "MTL",
+    "collectorNumber": "021/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019304.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19304/",
+    "scrapedAt": "2026-11-01T08:38:17.754Z",
+    "regulationMark": "I",
+    "rulesText": "從自己的牌庫選擇最多7張「基本【火】能量」卡，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Naoki Saito"
+  },
+  {
+    "id": "19305",
+    "name": "老大的指令",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "MTL",
+    "collectorNumber": "022/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019305.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19305/",
+    "scrapedAt": "2026-11-01T08:38:18.530Z",
+    "regulationMark": "I",
+    "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
+    "illustrator": "akagi"
+  },
+  {
+    "id": "19306",
+    "name": "莉莉艾的決意",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "MTL",
+    "collectorNumber": "023/023",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019306.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19306/",
+    "scrapedAt": "2026-11-01T08:38:19.227Z",
+    "regulationMark": "I",
+    "rulesText": "將自己的手牌全部放回牌庫並重洗。然後，從牌庫抽出6張卡。若自己剩餘獎賞卡的張數為6張，則改為抽出8張卡。",
+    "tags": [
+      "訓練家冠名"
+    ],
+    "illustrator": "Atsushi Furusawa"
+  },
+  {
+    "id": "19307",
+    "name": "基本【火】能量",
+    "supertype": "Energy",
+    "subtype": "Basic",
+    "setCode": "MTL",
+    "collectorNumber": "FIR",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019307.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19307/",
+    "scrapedAt": "2026-11-01T08:38:19.909Z",
+    "regulationMark": "J"
+  }
+]

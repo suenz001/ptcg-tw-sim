@@ -647,5 +647,65 @@
   "scrapedAt": "2026-09-15T04:08:27.947Z",
   "releaseDate": "2026-09-16",
   "count": 49
+ },
+ {
+  "code": "MTL",
+  "name": "戰術牌組「超級噴火龍Xex」",
+  "regulationMark": "J",
+  "cardCount": 24,
+  "supertypeCounts": {
+   "Pokemon": 8,
+   "Trainer": 15,
+   "Energy": 1
+  },
+  "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019286.png",
+  "scrapedAt": "2026-11-01T08:38:19.909Z",
+  "releaseDate": "2026-07-17",
+  "count": 24
+ },
+ {
+  "code": "MTS",
+  "name": "戰術牌組「超級沙奈朵ex」",
+  "regulationMark": "J",
+  "cardCount": 24,
+  "supertypeCounts": {
+   "Pokemon": 10,
+   "Trainer": 12,
+   "Energy": 2
+  },
+  "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019332.png",
+  "scrapedAt": "2026-11-01T08:39:16.021Z",
+  "releaseDate": "2026-07-17",
+  "count": 24
+ },
+ {
+  "code": "MTH",
+  "name": "戰術牌組「超級巨牙鯊ex」",
+  "regulationMark": "J",
+  "cardCount": 21,
+  "supertypeCounts": {
+   "Pokemon": 8,
+   "Trainer": 12,
+   "Energy": 1
+  },
+  "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019310.png",
+  "scrapedAt": "2026-11-01T08:40:07.356Z",
+  "releaseDate": "2026-07-17",
+  "count": 21
+ },
+ {
+  "code": "MTK",
+  "name": "戰術牌組「超級快龍ex」",
+  "regulationMark": "J",
+  "cardCount": 25,
+  "supertypeCounts": {
+   "Pokemon": 11,
+   "Trainer": 12,
+   "Energy": 2
+  },
+  "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019360.png",
+  "scrapedAt": "2026-11-01T08:41:01.087Z",
+  "releaseDate": "2026-07-17",
+  "count": 25
  }
 ]

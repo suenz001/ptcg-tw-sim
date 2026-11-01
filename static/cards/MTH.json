@@ -1,0 +1,527 @@
+[
+  {
+    "id": "19308",
+    "name": "願增猿",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "MTH",
+    "collectorNumber": "001/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019308.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19308/",
+    "scrapedAt": "2026-11-01T08:39:51.678Z",
+    "regulationMark": "H",
+    "stage": "Basic",
+    "hp": 110,
+    "pokemonType": "Psychic",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "腎上腺腦力",
+        "effect": "若這隻寶可夢身上附有【惡】能量卡，則在自己的回合時可使用1次。選擇最多3個自己的1隻場上寶可夢身上放置的傷害指示物，改放於對手的1隻場上寶可夢身上。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "精神歪曲",
+        "cost": [
+          "Psychic",
+          "Colorless"
+        ],
+        "damage": "60",
+        "effect": "將對手的戰鬥寶可夢【混亂】。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 1015,
+    "species": "隨從寶可夢",
+    "illustrator": "kodama"
+  },
+  {
+    "id": "19309",
+    "name": "利牙魚",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "MTH",
+    "collectorNumber": "002/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019309.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19309/",
+    "scrapedAt": "2026-11-01T08:39:52.373Z",
+    "regulationMark": "I",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Darkness",
+    "attacks": [
+      {
+        "name": "突擊",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "30",
+        "effect": "這隻寶可夢也受到10點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 318,
+    "species": "凶猛寶可夢",
+    "illustrator": "Shin Nagasawa"
+  },
+  {
+    "id": "19310",
+    "name": "超級巨牙鯊ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "MTH",
+    "collectorNumber": "003/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019310.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19310/",
+    "scrapedAt": "2026-11-01T08:39:53.059Z",
+    "regulationMark": "I",
+    "stage": "Stage1",
+    "hp": 330,
+    "pokemonType": "Darkness",
+    "attacks": [
+      {
+        "name": "貪心之牙",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "70",
+        "effect": "從自己的牌庫抽出2張卡。"
+      },
+      {
+        "name": "飢渴下巴",
+        "cost": [
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "120+",
+        "effect": "若這隻寶可夢身上放置有傷害指示物，則增加150點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "evolvesFrom": "利牙魚",
+    "illustrator": "5ban Graphics"
+  },
+  {
+    "id": "19311",
+    "name": "飯匙蛇",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "MTH",
+    "collectorNumber": "004/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019311.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19311/",
+    "scrapedAt": "2026-11-01T08:39:54.057Z",
+    "regulationMark": "I",
+    "stage": "Basic",
+    "hp": 120,
+    "pokemonType": "Darkness",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "激動力量",
+        "effect": "若自己的場上有【惡】屬性的「超級進化寶可夢【ex】」，則這隻寶可夢使用的招式，對對手的戰鬥寶可夢造成的傷害「+120」點。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "漆黑之牙",
+        "cost": [
+          "Darkness",
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "120",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 336,
+    "species": "牙蛇寶可夢",
+    "illustrator": "hncl"
+  },
+  {
+    "id": "19312",
+    "name": "毒電嬰",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "MTH",
+    "collectorNumber": "005/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019312.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19312/",
+    "scrapedAt": "2026-11-01T08:39:54.736Z",
+    "regulationMark": "I",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Darkness",
+    "attacks": [
+      {
+        "name": "呼朋引伴",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "",
+        "effect": "從自己的牌庫選擇最多2張【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。"
+      },
+      {
+        "name": "調皮踢",
+        "cost": [
+          "Darkness",
+          "Colorless"
+        ],
+        "damage": "20",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 848,
+    "species": "嬰兒寶可夢",
+    "illustrator": "OKACHEKE"
+  },
+  {
+    "id": "19313",
+    "name": "顫弦蠑螈",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "MTH",
+    "collectorNumber": "006/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019313.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19313/",
+    "scrapedAt": "2026-11-01T08:39:55.756Z",
+    "regulationMark": "I",
+    "stage": "Stage1",
+    "hp": 140,
+    "pokemonType": "Darkness",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "惡棍衝天",
+        "effect": "在自己的回合時可使用1次。從自己的牌庫選擇1張「基本【惡】能量」卡，附於備戰區的【惡】寶可夢身上。並且重洗牌庫。然後，在附上那張卡的寶可夢身上放置2個傷害指示物。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "重摑",
+        "cost": [
+          "Darkness",
+          "Darkness",
+          "Colorless"
+        ],
+        "damage": "100",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 849,
+    "species": "龐克寶可夢",
+    "evolvesFrom": "毒電嬰",
+    "illustrator": "DOM"
+  },
+  {
+    "id": "19314",
+    "name": "吉雉雞ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "MTH",
+    "collectorNumber": "007/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019314.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19314/",
+    "scrapedAt": "2026-11-01T08:39:56.491Z",
+    "regulationMark": "H",
+    "stage": "Basic",
+    "hp": 210,
+    "pokemonType": "Darkness",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "扭轉乾坤",
+        "effect": "在上個對手的回合，若自己的寶可夢【昏厥】了，則在自己的回合時可使用1次。從自己的牌庫抽出3張卡。在這個回合，若已經使出了其他的「扭轉乾坤」，則這個特性無法使用。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "殘酷箭",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "對手的1隻寶可夢受到100點傷害。[在備戰區不計算弱點・抵抗力。]"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "illustrator": "takuyoa"
+  },
+  {
+    "id": "19315",
+    "name": "桃歹郎ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "MTH",
+    "collectorNumber": "008/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019315.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19315/",
+    "scrapedAt": "2026-11-01T08:39:57.180Z",
+    "regulationMark": "H",
+    "stage": "Basic",
+    "hp": 190,
+    "pokemonType": "Darkness",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "支配鎖鏈",
+        "effect": "在自己的回合時可使用1次。選擇1隻自己的備戰區的【惡】寶可夢（「桃歹郎【ex】」除外），與戰鬥寶可夢互換。然後，將新的戰鬥寶可夢【中毒】。在這個回合，若已經使出了其他的「支配鎖鏈」，則這個特性無法使用。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "煩煩爆炸",
+        "cost": [
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "60×",
+        "effect": "造成對手已經獲得的獎賞卡的張數×60點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "illustrator": "aky CG Works"
+  },
+  {
+    "id": "19316",
+    "name": "特殊紅牌",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTH",
+    "collectorNumber": "009/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019316.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19316/",
+    "scrapedAt": "2026-11-01T08:39:57.931Z",
+    "regulationMark": "J",
+    "rulesText": "這張卡只有在對手剩餘獎賞卡的張數為3張以下時才可使用。\n\n對手將對手自己的手牌全部翻回反面並重洗，放回牌庫下方。然後，對手從牌庫抽出3張卡。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "19317",
+    "name": "好友寶芬",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTH",
+    "collectorNumber": "010/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019317.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19317/",
+    "scrapedAt": "2026-11-01T08:39:58.614Z",
+    "regulationMark": "H",
+    "rulesText": "從自己的牌庫選擇最多2張HP為「70」以下的【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。",
+    "illustrator": "AYUMI ODASHIMA"
+  },
+  {
+    "id": "19318",
+    "name": "高級球",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTH",
+    "collectorNumber": "011/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019318.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19318/",
+    "scrapedAt": "2026-11-01T08:39:59.613Z",
+    "regulationMark": "I",
+    "rulesText": "這張卡必須將自己的2張手牌丟棄才可使用。\n \n從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Ayaka Yoshida"
+  },
+  {
+    "id": "19319",
+    "name": "頂尖捕捉器",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTH",
+    "collectorNumber": "012/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019319.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19319/",
+    "scrapedAt": "2026-11-01T08:40:00.331Z",
+    "regulationMark": "H",
+    "tags": [
+      "ACE SPEC"
+    ],
+    "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。然後，將自己的戰鬥寶可夢與備戰寶可夢互換。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "19320",
+    "name": "寶可平板",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTH",
+    "collectorNumber": "013/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019320.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19320/",
+    "scrapedAt": "2026-11-01T08:40:01.052Z",
+    "regulationMark": "J",
+    "rulesText": "從自己的牌庫選擇1張寶可夢卡（「擁有規則的寶可夢」除外），在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "19321",
+    "name": "夜間擔架",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "MTH",
+    "collectorNumber": "014/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019321.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19321/",
+    "scrapedAt": "2026-11-01T08:40:02.127Z",
+    "regulationMark": "H",
+    "rulesText": "從自己的棄牌區選擇1張寶可夢卡或者基本能量卡，在給對手看過後加入手牌。",
+    "illustrator": "Toyste Beach"
+  },
+  {
+    "id": "19322",
+    "name": "龐克頭盔",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
+    "setCode": "MTH",
+    "collectorNumber": "015/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019322.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19322/",
+    "scrapedAt": "2026-11-01T08:40:02.801Z",
+    "regulationMark": "I",
+    "rulesText": "附有這張卡的【惡】寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置4個傷害指示物。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "19323",
+    "name": "氣球",
+    "supertype": "Trainer",
+    "subtype": "PokemonTool",
+    "setCode": "MTH",
+    "collectorNumber": "016/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019323.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19323/",
+    "scrapedAt": "2026-11-01T08:40:03.561Z",
+    "regulationMark": "I",
+    "rulesText": "附有這張卡的寶可夢，【撤退】所需的能量減少2個。",
+    "illustrator": "Studio Bora Inc."
+  },
+  {
+    "id": "19324",
+    "name": "艾莉絲的鬥志",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "MTH",
+    "collectorNumber": "017/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019324.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19324/",
+    "scrapedAt": "2026-11-01T08:40:04.273Z",
+    "regulationMark": "I",
+    "rulesText": "這張卡必須將自己的1張手牌丟棄才可使用。\n\n從牌庫抽卡直到自己的手牌滿6張為止。",
+    "illustrator": "yuu"
+  },
+  {
+    "id": "19325",
+    "name": "鬥子",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "MTH",
+    "collectorNumber": "018/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019325.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19325/",
+    "scrapedAt": "2026-11-01T08:40:05.280Z",
+    "regulationMark": "I",
+    "rulesText": "從自己的牌庫選擇進化寶可夢卡與能量卡各1張，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "yuu"
+  },
+  {
+    "id": "19326",
+    "name": "老大的指令",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "MTH",
+    "collectorNumber": "019/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019326.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19326/",
+    "scrapedAt": "2026-11-01T08:40:05.947Z",
+    "regulationMark": "I",
+    "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
+    "illustrator": "akagi"
+  },
+  {
+    "id": "19327",
+    "name": "莉莉艾的決意",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "MTH",
+    "collectorNumber": "020/020",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019327.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19327/",
+    "scrapedAt": "2026-11-01T08:40:06.653Z",
+    "regulationMark": "I",
+    "rulesText": "將自己的手牌全部放回牌庫並重洗。然後，從牌庫抽出6張卡。若自己剩餘獎賞卡的張數為6張，則改為抽出8張卡。",
+    "tags": [
+      "訓練家冠名"
+    ],
+    "illustrator": "Atsushi Furusawa"
+  },
+  {
+    "id": "19328",
+    "name": "基本【惡】能量",
+    "supertype": "Energy",
+    "subtype": "Basic",
+    "setCode": "MTH",
+    "collectorNumber": "DAR",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019328.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19328/",
+    "scrapedAt": "2026-11-01T08:40:07.356Z",
+    "regulationMark": "J"
+  }
+]
