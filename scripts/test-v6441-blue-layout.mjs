@@ -29,6 +29,7 @@
  * Run: node scripts/test-v6441-blue-layout.mjs
  */
 // v6.590 Rule40：先精確還原手機生命週期；新行為由test-v6590守，不放寬既有比對。
+import { revertV6620IfPresent } from './lib/revert-v6620-drag-touch.mjs';   // ⭐v6.620（Rule 40）
 import { revertV6599Game } from './lib/revert-v6599-pages.mjs';   // ⭐v6.599（Rule 40）：牌組先後攻偏好接線（行為由 test-v6599 守）
 import { revertV6598Game as _rv6598Game, revertV6598Cards, revertV6598Decks, V6598_CARDS_PAIRS } from './lib/revert-v6598-pages.mjs';   // ⭐v6.598（Rule 40）：手機彈出視窗上緣／關閉鈕，先還原成 v6.597
 import { revertV6600Game } from './lib/revert-v6600-game.mjs';   // ⭐v6.600（Rule 40）：復盤勝敗與雙方牌組接線（行為由 test-v6600 守）
@@ -334,6 +335,7 @@ import { V6566_GAME_PAIRS } from './lib/revert-v6566-game.mjs';   // ⭐v6.566�
 //   ⇒ 比照 v6.560 放在 PRE 最前面先整段還原成 v6.575；內容由 test-v6576-no-layout-shift 鎖。
 const PRE = [...V6583_GAME_PAIRS, ...V6582_GAME_PAIRS, ...V6581_GAME_PAIRS, ...V6580_GAME_PAIRS, ...V6579_GAME_PAIRS, ...V6578_GAME_PAIRS, ...V6576_GAME_PAIRS, ...V6566_GAME_PAIRS, ...V6565_GAME_PAIRS, ...V6564_GAME_PAIRS, ...V6563_GAME_PAIRS, ...V6562_GAME_PAIRS, ...V6561_GAME_PAIRS, ...V6560_GAME_PAIRS, ...V6464_GAME_PAIRS];
 function strip(src) {
+  src = revertV6620IfPresent('src/routes/game/+page.svelte', src);   // ⭐v6.620（Rule 40）：最先還原（回放控制列把手等非藍桌墊改動；內容由 test-v6620 鎖）
   let s = revertMobileUiV6590(revertV6592Game(revertV6595Game(revertV6596Game(revertV6598Game(src)))), 'src/routes/game/+page.svelte');   // ⭐v6.595 最先還原（Rule 40；行為由 test-v6595 鎖）
   const bad = [];
   for (const [a, b] of PRE) { const c = s.split(a).length - 1; if (c !== 1) bad.push(`PRE 條目命中 ${c} 次：${a.slice(0, 50)}`); s = s.split(a).join(b); }

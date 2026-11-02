@@ -1,5 +1,19 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.620（2026-11-02）拖曳浮動視窗不再帶動對戰盤面
+
+BASE `54b996eb`（v6.619）。站長：iPad 回放時拖曳控制列常常拖到後面的對戰盤面，要求整體 audit，各種桌墊與手機版對戰畫面都不該被拖動。
+
+- 根因（Chromium 觸控實測）：回放控制列把手「標題」沒有 touch-action:none ⇒ 觸控拖曳被當成整頁平移（iPad Safari 回彈／網址列收合），拖 200px 控制列只動 27px。
+- modal-drag（中央）：installHandleTouchNone——掛上 action 的把手（含之後才出現的）自動 touch-action:none（共用樣式表、data-mdrag 限定範圍、卸載移除）；measureZoomScale＋calibrate——祖先 CSS zoom（解析度模式）下位移換算，縮放比改變時換算 off 不跳位。
+- panel-resize：共用 measureZoomScale（聊天面板拉把在 zoom 下一按就縮的既有問題）。
+- 對戰頁：html／body overscroll-behavior:none（:has(.battle-root)，不鎖 overflow）；回放控制列整條都是把手、-webkit-user-select:none。
+- audit：iPad 7 種尺寸 × 4 種桌墊回放，document 皆不可捲（scrollHeight＝畫面高）；手機直式本來就有 .mp touch-action:none＋preventScroll；其餘把手、手牌、通知堆疊、聊天、選擇視窗原本就有 touch-action:none／overscroll contain。
+- 複審 P1：test-v6425 C4、test-v6441 strip、test-v6293 GAME 的回放控制列錨點 → 接上 revertV6620IfPresent／放寬（Rule 40）；複審 P2：探針在折疊視窗被 display:none → 探針 display:block !important、量不到回 null 沿用舊值；U4 改驗「改縮放比後樣式位移不被改寫」（突變：拿掉換算會紅）。
+- 審查（Opus 5.5）：P2-1 WebKit 的 getBoundingClientRect 對 zoom 的回報方式未證實（若回報本地座標則量到 1 ＝ 與舊版相同，不會更差；需 iPad 實機確認經典版／桌遊版拖曳是否跟手）；P2-2 整條控制列當把手；P2-3 panel-resize；P2-4 R1 盤面不動在 Chromium 恆真 → 改斷言 scrollHeight≤畫面高＋擴尺寸＋註明回彈需實機；P3-1～3 縮放比兩軸量、改變時換算、不解析字串。
+- 既有問題（非本版）：test-v6576 R6（1376 寬回放控制列不伸進盤面）自 v6.582 加時間軸後就是紅的，因它讀 ROOT/build、沙盒與 CI 都 SKIP 才沒被發現。
+- 守衛：test-v6620（U1～U5、S1～S2、R1 28 組、HEAD-FAIL）；Rule 40：test-v6590（還原鏈）、test-v6576 S3（把手放寬）、changelog 還原鏈。
+
 ## v6.619（2026-11-02）個人計時縮小氣泡＋手機提示疊加
 
 BASE `60dec41d`（v6.618＋鐵律 Rule 91）。站長：個人計時小視窗比照聊天氣泡加縮小鈕；縮小只顯示數字；手機越小越好；手機「請派出寶可夢」提示會下推畫面，要修並整體 audit，建議疊在計時器那欄。

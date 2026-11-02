@@ -21,6 +21,7 @@ import {functionSource} from './lib/deck-replay-db-fixture.mjs';
 import {extractCss} from './lib/zoom-modal-fixture.mjs';
 import {readBaseBlob,hasBaseCommit,shallowSkip} from './lib/base-blob.mjs';
 import {revertMobileUiV6590} from './lib/mobile-ui-v6590-pairs.mjs';
+import {revertV6620IfPresent} from './lib/revert-v6620-drag-touch.mjs';   // ⭐v6.620（Rule 40）：對戰頁與中央拖曳先還原 v6.620（把手 touch-action、zoom 換算、整頁不回彈）
 const ROOT=dirname(dirname(fileURLToPath(import.meta.url)));
 const PRODUCT=process.env.V6590_PRODUCT_ROOT||ROOT,BASE='3c8a3da9477244fcd0ac9912a3cc55246f76f6fb';
 const paths=['src/routes/game/+page.svelte','src/routes/game/MobilePortraitBattle.svelte','src/lib/modal-drag.ts'];
@@ -28,7 +29,7 @@ const originalBytes=paths.map(p=>readFileSync(join(PRODUCT,p))),read=p=>readFile
 const [game,mobile,drag]=paths.map(read);let pass=0,fail=0;
 const ok=(name,yes,detail='')=>{if(yes){pass++;console.log('PASS '+name)}else{fail++;console.error('FAIL '+name+' '+detail)}};
 const sha=s=>createHash('sha256').update(s).digest('hex');
-if(hasBaseCommit(ROOT,BASE)){for(let i=0;i<paths.length;i++){const b=readBaseBlob(ROOT,BASE,paths[i]);if(!b.ok)throw Error('BASE讀取失敗');let restored='';try{restored=revertMobileUiV6590(i===0?revertV6592Game(revertV6595Game(revertV6596Game(revertV6598Game(game)))):i===1?revertIosTopV6593(revertV6604Mobile(mobile)):drag,paths[i])}catch{}ok('R 精確還原 '+paths[i],restored===b.out.replace(/\r\n/g,'\n'));}}else shallowSkip('v6590 BASE','需v6.589歷史');
+if(hasBaseCommit(ROOT,BASE)){for(let i=0;i<paths.length;i++){const b=readBaseBlob(ROOT,BASE,paths[i]);if(!b.ok)throw Error('BASE讀取失敗');let restored='';try{restored=revertMobileUiV6590(i===0?revertV6592Game(revertV6595Game(revertV6596Game(revertV6598Game(revertV6620IfPresent(paths[0],game))))):i===1?revertIosTopV6593(revertV6604Mobile(mobile)):revertV6620IfPresent(paths[2],drag),paths[i])}catch{}ok('R 精確還原 '+paths[i],restored===b.out.replace(/\r\n/g,'\n'));}}else shallowSkip('v6590 BASE','需v6.589歷史');
 function historyCode(s){const end=s.indexOf("return () => { window.removeEventListener('popstate', onPop); };");if(end<0)throw Error('history終點缺失');const start=s.lastIndexOf('  $effect(() => {',end);if(start<0)throw Error('history起點缺失');const derived=s.includes('const battleHistoryActive = $derived(!!game);')?'const battleHistoryActive = $derived(!!game);':'';return derived+s.slice(start,s.indexOf('  });',end)+5);}
 const bodyStart=game.indexOf('// >>> v6590-mobile-body-lock'),bodyEnd=game.indexOf('// <<< v6590-mobile-body-lock');
 const bodyCode=bodyStart>=0&&bodyEnd>bodyStart?game.slice(bodyStart,bodyEnd):'';

@@ -1,3 +1,4 @@
+import { revertV6620IfPresent } from './lib/revert-v6620-drag-touch.mjs';   // ⭐v6.620（Rule 40）
 import { revertV6609Game } from './lib/revert-v6609-energy-ui.mjs';
 // v6.293 守衛：/friends 頁（含私聊面板）改成墨綠配色 ＋ 頂端假分頁列
 //
@@ -75,7 +76,8 @@ const FRP_RAW = rd(P_FRP);
 const RE6477F = /\n  \/\* >>> v6477-friends-light \*\/\n[\s\S]*?\n  \/\* <<< v6477-friends-light \*\/\n/g;
 if ((FRP_RAW.match(RE6477F) || []).length !== 1) { console.log('  FAIL [前提] FriendsPanel 的 v6477-friends-light 哨兵應恰好一塊'); process.exitCode = 1; }
 const FRP = FRP_RAW.replace(RE6477F, '\n');
-const GAME = rd(P_GAME);
+// ⭐v6.620（Rule 40）：回放控制列把手、拖曳觸控規則、整頁不回彈（全版面、非本守衛範圍）⇒ 先還原成 v6.619 再比；內容由 test-v6620 鎖
+const GAME = revertV6620IfPresent('src/routes/game/+page.svelte', rd(P_GAME));
 const API = rd(P_API);
 const PKG = rd(P_PKG);
 

@@ -12740,7 +12740,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
        改成浮動、可拖曳的小視窗（比照手機版直接蓋住儀表板）：預設疊在頁首正上方置中，按住左邊的 ⠿ 或標題可以拖到任何地方；
        拖曳與邊界夾制走全站唯一的 use:modalDrag（clamp:'contain' ⇒ 永遠完整留在畫面內、按鈕一定按得到）。 -->
   <div class="treplay-float-wrap">
-  <div class="treplay-bar" use:modalDrag={{ clamp: 'contain', handle: '.treplay-grip, .treplay-title', overlay: false }}>
+  <!-- ⭐v6.620（站長：iPad 拖曳回放控制列常常拖到後面的盤面；審查 P2-2）：整條控制列都是把手（按鈕、時間軸、速度鈕照常可按，中央 DRAG_IGNORE 排除），
+       手機橫向標題被隱藏時也有地方抓；把手由中央 modalDrag 自動加 touch-action:none ⇒ 不會變成整頁平移。 -->
+  <div class="treplay-bar" use:modalDrag={{ clamp: 'contain', handle: '.treplay-bar', overlay: false }}>
     <span class="treplay-grip" title="按住拖曳，移動回放控制列" aria-hidden="true">⠿</span>
     <button class="treplay-btn" onclick={tExitReplay} title="離開回放">✕ 離開</button>
     <span class="treplay-title">{replayKind === 'casual' ? '🎞️ 復盤：' : '🎬 回放：'}<b>{tReplay.meta?.p1name ?? '?'}</b> vs <b>{tReplay.meta?.p2name ?? '?'}</b>{#if tReplay.meta?.winnerName} ｜ 🏆 {tReplay.meta.winnerName}{/if}</span>
@@ -16443,6 +16445,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .treplay-float-wrap { position: fixed; top: calc(var(--safe-top, 0px) + 2px); left: 0; right: 0; display: flex; justify-content: center; z-index: 500; pointer-events: none; }
   .treplay-grip { cursor: grab; color: #8fb0e0; font-size: 1rem; padding: 0 2px; user-select: none; touch-action: none; }
   .treplay-bar .treplay-title { cursor: grab; }
+  .treplay-bar { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }   /* ⭐v6.620 iPad 長按不跳出文字選取（會打斷拖曳） */
   /* ⭐v6.576（審查 P2）：預設位置疊在頁首上，盡量不伸進盤面 ⇒ 外框不換行、標題可以縮成「…」；只有按鈕群在很窄的視窗才會折成兩行。
      ⚠ 不新增媒體查詢（test-v6187／v6195／v6466 S6 限制本頁媒體查詢數量）；窄螢幕手機橫向另有既有的精簡規則。 */
   .treplay-float-wrap .treplay-bar { flex-wrap: nowrap; padding: 2px 8px; }
@@ -19993,6 +19996,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
     overscroll-behavior: none;
   }
   :global(html:has(body.mp-locked)) { overflow: hidden; overscroll-behavior: none; }
+  /* ⭐v6.620（站長：iPad 回放時拖曳控制列常常拖到後面的對戰盤面；「各種版面桌墊包含手機版，對戰的版面都不該被拖動」）：
+     對戰畫面（含回放、手機直式）存在時，整頁不做彈性回彈／下拉重新整理（iPad、iPhone Safari 拖到頁面邊界會把整個盤面拉著走）。
+     ⚠ 只關回彈與捲動串連，不鎖 overflow：版面本來就排在一個畫面內（實測 iPad 各尺寸、四種桌墊 scrollHeight＝畫面高）；
+       萬一某個尺寸真的超出，仍然捲得到，不會被切掉。拖曳把手的 touch-action 由 $lib/modal-drag 中央處理。 */
+  :global(html:has(.battle-root)), :global(body:has(.battle-root)) { overscroll-behavior: none; }
 
   /* ════════════════════════════════════════════════════════════════════
      v2.286 Phase 3：手機直屏（≤600px portrait）modal RWD 適配

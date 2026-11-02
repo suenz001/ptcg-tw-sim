@@ -13,6 +13,8 @@
 //   ・位置夾制交給既有的 use:modalDrag（它有 ResizeObserver，視窗變大後會自己重夾回畫面內）。
 //   ⚠ localStorage 一律包 try/catch（無痕模式／被封鎖時照常可用，只是不記住）。
 
+import { measureZoomScale } from './modal-drag';   // ⭐v6.620 縮放比只有一份（Rule 38）
+
 export type PanelGrip = 'tl' | 'br';
 export interface PanelResizeOptions {
   /** localStorage key；換 key（例如手機轉向）會改讀另一份記錄 */
@@ -89,8 +91,11 @@ export function panelResize(node: HTMLElement, param: PanelResizeOptions) {
   function apply(s: PanelSize | null) {
     if (!s) { node.style.removeProperty('width'); node.style.removeProperty('height'); node.style.removeProperty('max-height'); node.style.removeProperty('max-width'); return; }
     const c = clampPanelSize(s, vw(), vh(), minW(), minH(), margin());
-    node.style.width = c.w + 'px';
-    node.style.height = c.h + 'px';
+    // ⭐v6.620（審查 P2-3）：尺寸是畫面 px（量自 getBoundingClientRect、夾制用畫面寬高），寫進樣式要除以祖先 CSS zoom 的縮放比，
+    //   否則經典版／桌遊版「解析度模式」下一按拉把面板就縮成 86%、之後也只跟手 86%。拖曳中沿用按下時量的值。
+    const sc = pid !== null ? dragScale : (measureZoomScale(node) ?? { sx: 1, sy: 1 });
+    node.style.width = c.w / sc.sx + 'px';
+    node.style.height = c.h / sc.sy + 'px';
     // CSS 預設可能有 max-height（手機 55vh）——玩家拉大時要能超過
     node.style.maxHeight = 'none';
     node.style.maxWidth = 'none';
@@ -101,12 +106,14 @@ export function panelResize(node: HTMLElement, param: PanelResizeOptions) {
   }
 
   let startX = 0, startY = 0, start: PanelSize = { w: 0, h: 0 }, pid: number | null = null;
+  let dragScale = { sx: 1, sy: 1 };   // ⭐v6.620
   function onDown(e: PointerEvent) {
     if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     const r = node.getBoundingClientRect();
     start = { w: r.width, h: r.height };
+    dragScale = measureZoomScale(node) ?? { sx: 1, sy: 1 };   // ⭐v6.620
     startX = e.clientX; startY = e.clientY;
     pid = e.pointerId;
     try { grip.setPointerCapture(e.pointerId); } catch { /* 舊瀏覽器 */ }

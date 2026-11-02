@@ -193,6 +193,68 @@ function ensureCollapseStyle() {
   st.textContent = COLLAPSE_CSS;
   (document.head || document.documentElement).appendChild(st);
 }
+// >>> v6620-handle-touch-none
+/**
+ * ⭐⭐v6.620 觸控裝置上「拖曳把手」一律 `touch-action: none`（站長：iPad 回放時拖曳控制列，常常拖到後面的對戰盤面）。
+ *   根因：觸控的拖曳手勢由瀏覽器先決定要不要當成「捲動／平移」——把手沒有 `touch-action:none` 時，
+ *   iPad Safari 會接手變成整頁平移（頁面彈性回彈、網址列收合），同時送 pointercancel ⇒ 控制列只動一點、後面的盤面卻跟著動。
+ *   `preventDefault()` 擋不住（觸控平移只看 CSS）。以前靠每個把手各自在 CSS 寫 touch-action:none，回放控制列的標題（.treplay-title）就漏了。
+ *   ⇒ 收斂到這裡：掛上 action 的元素，它的把手（handle 選擇器；wholeNode 時是元素本身）由中央自動加上 touch-action:none。
+ *   ・用一張共用樣式表、每個實例一條以 data-mdrag 編號限定範圍的規則 ⇒ 之後才出現的把手（{#if} 裡的）也涵蓋；卸載時移除。
+ *   ・把手裡的按鈕照常可以點（touch-action 只影響平移／縮放，不影響點擊）。
+ */
+export const MDRAG_ATTR = 'data-mdrag';
+const TOUCH_STYLE_ID = 'modal-drag-touch-style';
+let mdragSeq = 0;
+function touchSheet(): CSSStyleSheet | null {
+  if (typeof document === 'undefined') return null;
+  let st = document.getElementById(TOUCH_STYLE_ID) as HTMLStyleElement | null;
+  if (!st) { st = document.createElement('style'); st.id = TOUCH_STYLE_ID; (document.head || document.documentElement).appendChild(st); }
+  return st.sheet as CSSStyleSheet | null;
+}
+/** 給 node 的把手加上 touch-action:none，回傳移除函式（純 DOM，守衛直接測）。 */
+export function installHandleTouchNone(node: HTMLElement, o: ModalDragOptions): () => void {
+  if (typeof document === 'undefined') return () => {};
+  if (o.wholeNode) {
+    const prev = node.style.touchAction;
+    node.style.touchAction = 'none';
+    return () => { node.style.touchAction = prev; };
+  }
+  const sheet = touchSheet();
+  if (!sheet) return () => {};
+  const id = node.getAttribute(MDRAG_ATTR) || String(++mdragSeq);
+  node.setAttribute(MDRAG_ATTR, id);
+  const sel = o.handle ?? DEFAULT_HANDLE_SELECTOR;
+  const scope = `[${MDRAG_ATTR}="${id}"]`;
+  const text = `${scope} :is(${sel}), ${scope}:is(${sel}) { touch-action: none; }`;
+  try { sheet.insertRule(text, sheet.cssRules.length); } catch { return () => {}; }   // 選擇器不合法就不加（不影響拖曳本身）
+  const rule = sheet.cssRules[sheet.cssRules.length - 1];
+  return () => {
+    for (let i = sheet.cssRules.length - 1; i >= 0; i--) if (sheet.cssRules[i] === rule) { sheet.deleteRule(i); break; }
+  };
+}
+/**
+ * ⭐v6.620 量 node 所在座標系的縮放比（畫面 px ÷ 樣式 px，兩軸各自量）。祖先有 CSS zoom 時 ≠ 1。
+ *   作法：在 node 裡暫時放一個看不見的探針，左上各移 100px，看畫面上移了多少（不解析任何樣式字串、不動 node 自己的樣式）。
+ *   量不到（未排版、node 自己 display:none、SSR）回 null，呼叫端沿用舊值（初始 1 ＝ 與 v6.619 相同的行為）。中央拖曳與 panel-resize 共用（Rule 38）。
+ */
+export function measureZoomScale(node: HTMLElement): { sx: number; sy: number } | null {
+  try {
+    if (typeof document === 'undefined') return null;
+    const p = document.createElement('div');
+    // display:block !important：中央折疊 CSS 會把視窗的子元素 display:none（行內 !important 蓋得過樣式表 !important；複審 P2-1）
+    p.style.cssText = 'display:block !important;position:absolute;left:0;top:0;width:0;height:0;margin:0;padding:0;border:0;visibility:hidden;pointer-events:none;';
+    node.appendChild(p);
+    const a = p.getBoundingClientRect();
+    p.style.left = '100px'; p.style.top = '100px';
+    const b = p.getBoundingClientRect();
+    p.remove();
+    const dx = b.left - a.left, dy = b.top - a.top;
+    if (!(dx > 5 && dx < 2000 && dy > 5 && dy < 2000)) return null;   // 量不到（node 自己 display:none、未排版）⇒ null：呼叫端沿用舊值，不可以當成「縮放比變成 1」
+    return { sx: dx / 100, sy: dy / 100 };
+  } catch { return null; }
+}
+// <<< v6620-handle-touch-none
 /** 這個視窗要不要有折疊鈕（純函式，守衛直接測）。 */
 export function modalCollapsible(o: ModalDragOptions): boolean {
   if (o.collapsible === false) return false;
@@ -226,6 +288,20 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
   /** 拖曳結束後緊接著的那一個 click 要吃掉（否則浮動按鈕拖完就被當成點擊而打開面板）。 */
   let swallowClick = false;
   let appliedMode: 'translate' | 'margin' = opts.mode ?? 'translate';
+  // >>> v6620-zoom-scale
+  // ⭐v6.620：祖先有 CSS zoom（對戰頁「解析度模式」.battle-root.zoomed，iPad 經典版／桌遊版常見 0.6～0.9）時，
+  //   手指移動的距離是「畫面上的 px」，translate／margin 卻是「縮放後座標」的 px ⇒ 視窗只跟手 60～90%（Chromium 實測 iPad 經典版拖 200px 只動 120px）。
+  //   位移（off）與夾制一律用畫面座標；寫進樣式時除以 measureZoomScale 量到的兩軸縮放比。
+  //   縮放比改變（玩家改了解析度）時，先把 off 換算成「目前畫面上真正的位移」再量基準，不會跳位（審查 P3-1）。
+  let scale = { sx: 1, sy: 1 };
+  function calibrate() {
+    const n = measureZoomScale(node);
+    if (n && (n.sx !== scale.sx || n.sy !== scale.sy)) {
+      off = { x: off.x * n.sx / scale.sx, y: off.y * n.sy / scale.sy };
+      scale = n;
+    }
+  }
+  // <<< v6620-zoom-scale
   let safeB = 0, safeT = 0;   // v6.590：上下安全區只在拖曳開始／重夾時量，不在 pointermove 量。
   let collapseBtn: HTMLButtonElement | null = null;
   let collapsed = false;
@@ -272,11 +348,13 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
       else node.style.translate = '';
       appliedMode = mode;
     }
+    // ⭐v6.620：off 是畫面座標，除以縮放比才是樣式座標（v6620-zoom-scale）
+    const lx = off.x / scale.sx, ly = off.y / scale.sy;
     if (mode === 'margin') {
-      node.style.marginLeft = zero ? '' : `${off.x}px`;
-      node.style.marginTop = zero ? '' : `${off.y}px`;
+      node.style.marginLeft = zero ? '' : `${lx}px`;
+      node.style.marginTop = zero ? '' : `${ly}px`;
     } else {
-      node.style.translate = zero ? '' : `${off.x}px ${off.y}px`;
+      node.style.translate = zero ? '' : `${lx}px ${ly}px`;
     }
   }
 
@@ -293,6 +371,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
       if (!t.closest(opts.handle ?? DEFAULT_HANDLE_SELECTOR)) return;
     }
     if (opts.stopPropagation) e.stopPropagation();
+    calibrate();   // ⭐v6.620 每次開始拖曳時量縮放比（解析度模式可能剛被改過）
     base = measure();
     safeB = safeInsetPx('bottom'); safeT = safeInsetPx('top');
     minVisW = measureMinVisible();
@@ -358,6 +437,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
     if (off.x === 0 && off.y === 0) return;
     if (start) return;   // 拖曳中由 onMove 負責
     const { vw, vh } = view();
+    calibrate();   // ⭐v6.620 解析度模式改變時縮放比也會變
     base = measure();
     safeB = safeInsetPx('bottom'); safeT = safeInsetPx('top');
     const before = off;
@@ -470,6 +550,9 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
   }
   if (typeof document !== 'undefined') ensureCollapseBtn();
 
+  // >>> v6620-handle-touch-none
+  let removeTouchNone = installHandleTouchNone(node, opts);
+  // <<< v6620-handle-touch-none
   node.addEventListener('pointerdown', onDown);
   node.addEventListener('pointermove', onMove);
   node.addEventListener('pointerup', onUp);
@@ -483,6 +566,7 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
   ro?.observe(node);
   // 有初始位移（還原上次的位置）⇒ 先套用，版面排好後再夾一次（換裝置／換方向後舊位置可能在畫面外）
   if (off.x !== 0 || off.y !== 0) {
+    scale = measureZoomScale(node) ?? scale;   // ⭐v6.620：初始位移本來就是畫面座標（onEnd 回報的值）⇒ 只量縮放比、不換算
     apply();
     if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => onResize());
   }
@@ -491,7 +575,13 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
     update(next: ModalDragOptions = {}) {
       const changed = 'resetKey' in next && next.resetKey !== opts.resetKey;
       const modeChanged = (next.mode ?? 'translate') !== (opts.mode ?? 'translate');
+      // >>> v6620-handle-touch-none
+      const handleChanged = next.handle !== opts.handle || !!next.wholeNode !== !!opts.wholeNode;
+      // <<< v6620-handle-touch-none
       opts = { ...next };
+      // >>> v6620-handle-touch-none
+      if (handleChanged) { removeTouchNone(); removeTouchNone = installHandleTouchNone(node, opts); }
+      // <<< v6620-handle-touch-none
       if (changed) {
         off = { x: 0, y: 0 };
         base = null;
@@ -506,6 +596,9 @@ export function modalDrag(node: HTMLElement, param: ModalDragOptions = {}) {
       if (typeof document !== 'undefined') ensureCollapseBtn();
     },
     destroy() {
+      // >>> v6620-handle-touch-none
+      removeTouchNone();
+      // <<< v6620-handle-touch-none
       ro?.disconnect();
       collapseBtn?.remove();
       node.removeEventListener('pointerdown', onDown);

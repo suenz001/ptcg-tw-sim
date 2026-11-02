@@ -53,7 +53,8 @@ function scenS(src) {
   r.S2 = ['net-warn-banner', 'act-retry-banner', 'act-queue-banner', 'act-notice-banner', 'opp-quiet-banner'].every((k) => x(k).includes('class="net-warn-x"'))
     && stack.includes('{#if tActRetry && !_ntHideRetry}') && stack.includes('{#if tActQueue.length && !_ntHideQueue}') && stack.includes('{#if tActNotice && !_ntHideNotice}') && /function tActSay\(msg: string, ms = 2600\): void \{\n    _ntHideNotice = false;/.test(src) && stack.includes('{#if tOppQuietOn && !_ntHideOppQuiet}')
     && src.includes('$effect(() => { if (!tActRetry) _ntHideRetry = false; });') && src.includes('$effect(() => { if (tActQueue.length === 0) _ntHideQueue = false; });') && src.includes('$effect(() => { if (!tOppQuietOn) _ntHideOppQuiet = false; });');
-  r.S3 = src.includes(`  <div class="treplay-float-wrap">\n  <div class="treplay-bar" use:modalDrag={{ clamp: 'contain', handle: '.treplay-grip, .treplay-title', overlay: false }}>\n    <span class="treplay-grip"`)
+  // ⭐v6.620（Rule 40）：把手從「⠿＋標題」放寬成整條控制列（iPad 上按到別處會變成整頁平移）；意圖（浮動、可拖曳、contain、有 ⠿）不變
+  r.S3 = /  <div class="treplay-float-wrap">\n(?:  <!--[\s\S]*?-->\n)?  <div class="treplay-bar" use:modalDrag=\{\{ clamp: 'contain', handle: '(?:\.treplay-grip, \.treplay-title|\.treplay-bar)', overlay: false \}\}>\n    <span class="treplay-grip"/.test(src)
     && /\.treplay-float-wrap \{ position: fixed;[^}]*pointer-events: none; \}/.test(src) && /\.treplay-bar \{ position: relative; pointer-events: auto;/.test(src) && !/\.treplay-bar \{ position: sticky/.test(src);
   return r;
 }

@@ -130,7 +130,8 @@ await T('C4 ⭐七個浮動元件（聊天鈕／聊天面板／對手回合鈕�
   const n = (PAGE.match(/use:modalDrag=\{\{ clamp: 'contain',/g) || []).length;
   assert.strictEqual(n, 7, '實得 ' + n);
   for (const cls of ['float-evo-menu', 'opp-turn-panel-header', 'chat-panel-header']) assert.ok(PAGE.includes(cls), cls);
-  assert.ok(PAGE.includes(`<div class="treplay-bar" use:modalDrag={{ clamp: 'contain', handle: '.treplay-grip, .treplay-title', overlay: false }}>`), 'treplay-bar');
+  // ⭐v6.620（Rule 40）：回放控制列把手放寬成整條（iPad 觸控）；意圖（明確帶 contain）不變
+  assert.ok(/<div class="treplay-bar" use:modalDrag=\{\{ clamp: 'contain', handle: '(?:\.treplay-grip, \.treplay-title|\.treplay-bar)', overlay: false \}\}>/.test(PAGE), 'treplay-bar');
   assert.ok(PAGE.includes(`<div class="battle-notice-stack" role="presentation" use:modalDrag={{ clamp: 'contain', wholeNode: true, threshold: 6, overlay: false }}>`), 'battle-notice-stack');
 });
 
