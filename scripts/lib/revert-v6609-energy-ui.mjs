@@ -1,3 +1,4 @@
+import { revertV6619File, hasV6619File } from './revert-v6619-clock-mobile.mjs';   // ⭐v6.619（Rule 40）：手機版最先還原 v6.619 的疊加提示與頁首不擠動
 import { revertV6610File, hasV6610File } from './revert-v6610-energy-labels.mjs';
 import { revertV6614Game, hasV6614File } from './revert-v6614-blue-narrow.mjs';   // ⭐v6.614（Rule 40）：對戰頁最先還原 v6.614 的窄螢幕新版桌墊排列
 import { revertV6613Game, hasV6613File } from './revert-v6613-action-spacing.mjs';   // ⭐v6.613（Rule 40）：對戰頁最先還原 v6.613 的直排行動鈕間距
@@ -8,4 +9,6 @@ export const MOBILE_PAIRS = [["  const isIPhoneStandalone = typeof navigator !==
 function revert(s,pairs){s=s.replace(/\r\n/g,'\n');for(const[a,b]of pairs){assert.equal(s.split(a).length-1,1,'6609還原錨點必須唯一');s=s.replace(a,b);}return s;}
 const _rv6613=s=>{if(hasV6614File('src/routes/game/+page.svelte',s))s=revertV6614Game(s);return hasV6613File('src/routes/game/+page.svelte',s)?revertV6613Game(s):s;};
 export const revertV6609Game=s=>{s=_rv6613(s);return revert(hasV6612File('src/routes/game/+page.svelte',s)?revertV6612Game(s):s,GAME_PAIRS);};
-export const revertV6609Mobile=s=>revert(hasV6610File('src/routes/game/MobilePortraitBattle.svelte',s)?revertV6610File('src/routes/game/MobilePortraitBattle.svelte',s):s,MOBILE_PAIRS);
+const MPB='src/routes/game/MobilePortraitBattle.svelte';
+const _v6619M=s=>hasV6619File(MPB,s)?revertV6619File(MPB,s):s;
+export const revertV6609Mobile=s=>{s=_v6619M(s);return revert(hasV6610File(MPB,s)?revertV6610File(MPB,s):s,MOBILE_PAIRS);};

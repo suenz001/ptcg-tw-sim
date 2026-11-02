@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.619（2026-11-02）個人計時縮小氣泡＋手機提示疊加
+
+BASE `60dec41d`（v6.618＋鐵律 Rule 91）。站長：個人計時小視窗比照聊天氣泡加縮小鈕；縮小只顯示數字；手機越小越好；手機「請派出寶可夢」提示會下推畫面，要修並整體 audit，建議疊在計時器那欄。
+
+- PlayerClockNotice：標題列「－」縮成氣泡（網頁版 54px 圓、手機 24px 數字膠囊＋透明 ::before 擴大可點範圍）；只顯示數字；拖曳走中央 modalDrag；縮小狀態與位置存 localStorage；限時黃底只剩秒數、10 秒內紅閃、等待虛線框、stalled 黃外框；不自動展開。
+- MobilePortraitBattle：派出／等待派出提示疊在 .mp-timer-strip、取獎提示疊在 .mp-my-chips（絕對定位，不佔高度；舊存檔沒有計時器才退回獨立一列）；頁首 nowrap＋右側按鈕不縮（🤖／⏳送出中／⏳已排隊 不再擠動「結束回合」）。
+- audit：手機直式 .mp 內在流內、會條件出現的只有這兩種提示＋頁首標籤；+page 的通知堆疊與各 strip 都是 fixed；桌機 tabletop／fable／blue 的 alerts-col 原本就是 absolute。
+- 審查（Opus 5.5）：P2-1 守衛容器範圍改深度計數（M1d＋正對照）；P2-2 頁首擠動 → 修＋H1 量測（320／375／390，含 ← ↶）；P2-3 氣泡 z-index 高於選擇視窗（既有，縮小後面積大減）→ 留給站長裁定；P3 若干（aria、title、chips 捲動、省略號、HEAD-FAIL 打包錯誤不算紅、階段文字最小寬 1.6em）已修。複審無 P1／P2。
+- 守衛：test-v6619（C1～C5 真元件、M1a～M1d、M2、M3、H1、HEAD-FAIL）；Rule 40：test-v6211 時計 import 白名單加 $lib/modal-drag（附負對照）；還原表 revert-v6619 接進 revert-v6609-changelog 與 test-v6610。
+
 ## v6.618（2026-11-02）手機單卡頁讓開動態島＋✕
 
 BASE `95ad48cd`（v6.617）。站長回報：手機單卡頁上方被 iPhone 動態島擋住（或被模糊處理），也沒有 ✕ 回到卡牌瀏覽，請參考卡片視窗的做法。

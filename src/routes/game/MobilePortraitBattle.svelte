@@ -676,6 +676,12 @@
   //   寶可夢變多、超出版面寬度的卡，用滑鼠無法像觸控那樣按住橫拉看到。此 action 只接管
   //   「滑鼠」指標（觸控仍走原生捲動），按住左右拖曳即可捲動；移動超過門檻判定為拖曳時，
   //   吃掉緊接著的 click 避免誤觸卡片。
+  // ⭐v6.619（審查 P3-8）：取獎提示疊在可橫向捲動的 chips 列裡 ⇒ 出現時把那一列捲回最左邊，提示才會完整蓋住可視範圍
+  //   （配合 CSS：提示存在時那一列不可橫向捲動，避免提示跟著被滑走）。
+  function resetParentScroll(node: HTMLElement) {
+    const p = node.parentElement;
+    if (p) p.scrollLeft = 0;
+  }
   function dragScroll(node: HTMLElement) {
     let down = false, startX = 0, startScroll = 0, moved = false;
     function onDown(e: PointerEvent) {
@@ -779,6 +785,9 @@
   </header>
 
   <!-- v4.24 對戰計時器 — 細條 timer-strip，4 欄資訊一直可見 -->
+  <!-- ⭐v6.619 站長：「手機版的，請派出寶可夢的通知，還是會下推遊戲介面……我建議直接覆蓋顯示在計時器那欄就好」
+       ⇒ 送出新戰鬥寶可夢的提示改成**疊在計時器這一欄上面**（絕對定位、不佔版面高度），出現／消失都不會推動下面的場地。
+       計時器不存在（只有沒有 gameStartTime 的舊存檔）才退回原本的獨立一列。 -->
   {#if game.gameStartTime !== undefined}
     <div class="mp-timer-strip">
       <span class="mp-t-cell mp-t-total">⏱ {fmtTimerMs(gameTotalMs)}</span>
@@ -786,11 +795,14 @@
       <span class="mp-t-sep">|</span>
       <span class="mp-t-cell" class:mp-t-active={game.activePlayerIndex === 1 && game.phase === 'playing'}>P2 {fmtTimerMs(p1TotalMs)}</span>
       <span class="mp-t-cell mp-t-turn">▶ {fmtTimerMs(liveTurnTimeMs)}</span>
+      {#if needSendActiveMine}
+        <div class="mp-wait-alert mp-wait-warn mp-strip-cover" role="status"><span class="mp-overlay-text">⚠️ 請從備戰區派出新的戰鬥寶可夢</span></div>
+      {:else if needSendActiveOpp && isMyTurn}
+        <div class="mp-wait-alert mp-strip-cover" role="status"><span class="mp-overlay-text">⏳ 等待對手派出新的戰鬥寶可夢</span></div>
+      {/if}
     </div>
-  {/if}
-
-  <!-- v5.015：送出新戰鬥寶可夢的等待提示 — 桌機版 +page.svelte:5641-5662 已有同樣 alert，手機 portrait 需自行渲染 -->
-  {#if needSendActiveMine}
+  {:else if needSendActiveMine}
+    <!-- v5.015：送出新戰鬥寶可夢的等待提示 — 桌機版 +page.svelte:5641-5662 已有同樣 alert，手機 portrait 需自行渲染 -->
     <div class="mp-wait-alert mp-wait-warn">⚠️ 請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>
   {:else if needSendActiveOpp && isMyTurn}
     <div class="mp-wait-alert">⏳ 對手戰鬥場空 — 等待對手送出新戰鬥寶可夢</div>
@@ -985,15 +997,15 @@
         <span class="mp-chip mp-version">v{version}</span>
       </span>
     {/if}
+    <!-- v5.199：補 !isSpectator gate — 觀戰者不該看到「取得」按鈕（雖 dispatch L3589 已擋，但 UX 不該顯示） -->
+    <!-- ⭐v6.619（同上，站長要求整體 audit「不要再有下推或變動玩家遊玩畫面的狀況」）：取獎賞提示改成疊在我方這一列 chips 上，不再插入新的一列 -->
+    {#if (pendingPrizes ?? 0) > 0 && !isSpectator}
+      <div class="mp-prize-alert mp-strip-cover" use:resetParentScroll>
+        <span class="mp-overlay-text">🏆 取 {pendingPrizes} 張獎賞卡</span>
+        <button class="mp-prize-btn" disabled={actionBusy} onclick={() => onAction(GameActions.takePrizes(pendingPrizes!, myIdx, myIdx))}>取得</button>
+      </div>
+    {/if}
   </div>
-
-  <!-- v5.199：補 !isSpectator gate — 觀戰者不該看到「取得」按鈕（雖 dispatch L3589 已擋，但 UX 不該顯示） -->
-  {#if (pendingPrizes ?? 0) > 0 && !isSpectator}
-    <div class="mp-prize-alert">
-      🏆 取 {pendingPrizes} 張獎賞卡
-      <button class="mp-prize-btn" disabled={actionBusy} onclick={() => onAction(GameActions.takePrizes(pendingPrizes!, myIdx, myIdx))}>取得</button>
-    </div>
-  {/if}
 
   <!-- ─── 我方 bench ─── -->
   <div class="mp-row mp-my-bench" use:dragScroll>
@@ -1302,6 +1314,14 @@
   .mp-turn-text { color: #cef; font-weight: 600; }
   .mp-phase { color: #ffd44a; font-size: 0.7rem; }
   .mp-spacer { flex: 1; }
+  /* ⭐v6.619（審查 P2-2，站長：「不要再有下推或變動玩家遊玩畫面的狀況」）：頁首的 🤖／⏳送出中／⏳已排隊 標籤一閃一閃，
+     窄螢幕（320／375）放不下時原本會把「結束回合」與 ⚙ 擠到折行或推出畫面 ⇒ 頁首不折行、右側按鈕不縮，
+     放不下時由左邊的文字與標籤自己縮（省略）。 */
+  .mp-top { white-space: nowrap; overflow: hidden; }
+  .mp-end-btn, .mp-icon-btn { flex-shrink: 0; }
+  .mp-turn-text, .mp-phase, .mp-tag { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .mp-phase { min-width: 1.6em; }   /* 複審 P3-2：至少保住 🟢／🔴 圖示（它也是「重新同步」的點擊目標） */
+  .mp-tag { flex-shrink: 3; }       /* 放不下時先縮標籤、再縮回合文字 */
   .mp-tag {
     background: #3a2a1a; color: #fa8;
     border: 1px solid #5a3a1a; border-radius: 8px;
@@ -1947,6 +1967,21 @@
     margin: 4px 10px;
     text-align: center;
   }
+  /* ⭐v6.619 疊加式提示（class 刻意不以 overlay 結尾：它不是視窗，test-v6420 把 *-overlay 當成要能拖曳的視窗）：絕對定位蓋在計時器那一欄（或我方 chips 列）上，不佔版面高度 ⇒ 出現／消失都不會推動場地。
+     ⚠ 父層（.mp-timer-strip／.mp-chips）都是 position:relative；高度跟著父層（計時器約 20px、chips 22px）。 */
+  .mp-timer-strip { position: relative; }
+  .mp-strip-cover.mp-strip-cover {   /* 重複 class 提高特異度：蓋過後面 .mp-prize-alert 原本的 margin／padding／圓角 */
+    position: absolute; inset: 0; z-index: 12;
+    margin: 0; border-radius: 0; border-width: 0 0 1px 0;
+    padding: 0 8px; min-height: 0;
+    font-size: 0.72rem; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mp-overlay-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }   /* 審查 P3-9：flex 容器的匿名文字不會出現省略號 */
+  .mp-chips:has(> .mp-strip-cover) { overflow-x: hidden; }   /* 審查 P3-8：提示在的時候整列不能被橫滑帶走 */
+  .mp-wait-alert.mp-strip-cover { background: #183650; }
+  .mp-wait-alert.mp-wait-warn.mp-strip-cover { background: #4a2d0c; }
+  .mp-prize-alert.mp-strip-cover { background: #3d3108; }
+  .mp-prize-alert.mp-strip-cover .mp-prize-btn { padding: 1px 10px; font-size: 0.72rem; line-height: 1.3; }
   .mp-wait-alert.mp-wait-warn {
     background: linear-gradient(90deg, rgba(200,120,40,0.35), rgba(180,100,30,0.2));
     border-color: #c0782a;

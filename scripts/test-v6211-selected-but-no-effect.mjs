@@ -314,7 +314,10 @@ T('⭐⭐ 兩個對戰版面與一個時計顯示元件的檔名清單凍結（�
 const clockDisplayOnly = raw => {
   const src = stripComments(raw);
   const imports = [...src.matchAll(/import[\s\S]*?from\s*['"]([^'"]+)['"]/g)].map(m => m[1]);
-  return imports.length === 1 && imports[0] === '$lib/tournament/player-clock'
+  // ⭐v6.619（Rule 40）：縮小氣泡改用全站浮動按鈕的中央拖曳 $lib/modal-drag ⇒ 白名單多這一個（只准這兩個來源）；
+  //   意圖不變：時計元件只讀中央時計、不可以 import 任何卡牌動作判準來源。
+  const CLOCK_IMPORT_OK = new Set(['$lib/tournament/player-clock', '$lib/modal-drag']);
+  return imports.includes('$lib/tournament/player-clock') && imports.every((m) => CLOCK_IMPORT_OK.has(m))
     && src.includes('projectPlayerClock(clock, now)')
     && !/\b(?:GameState|GameAction|applyAction|dispatch|tournamentDispatch|getAvailableAttacks|getEffectiveAttacks|canRetreat|getUsableAbilities|getEvolvableTargets|getHandCardOps)\b/.test(src);
 };
@@ -325,6 +328,7 @@ T('時計顯示元件只讀中央時計、不包含卡牌動作判準', () => {
 T('時計分類負對照：混入本地卡牌動作判準必須被拒', () => {
   ok(!clockDisplayOnly(clockSource + '\n<script>function canRetreat(){return true;}</script>'), '錯把動作判準當成顯示元件');
   ok(!clockDisplayOnly(clockSource.replace('$lib/tournament/player-clock', './local-clock')), '放過本地時計來源');
+  ok(!clockDisplayOnly(clockSource.replace("<script lang=\"ts\">", "<script lang=\"ts\">\n  import { canRetreat as x } from '$lib/game/engine';")), '放過 import 引擎判準（v6.619 白名單外的來源）');
 });
 const UI_SRCS = UI_FILES.filter(f => f !== 'PlayerClockNotice.svelte').map((f) => [f, readFileSync(join(ROOT, 'src/routes/game', f), 'utf8')]);
 const GOOD_PROBE = "import { getAvailableAttacks, getEffectiveAttacks, canRetreat, getUsableAbilities, getEvolvableTargets } from '$lib/game/engine';\n"

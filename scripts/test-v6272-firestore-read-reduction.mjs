@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '95ad48cd42afd2ce598dbc784fb6f72b20e4a26e';   // v6.617（上一版）
+const PREV_SHA = '60dec41d76b267fec21a3a4f66f74b35009a8acc';   // v6.618（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,17 +757,28 @@ const PREV_SHA = '95ad48cd42afd2ce598dbc784fb6f72b20e4a26e';   // v6.617（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.618 前移：PREV_SHA 從 95ad48cd（v6.617）起算。
+  // ⚠⚠ v6.619 前移：PREV_SHA 從 60dec41d（v6.618）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.618：手機單卡頁頁首讓開安全區、右上角 ✕（回到卡牌資料庫的判準 cardPageBackTarget 放在 card-page.ts）；首頁 changelog 三步搬運
-  'src/lib/cards/card-page.ts',
+  // ⭐v6.619：錦標賽個人計時縮小氣泡（PlayerClockNotice，拖曳走中央 modalDrag）；手機直式派出／等待派出／取獎提示改疊加（MobilePortraitBattle）；首頁 changelog 三步搬運
   'src/lib/version.ts',
-  'src/routes/card/[id]/+page.svelte',
+  'src/routes/game/MobilePortraitBattle.svelte',
+  'src/routes/game/PlayerClockNotice.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.618）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.618 前移：PREV_SHA 從 95ad48cd（v6.617）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.618：手機單卡頁頁首讓開安全區、右上角 ✕（回到卡牌資料庫的判準 cardPageBackTarget 放在 card-page.ts）；首頁 changelog 三步搬運
+//   'src/lib/cards/card-page.ts',
+//   'src/lib/version.ts',
+//   'src/routes/card/[id]/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.617）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.617 前移：PREV_SHA 從 c430b6ac（v6.616）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -906,16 +917,6 @@ const PREV_ALLOWED = [
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.606）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.606 前移：PREV_SHA 從 9d427ed5（v6.605）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.606：只改共用卡背CSS尺寸，維持原有卡片顯示權限。
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'static/changelog.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog-archive.html',
 //   'static/site-version.txt',
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + [...PREV_ALLOWED].sort().join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }
