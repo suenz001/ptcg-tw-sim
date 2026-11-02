@@ -5,6 +5,10 @@
   import type { EnergyType } from '$lib/cards/types';
   import type { PageData } from './$types';
   import SetSourceCard from '$lib/components/SetSourceCard.svelte';   // ⭐v6.617 出自於卡包（封面＋連結）
+  import { onMount } from 'svelte';
+  import { afterNavigate, goto } from '$app/navigation';
+  import { cardPageBackTarget, cardPagePrevUrl } from '$lib/cards/card-page';   // ⭐v6.618 ✕ 回到卡牌瀏覽（判準只有一份）
+  import { WIDE_QUERY } from '$lib/site-theme';                 // ⭐v6.618 網頁版斷點只有一份（與 data-ui-wide 同源）
 
   let { data }: { data: PageData } = $props();
   const card = $derived(data.card);
@@ -35,6 +39,33 @@
     });
     return `<script type="application/ld+json">${j}<\/script>`;
   });
+
+  // ⭐v6.618 手機版右上角 ✕（站長：手機單卡頁沒有關閉按鈕可以回到原本的卡牌瀏覽頁面，請參考卡片視窗的做法）
+  //   ・只在手機（不是網頁版 ≥1024px）顯示：網頁版有頂端列可以換頁。掛載後才判斷 ⇒ 預渲染的 HTML 在桌機不會先閃出 ✕。
+  //   ・上一頁：判準在 cardPagePrevUrl（站內換頁用 from、整頁載入用 document.referrer、返回／前進沿用這筆歷史紀錄記下的值）。
+  //   ・snapshot：每一筆歷史紀錄記住自己第一次進來時的上一頁（SvelteKit 在 afterNavigate 之前還原）。
+  let showClose = $state(false);
+  let prevUrl = '';
+  export const snapshot = {
+    capture: () => prevUrl,
+    restore: (v: unknown) => { prevUrl = typeof v === 'string' ? v : ''; },
+  };
+  afterNavigate((nav) => {
+    try { prevUrl = cardPagePrevUrl({ type: nav.type, fromHref: nav.from?.url ? nav.from.url.href : null }, document.referrer || '', prevUrl); } catch { prevUrl = ''; }
+  });
+  onMount(() => {
+    try {
+      const mq = matchMedia(WIDE_QUERY);
+      const apply = () => { showClose = !mq.matches; };
+      apply();
+      mq.addEventListener('change', apply);
+      return () => mq.removeEventListener('change', apply);
+    } catch { showClose = true; return undefined; }
+  });
+  function closePage() {
+    const t = cardPageBackTarget({ prevUrl, origin: location.origin, base, historyLength: history.length, setCode: String(card.setCode) });
+    if (t.kind === 'back') history.back(); else goto(t.href);
+  }
 </script>
 
 <svelte:head>
@@ -50,13 +81,14 @@
 </svelte:head>
 
 <main class="card-page">
-  <nav class="crumb">
+  {#if showClose}<button class="close" type="button" onclick={closePage} aria-label="關閉，回到卡牌資料庫" title="關閉">×</button>{/if}
+  <nav class="crumb" class:has-close={showClose}>
     <a href="{base}/">首頁</a> ／
     <a href="{base}/cards?set={card.setCode}">{card.setCode} 卡包</a> ／
     <span>{card.name}</span>
   </nav>
 
-  <h1>{h1}</h1>
+  <h1 class:has-close={showClose}>{h1}</h1>
 
   <div class="body">
     <img use:retryImg={card.imageUrl} class="img" src={card.imageUrl} alt={card.name} loading="lazy" width="367" height="512" />
@@ -120,7 +152,7 @@
 </main>
 
 <style>
-  .card-page { max-width: 760px; margin: 0 auto; padding: 16px 18px 48px; color: #1d1d1f; font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif; line-height: 1.6; }
+  .card-page { max-width: 760px; margin: 0 auto; padding: calc(16px + var(--safe-top, 0px)) 18px 48px; color: #1d1d1f; font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif; line-height: 1.6; }
   .crumb { font-size: 13px; color: #666; margin-bottom: 10px; }
   .crumb a { color: #c0392b; text-decoration: none; }
   h1 { font-size: 22px; margin: 4px 0 16px; }
@@ -216,4 +248,32 @@
   :global(html:not([data-ui-wide])) .foot { color: var(--ui-text-muted); }
   :global(html:not([data-ui-wide])) .foot a { color: var(--ui-link); }
   /* <<< v6498-mobile-dark */
+  /* ⭐v6.618 手機版：①頁首讓開 iPhone 動態島／瀏海（加到主畫面開啟時內容會延伸到狀態列底下）；
+     ②右上角 ✕ 固定在畫面上（往下捲也按得到），樣式與卡牌資料庫的卡片視窗 ✕ 相同（2.8rem 圓鈕、主題底色、陰影）。
+     ・頁首讓位寫在最上面 .card-page 的 padding（審查 P3-1：放在手機前綴規則裡，桌機 hydrate 前會先套到而跳 8px；
+       網頁版 @media 本來就覆寫 padding，桌機的 --safe-top 也是 0 ⇒ 網頁版不變）。
+     ・✕ 只在手機（掛載後判斷）才渲染；麵包屑／卡名的右側讓位綁同一個 showClose ⇒ 桌機永遠不會套到。不加 @media（本頁 @media 數量有守衛在釘）。
+     ・安全區只讀 layout 的 --safe-top／--safe-right（全站唯一來源，test-v6187）。 */
+  .has-close { padding-right: 52px; }   /* 麵包屑與卡名不鑽到 ✕ 底下 */
+  .close {
+    position: fixed;
+    top: calc(var(--safe-top, 0px) + 8px);
+    right: calc(var(--safe-right, 0px) + 10px);
+    z-index: 50;
+    width: 2.8rem;
+    height: 2.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: var(--ui-bg-sunken, rgba(255, 255, 255, 0.9));
+    color: var(--ui-text, #333);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .close:active { transform: scale(0.94); }
 </style>

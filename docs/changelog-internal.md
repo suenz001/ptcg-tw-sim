@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.618（2026-11-02）手機單卡頁讓開動態島＋✕
+
+BASE `95ad48cd`（v6.617）。站長回報：手機單卡頁上方被 iPhone 動態島擋住（或被模糊處理），也沒有 ✕ 回到卡牌瀏覽，請參考卡片視窗的做法。
+
+- 頁首讓位：基底 `.card-page` 的 padding-top 改 `calc(16px + var(--safe-top, 0px))`（網頁版 @media 覆寫；桌機 --safe-top 為 0）。
+- ✕：掛載後且非網頁版（`matchMedia(WIDE_QUERY)`）才渲染，fixed 在 `--safe-top + 8px`，樣式比照 /cards 卡片視窗；麵包屑／卡名右側讓位綁 `showClose`。
+- 回去哪裡：`card-page.ts` 的 `cardPageBackTarget`（上一頁是同站 /cards 且有上一頁 ⇒ `history.back()`，否則 `/cards?set=代號`）與 `cardPagePrevUrl`（enter 用 referrer、站內導航用 from、popstate 沿用該筆歷史紀錄的 snapshot）。
+- 審查（Opus 5.5）：P2-1 popstate 倒退回本頁時 from 是下一頁 ⇒ 按 ✕ 會 history.back() 離開網站 → 改 snapshot＋cardPagePrevUrl，補 L4／B6（突變實測會紅）；P3-1 手機前綴規則在桌機 hydrate 前先套到而跳 8px → 改寫在基底規則；P3-5 符號改 ×；P3-6 守衛改 esbuild stdin。複審無 P1／P2。
+- 未處理（告知站長）：測試站 github.io 的 migration／beta 橫幅會蓋住 ✕、沒讓開安全區（正式站沒有）；正式站 Referrer-Policy 未查證（若 no-referrer，從卡片視窗進來按 ✕ 會改到卡包列表，不會壞）。
+- 守衛：test-v6618（L1～L4、S1～S4、B1～B6、HEAD-FAIL）；Rule 40：還原表 revert-v6618 接進 revert-v6609-changelog 與 test-v6610。
+
 ## v6.617（2026-11-02）「出自於卡包」加上卡包封面與連結
 
 BASE `c430b6ac`（v6.616＋鐵律 Rule 90）。站長 2026-11-02 轉述玩家建議：「卡牌資料頁中，「出自於卡包」項目建議加入卡裨資料庫那種的卡包封面圖，還有附上連結跳轉去該卡包的資料頁。在手機查卡牌出處感覺有點麻煩，在外面想買正確的卡包時另外開分頁複製卡包名稱才知道哪一包才正確。」先做原型給站長看預覽圖（手機／電腦、淺色／深色、改版前後），站長：「1.設計可以 2.依你的建議文字完全換掉」。
