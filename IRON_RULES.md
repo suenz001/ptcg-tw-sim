@@ -2731,3 +2731,25 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
    寫回卡檔前做空操作自證（各檔縮排不同：MT*／M-P-I／SVI 縮排 2、M-P-J 與 index.json 縮排 1）；card-set-map.json 走文字層追加；manifest 縮排 1＋檔尾換行。
 5. **既有守衛會被「補卡」以意想不到的方式弄紅**（v6.616 一次踩到四支）：現查挑 fixture 的守衛會挑到新卡（v6348 靶從 HP≥200 挑到新的萊希拉姆ex 230，扛不住 240）；釘張數的快照（v6232、v6241 ⑨）；「既有逐字等於 BASE」（v6615、v6391 E4b）；整檔位元組釘（v6609 effects.ts）。照 Rule 40 先用本版還原表（`scripts/lib/revert-v6616-svi-mp.mjs` 同時提供 changelog／effects.ts 位元組還原與 index／card-set-map 資料層還原）拿掉本版改動再比，或把前置條件寫對。
 6. **跨印刷一致性守衛（test-evolution-chain-integrity F）比官網單一欄位可靠**：它紅了先看卡圖，不要急著加白名單或改資料去配合官網。
+
+## Rule 91（2026-11-02）：手機版避開 iPhone 動態島／瀏海，以及「只給手機」的元素與 ✕ 返回（v6.618）
+
+站長逐字：「手機版，單卡頁的圖片顯示上方部分太多，導致會被iphone動態島擋住(或是被模糊處理)，也沒有X的關閉按鈕返回原本的卡變瀏覽頁面，請參考卡片檢視的頁面的做法」。
+
+1. **安全區只讀 `var(--safe-top／--safe-bottom／--safe-left／--safe-right, 0px)`**（唯一來源 `src/routes/+layout.svelte`，test-v6187）；不可以在頁面或元件寫 `env(safe-area-inset-*)`。app.html 是 `viewport-fit=cover`＋`black-translucent`：玩家從主畫面開啟時內容會延伸到狀態列底下，**任何頁首、貼頂的 fixed／sticky 元素都要自己讓開**（例：`padding-top: calc(16px + var(--safe-top, 0px))`、`top: calc(var(--safe-top, 0px) + 8px)`）。新增頁面時順手檢查頁首。
+2. **會改版面的手機規則不可以只靠 `:global(html:not([data-ui-wide]))` 前綴**：`data-ui-wide` 是 layout 掛載後才由 `trackWideAttr` 寫上的 ⇒ 桌機在 hydrate 前會先套到手機規則（v6.618 第一版：桌機頁首先 16px 再跳成 24px，SEO 頁 CLS；審查 P3-1）。正解：
+   - 讓位寫在**基底規則**（網頁版 `@media (min-width:1024px)` 本來就覆寫；桌機的 `--safe-top` 是 0）。
+   - **只給手機的元素**（✕、手機專用按鈕）在 `onMount` 後依 `matchMedia(WIDE_QUERY)`（`$lib/site-theme`，斷點只有一份）決定要不要渲染；跟它連動的讓位用 `class:xxx={showClose}` 綁同一個狀態。
+   - 只改顏色的 `html:not([data-ui-wide])` 規則（v6498 哨兵區塊）不受影響。
+3. **「關閉回到上一頁」的判準**（`$lib/cards/card-page.ts`：`cardPagePrevUrl`＋`cardPageBackTarget`）：
+   - 上一頁網址：整頁載入（`afterNavigate` 的 `type: 'enter'`、`from` 為 null）用 `document.referrer`；站內用戶端導航用 `nav.from`（`document.referrer` 不會更新）；**popstate 不可以用 `nav.from`**——倒退回本頁時 `from` 是「剛離開、排在後面的那一頁」（v6.618 審查 P2-1：直接進單卡頁 → 點麵包屑到 /cards → 返回 → ✕ ⇒ 被誤判成 `history.back()` 而離開網站）⇒ 用頁面的 `export const snapshot`（capture／restore；kit 在 afterNavigate 之前還原）讓每一筆歷史紀錄記住自己的上一頁。
+   - 上一頁是同站目標頁（比對 `${base}/cards`，含 github.io 的 base）且 `history.length > 1` ⇒ `history.back()`（保留卡包、篩選、捲動、視窗狀態）；其餘一律 `goto` 到明確的目標頁（不要猜）。
+   - /cards 卡片視窗的 `.modalInner` 會 `stopPropagation` ⇒ 視窗裡的連結是**整頁導航**（kit 攔截不到）⇒ 走 referrer 那條路。
+   - ⚠ 正式站的 Referrer-Policy 尚未查證；若是 no-referrer，只會退化成 goto 卡包列表，不會壞。
+4. **Playwright 模擬動態島**：Chromium 的 `env()` 永遠是 0 ⇒ 覆寫全站唯一來源。⚠ `addInitScript` 直接 `documentElement.appendChild(style)` 不會生效（v6.618 第一張截圖就沒讓位，差點誤判）⇒ 正確寫法：`document.addEventListener('DOMContentLoaded', () => head.appendChild(<style>html:root{--safe-top:59px !important}</style>))`，**先用 `getComputedStyle(documentElement).getPropertyValue('--safe-top')` 確認是 59px 再截圖**。iPhone 15 動態島：安全區 59px、島體約 top 11px、126×37。
+5. **量測地雷**：
+   - 網頁版的 SiteTopBar 自己也讀 `--safe-top` ⇒ 比較「有無安全區」時量**相對於 `main`** 的位置，不要量絕對 top。
+   - 判斷「✕ 有沒有壓到文字」要用 `Range.selectNodeContents(el).getClientRects()` 取文字框；區塊元素的 rect 含右側讓位的 padding，會誤判。
+   - 守衛載入 TS 模組用 esbuild `stdin`（`resolveDir` 指到原目錄），不要在 `src/` 底下寫暫存檔（全套平行跑時別的守衛會掃到）。
+6. **測試站（github.io）的 migration／beta 橫幅沒有讓開安全區，而且會蓋在頁面的 fixed ✕ 上** ⇒ 頁首外觀請站長在正式站驗收，回報時要主動提醒。
+7. 流程雜項：`scripts/bump-version.py` 會自己把 spec 的 `test` 加進 package.json 測試鏈，**不要再手動加**（v6.618 加了兩次，全套名單出現重複）。
