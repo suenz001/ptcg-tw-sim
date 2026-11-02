@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { revertV6598Game, revertV6598Cards, revertV6598Decks, V6598_CARDS_PAIRS } from './lib/revert-v6598-pages.mjs';   // ⭐v6.598（Rule 40）：手機彈出視窗上緣／關閉鈕，先還原成 v6.597
 import { V6586_CARDS_REVERT_PAIRS } from './lib/revert-v6586-cards.mjs';
+import { revertV6617Cards } from './lib/revert-v6617-set-source.mjs';   // ⭐v6.617（Rule 40）
 /**
  * v6.439 守衛：手機版卡牌資料庫（/cards 卡包頁）不可以左右滑動、「一般搜尋」不可以超出畫面
  *
@@ -160,7 +161,9 @@ const LATER = [
   ["\n  /* ⭐v6.468（全站 audit）：「← 首頁」只有 16～21px 高，手機上很難點。用 padding＋等量負 margin 放大可點範圍，\n     版面位置一點都不動（純文字連結、沒有底色或框線 ⇒ 桌機看起來也完全一樣）。\n     ⚠ 刻意不包 @media：本頁的 @media 數量有守衛在釘（手機／桌機不靠斷點切版），而這條在桌機也無害。 */\n  .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }\n</style>", "</style>"],
 ];
 // ⭐v6.464（Rule 40）：本版把資料庫格子的卡圖改用縮圖（src={cardThumb(…)}＋import），先用共用還原表還原成 v6.463 再剝哨兵；其餘仍須逐位元等於 BASE。
-let stripped = revertPairs(SRC.replace(/\r\n/g, '\n'), V6464_CARDS_PAIRS).replace(STRIP_RE, '');
+// ⭐v6.617（Rule 40）：本版移除的 .footSet 樣式有兩處在 v6475／v6498 哨兵區塊裡（跨進哨兵內）⇒ 放進 LATER 會因為哨兵先被剝掉而命中 0 次，
+//   所以在剝除之前先把整檔還原成 v6.616（共用還原表 revert-v6617-set-source.mjs，逐位元驗證過）；內容由 test-v6617 鎖。
+let stripped = revertPairs(revertV6617Cards(SRC.replace(/\r\n/g, '\n')), V6464_CARDS_PAIRS).replace(STRIP_RE, '');
 // ⭐v6.475（Rule 40）：網頁版主題＋版面整塊包在 v6475-desktop-theme 哨兵裡（全部在 min-width:1024px 內，手機不變）
 //   ⇒ 整塊拿掉即逐位元還原 v6.474；內容由 test-v6475-theme-pages 鎖。哨兵必須恰好一塊（被刪＝剝除器靜默 no-op ⇒ 紅）。
 {

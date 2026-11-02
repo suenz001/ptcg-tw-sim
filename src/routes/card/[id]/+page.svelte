@@ -4,6 +4,7 @@
   import { ENERGY_LABEL } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
   import type { PageData } from './$types';
+  import SetSourceCard from '$lib/components/SetSourceCard.svelte';   // ⭐v6.617 出自於卡包（封面＋連結）
 
   let { data }: { data: PageData } = $props();
   const card = $derived(data.card);
@@ -59,6 +60,7 @@
 
   <div class="body">
     <img use:retryImg={card.imageUrl} class="img" src={card.imageUrl} alt={card.name} loading="lazy" width="367" height="512" />
+    <div class="side">
     <table class="info">
       <tbody>
         <tr><th>類別</th><td>{SUPERTYPE_ZH[card.supertype] ?? card.supertype}{card.subtype && card.subtype !== 'None' ? '／' + card.subtype : ''}</td></tr>
@@ -76,6 +78,9 @@
         <tr><th>所屬版本</th><td>{card.setCode} ｜ 收集編號 {card.collectorNumber}</td></tr>
       </tbody>
     </table>
+    <!-- ⭐v6.617 玩家建議：出處加卡包封面，點了到該卡包的卡牌列表（放在資料表正下方，網頁版在右欄、手機接在表格後） -->
+    {#if data.set}<SetSourceCard set={data.set} href={`${base}/cards?set=${encodeURIComponent(card.setCode)}`} />{/if}
+    </div>
   </div>
 
   {#if card.abilities?.length}
@@ -121,7 +126,8 @@
   h1 { font-size: 22px; margin: 4px 0 16px; }
   .body { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
   .img { width: 280px; max-width: 100%; height: auto; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
-  .info { border-collapse: collapse; flex: 1; min-width: 260px; font-size: 14px; }
+  .side { flex: 1; min-width: 260px; }   /* ⭐v6.617 資料表＋出自於卡包 包成一欄 */
+  .info { border-collapse: collapse; width: 100%; font-size: 14px; }
   .info th, .info td { border: 1px solid #e3e3e6; padding: 6px 10px; text-align: left; vertical-align: top; }
   .info th { background: #f6f6f8; white-space: nowrap; width: 92px; color: #555; font-weight: 600; }
   .sec { margin-top: 22px; }

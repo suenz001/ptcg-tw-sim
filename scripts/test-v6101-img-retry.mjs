@@ -250,6 +250,7 @@ const FILES = [
   'src/routes/card/[id]/+page.svelte',
   'src/lib/decks/OpeningHandSim.svelte',   // ⭐v6.485 牌組編輯器「🎲 測抽」視窗（手牌／獎賞卡圖）
   'src/routes/deck-posts/+page.svelte',   // ⭐v6.594 牌組公布欄明細縮圖與大圖
+  'src/lib/components/SetSourceCard.svelte',   // ⭐v6.617 出自於卡包的封面（有的是官網卡圖）
 ];
 /**
  * ⭐ 判準是**白名單豁免制**，不是「src 綁到 …imageUrl 才算卡圖」。

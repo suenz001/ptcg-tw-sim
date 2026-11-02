@@ -1,5 +1,19 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.617（2026-11-02）「出自於卡包」加上卡包封面與連結
+
+BASE `c430b6ac`（v6.616＋鐵律 Rule 90）。站長 2026-11-02 轉述玩家建議：「卡牌資料頁中，「出自於卡包」項目建議加入卡裨資料庫那種的卡包封面圖，還有附上連結跳轉去該卡包的資料頁。在手機查卡牌出處感覺有點麻煩，在外面想買正確的卡包時另外開分頁複製卡包名稱才知道哪一包才正確。」先做原型給站長看預覽圖（手機／電腦、淺色／深色、改版前後），站長：「1.設計可以 2.依你的建議文字完全換掉」。
+
+- 新元件 `src/lib/components/SetSourceCard.svelte`（卡牌資料庫卡片視窗與單卡頁共用，Rule 38）：封面（與卡包列表同一張圖、aspect-ratio 0.71／object-fit cover）＋「出自於卡包」＋卡包名＋「代號 · 發售日 · 張數」＋「查看卡包 ›」。有 href ⇒ 整張是連結；正在看同一個卡包 ⇒ href=null、只顯示並在標籤旁標「目前瀏覽中」（放右側會把日期擠成兩行，預覽時抓到）。資訊列每段 nowrap、段間才換行；高度 ≥44px；顏色只讀 --ui-* 色票。封面掛 use:retryImg（有的是官網卡圖），test-v6101 FILES 登記。
+- /cards 卡片視窗：setNameByCode 改成 setByCode（整筆 SetSummary），舊「出自於卡包【…】」文字與 .footSet 樣式（含 v6475／v6498 哨兵內兩處）移除；點卡片導到 ?set=代號（.modalInner 會 stopPropagation，SvelteKit 的連結攔截收不到 ⇒ 實際是整頁導航，同既有「📄 單卡頁」連結）。
+- 單卡頁 /card/[id]：伺服器端 `getSetSummary`（$lib/server/cardIndex 讀 index.json，建置期一次，張數先過 applyHiddenCountsToSets 扣下架卡）；資料表與卡包卡片包成 .side 一欄 ⇒ 網頁版在右欄資料表正下方、手機接在表格後。
+- 修 v6.616 的 SVI 封面：當時填官網商品小圖 products/twhk_SVI_exp.png（1.6KB，只是「svI F」字樣，卡包列表也這樣顯示）⇒ 改用該商品皮卡丘ex 卡圖 tw00011307.png（同戰術牌組作法）。
+- 審查（Opus 5.5，3fb5ec77）：無 P1。P2-1 單卡頁張數沒扣下架卡（M-P-J 寫 141、/cards 是 139）⇒ getSetSummary 改過 applyHiddenCountsToSets，新增 B5 實測兩頁張數相同（突變拿掉 ⇒ S5／B5 紅）。P2-2 視窗內連結其實是整頁導航，`onnavigate={closeModal}` 沒有作用、B1「視窗關閉」是空驗 ⇒ 拿掉 onnavigate，B1 改驗「到了 SVI 列表（共 58 張）」，說明照實寫。P3：封面網址與 SetLite 型別抽成 $lib/cards/cover-url（卡包列表與元件共用；元件用 $derived 的 cover 才不會被 test-v6101 的 'coverUrl(' 豁免掉）；B3 說明改成只驗版面。P3 未改：封面是官網全尺寸卡圖（卡包列表本來就這樣）、SSR 階段沒有 retryImg（同頁主卡圖既有限制）。
+- 複審（62e9449b）：無 P1／P2；P3 兩處守衛舊註解已改。P3 未改（舊問題、另案）：test-v6101 對卡包列表 coverUrl( 的豁免理由寫「站內 /covers/ 圖」，但 MT*／SVI 封面已是官網卡圖，卡包列表的磚沒有重試。
+- 守衛 test-v6617（S1～S5＋正對照、B1～B5 真瀏覽器、HEAD-FAIL：BASE 上 S1／S3／S4／S5 紅）。突變：同卡包也給連結 ⇒ S2／B2 紅；單卡頁卡片移出右欄 ⇒ B4 紅；「目前瀏覽中」放回右側（加寬）在 390 寬實測資訊列仍是一行 ⇒ 不構成缺陷（等價突變，如實記錄）。
+- Rule 40：test-v6439 改在剝哨兵之前先整檔還原 v6.617（本版改動跨進 v6475／v6498 哨兵）；test-v6586 還原鏈前面接 revertV6617Cards；changelog 三檔接進 revert-v6609-changelog 與 test-v6610 rdP（表：scripts/lib/revert-v6617-set-source.mjs）。
+- 順手修既有守衛：test-v6481 E 段讀「顯示 N 張」的 `.meta` 自 v6.507 全站頁首統一後已不存在（在有 build 的環境一直紅；沙盒無 build 所以全套看不到）⇒ 改讀 PageHeader 的 `.ph-sub`，意圖不變。
+
 ## v6.616（2026-11-01）SVI 收錄、M-P 補 17 張、新卡包偵測連官方商品清單
 
 BASE `8e842315`（v6.615）。站長 2026-11-01：「官方有，站上沒有的卡，只要補h i j表的卡就好，已經退標的卡不用管」「新卡包偵測改成連官方商品清單一起比對。」「H i j標的話都要收」「我查到的阿球是D標啊、觀光客是D標？都不用收啊」「只有h i j標要收 收之前，先確認是不是h i j標！ 這是最基本的」。

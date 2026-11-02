@@ -23,16 +23,12 @@
   // <<< v6586-cards-pagination-imports
   import { readCardsUrlState, writeCardsUrlSearch } from '$lib/cards/url-state';   // ⭐v6.483 搜尋／篩選條件寫進網址
   import { cardPageHref } from '$lib/cards/card-page';   // ⭐v6.483 卡片視窗連到單卡頁
+  import SetSourceCard from '$lib/components/SetSourceCard.svelte';   // ⭐v6.617 出自於卡包（封面＋連結）
   import { MediaQuery } from 'svelte/reactivity';
   import { MOBILE_FILTER_QUERY, countActiveFilters, filterToggleLabel } from '$lib/mobile-filters';   // ⭐v6.497 手機篩選收合
 
-  /** Resolve a coverImageUrl that is either an absolute https:// URL (external
-   *  archive art) or a relative path like "covers/SV5a.jpg" (self-hosted). */
-  function coverUrl(url: string): string {
-    if (!url) return '';
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    return `${base}/${url}`;
-  }
+  // ⭐v6.617：卡包封面網址改由 $lib/cards/cover-url 提供（與 SetSourceCard 共用一份，Rule 38）
+  import { coverUrl } from '$lib/cards/cover-url';
 
   type LoadData =
     | { mode: 'index'; sets: SetSummary[] }
@@ -372,11 +368,12 @@
     catch { linkCopied = false; }
   }
 
-  // v2.184：setCode → 中文卡包名 對照（給 modal foot「出自於卡包【XXX】」用）
-  const setNameByCode = $derived.by(() => {
-    if (data.mode !== 'set') return {} as Record<string, string>;
-    const map: Record<string, string> = {};
-    for (const s of (data.sets ?? [])) map[s.code] = s.name;
+  // v2.184：setCode → 卡包資料對照（給 modal 的「出自於卡包」用）
+  // ⭐v6.617：原本只取中文名，改成整筆卡包摘要（封面、發售日、張數）給 SetSourceCard
+  const setByCode = $derived.by(() => {
+    if (data.mode !== 'set') return {} as Record<string, SetSummary>;
+    const map: Record<string, SetSummary> = {};
+    for (const s of (data.sets ?? [])) map[s.code] = s;
     return map;
   });
 
@@ -895,8 +892,10 @@
               {#if selected.regulationMark}· {selected.regulationMark}{/if}
               {#if selected.illustrator}· 繪師 {selected.illustrator}{/if}
             </p>
-            {#if setNameByCode[selected.setCode]}
-              <p class="footSet">出自於卡包【{setNameByCode[selected.setCode]}】</p>
+            <!-- ⭐v6.617 玩家建議：出處改成卡包封面＋連到該卡包（正在看的就是這個卡包時只顯示、不連結） -->
+            {#if setByCode[selected.setCode]}
+              <SetSourceCard set={setByCode[selected.setCode]}
+                href={selected.setCode === data.setCode ? null : `${base}/cards?set=${encodeURIComponent(selected.setCode)}`} />
             {/if}
             <!-- ⭐v6.483 單卡頁連結＋複製連結（沒有單卡頁的卡：複製的是目前這個資料庫網址，開起來一樣會打開這張卡） -->
             <p class="footLinks">
@@ -1657,18 +1656,12 @@
     font-size: 1.05rem;
     color: #888;
   }
-  /* v2.184: 顯示出自卡包中文名稱 */
+  /* v2.184: 顯示出自卡包中文名稱（⭐v6.617 起改用 SetSourceCard 元件，原本的 .footSet 樣式已移除） */
   /* ⭐v6.483 單卡頁連結＋複製連結 */
   .footLinks { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.9rem; margin: 0.6rem 0 0; font-size: 0.95rem; }
   .cardPageLink { font-weight: 700; color: #2563eb; text-decoration: none; }
   .cardPageLink:hover { text-decoration: underline; }
   .copyLinkBtn { padding: 0.3rem 0.8rem; border-radius: 999px; border: 1px solid #cbd5e1; background: #f8fafc; color: #334155; font-size: 0.9rem; cursor: pointer; }
-  .footSet {
-    margin: 0.25rem 0 0;
-    font-size: 1.1rem;
-    color: #555;
-    font-weight: 500;
-  }
   /* v4.492 手機 RWD：縮小 filter button 尺寸，配合 .filters flex-wrap，
      讓更多 chip 能在一行內容納，減少換行佔用垂直空間。 */
   @media (max-width: 600px) {
@@ -1845,7 +1838,7 @@
     .modal-nav:hover { background: rgba(61, 187, 122, 0.22); }
     .modal-variant-counter { color: var(--ui-link); background: var(--ui-accent-soft); border-color: var(--ui-border); }
     .detailInfo h2, .detailInfo h3 { color: var(--ui-text); }
-    .tag, .evo, .stats strong, .foot, .footSet { color: var(--ui-text-muted); }
+    .tag, .evo, .stats strong, .foot { color: var(--ui-text-muted); }
     .rules, .skillEffect { color: var(--ui-text); }   /* ⭐v6.512 招式／特性說明原本寫死 #333，深色主題看不見 */
     .pv-evo-chain { background: var(--ui-accent-soft); border-left-color: var(--ui-accent); }
     .pv-evo-chain-label { color: var(--ui-link); }
@@ -1932,8 +1925,7 @@
   :global(html:not([data-ui-wide])) .tag,
   :global(html:not([data-ui-wide])) .evo,
   :global(html:not([data-ui-wide])) .stats strong,
-  :global(html:not([data-ui-wide])) .foot,
-  :global(html:not([data-ui-wide])) .footSet { color: var(--ui-text-muted); }
+  :global(html:not([data-ui-wide])) .foot { color: var(--ui-text-muted); }
   :global(html:not([data-ui-wide])) .rules,
   :global(html:not([data-ui-wide])) .skillEffect { color: var(--ui-text); }   /* ⭐v6.512 */
   :global(html:not([data-ui-wide])) .pv-evo-chain { background: var(--ui-accent-soft); border-left-color: var(--ui-accent); }

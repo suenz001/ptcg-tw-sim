@@ -134,7 +134,8 @@ else if (chromium) {
       const pg = await ctx.newPage(); pg.on('pageerror', (e) => errs.push(e.message));
       await pg.goto(`http://localhost:${port}/cards?set=ALL`, { waitUntil: 'load' });
       await pg.waitForSelector('.cardBtn', { timeout: 20000 });
-      const meta = async (q) => { await pg.fill('.controls input[type=search]', q); await pg.waitForTimeout(700); return pg.evaluate(() => ({ n: Number((document.querySelector('.meta')?.textContent.match(/顯示 (\d+)/) || [])[1]), names: [...document.querySelectorAll('.cardBtn .name')].slice(0, 40).map((x) => x.textContent) })); };
+      // ⭐v6.617（Rule 40）：「顯示 N 張」自 v6.507 全站頁首統一起改在 PageHeader 的 .ph-sub（舊的 .meta 已不存在 ⇒ 本段在有 build 的環境一直讀到 null）；意圖不變
+      const meta = async (q) => { await pg.fill('.controls input[type=search]', q); await pg.waitForTimeout(700); return pg.evaluate(() => ({ n: Number((document.querySelector('.cards-ph .ph-sub, .ph-sub')?.textContent.match(/顯示 (\d+)/) || [])[1]), names: [...document.querySelectorAll('.cardBtn .name')].slice(0, 40).map((x) => x.textContent) })); };
       const A = await meta('皮卡丘');
       const B = await meta('皮卡丘 ex');
       const Cx = await meta('皮卡丘 -ex');

@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '8e8423151c07a6b0fe7827c83ceb8f156413592a';   // v6.615（上一版）
+const PREV_SHA = 'c430b6acaa0e7e9c36e069516b0212d67226e557';   // v6.616（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,22 +757,39 @@ const PREV_SHA = '8e8423151c07a6b0fe7827c83ceb8f156413592a';   // v6.615（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.616 前移：PREV_SHA 從 8e842315（v6.615）起算。
+  // ⚠⚠ v6.617 前移：PREV_SHA 從 c430b6ac（v6.616）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.616：卡牌資料庫收錄 SVI 58 張與 M-P 17 張（卡表、卡包索引、卡號對應）、SVI 6 招實裝（新卡檔＋多麗米亞｜能量支援抽成中央 helper）；首頁 changelog 三步搬運
-  'src/lib/game/effects.ts',
-  'src/lib/game/effects/cards/svi_wave1.ts',
+  // ⭐v6.617：卡牌資料庫卡片視窗與單卡頁的「出自於卡包」改成封面卡片（共用新元件 SetSourceCard）、單卡頁伺服器讀卡包摘要、SVI 封面改用卡圖；首頁 changelog 三步搬運
+  //   （審查後：卡包封面網址與型別抽成 $lib/cards/cover-url，卡包列表與元件共用）
+  'src/lib/cards/cover-url.ts',
+  'src/lib/components/SetSourceCard.svelte',
+  'src/lib/server/cardIndex.ts',
   'src/lib/version.ts',
-  'static/card-set-map.json',
-  'static/cards/M-P-I.json',
-  'static/cards/M-P-J.json',
-  'static/cards/SVI.json',
+  'src/routes/card/[id]/+page.server.ts',
+  'src/routes/card/[id]/+page.svelte',
+  'src/routes/cards/+page.svelte',
   'static/cards/index.json',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.616）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.616 前移：PREV_SHA 從 8e842315（v6.615）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.616：卡牌資料庫收錄 SVI 58 張與 M-P 17 張（卡表、卡包索引、卡號對應）、SVI 6 招實裝（新卡檔＋多麗米亞｜能量支援抽成中央 helper）；首頁 changelog 三步搬運
+//   'src/lib/game/effects.ts',
+//   'src/lib/game/effects/cards/svi_wave1.ts',
+//   'src/lib/version.ts',
+//   'static/card-set-map.json',
+//   'static/cards/M-P-I.json',
+//   'static/cards/M-P-J.json',
+//   'static/cards/SVI.json',
+//   'static/cards/index.json',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.615）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.615 前移：PREV_SHA 從 1f30545c（v6.614）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -894,20 +911,6 @@ const PREV_ALLOWED = [
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
 // ⭐v6.605：帳號處分管理屬admin維護，玩家前端僅升版。
 //   'src/lib/version.ts',
-//   'static/site-version.txt',
-// ── 上一版（v6.604）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.604 前移：PREV_SHA 從 d3a0a2fc（v6.603）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.604：復盤唯讀牌序入口/視窗、本人牌庫保存、移除賽季說明；不改遊戲引擎或對手隱私
-//   'src/lib/deck-posts/replay-share.ts',
-//   'src/lib/game/replay-deck.ts',
-//   'src/lib/game/replay-record.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'src/routes/game/MobilePortraitBattle.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
 //   'static/site-version.txt',
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + [...PREV_ALLOWED].sort().join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }

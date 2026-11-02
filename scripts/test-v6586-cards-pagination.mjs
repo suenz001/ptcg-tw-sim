@@ -10,6 +10,7 @@ import { pwLaunch } from './lib/pw.mjs';
 import { readBaseBlob, hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
 import { revertV6598Game, revertV6598Cards, revertV6598Decks, V6598_CARDS_PAIRS } from './lib/revert-v6598-pages.mjs';   // ⭐v6.598（Rule 40）：手機彈出視窗上緣／關閉鈕，先還原成 v6.597
 import { V6586_CARDS_REVERT_PAIRS } from './lib/revert-v6586-cards.mjs';
+import { revertV6617Cards } from './lib/revert-v6617-set-source.mjs';   // ⭐v6.617（Rule 40）
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const BASE = 'fd81d9b7aa823ffac0ee7c61cb1e2a207f3e3e25';
@@ -30,7 +31,7 @@ const baseRead = p => { const r = readBaseBlob(ROOT, BASE, p); if (!r.ok) throw 
 
 // 還原對照是逐字的，不以更新整檔指紋取代原版面鎖。
 if (hasBaseCommit(ROOT, BASE)) {
-  let restored = revertV6598Cards(source);   // ⭐v6.598（Rule 40）：先還原較新的版本
+  let restored = revertV6598Cards(revertV6617Cards(source));   // ⭐v6.598／v6.617（Rule 40）：先還原較新的版本（由新到舊）
   for (const [now, prev] of V6586_CARDS_REVERT_PAIRS) {
     if (restored.split(now).length !== 2) throw new Error('還原錨點失效：' + now.slice(0, 70));
     restored = restored.replace(now, prev);

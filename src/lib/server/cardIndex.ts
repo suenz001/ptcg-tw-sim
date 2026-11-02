@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Card } from '$lib/cards/types';
 // v6.194：下架卡不產生卡片頁、也不進 sitemap（唯一述詞）。
-import { isHiddenFromPlayers } from '$lib/cards/visibility';
+import { isHiddenFromPlayers, applyHiddenCountsToSets } from '$lib/cards/visibility';
 import { isCardMarkStandardLegal } from '$lib/cards/regulation';
 
 const DIR = join(process.cwd(), 'static', 'cards');
@@ -34,4 +34,20 @@ export function getStdCardIds(): string[] {
     if (isCardMarkStandardLegal(c.regulationMark)) ids.push(id);
   }
   return ids;
+}
+
+// ⭐ v6.617：單卡頁的「出自於卡包」要卡包名稱／封面／發售日 ⇒ 讀 static/cards/index.json（建置期一次）。
+//   張數先扣掉下架卡（applyHiddenCountsToSets，與 /cards 同一支）⇒ 單卡頁寫的「N 張」＝點進去看到的張數（審查 P2-1：M-P-J 141 vs 139）。
+import type { SetLite } from '$lib/cards/cover-url';
+let _sets: Map<string, SetLite> | null = null;
+export function getSetSummary(code: string): SetLite | null {
+  if (!_sets) {
+    _sets = new Map();
+    try {
+      for (const s of applyHiddenCountsToSets(JSON.parse(readFileSync(join(DIR, 'index.json'), 'utf8')) as (SetLite & { cardCount: number })[])) {
+        _sets.set(s.code, { code: s.code, name: s.name, releaseDate: s.releaseDate ?? null, cardCount: s.cardCount, coverImageUrl: s.coverImageUrl });
+      }
+    } catch { /* 讀不到就不顯示卡包卡片（單卡頁其餘內容照常） */ }
+  }
+  return _sets.get(code) ?? null;
 }
