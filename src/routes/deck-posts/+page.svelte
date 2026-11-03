@@ -892,8 +892,8 @@
       } catch { /* 舊伺服器或離線時靜默略過 */ }
     })();
   });
-  function selectMetaArchetype(arch: string) {
-    const next = searchQ.trim() === arch ? '' : arch;
+  function selectMetaArchetype(arch: string, fromSelect = false) {
+    const next = fromSelect ? arch : (searchQ.trim() === arch ? '' : arch);
     searchQ = next;
     searchUnsupported = false;
     page = 1;
@@ -1064,7 +1064,21 @@
       <section class="meta-bar" aria-label="熱門環境牌組排行">
         <div class="meta-bar-head">
           <span class="meta-bar-title">📊 實戰環境熱門牌組排行</span>
-          <span class="meta-bar-sub">自動統計站內線上對戰、賽事名次與公開牌組數據（點選可直接篩選牌組與復盤）</span>
+        </div>
+        <div class="meta-mobile-row">
+          <select
+            class="meta-select"
+            aria-label="熱門環境牌組排行"
+            value={metaRows.some((m) => m.archetype === searchQ.trim()) ? searchQ.trim() : ''}
+            onchange={(e) => selectMetaArchetype((e.currentTarget as HTMLSelectElement).value, true)}
+          >
+            <option value="">📊 實戰環境熱門牌組排行（點選篩選）</option>
+            {#each metaRows as m (m.archetype)}
+              <option value={m.archetype}>
+                📊 {m.archetype}{m.winRate !== null ? ` ｜ 勝率 ${Math.round(m.winRate * 100)}%` : ''}{m.topCuts > 0 ? ` ｜ ${m.topCuts}🏆` : ''}{m.postCount > 0 ? ` ｜ ${m.postCount} 篇` : ''}
+              </option>
+            {/each}
+          </select>
         </div>
         <div class="meta-chips">
           {#each metaRows as m (m.archetype)}
@@ -1076,7 +1090,7 @@
             >
               <span class="meta-arch">{m.archetype}</span>
               {#if m.winRate !== null}<span class="meta-wr">勝率 {Math.round(m.winRate * 100)}%</span>{/if}
-              {#if m.topCuts > 0}<span class="meta-cut">🏆 {m.topCuts}</span>{/if}
+              {#if m.topCuts > 0}<span class="meta-cut">{m.topCuts}🏆</span>{/if}
               {#if m.postCount > 0}<span class="meta-cnt">{m.postCount} 篇</span>{/if}
             </button>
           {/each}
@@ -1880,13 +1894,18 @@
   .dpz-nav .dpz-close { background: var(--ui-chip-active-bg, #236447); color: var(--ui-chip-active-text, #fff); border-color: var(--ui-chip-active-bg, #236447); font-weight: 600; }
   /* <<< v6594-deck-post-thumbs-css */
   .meta-bar { background: var(--ui-bg-elev, #fff); border: 1px solid var(--ui-border, rgba(128,128,128,.25)); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; box-shadow: var(--ui-shadow, none); }
-  .meta-bar-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 8px; }
+  .meta-bar-head { display: flex; align-items: center; margin-bottom: 8px; }
   .meta-bar-title { font-weight: 700; font-size: .9rem; color: var(--ui-text, inherit); }
-  .meta-bar-sub { font-size: .76rem; color: var(--ui-text-muted, #666); }
+  .meta-mobile-row { display: none; }
+  .meta-select { width: 100%; min-width: 0; min-height: 38px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--ui-border, rgba(128,128,128,.35)); background: var(--ui-input-bg, var(--ui-bg-sunken, #fff)); color: var(--ui-text, inherit); font: inherit; font-size: .86rem; box-sizing: border-box; }
   .meta-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .meta-chip { display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--ui-border, rgba(128,128,128,.3)); background: var(--ui-bg-sunken, rgba(128,128,128,.08)); color: var(--ui-text, inherit); font: inherit; font-size: .8rem; cursor: pointer; }
+  .meta-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--ui-border, rgba(128,128,128,.3)); background: var(--ui-bg-sunken, rgba(128,128,128,.08)); color: var(--ui-text, inherit); font: inherit; font-size: .8rem; cursor: pointer; }
   .meta-chip:hover { border-color: var(--ui-accent, #236447); }
   .meta-chip.active { background: var(--ui-chip-active-bg, #236447); color: var(--ui-chip-active-text, #fff); border-color: var(--ui-chip-active-bg, #236447); }
   .meta-arch { font-weight: 600; }
   .meta-wr, .meta-cut, .meta-cnt { font-size: .72rem; opacity: .88; font-variant-numeric: tabular-nums; }
+  :global(html:not([data-ui-wide])) .meta-bar { padding: 6px 8px; margin-bottom: 10px; }
+  :global(html:not([data-ui-wide])) .meta-bar-head { display: none; }
+  :global(html:not([data-ui-wide])) .meta-chips { display: none; }
+  :global(html:not([data-ui-wide])) .meta-mobile-row { display: flex; }
 </style>

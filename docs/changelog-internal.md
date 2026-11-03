@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.621（2026-11-03）單卡頁結構化資料修正、牌組公布欄動態 SEO 與熱門環境牌組排行
+
+BASE `be877969`（v6.620）。站長交辦：將老玩家的日常對戰自動轉換成 SEO 曝光（步驟 1、2、3），並調整公布欄熱門牌組顯示（奪冠數改 `1🏆` 避免與篇數連在一起、手機版改為下拉選單節約版面、刪除冗餘說明文字）。
+
+- 單卡頁（`src/routes/card/[id]/+page.svelte`）：JSON-LD 由 `@type: Product` 改為 `@graph`（`WebPage`＋`BreadcrumbList`），解決 Search Console 185 項缺少 `offers`/`review`/`aggregateRating` 錯誤；底部新增 `/deck-posts?q={卡名}` 內部連結。
+- 牌組公布欄（`src/routes/deck-posts/+page.svelte`）：支援 `?q=` 搜尋網址參數初始化、動態 `<title>`／`<meta name="description">`／`canonical`／Open Graph；新增「📊 實戰環境熱門牌組排行」（電腦版顯示膠囊標籤列、手機版 `:global(html:not([data-ui-wide]))` 顯示單行下拉選單、奪冠數顯示為 `{m.topCuts}🏆`、移除副標題說明文字）。
+- 伺服器端（`oracle-admin/server_admin_patch.js` v1.78）：新增 `GET /api/sitemap-decks.xml`（10 分鐘快取）、`GET /api/deck-share/:id`（SSR Open Graph＋60 張卡表連結＋DiscussionForumPosting JSON-LD）、`GET /api/meta-stats`（5 分鐘快取，聚合公開投稿、名人堂冠軍與近期對局勝率）。
+- 靜態索引：`static/sitemap.xml` 加入 `/deck-posts`；`static/robots.txt` 加入 `Sitemap: https://www.ptcg-tw-sim.com/api/sitemap-decks.xml`。
+
 ## v6.620（2026-11-02）拖曳浮動視窗不再帶動對戰盤面
 
 BASE `54b996eb`（v6.619）。站長：iPad 回放時拖曳控制列常常拖到後面的對戰盤面，要求整體 audit，各種桌墊與手機版對戰畫面都不該被拖動。
