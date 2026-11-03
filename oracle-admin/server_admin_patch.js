@@ -8553,6 +8553,253 @@ import('firebase-admin').then(async ({ default: admin }) => {
       return [docs, total];
     };
     // <<< v171-deck-post-replay-stats
+    // >>> v178-seo-meta-and-sitemaps
+    // v1.78：公開牌組動態 Sitemap、社群分享 SSR 預覽頁（LINE/Discord Open Graph + JSON-LD）、實戰環境熱門牌組統計
+    let _seoSitemapCache = { xml: '', exp: 0 };
+    let _seoMetaCache = { data: null, exp: 0 };
+    const _seoXmlEsc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+    const _seoHtmlEsc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const _seoCardImgUrl = cid => {
+      const id = String(cid || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      if (!id) return 'https://www.ptcg-tw-sim.com/og-banner.jpg';
+      const card = TPOOL && TPOOL.byId ? TPOOL.byId.get(id) : null;
+      const setCode = card && card.setCode ? String(card.setCode).replace(/[^a-zA-Z0-9_-]/g, '') : '';
+      return setCode ? `https://www.ptcg-tw-sim.com/cards/img/${setCode}/${id}.png` : 'https://www.ptcg-tw-sim.com/og-banner.jpg';
+    };
+
+    app.get('/api/sitemap-decks.xml', async (req, res) => {
+      try {
+        const now = Date.now();
+        if (_seoSitemapCache.xml && now < _seoSitemapCache.exp) {
+          res.set('Content-Type', 'application/xml; charset=utf-8');
+          res.set('Cache-Control', 'public, max-age=600');
+          return res.send(_seoSitemapCache.xml);
+        }
+        const posts = await _dprPosts.find(
+          { status: 'published' },
+          { projection: { _id: 1, title: 1, archetype: 1, updatedAt: 1, createdAt: 1 } }
+        ).sort({ createdAt: -1 }).limit(500).toArray();
+        const today = new Date().toISOString().slice(0, 10);
+        const urls = [
+          `  <url><loc>https://www.ptcg-tw-sim.com/deck-posts</loc><lastmod>${today}</lastmod><changefreq>hourly</changefreq><priority>0.9</priority></url>`,
+        ];
+        const archSet = new Set();
+        for (const p of posts) {
+          const a = String(p.archetype || '').trim();
+          if (a && a !== '其他 / 未分類' && a.length <= 40 && archSet.size < 100) archSet.add(a);
+        }
+        for (const a of archSet) {
+          const loc = `https://www.ptcg-tw-sim.com/deck-posts?q=${encodeURIComponent(a)}`;
+          urls.push(`  <url><loc>${_seoXmlEsc(loc)}</loc><lastmod>${today}</lastmod><changefreq>daily</changefreq><priority>0.8</priority></url>`);
+        }
+        for (const p of posts) {
+          const pid = String(p._id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+          if (!pid) continue;
+          const ts = Number(p.updatedAt || p.createdAt) || now;
+          const dStr = new Date(ts).toISOString().slice(0, 10);
+          const locPost = `https://www.ptcg-tw-sim.com/deck-posts?post=${encodeURIComponent(pid)}`;
+          const locShare = `https://www.ptcg-tw-sim.com/api/deck-share/${encodeURIComponent(pid)}`;
+          urls.push(`  <url><loc>${_seoXmlEsc(locPost)}</loc><lastmod>${dStr}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>`);
+          urls.push(`  <url><loc>${_seoXmlEsc(locShare)}</loc><lastmod>${dStr}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>`);
+        }
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
+        _seoSitemapCache = { xml, exp: now + 10 * 60 * 1000 };
+        res.set('Content-Type', 'application/xml; charset=utf-8');
+        res.set('Cache-Control', 'public, max-age=600');
+        res.send(xml);
+      } catch (e) {
+        res.status(500).set('Content-Type', 'text/plain; charset=utf-8').send('unavailable');
+      }
+    });
+
+    app.get('/api/deck-share/:id', async (req, res) => {
+      try {
+        const pid = String((req.params && req.params.id) || '').slice(0, 80);
+        const p = pid ? await _dprPosts.findOne({ _id: pid, status: 'published' }) : null;
+        if (!p) return res.status(404).set('Content-Type', 'text/html; charset=utf-8').send('<!doctype html><html lang="zh-Hant-TW"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>找不到牌組 — 寶可夢集換式卡牌 台灣線上對戰模擬器</title></head><body><p>找不到這份公開牌組（可能已下架）。<a href="https://www.ptcg-tw-sim.com/deck-posts">返回牌組公布欄</a></p></body></html>');
+        const entries = Array.isArray(p.entries) ? p.entries : [];
+        const totalCards = entries.reduce((sum, e) => sum + (Number(e && e.count) || 0), 0);
+        const topNames = entries.slice(0, 8).map(e => {
+          const c = TPOOL && TPOOL.byId ? TPOOL.byId.get(String(e.cardId)) : null;
+          const nm = (e && e.name) || (c && c.name) || String(e.cardId || '');
+          return `${nm}×${Number(e.count) || 1}`;
+        }).join('、');
+        const arch = p.archetype ? `【${p.archetype}】` : '';
+        const title = `${p.title || '公開牌組'} ${arch} — 牌組卡表與實戰復盤｜PTCG 繁中線上對戰模擬器`.replace(/\s+/g, ' ');
+        const descRaw = p.note ? String(p.note).replace(/\s+/g, ' ').trim().slice(0, 110) : `收錄 ${topNames} 等共 ${totalCards} 張卡牌。`;
+        const desc = `${p.authorName || '玩家'} 分享的繁中標準賽制 60 張牌組配置：${descRaw} 可一鍵匯入模擬器進行免費線上對戰與起手測試。`;
+        const coverImg = _seoCardImgUrl(p.coverCardId || (entries[0] && entries[0].cardId));
+        const targetUrl = `https://www.ptcg-tw-sim.com/deck-posts?post=${encodeURIComponent(String(p._id))}`;
+        const shareUrl = `https://www.ptcg-tw-sim.com/api/deck-share/${encodeURIComponent(String(p._id))}`;
+        const jsonLd = JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'DiscussionForumPosting',
+          headline: String(p.title || '公開牌組'),
+          description: desc,
+          image: coverImg,
+          datePublished: new Date(Number(p.createdAt) || Date.now()).toISOString(),
+          dateModified: new Date(Number(p.updatedAt || p.createdAt) || Date.now()).toISOString(),
+          author: { '@type': 'Person', name: String(p.authorName || '玩家') },
+          mainEntityOfPage: targetUrl,
+        }).replace(/</g, '\\u003c');
+        const listItems = entries.map(e => {
+          const cid = String((e && e.cardId) || '').replace(/[^a-zA-Z0-9_-]/g, '');
+          const c = TPOOL && TPOOL.byId ? TPOOL.byId.get(cid) : null;
+          const nm = (e && e.name) || (c && c.name) || cid;
+          const cnt = Number(e && e.count) || 1;
+          return `<li><a href="https://www.ptcg-tw-sim.com/card/${_seoHtmlEsc(cid)}/">${_seoHtmlEsc(nm)} (#${_seoHtmlEsc(cid)})</a> × ${cnt}</li>`;
+        }).join('\n        ');
+        const html = `<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${_seoHtmlEsc(title)}</title>
+  <meta name="description" content="${_seoHtmlEsc(desc)}" />
+  <link rel="canonical" href="${_seoHtmlEsc(targetUrl)}" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="寶可夢集換式卡牌 台灣線上對戰模擬器" />
+  <meta property="og:title" content="${_seoHtmlEsc(title)}" />
+  <meta property="og:description" content="${_seoHtmlEsc(desc)}" />
+  <meta property="og:url" content="${_seoHtmlEsc(shareUrl)}" />
+  <meta property="og:image" content="${_seoHtmlEsc(coverImg)}" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${_seoHtmlEsc(title)}" />
+  <meta name="twitter:description" content="${_seoHtmlEsc(desc)}" />
+  <meta name="twitter:image" content="${_seoHtmlEsc(coverImg)}" />
+  <script type="application/ld+json">${jsonLd}</script>
+  <style>
+    body { font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif; background: #0d1117; color: #e6edf3; margin: 0; padding: 24px 16px; line-height: 1.6; }
+    main { max-width: 760px; margin: 0 auto; background: #161b22; border: 1px solid #30363d; border-radius: 14px; padding: 22px; }
+    h1 { font-size: 1.35rem; margin: 0 0 8px; color: #f0f6fc; }
+    .meta { color: #8b949e; font-size: 0.9rem; margin-bottom: 14px; }
+    .cta { display: inline-block; background: #238636; color: #fff; text-decoration: none; font-weight: 700; padding: 10px 18px; border-radius: 8px; margin: 10px 0 18px; }
+    .note { white-space: pre-wrap; background: #0d1117; border: 1px solid #21262d; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+    ul { columns: 2; padding-left: 20px; }
+    li { margin-bottom: 4px; }
+    a { color: #58a6ff; }
+    @media (max-width: 600px) { ul { columns: 1; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>${_seoHtmlEsc(p.title || '公開牌組')} ${_seoHtmlEsc(arch)}</h1>
+    <div class="meta">作者：${_seoHtmlEsc(p.authorName || '玩家')} ｜ 卡牌總數：${totalCards} 張 ｜ ❤️ ${Number(p.likeCount) || 0} ｜ ⬇ ${Number(p.downloadCount) || 0}</div>
+    <a class="cta" href="${_seoHtmlEsc(targetUrl)}">▶ 在模擬器開啟互動卡表、實戰復盤與一鍵匯入</a>
+    ${p.note ? `<div class="note">${_seoHtmlEsc(String(p.note))}</div>` : ''}
+    <h2>完整 60 張牌組卡表（點擊可查看單卡效果與大圖）</h2>
+    <ul>
+        ${listItems}
+    </ul>
+    <p><a href="https://www.ptcg-tw-sim.com/deck-posts">← 返回牌組公布欄與熱門 Meta 排行</a> ｜ <a href="https://www.ptcg-tw-sim.com/">寶可夢 PTCG 繁中線上對戰模擬器首頁</a></p>
+  </main>
+</body>
+</html>`;
+        res.set('Content-Type', 'text/html; charset=utf-8');
+        res.set('Cache-Control', 'public, max-age=300');
+        res.send(html);
+      } catch (e) {
+        res.status(500).set('Content-Type', 'text/plain; charset=utf-8').send('unavailable');
+      }
+    });
+
+    app.get('/api/meta-stats', async (req, res) => {
+      try {
+        const now = Date.now();
+        if (_seoMetaCache.data && now < _seoMetaCache.exp) {
+          res.set('Cache-Control', 'public, max-age=300');
+          return res.json(_seoMetaCache.data);
+        }
+        const [postAgg, recentChamps, recentMatches] = await Promise.all([
+          _dprPosts.aggregate([
+            { $match: { status: 'published', archetype: { $exists: true, $nin: ['', '其他 / 未分類', null] } } },
+            { $group: {
+              _id: '$archetype',
+              postCount: { $sum: 1 },
+              likes: { $sum: { $ifNull: ['$likeCount', 0] } },
+              downloads: { $sum: { $ifNull: ['$downloadCount', 0] } },
+              sampleCardId: { $first: '$coverCardId' },
+            } },
+            { $sort: { postCount: -1, downloads: -1, likes: -1 } },
+            { $limit: 16 },
+          ]).toArray(),
+          db.collection('tournamentChampions').find(
+            {},
+            { projection: { deckName: 1, finishedAt: 1 } }
+          ).sort({ finishedAt: -1 }).limit(100).toArray().catch(() => []),
+          db.collection('matchRecords').find(
+            {},
+            { projection: { winner: 1, finalTurn: 1, p1: 1, p2: 1, endedAt: 1 } }
+          ).sort({ endedAt: -1 }).limit(250).toArray().catch(() => []),
+        ]);
+        try {
+          if (app.locals && typeof app.locals._archetypeEnrichMatchRecords === 'function' && recentMatches.length) {
+            await app.locals._archetypeEnrichMatchRecords(recentMatches);
+          }
+        } catch (e) { /* ignore enrich error */ }
+        const statsMap = new Map();
+        const ensure = name => {
+          const k = String(name || '').trim();
+          if (!k || k === '其他 / 未分類' || k === '未分類') return null;
+          let r = statsMap.get(k);
+          if (!r) {
+            r = { archetype: k, postCount: 0, likes: 0, downloads: 0, topCutCount: 0, winCount: 0, matchCount: 0, coverCardId: '' };
+            statsMap.set(k, r);
+          }
+          return r;
+        };
+        for (const g of postAgg) {
+          const r = ensure(g._id);
+          if (!r) continue;
+          r.postCount = Number(g.postCount) || 0;
+          r.likes = Number(g.likes) || 0;
+          r.downloads = Number(g.downloads) || 0;
+          if (g.sampleCardId) r.coverCardId = String(g.sampleCardId);
+        }
+        for (const ch of recentChamps) {
+          const dn = String((ch && ch.deckName) || '').trim();
+          if (!dn) continue;
+          for (const [k, r] of statsMap.entries()) {
+            if (dn === k || dn.includes(k) || k.includes(dn)) {
+              r.topCutCount++;
+              break;
+            }
+          }
+        }
+        for (const mr of recentMatches) {
+          if (!mr || (Number(mr.finalTurn) || 0) <= 1) continue;
+          const seats = [mr.p1, mr.p2];
+          for (let i = 0; i < 2; i++) {
+            const r = ensure(seats[i] && seats[i].archetype);
+            if (!r) continue;
+            r.matchCount++;
+            if (Number(mr.winner) === i) r.winCount++;
+          }
+        }
+        const items = [...statsMap.values()]
+          .filter(r => r.postCount > 0 || r.topCutCount > 0 || r.matchCount >= 3)
+          .map(r => ({
+            archetype: r.archetype,
+            postCount: r.postCount,
+            topCuts: r.topCutCount,
+            topCutCount: r.topCutCount,
+            games: r.matchCount,
+            wins: r.winCount,
+            matchCount: r.matchCount,
+            winRate: r.matchCount >= 5 ? +(r.winCount / r.matchCount).toFixed(4) : null,
+            score: r.postCount * 3 + r.topCutCount * 8 + Math.min(r.matchCount, 60) + Math.floor(r.downloads / 3),
+          }))
+          .sort((a, b) => b.score - a.score || b.postCount - a.postCount)
+          .slice(0, 12);
+        const payload = { metaApi: 1, updatedAt: now, items };
+        _seoMetaCache = { data: payload, exp: now + 5 * 60 * 1000 };
+        res.set('Cache-Control', 'public, max-age=300');
+        res.json(payload);
+      } catch (e) {
+        res.status(500).json({ error: 'unavailable' });
+      }
+    });
+    // <<< v178-seo-meta-and-sitemaps
     app.get('/api/tournament/state', async (req, res) => {
       try {
         const room = String(req.query.room || 'TOURNAMENT-TEST');

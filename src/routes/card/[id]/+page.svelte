@@ -31,11 +31,36 @@
     return `${card.name}（${SUPERTYPE_ZH[card.supertype] ?? ''}${card.regulationMark ? '，標準標記 ' + card.regulationMark : ''}）。${p.join('｜')}。Pokémon 集換式卡牌資料、招式效果與屬性 — PTCG 卡牌資料庫。`;
   });
   const jsonLdScript = $derived.by(() => {
+    const setUrl = `https://www.ptcg-tw-sim.com/cards?set=${encodeURIComponent(String(card.setCode))}`;
     const j = JSON.stringify({
-      '@context': 'https://schema.org', '@type': 'Product',
-      name: card.name, image: card.imageUrl, description,
-      sku: String(card.id), category: SUPERTYPE_ZH[card.supertype] ?? card.supertype,
-      brand: { '@type': 'Brand', name: 'Pokémon TCG' },
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'WebPage',
+          '@id': pageUrl,
+          url: pageUrl,
+          name: title,
+          description,
+          image: card.imageUrl,
+          inLanguage: 'zh-Hant',
+          isPartOf: { '@type': 'WebSite', name: 'PTCG 卡牌資料庫', url: 'https://www.ptcg-tw-sim.com/' },
+          mainEntity: {
+            '@type': 'Thing',
+            name: card.name,
+            identifier: String(card.id),
+            image: card.imageUrl,
+            description,
+          },
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: '首頁', item: 'https://www.ptcg-tw-sim.com/' },
+            { '@type': 'ListItem', position: 2, name: `${card.setCode} 卡包`, item: setUrl },
+            { '@type': 'ListItem', position: 3, name: card.name, item: pageUrl },
+          ],
+        },
+      ],
     });
     return `<script type="application/ld+json">${j}<\/script>`;
   });
@@ -146,6 +171,7 @@
 
   <nav class="links">
     <a href="{base}/cards?set={card.setCode}">← 在卡牌資料庫查看「{card.setCode}」全部卡牌</a>
+    <a href="{base}/deck-posts?q={encodeURIComponent(card.name)}">🔍 查看投入「{card.name}」的公開牌組與實戰復盤</a>
     <a href="{base}/decks">前往牌組編輯器 →</a>
   </nav>
   <p class="foot">PTCG 卡牌資料庫 ｜ <a href="{base}/">ptcg-tw-sim</a> — 寶可夢集換式卡牌中文模擬器與卡牌查詢</p>

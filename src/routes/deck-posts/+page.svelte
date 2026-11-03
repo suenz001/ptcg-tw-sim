@@ -101,7 +101,7 @@
   //   ⚠ 搜尋是**伺服器端**的（?q=）——公布欄分頁載入，前端只篩得到當頁，
   //     玩家會誤以為那個牌組不存在。卡名→cardId 的解析也在伺服器（那邊有完整卡池），
   //     前端不必為了搜尋載卡片資料庫、也沒有 id 清單塞爆 URL 的問題。
-  let searchQ = $state('');
+  let searchQ = $state(typeof location !== 'undefined' ? (new URLSearchParams(location.search).get('q') || '').trim().slice(0, 60) : '');
   let searchTimer: ReturnType<typeof setTimeout> | null = null;
   // 舊伺服器不認識 ?q=（回應沒有 q 哨兵欄位）⇒ 會靜默回「未過濾」的完整列表。
   //   要明講，不能讓玩家以為搜尋有生效（v1.17 combined:true 哨兵的同一課）。
@@ -878,11 +878,61 @@
     const p = (n: number) => String(n).padStart(2, '0');
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
   }
+
+  // ── SEO 動態標題與描述 ＋ 實戰環境熱門牌組統計（Meta 快照） ──
+  type MetaArchetypeRow = { archetype: string; postCount: number; topCuts: number; games: number; wins: number; winRate: number | null };
+  let metaRows = $state<MetaArchetypeRow[]>([]);
+  onMount(() => {
+    void (async () => {
+      try {
+        const r = await fetch('/api/meta-stats', { headers: { Accept: 'application/json' } });
+        if (!r.ok || !(r.headers.get('content-type') || '').includes('application/json')) return;
+        const j = await r.json();
+        if (j && j.metaApi === 1 && Array.isArray(j.items)) metaRows = j.items;
+      } catch { /* 舊伺服器或離線時靜默略過 */ }
+    })();
+  });
+  function selectMetaArchetype(arch: string) {
+    const next = searchQ.trim() === arch ? '' : arch;
+    searchQ = next;
+    searchUnsupported = false;
+    page = 1;
+    void fetchList();
+  }
+  const seoTitle = $derived.by(() => {
+    if (openPost) {
+      const arch = openPost.archetype ? `（${openPost.archetype}）` : '';
+      const trn = openPost.tournament ? ` · ${openPost.tournament.eventName}${openPost.tournament.placementLabel}` : '';
+      return `${openPost.deckName}${arch}${trn} - ${openPost.authorName}｜PTCG 牌組公布欄 · ptcg-tw-sim`;
+    }
+    const q = searchQ.trim();
+    if (q) return `「${q}」牌組配置與實戰復盤搜尋結果｜PTCG 牌組公布欄 · ptcg-tw-sim`;
+    return '牌組公布欄 · ptcg-tw-sim';
+  });
+  const seoDescription = $derived.by(() => {
+    if (openPost) {
+      const cards = detailRows.flatMap((g) => g.items).slice(0, 8).map((i) => `${i.name}×${i.count}`).join('、');
+      const notes = openPost.notes ? `｜${openPost.notes.slice(0, 80)}` : '';
+      return `${openPost.authorName} 分享的 PTCG 牌組「${openPost.deckName}」${openPost.archetype ? '（' + openPost.archetype + '）' : ''}${notes}${cards ? '。核心卡片：' + cards : ''}。可直接匯入模擬器線上對戰與觀看實戰復盤。`;
+    }
+    const q = searchQ.trim();
+    if (q) return `查看包含「${q}」的玩家分享寶可夢集換式卡牌（PTCG）實戰牌組配置、賽事名次牌組與對戰紀錄回放，可直接匯入牌組列表。`;
+    return '玩家分享的寶可夢集換式卡牌牌組，可直接匯入到自己的牌組列表。';
+  });
+  const seoCanonical = $derived.by(() => {
+    if (openPost) return `https://www.ptcg-tw-sim.com/deck-posts?post=${encodeURIComponent(openPost.id)}`;
+    const q = searchQ.trim();
+    if (q) return `https://www.ptcg-tw-sim.com/deck-posts?q=${encodeURIComponent(q)}`;
+    return 'https://www.ptcg-tw-sim.com/deck-posts';
+  });
 </script>
 
 <svelte:head>
-  <title>牌組公布欄 · ptcg-tw-sim</title>
-  <meta name="description" content="玩家分享的寶可夢集換式卡牌牌組，可直接匯入到自己的牌組列表。" />
+  <title>{seoTitle}</title>
+  <meta name="description" content={seoDescription} />
+  <link rel="canonical" href={seoCanonical} />
+  <meta property="og:title" content={seoTitle} />
+  <meta property="og:description" content={seoDescription} />
 </svelte:head>
 
 <main>
@@ -1010,6 +1060,29 @@
         </p>
       {/if}
     {:else}
+    {#if metaRows.length > 0}
+      <section class="meta-bar" aria-label="熱門環境牌組排行">
+        <div class="meta-bar-head">
+          <span class="meta-bar-title">📊 實戰環境熱門牌組排行</span>
+          <span class="meta-bar-sub">自動統計站內線上對戰、賽事名次與公開牌組數據（點選可直接篩選牌組與復盤）</span>
+        </div>
+        <div class="meta-chips">
+          {#each metaRows as m (m.archetype)}
+            <button
+              type="button"
+              class="meta-chip"
+              class:active={searchQ.trim() === m.archetype}
+              onclick={() => selectMetaArchetype(m.archetype)}
+            >
+              <span class="meta-arch">{m.archetype}</span>
+              {#if m.winRate !== null}<span class="meta-wr">勝率 {Math.round(m.winRate * 100)}%</span>{/if}
+              {#if m.topCuts > 0}<span class="meta-cut">🏆 {m.topCuts}</span>{/if}
+              {#if m.postCount > 0}<span class="meta-cnt">{m.postCount} 篇</span>{/if}
+            </button>
+          {/each}
+        </div>
+      </section>
+    {/if}
     <div class="toolbar">
       <div class="search">
         <input
@@ -1806,4 +1879,14 @@
   .dpz-nav button:disabled { opacity: .4; cursor: default; }
   .dpz-nav .dpz-close { background: var(--ui-chip-active-bg, #236447); color: var(--ui-chip-active-text, #fff); border-color: var(--ui-chip-active-bg, #236447); font-weight: 600; }
   /* <<< v6594-deck-post-thumbs-css */
+  .meta-bar { background: var(--ui-bg-elev, #fff); border: 1px solid var(--ui-border, rgba(128,128,128,.25)); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; box-shadow: var(--ui-shadow, none); }
+  .meta-bar-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 8px; }
+  .meta-bar-title { font-weight: 700; font-size: .9rem; color: var(--ui-text, inherit); }
+  .meta-bar-sub { font-size: .76rem; color: var(--ui-text-muted, #666); }
+  .meta-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .meta-chip { display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--ui-border, rgba(128,128,128,.3)); background: var(--ui-bg-sunken, rgba(128,128,128,.08)); color: var(--ui-text, inherit); font: inherit; font-size: .8rem; cursor: pointer; }
+  .meta-chip:hover { border-color: var(--ui-accent, #236447); }
+  .meta-chip.active { background: var(--ui-chip-active-bg, #236447); color: var(--ui-chip-active-text, #fff); border-color: var(--ui-chip-active-bg, #236447); }
+  .meta-arch { font-weight: 600; }
+  .meta-wr, .meta-cut, .meta-cnt { font-size: .72rem; opacity: .88; font-variant-numeric: tabular-nums; }
 </style>
