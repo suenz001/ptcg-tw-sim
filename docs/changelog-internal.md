@@ -7,8 +7,10 @@ BASE `daa9fd56`（v6.625）。站長授權處理交接落後、換行差異與v6
 - 獨立Codex retro_6621_6625_review（非Opus）初審無確證P1、P2三組：分享頁讀錯deckName/notes與TPOOL Map；meta/sitemap冷快取並發重查；DB/分類故障吞成成功零值並快取30分鐘。主代理抽真handler獨立重現。皆已修正，503/no-store且失敗後可重試。
 - P3中央filter改接真buildCasualCleanFilter橋接；meta手機布局改CSS1024斷點，首次繪製不再依賴hydrate屬性。部署marker修法在ignored本機oracle_admin_update.sh、未進v6.623 Git，屬交付重現缺口；保留既有忽略政策並記錄，不宣稱正式部署失效。細節見docs/maintenance-review-6621-6625.md。
 - 基準harness+35免疫36/36；新守衛15/0，BASE3綠12真行為紅，10/10有效突變全攔截、N1與逐位元還原綠。獨立複審已核產品及TTL邊界，最終build/全套/准推仍待完成。
-- 修後harness+35免疫36/36、相關舊守衛5/5與anti-pattern-lint成功；一般Firebase/root及Oracle雙build成功，真發行公布欄六組手機/桌機/深淺篩選與詳情放大返回均成功，pageerrors=0、寫入=0。獨立複審新15守衛/10突變/17hunk還原均通過；完整回歸及最終准推仍待完成。
+- 修後harness+35免疫36/36、相關舊守衛5/5與anti-pattern-lint成功；一般Firebase/root及Oracle雙build成功，真發行公布欄六組手機/桌機/深淺篩選與詳情放大返回均成功，pageerrors=0、寫入=0。獨立複審新15守衛/10突變/17hunk還原均通過；完整回歸結果見下段。
 - 只改分享/統計及公布欄顯示，未改卡牌引擎或錦標賽判定。正式站由站長自行update-tournament.bat後redeploy-oracle.bat，AI不代部署。
+
+- 完整969支首輪964成功、3FAIL（6182/6594媒體數、6616硬呼bash）與2TIMEOUT（6614/6620各120秒），31.98分；原報表E:/sb-retro-6626/__rt/full.json保留。只修4支舊測試：前兩支媒體數先精確還原本版合法排行CSS、額外media負對照仍紅；6616改中央extractBaseArchive；6612改接固定建置快照讓真B實跑。審查抓新import放在shebang前已修並node--check。10a13663僅測試，產品對31d2407d零diff。單工補驗10/10成功8.66分，E:/sb-retro-6626-supp/__rt/supp.json；兩報聯集969未解0，不能稱首輪969全綠。兩報escape/mainHard/restoreFailed皆0、statusChanged=false，full263暫存均還原，supp0；有效SHALLOW0、既有6378 ENV1與6263 Windows PLATFORM1。6614真B10條、6620真R等9條、6612真B含15條皆無skip；兩逾時守衛單工250.2/147.4秒。外部acceptance.json已程式核驗。所有runner/browser/build結束、subst空。
 
 ## v6.625（2026-11-04）公布欄熱門牌組勝率對齊後台原型統計淨化標準
 
