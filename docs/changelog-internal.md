@@ -6,7 +6,11 @@
 - 缺卡或非正整數整份禁止複製、清舊複製資料、單行牌組名稱與 HTML 跳脫；剪貼簿成功後才顯示成功。只記 admin 內部更新，公開三份 changelog 不變。
 - 獨立 Codex `deck_import_6627_review`（非 Opus）初審抓到右半特殊 ID，已改沿用完整卡包卡號；複審抓到兩 P2（M5 舊 ID／壞 entries 在驗證前崩潰）與一 P3（字串張數總計錯誤），均重現修正；第三輪產品與守衛准予進入驗收，未解決問題 0。審查者另測全部 81 筆 M5 alias，無替代警告且印刷正確。
 - 新守衛實抽真 admin 索引／alias／牌組明細與玩家匯入器、真卡池與 split/visibility：23/0；BASE 4 正對照綠、19 項行為紅，正常 exit 1，非模組缺失；10 有效突變全部攔截，N1／還原綠。初 M5 conditional 賦值因入口早清空而等價存活，誠實排除並換成禁用按鈕的有效突變，不冒稱初輪全殺。
-- 正常 root Firebase 與 fake Oracle 雙 build 成功且快照完成；完整 admin script 語法通過。前後 harness＋35 免疫各 36/36，scope42/0、lint無違規；手機／桌機真瀏覽器與完整 runner 驗收進行中，未推送、未部署。
+- 正常 root Firebase 與 fake Oracle 雙 build 成功且快照完成；完整 admin script 語法通過。前後 harness＋35 免疫各 36/36，scope42/0、lint無違規。
+- 真瀏覽器 390／1366 × 深淺 4 場景：實抽正式 admin 牌組明細點複製，再由 Oracle 發行版 /decks 匯入，60 張、印刷 ID、場地左右一致；無來源提示、dialog／pageerror，server writes 0。初次外部 fixture 未先新增 active 牌組而找不到匯入按鈕 timeout，只補 fixture 後通過，不是產品改動；非原生 iPhone 實機驗證。
+- 完整 970 首輪 969 成功／1 FAIL、34.242 分；唯一 6371 F0b 是新 mutcheck 把 ROOT/temp 宣告同一行，掃描器拒絕。`ae379fc5` 只拆兩行，產品相對 checkpoint `88024739` 完全未變。補驗指定 3 項（6371／新守衛／lint）3/3 成功、0.62445 分，最終 mutants10/10／N1／還原綠；聯集 970 未解 0，不能稱首輪全綠。
+- full／supp 均 timeout／escape／restoreFailed／mainTree.hard 0、statusChanged false；首輪 260 暫存全還原、補驗 0。既有 6378 ENV1、6263 Windows PLATFORM1，SHALLOW0。報表 E:/sb-deck-import-6627/__rt/full.json、E:/sb-deck-import-6627-supp/__rt/supp.json；外部 acceptance.json 嚴格核對聯集、skip 與安全欄位。證據 E:/ptcg-tw-sim-local/deck-import-6627-evidence。
+- 同位獨立 Codex 審查者已獨立解析 full／supp 與最終紀錄，最終明確准予 push；未解決 P1／P2／P3 皆 0。只提交本段驗收文件後推送並核對雙 CI／測試站；正式站仍由站長自行部署。
 
 ## v6.626（2026-11-04）接手補審與公開牌組分享／統計可靠性修正
 
