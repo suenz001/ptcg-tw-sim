@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,copyFileSync,symlinkSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';import{join,dirname,resolve,sep}from'node:path';import{fileURLToPath}from'node:url';import{spawnSync}from'node:child_process';
-const ROOT=fileURLToPath(new URL('..',import.meta.url)),temp=mkdtempSync(join(tmpdir(),'ptcg-v6627-'));
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const temp = mkdtempSync(join(tmpdir(), 'ptcg-v6627-'));
 const admin='oracle-admin/admin.html',page='src/routes/decks/+page.svelte';
 const originals=new Map([admin,page].map(p=>[p,readFileSync(join(ROOT,p),'utf8').replace(/\r\n/g,'\n')]));
 for(const p of ['src/lib/decks/cardIdMigration.ts','src/lib/cards/visibility.ts']){mkdirSync(dirname(join(temp,p)),{recursive:true});copyFileSync(join(ROOT,p),join(temp,p));}
