@@ -8710,6 +8710,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
           res.set('Cache-Control', 'public, max-age=1800');
           return res.json(_seoMetaCache.data);
         }
+        const _metaCleanFilter = {
+          roomCode: { $type: 'string' },
+          winner: { $in: [0, 1] },
+          $and: [
+            { $or: [{ winReason: { $not: /中途離開|離開房間|斷線|斷開|退出|不在場|disconnect|技不如人|先行離開/i } }, { finalTurn: { $gte: 3 } }] },
+            { $or: [{ winReason: { $not: /無回應/ } }, { finalTurn: { $gte: 2 } }] },
+          ],
+        };
         const [postAgg, recentMatches] = await Promise.all([
           _dprPosts.aggregate([
             { $match: { status: 'published', archetype: { $exists: true, $nin: ['', '其他 / 未分類', null] } } },
@@ -8725,9 +8733,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
             { $limit: 16 },
           ]).toArray(),
           db.collection('matchRecords').find(
-            {},
-            { projection: { winner: 1, finalTurn: 1, p1: 1, p2: 1, endedAt: 1 } }
-          ).sort({ endedAt: -1 }).limit(250).toArray().catch(() => []),
+            _metaCleanFilter,
+            { projection: { winner: 1, 'p1.cardCounts': 1, 'p2.cardCounts': 1, endedAt: 1 } }
+          ).sort({ endedAt: -1 }).limit(500).toArray().catch(() => []),
         ]);
         try {
           if (app.locals && typeof app.locals._archetypeEnrichMatchRecords === 'function' && recentMatches.length) {
@@ -8740,7 +8748,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           if (!k || k === '其他 / 未分類' || k === '未分類') return null;
           let r = statsMap.get(k);
           if (!r) {
-            r = { archetype: k, postCount: 0, likes: 0, downloads: 0, topCutCount: 0, winCount: 0, matchCount: 0, coverCardId: '' };
+            r = { archetype: k, postCount: 0, likes: 0, downloads: 0, topCutCount: 0, winCount: 0, lossCount: 0, matchCount: 0, coverCardId: '' };
             statsMap.set(k, r);
           }
           return r;
@@ -8755,28 +8763,33 @@ import('firebase-admin').then(async ({ default: admin }) => {
           if (g.sampleCardId) r.coverCardId = String(g.sampleCardId);
         }
         for (const mr of recentMatches) {
-          if (!mr || (Number(mr.finalTurn) || 0) <= 1) continue;
+          if (!mr || (mr.winner !== 0 && mr.winner !== 1)) continue;
           const seats = [mr.p1, mr.p2];
           for (let i = 0; i < 2; i++) {
             const r = ensure(seats[i] && seats[i].archetype);
             if (!r) continue;
             r.matchCount++;
-            if (Number(mr.winner) === i) r.winCount++;
+            if (mr.winner === i) r.winCount++;
+            else r.lossCount++;
           }
         }
         const items = [...statsMap.values()]
           .filter(r => r.postCount > 0 || r.topCutCount > 0 || r.matchCount >= 3)
-          .map(r => ({
-            archetype: r.archetype,
-            postCount: r.postCount,
-            topCuts: r.topCutCount,
-            topCutCount: r.topCutCount,
-            games: r.matchCount,
-            wins: r.winCount,
-            matchCount: r.matchCount,
-            winRate: r.matchCount >= 5 ? +(r.winCount / r.matchCount).toFixed(4) : null,
-            score: r.postCount * 3 + r.topCutCount * 8 + Math.min(r.matchCount, 60) + Math.floor(r.downloads / 3),
-          }))
+          .map(r => {
+            const dec = r.winCount + r.lossCount;
+            return {
+              archetype: r.archetype,
+              postCount: r.postCount,
+              topCuts: r.topCutCount,
+              topCutCount: r.topCutCount,
+              games: dec,
+              wins: r.winCount,
+              losses: r.lossCount,
+              matchCount: dec,
+              winRate: dec >= 5 ? +(r.winCount / dec).toFixed(4) : null,
+              score: r.postCount * 3 + r.topCutCount * 8 + Math.min(dec, 60) + Math.floor(r.downloads / 3),
+            };
+          })
           .sort((a, b) => b.score - a.score || b.postCount - a.postCount)
           .slice(0, 12);
         const payload = { metaApi: 1, updatedAt: now, items };

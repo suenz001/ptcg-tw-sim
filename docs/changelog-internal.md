@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.625（2026-11-04）公布欄熱門牌組勝率對齊後台原型統計淨化標準
+
+BASE `a24974e0`（v6.624）。站長要求將牌組公布欄熱門牌組的勝率計算調整為與後台原型統計（`deck-archetype-stats`）一致的過濾標準。
+
+- 修正（`oracle-admin/server_admin_patch.js`）：`GET /api/meta-stats` 對 `matchRecords` 的查詢改為對齊 `buildCasualCleanFilter({ excludeAI: true, archNoShow: true, winnerOnly: true })`：
+  1. `roomCode: { $type: 'string' }`：排除 AI 對戰與本機雙人對戰，只計真人線上房間對戰。
+  2. 排除第 1 回合未進場判負（`winReason` 含「無回應」且 `finalTurn < 2`）以及前 2 回合中途離開／斷線（`winReason` 含離開／斷線等字樣且 `finalTurn < 3`）。
+  3. `winner: { $in: [0, 1] }`：只算有分出勝負的場次，勝率公式嚴格為 `勝場 ÷ (勝場 + 敗場)`（最低顯示門檻仍為有效勝負場次 `>= 5` 場），並將近期有效真人對局取樣數提升至 500 場。
+
 ## v6.624（2026-11-04）修正牌組公布欄熱門牌組的冠軍數（N🏆）統計口徑
 
 BASE `4751f465`（v6.623）。站長回報牌組公布欄「📊 實戰環境熱門牌組排行」顯示超級烈空坐有 `8🏆`，但點選篩選後公布欄內並沒有任何超級烈空坐的冠軍投稿。
