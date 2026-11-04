@@ -2438,6 +2438,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let takePrizeTimerId = $state<ReturnType<typeof setInterval> | null>(null);
   // v3.74：mulligan 揭示 modal 的當前頁碼（每頁顯示一手起手 = 7 張卡）
   let revealPage = $state(0);
+  // ⭐v6.622：我方起手無基礎寶可夢（重抽）時，自己也能查看每次重抽抽到的 7 張手牌
+  let selfRevealPage = $state(0);
+  let selfMulliganSeenKey = $state('');
 
   // ── 招式前置丟能量選擇（v1.57） ────────────────────────────────────────────
   // 玩家宣告招式、ATTACK_PRE_DISCARD_CHOICE 命中時彈出的能量挑選 modal 狀態
@@ -14397,6 +14400,36 @@ function _setupSelfPending(g: any, seat: number): string | null {
     </div>
   {/if}
 
+  <!-- >>> v6622-self-mulligan-snippet -->
+  {#snippet selfMulliganBody(handsRaw: string[])}
+    {@const hands = handsRaw.map(s => s.split('|'))}
+    {@const totalPages = hands.length}
+    {@const pageIdx = Math.min(Math.max(selfRevealPage, 0), Math.max(0, totalPages - 1))}
+    {@const curHand = hands[pageIdx] ?? []}
+    <div class="mulligan-reveal-body">
+      <div class="mulligan-reveal-pager">
+        <button class="btn-act small" disabled={pageIdx <= 0} onclick={() => selfRevealPage = Math.max(0, pageIdx - 1)}>← 上一手</button>
+        <span class="page-indicator">第 {pageIdx + 1} 次重抽 / 共 {totalPages} 次</span>
+        <button class="btn-act small" disabled={pageIdx >= totalPages - 1} onclick={() => selfRevealPage = Math.min(totalPages - 1, pageIdx + 1)}>下一手 →</button>
+      </div>
+      <div class="mulligan-reveal-grid">
+        {#each curHand as cid, ci (pageIdx + '_' + ci)}
+          {@const cc = pool.get(cid)}
+          <div class="mulligan-reveal-card">
+            {#if cc?.imageUrl}
+              <img use:retryImg={cc.imageUrl} src={cardThumb(cc.imageUrl)} alt={cc.name} onclick={() => openZoom(cid, null)} class="zoomable"
+                class:legend-half-l={twoCardStadiumSide(cid) === 0}
+                class:legend-half-r={twoCardStadiumSide(cid) === 1} />
+            {:else}
+              <div class="card-placeholder">{cc?.name ?? cid}</div>
+            {/if}
+            <div class="card-name-label">{cc?.name ?? '?'}</div>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/snippet}
+  <!-- <<< v6622-self-mulligan-snippet -->
   <!-- v4.923 重抽懲罰補抽決定：+/- 計數器 UI（0 ~ nDraw 張，預設最大值） -->
   {#if game && game.phase==='setup' && (game.pendingMulliganDraw?.[myIdx] ?? 0) > 0 && (game.mulliganRevealConfirmed?.[myIdx] ?? true) && (
       (mode==='online' && myPlayerIndex===myIdx) ||
@@ -14455,10 +14488,54 @@ function _setupSelfPending(g: any, seat: number): string | null {
                但對手那時候其實還在選出場寶可夢（揭示確認、補抽都要等他 setupDone 之後）。 -->
           <p class="sel-hint">起手無基礎寶可夢，已重抽 {game.mulliganCounts?.[myIdx] ?? 0} 次。{!game.setupDone?.[oppIdx] ? '對手正在選出場寶可夢並按準備…' : (!game.mulliganRevealConfirmed?.[oppIdx] ? '對手正在確認起手揭示…' : ('對手正在決定是否多抽 ' + game.pendingMulliganDraw[oppIdx] + ' 張…'))}</p>
         </div>
+        <!-- >>> v6622-self-mulligan-wait -->
+        {#if ((myIdx === 0 ? game.mulliganRevealedHands?.p1 : game.mulliganRevealedHands?.p2)?.length ?? 0) > 0}
+          {@const myHandsRaw = (myIdx === 0 ? game.mulliganRevealedHands?.p1 : game.mulliganRevealedHands?.p2) ?? []}
+          {@const mySeenKey = `${game.id}_${myIdx}_${myHandsRaw.length}`}
+          {@render selfMulliganBody(myHandsRaw)}
+          <div class="sel-footer mulligan-footer">
+            <span class="sel-hint" style="flex:1; font-size:.8rem;">
+              {selfMulliganSeenKey === mySeenKey ? '✅ 已查看我方重抽手牌（等待對手完成後即可擺場）' : '👀 以上為你起手無基礎寶可夢、向對手揭示的 7 張手牌'}
+            </span>
+            {#if selfMulliganSeenKey !== mySeenKey}
+              <button class="btn-act primary" onclick={() => { selfMulliganSeenKey = mySeenKey; selfRevealPage = 0; }}>
+                ✅ 我看完了，繼續
+              </button>
+            {/if}
+          </div>
+        {/if}
+        <!-- <<< v6622-self-mulligan-wait -->
       </div>
     </div>
   {/if}
 
+  <!-- >>> v6622-self-mulligan-modal -->
+  {#if game && game.phase==='setup' && !isSpectator && !game.setupDone?.[myIdx] && !game.openingChoicePending?.[myIdx] && !(mode==='online' && myPlayerIndex===myIdx && (game.pendingMulliganDraw?.[oppIdx] ?? 0) > 0 && setupActorSeat(game) === oppIdx) && !((game.pendingMulliganDraw?.[myIdx] ?? 0) > 0 && (game.mulliganRevealConfirmed?.[myIdx] ?? true)) && (((myIdx === 0 ? game.mulliganRevealedHands?.p1 : game.mulliganRevealedHands?.p2)?.length ?? 0) > 0) && selfMulliganSeenKey !== `${game.id}_${myIdx}_${(myIdx === 0 ? game.mulliganRevealedHands?.p1 : game.mulliganRevealedHands?.p2)?.length ?? 0}` && ((mode==='online' && myPlayerIndex===myIdx) || (mode!=='online' && aiPlayerIndex === null) || (aiPlayerIndex !== null && aiPlayerIndex !== myIdx))}
+    {@const myHandsRaw = (myIdx === 0 ? game.mulliganRevealedHands?.p1 : game.mulliganRevealedHands?.p2) ?? []}
+    {@const mySeenKey = `${game.id}_${myIdx}_${myHandsRaw.length}`}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="selection-overlay" onclick={(e) => { if (e.target === e.currentTarget) { selfMulliganSeenKey = mySeenKey; selfRevealPage = 0; } }}>
+      <div class="selection-modal mulligan-modal mulligan-reveal-modal" use:modalDrag={{ resetKey: pendingSelection?.token ?? pendingSelection?.effectKey }}>
+        <div class="sel-header" title="拖曳視窗">
+          <h3>🔄 我方起手重抽揭示</h3>
+          <p class="sel-hint">
+            你起手無基礎寶可夢，已重抽 <strong>{myHandsRaw.length}</strong> 次。以下為每次重抽前抽到並向對手揭示的 7 張手牌：
+          </p>
+        </div>
+        {@render selfMulliganBody(myHandsRaw)}
+        <div class="sel-footer mulligan-footer">
+          <span class="sel-hint" style="flex:1; font-size:.8rem;">
+            👀 確認後即可選擇要放上戰鬥場的基礎寶可夢
+          </span>
+          <button class="btn-act primary" onclick={() => { selfMulliganSeenKey = mySeenKey; selfRevealPage = 0; }}>
+            ✅ 我看完了，繼續
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+  <!-- <<< v6622-self-mulligan-modal -->
   <!-- v2.256 招式前置：0~max stepper overlay（波盪水|蜿蜒割裂 等「最多 N 個指示物」招式） -->
   {#if preAttackDiscard && game && preDiscardModalKind(preAttackDiscard.spec.scope) === 'stepper'}
     {@const spec = preAttackDiscard.spec}
@@ -15914,7 +15991,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     {@const _rvc = getCard(cardRevealCur.cardId)}
     {#key cardRevealCur.id}
       <div class="card-reveal-layer" aria-hidden="true">
-        <div class="card-reveal" class:from-top={cardRevealCur.fromTop} style="animation-duration:{cardRevealCur.ms}ms">
+        <div class="card-reveal" class:from-top={cardRevealCur.fromTop} class:is-draw={!!cardRevealCur.drawIid} style="animation-duration:{cardRevealCur.ms}ms">
           <div class="card-reveal-inner" style="animation-duration:{cardRevealCur.ms}ms">
             <div class="card-reveal-face card-reveal-back" style="animation-duration:{cardRevealCur.ms}ms"><div class="card-back"><span class="card-back-mark">?</span></div></div>
             <div class="card-reveal-face card-reveal-front" style="animation-duration:{cardRevealCur.ms}ms">{#if _rvc?.imageUrl}<img use:retryImg={_rvc.imageUrl} src={cardThumb(_rvc.imageUrl)} alt={_rvc?.name ?? ''} />{:else}<div class="card-reveal-noimg">{_rvc?.name ?? ''}</div>{/if}</div>
@@ -21459,6 +21536,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .card-reveal-layer{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:9400; }
   .card-reveal{ display:flex; flex-direction:column; align-items:center; gap:.45rem; animation-name:cardRevealMove; animation-timing-function:cubic-bezier(.2,.8,.3,1); animation-fill-mode:both; --rv-from:38vh; }
   .card-reveal.from-top{ --rv-from:-38vh; }
+  .card-reveal.is-draw{ animation-name:cardRevealMoveDraw; }
+  .selection-modal.mulligan-modal:has(.mulligan-reveal-body){ --pk-w:var(--pk-m); }
   .card-reveal-inner{ position:relative; width:min(34vw, 190px); aspect-ratio:63 / 88; transform-style:preserve-3d; animation-name:cardRevealFlip; animation-fill-mode:both; }
   .card-reveal-face{ position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:8px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,.6), 0 0 0 2px rgba(255,255,255,.18); }
   .card-reveal-face img{ width:100%; height:100%; object-fit:cover; display:block; }
@@ -21481,6 +21560,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
   @keyframes cardRevealFlip{
     0%, 22%{ transform:rotateY(0deg); }
     40%, 100%{ transform:rotateY(180deg); }
+  }
+  @keyframes cardRevealMoveDraw{
+    0%{ opacity:0; transform:translateY(-6vh) scale(.65); }
+    18%{ opacity:1; transform:translateY(0) scale(1); }
+    68%{ opacity:1; transform:translateY(0) scale(1); }
+    100%{ opacity:0; transform:translateY(42vh) scale(.42); }
   }
   /* <<< v6581-card-reveal-css */
   /* >>> v6441-blue-css */

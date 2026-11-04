@@ -788,7 +788,7 @@
   <!-- ⭐v6.619 站長：「手機版的，請派出寶可夢的通知，還是會下推遊戲介面……我建議直接覆蓋顯示在計時器那欄就好」
        ⇒ 送出新戰鬥寶可夢的提示改成**疊在計時器這一欄上面**（絕對定位、不佔版面高度），出現／消失都不會推動下面的場地。
        計時器不存在（只有沒有 gameStartTime 的舊存檔）才退回原本的獨立一列。 -->
-  {#if game.gameStartTime !== undefined}
+  {#if game.gameStartTime !== undefined || game.phase === 'setup'}
     <div class="mp-timer-strip">
       <span class="mp-t-cell mp-t-total">⏱ {fmtTimerMs(gameTotalMs)}</span>
       <span class="mp-t-cell" class:mp-t-active={game.activePlayerIndex === 0 && game.phase === 'playing'}>P1 {fmtTimerMs(p0TotalMs)}</span>

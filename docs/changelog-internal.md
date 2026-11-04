@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.622（2026-11-04）抽牌飛入手牌動畫、我方重抽手牌揭示、手機起手設置不推畫面、熱門牌組統計快取 30 分鐘
+
+BASE `6219cb08`（v6.621）。站長交辦四項優化：
+
+- 熱門牌組統計快取延長（`oracle-admin/server_admin_patch.js`）：`GET /api/meta-stats` 記憶體快取 TTL 由 5 分鐘延長為 30 分鐘（`30 * 60 * 1000` ms，`Cache-Control: public, max-age=1800`），降低伺服器聚合查詢負擔。
+- 抽牌動畫新增往下飛入手牌效果（`src/routes/game/+page.svelte`）：`.card-reveal` 新增 `class:is-draw={!!cardRevealCur.drawIid}` 與 `@keyframes cardRevealMoveDraw`，卡牌在畫面中央翻開展示後往下飛入手牌區（`translateY(42vh) scale(.42)`），總時長維持 `CARD_REVEAL_MS_DRAW = 900` ms。
+- 我方起手無基礎寶可夢（重抽）時自己也能查看抽到的 7 張手牌（`src/routes/game/+page.svelte`）：新增 `selfMulliganBody`、`🔄 我方起手重抽揭示` 視窗與線上 `⏳ 等待對手` 視窗內嵌檢視，讓重抽玩家在起手擺場前也能逐次查看自己抽了哪 7 張牌。
+- 手機直式起手設置（setup 階段）不再下推畫面（`src/routes/game/MobilePortraitBattle.svelte`）：`.mp-timer-strip` 條件改為 `game.gameStartTime !== undefined || game.phase === 'setup'`，在 setup 階段即顯示 `0:00` 計時列並預留 22px 高度，消除 setup → playing 轉場時的版面下推。
+
 ## v6.621（2026-11-03）單卡頁結構化資料修正、牌組公布欄動態 SEO 與熱門環境牌組排行
 
 BASE `be877969`（v6.620）。站長交辦：將老玩家的日常對戰自動轉換成 SEO 曝光（步驟 1、2、3），並調整公布欄熱門牌組顯示（奪冠數改 `1🏆` 避免與篇數連在一起、手機版改為下拉選單節約版面、刪除冗餘說明文字）。

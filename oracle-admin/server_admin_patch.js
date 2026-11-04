@@ -8707,7 +8707,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const now = Date.now();
         if (_seoMetaCache.data && now < _seoMetaCache.exp) {
-          res.set('Cache-Control', 'public, max-age=300');
+          res.set('Cache-Control', 'public, max-age=1800');
           return res.json(_seoMetaCache.data);
         }
         const [postAgg, recentChamps, recentMatches] = await Promise.all([
@@ -8792,8 +8792,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
           .sort((a, b) => b.score - a.score || b.postCount - a.postCount)
           .slice(0, 12);
         const payload = { metaApi: 1, updatedAt: now, items };
-        _seoMetaCache = { data: payload, exp: now + 5 * 60 * 1000 };
-        res.set('Cache-Control', 'public, max-age=300');
+        _seoMetaCache = { data: payload, exp: now + 30 * 60 * 1000 };
+        res.set('Cache-Control', 'public, max-age=1800');
         res.json(payload);
       } catch (e) {
         res.status(500).json({ error: 'unavailable' });
