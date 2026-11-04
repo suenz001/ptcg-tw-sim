@@ -1,5 +1,12 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.623（2026-11-04）修正部署腳本 START_MARKER 數量檢查誤報警告
+
+BASE `48855dc6`（v6.622）。站長反映執行 `oracle-admin\update-tournament.bat` 時出現 `⚠ WARNING: marker count abnormal`（`START_MARKER x7, END_MARKER x1`）。
+
+- 根因：`oracle-admin/server_admin_patch.js` 第 1～7 行有 7 行歷史版本標頭註解皆含 `// === ORACLE ADMIN ENDPOINTS ===`，而 `oracle-admin/oracle_admin_update.sh` 的 Sanity 檢查原本寫死 `sm_count != 1`。
+- 修正（`oracle-admin/oracle_admin_update.sh`）：改為比對 `patch.count(START_MARKER)` 與 `patch.count(END_MARKER)`（且 `exp_em == 1`），當 `server.js` 內無殘留重複區塊時顯示 `✓ Sanity: START_MARKER x7 (expected 7), END_MARKER x1 (expected 1)`，不再誤報警告；若真有殘留區塊仍會告警。
+
 ## v6.622（2026-11-04）抽牌飛入手牌動畫、我方重抽手牌揭示、手機起手設置不推畫面、熱門牌組統計快取 30 分鐘
 
 BASE `6219cb08`（v6.621）。站長交辦四項優化：

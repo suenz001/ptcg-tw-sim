@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '6219cb086f44c56c4295973acfb80ff50c0d575e';   // v6.621（上一版）
+const PREV_SHA = '48855dc630346c203cd80aa59e50a6c43d7919ac';   // v6.622（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,17 +757,23 @@ const PREV_SHA = '6219cb086f44c56c4295973acfb80ff50c0d575e';   // v6.621（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.622 前移：PREV_SHA 從 6219cb08（v6.621）起算。
+  // ⚠⚠ v6.623 前移：PREV_SHA 從 48855dc6（v6.622）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.622：抽牌飛入手牌動畫、我方起手重抽 7 張牌揭示、手機直式 setup 階段預留計時列不推畫面；首頁 changelog 三步搬運
+  // ⭐v6.623：修正 oracle_admin_update.sh 部署腳本 START_MARKER 數量檢查誤報警告（純後台部署維護，玩家端只動 version.ts 與 site-version.txt）
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
-  'src/routes/game/MobilePortraitBattle.svelte',
-  'static/changelog-archive.html',
-  'static/changelog-bodies.html',
-  'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.622）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.622 前移：PREV_SHA 從 6219cb08（v6.621）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.622：抽牌飛入手牌動畫、我方起手重抽 7 張牌揭示、手機直式 setup 階段預留計時列不推畫面；首頁 changelog 三步搬運
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'src/routes/game/MobilePortraitBattle.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.621）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.621 前移：PREV_SHA 從 be877969（v6.620）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -902,18 +908,6 @@ const PREV_ALLOWED = [
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.610）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.610 前移：PREV_SHA 從 9aa83ddd（v6.609）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.610：依站長指定精簡能量標記，只調名稱及顯示格式，不改能量供應或規則。
-//   'src/lib/cards/attached-energy.ts',
-//   'src/lib/ui/SpecialEnergyBadges.svelte',
-//   'src/routes/game/MobilePortraitBattle.svelte',
-//   'src/lib/version.ts',
-//   'static/changelog.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog-archive.html',
 //   'static/site-version.txt',
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + [...PREV_ALLOWED].sort().join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }
