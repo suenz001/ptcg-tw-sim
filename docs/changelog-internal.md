@@ -10,7 +10,7 @@
 - 前後 harness＋35 免疫各 36/36，scope42/0、lint無違規、完整 admin script 語法通過。正常 root Firebase／fake Oracle 雙建置成功且快照完成；產品未改 server、引擎、牌池或公開三份 changelog。
 - 真瀏覽器 390／1366 × 深淺 4 場景：點真 admin 冠軍入口／目前 pre 複製，再進 Oracle 發行版 /decks 匯入，冠軍 UID、60 張、精確印刷與場地左右一致；dialogs／pageerrors 空、server writes 0，非原生 iPhone 實機。證據 E:/ptcg-tw-sim-local/tournament-decks-6628-evidence。
 - 完整 971/971 單次全綠、33.7228 分；報表 E:/sb-tournament-decks-6628/__rt/full.json，外部 acceptance.json 嚴格核對唯一清單與全部結果。FAIL／TIMEOUT／escape／restoreFailed／mainTree.hard 均 0，statusChanged false，260 暫存全還原；SHALLOW0、既有 6378 ENV1／6263 Windows PLATFORM1 與基準相同。
-- 全套時產品與測試凍結在 `18b94175`，後續只補驗收文件；尚待同位獨立審查者核定最後准推，未部署正式站。
+- 全套時產品與測試凍結在 `18b94175`，後續只補驗收文件；同位獨立 Codex 審查者已於 `d29a9a98` 自行解析原始全套、清單、安全欄位與前述全部證據，最終准予推送，未解 P1／P2／P3＝0。僅補本准推紀錄後推送；CI／線上另行核對，未部署正式站。
 
 ## v6.627｜玩家查詢牌組文字匯回（hidden）
 
