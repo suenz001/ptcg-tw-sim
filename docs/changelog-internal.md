@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.628｜歷史賽事參賽牌組與冠軍捷徑（hidden）
+
+- BASE：`a8e412c2`（v6.627）。站長希望方便查看已完賽玩家尤其冠軍當時牌組，複製到自己的編輯器測試。已確認歸檔及既有管理端stats API含完整報名快照；只補admin介面，不加API、不改server與遊戲。
+- 歷屆賽事冠軍入口、賽程冠軍入口、參賽名單及對戰雙方入口，精確eventId+uid查本場players[].deckEntries；不按名字猜，不讀玩家目前牌組。共用v6.627精確匯入格式器，缺快照明示未留存、缺卡/錯數量禁複製。
+- 新modal從目前可見pre複製，loading marker防關閉重開／A覆B，舊按鈕不跨視窗複製；回原賽程與既有回放保留。公開三份changelog不動，僅admin內部紀錄。
+- 獨立 Codex `tournament_decks_6628_review`（非 Opus）產品及守衛審查通過；兩項 P3 守衛缺口（無冠軍查詢範圍、跨視窗舊按鈕）已修正複審，未解 P1／P2／P3＝0。最終全套結果仍待核定，尚未准推。
+- 新守衛抽真 admin 函式／CSS／索引／格式器與真卡池：23/0；BASE 3 正對照綠、20 真行為紅，正常 exit 1；7 有效突變全殺、N1／還原綠。初次 fixture 漏真 _tsMatchOutcome 及 race 點擊遭遮罩攔截，補 helper 並以真 DOM click 模擬並發後通過，非產品修正。
+- 前後 harness＋35 免疫各 36/36，scope42/0、lint無違規、完整 admin script 語法通過。正常 root Firebase／fake Oracle 雙建置成功且快照完成；產品未改 server、引擎、牌池或公開三份 changelog。
+- 真瀏覽器 390／1366 × 深淺 4 場景：點真 admin 冠軍入口／目前 pre 複製，再進 Oracle 發行版 /decks 匯入，冠軍 UID、60 張、精確印刷與場地左右一致；dialogs／pageerrors 空、server writes 0，非原生 iPhone 實機。證據 E:/ptcg-tw-sim-local/tournament-decks-6628-evidence。
+- 完整回歸待執行；未推送、未部署。
+
 ## v6.627｜玩家查詢牌組文字匯回（hidden）
 
 - BASE：`54dc5079`（v6.626）。玩家匯入視窗移除 admin 來源說明；後台玩家儲存牌組明細改用精確卡號文字，標題／統計為註解。右半場地沿用索引卡包＋卡號完整格式，不新增映射、不改 parser。

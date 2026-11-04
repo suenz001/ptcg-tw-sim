@@ -1604,6 +1604,63 @@ function _tsMatchOutcome(m) {
   return m.status || '';
 }
 
+// >>> v6628-archived-tournament-decks
+function tsArchivePlayerOf(archive, uid) {
+  if (uid == null || String(uid) === '') return null;
+  return (Array.isArray(archive?.players) ? archive.players : []).find(p => p && p.uid != null && String(p.uid) === String(uid)) || null;
+}
+function tsArchiveDeckButton(archive, uid, label) {
+  const player = tsArchivePlayerOf(archive, uid);
+  const available = archive?.eventId && Array.isArray(player?.deckEntries) && player.deckEntries.length;
+  const handler = 'tevShowArchivedDeck(' + JSON.stringify(String(archive?.eventId || '')) + ',' + JSON.stringify(String(uid ?? '')) + ')';
+  return '<button type="button" class="archive-deck-open" style="padding:4px 9px;border:1px solid #5b8def;border-radius:5px;background:#eaf1ff;color:#2a4a7a;cursor:pointer;" '
+    + (available ? 'onclick="' + escapeHtml(handler) + '"' : 'disabled title="這筆歸檔沒有留存完整的參賽牌表"')
+    + '>' + escapeHtml(label) + (available ? '' : '（未留存）') + '</button>';
+}
+let _tsArchiveDeckRequest = 0;
+window.tevShowArchivedDeck = async function(eventId, uid) {
+  const archives = Array.isArray(tournStatsCache?.archives) ? tournStatsCache.archives : [];
+  const archive = archives.find(a => a && String(a.eventId) === String(eventId));
+  const player = tsArchivePlayerOf(archive, uid);
+  const backHandler = 'tevShowBracket(' + JSON.stringify(encodeURIComponent(String(eventId))) + ')';
+  const back = '<button type="button" style="min-height:44px;" onclick="' + escapeHtml(backHandler) + '">← 回賽程</button>';
+  if (!archive || !Array.isArray(player?.deckEntries) || !player.deckEntries.length) {
+    _tsModal('<h3>當時參賽牌組</h3><p role="alert">這筆歷史紀錄未留存該玩家的參賽牌表，無法還原。</p>' + back);
+    return;
+  }
+  const request = ++_tsArchiveDeckRequest;
+  _tsModal('<section data-archive-loading="' + request + '"><h3>當時參賽牌組</h3><p>載入卡片資料中…</p></section>');
+  let loadError = false;
+  try { await ensureCardIndex(); } catch { loadError = true; }
+  // 關閉／回賽程／開另一副後，不讓較早的載入結果重開或覆蓋目前視窗。
+  const overlay = document.getElementById('ts-modal-overlay');
+  if (!overlay || overlay.style.display === 'none' || !overlay.querySelector('[data-archive-loading="' + request + '"]')) return;
+  const copyData = loadError ? { text: '', error: '卡片資料載入失敗，請關閉後重試。' }
+    : playerDeckImportText(player.deckName || ((player.name || '玩家') + '參賽牌組'), player.deckEntries);
+  const champion = archive.championUid != null && String(archive.championUid) === String(uid);
+  _tsModal('<section data-archive-deck><h3 style="margin-right:28px;">' + (champion ? '🏆 冠軍牌組' : '🃏 當時參賽牌組') + '</h3>'
+    + '<p><b>賽事：</b>' + escapeHtml(archive.eventName || '錦標賽') + '<br><b>日期：</b>' + escapeHtml(_tsFmtDateTime(archive.startedAt || archive.createdAt || archive.finishedAt))
+    + '<br><b>玩家：</b>' + escapeHtml(player.name || '玩家') + '<br><b>牌組：</b>' + escapeHtml(player.deckName || '未命名') + '</p>'
+    + '<p class="small muted">來源：本場賽事保存的報名牌組。複製後可貼到牌組編輯器「匯入文字」。</p>'
+    + (copyData.error ? '<p role="alert" style="color:#a33;">' + escapeHtml(copyData.error) + '</p>' : '')
+    + '<pre data-deck-text style="padding:10px;background:#f5f7fa;border-radius:6px;max-height:48vh;overflow:auto;overscroll-behavior:contain;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;">' + escapeHtml(copyData.text) + '</pre>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;">' + back
+    + '<button type="button" style="min-height:44px;" ' + (copyData.error ? 'disabled ' : '') + 'onclick="tevCopyArchivedDeck(this)">📋 複製匯入文字</button></div></section>');
+};
+window.tevCopyArchivedDeck = async function(btn) {
+  const overlay = document.getElementById('ts-modal-overlay');
+  const box = btn?.closest('[data-archive-deck]');
+  const pre = box?.querySelector('pre[data-deck-text]');
+  if (!btn || btn.disabled || !overlay || overlay.style.display === 'none' || !overlay.contains(btn) || !pre?.textContent?.trim()) return;
+  try {
+    await navigator.clipboard.writeText(pre.textContent);
+    btn.textContent = '✅ 已複製';
+  } catch {
+    btn.textContent = '複製失敗，請選取上方文字複製';
+  }
+};
+// <<< v6628-archived-tournament-decks
+
 window.tevShowBracket = function (eventIdEnc) {
   var eventId = decodeURIComponent(eventIdEnc);
   var data = tournStatsCache || { archives: [] };
@@ -1623,6 +1680,7 @@ window.tevShowBracket = function (eventIdEnc) {
   h += '<p class="small muted" style="margin:0 0 10px;">' + (a.playerCount || 0) + ' 人'
     + (a.championName ? ' ｜ 冠軍：' + pName(a.championUid, a.championName) + ' 🏆' : '')
     + '　·　點名字看玩家總覽、點對戰看該局 log</p>';
+  if (a.championUid) h += '<div style="margin-bottom:10px;">' + tsArchiveDeckButton(a, a.championUid, '🏆 冠軍牌組') + '</div>';
   // v1.54 參賽名單（含使用牌組），每位都可點進玩家總覽
   if ((a.players || []).length) {
     h += '<details style="margin:0 0 10px;"><summary style="cursor:pointer;color:#3a5a8a;font-weight:600;">👥 參賽名單（' + a.players.length + ' 人）</summary>'
@@ -1632,6 +1690,7 @@ window.tevShowBracket = function (eventIdEnc) {
             + (p.email ? playerLink(p.email, p.name || p.email) : escapeHtml(p.name || '—'))
             + (p.deckName ? ' <span class="small muted">· ' + escapeHtml(p.deckName) + '</span>' : '')
             + (p.email ? '' : ' <span class="small muted">(無 email)</span>')
+            + ' ' + tsArchiveDeckButton(a, p.uid, '🃏 當時牌組')
             + '</div>';
         }).join('')
       + '</div></details>';
@@ -1648,11 +1707,12 @@ window.tevShowBracket = function (eventIdEnc) {
       if (clickable) {
         // v1.54：原本整列是 <button>，玩家名做成連結後會巢狀在按鈕內而無法點。
         //   改成外層 div + 右側獨立「看對戰 log」按鈕，兩種點擊互不干擾。
-        h += '<div style="display:flex;align-items:center;gap:8px;margin:3px 0;padding:8px 11px;border-radius:6px;border:1px solid #e3e8ef;background:#f8fafc;color:#1a2332;font-size:.9rem;">'
+        h += '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:3px 0;padding:8px 11px;border-radius:6px;border:1px solid #e3e8ef;background:#f8fafc;color:#1a2332;font-size:.9rem;">'
           + '<span style="flex:1;">' + label + ' <span class="small muted">· ' + _tsMatchOutcome(m) + '</span></span>'
           // v1.60 舊的文字「對戰 log」換成新的【回放】：主站的回放頁是公開連結（免登入），
           //   matchId 的組成規則與後端一致 = eventId + '_r' + round + '_m' + idx。
           //   開新分頁而不內嵌：回放是完整對戰 UI，塞進 840px 的 modal 既難用又跨網域。
+          + tsArchiveDeckButton(a, m.p1uid, 'P1 牌組') + ' ' + tsArchiveDeckButton(a, m.p2uid, 'P2 牌組')
           + '<button onclick="tevOpenReplay(\'' + encodeURIComponent(eventId) + '\',' + m.round + ',' + m.idx + ')" style="flex:none;padding:3px 10px;border-radius:5px;border:1px solid #5b8def;background:#eaf1ff;color:#2a4a7a;cursor:pointer;font-size:.82rem;" title="在新分頁開啟這場的回放">▶ 回放</button>'
           + '</div>';
       } else {
@@ -2259,7 +2319,7 @@ function renderTournamentStats(el, data) {
         return '<tr><td>' + _tsFmtDateTime(a.finishedAt) + '</td><td>' + _tsFmtDuration(dur) + '</td>'
           + '<td><button onclick="tevShowBracket(\'' + encodeURIComponent(a.eventId) + '\')" style="background:none;border:none;color:#7fd0ff;text-decoration:underline;cursor:pointer;padding:0;font-size:.9rem;" title="點看賽程與回放">' + escapeHtml(a.eventName || '錦標賽') + '</button></td>'
           + '<td>' + (a.playerCount || (a.players || []).length) + '</td>'
-          + '<td>' + (a.championName ? escapeHtml(a.championName) + ' 🏆' : '—') + '</td><td>' + champCell + '</td>'
+          + '<td>' + (a.championName ? escapeHtml(a.championName) + ' 🏆' : '—') + (a.championUid ? '<br>' + tsArchiveDeckButton(a, a.championUid, '🏆 冠軍牌組') : '') + '</td><td>' + champCell + '</td>'
           + '<td><button style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:.8rem;" onclick="tevDeleteArchive(\'' + encodeURIComponent(a.eventId) + '\', this)">🗑️ 刪除</button></td></tr>';
       }).join('')
       + '</tbody></table>',
@@ -2316,7 +2376,7 @@ window.manualRefresh = async function(btn) {
 //   data-internal="1" ＝ 與遊戲內容無關的內部維護版本（玩家看不到），這裡照樣列出並標示。
 const CL_SITE_BASE = 'https://suenz001.github.io/ptcg-tw-sim';
 // 只隨admin發布，永不寫入玩家首頁／公開更新檔。
-const CL_ADMIN_ONLY_ENTRIES = [{ ver:'v6.627', internal:true, dup:false, summaryHtml:'<b>修正玩家查詢牌組文字匯回</b>', bodyHtml:'玩家儲存牌組明細改用精確卡號／完整卡包卡號格式，標題與統計以註解輸出；支援基本能量與雙張場地左右半。缺卡或數量異常禁止複製，複製失敗會提示。玩家匯入說明移除管理來源文字。' }, { ver:'v6.625', internal:true, dup:false, summaryHtml:'<b>公布欄熱門牌組勝率對齊後台原型統計淨化標準</b>', bodyHtml:'/api/meta-stats 的勝率統計改為與後台原型統計一致：排除 AI／本機對戰（只算有房號的真人線上對戰）、排除第 1 回合未進場無回應判負與前 2 回合中途離開／斷線，且只計算有分出勝負的場次（勝場 ÷ (勝場 + 敗場)）。' }, { ver:'v6.624', internal:true, dup:false, summaryHtml:'<b>修正牌組公布欄熱門牌組的冠軍數（N🏆）統計口徑</b>', bodyHtml:'/api/meta-stats 的冠軍數改為直接統計已發布在牌組公布欄內、標記為「網站賽｜冠軍」（tournament.placementLabel === "冠軍"，不含社群賽）的投稿篇數，移除原本對 tournamentChampions 自訂牌組名稱的模糊字串比對，使按鈕上的 N🏆 與點選篩選後看到的網站賽冠軍投稿篇數完全一致。' }, { ver:'v6.623', internal:true, dup:false, summaryHtml:'<b>修正部署腳本 START_MARKER 數量檢查誤報警告</b>', bodyHtml:'oracle_admin_update.sh 的 Sanity 檢查改為比對 server_admin_patch.js 本身的 START_MARKER 與 END_MARKER 數量（expected 7 / 1），消除因檔頭歷史版本註解導致每次執行 update-tournament.bat 時跳出 WARNING 的誤報。' }, { ver:'v6.621', internal:true, dup:false, summaryHtml:'<b>單卡頁結構化資料修正、牌組公布欄動態 SEO 與熱門環境牌組排行</b>', bodyHtml:'單卡頁 JSON-LD 改為 WebPage＋BreadcrumbList 解決 Search Console 產品摘要錯誤，並新增公開牌組搜尋導流；新增 /api/sitemap-decks.xml、/api/deck-share/:id 社群預覽與 /api/meta-stats 熱門牌組統計；牌組公布欄新增熱門環境牌組排行（電腦版標籤列、手機版改為下拉選單節約版面，奪冠數改為 N🏆 格式並移除冗餘說明）。' }, { ver:'v6.603', internal:true, dup:true, summaryHtml:'<b>錦標賽賽季管理</b>', bodyHtml:'賽事分頁新增立即換季、台灣日期00:00排程、改期及取消。提交前確認舊新賽季與生效時間；同年序號累加、跨年第一季。歷史與玩家資料保留，個人頁維持生涯累計。' }, { ver:'v6.602', internal:true, dup:true, summaryHtml:'<b>預設牌組管理</b>', bodyHtml:'新增預設牌組分頁，可文字貼上牌表、預覽精確卡號與合法性後匯入，下架與復原均需確認。管理清單統一提供給編輯器、一般對戰及錦標賽；不更動玩家副本或既有報名／對戰牌表。' }, { ver: 'v6.592', internal: true, dup: true, summaryHtml: '<b>個人操作時間控制</b>', bodyHtml: '監控分頁新增個人限時開關與1～120分鐘設定（初始15分鐘）；預設關閉。開啟、關閉及調整即時套用。玩家回合限時30秒與電腦必要收尾由伺服器管理。' }, { ver: 'v6.591', internal: true, dup: false,
+const CL_ADMIN_ONLY_ENTRIES = [{ ver:'v6.628', internal:true, dup:false, summaryHtml:'<b>歷史賽事參賽牌組與冠軍捷徑</b>', bodyHtml:'歷屆賽事新增冠軍牌組入口；賽程的冠軍、參賽名單與對戰雙方可查看當時保存的報名牌組並複製匯入文字。以賽事與玩家uid精確查找歸檔，不取目前牌組；未留存的舊資料明確標示。' }, { ver:'v6.627', internal:true, dup:false, summaryHtml:'<b>修正玩家查詢牌組文字匯回</b>', bodyHtml:'玩家儲存牌組明細改用精確卡號／完整卡包卡號格式，標題與統計以註解輸出；支援基本能量與雙張場地左右半。缺卡或數量異常禁止複製，複製失敗會提示。玩家匯入說明移除管理來源文字。' }, { ver:'v6.625', internal:true, dup:false, summaryHtml:'<b>公布欄熱門牌組勝率對齊後台原型統計淨化標準</b>', bodyHtml:'/api/meta-stats 的勝率統計改為與後台原型統計一致：排除 AI／本機對戰（只算有房號的真人線上對戰）、排除第 1 回合未進場無回應判負與前 2 回合中途離開／斷線，且只計算有分出勝負的場次（勝場 ÷ (勝場 + 敗場)）。' }, { ver:'v6.624', internal:true, dup:false, summaryHtml:'<b>修正牌組公布欄熱門牌組的冠軍數（N🏆）統計口徑</b>', bodyHtml:'/api/meta-stats 的冠軍數改為直接統計已發布在牌組公布欄內、標記為「網站賽｜冠軍」（tournament.placementLabel === "冠軍"，不含社群賽）的投稿篇數，移除原本對 tournamentChampions 自訂牌組名稱的模糊字串比對，使按鈕上的 N🏆 與點選篩選後看到的網站賽冠軍投稿篇數完全一致。' }, { ver:'v6.623', internal:true, dup:false, summaryHtml:'<b>修正部署腳本 START_MARKER 數量檢查誤報警告</b>', bodyHtml:'oracle_admin_update.sh 的 Sanity 檢查改為比對 server_admin_patch.js 本身的 START_MARKER 與 END_MARKER 數量（expected 7 / 1），消除因檔頭歷史版本註解導致每次執行 update-tournament.bat 時跳出 WARNING 的誤報。' }, { ver:'v6.621', internal:true, dup:false, summaryHtml:'<b>單卡頁結構化資料修正、牌組公布欄動態 SEO 與熱門環境牌組排行</b>', bodyHtml:'單卡頁 JSON-LD 改為 WebPage＋BreadcrumbList 解決 Search Console 產品摘要錯誤，並新增公開牌組搜尋導流；新增 /api/sitemap-decks.xml、/api/deck-share/:id 社群預覽與 /api/meta-stats 熱門牌組統計；牌組公布欄新增熱門環境牌組排行（電腦版標籤列、手機版改為下拉選單節約版面，奪冠數改為 N🏆 格式並移除冗餘說明）。' }, { ver:'v6.603', internal:true, dup:true, summaryHtml:'<b>錦標賽賽季管理</b>', bodyHtml:'賽事分頁新增立即換季、台灣日期00:00排程、改期及取消。提交前確認舊新賽季與生效時間；同年序號累加、跨年第一季。歷史與玩家資料保留，個人頁維持生涯累計。' }, { ver:'v6.602', internal:true, dup:true, summaryHtml:'<b>預設牌組管理</b>', bodyHtml:'新增預設牌組分頁，可文字貼上牌表、預覽精確卡號與合法性後匯入，下架與復原均需確認。管理清單統一提供給編輯器、一般對戰及錦標賽；不更動玩家副本或既有報名／對戰牌表。' }, { ver: 'v6.592', internal: true, dup: true, summaryHtml: '<b>個人操作時間控制</b>', bodyHtml: '監控分頁新增個人限時開關與1～120分鐘設定（初始15分鐘）；預設關閉。開啟、關閉及調整即時套用。玩家回合限時30秒與電腦必要收尾由伺服器管理。' }, { ver: 'v6.591', internal: true, dup: false,
   summaryHtml: '<b>測試站搜尋收錄排除</b>',
   bodyHtml: '僅 GitHub Pages 發布時，替所有內容頁、卡片頁、404 與更新紀錄片段加入 noindex；正式站一般建置維持原搜尋設定。Google 擁有權驗證檔保持原文。現有搜尋結果需等爬蟲重新讀取，或由站長在 Search Console 提交暫時移除。' }, { ver: 'v6.589', internal: true, dup: false,
   summaryHtml: '<b>後台完整帳號統計</b>',
@@ -4420,7 +4480,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.627';
+window.SITE_VERSION_HINT = '6.628';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
