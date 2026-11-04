@@ -359,7 +359,8 @@ const CRITERIA = {
     'src/routes/deck-posts/+page.svelte': {
       // ⭐v6.583（Rule 40）：投稿的對戰紀錄區（dprFetch：清單／候選／附加／上傳／移除共用一個 fetch 呼叫點；只在打開明細或按按鈕時才發）。
       //   ⚠ 刻意不走 api()：舊伺服器沒有端點時只是這一區不顯示。名實相符由 C11e 釘，行為端見 test-v6583 V／E1。
-      'fetch(': 1,
+      // ⭐v6.621（Rule 40）：實戰環境熱門牌組排行（loadMetaStats：抓 GET /api/meta-stats，不碰 Firestore；舊伺服器沒有端點時靜默不顯示）。
+      'fetch(': 2,
     },
   };
   if (hasBaseCommit(ROOT, BASE_SHA)) {
