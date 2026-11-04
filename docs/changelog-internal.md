@@ -1,5 +1,12 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.624（2026-11-04）修正牌組公布欄熱門牌組的冠軍數（N🏆）統計口徑
+
+BASE `4751f465`（v6.623）。站長回報牌組公布欄「📊 實戰環境熱門牌組排行」顯示超級烈空坐有 `8🏆`，但點選篩選後公布欄內並沒有任何超級烈空坐的冠軍投稿。
+
+- 根因：`GET /api/meta-stats` 原本查詢 `tournamentChampions`（未排除 `communityEvent: true` 社群賽，且 `tournamentChampions` 僅存玩家報名時自訂的 `deckName` 文字而非 60 張規則分類），並以 `k.includes(dn)` 雙向子字串模糊比對，導致玩家將牌組取名為「超」等短字串或社群賽紀錄被誤計入。
+- 修正（`oracle-admin/server_admin_patch.js`）：依站長拍板，`topCutCount`（`N🏆`）改由 `_dprPosts.aggregate` 直接統計公布欄內已發布且 `tournament.placementLabel === '冠軍'` 的投稿數（公布欄名次投稿本身即嚴格限定網站賽、不含社群賽），並移除對 `tournamentChampions` 的查詢與模糊比對，確保按鈕上的 `N🏆` 與點選後篩選出的網站賽冠軍牌組投稿數量 100% 一致。
+
 ## v6.623（2026-11-04）修正部署腳本 START_MARKER 數量檢查誤報警告
 
 BASE `48855dc6`（v6.622）。站長反映執行 `oracle-admin\update-tournament.bat` 時出現 `⚠ WARNING: marker count abnormal`（`START_MARKER x7, END_MARKER x1`）。

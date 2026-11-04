@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '48855dc630346c203cd80aa59e50a6c43d7919ac';   // v6.622（上一版）
+const PREV_SHA = '4751f4654763f6b9671564cfa6fe9f7e5f30ab96';   // v6.623（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -757,12 +757,18 @@ const PREV_SHA = '48855dc630346c203cd80aa59e50a6c43d7919ac';   // v6.622（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.623 前移：PREV_SHA 從 48855dc6（v6.622）起算。
+  // ⚠⚠ v6.624 前移：PREV_SHA 從 4751f465（v6.623）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.623：修正 oracle_admin_update.sh 部署腳本 START_MARKER 數量檢查誤報警告（純後台部署維護，玩家端只動 version.ts 與 site-version.txt）
+  // ⭐v6.624：修正 /api/meta-stats 熱門牌組冠軍數統計口徑為公布欄內網站賽冠軍投稿數（伺服器端修正，玩家端只動 version.ts 與 site-version.txt）
   'src/lib/version.ts',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.623）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.623 前移：PREV_SHA 從 48855dc6（v6.622）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.623：修正 oracle_admin_update.sh 部署腳本 START_MARKER 數量檢查誤報警告（純後台部署維護，玩家端只動 version.ts 與 site-version.txt）
+//   'src/lib/version.ts',
+//   'static/site-version.txt',
 // ── 上一版（v6.622）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.622 前移：PREV_SHA 從 6219cb08（v6.621）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -895,16 +901,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/battle-view-mode.ts',
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.611）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.611 前移：PREV_SHA 從 29eeb4cf（v6.610）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.611：特殊能量標記合成一顆膠囊（只改 SpecialEnergyBadges.svelte）；首頁 changelog 三步搬運
-//   'src/lib/ui/SpecialEnergyBadges.svelte',
-//   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

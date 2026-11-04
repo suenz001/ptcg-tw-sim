@@ -8710,23 +8710,20 @@ import('firebase-admin').then(async ({ default: admin }) => {
           res.set('Cache-Control', 'public, max-age=1800');
           return res.json(_seoMetaCache.data);
         }
-        const [postAgg, recentChamps, recentMatches] = await Promise.all([
+        const [postAgg, recentMatches] = await Promise.all([
           _dprPosts.aggregate([
             { $match: { status: 'published', archetype: { $exists: true, $nin: ['', '其他 / 未分類', null] } } },
             { $group: {
               _id: '$archetype',
               postCount: { $sum: 1 },
+              topCutCount: { $sum: { $cond: [{ $eq: ['$tournament.placementLabel', '冠軍'] }, 1, 0] } },
               likes: { $sum: { $ifNull: ['$likeCount', 0] } },
               downloads: { $sum: { $ifNull: ['$downloadCount', 0] } },
               sampleCardId: { $first: '$coverCardId' },
             } },
-            { $sort: { postCount: -1, downloads: -1, likes: -1 } },
+            { $sort: { postCount: -1, topCutCount: -1, downloads: -1, likes: -1 } },
             { $limit: 16 },
           ]).toArray(),
-          db.collection('tournamentChampions').find(
-            {},
-            { projection: { deckName: 1, finishedAt: 1 } }
-          ).sort({ finishedAt: -1 }).limit(100).toArray().catch(() => []),
           db.collection('matchRecords').find(
             {},
             { projection: { winner: 1, finalTurn: 1, p1: 1, p2: 1, endedAt: 1 } }
@@ -8752,19 +8749,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
           const r = ensure(g._id);
           if (!r) continue;
           r.postCount = Number(g.postCount) || 0;
+          r.topCutCount = Number(g.topCutCount) || 0;
           r.likes = Number(g.likes) || 0;
           r.downloads = Number(g.downloads) || 0;
           if (g.sampleCardId) r.coverCardId = String(g.sampleCardId);
-        }
-        for (const ch of recentChamps) {
-          const dn = String((ch && ch.deckName) || '').trim();
-          if (!dn) continue;
-          for (const [k, r] of statsMap.entries()) {
-            if (dn === k || dn.includes(k) || k.includes(dn)) {
-              r.topCutCount++;
-              break;
-            }
-          }
         }
         for (const mr of recentMatches) {
           if (!mr || (Number(mr.finalTurn) || 0) <= 1) continue;
