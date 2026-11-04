@@ -1187,6 +1187,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
     // <<< v159-arch-noshow
     return q;
   }
+  // >>> v6626-clean-filter-bridge
+  app.locals._buildCasualCleanFilter = buildCasualCleanFilter;
+  // <<< v6626-clean-filter-bridge
 
   // ══ v6.242：admin 全量掃描的「讓路」節拍（Rule 30：絕不可讓玩家變慢）══════════
   //   ⚠⚠ cursor 只解決**記憶體**（同時駐留由 O(N) 變 O(1)），**不解決時間**：
@@ -8557,24 +8560,25 @@ import('firebase-admin').then(async ({ default: admin }) => {
     // v1.78：公開牌組動態 Sitemap、社群分享 SSR 預覽頁（LINE/Discord Open Graph + JSON-LD）、實戰環境熱門牌組統計
     let _seoSitemapCache = { xml: '', exp: 0 };
     let _seoMetaCache = { data: null, exp: 0 };
+    // v6.626：冷快取的並行請求共用同一次查詢，失敗後允許重試。
+    const _seoSingleFlight = load => {
+      let pending = null;
+      return () => {
+        if (!pending) pending = Promise.resolve().then(load).finally(() => { pending = null; });
+        return pending;
+      };
+    };
     const _seoXmlEsc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
     const _seoHtmlEsc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     const _seoCardImgUrl = cid => {
       const id = String(cid || '').replace(/[^a-zA-Z0-9_-]/g, '');
       if (!id) return 'https://www.ptcg-tw-sim.com/og-banner.jpg';
-      const card = TPOOL && TPOOL.byId ? TPOOL.byId.get(id) : null;
-      const setCode = card && card.setCode ? String(card.setCode).replace(/[^a-zA-Z0-9_-]/g, '') : '';
-      return setCode ? `https://www.ptcg-tw-sim.com/cards/img/${setCode}/${id}.png` : 'https://www.ptcg-tw-sim.com/og-banner.jpg';
+      const card = TPOOL.get(id);
+      return card && /^https:\/\//.test(String(card.imageUrl || '')) ? String(card.imageUrl) : 'https://www.ptcg-tw-sim.com/og-banner.jpg';
     };
 
-    app.get('/api/sitemap-decks.xml', async (req, res) => {
-      try {
+    const _seoLoadSitemap = _seoSingleFlight(async () => {
         const now = Date.now();
-        if (_seoSitemapCache.xml && now < _seoSitemapCache.exp) {
-          res.set('Content-Type', 'application/xml; charset=utf-8');
-          res.set('Cache-Control', 'public, max-age=600');
-          return res.send(_seoSitemapCache.xml);
-        }
         const posts = await _dprPosts.find(
           { status: 'published' },
           { projection: { _id: 1, title: 1, archetype: 1, updatedAt: 1, createdAt: 1 } }
@@ -8603,12 +8607,24 @@ import('firebase-admin').then(async ({ default: admin }) => {
           urls.push(`  <url><loc>${_seoXmlEsc(locShare)}</loc><lastmod>${dStr}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>`);
         }
         const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
-        _seoSitemapCache = { xml, exp: now + 10 * 60 * 1000 };
+        _seoSitemapCache = { xml, exp: Date.now() + 10 * 60 * 1000 };
+        return xml;
+    });
+
+    app.get('/api/sitemap-decks.xml', async (req, res) => {
+      try {
+        const now = Date.now();
+        if (_seoSitemapCache.xml && now < _seoSitemapCache.exp) {
+          res.set('Content-Type', 'application/xml; charset=utf-8');
+          res.set('Cache-Control', 'public, max-age=600');
+          return res.send(_seoSitemapCache.xml);
+        }
+        const xml = await _seoLoadSitemap();
         res.set('Content-Type', 'application/xml; charset=utf-8');
         res.set('Cache-Control', 'public, max-age=600');
         res.send(xml);
       } catch (e) {
-        res.status(500).set('Content-Type', 'text/plain; charset=utf-8').send('unavailable');
+        res.status(503).set('Cache-Control', 'no-store').set('Content-Type', 'text/plain; charset=utf-8').send('unavailable');
       }
     });
 
@@ -8620,13 +8636,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const entries = Array.isArray(p.entries) ? p.entries : [];
         const totalCards = entries.reduce((sum, e) => sum + (Number(e && e.count) || 0), 0);
         const topNames = entries.slice(0, 8).map(e => {
-          const c = TPOOL && TPOOL.byId ? TPOOL.byId.get(String(e.cardId)) : null;
+          const c = TPOOL.get(String(e.cardId));
           const nm = (e && e.name) || (c && c.name) || String(e.cardId || '');
           return `${nm}×${Number(e.count) || 1}`;
         }).join('、');
         const arch = p.archetype ? `【${p.archetype}】` : '';
-        const title = `${p.title || '公開牌組'} ${arch} — 牌組卡表與實戰復盤｜PTCG 繁中線上對戰模擬器`.replace(/\s+/g, ' ');
-        const descRaw = p.note ? String(p.note).replace(/\s+/g, ' ').trim().slice(0, 110) : `收錄 ${topNames} 等共 ${totalCards} 張卡牌。`;
+        const title = `${p.deckName || '公開牌組'} ${arch} — 牌組卡表與實戰復盤｜PTCG 繁中線上對戰模擬器`.replace(/\s+/g, ' ');
+        const descRaw = p.notes ? String(p.notes).replace(/\s+/g, ' ').trim().slice(0, 110) : `收錄 ${topNames} 等共 ${totalCards} 張卡牌。`;
         const desc = `${p.authorName || '玩家'} 分享的繁中標準賽制 60 張牌組配置：${descRaw} 可一鍵匯入模擬器進行免費線上對戰與起手測試。`;
         const coverImg = _seoCardImgUrl(p.coverCardId || (entries[0] && entries[0].cardId));
         const targetUrl = `https://www.ptcg-tw-sim.com/deck-posts?post=${encodeURIComponent(String(p._id))}`;
@@ -8634,7 +8650,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const jsonLd = JSON.stringify({
           '@context': 'https://schema.org',
           '@type': 'DiscussionForumPosting',
-          headline: String(p.title || '公開牌組'),
+          headline: String(p.deckName || '公開牌組'),
           description: desc,
           image: coverImg,
           datePublished: new Date(Number(p.createdAt) || Date.now()).toISOString(),
@@ -8644,7 +8660,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         }).replace(/</g, '\\u003c');
         const listItems = entries.map(e => {
           const cid = String((e && e.cardId) || '').replace(/[^a-zA-Z0-9_-]/g, '');
-          const c = TPOOL && TPOOL.byId ? TPOOL.byId.get(cid) : null;
+          const c = TPOOL.get(cid);
           const nm = (e && e.name) || (c && c.name) || cid;
           const cnt = Number(e && e.count) || 1;
           return `<li><a href="https://www.ptcg-tw-sim.com/card/${_seoHtmlEsc(cid)}/">${_seoHtmlEsc(nm)} (#${_seoHtmlEsc(cid)})</a> × ${cnt}</li>`;
@@ -8683,10 +8699,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
 </head>
 <body>
   <main>
-    <h1>${_seoHtmlEsc(p.title || '公開牌組')} ${_seoHtmlEsc(arch)}</h1>
+    <h1>${_seoHtmlEsc(p.deckName || '公開牌組')} ${_seoHtmlEsc(arch)}</h1>
     <div class="meta">作者：${_seoHtmlEsc(p.authorName || '玩家')} ｜ 卡牌總數：${totalCards} 張 ｜ ❤️ ${Number(p.likeCount) || 0} ｜ ⬇ ${Number(p.downloadCount) || 0}</div>
     <a class="cta" href="${_seoHtmlEsc(targetUrl)}">▶ 在模擬器開啟互動卡表、實戰復盤與一鍵匯入</a>
-    ${p.note ? `<div class="note">${_seoHtmlEsc(String(p.note))}</div>` : ''}
+    ${p.notes ? `<div class="note">${_seoHtmlEsc(String(p.notes))}</div>` : ''}
     <h2>完整 60 張牌組卡表（點擊可查看單卡效果與大圖）</h2>
     <ul>
         ${listItems}
@@ -8703,21 +8719,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
       }
     });
 
-    app.get('/api/meta-stats', async (req, res) => {
-      try {
+    const _seoLoadMeta = _seoSingleFlight(async () => {
         const now = Date.now();
-        if (_seoMetaCache.data && now < _seoMetaCache.exp) {
-          res.set('Cache-Control', 'public, max-age=1800');
-          return res.json(_seoMetaCache.data);
-        }
-        const _metaCleanFilter = {
-          roomCode: { $type: 'string' },
-          winner: { $in: [0, 1] },
-          $and: [
-            { $or: [{ winReason: { $not: /中途離開|離開房間|斷線|斷開|退出|不在場|disconnect|技不如人|先行離開/i } }, { finalTurn: { $gte: 3 } }] },
-            { $or: [{ winReason: { $not: /無回應/ } }, { finalTurn: { $gte: 2 } }] },
-          ],
-        };
+        if (typeof app.locals._buildCasualCleanFilter !== 'function' || typeof app.locals._archetypeEnrichMatchRecords !== 'function') throw new Error('統計尚未就緒');
+        const _metaCleanFilter = app.locals._buildCasualCleanFilter({ excludeAI: true, archNoShow: true, winnerOnly: true });
         const [postAgg, recentMatches] = await Promise.all([
           _dprPosts.aggregate([
             { $match: { status: 'published', archetype: { $exists: true, $nin: ['', '其他 / 未分類', null] } } },
@@ -8735,13 +8740,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
           db.collection('matchRecords').find(
             _metaCleanFilter,
             { projection: { winner: 1, 'p1.cardCounts': 1, 'p2.cardCounts': 1, endedAt: 1 } }
-          ).sort({ endedAt: -1 }).limit(500).toArray().catch(() => []),
+          ).sort({ endedAt: -1 }).limit(500).toArray(),
         ]);
-        try {
-          if (app.locals && typeof app.locals._archetypeEnrichMatchRecords === 'function' && recentMatches.length) {
-            await app.locals._archetypeEnrichMatchRecords(recentMatches);
-          }
-        } catch (e) { /* ignore enrich error */ }
+        if (recentMatches.length) await app.locals._archetypeEnrichMatchRecords(recentMatches);
         const statsMap = new Map();
         const ensure = name => {
           const k = String(name || '').trim();
@@ -8793,11 +8794,22 @@ import('firebase-admin').then(async ({ default: admin }) => {
           .sort((a, b) => b.score - a.score || b.postCount - a.postCount)
           .slice(0, 12);
         const payload = { metaApi: 1, updatedAt: now, items };
-        _seoMetaCache = { data: payload, exp: now + 30 * 60 * 1000 };
+        _seoMetaCache = { data: payload, exp: Date.now() + 30 * 60 * 1000 };
+        return payload;
+    });
+
+    app.get('/api/meta-stats', async (req, res) => {
+      try {
+        const now = Date.now();
+        if (_seoMetaCache.data && now < _seoMetaCache.exp) {
+          res.set('Cache-Control', 'public, max-age=1800');
+          return res.json(_seoMetaCache.data);
+        }
+        const payload = await _seoLoadMeta();
         res.set('Cache-Control', 'public, max-age=1800');
         res.json(payload);
       } catch (e) {
-        res.status(500).json({ error: 'unavailable' });
+        res.status(503).set('Cache-Control', 'no-store').json({ error: 'unavailable' });
       }
     });
     // <<< v178-seo-meta-and-sitemaps

@@ -1904,8 +1904,10 @@
   .meta-chip.active { background: var(--ui-chip-active-bg, #236447); color: var(--ui-chip-active-text, #fff); border-color: var(--ui-chip-active-bg, #236447); }
   .meta-arch { font-weight: 600; }
   .meta-wr, .meta-cut, .meta-cnt { font-size: .72rem; opacity: .88; font-variant-numeric: tabular-nums; }
-  :global(html:not([data-ui-wide])) .meta-bar { padding: 6px 8px; margin-bottom: 10px; }
-  :global(html:not([data-ui-wide])) .meta-bar-head { display: none; }
-  :global(html:not([data-ui-wide])) .meta-chips { display: none; }
-  :global(html:not([data-ui-wide])) .meta-mobile-row { display: flex; }
+  @media (max-width: 1023px) {
+    .meta-bar { padding: 6px 8px; margin-bottom: 10px; }
+    .meta-bar-head { display: none; }
+    .meta-chips { display: none; }
+    .meta-mobile-row { display: flex; }
+  }
 </style>

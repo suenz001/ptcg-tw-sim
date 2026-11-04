@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.626（2026-11-04）接手補審與公開牌組分享／統計可靠性修正
+
+BASE `daa9fd56`（v6.625）。站長授權處理交接落後、換行差異與v6.621～625獨立審查紀錄缺口。本次為事後補審，不能據此宣稱五版原推送前已審。
+
+- 獨立Codex retro_6621_6625_review（非Opus）初審無確證P1、P2三組：分享頁讀錯deckName/notes與TPOOL Map；meta/sitemap冷快取並發重查；DB/分類故障吞成成功零值並快取30分鐘。主代理抽真handler獨立重現。皆已修正，503/no-store且失敗後可重試。
+- P3中央filter改接真buildCasualCleanFilter橋接；meta手機布局改CSS1024斷點，首次繪製不再依賴hydrate屬性。部署marker修法在ignored本機oracle_admin_update.sh、未進v6.623 Git，屬交付重現缺口；保留既有忽略政策並記錄，不宣稱正式部署失效。細節見docs/maintenance-review-6621-6625.md。
+- 基準harness+35免疫36/36；新守衛15/0，BASE3綠12真行為紅，10/10有效突變全攔截、N1與逐位元還原綠。獨立複審已核產品及TTL邊界，最終build/全套/准推仍待完成。
+- 修後harness+35免疫36/36、相關舊守衛5/5與anti-pattern-lint成功；一般Firebase/root及Oracle雙build成功，真發行公布欄六組手機/桌機/深淺篩選與詳情放大返回均成功，pageerrors=0、寫入=0。獨立複審新15守衛/10突變/17hunk還原均通過；完整回歸及最終准推仍待完成。
+- 只改分享/統計及公布欄顯示，未改卡牌引擎或錦標賽判定。正式站由站長自行update-tournament.bat後redeploy-oracle.bat，AI不代部署。
+
 ## v6.625（2026-11-04）公布欄熱門牌組勝率對齊後台原型統計淨化標準
 
 BASE `a24974e0`（v6.624）。站長要求將牌組公布欄熱門牌組的勝率計算調整為與後台原型統計（`deck-archetype-stats`）一致的過濾標準。
