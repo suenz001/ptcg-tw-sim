@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { extractBaseArchive } from './lib/base-archive.mjs';
 /**
  * v6.616 守衛：M-P 補 17 張、SVI「Trianers Camp」收錄（只收卡圖印 H 的 58 張）、新卡包偵測連官方商品清單
  *
@@ -29,10 +30,9 @@
  *   C4 重印判準唯一一份：refresh 與完整性守衛都 import scripts/lib/official-reprint-match.mjs，別處沒有第二份
  * 【H】HEAD-FAIL：BASE（v6.615）上 D1、D2、D3、C2 紅
  */
-import { readFileSync, readdirSync, writeFileSync, mkdtempSync, rmSync, unlinkSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync, mkdtempSync, rmSync, unlinkSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
@@ -257,7 +257,8 @@ ok('★★★ C2g 全覆蓋：SVI 有效果的招式與訓練家全部已註冊'
 let BASE_M = null;
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const dirB = join(TMP, 'base');
-  execFileSync('bash', ['-c', `mkdir -p "${dirB}" && git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${dirB}"`]);
+  mkdirSync(dirB, { recursive: true });
+  extractBaseArchive(ROOT, BASE_SHA, ['src'], dirB);
   BASE_M = await bundleFrom(join(dirB, 'src'), 'base');
   const dorumi = all.find((c) => c.name === '多麗米亞' && (c.attacks ?? []).some((a) => a.name === '能量支援'));
   const run = (M, o) => { const r = hit(M, String(dorumi.id), '能量支援', o); return JSON.stringify([r.dmg, r.pend, r.ptype, r.plabel, r.log]); };

@@ -121,7 +121,7 @@ ok('★★ S5 設定「🖥️ 對戰畫面」三選一，寬 ≤ 600 不顯示'
 ok('★★ S6 平板直立開關只在自動模式顯示；指標改變也重算', S.S6 === true);
 
 // ── B：真瀏覽器 ──
-const BUILD = join(ROOT, 'build');
+const BUILD = process.env.PTCG_ACCEPTANCE_BUILD || join(ROOT, 'build');   // 本機完整驗收使用固定的已建置快照。
 let B = null;
 if (!existsSync(join(BUILD, '404.html'))) shallowSkip('B（沒有 build/；CI 的 build 步驟之後才有）');
 else {

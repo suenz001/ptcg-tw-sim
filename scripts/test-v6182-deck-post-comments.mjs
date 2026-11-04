@@ -1,3 +1,4 @@
+import { revertV6626IfPresent } from './lib/revert-v6626-seo-retro.mjs';
 // v6.182 守衛：牌組公布欄「玩家留言板」。
 //
 // 這個功能區的地雷全部是 v6.138~v6.140 已經踩過、而且**壞掉時不會有錯誤訊息**的那幾種：
@@ -717,7 +718,8 @@ T('⭐⭐ 手機直式：留言區靠 flex-wrap / 100% 寬自適應，沒有新�
   // ⭐ v6.317：改走中央 helper（先剝 HTML 註解、開頭標籤限行首）再剝 CSS 區塊註解；原本用「第一個樣式標籤字面」切，會被更前面的字面騙
   // ⭐v6.476（Rule 40）：網頁版主題＋版面整塊在 v6476-desktop-theme 哨兵裡，而且只能是一個 min-width:1024px（只在桌機加樣式、不是手機開關）
   //   ⇒ 先把哨兵整塊拿掉再數 @media（本條的原意「留言區不靠 @media 切手機版」不變）；哨兵必須恰好一塊、內容必須是 min-width:1024px。
-  const cssRaw = normEol(sectionInner(RAW, 'style', { label: 'deck-posts css', minSections: 1 }));
+  // Rule 40：只精確拿掉v6626排行斷點；留言及額外media仍由原斷言檢查。
+  const cssRaw = normEol(sectionInner(revertV6626IfPresent('src/routes/deck-posts/+page.svelte', RAW), 'style', { label: 'deck-posts css', minSections: 1 }));
   const RE6476 = /\n  \/\* >>> v6476-desktop-theme \*\/\n[\s\S]*?\n  \/\* <<< v6476-desktop-theme \*\/\n/g;
   const blk6476 = cssRaw.match(RE6476) || [];
   ok(blk6476.length === 1 && blk6476[0].replace(/\/\*[\s\S]*?\*\//g, '').trim().startsWith('@media (min-width: 1024px) {') && (blk6476[0].match(/@media/g) || []).length === 1,

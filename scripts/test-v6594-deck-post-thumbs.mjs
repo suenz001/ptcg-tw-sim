@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { revertV6626IfPresent } from './lib/revert-v6626-seo-retro.mjs';
 /**
  * v6.594 守衛：牌組公布欄明細「縮圖／文字」牌表與大圖檢視（站長 2026-10-23 核准第一期）
  *
@@ -192,7 +193,9 @@ function staticChecks(DP, DECKS) {
   r.S3 = /<div use:pageScrollLock class="dpz-backdrop" role="presentation" onclick=\{closeZoom\}>/.test(zoomMk) && /onclick=\{\(e\) => e\.stopPropagation\(\)\}/.test(zoomMk)
     && /zoomKey = null/.test(od) && /zoomKey = null/.test(cd) && /<svelte:window onkeydown=\{onZoomKey\} \/>/.test(dp);
   // S4 本頁沒有多出媒體查詢（數量被其他守衛釘住）、沒有就地改 body 或攔 wheel
-  r.S4 = (dp.match(/@media/g) || []).length === (stripCommentsBlank(normEol(readBaseBlob(ROOT, BASE_SHA, DP_REL).out || '')).match(/@media/g) || []).length
+  // Rule 40：v6626排行合法斷點由新D1行為守衛承擔，其他media仍須原數量。
+  const mediaDp = stripCommentsBlank(revertV6626IfPresent(DP_REL, DP));
+  r.S4 = (mediaDp.match(/@media/g) || []).length === (stripCommentsBlank(normEol(readBaseBlob(ROOT, BASE_SHA, DP_REL).out || '')).match(/@media/g) || []).length
     && !/document\.body\.style/.test(blk(DP, 'v6594-deck-post-zoom')) && !/addEventListener\('wheel'/.test(DP.slice(DP.indexOf('v6594-deck-post-zoom')));
   return r;
 }
