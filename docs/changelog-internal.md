@@ -14,6 +14,7 @@
 - admin本來使用固定淺色樣式，四組深淺場景驗證主要是玩家發行頁，未宣稱新增admin深色。最新驗收進行中，尚未最終准推。證據 E:/ptcg-tw-sim-local/admin-ux-6629-evidence，審查實驗 review-6629。
 - 修後複審接受且未解P1／P2／P3為0；7項重點檢查全綠（含四原失敗、新31守衛、hygiene、lint），後測36/36；12突變全殺／N1／還原綠。重新正常root Firebase／fake Oracle雙建置及四組實頁全綠、pageerrors空、server writes0，證據以builds-r2.json／release-ui-r2.json／mutants-r2.log為準；第二輪完整回歸待完成。
 - 第二輪完整972/972全綠、34.8647分，凍結HEAD `5d52a610`；報表 E:/sb-admin-ux-6629-r2/__rt/full.json，acceptance.json嚴格核對972唯一清單與結果、四項原失敗均解。TIMEOUT／escape／restoreFailed／mainTree.hard均0，statusChanged false、260暫存全還原。SHALLOW0，既有6378 ENV1／6263 Windows PLATFORM1與628基準相同。不得稱首輪全綠；修後全套後只補文件，產品與測試不再變動。待同位審查者最終准推。
+- 同位獨立Codex審查者已在`c0286c32`自行解析原始第二輪全套與目前package清單、首輪四失敗及全部修後證據，最終明確准予推送；未解P1／P2／P3＝0。產品與測試相對`5d52a610`不變，只補本准推紀錄後推送；CI／線上發布另核。最終審查 E:/ptcg-tw-sim-local/review-6629/FINAL-APPROVAL.md及final-audit.json，正式站仍由站長自行部署。
 
 ## v6.628｜歷史賽事參賽牌組與冠軍捷徑（hidden）
 
