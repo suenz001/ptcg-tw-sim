@@ -13,6 +13,7 @@
 - 首輪完整972項：968成功／4失敗、37.583分，`8ffd9704`凍結；報表 E:/sb-admin-ux-6629/__rt/full.json。v175抓到產品漏掉既有「可搜未分類」提示，已恢復原文，保留原守衛。6589補抽真手動搜尋哨兵並加pageerrors檢查；6610／6605先以本版三份公開紀錄的6組唯一錨點精確還原，再走原還原鏈，所有原斷言保留。外部驗證逐檔等BASE628、無關內容保留、缺失／重複拒絕。四項及新守衛已重新通過；因產品提示有改，須重雙建置／畫面／全套，不以純測試補驗代替。
 - admin本來使用固定淺色樣式，四組深淺場景驗證主要是玩家發行頁，未宣稱新增admin深色。最新驗收進行中，尚未最終准推。證據 E:/ptcg-tw-sim-local/admin-ux-6629-evidence，審查實驗 review-6629。
 - 修後複審接受且未解P1／P2／P3為0；7項重點檢查全綠（含四原失敗、新31守衛、hygiene、lint），後測36/36；12突變全殺／N1／還原綠。重新正常root Firebase／fake Oracle雙建置及四組實頁全綠、pageerrors空、server writes0，證據以builds-r2.json／release-ui-r2.json／mutants-r2.log為準；第二輪完整回歸待完成。
+- 第二輪完整972/972全綠、34.8647分，凍結HEAD `5d52a610`；報表 E:/sb-admin-ux-6629-r2/__rt/full.json，acceptance.json嚴格核對972唯一清單與結果、四項原失敗均解。TIMEOUT／escape／restoreFailed／mainTree.hard均0，statusChanged false、260暫存全還原。SHALLOW0，既有6378 ENV1／6263 Windows PLATFORM1與628基準相同。不得稱首輪全綠；修後全套後只補文件，產品與測試不再變動。待同位審查者最終准推。
 
 ## v6.628｜歷史賽事參賽牌組與冠軍捷徑（hidden）
 
