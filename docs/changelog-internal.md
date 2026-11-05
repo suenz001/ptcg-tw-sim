@@ -9,6 +9,7 @@
 - hidden升版，只寫admin完整更新與內部文件；公開三份changelog保持v6.629位元組不變。正式站由站長自行部署，沒有執行BAT或連Oracle。證據 E:/ptcg-tw-sim-local/admin-rwd-6630-evidence；審查 E:/ptcg-tw-sim-local/review-6630。
 - 產品複審：獨立Codex共發現P2三項／P3四項，均修正並獨立重現；含320長Email使modal橫捲／關閉鈕出框，已加長文字換行與modal內表格獨立橫捲。P1/P2/P3未解0，可進完整驗收但未最終准推。新守衛35/0、BASE7綠／28行為紅正常exit1，指定三項既有正對照皆綠。初次突變為納入最後P3而主動中斷，保留interrupted證據，不當成存活或全殺；最新13突變正在驗證。
 - 最新13有效突變逐項指定行為全殺、三正對照維持綠、N1／還原綠，正常exit0（620.04秒）；舊後台／hygiene／lint等19項全0（121.09秒）。改前後harness＋35免疫各36唯一項全0；正常root Pages與fake Oracle雙建置全0，快照版本630與公開三檔相同，build造成的兩home-video EOL變化已逐位元還原。獨立審查另核64場景無重複ID／溢出／JS錯誤／未知API／寫入；實作80場景及預覽亦無錯，皆為隔離假資料與真HTML，非正式資料操作。完整973項回歸即將凍結執行，最終結果另附。
+- 首輪完整973項為970綠／3紅，總測試34.585分（wrapper35.576分），凍結4aa34191，原報表 E:/sb-admin-rwd-6630/__rt/full.json。安全escape／restoreFailed／mainTree.hard均0、statusChanged false。不得稱首輪全綠。配色舊守衛把八位半透明hex遮罩當六位實心底；改產品遵循既有modal的rgba寫法，alpha精確80/255、外觀與guard門檻不變。新卡片守衛count與樣式分次讀時，原primeEmailMap非同步重繪拔掉節點，導致computed display空字串；改同一frame原子快照，仍嚴格核50DOM／10可見／grid，不放寬條件。6378內部6276 HEAD非0未留失敗全文，獨立6276=35/0、6378=46/0，負載因素僅推測；不改守衛或門檻，第二輪改3workers完整重跑，並重驗新35／13突變／雙build及複審。
 
 ## v6.629｜admin賽程辨識／分頁／手動搜尋，投稿按鈕對比修正
 
