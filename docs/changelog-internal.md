@@ -8,6 +8,7 @@
 - 獨立 Codex admin_workspace_6630_review（非 Opus）已找到並修正共用政策儲存隱藏、原型名稱漏露、details空收合、焦點恢復／抽屜transition與表格垂直手勢被contain吞掉。審查者另以真CDP touch因果驗證手機600→935，modal內拖動不帶背景，關閉還原600。未宣稱原生iPhone實機驗證。後續複審與全套結果追加在本節。
 - hidden升版，只寫admin完整更新與內部文件；公開三份changelog保持v6.629位元組不變。正式站由站長自行部署，沒有執行BAT或連Oracle。證據 E:/ptcg-tw-sim-local/admin-rwd-6630-evidence；審查 E:/ptcg-tw-sim-local/review-6630。
 - 產品複審：獨立Codex共發現P2三項／P3四項，均修正並獨立重現；含320長Email使modal橫捲／關閉鈕出框，已加長文字換行與modal內表格獨立橫捲。P1/P2/P3未解0，可進完整驗收但未最終准推。新守衛35/0、BASE7綠／28行為紅正常exit1，指定三項既有正對照皆綠。初次突變為納入最後P3而主動中斷，保留interrupted證據，不當成存活或全殺；最新13突變正在驗證。
+- 最新13有效突變逐項指定行為全殺、三正對照維持綠、N1／還原綠，正常exit0（620.04秒）；舊後台／hygiene／lint等19項全0（121.09秒）。改前後harness＋35免疫各36唯一項全0；正常root Pages與fake Oracle雙建置全0，快照版本630與公開三檔相同，build造成的兩home-video EOL變化已逐位元還原。獨立審查另核64場景無重複ID／溢出／JS錯誤／未知API／寫入；實作80場景及預覽亦無錯，皆為隔離假資料與真HTML，非正式資料操作。完整973項回歸即將凍結執行，最終結果另附。
 
 ## v6.629｜admin賽程辨識／分頁／手動搜尋，投稿按鈕對比修正
 
