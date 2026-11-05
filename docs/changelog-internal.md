@@ -12,6 +12,9 @@
 - 首輪完整973項為970綠／3紅，總測試34.585分（wrapper35.576分），凍結4aa34191，原報表 E:/sb-admin-rwd-6630/__rt/full.json。安全escape／restoreFailed／mainTree.hard均0、statusChanged false。不得稱首輪全綠。配色舊守衛把八位半透明hex遮罩當六位實心底；改產品遵循既有modal的rgba寫法，alpha精確80/255、外觀與guard門檻不變。新卡片守衛count與樣式分次讀時，原primeEmailMap非同步重繪拔掉節點，導致computed display空字串；改同一frame原子快照，仍嚴格核50DOM／10可見／grid，不放寬條件。6378內部6276 HEAD非0未留失敗全文，獨立6276=35/0、6378=46/0，負載因素僅推測；不改守衛或門檻，第二輪改3workers完整重跑，並重驗新35／13突變／雙build及複審。
 - 修後第二輪前置驗收：新guard35/0、BASE7/28正常exit1、13有效突變全殺／N1／還原綠；含首輪三失敗相關補驗的21項全0，6276/6378單跑分別35/0與46/0，不捏造首輪內部原因。再次後測36/36、5寬×16分頁80場景無溢出／pageerrors／未知API，預覽無寫入。獨立審查接受原子快照與等色shade，產品未解0。原計畫重雙build，確認相對成功建置只改admin獨立HTML／守衛／內部文件，玩家src/static/config/package與lock完全未變，因此改驗證並直接沿用原不可變成功雙build目錄：嚴格兩指定build/真exit0、必要入口/marker630/PUBLIC3/admin未入玩家artifact，附build-reuse-proof.json與入口雜湊；完整回歸仍指原build-pages，不使用r2半成品複本。最初逐檔複製／重算全樹SHA在Windows掃描成本過高，已主動中止並保留pipeline-interrupted-artifact-copy.json及build-copy-interrupted.log，未宣稱完成全樹重算或新npm build。審查另抓外部驗證helper空陣列會令all恆真的P3，已補len2/名稱唯一/真exit並複審解除。第二輪完整973項改3workers，凍結後不得動產品與守衛；原首輪報表全部保留。
 
+- 第二輪完整回歸中途由獨立補查發現功能搜尋範例「限時」沒有監控別名（產品P3第5項），先終止runner與子樹再改程式；r2/full.log及full-interrupted-nav-search.json保留，不能稱第二輪全套完成。最小修正補「限時 計時」，原35守衛擴390/1440×冠軍/限時/計時，輸入不篩選、Enter恰一入口且無API；獨立6場景複審解除，產品累計P2三項／P3五項未解0。最新35/0、BASE7綠28真行為紅、14有效突變全殺／三正對照綠／N1與還原綠；hygiene、舊stats契約、lint、EOL皆綠，80場景及預覽無溢出／JS錯誤／未知API／寫入。原成功雙build直接沿用並再次核輸入、入口與630/public3，非新npm建置。接著凍結第三輪完整973項，結果待補。證據admin-rwd-6630-evidence/r3。
+- 上述最後P3修正後再跑harness及35支免疫，36/36全0；不以管理頁改動省略既定後測。
+
 ## v6.629｜admin賽程辨識／分頁／手動搜尋，投稿按鈕對比修正
 
 - BASE：`a1a0bc3c`（v6.628）。admin賽程勝者綠底與勝字、依本場快照使用中央牌組原型規則；冠軍榜50筆分頁。所有文字搜尋改按鈕／Enter提交，相關下拉與勾選明確套用；草稿不觸發查詢或篩選。
