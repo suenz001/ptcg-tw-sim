@@ -99,7 +99,7 @@ if(hasBaseCommit(ROOT,BASE)){
 }else shallowSkip('v6589 BASE','需要完整main歷史');
 const browser=await pwLaunch('v6.589 admin完整帳號統計');
 if(browser)try{
- const page=await browser.newPage();
+ const page=await browser.newPage(),pageErrors=[];page.on('pageerror',e=>pageErrors.push(e.message));
  const css=/<style>([\s\S]*?)<\/style>/.exec(productAdmin)[1];
  async function show(users,width=390,text=productAdmin){
   await page.setViewportSize({width,height:900});await page.setContent('<style>'+css+'</style><main><div id="tab-overview"></div></main>');
@@ -117,7 +117,12 @@ if(browser)try{
  if(!productRoot){
   const begin=productAdmin.indexOf('const CL_ADMIN_ONLY_ENTRIES =');
   const end=productAdmin.indexOf('/** 純函式',begin);
-  const code=productAdmin.slice(begin,end)+['clParseEntries','clEntriesHtml','loadChangelogAdmin'].map(n=>functionSource(productAdmin,n)).join('\n');
+  // v6.629：抽真手動搜尋元件；保留既有更新記錄載入、內部標籤與排序斷言。
+  const searchBegin=productAdmin.indexOf('// >>> v6629-explicit-admin-search');
+  const searchEnd=productAdmin.indexOf('// <<< v6629-explicit-admin-search',searchBegin);
+  if(searchBegin>=0&&searchEnd<=searchBegin)throw Error('手動搜尋哨兵缺結尾');
+  const searchCode=searchBegin>=0?productAdmin.slice(searchBegin,searchEnd):'';
+  const code=searchCode+'\n'+productAdmin.slice(begin,end)+['clParseEntries','clEntriesHtml','loadChangelogAdmin'].map(n=>functionSource(productAdmin,n)).join('\n');
   await page.setContent('<div id="tab-changelog"></div>');
   await page.evaluate(async code=>{
    window.escapeHtml=x=>String(x).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
@@ -132,6 +137,7 @@ if(browser)try{
   const bad=productAdmin.replace('不是同時在線人數','目前在線人數');await show({enabled:true,total:55001,complete:true},390,bad);ok('M 在線語意突變會紅',!(await page.locator('main').textContent()).includes('不是同時在線人數'));
  }
  await show({enabled:true,total:55001,complete:true});ok('最後HEAD首頁回綠',await page.locator('.stat-value').first().textContent()==='55001');
+ ok('U 無頁面執行錯誤',pageErrors.length===0);
 }finally{await browser.close();}
 ok('原始產品bytes不變',[SAP,ADM].every((p,i)=>readFileSync(join(ROOT,p)).equals(original[i])));
 ok('最後HEAD完整統計回綠',Object.values(await facts(product)).every(Boolean));

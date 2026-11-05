@@ -8,9 +8,11 @@ import {execFileSync} from 'node:child_process';
 import vm from 'node:vm';
 import {pwLaunch} from './lib/pw.mjs';
 import {revertV6606Changelog} from './lib/revert-v6606-changelog.mjs';
+import {revertV6629ChangelogIfPresent} from './lib/revert-v6629-changelog.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PRODUCT = process.env.V6605_PRODUCT || ROOT;
-const read = p => readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n');
+// Rule 40：僅精確還原629公開紀錄搬運，保留605隱藏版原文契約及處分行為斷言。
+const read = p => revertV6629ChangelogIfPresent(p,readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n'));
 const sap = read('oracle-admin/server_admin_patch.js'), html = read('oracle-admin/admin.html');
 const block = sap.split('// >>> v6605-account-moderation\n')[1]?.split('// <<< v6605-account-moderation')[0];
 let passed=0, failed=0;

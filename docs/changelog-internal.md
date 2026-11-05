@@ -10,7 +10,9 @@
 - 前後 harness＋35 免疫各 36/36；15 相關舊守衛首輪 13 綠／2 fixture 紅，6272 補真搜尋元件及 committed 初值後42/0、184 透過真套用出口後13/0，斷言與門檻不變；同位審查者複審接受。其餘 inline-handler／6229／6567／628 fixture 因新提交契約調整接線，不削弱原意。標準 bump 工具自動依13版政策裁掉6272最舊歷史註解，審查核後接受。完整 admin script 語法、lint／EOL綠。
 - 原型只判目前開啟的賽事，沿用既有管理端 classify-decks 中央規則，每批500、5分鐘 cache／in-flight 共用、明確更新按鈕；數字 key 避免80字截斷，event/view＋uid 防舊回應覆蓋，缺牌表／未知／失敗明示。沒有新增端點或改 server／引擎／牌池。公開更新僅玩家 CTA，admin完整記錄另列629內部條目。
 - 正常 root Firebase／fake Oracle 雙建置成功且快照完成；390／1366 × 深淺四場景，以真 Oracle 發行頁配隔離假登入／API 確認投稿按鈕綠白與投稿視窗，真 admin renderer 確認冠軍榜50筆及勝方／原型。pageerrors 空、server writes 0；圖片已檢視，非原生 iPhone 實機或正式資料操作。
-- 完整回歸待執行，尚未最終准推。證據 E:/ptcg-tw-sim-local/admin-ux-6629-evidence，審查實驗 review-6629。
+- 首輪完整972項：968成功／4失敗、37.583分，`8ffd9704`凍結；報表 E:/sb-admin-ux-6629/__rt/full.json。v175抓到產品漏掉既有「可搜未分類」提示，已恢復原文，保留原守衛。6589補抽真手動搜尋哨兵並加pageerrors檢查；6610／6605先以本版三份公開紀錄的6組唯一錨點精確還原，再走原還原鏈，所有原斷言保留。外部驗證逐檔等BASE628、無關內容保留、缺失／重複拒絕。四項及新守衛已重新通過；因產品提示有改，須重雙建置／畫面／全套，不以純測試補驗代替。
+- admin本來使用固定淺色樣式，四組深淺場景驗證主要是玩家發行頁，未宣稱新增admin深色。最新驗收進行中，尚未最終准推。證據 E:/ptcg-tw-sim-local/admin-ux-6629-evidence，審查實驗 review-6629。
+- 修後複審接受且未解P1／P2／P3為0；7項重點檢查全綠（含四原失敗、新31守衛、hygiene、lint），後測36/36；12突變全殺／N1／還原綠。重新正常root Firebase／fake Oracle雙建置及四組實頁全綠、pageerrors空、server writes0，證據以builds-r2.json／release-ui-r2.json／mutants-r2.log為準；第二輪完整回歸待完成。
 
 ## v6.628｜歷史賽事參賽牌組與冠軍捷徑（hidden）
 

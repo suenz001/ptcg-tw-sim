@@ -3085,7 +3085,7 @@ function renderRoomsTab(el, source, rooms) {
       <span class="filter-btn ${statusFilter === 'playing' ? 'active' : ''}" onclick="setStatusFilter('playing', '${source}')">⚔️ 進行中 (${(counts.playing || 0).toLocaleString()})</span>
       <span class="filter-btn ${statusFilter === 'lobby' ? 'active' : ''}" onclick="setStatusFilter('lobby', '${source}')">🏠 等待中 (${(counts.lobby || 0).toLocaleString()})</span>
       <span class="filter-btn ${statusFilter === 'ended' ? 'active' : ''}" onclick="setStatusFilter('ended', '${source}')">✅ 已結束 (${(counts.ended || 0).toLocaleString()})</span>
-      ${adminSearchBox('rooms-search-' + source, source === 'oracle' ? oracleRoomsSearch : firebaseRoomsSearch, '搜尋 房號 / 房間名 / 玩家名 / Email / 牌組卡名 / 牌組原型', q => window.filterRoomsBySearch(q, source))}
+      ${adminSearchBox('rooms-search-' + source, source === 'oracle' ? oracleRoomsSearch : firebaseRoomsSearch, '搜尋 房號 / 房間名 / 玩家名 / Email / 牌組卡名 / 牌組原型（可搜「未分類」）', q => window.filterRoomsBySearch(q, source))}
       ${archPickHtml}
       <input class="search-box" id="diag-code-${source}" placeholder="🔍 房號卡死診斷 (如 E5D9)" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')showRoomDiag((this.value||'').trim().toUpperCase(),'${source}')" />
       <button class="ghost" onclick="showRoomDiag((document.getElementById('diag-code-${source}').value||'').trim().toUpperCase(),'${source}')">🔍 診斷</button>
