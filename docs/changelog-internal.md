@@ -15,6 +15,8 @@
 - 第二輪完整回歸中途由獨立補查發現功能搜尋範例「限時」沒有監控別名（產品P3第5項），先終止runner與子樹再改程式；r2/full.log及full-interrupted-nav-search.json保留，不能稱第二輪全套完成。最小修正補「限時 計時」，原35守衛擴390/1440×冠軍/限時/計時，輸入不篩選、Enter恰一入口且無API；獨立6場景複審解除，產品累計P2三項／P3五項未解0。最新35/0、BASE7綠28真行為紅、14有效突變全殺／三正對照綠／N1與還原綠；hygiene、舊stats契約、lint、EOL皆綠，80場景及預覽無溢出／JS錯誤／未知API／寫入。原成功雙build直接沿用並再次核輸入、入口與630/public3，非新npm建置。接著凍結第三輪完整973項，結果待補。證據admin-rwd-6630-evidence/r3。
 - 上述最後P3修正後再跑harness及35支免疫，36/36全0；不以管理頁改動省略既定後測。
 
+- 第三輪完整973/973全部成功（975 chain commands／973唯一項嚴格逐支相符），凍結HEAD `809c0f69`，總測試42.7370分。報表 E:/sb-admin-rwd-6630-r3/__rt/full.json，r3/acceptance.json核meta/清單/退出碼/全部安全欄位與前版skip基準；TIMEOUT／escape／restoreFailed／mainTree.hard均0、statusChanged false、260項暫存已還原。SHALLOW0、既有6378 ENV1／6263 Windows PLATFORM1與629相同。保留首輪970綠3紅及第二輪主動中止證據，不追稱它們全綠。完整測試後僅補本驗收文件，產品與守衛逐檔SHA完全不變；待同位審查者最後核報表准推。
+
 ## v6.629｜admin賽程辨識／分頁／手動搜尋，投稿按鈕對比修正
 
 - BASE：`a1a0bc3c`（v6.628）。admin賽程勝者綠底與勝字、依本場快照使用中央牌組原型規則；冠軍榜50筆分頁。所有文字搜尋改按鈕／Enter提交，相關下拉與勾選明確套用；草稿不觸發查詢或篩選。
