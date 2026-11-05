@@ -24,6 +24,7 @@ const cases=[
  ['M11','overlayFocus.focus({preventScroll:true})','void 0','關閉彈窗焦點回原入口且Escape只關最上層'],
  ['M12','.admin-modal-bar { position:sticky; top:0;','.admin-modal-bar { position:static; top:0;','彈窗捲到底仍有頂部關閉且背景捲動還原'],
  ['M13','overscroll-behavior-x:contain; overscroll-behavior-y:auto;','overscroll-behavior-x:contain; overscroll-behavior-y:contain;','手機卡片與桌機表格內滾輪可繼續捲動整頁'],
+ ['M14','時間限制 限時 計時 開關 設定 連線','時間限制 開關 設定 連線','功能尋找須提交只改本機不發查詢'],
 ];
 const positives=['真Auth總覽顯示完整55001帳號與原16分頁','房間原50筆與P1P2資料完整保留','既有搜尋只在Enter送出原query'];
 function run(){const result=spawnSync(process.execPath,[join(ROOT,'scripts/test-v6630-admin-workspace.mjs')],{cwd:ROOT,env:{...process.env,V6630_PRODUCT:temp},encoding:'utf8',timeout:240000,maxBuffer:12*1024*1024});assert.equal(result.signal,null,result.stderr);for(const n of positives)assert.ok(result.stdout.includes('PASS 正對照：'+n),'正對照 '+n+'\n'+result.stdout);return result;}

@@ -9703,7 +9703,7 @@ window.toggleSupportTag = async function(cardId) {
     ['統計與紀錄', ['tournament-stats','stats','matches','changelog']],
     ['系統設定', ['monitor','broadcast']],
   ];
-  const aliases = { overview:'首頁 帳號總數', 'oracle-rooms':'房間 玩家 搜尋 觀戰 診斷', 'firebase-rooms':'房間 訊息', users:'帳號 email 查詢', moderation:'禁言 停權 ban 限制參賽', feedback:'回饋 回覆', tournament:'報名 賽季 開賽 裁定', 'preset-decks':'預組 匯入 下架', 'deck-rules':'原型 規則 環境圖', 'card-policy':'卡包 允許標', 'tournament-stats':'冠軍 排名 歷屆賽事', stats:'對戰 勝率 報表', matches:'對戰 歷史 回放', changelog:'版本 更新紀錄', monitor:'時間限制 開關 設定 連線', broadcast:'公告 廣播' };
+  const aliases = { overview:'首頁 帳號總數', 'oracle-rooms':'房間 玩家 搜尋 觀戰 診斷', 'firebase-rooms':'房間 訊息', users:'帳號 email 查詢', moderation:'禁言 停權 ban 限制參賽', feedback:'回饋 回覆', tournament:'報名 賽季 開賽 裁定', 'preset-decks':'預組 匯入 下架', 'deck-rules':'原型 規則 環境圖', 'card-policy':'卡包 允許標', 'tournament-stats':'冠軍 排名 歷屆賽事', stats:'對戰 勝率 報表', matches:'對戰 歷史 回放', changelog:'版本 更新紀錄', monitor:'時間限制 限時 計時 開關 設定 連線', broadcast:'公告 廣播' };
   const tabs = Array.from(sidebar.querySelectorAll('.tab[data-tab]'));
   const tabMap = new Map(tabs.map(el => [el.dataset.tab, el]));
   const labelOf = el => (el?.textContent || '').trim().replace(/\s+/g,' ');
