@@ -10,6 +10,7 @@
 - 產品複審：獨立Codex共發現P2三項／P3四項，均修正並獨立重現；含320長Email使modal橫捲／關閉鈕出框，已加長文字換行與modal內表格獨立橫捲。P1/P2/P3未解0，可進完整驗收但未最終准推。新守衛35/0、BASE7綠／28行為紅正常exit1，指定三項既有正對照皆綠。初次突變為納入最後P3而主動中斷，保留interrupted證據，不當成存活或全殺；最新13突變正在驗證。
 - 最新13有效突變逐項指定行為全殺、三正對照維持綠、N1／還原綠，正常exit0（620.04秒）；舊後台／hygiene／lint等19項全0（121.09秒）。改前後harness＋35免疫各36唯一項全0；正常root Pages與fake Oracle雙建置全0，快照版本630與公開三檔相同，build造成的兩home-video EOL變化已逐位元還原。獨立審查另核64場景無重複ID／溢出／JS錯誤／未知API／寫入；實作80場景及預覽亦無錯，皆為隔離假資料與真HTML，非正式資料操作。完整973項回歸即將凍結執行，最終結果另附。
 - 首輪完整973項為970綠／3紅，總測試34.585分（wrapper35.576分），凍結4aa34191，原報表 E:/sb-admin-rwd-6630/__rt/full.json。安全escape／restoreFailed／mainTree.hard均0、statusChanged false。不得稱首輪全綠。配色舊守衛把八位半透明hex遮罩當六位實心底；改產品遵循既有modal的rgba寫法，alpha精確80/255、外觀與guard門檻不變。新卡片守衛count與樣式分次讀時，原primeEmailMap非同步重繪拔掉節點，導致computed display空字串；改同一frame原子快照，仍嚴格核50DOM／10可見／grid，不放寬條件。6378內部6276 HEAD非0未留失敗全文，獨立6276=35/0、6378=46/0，負載因素僅推測；不改守衛或門檻，第二輪改3workers完整重跑，並重驗新35／13突變／雙build及複審。
+- 修後第二輪前置驗收：新guard35/0、BASE7/28正常exit1、13有效突變全殺／N1／還原綠；含首輪三失敗相關補驗的21項全0，6276/6378單跑分別35/0與46/0，不捏造首輪內部原因。再次後測36/36、5寬×16分頁80場景無溢出／pageerrors／未知API，預覽無寫入。獨立審查接受原子快照與等色shade，產品未解0。原計畫重雙build，確認相對成功建置只改admin獨立HTML／守衛／內部文件，玩家src/static/config/package與lock完全未變，因此改驗證並直接沿用原不可變成功雙build目錄：嚴格兩指定build/真exit0、必要入口/marker630/PUBLIC3/admin未入玩家artifact，附build-reuse-proof.json與入口雜湊；完整回歸仍指原build-pages，不使用r2半成品複本。最初逐檔複製／重算全樹SHA在Windows掃描成本過高，已主動中止並保留pipeline-interrupted-artifact-copy.json及build-copy-interrupted.log，未宣稱完成全樹重算或新npm build。審查另抓外部驗證helper空陣列會令all恆真的P3，已補len2/名稱唯一/真exit並複審解除。第二輪完整973項改3workers，凍結後不得動產品與守衛；原首輪報表全部保留。
 
 ## v6.629｜admin賽程辨識／分頁／手動搜尋，投稿按鈕對比修正
 
