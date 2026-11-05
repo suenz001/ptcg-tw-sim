@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.92</title>
+<title>PTCG Oracle Admin v1.93</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -365,6 +365,145 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 .ts-win-label { white-space:nowrap; font-weight:700; }
 /* <<< v6629-bracket-player-colors */
 
+/* >>> v6630-admin-workspace */
+:root { --admin-header-height:64px; --admin-sidebar-width:220px; }
+html { scroll-padding-top:calc(var(--admin-header-height) + 72px); scrollbar-gutter:stable; }
+html.admin-overlay-open { overflow:hidden; }
+body.admin-workspace-ready [hidden] { display:none !important; }
+body.admin-workspace-ready { line-height:1.5; }
+#app-section > header { position:sticky; top:0; z-index:50; min-height:64px; background:#fff; padding:10px 22px; }
+#app-section > header h1 { font-size:16px; }
+.admin-mobile-menu, .admin-drawer-close, .admin-nav-shade, .admin-bottom-nav { display:none; }
+#app-section > .tabs.admin-sidebar { position:fixed; top:var(--admin-header-height); left:0; bottom:0; width:var(--admin-sidebar-width); padding:14px 10px 24px; overflow:auto; display:block; background:#f0f3f8; border-right:1px solid #dce3ed; border-bottom:0; z-index:45; overscroll-behavior:contain; }
+.admin-nav-group { margin:0 0 14px; }
+.admin-nav-group > h2 { margin:10px 12px 5px; font-size:11px; color:#596679; letter-spacing:.08em; }
+.admin-sidebar .tab { border:0; border-radius:8px; padding:10px 12px; min-height:42px; margin:3px 0; white-space:normal; color:#465368; }
+.admin-sidebar .tab.active { background:#e0eafb; color:#1e4d91; box-shadow:inset 3px 0 #427aca; }
+.admin-sidebar .tab:focus-visible, .admin-bottom-nav button:focus-visible { outline:3px solid #6f98db; outline-offset:-3px; }
+.admin-sidebar [hidden] { display:none !important; }
+.admin-nav-search { display:flex; gap:5px; padding:0 2px 8px; }
+.admin-nav-search input { width:100%; min-width:0; padding:8px; border:1px solid #c8d2df; border-radius:6px; background:#fff; color:#1a2332; }
+.admin-nav-search button { flex:none; padding:7px; }
+.admin-nav-caption { color:#526174; font-size:12px; padding:4px 6px 10px; }
+.admin-nav-empty { padding:16px 6px; color:#6b7280; font-size:13px; }
+#app-section > main { margin-left:var(--admin-sidebar-width); width:calc(100% - var(--admin-sidebar-width)); padding:18px 24px 40px; min-width:0; }
+.admin-context-bar { position:sticky; top:var(--admin-header-height); z-index:40; margin:-18px -24px 18px; padding:10px 24px; border-bottom:1px solid #dae2ed; background:#f5f7fa; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.admin-context-title { font-size:17px; font-weight:700; margin-right:auto; color:#23364e; }
+.admin-context-bar label { display:flex; gap:6px; align-items:center; font-size:12px; color:#526174; min-width:0; }
+.admin-context-bar select { max-width:300px; min-width:0; border:1px solid #c8d2df; padding:7px; border-radius:6px; background:#fff; color:#23364e; }
+.admin-context-bar button { min-height:36px; }
+.admin-back-top[hidden] { display:none; }
+.admin-section { min-width:0; }
+.admin-section > h3, .admin-section > .stat-section-label { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.admin-fold-toggle { display:none; }
+.admin-jump-target { scroll-margin-top:calc(var(--admin-header-height) + 80px); }
+.admin-table-host { min-width:0; max-width:100%; }
+.admin-table-scroll { overflow:auto; max-width:100%; overscroll-behavior-x:contain; overscroll-behavior-y:auto; scrollbar-gutter:stable; }
+.admin-table-tools, .admin-reveal-rows { display:none; }
+.admin-row-toggle-cell, .admin-row-toggle-heading { display:none; }
+.admin-list-hidden { display:none !important; }
+.admin-list-pager { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 0; color:#526174; font-size:12px; }
+.admin-list-pager button { min-height:36px; }
+.admin-list-pager [data-page-label] { margin-right:auto; }
+.admin-modal-bar { position:sticky; top:0; left:0; width:100%; min-width:0; background:#fff; border-bottom:1px solid #e1e7ef; display:flex; align-items:center; justify-content:space-between; gap:8px; z-index:10; padding:4px 0 10px; margin-bottom:12px; color:#526174; font-size:12px; }
+.admin-modal-bar button { min-height:40px; flex:none; }
+.admin-modal-legacy-close { display:none !important; }
+.modal-bg > .modal { overscroll-behavior:contain; overflow-wrap:anywhere; }
+.admin-modal-table-scroll { max-width:100%; overflow:auto; overscroll-behavior-x:contain; }
+.admin-modal-bar + h3 { padding-right:0 !important; }
+.admin-section-body, .tab-content, .stats-row > *, .stats-grid > * { min-width:0; }
+@media (max-width:900px) {
+  html { scroll-padding-top:calc(var(--admin-header-height) + 110px); scrollbar-gutter:auto; }
+  #app-section > header { padding:calc(8px + env(safe-area-inset-top,0px)) 10px 8px; min-height:60px; gap:8px; flex-wrap:nowrap; }
+  #app-section > header h1 { min-width:0; flex:1; font-size:13px; line-height:1.3; }
+  #app-section > header .header-actions { flex:none; gap:4px; }
+  #app-section > header .header-actions > button { font-size:0; min-width:42px; padding:8px; min-height:44px; }
+  #app-section > header .header-actions > button::before { font-size:18px; }
+  #app-section > header .header-actions > button:nth-of-type(1)::before { content:'↻'; }
+  #app-section > header .header-actions > button:nth-of-type(2) { display:none; }
+  #app-section > header .header-actions > button:nth-of-type(3) { display:none; }
+  .admin-mobile-menu { display:inline-flex; flex:none; min-width:44px; min-height:44px; align-items:center; justify-content:center; padding:8px; font-size:20px; }
+  #app-section > .tabs.admin-sidebar { transform:translateX(-105%); visibility:hidden; transition:transform .16s ease, visibility .16s; top:0; bottom:0; width:min(86vw,340px); padding:calc(12px + env(safe-area-inset-top,0px)) 12px calc(18px + env(safe-area-inset-bottom,0px)); z-index:90; box-shadow:8px 0 35px #18283a38; }
+  #app-section > .tabs.admin-sidebar.admin-drawer-open { transform:translateX(0); visibility:visible; }
+  .admin-drawer-close { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; font-weight:700; font-size:16px; }
+  .admin-drawer-close button { min-height:44px; }
+  .admin-nav-shade:not([hidden]) { display:block; position:fixed; inset:0; background:#17253680; z-index:80; border:0; border-radius:0; }
+  .admin-nav-shade:hover { background:#17253680; transform:none; }
+  .admin-nav-caption { font-size:13px; }
+  .admin-sidebar .tab { min-height:46px; font-size:14px; }
+  #app-section > main { margin:0; width:100%; padding:12px 10px calc(90px + env(safe-area-inset-bottom,0px)); }
+  .admin-context-bar { top:var(--admin-header-height); margin:-12px -10px 12px; padding:8px 10px; gap:6px; }
+  .admin-context-title { font-size:15px; min-width:0; flex:1; }
+  .admin-context-bar label { flex-basis:100%; white-space:nowrap; }
+  .admin-context-bar select { max-width:none; width:100%; flex:1; min-height:40px; font-size:16px; }
+  .admin-context-bar button { min-height:40px; }
+  .admin-jump-target { scroll-margin-top:calc(var(--admin-header-height) + 120px); }
+  .admin-bottom-nav { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); position:fixed; bottom:0; left:0; right:0; padding:5px 4px calc(5px + env(safe-area-inset-bottom,0px)); background:#fff; border-top:1px solid #d6dfeb; z-index:55; box-shadow:0 -2px 12px #243c5810; }
+  .admin-bottom-nav button { min-width:0; min-height:52px; background:transparent; color:#526174; box-shadow:none; border-radius:8px; font-size:11px; padding:3px 2px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; }
+  .admin-bottom-nav button span:first-child { font-size:20px; }
+  .admin-bottom-nav button[aria-current=page] { background:#e5eefb; color:#1e4d91; font-weight:700; }
+  .admin-bottom-nav button:hover { transform:none; background:#eef3fa; }
+  #app-section button, #app-section .filter-btn { min-height:40px; }
+  #app-section input:not([type=checkbox]):not([type=radio]), #app-section select, #app-section textarea { max-width:100%; min-width:0; color:#1a2332; font-size:16px; }
+  #app-section input:not([type=checkbox]):not([type=radio]), #app-section select { min-height:42px; }
+  #app-section textarea { overflow-wrap:anywhere; }
+  #app-section .admin-search-control { width:100%; flex-basis:100%; gap:6px !important; }
+  #app-section .admin-search-control button { min-height:44px; }
+  #app-section .toolbar { align-items:center; }
+  #app-section .toolbar .filter-btn { display:inline-flex; align-items:center; justify-content:center; min-height:38px; font-size:12px; }
+  #app-section .stats-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  #app-section .stat-card { padding:12px 10px; }
+  #app-section .stat-value { font-size:24px; overflow-wrap:anywhere; }
+  #app-section .stat-label { font-size:12px; }
+  #app-section .stats-row, #app-section .deck-grid { grid-template-columns:minmax(0,1fr); }
+  #app-section .stats-box { padding:10px; }
+  #app-section .fm-row { grid-template-columns:minmax(0,1fr); gap:5px; }
+  #app-section .histo-row, #app-section .trend-row { grid-template-columns:minmax(0,1fr) auto !important; gap:4px 8px; }
+  #app-section .histo-bar, #app-section .trend-bar { grid-column:1 / -1; grid-row:2; }
+  #app-section .histo-cnt, #app-section .trend-cnt { grid-column:2; grid-row:1; max-width:170px; overflow-wrap:anywhere; }
+  #app-section .tab-content > .admin-inner-page { padding:8px 0 !important; max-width:100% !important; }
+  #app-section .tab-content h2 { line-height:1.5; overflow-wrap:anywhere; }
+  #app-section .tab-content h3 { line-height:1.5; overflow-wrap:anywhere; }
+  .admin-section { border:1px solid #dfe6ef; border-radius:10px; margin:10px 0 14px; padding:10px !important; background:#fff; }
+  .admin-section > h3, .admin-section > .stat-section-label { margin:0 !important; font-size:14px; gap:7px; }
+  .admin-fold-toggle { display:inline-flex; align-items:center; justify-content:center; min-width:40px; min-height:40px; padding:4px; flex:none; background:#edf2f9; color:#37567c; box-shadow:none; font-size:17px; }
+  .admin-section-body { margin-top:10px; }
+  .admin-section.admin-section-collapsed > .admin-section-body { display:none; }
+  .admin-table-tools { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:8px 0; font-size:12px; color:#526174; }
+  .admin-table-tools label { min-width:0; display:flex; gap:5px; align-items:center; }
+  .admin-table-tools select { width:auto; min-width:0; max-width:220px; }
+  .admin-table-tools .admin-table-sort { flex-basis:100%; display:flex; gap:6px; align-items:center; }
+  .admin-table-tools .admin-table-sort select { flex:1; }
+  .admin-table-card-mode > table { min-width:0 !important; display:block; width:100%; background:transparent; overflow:visible; }
+  .admin-table-card-mode > table > thead { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+  .admin-table-card-mode > table > tbody { display:grid; gap:10px; }
+  .admin-table-card-mode > table > tbody > tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 10px; border:1px solid #dce4ef; border-radius:9px; padding:10px; background:#fff; }
+  .admin-table-card-mode > table > tbody > tr > td { display:block; min-width:0; width:auto !important; padding:3px 0 !important; border:0; font-size:14px !important; white-space:normal !important; overflow-wrap:anywhere; text-align:left; }
+  .admin-table-card-mode > table > tbody > tr > td::before { content:attr(data-admin-label); display:block; color:#647187; font-size:11px; font-weight:500; margin-bottom:2px; }
+  .admin-table-card-mode .admin-card-wide { grid-column:1 / -1; }
+  .admin-table-card-mode .trunc-inner, .admin-table-card-mode .trunc-inner.wide { max-width:100% !important; white-space:normal; overflow-wrap:anywhere; }
+  .admin-table-card-mode > table > tbody > tr > td.admin-card-detail { display:none; }
+  .admin-table-card-mode > table > tbody > tr.admin-row-open > td.admin-card-detail { display:block; }
+  .admin-table-card-mode .admin-row-toggle-cell { grid-column:1 / -1; border-top:1px solid #edf1f6 !important; }
+  .admin-row-toggle-cell::before { display:none !important; }
+  .admin-row-toggle-cell button { width:100%; background:#edf2f9; color:#37567c; box-shadow:none; }
+  .admin-table-card-mode > table > tbody > tr.admin-row-deferred { display:none; }
+  .admin-table-card-mode .winner-cell { border-radius:6px; padding:5px !important; }
+  .admin-reveal-rows { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:10px 0; color:#526174; font-size:12px; }
+  .admin-table-full-mode + .admin-reveal-rows { display:none; }
+  .admin-table-scroll:not(.admin-table-card-mode)::before { content:'↔ 表格可左右滑動'; display:block; padding:5px 2px; color:#647187; font-size:12px; }
+  .admin-list-pager button { min-height:42px; }
+  .modal-bg { padding:calc(10px + env(safe-area-inset-top,0px)) 8px calc(10px + env(safe-area-inset-bottom,0px)) !important; align-items:center !important; }
+  .modal-bg > .modal { min-width:0 !important; width:100% !important; max-width:100% !important; max-height:calc(100dvh - 20px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)) !important; padding:14px !important; border-radius:12px; overflow:auto; }
+  .modal-bg > .modal button { min-height:42px; font-size:13px; }
+  .modal-bg > .modal input:not([type=checkbox]):not([type=radio]), .modal-bg > .modal select, .modal-bg > .modal textarea { font-size:16px; max-width:100%; min-width:0; }
+  .modal-bg > .modal pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+  .modal-bg > .modal img, .modal-bg > .modal canvas { max-width:100%; height:auto; }
+  .admin-modal-bar { gap:6px; margin-bottom:10px; }
+}
+@media (prefers-reduced-motion:reduce) { #app-section > .tabs.admin-sidebar { transition:none; } }
+/* <<< v6630-admin-workspace */
+
 </style>
 </head>
 <body>
@@ -384,7 +523,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.92</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.93</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2460,6 +2599,7 @@ window.switchTab = function(name, opts) {
 
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach(c => c.style.display = c.id === 'tab-' + name ? 'block' : 'none');
+  window.adminWorkspace?.viewChanged(name);
   return loadActive();   // v1.76：回傳載入的 Promise，讓跨分頁跳轉可以等載完再填表單
 };
 
@@ -2501,7 +2641,7 @@ window.manualRefresh = async function(btn) {
 //   data-internal="1" ＝ 與遊戲內容無關的內部維護版本（玩家看不到），這裡照樣列出並標示。
 const CL_SITE_BASE = 'https://suenz001.github.io/ptcg-tw-sim';
 // 只隨admin發布，永不寫入玩家首頁／公開更新檔。
-const CL_ADMIN_ONLY_ENTRIES = [{ ver:'v6.629', internal:true, dup:true, summaryHtml:'<b>賽程勝方與原型、冠軍分頁及明確搜尋</b>', bodyHtml:'賽程以綠底與勝字標示獲勝者，玩家名稱後依當場牌表與中央原型規則顯示分類；冠軍榜每頁50筆。所有文字搜尋改按放大鏡或Enter才查詢／篩選，下拉與勾選篩選改按鈕套用，未提交草稿不影響背景回應與報告。公開更新只記錄投稿按鈕的綠底白字修正。' }, { ver:'v6.628', internal:true, dup:false, summaryHtml:'<b>歷史賽事參賽牌組與冠軍捷徑</b>', bodyHtml:'歷屆賽事新增冠軍牌組入口；賽程的冠軍、參賽名單與對戰雙方可查看當時保存的報名牌組並複製匯入文字。以賽事與玩家uid精確查找歸檔，不取目前牌組；未留存的舊資料明確標示。' }, { ver:'v6.627', internal:true, dup:false, summaryHtml:'<b>修正玩家查詢牌組文字匯回</b>', bodyHtml:'玩家儲存牌組明細改用精確卡號／完整卡包卡號格式，標題與統計以註解輸出；支援基本能量與雙張場地左右半。缺卡或數量異常禁止複製，複製失敗會提示。玩家匯入說明移除管理來源文字。' }, { ver:'v6.625', internal:true, dup:false, summaryHtml:'<b>公布欄熱門牌組勝率對齊後台原型統計淨化標準</b>', bodyHtml:'/api/meta-stats 的勝率統計改為與後台原型統計一致：排除 AI／本機對戰（只算有房號的真人線上對戰）、排除第 1 回合未進場無回應判負與前 2 回合中途離開／斷線，且只計算有分出勝負的場次（勝場 ÷ (勝場 + 敗場)）。' }, { ver:'v6.624', internal:true, dup:false, summaryHtml:'<b>修正牌組公布欄熱門牌組的冠軍數（N🏆）統計口徑</b>', bodyHtml:'/api/meta-stats 的冠軍數改為直接統計已發布在牌組公布欄內、標記為「網站賽｜冠軍」（tournament.placementLabel === "冠軍"，不含社群賽）的投稿篇數，移除原本對 tournamentChampions 自訂牌組名稱的模糊字串比對，使按鈕上的 N🏆 與點選篩選後看到的網站賽冠軍投稿篇數完全一致。' }, { ver:'v6.623', internal:true, dup:false, summaryHtml:'<b>修正部署腳本 START_MARKER 數量檢查誤報警告</b>', bodyHtml:'oracle_admin_update.sh 的 Sanity 檢查改為比對 server_admin_patch.js 本身的 START_MARKER 與 END_MARKER 數量（expected 7 / 1），消除因檔頭歷史版本註解導致每次執行 update-tournament.bat 時跳出 WARNING 的誤報。' }, { ver:'v6.621', internal:true, dup:false, summaryHtml:'<b>單卡頁結構化資料修正、牌組公布欄動態 SEO 與熱門環境牌組排行</b>', bodyHtml:'單卡頁 JSON-LD 改為 WebPage＋BreadcrumbList 解決 Search Console 產品摘要錯誤，並新增公開牌組搜尋導流；新增 /api/sitemap-decks.xml、/api/deck-share/:id 社群預覽與 /api/meta-stats 熱門牌組統計；牌組公布欄新增熱門環境牌組排行（電腦版標籤列、手機版改為下拉選單節約版面，奪冠數改為 N🏆 格式並移除冗餘說明）。' }, { ver:'v6.603', internal:true, dup:true, summaryHtml:'<b>錦標賽賽季管理</b>', bodyHtml:'賽事分頁新增立即換季、台灣日期00:00排程、改期及取消。提交前確認舊新賽季與生效時間；同年序號累加、跨年第一季。歷史與玩家資料保留，個人頁維持生涯累計。' }, { ver:'v6.602', internal:true, dup:true, summaryHtml:'<b>預設牌組管理</b>', bodyHtml:'新增預設牌組分頁，可文字貼上牌表、預覽精確卡號與合法性後匯入，下架與復原均需確認。管理清單統一提供給編輯器、一般對戰及錦標賽；不更動玩家副本或既有報名／對戰牌表。' }, { ver: 'v6.592', internal: true, dup: true, summaryHtml: '<b>個人操作時間控制</b>', bodyHtml: '監控分頁新增個人限時開關與1～120分鐘設定（初始15分鐘）；預設關閉。開啟、關閉及調整即時套用。玩家回合限時30秒與電腦必要收尾由伺服器管理。' }, { ver: 'v6.591', internal: true, dup: false,
+const CL_ADMIN_ONLY_ENTRIES = [{ ver:'v6.630', internal:true, dup:false, summaryHtml:'<b>後台工作導覽與手機介面重整</b>', bodyHtml:'桌機依工作分組導覽，手機新增常用入口及全部功能選單；長頁可跳區段及收合。一般表格提供摘要卡片與完整表格，摘要先顯示10筆並可繼續展開；更新紀錄20則、預設牌組清單10則本機分頁，搜尋仍含完整資料。彈窗頂端關閉與返回、焦點與背景捲動改善；修正房間列表底部跳頁讀值。原權限、查詢與管理確認流程維持不變。' }, { ver:'v6.629', internal:true, dup:true, summaryHtml:'<b>賽程勝方與原型、冠軍分頁及明確搜尋</b>', bodyHtml:'賽程以綠底與勝字標示獲勝者，玩家名稱後依當場牌表與中央原型規則顯示分類；冠軍榜每頁50筆。所有文字搜尋改按放大鏡或Enter才查詢／篩選，下拉與勾選篩選改按鈕套用，未提交草稿不影響背景回應與報告。公開更新只記錄投稿按鈕的綠底白字修正。' }, { ver:'v6.628', internal:true, dup:false, summaryHtml:'<b>歷史賽事參賽牌組與冠軍捷徑</b>', bodyHtml:'歷屆賽事新增冠軍牌組入口；賽程的冠軍、參賽名單與對戰雙方可查看當時保存的報名牌組並複製匯入文字。以賽事與玩家uid精確查找歸檔，不取目前牌組；未留存的舊資料明確標示。' }, { ver:'v6.627', internal:true, dup:false, summaryHtml:'<b>修正玩家查詢牌組文字匯回</b>', bodyHtml:'玩家儲存牌組明細改用精確卡號／完整卡包卡號格式，標題與統計以註解輸出；支援基本能量與雙張場地左右半。缺卡或數量異常禁止複製，複製失敗會提示。玩家匯入說明移除管理來源文字。' }, { ver:'v6.625', internal:true, dup:false, summaryHtml:'<b>公布欄熱門牌組勝率對齊後台原型統計淨化標準</b>', bodyHtml:'/api/meta-stats 的勝率統計改為與後台原型統計一致：排除 AI／本機對戰（只算有房號的真人線上對戰）、排除第 1 回合未進場無回應判負與前 2 回合中途離開／斷線，且只計算有分出勝負的場次（勝場 ÷ (勝場 + 敗場)）。' }, { ver:'v6.624', internal:true, dup:false, summaryHtml:'<b>修正牌組公布欄熱門牌組的冠軍數（N🏆）統計口徑</b>', bodyHtml:'/api/meta-stats 的冠軍數改為直接統計已發布在牌組公布欄內、標記為「網站賽｜冠軍」（tournament.placementLabel === "冠軍"，不含社群賽）的投稿篇數，移除原本對 tournamentChampions 自訂牌組名稱的模糊字串比對，使按鈕上的 N🏆 與點選篩選後看到的網站賽冠軍投稿篇數完全一致。' }, { ver:'v6.623', internal:true, dup:false, summaryHtml:'<b>修正部署腳本 START_MARKER 數量檢查誤報警告</b>', bodyHtml:'oracle_admin_update.sh 的 Sanity 檢查改為比對 server_admin_patch.js 本身的 START_MARKER 與 END_MARKER 數量（expected 7 / 1），消除因檔頭歷史版本註解導致每次執行 update-tournament.bat 時跳出 WARNING 的誤報。' }, { ver:'v6.621', internal:true, dup:false, summaryHtml:'<b>單卡頁結構化資料修正、牌組公布欄動態 SEO 與熱門環境牌組排行</b>', bodyHtml:'單卡頁 JSON-LD 改為 WebPage＋BreadcrumbList 解決 Search Console 產品摘要錯誤，並新增公開牌組搜尋導流；新增 /api/sitemap-decks.xml、/api/deck-share/:id 社群預覽與 /api/meta-stats 熱門牌組統計；牌組公布欄新增熱門環境牌組排行（電腦版標籤列、手機版改為下拉選單節約版面，奪冠數改為 N🏆 格式並移除冗餘說明）。' }, { ver:'v6.603', internal:true, dup:true, summaryHtml:'<b>錦標賽賽季管理</b>', bodyHtml:'賽事分頁新增立即換季、台灣日期00:00排程、改期及取消。提交前確認舊新賽季與生效時間；同年序號累加、跨年第一季。歷史與玩家資料保留，個人頁維持生涯累計。' }, { ver:'v6.602', internal:true, dup:true, summaryHtml:'<b>預設牌組管理</b>', bodyHtml:'新增預設牌組分頁，可文字貼上牌表、預覽精確卡號與合法性後匯入，下架與復原均需確認。管理清單統一提供給編輯器、一般對戰及錦標賽；不更動玩家副本或既有報名／對戰牌表。' }, { ver: 'v6.592', internal: true, dup: true, summaryHtml: '<b>個人操作時間控制</b>', bodyHtml: '監控分頁新增個人限時開關與1～120分鐘設定（初始15分鐘）；預設關閉。開啟、關閉及調整即時套用。玩家回合限時30秒與電腦必要收尾由伺服器管理。' }, { ver: 'v6.591', internal: true, dup: false,
   summaryHtml: '<b>測試站搜尋收錄排除</b>',
   bodyHtml: '僅 GitHub Pages 發布時，替所有內容頁、卡片頁、404 與更新紀錄片段加入 noindex；正式站一般建置維持原搜尋設定。Google 擁有權驗證檔保持原文。現有搜尋結果需等爬蟲重新讀取，或由站長在 Search Console 提交暫時移除。' }, { ver: 'v6.589', internal: true, dup: false,
   summaryHtml: '<b>後台完整帳號統計</b>',
@@ -3071,8 +3211,8 @@ function renderRoomsTab(el, source, rooms) {
       <button class="ghost" onclick="setRoomsPage(${page + 1}, '${source}')" ${page === totalPages ? 'disabled' : ''}>下一頁 ›</button>
       <button class="ghost" onclick="setRoomsPage(${totalPages}, '${source}')" ${page === totalPages ? 'disabled' : ''}>最後一頁 »</button>
       <span style="margin-left:0.4rem;font-size:0.85rem;color:#bbb">跳至：</span>
-      <input id="rooms-page-input-${source}" type="number" min="1" max="${totalPages}" value="${page}" style="width:4.5rem;padding:0.2rem 0.3rem;background:#ffffff;color:#1a2332;border:1px solid #d6dbe3;border-radius:4px" onkeydown="if(event.key==='Enter')jumpRoomsPage('${source}')" />
-      <button class="ghost" onclick="jumpRoomsPage('${source}')">跳頁</button>
+      <input id="rooms-page-input-${source}" type="number" min="1" max="${totalPages}" value="${page}" style="width:4.5rem;padding:0.2rem 0.3rem;background:#ffffff;color:#1a2332;border:1px solid #d6dbe3;border-radius:4px" onkeydown="if(event.key==='Enter')jumpRoomsPage('${source}',this)" />
+      <button class="ghost" onclick="jumpRoomsPage('${source}',this.previousElementSibling)">跳頁</button>
     </div>
   ` : '';
   el.innerHTML = `
@@ -3097,7 +3237,7 @@ function renderRoomsTab(el, source, rooms) {
     </tr></thead><tbody id="${source}-rooms-tbody">
     ${pageRooms.map(r => renderRoomRow(r, source)).join('')}
     </tbody></table></div>
-    ${pagerHtml}
+    ${pagerHtml.replace('id="rooms-page-input-'+source+'"','id="rooms-page-input-'+source+'-bottom"')}
   `;
 }
 
@@ -3151,8 +3291,8 @@ window.toggleFirebaseMsgCounts = function() {
   loadFirebaseRooms();
 };
 
-window.jumpRoomsPage = function(source) {
-  const inp = document.getElementById('rooms-page-input-' + source);
+window.jumpRoomsPage = function(source, input) {
+  const inp = input || document.getElementById('rooms-page-input-' + source);
   if (!inp) return;
   const p = parseInt(inp.value, 10);
   if (Number.isFinite(p) && p >= 1) window.setRoomsPage(p, source);
@@ -4619,7 +4759,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.629';
+window.SITE_VERSION_HINT = '6.630';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -9550,6 +9690,263 @@ window.toggleSupportTag = async function(cardId) {
     alert('Tag 失敗：' + (err?.message || '?'));
   }
 };
+// >>> v6630-admin-workspace
+// 後台專用的導覽與閱讀層；只移動既有 DOM，不查詢資料、不儲存業務設定。
+(function initAdminWorkspace() {
+  const app = document.getElementById('app-section');
+  const sidebar = app?.querySelector('.tabs'), main = app?.querySelector('main'), header = app?.querySelector('header');
+  if (!app || !sidebar || !main || !header) return;
+  const mobile = matchMedia('(max-width:900px)');
+  const groups = [
+    ['日常管理', ['overview','oracle-rooms','firebase-rooms','users','moderation','feedback']],
+    ['賽事與牌組', ['tournament','preset-decks','deck-rules','card-policy']],
+    ['統計與紀錄', ['tournament-stats','stats','matches','changelog']],
+    ['系統設定', ['monitor','broadcast']],
+  ];
+  const aliases = { overview:'首頁 帳號總數', 'oracle-rooms':'房間 玩家 搜尋 觀戰 診斷', 'firebase-rooms':'房間 訊息', users:'帳號 email 查詢', moderation:'禁言 停權 ban 限制參賽', feedback:'回饋 回覆', tournament:'報名 賽季 開賽 裁定', 'preset-decks':'預組 匯入 下架', 'deck-rules':'原型 規則 環境圖', 'card-policy':'卡包 允許標', 'tournament-stats':'冠軍 排名 歷屆賽事', stats:'對戰 勝率 報表', matches:'對戰 歷史 回放', changelog:'版本 更新紀錄', monitor:'時間限制 開關 設定 連線', broadcast:'公告 廣播' };
+  const tabs = Array.from(sidebar.querySelectorAll('.tab[data-tab]'));
+  const tabMap = new Map(tabs.map(el => [el.dataset.tab, el]));
+  const labelOf = el => (el?.textContent || '').trim().replace(/\s+/g,' ');
+  const titles = new Map(tabs.map(el => [el.dataset.tab,labelOf(el)]));
+  let active = tabs.find(el=>el.classList.contains('active'))?.dataset.tab || 'overview';
+  let drawerOpen = false, drawerReturn = null, frame = 0, sequence = 0;
+  let sections = [], locked = false, lockedAt = 0, overlayFocus = null, topModal = null;
+  const foldState = new Map(), tableStates = new WeakMap(), listStates = new WeakMap();
+  const create = (tag, cls, text) => { const el=document.createElement(tag); if(cls)el.className=cls; if(text!=null)el.textContent=text; return el; };
+  const setText = (el,text) => { if(el.textContent!==text)el.textContent=text; };
+  const button = (text, action, cls='ghost') => { const el=create('button',cls,text);el.type='button';el.addEventListener('click',action);return el; };
+  const headingLabel = heading => {
+    const clone=heading.cloneNode(true);
+    clone.querySelectorAll('button,input,select,.small,.muted').forEach(el=>el.remove());
+    return labelOf(clone).slice(0,100) || labelOf(heading).slice(0,100);
+  };
+  const preference = (key,value) => {
+    try { if(value===undefined)return localStorage.getItem('ptcg_admin_ui_'+key);localStorage.setItem('ptcg_admin_ui_'+key,value); } catch { /* 偏好無法保存時仍可操作。 */ }
+    return null;
+  };
+
+  sidebar.id='admin-sidebar'; sidebar.classList.add('admin-sidebar');sidebar.setAttribute('aria-label','後台全部功能');
+  const drawerHead=create('div','admin-drawer-close','全部功能');
+  drawerHead.append(button('✕ 關閉',()=>setDrawer(false)));
+  const navForm=create('form','admin-nav-search');
+  const navInput=create('input');navInput.type='search';navInput.placeholder='找功能：冠軍、限時、玩家…';navInput.setAttribute('aria-label','尋找後台功能');
+  const navSubmit=create('button','','搜尋');navSubmit.type='submit';navForm.append(navInput,navSubmit);
+  const empty=create('p','admin-nav-empty','沒有符合的功能，清空後再搜尋即可。');empty.hidden=true;
+  sidebar.prepend(drawerHead,navForm,create('div','admin-nav-caption','選擇工作項目；不會同時載入所有分頁。'));
+  for(const [label,ids]of groups){
+    const group=create('section','admin-nav-group');group.append(create('h2','',label));
+    for(const id of ids){const tab=tabMap.get(id);if(!tab)continue;tab.setAttribute('role','button');tab.tabIndex=0;group.append(tab);}
+    sidebar.append(group);
+  }
+  sidebar.append(empty);
+  const navAccount=create('div','admin-nav-account');
+  navAccount.append(button('🔄 強制更新版本',()=>window.hardReloadAdmin(navAccount.firstElementChild)),button('登出',()=>window.doLogout()));sidebar.append(navAccount);
+  navForm.addEventListener('submit',event=>{
+    event.preventDefault();const needle=navInput.value.trim().toLowerCase();let found=0;
+    for(const tab of tabs){tab.hidden=!!needle&&!(titles.get(tab.dataset.tab)+' '+(aliases[tab.dataset.tab]||'')).toLowerCase().includes(needle);if(!tab.hidden)found++;}
+    sidebar.querySelectorAll('.admin-nav-group').forEach(group=>{group.hidden=!Array.from(group.querySelectorAll('.tab')).some(tab=>!tab.hidden);});empty.hidden=found>0;
+  });
+  sidebar.addEventListener('keydown',event=>{if(event.target.classList.contains('tab')&&(event.key==='Enter'||event.key===' ')){event.preventDefault();event.target.click();}});
+  const menuButton=button('☰',()=>setDrawer(!drawerOpen),'admin-mobile-menu');menuButton.setAttribute('aria-label','開啟全部功能');menuButton.setAttribute('aria-controls',sidebar.id);menuButton.setAttribute('aria-expanded','false');header.prepend(menuButton);
+  const shade=button('',()=>setDrawer(false),'admin-nav-shade');shade.setAttribute('aria-label','關閉功能選單');shade.tabIndex=-1;shade.hidden=true;app.append(shade);
+  const bottom=create('nav','admin-bottom-nav');bottom.setAttribute('aria-label','常用後台功能');
+  for(const [id,icon,title]of [['oracle-rooms','🎮','對戰'],['tournament','🏆','賽事'],['users','👤','玩家'],['monitor','📡','監控'],['all','☰','全部']]){
+    const item=button('',()=>id==='all'?setDrawer(true):window.switchTab(id),'');item.dataset.target=id;item.append(create('span','',icon),create('span','',title));bottom.append(item);
+  }
+  app.append(bottom);
+  const context=create('div','admin-context-bar'), contextTitle=create('span','admin-context-title');
+  const topButton=button('↑ 頁首',()=>window.scrollTo({top:0,behavior:'instant'}),'ghost admin-back-top');
+  const jumpLabel=create('label','','跳至'), jump=create('select');jump.id='admin-section-jump';jump.setAttribute('aria-label','跳至本頁區段');jumpLabel.append(jump);
+  context.append(contextTitle,topButton,jumpLabel);main.prepend(context);
+  jump.addEventListener('change',()=>{
+    const entry=sections.find(s=>s.id===jump.value);if(!entry)return;
+    for(let p=entry.node.parentElement;p&&p!==main;p=p.parentElement){if(p.classList.contains('admin-section'))setFold(p,false);if(p.tagName==='DETAILS')p.open=true;}
+    const section=entry.node.closest('.admin-section');if(section)setFold(section,false);
+    entry.node.scrollIntoView({block:'start',behavior:'instant'});entry.node.tabIndex=-1;entry.node.focus({preventScroll:true});
+  });
+  function setDrawer(open){
+    const returnTarget=drawerReturn;
+    drawerOpen=!!open&&mobile.matches;
+    sidebar.classList.toggle('admin-drawer-open',drawerOpen);shade.hidden=!drawerOpen;menuButton.setAttribute('aria-expanded',String(drawerOpen));
+    if(drawerOpen){drawerReturn=document.activeElement;sidebar.setAttribute('role','dialog');sidebar.setAttribute('aria-modal','true');}
+    else {sidebar.removeAttribute('role');sidebar.removeAttribute('aria-modal');drawerReturn=null;}
+    syncOverlays();
+    if(drawerOpen)requestAnimationFrame(()=>requestAnimationFrame(()=>{if(drawerOpen&&!sidebar.inert)navInput.focus({preventScroll:true});}));
+    if(!drawerOpen&&returnTarget?.isConnected&&returnTarget.checkVisibility())returnTarget.focus({preventScroll:true});
+  }
+  function updateContext(){
+    setText(contextTitle,titles.get(active)||'後台');
+    for(const tab of tabs){if(tab.dataset.tab===active)tab.setAttribute('aria-current','page');else tab.removeAttribute('aria-current');}
+    for(const item of bottom.querySelectorAll('button')){if(item.dataset.target===active)item.setAttribute('aria-current','page');else item.removeAttribute('aria-current');}
+  }
+  function setFold(section,collapsed){
+    const value=!!collapsed;foldState.set(section.dataset.adminSectionKey,value);section.classList.toggle('admin-section-collapsed',value);
+    const toggle=section.querySelector(':scope > .admin-section-heading > .admin-fold-toggle');
+    if(toggle){toggle.setAttribute('aria-expanded',String(!mobile.matches||!value));setText(toggle,mobile.matches&&value?'▸':'▾');toggle.setAttribute('aria-label',(mobile.matches&&value?'展開':'收合')+' '+section.dataset.adminSectionTitle);}
+  }
+  function sectionize(panel){
+    // 只將同一個普通容器中的相鄰大區段分組；不跨表單、表格或既有 details。
+    const containers=[panel,...Array.from(panel.children).filter(el=>el.tagName==='DIV'&&el.querySelector(':scope > h2'))];
+    for(const parent of containers){
+      const headings=Array.from(parent.children).filter(el=>el.tagName==='H3'||el.classList.contains('stat-section-label'));
+      if(headings.length<2)continue;
+      for(const heading of headings){
+        const section=create('section');parent.insertBefore(section,heading);section.append(heading);
+        let next=section.nextSibling;
+        while(next){const following=next.nextSibling;if(next.nodeType===1&&(next.matches('h2,h3,.stat-section-label,section,form')||next.querySelector('#cp-save,#cp-clear,#cp-status')))break;section.append(next);next=following;}
+      }
+    }
+    panel.querySelectorAll(':scope > div[style*="max-width"]').forEach(el=>el.classList.add('admin-inner-page'));
+    const extra=active==='tournament'?Array.from(panel.querySelectorAll('div[style*="font-weight:700"]')).filter(el=>el.parentElement.firstElementChild===el&&!el.querySelector('input,select,textarea')&&headingLabel(el).length<110):[];
+    const headings=[...Array.from(panel.querySelectorAll('h3,.stat-section-label')), ...extra].filter(el=>!el.closest('details,table,.modal'));
+    let position=0;
+    for(const heading of headings){
+      const parent=heading.parentElement;
+      if(parent===panel||parent.matches('.toolbar,.stats-grid,.stat-card,.stats-row,.admin-section-body'))continue;
+      if(parent.classList.contains('admin-section')){setFold(parent,parent.classList.contains('admin-section-collapsed'));continue;}
+      if(parent.firstElementChild!==heading||parent.querySelectorAll(':scope > h3,:scope > .stat-section-label').length>1)continue;
+      const title=headingLabel(heading),key=active+'|'+title;
+      parent.classList.add('admin-section');parent.dataset.adminSectionKey=key;parent.dataset.adminSectionTitle=title;
+      heading.classList.add('admin-section-heading');
+      if(!heading.matches('h3,.stat-section-label'))heading.setAttribute('data-admin-landmark','');
+      const body=create('div','admin-section-body');body.id='admin-section-body-'+(++sequence);
+      while(heading.nextSibling)body.append(heading.nextSibling);parent.append(body);
+      const toggle=button('▾',()=>setFold(parent,!parent.classList.contains('admin-section-collapsed')),'admin-fold-toggle');toggle.setAttribute('aria-controls',body.id);heading.prepend(toggle);
+      setFold(parent,foldState.has(key)?foldState.get(key):position++>0);
+    }
+  }
+  function landmarks(panel){
+    const nodes=Array.from(panel.querySelectorAll('h2,h3,h4,.stat-section-label,[data-admin-landmark]'));
+    if(active==='monitor')nodes.push(...Array.from(panel.querySelectorAll('div[style*="font-weight:700"]')).filter(el=>el.children.length<5&&labelOf(el).length<110));
+    sections=[];const seen=new Set();
+    for(const node of nodes){
+      if(node.closest('table,.admin-table-tools,.admin-modal-bar'))continue;
+      const title=headingLabel(node);if(!title||seen.has(title))continue;seen.add(title);
+      if(!node.id)node.id='admin-jump-'+(++sequence);node.classList.add('admin-jump-target');sections.push({node,id:node.id,title});
+    }
+    const signature=sections.map(s=>s.id+'|'+s.title).join('\n');
+    if(jump.dataset.signature!==signature){const previous=jump.value;jump.replaceChildren(new Option('選擇區段（'+sections.length+'）',''),...sections.map(s=>new Option(s.title,s.id)));jump.dataset.signature=signature;jump.value=sections.some(s=>s.id===previous)?previous:'';}
+    jumpLabel.hidden=sections.length<2;
+  }
+  function listPager(list,pageSize){
+    if(!list)return;
+    const rows=Array.from(list.children).filter(el=>list.id==='cl-full-list'?el.tagName==='DETAILS':el.tagName==='P');
+    let state=listStates.get(list);
+    if(!state){
+      const before=create('div','admin-list-pager'),after=create('div','admin-list-pager');
+      list.before(before);list.after(after);state={page:1,rows:[],before,after};listStates.set(list,state);
+    }
+    if(state.rows.length!==rows.length||state.rows[0]!==rows[0]||state.rows.at(-1)!==rows.at(-1))state.page=1;
+    state.rows=rows;const pages=Math.max(1,Math.ceil(rows.length/pageSize));state.page=Math.min(state.page,pages);
+    rows.forEach((row,i)=>row.classList.toggle('admin-list-hidden',Math.floor(i/pageSize)!==state.page-1));
+    for(const pager of[state.before,state.after]){
+      pager.hidden=pages<=1;
+      const label='第 '+state.page+' / '+pages+' 頁 · 共 '+rows.length+' 則（每頁 '+pageSize+' 則）';
+      if(pager.dataset.label===label)continue;pager.dataset.label=label;pager.replaceChildren();const text=create('span','',label);text.dataset.pageLabel='';pager.append(text);
+      for(const [word,delta]of [['‹ 上一頁',-1],['下一頁 ›',1]]){const b=button(word,()=>{state.page+=delta;listPager(list,pageSize);state.before.scrollIntoView({block:'start',behavior:'instant'});});b.disabled=delta<0?state.page===1:state.page===pages;pager.append(b);}
+    }
+  }
+  function enhanceTable(table,index,panel){
+    if(table.closest('.modal'))return;
+    const headerRows=table.tHead?.rows, body=table.tBodies[0], heads=headerRows?.length===1?Array.from(headerRows[0].cells).filter(c=>!c.classList.contains('admin-row-toggle-heading')):[];
+    const rows=body?Array.from(body.rows):[];
+    const eligible=heads.length>=3&&!table.matches('.mx-t,.mx-f,.heatmap-table')&&rows.length>0&&rows.every(row=>{const cells=Array.from(row.cells).filter(c=>!c.classList.contains('admin-row-toggle-cell'));return cells.length===heads.length&&cells.every(c=>c.tagName==='TD'&&c.colSpan===1&&c.rowSpan===1);});
+    let state=tableStates.get(table);
+    if(!state){
+      const host=create('div','admin-table-host'),scroll=create('div','admin-table-scroll');table.before(host);host.append(scroll);scroll.append(table);
+      state={host,scroll,limit:10};tableStates.set(table,state);
+    }
+    if(!eligible)return;
+    const labels=heads.map((h,i)=>labelOf(h).replace(/[▲▼]/g,'').trim()||'操作 '+(i+1));
+    if(!state.tools){
+      const tools=create('div','admin-table-tools'),label=create('label','','顯示'),mode=create('select');mode.setAttribute('aria-label','清單顯示方式');mode.append(new Option('摘要卡片','cards'),new Option('完整表格','table'));label.append(mode);tools.append(label);
+      const count=create('span');tools.append(count);state.host.prepend(tools);
+      const footer=create('div','admin-reveal-rows'),more=button('再顯示 10 筆',()=>{state.limit+=10;enhanceTable(table,index,panel);}),all=button('本頁全部',()=>{state.limit=Infinity;enhanceTable(table,index,panel);});footer.append(create('span'),more,all);state.host.append(footer);
+      Object.assign(state,{tools,mode,count,footer,more,all});const viewKey='table_'+active;mode.value=preference(viewKey)==='table'?'table':'cards';
+      mode.addEventListener('change',()=>{preference(viewKey,mode.value);enhanceTable(table,index,panel);});
+      const sortable=heads.map((h,i)=>({h,i})).filter(({h})=>h.hasAttribute('onclick'));
+      if(sortable.length){const form=create('div','admin-table-sort'),select=create('select');select.setAttribute('aria-label','選擇排序欄位');sortable.forEach(({i})=>select.append(new Option(labels[i],String(i))));form.append(select,button('套用排序',()=>heads[Number(select.value)]?.click()));tools.append(form);}
+      const th=create('th','admin-row-toggle-heading','詳細');headerRows[0].append(th);
+    }
+    state.scroll.classList.toggle('admin-table-card-mode',state.mode.value==='cards');state.scroll.classList.toggle('admin-table-full-mode',state.mode.value!=='cards');
+    setText(state.count,'本頁 '+rows.length+' 筆');
+    rows.forEach((row,rowIndex)=>{
+      const cells=Array.from(row.cells).filter(c=>!c.classList.contains('admin-row-toggle-cell'));
+      cells.forEach((cell,i)=>{
+        cell.dataset.adminLabel=labels[i];
+        const primary=i<2||(/^(P1|P2|狀態|回合|暱稱|玩家|冠軍|勝率|奪冠|牌組名稱|名稱|卡名|卡片|勝方|Email)/i.test(labels[i]));
+        const buttons=Array.from(cell.querySelectorAll('button'));
+        const safeAction=buttons.length>0&&buttons.every(b=>/觀戰|回放|詳情|明細|牌組|查看/.test(labelOf(b))&&!/刪除|下架|判|儲存|解除|清除/.test(labelOf(b)));
+        cell.classList.toggle('admin-card-detail',!primary&&!safeAction);
+        cell.classList.toggle('admin-card-wide',i===0||i===1||safeAction);
+      });
+      row.classList.toggle('admin-row-deferred',rowIndex>=state.limit);
+      if(!row.querySelector(':scope > .admin-row-toggle-cell')){
+        const cell=create('td','admin-row-toggle-cell'),toggle=button('詳細與操作 ▾',()=>{const open=row.classList.toggle('admin-row-open');toggle.setAttribute('aria-expanded',String(open));setText(toggle,open?'收合資料 ▴':'詳細與操作 ▾');});toggle.setAttribute('aria-expanded','false');cell.append(toggle);row.append(cell);
+      }
+    });
+    state.footer.hidden=rows.length<=10||state.limit>=rows.length;setText(state.footer.firstElementChild,'已顯示本頁 '+Math.min(state.limit,rows.length)+' / '+rows.length+' 筆');
+  }
+  function enhanceModals(){
+    const overlays=Array.from(document.querySelectorAll('.modal-bg')).filter(el=>el.getClientRects().length);
+    for(const overlay of overlays){
+      const modal=overlay.querySelector(':scope > .modal');if(!modal)continue;
+      for(const table of modal.querySelectorAll('table')){if(table.parentElement.classList.contains('admin-modal-table-scroll'))continue;const scroll=create('div','admin-modal-table-scroll');table.before(scroll);scroll.append(table);}
+      const original=Array.from(modal.querySelectorAll('button[onclick]')).find(b=>/^(?:✕\s*)?(?:關閉|Close|←\s*返回|返回上一層)$/.test(labelOf(b)));
+      if(!original)continue;
+      let bar=modal.querySelector(':scope > .admin-modal-bar');
+      if(!bar){bar=create('div','admin-modal-bar');bar.append(create('span','',overlay.id==='ts-modal-overlay'?'賽程與牌組':'資料詳情'),create('button'));modal.prepend(bar);}
+      // pushModal 保存 HTML，popModal 還原後必須重新綁定按鈕，不能只看外觀標記。
+      const close=bar.querySelector('button');close.type='button';close.textContent=labelOf(original);close.onclick=()=>original.click();close.setAttribute('aria-label',labelOf(original));original.classList.add('admin-modal-legacy-close');
+      modal.setAttribute('role','dialog');modal.setAttribute('aria-label',headingLabel(modal.querySelector('h3,h2')||bar.firstElementChild));
+    }
+    return overlays;
+  }
+  function syncOverlays(){
+    const overlays=enhanceModals();const visible=app.getClientRects().length>0;
+    if(!visible&&drawerOpen){drawerOpen=false;sidebar.classList.remove('admin-drawer-open');shade.hidden=true;menuButton.setAttribute('aria-expanded','false');sidebar.removeAttribute('role');sidebar.removeAttribute('aria-modal');drawerReturn=null;}
+    const shouldLock=visible&&(drawerOpen||overlays.length>0);
+    if(shouldLock&&!locked){lockedAt=window.scrollY;overlayFocus=document.activeElement;}
+    const modalOpen=visible&&overlays.length>0;
+    main.inert=drawerOpen||modalOpen;header.inert=drawerOpen||modalOpen;bottom.inert=drawerOpen||modalOpen;sidebar.inert=modalOpen;
+    const z=el=>Math.max(...[el,el.parentElement].filter(Boolean).map(e=>Number(getComputedStyle(e).zIndex)||0));
+    const top=overlays.slice().sort((a,b)=>z(b)-z(a))[0]||null;
+    for(const overlay of overlays){overlay.inert=overlay!==top;overlay.querySelector(':scope > .modal')?.setAttribute('aria-modal',String(overlay===top));}
+    if(top&&top!==topModal)top.querySelector('.admin-modal-bar button,button,input,select,textarea,a[href]')?.focus({preventScroll:true});
+    topModal=top;
+    document.documentElement.classList.toggle('admin-overlay-open',shouldLock);
+    if(!shouldLock&&locked){window.scrollTo({top:lockedAt,behavior:'instant'});if(overlayFocus?.isConnected&&overlayFocus.getClientRects().length)overlayFocus.focus({preventScroll:true});overlayFocus=null;}
+    locked=shouldLock;
+  }
+  function refresh(){
+    frame=0;observer.disconnect();
+    try{
+      const panel=document.getElementById('tab-'+active);
+      updateContext();if(panel){sectionize(panel);landmarks(panel);Array.from(panel.querySelectorAll('table')).forEach((table,i)=>enhanceTable(table,i,panel));listPager(panel.querySelector('#cl-full-list'),20);listPager(panel.querySelector('#preset-list'),10);}
+      syncOverlays();
+    }finally{observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['style']});}
+  }
+  function schedule(){if(!frame)frame=requestAnimationFrame(refresh);}
+  const observer=new MutationObserver(schedule);
+  window.adminWorkspace={refresh:schedule,viewChanged(name){const changed=active!==name;active=name;setDrawer(false);if(changed)window.scrollTo({top:0,behavior:'instant'});updateContext();schedule();}};
+  document.addEventListener('keydown',event=>{
+    if(topModal){
+      const items=Array.from(topModal.querySelectorAll('button,input,select,textarea,a[href],[tabindex="0"]')).filter(el=>!el.disabled&&el.checkVisibility());
+      if(event.key==='Escape'){const close=topModal.querySelector('.admin-modal-bar button');if(close){event.preventDefault();close.click();}return;}
+      if(event.key==='Tab'){const first=items[0],last=items.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}}
+      return;
+    }
+    if(drawerOpen){
+      if(event.key==='Escape'){event.preventDefault();setDrawer(false);return;}
+      if(event.key==='Tab'){const items=Array.from(sidebar.querySelectorAll('button,input,[tabindex="0"]')).filter(el=>!el.disabled&&el.getClientRects().length);const first=items[0],last=items.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}}
+    }
+  });
+  mobile.addEventListener('change',()=>{if(!mobile.matches)setDrawer(false);schedule();});
+  new ResizeObserver(()=>{const height=Math.ceil(header.getBoundingClientRect().height);if(height>0)document.documentElement.style.setProperty('--admin-header-height',height+'px');}).observe(header);
+  document.body.classList.add('admin-workspace-ready');refresh();
+})();
+// <<< v6630-admin-workspace
+
 </script>
 </body>
 </html>
