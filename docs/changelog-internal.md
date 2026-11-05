@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.629｜admin賽程辨識／分頁／手動搜尋，投稿按鈕對比修正
+
+- BASE：`a1a0bc3c`（v6.628）。admin賽程勝者綠底與勝字、依本場快照使用中央牌組原型規則；冠軍榜50筆分頁。所有文字搜尋改按鈕／Enter提交，相關下拉與勾選明確套用；草稿不觸發查詢或篩選。
+- 站長追加手機公布欄投稿按鈕綠底白字，桌機與深淺一致；本版公開changelog只寫此玩家修正，所有admin細節只列後台。
+- 獨立 Codex `admin_ux_6629_review`（非 Opus）初審三 P2：等待回應套用未提交矩陣選項／舊統計與新時間標題錯配／人工裁定殘留平手旗標遮住勝方。主代理均抽真函式重現後修正：草稿與已提交值分離、時間範圍明確套用、取得資料的 days 快照、變更範圍清舊統計／矩陣／先後攻表並禁用其匯出；busy 不切範圍；done 的有效 winner 優先，人工裁定文案優先。複審三項解除。
+- 後續產品效能 P3 已修：每次賽程 view 只查一次牌表簽章／cache，再傳玩家 renderer；128 人 320 場的獨立暖 cache 量測約 1431→83ms。以真 signature 呼叫次數守衛而非釘毫秒。常數 fixture P3 改 AST 抽真 TV_PAGE_SIZE／ROOMS_PAGE_SIZE，M3 已殺；自查 M5 初次被 loading 移除 input 防線遮住，改非空 cache 保留工具列並確實重送，驗真 busy。
+- 最後守衛 31/0；BASE 3 正對照綠、28 行為紅，正常 exit 1；12 個有效突變逐輪指定行為紅、兩既有正對照綠，N1／還原綠。初兩輪在 M3／M5 存活時停止並留 log，不能稱初輪全殺；初 fixture AST 誤切註解內 script 標記／未提供 BASE 報告寬窗 API 回應已補，未將 fixture 中止算成 HEAD-FAIL。
+- 前後 harness＋35 免疫各 36/36；15 相關舊守衛首輪 13 綠／2 fixture 紅，6272 補真搜尋元件及 committed 初值後42/0、184 透過真套用出口後13/0，斷言與門檻不變；同位審查者複審接受。其餘 inline-handler／6229／6567／628 fixture 因新提交契約調整接線，不削弱原意。標準 bump 工具自動依13版政策裁掉6272最舊歷史註解，審查核後接受。完整 admin script 語法、lint／EOL綠。
+- 原型只判目前開啟的賽事，沿用既有管理端 classify-decks 中央規則，每批500、5分鐘 cache／in-flight 共用、明確更新按鈕；數字 key 避免80字截斷，event/view＋uid 防舊回應覆蓋，缺牌表／未知／失敗明示。沒有新增端點或改 server／引擎／牌池。公開更新僅玩家 CTA，admin完整記錄另列629內部條目。
+- 正常 root Firebase／fake Oracle 雙建置成功且快照完成；390／1366 × 深淺四場景，以真 Oracle 發行頁配隔離假登入／API 確認投稿按鈕綠白與投稿視窗，真 admin renderer 確認冠軍榜50筆及勝方／原型。pageerrors 空、server writes 0；圖片已檢視，非原生 iPhone 實機或正式資料操作。
+- 完整回歸待執行，尚未最終准推。證據 E:/ptcg-tw-sim-local/admin-ux-6629-evidence，審查實驗 review-6629。
+
 ## v6.628｜歷史賽事參賽牌組與冠軍捷徑（hidden）
 
 - BASE：`a8e412c2`（v6.627）。站長希望方便查看已完賽玩家尤其冠軍當時牌組，複製到自己的編輯器測試。已確認歸檔及既有管理端stats API含完整報名快照；只補admin介面，不加API、不改server與遊戲。

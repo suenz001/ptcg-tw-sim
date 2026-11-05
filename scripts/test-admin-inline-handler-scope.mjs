@@ -68,7 +68,7 @@ T('⭐inline on* handler 不可直接賦值模組層級變數（全域作用域�
 T('⭐時間範圍下拉必須透過掛在 window 的 setter（本次事故的具體回歸鎖）', () => {
   const sel = lines.find((l) => l.includes('id="arch-since"'));
   assert.ok(sel, '牌組原型的時間範圍下拉應存在');
-  assert.ok(/onchange="setArchSince\(/.test(sel), '應呼叫 setArchSince()，實際：' + sel.trim().slice(0, 140));
+  assert.ok(/onchange="setArchSince\(/.test(sel) || src.includes("onclick=\"setArchSince(document.getElementById('arch-since').value)"), '應呼叫 setArchSince()，實際：' + sel.trim().slice(0, 140));
   assert.ok(src.includes('window.setArchSince'), 'setArchSince 必須掛在 window，否則 inline handler 找不到它');
 });
 

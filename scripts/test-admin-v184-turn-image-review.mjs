@@ -84,12 +84,13 @@ async function judge(browser, HTML) {
       out.norm = await draw(data, 1);
       out.insuff = await draw(data, 100);
       out.big = await draw(big, 1);
+      // Rule 40 v6.629：下拉先按真套用出口再匯出；仍驗同一張真圖的all場數，BASE維持舊即時讀取。
       // G6：資料源 all 經匯出鈕
       __setData(data);
-      document.getElementById('mx-src').value = 'all';
+      document.getElementById('mx-src').value = 'all'; if(window.applyArchMatchupFilters)window.applyArchMatchupFilters();
       T = []; await window.exportArchTurnImage();
       out.allTexts = T.map((x) => x.t);
-      document.getElementById('mx-src').value = 'casual';
+      document.getElementById('mx-src').value = 'casual'; if(window.applyArchMatchupFilters)window.applyArchMatchupFilters();
       // G7 純函式
       if (__mx.mxDiffView && __mx.mxKnownTurn) {
         const L = (d, ok1, ok2) => ({ diff: d, first: { ok: ok1 }, second: { ok: ok2 } });
@@ -102,8 +103,8 @@ async function judge(browser, HTML) {
       out.focus0 = T.map((x) => x.t);
       // G10：網頁表（複審 P3-3／P3-4）——場數千分位；資料源 all 在舊伺服器時要說「伺服器還沒更新」
       __setData(big); window.renderArchTurnOrder(); out.webBig = document.getElementById('mx-turn-box').innerText;
-      __setData(old); document.getElementById('mx-src').value = 'all'; window.renderArchTurnOrder(); out.webOldAll = document.getElementById('mx-turn-box').innerText;
-      document.getElementById('mx-src').value = 'casual';
+      __setData(old); document.getElementById('mx-src').value = 'all'; if(window.applyArchMatchupFilters)window.applyArchMatchupFilters(); window.renderArchTurnOrder(); out.webOldAll = document.getElementById('mx-turn-box').innerText;
+      document.getElementById('mx-src').value = 'casual'; if(window.applyArchMatchupFilters)window.applyArchMatchupFilters();
       // G9：舊伺服器 → 按鈕
       apiResp = old;
       document.getElementById('mx-turn-img-btn').disabled = true;

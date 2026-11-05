@@ -131,7 +131,7 @@ function adminScenarios(H, HOME, BODIES, ARC) {
     && /Promise\.all\(\[get\('changelog\.html'\), get\('changelog-bodies\.html'\)\.catch\(\(\) => ''\), get\('changelog-archive\.html'\)\]\)/.test(H)
     && /&lt;b&gt;大標題&lt;\/b&gt;&lt;br&gt;摘要/.test(H)
     && /el\.innerHTML = fullHtml \+\s*\n\s*'<details[^']*><summary[^>]*>🛠️ 進階：首頁更新記錄覆蓋編輯/.test(H)
-    && /window\.clAdminFilter = function/.test(H) && /oninput="clAdminFilter\(this\.value\)"/.test(H);
+    && /window\.clAdminFilter = function/.test(H) && (/oninput="clAdminFilter\(this\.value\)"/.test(H) || /adminSearchBox\('cl-full-q',[^\n]*window\.clAdminFilter\(q\)/.test(H));
   return r;
 }
 

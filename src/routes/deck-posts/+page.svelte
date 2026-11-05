@@ -976,7 +976,7 @@
       <button class:active={tab === 'mine'} onclick={() => switchTab('mine')}>我的投稿</button>
       <span class="spacer"></span>
       {#if canPost}
-        <button class="primary small" onclick={openPostModal}>＋ 投稿牌組</button>
+        <button class="primary small post-submit-cta" onclick={openPostModal}>＋ 投稿牌組</button>
       {:else}
         <span class="hint">登入 email 帳號後就能投稿</span>
       {/if}
@@ -1840,6 +1840,10 @@
   :global(html) .notice { background: var(--ui-accent-soft); border-color: var(--ui-border); color: var(--ui-text); }
   :global(html) .badge.arche { background: var(--ui-accent-soft); border-color: var(--ui-border); }
   /* <<< v6504-unify */
+  /* >>> v6629-post-cta */
+  /* v6.629：投稿主要按鈕固定森林綠白字，不沿用深色主題的淡綠底深字。 */
+  .tabs > button.primary.post-submit-cta { background: #236447; color: #fff; border-color: #236447; }
+  /* <<< v6629-post-cta */
   /* >>> v6594-deck-post-thumbs-css */
   /* ⭐v6.594 牌組明細：縮圖／文字切換、縮圖格、大圖檢視（站長 2026-10-23 核准第一期）。
      ・不用媒體查詢（本頁的數量有守衛在釘）：格子用 auto-fill＋minmax 依明細寬度自己排 ——

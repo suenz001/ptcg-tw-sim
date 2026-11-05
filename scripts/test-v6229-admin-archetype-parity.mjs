@@ -207,13 +207,15 @@ function buildSearch(htmlSrc, rooms) {
   const eh = sliceBetween(htmlSrc, 'function escapeHtml(s) {', '\n\n// ── Deck modal', 'escapeHtml');
   const dm = sliceBetween(htmlSrc, 'function detectMainPokemon(seat) {', '\nlet statsLoading', 'detectMainPokemon');
   const rr = sliceBetween(htmlSrc, 'function renderRoomRow(r, source) {', '\nfunction escapeHtml(', 'renderRoomRow');
-  const fs = sliceBetween(htmlSrc, 'window.filterRoomsBySearch = function(q, source) {', '\nfunction renderRoomRow', 'filterRoomsBySearch');
+  const fs = sliceBetween(htmlSrc, 'window.filterRoomsBySearch = function(q, source', '\nfunction renderRoomRow', 'filterRoomsBySearch');
   // v6.240：filterRoomsBySearch 多了「伺服器端分頁時把搜尋送到伺服器」的分支，
   //   oracleRoomsSrv = null ＝ 舊伺服器／前端切頁模式，正是本守衛要驗的那條本機搜尋路徑。
   const prelude = 'let statusFilter = "all"; let oracleRoomsPage = 1; let firebaseRoomsPage = 1;\n'
     + 'let oracleRoomsSrv = null; let oracleRoomsSearch = ""; let _oracleSearchFocus = false; let _oracleSearchTimer = null;\n'
     + 'const ROOMS_PAGE_SIZE = 50; const oracleRoomsCache = ROOMS; const firebaseRoomsCache = [];\n';
-  const src = prelude + eh + '\n' + dm + '\n' + rr + '\n' + fs + '\nreturn window.filterRoomsBySearch;';
+  // Rule 40 v6.629：本機搜尋改完整重繪 pager；仍實跑真搜尋述詞與真 row，這裡只補 render 的 DOM 替身。
+  const localRender = htmlSrc.includes('function filterLocalRooms(') ? `function renderRoomsTab(el,source){document.getElementById(source+'-rooms-tbody').innerHTML=filterLocalRooms(source==='oracle'?oracleRoomsSearch:firebaseRoomsSearch,source).slice(0,ROOMS_PAGE_SIZE).map(r=>renderRoomRow(r,source)).join('');}` : '';
+  const src = prelude + localRender + eh + '\n' + dm + '\n' + rr + '\n' + fs + '\nreturn window.filterRoomsBySearch;';
   const captured = {};
   const documentStub = { getElementById: (id) => ({ set innerHTML(v) { captured[id] = v; }, get innerHTML() { return captured[id]; } }) };
   const search = new Function('window', 'document', 'ROOMS', 'cardInfoMap', 'cardTagsCache', 'uidEmailMap', 'playerLink', src)(

@@ -16,6 +16,7 @@ export function tournamentDeckFixture(root) {
   new Function('map',sliceBetween(html,'      for (let jp = 50220;','      cardCanonicalMap = canonicalMap;'))(info);
   const formatter=sliceBetween(html,'// >>> v6627-player-deck-import-text','// <<< v6627-player-deck-import-text');
   const added=html.includes('// >>> v6628-archived-tournament-decks')?sliceBetween(html,'// >>> v6628-archived-tournament-decks','// <<< v6628-archived-tournament-decks'):'';
+  const newer=html.includes('// >>> v6629-bracket-archetypes')?sliceBetween(html,'// >>> v6629-bracket-archetypes','// <<< v6629-bracket-archetypes'):'';
   const modal=sliceBetween(html,'let _zTop = 200;','// v1.60 一般 modal');
   const outcome=sliceBetween(html,'function _tsMatchOutcome(m)', '\n}\n')+'\n}';
   const bracket=sliceBetween(html,'window.tevShowBracket = function (eventIdEnc)','// v1.48 對戰 log');
@@ -25,7 +26,7 @@ export function tournamentDeckFixture(root) {
   const dates=sliceBetween(html,'function _tsFmtDateTime(ms)','function _tsPct(');
   const style=html.match(/<style[^>]*>([\s\S]*?)<\/style>/)?.[1];assert.ok(style);
   const code=`let tournStatsCache={archives:initialArchives};const cardInfoMap=initialInfo;
-    ${escape}\n${dates}\n${modal}\n${formatter}\n${added}\n${outcome}\n${bracket}\n${replay}
+    ${escape}\n${dates}\n${modal}\n${formatter}\n${added}\n${newer}\n${outcome}\n${bracket}\n${replay}
     let pending=[];window._fixtureDelay=false;window._fixtureLoadReject=false;window._fixtureLoadCalls=0;window._fixtureApiCalls=0;
     const ensureCardIndex=()=>{window._fixtureLoadCalls++;if(window._fixtureLoadReject)throw Error('index failed');return window._fixtureDelay?new Promise(resolve=>pending.push(resolve)):Promise.resolve();};
     window._fixtureResolve=()=>pending.shift()?.();
@@ -33,7 +34,7 @@ export function tournamentDeckFixture(root) {
     window._fixtureArchives=()=>tournStatsCache.archives;
     window._fixtureInfo=cardInfoMap;window._fixtureFormat=(...args)=>playerDeckImportText(...args);
     const playerLink=(email,name)=>'<a href="#player">'+escapeHtml(name)+'</a>';
-    window.api=()=>{window._fixtureApiCalls++;throw Error('不得查詢其他牌組');};
+    window._fixtureClassificationCalls=0;window.api=(path,opts)=>{if(path==='/api/admin/deck-rules/classify-decks'){window._fixtureClassificationCalls++;return Promise.resolve({results:Object.fromEntries(JSON.parse(opts.body).decks.map(d=>[d.key,'測試原型']))});}window._fixtureApiCalls++;throw Error('不得查詢其他牌組');};
     window._fixtureOpened=[];window.open=(...args)=>window._fixtureOpened.push(args);
     window._fixtureClipboard='';window._fixtureClipboardReject=false;window._fixtureClipboardHold=false;
     Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{if(window._fixtureClipboardReject)throw Error('denied');if(window._fixtureClipboardHold)await new Promise(resolve=>window._fixtureClipboardRelease=resolve);window._fixtureClipboard=text;}}});

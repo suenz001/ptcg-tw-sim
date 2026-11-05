@@ -357,6 +357,14 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
   #tab-moderation label { display:block; margin:10px 0 5px; }
   #tab-moderation select { width:100%; max-width:100%; }
   #tab-moderation button { white-space:normal; }
+/* >>> v6629-bracket-player-colors */
+.ts-bracket-player { display:inline-block; padding:3px 6px; border:1px solid transparent; border-radius:5px; color:#5a6472; overflow-wrap:anywhere; }
+.ts-bracket-player.ts-match-winner { color:#176333; background:#e4f4e8; border-color:#91bf9d; font-weight:700; }
+.ts-bracket-player.ts-match-winner a, .ts-bracket-player.ts-match-winner .player-name, .ts-bracket-player.ts-match-winner .muted { color:inherit; }
+.ts-player-archetype { font-size:.82rem; font-weight:400; }
+.ts-win-label { white-space:nowrap; font-weight:700; }
+/* <<< v6629-bracket-player-colors */
+
 </style>
 </head>
 <body>
@@ -1591,6 +1599,7 @@ window._tsCloseModal = function () { var ov = document.getElementById('ts-modal-
 
 function _tsMatchOutcome(m) {
   if (m.bye) return '輪空晉級';
+  if (m.status === 'done' && m.adminResolved && m.winnerUid) return '管理員裁定';
   // v1.69（Fable 5 審查）：沒有這一條，系統死角平手場會落到最後的「正常分勝負」——
   //   而 v6.156 刻意不重用 doubleNoShow 就是為了事後分得出「掛機」與「系統卡住」。
   if (m.deadlockDraw) return (m.status === 'pending-admin' ? '系統死角（待裁定）' : '系統死角改判平手');
@@ -1661,6 +1670,70 @@ window.tevCopyArchivedDeck = async function(btn) {
 };
 // <<< v6628-archived-tournament-decks
 
+// >>> v6629-bracket-archetypes
+const tsBracketArchetypes = new Map();
+let tsBracketView = 0;
+function tsBracketSignature(a) { return JSON.stringify((a.players || []).map(p => [p.uid, p.deckEntries || []])); }
+function tsBracketCached(a) {
+  const cached = tsBracketArchetypes.get(String(a.eventId));
+  return cached && cached.signature === tsBracketSignature(a) && Date.now() - cached.at < 300000 ? cached : null;
+}
+function tsBracketArchetypeText(a, uid, cache) {
+  const p = tsArchivePlayerOf(a, uid);
+  if (!Array.isArray(p?.deckEntries) || !p.deckEntries.length) return '未留存牌表';
+  const result = cache?.results;
+  if (!result?.has(String(uid))) return '原型待判定';
+  return result.get(String(uid)) || '無法判定';
+}
+function tsBracketPlayer(a, uid, name, winner, cache) {
+  const p = tsArchivePlayerOf(a, uid);
+  const text = p?.email ? playerLink(p.email, name || p.name || p.email) : escapeHtml(name || p?.name || '—');
+  return '<span class="ts-bracket-player' + (winner ? ' ts-match-winner' : '') + '">'
+    + text + ' <span class="ts-player-archetype" data-uid="' + escapeHtml(String(uid ?? '')) + '">【'
+    + escapeHtml(tsBracketArchetypeText(a, uid, cache)) + '】</span>'
+    + (winner ? ' <span class="ts-win-label">✓ 勝</span>' : '') + '</span>';
+}
+async function tsLoadBracketArchetypes(a, view, refresh = false) {
+  const key = String(a.eventId), signature = tsBracketSignature(a);
+  let cache = tsBracketCached(a);
+  if (refresh && !cache?.pending) { tsBracketArchetypes.delete(key); cache = null; }
+  const rows = (a.players || []).filter(p => p?.uid != null && Array.isArray(p.deckEntries) && p.deckEntries.length);
+  if (!rows.length) return;
+  if (!cache) {
+    cache = { signature, at: Date.now(), results: new Map(), pending: null };
+    tsBracketArchetypes.set(key, cache);
+    cache.pending = (async () => {
+      const results = new Map();
+      // 僅判定目前開啟的賽事；沿用伺服器中央規則，數字 key 避開端點 80 字截斷。
+      for (let i = 0; i < rows.length; i += 500) {
+        const part = rows.slice(i, i + 500);
+        const res = await api('/api/admin/deck-rules/classify-decks', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decks: part.map((p, n) => ({ key: String(n), entries: p.deckEntries })) }),
+        });
+        if (!res || res.error || !res.results || part.some((p, n) => !Object.hasOwn(res.results, String(n)))) throw Error('原型判定失敗');
+        part.forEach((p, n) => results.set(String(p.uid), typeof res.results[String(n)] === 'string' ? res.results[String(n)] : null));
+      }
+      cache.results = results; cache.at = Date.now();
+    })().catch(() => { cache.error = true; if (tsBracketArchetypes.get(key) === cache) tsBracketArchetypes.delete(key); })
+      .finally(() => { cache.pending = null; });
+  }
+  await cache.pending;
+  const overlay = document.getElementById('ts-modal-overlay');
+  if (!overlay || overlay.style.display === 'none' || overlay.querySelector('[data-bracket-view]')?.dataset.bracketView !== String(view)) return;
+  overlay.querySelectorAll('.ts-player-archetype').forEach(el => {
+    const uid = el.dataset.uid, p = tsArchivePlayerOf(a, uid);
+    el.textContent = '【' + (!p?.deckEntries?.length ? '未留存牌表' : cache.error ? '判定失敗，可重試' : cache.results.get(uid) || '無法判定') + '】';
+  });
+}
+window.tsRefreshBracketArchetypes = function() {
+  const el = document.querySelector('#ts-modal-overlay [data-bracket-view]');
+  if (!el) return;
+  const a = (tournStatsCache?.archives || []).find(a => String(a.eventId) === el.dataset.eventId);
+  if (a) return tsLoadBracketArchetypes(a, el.dataset.bracketView, true);
+};
+// <<< v6629-bracket-archetypes
+
 window.tevShowBracket = function (eventIdEnc) {
   var eventId = decodeURIComponent(eventIdEnc);
   var data = tournStatsCache || { archives: [] };
@@ -1669,25 +1742,22 @@ window.tevShowBracket = function (eventIdEnc) {
   var byRound = {};
   (a.matches || []).forEach(function (m) { (byRound[m.round] = byRound[m.round] || []).push(m); });
   var rounds = Object.keys(byRound).map(Number).sort(function (x, y) { return x - y; });
-  // v1.54：uid → email 對照，讓賽程裡的每個名字都能點進玩家總覽
-  var uidEmail = {};
-  (a.players || []).forEach(function (p) { if (p && p.uid) uidEmail[String(p.uid)] = p.email || null; });
-  var pName = function (uid, name) {
-    var em = uid ? uidEmail[String(uid)] : null;
-    return em ? playerLink(em, name || em) : escapeHtml(name || '—');
-  };
-  var h = '<h3 style="margin:0 28px 2px 0;">🏆 ' + escapeHtml(a.eventName || '錦標賽') + ' — 賽程</h3>';
+  const view = ++tsBracketView;
+  const archetypes = tsBracketCached(a);
+  var pName = (uid, name) => tsBracketPlayer(a, uid, name, false, archetypes);
+  var h = '<div data-bracket-view="' + view + '" data-event-id="' + escapeHtml(String(a.eventId)) + '"></div><h3 style="margin:0 28px 2px 0;">🏆 ' + escapeHtml(a.eventName || '錦標賽') + ' — 賽程</h3>';
   h += '<p class="small muted" style="margin:0 0 10px;">' + (a.playerCount || 0) + ' 人'
     + (a.championName ? ' ｜ 冠軍：' + pName(a.championUid, a.championName) + ' 🏆' : '')
     + '　·　點名字看玩家總覽、點對戰看該局 log</p>';
   if (a.championUid) h += '<div style="margin-bottom:10px;">' + tsArchiveDeckButton(a, a.championUid, '🏆 冠軍牌組') + '</div>';
-  // v1.54 參賽名單（含使用牌組），每位都可點進玩家總覽
+  h += '<p><button type="button" onclick="tsRefreshBracketArchetypes()">↻ 更新牌組原型</button></p>';
+  // 參賽名單與每場對戰共用本場快照的原型標籤。
   if ((a.players || []).length) {
     h += '<details style="margin:0 0 10px;"><summary style="cursor:pointer;color:#3a5a8a;font-weight:600;">👥 參賽名單（' + a.players.length + ' 人）</summary>'
       + '<div style="max-height:32vh;overflow:auto;margin-top:6px;">'
       + a.players.map(function (p) {
           return '<div style="padding:4px 8px;border-bottom:1px solid #e3e8ef;font-size:.88rem;">'
-            + (p.email ? playerLink(p.email, p.name || p.email) : escapeHtml(p.name || '—'))
+            + pName(p.uid, p.name)
             + (p.deckName ? ' <span class="small muted">· ' + escapeHtml(p.deckName) + '</span>' : '')
             + (p.email ? '' : ' <span class="small muted">(無 email)</span>')
             + ' ' + tsArchiveDeckButton(a, p.uid, '🃏 當時牌組')
@@ -1695,13 +1765,15 @@ window.tevShowBracket = function (eventIdEnc) {
         }).join('')
       + '</div></details>';
   }
-  if (!rounds.length) { h += '<p class="empty">這場沒有賽程紀錄。</p>'; _tsModal(h); return; }
+  if (!rounds.length) { h += '<p class="empty">這場沒有賽程紀錄。</p>'; _tsModal(h); void tsLoadBracketArchetypes(a, view); return; }
   rounds.forEach(function (r) {
     h += '<div style="margin:10px 0 4px;color:#3a5a8a;font-weight:600;">第 ' + r + ' 輪</div>';
     byRound[r].forEach(function (m) {
-      var winP1 = m.winnerUid && m.winnerUid === m.p1uid, winP2 = m.winnerUid && m.winnerUid === m.p2uid;
-      var p1 = '<b style="color:' + (winP1 ? '#2e7d32' : '#5a6472') + ';">' + pName(m.p1uid, m.p1name) + (winP1 ? ' 🏆' : '') + '</b>';
-      var p2 = m.bye ? '<span class="muted">（輪空）</span>' : ('<b style="color:' + (winP2 ? '#2e7d32' : '#5a6472') + ';">' + pName(m.p2uid, m.p2name) + (winP2 ? ' 🏆' : '') + '</b>');
+      const resolved = m.status === 'done' && !m.bye;
+      var winP1 = resolved && m.winnerUid != null && String(m.winnerUid) === String(m.p1uid);
+      var winP2 = resolved && m.winnerUid != null && String(m.winnerUid) === String(m.p2uid);
+      var p1 = tsBracketPlayer(a, m.p1uid, m.p1name, winP1, archetypes);
+      var p2 = m.bye ? '<span class="muted">（輪空）</span>' : tsBracketPlayer(a, m.p2uid, m.p2name, winP2, archetypes);
       var label = p1 + ' <span class="muted">vs</span> ' + p2;
       var clickable = !m.bye && m.p1uid && m.p2uid;
       if (clickable) {
@@ -1721,6 +1793,7 @@ window.tevShowBracket = function (eventIdEnc) {
     });
   });
   _tsModal(h);
+  void tsLoadBracketArchetypes(a, view);
 };
 
 // v1.48 對戰 log 單行上色：依類型分類 + 卡牌連結 PUA marker(U+E100 iid U+E101 名 U+E102) 清成高亮卡名
@@ -1952,6 +2025,47 @@ window._tsSortTable = _tsSortTable; // v1.50 type="module" 下 inline onclick �
 //   inline on* handler 在全域執行 → 一律呼叫 window.tv*，且只 mutate registry
 //   **物件的屬性**（物件屬性的 mutation 在任何作用域都安全），絕不賦值模組變數。
 // ══════════════════════════════════════════════════════════════════════════
+// >>> v6629-explicit-admin-search
+// 輸入只保存草稿；按搜尋／Enter 才呼叫各分頁既有的查詢或篩選。
+const adminSearches = new Map();
+function adminSearchBox(id, value, placeholder, apply) {
+  const committed = String(value || '');
+  let state = adminSearches.get(id);
+  if (!state) { state = { draft: committed, committed, busy: false }; adminSearches.set(id, state); }
+  if (state.committed !== committed) { state.draft = committed; state.committed = committed; }
+  state.apply = apply;
+  const arg = escapeHtml(JSON.stringify(id));
+  return '<div class="admin-search-control" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;max-width:100%;">'
+    + '<input class="search-box" type="search" id="' + escapeHtml(id) + '" value="' + escapeHtml(state.draft)
+    + '" placeholder="' + escapeHtml(placeholder || '搜尋…') + '" aria-label="' + escapeHtml(placeholder || '搜尋')
+    + '" style="flex:1;min-width:0;max-width:100%;" oninput="adminSearchRemember(' + arg + ',this.value)"'
+    + ' onkeydown="if(event.key===\'Enter\' &amp;&amp; !event.isComposing){event.preventDefault();adminSearchApply(' + arg + ');}">'
+    + '<button type="button" id="' + escapeHtml(id) + '-submit" onclick="adminSearchApply(' + arg + ')"'
+    + (state.busy ? ' disabled' : '') + ' style="min-height:40px;flex:none;">🔍 搜尋</button></div>';
+}
+window.adminSearchRemember = function(id, value) {
+  const state = adminSearches.get(id);
+  if (state) state.draft = String(value || '');
+};
+window.adminSearchApply = async function(id) {
+  const state = adminSearches.get(id), input = document.getElementById(id);
+  if (!state || state.busy || !input) return;
+  state.draft = input.value; state.committed = input.value.trim(); state.busy = true;
+  const button = document.getElementById(id + '-submit');
+  if (button) button.disabled = true;
+  try { await state.apply(state.committed); }
+  catch {
+    const current = document.getElementById(id + '-submit');
+    if (current) current.textContent = '搜尋失敗，請重試';
+  }
+  finally {
+    state.busy = false;
+    const current = document.getElementById(id + '-submit');
+    if (current) current.disabled = false;
+  }
+};
+// <<< v6629-explicit-admin-search
+
 const TV_PAGE_SIZE = 50;
 const tableViews = Object.create(null);
 
@@ -2027,13 +2141,10 @@ function tvTh(id, key, label, extra) {
   const ar = tv && tv.sortKey === key ? (tv.sortDir === 'asc' ? ' ▲' : ' ▼') : '';
   return '<th class="sortable" onclick="tvSort(\'' + id + '\',\'' + key + '\')"' + (extra || '') + '>' + label + ar + '</th>';
 }
-/** 搜尋框。⚠必須放在 mount() 容器**之外**：tvSearch 每敲一鍵就重繪 mount，
- *  搜尋框若在裡面會被一起重建而失去輸入焦點。 */
+/** 搜尋框放在 mount 外，輸入草稿不觸發重繪；按鈕／Enter 才提交。 */
 function tvSearchBox(id, placeholder) {
   const tv = tableViews[id];
-  return '<input class="search-box" id="tv-search-' + id + '" placeholder="' + (placeholder || '🔎 搜尋…')
-    + '" value="' + escapeHtml((tv && tv.search) || '') + '" oninput="tvSearch(\'' + id + '\', this.value)"'
-    + ' style="padding:6px 10px;min-width:260px;" />';
+  return adminSearchBox('tv-search-' + id, (tv && tv.search) || '', placeholder, q => window.tvSearch(id, q));
 }
 // ── window 接口（inline on* 只認得 window.*）──
 window.tvSort = function (id, key) {
@@ -2194,15 +2305,8 @@ function renderTournamentStats(el, data) {
   // ── 2. 冠軍榜（奪冠次數）──
   const champRank = Object.values(pmap).filter((p) => p.titles > 0).sort((a, b) => b.titles - a.titles || b.wins - a.wins);
   html += '<section class="stats-section"><h3>🏆 2. 冠軍榜（奪冠次數）' + tsFilterLabel() + '</h3>';
-  if (!champRank.length) html += '<div class="empty">尚無冠軍紀錄。</div>';
-  else {
-    html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th class="sortable" onclick="_tsSortTable(this)">玩家</th><th class="sortable" onclick="_tsSortTable(this)">Email</th><th class="sortable" onclick="_tsSortTable(this)">奪冠</th><th class="sortable" onclick="_tsSortTable(this)">參賽</th><th class="sortable" onclick="_tsSortTable(this)">戰績</th><th class="sortable" onclick="_tsSortTable(this)">勝率</th></tr></thead><tbody>';
-    champRank.forEach((p, i) => {
-      html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td class="small muted">' + playerLink(p.email) + '</td><td><b>' + p.titles + '</b> 🏆</td><td>' + p.events
-        + '</td><td>' + p.wins + ' 勝 ' + p.losses + ' 負</td><td>' + _tsPct(p.wins, p.losses) + '%</td></tr>';
-    });
-    html += '</tbody></table>';
-  }
+  html += tvSearchBox('tsChampRank', '搜尋冠軍玩家 / email…');
+  html += '<div id="tv-mount-tsChampRank" class="table-wrap"></div>';
   html += '</section>';
 
   // ── 3. 玩家戰績排行（依勝場）──
@@ -2255,6 +2359,27 @@ function renderTournamentStats(el, data) {
 
   // ══ v1.60 三張大表交給中央 tv 管線（每頁 50 筆；排序 → 翻頁不會被打回原序）══
   //   注意：一定要在 el.innerHTML 之後才註冊/餵資料，因為 mount() 要找得到剛寫進去的佔位 div。
+  tvDefine({
+    id: 'tsChampRank',
+    columns: {
+      name: { get:r=>r.name, str:true }, email: { get:r=>r.email || '', str:true },
+      titles: { get:r=>r.titles }, events: { get:r=>r.events }, wins: { get:r=>r.wins },
+      rate: { get:r=>_tsPct(r.wins,r.losses) },
+    },
+    defaultSort: ['titles', 'desc'],
+    searchText: r => ((r.name || '') + ' ' + (r.email || '')).toLowerCase(),
+    mount: () => document.getElementById('tv-mount-tsChampRank'),
+    render: v => !v.total ? '<div class="empty">尚無符合的冠軍紀錄。</div>'
+      : '<table class="data-table"><thead><tr><th>#</th>'
+      + tvTh('tsChampRank','name','玩家') + tvTh('tsChampRank','email','Email') + tvTh('tsChampRank','titles','奪冠')
+      + tvTh('tsChampRank','events','參賽') + tvTh('tsChampRank','wins','戰績') + tvTh('tsChampRank','rate','勝率') + '</tr></thead><tbody>'
+      + v.pageRows.map((p,i) => '<tr><td>' + (v.startIndex+i+1) + '</td><td>' + escapeHtml(p.name)
+        + '</td><td>' + playerLink(p.email) + '</td><td><b>' + p.titles + '</b> 🏆</td><td>' + p.events
+        + '</td><td>' + p.wins + ' 勝 ' + p.losses + ' 負</td><td>' + _tsPct(p.wins,p.losses) + '%</td></tr>').join('')
+      + '</tbody></table>',
+  });
+  tvSetRows('tsChampRank', champRank);
+
   tvDefine({
     id: 'tsPlayerRank',
     columns: {
@@ -2376,7 +2501,7 @@ window.manualRefresh = async function(btn) {
 //   data-internal="1" ＝ 與遊戲內容無關的內部維護版本（玩家看不到），這裡照樣列出並標示。
 const CL_SITE_BASE = 'https://suenz001.github.io/ptcg-tw-sim';
 // 只隨admin發布，永不寫入玩家首頁／公開更新檔。
-const CL_ADMIN_ONLY_ENTRIES = [{ ver:'v6.628', internal:true, dup:false, summaryHtml:'<b>歷史賽事參賽牌組與冠軍捷徑</b>', bodyHtml:'歷屆賽事新增冠軍牌組入口；賽程的冠軍、參賽名單與對戰雙方可查看當時保存的報名牌組並複製匯入文字。以賽事與玩家uid精確查找歸檔，不取目前牌組；未留存的舊資料明確標示。' }, { ver:'v6.627', internal:true, dup:false, summaryHtml:'<b>修正玩家查詢牌組文字匯回</b>', bodyHtml:'玩家儲存牌組明細改用精確卡號／完整卡包卡號格式，標題與統計以註解輸出；支援基本能量與雙張場地左右半。缺卡或數量異常禁止複製，複製失敗會提示。玩家匯入說明移除管理來源文字。' }, { ver:'v6.625', internal:true, dup:false, summaryHtml:'<b>公布欄熱門牌組勝率對齊後台原型統計淨化標準</b>', bodyHtml:'/api/meta-stats 的勝率統計改為與後台原型統計一致：排除 AI／本機對戰（只算有房號的真人線上對戰）、排除第 1 回合未進場無回應判負與前 2 回合中途離開／斷線，且只計算有分出勝負的場次（勝場 ÷ (勝場 + 敗場)）。' }, { ver:'v6.624', internal:true, dup:false, summaryHtml:'<b>修正牌組公布欄熱門牌組的冠軍數（N🏆）統計口徑</b>', bodyHtml:'/api/meta-stats 的冠軍數改為直接統計已發布在牌組公布欄內、標記為「網站賽｜冠軍」（tournament.placementLabel === "冠軍"，不含社群賽）的投稿篇數，移除原本對 tournamentChampions 自訂牌組名稱的模糊字串比對，使按鈕上的 N🏆 與點選篩選後看到的網站賽冠軍投稿篇數完全一致。' }, { ver:'v6.623', internal:true, dup:false, summaryHtml:'<b>修正部署腳本 START_MARKER 數量檢查誤報警告</b>', bodyHtml:'oracle_admin_update.sh 的 Sanity 檢查改為比對 server_admin_patch.js 本身的 START_MARKER 與 END_MARKER 數量（expected 7 / 1），消除因檔頭歷史版本註解導致每次執行 update-tournament.bat 時跳出 WARNING 的誤報。' }, { ver:'v6.621', internal:true, dup:false, summaryHtml:'<b>單卡頁結構化資料修正、牌組公布欄動態 SEO 與熱門環境牌組排行</b>', bodyHtml:'單卡頁 JSON-LD 改為 WebPage＋BreadcrumbList 解決 Search Console 產品摘要錯誤，並新增公開牌組搜尋導流；新增 /api/sitemap-decks.xml、/api/deck-share/:id 社群預覽與 /api/meta-stats 熱門牌組統計；牌組公布欄新增熱門環境牌組排行（電腦版標籤列、手機版改為下拉選單節約版面，奪冠數改為 N🏆 格式並移除冗餘說明）。' }, { ver:'v6.603', internal:true, dup:true, summaryHtml:'<b>錦標賽賽季管理</b>', bodyHtml:'賽事分頁新增立即換季、台灣日期00:00排程、改期及取消。提交前確認舊新賽季與生效時間；同年序號累加、跨年第一季。歷史與玩家資料保留，個人頁維持生涯累計。' }, { ver:'v6.602', internal:true, dup:true, summaryHtml:'<b>預設牌組管理</b>', bodyHtml:'新增預設牌組分頁，可文字貼上牌表、預覽精確卡號與合法性後匯入，下架與復原均需確認。管理清單統一提供給編輯器、一般對戰及錦標賽；不更動玩家副本或既有報名／對戰牌表。' }, { ver: 'v6.592', internal: true, dup: true, summaryHtml: '<b>個人操作時間控制</b>', bodyHtml: '監控分頁新增個人限時開關與1～120分鐘設定（初始15分鐘）；預設關閉。開啟、關閉及調整即時套用。玩家回合限時30秒與電腦必要收尾由伺服器管理。' }, { ver: 'v6.591', internal: true, dup: false,
+const CL_ADMIN_ONLY_ENTRIES = [{ ver:'v6.629', internal:true, dup:true, summaryHtml:'<b>賽程勝方與原型、冠軍分頁及明確搜尋</b>', bodyHtml:'賽程以綠底與勝字標示獲勝者，玩家名稱後依當場牌表與中央原型規則顯示分類；冠軍榜每頁50筆。所有文字搜尋改按放大鏡或Enter才查詢／篩選，下拉與勾選篩選改按鈕套用，未提交草稿不影響背景回應與報告。公開更新只記錄投稿按鈕的綠底白字修正。' }, { ver:'v6.628', internal:true, dup:false, summaryHtml:'<b>歷史賽事參賽牌組與冠軍捷徑</b>', bodyHtml:'歷屆賽事新增冠軍牌組入口；賽程的冠軍、參賽名單與對戰雙方可查看當時保存的報名牌組並複製匯入文字。以賽事與玩家uid精確查找歸檔，不取目前牌組；未留存的舊資料明確標示。' }, { ver:'v6.627', internal:true, dup:false, summaryHtml:'<b>修正玩家查詢牌組文字匯回</b>', bodyHtml:'玩家儲存牌組明細改用精確卡號／完整卡包卡號格式，標題與統計以註解輸出；支援基本能量與雙張場地左右半。缺卡或數量異常禁止複製，複製失敗會提示。玩家匯入說明移除管理來源文字。' }, { ver:'v6.625', internal:true, dup:false, summaryHtml:'<b>公布欄熱門牌組勝率對齊後台原型統計淨化標準</b>', bodyHtml:'/api/meta-stats 的勝率統計改為與後台原型統計一致：排除 AI／本機對戰（只算有房號的真人線上對戰）、排除第 1 回合未進場無回應判負與前 2 回合中途離開／斷線，且只計算有分出勝負的場次（勝場 ÷ (勝場 + 敗場)）。' }, { ver:'v6.624', internal:true, dup:false, summaryHtml:'<b>修正牌組公布欄熱門牌組的冠軍數（N🏆）統計口徑</b>', bodyHtml:'/api/meta-stats 的冠軍數改為直接統計已發布在牌組公布欄內、標記為「網站賽｜冠軍」（tournament.placementLabel === "冠軍"，不含社群賽）的投稿篇數，移除原本對 tournamentChampions 自訂牌組名稱的模糊字串比對，使按鈕上的 N🏆 與點選篩選後看到的網站賽冠軍投稿篇數完全一致。' }, { ver:'v6.623', internal:true, dup:false, summaryHtml:'<b>修正部署腳本 START_MARKER 數量檢查誤報警告</b>', bodyHtml:'oracle_admin_update.sh 的 Sanity 檢查改為比對 server_admin_patch.js 本身的 START_MARKER 與 END_MARKER 數量（expected 7 / 1），消除因檔頭歷史版本註解導致每次執行 update-tournament.bat 時跳出 WARNING 的誤報。' }, { ver:'v6.621', internal:true, dup:false, summaryHtml:'<b>單卡頁結構化資料修正、牌組公布欄動態 SEO 與熱門環境牌組排行</b>', bodyHtml:'單卡頁 JSON-LD 改為 WebPage＋BreadcrumbList 解決 Search Console 產品摘要錯誤，並新增公開牌組搜尋導流；新增 /api/sitemap-decks.xml、/api/deck-share/:id 社群預覽與 /api/meta-stats 熱門牌組統計；牌組公布欄新增熱門環境牌組排行（電腦版標籤列、手機版改為下拉選單節約版面，奪冠數改為 N🏆 格式並移除冗餘說明）。' }, { ver:'v6.603', internal:true, dup:true, summaryHtml:'<b>錦標賽賽季管理</b>', bodyHtml:'賽事分頁新增立即換季、台灣日期00:00排程、改期及取消。提交前確認舊新賽季與生效時間；同年序號累加、跨年第一季。歷史與玩家資料保留，個人頁維持生涯累計。' }, { ver:'v6.602', internal:true, dup:true, summaryHtml:'<b>預設牌組管理</b>', bodyHtml:'新增預設牌組分頁，可文字貼上牌表、預覽精確卡號與合法性後匯入，下架與復原均需確認。管理清單統一提供給編輯器、一般對戰及錦標賽；不更動玩家副本或既有報名／對戰牌表。' }, { ver: 'v6.592', internal: true, dup: true, summaryHtml: '<b>個人操作時間控制</b>', bodyHtml: '監控分頁新增個人限時開關與1～120分鐘設定（初始15分鐘）；預設關閉。開啟、關閉及調整即時套用。玩家回合限時30秒與電腦必要收尾由伺服器管理。' }, { ver: 'v6.591', internal: true, dup: false,
   summaryHtml: '<b>測試站搜尋收錄排除</b>',
   bodyHtml: '僅 GitHub Pages 發布時，替所有內容頁、卡片頁、404 與更新紀錄片段加入 noindex；正式站一般建置維持原搜尋設定。Google 擁有權驗證檔保持原文。現有搜尋結果需等爬蟲重新讀取，或由站長在 Search Console 提交暫時移除。' }, { ver: 'v6.589', internal: true, dup: false,
   summaryHtml: '<b>後台完整帳號統計</b>',
@@ -2438,7 +2563,7 @@ async function loadChangelogAdmin() {
     fullHtml = '<div style="max-width:900px;padding:16px 16px 4px;">'
       + '<h2 style="margin-top:0;">📋 完整更新紀錄（' + _clAdminEntries.length + ' 則）</h2>'
       + '<p style="color:#666;font-size:.88rem;line-height:1.6;margin:2px 0 8px;">玩家在首頁與「完整更新歷史」只看得到每一版的<b>大標題</b>；這裡是完整內容（大標題＋摘要，點開看細節）。標「🔒 內部」的是與遊戲內容無關、玩家看不到的版本。公開版本來自網站更新檔，後台專用版本隨 admin 更新。</p>'
-      + '<input id="cl-full-q" placeholder="搜尋版本、卡名、關鍵字…" oninput="clAdminFilter(this.value)" style="width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #d6dbe3;border-radius:6px;margin:0 0 10px;font-size:.92rem;">'
+      + adminSearchBox('cl-full-q', '', '搜尋版本、卡名、關鍵字…', q => window.clAdminFilter(q))
       + '<div id="cl-full-list">' + clEntriesHtml(_clAdminEntries, '') + '</div></div>';
   } catch (e) {
     fullHtml = '<div style="max-width:900px;padding:16px;color:#c00;">完整更新紀錄載入失敗：' + escapeHtml(e.message || String(e)) + '</div>';
@@ -2789,9 +2914,11 @@ let oracleRoomsSrv = null;       // 伺服器回的 { total, page, pageSize, tot
 //   null ＝ 舊伺服器（沒有 capped 哨兵）⇒ 行為與 v6.271 逐字相同，也不會亂標「被截斷」。
 let firebaseRoomsSrv = null;
 let firebaseRoomsMsgCounts = false;   // 💬 訊息數要多花「每房 1 次」Firestore 讀取 ⇒ 預設關
-let _oracleSearchTimer = null;
+let firebaseRoomsSearch = '';
+let oracleRoomsRequest = 0;
 let _oracleSearchFocus = false;  // 伺服器端搜尋是整塊重繪 → 要把游標接回搜尋框
 async function loadOracleRooms() {
+  const request = ++oracleRoomsRequest;
   primeEmailMap();  // v0.5 不 await：背景預熱 email map
   const el = document.getElementById('tab-oracle-rooms');
   if (!oracleRoomsCache.length) el.innerHTML = '<h2>🎮 Oracle 對戰</h2><div class="empty">Loading…</div>';
@@ -2806,6 +2933,7 @@ async function loadOracleRooms() {
   // v1.20: 只 await 房間（status 過濾，快）→ 立即渲染，恢復 v1.18 的快速 refresh。
   //   卡片索引/標籤改「背景載入」，好了再重畫補上主力打手 badge（已快取則 .then 立即跑、badge 同步出現）。
   const data = await api('/api/admin/oracle/rooms?' + _p.toString());
+  if (request !== oracleRoomsRequest) return;
   if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
   oracleRoomsCache = data.rooms;
   if (data.counts) oracleRoomsCounts = data.counts;  // 三狀態計數，toolbar 用
@@ -2818,7 +2946,7 @@ async function loadOracleRooms() {
   renderRoomsTab(el, 'oracle', oracleRoomsCache);
   _restoreOracleSearchFocus();
   Promise.all([ensureCardIndex(), ensureCardTags()]).then(() => {
-    if (currentTab === 'oracle-rooms') { renderRoomsTab(el, 'oracle', oracleRoomsCache); _restoreOracleSearchFocus(); } // v1.74：補退路 ⚔️ badge 與主力打手搜尋索引（原型欄位缺席時才用）
+    if (request === oracleRoomsRequest && currentTab === 'oracle-rooms') { renderRoomsTab(el, 'oracle', oracleRoomsCache); _restoreOracleSearchFocus(); } // v1.74：補退路 ⚔️ badge 與主力打手搜尋索引（原型欄位缺席時才用）
   });
 }
 function _restoreOracleSearchFocus() {
@@ -2879,7 +3007,8 @@ function renderRoomsTab(el, source, rooms) {
     start = (page - 1) * (srv.pageSize || ROOMS_PAGE_SIZE);
     pageRooms = rooms;
   } else {
-    const filtered = statusFilter === 'all' ? rooms : rooms.filter(r => r.status === statusFilter);
+    const q = source === 'oracle' ? oracleRoomsSearch : firebaseRoomsSearch;
+    const filtered = q ? window.filterRoomsBySearch(q, source, true) : (statusFilter === 'all' ? rooms : rooms.filter(r => r.status === statusFilter));
     // v5.276: 翻頁 — 50 筆/頁
     totalRows = filtered.length;
     totalPages = Math.max(1, Math.ceil(filtered.length / ROOMS_PAGE_SIZE));
@@ -2956,7 +3085,7 @@ function renderRoomsTab(el, source, rooms) {
       <span class="filter-btn ${statusFilter === 'playing' ? 'active' : ''}" onclick="setStatusFilter('playing', '${source}')">⚔️ 進行中 (${(counts.playing || 0).toLocaleString()})</span>
       <span class="filter-btn ${statusFilter === 'lobby' ? 'active' : ''}" onclick="setStatusFilter('lobby', '${source}')">🏠 等待中 (${(counts.lobby || 0).toLocaleString()})</span>
       <span class="filter-btn ${statusFilter === 'ended' ? 'active' : ''}" onclick="setStatusFilter('ended', '${source}')">✅ 已結束 (${(counts.ended || 0).toLocaleString()})</span>
-      <input class="search-box" id="rooms-search-${source}" value="${source === 'oracle' ? escapeHtml(oracleRoomsSearch) : ''}" placeholder="${source === 'oracle' ? '搜尋 房號 / 房間名 / 玩家名 / Email / 牌組卡名 / 牌組原型（可搜「未分類」）' : '搜尋 房號 / 房間名 / 玩家名 / Email / 牌組卡名'}" oninput="filterRoomsBySearch(this.value, '${source}')" />
+      ${adminSearchBox('rooms-search-' + source, source === 'oracle' ? oracleRoomsSearch : firebaseRoomsSearch, '搜尋 房號 / 房間名 / 玩家名 / Email / 牌組卡名 / 牌組原型', q => window.filterRoomsBySearch(q, source))}
       ${archPickHtml}
       <input class="search-box" id="diag-code-${source}" placeholder="🔍 房號卡死診斷 (如 E5D9)" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')showRoomDiag((this.value||'').trim().toUpperCase(),'${source}')" />
       <button class="ghost" onclick="showRoomDiag((document.getElementById('diag-code-${source}').value||'').trim().toUpperCase(),'${source}')">🔍 診斷</button>
@@ -3038,19 +3167,22 @@ window.setStatusFilter = function(s, source) {
   else loadFirebaseRooms();
 };
 
-window.filterRoomsBySearch = function(q, source) {
+window.filterRoomsBySearch = function(q, source, filterOnly = false) {
+  if (filterOnly) return filterLocalRooms(q, source);
   // v5.276: 搜尋也走翻頁 — 完整 re-render (含 pager) 而非只更新 tbody
   if (source === 'oracle') oracleRoomsPage = 1;
   else firebaseRoomsPage = 1;
   // v6.240 Oracle 走伺服器端分頁 ⇒ 搜尋也必須在伺服器端做，否則只搜得到當前這 50 筆。
-  //   debounce 350ms（每敲一鍵打一次 API 會把 8 萬筆的 regex 掃描打爆）。
+  // 搜尋只由明確提交元件呼叫，不再用輸入延遲計時器觸發。
+  if (source === 'oracle') oracleRoomsSearch = q || '';
+  else firebaseRoomsSearch = q || '';
   if (source === 'oracle' && oracleRoomsSrv) {
-    oracleRoomsSearch = q || '';
     _oracleSearchFocus = true;
-    if (_oracleSearchTimer) clearTimeout(_oracleSearchTimer);
-    _oracleSearchTimer = setTimeout(() => { _oracleSearchTimer = null; loadOracleRooms(); }, 350);
-    return;
+    return loadOracleRooms();
   }
+  renderRoomsTab(document.getElementById('tab-' + source + '-rooms'), source, source === 'oracle' ? oracleRoomsCache : firebaseRoomsCache);
+};
+function filterLocalRooms(q, source) {
   const rooms = source === 'oracle' ? oracleRoomsCache : firebaseRoomsCache;
   // 過濾 cache 內 rooms 後重 render. statusFilter + search 都套用.
   const lc = q.toLowerCase();
@@ -3076,9 +3208,8 @@ window.filterRoomsBySearch = function(q, source) {
       return false;
     });
   });
-  // tbody-only 更新 (不重 render pager — 搜尋當下不換頁碼避免閃爍)
-  document.getElementById(source + '-rooms-tbody').innerHTML = filtered.slice(0, ROOMS_PAGE_SIZE).map(r => renderRoomRow(r, source)).join('');
-};
+  return filtered;
+}
 
 function renderRoomRow(r, source) {
   const updated = r.updatedAt ? new Date(r.updatedAt) : null;
@@ -3420,6 +3551,7 @@ let _deckRules = [];
 let _rulePreview = null;   // { ruleName, hits, scannedDecks, samples, unknownCardNames }
 // v1.52 批次3：牌組原型統計（休閒／錦標賽分開）
 let _archStats = null;
+let _archStatsDays = 0; // 已取得的統計快照範圍，產圖不能借用尚未完成的新查詢。
 let _archStatsBusy = false;
 // v1.55：統計表排序（休閒／錦標賽兩張表共用同一組設定，方便左右對照同一指標）
 let _archSortKey = 'usage';   // usage | wins | losses | draws | winRate | name
@@ -3429,16 +3561,21 @@ let _archSince = '0';   // '0'=全部；否則為天數
 //   而 inline on* handler 是在「全域」執行的。所以 onchange="_archSince=this.value"
 //   只會寫進一個同名的全域變數，模組內這個 _archSince 永遠停在初始值 '0'
 //   → 不論選 7 天還 30 天，送出去的 since 都是 0（全部時間），統計數字自然完全一樣。
-//   修法：① setter 掛 window 供 inline 呼叫 ② 讀取端一律以畫面上的 <select> 為單一真實來源。
-window.setArchSince = function (v) {
-  _archSince = String(v == null ? '0' : v);
-  loadArchetypeStats();
+//   修法：① setter 掛 window 供 inline 呼叫 ② v6.629 改為按鈕提交後的範圍為單一來源，未提交下拉僅是草稿。
+window.setArchSince = function (v, calculate = true) {
+  if (_archStatsBusy || _mxBusy) return;
+  const next = String(v == null ? '0' : v);
+  if (next !== _archSince) {
+    _archSince = next; _archStats = null; _mxData = null;
+    ['meta-img-btn','meta-img-full-btn','mx-img-btn','mx-turn-img-btn','mx-focus-btn'].forEach(id => {
+      const button = document.getElementById(id); if (button) button.disabled = true;
+    });
+    ['arch-stats-box','mx-box','mx-turn-box'].forEach(id => { const box = document.getElementById(id); if (box) box.innerHTML = '<div class="empty">時間範圍已套用，請重新計算。</div>'; });
+  }
+  if (calculate) return loadArchetypeStats();
 };
-/** 時間範圍的單一真實來源＝畫面上的下拉；取不到才回退模組變數。 */
-function currentArchSince() {
-  const sel = document.getElementById('arch-since');
-  return sel ? String(sel.value || '0') : _archSince;
-}
+/** 時間範圍只讀已提交值；草稿不得被背景回應或報告匯出偷用。 */
+function currentArchSince() { return _archSince; }
 
 window.loadDeckRules = async function() {
   const el = document.getElementById('tab-deck-rules');
@@ -3567,14 +3704,15 @@ function renderDeckRules(el) {
     <!-- v1.52 批次3：使用率／勝率統計 -->
     <h3 style="margin:22px 0 6px;">📊 牌組使用率與勝率</h3>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
-      <label class="small" style="margin:0;">統計範圍：</label>
-      <select id="arch-since" onchange="setArchSince(this.value)" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
+      <label class="small" style="margin:0;">統計範圍（選好後按套用）：</label>
+      <select id="arch-since" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
         <option value="0">全部時間</option>
         <option value="7">最近 7 天</option>
         <option value="30">最近 30 天</option>
         <option value="90">最近 90 天</option>
       </select>
-      <button onclick="loadArchetypeStats()">📊 計算統計</button>
+      <button onclick="setArchSince(document.getElementById('arch-since').value,false)">🔍 套用時間範圍</button>
+      <button onclick="setArchSince(document.getElementById('arch-since').value)">📊 計算統計</button>
       <button id="meta-img-btn" onclick="openMetaImageExport()" disabled
               title="產生可直接發佈給玩家的環境報告圖（1080×1350 PNG）">🖼️ 匯出環境報告圖</button>
       <!-- v6.112（Wilson）：奪冠報告圖挪來這裡，與環境報告圖並排、共用左邊的「統計範圍」下拉。
@@ -3598,19 +3736,20 @@ function renderDeckRules(el) {
     <h3 style="margin:22px 0 6px;">⚔️ 常用牌組對戰勝率</h3>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
       <label class="small" style="margin:0;">資料來源：</label>
-      <select id="mx-src" onchange="renderArchMatchups()" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
+      <select id="mx-src" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
         <option value="casual">一般對戰</option>
         <option value="tourn">錦標賽</option>
         <option value="all">一般對戰＋錦標賽</option>
       </select>
       <label class="small" style="margin:0;">前</label>
-      <select id="mx-topn" onchange="renderArchMatchups()" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
+      <select id="mx-topn" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
         <option value="10">10</option><option value="15">15</option><option value="20" selected>20</option><option value="25">25</option><option value="30">30</option>
       </select>
       <label class="small" style="margin:0;">名　最少場數：</label>
-      <select id="mx-min" onchange="renderArchMatchups()" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
+      <select id="mx-min" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
         <option value="1">1</option><option value="3">3</option><option value="5" selected>5</option><option value="10">10</option><option value="20">20</option>
       </select>
+      <button onclick="applyArchMatchupFilters()">🔍 套用篩選</button>
       <button onclick="loadArchMatchups()">⚔️ 計算對戰勝率</button>
       <button id="mx-img-btn" onclick="exportArchMatrixImage()" disabled title="匯出對戰矩陣圖（PNG）">🖼️ 匯出矩陣圖</button>
       <button id="mx-turn-img-btn" onclick="exportArchTurnImage()" disabled title="匯出先攻／後攻勝率圖（PNG）">🖼️ 匯出先後攻圖</button>
@@ -4480,7 +4619,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.628';
+window.SITE_VERSION_HINT = '6.629';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -5210,7 +5349,7 @@ window.openMetaImageExport = async function () {
   try {
     // ⚠先把資料與參數快照成區域變數：產圖期間使用者可能又去動了時間下拉。
     const cur = _archStats;
-    const days = Number(currentArchSince() || 0);
+    const days = _archStatsDays;
     let wide = null;
     if (days > 0) {
       // 寬窗＝2N 天（含本期），相減才是「前一個等長窗」。失敗就降級成無趨勢快照，不整個失敗。
@@ -5582,7 +5721,7 @@ window.openMetaImageFullExport = async function () {
   try {
     // ⚠先把資料與參數快照成區域變數：產圖期間使用者可能又去動了時間下拉。
     const cur = _archStats;
-    const days = Number(currentArchSince() || 0);
+    const days = _archStatsDays;
     let wide = null;
     if (days > 0) {
       // 寬窗＝2N 天（含本期），相減才是「前一個等長窗」。與單頁版同一個推導。
@@ -6383,24 +6522,28 @@ function mxDiffView(line) {
 // ══ MX-PURE-END ══════════════════════════════════════════════════════════════
 
 let _mxData = null, _mxBusy = false;
+let _mxDays = 0;
 let _mxOpt = { src: 'casual', topN: 20, minGames: 5 };
 // 網頁（白底）與報告圖（深底）各一組配色；兩者都走 mxColor 同一個內插。
 const MX_PAL_WEB = { neg: '#f87171', mid: '#f8fafc', pos: '#4ade80', na: '#eef1f5' };
 const MX_PAL_IMG = { neg: '#B91C1C', mid: '#2A3B5C', pos: '#15803D', na: '#1E2D47' };
 const MX_SRC_LABEL = { casual: '一般對戰', tourn: '錦標賽', all: '一般對戰＋錦標賽' };
 
-function mxReadOpts() {
+function mxCommitOpts() {
   const v = (id) => { const e = document.getElementById(id); return e ? e.value : null; };
   _mxOpt = { src: v('mx-src') || _mxOpt.src, topN: Number(v('mx-topn')) || _mxOpt.topN, minGames: Number(v('mx-min')) || _mxOpt.minGames };
   return _mxOpt;
 }
+function mxReadOpts() { return { ..._mxOpt }; }
+window.applyArchMatchupFilters = function() { mxCommitOpts(); renderArchMatchups(); };
 function mxPeriodText() {
-  const days = Number(currentArchSince() || 0);
+  const days = _mxDays;
   return days > 0 ? (miDate(Date.now() - days * 86400000) + '–' + miDate(Date.now())) : '全部時間';
 }
 
 window.loadArchMatchups = async function () {
   if (_mxBusy) return;
+  mxCommitOpts();
   _mxBusy = true;
   const box = document.getElementById('mx-box');
   if (box) box.innerHTML = '<div class="empty">計算中…（會掃描期間內每一場對戰，第一次會久一點）</div>';
@@ -6410,7 +6553,7 @@ window.loadArchMatchups = async function () {
     const since = days > 0 ? Math.floor((Date.now() - days * 86400000) / 60000) * 60000 : 0;
     const res = await api('/api/admin/deck-archetype-matchups?source=all&since=' + since);
     if (!res || res.error) { if (box) box.innerHTML = '<div class="empty">讀取失敗：' + escapeHtml(res?.error || '?') + '</div>'; return; }
-    _mxData = res;
+    _mxData = res; _mxDays = days;
     const dl = document.getElementById('mx-name-list');
     if (dl) dl.innerHTML = Object.values(res.names || {}).sort().map((n) => '<option value="' + escapeHtml(n) + '">').join('');
     ['mx-img-btn', 'mx-focus-btn', 'mx-turn-img-btn'].forEach((id) => { const e = document.getElementById(id); if (e) e.disabled = false; });
@@ -6818,15 +6961,18 @@ window.exportArchFocusImage = async function () {
 window.loadArchetypeStats = async function() {
   if (_archStatsBusy) return;
   _archStatsBusy = true;
+  _archStats = null;
+  ['meta-img-btn', 'meta-img-full-btn'].forEach(id => { const b = document.getElementById(id); if (b) b.disabled = true; });
   const box = document.getElementById('arch-stats-box');
-  if (box) box.innerHTML = '<div class="empty">統計計算中…（第一次跑或規則剛改會久一點）</div>';
-  const days = Number(currentArchSince() || 0);   // v1.58：以畫面上的下拉為準
+  if (box) box.innerHTML = '<div class="empty">統計計算中…</div>';
+  const days = Number(currentArchSince() || 0);
   const since = days > 0 ? (Date.now() - days * 86400000) : 0;
-  const res = await api('/api/admin/deck-archetype-stats?source=all&since=' + since);
-  _archStatsBusy = false;
-  if (!res || res.error) { if (box) box.innerHTML = '<div class="empty">讀取失敗：' + escapeHtml(res?.error || '?') + '</div>'; return; }
-  _archStats = res;
-  renderArchetypeStats();
+  try {
+    const res = await api('/api/admin/deck-archetype-stats?source=all&since=' + since);
+    if (!res || res.error) { if (box) box.innerHTML = '<div class="empty">讀取失敗：' + escapeHtml(res?.error || '?') + '</div>'; return; }
+    _archStats = res; _archStatsDays = days;
+    renderArchetypeStats();
+  } finally { _archStatsBusy = false; }
 };
 
 // ══ v1.56 牌組原型明細：代表 60 張 / 只看獲勝場次 / 遺珠之憾 ═════════════════
@@ -6896,9 +7042,9 @@ function renderArchetypeDetail() {
         <h3>🃏 ${escapeHtml(d.name)} — 代表牌組</h3>
         <div style="margin:2px 0 8px;">
           <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;">
-            <input type="checkbox" ${_archDetailWinOnly ? 'checked' : ''} onchange="toggleArchDetailWinOnly(this.checked)">
+            <input type="checkbox" id="arch-detail-win-only" ${_archDetailWinOnly ? 'checked' : ''}>
             只看獲勝場次的構築
-          </label>
+          </label><button onclick="toggleArchDetailWinOnly(document.getElementById('arch-detail-win-only').checked)">🔍 套用篩選</button>
         </div>
         <div class="small muted" style="margin-bottom:10px;">
           資料來源：<b>${d.source === 'tourn' ? '錦標賽' : '一般對戰'}</b>
@@ -7250,14 +7396,14 @@ function archetypePickerHtml(cur) {
   const names = [...new Set((_deckRules || []).filter((r) => r && r.enabled !== false && r.name).map((r) => String(r.name)))]
     .sort((a, b) => a.localeCompare(b, 'zh-Hant'));
   const opt = (v, label) => '<option value="' + escapeHtml(v) + '"' + (cur === v ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
-  return '<select id="arch-pick-oracle" class="search-box" style="max-width:190px;" title="選一個牌組原型＝在搜尋框輸入它的名稱"'
+  return '<select id="arch-pick-oracle" class="search-box" style="max-width:190px;" title="選擇原型後按搜尋套用"'
     + ' onchange="pickOracleArchetype(this.value)">'
     + opt('', '🎴 依牌組原型…') + opt('未分類', '未分類') + names.map((n) => opt(n, n)).join('') + '</select>';
 }
 window.pickOracleArchetype = function (v) {
   if (!v) return;
   const si = document.getElementById('rooms-search-oracle'); if (si) si.value = v;
-  filterRoomsBySearch(v, 'oracle');
+  window.adminSearchRemember('rooms-search-oracle', v);
 };
 
 // ══ v1.50 玩家總覽（批次1）══════════════════════════════════════════════════
@@ -8625,7 +8771,7 @@ function renderTopPokemon(c) {
         <span class="small muted" style="margin-left:auto;">點右側 ⭐/☆ 切換「支援型」tag — 自動同步到同卡所有版本</span>
       </div>
       <div style="margin-bottom:8px;">
-        <input id="pokemon-search" class="search-box" placeholder="🔎 搜尋寶可夢名稱…" value="${escapeHtml(pokemonSearch)}" oninput="filterTopPokemon(this.value)" style="padding:6px 10px; min-width:240px;" />
+        ${adminSearchBox('pokemon-search', pokemonSearch, '搜尋寶可夢名稱…', q => window.filterTopPokemon(q))}
       </div>
       <div class="stats-box" style="overflow-x:auto;">
         <table>
@@ -9090,7 +9236,7 @@ window.showCardArchetype = async function(idsCSV) {
   const cardName = firstInfo.displayName || firstInfo.name || ids[0];
   const modeLabelMap = { online: '🌐 線上對戰', local: '🏠 本機（含 AI）', all: '全部資料' };
   const rangeLabel = modeLabelMap[statsMode] || '全部資料';
-  const checkboxHtml = `<label style="display:inline-flex; align-items:center; gap:5px; cursor:pointer; font-size:13px; margin:0 0 10px;"><input type="checkbox" ${archetypeWinnerOnly ? 'checked' : ''} onchange="toggleArchetypeWinnerOnly(this.checked)"> 🏆 只從獲勝牌組篩選</label>`;
+  const checkboxHtml = `<label style="display:inline-flex; align-items:center; gap:5px; cursor:pointer; font-size:13px; margin:0 0 10px;"><input type="checkbox" id="card-archetype-winner-only" ${archetypeWinnerOnly ? 'checked' : ''}> 🏆 只從獲勝牌組篩選</label><button onclick="toggleArchetypeWinnerOnly(document.getElementById('card-archetype-winner-only').checked)">🔍 套用篩選</button>`;
   document.getElementById('modal-container').innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>🃏 含「${escapeHtml(cardName)}」的代表牌組</h3>${checkboxHtml}<div class="empty">統計中…</div></div></div>`;
   const modeQ = statsMode === 'all' ? '' : ('mode=' + statsMode + '&');
   const winQ = archetypeWinnerOnly ? 'winnerOnly=true&' : '';
@@ -9266,7 +9412,7 @@ function renderCardWinrate(w) {
         <span class="small muted" style="margin-left:auto;">避免新卡包上市後仍看到舊統計數據</span>
       </div>
       <div style="margin-bottom:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-        <input id="winrate-search" class="search-box" placeholder="🔎 搜尋卡牌名稱…" value="${escapeHtml(winrateSearch)}" oninput="filterWinrate(this.value)" style="padding:6px 10px; min-width:240px;" />
+        ${adminSearchBox('winrate-search', winrateSearch, '搜尋卡牌名稱…', q => window.filterWinrate(q))}
         <span class="small muted">💡 點卡牌名稱可看「含該卡的代表牌組」</span>
       </div>
       <div class="stats-box" style="overflow-x:auto;">
