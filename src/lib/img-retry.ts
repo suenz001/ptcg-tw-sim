@@ -36,12 +36,18 @@
  * v6.631（站長：「手機版常常會出現圖片未顯示的狀況，雖然點選查看詳情後，圖示就會重新讀取進來」）：
  *   截圖裡備戰區是**整格空白**（只剩 HP），而載入失敗時會顯示暗色框＋卡名 ⇒ 那幾張圖不是「失敗」，是**卡住**：
  *   手機弱網下請求掛著不回、也不報錯 ⇒ 上面的重試完全不會啟動。補兩件事：
- *   ① 卡住看門狗：非延遲載入（loading 不是 lazy）的外部卡圖，畫面在前景時 STALL_MS（15 秒）還沒載完
- *      ⇒ 當成失敗走同一套換路徑重試（縮圖卡住 ⇒ 立刻改官方原圖；原圖卡住 ⇒ 退避後改代理縮圖）。
- *      ・只看「還在載入中」的那幾張（pending 集合），全部載完就停掉計時器；切到背景時不計時。
+ *   ① 卡住看門狗：非延遲載入（loading 不是 lazy）的外部小圖（盤面／手牌，不含放大檢視），畫面在前景時
+ *      STALL_MS（15 秒）還沒載完，**而且這 15 秒內整頁沒有任何一張卡圖完成（載入或失敗）** ⇒ 判定卡住。
+ *      ⚠ 審查 P1：弱網下 25 張縮圖同時搶頻寬，22 秒才載完是「慢」不是「卡」；若照單張計時，
+ *        15 秒時會把十幾張縮圖（約 53KB）整批換成官方原圖（約 427KB）⇒ 位元組放大 8 倍、反而讓玩家更 lag。
+ *        ⇒ 只要別張圖還在陸續完成就不介入；而且卡住時一律改走**小的**代理圖（不升級成官方原圖），
+ *          每一輪最多換 STALL_SWITCH_MAX 張。
+ *      ・只看「還在載入中」的那幾張（pending 集合），全部載完就停掉計時器；背景時間不計（含 iOS 背景凍結 JS）。
  *      ・只對外部網址（縮圖站、官方 CDN、圖片代理）生效，**本站自己的檔案不會因此多一個請求**（站長 2026-11-07：
  *        「不管你以後作任何改版，都不可以加重伺服器的負擔」）。
- *   ② 額度用完的圖，切回前景時再給一輪完整額度（原本只有 `online` 事件會歸零 ⇒ 弱網下用完 4 次就永遠空白）。
+ *   ② 額度用完的圖，切回前景時再給一輪額度（原本只有 `online` 事件會歸零 ⇒ 弱網下用完 4 次就永遠空白）；
+ *      每張圖 REGRANT_COOLDOWN_MS（60 秒）內最多一次、最多 REGRANT_MAX 輪 ⇒ 反覆切 App 不會無限重抓。
+ *   ⚠ 測試站（suenz001.github.io）上縮圖與網站同網域 ⇒ 被當成本站檔案、不受看門狗監看；要在正式站驗收。
  */
 
 import { isCardThumb } from './cards/thumb';
@@ -76,13 +82,28 @@ function bindGlobalOnce() {
   if (boundWindows.has(window as unknown as object)) return;
   boundWindows.add(window as unknown as object);
   window.addEventListener('online', () => { kickers.forEach((k) => k(true)); });
-  document.addEventListener('visibilitychange', () => { kickers.forEach((k) => k(false)); });
+  document.addEventListener('visibilitychange', () => {
+    // v6.631（審查 P2-1）：iOS 背景會凍結 JS ⇒ 背景期間根本沒有巡邏、lastSweepHidden 不會被設成 true。
+    //   切換前景／背景的當下就標記「下一輪重新起算」，背景時間才真的不算進 15 秒。
+    lastSweepHidden = true;
+    kickers.forEach((k) => k(false));
+  });
 }
 
 /** v6.631 卡住看門狗：載入中超過這麼久（畫面在前景的時間）就當成失敗換路徑。 */
 export const STALL_MS = 15000;
 /** 看門狗多久巡一次（只在有圖片載入中時才跑）。 */
 const SWEEP_MS = 5000;
+/** 每一輪最多把幾張卡住的圖換路徑（避免一次大量重抓）。 */
+export const STALL_SWITCH_MAX = 3;
+/** 額度用完後「切回前景再給一輪」：每張圖的冷卻與最多幾輪。 */
+export const REGRANT_COOLDOWN_MS = 60000;
+export const REGRANT_MAX = 3;
+/** 整頁最近一次有卡圖完成（載入或失敗）的時間：還有圖在陸續完成 ⇒ 是頻寬不足，不是卡住。 */
+let lastProgressAt = 0;
+function noteProgress() { lastProgressAt = Date.now(); }
+/** 本輪巡邏已換路徑的張數（sweep 開頭歸零）。 */
+let switchedThisSweep = 0;
 /** 還在載入中的節點：值是「檢查函式」，回傳 true 代表已經不用再看（載完／失敗／卸載）。 */
 const pending = new Set<(now: number, hidden: boolean) => boolean>();
 let sweepTimer: ReturnType<typeof setInterval> | null = null;
@@ -93,9 +114,12 @@ export function sweepStalledImages(now: number = Date.now()): void {
   // 剛從背景回來的這一輪也當成「重新起算」：背景期間的時間一律不算進 15 秒
   const restart = hidden || lastSweepHidden;
   lastSweepHidden = hidden;
+  switchedThisSweep = 0;
   for (const check of [...pending]) { if (check(now, restart)) pending.delete(check); }
   if (pending.size === 0 && sweepTimer !== null) { clearInterval(sweepTimer); sweepTimer = null; }
 }
+/** 守衛用：巡邏計時器是否在跑。 */
+export function stallSweepActive(): boolean { return sweepTimer !== null; }
 function watchPending(check: (now: number, hidden: boolean) => boolean) {
   pending.add(check);
   if (sweepTimer === null && typeof window !== 'undefined') {
@@ -131,22 +155,38 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
   const clear = () => { if (timer !== null) { clearTimeout(timer); timer = null; } };
   // v6.631 卡住看門狗：startedAt＝這一次載入開始的時間（只累計前景時間）；loading=false 代表目前沒在看
   let startedAt = 0, loading = false;
+  let regrants = 0, lastRegrantAt = -Infinity;
   const check = (now: number, hidden: boolean): boolean => {
     if (disposed || !loading) { loading = false; return true; }
     if (node.complete) { loading = false; return true; }           // 已載完或已失敗（事件會處理）
     if (hidden) { startedAt = now; return false; }                // 背景不計時（回前景重新起算）
-    if (now - startedAt < STALL_MS) return false;
+    // 從「這一張開始載」與「整頁最後一次有圖完成」兩者較晚的那一刻起算：別張還在陸續完成 ⇒ 是慢，不是卡
+    if (now - Math.max(startedAt, lastProgressAt) < STALL_MS) return false;
+    if (switchedThisSweep >= STALL_SWITCH_MAX) return false;     // 這一輪換夠了，下一輪再說
+    switchedThisSweep++;
     loading = false;
-    onError();                                                    // 卡住＝當成失敗，走同一套換路徑
-    return true;
+    onStall();
+    return !loading;                                              // 換成代理後又重新監看 ⇒ 留在名單上（不可被這一輪移除）
   };
   const startWatch = () => {
     const cur = node.currentSrc || node.src;
-    if (disposed || !cur || !isExternalUrl(cur)) return;
-    if (node.loading === 'lazy') return;                          // 延遲載入的圖不在畫面上時本來就不會載
-    if (node.complete) return;
+    if (disposed || !cur || !isExternalUrl(cur)) { loading = false; return; }   // 審查 P3-1：換成本站網址時清掉殘留的監看
+    if (node.getAttribute('loading') === 'lazy') { loading = false; return; }  // 延遲載入的圖不在畫面上時本來就不會載（舊 Safari 沒有 .loading 屬性）
+    if (width > DEFAULT_PROXY_WIDTH) { loading = false; return; }             // 放大檢視的大圖慢是正常的，不監看
+    if (node.complete) { loading = false; return; }
     startedAt = Date.now();
     if (!loading) { loading = true; watchPending(check); }
+  };
+  /** 卡住：改走小的代理圖（不升級成官方原圖，避免弱網下位元組放大）；代理本身卡住才交給一般失敗流程。 */
+  const onStall = () => {
+    if (disposed || tries >= MAX_RETRY || !original) return;
+    const cur = node.currentSrc || node.src;
+    node.setAttribute('data-img-retrying', '1');
+    clear();
+    if (cur.startsWith('https://images.weserv.nl/')) { onError(); return; }
+    tries = Math.max(tries, 2);                                   // 等同走到「代理」那一步（之後再壞照原本順序：代理→官方原圖＋cache-buster）
+    node.src = proxied(original, width);
+    startWatch();
   };
 
   const attempt = (): void => {
@@ -162,6 +202,7 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
   const onError = () => {
     if (disposed) return;
     loading = false;
+    noteProgress();
     node.setAttribute('data-img-retrying', '1');
     clear();
     // v6.464：失敗的是本站縮圖（新卡還沒產生縮圖／GitHub Pages 掛掉）⇒ **立刻**改官方原圖，不等退避；
@@ -172,6 +213,7 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
   };
   const onLoad = () => {
     loading = false;
+    noteProgress();
     node.removeAttribute('data-img-retrying');
     tries = 0;                                                        // 成功即歸零，之後再壞還有完整額度
     clear();
@@ -181,8 +223,14 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
     if (disposed || !node.hasAttribute('data-img-retrying')) return;
     // 切到背景時不重試：那裡網路常被掐斷，只會快速失敗並燒掉額度。
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-    // v6.631：額度已用完的圖，切回前景也給一輪完整額度（原本只有 online 會歸零 ⇒ 弱網下用完就永遠空白）
-    if (resetTries || tries >= MAX_RETRY) tries = 0;
+    // v6.631：額度已用完的圖，切回前景也再給一輪（原本只有 online 會歸零 ⇒ 弱網下用完就永遠空白）；
+    //   審查 P2-2：每張圖 60 秒內最多一次、最多 REGRANT_MAX 輪（反覆切 App 不會無限重抓）
+    if (resetTries) tries = 0;
+    else if (tries >= MAX_RETRY) {
+      const t = Date.now();
+      if (regrants >= REGRANT_MAX || t - lastRegrantAt < REGRANT_COOLDOWN_MS) return;
+      regrants++; lastRegrantAt = t; tries = 0;
+    }
     clear();
     attempt();
   };
@@ -209,7 +257,10 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
       tries = 0;
       clear();
       node.removeAttribute('data-img-retrying');
-      // v6.631：換卡＝新的一次載入，重新起算（等這一輪 DOM 更新把新 src 寫上去之後再看）
+      regrants = 0; lastRegrantAt = -Infinity;
+      // v6.631：換卡＝新的一次載入，重新起算。⚠ Svelte 5 的 action update 排在 src 屬性寫入**之前**（審查實測編譯結果）
+      //   ⇒ 等這一輪 DOM 更新把新 src 寫上去之後再看；先清掉上一張的監看。
+      loading = false;
       queueMicrotask(startWatch);
     },
     destroy() {
