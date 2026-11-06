@@ -10,7 +10,8 @@ BASE `797f0435`（server v1.80，前端 v6.630）。站長：「手機版常常�
   - 本站自己的網址（相對路徑、同網域）不監看 ⇒ 不會多打本站。⚠ 測試站 suenz001.github.io 與縮圖同網域 ⇒ 測試站上縮圖不受監看，要在正式站驗收。
 - iPad 圖示：牌組頁 `@media (pointer: coarse)` 的 button.icon（🔍、☆、＋／−、✕）與 .pv-fav-btn、頂端列 .stb-theme（≥1024px）改 inline-flex 置中＋內距 0（尺寸不變）。⚠ 雲端沒有 WebKit／真 iPad，無法實測；inline-flex 修得掉 Safari 按鈕預設內距造成的水平偏移，Apple Color Emoji 字形本身的垂直偏移不一定。iPad 直向（834px）看到的是底部導覽列，那邊原本就是 flex 置中。桌機 Chrome 的明暗鈕也會改成 padding 0（36px 外框不變）。
 - 審查（Opus 5.5）初審 P1-1：照單張計時會在弱網下把十幾張縮圖（53KB）整批換成官方原圖（427KB），位元組放大約 8 倍 → 改成「整頁沒進度才算卡住」＋卡住只改走代理＋每輪上限 3 張。P2-1 iOS 背景凍結 JS 時回前景第一輪誤判 → visibilitychange 當下標記重新起算。P2-2 切 App 重給額度無上限（實測 10 次切換 4→44 次請求）→ 60 秒冷卻、最多 3 輪。P2-3 守衛 A9 呼叫順序與 Svelte 5 實際相反（審查編譯確認 action update 先於 src 寫入）→ 改成先 update 再寫 src；`queueMicrotask(startWatch)` 改同步已會紅。P3：換成本站網址時清掉殘留監看、lazy 改讀屬性（舊 Safari 沒有 .loading）、放大檢視不監看、巡邏計時器啟停可觀測。修正過程中新守衛抓到一個真 bug：卡住換代理後重新監看會被同一輪巡邏移出名單 ⇒ 改成回傳 `!loading`。
-- 守衛 test-v6631-img-stall-and-ipad-icons（A1～A11、B1～B4、H1／H2）；12 個突變 11 個紅，1 個等價存活（update 裡的 `loading = false` 與 startWatch 提早 return 時的清除重複）。
+- 複審（Opus 5.5）：無 P1；12 個突變全紅、同意等價突變判定。P2-a「整頁進度」把救回來的代理圖也算進去 ⇒ 縮圖站整條卡死時每 20 秒才輪到 3 張（實測 25 張 175 秒）→ 進度改**依主機分開**記（progressByHost），代理載入不會拖住縮圖站那批；P3-1 代理卡住走失敗流程時不算成「有進度」。新增 A1d（9 張 25 秒內全部換完；改回全頁單一進度 ⇒ 紅）、A1e（卡住算進度 ⇒ 紅）。
+- 守衛 test-v6631-img-stall-and-ipad-icons（A1～A11、A1b～A1e、A2b、B1～B4、H1／H2）；突變 14 個 13 紅，1 個等價存活（update 裡的 `loading = false` 與 startWatch 提早 return 時的清除重複）。
 
 ## server v1.80（2026-11-07）全站推播上限 500→5000、每筆推播 30 秒請求逾時
 

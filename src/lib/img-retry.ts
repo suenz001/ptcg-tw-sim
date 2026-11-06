@@ -100,8 +100,11 @@ export const STALL_SWITCH_MAX = 3;
 export const REGRANT_COOLDOWN_MS = 60000;
 export const REGRANT_MAX = 3;
 /** 整頁最近一次有卡圖完成（載入或失敗）的時間：還有圖在陸續完成 ⇒ 是頻寬不足，不是卡住。 */
-let lastProgressAt = 0;
-function noteProgress() { lastProgressAt = Date.now(); }
+//   ⭐複審 P2-a：**依主機分開記**。只用一個全頁時間的話，換成代理圖（weserv）陸續載入成功，會把整頁「有進度」的時間
+//   一直往後推 ⇒ 還卡在死掉的縮圖站連線上的那幾張要每 20 秒才輪到 3 張（實測 25 張全部恢復要 175 秒）。
+const progressByHost = new Map<string, number>();
+function hostOf(url: string): string { const m = /^https?:\/\/([^/?#]+)/i.exec(url); return m ? m[1].toLowerCase() : ''; }
+function noteProgress(url: string) { const h = hostOf(url); if (h) progressByHost.set(h, Date.now()); }
 /** 本輪巡邏已換路徑的張數（sweep 開頭歸零）。 */
 let switchedThisSweep = 0;
 /** 還在載入中的節點：值是「檢查函式」，回傳 true 代表已經不用再看（載完／失敗／卸載）。 */
@@ -161,7 +164,8 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
     if (node.complete) { loading = false; return true; }           // 已載完或已失敗（事件會處理）
     if (hidden) { startedAt = now; return false; }                // 背景不計時（回前景重新起算）
     // 從「這一張開始載」與「整頁最後一次有圖完成」兩者較晚的那一刻起算：別張還在陸續完成 ⇒ 是慢，不是卡
-    if (now - Math.max(startedAt, lastProgressAt) < STALL_MS) return false;
+    const hostAt = progressByHost.get(hostOf(node.currentSrc || node.src)) ?? 0;
+    if (now - Math.max(startedAt, hostAt) < STALL_MS) return false;
     if (switchedThisSweep >= STALL_SWITCH_MAX) return false;     // 這一輪換夠了，下一輪再說
     switchedThisSweep++;
     loading = false;
@@ -183,7 +187,7 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
     const cur = node.currentSrc || node.src;
     node.setAttribute('data-img-retrying', '1');
     clear();
-    if (cur.startsWith('https://images.weserv.nl/')) { onError(); return; }
+    if (cur.startsWith('https://images.weserv.nl/')) { fail(false); return; }   // 卡住不算「有進度」（複審 P3-1）
     tries = Math.max(tries, 2);                                   // 等同走到「代理」那一步（之後再壞照原本順序：代理→官方原圖＋cache-buster）
     node.src = proxied(original, width);
     startWatch();
@@ -199,10 +203,12 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
     startWatch();
   };
 
-  const onError = () => {
+  const onError = () => fail(true);
+  /** 失敗處理；noted=false 代表是看門狗判定的「卡住」，不可以算成該主機有進度。 */
+  const fail = (noted: boolean) => {
     if (disposed) return;
+    if (noted) noteProgress(node.currentSrc || node.src);
     loading = false;
-    noteProgress();
     node.setAttribute('data-img-retrying', '1');
     clear();
     // v6.464：失敗的是本站縮圖（新卡還沒產生縮圖／GitHub Pages 掛掉）⇒ **立刻**改官方原圖，不等退避；
@@ -213,7 +219,7 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
   };
   const onLoad = () => {
     loading = false;
-    noteProgress();
+    noteProgress(node.currentSrc || node.src);
     node.removeAttribute('data-img-retrying');
     tries = 0;                                                        // 成功即歸零，之後再壞還有完整額度
     clear();

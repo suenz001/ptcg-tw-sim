@@ -118,6 +118,21 @@ async function runA(M) {
     S(20100); const n2 = imgs.filter((x) => x.srcHistory.length > 1).length;
     R.A1c = { ok: !!sweep && n1 === 3 && n2 === 6, d: JSON.stringify({ n1, n2 }) };
     hs.forEach((h) => h.destroy()); S(9e6); }
+  // A1d（複審 P2-a）縮圖站整條卡死、代理圖一換就載好 ⇒ 代理的進度不可以拖住縮圖站那批：9 張在 25.1 秒內全部換完
+  fresh();
+  { const imgs = Array.from({ length: 9 }, () => makeImg(TH)); const hs = imgs.map((x) => M.retryImg(x, CDN));
+    const loadSwitched = () => { for (const x of imgs) if (isProxy(x.src) && !x.complete) { x.complete = true; x.naturalWidth = 420; x._fire('load'); } };
+    for (const dt of [15100, 20100, 25100]) { S(dt); loadSwitched(); }
+    const done = imgs.filter((x) => isProxy(x.srcHistory.at(-1))).length;
+    R.A1d = { ok: !!sweep && done === 9, d: JSON.stringify({ done }) };
+    hs.forEach((h) => h.destroy()); S(9e6); }
+  // A1e（複審 P3-1）代理圖卡住不算「代理那台有進度」：同一輪兩張代理都卡住 ⇒ 兩張都交給失敗流程
+  fresh();
+  { const x = makeImg(TH), y = makeImg(TH); const hx = M.retryImg(x, CDN), hy = M.retryImg(y, CDN);
+    S(15100); const both = isProxy(x.src) && isProxy(y.src);
+    S(30200); const backoffs = timers.filter((q) => !q.dead && !q.done && q.ms >= 3000).length;
+    R.A1e = { ok: !!sweep && both && backoffs === 2, d: JSON.stringify({ both, backoffs }) };
+    hx.destroy(); hy.destroy(); S(9e6); }
   // A2 背景（背景期間有巡邏）
   fresh();
   { const img = makeImg(TH); const h = M.retryImg(img, CDN);
@@ -219,6 +234,8 @@ const NAMES = {
   A1: '★★★ A1 縮圖 15 秒沒進度 ⇒ 改走小的代理圖，**不升級成官方原圖**（14.9 秒時不動）',
   A1b: '★★★ A1b 別張圖還在陸續完成（頻寬不足）⇒ 不介入，等整頁 15 秒沒進度才換',
   A1c: '★★ A1c 每一輪最多換 3 張（7 張卡住：第一輪 3、第二輪 6）',
+  A1e: '★★ A1e 代理圖卡住不算成代理那台「有進度」（同一輪兩張卡住都會處理）',
+  A1d: '★★★ A1d 縮圖站卡死、代理圖即載 ⇒ 進度依主機分開算，9 張在 25 秒內全部換完（不被代理的進度拖住）',
   A2: '★★ A2 背景時間不計（背景期間有巡邏）',
   A2b: '★★★ A2b iOS 背景凍結 JS（背景期間沒有巡邏）⇒ 回前景第一輪不誤判，重新等滿 15 秒',
   A3: '★★ A3 loading="lazy"（屬性）的圖不換',
