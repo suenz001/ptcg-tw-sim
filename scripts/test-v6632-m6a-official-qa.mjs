@@ -17,6 +17,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const SELF_PATH = fileURLToPath(import.meta.url);   // HEAD-FAIL 用：子行程跑同一支守衛（路徑根定義另起一行，test-v6371 F0b 才掃得到）
 // HEAD-FAIL 用：子行程把 V6632_SRC_ROOT 指到 BASE 的 src 副本（卡池、判例快照永遠讀現行工作樹）
 const SRC_ROOT = process.env.V6632_SRC_ROOT || ROOT;
 const IS_CHILD = !!process.env.V6632_SRC_ROOT;
@@ -443,7 +444,7 @@ if (!IS_CHILD) {
     const tmp = mkdtempSync(join(tmpdir(), 'v6632-base-'));
     try {
       execFileSync('bash', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
-      const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], { env: { ...process.env, V6632_SRC_ROOT: tmp }, encoding: 'utf8', timeout: 150000 });
+      const r = spawnSync(process.execPath, [SELF_PATH], { env: { ...process.env, V6632_SRC_ROOT: tmp }, encoding: 'utf8', timeout: 150000 });
       const out = String(r.stdout || '');
       const red = out.split('\n').filter((l) => l.includes('❌')).map((l) => l.trim());
       const green = out.split('\n').filter((l) => l.includes('✓')).length;
