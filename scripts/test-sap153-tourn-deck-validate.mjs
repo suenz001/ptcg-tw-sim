@@ -65,7 +65,7 @@ import { revertAdminV159 } from './lib/sap-revert-admin-v159.mjs';   // ⭐serve
 import { revertAdminV158 } from './lib/sap-revert-admin-v158.mjs';   // ⭐server v1.58（常用牌組對戰矩陣端點）：先剝較新的（Rule 54）
 import { revertAdminV157 } from './lib/sap-revert-admin-v157.mjs';   // ⭐server v1.57（序位預設 50＋用最新規則重新判定）：先剝較新的（Rule 54）
 import { revertV154 as _rv154, revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171 } from './lib/tourn-revert-v171.mjs';   // ⭐v1.65 再長一節
-import { revertV173 } from './lib/tourn-revert-v176.mjs';
+import { revertV173 } from './lib/tourn-revert-v180.mjs';
 const revertV171 = b => _rv171(revertV173(b));
 const revertV169 = (b) => _rv169(revertV171(b));   // v1.71 先逐字還原新修改，再接既有鎖。
 const revertV167 = (b) => _rv167(revertV169(b));   // ⭐v1.69（Rule 54）：鏈再長一節（重賽系統訊息「擲硬幣」；既有呼叫點一個字都不必改）
@@ -265,8 +265,8 @@ console.log('\n【D】錦標賽區塊 28 把鎖重釘');
   ok('★★[D4] v1.52 的舊指紋零殘留（28 把鎖全部重釘）', OLD_TAIL_SHA_V152 !== NEW_TAIL_SHA_V153 && stale.length === 0, stale.join(', '));
   const CONSUMERS = ['scripts/test-v6276-deck-tournament-stats.mjs', 'scripts/test-v6291-tourn-verified-gate.mjs', 'scripts/test-v6292-tourn-verified-gate2.mjs',
     'scripts/test-v6303-ui-batch.mjs', 'scripts/test-v6381-archive-gamedraw-and-swiss-note.mjs'];
-  // （⭐v1.65 起消費者改接 tourn-revert-v165，它的鏈內含本版；Rule 40 意圖不變）
-  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(/from '\.\/lib\/tourn-revert-v1(?:[56]\d|7[136])\.mjs'/.test(s) && /revert(?:Admin)?V153\(/.test(s)); });
+  // （⭐v1.65 起消費者改接 tourn-revert-v165，它的鏈內含本版；v1.80 起接 tourn-revert-v180（鏈仍含本版）；Rule 40 意圖不變）
+  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(/from '\.\/lib\/tourn-revert-v1(?:[56]\d|7[136]|80)\.mjs'/.test(s) && /revert(?:Admin)?V153\(/.test(s)); });
   ok('★★[D5] 五支消費者都 import 新 lib 且呼叫 v1.53 的還原器', bad.length === 0, bad.join(', '));
   ok('★[D5b] test-v6303 的 SAP 還原鏈最內層是 revertAdminV153', /revertAdminV152\(revertAdminV153\((?:SAP_RAW|revertAdminV15\d\()/.test(rd('scripts/test-v6303-ui-batch.mjs')));
 }

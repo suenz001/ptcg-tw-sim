@@ -1255,7 +1255,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       catch (_eReq) { try { wp = (await import('web-push')).default; } catch (_eImp) { wp = null; } }
       if (!wp || typeof wp.sendNotification !== 'function' || wp.__ptcgPushQueue) return;
       const raw = wp.sendNotification;
-      const cfg = { maxInflight: 16, slotTimeoutMs: 5000, urgentBatchMax: 32 };   // PUSH_MAX_INFLIGHT／PUSH_SLOT_TIMEOUT_MS
+      const cfg = { maxInflight: 16, slotTimeoutMs: 5000, urgentBatchMax: 32, requestTimeoutMs: 30000 };   // PUSH_MAX_INFLIGHT／PUSH_SLOT_TIMEOUT_MS／v1.80 請求逾時
       // 兩條佇列（審查 P2-1）：同一段同步程式裡一起呼叫進來的算「一批」；小批（≤ urgentBatchMax，例如報到、進場、
       //   60 秒判負警告、推播自測）排進 urgent，大批（全站廣播）排進 bulk ⇒ 時效性推播不會排在幾百筆廣播後面。
       const urgent = [], bulk = [];
@@ -1268,9 +1268,17 @@ import('firebase-admin').then(async ({ default: admin }) => {
           let released = false;
           const release = () => { if (released) return; released = true; inflight--; pump(); };
           setImmediate(() => {
-            let p;
-            try { p = Promise.resolve(raw.apply(wp, job.args)); }
-            catch (e) { p = Promise.reject(e); }
+            const call = (a) => { try { return Promise.resolve(raw.apply(wp, a)); } catch (e) { return Promise.reject(e); } };
+            let p = call(job.args);
+            // ⭐v1.80：很舊的 web-push（3.4.0 以前）不認得 timeout 選項，會直接 reject「'timeout' is an invalid option」
+            //   ⇒ 這一筆改用呼叫端原本的參數重送，之後全部不再補逾時（行為退回 v1.79，推播照樣送得出去）。
+            if (job.args !== job.rawArgs) {
+              p = p.catch((e) => {
+                if (!/'timeout' is an invalid option/.test(String(e && e.message))) throw e;
+                cfg.requestTimeoutMs = 0;
+                return call(job.rawArgs);
+              });
+            }
             const timer = setTimeout(release, cfg.slotTimeoutMs);
             if (timer && typeof timer.unref === 'function') timer.unref();
             p.then(job.resolve, job.reject).finally(() => { clearTimeout(timer); doneTotal++; release(); });
@@ -1278,6 +1286,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
         }
       };
       wp.sendNotification = function queuedSendNotification(...args) {
+        // ⭐v1.80：沒指定逾時就補 30 秒（web-push 預設沒有逾時，推播服務卡住時連線會一直掛著、越積越多）
+        //   逾時＝這筆推播失敗（web-push 會 reject、呼叫端照原本的失敗處理記一筆 log），不影響其他推播。
+        //   ⚠ 不改呼叫端傳進來的物件（複製一份）；呼叫端自己有給 timeout 就照它的。
+        const opt = args[2] && typeof args[2] === 'object' ? args[2] : {};
+        const sendArgs = cfg.requestTimeoutMs > 0 && !(opt.timeout > 0)
+          ? [args[0], args[1], { ...opt, timeout: cfg.requestTimeoutMs }, ...args.slice(3)]
+          : args;
         return new Promise((resolve, reject) => {
           if (!batch) {
             const b = batch = [];
@@ -1289,7 +1304,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
               pump();
             });
           }
-          batch.push({ args, resolve, reject });
+          batch.push({ args: sendArgs, rawArgs: args, resolve, reject });
         });
       };
       wp.__ptcgPushQueue = { cfg, stats: () => ({ inflight, urgent: urgent.length, bulk: bulk.length, doneTotal, peakQueue }) };
@@ -10421,8 +10436,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
      *                     → **未設定過的舊訂閱視為開啟**（Wilson 裁定新通知預設開，
      *                       否則既有玩家全部收不到、功能等於沒上線）
      * @param cap          單次推播上限，防未來訂閱數暴增時一次送爆
+     *                     ⭐v1.80：500 → 5000。訂閱 3 個月內 25 → 427，照這速度幾週內就超過 500，超過後會**悄悄**只推給其中 500 人
+     *                     （沒有排序、沒有錯誤訊息）。v1.79 起推播排隊送出（同時最多 16 筆），人數多不會加重卡頓。
      */
-    async function broadcastPush(payload, { excludeUid = null, excludeUids = null, prefKey = null, cap = 500 } = {}) {
+    async function broadcastPush(payload, { excludeUid = null, excludeUids = null, prefKey = null, cap = 5000 } = {}) {
       if (!_webpush) return { sent: 0 };
       try {
         // v0.99：單一排除與批次排除合併成同一個 $nin，避免兩個條件互相覆蓋掉
@@ -10431,7 +10448,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const q = {};
         if (excl.size) q.uid = { $nin: [...excl] };
         if (prefKey) q[prefKey] = { $ne: false };
-        let subs = await TPUSH.find(q).limit(cap).toArray();
+        // ⭐v1.80：只取送推播用得到的欄位（端點與金鑰在 sub、清除失效訂閱用 _id），人數變多時少解一點 BSON
+        let subs = await TPUSH.find(q, { projection: { _id: 1, uid: 1, sub: 1 } }).limit(cap).toArray();
         // ⭐v1.67（Opus 審查 P1-2）：同一個推播端點可能還掛在別的帳號底下（舊資料）⇒ 依端點去重；
         //   而且只要有任何一筆把這個端點標成「關」，就不推（寧可少推，不可以推給關掉的人）。
         if (prefKey && subs.length) {

@@ -29,7 +29,7 @@ import {
 // ⭐v1.53（Rule 40，意圖不變）：錦標賽區塊之後又被 v1.53（報名牌組完整規則）合法改過 ⇒ D 節先剝 v1.53 再比對 v1.52 的值。
 import { revertV153 } from './lib/tourn-revert-v153.mjs';
 import { revertV154 as _rv154, revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171 } from './lib/tourn-revert-v171.mjs';   // ⭐v1.54（Rule 40）：再先剝一節；⭐v1.65 再長一節
-import { revertV173 } from './lib/tourn-revert-v176.mjs';
+import { revertV173 } from './lib/tourn-revert-v180.mjs';
 const revertV171 = b => _rv171(revertV173(b));
 const revertV169 = (b) => _rv169(revertV171(b));   // v1.71 先逐字還原新修改，再接既有鎖。
 const revertV167 = (b) => _rv167(revertV169(b));   // ⭐v1.69（Rule 54）：鏈再長一節（重賽系統訊息「擲硬幣」；既有呼叫點一個字都不必改）
@@ -206,8 +206,8 @@ console.log('\n【D】錦標賽區塊 28 把鎖重釘');
   }
   const CONSUMERS = ['scripts/test-v6276-deck-tournament-stats.mjs', 'scripts/test-v6291-tourn-verified-gate.mjs', 'scripts/test-v6292-tourn-verified-gate2.mjs',
     'scripts/test-v6303-ui-batch.mjs', 'scripts/test-v6381-archive-gamedraw-and-swiss-note.mjs'];
-  // （⭐v1.65 起消費者改接 tourn-revert-v165，它的鏈內含本版；Rule 40 意圖不變）
-  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(/from '\.\/lib\/tourn-revert-v1(?:[56]\d|7[136])\.mjs'/.test(s) && s.includes('revertV152(')); });
+  // （⭐v1.65 起消費者改接 tourn-revert-v165，它的鏈內含本版；v1.80 起接 tourn-revert-v180（鏈仍含本版）；Rule 40 意圖不變）
+  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(/from '\.\/lib\/tourn-revert-v1(?:[56]\d|7[136]|80)\.mjs'/.test(s) && s.includes('revertV152(')); });
   ok('D5 五支消費者都 import 新 lib 且呼叫 revertV152(', bad.length === 0, bad.join(', '));
   ok('D5b test-v6303 的 SAP 還原鏈最內層是 revertAdminV152', /revertAdminV150\(revertAdminV152\((?:SAP_RAW|revertAdminV15\d\()/.test(rd('scripts/test-v6303-ui-batch.mjs')));
 }

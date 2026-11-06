@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## server v1.80（2026-11-07）全站推播上限 500→5000、每筆推播 30 秒請求逾時
+
+站長轉來伺服器 AI 的建議（v1.79 部署後 21 次 propose 全部成功），站長：「兩件合在一版做，照完整流程跑完」。同時裁定：「不管你以後作任何改版，都不可以加重伺服器的負擔，導致玩家lag，這是最重要的」。
+
+- ① broadcastPush 的 cap 預設 500 → 5000：訂閱 3 個月內 25 → 427，超過 500 後會悄悄只推給其中任意 500 人（沒排序、沒錯誤）。v1.79 起推播排隊送出（同時最多 16 筆、每筆各自 setImmediate），人數多只是送得久一點，不會讓事件迴圈一次被佔用更久；目前 427 人 ⇒ 實際推播數量不變。主查詢順手加 projection（_id／uid／sub，函式只用到這三欄）。
+- ② web-push 預設沒有請求逾時：v1.79 的「格子 5 秒讓出」只讓出名額、連線照樣掛著。排隊包裝補 `timeout: 30000`（複製一份選項、不改呼叫端物件；呼叫端自己給 timeout 就照它的）。逾時＝那一筆 reject，呼叫端照原本失敗處理記 log。
+  - ⚠ web-push 3.4.0 以前不認得 timeout，會 reject「'timeout' is an invalid option」（已下載 3.3.5／3.4.0／3.4.5／4.0.0 原始碼確認；選項驗證是 reject 不是同步 throw）⇒ 這一筆改用原參數重送、之後全部不再補（退回 v1.79 行為），推播不會因此全部失敗。VM 上 web-push 的實際版本未查（站長可用 `cat /opt/ptcg/api/node_modules/web-push/package.json | grep version` 確認）。
+- 錦標賽區塊鎖（Rule 68）：tail 3b5b2d09…、tev 474b9038…、len 248732；新增 scripts/lib/sap-revert-admin-v180.mjs（3 組還原對，difflib 產生、驗證逐位元回 146a1318）、tourn-revert-v180.mjs（鏈又長一節）；revertAdminV177 入口改為先退 v1.80 再剝 v1.79。Rule 40：test-sap152／sap153 的 D5 允許 lib 版本清單加 v180；test-v6379 D3 納入 v1.76 舊值與 v176／v180 兩支宣告端（17 支）；test-v179 C2／C3 先套 v1.80 還原表再比 BASE。
+- 守衛：test-v180-push-cap-timeout（A1～A5 逾時、B1～B5 上限／投影／去重、D1～D5 鎖、H1／H2 HEAD-FAIL：BASE 不帶逾時、600 人只送 500）。7 個突變全殺（拿掉退路、退路不停用、退路吞所有錯誤、不尊重呼叫端 timeout、就地改呼叫端物件、拿掉投影、投影漏金鑰）。
+- 部署：update-tournament.bat（admin-only／server-only，不寫對外 changelog）。
+
 ## server v1.79（2026-11-06）推播排隊送出：發起社群賽不再卡住全站
 
 站長轉來主機檢查報告（另一個可連 VPS 的 AI，純讀取）：11/5 三次 POST /api/tournament/propose 之後 1 秒內，全站 30～70 個平常 1～10ms 的請求同一秒卡約 1.1 秒。站長：「好的請修正」。
