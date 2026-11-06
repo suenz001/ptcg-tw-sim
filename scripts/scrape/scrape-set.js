@@ -5,6 +5,8 @@
  *   node scripts/scrape/scrape-set.js SV10
  *   node scripts/scrape/scrape-set.js SV10 --delay 800   # custom delay per request (ms)
  *   node scripts/scrape/scrape-set.js SV10 --resume      # skip cards already in the output file
+ *   node scripts/scrape/scrape-set.js M7 --out .new-set/M7   # ⭐v6.632 寫到暫存資料夾（新卡包一律先這樣跑，
+ *                                                          #   檢查完才併進 static/cards；見 scripts/new-set/）
  *
  * Output:
  *   data/cards/{SET}.json     - array of Card objects
@@ -31,11 +33,13 @@ const BASE = 'https://asia.pokemon-card.com';
 const UA = 'Mozilla/5.0 (PTCG-TW-Sim scraper; contact: github.com/suenz001/ptcg-tw-sim)';
 
 function parseArgs(argv) {
-  const args = { set: null, delayMs: 600, resume: false };
+  const args = { set: null, delayMs: 600, resume: false, out: null };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--delay') args.delayMs = parseInt(argv[++i], 10);
     else if (a === '--resume') args.resume = true;
+    else if (a === '--out') args.out = argv[++i];
+    else if (a.startsWith('--')) throw new Error('未知參數：' + a);   // ⭐v6.632 fail-closed：打錯參數不可以默默寫進 static/cards
     else if (!args.set) args.set = a;
   }
   return args;
@@ -44,11 +48,18 @@ function parseArgs(argv) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchHtml(url) {
-  const res = await fetch(url, {
-    headers: { 'User-Agent': UA, 'Accept-Language': 'zh-TW' }
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return await res.text();
+  // ⭐v6.632：官網偶發 502／429（2026-11 補卡經驗）⇒ 5xx／429 退避重試 3 次；4xx 直接失敗
+  let last;
+  for (let i = 0; i < 4; i++) {
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'zh-TW' } });
+      if (res.ok) return await res.text();
+      last = new Error(`HTTP ${res.status} for ${url}`);
+      if (res.status < 500 && res.status !== 429) break;
+    } catch (e) { last = e; }
+    await sleep(1500 * (i + 1));
+  }
+  throw last;
 }
 
 /** Collect every numeric card ID in a set, walking pagination. */
@@ -101,10 +112,11 @@ async function main() {
     process.exit(1);
   }
   const setCode = args.set;
+  const outDir = args.out ? path.resolve(args.out) : OUT_DIR;
 
-  await fs.mkdir(OUT_DIR, { recursive: true });
-  const outPath = path.join(OUT_DIR, `${setCode}.json`);
-  const logPath = path.join(OUT_DIR, `${setCode}.log`);
+  await fs.mkdir(outDir, { recursive: true });
+  const outPath = path.join(outDir, `${setCode}.json`);
+  const logPath = path.join(outDir, `${setCode}.log`);
 
   console.error(`[1/3] Collecting card IDs for set ${setCode}...`);
   const allIds = await collectCardIds(setCode, args.delayMs);

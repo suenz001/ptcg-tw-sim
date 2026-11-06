@@ -48,6 +48,7 @@ import {
 //   （scripts/anti-pattern-lint.mjs 的反向 edge 規則，module-init 循環 TDZ）。
 //   站上所有「場上的卡回手牌」的卡（念力土偶｜退化光線、v2353/v2354、items_misc…）都是這樣接的。
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c';
+import { isAllPowerSoulBlocked } from '../../usable-gates';   // ⭐v6.632 全能靈魂（整人變身不可以換上海豚俠ex）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ① gust 方向：「選擇 1 隻**對手的備戰**寶可夢，與戰鬥寶可夢互換。」（1 招）
@@ -172,7 +173,9 @@ regPost('百變怪|整人變身', (state, aIdx, pool) => {
   if (!p.active) return r.state;
   if (p.deck.length === 0) return addLog(r.state, '整人變身：牌庫為空，無法選擇', aIdx);
   // picker 只列牌庫裡的「寶可夢卡」（卡面明文）。候選 0 張時仍要重洗牌庫（已看過牌庫）。
-  const pokeIids = p.deck.filter(d => pool.get(d.cardId)?.supertype === 'Pokemon').map(d => d.iid);
+  // ⭐v6.632（官方 Q&A，30th CELEBRATION）：牌庫裡的「陳舊的○○化石」是物品卡（不是寶可夢卡）⇒ 本來就不在候選；
+  //   海豚俠ex｜全能靈魂「只可依據『海豚俠』的特性『全能變身』的效果放置於場上」⇒「不可以」互換 ⇒ 排除（中央述詞 isAllPowerSoulBlocked）。
+  const pokeIids = p.deck.filter(d => { const c = pool.get(d.cardId); return c?.supertype === 'Pokemon' && !isAllPowerSoulBlocked(c); }).map(d => d.iid);
   if (pokeIids.length === 0) {
     return updatePlayer(addLog(r.state, '整人變身：牌庫沒有寶可夢卡，重洗牌庫', aIdx), aIdx,
       pl => ({ ...pl, deck: shuffle([...pl.deck]) }));
@@ -200,6 +203,7 @@ regR('ditto-transform-swap', (st, idx, iids, params, pool) => {
   const picked = p.deck.find(c => c.iid === iids[0]);
   if (!picked) return reshuffle(`${label}：牌庫中找不到所選卡，重洗牌庫`);
   if (pool.get(picked.cardId)?.supertype !== 'Pokemon') return reshuffle(`${label}：所選非寶可夢卡，重洗牌庫`);
+  if (isAllPowerSoulBlocked(pool.get(picked.cardId))) return reshuffle(`${label}：${pool.get(picked.cardId)?.name}只可依據「全能變身」放置於場上，重洗牌庫`);   // ⭐v6.632 resolver 自己再驗
   const onField = p.active?.iid === hostIid ? p.active : p.bench.find(c => c.iid === hostIid);
   if (!onField) return reshuffle(`${label}：場上找不到這隻寶可夢，重洗牌庫`);
 

@@ -1,5 +1,6 @@
 // 帳號處分：執行真實服務、middleware、管理端點與完整補丁的啟動。
 // BASE 沒有功能時逐條失敗；既有賽程區塊及對外更新紀錄為兩個正對照。
+import { revertV6632ChangelogIfPresent } from './lib/revert-v6632-changelog.mjs';   // ⭐v6.632（Rule 40）：最新一版先還原
 import { revertV6631ChangelogIfPresent } from './lib/revert-v6631-changelog.mjs';   // ⭐v6.631（Rule 40）：最新一版先還原
 import { revertAdminV180IfPresent } from './lib/sap-revert-admin-v180.mjs';
 import assert from 'node:assert/strict';
@@ -14,7 +15,7 @@ import {revertV6629ChangelogIfPresent} from './lib/revert-v6629-changelog.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PRODUCT = process.env.V6605_PRODUCT || ROOT;
 // Rule 40：僅精確還原629公開紀錄搬運，保留605隱藏版原文契約及處分行為斷言。
-const read = p => revertV6629ChangelogIfPresent(p,revertV6631ChangelogIfPresent(p,readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n')));
+const read = p => revertV6629ChangelogIfPresent(p,revertV6631ChangelogIfPresent(p,revertV6632ChangelogIfPresent(p,readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n'))));
 const sap = read('oracle-admin/server_admin_patch.js'), html = read('oracle-admin/admin.html');
 const block = sap.split('// >>> v6605-account-moderation\n')[1]?.split('// <<< v6605-account-moderation')[0];
 let passed=0, failed=0;

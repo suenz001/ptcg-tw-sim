@@ -98,3 +98,6 @@ __*/
 /search_result.txt
 /svelte-errors.txt
 /test.tmp
+
+# ⭐v6.632 新卡包暫存（爬蟲先寫到這裡，檢查完才併進 static/cards）
+.new-set/

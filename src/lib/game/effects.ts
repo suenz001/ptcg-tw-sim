@@ -530,6 +530,13 @@ export function weaknessMultiplier(
   const wv = defenderCard?.weakness?.value;
   if (wv != null && !String(wv).startsWith('×')) return WEAKNESS_MULTIPLIER_DEFAULT;
   let mul = WEAKNESS_MULTIPLIER_DEFAULT;
+  // >>> v6632-weakness-mult-opp-ability-immune
+  // ⭐v6.632（官方 Q&A，30th CELEBRATION：甜甜螢｜絕佳費洛蒙 × 來悲粗茶｜化隱）：
+  //   「對手戰鬥場上的特性『化隱』處於有效狀態的來悲粗茶的弱點會以『×3』計算傷害嗎？」⇒「不會。將以『×2』計算傷害。」
+  //   ⇒ 受招方「不受對手特性效果影響」（化隱／光之翼…中央述詞）時，**對手那一側**的倍率特性對它無效；
+  //     自己這一側的照算（卡面「雙方」）。受招方＝那一側的戰鬥寶可夢（本函式只在算戰鬥寶可夢弱點時呼叫）。
+  const _v6632Def = state.players[defenderOwnerIdx]?.active ?? null;
+  // <<< v6632-weakness-mult-opp-ability-immune
   // 卡面「**雙方**的戰鬥寶可夢」⇒ 持有者在哪一側都算，兩側都要掃。
   for (const ownerIdx of [0, 1] as const) {
     const p = state.players[ownerIdx];
@@ -548,6 +555,9 @@ export function weaknessMultiplier(
         if (!isAbilityHolderEffective(state, inst, card, ownerIdx, spec.ability, loc, pool)) continue;
         // 卡面前提：「**自己**的場上有『電螢蟲』」＝ 持有者那一側的戰鬥場＋備戰。
         if (!spec.requiresOwnOnField.every((nm) => hasNamedPokemonOnOwnField(state, ownerIdx, nm, pool))) continue;
+        // >>> v6632-weakness-mult-opp-ability-immune
+        if (ownerIdx !== defenderOwnerIdx && _v6632Def && isImmuneToOppAbilityEffect(state, ownerIdx, _v6632Def, pool, false)) continue;
+        // <<< v6632-weakness-mult-opp-ability-immune
         if (spec.multiplier > mul) mul = spec.multiplier;
       }
     }
@@ -8718,8 +8728,14 @@ export function getOctopusTentacleEffectiveCost(
   attackName: string,
   originalCost: import('$lib/cards/types').EnergyType[],
 ): import('$lib/cards/types').EnergyType[] {
-  if (attackerName !== '八爪武師') return originalCost;
+  // >>> v6632-copied-attack-self-cost
+  // ⭐v6.632（官方 Q&A，30th CELEBRATION：夢幻ex｜記憶螺旋使出鐵螯龍蝦｜反撲剪）：
+  //   「附有1個【惡】能量的自己的夢幻ex身上有放傷害指示物時，可以……使用『反撲剪』嗎？」⇒「可以。」
+  //   卡面「若**這隻寶可夢**身上放置有傷害指示物」＝**使用招式的那一隻**，不是卡面原本的持有者。
+  //   ⇒ 不再要求出招者的卡名是八爪武師（借來用的也照算，看的是出招者自己的指示物）。招式名全站唯一（v6.632 現查）。
+  void attackerName;
   if (attackName !== '觸手激怒') return originalCost;
+  // <<< v6632-copied-attack-self-cost
   if (attackerInst.damage <= 0) return originalCost;
   // 身上有傷害指示物 → 改為 1 個【鬥】
   return ['Fighting'];
@@ -8735,8 +8751,12 @@ export function getIronCrabCounterClipEffectiveCost(
   attackName: string,
   originalCost: import('$lib/cards/types').EnergyType[],
 ): import('$lib/cards/types').EnergyType[] {
-  if (attackerName !== '鐵螯龍蝦') return originalCost;
+  // >>> v6632-copied-attack-self-cost
+  // ⭐v6.632 同上（官方 Q&A 原句就是這一招）：看的是使用招式的那一隻身上有沒有指示物；
+  //   反過來，指示物只在備戰的鐵螯龍蝦身上、夢幻ex 沒有 ⇒ 不減費（官方：「不可以」）。
+  void attackerName;
   if (attackName !== '反撲剪') return originalCost;
+  // <<< v6632-copied-attack-self-cost
   if (attackerInst.damage <= 0) return originalCost;
   // 身上有傷害指示物 → 改為 1 個【惡】
   return ['Darkness'];
