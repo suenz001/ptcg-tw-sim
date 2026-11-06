@@ -1231,6 +1231,72 @@ import('firebase-admin').then(async ({ default: admin }) => {
     if (t && typeof t.unref === 'function') t.unref();
   })();
   // <<< v149-loop-lag-log
+  // >>> v179-push-yield
+  // ══ v1.79（2026-11-06）推播分批送出：不讓「推播給全站」卡住整台伺服器 ══════════════════════
+  //   實錄（主機檢查 2026-11-06）：11/5 三次「玩家發起社群賽」（POST /api/tournament/propose）之後 1 秒內，
+  //   全站 30～70 個平常 1～10ms 的請求（房間、聊天、錦標賽狀態）同一秒一起卡約 1.1 秒。
+  //   真因：broadcastPush／sendPushToUids 用 `subs.map(async row => sendNotification(...))` 一口氣發給所有訂閱者；
+  //   web-push 的 sendNotification 在發出 HTTPS 之前，要先**同步**做完 payload 加密（ECDH＋AES-GCM）與 VAPID 簽章
+  //   （VM 實測每筆約 0.75ms），訂閱數已達 427 ⇒ 同一個 tick 裡同步做完幾百筆，再同時開幾百條 TLS 連線。
+  //   ⇒ 這裡把 web-push 模組的 sendNotification 換成「排隊送」：同時最多 PUSH_MAX_INFLIGHT 筆在路上，
+  //     每一筆都在自己的 setImmediate 才開始（加密＋開連線），送完一筆才補下一筆 ⇒ 事件迴圈每次只被佔用一小段，
+  //     TLS 握手與 DNS 查詢也被分散（同時最多 16 條）。
+  //   ・時效性推播優先：一次只送幾筆的（報到、進場、60 秒判負警告、推播自測）排在全站廣播前面。
+  //   ・推播內容、對象、失效訂閱清除（404／410）完全不變：呼叫端拿到的 Promise 結果與原本相同（成功值／錯誤原封轉交）。
+  //   ・某個推播服務一直不回應時，那一格最多佔 PUSH_SLOT_TIMEOUT_MS（5 秒）就讓給下一筆（原本的請求不取消，結果照常轉交）
+  //     ⇒ 不會因為幾個卡住的端點讓之後所有推播（含報到、進場通知）排不出去。
+  //   ・放在錦標賽區塊之前、以「同一個模組物件」生效：錦標賽區塊的 require('web-push')／import('web-push').default
+  //     拿到的就是這裡改過的物件（Node 的模組快取），錦標賽區塊本身一個字都沒動（28 把鎖不受影響）。
+  //   ・設定掛在 wp.__ptcgPushQueue（守衛用來調小逾時；也可在 VM 上看 stats()）。重複執行不會重複包裝。
+  ;(async function installPushQueue() {
+    try {
+      let wp = null;
+      try { wp = require('web-push'); }
+      catch (_eReq) { try { wp = (await import('web-push')).default; } catch (_eImp) { wp = null; } }
+      if (!wp || typeof wp.sendNotification !== 'function' || wp.__ptcgPushQueue) return;
+      const raw = wp.sendNotification;
+      const cfg = { maxInflight: 16, slotTimeoutMs: 5000, urgentBatchMax: 32 };   // PUSH_MAX_INFLIGHT／PUSH_SLOT_TIMEOUT_MS
+      // 兩條佇列（審查 P2-1）：同一段同步程式裡一起呼叫進來的算「一批」；小批（≤ urgentBatchMax，例如報到、進場、
+      //   60 秒判負警告、推播自測）排進 urgent，大批（全站廣播）排進 bulk ⇒ 時效性推播不會排在幾百筆廣播後面。
+      const urgent = [], bulk = [];
+      let batch = null;
+      let inflight = 0, doneTotal = 0, peakQueue = 0;
+      const pump = () => {
+        while (inflight < cfg.maxInflight && (urgent.length || bulk.length)) {
+          const job = urgent.length ? urgent.shift() : bulk.shift();
+          inflight++;
+          let released = false;
+          const release = () => { if (released) return; released = true; inflight--; pump(); };
+          setImmediate(() => {
+            let p;
+            try { p = Promise.resolve(raw.apply(wp, job.args)); }
+            catch (e) { p = Promise.reject(e); }
+            const timer = setTimeout(release, cfg.slotTimeoutMs);
+            if (timer && typeof timer.unref === 'function') timer.unref();
+            p.then(job.resolve, job.reject).finally(() => { clearTimeout(timer); doneTotal++; release(); });
+          });
+        }
+      };
+      wp.sendNotification = function queuedSendNotification(...args) {
+        return new Promise((resolve, reject) => {
+          if (!batch) {
+            const b = batch = [];
+            queueMicrotask(() => {   // 這一段同步程式結束 ⇒ 這一批收尾，依大小分到兩條佇列
+              batch = null;
+              (b.length <= cfg.urgentBatchMax ? urgent : bulk).push(...b);
+              const q = urgent.length + bulk.length;
+              if (q > peakQueue) peakQueue = q;
+              pump();
+            });
+          }
+          batch.push({ args, resolve, reject });
+        });
+      };
+      wp.__ptcgPushQueue = { cfg, stats: () => ({ inflight, urgent: urgent.length, bulk: bulk.length, doneTotal, peakQueue }) };
+      console.log('[push] 推播改為排隊送出（同時最多 ' + cfg.maxInflight + ' 筆）');
+    } catch (e) { console.warn('[push] 推播排隊未啟用（照舊一次送出）:', e && e.message); }
+  })();
+  // <<< v179-push-yield
 
   // ══ v1.28（v6.266）套牌戰績 GET /api/deck-stats 的兩支索引 ═════════════════
   //   查詢形狀＝`$or:[{'p1.deckId':X},{'p2.deckId':X}]` ⇒ 兩支單欄索引，planner 走 index union。

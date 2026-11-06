@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## server v1.79（2026-11-06）推播排隊送出：發起社群賽不再卡住全站
+
+站長轉來主機檢查報告（另一個可連 VPS 的 AI，純讀取）：11/5 三次 POST /api/tournament/propose 之後 1 秒內，全站 30～70 個平常 1～10ms 的請求同一秒卡約 1.1 秒。站長：「好的請修正」。
+
+- 真因（對照程式確認）：broadcastPush／sendPushToUids 用 `subs.map(async row => _webpush.sendNotification(...))` 一次發給所有訂閱者；web-push 在發出 HTTPS 前同步做完加密與 VAPID 簽章（VM 實測每筆約 0.75ms），訂閱已 427 筆。propose 本來就沒有等廣播（fire-and-forget），被卡的是同一秒全站其他玩家。
+- 修法（`// >>> v179-push-yield`，放在錦標賽區塊之前，錦標賽區塊一個字都沒動 ⇒ 28 把鎖不受影響）：把 web-push 模組物件的 sendNotification 換成排隊送出——同時最多 16 筆在路上、每筆在自己的 setImmediate 才開始；成功值與錯誤原封轉交（404／410 清除訂閱照舊）；卡住的推播服務 15 秒後讓出格子。錦標賽區塊的 require／import('web-push').default 拿到的是同一個模組物件（Node 模組快取）。
+- 實測（守衛 B1，假 web-push 每筆同步 1.5ms、400 個訂閱跑真的 broadcastPush）：事件迴圈最長佔用 611ms → 27ms。突變：上限改 1000 ⇒ A1、B1 紅。
+- 部署：update-tournament.bat。伺服器啟動時 pm2 log 會印「[push] 推播改為排隊送出（同時最多 16 筆）」；之後可用既有的 [loop-lag] 紀錄對照 propose 時間確認不再卡頓。
+- 審查（Opus 5.5）：無 P1。P2-1 時效性推播（報到、進場、60 秒判負警告）排在 427 筆廣播後面、推播服務卡住時最壞延遲數分鐘 → 改兩條佇列（同一段同步程式呼叫進來的算一批，≤32 筆走優先佇列）、格子逾時 15 秒降為 5 秒；P2-2 推播自測端點同樣受惠。P3：守衛 A3 補 inflight 歸 0 與上限、B1 門檻 60→150ms（BASE 約 600ms）、新增 C4（區塊外的呼叫都是呼叫當下讀 `_webpush.sendNotification`）；sentTotal 改名 doneTotal。突變：拿掉 released 旗標 ⇒ A3 紅、優先門檻改 0 ⇒ A5 紅。
+- 審查另提（未做，需站長裁定或另案）：web-push 預設沒有請求逾時（卡住的連線不會自己結束）；broadcastPush 的 cap=500 沒排序（訂閱超過 500 後會只推給任意 500 人，要動錦標賽區塊）。報告「21 次 propose 只有 3 次卡」可能是其餘多半沒有成功發起（409／400 不廣播）。
+- 守衛：test-v179-push-yield（A1～A5、B1、C1～C4、HEAD-FAIL）；Rule 40：scripts/lib/sap-revert-admin-v179.mjs（剝掉本版區塊）接在 revertAdminV177 最前面，釘整份補丁的 6 支舊守衛（v6588、v6589、v6592、sap153、sap154、sap169）經它還原。
+
 ## v6.630｜後台工作導覽與手機 RWD（hidden）
 
 - BASE：`5d657c8b`（v6.629）。站長授權整體整理 admin，改善手機分頁難找與長距離捲動；只動管理閱讀層，不增 API、不改 server／權限／遊戲規則／輪詢。桌機220px分組側欄，≤900px抽屜與常駐五入口；功能搜尋明確提交。
