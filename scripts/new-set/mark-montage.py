@@ -9,7 +9,7 @@
 
 用法：
   python3 scripts/new-set/mark-montage.py <卡表或暫存.json> <輸出資料夾> [--per-page 24] [--only-ids 1,2,3]
-  例：python3 scripts/new-set/mark-montage.py .new-set/M7/cards.json .new-set/M7/montage
+  例：python3 scripts/new-set/mark-montage.py .new-set/M7/M7.json .new-set/M7/montage
 
 每一格：上半＝卡圖左上（階段字樣、卡名），下半＝卡圖左下（規則標記、卡包代號、收錄編號）；
   格子上方印「id／卡名／資料寫的標記／資料寫的階段」——圖上印的和資料寫的不一樣，就是官網欄位錯了。

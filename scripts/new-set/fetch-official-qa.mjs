@@ -12,11 +12,12 @@
  *
  * 用法：
  *   node scripts/new-set/fetch-official-qa.mjs --set M6a --write       以 M6a 每張卡的卡名逐一查詢，併進快照
- *   node scripts/new-set/fetch-official-qa.mjs --set M7 --staging .new-set/M7/cards.json --write
+ *   node scripts/new-set/fetch-official-qa.mjs --set M7 --staging .new-set/M7/M7.json --write
  *                                                                      新卡包還沒併表時，讀爬蟲暫存檔的卡名
  *   node scripts/new-set/fetch-official-qa.mjs --names 卡名.txt --write  任意卡名清單（一行一個）
- *   node scripts/new-set/fetch-official-qa.mjs --set M6a                不連網：只用既有快照印 M6a 的報告（不寫檔）
- *     ⚠ 有 --set 就會連網查；只想看報告請加 --from-file scripts/data/official-qa.json
+ *   node scripts/new-set/fetch-official-qa.mjs --set M6a --from-file scripts/data/official-qa.json
+ *                                                                      不連網：只用既有快照印 M6a 的報告（不寫檔）
+ *     ⚠ 有 --set 而沒有 --from-file 就會連網查
  *   node scripts/new-set/fetch-official-qa.mjs --product 30th --from-file scripts/data/official-qa.json
  *   --delay 400   每次請求間隔（預設 350ms，對官網客氣一點）
  *
@@ -216,6 +217,8 @@ async function main() {
     incomplete = r.incomplete;
     ({ snap, added } = mergeSnapshot(prev, r.items, { lastQuery: { set: args.set, names: r.queried } }));
     console.log(`查了 ${r.queried} 個卡名，取得 ${r.items.length} 筆，快照新增 ${added} 筆`);
+    // 審查 P3-9：全部 0 筆多半是官網頁面結構變了（解析不到），不是真的沒有判例
+    if (r.queried >= 5 && r.items.length === 0) console.log('⚠ 查了很多卡名卻一筆都沒有 ⇒ 官網頁面結構可能變了（parsePage 解析不到），請到官網手動確認');
   } else if (args.names) {
     const r = await fetchByNames(readFileSync(args.names, 'utf8').split(/\r?\n/), args.delay);
     incomplete = r.incomplete;

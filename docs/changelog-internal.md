@@ -25,6 +25,8 @@ BASE `570afeaf`（v6.631）。站長：「官方預計在11月底推出新的擴
 - test-v6632-new-set-kit：工具組判準（29 條，8 個突變全殺）＋Z ex 判準。
 - Rule 40：test-v6610 P（effects.ts 先套 revert-v6632-game）、test-v6610／v6605 的 changelog 鏈加 revert-v6632-changelog。
 - 改前後 harness＋35 支免疫網 36/36 全綠。
+- 審查（Opus 5.5；第一位審查者工具環境壞掉沒做成，換一位重審）：三處規則修正正確、無副作用（反撲剪／觸手激怒招式名全站唯一；揮指等 copy-attack 不走 effectiveAttackCost；weaknessMultiplier 兩個呼叫點都只在受招方是戰鬥寶可夢時）；37 條判例逐條有對應。修正：P2-1 守衛 1h 道具掛錯欄位（引擎讀 toolAttached）⇒ 安慰劑，改正並加「烈空坐自己看得到德爾塔之禮」哨兵；P2-2 守衛 5b 判錯機制（祭典第 2 次是 state.festivalDancePendingSecondAttack）⇒ 恆真，改正並加 HP 夠時的正對照；P2-3 audit B3：主動特性以**卡名**為 key（regA／regAByName），同卡面的新卡不會自動生效，原本誤報「自動套用」⇒ 改讀 ABILITY_EFFECTS／ABILITY_EFFECTS_BY_NAME，手牌觸發型（若手牌有這張卡）另判。P3：A3／A5 只查 H／I／J；B2 只在有 handler 時報、只有傷害不同時只在有 PRE handler 時報（卡比獸｜倒下 130／160 是 POST，不撞）；正規化去【】；A2 卡包代號完整比對（M6 不吃 M6a）；新增 A7 收錄編號缺號（M6a 缺 119／128／129／131）；文件路徑改成 scrape 實際寫出的 `.new-set/M7/M7.json`；scrape `--out` 沒給值時中止；判例查詢全部 0 筆時警告；守衛補 2a 實際結算、1j／3d 正對照。工具組守衛 29→40 條，新判準 8 個突變全殺。
+- ⚠ 審查另列既有問題（未在本版修）：雙卵細胞球｜細胞進化、人造細胞卵｜細胞覺醒、彩粉蝶｜進化粉、招式學習器 演進（共用 cellAwakeningStep）等「從牌庫直接進化」的效果，篩選只看 evolvesFrom ⇒ 可以把波普海豚進化成海豚俠ex（全能靈魂應不行）。待下一版收斂。
 
 ## v6.631（2026-11-07）卡圖卡住看門狗＋iPad 圖示置中
 

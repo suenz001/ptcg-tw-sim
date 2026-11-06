@@ -38,7 +38,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '--delay') args.delayMs = parseInt(argv[++i], 10);
     else if (a === '--resume') args.resume = true;
-    else if (a === '--out') args.out = argv[++i];
+    else if (a === '--out') { args.out = argv[++i]; if (!args.out || args.out.startsWith('--')) throw new Error('--out 後面要接資料夾'); }   // 審查 P3-8：沒給值不可以退回寫 static/cards
     else if (a.startsWith('--')) throw new Error('未知參數：' + a);   // ⭐v6.632 fail-closed：打錯參數不可以默默寫進 static/cards
     else if (!args.set) args.set = a;
   }
@@ -108,7 +108,7 @@ async function writeAtomic(file, content) {
 async function main() {
   const args = parseArgs(process.argv);
   if (!args.set) {
-    console.error('Usage: node scrape-set.js <SET_CODE> [--delay ms] [--resume]');
+    console.error('Usage: node scrape-set.js <SET_CODE> [--out 暫存資料夾] [--delay ms] [--resume]');
     process.exit(1);
   }
   const setCode = args.set;

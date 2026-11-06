@@ -7,7 +7,7 @@
  *   新卡包一抓回來（還沒併表、或剛併表）就跑一次，紅的地方先處理再實裝。
  *
  * 用法：
- *   node scripts/new-set/audit-new-set.mjs M7 --staging .new-set/M7/cards.json   爬蟲暫存檔（還沒併表）
+ *   node scripts/new-set/audit-new-set.mjs M7 --staging .new-set/M7/M7.json   爬蟲暫存檔（scrape-set.js --out .new-set/M7 寫出的）
  *   node scripts/new-set/audit-new-set.mjs M6                                     已併表的卡包（讀 static/cards）
  *   node scripts/new-set/audit-new-set.mjs M6 --src-root /tmp/old                 用另一份 src（例如歷史版本）判斷「有沒有實裝」
  *   --md 檔案   另存 Markdown 報告
@@ -17,13 +17,16 @@
  *   A2 卡片 id 一律字串、不可與站上既有 id 撞號（v6.616 數字 id 讓前端卡池一直全量重載；v6.328 自造 id 撞官方 id）
  *   A3 進化：1／2 階一定有 evolvesFrom、基礎沒有；來源卡存在且剛好低一階；ex 不可從「去掉 ex／超級」的同名卡進化（站長多次提醒）
  *   A4 兩張合一的競技場（collectorNumber 含逗號）⇒ 要拆出 `<id>-1` 右半（M6 傳說競技場）
+ *   A7 收錄編號缺號 ⇒ 確認是刻意不收還是漏抓
+ *   （A3／A5 只檢查 H／I／J；不收的卡不報）
  *   A5 欄位完整：寶可夢有 hp／pokemonType／attacks 或 abilities；訓練家有 rulesText（訓練家卡面在 rulesText，不在 effect）
  *   A6 超級進化 ex（含名字有 Z／X 的）：isMegaExCard 同一判準（卡名以「超級」開頭且 subtype ex）⇒ 被擊倒給 3 張
  * 【B】實裝（用 esbuild 讀「真實註冊表」，不是 regex 猜）
  *   B1 招式：`卡名|招式名` 有沒有 handler；沒有的話列出「卡面逐字相同、已實裝」的範本
  *      ⚠ 範本可能本身是錯的（v6.064 好啦魷｜拍落照抄到既有 bug）⇒ 範本只是線索，要先查有沒有裁定註解
  *   B2 ⛔ 同名同招、卡面不同：ATTACK_PRE 的 key 沒有印刷維度，舊印刷的 handler 會套到新卡上（skill ptcg-guard-hygiene）
- *   B3 特性：特性名在程式裡完全沒出現 ⇒ 一定沒實裝；有出現但站上同名特性卡面不同 ⇒ ⛔ 名稱撞號（被動特性多以特性名為 key）
+ *   B3 特性：主動特性以**卡名**為 key 註冊（regA／regAByName）⇒ 新卡同卡面也不會自動生效；被動特性多以特性名為 key ⇒
+ *      同名特性卡面不同 ⇒ ⛔ 撞號；同卡面 ⇒ 可能自動生效，但一定要實跑守衛確認
  *   B4 訓練家：TRAINER_EFFECTS 有沒有同名 handler；同名但 rulesText 不同 ⇒ ⛔ 撞號（舊卡的效果會直接套上來）
  *      沒有 handler 的物品／支援者／道具會自動 fail-closed（v6.066），競技場要另外登記 PENDING_STADIUMS
  * 【C】官方判例：scripts/data/official-qa.json 裡跟這個卡包有關、而規則書還沒收錄的條數（先跑 fetch-official-qa.mjs）
@@ -71,7 +74,8 @@ export function loadSitePool(root = ROOT) {
 
 const stripEx = (n) => String(n).replace(/^超級/, '').replace(/\s*(ex|EX)$/, '').replace(/[XYZ]$/, '');
 export const isMegaName = (c) => c?.supertype === 'Pokemon' && c.subtype === 'ex' && String(c.name).startsWith('超級');
-const norm = (s) => String(s ?? '').replace(/[​-‍﻿]/g, '').replace(/\s+/g, '');
+// 比對卡面用：去零寬字元、空白、【】（官網「寶可夢【ex】」與「寶可夢ex」混用，審查 P3-4）
+const norm = (s) => String(s ?? '').replace(/[​-‍﻿]/g, '').replace(/\s+/g, '').replace(/[【】]/g, '');
 
 /** 【A】資料檢查。setCards＝新卡包的卡；pool＝站上 live 卡池（不含新卡包本身時也可以） */
 export function auditData(setCards, pool) {
@@ -91,11 +95,16 @@ export function auditData(setCards, pool) {
     if (seen.has(String(c.id))) out.stop.push(`A2 ⛔ 卡包內 id 重複：${c.id}`);
     seen.add(String(c.id));
     const old = siteIds.get(String(c.id));
-    if (old && old._file && !old._file.startsWith(c.setCode ?? '')) out.stop.push(`A2 ⛔ id ${c.id}（${c.name}）與站上 ${old._file} 的「${old.name}」撞號`);
+    // 審查 P3-6：卡包代號要**完全相同**（或按標拆檔的 `代號-標`）才算同一張；只比前綴會讓 M6 吃掉 M6a 的撞號
+    const oldCode = old?._file ? old._file.replace(/\.json$/, '') : null;
+    const same = !!c.setCode && !!oldCode && (oldCode === c.setCode || oldCode.startsWith(c.setCode + '-'));
+    if (old && !same) out.stop.push(`A2 ⛔ id ${c.id}（${c.name}）與站上 ${old._file ?? '?'} 的「${old.name}」撞號`);
   }
   const byName = new Map();
   for (const c of [...pool, ...setCards]) { if (!byName.has(c.name)) byName.set(c.name, []); byName.get(c.name).push(c); }
-  for (const c of setCards) {
+  // 審查 P3-2：只檢查要收的 H／I／J（經典重印的 BREAK／VMAX 等不收，不必報）
+  const kept = setCards.filter((c) => ALLOWED_MARKS.has(c.regulationMark));
+  for (const c of kept) {
     if (c.supertype !== 'Pokemon') continue;
     const stage = c.stage ?? (['Basic', 'Stage1', 'Stage2'].includes(c.subtype) ? c.subtype : null);
     if (!stage) { out.stop.push(`A3 ⛔ ${c.name}（${c.id}）沒有 stage`); continue; }
@@ -111,11 +120,26 @@ export function auditData(setCards, pool) {
         out.stop.push(`A3 ⛔ ${c.name} ← ${c.evolvesFrom}：ex 是平行的一張卡，從**前一階**進化，不是從同名非 ex 卡`);
     }
   }
+  // 審查 P3-10：收錄編號缺號（例：M6a 缺 119／128／129／131）⇒ 要確認是刻意不收還是漏抓
+  {
+    const nums = new Set(), totals = new Set();
+    for (const c of setCards) for (const part of String(c.collectorNumber ?? '').split(',')) {
+      const m = part.trim().match(/^(\d+)\/(\d+)$/); if (!m) continue;
+      nums.add(Number(m[1])); totals.add(Number(m[2]));
+    }
+    if (nums.size) {
+      const max = Math.max(...nums), gaps = [];
+      for (let i = 1; i <= max; i++) if (!nums.has(i)) gaps.push(i);
+      if (gaps.length) out.warn.push(`A7 收錄編號缺號 ${gaps.length} 個（1～${max}）：${gaps.slice(0, 30).join('、')}${gaps.length > 30 ? '…' : ''} ⇒ 確認是刻意不收（非 H／I／J、重印）還是爬蟲漏抓（列表翻頁）`);
+      out.info.push(`A7 收錄編號 ${nums.size} 個、最大 ${max}、卡面分母 ${[...totals].join('／')}`);
+    }
+  }
   for (const c of setCards) {
     if (/,/.test(String(c.collectorNumber ?? ''))) {
       const hasRight = setCards.some((x) => String(x.id) === `${c.id}-1`);
       (hasRight ? out.info : out.warn).push(`A4 兩張合一的卡：${c.name}（${c.collectorNumber}）${hasRight ? '已有右半' : '⇒ 要拆出 `' + c.id + '-1` 右半（比照 M6 傳說競技場；自造 id 不可是純數字）'}`);
     }
+    if (!ALLOWED_MARKS.has(c.regulationMark)) continue;   // 審查 P3-2：不收的卡不檢查欄位
     if (c.supertype === 'Pokemon') {
       if (!(Number(c.hp) > 0)) out.stop.push(`A5 ⛔ ${c.name}（${c.id}）沒有 HP`);
       if (!c.pokemonType) out.warn.push(`A5 ${c.name}（${c.id}）沒有屬性（pokemonType）`);
@@ -151,6 +175,8 @@ export async function loadRegistry(srcRoot = ROOT) {
       for (const [k, fn] of mp.entries()) fnSig.set(k, (fnSig.get(k) ?? '') + nm + ':' + String(fn).replace(/\s+/g, ' ') + '\n');
     }
     const trainer = keys(SH.TRAINER_EFFECTS);
+    // 主動特性以**卡名**為 key 註冊（regA：`卡名|序號`；regAByName：`卡名|特性名`）⇒ 新卡同卡面也不會自動生效（審查 P2-3）
+    const ability = new Set([...keys(SH.ABILITY_EFFECTS), ...keys(SH.ABILITY_EFFECTS_BY_NAME)]);
     // 程式全文（特性多半散在各種以特性名為 key 的表裡，用字面出現與否當「一定沒實裝」的判準）
     let srcText = '';
     const walk = (d) => { for (const n of readdirSync(d)) { const p = join(d, n); const st = statSync(p); if (st.isDirectory()) walk(p); else if (/\.(ts|svelte)$/.test(n)) srcText += readFileSync(p, 'utf8') + '\n'; } };
@@ -159,7 +185,7 @@ export async function loadRegistry(srcRoot = ROOT) {
     const nameHandled = new Set();
     const m = engineSrc.match(/BENCH_FILL_ATTACK_NAMES = new Set<string>\(\[([\s\S]*?)\]\)/);
     if (m) for (const mm of m[1].matchAll(/'([^']+)'/g)) nameHandled.add(mm[1]);
-    return { attack, trainer, srcText, nameHandled, fnSig };
+    return { attack, trainer, ability, srcText, nameHandled, fnSig };
   } finally { clean(); }
 }
 
@@ -192,8 +218,14 @@ export function auditImpl(setCards, pool, reg) {
         if (done.has('A' + key)) continue; done.add('A' + key);
         const eff = norm(a.effect);
         const prior = byKeyText.get(key);
-        if (prior && ![...prior].includes(eff + '§' + String(a.damage ?? '')))
-          out.stop.push(`B2 ⛔ ${key}：站上已有同名同招但卡面／傷害不同的印刷 ⇒ handler 會共用，要走 faceAttackDamage／faceAttackEffect 印刷閘並實跑兩張`);
+        // 審查 P3-3：只有既有那張「有 handler」時才會共用錯 handler；白板招式沒有這個風險
+        if (prior && (reg.attack.has(key) || reg.nameHandled.has(a.name))) {
+          const effs = new Set([...prior].map((x) => x.split('§')[0]));
+          const hasPre = /(^|\n)PRE:/.test(reg.fnSig?.get(key) ?? '');
+          // 卡面效果不同 ⇒ 一定撞；只有傷害不同 ⇒ 只在 PRE handler（可能寫死傷害）時才撞（POST 只做效果、傷害由引擎讀卡面，例：卡比獸｜倒下 130／160）
+          if (!effs.has(eff)) out.stop.push(`B2 ⛔ ${key}：站上已有同名同招但**卡面效果不同**的印刷 ⇒ handler 會共用，要走 faceAttackDamage／faceAttackEffect 印刷閘並實跑兩張`);
+          else if (hasPre && ![...prior].includes(eff + '§' + String(a.damage ?? ''))) out.stop.push(`B2 ⛔ ${key}：同名同招、效果相同但**傷害不同**，而且有 PRE handler（可能寫死傷害）⇒ 實跑兩張確認各自讀自己的卡面`);
+        }
         if (!eff) continue;
         if (reg.attack.has(key) || reg.nameHandled.has(a.name)) { out.ok.push(`招式 ${key}`); continue; }
         const twins = attackIndex.get(norm(String(a.effect).split(c.name).join('<SELF>'))) ?? [];
@@ -207,17 +239,21 @@ export function auditImpl(setCards, pool, reg) {
         else line += `\n      卡面逐字相同、已實裝的範本 ${regTwins.length} 個（寫法一致）：${regTwins.slice(0, 4).join('、')}（⚠ 一致也可能一起錯：先查該措辭有沒有裁定紀錄）`;
         out.todo.push(line);
       }
-      for (const ab of c.abilities ?? []) {
-        if (done.has('B' + ab.name)) continue; done.add('B' + ab.name);
+      (c.abilities ?? []).forEach((ab, abIdx) => {
+        if (done.has('B' + c.name + '|' + ab.name)) return; done.add('B' + c.name + '|' + ab.name);
         const prior = abilityText.get(ab.name);
         const eff = norm(ab.effect);
         if (prior && !prior.has(eff)) out.stop.push(`B3 ⛔ 特性「${ab.name}」（${c.name}）：站上已有同名特性但卡面不同（${[...prior.values()].join('、')}）⇒ 以特性名為 key 的被動效果會套錯`);
+        const activeReg = reg.ability?.has(`${c.name}|${abIdx}`) || reg.ability?.has(`${c.name}|${ab.name}`);
+        // 「若手牌有這張卡…」是手牌觸發型（例：烈箭鷹ex｜激動俯衝），不是場上 regA 註冊的主動特性
+        const looksActive = /可使用1次|可使用一次|時，可使用|使用這個特性/.test(String(ab.effect)) && !/手牌有這張卡/.test(String(ab.effect));
         const appears = reg.srcText.includes(`'${ab.name}'`) || reg.srcText.includes(`"${ab.name}"`) || reg.srcText.includes(`|${ab.name}'`) || reg.srcText.includes(`|${ab.name}"`);
-        if (prior && prior.has(eff) && appears) out.ok.push(`特性 ${c.name}｜${ab.name}（與 ${prior.get(eff)} 同卡面，既有實作會自動套用——仍要寫實跑守衛）`);
+        if (activeReg) out.ok.push(`特性 ${c.name}｜${ab.name}（主動特性已以卡名註冊）`);
+        else if (looksActive) out.todo.push(`B3 主動特性未註冊 ${c.name}｜${ab.name}：${String(ab.effect).slice(0, 60)}` + (prior && prior.has(eff) ? `\n      與 ${prior.get(eff)} 同卡面，但主動特性以**卡名**為 key ⇒ 不會自動生效，要用 regA／regAByName 為新卡名註冊（共用同一個 handler）` : ''));
+        else if (prior && prior.has(eff) && appears) out.info.push(`B3 被動特性 ${c.name}｜${ab.name}：與 ${prior.get(eff)} 同卡面、特性名在程式裡有出現 ⇒ 若是以特性名為 key 就會自動生效（例：反擊針），**一定要寫實跑守衛確認**`);
         else if (!appears) out.todo.push(`B3 特性未實裝 ${c.name}｜${ab.name}：${String(ab.effect).slice(0, 60)}（程式裡完全沒有這個特性名）`);
-        else if (!prior) out.ok.push(`特性 ${c.name}｜${ab.name}（特性名只屬於這張卡，程式裡有出現）`);
-        else out.info.push(`B3 特性名「${ab.name}」程式裡有出現（${c.name}）⇒ 要人工確認是不是同一張卡的實作`);
-      }
+        else out.info.push(`B3 特性名「${ab.name}」程式裡有出現（${c.name}），但沒有以卡名註冊的主動 handler ⇒ 被動特性要人工確認是不是這張卡的實作`);
+      });
     } else if (c.supertype === 'Trainer') {
       if (done.has('T' + c.name)) continue; done.add('T' + c.name);
       const prior = trainerText.get(c.name);

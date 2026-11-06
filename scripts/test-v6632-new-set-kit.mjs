@@ -63,7 +63,8 @@ const reg = {
   trainer: new Set(['老舊支援者']),
   nameHandled: new Set(),
   srcText: "'舊特性' '波導探求者'",
-  fnSig: new Map([['範本甲|偷看', 'POST:random'], ['範本乙|偷看', 'POST:picker']]),
+  fnSig: new Map([['範本甲|偷看', 'POST:random'], ['範本乙|偷看', 'POST:picker'], ['路卡利歐|波導彈', 'PRE:return 90']]),
+  ability: new Set(['叉字蝠|0']),
 };
 const newCards = [
   { id: '300', name: '路卡利歐', supertype: 'Pokemon', subtype: 'Stage1', stage: 'Stage1', evolvesFrom: '利歐路', regulationMark: 'J',
@@ -73,7 +74,33 @@ const newCards = [
   { id: '303', name: '新物品', supertype: 'Trainer', subtype: 'Item', regulationMark: 'J', rulesText: '全新的物品。' },
 ];
 const I = auditImpl(newCards, site, reg);
-ok('B2 同名同招、傷害不同 ⇒ ⛔ 印刷閘', has(I.stop, /路卡利歐\|波導彈.*印刷閘/));
+ok('B2 同名同招、傷害不同且有 PRE handler（可能寫死傷害）⇒ ⛔', has(I.stop, /路卡利歐\|波導彈.*傷害不同/));
+{ const regPost = { ...reg, fnSig: new Map([['路卡利歐|波導彈', 'POST:status']]) };
+  ok('B2 反對照：只有傷害不同、handler 只有 POST（傷害由引擎讀卡面）⇒ 不報（例：卡比獸｜倒下 130／160）', !has(auditImpl([newCards[0]], site, regPost).stop, /波導彈/));
+  const diffEff = { ...newCards[0], attacks: [{ name: '波導彈', damage: '90', effect: '完全不同的效果。' }] };
+  ok('B2 卡面效果不同 ⇒ ⛔（不論 PRE／POST）', has(auditImpl([diffEff], site, regPost).stop, /波導彈.*卡面效果不同/));
+  const whiteboard = { ...newCards[2], name: '範本丙', attacks: [{ name: '白板', damage: '50', effect: '' }] };
+  ok('B2 反對照：白板招式（沒有 handler）不報', !auditImpl([whiteboard], [...site, { ...whiteboard, id: '199', attacks: [{ name: '白板', damage: '30', effect: '舊印刷有一段不同的文字，但從來沒有 handler。' }], _file: 'OLD.json' }], reg).stop.length); }
+// B3（審查 P2-3）：主動特性以卡名為 key ⇒ 同卡面的新卡也不會自動生效
+{ const crobat = { id: '110', name: '叉字蝠', supertype: 'Pokemon', subtype: 'Stage2', stage: 'Stage2', regulationMark: 'J', _file: 'OLD.json', abilities: [{ name: '夜間工作', effect: '在自己的回合可使用1次。從自己的牌庫抽出2張卡。' }] };
+  const newbie = { id: '310', name: '測試新卡', supertype: 'Pokemon', subtype: 'Basic', stage: 'Basic', regulationMark: 'J', abilities: [crobat.abilities[0]] };
+  const regAb = { ...reg, srcText: "'夜間工作'" };
+  const r = auditImpl([newbie], [...site, crobat], regAb);
+  ok('B3 同卡面的主動特性、新卡名沒註冊 ⇒ 待實裝（不可以報「自動套用」）', has(r.todo, /主動特性未註冊 測試新卡｜夜間工作/) && !r.ok.some((x) => /測試新卡/.test(x)), JSON.stringify(r));
+  const r2 = auditImpl([{ ...newbie, name: '叉字蝠' }], [...site, { ...crobat, id: '111' }], regAb);
+  ok('B3 反對照：以卡名註冊過（叉字蝠|0）⇒ 已實裝', r2.ok.some((x) => /叉字蝠｜夜間工作/.test(x)));
+  const hand = { ...newbie, id: '311', name: '手牌鷹', abilities: [{ name: '激動俯衝', effect: '在自己的回合，若手牌有這張卡，則可使用1次。將這張卡放置於備戰區。' }] };
+  ok('B3 手牌觸發型（若手牌有這張卡）不當成 regA 主動特性', !has(auditImpl([hand], site, { ...reg, srcText: "'激動俯衝'" }).todo, /主動特性未註冊/)); }
+// B3／B4 正規化：「【ex】」與「ex」同一句
+ok('B4 卡面「寶可夢【ex】」與「寶可夢ex」視為相同（不誤報撞號）', !auditImpl([{ id: '320', name: '老舊支援者', supertype: 'Trainer', subtype: 'Supporter', regulationMark: 'J', rulesText: '從自己的牌庫抽出2張卡。' }],
+  [{ ...site[2], rulesText: '從自己的牌庫抽出2張卡。' }], reg).stop.length
+  && !auditImpl([{ id: '321', name: 'X支援者', supertype: 'Trainer', subtype: 'Supporter', regulationMark: 'J', rulesText: '對寶可夢【ex】有效。' }],
+    [{ id: '322', name: 'X支援者', supertype: 'Trainer', subtype: 'Supporter', regulationMark: 'J', _file: 'OLD.json', rulesText: '對寶可夢ex有效。' }], reg).stop.length);
+// A2（審查 P3-6）：卡包代號只比前綴會漏；A7 缺號；A3 只查 H／I／J
+ok('A2 id 撞到代號前綴相同的別的卡包（M6 vs M6a）⇒ ⛔', has(auditData([{ ...good, id: '400', setCode: 'M6' }], [{ ...site[0], id: '400', _file: 'M6a.json' }]).stop, /撞號/));
+ok('A2 反對照：同卡包按標拆檔（M7-J.json）不算撞號', !has(auditData([{ ...good, id: '401', setCode: 'M7' }], [{ ...site[0], id: '401', _file: 'M7-J.json' }]).stop, /撞號/));
+ok('A7 收錄編號缺號會列出', has(auditData([{ ...good, id: '410', collectorNumber: '001/005' }, { ...good, id: '411', collectorNumber: '003/005' }], site).warn, /缺號 1 個.*2/));
+ok('A3 不收的卡（非 H／I／J）不做進化檢查', auditData([{ ...good, id: '420', regulationMark: 'D', evolvesFrom: '不存在的卡' }], site).stop.length === 0);
 ok('B3 同名特性卡面不同 ⇒ ⛔ 撞號', has(I.stop, /特性「舊特性」/));
 ok('B4 同名訓練家卡面不同 ⇒ ⛔', has(I.stop, /訓練家「老舊支援者」/));
 ok('B1 範本寫法不一致 ⇒ 提醒（拍落型教訓）', has(I.todo, /新來的\|偷看[\s\S]*2 種不同寫法/));

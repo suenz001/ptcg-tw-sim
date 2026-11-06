@@ -132,8 +132,10 @@ console.log('\n【一】夢幻ex｜記憶螺旋');
 }
 { // Q：夢幻ex 不能用備戰寶可夢身上「超級烈空坐帽子」寫的招式
   const ray = all.find((c) => c.supertype === 'Pokemon' && c.stage === 'Basic' && ['J'].includes(c.regulationMark) && /烈空坐/.test(c.name)) ?? PLAIN;
-  const s = mk({ active: inst(MEW.id, { energyAttached: en('Psychic', 2) }), bench: [inst(ray.id, { tool: inst(DELTA_CAP.id), attachedTools: [] })] }, { active: inst(TARGET.id) });
-  s.players[0].bench[0].attachedTool = s.players[0].bench[0].tool;
+  // ⚠（審查 P2-1）引擎讀的道具欄位是 toolAttached；第一版掛在 tool／attachedTool ⇒ 帽子根本沒掛上去（安慰劑）
+  const rayInst = inst(ray.id, { toolAttached: inst(DELTA_CAP.id) });
+  const s = mk({ active: inst(MEW.id, { energyAttached: en('Psychic', 2) }), bench: [rayInst] }, { active: inst(TARGET.id) });
+  chk('1h 哨兵：帽子真的掛上去了（烈空坐自己看得到德爾塔之禮）', getEffectiveAttacks(s, rayInst, pool).some((e) => e.atk.name === '德爾塔之禮'), ray.name);
   chk('1h 超級烈空坐帽子：夢幻ex 不能用道具上的「德爾塔之禮」（官方：不可以）', !effNames(s, s.players[0].active).includes('德爾塔之禮'), JSON.stringify(effNames(s, s.players[0].active)));
 }
 { // Q：力量蛋白飲的回合，夢幻ex 使出超級路卡利歐ex 的波動突刺 ⇒ 不 +30（夢幻ex 是【超】）
@@ -150,6 +152,8 @@ console.log('\n【一】夢幻ex｜記憶螺旋');
   const s = mk({ active: inst(MEW.id, { energyAttached: en('Grass') }), bench: [inst(LURANT.id, { healedThisTurn: true, hpHealedThisTurn: 30 })] }, { active: inst(TARGET.id) });
   s.players[0].bench[0].healedAmountThisTurn = 30;
   chk('1j 活潑刀：恢復的是備戰蘭螳花ex、夢幻ex 沒恢復 ⇒ 60（官方：不可以加）', dmgOn(attack(s, '活潑刀')) === 60);
+  const s2 = mk({ active: inst(LURANT.id, { energyAttached: en('Grass'), healedThisTurn: true, hpHealedThisTurn: 30, healedAmountThisTurn: 30 }) }, { active: inst(TARGET.id) });
+  chk('1j 正對照：蘭螳花ex 自己這回合恢復過 ⇒ 260（同一組欄位真的會被讀到）', dmgOn(attack(s2, '活潑刀')) === 260, String(dmgOn(attack(s2, '活潑刀'))));
 }
 { // Q：對手已拿 5 張，沒附能量的夢幻ex 不能用記憶螺旋使出赫月 ex 的血月
   const s = mk({ active: inst(MEW.id, { energyAttached: [] }), bench: [inst(URSA.id)] }, { active: inst(TARGET.id), prizes: deckN(1) });
@@ -167,6 +171,10 @@ console.log('\n【二】稜鏡能量');
   const ps = r?.pendingSelection;
   const choosable = ps ? JSON.stringify(ps.params ?? {}) + JSON.stringify(ps.validIids ?? ps.params?.validIids ?? []) : '';
   chk('2a 元素爆破：稜鏡能量可以被選成【火】丟棄（官方：可以）', !!ps && choosable.includes(prism.iid), `pending=${ps?.type ?? '無'} dmg=${dmgOn(r)}`);
+  // 審查 P3-11：實際結算「選稜鏡當火＋水」⇒ 基本火留在身上、稜鏡與水進棄牌
+  const r2 = ps ? act(r, { type: 'RESOLVE_SELECTION', selectedIids: [prism.iid, water.iid], actorIdx: 0 }) : null;
+  const left = r2?.players?.[0]?.active?.energyAttached?.map((e) => e.iid) ?? [];
+  chk('2a 結算：選稜鏡＋水 ⇒ 基本火留在洛奇亞身上（官方：可以不丟基本火）', !!r2 && left.includes(fire.iid) && !left.includes(prism.iid), JSON.stringify({ left, pend: r2?.pendingSelection?.type, log: LOGS(r2).slice(-2) }));
 }
 { // Q：附稜鏡能量的萊希拉姆用鐳射火焰，可以 +80 嗎？⇒ 可以
   const s = mk({ active: inst(RESHI.id, { energyAttached: [inst(EID.Fire), inst(PRISM.id), inst(EID.Water)] }) }, { active: inst(TARGET.id) });
@@ -212,6 +220,8 @@ const MOLT = byId('19918'), ARTI_R = byId('12772'), ZAP_R = byId('12783');
   const s = mk({ active: inst(IGGY.id), bench: [inst(IGGY.id), inst(IGGY.id), inst(IGGY.id)] }, { active: inst(TARGET.id) },
     { activeStadium: inst(ARENA.id), activeStadiumOwnerIdx: 0 });
   chk('3d 軟彈陣 × 激動競技場：備戰 3 隻寶寶丁最大 HP 變 60 ⇒ 0 點（官方：0）', dmgOn(attack(s, '軟彈陣')) === 0);
+  const s0 = mk({ active: inst(IGGY.id), bench: [inst(IGGY.id), inst(IGGY.id), inst(IGGY.id)] }, { active: inst(TARGET.id) });
+  chk('3d 正對照：沒有激動競技場 ⇒ 90', dmgOn(attack(s0, '軟彈陣')) === 90);
   const s2 = mk({ active: inst(IGGY.id), bench: [inst(IGGY.id, { damage: 10 }), inst(IGGY.id)] }, { active: inst(TARGET.id) });
   chk('3e 軟彈陣：最大 HP 30、身上 1 個指示物仍算 ⇒ 60（官方：可以算）', dmgOn(attack(s2, '軟彈陣')) === 60);
   const hp60 = all.find((c) => c.supertype === 'Pokemon' && c.stage === 'Basic' && Number(c.hp) === 60 && !(c.abilities || []).length && ['H', 'I', 'J'].includes(c.regulationMark));
@@ -362,8 +372,13 @@ const WISH = byId('19928'), DIPPLIN = byId('10426'), FEST = byId('10513');
     { active: inst(WISH.id, { damage: 0 }), bench: [inst(PLAIN.id)] }, { activeStadium: inst(FEST.id), activeStadiumOwnerIdx: 0 });
   const r = attack(st, '朋友之環');
   const usedTwice = LOGS(r).filter((x) => /朋友之環/.test(x)).length;
-  chk('5b 祭典樂舞：剩 30 HP 的裹蜜蟲第 1 次被群聚反擊打昏 ⇒ 不能用第 2 次（官方：不可以）', !r?.pendingSelection || r.pendingSelection?.effectKey !== 'festival-dance-second',
-    JSON.stringify({ pend: r?.pendingSelection?.type, key: r?.pendingSelection?.effectKey, mentions: usedTwice, active0: r?.players?.[0]?.active?.cardId }));
+  // ⚠（審查 P2-2）祭典第 2 次走的是 state.festivalDancePendingSecondAttack，不是 pendingSelection（第一版判錯機制 ⇒ 恆真）
+  chk('5b 祭典樂舞：剩 30 HP 的裹蜜蟲第 1 次被群聚反擊打昏 ⇒ 不能用第 2 次（官方：不可以）', !!r && !r.festivalDancePendingSecondAttack && String(r.players[0].active?.cardId ?? '') !== String(DIPPLIN.id),
+    JSON.stringify({ fdps: r?.festivalDancePendingSecondAttack, mentions: usedTwice, active0: r?.players?.[0]?.active?.cardId }));
+  const stOk = mk({ active: inst(DIPPLIN.id, { damage: 0, energyAttached: en('Grass', 1) }), bench: [inst(PLAIN.id)] },
+    { active: inst(WISH.id, { damage: 0 }), bench: [inst(PLAIN.id)] }, { activeStadium: inst(FEST.id), activeStadiumOwnerIdx: 0 });
+  const rOk = attack(stOk, '朋友之環');
+  chk('5b 正對照：HP 夠（滿血 80）⇒ 第 1 次後仍掛著「第 2 次」待使用', !!rOk?.festivalDancePendingSecondAttack || (rOk?.turnPhase !== 'end' && rOk?.activePlayerIndex === 0), JSON.stringify({ fdps: rOk?.festivalDancePendingSecondAttack, phase: rOk?.turnPhase }));
 }
 { // 夢幻ex 用記憶螺旋使出裹蜜蟲的朋友之環（祭典會場在場）⇒ 不能用第 2 次
   const st = mk({ active: inst(MEW.id, { energyAttached: en('Grass', 1) }), bench: [inst(DIPPLIN.id), inst(PLAIN.id)] },
