@@ -1,3 +1,4 @@
+import { revertV6631ChangelogIfPresent } from './lib/revert-v6631-changelog.mjs';   // ⭐v6.631（Rule 40）：最新一版先還原
 import { revertV6626IfPresent } from './lib/revert-v6626-seo-retro.mjs';
 import { revertV6629ChangelogIfPresent } from './lib/revert-v6629-changelog.mjs';
 import assert from 'node:assert/strict';
@@ -25,7 +26,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PRODUCT = process.env.V6610_PRODUCT || ROOT;
 const BASE='9aa83ddd54e2ba286957ebd7b9eabd0a5f669478';
 // Rule 40：先精確還原629正常更新紀錄搬運，其餘原還原鏈與所有斷言保留。
-const rd=p=>revertV6629ChangelogIfPresent(p,readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n'));
+const rd=p=>revertV6629ChangelogIfPresent(p,revertV6631ChangelogIfPresent(p,readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n')));
 const rdP=p=>{let x=rd(p);x=revertV6626IfPresent(p,x);if(hasV6620File(p,x))x=revertV6620File(p,x);if(hasV6619File(p,x))x=revertV6619File(p,x);if(hasV6618File(p,x))x=revertV6618File(p,x);if(hasV6617File(p,x))x=revertV6617File(p,x);if(hasV6616File(p,x))x=revertV6616File(p,x);if(hasV6615File(p,x))x=revertV6615File(p,x);if(hasV6614File(p,x))x=revertV6614File(p,x);if(hasV6613File(p,x))x=revertV6613File(p,x);if(hasV6612File(p,x))x=revertV6612File(p,x);return hasV6611File(p,x)?revertV6611File(p,x):x;};   // ⭐v6.611（Rule 40）：只給 P 段用（標記元件與 changelog 三檔先還原成 v6.610）
 const base=p=>{const r=readBaseBlob(ROOT,BASE,p);assert.ok(r.ok);return r.out.replace(/\r\n/g,'\n');};
 let pass=0,fail=0;
