@@ -62,13 +62,14 @@ function fnSrc(src, head) {
   return null;
 }
 const tick = () => new Promise((r) => setImmediate(r));
-async function install(code, fake) {
+async function install(code, fake, logs = [], sloppy = false) {
   const req = (n) => { if (n !== 'web-push') throw new Error('no require'); return fake; };
-  const f = new Function('require', '__imp', 'console', `return (async () => { ${code}\n })();`);
-  await f(req, async () => { throw new Error('no import'); }, { log() {}, warn() {} });
+  // ⚠ 正式補丁是 ESM（嚴格模式）⇒ 守衛也用嚴格模式跑，對唯讀物件賦值的行為才一致
+  const f = new Function('require', '__imp', 'console', `${sloppy ? '' : "'use strict'; "}return (async () => { ${code}\n })();`);
+  await f(req, async () => { throw new Error('no import'); }, { log: (...a) => logs.push(['log', a.join(' ')]), warn: (...a) => logs.push(['warn', a.join(' ')]) });
   for (let i = 0; i < 5; i++) await tick();
 }
-// 假 web-push：記下每一次收到的參數；oldLib＝模擬 3.4.0 以前（不認得 timeout 選項，與真的 web-push 一樣用 reject 回報）
+// 假 web-push：記下每一次收到的參數；oldLib＝模擬 3.4.3 以前（不認得 timeout 選項，與真的 web-push 一樣用 reject 回報）
 function fakeWebPush({ oldLib = false, failMap = new Map() } = {}) {
   const calls = [];
   return {
@@ -107,6 +108,16 @@ async function runA(src) {
   { const wp = fakeWebPush({ failMap: new Map([['g', 410]]) }); await install(code, wp);
     const out = await wp.sendNotification({ endpoint: 'g' }, 'x').then(() => null, (e) => e);
     r.a5 = { code: out && out.statusCode, n: wp.calls.length }; }
+  // A6（審查 P2-1）：web-push 4.x 的 ESM 命名空間是唯讀 ⇒ 換不掉時要明講、不可以印「已啟用」
+  { const wp = Object.freeze(fakeWebPush()); const logs = []; await install(code, wp, logs);
+    // 非嚴格模式下對唯讀物件賦值是**靜默無效**（審查實測的情境）⇒ 一定要靠本版的檢查才不會印「已啟用」
+    const wp2 = Object.freeze(fakeWebPush()); const logs2 = []; await install(code, wp2, logs2, true);
+    const logs3 = []; await install(code, null, logs3);   // 拿不到 web-push（沒有 require、4.x 沒有 default export）
+    r.a6 = { logs, untouched: !wp.__ptcgPushQueue, logs2, untouched2: !wp2.__ptcgPushQueue, logs3 }; }
+  { const wp = fakeWebPush(); const logs = []; await install(code, wp, logs);
+    r.a7 = { cfg: wp.__ptcgPushQueue && { ...wp.__ptcgPushQueue.cfg }, logs };
+    await wp.sendNotification({ endpoint: 'z' }, 'x', { timeout: 0 });
+    r.a3b = wp.calls[0] && wp.calls[0].options; }
   return r;
 }
 
@@ -155,6 +166,12 @@ if (!A.err) {
     A.a4.first.ok && A.a4.first.ok.statusCode === 201 && A.a4.n1 === 2 && A.a4.calls[0] && A.a4.calls[0].timeout === 30000 && A.a4.calls[1] === undefined
     && A.a4.second.ok && A.a4.calls.length === 3 && JSON.stringify(A.a4.calls[2]) === JSON.stringify({ TTL: 9 }) && A.a4.cfg === 0, JSON.stringify(A.a4));
   ok('★★ A5 其他錯誤（410）原封轉交、不重送', A.a5.code === 410 && A.a5.n === 1, JSON.stringify(A.a5));
+  ok('★★ A3b 呼叫端明確給 timeout: 0（不要逾時）⇒ 照它的，不改成 30000', A.a3b && A.a3b.timeout === 0, JSON.stringify(A.a3b));
+  ok('★★★ A6 web-push 模組唯讀（4.x ESM）⇒ 印「未啟用」警告、不印「已啟用」、不留 __ptcgPushQueue', A.a6.untouched
+    && A.a6.logs.some(([k, m]) => k === 'warn' && /推播排隊未啟用/.test(m)) && !A.a6.logs.some(([k, m]) => k === 'log' && /排隊送出/.test(m))
+    && A.a6.logs3.some(([k, m]) => k === 'warn' && /web-push 載入失敗/.test(m)) && A.a6.untouched2 && A.a6.logs2.some(([k, m]) => k === 'warn' && /web-push 模組唯讀/.test(m)) && !A.a6.logs2.some(([k, m]) => k === 'log' && /排隊送出/.test(m)), JSON.stringify(A.a6));
+  ok('★★ A7 預設值釘住（同時 16 筆／格子 5 秒／小批 32 筆／逾時 30 秒），啟動 log 寫出逾時', JSON.stringify(A.a7.cfg) === JSON.stringify({ maxInflight: 16, slotTimeoutMs: 5000, urgentBatchMax: 32, requestTimeoutMs: 30000 })
+    && A.a7.logs.some(([k, m]) => k === 'log' && /每筆逾時 30000ms/.test(m)), JSON.stringify(A.a7));
 }
 
 console.log('【B】broadcastPush 上限與投影');

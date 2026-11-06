@@ -1253,7 +1253,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
       let wp = null;
       try { wp = require('web-push'); }
       catch (_eReq) { try { wp = (await import('web-push')).default; } catch (_eImp) { wp = null; } }
-      if (!wp || typeof wp.sendNotification !== 'function' || wp.__ptcgPushQueue) return;
+      // ⭐v1.80（複審 P3-1）：拿不到可用的 web-push 時也明講（例：沒有 require、裝到 4.x 純 ESM 沒有 default export）
+      if (!wp || typeof wp.sendNotification !== 'function') { console.warn('[push] 推播排隊未啟用：web-push 載入失敗或沒有 default export（4.x ESM？請維持 3.x）'); return; }
+      if (wp.__ptcgPushQueue) return;
       const raw = wp.sendNotification;
       const cfg = { maxInflight: 16, slotTimeoutMs: 5000, urgentBatchMax: 32, requestTimeoutMs: 30000 };   // PUSH_MAX_INFLIGHT／PUSH_SLOT_TIMEOUT_MS／v1.80 請求逾時
       // 兩條佇列（審查 P2-1）：同一段同步程式裡一起呼叫進來的算「一批」；小批（≤ urgentBatchMax，例如報到、進場、
@@ -1270,7 +1272,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           setImmediate(() => {
             const call = (a) => { try { return Promise.resolve(raw.apply(wp, a)); } catch (e) { return Promise.reject(e); } };
             let p = call(job.args);
-            // ⭐v1.80：很舊的 web-push（3.4.0 以前）不認得 timeout 選項，會直接 reject「'timeout' is an invalid option」
+            // ⭐v1.80：很舊的 web-push（3.4.3 以前；3.4.4 才有 timeout）不認得 timeout 選項，會直接 reject「'timeout' is an invalid option」
             //   ⇒ 這一筆改用呼叫端原本的參數重送，之後全部不再補逾時（行為退回 v1.79，推播照樣送得出去）。
             if (job.args !== job.rawArgs) {
               p = p.catch((e) => {
@@ -1285,12 +1287,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
           });
         }
       };
-      wp.sendNotification = function queuedSendNotification(...args) {
+      const queuedSendNotificationRef = function queuedSendNotification(...args) {
         // ⭐v1.80：沒指定逾時就補 30 秒（web-push 預設沒有逾時，推播服務卡住時連線會一直掛著、越積越多）
         //   逾時＝這筆推播失敗（web-push 會 reject、呼叫端照原本的失敗處理記一筆 log），不影響其他推播。
         //   ⚠ 不改呼叫端傳進來的物件（複製一份）；呼叫端自己有給 timeout 就照它的。
         const opt = args[2] && typeof args[2] === 'object' ? args[2] : {};
-        const sendArgs = cfg.requestTimeoutMs > 0 && !(opt.timeout > 0)
+        const sendArgs = cfg.requestTimeoutMs > 0 && opt.timeout == null
           ? [args[0], args[1], { ...opt, timeout: cfg.requestTimeoutMs }, ...args.slice(3)]
           : args;
         return new Promise((resolve, reject) => {
@@ -1307,8 +1309,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
           batch.push({ args: sendArgs, rawArgs: args, resolve, reject });
         });
       };
+      try { wp.sendNotification = queuedSendNotificationRef; } catch (_eRo) { /* 嚴格模式下唯讀物件會 throw，下面一起判斷 */ }
+      // ⭐v1.80（審查 P2-1）：web-push 4.x 是純 ESM，require() 拿到的是唯讀的模組命名空間 ⇒ 上面的賦值會**靜默無效**。
+      //   沒換成功就明講（排隊與逾時都沒生效，推播照舊一次送出），不可以印「已啟用」誤導排查。VM 請維持 web-push 3.x。
+      if (wp.sendNotification !== queuedSendNotificationRef) {
+        console.warn('[push] 推播排隊未啟用（web-push 模組唯讀，可能是 4.x 的 ESM 版；請維持 3.x），推播照舊一次送出');
+        return;
+      }
       wp.__ptcgPushQueue = { cfg, stats: () => ({ inflight, urgent: urgent.length, bulk: bulk.length, doneTotal, peakQueue }) };
-      console.log('[push] 推播改為排隊送出（同時最多 ' + cfg.maxInflight + ' 筆）');
+      console.log('[push] 推播改為排隊送出（同時最多 ' + cfg.maxInflight + ' 筆，每筆逾時 ' + cfg.requestTimeoutMs + 'ms）');
     } catch (e) { console.warn('[push] 推播排隊未啟用（照舊一次送出）:', e && e.message); }
   })();
   // <<< v179-push-yield

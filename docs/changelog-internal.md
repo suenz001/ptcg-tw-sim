@@ -6,9 +6,10 @@
 
 - ① broadcastPush 的 cap 預設 500 → 5000：訂閱 3 個月內 25 → 427，超過 500 後會悄悄只推給其中任意 500 人（沒排序、沒錯誤）。v1.79 起推播排隊送出（同時最多 16 筆、每筆各自 setImmediate），人數多只是送得久一點，不會讓事件迴圈一次被佔用更久；目前 427 人 ⇒ 實際推播數量不變。主查詢順手加 projection（_id／uid／sub，函式只用到這三欄）。
 - ② web-push 預設沒有請求逾時：v1.79 的「格子 5 秒讓出」只讓出名額、連線照樣掛著。排隊包裝補 `timeout: 30000`（複製一份選項、不改呼叫端物件；呼叫端自己給 timeout 就照它的）。逾時＝那一筆 reject，呼叫端照原本失敗處理記 log。
-  - ⚠ web-push 3.4.0 以前不認得 timeout，會 reject「'timeout' is an invalid option」（已下載 3.3.5／3.4.0／3.4.5／4.0.0 原始碼確認；選項驗證是 reject 不是同步 throw）⇒ 這一筆改用原參數重送、之後全部不再補（退回 v1.79 行為），推播不會因此全部失敗。VM 上 web-push 的實際版本未查（站長可用 `cat /opt/ptcg/api/node_modules/web-push/package.json | grep version` 確認）。
+  - ⚠ web-push 3.4.3 以前不認得 timeout（3.4.4 才加入），會 reject「'timeout' is an invalid option」（下載 3.3.5～4.0.0 各版原始碼確認；選項驗證是 reject 不是同步 throw）⇒ 這一筆改用原參數重送、之後全部不再補（退回 v1.79 行為），推播不會因此全部失敗。VM 上 web-push 的實際版本未查（站長可用 `cat /opt/ptcg/api/node_modules/web-push/package.json | grep version` 確認）。
 - 錦標賽區塊鎖（Rule 68）：tail 3b5b2d09…、tev 474b9038…、len 248732；新增 scripts/lib/sap-revert-admin-v180.mjs（3 組還原對，difflib 產生、驗證逐位元回 146a1318）、tourn-revert-v180.mjs（鏈又長一節）；revertAdminV177 入口改為先退 v1.80 再剝 v1.79。Rule 40：test-sap152／sap153 的 D5 允許 lib 版本清單加 v180；test-v6379 D3 納入 v1.76 舊值與 v176／v180 兩支宣告端（17 支）；test-v179 C2／C3 先套 v1.80 還原表再比 BASE。
 - 守衛：test-v180-push-cap-timeout（A1～A5 逾時、B1～B5 上限／投影／去重、D1～D5 鎖、H1／H2 HEAD-FAIL：BASE 不帶逾時、600 人只送 500）。7 個突變全殺（拿掉退路、退路不停用、退路吞所有錯誤、不尊重呼叫端 timeout、就地改呼叫端物件、拿掉投影、投影漏金鑰）。
+- 審查（Opus 5.5）：無 P1。P2-1 web-push 4.0.0（2026-11-06 發佈）是純 ESM，require() 拿到唯讀命名空間 ⇒ 換不掉 sendNotification（非嚴格模式下靜默無效、還會印「已啟用」）→ 改成賦值後檢查，換不掉就 warn「推播排隊未啟用（…請維持 3.x）」且不印成功、不掛 __ptcgPushQueue；成功 log 加印逾時。⚠ VM 上的 web-push 請維持 3.x（部署 bat 不跑 npm install）。P3：版本說明 3.4.0→3.4.3；呼叫端明確給 timeout:0 原本會被改成 30000 → 改 `opt.timeout == null`；v179 區塊內 cfg 預設值沒有鎖 → A7 釘住四個預設值。審查實測：逾時是 socket 閒置逾時、reject `Error('Socket timeout')` 沒有 statusCode ⇒ 不會誤刪訂閱；5000 筆事件迴圈與 heap 與 v1.79 同級；推播服務整個卡住時同時掛著的連線上限約 16×6≈96（v1.79 沒有上限）。新增 A3b／A6（嚴格與非嚴格兩種模式）／A7，突變：拿掉唯讀檢查 ⇒ A6 紅、timeout 判斷改回 ⇒ A3b 紅、格子 60 秒 ⇒ A7 紅。複審：無 P1／P2；P3-1 沒有 require 又裝到 4.x（import().default 是 undefined）時原本安靜 return、一行 log 都沒有 → 補 warn「web-push 載入失敗或沒有 default export」（這時推播整個停用、不會變卡；錦標賽區塊的「vapid.json 不完整」訊息在 28 把鎖範圍內，不動）；A6 補這個情境，拿掉 warn ⇒ A6 紅。
 - 部署：update-tournament.bat（admin-only／server-only，不寫對外 changelog）。
 
 ## server v1.79（2026-11-06）推播排隊送出：發起社群賽不再卡住全站
