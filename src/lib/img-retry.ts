@@ -32,6 +32,16 @@
  *
  * 失敗期間會在該 <img> 上掛 `data-img-retrying`，樣式在 `+layout.svelte`（:global）。
  * ⚠ 這裡**不換成卡背圖**：卡背代表「未揭曉的牌」，用在載入失敗會誤導玩家判讀盤面。
+ *
+ * v6.631（站長：「手機版常常會出現圖片未顯示的狀況，雖然點選查看詳情後，圖示就會重新讀取進來」）：
+ *   截圖裡備戰區是**整格空白**（只剩 HP），而載入失敗時會顯示暗色框＋卡名 ⇒ 那幾張圖不是「失敗」，是**卡住**：
+ *   手機弱網下請求掛著不回、也不報錯 ⇒ 上面的重試完全不會啟動。補兩件事：
+ *   ① 卡住看門狗：非延遲載入（loading 不是 lazy）的外部卡圖，畫面在前景時 STALL_MS（15 秒）還沒載完
+ *      ⇒ 當成失敗走同一套換路徑重試（縮圖卡住 ⇒ 立刻改官方原圖；原圖卡住 ⇒ 退避後改代理縮圖）。
+ *      ・只看「還在載入中」的那幾張（pending 集合），全部載完就停掉計時器；切到背景時不計時。
+ *      ・只對外部網址（縮圖站、官方 CDN、圖片代理）生效，**本站自己的檔案不會因此多一個請求**（站長 2026-11-07：
+ *        「不管你以後作任何改版，都不可以加重伺服器的負擔」）。
+ *   ② 額度用完的圖，切回前景時再給一輪完整額度（原本只有 `online` 事件會歸零 ⇒ 弱網下用完 4 次就永遠空白）。
  */
 
 import { isCardThumb } from './cards/thumb';
@@ -69,6 +79,39 @@ function bindGlobalOnce() {
   document.addEventListener('visibilitychange', () => { kickers.forEach((k) => k(false)); });
 }
 
+/** v6.631 卡住看門狗：載入中超過這麼久（畫面在前景的時間）就當成失敗換路徑。 */
+export const STALL_MS = 15000;
+/** 看門狗多久巡一次（只在有圖片載入中時才跑）。 */
+const SWEEP_MS = 5000;
+/** 還在載入中的節點：值是「檢查函式」，回傳 true 代表已經不用再看（載完／失敗／卸載）。 */
+const pending = new Set<(now: number, hidden: boolean) => boolean>();
+let sweepTimer: ReturnType<typeof setInterval> | null = null;
+let lastSweepHidden = false;
+/** 巡一次（export 給守衛直接驅動；正式環境由 setInterval 呼叫）。 */
+export function sweepStalledImages(now: number = Date.now()): void {
+  const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+  // 剛從背景回來的這一輪也當成「重新起算」：背景期間的時間一律不算進 15 秒
+  const restart = hidden || lastSweepHidden;
+  lastSweepHidden = hidden;
+  for (const check of [...pending]) { if (check(now, restart)) pending.delete(check); }
+  if (pending.size === 0 && sweepTimer !== null) { clearInterval(sweepTimer); sweepTimer = null; }
+}
+function watchPending(check: (now: number, hidden: boolean) => boolean) {
+  pending.add(check);
+  if (sweepTimer === null && typeof window !== 'undefined') {
+    sweepTimer = setInterval(() => sweepStalledImages(), SWEEP_MS);
+    // Node（守衛）裡不要讓計時器撐住行程；瀏覽器回傳的是數字，沒有 unref
+    (sweepTimer as unknown as { unref?: () => void })?.unref?.();
+  }
+}
+/** 守衛用：目前在看門狗名單上的張數。 */
+export function stalledWatchCount(): number { return pending.size; }
+/** 只有外部網址才需要看門狗（本站檔案由 Service Worker／CDN 處理，也不可以因此多打本站）。 */
+function isExternalUrl(url: string): boolean {
+  if (!/^https?:\/\//i.test(url)) return false;
+  try { return typeof location === 'undefined' || !url.startsWith(location.origin + '/'); } catch { return true; }
+}
+
 /** 官網 CDN → 圖片代理縮圖（帶 CORS、長效快取、體積小很多） */
 function proxied(url: string, width: number): string {
   // ⚠ 只代理絕對 http(s) 網址。站內相對路徑（/covers/…、data:、blob:）交給代理會直接壞掉，
@@ -86,6 +129,25 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
   let disposed = false;
 
   const clear = () => { if (timer !== null) { clearTimeout(timer); timer = null; } };
+  // v6.631 卡住看門狗：startedAt＝這一次載入開始的時間（只累計前景時間）；loading=false 代表目前沒在看
+  let startedAt = 0, loading = false;
+  const check = (now: number, hidden: boolean): boolean => {
+    if (disposed || !loading) { loading = false; return true; }
+    if (node.complete) { loading = false; return true; }           // 已載完或已失敗（事件會處理）
+    if (hidden) { startedAt = now; return false; }                // 背景不計時（回前景重新起算）
+    if (now - startedAt < STALL_MS) return false;
+    loading = false;
+    onError();                                                    // 卡住＝當成失敗，走同一套換路徑
+    return true;
+  };
+  const startWatch = () => {
+    const cur = node.currentSrc || node.src;
+    if (disposed || !cur || !isExternalUrl(cur)) return;
+    if (node.loading === 'lazy') return;                          // 延遲載入的圖不在畫面上時本來就不會載
+    if (node.complete) return;
+    startedAt = Date.now();
+    if (!loading) { loading = true; watchPending(check); }
+  };
 
   const attempt = (): void => {
     if (disposed || tries >= MAX_RETRY || !original) return;
@@ -94,10 +156,12 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
     if (n === 1 || n === 2) next = proxied(original, width);          // 中間兩次走代理縮圖
     if (n === MAX_RETRY - 1) next += (next.includes('?') ? '&' : '?') + `_r=${Date.now()}`;
     node.src = next;
+    startWatch();
   };
 
   const onError = () => {
     if (disposed) return;
+    loading = false;
     node.setAttribute('data-img-retrying', '1');
     clear();
     // v6.464：失敗的是本站縮圖（新卡還沒產生縮圖／GitHub Pages 掛掉）⇒ **立刻**改官方原圖，不等退避；
@@ -107,6 +171,7 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
     timer = setTimeout(attempt, failedThumb ? 0 : BACKOFF_MS[Math.min(tries, BACKOFF_MS.length - 1)]);
   };
   const onLoad = () => {
+    loading = false;
     node.removeAttribute('data-img-retrying');
     tries = 0;                                                        // 成功即歸零，之後再壞還有完整額度
     clear();
@@ -116,7 +181,8 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
     if (disposed || !node.hasAttribute('data-img-retrying')) return;
     // 切到背景時不重試：那裡網路常被掐斷，只會快速失敗並燒掉額度。
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-    if (resetTries) tries = 0;
+    // v6.631：額度已用完的圖，切回前景也給一輪完整額度（原本只有 online 會歸零 ⇒ 弱網下用完就永遠空白）
+    if (resetTries || tries >= MAX_RETRY) tries = 0;
     clear();
     attempt();
   };
@@ -128,6 +194,7 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
 
   // 掛上時就已經是失敗狀態（例如前一次渲染就壞了）→ 立刻排一次重試
   if (node.complete && node.naturalWidth === 0 && (node.currentSrc || node.src)) onError();
+  else startWatch();                                              // v6.631：還在載入中 ⇒ 交給卡住看門狗
 
   return {
     /**
@@ -142,9 +209,12 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
       tries = 0;
       clear();
       node.removeAttribute('data-img-retrying');
+      // v6.631：換卡＝新的一次載入，重新起算（等這一輪 DOM 更新把新 src 寫上去之後再看）
+      queueMicrotask(startWatch);
     },
     destroy() {
       disposed = true;
+      loading = false;                                            // 看門狗下一輪會把它移出名單
       clear();
       node.removeEventListener('error', onError);
       node.removeEventListener('load', onLoad);

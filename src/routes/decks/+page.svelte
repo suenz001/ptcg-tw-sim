@@ -4157,6 +4157,11 @@
     /* ⭐v6.497：再放大到 36／40px（站長手機清單第 5 項：觸控目標 36～44px） */
     .deck-reorder-btn { min-width: 36px; min-height: 36px; font-size: 0.75rem; }
     button.icon, .picker-list li button.icon { min-width: 40px; min-height: 40px; }
+    /* ⭐v6.631（站長：iPad 10.5 上放大鏡、星星最愛等圖示「稍微位置偏移」）：iPad／手機 Safari 的按鈕有預設內距，
+       表情符號字形的盒子又比字大 ⇒ 圖示會往一邊偏。改成彈性置中、拿掉預設內距（尺寸不變，只是置中）。
+       只放在觸控分支：桌機 CSS 有逐字指紋守衛（test-v6213）。 */
+    button.icon { display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+    .pv-fav-btn { display: inline-flex; align-items: center; justify-content: center; }
     /* 「← 首頁」可點範圍放大（padding＋等量負 margin，版面不動）。⚠ 本頁的桌機 CSS 有逐字指紋守衛（test-v6213）⇒ 只放在觸控分支 */
     .back { display: inline-block; padding: 10px 8px; margin: -10px -8px; }
   }

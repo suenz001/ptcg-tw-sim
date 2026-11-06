@@ -142,6 +142,12 @@
       line-height: 1;
       cursor: pointer;
       transition: background-color 0.12s;
+      /* ⭐v6.631（站長：iPad 10.5 上明暗模式圖示位置偏移）：Safari 按鈕的預設內距＋表情符號字形盒子 ⇒ ☀️／🌙 偏一邊。
+         彈性置中、拿掉預設內距（外框 36px 不變）。 */
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
     }
     .stb-theme:hover { background: var(--ui-topbar-hover); }
   }
