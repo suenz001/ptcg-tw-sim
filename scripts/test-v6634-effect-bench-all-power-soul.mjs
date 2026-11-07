@@ -18,6 +18,7 @@
 //   A4 正對照：選海豚俠 ⇒ 上備戰
 //   A5 只有海豚俠ex 可選時 ⇒ TOP 型只開「查看」（maxCount 0）且仍看得到它；棄牌區型不開選卡
 // 【B】中央判準單元與 filter 交集
+// 【C】uiCands 所照抄的對戰頁三條規則，靜態確認它們真的在 +page.svelte（審查 P3-1）
 // 【H】HEAD-FAIL：BASE（v6.633）引擎跑 A1／A2 ⇒ 紅
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, mkdtempSync, rmSync } from 'node:fs';
@@ -26,6 +27,7 @@ import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
+import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '301b6e23';   // v6.633（本版的上一版）
@@ -174,6 +176,17 @@ console.log('【B】中央判準與 filter 交集');
     ev('deck-search', 'Pokemon:TOP9', c1, PALAFIN, { params: { top9Iids: ['x1'] } }) === true
     && ev('deck-search', 'Pokemon:TOP9', c1, PALAFIN, { params: { top9Iids: ['x1'], validIids: [] } }) === false
     && ev('deck-search', 'Pokemon:TOP9', c2, PALAFIN, { params: { top9Iids: ['x1'], validIids: ['x2'] } }) === false); }
+
+console.log('【C】uiCands 照抄的那三條對戰頁規則，真的在 +page.svelte 裡（審查 P3-1：判準不可只存在守衛裡）');
+{ const page = stripCommentsBlankChecked(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'), 'svelte');
+  const ds = page.indexOf("case 'deck-search': {"), dd = page.indexOf("case 'discard-search': {");
+  const deck = ds < 0 ? '' : page.slice(ds, page.indexOf('\n      case ', ds + 30));
+  const disc = dd < 0 ? '' : page.slice(dd, dd + 700);
+  const iCentral = deck.indexOf('if (_central !== null) return _central;'), iPoke = deck.indexOf("if (f === 'Pokemon') {");
+  const poke = iPoke < 0 ? '' : deck.slice(iPoke, deck.indexOf('}', deck.indexOf('return true', iPoke)) + 1);
+  ok('★★ C1 deck-search：先問中央 filter（已收錄就只看它），再落到 inline 的 \'Pokemon\' 分支', deck.length > 2000 && deck.length < 40000 && iCentral > 0 && iPoke > iCentral, `${deck.length} ${iCentral} ${iPoke}`);
+  ok('★★ C2 deck-search \'Pokemon\' 分支與 params.validIids 交集（親送挑戰靠它）', poke.length > 40 && poke.length < 800 && /validIids/.test(poke) && /!\s*\w+\.includes\(c\.iid\)\)\s*return false/.test(poke), poke);
+  ok('★★ C3 discard-search 先與 params.validIids 交集（王之號召靠它）', /validIidsDiscard && !validIidsDiscard\.includes\(c\.iid\)\) return false/.test(disc), disc.slice(0, 300)); }
 
 console.log('【H】HEAD-FAIL');
 if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('H（缺 BASE ' + BASE_SHA + '）');

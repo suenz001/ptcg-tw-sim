@@ -12,6 +12,8 @@ BASE `301b6e23`（v6.633）。v6.633 Opus 審查 P2-1 列出的 5 處同型漏�
 - 守衛 test-v6634（35 條）：五招 × 候選／偽造／直呼 resolver（含無 validIids）／正對照／只有海豚俠ex；中央判準與 filter 交集單元（Rule 39 用讀與不讀答案不同的輸入）；HEAD-FAIL 在 BASE 五招全紅。自做 9 個突變全殺（M7 原本存活 ⇒ 補 A3b）。
 - Rule 40：revert-v6634-{changelog,game}.mjs 接在 revert-v6633 兩支 lib 的鏈頭（既有呼叫點不改）；game 表依序檢查錨點（後段錨點要前段先還原才出現）。
 - 修改前後 harness＋免疫網 36 支全綠；tsc 0。
+- Opus 獨立審查：無 P1／P2，可推送。P3-1（守衛 uiCands 照抄對戰頁候選算法）已補 C1～C3 靜態斷言（拿掉頁面 'Pokemon' 分支的 validIids 交集 ⇒ C2 紅，已實測）；P3-2 v311 resolver 不重驗備戰空位（既有，靠消毒閘夾 maxCount）、P3-4 王之號召 log 措辭（既有）留著。
+- 全套第一輪唯一紅 test-v6370-guard-integrity（全套中它會暫換 test-v6365 再跑 test-v6263，平行時序干擾；單獨連跑三次 91/0）。
 
 ## v6.633（2026-11-07）從牌庫直接進化排除全能靈魂
 
