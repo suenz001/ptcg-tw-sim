@@ -350,13 +350,13 @@ const ALLOW_A = [
   ['/src/lib/game/engine.ts', "if (card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && !card.evolvesFrom) return true;", 'canBeInitialActiveCard＝對戰準備時從**手牌**放（官方 id 786：化石不可以）'],
   // ── 「是不是進化寶可夢」的判定（不是【基礎】判定）─────────────────────────
   ['/src/lib/game/ai.ts', "if (!card.evolvesFrom) return false;", '壯偉碩木 step1/step2＝要求**有**進化來源'],
-  ['/src/lib/game/ai.ts', "if (card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;", '惡之覺醒＝要求**有**進化來源'],
+  // ⭐v6.633（Rule 40）：ai.ts 惡之覺醒與 misc8 三處的「要求有進化來源」改走中央 canDeckEvolveOnto ⇒ 舊條目移除，改登記中央那一份（同一個視角：牌庫裡的進化卡）
+  ['/src/lib/game/effects/_shared.ts', "if (!evoCard || evoCard.supertype !== 'Pokemon' || !evoCard.evolvesFrom) return false;", 'canDeckEvolveOnto＝牌庫裡的進化卡要求**有**進化來源（不是判【基礎】）'],
   ['/src/lib/game/effects.ts', "if (!p.retreatingCard.evolvesFrom) return {};", '阿利多斯｜大網＝對手戰鬥場是**進化**寶可夢時撤退費+1'],
   ['/src/lib/game/effects.ts', "if (!att.evolvesFrom) return 0;", '比克提尼｜勝利聲援＝**進化**寶可夢才 +10'],
   ['/src/lib/game/effects/cards/v172_hij_batch.ts', "if (!evoCard || !evoCard.evolvesFrom) {", '壯偉碩木：選到的必須是進化卡'],
   ['/src/lib/game/effects/cards/v172_hij_batch.ts', "if (!evoCard || !evoCard.evolvesFrom || !canEvolveOnto(evoCard.evolvesFrom, stage1Name)) {", '同上'],
   ['/src/lib/game/effects/cards/v2360_j_mark_batch.ts', "if (!evoCard || !evoCard.evolvesFrom) {", '同型：選到的必須是進化卡'],
-  ['/src/lib/game/effects/cards/v2650_i_wave15_misc8.ts', "if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;", '同型：進化卡判定'],
   ['/src/lib/game/engine.ts', "if (!evoCard || evoCard.supertype !== 'Pokemon' || !evoCard.evolvesFrom) return state;", 'EVOLVE：選到的必須是進化卡'],
   ['/src/lib/game/stage2-index.ts', "if (!c || c.supertype !== 'Pokemon' || !c.evolvesFrom) continue;", '進化鏈索引'],
   ['/src/lib/game/stage2-index.ts', "if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;", '進化鏈索引'],
