@@ -70,6 +70,7 @@ import {
   addPendingPrize,
   regG, rejectAbilityUse } from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
+import { canEffectPlaceOnBench } from '../_shared'; // ⭐v6.634 效果放備戰：排除海豚俠ex｜全能靈魂
 import { mandatoryTargetCount } from '../_shared'; // ⭐v6.305 卡面寫死目標隻數 → 強制選滿
 import { openDeckViewReshuffle } from '../_shared';
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
@@ -1006,11 +1007,17 @@ regPost('下石鳥|親送挑戰', (state, aIdx, pool) => {
       filter: 'Pokemon',
       minCount: 0, maxCount: 1,
       effectKey: 'm5-flamigo-delivery',
-      params: { benchLimitAtPick: limit },
+      // ⭐v6.634：filter 'Pokemon' 的 UI／AI／消毒閘都會與 validIids 交集 ⇒ 海豚俠ex｜全能靈魂不會出現在候選裡
+      params: { benchLimitAtPick: limit, validIids: p.deck.filter(c => canEffectPlaceOnBench(pool.get(c.cardId))).map(c => c.iid) },
     },
   );
 });
-regR('m5-flamigo-delivery', (state, aIdx, iids, params) => {
+regR('m5-flamigo-delivery', (state, aIdx, iids0, params, pool) => {
+  // ⭐v6.634：resolver 自己再驗一次（不信任 payload）：不可被效果放上備戰區的卡（海豚俠ex｜全能靈魂）不收、留在牌庫重洗
+  const iids = iids0.filter(iid => {
+    const inst = state.players[aIdx].deck.find(c => c.iid === iid);
+    return !!inst && canEffectPlaceOnBench(pool.get(inst.cardId));
+  });
   if (iids.length === 0) {
     return updatePlayer(addLog(state, '親送挑戰：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
       ...p,

@@ -12,6 +12,7 @@ import type { Card, EnergyType } from '$lib/cards/types';
 import { STATUS_NAME } from './status-display';   // ⭐v6.556 狀態官方用詞的唯一出口
 import { ENERGY_LABEL } from '$lib/cards/energy'; // v5.801 屬性→CJK 標籤(丟對手【X】能量 log)
 import { hasOakEye, faceAttackDamage } from './effects/_shared'; // v5.789 監視之眼 gate
+import { canEffectPlaceOnBench } from './effects/_shared'; // ⭐v6.634 效果放備戰：排除海豚俠ex｜全能靈魂
 import { withAttackDamageTaken, addToolDiscardLog } from './effects/_shared'; // ⭐v6.256「受到的招式的傷害」唯一中央寫入點
 import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂（【無】被招式傷害KO 獎賞-1）
 import { markDamageCounterMovedFrom } from './effects/_shared'; // v5.947 移動指示物非治療
@@ -14134,7 +14135,8 @@ regR('bench-from-discard-samename', (st, idx, iids, params, pool) => {
   const label = (params?.label as string) ?? '同名回備戰';
   const targetName = (params?.targetName as string) ?? '';
   const p = st.players[idx];
-  const picked = p.discard.filter(c => iids.includes(c.iid));
+  // ⭐v6.634：resolver 自己再驗一次（不信任 payload）：不可被效果放上備戰區的卡（海豚俠ex｜全能靈魂）不收、留在棄牌區
+  const picked = p.discard.filter(c => iids.includes(c.iid) && canEffectPlaceOnBench(pool.get(c.cardId)));
   if (picked.length === 0) return addLog(st, `${label}：未選擇`, idx);
   // v5.041：bench limit 改 getBenchLimit (5→8)
   const slots = getOwnBenchLimit(st, idx, pool) - p.bench.length;
@@ -22213,7 +22215,8 @@ export function discardPokemonToBenchPost(
     if (p.bench.length >= limit) return addLog(state, `${label}：備戰區已滿`, aIdx);
     const cand = p.discard.filter(c => {
       const card = pool.get(c.cardId);
-      return card?.supertype === 'Pokemon' && predicate(card);
+      // ⭐v6.634：改走中央 canEffectPlaceOnBench（海豚俠ex｜全能靈魂不可以被放上備戰區；刺龍王ex｜王之號召選【水】時會碰到）
+      return canEffectPlaceOnBench(card) && predicate(card!);
     });
     if (cand.length === 0) return addLog(state, `${label}：棄牌區無${targetDesc}`, aIdx);
     const slots = Math.min(max, limit - p.bench.length, cand.length);

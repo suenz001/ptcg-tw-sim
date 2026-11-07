@@ -19,6 +19,7 @@ import {
   withPending,
 } from '../_shared';
 import { getOwnBenchLimit } from '../_shared';
+import { canEffectPlaceOnBench } from '../_shared';   // ⭐v6.634 效果放備戰：排除海豚俠ex｜全能靈魂
 import { applyStatusToOppActive } from '../../effects';
 // ⭐⭐⭐ v6.262 古歷漏免疫：支援者效果目標免疫過濾（含陳舊的鰭之化石｜鰭之守護）
 import { isImmuneToOppSupporter } from './v3080_deferred_wave_c';
@@ -98,7 +99,9 @@ regPost('超級妖火紅狐ex|戲法傳送門', (state, aIdx, pool) => {
 
   const top9 = p.deck.slice(0, Math.min(9, p.deck.length));
   const top9Iids = top9.map(c => c.iid);
-  const maxPick = Math.min(top9.length, benchSpace);
+  // ⭐v6.634：可勾的只有「可被效果放上備戰區」的寶可夢（排除海豚俠ex｜全能靈魂）；Pokemon:TOP9 會與 validIids 交集
+  const validIids = top9.filter(c => canEffectPlaceOnBench(pool.get(c.cardId))).map(c => c.iid);
+  const maxPick = Math.min(validIids.length, benchSpace);   // ⭐v6.634 上限＝真的能放的張數（沒有可放的 ⇒ 0＝只查看）
 
   return withPending(
     addLog(state, `戲法傳送門：查看牌庫上方 ${top9.length} 張，選任意數量寶可夢放備戰`, aIdx),
@@ -113,6 +116,7 @@ regPost('超級妖火紅狐ex|戲法傳送門', (state, aIdx, pool) => {
       effectKey: 'bench-basic-from-deck',
       params: {
         top9Iids,
+        validIids,   // ⭐v6.634
         titleOverride: `戲法傳送門：從牌庫上方 ${top9.length} 張選任意數量寶可夢放備戰`,
       },
     },

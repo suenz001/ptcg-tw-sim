@@ -17,6 +17,7 @@ import {
   regAttackPrecondition, // ⭐v6.438 per-attack 使用前提（engine ATTACK handler 與 getAvailableAttacks 共用同一份）
 } from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
+import { canEffectPlaceOnBench } from '../_shared'; // ⭐v6.634 效果放備戰：排除海豚俠ex｜全能靈魂
 import { mandatoryTargetCount } from '../_shared'; // ⭐v6.305 卡面寫死目標隻數 → 強制選滿
 import { canEvolveOnto } from '../_shared'; // v6.203 進化來源逐字比對中央述詞
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
@@ -856,17 +857,17 @@ function deckTopPeekPokemonToBenchPost(peekN: number, label: string): AttackPost
     const top = p.deck.slice(0, peekN);
     const topIids = top.map(c => c.iid);
     // v5.076：列所有寶可夢（不限 Basic）— 卡面寫「寶可夢卡」未限制階段
-    const pokemonsInTop = top.filter(c => {
-      const card = pool.get(c.cardId);
-      return card?.supertype === 'Pokemon';
-    });
+    // ⭐v6.634：改走中央 canEffectPlaceOnBench（海豚俠ex｜全能靈魂不可以被放上備戰區）；
+    //   排除的那張仍在「查看翻到的其他」區看得到（查看權不變），validIids 讓 UI／AI／消毒閘同一份
+    const pokemonsInTop = top.filter(c => canEffectPlaceOnBench(pool.get(c.cardId)));
+    const validIids = pokemonsInTop.map(c => c.iid);
     if (pokemonsInTop.length === 0) {
       // v5.964 卡面「查看…上方N張」是無條件動作:無寶可夢也要讓玩家看到這 N 張(maxCount:0 僅檢視 → 洗回)。
       return withPending(addLog(state, `${label}：查看牌庫上方 ${top.length} 張，選任意數量寶可夢卡放備戰（剩餘洗回）`, aIdx), {
         type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
         filter: 'Pokemon:TOP_N', minCount: 0, maxCount: 0,
         effectKey: 'v311-deck-peek-basic-to-bench',
-        params: { label, topIids, peekN: top.length },
+        params: { label, topIids, peekN: top.length, validIids },   // ⭐v6.634
       });
     }
     // v5.076：bench limit 5 → getOwnBenchLimit（零之大空洞 +3 = 8）
@@ -879,7 +880,7 @@ function deckTopPeekPokemonToBenchPost(peekN: number, label: string): AttackPost
         type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
         filter: 'Pokemon:TOP_N', minCount: 0, maxCount: 0,
         effectKey: 'v311-deck-peek-basic-to-bench',
-        params: { label, topIids, peekN: top.length },
+        params: { label, topIids, peekN: top.length, validIids },   // ⭐v6.634
       });
     }
     return withPending(addLog(state, `${label}：查看牌庫上方 ${top.length} 張，選任意數量寶可夢卡放備戰（剩餘洗回）`, aIdx), {
@@ -888,7 +889,7 @@ function deckTopPeekPokemonToBenchPost(peekN: number, label: string): AttackPost
       filter: 'Pokemon:TOP_N',
       minCount: 0, maxCount: realMax,
       effectKey: 'v311-deck-peek-basic-to-bench',
-      params: { label, topIids, peekN: top.length },
+      params: { label, topIids, peekN: top.length, validIids },   // ⭐v6.634
     });
   };
 }
@@ -899,8 +900,16 @@ regR('v311-deck-peek-basic-to-bench', (state, aIdx, iids, params, _pool) => {
   if (iids.length === 0) {
     return updatePlayer(addLog(state, `${label}：未選擇任何寶可夢；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
   }
-  const chosenSet = new Set(iids);
+  // ⭐v6.634：resolver 自己再驗一次（不信任 payload）：只收上方 N 張裡、可被效果放上備戰區的寶可夢；不合格的留在牌庫一起重洗
+  const _top634 = new Set((params?.topIids as string[] | undefined) ?? []);
+  const chosenSet = new Set(iids.filter(iid => {
+    const inst = p.deck.find(c => c.iid === iid);
+    return !!inst && _top634.has(iid) && canEffectPlaceOnBench(_pool.get(inst.cardId));
+  }));
   const chosen = p.deck.filter(c => chosenSet.has(c.iid));
+  if (chosen.length === 0) {
+    return updatePlayer(addLog(state, `${label}：未選擇任何寶可夢；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+  }
   const restDeck = p.deck.filter(c => !chosenSet.has(c.iid));
   // v5.076：去掉「基礎」字樣，現在可放任意階段寶可夢（含 Stage1/Stage2/ex）
   const benchAdd = chosen.map(c => ({ ...c, justPlaced: true }));

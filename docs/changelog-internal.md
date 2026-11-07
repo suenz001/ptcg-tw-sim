@@ -1,5 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.634（2026-11-07）效果放備戰排除全能靈魂
+
+BASE `301b6e23`（v6.633）。v6.633 Opus 審查 P2-1 列出的 5 處同型漏洞，站長：「請繼續下一版」。
+
+- 卡面：海豚俠ex｜全能靈魂「這張卡只可依據『海豚俠』的特性『全能變身』的效果放置於場上」。
+- 全站掃「放置於備戰區」H/I/J 卡面：不限基礎、碰得到海豚俠ex（1 階【水】）的只有 5 招 —— 米立龍ex｜硃砂誘餌、人造細胞卵｜傳喚之門（共用 deckTopPeekPokemonToBenchPost）、超級妖火紅狐ex｜戲法傳送門、下石鳥｜親送挑戰、刺龍王ex｜王之號召（【水】）。其餘都限【基礎】／限名稱／限惡或龍。
+- 中央判準 `canEffectPlaceOnBench`（_shared.ts，哨兵 v6634-effect-bench-all-power-soul）＝寶可夢卡且非 isAllPowerSoulBlocked；五招的候選 validIids 與 resolver 再驗都呼叫它。
+- `Pokemon:TOP_N`／`Pokemon:TOP9`（selection-filter.ts，哨兵 v6634-top-valid-iids）有宣告 params.validIids 時交集 ⇒ 對戰頁候選、AI、engine 消毒閘同一份；沒宣告的既有招式（杜若／黑暗球…）不變。被排除的海豚俠ex 仍在「查看翻到的其他」區看得到。
+- resolver 三層：v311-deck-peek-basic-to-bench 另補「只收上方 N 張」；bench-basic-from-deck 補第三層（params 沒有 validIids 的舊 pending 也擋）；m5-flamigo-delivery、bench-from-discard-samename 各自再驗。戲法傳送門 maxCount 改成可放張數（0＝只查看）。
+- 守衛 test-v6634（35 條）：五招 × 候選／偽造／直呼 resolver（含無 validIids）／正對照／只有海豚俠ex；中央判準與 filter 交集單元（Rule 39 用讀與不讀答案不同的輸入）；HEAD-FAIL 在 BASE 五招全紅。自做 9 個突變全殺（M7 原本存活 ⇒ 補 A3b）。
+- Rule 40：revert-v6634-{changelog,game}.mjs 接在 revert-v6633 兩支 lib 的鏈頭（既有呼叫點不改）；game 表依序檢查錨點（後段錨點要前段先還原才出現）。
+- 修改前後 harness＋免疫網 36 支全綠；tsc 0。
+
 ## v6.633（2026-11-07）從牌庫直接進化排除全能靈魂
 
 BASE `522ddb9f`（v6.632）。站長：「審查找到一個既有問題：雙卵細胞球「細胞進化」這類「從牌庫直接進化」的效果，目前可以把波普海豚進化成海豚俠ex，照卡面應該不行。影響四張卡，要下一版修」；並裁定「卡圖對照圖 如果是波導探求者這類擴充包的新卡，就不用比對版本了，避免浪費ai token，一定都是J標不會錯，比較需要比對的是舊卡或是戰術牌組那種混了很多標的卡在一起的才有需要比對」。

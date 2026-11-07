@@ -1265,6 +1265,19 @@ export function canDeckEvolveOnto(evoCard: Card | undefined | null, baseCardName
 }
 // <<< v6633-deck-evolve-all-power-soul
 
+// >>> v6634-effect-bench-all-power-soul
+/**
+ * ⭐v6.634「效果把寶可夢卡直接放置於備戰區」的唯一可放判準（不含『基礎／屬性／名稱』等卡面條件，那些由各招自己再加）。
+ *   ＝ 寶可夢卡 ＋ **不是「只可依據某特性放置於場上」的卡**（海豚俠ex｜全能靈魂）。
+ *   卡面不限基礎的放備戰效果：米立龍ex｜硃砂誘餌、人造細胞卵｜傳喚之門、超級妖火紅狐ex｜戲法傳送門、
+ *   下石鳥｜親送挑戰、刺龍王ex｜王之號召（【水】）—— 都不可以把海豚俠ex 放上備戰區（v6.633 審查列出）。
+ *   候選（validIids）與 resolver 兩端都呼叫這一份（filter 必須 === 能勾的）。
+ */
+export function canEffectPlaceOnBench(card: Card | undefined | null): boolean {
+  return !!card && card.supertype === 'Pokemon' && !isAllPowerSoulBlocked(card);
+}
+// <<< v6634-effect-bench-all-power-soul
+
 /**
  * v2.246 完整 KO cause tracking — 統一 KO 記錄入口。
  *

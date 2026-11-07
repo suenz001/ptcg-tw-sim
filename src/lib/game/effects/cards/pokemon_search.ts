@@ -19,6 +19,7 @@ import {
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   applyBenchPlaceSideEffects,
   getOwnBenchLimit,
+  canEffectPlaceOnBench,   // ⭐v6.634 效果放備戰：排除海豚俠ex｜全能靈魂
 } from '../_shared';
 import { isMegaExCard } from '../../selection-filter'; // v6.210：Mega ex 判定收斂中央述詞（leaf，Check O 安全）
 
@@ -149,6 +150,12 @@ regR('bench-basic-from-deck', (st, idx, iids, params, pool) => {
     const validSet = new Set(validIids);
     effIids = effIids.filter(iid => validSet.has(iid));
   }
+  // ⭐v6.634 defense-in-depth #3：不可被效果放上備戰區的卡（海豚俠ex｜全能靈魂）一律不收、留在牌庫重洗
+  //   （本 resolver 的所有使用者都是「放置於備戰區」；空 validIids 時上面那層不縮限，這層照擋）
+  effIids = effIids.filter(iid => {
+    const inst = st.players[idx].deck.find(c => c.iid === iid);
+    return !!inst && canEffectPlaceOnBench(pool.get(inst.cardId));
+  });
   // 公開資訊：放到備戰區本來就對對手可見，順便記到 log 方便追蹤
   const chosen = st.players[idx].deck.filter(c => effIids.includes(c.iid));
   if (chosen.length > 0) {

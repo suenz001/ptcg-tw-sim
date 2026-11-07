@@ -233,6 +233,16 @@ function inTopParam(ctx: SelectionFilterCtx, key: string, inst: { iid: string })
   const ids = ctx.params?.[key];
   return Array.isArray(ids) && (ids as string[]).includes(inst.iid);
 }
+// >>> v6634-top-valid-iids
+/** ⭐v6.634 TOP 型寶可夢 filter 共用：pending 有宣告 params.validIids 時，候選必須也在裡面（沒宣告＝不縮限，既有招式行為不變）。
+ *   放備戰的 TOP 招式（硃砂誘餌／傳喚之門／戲法傳送門）用它排除海豚俠ex｜全能靈魂；
+ *   UI 候選、AI、engine 消毒閘都經同一個 evaluateSelectionFilter ⇒ 看得到的＝勾得動的＝送得進去的。
+ *   被排除的那張仍會出現在 UI「查看翻到的其他」區（peek − 可選），查看權不受影響。 */
+function inValidParam(ctx: SelectionFilterCtx, inst: { iid: string }): boolean {
+  const ids = ctx.params?.validIids;
+  return !Array.isArray(ids) || (ids as string[]).includes(inst.iid);
+}
+// <<< v6634-top-valid-iids
 const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCtx, inst: { iid: string }) => boolean> = {
   // 基礎/階段/寶可夢型（v2.132：階段用 stage ?? subtype，避免 ex 進化被 subtype='ex' 排除）
   'Basic':        (c) => isBasicPokemonCard(c),
@@ -350,7 +360,7 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
   'Supporter:TOP6': (c, ctx, inst) => inTopParam(ctx, 'top6Iids', inst) && c.subtype === 'Supporter',
   'Supporter:TOP7': (c, ctx, inst) => inTopParam(ctx, 'top7Iids', inst) && c.subtype === 'Supporter',
   'Pokemon:TOP7': (c, ctx, inst) => inTopParam(ctx, 'top7Iids', inst) && c.supertype === 'Pokemon',
-  'Pokemon:TOP9': (c, ctx, inst) => inTopParam(ctx, 'top9Iids', inst) && c.supertype === 'Pokemon',
+  'Pokemon:TOP9': (c, ctx, inst) => inTopParam(ctx, 'top9Iids', inst) && c.supertype === 'Pokemon' && inValidParam(ctx, inst),   // ⭐v6.634 validIids 交集
   'Basic:TOP5': (c, ctx, inst) => inTopParam(ctx, 'top5Iids', inst) && isBasicPokemonCard(c),
   // 捕蟲組合「【草】寶可夢卡」＝任何階段（Bug #20；ai.ts 舊 inline 殘留 !evolvesFrom，本版一併修正）
   'GrassBasicOrGrassEnergy:TOP7': (c, ctx, inst) => inTopParam(ctx, 'top7Iids', inst)
@@ -358,7 +368,7 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
   'Basic:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && isBasicPokemonCard(c),
   'Energy:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && c.supertype === 'Energy',
   'BasicEnergy:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && c.supertype === 'Energy' && c.subtype === 'Basic',
-  'Pokemon:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && c.supertype === 'Pokemon',
+  'Pokemon:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && c.supertype === 'Pokemon' && inValidParam(ctx, inst),   // ⭐v6.634 validIids 交集
   'Trainer:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && c.supertype === 'Trainer',
   // <<< v6543-top-filters-central
 };
