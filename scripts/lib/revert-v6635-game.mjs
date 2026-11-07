@@ -1,0 +1,16 @@
+// Rule 40：逐段精確還原 v6.635（放備戰兩項後續：棄牌區放備戰 log／validIids 再驗、v311 備戰空位再驗）的改動，缺失或重複錨點拒絕。表由 difflib 產生、驗證逐位元回 f2ef96b2（v6.634）。
+// 鏈頭：revert-v6634-game.mjs 的 revertV6634GameIfPresent 會先呼叫本檔（一版一節，既有呼叫點一個字都不必改）。
+import assert from 'node:assert/strict';
+export const V6635_GAME_PAIRS = {"src/lib/game/effects.ts": [["  const names = take.map(c => pool.get(c.cardId)?.name ?? '?').join('、');\n  // ⭐v6.635：log 一律列實際卡名（原本把條件描述套進引號 ⇒「放置 2 張「【水】寶可夢」到備戰」）\n  let s = addLog(st, `${label}：從棄牌區放置 ${take.length} 張到備戰區（${names}）`, idx);\n  return updatePlayer(s, idx, pl => ({\n", "  const names = take.map(c => pool.get(c.cardId)?.name ?? '?').join('、');\n  let s = addLog(st, `${label}：從棄牌區放置 ${take.length} 張「${targetName}」到備戰（${names}）`, idx);\n  return updatePlayer(s, idx, pl => ({\n"], ["  // ⭐v6.634：resolver 自己再驗一次（不信任 payload）：不可被效果放上備戰區的卡（海豚俠ex｜全能靈魂）不收、留在棄牌區\n  // ⭐v6.635：也再驗 params.validIids（卡面條件：同名／【水】／【基礎】…）；有宣告才縮限\n  const _vi635 = Array.isArray(params?.validIids) ? new Set(params.validIids as string[]) : null;\n  const picked = p.discard.filter(c => iids.includes(c.iid) && canEffectPlaceOnBench(pool.get(c.cardId)) && (!_vi635 || _vi635.has(c.iid)));\n  if (picked.length === 0) return addLog(st, `${label}：未選擇`, idx);\n", "  // ⭐v6.634：resolver 自己再驗一次（不信任 payload）：不可被效果放上備戰區的卡（海豚俠ex｜全能靈魂）不收、留在棄牌區\n  const picked = p.discard.filter(c => iids.includes(c.iid) && canEffectPlaceOnBench(pool.get(c.cardId)));\n  if (picked.length === 0) return addLog(st, `${label}：未選擇`, idx);\n"], ["  const label = (params?.label as string) ?? '同名回備戰';\n  const p = st.players[idx];\n", "  const label = (params?.label as string) ?? '同名回備戰';\n  const targetName = (params?.targetName as string) ?? '';\n  const p = st.players[idx];\n"]], "src/lib/game/effects/cards/v2750_h_wave2_full.ts": [["  }\n  const _placed635 = new Set(chosen.map(c => c.iid));\n  const restDeck = p.deck.filter(c => !_placed635.has(c.iid));\n  // v5.076：去掉「基礎」字樣，現在可放任意階段寶可夢（含 Stage1/Stage2/ex）\n", "  }\n  const restDeck = p.deck.filter(c => !chosenSet.has(c.iid));\n  // v5.076：去掉「基礎」字樣，現在可放任意階段寶可夢（含 Stage1/Stage2/ex）\n"], ["  }));\n  // ⭐v6.635：resolver 再驗備戰空位（原本只靠消毒閘夾 maxCount；開視窗後空位變少或舊 pending 時會超過上限）\n  //   超出空位的不放、留在牌庫一起重洗（不丟卡）；順序依牌庫上方順序取\n  const _space635 = Math.max(0, getOwnBenchLimit(state, aIdx, _pool) - p.bench.length);\n  const chosen = p.deck.filter(c => chosenSet.has(c.iid)).slice(0, _space635);\n  if (chosen.length === 0) {\n", "  }));\n  const chosen = p.deck.filter(c => chosenSet.has(c.iid));\n  if (chosen.length === 0) {\n"]]};
+// 依序檢查（表是由新往舊逐段還原產生的，後面的錨點可能要前面先還原才出現）
+export const hasV6635GameFile = (path, source) => {
+ const pairs = V6635_GAME_PAIRS[path]; if (!pairs) return false; let s = source.replace(/\r\n/g, '\n');
+ for (const [a, b] of pairs) { if (s.split(a).length !== 2) return false; s = s.replace(a, b); }
+ return true;
+};
+export function revertV6635GameFile(path, source) {
+ const pairs = V6635_GAME_PAIRS[path]; assert.ok(pairs, '未知路徑 ' + path); let s = source.replace(/\r\n/g, '\n');
+ for (const [a, b] of pairs) { assert.equal(s.split(a).length, 2, 'v6635還原錨點缺失或重複 ' + path); s = s.replace(a, b); }
+ return s;
+}
+export const revertV6635GameIfPresent = (path, s) => hasV6635GameFile(path, s) ? revertV6635GameFile(path, s) : s;

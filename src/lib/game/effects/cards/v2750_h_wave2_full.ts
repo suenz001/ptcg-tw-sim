@@ -906,11 +906,15 @@ regR('v311-deck-peek-basic-to-bench', (state, aIdx, iids, params, _pool) => {
     const inst = p.deck.find(c => c.iid === iid);
     return !!inst && _top634.has(iid) && canEffectPlaceOnBench(_pool.get(inst.cardId));
   }));
-  const chosen = p.deck.filter(c => chosenSet.has(c.iid));
+  // ⭐v6.635：resolver 再驗備戰空位（原本只靠消毒閘夾 maxCount；開視窗後空位變少或舊 pending 時會超過上限）
+  //   超出空位的不放、留在牌庫一起重洗（不丟卡）；順序依牌庫上方順序取
+  const _space635 = Math.max(0, getOwnBenchLimit(state, aIdx, _pool) - p.bench.length);
+  const chosen = p.deck.filter(c => chosenSet.has(c.iid)).slice(0, _space635);
   if (chosen.length === 0) {
     return updatePlayer(addLog(state, `${label}：未選擇任何寶可夢；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
   }
-  const restDeck = p.deck.filter(c => !chosenSet.has(c.iid));
+  const _placed635 = new Set(chosen.map(c => c.iid));
+  const restDeck = p.deck.filter(c => !_placed635.has(c.iid));
   // v5.076：去掉「基礎」字樣，現在可放任意階段寶可夢（含 Stage1/Stage2/ex）
   const benchAdd = chosen.map(c => ({ ...c, justPlaced: true }));
   return updatePlayer(addLog(state, `${label}：放 ${chosen.length} 隻寶可夢到備戰（剩餘洗回）`, aIdx), aIdx, pl => ({

@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.635（2026-11-07）放備戰兩項後續
+
+BASE `f2ef96b2`（v6.634）。v6.634 審查 P3 的兩項既有小問題，站長：「有發現問題就修吧」。
+
+- `bench-from-discard-samename`（effects.ts；王之號召／轟鳴呼聲／復生火焰／同名系列共用）：log 原本把條件描述套進引號（「放置 2 張「【水】寶可夢」到備戰」）⇒ 一律列實際卡名；resolver 補再驗 params.validIids（卡面條件），不只靠 engine 消毒閘。
+- `v311-deck-peek-basic-to-bench`（硃砂誘餌／傳喚之門）：resolver 補再驗備戰空位（getOwnBenchLimit），超出的留在牌庫一起重洗（不丟卡）。
+- 守衛 test-v6635（10 條）：王之號召 log 與正對照、直呼 resolver 偽造 validIids 外的卡、備戰只剩 1 格送 2 隻（守恆）、HEAD-FAIL 在 BASE 三項全紅；4 個突變全殺。
+- Rule 40：revert-v6635-{changelog,game}.mjs 接在 revert-v6634 兩支 lib 的鏈頭。
+- 修改前後 harness＋免疫網 36 支全綠；tsc 0。
+
 ## v6.634（2026-11-07）效果放備戰排除全能靈魂
 
 BASE `301b6e23`（v6.633）。v6.633 Opus 審查 P2-1 列出的 5 處同型漏洞，站長：「請繼續下一版」。

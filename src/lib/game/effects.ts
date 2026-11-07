@@ -14133,16 +14133,18 @@ function discardSameNameBenchPost(max: number, cardName: string, label: string):
 }
 regR('bench-from-discard-samename', (st, idx, iids, params, pool) => {
   const label = (params?.label as string) ?? '同名回備戰';
-  const targetName = (params?.targetName as string) ?? '';
   const p = st.players[idx];
   // ⭐v6.634：resolver 自己再驗一次（不信任 payload）：不可被效果放上備戰區的卡（海豚俠ex｜全能靈魂）不收、留在棄牌區
-  const picked = p.discard.filter(c => iids.includes(c.iid) && canEffectPlaceOnBench(pool.get(c.cardId)));
+  // ⭐v6.635：也再驗 params.validIids（卡面條件：同名／【水】／【基礎】…）；有宣告才縮限
+  const _vi635 = Array.isArray(params?.validIids) ? new Set(params.validIids as string[]) : null;
+  const picked = p.discard.filter(c => iids.includes(c.iid) && canEffectPlaceOnBench(pool.get(c.cardId)) && (!_vi635 || _vi635.has(c.iid)));
   if (picked.length === 0) return addLog(st, `${label}：未選擇`, idx);
   // v5.041：bench limit 改 getBenchLimit (5→8)
   const slots = getOwnBenchLimit(st, idx, pool) - p.bench.length;
   const take = picked.slice(0, slots).map(c => ({ ...c, damage: 0, energyAttached: [], justPlaced: true } as CardInstance));
   const names = take.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  let s = addLog(st, `${label}：從棄牌區放置 ${take.length} 張「${targetName}」到備戰（${names}）`, idx);
+  // ⭐v6.635：log 一律列實際卡名（原本把條件描述套進引號 ⇒「放置 2 張「【水】寶可夢」到備戰」）
+  let s = addLog(st, `${label}：從棄牌區放置 ${take.length} 張到備戰區（${names}）`, idx);
   return updatePlayer(s, idx, pl => ({
     ...pl,
     bench: [...pl.bench, ...take.map(placedBenchInstance)],
