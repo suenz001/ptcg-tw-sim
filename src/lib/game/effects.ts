@@ -14140,8 +14140,10 @@ regR('bench-from-discard-samename', (st, idx, iids, params, pool) => {
   const picked = p.discard.filter(c => iids.includes(c.iid) && canEffectPlaceOnBench(pool.get(c.cardId)) && (!_vi635 || _vi635.has(c.iid)));
   if (picked.length === 0) return addLog(st, `${label}：未選擇`, idx);
   // v5.041：bench limit 改 getBenchLimit (5→8)
-  const slots = getOwnBenchLimit(st, idx, pool) - p.bench.length;
+  // ⭐v6.635：夾 0（備戰已超過上限時 slice(0, 負數) 會變成「取前面幾張」）；放不下任何一張 ⇒ 只寫 log
+  const slots = Math.max(0, getOwnBenchLimit(st, idx, pool) - p.bench.length);
   const take = picked.slice(0, slots).map(c => ({ ...c, damage: 0, energyAttached: [], justPlaced: true } as CardInstance));
+  if (take.length === 0) return addLog(st, `${label}：備戰區已滿，沒有放置寶可夢`, idx);
   const names = take.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   // ⭐v6.635：log 一律列實際卡名（原本把條件描述套進引號 ⇒「放置 2 張「【水】寶可夢」到備戰」）
   let s = addLog(st, `${label}：從棄牌區放置 ${take.length} 張到備戰區（${names}）`, idx);

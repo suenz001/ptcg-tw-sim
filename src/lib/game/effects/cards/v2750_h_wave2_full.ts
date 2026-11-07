@@ -910,6 +910,9 @@ regR('v311-deck-peek-basic-to-bench', (state, aIdx, iids, params, _pool) => {
   //   超出空位的不放、留在牌庫一起重洗（不丟卡）；順序依牌庫上方順序取
   const _space635 = Math.max(0, getOwnBenchLimit(state, aIdx, _pool) - p.bench.length);
   const chosen = p.deck.filter(c => chosenSet.has(c.iid)).slice(0, _space635);
+  if (chosen.length === 0 && chosenSet.size > 0 && _space635 === 0) {
+    return updatePlayer(addLog(state, `${label}：備戰區已滿，沒有放置寶可夢；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+  }
   if (chosen.length === 0) {
     return updatePlayer(addLog(state, `${label}：未選擇任何寶可夢；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
   }

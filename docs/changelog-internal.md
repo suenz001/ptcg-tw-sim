@@ -8,6 +8,8 @@ BASE `f2ef96b2`（v6.634）。v6.634 審查 P3 的兩項既有小問題，站長
 - `v311-deck-peek-basic-to-bench`（硃砂誘餌／傳喚之門）：resolver 補再驗備戰空位（getOwnBenchLimit），超出的留在牌庫一起重洗（不丟卡）。
 - 守衛 test-v6635（10 條）：王之號召 log 與正對照、直呼 resolver 偽造 validIids 外的卡、備戰只剩 1 格送 2 隻（守恆）、HEAD-FAIL 在 BASE 三項全紅；4 個突變全殺。
 - Rule 40：revert-v6635-{changelog,game}.mjs 接在 revert-v6634 兩支 lib 的鏈頭。
+- Opus 審查（97982467）：無 P1／P2，可推送。P3 依站長「有發現問題就修吧」同版補上：棄牌區 resolver 的 slots 夾 0（備戰超過上限時 slice 負數會照放）＋放不下時寫「備戰區已滿」不出空括號；v311 空位 0 卻有選卡時 log 改寫「備戰區已滿」；守衛補 D1～D4（零之大空洞＋太晶上限 8、依牌庫上方順序取）與 H5。新分支 3 個突變全殺。
+- 第一輪全套（97982467）981/981 綠；補 P3 後重跑。
 - 修改前後 harness＋免疫網 36 支全綠；tsc 0。
 
 ## v6.634（2026-11-07）效果放備戰排除全能靈魂

@@ -10,7 +10,8 @@
 // 【A】王之號召完整流程：log 措辭、正常放置
 // 【B】直呼 resolver：偽造 validIids 外的卡 ⇒ 不收（留在棄牌區）；正對照 validIids 內 ⇒ 收
 // 【C】硃砂誘餌：開視窗後備戰被補到只剩 1 格，送 2 隻 ⇒ 只放 1 隻、另 1 隻留在牌庫、牌庫張數守恆
-// 【H】HEAD-FAIL：BASE（v6.634）引擎跑 A1／B1／C1 ⇒ 紅
+// 【D】審查 P3：備戰超過上限／剛好滿的 log、零之大空洞上限 8 與牌庫順序
+// 【H】HEAD-FAIL：BASE（v6.634）引擎跑 A1／B1／C1／D1 ⇒ 紅
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -62,6 +63,8 @@ const mk = (p0, p1) => ({ phase: 'playing', turnPhase: 'main', activePlayerIndex
   pendingSelection: null, setupDone: [true, true], pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0], coinFlippedThisAttack: false,
   _attackerActiveBonusDone: false, activeStadium: null, activeStadiumOwnerIdx: 0, players: [P({ name: 'A', ...p0 }), P({ name: 'B', ...p1 })] });
 const energyFor = (card, atk) => (card.attacks.find((a) => a.name === atk).cost || []).map((t) => inst((ENERGY[t] || ENERGY.Water).id));
+const VOID = all.find((c) => c.name === '零之大空洞');
+const TERA = all.find((c) => c.supertype === 'Pokemon' && (c.tags || []).includes('太晶') && H.includes(c.regulationMark));
 const msgs = (s) => (s?.log ?? []).map((l) => (typeof l === 'string' ? l : l?.message ?? l?.text ?? '')).filter(Boolean);
 
 function run(M) {
@@ -96,6 +99,29 @@ function run(M) {
     // 正對照：空位足夠 ⇒ 兩隻都放
     let r3 = null; try { r3 = fn({ ...r, pendingSelection: null }, 0, [x.iid, y.iid], ps?.params, pool); } catch (e) { r3 = { __err: e.message }; }
     out.C2 = { err: r3?.__err, bench: r3?.players?.[0]?.bench?.length }; }
+  // 【D】審查 P3：備戰已超過上限／已滿、零之大空洞上限 8 與牌庫順序
+  { const fn = M.SH.RESOLVERS.get('bench-from-discard-samename');
+    const a = inst(WATER_A.id), b = inst(WATER_B.id);
+    const over = mk({ active: inst(PLAIN.id), bench: Array.from({ length: 6 }, () => inst(PLAIN.id)), discard: [a, b] }, { active: inst(PLAIN.id) });
+    let r = null; try { r = fn(over, 0, [a.iid, b.iid], { validIids: [a.iid, b.iid], label: '王之號召' }, pool); } catch (e) { r = { __err: e.message }; }
+    out.D1 = { err: r?.__err, bench: r?.players?.[0]?.bench?.length, inDiscard: (r?.players?.[0]?.discard ?? []).length, line: msgs(r).slice(-1)[0] ?? '' };
+    const full = mk({ active: inst(PLAIN.id), bench: Array.from({ length: 5 }, () => inst(PLAIN.id)), discard: [a, b] }, { active: inst(PLAIN.id) });
+    let r2 = null; try { r2 = fn(full, 0, [a.iid], { validIids: [a.iid, b.iid], label: '王之號召' }, pool); } catch (e) { r2 = { __err: e.message }; }
+    out.D2 = { err: r2?.__err, bench: r2?.players?.[0]?.bench?.length, line: msgs(r2).slice(-1)[0] ?? '' }; }
+  { const x = inst(WATER_A.id), y = inst(FIRE.id), z = inst(WATER_B.id);
+    const st = mk({ active: inst(MIRAIDON_LIKE.id, { energyAttached: energyFor(MIRAIDON_LIKE, '硃砂誘餌') }), deck: [x, y, z, ...filler(7)] }, { active: inst(PLAIN.id) });
+    const r = act(st, { type: 'ATTACK', attackIndex: MIRAIDON_LIKE.attacks.findIndex((q) => q.name === '硃砂誘餌') });
+    const ps = r?.pendingSelection;
+    const fn = M.SH.RESOLVERS.get('v311-deck-peek-basic-to-bench');
+    // 零之大空洞＋場上有太晶 ⇒ 上限 8；備戰 6 隻 ⇒ 空位 2；送 z、x、y（payload 順序故意打亂）⇒ 依牌庫上方順序放 x、y
+    const v = { ...r, pendingSelection: null, activeStadium: inst(VOID.id), activeStadiumOwnerIdx: 0,
+      players: [{ ...r.players[0], bench: [inst(TERA.id), ...Array.from({ length: 5 }, () => inst(PLAIN.id))] }, r.players[1]] };
+    let r2 = null; try { r2 = fn(v, 0, [z.iid, x.iid, y.iid], ps?.params, pool); } catch (e) { r2 = { __err: e.message }; }
+    const bench = (r2?.players?.[0]?.bench ?? []).map((q) => q.iid);
+    out.D3 = { err: r2?.__err, n: bench.length, x: bench.includes(x.iid), y: bench.includes(y.iid), zDeck: (r2?.players?.[0]?.deck ?? []).some((q) => q.iid === z.iid) };
+    const full = { ...r, pendingSelection: null, players: [{ ...r.players[0], bench: Array.from({ length: 5 }, () => inst(PLAIN.id)) }, r.players[1]] };
+    let r3 = null; try { r3 = fn(full, 0, [x.iid], ps?.params, pool); } catch (e) { r3 = { __err: e.message }; }
+    out.D4 = { err: r3?.__err, n: r3?.players?.[0]?.bench?.length, line: msgs(r3).slice(-1)[0] ?? '' }; }
   return out;
 }
 
@@ -108,6 +134,11 @@ ok('★★ B2 正對照：validIids 內的照收', CUR.B.aOn === true, JSON.stri
 ok('★★★ C1 硃砂誘餌：備戰只剩 1 格時送 2 隻 ⇒ 只放 1 隻、另一隻留在牌庫（卡不會不見、不會超過上限）', !CUR.C.err && CUR.C.bench === 5 && CUR.C.deckOk && !CUR.C.lost && CUR.C.key === 'v311-deck-peek-basic-to-bench', JSON.stringify(CUR.C));
 ok('★★ C2 正對照：空位足夠 ⇒ 兩隻都放', !CUR.C2.err && CUR.C2.bench === 2, JSON.stringify(CUR.C2));
 
+ok('★★★ D1 棄牌區 resolver：備戰已超過上限（6 隻）⇒ 一張都不放、兩張都留在棄牌區', !CUR.D1.err && CUR.D1.bench === 6 && CUR.D1.inDiscard === 2, JSON.stringify(CUR.D1));
+ok('★★ D2 棄牌區 resolver：備戰剛好滿 ⇒ log 寫「備戰區已滿」、不出現空括號', CUR.D2.bench === 5 && /備戰區已滿/.test(CUR.D2.line) && !/（）/.test(CUR.D2.line), JSON.stringify(CUR.D2));
+ok('★★★ D3 硃砂誘餌：零之大空洞＋太晶上限 8、空位 2 ⇒ 依牌庫上方順序放 2 隻，第 3 隻留在牌庫', !CUR.D3.err && CUR.D3.n === 8 && CUR.D3.x && CUR.D3.y && CUR.D3.zDeck, JSON.stringify(CUR.D3));
+ok('★★ D4 硃砂誘餌：備戰已滿卻送了卡 ⇒ log 寫「備戰區已滿」（不是「未選擇」）', CUR.D4.n === 5 && /備戰區已滿/.test(CUR.D4.line), JSON.stringify(CUR.D4));
+
 console.log('【H】HEAD-FAIL');
 if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('H（缺 BASE ' + BASE_SHA + '）');
 else {
@@ -118,6 +149,7 @@ else {
     ok('★★★ H1 BASE（v6.634）的 log 把「【水】寶可夢」套進引號', B.A.line.includes('「【水】寶可夢」'), B.A.line);
     ok('★★★ H2 BASE 直呼 resolver 會收 validIids 外的卡', B.B.fOn === true, JSON.stringify(B.B));
     ok('★★★ H3 BASE 硃砂誘餌 resolver 會放超過備戰上限', B.C.bench === 6, JSON.stringify(B.C));
+    ok('★★ H5 BASE 棄牌區 resolver 在備戰超過上限時仍會放卡（slice 負數）', B.D1.bench > 6, JSON.stringify(B.D1));
     ok('★★ H4 BASE 上正對照照常（harness 沒壞）', B.A.benched === 2 && B.B.aOn && B.C2.bench === 2);
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
