@@ -1126,6 +1126,7 @@ import { isManuallyActivatableAbilityText } from './ability-activation';   // �
 import { returnHandToDeck } from './effects/_shared';
 // <<< v6362-return-hand-import
 export { sameEvoName, canEvolveOnto };
+export { canDeckEvolveOnto } from './effects/_shared';   // ⭐v6.633 從牌庫直接進化的候選判準（畫面篩選用）
 
 /**
  * ⭐⭐⭐ v6.203 中央述詞（**進化合法性只有這一份**）：

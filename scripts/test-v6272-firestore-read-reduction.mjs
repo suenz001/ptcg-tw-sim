@@ -670,7 +670,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '570afeaf263cfb7df420bac0eb077e496c2ec75c';   // v6.631（上一版）
+const PREV_SHA = '522ddb9f9ae5962cbcc2a150d28e5f3487cd04b2';   // v6.632（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -759,17 +759,31 @@ const PREV_SHA = '570afeaf263cfb7df420bac0eb077e496c2ec75c';   // v6.631（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.632 前移：PREV_SHA 從 570afeaf（v6.631）起算。
+  // ⚠⚠ v6.633 前移：PREV_SHA 從 522ddb9f（v6.632）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.632：官方判例 3 處修正：借招自身條件減費（反撲剪／觸手激怒）、弱點倍率特性對化隱無效、整人變身排除全能靈魂；首頁 changelog 三步搬運
-  'src/lib/game/effects.ts',
-  'src/lib/game/effects/cards/m6a_wave4.ts',
+  // ⭐v6.633：從牌庫直接進化的中央候選判準 canDeckEvolveOnto（排除全能靈魂）接上細胞進化／細胞覺醒／進化粉／惡之覺醒、畫面篩選與 AI；首頁 changelog 三步搬運
+  'src/lib/game/ai.ts',
+  'src/lib/game/effects/_shared.ts',
+  'src/lib/game/effects/cards/v2650_i_wave15_misc8.ts',
+  'src/lib/game/engine.ts',
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.632）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.632 前移：PREV_SHA 從 570afeaf（v6.631）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.632：官方判例 3 處修正：借招自身條件減費（反撲剪／觸手激怒）、弱點倍率特性對化隱無效、整人變身排除全能靈魂；首頁 changelog 三步搬運
+//   'src/lib/game/effects.ts',
+//   'src/lib/game/effects/cards/m6a_wave4.ts',
+//   'src/lib/version.ts',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.631）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.631 前移：PREV_SHA 從 797f0435（v6.630）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -869,17 +883,6 @@ const PREV_ALLOWED = [
 //   'src/lib/panel-resize.ts',
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.619）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.619 前移：PREV_SHA 從 60dec41d（v6.618）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.619：錦標賽個人計時縮小氣泡（PlayerClockNotice，拖曳走中央 modalDrag）；手機直式派出／等待派出／取獎提示改疊加（MobilePortraitBattle）；首頁 changelog 三步搬運
-//   'src/lib/version.ts',
-//   'src/routes/game/MobilePortraitBattle.svelte',
-//   'src/routes/game/PlayerClockNotice.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

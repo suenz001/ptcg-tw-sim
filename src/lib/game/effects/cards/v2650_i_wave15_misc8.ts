@@ -14,7 +14,7 @@
  */
 
 import { isRocketTeamPokemonCard } from '../_shared';   // ⭐v6.546「火箭隊的寶可夢」唯一判準
-import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, canEvolveOnto, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
+import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, canEvolveOnto, canDeckEvolveOnto, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
 import { getAllAttachedTools } from '../_shared'; // v5.835 道具數含多重轉接
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { openDeckViewReshuffle } from '../_shared';
@@ -193,7 +193,8 @@ regPost('雙卵細胞球|細胞進化', (state, aIdx, pool) => {
       return p.deck.some(d => {
         const dc = pool.get(d.cardId);
         // v6.203：進化來源逐字比對（中央述詞）；牌庫來源不吃虹色DNA 例外（卡面寫「從手牌」）
-        return !!dc?.evolvesFrom && canEvolveOnto(dc.evolvesFrom, card.name);
+        // ⭐v6.633：改走 canDeckEvolveOnto（排除海豚俠ex｜全能靈魂）
+        return canDeckEvolveOnto(dc, card.name);
       });
     })
     .map(c => c.iid);
@@ -238,9 +239,7 @@ regR('twin-cell-evolve-pick-base', (st, aIdx, iids, _params, pool) => {
       aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
   }
   const validEvoIids = p.deck.filter(c => {
-    const card = pool.get(c.cardId);
-    if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
-    return canEvolveOnto(card.evolvesFrom, baseCard.name);  // v6.203 逐字比對
+    return canDeckEvolveOnto(pool.get(c.cardId), baseCard.name);  // ⭐v6.633 中央判準（v6.203 逐字比對＋排除全能靈魂）
   }).map(c => c.iid);
   if (validEvoIids.length === 0) {
     return openDeckViewReshuffle(st, aIdx, '細胞進化'); // v5.496：仍開檢視 picker（內含重洗）
@@ -269,7 +268,8 @@ regR('twin-cell-evolve-do', (st, aIdx, iids, params, pool) => {
     const base = p.active?.iid === baseIid ? p.active : p.bench.find(c => c.iid === baseIid);
     if (evoInst && base) {
       const evoCard = pool.get(evoInst.cardId);
-      if (evoCard) {
+      // ⭐v6.633：resolver 自己再驗一次（不信任 payload；排除全能靈魂、來源必須對得上實際底座）
+      if (evoCard && canDeckEvolveOnto(evoCard, pool.get(base.cardId)?.name)) {
         const isActive = p.active?.iid === baseIid;
         const prevStack = base.evolvedFromStack ?? [];
         const baseBare: CardInstance = {
@@ -314,9 +314,7 @@ export function cellAwakeningStep(
   if (!baseCard) return cellAwakeningStep(s, aIdx, pool, benchIdx + 1, label);
   // 牌庫中有可進化的卡嗎？
   const validEvoIids = p.deck.filter(c => {
-    const card = pool.get(c.cardId);
-    if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
-    return canEvolveOnto(card.evolvesFrom, baseCard.name);  // v6.203 逐字比對
+    return canDeckEvolveOnto(pool.get(c.cardId), baseCard.name);  // ⭐v6.633 中央判準（v6.203 逐字比對＋排除全能靈魂）
   }).map(c => c.iid);
   if (validEvoIids.length === 0) {
     s = addLog(s, `${label}：牌庫中無「${baseCard.name}」的進化卡（跳過）`, aIdx);
@@ -360,7 +358,8 @@ regR('cell-awaken-evolve-step', (st, aIdx, iids, params, pool) => {
     const base = p.bench.find(c => c.iid === baseIid);
     if (evoInst && base) {
       const evoCard = pool.get(evoInst.cardId);
-      if (evoCard) {
+      // ⭐v6.633：resolver 自己再驗一次（不信任 payload；排除全能靈魂、來源必須對得上實際底座）
+      if (evoCard && canDeckEvolveOnto(evoCard, pool.get(base.cardId)?.name)) {
         const prevStack = base.evolvedFromStack ?? [];
         const baseBare: CardInstance = {
           ...base, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined,
@@ -472,9 +471,7 @@ regR('evil-awakening-pick-base', (st, aIdx, iids, params, pool) => {
   }
   // 檢查牌庫是否有可搜的進化卡
   const validEvoIids = p.deck.filter(c => {
-    const card = pool.get(c.cardId);
-    if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
-    return canEvolveOnto(card.evolvesFrom, baseCard.name);  // v6.203 逐字比對
+    return canDeckEvolveOnto(pool.get(c.cardId), baseCard.name);  // ⭐v6.633 中央判準（v6.203 逐字比對＋排除全能靈魂）
   }).map(c => c.iid);
   if (validEvoIids.length === 0) {
     let s = addLog(st, `惡之覺醒：牌庫中無「${baseCard.name}」的進化卡`, aIdx);
@@ -512,7 +509,8 @@ regR('evil-awakening-evolve', (st, aIdx, iids, params, pool) => {
     const base = p.active?.iid === baseIid ? p.active : p.bench.find(c => c.iid === baseIid);
     if (evoInst && base) {
       const evoCard = pool.get(evoInst.cardId);
-      if (evoCard) {
+      // ⭐v6.633：resolver 自己再驗一次（不信任 payload；排除全能靈魂、來源必須對得上實際底座）
+      if (evoCard && canDeckEvolveOnto(evoCard, pool.get(base.cardId)?.name)) {
         // 進化邏輯（仿 v172 __sturdyDoEvolveStep1）
         const isActive = p.active?.iid === baseIid;
         const prevStack = base.evolvedFromStack ?? [];

@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.633（2026-11-07）從牌庫直接進化排除全能靈魂
+
+BASE `522ddb9f`（v6.632）。站長：「審查找到一個既有問題：雙卵細胞球「細胞進化」這類「從牌庫直接進化」的效果，目前可以把波普海豚進化成海豚俠ex，照卡面應該不行。影響四張卡，要下一版修」；並裁定「卡圖對照圖 如果是波導探求者這類擴充包的新卡，就不用比對版本了，避免浪費ai token，一定都是J標不會錯，比較需要比對的是舊卡或是戰術牌組那種混了很多標的卡在一起的才有需要比對」。
+
+- 新中央判準 `canDeckEvolveOnto(evoCard, baseName)`（_shared.ts，哨兵 v6633-deck-evolve-all-power-soul）＝ 寶可夢卡＋canEvolveOnto 逐字對得上＋不是 isAllPowerSoulBlocked（海豚俠ex｜全能靈魂「只可依據『全能變身』放置於場上」）。engine re-export 給畫面用。
+- 接上：雙卵細胞球｜細胞進化（底座篩選＋牌庫候選）、cellAwakeningStep（人造細胞卵｜細胞覺醒、彩粉蝶｜進化粉）、火箭隊的尼多娜｜惡之覺醒（只能選【惡】，實務碰不到，同一份判準）；三個 resolver（twin-cell-evolve-do／cell-awaken-evolve-step／evil-awakening-evolve）自己再驗（偽造 payload 不進化）；對戰頁與 AI 的 `EvilAwakening:EvolveFrom` 篩選（filter＝能勾的）。招式學習器 演進 是 G 標，不在維護範圍。
+- 守衛 test-v6633-deck-evolve-all-power-soul（21 條）：三張卡完整流程（候選、偽造 payload、正對照、牌庫只有海豚俠ex 不開選卡）、中央判準（5 個海豚俠ex 印刷）、畫面／AI 走同一份、HEAD-FAIL（BASE 三張都會進化出海豚俠ex）。Rule 40：test-v6609／v6610 先套 revert-v6633-game，test-v6610／v6605 changelog 鏈加 revert-v6633-changelog。
+- 鐵律 Rule 90 加站長例外：全新擴充包不看卡圖核標記；舊卡、重印、戰術牌組等混標商品才看（mark-montage.py 說明同步）。
+
 ## v6.632（2026-11-07）新卡包工具組＋30th CELEBRATION 官方判例比對
 
 BASE `570afeaf`（v6.631）。站長：「官方預計在11月底推出新的擴充包 波導探求者 我希望你能準備好相關的skills、爬蟲程式、audit規則等等，務必抓取推出的新卡和卡包，並且完成卡牌功能實裝，並符合官方的規則與判例，降低錯誤 因此我希望你可以透過學習的方式，例如利用現在已經抓取的卡包和卡片，去測試模擬你的skills、相關記憶和爬蟲程式、判定規則是否正確」。

@@ -19,7 +19,7 @@ import {
   getUsableAbilities, canRetreat, isBasicPokemonCard,
   canBeInitialActiveCard, isRulePokemon,
   getEffectiveHP, canAffordAttack, isBasicEnergyOfType, getBasicEnergyType,
-  totalEnergyUnits, computeActiveRetreatCostFor, canEvolveOnto,
+  totalEnergyUnits, computeActiveRetreatCostFor, canEvolveOnto, canDeckEvolveOnto,   // ⭐v6.633
 } from './engine';
 // v4.949 Phase 2a：能量分配 role-aware
 import { findMainAttackers } from './ai-roles';
@@ -770,10 +770,9 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         }
         // v4.38 火箭隊的尼多娜｜惡之覺醒：evolvesFrom 對得上所選 base
         if (f === 'EvilAwakening:EvolveFrom') {
-          if (card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
           const baseName = (sel.params?.baseName as string | undefined) ?? '';
-          // v6.203：與 resolver 端 canEvolveOnto 對齊（原本 stripEx 會多列出違規候選）
-          return canEvolveOnto(card.evolvesFrom, baseName);
+          // v6.203：與 resolver 端對齊；⭐v6.633 改走中央 canDeckEvolveOnto（排除海豚俠ex｜全能靈魂）
+          return canDeckEvolveOnto(card, baseName);
         }
         // v4.45 小箭雀｜鳥笛：抵抗力為【鬥】屬性的寶可夢
         if (f === 'Resistance:Fighting') {

@@ -116,7 +116,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import {
     createGame, applyAction,
     getAvailableAttacks, getEffectiveAttacks, hasPendingActions,
-    countEnergy, getEvolvableTargets, canEvolveOnto,   // v6.203 進化來源逐字比對中央述詞
+    countEnergy, getEvolvableTargets, canEvolveOnto, canDeckEvolveOnto,   // v6.203 進化來源逐字比對中央述詞（⭐v6.633 從牌庫直接進化）
     canRetreat, getRetreatBlockReason,
     computeActiveRetreatCostFor,
     getUsableAbilities, isBasicPokemonCard, isRulePokemon, getEffectiveHP, getBasicEnergyType,
@@ -4358,11 +4358,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         if (f === 'EvilAwakening:EvolveFrom') {
           const baseName = (pendingSelection.params?.baseName as string | undefined) ?? '';
           return src.deck.filter(c => {
-            const card = pool.get(c.cardId);
-            if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
-            // v6.203：進化來源逐字比對（中央述詞 canEvolveOnto）——
-            //   顯示端(filter) 必須 === 能勾端(resolver 的 validEvoIids)，原 stripEx 會多列違規候選。
-            return canEvolveOnto(card.evolvesFrom, baseName);
+            // v6.203：顯示端(filter) 必須 === 能勾端(resolver 的 validEvoIids)，原 stripEx 會多列違規候選。
+            // ⭐v6.633：改走中央 canDeckEvolveOnto（逐字比對＋排除海豚俠ex｜全能靈魂），與 resolver 同一份
+            return canDeckEvolveOnto(pool.get(c.cardId), baseName);
           });
         }
         // v4.45 小箭雀｜鳥笛：牌庫中抵抗力為【鬥】屬性的寶可夢

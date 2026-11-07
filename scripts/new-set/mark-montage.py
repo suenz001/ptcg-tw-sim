@@ -7,6 +7,11 @@
   官網 detail 頁的欄位不可盡信——舊商品重印的標記會被標成現行可用的 I／J（阿球、觀光客、SVI 訓練家實印 G）、
   階段（超能豔鴕 11317 實為 1 階進化）也錯過 ⇒ 收錄前一律看卡圖。
 
+什麼時候要跑（站長 2026-11-07）：
+  「卡圖對照圖 如果是波導探求者這類擴充包的新卡，就不用比對版本了，避免浪費ai token，一定都是J標不會錯，
+   比較需要比對的是舊卡或是戰術牌組那種混了很多標的卡在一起的才有需要比對」
+  ⇒ 全新擴充包**不跑**；舊卡補漏、重印、戰術牌組等混標商品才跑，而且用 --only-ids 只拼要看的那幾張。
+
 用法：
   python3 scripts/new-set/mark-montage.py <卡表或暫存.json> <輸出資料夾> [--per-page 24] [--only-ids 1,2,3]
   例：python3 scripts/new-set/mark-montage.py .new-set/M7/M7.json .new-set/M7/montage

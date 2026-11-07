@@ -14,6 +14,7 @@
  * v2.05 (Session 38b2)：從 effects.ts 抽離，作為模組化第一步骨架。
  */
 
+import { isAllPowerSoulBlocked } from '../usable-gates';   // ⭐v6.633 leaf 模組（不 import 任何東西，不會循環）
 import { runAsCopiedSupporterEffect } from '../supporter-effect-source';   // ⭐v6.530 複製支援者的使用條件判定
 import type { Card } from '$lib/cards/types';
 import { CLEAR_ON_EXIT_FLAGS, PERSIST_ON_EXIT_FLAGS } from '../instance-flags';
@@ -1247,6 +1248,22 @@ export function canEvolveOnto(
   if (!evolvesFromName || !baseCardName) return false;
   return evolvesFromName === baseCardName;
 }
+
+// >>> v6633-deck-evolve-all-power-soul
+/**
+ * ⭐v6.633「從牌庫選進化卡、直接放到場上的寶可夢身上完成進化」的唯一候選判準。
+ *   ＝ 寶可夢卡 ＋ 進化來源逐字對得上（canEvolveOnto）＋ **不是「只可依據某特性放置於場上」的卡**。
+ *   海豚俠ex｜全能靈魂：「這張卡只可依據『海豚俠』的特性『全能變身』的效果放置於場上」
+ *   ⇒ 雙卵細胞球｜細胞進化、人造細胞卵｜細胞覺醒、彩粉蝶｜進化粉、火箭隊的尼多娜｜惡之覺醒 都不可以把它進化上去
+ *   （v6.632 審查列出；同一句卡面的整人變身已於 v6.632 依官方 Q&A 排除，官方答案「不可以」）。
+ *   畫面（+page.svelte 的 EvilAwakening:EvolveFrom 篩選）、AI、resolver 三處都呼叫這一份（filter 必須 === 能勾的）。
+ */
+export function canDeckEvolveOnto(evoCard: Card | undefined | null, baseCardName: string | undefined | null): boolean {
+  if (!evoCard || evoCard.supertype !== 'Pokemon' || !evoCard.evolvesFrom) return false;
+  if (isAllPowerSoulBlocked(evoCard)) return false;
+  return canEvolveOnto(evoCard.evolvesFrom, baseCardName);
+}
+// <<< v6633-deck-evolve-all-power-soul
 
 /**
  * v2.246 完整 KO cause tracking — 統一 KO 記錄入口。
