@@ -28,6 +28,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
 import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '301b6e23';   // v6.633（本版的上一版）
@@ -178,7 +179,7 @@ console.log('【B】中央判準與 filter 交集');
     && ev('deck-search', 'Pokemon:TOP9', c2, PALAFIN, { params: { top9Iids: ['x1'], validIids: ['x2'] } }) === false); }
 
 console.log('【C】uiCands 照抄的那三條對戰頁規則，真的在 +page.svelte 裡（審查 P3-1：判準不可只存在守衛裡）');
-{ const page = stripCommentsBlankChecked(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'), 'svelte');
+{ const page = stripCommentsBlankChecked(normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8')), 'svelte');
   const ds = page.indexOf("case 'deck-search': {"), dd = page.indexOf("case 'discard-search': {");
   const deck = ds < 0 ? '' : page.slice(ds, page.indexOf('\n      case ', ds + 30));
   const disc = dd < 0 ? '' : page.slice(dd, dd + 700);
