@@ -1,3 +1,4 @@
+import { revertV6636IfPresent } from './revert-v6636-cost-filters.mjs'; // v6.636
 // v6.617「出自於卡包」改成卡包封面卡片：本版改動的「逐位元還原表」（單一來源；IRON_RULES Rule 38）
 //   /cards 頁、單卡頁、對外 changelog 三檔。釘這些檔位元組的舊守衛先用這裡還原成 v6.616＋鐵律（c430b6ac）。
 //   表由 difflib 產生、當場驗證可逐位元還原；行為由 test-v6617 守。
@@ -7,7 +8,7 @@ export const V6617_CARDS_PAIRS = V6617_PAIRS['src/routes/cards/+page.svelte'];
 export const hasV6617File = (path, s) => { const ps = V6617_PAIRS[path]; return !!ps && ps.every(([a]) => s.replace(/\r\n/g, '\n').split(a).length === 2); };
 export function revertV6617File(path, source) {
   const ps = V6617_PAIRS[path]; assert.ok(ps, '未知路徑 ' + path);
-  let s = source.replace(/\r\n/g, '\n');
+  let s = revertV6636IfPresent(path, source.replace(/\r\n/g, '\n'));
   for (const [a, b] of ps) { assert.equal(s.split(a).length, 2, 'v6617 還原錨點缺失或重複 ' + path); s = s.replace(a, b); }
   return s;
 }

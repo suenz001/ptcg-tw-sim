@@ -1,4 +1,8 @@
 <script lang="ts">
+  // >>> v6636-cost-filter-imports
+  import CostFilters from '$lib/cards/CostFilters.svelte';
+  import { matchesPrintedCosts, printedCostOptions, readCostFilterSearch, writeCostFilterSearch } from '$lib/cards/cost-filter';
+  // <<< v6636-cost-filter-imports
   import PageHeader from '$lib/ui/PageHeader.svelte';   // ⭐v6.507 全站頁首統一
   import { compileCardQuery, cardSearchFields, SEARCH_SYNTAX_HINT } from '$lib/cards/search-query';   // ⭐v6.481 搜尋語法（兩頁共用）
   import { pageScrollLock } from '$lib/page-scroll-lock'; // ⭐v6.457 彈出視窗開著時手機不捲到背景（中央）
@@ -196,6 +200,12 @@
   };
   const STAGE_ORDER: StageKey[] = ['Basic', 'Stage1', 'Stage2'];
   let selectedStages = $state<Set<StageKey>>(new Set());
+  // >>> v6636-cost-filter-state
+  let selectedRetreatCosts = $state<Set<number>>(new Set());
+  let selectedAttackCosts = $state<Set<number>>(new Set());
+  const retreatOptions = $derived(printedCostOptions(setCards, 'retreat'));
+  const attackOptions = $derived(printedCostOptions(setCards, 'attack'));
+  // <<< v6636-cost-filter-state
 
   // v2.84: 賽制賽季標記篩選
   // ⭐⭐ v6.340 站長交辦：拿掉【G 標】鈕，改成一顆【已退標】。
@@ -232,7 +242,7 @@
   //   桌機（>600px）永遠展開，與原本完全相同。
   const narrowView = new MediaQuery(MOBILE_FILTER_QUERY, false);
   let filtersOpen = $state(false);
-  const activeFilterCount = $derived(countActiveFilters([selectedCategories, selectedTags, selectedTypes, selectedStages, selectedRegMarks]));
+  const activeFilterCount = $derived(countActiveFilters([selectedCategories, selectedTags, selectedTypes, selectedStages, selectedRetreatCosts, selectedAttackCosts, selectedRegMarks]));
   const showFilters = $derived(!narrowView.current || filtersOpen);
   // <<< v6497-mobile-filter-fold
 
@@ -337,6 +347,8 @@
     selectedTypes = new Set(st.type as EnergyType[]);
     selectedStages = new Set(st.stage as StageKey[]);
     selectedRegMarks = new Set(st.mark as RegMarkKey[]);
+    const costs = readCostFilterSearch(location.search, retreatOptions, attackOptions); // v6636
+    selectedRetreatCosts = new Set(costs.retreat); selectedAttackCosts = new Set(costs.attack);
     selected = st.card ? setCards.find((x) => String(x.id) === st.card) ?? null : null;
     lastAllFilterKey = allFilterKey(); // 導頁還原不是玩家修改篩選，不重設還原的頁碼
   }
@@ -349,10 +361,11 @@
       cat: [...selectedCategories], tag: [...selectedTags], type: [...selectedTypes],
       stage: [...selectedStages], mark: [...selectedRegMarks], card: selected ? String(selected.id) : null,
     };
+    const costs = { retreat: selectedRetreatCosts, attack: selectedAttackCosts }; // v6636：在 effect 中追蹤
     const pageToWrite = data.setCode === 'ALL' ? pageRange.page : null; // v6.586 在 effect 內追蹤頁碼
     const id = setTimeout(() => {
       try {
-        const conditions = writeCardsUrlSearch(location.search, st);
+        const conditions = writeCostFilterSearch(writeCardsUrlSearch(location.search, st), costs);
         const next = pageToWrite === null ? conditions : writeCardsPageSearch(conditions, pageToWrite);
         if (next !== location.search) replaceState(location.pathname + next + location.hash, {});
       } catch { /* 路由還沒準備好等情況：不寫網址，不影響畫面 */ }
@@ -422,7 +435,9 @@
     const types = selectedTypes;
     const stages = selectedStages;
     const marks = selectedRegMarks;
+    const retreatCosts = selectedRetreatCosts, attackCosts = selectedAttackCosts; // v6636：明確追蹤兩組選擇
     return setCards.filter((c) => {
+      if (!matchesPrintedCosts(c, retreatCosts, attackCosts)) return false; // v6636：只讀印刷費用
       if (cats.size > 0 && !cats.has(cardCategory(c))) return false;
       // tag filter: OR across selected tags
       if (tags.size > 0) {
@@ -465,14 +480,14 @@
   /** 任何會改變 filtered 的輸入變動 → 回到第一頁。 */
   function allFilterKey() {
     return JSON.stringify([query, searchMode, keywordScope, data.mode === 'set' ? data.setCode : '',
-      [...selectedCategories], [...selectedTags], [...selectedTypes], [...selectedStages], [...selectedRegMarks]]);
+      [...selectedCategories], [...selectedTags], [...selectedTypes], [...selectedStages], [...selectedRegMarks], [...selectedRetreatCosts], [...selectedAttackCosts]]);
   }
   $effect(() => {
     const filterKey = allFilterKey();
     if (data.setCode === 'ALL' && lastAllFilterKey !== null && lastAllFilterKey !== filterKey) currentPage = 1;
     lastAllFilterKey = filterKey;
     void debouncedQuery; void selectedCategories; void selectedTags;
-    void selectedTypes; void selectedStages; void selectedRegMarks; void data.setCode;
+    void selectedTypes; void selectedStages; void selectedRegMarks; void selectedRetreatCosts; void selectedAttackCosts; void data.setCode;
     visibleCount = PAGE_SIZE;
   });
   /** 捲到接近底部時追加下一批（sentinel 進入視窗即觸發）。 */
@@ -696,6 +711,10 @@
         >{STAGE_LABEL[stg]}</button>
       {/each}
     </div>
+    <!-- >>> v6636-cost-filters -->
+    <CostFilters bind:retreat={selectedRetreatCosts} bind:attack={selectedAttackCosts}
+      {retreatOptions} {attackOptions} />
+    <!-- <<< v6636-cost-filters -->
     <div class="filters markFilters" role="group" aria-label="賽季標記篩選（可複選）">
       <span class="tagLabel">賽季：</span>
       <button

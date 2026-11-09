@@ -1,4 +1,8 @@
 <script lang="ts">
+  // >>> v6636-cost-filter-imports
+  import CostFilters from '$lib/cards/CostFilters.svelte';
+  import { matchesPrintedCosts, printedCostOptions } from '$lib/cards/cost-filter';
+  // <<< v6636-cost-filter-imports
   import { compileCardQuery, cardSearchFields, SEARCH_SYNTAX_HINT } from '$lib/cards/search-query';   // ⭐v6.481 搜尋語法（兩頁共用）
   import { MediaQuery } from 'svelte/reactivity';
   import PageHeader from '$lib/ui/PageHeader.svelte';   // ⭐v6.507 全站頁首統一
@@ -268,6 +272,12 @@
   const STAGE_LABEL: Record<StageKey, string> = { Basic: '基礎', Stage1: '1階進化', Stage2: '2階進化' };
   const STAGE_ORDER: StageKey[] = ['Basic', 'Stage1', 'Stage2'];
   let selectedStages = $state<Set<StageKey>>(new Set());
+  // >>> v6636-cost-filter-state
+  let selectedRetreatCosts = $state<Set<number>>(new Set());
+  let selectedAttackCosts = $state<Set<number>>(new Set());
+  const retreatOptions = $derived(printedCostOptions(pool, 'retreat'));
+  const attackOptions = $derived(printedCostOptions(pool, 'attack'));
+  // <<< v6636-cost-filter-state
 
   function cardStage(c: Card): StageKey | null {
     if (c.supertype !== 'Pokemon') return null;
@@ -313,7 +323,7 @@
     return same ? new Set() : selectedRegMarks;
   });
   const activeFilterCount = $derived(countActiveFilters(
-    [selectedCategories, selectedTags, selectedTypes, selectedStages, regMarksNarrowed],
+    [selectedCategories, selectedTags, selectedTypes, selectedStages, selectedRetreatCosts, selectedAttackCosts, regMarksNarrowed],
     [favoritesOnly, setFilter !== ''],
   ));
   const showFilters = $derived(!narrowView.current || filtersOpen);
@@ -495,7 +505,9 @@
     const types = selectedTypes;
     const stages = selectedStages;
     const marks = selectedRegMarks;
+    const retreatCosts = selectedRetreatCosts, attackCosts = selectedAttackCosts; // v6636：明確追蹤兩組選擇
     return pool.filter((c) => {
+      if (!matchesPrintedCosts(c, retreatCosts, attackCosts)) return false; // v6636：只讀印刷費用
       // Category chip filter
       if (cats.size > 0 && !cats.has(cardCategory(c))) return false;
       // Tag chip filter (OR)
@@ -2124,6 +2136,10 @@
               onclick={() => toggleStage(stg)}>{STAGE_LABEL[stg]}</button>
           {/each}
         </div>
+    <!-- >>> v6636-cost-filters -->
+    <CostFilters bind:retreat={selectedRetreatCosts} bind:attack={selectedAttackCosts}
+      {retreatOptions} {attackOptions} />
+    <!-- <<< v6636-cost-filters -->
         <div class="pk-chip-row" role="group" aria-label="賽季">
           <span class="pk-label">賽季：</span>
           <button class="pk-chip pk-chip-mark" class:active={selectedRegMarks.size === 0}
