@@ -16,7 +16,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
 
@@ -144,7 +144,7 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('H（缺 BASE ' + BASE_SHA + '�
 else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6635-base-'));
   try {
-    execFileSync('bash', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ['src'], tmp);
     const B = run(await loadEngine(tmp, 'b'));
     ok('★★★ H1 BASE（v6.634）的 log 把「【水】寶可夢」套進引號', B.A.line.includes('「【水】寶可夢」'), B.A.line);
     ok('★★★ H2 BASE 直呼 resolver 會收 validIids 外的卡', B.B.fOn === true, JSON.stringify(B.B));

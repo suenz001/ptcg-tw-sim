@@ -24,7 +24,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
 import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';
@@ -194,7 +194,7 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('H（缺 BASE ' + BASE_SHA + '�
 else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6634-base-'));
   try {
-    execFileSync('bash', ['-c', `git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`]);
+    extractBaseArchive(ROOT, BASE_SHA, ['src'], tmp);
     const B = runAll(await loadEngine(tmp, 'b'));
     const reds = CASES.filter(([l]) => B[l].main.cands.includes('海豚俠ex') && B[l].main.forged?.exOnBench).map(([l]) => l);
     console.log('    BASE 上可以把海豚俠ex 放上備戰區：' + reds.join('、'));
