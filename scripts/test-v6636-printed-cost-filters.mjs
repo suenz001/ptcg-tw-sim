@@ -56,6 +56,8 @@ for(const [name,src]of[['cards',cards],['decks',decks]]){
  ok('D '+name+' 共用判準接在清單 filter',src.includes('if (!matchesPrintedCosts(c, retreatCosts, attackCosts)) return false;'));
  ok('D '+name+' 共用元件雙向綁定',src.includes('<CostFilters bind:retreat={selectedRetreatCosts} bind:attack={selectedAttackCosts}'));
  ok('D '+name+' 手機收合計數包含費用',/countActiveFilters\([\s\S]{0,220}selectedRetreatCosts, selectedAttackCosts/.test(src));
+ const foldStart=src.indexOf('{#if showFilters}'),foldEnd=src.indexOf('{/if}<!-- v6497-mobile-filter-toggle -->');
+ ok('D '+name+' 費用元件位於手機收合區',foldStart>=0&&foldEnd>foldStart&&src.slice(foldStart,foldEnd).includes('<CostFilters bind:retreat={selectedRetreatCosts} bind:attack={selectedAttackCosts}'));
 }
 ok('D cards 費用寫入及還原網址',cards.includes('writeCostFilterSearch(writeCardsUrlSearch(location.search, st), costs)')&&cards.includes('readCostFilterSearch(location.search, retreatOptions, attackOptions)'));
 ok('D cards 條件變更重設頁碼',/function allFilterKey\(\)[\s\S]{0,450}\[\.\.\.selectedRetreatCosts\], \[\.\.\.selectedAttackCosts\]/.test(cards));

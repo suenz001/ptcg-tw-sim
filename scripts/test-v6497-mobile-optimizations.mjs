@@ -14,12 +14,13 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import assert from 'node:assert';
+import { revertV6636IfPresent } from './lib/revert-v6636-cost-filters.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const require_ = createRequire(import.meta.url);
 const esbuild = require_('esbuild');
 let pass = 0, fail = 0;
 const T = (n, f) => { try { f(); pass++; console.log('PASS ' + n); } catch (e) { fail++; console.log('FAIL ' + n + ' :: ' + (e && e.message)); } };
-const rd = (p) => { try { return readFileSync(join(ROOT, p), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
+const rd = (p) => { try { return revertV6636IfPresent(p, readFileSync(join(ROOT, p), 'utf8')); } catch { return ''; } }; // Rule 40：保留本版五組篩選判準，費用兩組由 v6636 守衛驗證。
 
 console.log('【A】純函式');
 let MF = null;
