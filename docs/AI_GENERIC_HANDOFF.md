@@ -1,5 +1,7 @@
 # PTCG 通用交接提示詞
 
+> ⚠⚠ **本檔已過時（停在 2026-05，v2.363 前後），不要照做。** 現行交接：站長電腦 `E:\ptcg-tw-sim\_handoff\HANDOFF.md`（本機、不進 git）、repo 的 `IRON_RULES.md`（鐵律 Rule 1～92）、`docs/maintenance-status.md`、`docs/changelog-internal.md`。（2026-11-09 標註）
+
 > 每次邀請新 AI agent 協助前，請將本檔提供給它閱讀。
 > 本檔為通用準則，適用於所有任務。如有任務專用的交接提示詞（例如 J 標實裝），兩者應同時提供，**任務專用提示詞優先於本通用提示詞**。
 

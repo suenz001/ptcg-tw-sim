@@ -1,5 +1,7 @@
 # PTCG 實體賽事演練引擎 — AI 交接紀錄
 
+> ⚠⚠ **本檔已過時（停在 2026-05，v2.363 前後），不要照做。** 現行交接：站長電腦 `E:\ptcg-tw-sim\_handoff\HANDOFF.md`（本機、不進 git）、repo 的 `IRON_RULES.md`（鐵律 Rule 1～92）、`docs/maintenance-status.md`、`docs/changelog-internal.md`。（2026-11-09 標註）
+
 > 最後更新：2026-05-05 (v2.363 + engine.ts Edit tool 截斷事故紀錄)
 > 正式網址：https://suenz001.github.io/ptcg-tw-sim/game
 > 卡牌資料庫：https://suenz001.github.io/ptcg-tw-sim/cards?set=ALL
