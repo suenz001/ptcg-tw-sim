@@ -1,0 +1,367 @@
+{
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/",
+  "retrievedAt": "2026-11-10T00:45:27.316227+00:00",
+  "selection": "官方商品代碼 M*／SV*（不使用標準賽制篩選，包含歷史卡，僅供封存參考）",
+  "products": [
+    {
+      "code": "M6a",
+      "label": "擴充包「30th CELEBRATION」",
+      "series": "超級進化"
+    },
+    {
+      "code": "MF",
+      "label": "頂級牌組組合 「太陽伊布・月亮伊布」",
+      "series": "超級進化"
+    },
+    {
+      "code": "M6",
+      "label": "擴充包「綠寶石風暴」",
+      "series": "超級進化"
+    },
+    {
+      "code": "MTK",
+      "label": "戰術牌組「超級快龍ex」",
+      "series": "超級進化"
+    },
+    {
+      "code": "MTH",
+      "label": "戰術牌組「超級巨牙鯊ex」",
+      "series": "超級進化"
+    },
+    {
+      "code": "MTS",
+      "label": "戰術牌組「超級沙奈朵ex」",
+      "series": "超級進化"
+    },
+    {
+      "code": "MTL",
+      "label": "戰術牌組「超級噴火龍Xex」",
+      "series": "超級進化"
+    },
+    {
+      "code": "M5",
+      "label": "擴充包「深淵之瞳」",
+      "series": "超級進化"
+    },
+    {
+      "code": "M4",
+      "label": "擴充包「忍者飛旋」",
+      "series": "超級進化"
+    },
+    {
+      "code": "MJ",
+      "label": "New Trainer Journey",
+      "series": "超級進化"
+    },
+    {
+      "code": "M3",
+      "label": "擴充包「虛無歸零」",
+      "series": "超級進化"
+    },
+    {
+      "code": "MC",
+      "label": "初階牌組 100對戰收藏",
+      "series": "超級進化"
+    },
+    {
+      "code": "M2a",
+      "label": "高級擴充包「超級進化夢想ex」",
+      "series": "超級進化"
+    },
+    {
+      "code": "M2",
+      "label": "擴充包「烈獄狂火X」",
+      "series": "超級進化"
+    },
+    {
+      "code": "MBD",
+      "label": "挑戰牌組 「超級蒂安希ex」",
+      "series": "超級進化"
+    },
+    {
+      "code": "MBG",
+      "label": "挑戰牌組「超級耿鬼ex」",
+      "series": "超級進化"
+    },
+    {
+      "code": "M1S",
+      "label": "擴充包「超級交響樂」",
+      "series": "超級進化"
+    },
+    {
+      "code": "M1L",
+      "label": "擴充包「超級勇氣」",
+      "series": "超級進化"
+    },
+    {
+      "code": "M-P",
+      "label": "特典卡 超級進化",
+      "series": "超級進化"
+    },
+    {
+      "code": "SVQL",
+      "label": "ex初階牌組 噴火龍",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVQP",
+      "label": "ex初階牌組 皮卡丘",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV11B",
+      "label": "擴充包「漆黑伏特」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV11W",
+      "label": "擴充包 「純白閃焰」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV10",
+      "label": "擴充包「火箭隊的榮耀」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV9a",
+      "label": "強化擴充包「熱風競技場」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVOD",
+      "label": "挑戰牌組 大吾的鐵啞鈴&巨金怪ex",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVOM",
+      "label": "挑戰牌組 瑪俐的莫魯貝可&長毛巨魔ex",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV9",
+      "label": "擴充包「對戰搭檔」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVM",
+      "label": "雙ex初階牌組 Generations",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV8a",
+      "label": "高級擴充包「太晶慶典ex」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV8",
+      "label": "擴充包「超電突圍」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVK",
+      "label": "牌組構築BOX 樂園騰龍",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVPS",
+      "label": "ex特別組合 太晶屬性：星晶 蒼炎刃鬼ex",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVPN",
+      "label": "ex特別組合 太晶屬性：星晶 仙子伊布ex",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV7a",
+      "label": "強化擴充包「樂園騰龍」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVI",
+      "label": "Trianers Camp",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV7",
+      "label": "擴充包「星晶奇跡」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVTH",
+      "label": "戰術牌組「巨鉗螳螂ex」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVTG",
+      "label": "戰術牌組「太晶烈咬陸鯊ex」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVTS",
+      "label": "戰術牌組「沙奈朵ex」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVTR",
+      "label": "戰術牌組「密勒頓ex」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVTL",
+      "label": "戰術牌組「太晶噴火龍ex」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVTM",
+      "label": "戰術牌組「魔幻假面喵ex」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV6a",
+      "label": "強化擴充包「黑夜漫遊者」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV6",
+      "label": "擴充包「變幻假面」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV5a",
+      "label": "強化擴充包「緋紅薄霧」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVHM",
+      "label": "起始組合「未來密勒頓ex」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVHK",
+      "label": "起始組合「古代故勒頓ex」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV5M",
+      "label": "擴充包「異度審判」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV5K",
+      "label": "擴充包「狂野之力」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV4a",
+      "label": "高級擴充包「閃色寶藏ex」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV4K",
+      "label": "擴充包「古代咆哮」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV4M",
+      "label": "擴充包「未來閃光」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV3a",
+      "label": "強化擴充包「激狂駭浪」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVEM",
+      "label": "起始組合 太晶 超夢ex",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVEL",
+      "label": "起始組合 太晶 骨紋巨聲鱷ex",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVF",
+      "label": "牌組構築BOX黯焰支配者",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV3",
+      "label": "擴充包「黯焰支配者」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVD",
+      "label": "ex初階牌組",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV2a",
+      "label": "強化擴充包「寶可夢卡牌151」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVP1",
+      "label": "ex特別組合",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVC",
+      "label": "起始組合ex 皮卡丘特別組合",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV2P",
+      "label": "擴充包「冰雪險境」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV2D",
+      "label": "擴充包「碟旋暴擊」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV1a",
+      "label": "強化擴充包「三連音爆」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVB",
+      "label": "頂級訓練家收藏箱ex",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVAW",
+      "label": "起始組合ex 潤水鴨&謎擬Ｑ ex",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVAM",
+      "label": "起始組合ex 新葉喵&路卡利歐 ex",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SVAL",
+      "label": "起始組合ex 呆火鱷&電龍 ex",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV1V",
+      "label": "擴充包「紫ex」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV1S",
+      "label": "擴充包「朱ex」",
+      "series": "朱&紫"
+    },
+    {
+      "code": "SV-P",
+      "label": "特典卡 朱&紫",
+      "series": "朱&紫"
+    }
+  ]
+}

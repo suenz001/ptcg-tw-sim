@@ -1,0 +1,3 @@
+# 僅此維護封存：固定文字換行，讓 Windows/Linux checkout 的 SHA-256 一致。
+* text eol=lf
+*.pdf binary

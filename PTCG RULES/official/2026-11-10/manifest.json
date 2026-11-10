@@ -1,0 +1,1621 @@
+{
+  "schemaVersion": 1,
+  "archiveDate": "2026-11-10",
+  "purpose": "維護用官方規則資料封存；不會自動更改或證明引擎符合規則。",
+  "documents": [
+    {
+      "id": "exam-hk",
+      "title": "第十三回資格認證測驗公開命題範圍",
+      "region": "HK",
+      "sourceUrl": "https://asia.pokemon-card.com/hk/exam_details_13/",
+      "retrievedAt": "2026-11-10T00:45:12.959701+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "d7049678921bc8f706d404e54fe73bd60b1c3d31045200f3614dc708574898ec",
+      "rawBytes": 123527,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\exam-hk.html",
+      "textPath": "pages/exam-hk.md",
+      "links": [
+        {
+          "title": "官方資格測驗是什麼",
+          "url": "https://asia.pokemon-card.com/hk/archive/special/card/certificationsystem/"
+        },
+        {
+          "title": "報名表",
+          "url": "https://questant.jp/q/L3WVHS88"
+        },
+        {
+          "title": "請見此",
+          "url": "https://www.e-coms.co.jp/saku-saku-testing/system.html"
+        },
+        {
+          "title": "請見此",
+          "url": "https://hk.portal-pokemon.com/privacypolicy/"
+        },
+        {
+          "title": "寶可夢集換式卡牌遊戲",
+          "url": "https://www.facebook.com/Pokemon.TCG.Official.HongKong"
+        },
+        {
+          "title": "「Google Meet」系統需求",
+          "url": "https://support.google.com/meet/#topic=14074839"
+        },
+        {
+          "title": "Inquiry Form",
+          "url": "https://asia-pacs.pokemon-support.com/hc/zh-tw/requests/new"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "7e01f45669a963f8853b558bdb30ff59ef4aeb23b93e7ded09468b3b45cecb68",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "exam-tw",
+      "title": "第十三回資格認證測驗公開命題範圍（台灣）",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/exam_details_13/",
+      "retrievedAt": "2026-11-10T00:45:13.060277+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "0a74b6b11a7be05ccc39f3915f67a2e2021011d139926971cfd069e50e860f56",
+      "rawBytes": 123534,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\exam-tw.html",
+      "textPath": "pages/exam-tw.md",
+      "links": [
+        {
+          "title": "官方資格測驗是什麼",
+          "url": "https://asia.pokemon-card.com/tw/archive/special/card/certificationsystem/"
+        },
+        {
+          "title": "報名表",
+          "url": "https://questant.jp/q/L3WVHS88"
+        },
+        {
+          "title": "請見此",
+          "url": "https://www.e-coms.co.jp/saku-saku-testing/system.html"
+        },
+        {
+          "title": "請見此",
+          "url": "https://tw.portal-pokemon.com/privacypolicy/"
+        },
+        {
+          "title": "寶可夢集換式卡牌遊戲",
+          "url": "https://www.facebook.com/Pokemon.TCG.Official.Taiwan"
+        },
+        {
+          "title": "「Google Meet」系統需求",
+          "url": "https://support.google.com/meet/#topic=14074839"
+        },
+        {
+          "title": "Inquiry Form",
+          "url": "https://asia-pacs.pokemon-support.com/hc/zh-tw/requests/new"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "1523f08491e117ea344e237f5f92ca03d9911b9c088b3939349e63703de7cb74",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "rules-detail-tw",
+      "title": "台灣詳細規則下載入口",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/rules/detail/",
+      "retrievedAt": "2026-11-10T00:45:13.145601+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "816fa1d83e8b97d276273f461cd78b79445e55b3a1d23d5476d67e6a15cb53bd",
+      "rawBytes": 110577,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\rules-detail-tw.html",
+      "textPath": "pages/rules-detail-tw.md",
+      "links": [
+        {
+          "title": "PDF",
+          "url": "https://asia.pokemon-card.com/tw/archives/11482/"
+        },
+        {
+          "title": "PDF",
+          "url": "https://asia.pokemon-card.com/tw/archives/9914/"
+        },
+        {
+          "title": "PDF",
+          "url": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2021/09/attack_flow_chart_TC.pdf"
+        },
+        {
+          "title": "PDF",
+          "url": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2023/12/TW_PenltyChart_240111.pdf"
+        },
+        {
+          "title": "PDF",
+          "url": "https://asia.pokemon-card.com/tw/archives/11092/"
+        },
+        {
+          "title": "玩法規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "賽制",
+          "url": "https://asia.pokemon-card.com/tw/rules/regulation/"
+        },
+        {
+          "title": "詳細規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/detail/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "553cd1602a0a91a2ecef4f2ef1a36bbbaa5dc7418c7244065619e880accf0ee3",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "rules-detail-hk",
+      "title": "香港詳細規則下載入口",
+      "region": "HK",
+      "sourceUrl": "https://asia.pokemon-card.com/hk/rules/detail/",
+      "retrievedAt": "2026-11-10T00:45:13.235389+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "e9930d731c63f1aa2ae85fd4b377efb1bc86b2186bab4d1cc766408fa708f861",
+      "rawBytes": 110578,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\rules-detail-hk.html",
+      "textPath": "pages/rules-detail-hk.md",
+      "links": [
+        {
+          "title": "PDF",
+          "url": "https://asia.pokemon-card.com/hk/archives/8232/"
+        },
+        {
+          "title": "PDF",
+          "url": "https://asia.pokemon-card.com/hk/archives/7210/"
+        },
+        {
+          "title": "PDF",
+          "url": "https://asia.pokemon-card.com/hk/wp-content/uploads/sites/3/2021/09/attack_flow_chart_TC.pdf"
+        },
+        {
+          "title": "PDF",
+          "url": "https://asia.pokemon-card.com/hk/wp-content/uploads/sites/3/2023/12/HK_PenltyChart_240111.pdf"
+        },
+        {
+          "title": "PDF",
+          "url": "https://asia.pokemon-card.com/hk/archives/7948/"
+        },
+        {
+          "title": "玩法規則",
+          "url": "https://asia.pokemon-card.com/hk/rules/howtoplay/"
+        },
+        {
+          "title": "賽制",
+          "url": "https://asia.pokemon-card.com/hk/rules/regulation/"
+        },
+        {
+          "title": "詳細規則",
+          "url": "https://asia.pokemon-card.com/hk/rules/detail/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "8e0f87e16d96f012139def6d5252024a2f6402c5e149235de67eea5bd24dad8a",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "advanced-manual-3.4.1-landing",
+      "title": "進階玩家規則教學手冊官方附件入口",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/archives/11482/",
+      "retrievedAt": "2026-11-10T00:45:13.318080+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "fd3f75460f2f890f20f88d6ff965b037ac6d2112b999846d6e151fcb0e94c893",
+      "rawBytes": 110383,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\advanced-manual-3.4.1-landing.html",
+      "textPath": "pages/advanced-manual-3.4.1-landing.md",
+      "links": [
+        {
+          "title": "",
+          "url": "https://asia.pokemon-card.com/tw/archives/11482/"
+        },
+        {
+          "title": "Facebook",
+          "url": "http://www.facebook.com/share.php?u=https://asia.pokemon-card.com/tw/archives/11482/"
+        },
+        {
+          "title": "擴充包「波導探求者」將於12月4日（五）發售！ Product",
+          "url": "https://asia.pokemon-card.com/tw/archives/13597/"
+        },
+        {
+          "title": "第十三回資格認證測驗開始報名! Other",
+          "url": "https://asia.pokemon-card.com/tw/archives/13578/"
+        },
+        {
+          "title": "高級球聯盟賽 賽季2 報名開始！ Event",
+          "url": "https://asia.pokemon-card.com/tw/archives/13516/"
+        },
+        {
+          "title": "MORE",
+          "url": "https://asia.pokemon-card.com/tw/info/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "b3ae805af245fda944ba3e9f7e26aba92178a40f190b9ba0c25462da216b0e7f",
+      "attachmentPdfUrl": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2026/08/【新版】進階玩家規則教學手冊_3_4_1改訂.pdf",
+      "attachmentDiscovery": "原始 HTML 的 PDF 路徑（附件頁 main 可能不顯示下載連結）；原始 HTML 已另存本機證據。",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "advanced-manual-3.4.1",
+      "title": "進階玩家規則教學手冊",
+      "region": "TW",
+      "landingUrl": "https://asia.pokemon-card.com/tw/archives/11482/",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2026/08/【新版】進階玩家規則教學手冊_3_4_1改訂.pdf",
+      "resolvedUrl": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2026/08/%E3%80%90%E6%96%B0%E7%89%88%E3%80%91%E9%80%B2%E9%9A%8E%E7%8E%A9%E5%AE%B6%E8%A6%8F%E5%89%87%E6%95%99%E5%AD%B8%E6%89%8B%E5%86%8A_3_4_1%E6%94%B9%E8%A8%82.pdf",
+      "retrievedAt": "2026-11-10T00:45:17.454846+00:00",
+      "version": "3.4.1",
+      "officialPageUpdated": "2026-08-28",
+      "versionDateNote": "官網頁面更新日與 PDF 內文版本分開記錄；不以 URL 上傳目錄當作生效日。",
+      "path": "pdf/advanced-manual-3.4.1.pdf",
+      "textPath": "text/advanced-manual-3.4.1.txt",
+      "bytes": 891639,
+      "sha256": "03c9cbb368a85d0497a7412d82ab1f9ef7c6e60813c58b409d66b394b4b939ac",
+      "textSha256": "c5364d665b35c7b149e325df4a5881eee68ba6f815c09d10cc57a099f30e7aca",
+      "httpStatus": 200,
+      "contentType": "application/pdf",
+      "pages": 61,
+      "firstPageExcerpt": "進階玩家規則教學⼿冊 ver 3.4.1 \n為了讓所有寶可夢卡牌遊戲玩家的遊戲過程兼具公平性及娛樂性，故編寫此教學⼿冊，訂定標\n準規則，以供必要時之參考，冀雙⽅玩家在對戰過程彼此理解，有禮貌且愉快地進⾏遊戲。 \n※本⽂中的底線，是「I 遊戲說明書的補充」與「II 卡牌說明⽂字」當中的重點項⺫。請依實 \n際需求參照各相關章節。 \n \nI 遊戲說明書的補充 \nA",
+      "pdfMetadata": {
+        "/ModDate": "D:20260817062330Z00'00'",
+        "/Producer": "macOS バージョン26.6（ビルド25G72） Quartz PDFContext",
+        "/Creator": "Word",
+        "/Title": "【新版】進階玩家規則教學手冊_3_4改訂",
+        "/CreationDate": "D:20260817062330Z00'00'"
+      },
+      "blankPagesVerifiedWithPyMuPDF": [],
+      "hongKongAlias": {
+        "landingUrl": "https://asia.pokemon-card.com/hk/archives/8232/",
+        "sourceUrl": "https://asia.pokemon-card.com/hk/wp-content/uploads/sites/3/2026/08/【新版】進階玩家規則教學手冊_3_4_1改訂.pdf",
+        "retrievedAt": "2026-11-10T00:48:14.368742+00:00",
+        "sha256": "03c9cbb368a85d0497a7412d82ab1f9ef7c6e60813c58b409d66b394b4b939ac",
+        "bytes": 891639,
+        "identicalToTaiwan": true
+      },
+      "pdfStatedUpdatedDate": null,
+      "sourceFontMappingWarnings": [
+        {
+          "pdfPage": 9,
+          "codepoint": "U+F8FF",
+          "occurrences": 1
+        },
+        {
+          "pdfPage": 18,
+          "codepoint": "U+F8FF",
+          "occurrences": 2
+        }
+      ],
+      "notes": [
+        "原官方 PDF 有 U+F8FF 字形／字碼問題，文字擷取3處；PDF第9頁「神秘花園」末字渲染亦異常。保留原檔，不自行修正卡名或規則，需與台灣官方卡圖／判例交叉確認。"
+      ],
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "floor-rules-1.32-landing",
+      "title": "寶可夢集換式卡牌遊戲 賽場規則官方附件入口",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/archives/9914/",
+      "retrievedAt": "2026-11-10T00:45:17.544482+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "9787a32689a0cc002de66449bfcb7c200d9f16c22ea061da25f991c134873b89",
+      "rawBytes": 110337,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\floor-rules-1.32-landing.html",
+      "textPath": "pages/floor-rules-1.32-landing.md",
+      "links": [
+        {
+          "title": "",
+          "url": "https://asia.pokemon-card.com/tw/archives/9914/"
+        },
+        {
+          "title": "Facebook",
+          "url": "http://www.facebook.com/share.php?u=https://asia.pokemon-card.com/tw/archives/9914/"
+        },
+        {
+          "title": "擴充包「波導探求者」將於12月4日（五）發售！ Product",
+          "url": "https://asia.pokemon-card.com/tw/archives/13597/"
+        },
+        {
+          "title": "第十三回資格認證測驗開始報名! Other",
+          "url": "https://asia.pokemon-card.com/tw/archives/13578/"
+        },
+        {
+          "title": "高級球聯盟賽 賽季2 報名開始！ Event",
+          "url": "https://asia.pokemon-card.com/tw/archives/13516/"
+        },
+        {
+          "title": "MORE",
+          "url": "https://asia.pokemon-card.com/tw/info/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "32d9a8e491896f78fc734c85f9e8def7b2b52a462fbede6afa44b3849d8dce69",
+      "attachmentPdfUrl": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2025/08/TC_PTCG_FloorRulesVer1_32_re.pdf",
+      "attachmentDiscovery": "原始 HTML 的 PDF 路徑（附件頁 main 可能不顯示下載連結）；原始 HTML 已另存本機證據。",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "floor-rules-1.32",
+      "title": "寶可夢集換式卡牌遊戲 賽場規則",
+      "region": "TW",
+      "landingUrl": "https://asia.pokemon-card.com/tw/archives/9914/",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2025/08/TC_PTCG_FloorRulesVer1_32_re.pdf",
+      "resolvedUrl": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2025/08/TC_PTCG_FloorRulesVer1_32_re.pdf",
+      "retrievedAt": "2026-11-10T00:45:19.134508+00:00",
+      "version": "Asia-1.32",
+      "officialPageUpdated": "2025-08-21",
+      "versionDateNote": "官網頁面更新日與 PDF 內文版本分開記錄；不以 URL 上傳目錄當作生效日。",
+      "path": "pdf/floor-rules-1.32.pdf",
+      "textPath": "text/floor-rules-1.32.txt",
+      "bytes": 605679,
+      "sha256": "afcbd1d3c991bd883a813e5b2968c8f35ed270631ee8fdf165b60876325f411a",
+      "textSha256": "64cc8dd6db15a55630ca02757afb91c6c3cba6ed36283cfc7072f8e6810a9675",
+      "httpStatus": 200,
+      "contentType": "application/pdf",
+      "pages": 12,
+      "firstPageExcerpt": "寶可夢集換式卡牌遊戲\n賽場規則 Ver. Asia-\n1.3 2 \n最終更新⽇：2025 年 8⽉ 21 ⽇ \n \n \n \n \n序章 \n為了讓所有活動參與⼈員皆能享受寶可夢集換式卡牌遊戲對戰樂趣，故制定「寶可夢集換式\n卡牌遊戲賽場規則」，作為寶可夢集換式卡牌遊戲所有活動通⽤之規則。 \n請所有活動參與⼈員遵守此規則，⼀同完成⼀場成功的活動，在乎對戰勝敗的同時，",
+      "pdfMetadata": {
+        "/Title": "【TC】PTCG_FloorRulesVer1_32",
+        "/Producer": "macOS バージョン14.4.1（ビルド23E224） Quartz PDFContext",
+        "/Creator": "Word",
+        "/CreationDate": "D:20250822060821Z00'00'",
+        "/ModDate": "D:20250822060821Z00'00'"
+      },
+      "blankPagesVerifiedWithPyMuPDF": [],
+      "hongKongAlias": {
+        "landingUrl": "https://asia.pokemon-card.com/hk/archives/7210/",
+        "sourceUrl": "https://asia.pokemon-card.com/hk/wp-content/uploads/sites/3/2025/08/TC_PTCG_FloorRulesVer1_32_re.pdf",
+        "retrievedAt": "2026-11-10T00:48:16.635950+00:00",
+        "sha256": "afcbd1d3c991bd883a813e5b2968c8f35ed270631ee8fdf165b60876325f411a",
+        "bytes": 605679,
+        "identicalToTaiwan": true
+      },
+      "pdfStatedUpdatedDate": "2025-08-21",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "judge-penalty-1.3-landing",
+      "title": "裁判罰則處理規則官方附件入口",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/archives/11092/",
+      "retrievedAt": "2026-11-10T00:45:19.234088+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "55331038431de29f96575d9bb8840230c23f51495d95600ddc02fc312d8983a8",
+      "rawBytes": 110359,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\judge-penalty-1.3-landing.html",
+      "textPath": "pages/judge-penalty-1.3-landing.md",
+      "links": [
+        {
+          "title": "",
+          "url": "https://asia.pokemon-card.com/tw/archives/11092/"
+        },
+        {
+          "title": "Facebook",
+          "url": "http://www.facebook.com/share.php?u=https://asia.pokemon-card.com/tw/archives/11092/"
+        },
+        {
+          "title": "擴充包「波導探求者」將於12月4日（五）發售！ Product",
+          "url": "https://asia.pokemon-card.com/tw/archives/13597/"
+        },
+        {
+          "title": "第十三回資格認證測驗開始報名! Other",
+          "url": "https://asia.pokemon-card.com/tw/archives/13578/"
+        },
+        {
+          "title": "高級球聯盟賽 賽季2 報名開始！ Event",
+          "url": "https://asia.pokemon-card.com/tw/archives/13516/"
+        },
+        {
+          "title": "MORE",
+          "url": "https://asia.pokemon-card.com/tw/info/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "63fea7435a28a78bf5f4a70b2437861d608cb4d087387f99255414030ad21443",
+      "attachmentPdfUrl": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2026/10/【TC】penalty-guideline1.3.pdf",
+      "attachmentDiscovery": "原始 HTML 的 PDF 路徑（附件頁 main 可能不顯示下載連結）；原始 HTML 已另存本機證據。",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "judge-penalty-1.3",
+      "title": "裁判罰則處理規則",
+      "region": "TW",
+      "landingUrl": "https://asia.pokemon-card.com/tw/archives/11092/",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2026/10/【TC】penalty-guideline1.3.pdf",
+      "resolvedUrl": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2026/10/%E3%80%90TC%E3%80%91penalty-guideline1.3.pdf",
+      "retrievedAt": "2026-11-10T00:45:21.936196+00:00",
+      "version": "1.3",
+      "officialPageUpdated": "2026-10-08",
+      "versionDateNote": "官網頁面更新日與 PDF 內文版本分開記錄；不以 URL 上傳目錄當作生效日。",
+      "path": "pdf/judge-penalty-1.3.pdf",
+      "textPath": "text/judge-penalty-1.3.txt",
+      "bytes": 531028,
+      "sha256": "97eea7b268a35dc62ba87033bd7cf66e0b4049df3f1339fdb7d46704ceec742c",
+      "textSha256": "1dfe8a84661eb0f9080bd01ff92bc12678b4eae8061ec5c8bad3882fc8a56121",
+      "httpStatus": 200,
+      "contentType": "application/pdf",
+      "pages": 33,
+      "firstPageExcerpt": "寶可夢集換式卡牌遊戲 \n裁判罰則處理規則 \nVer.1.3 \n最終更新日：2026年09月04日 \n \n \n「裁判罰則處理規則」的作用 \n本「寶可夢集換式卡牌遊戲 裁判罰則處理規則」（以下稱「罰則處理規則」）是在作為競技的寶可夢集換式卡牌遊戲賽事運營\n中，發生違規或不正當行為時，為了適用合適的罰則，並指示其對應方針的資料。 \n本罰則處理規則的目的是為了讓參加",
+      "pdfMetadata": {
+        "/ModDate": "D:20260930102420Z00'00'",
+        "/Producer": "macOS バージョン26.7（ビルド25G229） Quartz PDFContext",
+        "/Creator": "Word",
+        "/Title": "【TC】penalty-guideline1.3",
+        "/CreationDate": "D:20260930102420Z00'00'"
+      },
+      "blankPagesVerifiedWithPyMuPDF": [
+        31
+      ],
+      "hongKongAlias": {
+        "landingUrl": "https://asia.pokemon-card.com/hk/archives/7948/",
+        "sourceUrl": "https://asia.pokemon-card.com/hk/wp-content/uploads/sites/3/2026/10/【TC】penalty-guideline1.3.pdf",
+        "retrievedAt": "2026-11-10T00:48:18.774833+00:00",
+        "sha256": "97eea7b268a35dc62ba87033bd7cf66e0b4049df3f1339fdb7d46704ceec742c",
+        "bytes": 531028,
+        "identicalToTaiwan": true
+      },
+      "pdfStatedUpdatedDate": "2026-09-04",
+      "notes": [
+        "PDF 原檔第31頁為空白；pypdf/PyMuPDF 皆無文字，PyMuPDF無影像或繪圖，渲染亦為空白，予以保留。",
+        "PDF 內文最終更新日2026-09-04；下載入口更新日2026-10-08，兩者不同。"
+      ],
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "attack-flow",
+      "title": "招式的處理順序",
+      "region": "TW",
+      "landingUrl": "https://asia.pokemon-card.com/tw/rules/detail/",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2021/09/attack_flow_chart_TC.pdf",
+      "resolvedUrl": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2021/09/attack_flow_chart_TC.pdf",
+      "retrievedAt": "2026-11-10T00:45:22.143043+00:00",
+      "version": null,
+      "officialPageUpdated": null,
+      "versionDateNote": "官網頁面更新日與 PDF 內文版本分開記錄；不以 URL 上傳目錄當作生效日。",
+      "path": "pdf/attack-flow.pdf",
+      "textPath": "text/attack-flow.txt",
+      "bytes": 148034,
+      "sha256": "53dc5b4afbe2e91c7666345a033ee4a0a987faf96bdf57c268af5764083098fe",
+      "textSha256": "e44feb8f6ed614478818d01e70df208007f85c202512836882ad511bab05029c",
+      "httpStatus": 200,
+      "contentType": "application/pdf",
+      "pages": 2,
+      "firstPageExcerpt": "招式使用流程\n①確認招式是否能夠使用\n・是否附有使用招式所需的能量卡？\n・是否受到「在下個對手的回合，受到這個招式的寶可夢無法使用\n招式。」等效果\n↓\n②宣言 宣言在戰鬥場上的寶可夢的招式\n↓\n※1 「混亂」等硬幣判定\n↓\n③選擇使用對象 若為選擇使用對象的招式，需選擇對對手場上哪隻寶可夢使用\n↓\n④（效果） （僅限「在造成傷害前」等指定的情況下，在造成傷害",
+      "pdfMetadata": {
+        "/Author": "takashima",
+        "/Company": "株式会社ポケモン",
+        "/CreationDate": "D:20210224170653+09'00'",
+        "/Creator": "Excel 用 Acrobat PDFMaker 21",
+        "/ModDate": "D:20210301135216+09'00'",
+        "/Producer": "Adobe PDF Library 21.1.170",
+        "/Title": "Attack Resolution Chart TC"
+      },
+      "blankPagesVerifiedWithPyMuPDF": [],
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "penalty-chart-240111",
+      "title": "罰則速查表",
+      "region": "TW",
+      "landingUrl": "https://asia.pokemon-card.com/tw/rules/detail/",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2023/12/TW_PenltyChart_240111.pdf",
+      "resolvedUrl": "https://asia.pokemon-card.com/tw/wp-content/uploads/sites/2/2023/12/TW_PenltyChart_240111.pdf",
+      "retrievedAt": "2026-11-10T00:45:22.358352+00:00",
+      "version": null,
+      "officialPageUpdated": null,
+      "versionDateNote": "官網頁面更新日與 PDF 內文版本分開記錄；不以 URL 上傳目錄當作生效日。",
+      "path": "pdf/penalty-chart-240111.pdf",
+      "textPath": "text/penalty-chart-240111.txt",
+      "bytes": 157453,
+      "sha256": "210d20b5941207e8bb98b42b3b3359e22f61880e84a7d6903d047bdaa7968a02",
+      "textSha256": "953f7fd7edd7f2d8e456279c1a78e320e6d6a88d418356bc56aec66a39fdb706",
+      "httpStatus": 200,
+      "contentType": "application/pdf",
+      "pages": 1,
+      "firstPageExcerpt": "株式會社寶可夢\n2024年1月11日\n順序上的錯誤\n・洗牌失誤，洗對手牌組時洗牌失敗，不小心看到1張牌。\n・・獎賞卡多拿了，但尚未混入手牌。或還未確認獎賞卡的內容。\n・忘記放置獎賞卡便開始對戰。對戰一開始便發現錯誤，尚未從牌庫抽卡。\n    (對手亦未發現錯誤而進行對戰時，亦施予注意)\n・忘記拿獎賞卡，在對手的回合開始時，才發現錯誤。\n(對手亦未發現錯誤而進",
+      "pdfMetadata": {
+        "/Title": "CN_PenltyChart_231201",
+        "/Producer": "macOS バージョン11.1（ビルド20C69） Quartz PDFContext",
+        "/Creator": "Excel",
+        "/CreationDate": "D:20231219101059Z00'00'",
+        "/ModDate": "D:20231219101059Z00'00'"
+      },
+      "blankPagesVerifiedWithPyMuPDF": [],
+      "pdfStatedUpdatedDate": "2024-01-11",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "basic-rules-1",
+      "title": "官方線上玩法教學 1",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/",
+      "retrievedAt": "2026-11-10T00:45:22.469906+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "678c21401c101eced53b57db8bca1c77f51f3515c4652d659882e40e6353c3d1",
+      "rawBytes": 124594,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\basic-rules-1.html",
+      "textPath": "pages/basic-rules-1.md",
+      "links": [
+        {
+          "title": "玩法",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "卡牌種類和卡面介紹",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "對戰所需物品",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "場地的名稱",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "對戰準備事項",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "寶可夢的「昏厥」與對戰的勝敗",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "寶可夢檢查和特殊狀態",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        },
+        {
+          "title": "寶可夢卡",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/#card-menu1"
+        },
+        {
+          "title": "能量卡",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/#card-menu2"
+        },
+        {
+          "title": "訓練家卡",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/#card-menu3"
+        },
+        {
+          "title": "特殊卡牌",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/#card-menu4"
+        },
+        {
+          "title": "關於「弱點和抵抗力」請見此",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/#card-menu4"
+        },
+        {
+          "title": "NEXT",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "玩法規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "賽制",
+          "url": "https://asia.pokemon-card.com/tw/rules/regulation/"
+        },
+        {
+          "title": "詳細規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/detail/"
+        },
+        {
+          "title": "玩法",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "卡牌種類和卡面介紹",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "對戰所需物品",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "場地的名稱",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "對戰準備事項",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "寶可夢的「昏厥」與對戰的勝敗",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "寶可夢檢查和特殊狀態",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "1379f370b45d662253c22c0a1a3411a1c85a701fec0f96aa834067976f1566ab",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "basic-rules-2",
+      "title": "官方線上玩法教學 2",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/",
+      "retrievedAt": "2026-11-10T00:45:23.082292+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "57aef1c0d3233f7ae5bb87dd12e28dd6bc2031c698cb897d14c0658a33507cf1",
+      "rawBytes": 112792,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\basic-rules-2.html",
+      "textPath": "pages/basic-rules-2.md",
+      "links": [
+        {
+          "title": "玩法",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "卡牌種類和卡面介紹",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "對戰所需物品",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "場地的名稱",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "對戰準備事項",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "寶可夢的「昏厥」與對戰的勝敗",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "寶可夢檢查和特殊狀態",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        },
+        {
+          "title": "牌組的構築規則請見此",
+          "url": "https://asia.pokemon-card.com/tw/deck/first-deck/"
+        },
+        {
+          "title": "PREVIOUS",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "NEXT",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "玩法規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "賽制",
+          "url": "https://asia.pokemon-card.com/tw/rules/regulation/"
+        },
+        {
+          "title": "詳細規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/detail/"
+        },
+        {
+          "title": "玩法",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "卡牌種類和卡面介紹",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "對戰所需物品",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "場地的名稱",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "對戰準備事項",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "寶可夢的「昏厥」與對戰的勝敗",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "寶可夢檢查和特殊狀態",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "411c57525540f55082225f382309465a1a49f8338f0f623132d542ffc8f76d17",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "basic-rules-3",
+      "title": "官方線上玩法教學 3",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/",
+      "retrievedAt": "2026-11-10T00:45:23.687703+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "159b0264f5ed819b1ec7b1c02a64bce6634215a3f5671b3182892d53c1b23596",
+      "rawBytes": 113262,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\basic-rules-3.html",
+      "textPath": "pages/basic-rules-3.md",
+      "links": [
+        {
+          "title": "玩法",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "卡牌種類和卡面介紹",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "對戰所需物品",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "場地的名稱",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "對戰準備事項",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "寶可夢的「昏厥」與對戰的勝敗",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "寶可夢檢查和特殊狀態",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        },
+        {
+          "title": "PREVIOUS",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "NEXT",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "玩法規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "賽制",
+          "url": "https://asia.pokemon-card.com/tw/rules/regulation/"
+        },
+        {
+          "title": "詳細規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/detail/"
+        },
+        {
+          "title": "玩法",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "卡牌種類和卡面介紹",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "對戰所需物品",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "場地的名稱",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "對戰準備事項",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "寶可夢的「昏厥」與對戰的勝敗",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "寶可夢檢查和特殊狀態",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "81c07bc8be13a24a491ee906119418e872987722d734f12b54300995faec6159",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "basic-rules-4",
+      "title": "官方線上玩法教學 4",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/",
+      "retrievedAt": "2026-11-10T00:45:24.251117+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "295429c45a5e5b75986f9c939b39ba10e5de2012ed17b2d51c04b8e243e8a995",
+      "rawBytes": 115970,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\basic-rules-4.html",
+      "textPath": "pages/basic-rules-4.md",
+      "links": [
+        {
+          "title": "玩法",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "卡牌種類和卡面介紹",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "對戰所需物品",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "場地的名稱",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "對戰準備事項",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "寶可夢的「昏厥」與對戰的勝敗",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "寶可夢檢查和特殊狀態",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        },
+        {
+          "title": "PREVIOUS",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "NEXT",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "玩法規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "賽制",
+          "url": "https://asia.pokemon-card.com/tw/rules/regulation/"
+        },
+        {
+          "title": "詳細規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/detail/"
+        },
+        {
+          "title": "玩法",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "卡牌種類和卡面介紹",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "對戰所需物品",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "場地的名稱",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "對戰準備事項",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "寶可夢的「昏厥」與對戰的勝敗",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "寶可夢檢查和特殊狀態",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "0ea388b6a1a80fc4f73fc4664957320b44327685f127312a69ae59d2748ac4ed",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "basic-rules-5",
+      "title": "官方線上玩法教學 5",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/",
+      "retrievedAt": "2026-11-10T00:45:24.835514+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "5f410174d151a20290aabc2a166936cc21c590de62d346a0acdbceac2641b3ed",
+      "rawBytes": 121339,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\basic-rules-5.html",
+      "textPath": "pages/basic-rules-5.md",
+      "links": [
+        {
+          "title": "玩法",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "卡牌種類和卡面介紹",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "對戰所需物品",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "場地的名稱",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "對戰準備事項",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "寶可夢的「昏厥」與對戰的勝敗",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "寶可夢檢查和特殊狀態",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/#card-menu1"
+        },
+        {
+          "title": "自己的回合 進行的動作",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/#card-menu2"
+        },
+        {
+          "title": "招式的使用方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/#card-menu3"
+        },
+        {
+          "title": "弱點和抵抗力",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/#card-menu4"
+        },
+        {
+          "title": "計算傷害的方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/#card-menu5"
+        },
+        {
+          "title": "關於對戰的勝負",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/#card-menu2"
+        },
+        {
+          "title": "關於寶可夢檢查",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/#card-menu1"
+        },
+        {
+          "title": "關於使用招式所需的能量",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/#card-menu6"
+        },
+        {
+          "title": "關於能使用的張數",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/#card-menu3"
+        },
+        {
+          "title": "PREVIOUS",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "NEXT",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "玩法規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "賽制",
+          "url": "https://asia.pokemon-card.com/tw/rules/regulation/"
+        },
+        {
+          "title": "詳細規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/detail/"
+        },
+        {
+          "title": "玩法",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "卡牌種類和卡面介紹",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "對戰所需物品",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "場地的名稱",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "對戰準備事項",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "寶可夢的「昏厥」與對戰的勝敗",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "寶可夢檢查和特殊狀態",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "76a8a0b961e728b8ebfefc621bba299c8970872b4fdbfd323178ab107a25578a",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "basic-rules-6",
+      "title": "官方線上玩法教學 6",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/",
+      "retrievedAt": "2026-11-10T00:45:25.396057+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "0f2154c4e6833cc9848c58a180e806537c380310a7ec37feb4b4c441067de0ae",
+      "rawBytes": 112612,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\basic-rules-6.html",
+      "textPath": "pages/basic-rules-6.md",
+      "links": [
+        {
+          "title": "玩法",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "卡牌種類和卡面介紹",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "對戰所需物品",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "場地的名稱",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "對戰準備事項",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "寶可夢的「昏厥」與對戰的勝敗",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "寶可夢檢查和特殊狀態",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        },
+        {
+          "title": "PREVIOUS",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "NEXT",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        },
+        {
+          "title": "玩法規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "賽制",
+          "url": "https://asia.pokemon-card.com/tw/rules/regulation/"
+        },
+        {
+          "title": "詳細規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/detail/"
+        },
+        {
+          "title": "玩法",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "卡牌種類和卡面介紹",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "對戰所需物品",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "場地的名稱",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "對戰準備事項",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "寶可夢的「昏厥」與對戰的勝敗",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "寶可夢檢查和特殊狀態",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "1d2fa2c1094e4eb1e68b4562c2058674b0264ce870d04e08f3b373cec5882498",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "basic-rules-7",
+      "title": "官方線上玩法教學 7",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/",
+      "retrievedAt": "2026-11-10T00:45:25.990717+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "d13970a542311d1fb6290f8598a962453ce954945dc8f748a472d6c15bbe43ca",
+      "rawBytes": 118334,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\basic-rules-7.html",
+      "textPath": "pages/basic-rules-7.md",
+      "links": [
+        {
+          "title": "玩法",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "卡牌種類和卡面介紹",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "對戰所需物品",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "場地的名稱",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "對戰準備事項",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "寶可夢的「昏厥」與對戰的勝敗",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "寶可夢檢查和特殊狀態",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        },
+        {
+          "title": "PREVIOUS",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "玩法規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "賽制",
+          "url": "https://asia.pokemon-card.com/tw/rules/regulation/"
+        },
+        {
+          "title": "詳細規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/detail/"
+        },
+        {
+          "title": "玩法",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "卡牌種類和卡面介紹",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules01/"
+        },
+        {
+          "title": "對戰所需物品",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules02/"
+        },
+        {
+          "title": "場地的名稱",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules03/"
+        },
+        {
+          "title": "對戰準備事項",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules04/"
+        },
+        {
+          "title": "對戰方式",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules05/"
+        },
+        {
+          "title": "寶可夢的「昏厥」與對戰的勝敗",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules06/"
+        },
+        {
+          "title": "寶可夢檢查和特殊狀態",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/basic_rules07/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "f8fffa644eb28a28457e25f3f98974f246bf0d9b4552249ff29995a953efc2a2",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "format-tw",
+      "title": "台灣官方賽制說明",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/rules/regulation/",
+      "retrievedAt": "2026-11-10T00:45:26.544588+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "d470f48988a273a128441afe6c2fa3099ee85f5a02195a25853c02a724a670a2",
+      "rawBytes": 111480,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\format-tw.html",
+      "textPath": "pages/format-tw.md",
+      "links": [
+        {
+          "title": "玩法規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/howtoplay/"
+        },
+        {
+          "title": "賽制",
+          "url": "https://asia.pokemon-card.com/tw/rules/regulation/"
+        },
+        {
+          "title": "詳細規則",
+          "url": "https://asia.pokemon-card.com/tw/rules/detail/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "92f704db1320626aa83e837aec37eba8089023df4f760ed98933cb3c30072e48",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "sv-starter",
+      "title": "朱&紫起始組合ex商品與紙本說明書資訊",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/archive/special/card/sva/",
+      "retrievedAt": "2026-11-10T00:45:26.623602+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "cf5aea41482dfc0ca9b6ea4a373adc80d457df65a884fdb1d840b55b9ec2f0af",
+      "rawBytes": 37574,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\sv-starter.html",
+      "textPath": "pages/sv-starter.md",
+      "links": [
+        {
+          "title": "",
+          "url": "https://asia.pokemon-card.com/tw/archive/special/card/sva/#modal-about"
+        },
+        {
+          "title": "",
+          "url": "https://asia.pokemon-card.com/tw/about/"
+        },
+        {
+          "title": "",
+          "url": "https://asia.pokemon-card.com/tw/archive/special/card/sva/#modal-deck1"
+        },
+        {
+          "title": "",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=SVAM"
+        },
+        {
+          "title": "",
+          "url": "https://asia.pokemon-card.com/tw/archive/special/card/sva/#modal-deck2"
+        },
+        {
+          "title": "",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=SVAL"
+        },
+        {
+          "title": "",
+          "url": "https://asia.pokemon-card.com/tw/archive/special/card/sva/#modal-deck3"
+        },
+        {
+          "title": "",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=SVAW"
+        },
+        {
+          "title": "",
+          "url": "https://asia.pokemon-card.com/tw/archive/special/card/sv1/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "13207f87a2322b16bdda4edb167702c60acfe45a6d2f960996bfc65a1757876b",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "mega-starter-hk",
+      "title": "超級進化挑戰牌組與紙本說明書資訊",
+      "region": "HK",
+      "sourceUrl": "https://asia.pokemon-card.com/hk/archives/8009/",
+      "retrievedAt": "2026-11-10T00:45:26.845996+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html",
+      "rawSha256": "b6d3843a3a04f79ca9a9a0ad9353ed238af6792358aec2576a4212c69c2a090a",
+      "rawBytes": 152888,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\mega-starter-hk.html",
+      "textPath": "pages/mega-starter-hk.md",
+      "links": [
+        {
+          "title": "「挑戰牌組 超級耿鬼 ex 」「挑戰牌組 超級蒂安希 ex 」9月19日（五）發售！",
+          "url": "https://asia.pokemon-card.com/hk/archives/8009/"
+        },
+        {
+          "title": "挑戰牌組 超級耿鬼 ex 卡牌清單 挑戰牌組 超級蒂安希 ex 卡牌清單",
+          "url": "https://asia.pokemon-card.com/hk/archives/8009/#cardlist"
+        },
+        {
+          "title": "挑戰牌組 超級耿鬼 ex 卡牌清單",
+          "url": "https://asia.pokemon-card.com/hk/card-search/list/?expansionCodes=MBG"
+        },
+        {
+          "title": "挑戰牌組 超級蒂安希 ex 卡牌清單",
+          "url": "https://asia.pokemon-card.com/hk/card-search/list/?expansionCodes=MBD"
+        },
+        {
+          "title": "「挑戰牌組 超級耿鬼 ex 」",
+          "url": "https://asia.pokemon-card.com/hk/archives/8009/#s1"
+        },
+        {
+          "title": "「挑戰牌組 超級蒂安希 ex 」",
+          "url": "https://asia.pokemon-card.com/hk/archives/8009/#s2"
+        },
+        {
+          "title": "Facebook",
+          "url": "http://www.facebook.com/share.php?u=https://asia.pokemon-card.com/hk/archives/8009/"
+        },
+        {
+          "title": "擴充包「波導探求者」將於12月4日（五）發售！ Product",
+          "url": "https://asia.pokemon-card.com/hk/archives/9925/"
+        },
+        {
+          "title": "第十三回資格認證測驗開始報名! Other",
+          "url": "https://asia.pokemon-card.com/hk/archives/9918/"
+        },
+        {
+          "title": "高級球聯盟賽 賽季2 報名開始！ Event",
+          "url": "https://asia.pokemon-card.com/hk/archives/9893/"
+        },
+        {
+          "title": "MORE",
+          "url": "https://asia.pokemon-card.com/hk/info/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "6dbae66726c8c1fc5ef8296a53816a5042262c69928d97328af11b98a053ae5a",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    },
+    {
+      "id": "card-products-tw",
+      "title": "台灣官方卡牌檢索與商品清單",
+      "region": "TW",
+      "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/",
+      "retrievedAt": "2026-11-10T00:45:27.138243+00:00",
+      "httpStatus": 200,
+      "contentType": "text/html; charset=UTF-8",
+      "rawSha256": "46c22777751848bd9f3636a5bfd09046f065dcee03c6ef53e7acbd3f18b47bf5",
+      "rawBytes": 126968,
+      "rawLocalFile": "E:\\ptcg-tw-sim-local\\official-rules-20261110\\raw\\card-products-tw.html",
+      "textPath": "pages/card-products-tw.md",
+      "links": [
+        {
+          "title": "超級進化 頂級牌組組合 「太陽伊布・月亮伊布」 發售日 09-16-2026",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=MF"
+        },
+        {
+          "title": "超級進化 擴充包「30th CELEBRATION」 發售日 09-16-2026",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=M6a"
+        },
+        {
+          "title": "超級進化 擴充包「綠寶石風暴」 發售日 08-07-2026",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=M6"
+        },
+        {
+          "title": "超級進化 戰術牌組「超級噴火龍Xex」 發售日 07-17-2026",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=MTL"
+        },
+        {
+          "title": "超級進化 戰術牌組「超級沙奈朵ex」 發售日 07-17-2026",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=MTS"
+        },
+        {
+          "title": "超級進化 戰術牌組「超級巨牙鯊ex」 發售日 07-17-2026",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=MTH"
+        },
+        {
+          "title": "超級進化 戰術牌組「超級快龍ex」 發售日 07-17-2026",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=MTK"
+        },
+        {
+          "title": "超級進化 擴充包「深淵之瞳」 發售日 06-05-2026",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=M5"
+        },
+        {
+          "title": "超級進化 擴充包「忍者飛旋」 發售日 03-27-2026",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=M4"
+        },
+        {
+          "title": "超級進化 New Trainer Journey 發售日 02-26-2026",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=MJ"
+        },
+        {
+          "title": "超級進化 擴充包「虛無歸零」 發售日 02-06-2026",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=M3"
+        },
+        {
+          "title": "超級進化 初階牌組 100對戰收藏 發售日 01-16-2026",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=MC"
+        },
+        {
+          "title": "超級進化 高級擴充包「超級進化夢想ex」 發售日 12-05-2025",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=M2a"
+        },
+        {
+          "title": "超級進化 擴充包「烈獄狂火X」 發售日 10-09-2025",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=M2"
+        },
+        {
+          "title": "超級進化 挑戰牌組「超級耿鬼ex」 發售日 09-19-2025",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=MBG"
+        },
+        {
+          "title": "超級進化 挑戰牌組 「超級蒂安希ex」 發售日 09-19-2025",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=MBD"
+        },
+        {
+          "title": "超級進化 擴充包「超級勇氣」 發售日 08-15-2025",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=M1L"
+        },
+        {
+          "title": "超級進化 擴充包「超級交響樂」 發售日 08-15-2025",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=M1S"
+        },
+        {
+          "title": "超級進化 特典卡 超級進化 發售日 08-07-2025",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=M-P"
+        },
+        {
+          "title": "朱＆紫 ex初階牌組 皮卡丘 發售日 07-18-2025",
+          "url": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=SVQP"
+        },
+        {
+          "title": "2",
+          "url": "https://asia.pokemon-card.com/tw/card-search/?pageNo=2"
+        },
+        {
+          "title": "3",
+          "url": "https://asia.pokemon-card.com/tw/card-search/?pageNo=3"
+        },
+        {
+          "title": "4",
+          "url": "https://asia.pokemon-card.com/tw/card-search/?pageNo=4"
+        },
+        {
+          "title": "5",
+          "url": "https://asia.pokemon-card.com/tw/card-search/?pageNo=5"
+        },
+        {
+          "title": "Next",
+          "url": "https://asia.pokemon-card.com/tw/card-search/?pageNo=2"
+        },
+        {
+          "title": "TOP",
+          "url": "https://asia.pokemon-card.com/tw/"
+        }
+      ],
+      "extraction": "官方 HTML 的 main 文字與連結；非原版紙本說明書，不含影片與圖片像素。",
+      "textSha256": "66365774136597508a44a503cf66186fc66e0e59e780238b02883d18d43e2343",
+      "derivedTextFormat": "UTF-8／LF；文字與Markdown移除行尾ASCII空白。原始PDF／HTML不修改。"
+    }
+  ],
+  "legacyPdf": {
+    "path": "PTCG RULES/進階玩家規則教學⼿冊.pdf",
+    "sha256": "cc84e73778c05875e39fea74d372869543bad3e2850dbbc30cb241ed22e24b2a",
+    "pages": 61,
+    "firstPageExcerpt": "進階玩家規則教學⼿冊 ver 3.4 \n \n為了讓所有寶可夢卡牌遊戲玩家的遊戲過程兼具公平性及娛樂性，故編寫此教學⼿冊，訂定標\n準規則，以供必要時之參考，冀雙⽅玩家在對戰過程彼此理解，有禮貌且愉快地進⾏遊戲。 \n \n※本⽂中的底線，是「I 遊戲說明書的補充」與「II 卡牌說明⽂字」當中的重點項⺫。請依實際\n需求參照各相關章節。 \n \nI 遊戲說明書的補充 \nA 寶可夢卡 \nA-01招式 A-02特",
+    "note": "原有 PDF 保留；未知原始下載日期與來源 URL，不冒填；以內文核對版本。"
+  },
+  "requestedScope": [
+    {
+      "category": "超級進化系列卡牌",
+      "status": "reference-text-and-catalog",
+      "data": [
+        "card-catalog.json",
+        "card-coverage.json",
+        "additional-card-texts.json",
+        "static/cards（由coverage指向）"
+      ],
+      "limits": "官網M*可檢索範圍；文字資料與圖片URL。未重抓現有卡表、未下載所有圖片像素或逐卡核卡圖。"
+    },
+    {
+      "category": "超級進化系列遊戲說明書",
+      "status": "pending-original",
+      "reason": "官方商品載明紙本玩法說明書；本次未找到可驗證的官方公開原檔下載。",
+      "supplement": "pages/basic-rules-1.md～7.md是官方線上玩法，不能視為同一份系列說明書。"
+    },
+    {
+      "category": "朱&紫系列卡牌",
+      "status": "reference-text-and-catalog",
+      "data": [
+        "card-catalog.json",
+        "card-coverage.json",
+        "additional-card-texts.json",
+        "static/cards（由coverage指向）"
+      ],
+      "limits": "官網SV*可檢索範圍；歷史卡只供參考，不加入H/I/J遊戲卡池。圖片像素未全部下載或核對。"
+    },
+    {
+      "category": "朱&紫系列遊戲說明書",
+      "status": "pending-original",
+      "reason": "官方商品載明紙本遊戲說明書；本次未找到可驗證的官方公開原檔下載。",
+      "supplement": "pages/basic-rules-1.md～7.md不可冒充系列原版說明書。"
+    },
+    {
+      "category": "進階玩家規則教學手冊",
+      "status": "original-pdf-archived",
+      "documentId": "advanced-manual-3.4.1"
+    },
+    {
+      "category": "寶可夢卡牌遊戲賽場規則",
+      "status": "original-pdf-archived",
+      "documentId": "floor-rules-1.32"
+    }
+  ],
+  "requestedScopeComplete": false,
+  "runtimeIntegration": "無。資料不由前端或伺服器載入；未變更引擎或玩家卡池。"
+}
