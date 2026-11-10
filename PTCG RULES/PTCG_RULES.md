@@ -3514,7 +3514,3 @@
 - 標準賽制 Q&A：https://asia.pokemon-card.com/tw/rules/search/?regulation=1
 - 全量 Q&A（含開放賽制）：https://asia.pokemon-card.com/tw/rules/search/
 - 卡牌資料庫：https://asia.pokemon-card.com/tw/card-search
-
-## 2026-11-10 官方原檔封存入口（不變更以上既有規則與 Q&A 行號）
-
-最新取得的官方 PDF、版本、來源、卡牌索引與缺口，請先讀 [規則資料庫入口](README.md) 及 [2026-11-10 封存說明](official/2026-11-10/README.md)。其中進階手冊已另存 3.4.1，原有 3.4 保留；兩份系列原版遊戲說明書仍待補。本次只建檔，未逐條驗證或修改引擎行為。
