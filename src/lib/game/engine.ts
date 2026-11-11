@@ -2278,6 +2278,7 @@ export function markHealsByDamageDecrease(
   prev: GameState,
   next: GameState,
   pool?: Map<string, Card>,   // v6.077：傳說的海溝需要查場上競技場卡名
+  checkupStep = false, // v6.637：恢復當下的實際快照，不再疊加較早的中毒／灼傷。
 ): GameState {
   // v6.077 M6 傳說的海溝 —「雙方的所有寶可夢恢復HP時，恢復的HP改為2倍。」
   //   ⭐ 為何接在這裡：全站 heal 站點分散 18+ 處（healResolver／engine inline／各卡 effect），
@@ -2309,7 +2310,7 @@ export function markHealsByDamageDecrease(
   //   ⚠ 收斂理由：全站 heal 站點 18+ 處，本函式是 applyAction **唯一**的 heal 偵測出口；
   //     在出口把基準線修正一次 ＝ 一處涵蓋全部，不必在每個 heal 站點各補一次。
   //   ⚠ 只疊「這個 action 內」的量：_v6369CheckupDmgUp 由 applyActionImpl 每次 action 結束即清除。
-  for (const [_iid369, _up369] of Object.entries(next._v6369CheckupDmgUp ?? {})) {
+  for (const [_iid369, _up369] of Object.entries(checkupStep ? {} : (next._v6369CheckupDmgUp ?? {}))) {
     const _b369 = prevDamage.get(_iid369);
     if (_b369 !== undefined && _up369 > 0) prevDamage.set(_iid369, _b369 + _up369);
   }
@@ -2329,6 +2330,15 @@ export function markHealsByDamageDecrease(
     let pChanged = false;
 
     const checkOne = (c: CardInstance): CardInstance => {
+      // >>> v6637-heal-once
+      if (!checkupStep && next._checkupHealsHandled?.[c.iid] !== undefined) {
+        if (next._checkupHealsHandled[c.iid] && !c.healedThisTurn) {
+          pChanged = true;
+          return { ...c, healedThisTurn: true };
+        }
+        return c;
+      }
+      // <<< v6637-heal-once
       const prevDmg = prevDamage.get(c.iid);
       if (prevDmg === undefined) return c;  // 新進場（換場/進化新 iid）→ 不算 heal
       const newDmg = c.damage ?? 0;
@@ -4138,6 +4148,10 @@ function sanityKOSweep(
   attackerIdx: 0 | 1,
   pool: Map<string, Card>,
 ): GameState {
+  // >>> v6637-checkup-sweep-hold
+  // 檢查中傷害可以暫達 HP；必須等固定狀態區及其他效果全部結束，不能由保險掃描提前移除。
+  if (state.pokemonCheckup) return state;
+  // <<< v6637-checkup-sweep-hold
   // >>> v6355-ko-after-prize-drain
   // ⭐⭐⭐ v6.355【耿鬼ex｜死亡宣告】的**唯一** drain 點。
   //   sanityKOSweep 是每一條 action 的 KO 收斂點（USE_ATTACK 末端／RESOLVE_SELECTION 末端／
@@ -4404,6 +4418,240 @@ function tremorPunchTrainerGate(
   };
 }
 // <<< v6356-tremor-punch-gate
+// >>> v6637-checkup-pipeline
+type CheckupStep = NonNullable<GameState['pokemonCheckup']>['remaining'][number];
+
+/** 所有檢查效果完成前，寶可夢仍在場上；固定特殊狀態區不可插入其他效果（進階規則 F）。 */
+function runPokemonCheckup(state: GameState, pool: Map<string, Card>, selected?: string): GameState {
+  const endingIdx = state.pokemonCheckup?.endingIdx ?? state.activePlayerIndex;
+  const chooser = (1 - endingIdx) as 0 | 1;
+  const field = (s: GameState, owner: 0 | 1) => [
+    ...(s.players[owner].active ? [{ inst: s.players[owner].active!, loc: 'active' as const }] : []),
+    ...s.players[owner].bench.map(inst => ({ inst, loc: 'bench' as const })),
+  ];
+  const effective = (s: GameState, owner: 0 | 1, inst: CardInstance, loc: 'active' | 'bench', name: string) => {
+    const card = pool.get(inst.cardId);
+    return !!card?.abilities?.some(a => a.name === name)
+      && isAbilityHolderEffective(s, inst, card, owner, name, loc, pool);
+  };
+  const initial: CheckupStep[] = [{ id: 'status', kind: 'status', ownerIdx: endingIdx }];
+  if (!state.pokemonCheckup) {
+    for (const ownerIdx of [0, 1] as const) {
+      for (const { inst, loc } of field(state, ownerIdx)) {
+        if (effective(state, ownerIdx, inst, loc, '冰冷之帳')) {
+          initial.push({ id: `frost:${inst.iid}`, kind: 'frost', ownerIdx });
+        }
+      }
+      if (hasRocketTyranitarSandstorm(state, ownerIdx, pool)) {
+        initial.push({ id: `sand:${ownerIdx}`, kind: 'sand', ownerIdx });
+      }
+    }
+    // 沒有任何檢查效果的常見盤面不建立續接／傷害／昏厥快照；照常交回原回合收尾。
+    const statuses = ['poisoned', 'burned', 'asleep', 'paralyzed'];
+    if (initial.length === 1 && state.players.every(p => !p.active
+        || ![p.active.status, p.active.secondaryStatus, p.active.tertiaryStatus].some(s => s && statuses.includes(s)))) {
+      return { ...state, endTurnSkipCheckup: true, endTurnCheckupAbilitiesDone: true };
+    }
+  }
+  let remaining = [...(state.pokemonCheckup?.remaining ?? initial)];
+  let causes = { ...(state.pokemonCheckup?.causes ?? {}) };
+  state = { ...state, turnPhase: 'end', pokemonCheckup: { endingIdx, remaining, causes } };
+  const damageFor = (step: CheckupStep, s: GameState, owner: 0 | 1, inst: CardInstance, loc: 'active' | 'bench'): number => {
+    if (step.kind === 'status') return 0;
+    const card = pool.get(inst.cardId);
+    if (step.kind === 'sand' && (owner === step.ownerIdx || !isBasicPokemonOnField(inst, card))) return 0;
+    if (step.kind === 'frost' && (card?.name.trim() === '雪妖女'
+        || !hasAnyEffectiveAbility(s, inst, card, owner, loc, pool))) return 0;
+    if (owner !== step.ownerIdx) {
+      // 自家冰冷之帳照放；對手的指示物一律走中央免疫與備戰保護判準。
+      if (oppAbilityEffectBlockReason(s, step.ownerIdx, inst, pool, true) !== null) return 0;
+      if (loc === 'bench' && s.activeStadium && BENCH_PROTECTION_STADIUMS.has(pool.get(s.activeStadium.cardId)?.name ?? '')) return 0;
+      if (step.kind === 'sand' && canApplyEffectToTarget(s, step.ownerIdx, inst, card, 'ability-effect', pool, { isBench: loc === 'bench' }).blocked) return 0;
+    }
+    return step.kind === 'frost' ? 10 : 20;
+  };
+  const putDamage = (owner: 0 | 1, iid: string, amount: number, cause: string) => {
+    const ps = [...state.players] as [PlayerState, PlayerState];
+    const pl = { ...ps[owner] };
+    const apply = (c: CardInstance) => c.iid === iid ? { ...c, damage: c.damage + amount } : c;
+    pl.active = pl.active ? apply(pl.active) : null;
+    pl.bench = pl.bench.map(apply);
+    ps[owner] = pl;
+    causes = { ...causes, [iid]: cause };
+    state = { ...state, players: ps };
+  };
+  const hasStatus = (c: CardInstance | null, status: string) => !!c && [c.status, c.secondaryStatus, c.tertiaryStatus].includes(status as CardInstance['status']);
+  const clearStatus = (owner: 0 | 1, status: string) => {
+    const ps = [...state.players] as [PlayerState, PlayerState];
+    const inst = ps[owner].active;
+    if (!inst) return;
+    const c = { ...inst };
+    for (const key of ['status', 'secondaryStatus', 'tertiaryStatus'] as const) {
+      if (c[key] === status) delete c[key]; // status-slot-ok: 檢查階段按實際所在格解除指定狀態。
+    }
+    ps[owner] = { ...ps[owner], active: c };
+    state = { ...state, players: ps };
+  };
+  while (remaining.length > 0) {
+    // 不枚舉排列。現行 H/I/J 的檢查恢復效果只有好眠；僅有效恢復與可命中的傷害交錯時才詢問。
+    const orderMatters = remaining.some(s => s.kind === 'status') && ([0, 1] as const).some(owner => {
+      const inst = state.players[owner].active;
+      return !!inst && hasStatus(inst, 'asleep') && effective(state, owner, inst, 'active', '好眠')
+        && !isHealBlockedFor(state, owner, inst.iid, pool)
+        && remaining.some(step => damageFor(step, state, owner, inst, 'active') > 0);
+    });
+    if (orderMatters && !selected) {
+      // 相同效果／同一持有方的雪妖女可交換：選一隻先處理，保留其餘供選在狀態區前或後。
+      const seen = new Set<string>();
+      const options = remaining.filter(s => {
+        const key = `${s.kind}:${s.ownerIdx}`;
+        if (seen.has(key)) return false;
+        seen.add(key); return true;
+      }).map(s => ({ id: s.id, text: s.kind === 'status'
+        ? '先處理特殊狀態（中毒 → 灼傷 → 睡眠 → 麻痺）'
+        : `先處理${state.players[s.ownerIdx].name}的「${s.kind === 'frost' ? '冰冷之帳' : '揚沙'}」` }));
+      return withPending(addLog({ ...state, pokemonCheckup: { endingIdx, remaining, causes } },
+        '寶可夢檢查：效果先後可能影響恢復結果，由下一回合玩家選擇處理順序。', chooser), {
+        type: 'modal-choice', actorIdx: chooser, sourcePlayerIdx: chooser, minCount: 1, maxCount: 1,
+        effectKey: 'v6637-checkup-order', // effectkey-inline-ok: engine RESOLVE_SELECTION 專用續接。
+        params: { label: '寶可夢檢查：先處理哪一項？', options },
+      });
+    }
+    const step = selected ? remaining.find(s => s.id === selected) : remaining[0];
+    if (!step) return state;
+    selected = undefined;
+    // 不需要選順序時，相同指示物效果合併計算／記錄；避免多隻雪妖女重掃所有目標與增加 log。
+    const batch = step.kind !== 'status' && !orderMatters ? remaining.filter(s => s.kind === step.kind) : [step];
+    const batchIds = new Set(batch.map(s => s.id));
+    remaining = remaining.filter(s => !batchIds.has(s.id));
+    if (step.kind === 'status') {
+      // 同時中毒：先從同一盤面算出雙方放置量，再寫入；達到 HP 仍不能提前移除持有者。
+      const poisonBoard = state;
+      const poisonAmounts = ([0, 1] as const).map(tIdx => {
+        const inst = poisonBoard.players[tIdx].active;
+        if (!inst || !hasStatus(inst, 'poisoned')) return 0;
+        const other = (1 - tIdx) as 0 | 1;
+        const opp = poisonBoard.players[other].active;
+        const jungle = poisonBoard.activeStadium && pool.get(poisonBoard.activeStadium.cardId)?.name === '危險密林'
+          && pool.get(inst.cardId)?.pokemonType !== 'Darkness' ? 20 : 0;
+        return (inst.poisonDamagePerCheckup ?? 10) + jungle
+          + (opp && effective(poisonBoard, other, opp, 'active', '劇毒支配') ? 50 : 0);
+      });
+      for (const tIdx of [endingIdx, chooser]) {
+        const poisonPlayer = state.players[tIdx];
+        const poisonTotalDmg = poisonAmounts[tIdx];
+        if (!poisonPlayer.active || !poisonTotalDmg) continue;
+        putDamage(tIdx, poisonPlayer.active.iid, poisonTotalDmg, '中毒傷害');
+        // >>> v6369-checkup-damage-up-poison
+        state = noteCheckupDamageUpV6369(state, poisonPlayer.active.iid, poisonTotalDmg);
+        // <<< v6369-checkup-damage-up-poison
+        state = addLog(state, `中毒：${pool.get(poisonPlayer.active.cardId)?.name ?? '?'} 受到 ${poisonTotalDmg} 傷害！`, null);
+      }
+      const burnBoard = state;
+      const burnAmounts = ([0, 1] as const).map(i => hasStatus(burnBoard.players[i].active, 'burned')
+        ? 20 + magmarFlowingBurnBonus(burnBoard, (1 - i) as 0 | 1, pool) : 0);
+      for (const tIdx of [endingIdx, chooser]) {
+        const burnedPlayer = state.players[tIdx];
+        const burnTotalDmg = burnAmounts[tIdx];
+        if (!burnedPlayer.active || !burnTotalDmg) continue;
+        putDamage(tIdx, burnedPlayer.active.iid, burnTotalDmg, '灼傷傷害');
+        // >>> v6369-checkup-damage-up-burn
+        state = noteCheckupDamageUpV6369(state, burnedPlayer.active.iid, burnTotalDmg);
+        // <<< v6369-checkup-damage-up-burn
+        const flip = flipCoinsWithLog(state, 1, `灼傷判定（${pool.get(burnedPlayer.active.cardId)?.name ?? '?'}）`, tIdx);
+        state = flip.state;
+        if (flip.heads === 1) clearStatus(tIdx, 'burned');
+        state = addLog(state, `灼傷：${pool.get(burnedPlayer.active.cardId)?.name ?? '?'} 受到 ${burnTotalDmg} 傷害 → ${flip.heads === 1 ? '正面：灼傷解除' : '反面：灼傷持續'}`, null);
+      }
+      const beforeHeal = state;
+      const healedIids: string[] = [];
+      for (const tIdx of [endingIdx, chooser]) {
+        const inst = state.players[tIdx].active;
+        if (!inst || !hasStatus(inst, 'asleep')) continue;
+        const name = pool.get(inst.cardId)?.name ?? '?';
+        const flip = flipCoinsWithLog(state, 1, `睡眠判定（${name}）`, tIdx);
+        state = flip.state;
+        if (flip.heads === 1) clearStatus(tIdx, 'asleep');
+        state = addLog(state, `${name}：${flip.heads === 1 ? '正面 → 醒來了！' : '反面 → 仍在睡眠'}`, null);
+        if (flip.heads === 0 && inst.damage > 0 && effective(state, tIdx, inst, 'active', '好眠')) {
+          const ps = [...state.players] as [PlayerState, PlayerState];
+          ps[tIdx] = { ...ps[tIdx], active: { ...inst, damage: 0 } };
+          state = addLog({ ...state, players: ps }, `好眠：${name} 沒有從睡眠恢復 → HP 全部恢復`, null);
+          healedIids.push(inst.iid);
+        }
+      }
+      if (healedIids.length) {
+        // 同一支中央治療函式，使用恢復前實際盤面；必須在 KO 前套禁止恢復，且出口不可重算。
+        state = markHealsByDamageDecrease(beforeHeal, state, pool, true);
+        const handled = { ...(state._checkupHealsHandled ?? {}) };
+        for (const iid of healedIids) {
+          handled[iid] = ([0, 1] as const).some(owner => {
+            const before = beforeHeal.players[owner].active, after = state.players[owner].active;
+            return before?.iid === iid && after?.iid === iid && after.damage < before.damage;
+          });
+        }
+        state = { ...state, _checkupHealsHandled: handled };
+      }
+      if (hasStatus(state.players[endingIdx].active, 'paralyzed')) {
+        clearStatus(endingIdx, 'paralyzed');
+        state = addLog(state, `${pool.get(state.players[endingIdx].active!.cardId)?.name ?? '?'} 的麻痺解除了！`, null);
+      }
+    } else {
+      const board = state;
+      const names: string[] = [];
+      const sources = ([0, 1] as const).flatMap(owner => {
+        const sameOwner = batch.filter(s => s.ownerIdx === owner);
+        return sameOwner.length ? [{ step: sameOwner[0], count: sameOwner.length }] : [];
+      });
+      for (const owner of [0, 1] as const) for (const { inst, loc } of field(board, owner)) {
+        const amount = sources.reduce((n, source) => n + source.count * damageFor(source.step, board, owner, inst, loc), 0);
+        if (!amount) continue;
+        const label = step.kind === 'frost' ? '冰冷之帳' : '揚沙';
+        putDamage(owner, inst.iid, amount, label);
+        names.push(`${pool.get(inst.cardId)?.name ?? '?'}(-${amount})`);
+      }
+      if (names.length) state = addLog(state, `${step.kind === 'frost' ? '冰冷之帳' : '揚沙'}：${names.join('、')}`, null);
+    }
+    state = { ...state, pokemonCheckup: { endingIdx, remaining, causes } };
+  }
+  // 所有效果結束後，以同一盤面決定全部昏厥；HP／特性來源不受移除先後影響。
+  const koBoard = state;
+  const victims = ([0, 1] as const).flatMap(owner => field(koBoard, owner)
+    .filter(({ inst }) => { if (inst.damage <= 0) return false; const hp = getEffectiveHP(inst, pool, koBoard); return hp > 0 && inst.damage >= hp; })
+    .map(v => ({ ...v, owner })));
+  // 昏厥生效的特性在丟棄前處理（進階規則 D／E-04）；維持無寶可夢可補時省略奇跡之吻的既有裁定。
+  for (const v of victims) {
+    const deadIds = new Set(victims.filter(x => x.owner === v.owner).map(x => x.inst.iid));
+    if (v.loc === 'active' && field(koBoard, v.owner).some(x => !deadIds.has(x.inst.iid))) {
+      state = liftEndgameForOnKoV6361(miracleKissOnActiveFaint(state, v.owner, pool));
+    }
+  }
+  const ps = [...state.players] as [PlayerState, PlayerState];
+  const owed: [number, number] = [0, 0];
+  for (const v of victims) {
+    const pl = { ...ps[v.owner] };
+    pl.discard = [...pl.discard, v.inst, ...v.inst.energyAttached, ...getAllAttachedTools(v.inst), ...(v.inst.evolvedFromStack ?? [])];
+    if (v.loc === 'active') pl.active = null;
+    else pl.bench = pl.bench.filter(c => c.iid !== v.inst.iid);
+    ps[v.owner] = pl;
+    const card = pool.get(v.inst.cardId);
+    owed[(1 - v.owner) as 0 | 1] += card ? prizesForKO(card) : 1;
+    state = addLog(state, `${card?.name ?? '?'} 因${causes[v.inst.iid] ?? '寶可夢檢查'}昏厥！`, null);
+  }
+  state = { ...state, players: ps, pokemonCheckup: undefined, endTurnSkipCheckup: true,
+    endTurnCheckupAbilitiesDone: true, endTurnCheckupResume: true };
+  for (const owner of [0, 1] as const) if (owed[owner] > 0) {
+    state = liftEndgameForOnKoV6361(addPendingPrize(state, owner, owed[owner], pool));
+  }
+  if (!state.players[0].active || !state.players[1].active) {
+    state = { ...state, endTurnContinueAfterKO: endingIdx };
+    if (state.players.some(p => !p.active && p.bench.length === 0)) state = requestEndgameVerdictV6361(state);
+  }
+  return state;
+}
+// <<< v6637-checkup-pipeline
+
+
 function handlePlaying(
   state: GameState,
   action: GameAction,
@@ -4577,6 +4825,18 @@ function handlePlaying(
       );
     }
     // <<< v6331-modal-choice-payload-gate
+    // >>> v6637-checkup-resolve
+    // 順序必選且只能提交仍在選單中的單一效果；即使一般拒絕計數達上限也不吞步驟。
+    if (effectKey === 'v6637-checkup-order') {
+      const picked = _rawIids[0];
+      const options = (params?.options ?? []) as { id: string }[];
+      if (!state.pokemonCheckup || _rawIids.length !== 1
+          || !options.some(o => o.id === picked)
+          || !state.pokemonCheckup.remaining.some(s => s.id === picked)) return state;
+      return runPokemonCheckup({ ...state, pendingSelection: undefined,
+        _rejectedResolveStreak: undefined, _rejectedResolveTok: undefined }, pool, picked);
+    }
+    // <<< v6637-checkup-resolve
     let newState: GameState = { ...state, pendingSelection: undefined, _rejectedResolveStreak: undefined, _rejectedResolveTok: undefined };
     if (resolver) {
       newState = resolver(newState, actorIdx, _cleanIids, params, pool);
@@ -8409,532 +8669,19 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     }
 
 
-    // >>> v6500-checkup-ko-defer-promote
-    // ⭐v6.500 站長裁定：「對手中毒（或灼傷）昏厥後，同一次檢查的冰冷之帳照常對其他還在場上、有特性的寶可夢各放 1 個指示物，
-    //   已經昏厥的那隻就略過」。原本狀態區一有昏厥就先 return 等補位，冰冷之帳／揚沙要等補完、re-dispatch 才放
-    //   ⇒ 同一次檢查裡對戰圓形競技場保護的備戰被補上戰鬥場後吃到對手的指示物、會被冰冷之帳打倒的備戰被先派上場等。
-    //   改成：狀態區只記下「有昏厥」，放指示物特性區（下方）照常在同一次檢查跑完，再統一停下來等補位。
-    let _v6500StatusKO = false;
-    // <<< v6500-checkup-ko-defer-promote
-    // v2.124：把所有寶可夢 checkup（中毒/灼傷/睡眠/麻痺/雪妖女）包在 skipCheckup gate 內。
-    // 第一次 END_TURN 跑 checkup；若 self-KO，設 endTurnContinueAfterKO + return；
-    // SEND_NEW_ACTIVE 補完戰鬥位後 re-dispatch END_TURN 並設 endTurnSkipCheckup=true，
-    // 這樣不會重跑 checkup（避免重複放傷害），直接進到 finalize。
+    // >>> v6637-checkup-dispatch
+    // 通則 F：整次檢查完成才確認昏厥；尚未決定順序時不切換回合、不補位。
     if (!state.endTurnSkipCheckup) {
-    // v2.181 修正：寶可夢檢查階段對「雙方戰鬥寶可夢」都跑中毒/灼傷判定（PTCG 官方規則）。
-    //   舊版只跑 players[aIdx]（剛結束回合的玩家），導致對手的中毒/灼傷寶可夢在自己回合
-    //   末才扣血、跨回合不扣血 — 違反規則。
-    //   - 中毒：每個寶可夢檢查階段（雙方回合結束都觸發）+10
-    //   - 灼傷：每個寶可夢檢查階段 +20，再擲幣決定是否解除
-    //   順序：先處理 aIdx 方（剛結束回合的玩家），再處理 dIdx 方（對手）。
-    //   KO 時 endTurnContinueAfterKO=aIdx 觸發 SEND_NEW_ACTIVE re-dispatch；
-    //   re-dispatch 帶 endTurnSkipCheckup=true 跳過剩餘 checkup（罕見的雙方同時 KO 不重跑）。
-
-    // ── 中毒（雙方各檢查一次）─────────────────────────────────────────────
-    for (const tIdx of [aIdx, dIdx] as const) {
-      const oIdx = (1 - tIdx) as 0 | 1;
-      const poisonPlayer = { ...players[tIdx] };
-      // v2.163：同時兩狀態（如危險光線）— 中毒可能落在 secondaryStatus 格。
-      // v5.295: 加 tertiaryStatus 掃描 (PTCG 規則允許中毒+灼傷+混亂並存)
-      if (poisonPlayer.active?.status !== 'poisoned' && poisonPlayer.active?.secondaryStatus !== 'poisoned' && poisonPlayer.active?.tertiaryStatus !== 'poisoned') {
-        continue;
-      }
-      const poisonedCard = pool.get(poisonPlayer.active.cardId);
-      const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
-      let poisonBonus = 0;
-      if (stadiumName === '危險密林' && poisonedCard?.pokemonType !== 'Darkness') poisonBonus += 20;
-      // 劇毒支配（桃歹郎）— 「中毒方的對手」active 是劇毒支配時 +50
-      // v5.507：須查 isAbilityHolderEffective — 中毒方(我方)振翼髮｜暗夜羽擊在戰鬥場時，
-      //   對手 active 的劇毒支配被消除 → 不加 +50（玩家回報暗夜羽擊沒擋住劇毒支配）。
-      const oActiveInst = state.players[oIdx].active;
-      const oActiveCard = oActiveInst ? pool.get(oActiveInst.cardId) : null;
-      const hasDominatingPoisonOnActive = !!oActiveInst && !!oActiveCard
-        && (oActiveCard.abilities?.some(a => a.name === '劇毒支配') ?? false)
-        && isAbilityHolderEffective(state, oActiveInst, oActiveCard, oIdx, '劇毒支配', 'active', pool);
-      if (hasDominatingPoisonOnActive) poisonBonus += 50;
-      const poisonBaseDamage = poisonPlayer.active.poisonDamagePerCheckup ?? 10;
-      const poisonTotalDmg = poisonBaseDamage + poisonBonus;
-      const newDmg = poisonPlayer.active.damage + poisonTotalDmg;
-      const poisonedHP = getEffectiveHP(poisonPlayer.active, pool, state);
-      // v5.192：致死分支前先 addLog 顯示實際傷害（避免玩家看不到飄字直接跳 KO）
-      //   原本致死直接走 KO log，玩家無法確認致死猛毒等強化中毒的實際傷害值
-      state = addLog({ ...state, players }, `中毒：${pool.get(poisonPlayer.active.cardId)?.name ?? '?'} 受到 ${poisonTotalDmg} 傷害！`, null);
-      if (poisonedHP > 0 && newDmg >= poisonedHP) {
-        // 被毒死 → KO；獎賞給「中毒方的對手」(oIdx)
-        const koDiscard2: CardInstance[] = [
-          { ...poisonPlayer.active, damage: newDmg },
-          ...poisonPlayer.active.energyAttached,
-          ...getAllAttachedTools(poisonPlayer.active),
-          ...(poisonPlayer.active.evolvedFromStack ?? []),
-        ];
-        poisonPlayer.discard = [...poisonPlayer.discard, ...koDiscard2];
-        poisonPlayer.active = null;
-        players[tIdx] = poisonPlayer;
-        const poisonPrizes = prizesForKO(poisonedCard!);
-        // v5.889：取獎收斂到中央 addPendingPrize(與一般 KO / 冰冷之帳一致):有正面朝上獎賞開 picker、
-        //   私訊揭示取得的卡名(對手看張數)、取完所有獎賞判勝。原 direct-slice 繞過此三者。
-        let poisonState = addLog({ ...state, players }, `${poisonedCard?.name ?? '?'} 因中毒傷害昏厥！`, null);
-        poisonState = addPendingPrize(poisonState, oIdx, poisonPrizes, pool);
-        players[0] = poisonState.players[0]; players[1] = poisonState.players[1];  // 同步(避免後續 {...state,players} 用 stale players 覆蓋獎賞)
-        // ⭐v6.502（Opus 審查 2）：取完獎賞也不在這裡結束——另一方的中毒／灼傷、冰冷之帳還沒結算（同時取完獎賞又沒有寶可夢
-        //   要依 v6.420 判平手）⇒ 收回成「待重判」繼續跑，出口的中央判定（含排隊中的取獎結清）一次判。
-        poisonState = liftEndgameForOnKoV6361(poisonState);   // v6502-checkup-simultaneous-verdict
-        // >>> v6502-checkup-simultaneous-verdict
-        // ⭐v6.502（Fable 審查 D，站長裁定修）：原本「中毒昏厥且沒有備戰」當下就判對手勝 ⇒ 雙方同時中毒昏厥、
-        //   雙方都沒備戰時，先結算的那一方被判輸（應為平手，官方 L1460／v6.361 裁定）。
-        //   ⇒ 不在這裡判；整個寶可夢檢查跑完後，由 applyAction 出口的中央 judgeEndgameV6361 一次判（雙方皆無 ⇒ 平手）。
-        // <<< v6502-checkup-simultaneous-verdict
-        // >>> v6493-kiss-poison
-        // ⭐v6.493 站長裁定 1：寶可夢檢查階段對手的戰鬥寶可夢昏厥 ⇒ 擲奇跡之吻
-        poisonState = liftEndgameForOnKoV6361(miracleKissOnActiveFaint(poisonState, tIdx, pool));   // v6.502：同上
-        players[0] = poisonState.players[0]; players[1] = poisonState.players[1];
-        // <<< v6493-kiss-poison
-        // SEND_NEW_ACTIVE 由被毒死方（tIdx）補；re-dispatch END_TURN 仍以 aIdx 為 activePlayerIndex
-        // v5.764：不 early-return — 設 state 後繼續跑完剩餘 checkup(對手中毒/灼傷、雙方睡眠醒幣、
-        //   麻痺解除)。§11 規則:寶可夢檢查須完整結算雙方所有特殊狀態;補位延到狀態區結尾統一處理。
-        state = poisonState;
-      } else {
-        poisonPlayer.active = { ...poisonPlayer.active, damage: newDmg };
-        players[tIdx] = poisonPlayer;
-        // >>> v6369-checkup-damage-up-poison
-        // ⭐v6.369 六-5：中毒加的這 `poisonTotalDmg` 點要疊進「回血前一刻」的基準線
-        //   （同一個 END_TURN 後面還有睡眠區的好眠恢復）。
-        state = noteCheckupDamageUpV6369(state, poisonPlayer.active.iid, poisonTotalDmg);
-        // <<< v6369-checkup-damage-up-poison
-        // v5.192：log 已在致死前統一 addLog，此處不再重複（避免雙重 log）
-      }
+      state = runPokemonCheckup({ ...state, players }, pool);
+      if (state.pokemonCheckup) return state;
+      players[0] = state.players[0]; players[1] = state.players[1];
     }
-
-    // ── 灼傷（雙方各檢查一次）─────────────────────────────────────────────
-    for (const tIdx of [aIdx, dIdx] as const) {
-      const oIdx = (1 - tIdx) as 0 | 1;
-      const burnedPlayer = { ...players[tIdx] };
-      // v5.295: 加 tertiaryStatus 掃描
-      if (burnedPlayer.active?.status !== 'burned' && burnedPlayer.active?.secondaryStatus !== 'burned' && burnedPlayer.active?.tertiaryStatus !== 'burned') {
-        continue;
-      }
-      const burnedCard = pool.get(burnedPlayer.active.cardId);
-      // v3.0 鴨嘴炎獸｜熔岩波動 — 對手場上有此卡時，灼傷指示物 +3（=+30 傷害）。
-      const burnBonus = magmarFlowingBurnBonus(state, oIdx, pool);
-      const burnTotalDmg = 20 + burnBonus;
-      const newBurnDmg = burnedPlayer.active.damage + burnTotalDmg;
-      const burnedHP = getEffectiveHP(burnedPlayer.active, pool, state);
-      if (burnBonus > 0) {
-        state = addLog(state, `「熔岩波動」啟動：灼傷傷害 +${burnBonus}`, oIdx);
-      }
-      // v5.192：致死分支前先 addLog 顯示實際傷害（同中毒）
-      if (burnedHP > 0 && newBurnDmg >= burnedHP) {
-        state = addLog({ ...state, players }, `灼傷：${burnedCard?.name ?? '?'} 受到 ${burnTotalDmg} 傷害！`, null);
-        // ⭐v6.556：對戰紀錄用詞改成台灣官方卡面的「灼傷」（原本寫「燒傷」，卡面 0 次）。
-        // 燒傷致死 → KO；獎賞給對手 oIdx
-        const koDiscard3: CardInstance[] = [
-          { ...burnedPlayer.active, damage: newBurnDmg },
-          ...burnedPlayer.active.energyAttached,
-          ...getAllAttachedTools(burnedPlayer.active),
-          ...(burnedPlayer.active.evolvedFromStack ?? []),
-        ];
-        burnedPlayer.discard = [...burnedPlayer.discard, ...koDiscard3];
-        burnedPlayer.active = null;
-        players[tIdx] = burnedPlayer;
-        const burnPrizes = prizesForKO(burnedCard!);
-        // v5.889：取獎收斂到中央 addPendingPrize(同中毒/一般 KO)。
-        let burnState = addLog({ ...state, players }, `${burnedCard?.name ?? '?'} 因灼傷傷害昏厥！`, null);
-        burnState = addPendingPrize(burnState, oIdx, burnPrizes, pool);
-        players[0] = burnState.players[0]; players[1] = burnState.players[1];
-        burnState = liftEndgameForOnKoV6361(burnState);   // ⭐v6.502（Opus 審查 2）：同中毒那一格
-        // >>> v6502-checkup-simultaneous-verdict
-        // ⭐v6.502：同中毒那一格——沒有備戰也不在這裡判，交給出口的中央終局判定（雙方同時 ⇒ 平手）。
-        // <<< v6502-checkup-simultaneous-verdict
-        // >>> v6493-kiss-burn
-        burnState = liftEndgameForOnKoV6361(miracleKissOnActiveFaint(burnState, tIdx, pool));   // ⭐v6.493 站長裁定 1；v6.502 不提早返回
-        players[0] = burnState.players[0]; players[1] = burnState.players[1];
-        // <<< v6493-kiss-burn
-        // v5.764：同上 — 不 early-return,繼續跑完剩餘 checkup,補位延到狀態區結尾統一處理。
-        state = burnState;
-      } else {
-        burnedPlayer.active = { ...burnedPlayer.active, damage: newBurnDmg };
-        // >>> v6369-checkup-damage-up-burn
-        // ⭐v6.369 六-5：同中毒那一格（灼傷也排在睡眠區之前）。
-        state = noteCheckupDamageUpV6369(state, burnedPlayer.active.iid, burnTotalDmg);
-        // <<< v6369-checkup-damage-up-burn
-        // 擲硬幣：正面解除燒傷
-        const burnFlip = flipCoinsWithLog(state, 1, `灼傷判定（${burnedCard?.name ?? '?'}）`, tIdx);
-        state = burnFlip.state;
-        const burnCoin = burnFlip.heads === 1;
-        if (burnCoin) {
-          // v2.163/v5.659：燒傷可能在 status / secondaryStatus / tertiaryStatus；只清掉燒傷「實際所在」那格。
-          //   原 else-if 同時認 secondary||tertiary 卻一律清 secondaryStatus → 若燒傷在 tertiary 會誤清 secondary
-          //   (例:睡眠+中毒+灼傷 → status=睡眠/secondary=中毒/tertiary=灼傷,解燒傷竟清掉中毒、燒傷反而留)。
-          if (burnedPlayer.active.status === 'burned') { // status-slot-ok: checkup 燒傷解除三分支,本就依實際所在格清除(v5.659)
-            burnedPlayer.active = { ...burnedPlayer.active, status: undefined };
-          } else if (burnedPlayer.active.secondaryStatus === 'burned') {
-            burnedPlayer.active = { ...burnedPlayer.active, secondaryStatus: undefined };
-          } else if (burnedPlayer.active.tertiaryStatus === 'burned') {
-            burnedPlayer.active = { ...burnedPlayer.active, tertiaryStatus: undefined };
-          }
-        }
-        players[tIdx] = burnedPlayer;
-        state = addLog({ ...state, players }, `灼傷：${burnedCard?.name ?? '?'} 受到 ${burnTotalDmg} 傷害 → ${burnCoin ? '正面：灼傷解除' : '反面：灼傷持續'}`, null);
-      }
-    }
-
-    // v2.124 順序修正（按 PTCG 官方）：中毒 → 灼傷 → 睡眠 → 麻痺 → 特性
-    // v2.181：睡眠 — 雙方 active 都擲幣（PTCG 規則：every Pokémon Checkup, flip coin to wake）
-    //          舊版只跑 aIdx，導致對手睡眠寶可夢跨回合不擲幣 — 違反規則。
-    for (const tIdx of [aIdx, dIdx] as const) {
-      const sleepPlayer = { ...players[tIdx] };
-      if (sleepPlayer.active?.status === 'asleep') {
-        const sleeperName = pool.get(sleepPlayer.active.cardId)?.name ?? '?';
-        const sleepFlip = flipCoinsWithLog(state, 1, `睡眠判定（${sleeperName}）`, tIdx);
-        state = sleepFlip.state;
-        const wakeCoin = sleepFlip.heads === 1;
-        if (wakeCoin) {
-          sleepPlayer.active = { ...sleepPlayer.active, status: undefined };
-          players[tIdx] = sleepPlayer;
-          state = addLog({ ...state, players }, `${sleeperName}：正面 → 醒來了！`, null);
-        } else {
-          state = addLog({ ...state, players }, `${sleeperName}：反面 → 仍在睡眠`, null);
-          // >>> v6347-snorlax-good-sleep
-          // ⭐v6.347 卡比獸｜好眠（M6a 095/103，J，Basic【無】160HP）
-          // 卡面逐字：「這隻寶可夢【睡眠】時，若在寶可夢檢查中這隻寶可夢沒有從【睡眠】恢復，
-          //            則將這隻寶可夢的HP全部恢復。」
-          //   ⚠ 觸發點就是**這一格**（睡眠擲幣為反面的那一刻），不是 checkup 尾端的
-          //     「放指示物特性區」—— 卡面的條件是「沒有從睡眠恢復」，必須綁在擲幣結果上。
-          //   ⚠ 中毒／灼傷在本區**之前**結算；若已被 checkup 傷害 KO，active 已是 null，
-          //     上面的 sleepPlayer.active?.status === 'asleep' 就進不來 ⇒ 不會「死而復生」。
-          //   ⚠ 特性被消除（火箭隊的監視塔對【無】屬性、初始化、暗夜羽擊…）時不生效 → 中央述詞。
-          const _v6347Sleeper = sleepPlayer.active;
-          const _v6347Card = _v6347Sleeper ? pool.get(_v6347Sleeper.cardId) : undefined;
-          if (_v6347Sleeper && _v6347Card?.abilities?.some(a => a.name === '好眠')
-              && _v6347Sleeper.damage > 0
-              && isAbilityHolderEffective(state, _v6347Sleeper, _v6347Card, tIdx, '好眠', 'active', pool)) {
-            sleepPlayer.active = { ..._v6347Sleeper, damage: 0 };
-            players[tIdx] = sleepPlayer;
-            state = addLog({ ...state, players },
-              `好眠：${sleeperName} 沒有從睡眠恢復 → HP 全部恢復`, null);
-          }
-          // <<< v6347-snorlax-good-sleep
-        }
-      }
-    }
-
-    // 特殊狀態：麻痺 — 持續到「擁有者下次自己寶可夢檢查」自動解除（PTCG 規則）
-    //   只在「擁有麻痺寶可夢的玩家」結束自己回合時解除，所以僅跑 aIdx 是正確的。
-    const paraPlayer = { ...players[aIdx] };
-    if (paraPlayer.active?.status === 'paralyzed') {
-      paraPlayer.active = { ...paraPlayer.active, status: undefined };
-      players[aIdx] = paraPlayer;
-      state = addLog({ ...state, players }, `${pool.get(paraPlayer.active.cardId)?.name ?? '?'} 的麻痺解除了！`, null);
-    }
-
-    // v5.764：checkup 全部狀態(中毒/灼傷/睡眠/麻痺,雙方)結算完畢後,若有任一方戰鬥位因 checkup
-    //   致死(active=null) → 此時才統一補位(SEND_NEW_ACTIVE)。原本 poison/burn 致死當下 early-return
-    //   會跳過剩餘 checkup,違反 §11(對手中毒/灼傷不結算、雙方睡眠不擲幣醒、麻痺不解除多停一回合)。
-    // v5.889：poison/burn 取獎收斂 addPendingPrize 後,若有正面朝上獎賞會開 take-prize-choose picker
-    //   (state.pendingSelection 已設,KO 方 active 亦為 null)。下面 return { ...state, endTurnContinueAfterKO }
-    //   會「一併帶著 pendingSelection」返回 → pendingSelection gate 擋住 SEND_NEW_ACTIVE 直到玩家解完取獎;
-    //   解完後 active 仍 null + endTurnContinueAfterKO 尚在 → SEND_NEW_ACTIVE 補位 → re-dispatch END_TURN
-    //   (skipCheckup) 續跑冰冷之帳/揚沙並換回合。無 faceUp 時 addPendingPrize 自動取、pendingSelection 為 null,
-    //   走原流程。故此處毋須額外 pendingSelection 分支(加了反而 return 時漏 endTurnContinueAfterKO 斷掉續跑)。
-    if (state.players[aIdx].active === null || state.players[dIdx].active === null) {
-      // >>> v6500-checkup-ko-defer-promote
-      // ⭐v6.502（Fable 審查 B，站長裁定修）：v6.500 在「正面朝上獎賞的取獎視窗開著」時維持舊流程（先補位才放冰冷之帳）。
-      //   取獎視窗之後再開的視窗會排進 pendingChainQueue（v6.418），不會被蓋掉 ⇒ 拿掉例外，兩條路徑一致：
-      //   特性區照常在同一次檢查跑完，再帶著還沒解完的視窗停下來等補位（視窗解完前引擎不收 SEND_NEW_ACTIVE）。
-      _v6500StatusKO = true;
-      // <<< v6500-checkup-ko-defer-promote
-    }
-    } // v5.426：status 區（中毒/灼傷/睡眠/麻痺）到此結束（endTurnSkipCheckup gate）。
-
-    // ── checkup 放指示物特性區（冰冷之帳 / 揚沙 等）獨立 gate ──
-    // v5.426 修：原本這些特性也包在 endTurnSkipCheckup gate 內，導致中毒/灼傷致死提早 return →
-    //   SEND_NEW_ACTIVE re-dispatch END_TURN(skipCheckup=true) 後整段被跳過 → 冰冷之帳/揚沙漏觸發。
-    //   改用 endTurnCheckupAbilitiesDone gate：status-KO re-dispatch 時 status 區跳過、本區仍執行一次。
-    //   旗標於區首設 true，避免後續 re-dispatch（力之沙漏 / 本區自身 KO 補位）重跑放第二次指示物。
-    if (!state.endTurnCheckupAbilitiesDone) {
-    state = { ...state, endTurnCheckupAbilitiesDone: true };
-
-    // ── 雪妖女｜冰冷之帳 ─────────────────────────────────────────────────────
-    // 卡面：只要這隻寶可夢在場上，每次寶可夢檢查時，在雙方的擁有特性的所有寶可夢
-    //       （「雪妖女」除外）身上各放置 1 個傷害指示物。
-    // 觸發階段：「寶可夢檢查」= 中毒/灼傷/麻痺/睡眠之後（本段落所在處）。
-    // 設計：每隻雪妖女各放 1 個指示物；若場上有 N 隻雪妖女則每個目標放 N 個。
-    // v2.70：KO 獎賞兩側都要計算（selfKOInstance 風格直接取獎，不走 pendingPrizes）。
-    //        因為：pendingPrizes 會被 activePlayerIndex 方 TAKE_PRIZES，
-    //        但 checkup 時 activePlayerIndex 仍是 aIdx，勝方卻可能是任何一方。
-    //        改成直接從勝方自己的獎賞堆轉到勝方手牌（與 selfKOInstance 同樣手法）。
-    // v6.049：持有者自己的特性若被消除（監視塔/初始化/暗夜羽擊/黏著束縛），冰冷之帳不生效。
-    //   卡面「只要這隻寶可夢在場上」是持續型特性 —— 特性被消除就沒有這個效果。
-    const countFrosmoth = (pl: PlayerState, ownerIdx: 0 | 1): number => {
-      const ok = (c: CardInstance, loc: 'active' | 'bench'): boolean => {
-        const cd = pool.get(c.cardId);
-        if (cd?.name !== '雪妖女') return false;
-        return isAbilityHolderEffective(state, c, cd, ownerIdx, '冰冷之帳', loc, pool);
-      };
-      let n = 0;
-      if (pl.active && ok(pl.active, 'active')) n += 1;
-      n += pl.bench.filter(c => ok(c, 'bench')).length;
-      return n;
-    };
-    // v4.08：對戰圓形擋對手特性放置備戰指示物 — 改 per-side 計算
-    //   - 戰鬥場：own + opp frosmoth 都生效（戰鬥場無 BENCH_PROTECTION）
-    //   - 備戰：對戰圓形啟動 → 對手 frosmoth 對自方備戰的指示物被擋（「對手特性」）；
-    //           自家 frosmoth 對自方備戰不擋（「自己特性」）
-    const frosmothByOwner: [number, number] = [countFrosmoth(players[0], 0), countFrosmoth(players[1], 1)];
-    const frosmothN = frosmothByOwner[0] + frosmothByOwner[1];
-    const benchProtected = (() => {
-      if (!state.activeStadium) return false;
-      const c = pool.get(state.activeStadium.cardId);
-      return !!c && BENCH_PROTECTION_STADIUMS.has(c.name);
-    })();
-    if (frosmothN > 0) {
-      // addCounters 不再是常數 — active/bench 用不同 counters，移到 loop 內計算
-      // v2.125：嚴格排除「雪妖女」本體 — Leon 提醒「冰冷之帳不對雪妖女自己作用」
-      // 用 trim 防 scraper 字串前後空白；同時以 startsWith 排除「雪妖女ex」（若未來有的話）
-      // 但「超級雪妖女ex」是不同實體（不擁有冰冷之帳，直接被 abilities.length===0 擋）
-      const isFrosmothName = (card: Card | undefined): boolean => {
-        const n = (card?.name ?? '').trim();
-        return n === '雪妖女';
-      };
-      // v2.387：超級皮可西ex｜光之翼 — 不受對手寶可夢特性效果影響，
-      //   冰冷之帳對其無效（不放指示物）。
-      // ⭐ v6.196：改走中央述詞（同 v6.049 對 hasAnyEffectiveAbility 的處理）——
-      //   超級皮可西ex 是 Stage1 進化 + ex 規則寶可夢，熔岩洞／初始化 在場時光之翼應被消除。
-      // ⭐v6.427：光之翼／化隱只擋「**對手的**」冰冷之帳（自家雪妖女照放）——改問中央 isImmuneToOppAbilityEffect。
-      //   原本光之翼寫死「兩邊的雪妖女都不放」、化隱只看印刷（特性被消除時仍擋）。
-      //   回傳擋下的特性名（'化隱'／'光之翼'…；沒擋回 null），log 沿用舊格式「化隱擋對手」。
-      const oppFrosmothBlocked = (c: CardInstance, ownerIdx: 0 | 1): string | null => {
-        const r = oppAbilityEffectBlockReason(state, (1 - ownerIdx) as 0 | 1, c, pool, true);   // 冰冷之帳＝放指示物
-        return r === null ? null : r.split(' ')[0];
-      };
-      // ⭐v6.049：卡面是「**擁有特性的**所有寶可夢」。原本只看卡片印刷有沒有特性，
-      //   完全不管特性有沒有被消除 → 火箭隊的監視塔（「雙方場上所有【無】寶可夢的特性
-      //   全部消除」）在場時，【無】寶可夢已經沒有特性了，卻仍被放指示物（玩家回報）。
-      //   鐵荊棘ex｜初始化、暗夜羽擊、黏著束縛 同理。改走中央述詞。
-      const isFrosmothCheckupTarget = (c: CardInstance, ownerIdx: 0 | 1, loc: 'active' | 'bench'): boolean => {
-        const card = pool.get(c.cardId);
-        if (!hasAnyEffectiveAbility(state, c, card, ownerIdx, loc, pool)) return false;
-        if (isFrosmothName(card)) return false;
-        return true;
-      };
-      // v5.083：化隱（斯魔茶 / 來悲粗茶 / 怨影娃娃 / 詛咒娃娃）— 卡面：
-      //   「這隻寶可夢不會受到對手的招式或特性的效果。」冰冷之帳是「特性效果」必擋。
-      //   per-target gate：化隱寶可夢只受 own frosmoth（自家雪妖女），不受 opp frosmoth。
-      //   套用點在下方 dispatch loop 計算 counter 時。
-      const affectedNames: string[] = [];
-      // [ownerIdx → prizes they owe to opponent]
-      const koPrizesByOwner: [number, number] = [0, 0];
-      const activeDiedByOwner: [boolean, boolean] = [false, false];
-      for (const i of [0, 1] as const) {
-        const pl = { ...players[i] };
-        const ownFrosmoth = frosmothByOwner[i];
-        const oppFrosmoth = frosmothByOwner[(1 - i) as 0 | 1];
-        // 戰鬥場：雙方 frosmoth 都生效（卡面註：戰鬥場仍會受到招式的傷害；
-        //   特性效果也照常 — 戰鬥場不受對戰圓形保護）
-        const activeCounters = ownFrosmoth + oppFrosmoth;
-        // 備戰：對戰圓形啟動 → 對手 frosmoth 被擋，只剩自家 frosmoth
-        const benchCounters = benchProtected ? ownFrosmoth : (ownFrosmoth + oppFrosmoth);
-        // 戰鬥區
-        // v5.083：per-target counter — 化隱寶可夢只算自家雪妖女（擋對手雪妖女特性效果）
-        if (pl.active && isFrosmothCheckupTarget(pl.active, i, 'active')) {
-          const _oppBlkA = oppFrosmothBlocked(pl.active, i);
-          const effectiveActiveCounters = _oppBlkA !== null ? ownFrosmoth : activeCounters;
-          if (effectiveActiveCounters > 0) {
-          const newDmg = pl.active.damage + effectiveActiveCounters * 10;
-          const card = pool.get(pl.active.cardId);
-          const hp = getEffectiveHP(pl.active, pool, state);
-          affectedNames.push(`${card?.name ?? '?'}(-${effectiveActiveCounters * 10}${_oppBlkA !== null ? ` ${_oppBlkA}擋對手` : ''})`);
-          if (hp > 0 && newDmg >= hp) {
-            const koDiscard: CardInstance[] = [
-              { ...pl.active, damage: newDmg },
-              ...pl.active.energyAttached,
-              ...getAllAttachedTools(pl.active),
-              ...(pl.active.evolvedFromStack ?? []),
-            ];
-            pl.discard = [...pl.discard, ...koDiscard];
-            koPrizesByOwner[i] += prizesForKO(card!);
-            activeDiedByOwner[i] = true;
-            pl.active = null;
-          } else {
-            pl.active = { ...pl.active, damage: newDmg };
-          }
-          }  // close v5.083 effectiveActiveCounters > 0 block
-        }
-        // 備戰區 — 對戰圓形啟動時 benchCounters 可能 = ownFrosmoth 或 0
-        // v5.083：per-target — 化隱寶可夢只算 ownFrosmoth（擋對手）
-        const newBench: CardInstance[] = [];
-        for (const b of pl.bench) {
-          if (!isFrosmothCheckupTarget(b, i, 'bench')) { newBench.push(b); continue; }
-          const _oppBlkB = oppFrosmothBlocked(b, i);
-          const effBenchCounters = _oppBlkB !== null ? ownFrosmoth : benchCounters;   // 擋對手 frosmoth ⇒ 只算自家
-          if (effBenchCounters === 0) { newBench.push(b); continue; }
-          const newDmg = b.damage + effBenchCounters * 10;
-          const card = pool.get(b.cardId);
-          const hp = getEffectiveHP(b, pool, state);
-          affectedNames.push(`${card?.name ?? '?'}(-${effBenchCounters * 10}${_oppBlkB !== null ? ` ${_oppBlkB}擋對手` : ''})`);
-          if (hp > 0 && newDmg >= hp) {
-            const koDiscard: CardInstance[] = [
-              { ...b, damage: newDmg },
-              ...b.energyAttached,
-              ...getAllAttachedTools(b),
-              ...(b.evolvedFromStack ?? []),
-            ];
-            pl.discard = [...pl.discard, ...koDiscard];
-            koPrizesByOwner[i] += prizesForKO(card!);
-          } else {
-            newBench.push({ ...b, damage: newDmg });
-          }
-        }
-        pl.bench = newBench;
-        players[i] = pl;
-      }
-      if (affectedNames.length > 0) {
-        state = addLog({ ...state, players },
-          `冰冷之帳：${affectedNames.join('、')}`, null);
-      }
-      // v2.98：累計到 pendingPrizes，由玩家透過 TAKE_PRIZES 各自取走（含對手回合可取）
-      for (const i of [0, 1] as const) {
-        const owed = koPrizesByOwner[i];
-        if (owed <= 0) continue;
-        const winnerIdx = (1 - i) as 0 | 1;
-        const winner = players[winnerIdx];
-        state = addLog({ ...state, players },
-          `冰冷之帳：${players[i].name} 有寶可夢昏厥，${winner.name} 將取得 ${owed} 張獎賞卡。`,
-          null);
-        state = liftEndgameForOnKoV6361(addPendingPrize(state, winnerIdx, owed, pool));   // v6.502：取完獎賞也跑完整個檢查
-        // v5.498：addPendingPrize 把獎賞發在 state.players，但本地 players 變數會 stale；
-        //   後續 checkup 區塊(力之沙漏/道具自棄)與 finalize(clearTurnFlags) 的 {...state, players}
-        //   會用 stale players 覆蓋掉剛發的獎賞 → 玩家「冰冷之帳/揚沙 KO 對手卻沒拿到獎賞」。同步回來。
-        players[0] = state.players[0]; players[1] = state.players[1];
-      }
-      // >>> v6493-kiss-frost-tent
-      // ⭐v6.493 站長裁定 1：冰冷之帳（寶可夢檢查）讓戰鬥寶可夢昏厥 ⇒ 該方的對手擲奇跡之吻
-      for (const i of [0, 1] as const) {
-        if (!activeDiedByOwner[i]) continue;
-        state = liftEndgameForOnKoV6361(miracleKissOnActiveFaint({ ...state, players }, i, pool));   // v6.502 不提早返回
-        players[0] = state.players[0]; players[1] = state.players[1];
-      }
-      // <<< v6493-kiss-frost-tent
-      // >>> v6502-checkup-simultaneous-verdict
-      // ⭐v6.502：原本「任一方戰鬥寶可夢被打倒＋備戰已空 ⇒ 對手勝」在這裡依座位順序先判 ⇒ 雙方同時沒有寶可夢時判錯，
-      //   而且揚沙被跳過。改由 applyAction 出口的中央 judgeEndgameV6361 在整個檢查結算完後一次判。
-      // <<< v6502-checkup-simultaneous-verdict
-    }
-
-    // v3.01 Wave 3 — 火箭隊的班基拉斯｜揚沙（寶可夢檢查時放指示物）
-    {
-      for (const ownerIdx of [0, 1] as const) {
-        if (!hasRocketTyranitarSandstorm({ ...state, players }, ownerIdx, pool)) continue;
-        const oppIdx = (1 - ownerIdx) as 0 | 1;
-        const opp = { ...players[oppIdx] };
-        const sandstormAffected: string[] = [];
-        let sandstormPrizes = 0;
-        let sandstormActiveDied = false;
-
-        // ⭐ v6.250：原本手刻（`supertype !== 'Pokemon'` 直接 false）會把場上化石漏掉。
-        //   卡面「對手的所有【基礎】寶可夢」是**場上視角** ⇒ 走中央述詞 isBasicPokemonOnField。
-        const isBasicPokemonInst = (inst: CardInstance): boolean =>
-          isBasicPokemonOnField(inst, pool.get(inst.cardId));
-
-        if (opp.active && isBasicPokemonInst(opp.active)) {
-          // v4.51 Phase 2：active 也加 canApplyEffectToTarget（光之翼會擋 active）
-          const _sandActGuard = canApplyEffectToTarget(state, ownerIdx, opp.active, pool.get(opp.active.cardId), 'ability-effect', pool, { isBench: false });
-          if (_sandActGuard.blocked) {
-            sandstormAffected.push(`${pool.get(opp.active.cardId)?.name ?? '?'}(${_sandActGuard.reason})`);
-          } else {
-          const newDmg = opp.active.damage + 20;
-          const card = pool.get(opp.active.cardId);
-          const hp = getEffectiveHP(opp.active, pool, state);
-          sandstormAffected.push(`${card?.name ?? '?'}(-20)`);
-          if (hp > 0 && newDmg >= hp) {
-            const koDiscard: CardInstance[] = [
-              { ...opp.active, damage: newDmg },
-              ...opp.active.energyAttached,
-              ...getAllAttachedTools(opp.active),
-              ...(opp.active.evolvedFromStack ?? []),
-            ];
-            opp.discard = [...opp.discard, ...koDiscard];
-            sandstormPrizes += prizesForKO(card!);
-            sandstormActiveDied = true;
-            opp.active = null;
-          } else {
-            opp.active = { ...opp.active, damage: newDmg };
-          }
-          }
-        }
-        // v4.51 Phase 2：改用統一 canApplyEffectToTarget（kind='ability-effect'）— 涵蓋光之翼 + 對戰圓形
-        const newOppBench: CardInstance[] = [];
-        for (const b of opp.bench) {
-          if (!isBasicPokemonInst(b)) { newOppBench.push(b); continue; }
-          // defense check per-target
-          const _sandTgtCard = pool.get(b.cardId);
-          const _sandGuard = canApplyEffectToTarget(state, ownerIdx, b, _sandTgtCard, 'ability-effect', pool, { isBench: true });
-          if (_sandGuard.blocked) {
-            sandstormAffected.push(`${_sandTgtCard?.name ?? '?'}(${_sandGuard.reason})`);
-            newOppBench.push(b);
-            continue;
-          }
-          const newDmg = b.damage + 20;
-          const card = pool.get(b.cardId);
-          const hp = getEffectiveHP(b, pool, state);
-          sandstormAffected.push(`${card?.name ?? '?'}(-20)`);
-          if (hp > 0 && newDmg >= hp) {
-            const koDiscard: CardInstance[] = [
-              { ...b, damage: newDmg },
-              ...b.energyAttached,
-              ...getAllAttachedTools(b),
-              ...(b.evolvedFromStack ?? []),
-            ];
-            opp.discard = [...opp.discard, ...koDiscard];
-            sandstormPrizes += prizesForKO(card!);
-          } else {
-            newOppBench.push({ ...b, damage: newDmg });
-          }
-        }
-        opp.bench = newOppBench;
-        players[oppIdx] = opp;
-
-        if (sandstormAffected.length > 0) {
-          state = addLog({ ...state, players },
-            `揚沙：${sandstormAffected.join('、')}`, ownerIdx);
-        }
-        if (sandstormPrizes > 0) {
-          state = addLog({ ...state, players },
-            `揚沙：${players[oppIdx].name} 有寶可夢昏厥，${players[ownerIdx].name} 將取得 ${sandstormPrizes} 張獎賞卡。`,
-            ownerIdx);
-          state = liftEndgameForOnKoV6361(addPendingPrize(state, ownerIdx, sandstormPrizes, pool));   // v6.502 同冰冷之帳
-        // v5.498：addPendingPrize 把獎賞發在 state.players，但本地 players 變數會 stale；
-        //   後續 checkup 區塊(力之沙漏/道具自棄)與 finalize(clearTurnFlags) 的 {...state, players}
-        //   會用 stale players 覆蓋掉剛發的獎賞 → 玩家「冰冷之帳/揚沙 KO 對手卻沒拿到獎賞」。同步回來。
-        players[0] = state.players[0]; players[1] = state.players[1];
-        }
-        // >>> v6493-kiss-sandstorm
-        if (sandstormActiveDied) {   // ⭐v6.493 站長裁定 1：揚沙（寶可夢檢查）
-          state = liftEndgameForOnKoV6361(miracleKissOnActiveFaint({ ...state, players }, oppIdx, pool));   // v6.502 不提早返回
-          players[0] = state.players[0]; players[1] = state.players[1];
-        }
-        // <<< v6493-kiss-sandstorm
-        // ⭐v6.502（v6502-checkup-simultaneous-verdict）：揚沙打倒最後一隻也不在這裡判，交給出口的中央終局判定。
-      }
-    }
-
-    } // v5.426：end of checkup 放指示物特性區（endTurnCheckupAbilitiesDone gate）
-
-    // >>> v6500-checkup-ko-defer-promote
-    // ⭐v6.500：狀態區有寶可夢昏厥 ⇒ 特性區跑完後才停下來等補位（雙方都可能要補；SEND_NEW_ACTIVE 會等兩邊都補完才續跑）。
-    //   re-dispatch 帶 endTurnSkipCheckup＋endTurnCheckupAbilitiesDone ⇒ 兩區都不重跑，直接進入下方收尾。
-    // ⭐v6.502（Fable 審查 C，站長裁定修）：冰冷之帳／揚沙單獨打倒戰鬥寶可夢（沒有狀態昏厥）時，原本照常換回合、
-    //   被打倒的一方在下一個回合中才補位（還被標成「本回合才放上戰鬥場」）⇒ 改成同樣停下來等補位，補完才換回合。
-    //   ⚠ 用本地 players 判（特性區的結果還沒寫回 state 的可能）；re-dispatch 時兩區都不跑、雙方都已補完 ⇒ 不會再停。
-    //   ⭐Opus 審查 1：停等時 turnPhase 設 'end'（否則結束回合的一方在等對手補位時還能附能量、出牌，AI 也會繼續出牌）。
-    //   ⭐Opus 審查 2：檢查中有人取完獎賞（已收回成待重判）或有一方完全沒有寶可夢 ⇒ 帶 _v6361NeedsVerdict，
-    //     讓出口先結清排隊中的取獎視窗、再依獎賞＋放置規則一次判（同時成立 ⇒ 平手，v6.420）。
     const _v6502NoMon = [0, 1].some((i) => players[i as 0 | 1].active === null && players[i as 0 | 1].bench.length === 0);
-    if (_v6500StatusKO || players[0].active === null || players[1].active === null || state._v6361NeedsVerdict === true) {
+    if (players[0].active === null || players[1].active === null || state._v6361NeedsVerdict === true) {
       const _v6502Stop: GameState = { ...state, players, endTurnContinueAfterKO: aIdx, turnPhase: 'end' };
-      return _v6502NoMon ? requestEndgameVerdictV6361(_v6502Stop) : _v6502Stop;   // 待重判（已收回者）原樣帶著
+      return _v6502NoMon ? requestEndgameVerdictV6361(_v6502Stop) : _v6502Stop;
     }
-    // <<< v6500-checkup-ko-defer-promote
+    // <<< v6637-checkup-dispatch
 
     // 清除當前玩家的回合旗標（justPlaced / evolvedThisTurn / abilityUsedThisTurn）
     const currentPlayer = { ...players[aIdx] };
@@ -9587,6 +9334,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         // v2.124：finalize 結束時清掉 endTurnSkipCheckup（避免下次 endTurn 也跳過 checkup）
         endTurnSkipCheckup: undefined,
         endTurnCheckupAbilitiesDone: undefined,  // v5.426 清除特性區旗標
+        endTurnCheckupResume: undefined, pokemonCheckup: undefined, // v6.637 檢查續接只活到換回合
         endTurnSnapshotDone: undefined, endTurnEffectsDone: undefined, endTurnPreCheckupStop: undefined,  // ⭐v6.550
         endTurnActiveIidAtEnd: undefined,  // ⭐v6.502 清除「回合結束當下的戰鬥寶可夢」
         _pendingAttackEnergyRevive: undefined,  // v5.678 安全清除跨picker revive快照
@@ -10619,6 +10367,15 @@ function applyActionImpl(
     next = state;
   }
 
+  // >>> v6637-checkup-resume-finalize
+  // 選完順序／正面獎賞，雙方均可繼續時才換回合；補位入口也沿用同一套 END_TURN。
+  if (next.endTurnCheckupResume && !next.pokemonCheckup && !next.pendingSelection
+      && !hasAnyPendingPrize(next) && next.phase === 'playing'
+      && next.players[0].active && next.players[1].active) {
+    next = handlePlaying({ ...next, endTurnCheckupResume: undefined, endTurnContinueAfterKO: undefined }, { type: 'END_TURN' }, pool);
+  }
+  // <<< v6637-checkup-resume-finalize
+
   // v5.852 中央：偵測「當前回合玩家的戰鬥寶可夢自我換到自己備戰區(撤退/寶可夢交替/急進開關/招式互換
   //   /坂木/衝浪海灘 等所有路徑)」，統一觸發對手『戰鬥寶可夢回備戰』類(熔岩地域灼傷/漩渦言靈混亂/凹洞
   //   放指示物)。取代原散落 4 處 inline 呼叫→涵蓋所有 self-swap 站點、杜絕漏網與重複觸發。
@@ -10642,9 +10399,10 @@ function applyActionImpl(
   // ⭐v6.369：_v6369CheckupDmgUp 是 per-action 的暫存基準線，唯一消費點就是上面那一行
   //   ⇒ 消費完立刻 delete（比照 v5.947 的 _counterMoveSrcIids、v6.361 的三個暫存旗標）。
   //   ⚠ 留下去會被推上 Firestore／Mongo，並在下一個 action 誤把舊的中毒量當成基準。
-  if (next._v6369CheckupDmgUp !== undefined) {
+  if (next._v6369CheckupDmgUp !== undefined || next._checkupHealsHandled !== undefined) {
     const _c369 = { ...next };
     delete _c369._v6369CheckupDmgUp;
+    delete _c369._checkupHealsHandled;
     next = _c369;
   }
   // <<< v6369-checkup-damage-up-clear

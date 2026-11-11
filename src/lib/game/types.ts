@@ -1377,6 +1377,18 @@ export interface GameState {
    *  與 endTurnSkipCheckup 解耦：status-KO 提早 return + re-dispatch(skipCheckup) 後，
    *  status 區跳過但本旗標仍為 false → 特性區照常執行一次。finalize 時清除。 */
   endTurnCheckupAbilitiesDone?: boolean;
+  // >>> v6637-checkup-state
+  /** 寶可夢檢查的可序列化續接；回合方保留，順序由下一回合玩家決定。 */
+  pokemonCheckup?: {
+    endingIdx: 0 | 1;
+    remaining: { id: string; kind: 'status' | 'frost' | 'sand'; ownerIdx: 0 | 1 }[];
+    causes: Record<string, string>;
+  };
+  /** 完整檢查後，等順序／獎賞／補位視窗結束再完成換回合。 */
+  endTurnCheckupResume?: boolean;
+  /** 只活於本次 action：已按恢復當下快照處理的好眠，不讓出口重算恢復。 */
+  _checkupHealsHandled?: Record<string, boolean>;
+  // <<< v6637-checkup-state
   /** ⭐v6.550（v6550-turn-end-before-checkup）：回合快照（InLastOppTurn 等）已輪替 ⇒ 重送 END_TURN 不再跑（原本借用 endTurnSkipCheckup）。 */
   endTurnSnapshotDone?: boolean;
   /** ⭐v6.550：寶可夢檢查之前的「回合結束時」效果區已跑完。 */

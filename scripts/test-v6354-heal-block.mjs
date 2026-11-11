@@ -339,13 +339,14 @@ console.log('\n【K】卡比獸｜好眠（v6.347）的時序：回血發生在 
     A0(kc)?.damage === 0, String(A0(kc)?.damage));
   chk('K2b 被擋時不標 healedThisTurn', A0(ky)?.healedThisTurn !== true, String(A0(ky)?.healedThisTurn));
 
-  // K3：「靠被禁止的回血逃過 KO」—— 中毒在睡眠區**之前**結算，KO 時 active 已 null，
-  //   好眠根本進不來 ⇒ 兩側都必須 KO（實測結論：出口回捲不會讓誰「復活」）。
-  const koY = runSleep([YVEL], 155, { secondaryStatus: 'poisoned' });
-  const koC = runSleep([PLAIN], 155, { secondaryStatus: 'poisoned' });
-  chk('K3 ⭐⭐damage155＋中毒（160HP）⇒ 有／無伊裴爾塔爾**都**被中毒擊倒（沒有靠回血逃過 KO）',
-    A0(koY) == null && A0(koC) == null, `${A0(koY)?.damage}/${A0(koC)?.damage}`);
-  chk('K3b 哨兵：兩側都真的走了中毒 KO 那條路', L(koY).includes('因中毒傷害昏厥') && L(koC).includes('因中毒傷害昏厥'));   // v6.571 用詞
+  // v6.637 Rule 40：官方進階規則 F 在全部檢查後才確認昏厥。保留「禁止恢復不能逃過 KO」意圖，
+  // 改用合法150傷害：中毒到160，無禁止時好眠反面回滿；生命制約有效時才於檢查最後昏厥。
+  const koY = runSleep([YVEL], 150, { secondaryStatus: 'poisoned' });
+  const koC = runSleep([PLAIN], 150, { secondaryStatus: 'poisoned' });
+  chk('K3 ⭐⭐damage150＋中毒（160HP）⇒ 禁止恢復者昏厥，未受禁止者好眠回滿',
+    A0(koY) == null && A0(koC)?.damage === 0, `${A0(koY)?.damage}/${A0(koC)?.damage}`);
+  chk('K3b 哨兵：生命制約確實擋下好眠，並在檢查最後結算中毒昏厥',
+    L(koY).includes('生命制約') && L(koY).includes('因中毒傷害昏厥') && !L(koC).includes('昏厥'));
 
   // K4 ⭐⭐v6.369 站長裁定 六-5（逐字：「要修」）：回捲要回到「**回血發生的前一刻**」。
   //   同一個 END_TURN 內先中毒 +10 再被擋下好眠 ⇒ 必須停在 110（中毒照算、只是不恢復），
@@ -423,8 +424,9 @@ console.log('\n【L】中央性（Rule 38：同一個判準只能有一份）');
     if (nCall - nDef > 0) callers.push(rel(p) + '×' + (nCall - nDef));
     if (s.includes('生命制約')) literal.push(rel(p));
   }
-  chk('L1 ⭐⭐`isHealBlockedFor(` 的消費點只有 engine.ts 一處（唯一出口）',
-    callers.length === 1 && callers[0].startsWith('lib/game/engine.ts×1'), callers.join(','));
+  // v6.637 Rule 40：同一中央述詞新增一次「是否值得問順序」的查詢，不是第二份禁止恢復實作。
+  chk('L1 ⭐⭐`isHealBlockedFor(` 僅 engine.ts 兩處（中央恢復閘＋順序詢問判斷）',
+    callers.length === 1 && callers[0] === 'lib/game/engine.ts×2', callers.join(','));
   // ⭐v6.373：白名單 3 → 4 —— 新增的 lib/game/as-of-declaration.ts 是站長裁定 A-3 的
   //   **中央述詞**（AS_OF_DECLARATION_ABILITIES 名單 ＋ 判準本體），與本條想防的
   //   「判準被抄散到各處」方向相反。⚠ 仍然是**逐字白名單**（不是放寬成 <= N）：

@@ -116,16 +116,19 @@ function makeCases({ createGame, applyAction }) {
     assert.equal(tentLogs(s).length, 1, '灼傷昏厥後冰冷之帳同樣在補位之前放');
     assert.equal(s.players[1].bench[0].damage, 10, '對手備戰的波克基斯（有特性）放 1 個');
     assert.equal(s.endTurnContinueAfterKO, 0);
-    const iS = idxOf(s, /(?:灼傷|燒傷)傷害(?:擊倒|昏厥)/  /* v6.556 Rule 40：log 用詞改官方「灼傷」；v6.571 Rule 40：「擊倒」改「昏厥」（BASE 引擎仍是舊字樣 ⇒ 兩者都收）。意圖（灼傷昏厥那行在冰冷之帳之前）不變 */), iT = idxOf(s, /^冰冷之帳：/);
-    assert.ok(iS >= 0 && iT > iS, 'log 順序：灼傷昏厥 → 冰冷之帳');
+    // v6.637 Rule 40：官方 F 昏厥確認在所有檢查效果最後。原意「冰冷之帳在補位前」維持，
+    // 並加強成灼傷放置→冰冷之帳→確認昏厥；不能再以提早移除當作正確行為。
+    const iB = idxOf(s, /^灼傷：/), iT = idxOf(s, /^冰冷之帳：/), iKO = idxOf(s, /昏厥！/);
+    assert.ok(iB >= 0 && iT > iB && iKO > iT, 'log 順序：灼傷 → 冰冷之帳 → 最後確認昏厥');
   };
   C.F5 = () => {
     const s = endTurn(board({ active: inst(KOKO), bench: [inst(FROS)] },
                             { active: inst(KISS, { status: 'poisoned', damage: hp(KISS) - 10 }), bench: [inst(KOKO)] }));
     const dead = s.players[1].discard.find(c => c.cardId === KISS);
     assert.ok(dead, '前置：波克基斯中毒昏厥');
-    assert.equal(dead.damage, hp(KISS), '已昏厥的那隻略過（傷害只有中毒那 10）');
-    assert.equal(tentLogs(s).length, 0, '場上沒有其他有特性的寶可夢 ⇒ 沒有放任何指示物');
+    // v6.637 Rule 40：中毒達 HP 尚未確認昏厥，仍在場上受到同次檢查的冰冷之帳。
+    assert.equal(dead.damage, hp(KISS) + 10, '確認昏厥前仍完成冰冷之帳；中毒與冰冷各加10');
+    assert.equal(tentLogs(s).length, 1, '同一次檢查有特性的波克基斯仍被放置一次');
   };
   C.F6 = () => {
     const s = endTurn(board({ active: inst(KOKO), bench: [inst(FROS), inst(KISS)] },
@@ -205,8 +208,8 @@ const NAMES = {
   F1: '使用者情境：對手中毒昏厥後，END_TURN 當下冰冷之帳已放、波克基斯昏厥，雙方停下來等補位',
   F2: '雙方都要補：先補的一方等待；兩邊補完才換回合；冰冷之帳只放一次',
   F3: '對戰圓形競技場：檢查時受保護的備戰，補上戰鬥場後仍是 0',
-  F4: '灼傷昏厥後，冰冷之帳同樣在補位之前放（log 順序正確）',
-  F5: '已昏厥的那隻略過',
+  F4: '灼傷與冰冷之帳在補位之前完成，最後才確認昏厥',
+  F5: '中毒達HP仍完成檢查，不提前移除',
   F6: '正對照：沒有狀態昏厥 ⇒ 冰冷之帳照常、直接換回合',
   F7: '正面朝上獎賞的取獎視窗：取完、補完位後冰冷之帳恰好一次並換回合',
   F8: '冰冷之帳打倒昏厥方最後一隻備戰 ⇒ 直接判勝負（由出口的中央終局判定判出）',
@@ -243,9 +246,9 @@ if (hasBaseCommit(ROOT, BASE_SHA)) {
   for (const [k, f] of Object.entries(B)) { try { f(); } catch (e) { if (e instanceof assert.AssertionError) red.push(k); else throw e; } }
   try { F12(await loadSlots(bdir)); } catch (e) { if (e instanceof assert.AssertionError) red.push('F12'); else throw e; }
   console.log('  （v6.499 紅了：' + red.join('、') + '）');
-  const expectRed = ['F1', 'F2', 'F3', 'F4', 'F8', 'F9', 'F10', 'F11', 'F12'];   // F8：舊版要先補位、補上去的那隻再被冰冷之帳打倒才判定
-  const expectGreen = ['F5', 'F6', 'F7'];
-  if (expectRed.every(k => red.includes(k)) && expectGreen.every(k => !red.includes(k))) { pass++; console.log('  OK S0 HEAD-FAIL：F1～F4、F8～F12 在 v6.499 紅，F5～F7（不變的行為）在 v6.499 綠'); }
+  const expectRed = ['F1', 'F2', 'F3', 'F4', 'F5', 'F8', 'F9', 'F10', 'F11', 'F12']; // v6.637 Rule 40：F5 改守官方確認昏厥時點，舊版也必須紅。
+  const expectGreen = ['F6', 'F7'];
+  if (expectRed.every(k => red.includes(k)) && expectGreen.every(k => !red.includes(k))) { pass++; console.log('  OK S0 HEAD-FAIL：F1～F5、F8～F12 在 v6.499 紅，F6～F7（不變的行為）在 v6.499 綠'); }
   else { fail++; console.log('  FAIL S0 HEAD-FAIL 分佈不符 :: 紅＝' + red.join(',')); }
 } else shallowSkip('v6500 S0：HEAD-FAIL', '需要 BASE commit');
 
