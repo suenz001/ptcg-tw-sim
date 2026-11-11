@@ -8681,6 +8681,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       const _v6502Stop: GameState = { ...state, players, endTurnContinueAfterKO: aIdx, turnPhase: 'end' };
       return _v6502NoMon ? requestEndgameVerdictV6361(_v6502Stop) : _v6502Stop;
     }
+    // 備戰昏厥也要領完獎賞才開始下一回合，否則下一位先抽空牌可能把勝負判反。
+    if (state.pendingSelection || hasAnyPendingPrize(state)) return { ...state, players, turnPhase: 'end' };
     // <<< v6637-checkup-dispatch
 
     // 清除當前玩家的回合旗標（justPlaced / evolvedThisTurn / abilityUsedThisTurn）

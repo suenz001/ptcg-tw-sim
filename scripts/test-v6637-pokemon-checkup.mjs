@@ -151,6 +151,27 @@ function run(M) {
   }
   result.faceUpPrizeChain = !prizes.pendingSelection && prizes.players.every(p => !p.active && p.prizes.length === 5 && p.hand.length === 1)
     && prizes.endTurnContinueAfterKO === 0;
+  // 既有缺口：只有備戰昏厥也要先領完獎賞，不能讓下一位先抽空牌而把勝負判反。
+  const lastPrize = [{ ...inst(ENERGY), faceUp: true }];
+  const benchOnly = end(game({ bench: [inst(KISS, { damage: KISS.hp - 10 })] },
+    { bench: [inst(FROST)], prizes: lastPrize, deck: [] }));
+  result.benchPrizeWait = benchOnly.phase === 'playing' && benchOnly.activePlayerIndex === 0
+    && benchOnly.pendingSelection?.actorIdx === 1 && benchOnly.players[1].hand.length === 0;
+  const prizeId = benchOnly.pendingSelection?.params?.options?.[0]?.id ?? 'random';
+  const prizeWin = benchOnly.pendingSelection ? pick(benchOnly, prizeId, false, { senderIdx: 1 }) : benchOnly;
+  result.prizeWinsBeforeDeckOut = prizeWin.phase === 'game-over' && prizeWin.winner === 1
+    && prizeWin.players[1].prizes.length === 0 && !logs(prizeWin).includes('無法抽牌');
+  let bothBench = end(game({ bench: [inst(FROST), inst(KISS, { damage: KISS.hp - 20 })], prizes: [{ ...inst(ENERGY), faceUp: true }, ...fill(5)] },
+    { bench: [inst(FROST), inst(KISS, { damage: KISS.hp - 20 })], prizes: [{ ...inst(ENERGY), faceUp: true }, ...fill(5)] }));
+  const beforeBoth = bothBench.activePlayerIndex === 0 && bothBench.players.every(p => p.hand.length === 0);
+  let waitedBetween = false;
+  for (let n = 0; n < 6 && bothBench.pendingSelection; n++) {
+    bothBench = pick(bothBench, bothBench.pendingSelection.params?.options?.[0]?.id ?? 'random');
+    if (bothBench.pendingSelection) waitedBetween = bothBench.activePlayerIndex === 0 && bothBench.players.every(p => p.deck.length === 12);
+  }
+  result.bothBenchPrizesBeforeDraw = beforeBoth && waitedBetween && !bothBench.pendingSelection
+    && bothBench.activePlayerIndex === 1 && bothBench.players[0].hand.length === 1 && bothBench.players[1].hand.length === 2
+    && bothBench.players.every(p => p.prizes.length === 5);
   return result;
 }
 const srcArg = process.argv.find(a => a.startsWith('--src-root='));
@@ -162,7 +183,7 @@ if (!process.argv.includes('--no-base')) {
     const baseDir = mkdtempSync(join(tmpdir(), 'v6637-base-')); dirs.push(baseDir);
     extractBaseArchive(ROOT, BASE, ['src'], baseDir);
     const old = run(await load(baseDir));
-    for (const name of ['mirror-0-false', 'mirror-1-true', 'sleep-false-false', 'orderPrompt', 'order-frost-sand-status', 'hpZeroRetained', 'splitSources']) check(`HEAD-FAIL ${name}`, old[name] === false);
+    for (const name of ['mirror-0-false', 'mirror-1-true', 'sleep-false-false', 'orderPrompt', 'order-frost-sand-status', 'hpZeroRetained', 'splitSources', 'benchPrizeWait', 'prizeWinsBeforeDeckOut', 'bothBenchPrizesBeforeDraw']) check(`HEAD-FAIL ${name}`, old[name] === false);
     for (const name of ['pure-0-false', 'sleep-true-false', 'sleep-false-true', 'damageOnlyNoPrompt', 'nullifiedNoPrompt']) check(`正對照 BASE/HEAD ${name}`, old[name] === true && outcomes[name] === true);
   } else shallowSkip('v6637 HEAD-FAIL', '需要 v6.636 BASE');
 }
