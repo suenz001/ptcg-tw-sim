@@ -1,3 +1,4 @@
+import { assertFunctionsMatchBase } from './lib/function-baseline.mjs';   // v6.637 Rule54：整檔engine範圍鎖退休，改守相關函式
 import { revertV6633GameIfPresent } from './lib/revert-v6633-game.mjs';   // ⭐v6.633（Rule 40）：從牌庫直接進化排除全能靈魂先還原
 import { revertV6632GameIfPresent } from './lib/revert-v6632-game.mjs';   // ⭐v6.632（Rule 40）：官方判例 3 處修正先還原，再守原意
 import assert from 'node:assert/strict';
@@ -17,7 +18,7 @@ const read=p=>readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n');
 let pass=0,fail=0;
 async function T(name,fn){try{await fn();pass++;console.log('PASS '+name);}catch(e){if(!(e instanceof assert.AssertionError))throw e;fail++;console.log('FAIL '+name+' '+e.message);}}
 const base=p=>{const x=readBaseBlob(ROOT,BASE,p);assert.ok(x.ok);return x.out.replace(/\r\n/g,'\n');};
-for(const p of ['src/lib/game/engine.ts','src/lib/game/effects.ts','src/lib/game/damage-estimate.ts'])await T('P '+p+'逐位元不變',()=>{let x=read(p);x=revertV6633GameIfPresent(p,x);if(p==='src/lib/game/effects.ts'){x=revertV6632GameIfPresent(p,x);assert.ok(hasV6616File(p,x),'v6616 還原錨點不在（還原表過期）');x=revertV6616File(p,x);}assert.equal(x,base(p));});
+for(const p of ['src/lib/game/engine.ts','src/lib/game/effects.ts','src/lib/game/damage-estimate.ts'])await T('P '+p+(p==='src/lib/game/engine.ts'?'相關能量函式逐字不變':'逐位元不變'),()=>{let x=read(p);x=revertV6633GameIfPresent(p,x);if(p==='src/lib/game/effects.ts'){x=revertV6632GameIfPresent(p,x);assert.ok(hasV6616File(p,x),'v6616 還原錨點不在（還原表過期）');x=revertV6616File(p,x);}if(p==='src/lib/game/engine.ts')assertFunctionsMatchBase(x,base(p),['countEnergy','totalEnergyUnits','canAffordAttack','computeActiveRetreatCostFor']);else assert.equal(x,base(p));});
 const game=revertV6633GameIfPresent('src/routes/game/+page.svelte',read('src/routes/game/+page.svelte')),mobile=read('src/routes/game/MobilePortraitBattle.svelte');
 await T('P 僅精確還原本版即可得到BASE兩頁',()=>{for(const[p,s,f]of [['src/routes/game/+page.svelte',game,revertV6609Game],['src/routes/game/MobilePortraitBattle.svelte',mobile,revertV6609Mobile]])assert.equal(s===base(p)?s:f(s),base(p));});
 const present=existsSync(join(PRODUCT,'src/lib/cards/attached-energy.ts'));

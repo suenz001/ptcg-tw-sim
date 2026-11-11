@@ -554,8 +554,13 @@ T('⭐ 5 個消費點都真的接上中央述詞（行為端之外再加一道�
   const eng = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8');
   const gg = eng.indexOf("'貪婪食客')");
   ok(gg > 0 && /isBasicPokemonOnField/.test(eng.slice(gg - 300, gg + 400)), '貪婪食客沒走中央述詞');
-  const sand = eng.indexOf('hasRocketTyranitarSandstorm({');
-  ok(sand > 0 && /isBasicPokemonOnField/.test(eng.slice(sand, sand + 1200)), '揚沙沒走中央述詞');
+  // v6.637：揚沙改在檢查步驟計算目標，原化石／Stage2行為案例繼續驗實際放置量。
+  const sand = eng.indexOf('// >>> v6637-checkup-pipeline');
+  const sandEnd = eng.indexOf('// <<< v6637-checkup-pipeline', sand);
+  ok(sand >= 0 && sandEnd > sand, '檢查流程哨兵缺失或順序錯誤');
+  const checkup = eng.slice(sand, sandEnd);
+  ok(/hasRocketTyranitarSandstorm\(state, ownerIdx, pool\)/.test(checkup)
+    && /step.kind === 'sand' && \(owner === step.ownerIdx \|\| !isBasicPokemonOnField\(inst, card\)\)/.test(checkup), '揚沙沒走中央述詞');
   const w2 = readFileSync(join(ROOT, 'src/lib/game/effects/cards/v2750_h_wave2_full.ts'), 'utf8');
   const bz = w2.indexOf("regPost('阿羅拉 椰蛋樹ex|嗡嗡榍石'");
   ok(bz > 0, '找不到 嗡嗡榍石');

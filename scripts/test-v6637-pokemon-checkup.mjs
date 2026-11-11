@@ -1,3 +1,5 @@
+import assert from 'node:assert/strict';
+import { assertFunctionsMatchBase } from './lib/function-baseline.mjs';
 /** v6.637：官方進階規則 F／D／E-04；H/I/J 卡面。固定狀態區、結果有差才問順序、最後同時昏厥。 */
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
@@ -174,6 +176,16 @@ function run(M) {
     && bothBench.players.every(p => p.prizes.length === 5);
   return result;
 }
+// Rule54：顯示功能的舊範圍鎖改為函式級，合法檢查流程變動可通過，相關函式變動仍拒絕。
+const pinBase = "function countEnergy() { return 1; }\nfunction unrelated() { return 0; }";
+let pinGood = false;
+try { assertFunctionsMatchBase(pinBase.replace('return 0', 'return 2'), pinBase, ['countEnergy']); pinGood = true; } catch {}
+check('函式級pin正對照：無關函式可改', pinGood);
+let pinBad = 0;
+for (const text of [pinBase.replace('return 1', 'return 2'), 'function unrelated() {}', pinBase + '\nfunction countEnergy() {}']) {
+  try { assert.throws(() => assertFunctionsMatchBase(text, pinBase, ['countEnergy'])); pinBad++; } catch {}
+}
+check('函式級pin拒絕行為突變／缺失／重複', pinBad === 3);
 const srcArg = process.argv.find(a => a.startsWith('--src-root='));
 const current = await load(srcArg ? srcArg.slice('--src-root='.length) : ROOT);
 const outcomes = run(current);

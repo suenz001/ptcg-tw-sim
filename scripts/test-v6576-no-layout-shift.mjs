@@ -182,19 +182,32 @@ else if (chromium) {
         const got = await pg.waitForSelector('.treplay-bar', { timeout: 60000 }).then(() => true).catch(() => false);
         ok(`[R 前提] ${layout}：回放開起來了`, got);
         if (got) {
+          // v6.637：廣播是可關閉的高層遮罩；先由真按鈕關閉，才驗回放把手拖曳。
           await pg.waitForTimeout(800);
+          const broadcastClose = pg.locator('.admin-broadcast-close');
+          if (await broadcastClose.count()) await broadcastClose.click();
           const rg = () => pg.evaluate(() => { const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return { t: b.top, b: b.bottom, l: b.left, r: b.right }; };
-            return { pm: r('.playmat'), hd: r('.battle-header'), bar: r('.treplay-bar'), step: document.querySelector('.treplay-step')?.textContent || '', W: innerWidth, H: innerHeight }; });
+            return { pm: r('.playmat'), hd: r('.battle-header'), bar: r('.treplay-bar'), mainBottom: Math.max(...[...document.querySelector('.treplay-bar').children].filter(e => !e.matches('.treplay-timeline')).map(e => e.getBoundingClientRect().bottom)), timeline: r('.treplay-timeline'), step: document.querySelector('.treplay-step')?.textContent || '', W: innerWidth, H: innerHeight }; });
           const a = await rg();
           // 一般對局的頁首→盤面間距：把控制列暫時拿掉量
           const tag0 = await pg.addStyleTag({ content: '.treplay-float-wrap, .treplay-bar{ display:none !important; }' }); await pg.waitForTimeout(200);
           const n = await rg(); await tag0.evaluate((x) => x.remove()); await pg.waitForTimeout(200);
           const gapR = a.pm.t - a.hd.b, gapN = n.pm.t - n.hd.b;
           ok(`★★★[R1] ${layout}：回放時頁首與盤面之間沒有被控制列撐開（與沒有控制列時同一個間距）`, Math.abs(gapR - gapN) <= 1 && Math.abs(a.pm.t - n.pm.t) <= 1, JSON.stringify({ gapR, gapN }));
-          // R6（審查 P2）：預設位置疊在頁首上，不伸進盤面（1376 寬單行；回放控制列下緣 ≤ 盤面上緣＋6px）
-          ok(`★★[R6] ${layout}：1376 寬時回放控制列預設不伸進盤面`, a.bar.b <= a.pm.t + 6, JSON.stringify({ barB: a.bar.b, pmT: a.pm.t }));
-          // R2：拖曳把手
+          // v6.637 Rule40：v6.582已核准時軸獨占第二列；原主控制列仍不得伸進盤面，+6px門檻不變。
+          // 整個浮框不推動盤面由R1守，時軸必須位於主列下方且完整留在浮框內。
+          ok(`★★[R6] ${layout}：1376寬主控制列不伸進盤面，時間軸另列且留在浮框內`,
+            a.mainBottom <= a.pm.t + 6 && !!a.timeline && a.timeline.t >= a.mainBottom - 1
+              && a.timeline.b <= a.bar.b && a.timeline.l >= a.bar.l && a.timeline.r <= a.bar.r,
+            JSON.stringify({ mainBottom: a.mainBottom, pmT: a.pm.t, timeline: a.timeline, bar: a.bar }));
+          // 反對照：浮動控制列整體下移（含時間軸），主列位置判準仍必須抓到。
+          const moveMain = await pg.addStyleTag({ content: '.treplay-bar{ translate:0px 80px !important; }' });
+          const wrongPlacement = await rg(); await moveMain.evaluate(e => e.remove());
+          ok(`★★[R6M] ${layout}：主控制列下移仍會違反原+6px界線`, wrongPlacement.mainBottom > wrongPlacement.pm.t + 6);
+          // R2：先驗命中把手，避免廣播等遮罩讓測試其實按到別的元素。
           const grip = await pg.locator('.treplay-grip').boundingBox();
+          const hitsGrip = await pg.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.treplay-bar'), { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 });
+          ok(`[R2 前提] ${layout}：拖曳起點命中回放把手`, hitsGrip);
           await pg.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2); await pg.mouse.down();
           await pg.mouse.move(grip.x + 60, grip.y + 120, { steps: 6 }); await pg.mouse.move(grip.x + 220, grip.y + 300, { steps: 10 }); await pg.mouse.up(); await pg.waitForTimeout(300);
           const b = await rg();

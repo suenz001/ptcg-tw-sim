@@ -1,3 +1,4 @@
+import { assertFunctionsMatchBase } from './lib/function-baseline.mjs';   // v6.637 Rule54：整檔engine範圍鎖退休，改守相關函式
 import { revertV6633GameIfPresent } from './lib/revert-v6633-game.mjs';   // ⭐v6.633（Rule 40）：從牌庫直接進化排除全能靈魂先還原
 import { revertV6633ChangelogIfPresent } from './lib/revert-v6633-changelog.mjs';   // ⭐v6.633（Rule 40）：最新一版先還原
 import { revertV6632GameIfPresent } from './lib/revert-v6632-game.mjs';   // ⭐v6.632（Rule 40）：官方判例 3 處修正先還原
@@ -35,7 +36,7 @@ const rdP=p=>{let x=rd(p);x=revertV6633GameIfPresent(p,x);x=revertV6632GameIfPre
 const base=p=>{const r=readBaseBlob(ROOT,BASE,p);assert.ok(r.ok);return r.out.replace(/\r\n/g,'\n');};
 let pass=0,fail=0;
 async function T(name,fn){try{await fn();pass++;console.log('PASS '+name);}catch(e){if(!(e instanceof assert.AssertionError))throw e;fail++;console.log('FAIL '+name+' '+e.message);}}
-for(const path of ['src/lib/game/engine.ts','src/lib/game/effects.ts','src/lib/game/damage-estimate.ts','src/routes/game/+page.svelte'])await T('P 遊戲與桌機接線不變 '+path,()=>assert.equal(rdP(path),base(path)));   // ⭐v6.612（Rule 40）：對戰頁先還原 v6.612 的手機／電腦版接線
+for(const path of ['src/lib/game/engine.ts','src/lib/game/effects.ts','src/lib/game/damage-estimate.ts','src/routes/game/+page.svelte'])await T('P '+(path==='src/lib/game/engine.ts'?'相關能量函式逐字不變 ':'遊戲與桌機接線不變 ')+path,()=>{if(path==='src/lib/game/engine.ts')assertFunctionsMatchBase(rdP(path),base(path),['countEnergy','totalEnergyUnits','canAffordAttack','computeActiveRetreatCostFor']);else assert.equal(rdP(path),base(path));});   // ⭐v6.612（Rule 40）：對戰頁先還原 v6.612 的手機／電腦版接線
 await T('P 只精確移除本版六檔差異、無關內容保留、缺失重複拒絕',()=>{
  for(const[path,pairs]of Object.entries(PAIRS)){
   const s=rdP(path);if(s===base(path))continue;

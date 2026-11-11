@@ -611,7 +611,8 @@ T('20b. 掃描器下限：兩種 pattern 都要抓得到東西（少一種＝那
   //   engine 「持有生效特性」、effects 本地複製、engine 衝衝鼓 gate、啡咚猴卡檔。
   //   ⚠ 「祭典會場」那幾處字面**本來就沒被 pattern1 數到**（它要求 6 行內有 abilities 且是 `===`）。
   //   ⚠ BASE 時 lit 恰好＝56＝舊下限（slack 0），任何收斂都注定翻紅 ⇒ 這次改成 slack 3。
-  assert.ok(lit>=49,'pattern1 只 '+lit+'（A 類下限 49／實測基準 52）');
+  // v6.637：精確BASE→HEAD枚舉50→48，只收斂劇毒支配／好眠至同一effective中央閘；違規枚舉及自驗保留。
+  assert.ok(lit>=48,'pattern1 只 '+lit+'（A 類下限48／v6.637實測48）');
 });
 // ⭐v6.325：下限自 63 收緊到 76（實測 77）。
 // ⭐v6.326【A 類：收斂就會掉】76（slack 1）→ 74（slack 3，實測 77）。

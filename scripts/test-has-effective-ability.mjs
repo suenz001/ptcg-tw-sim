@@ -162,9 +162,14 @@ T('⭐「擁有特性的寶可夢」判定點都已接上中央述詞（新增�
   }
   // 冰冷之帳的發動者自己也要判有效性（雪妖女被消除特性時整個效果不生效）
   const eng = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8');
-  const k = eng.indexOf('const countFrosmoth');
-  assert.ok(k > 0 && /isAbilityHolderEffective/.test(eng.slice(k, k + 700)),
-    '冰冷之帳的持有者計數也要過 isAbilityHolderEffective');
+  // v6.637：由計數改為逐來源檢查步驟，發動者仍必須經同一中央有效性述詞。
+  const k = eng.indexOf('// >>> v6637-checkup-pipeline');
+  const end = eng.indexOf('// <<< v6637-checkup-pipeline', k);
+  assert.ok(k >= 0 && end > k, '檢查流程哨兵缺失或順序錯誤');
+  const checkup = eng.slice(k, end);
+  assert.ok(/const effective =/.test(checkup) && /isAbilityHolderEffective\(s, inst, card, owner, name, loc, pool\)/.test(checkup)
+    && /effective\(state, ownerIdx, inst, loc, '冰冷之帳'\)/.test(checkup),
+    '冰冷之帳的發動者也要過 isAbilityHolderEffective');
 });
 
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);

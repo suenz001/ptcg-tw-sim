@@ -300,6 +300,8 @@ console.log('⑦ 維度 A 凍結表：「卡面有效果但完全沒實裝」的
 //   (i) 特性名根本不出現 —— 可能是「按卡名實作」（化石那一族就是），也可能真的沒做；
 //   (ii) 特性名的每個出現點都硬綁到**別的卡名** —— 狠辣椒ex 被「小碎鑽」壟斷正是這型。
 const ADJUDICATED_IMPLEMENTED=new Map(Object.entries({
+  // v6.637：通用effective呼叫附近有危險密林字面，四行共現誤綁卡名；R01雙方鏡像／消除守衛另驗真行為。
+  '桃歹郎|劇毒支配':'engine.ts runPokemonCheckup 的 effective(…,劇毒支配) → isAbilityHolderEffective；test-v6637 mirror-0-false／mirror-1-true',
   '伊布ex|虹色DNA':'engine.ts canEvolveFromHandOnto → hasEffectiveAbilityByInst(…,\'虹色DNA\')（v6.203 逐字化）',
   // ⭐ v6.257 移除：鬥志戰吼改走中央閘 getEvolveTimingBypass →
   //   hasEffectiveAbilityByInst(…,'鬥志戰吼')，engine.ts 那段同時出現特性名與

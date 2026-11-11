@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import ts from 'typescript';
+import { filterNotIgnored } from './lib/tracked-scope.mjs';   // v6.637：既有中央來源母體，不掃被gitignore的診斷殘檔
 import { extractBaseArchive } from './lib/base-archive.mjs';
 /**
  * v6.616 守衛：M-P 補 17 張、SVI「Trianers Camp」收錄（只收卡圖印 H 的 58 張）、新卡包偵測連官方商品清單
@@ -269,10 +271,18 @@ if (hasBaseCommit(ROOT, BASE_SHA)) {
 
 // C4 重印判準唯一一份
 {
-  const src = (p) => stripCommentsBlankChecked(readFileSync(join(ROOT, p), 'utf8'));
+  // v6.637：空白檔不可能有函式定義；非空檔仍嚴格剝註解，保留完整掃描母體。
+  const src = (p) => {
+    const text = readFileSync(join(ROOT, p), 'utf8');
+    // 非忽略的純註解診斷檔也是合法零定義；由獨立TS parser確認，不能以剝除器自己吐空作豁免。
+    const ast = ts.createSourceFile(p, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+    if (ast.statements.length === 0 && ast.parseDiagnostics.length === 0) return '';
+    return stripCommentsBlankChecked(text, { label: p });
+  };
   const users = ['scripts/refresh-official-set-manifest.mjs', 'scripts/test-official-set-completeness.mjs'];
   const imports = users.every((p) => /import\s*\{[^}]*findSameFace[^}]*\}\s*from\s*'\.\/lib\/official-reprint-match\.mjs'/.test(src(p)));
-  const dup = readdirSync(join(ROOT, 'scripts')).filter((f) => f.endsWith('.mjs')).filter((f) => /function\s+(findSameFace|pokemonFace)\b/.test(src('scripts/' + f)));
+  const candidates = readdirSync(join(ROOT, 'scripts')).filter(f => f.endsWith('.mjs')).map(f => join(ROOT, 'scripts', f));
+  const dup = filterNotIgnored(ROOT, candidates).filter(p => /function\s+(findSameFace|pokemonFace)\b/.test(src('scripts/' + p.split(/[\\/]/).at(-1))));
   ok('★★ C4 重印判準只有 scripts/lib/official-reprint-match.mjs 一份，refresh 與完整性守衛都 import 它', imports && dup.length === 0, JSON.stringify(dup));
 }
 
