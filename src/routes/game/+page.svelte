@@ -24,6 +24,7 @@
   import { cardThumb } from '$lib/cards/thumb'; // v6.464 小尺寸顯示改用縮圖（失敗由 retryImg 立刻退回官方原圖）
   import { modalDrag } from '$lib/modal-drag';   // ⭐v6.420：全站視窗拖曳＋邊界夾制的唯一來源
   import { panelResize } from '$lib/panel-resize';   // ⭐v6.495：浮動視窗自訂大小＋記住設定（聊天視窗）
+  import { actionResponsibility } from '$lib/game/action-responsibility'; // v6639：本機雙人視角沿用必要操作的中央判準
   import { promoteModalSeats, promoteAlerts, preDiscardModalKind, promoteWaitSeat } from '$lib/game/modal-slots';   // ⭐v6.425：「該開哪個視窗」的唯一判準
 import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式清單上限（單一來源，UI 與守衛共用）
   // ⭐⭐⭐v6.177「抓取中／抓取失敗不清空已顯示資料」的唯一中央述詞（stale-while-revalidate）。
@@ -4098,9 +4099,22 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //   只在 myPlayerIndex===null 的本機雙人才適用；線上 / AI 模式 myPlayerIndex 永遠有值，走另一條路徑。
       : (myPlayerIndex !== null
           ? myPlayerIndex
-          : (game?.phase === 'playing' && (game.pendingPrizes?.[1 - aIdx] ?? 0) > 0
-              ? ((1 - aIdx) as 0 | 1)
-              : aIdx)))
+          : (() => {
+              // >>> v6639-local-action-view
+              // 選牌沿用中央責任集合；已顯示補位視窗時，優先讓該玩家看到自己的手牌。
+              // 取獎與補位可能同時合法，不能只保留仍有獎賞的攻擊方視角。
+              const preferred = game?.phase === 'playing' && (game.pendingPrizes?.[1 - aIdx] ?? 0) > 0
+                ? ((1 - aIdx) as 0 | 1) : aIdx;
+              const actors = actionResponsibility(game);
+              const promotion = game ? promoteModalSeats({
+                phase: game.phase, players: game.players, hasPendingSelection: !!game.pendingSelection,
+                defenderIdx: (1 - aIdx) as 0 | 1, myIdx: aIdx, defenderTurnMine: true,
+                isSpectator: false, activePlayerIndex: game.activePlayerIndex,
+              }).find(seat => actors.includes(seat)) : undefined;
+              // 雙方補位的先後由既有 promoteWaitSeat 決定；只切顯示，不改引擎狀態。
+              return promotion ?? (actors.includes(preferred) ? preferred : (actors[0] ?? preferred));
+              // <<< v6639-local-action-view
+            })()))
   );
   const oppIdx  = $derived<0 | 1>((1 - myIdx) as 0 | 1);
   const myPlayer  = $derived(game ? game.players[myIdx]  : null);
