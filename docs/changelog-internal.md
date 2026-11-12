@@ -7,7 +7,10 @@
 - 唯一登錄消費端仍為洛奇亞元素爆破；借招共用POST。古舊同樣提供一個全屬性，此處屬同措辭類推（不是另有直接QA）。現行借招持有者為基礎／一階，新衝天的二階兩單位全屬性不構成本招可達盤面；未擴改其他能量規則。
 - Rule40：v6362 B11～B13錯守先用唯一古舊、後續雷略過，改守完整三張丟棄，保留B2～B10原三段合法自由選擇。v6632的2a兩項改為官方不可以及三張全丟；BASE v6631除了原三項外也必須在這兩項紅，H1原三項HEAD-FAIL不變，H2精確限定新增兩項紅，未放寬成任意失敗。
 - 第一輪獨立Codex唯讀審查（非Opus）無產品P1/P2；複審發現1項P3：合法分支枚舉達上限後未檢查殘留堆疊，且跨配置合計可能蓋過單組無終局。已按審查意見逐組確認候選非空、堆疊清空、至少一終局；lost-rest-types突變原本未讓everyLegalBranch紅的缺口自行重現，修後重跑要求該斷言明確紅。其餘六突變、43項含10HEAD-FAIL及9正對照的最終證據另列。
-- 驗收及獨立複審進行中，最後結果補於本節；證據目錄 E:/ptcg-tw-sim-local/lugia6638/。未新增API、輪詢、DB讀寫或常駐連線；只有此招式的有界候選計算，量測另記。部署由站長執行 update-tournament.bat → redeploy-oracle.bat。
+- 2026-11-12 起由 Claude（Opus 5.5）接手（Sol 6.1 中斷）。Sol 在 Windows 跑的完整 984 支：982 綠、2 紅（v6609／v6610，effects.ts 舊整檔鎖走 v6633→v6634→v6635 遊戲還原鏈，沒有剝 v6.638）；另有缺 build 造成的瀏覽器段縮水（coverage-gaps 56 支）。補修 0c27b73d：revert-v6635-game.mjs 的 has／File／IfPresent 先呼叫共用 revertV6638IfPresent（IfPresent 未命中也回 s0），不放寬 v6609／v6610 斷言。
+- 中央收斂確認：全站 H/I/J 卡面「多屬性能量各 1 個」只有元素爆破；唯一 helper discardOneEnergyOfEachTypePost／runDiscardOneEachType，候選與 resolver 共用 discardEachTypeCandidates，借招重播同一 ATTACK_POST，AI 與對戰頁都讀 pending validIids。
+- Opus 5.5 獨立審查（唯讀）：P1 0。P2 本節未補驗收結果（本條即補）。P3 已修兩項：新函式移到原 JSDoc 之前（原本把 runDiscardOneEachType 的說明隔開）、對外 changelog 改成玩家看得懂的句子；還原表 V6638_PAIRS 的 effects.ts／changelog.html 重新產生並逐位元驗證回 31f2a0ae，v6633 鏈仍回 522ddb9f。其餘 P3 留著：錨點沒命中時回傳已轉 LF 的字串（相關檔都是 LF，無實際影響）、replace 的 $ 樣式（本表無 $）、偽造選擇重複一行 log、兩張相同基本火仍開視窗（既有、B2 守著）。
+- 驗收（雲端）：改後 harness＋35 免疫 36/36（P3 修正前後各一次）；tsc 0；npm run build 0；完整全套見下一條；有 build 的瀏覽器補驗見下一條。未新增 API、輪詢、DB 讀寫或常駐連線，候選計算每步 best() 最多 8 次、每次能量張數×8×3 次運算（Rule 92）。部署由站長執行 update-tournament.bat → redeploy-oracle.bat。
 
 ## v6.637（2026-11-11）寶可夢檢查同步、昏厥時點與必要順序選擇
 

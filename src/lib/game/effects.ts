@@ -21983,19 +21983,6 @@ function discardOneAttachedEnergyFromActive(
   return addLog(s, `${label}：丟棄 ${ename}`, aIdx);
 }
 
-/**
- * ⭐⭐ 「選擇這隻寶可夢身上附加的【A】【B】【C】能量**各 1 個**，將其丟棄。」
- *   使用者：洛奇亞｜元素爆破（【火】【水】【雷】各 1 個）。
- *
- * ⚠ 為什麼不走 ATTACK_PRE_DISCARD_CHOICE：中央 PreDiscardSpec 只有**單一**
- *   energyTypeFilter，表達不了「三種屬性各剛好 1 個」；而這張卡的 250 是卡面印刷、
- *   與丟幾個能量無關 ⇒ 不需要 PRE。改走 POST 的中央能量 picker（active-energy-discard，
- *   ＋ params.validIids 走中央消毒閘），一行共用的 PRE_DISCARD UI 都不用動。
- * ⚠ 屬性判定 host-aware（energyProvidesType）—— 與 紅蓮引爆／雷電落 同一支述詞。
- * ⚠ 某一屬性**只有 1 個候選**時直接丟（沒有可選的餘地，不該為此彈一次視窗）；
- *   2 個以上才開 picker —— 玩家可能想留下稜鏡／古舊等特殊能量。
- * ⚠ 某一屬性**沒有**候選時只記 log 並往下一個屬性走（卡面沒有寫「否則招式失敗」）。
- */
 // >>> v6638-discard-type-assignment
 /**
  * 官方 Q&A（30th CELEBRATION，2026-11-12 複核）：
@@ -22033,6 +22020,19 @@ function discardEachTypeCandidates(att: CardInstance, types: EnergyType[], pool:
   return att.energyAttached.filter((_, i) => (masks[i] & 1) !== 0 && 1 + after(i) === required);
 }
 // <<< v6638-discard-type-assignment
+/**
+ * ⭐⭐ 「選擇這隻寶可夢身上附加的【A】【B】【C】能量**各 1 個**，將其丟棄。」
+ *   使用者：洛奇亞｜元素爆破（【火】【水】【雷】各 1 個）。
+ *
+ * ⚠ 為什麼不走 ATTACK_PRE_DISCARD_CHOICE：中央 PreDiscardSpec 只有**單一**
+ *   energyTypeFilter，表達不了「三種屬性各剛好 1 個」；而這張卡的 250 是卡面印刷、
+ *   與丟幾個能量無關 ⇒ 不需要 PRE。改走 POST 的中央能量 picker（active-energy-discard，
+ *   ＋ params.validIids 走中央消毒閘），一行共用的 PRE_DISCARD UI 都不用動。
+ * ⚠ 屬性判定 host-aware（energyProvidesType）—— 與 紅蓮引爆／雷電落 同一支述詞。
+ * ⚠ 某一屬性**只有 1 個候選**時直接丟（沒有可選的餘地，不該為此彈一次視窗）；
+ *   2 個以上才開 picker —— 玩家可能想留下稜鏡／古舊等特殊能量。
+ * ⚠ 某一屬性**沒有**候選時只記 log 並往下一個屬性走（卡面沒有寫「否則招式失敗」）。
+ */
 export function discardOneEnergyOfEachTypePost(types: EnergyType[], label: string): AttackPostFn {
   return (state, aIdx, pool) => runDiscardOneEachType(state, aIdx, pool, types, label);
 }
