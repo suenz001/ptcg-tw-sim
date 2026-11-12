@@ -4,7 +4,12 @@
 
 - BASE `262d3b5f`（v6.638）。站長要求本機雙人操控兩套牌，補位與其他必要操作時切到該玩家視角以查手牌。
 - 根因：myIdx只有setup／待領獎賞與回合方分支，沒有讀pending.actorIdx或補位。僅本機雙人playing視角沿用actionResponsibility；先選已顯示且合法的promoteModalSeats（探測myIdx固定回合方覆蓋雙側），無補位再保留原取獎偏好／責任座位。不修改引擎狀態、規則、時計或伺服器，不加網路請求／輪詢。
-- 獨立Codex唯讀設計審查（非Opus）抓1項P2：原案兩方都有待辦就保留攻擊方，漏「攻擊方取獎＋防守方補位」；主代理實跑確認actors[0,1]但modal[1]，已修補位優先。selfKO＋對手獎賞亦加入測試。文件P3缺本版標題與BASE格式已修，唯讀初審關閉。新守衛118/0：44盤面、12條逐項HEAD-FAIL及32正對照、6條真引擎補位取獎、4條雙端接線，另20條原myIdx宣告由真Svelte編譯的響應式DOM（BASE/HEAD、390/1366）；此fixture非整頁/RWD驗收。7突變全殺、註解對照綠；改前後harness＋35免疫各36/36，tsc0、production前端build0及server-engine build0。整頁／全套／最終複審待補。
+- 獨立Codex唯讀設計審查（非Opus）抓1項P2：原案兩方都有待辦就保留攻擊方，漏「攻擊方取獎＋防守方補位」；主代理實跑確認actors[0,1]但modal[1]，已修補位優先。selfKO＋對手獎賞亦加入測試。文件P3缺本版標題與BASE格式已修，唯讀初審關閉。新守衛118/0：44盤面、12條逐項HEAD-FAIL及32正對照、6條真引擎補位取獎、4條雙端接線，另20條原myIdx宣告由真Svelte編譯的響應式DOM（BASE/HEAD、390/1366）；此fixture非整頁/RWD驗收。7突變全殺、註解對照綠；改前後harness＋35免疫各36/36，tsc0、production前端build0及server-engine build0。整頁與回歸結果如下，最終複審完成後另記。
+- 正式前端建置整頁驗收（沒有注入測試狀態）：合法兩套60張牌、關閉預設AI，雙方真拖放準備並出招造成昏厥；水方攻擊、火方補位時，四種桌機版面 classic／tabletop／fable／blue 與390px手機版均顯示火方自己的6張手牌，內容與順序一致。收合／重開既有補位視窗、確認補位成功，無JS例外。證據 hotseat6639/real-ko-r2.log、real-ko-results.json 及 real-hand-*.png；早期開發測試入口失敗未列成功、未加入網站程式。
+- 凍結來源 `9a9f0917` 完整回歸985支、40.37分鐘：首輪982綠／3紅，runner exit 1，不能寫首輪全綠。兩紅為 v6377／v6378 的CRLF負對照前提：本版game頁物理LF、其餘Windows檔CRLF；完整結束後只將該頁物理行尾還原CRLF，canonical SHA與Git blob逐字不變，沒有產品／守衛語意變更。另v6560 E6自動流程停在第1回合，未達turn>=2前提；未改產品或測試，獨立重跑54/0。其預設AI=true不走本版local2p分支；保留首輪結果，不放寬原斷言。
+- 具名補驗8/8、runner exit 0：v6377、v6378、v6161、v6246、v6560、新v6639、lint-eol-anchors、test-lint-crlf-neutral。原完整985支＋8支補驗聯集未解決0；無TIMEOUT、escape、還原失敗或主樹硬差異／狀態變化。983個共同腳本的exit／PASS／FAIL／三種skip逐筆等於真建置v6637基準，另兩支合法新增v6638與v6639。SHALLOW0，既有Windows PLATFORM1與ENV1同基準，未增加跳過。
+- 原基準5筆硬差異為上述3失敗與2新增；12筆軟差異逐項分類：行尾失敗／E6已補驗、鏈及歷史列管新增2、具名本版PREV_ALLOWED、v6638官方元素爆破兩支文字更正、四桌墊實際取樣數浮動、tar負對照暫存尾碼。既有擲硬幣輸出浮動另列。沒有未知差異或因缺build少跑瀏覽器。六個worker各10425個真建置檔案驗後62550項SHA一致；補寫本段紀錄前核對凍結14檔，只有game頁物理行尾差異、Git內容完全同；其後僅補本內部紀錄。
+- 證據：`E:/ptcg-tw-sim-local/hotseat6639/acceptance-final.json`、accept.py、baseline-output-diffs.txt、eol-before.json／eol-after.json、source-after.json、build-after.json；原報表 `E:/sb-hotseat6639/__rt/full.json` 與 supplement.json 分開保留。初審同位Codex代理最終核對時遇用量限制，改由另一位獨立Codex唯讀審查者完整核對；不冒稱Opus或前位已准推。第二位獨立Codex唯讀最終審查已自行核對完整14檔diff、原始全套及補驗報表、983共同基準、7突變、來源與建置雜湊、真手機／藍桌墊截圖及本段最終文件，未解P1／P2／P3＝0，准許僅補結論後具名提交並推送。首位設計審查發現的P2與P3修正均已複核；推送後仍待CI build／deploy／audit與測試站版本查核，正式站未由AI部署。
 
 ## v6.638 — 洛奇亞元素爆破的多色能量選擇（2026-11-12）
 - 基準 `31f2a0ae`（v6.637）。站長實測正式站確認：基本火＋基本水＋稜鏡各一張，第一步把稜鏡當火丟會保留基本火；先基本火水則全丟。根因是逐屬性丟棄只看當前候選，讓唯一雷來源提早被耗用，再將雷需求當成無法處理而略過。
