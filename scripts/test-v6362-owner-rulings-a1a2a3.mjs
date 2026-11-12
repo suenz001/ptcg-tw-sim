@@ -319,28 +319,17 @@ console.log('\n【B】洛奇亞｜元素爆破 — 站長裁定 A-2「先選【�
     !valid6.some((i) => nameOf(byIid.get(i)) === '硬岩【鬥】能量'),
     valid6.map((i) => nameOf(byIid.get(i))).join(','));
 
-  // ④ 某個屬性沒有候選 —— 用「火 + 水 + 古舊能量」付費（古舊＝1 個所有屬性 ⇒ 付得出【雷】格），
-  //    然後在【火】的 picker **故意選古舊**：【水】只剩 1 個候選自動丟，【雷】就沒有候選了。
-  //    卡面沒有寫「否則招式失敗」⇒ 只記一行 log、招式照樣結算 250。
-  //    ⭐ 官方裁定支持 fail-open：`PTCG RULES/PTCG_RULES.md` L1855
-  //      Q:「…無法丟棄拉帝歐斯身上附加的3個能量，那麼可以對對手的寶可夢造成傷害嗎？」
-  //      A:「可以。／ 這個情況下，丟棄2個拉帝歐斯身上附加的【超】能量。」
-  //      ⇒ 丟得掉幾個就丟幾個，招式照常結算（另見 L767 / L2507 同型）。
+  // ④ v6.638 Rule40：舊B11～13錯誤允許先用唯一多色來源，讓後續屬性被略過。
+  // 官方元素爆破×稜鏡直接QA否定這條選法；古舊同樣提供1個所有屬性，此處為同措辭類推。
+  // 仍保留B2～B10真正有餘裕時的三段選擇，不把所有多色能量一律禁選。
   const r7 = run(LUGIA, '元素爆破', { atkEnergy: ['Fire', 'Water', ANCIENT.id] });
-  chk('B11 ④「火+水+古舊」付得出費用，第 1 個 picker 仍是【火】且候選含古舊',
-    pend(r7)?.effectKey === 'discard-one-each-type'
-    && (pend(r7)?.params?.validIids || []).length === 2,
-    JSON.stringify({ k: pend(r7)?.effectKey, n: (pend(r7)?.params?.validIids || []).length }));
-  const anc = (P0(r7).active?.energyAttached || []).find((e) => nameOf(e) === '古舊能量');
-  const r8 = resolve(r7, [anc.iid]);
-  chk('B12 ⭐⭐④【火】用掉古舊之後【雷】沒有候選：不當掉、不開第 3 個 picker、傷害照樣 250',
-    pend(r8) === null && dmgOf(r8) === 250
-    && dNames(r8).sort().join(',') === ['古舊能量', '基本【水】能量'].sort().join(',')
-    && eNames(r8).join(',') === '基本【火】能量',
-    `pend=${pend(r8)?.effectKey} dmg=${dmgOf(r8)} 棄=${dNames(r8)} 留=${eNames(r8)}`);
-  chk('B13 ⭐④log 逐字：「元素爆破：身上沒有【雷】能量可丟棄」（fail-open，只記一行）',
-    logIdx(r8, '元素爆破：身上沒有【雷】能量可丟棄') >= 0,
-    (r8.log || []).map(msg).filter((m) => m.includes('元素爆破')).join(' | '));
+  chk('B11 ④唯一雷來源古舊不能先當火丟，三種需求各只有一個合法選擇自動結算',
+    pend(r7) === null && (P0(r7).active?.energyAttached || []).length === 0);
+  const r8 = r7;
+  chk('B12 ④火、水、古舊各丟一張，招式照常造成250',
+    dmgOf(r8) === 250 && dNames(r8).sort().join(',') === ['古舊能量', '基本【火】能量', '基本【水】能量'].sort().join(','));
+  chk('B13 ④不再錯印「身上沒有雷能量可丟棄」，每張丟棄仍有紀錄',
+    logIdx(r8, '元素爆破：身上沒有【雷】能量可丟棄') < 0 && logIdx(r8, '丟棄 古舊能量') >= 0);
   chk('B14 哨兵：①②③④ 都沒有讓招式靜默失敗（attackUsedThisTurn 一律寫上）',
     ran(r1, '元素爆破') && ran(r5, '元素爆破') && ran(r8, '元素爆破'),
     `${ran(r1, '元素爆破')}/${ran(r5, '元素爆破')}/${ran(r8, '元素爆破')}`);

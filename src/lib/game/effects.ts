@@ -21996,6 +21996,43 @@ function discardOneAttachedEnergyFromActive(
  *   2 個以上才開 picker —— 玩家可能想留下稜鏡／古舊等特殊能量。
  * ⚠ 某一屬性**沒有**候選時只記 log 並往下一個屬性走（卡面沒有寫「否則招式失敗」）。
  */
+// >>> v6638-discard-type-assignment
+/**
+ * 官方 Q&A（30th CELEBRATION，2026-11-12 複核）：
+ * Q：身上附有基本【火】能量卡、基本【水】能量卡、「稜鏡能量」卡各1張的洛奇亞使用招式「元素爆破」時，可以將「稜鏡能量」卡視為【火】能量卡丟棄，而不丟棄基本【火】能量卡嗎？
+ * A：不可以。這種情況下，將「基本【火】能量」、「基本【水】能量」、「稜鏡能量」各1張丟棄。
+ * https://asia.pokemon-card.com/tw/rules/search/?regulation=1&keyword=元素爆破
+ * 每張卡只能分配給一個待丟屬性；候選必須保留其餘需求的最大可完成數。
+ * 只用本效果最多三個屬性的位元集合（最多八種狀態），不枚舉出牌排列。
+ */
+function discardEachTypeCandidates(att: CardInstance, types: EnergyType[], pool: Map<string, Card>): CardInstance[] {
+  const masks = att.energyAttached.map(e => types.reduce((m, t, i) => energyProvidesType(att, e, t, pool) ? m | (1 << i) : m, 0));
+  const count = (m: number): number => { let n = 0; for (; m; m &= m - 1) n++; return n; };
+  const best = (skip: number, allowed: number): number => {
+    let reachable = new Set([0]);
+    for (let j = 0; j < masks.length; j++) {
+      if (j === skip || !(masks[j] & allowed)) continue;
+      const next = new Set(reachable);
+      for (const used of reachable) for (let i = 0; i < types.length; i++) {
+        const bit = 1 << i;
+        if ((masks[j] & allowed & bit) && !(used & bit)) next.add(used | bit);
+      }
+      reachable = next;
+    }
+    return Math.max(...[...reachable].map(count));
+  };
+  const all = (1 << types.length) - 1;
+  const required = best(-1, all);
+  // 同一供能位元集合的卡片可互換；最多七種非空集合，只重算一次，避免附能量多時平方成長。
+  const remaining = new Map<number, number>();
+  const after = (i: number): number => {
+    const mask = masks[i];
+    if (!remaining.has(mask)) remaining.set(mask, best(i, all & ~1));
+    return remaining.get(mask)!;
+  };
+  return att.energyAttached.filter((_, i) => (masks[i] & 1) !== 0 && 1 + after(i) === required);
+}
+// <<< v6638-discard-type-assignment
 export function discardOneEnergyOfEachTypePost(types: EnergyType[], label: string): AttackPostFn {
   return (state, aIdx, pool) => runDiscardOneEachType(state, aIdx, pool, types, label);
 }
@@ -22008,7 +22045,7 @@ function runDiscardOneEachType(
     const tag = TYPE_TO_TAG[t] ?? '';
     const att = s.players[aIdx].active;
     if (!att) return addLog(s, `${label}：戰鬥場已無寶可夢，停止丟棄`, aIdx);
-    const cand = att.energyAttached.filter(e => energyProvidesType(att, e, t, pool));
+    const cand = discardEachTypeCandidates(att, types.slice(i), pool); // v6638：不能讓先選的多色能量吃掉後續必要屬性
     if (cand.length === 0) { s = addLog(s, `${label}：身上沒有${tag}能量可丟棄`, aIdx); continue; }
     if (cand.length === 1) { s = discardOneAttachedEnergyFromActive(s, aIdx, cand[0].iid, `${label}（${tag}）`, pool); continue; }
     return withPending(addLog(s, `${label}：選擇 1 個${tag}能量丟棄`, aIdx), {
@@ -22017,7 +22054,7 @@ function runDiscardOneEachType(
       minCount: 1, maxCount: 1,
       effectKey: 'discard-one-each-type',
       params: {
-        label, targetIid: att.iid,
+        label, targetIid: att.iid, energyType: t, // v6638：resolver 重新核對候選，不能只信舊 pending 白名單
         validIids: cand.map(e => e.iid),
         restTypes: types.slice(i + 1),
         titleOverride: `${label}：選擇 1 個${tag}能量丟棄`,
@@ -22029,6 +22066,16 @@ function runDiscardOneEachType(
 regR('discard-one-each-type', (st, aIdx, iids, params, pool) => {
   const label = String(params?.label ?? '招式');
   const rest = (params?.restTypes as EnergyType[] | undefined) ?? [];
+  // >>> v6638-discard-resolver-validation
+  // 舊版已開啟的選擇沒有 energyType；沿用原標題的屬性標籤恢復當前步驟。
+  const current = (params?.energyType as EnergyType | undefined)
+    ?? (Object.keys(TYPE_TO_TAG) as EnergyType[]).find(t => String(params?.titleOverride ?? '').includes(TYPE_TO_TAG[t]));
+  const att = st.players[aIdx].active;
+  if (current && att) {
+    const valid = discardEachTypeCandidates(att, [current, ...rest], pool);
+    if (!iids.length || !valid.some(e => e.iid === iids[0])) return runDiscardOneEachType(st, aIdx, pool, [current, ...rest], label);
+  }
+  // <<< v6638-discard-resolver-validation
   let s = st;
   if (iids.length > 0) s = discardOneAttachedEnergyFromActive(s, aIdx, iids[0], label, pool);
   return runDiscardOneEachType(s, aIdx, pool, rest, label);

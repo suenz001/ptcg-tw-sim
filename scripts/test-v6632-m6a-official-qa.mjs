@@ -166,17 +166,14 @@ console.log('\n【一】夢幻ex｜記憶螺旋');
 
 // ════════════════════════════════════════════════════════════════
 console.log('\n【二】稜鏡能量');
-{ // Q：附基本火、基本水、稜鏡能量的洛奇亞用元素爆破，可以把稜鏡能量當【火】丟、保留基本火嗎？⇒ 可以
+{ // v6.638 Rule40：目前官方直接QA為「不可以」，三張能量都必須丟棄；不是放寬舊守衛。
   const fire = inst(EID.Fire), water = inst(EID.Water), prism = inst(PRISM.id);
   const s = mk({ active: inst(LUGIA.id, { energyAttached: [fire, water, prism] }) }, { active: inst(TARGET.id) });
   const r = attack(s, '元素爆破');
-  const ps = r?.pendingSelection;
-  const choosable = ps ? JSON.stringify(ps.params ?? {}) + JSON.stringify(ps.validIids ?? ps.params?.validIids ?? []) : '';
-  chk('2a 元素爆破：稜鏡能量可以被選成【火】丟棄（官方：可以）', !!ps && choosable.includes(prism.iid), `pending=${ps?.type ?? '無'} dmg=${dmgOn(r)}`);
-  // 審查 P3-11：實際結算「選稜鏡當火＋水」⇒ 基本火留在身上、稜鏡與水進棄牌
-  const r2 = ps ? act(r, { type: 'RESOLVE_SELECTION', selectedIids: [prism.iid, water.iid], actorIdx: 0 }) : null;
-  const left = r2?.players?.[0]?.active?.energyAttached?.map((e) => e.iid) ?? [];
-  chk('2a 結算：選稜鏡＋水 ⇒ 基本火留在洛奇亞身上（官方：可以不丟基本火）', !!r2 && left.includes(fire.iid) && !left.includes(prism.iid), JSON.stringify({ left, pend: r2?.pendingSelection?.type, log: LOGS(r2).slice(-2) }));
+  chk('2a 元素爆破：不能把唯一雷來源稜鏡當火先丟（官方：不可以）', !r?.pendingSelection && dmgOn(r) === 250);
+  const left = r?.players?.[0]?.active?.energyAttached ?? [];
+  const discarded = r?.players?.[0]?.discard?.map(e => e.iid) ?? [];
+  chk('2a 結算：基本火、基本水、稜鏡各丟棄一張（官方：三張全丟）', left.length === 0 && [fire, water, prism].every(e => discarded.includes(e.iid)));
 }
 { // Q：附稜鏡能量的萊希拉姆用鐳射火焰，可以 +80 嗎？⇒ 可以
   const s = mk({ active: inst(RESHI.id, { energyAttached: [inst(EID.Fire), inst(PRISM.id), inst(EID.Water)] }) }, { active: inst(TARGET.id) });
@@ -451,7 +448,9 @@ if (!IS_CHILD) {
       const green = out.split('\n').filter((l) => l.includes('✓')).length;
       console.log('    BASE 上紅的：' + (red.map((l) => l.slice(2, 40)).join('｜') || '（無）'));
       chk('H1 BASE 上本版修的三條（反撲剪借招減費／化隱 × 弱點 ×3／整人變身排除海豚俠ex）逐條紅', FIXED.every((f) => red.some((l) => l.includes(f))), red.join('\n'));
-      chk('H2 BASE 上其餘條目照綠（紅的只有這三條 ⇒ 不是 harness 壞了）', red.length === FIXED.length && green >= 40, `紅 ${red.length} 綠 ${green}`);
+      // v6.638：更正2a的兩項錯誤舊斷言後，v6.631也必須在這兩項紅；原三項HEAD-FAIL仍由H1逐條守。
+      const corrected = ['2a 元素爆破：', '2a 結算：'];
+      chk('H2 BASE 僅原三項及更正後元素爆破兩項紅，其餘照綠', red.length === FIXED.length + corrected.length && corrected.every(f => red.some(l => l.includes(f))) && green >= 40, `紅 ${red.length} 綠 ${green}`);
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   }
 }
