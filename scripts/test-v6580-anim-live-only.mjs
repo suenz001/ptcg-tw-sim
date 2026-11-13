@@ -113,7 +113,10 @@ function scenS(src) {
     S6: /if \(coinFlipStage !== 'done'\) return;\s*\n[^\n]*\n\s*if \(animObserve\(game\)\.baseline\) \{ for \(const pIdx of \[0, 1\] as const\) prevHandIids\[pIdx\]/.test(src),
     S7: /if \(animObserve\(game\)\.baseline\) \{ lastLogProcessed = _maxTs; return; \}/.test(src),
     S8: /if \(animObserve\(game\)\.baseline\) return;   \/\/ ⭐v6\.580 基準盤面：游標跟上、不補播洗牌/.test(src) && /cur > prevDiscardLen\[i\] && !_quietDisc/.test(src),
-    S9: /pk\.damage !== prev && !_quietDmg/.test(src) && /if \(!animObserve\(game\)\.baseline\) turnBanner = \{ text, timestamp: ts \};/.test(src),
+    S9: /pk\.damage !== prev && !_quietDmg/.test(src) && (/if \(!animObserve\(game\)\.baseline\) turnBanner = \{ text, timestamp: ts \};/.test(src)
+      // ⭐v6.640（Rule 40）：回合開始防誤觸要同時知道「這次有沒有顯示橫幅」，animObserve 有狀態不能呼叫兩次 ⇒ 抽成變數；
+      //   只接受這一種逐字等價寫法（基準盤面仍不顯示橫幅），不放寬成任意運算式。
+      || /const _showBanner = !animObserve\(game\)\.baseline;[^\n]*\n\s*if \(_showBanner\) turnBanner = \{ text, timestamp: ts \};/.test(src)),
   };
 }
 const LABEL = {
