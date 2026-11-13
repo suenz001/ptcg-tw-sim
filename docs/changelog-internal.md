@@ -8,7 +8,8 @@
 - 守衛 `test-v6640-turn-start-attack-guard.mjs`：A 判準邊界、B 接線（剝註解）、B4 頁面送 ATTACK 的兩種寫法（`type: 'ATTACK'`／`GameActions.attack(`）都只能出現在白名單位置、H HEAD-FAIL 逐條紅＋正對照。突變 8 個殺 7 個（`myTurnShownAt == null` 拿掉是等價突變：Number.isFinite(null) 為 false）；另加「按鈕 ondblclick 直接 dispatch 攻擊」繞過突變被 B4 殺掉。
 - Rule 40：`test-v6580` S9 原本逐字釘 `if (!animObserve(game).baseline) turnBanner = …`；animObserve 有狀態不能呼叫兩次，抽成 `_showBanner` 變數，S9 只多接受這一種逐字等價寫法（突變 `if (true)` 會紅）。還原表 `revert-v6640-turn-start-guard.mjs` 接在 revertV6639IfPresent 鏈頭，逐位元驗證還原回 v6.639／v6.638。
 - 首輪全套（fd8d9ec9）3 紅：v6370 已知平行假紅（單跑綠）；`test-changelog-size-and-archive` ⑫ 抓到對外 changelog 引用「你的回合」算第二人稱 ⇒ 改成「回合開始的提示橫幅」；v6580 S9 見上。
-- Opus 5.5 獨立審查：P1 無。P2-1 B4 只數 `type: 'ATTACK'` 字面、漏 `GameActions.attack(` ⇒ 已改白名單並補繞過突變。P3-1 import 註解錯位 ⇒ 已修。P3-2 內部紀錄佔位 ⇒ 本段。P3-3 1 秒內在已開的招式選單點招式會關掉選單（要重開）⇒ 機率低，接受。P3-4 B 段為靜態接線比對 ⇒ 接受（判準有單元測試）。
+- 最終全套（50951699）：986／986 支、21.4 分，FAIL／TIMEOUT 0、escape 0、主樹差異 0。改前改後 harness＋免疫網 36 支結果相同；tsc 0。
+- Opus 5.5 獨立審查：P1 無。P2-1 B4 只數 `type: 'ATTACK'` 字面、漏 `GameActions.attack(` ⇒ 已改白名單並補繞過突變。P3-1 import 註解錯位 ⇒ 已修。P3-2 內部紀錄佔位 ⇒ 本段。P3-3 1 秒內在已開的招式選單點招式會關掉選單（要重開）⇒ 機率低，接受。P3-4 B 段為靜態接線比對 ⇒ 接受（判準有單元測試）。複審：無新問題；P3 記一筆——B4 以「最近一個 function」與「前 120 行內有 preAttackDiscard 條件區塊」判位置是近似法，日後可改用括號配對切範圍。
 
 ## v6.639 — 本機雙人視角跟隨必要操作（2026-11-13）
 
