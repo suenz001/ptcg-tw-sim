@@ -196,7 +196,8 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { createAnimObserver, makeLocalSeenStore, type AnimObserveResult } from '$lib/game/anim-live';   // ⭐v6.580 動畫只在當下播放
   import { computeRevealEvents, revealLabel, type RevealEvent } from '$lib/game/card-reveal';   // ⭐v6.581 出牌／抽牌放到中間翻開
   import { DISCARD_TABS, discardTabMatches, discardTabCounts, type DiscardTab } from '$lib/game/discard-filter';   // ⭐v6.582 棄牌區分類頁籤
-  import { attackGatePendingFor, uiAttackStep, gateReopenTarget, gateFieldCardsLoaded } from '$lib/game/attack-gate';   // ⭐v6.595 出招前擲幣判定（混亂／招式失敗）在選擇之前
+  import { attackGatePendingFor, uiAttackStep, gateReopenTarget, gateFieldCardsLoaded } from '$lib/game/attack-gate';
+  import { attackClickGuarded } from '$lib/game/turn-start-guard';   // ⭐v6.640 回合開始防誤觸（唯一判準）   // ⭐v6.595 出招前擲幣判定（混亂／招式失敗）在選擇之前
   import { defaultBattleLayout } from '$lib/game/battle-layout-default';   // ⭐v6.596 直立大螢幕預設新版桌墊
   import { buildConcededGame } from '$lib/game/concede';   // ⭐v6.582 認輸並提議重新開局（本機 vs AI 也走同一份認輸盤面）
   import { dprFileUrl, dpFromOfSearch, dpReplayIdOfSearch } from '$lib/deck-posts/replays';   // ⭐v6.583 牌組公布欄附加的對戰紀錄
@@ -8294,6 +8295,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
   function initiateAttack(attackIndex: number) {
     if (!game || !activePlayer?.active) return;
     if (!canAct) return;   // ⭐v6.197 觀戰／認不出座位：連本地的 copy-attack 選單都不開
+    // >>> v6640-turn-start-guard
+    // ⭐v6.640 剛輪到自己、「你的回合」橫幅還在的那 1 秒內，點招式按鈕不算數，只把橫幅關掉（橫幅不攔點擊，想點掉它的那一下會穿透到招式鈕）。
+    //   已經宣告過的招式（出招前擲幣通過、等選擇）不擋，重新開選擇視窗照常。
+    if (attackClickGuarded(myTurnShownAt, Date.now()) && attackGatePendingFor(game, game.activePlayerIndex) == null) {
+      turnBanner = null;
+      return;
+    }
+    // <<< v6640-turn-start-guard
     const eff = getEffectiveAttacks(game, activePlayer.active, pool);
     const entry = eff[attackIndex];
     if (!entry) return;
@@ -8769,6 +8778,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   function notifyPromptDecline() { showNotifyPrompt = false; markPrompted(true); }
 
   let turnBanner = $state<{ text: string; timestamp: number } | null>(null);
+  let myTurnShownAt: number | null = null;   // ⭐v6.640 畫面切到「自己的回合」並顯示橫幅的時間（一般變數，不觸發重跑）
   let _prevTurnPlayerIdx = -1;
   $effect(() => {
     if (!game) { _prevTurnPlayerIdx = -1; return; }
@@ -8779,7 +8789,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const text = isMine ? '你的回合' : '對手回合';
       const ts = Date.now();
       // ⭐v6.580：背景回來補到的回合切換只響音效（原本就有，讓在別的分頁的人聽得到），不再閃橫幅
-      if (!animObserve(game).baseline) turnBanner = { text, timestamp: ts };
+      const _showBanner = !animObserve(game).baseline;   // ⭐v6.640 抽成變數（不在 effect 裡讀 turnBanner，避免多一個依賴）
+      if (_showBanner) turnBanner = { text, timestamp: ts };
+      myTurnShownAt = (isMine && _showBanner) ? ts : null;   // ⭐v6.640 沒有顯示橫幅（背景分頁回來）就不擋
       // v3.91：播放回合切換音效（清亮上行三音 C5→E5→G5）
       // v6.048：回放模式不播 —— 逐步導覽時每按一次「下一步」幾乎都會跨半回合，
       //   會變成一直嗶。回放要的是看盤面，不是重播音效。
