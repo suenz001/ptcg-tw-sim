@@ -11,7 +11,7 @@
 //   B2 已宣告的招式（attackGatePendingFor 有值）不擋——重新打開選擇視窗照常
 //   B3 回合切換時：只有「輪到自己而且真的顯示了橫幅」才記時間；否則記 null（背景分頁回來不擋）
 //   B4 玩家能出招的入口（桌機招式鈕、招式清單視窗、手機版選單）全部經過 initiateAttack；
-//      UI 層沒有別的地方直接送 ATTACK（只剩 initiateAttack 內的擲幣宣告與能量選擇確認）
+//      頁面送 ATTACK（type: 'ATTACK' 與 GameActions.attack( 兩種寫法）只出現在白名單位置（initiateAttack 與只能由它打開的選擇視窗）
 //   B5 判準只有一份：+page.svelte 不可自己寫 1000ms／TURN_START_ATTACK_GUARD_MS 的比較
 // 【H】HEAD-FAIL：BASE（v6.639）上 A、B 逐條紅
 import { build } from 'esbuild';
@@ -69,9 +69,24 @@ function checkB(pageRaw, mobileRaw, tag) {
   const btnOk = /onclick=\{\(\)=>initiateAttack\(i\)\}/.test(page);
   const listOk = /onclick=\{\(\)=>\{ attackListPicker = null; initiateAttack\(it\.i\); \}\}/.test(page);
   const mobOk = /onInitiateAttack=\{initiateAttack\}/.test(page) && /onInitiateAttack\(i\)/.test(mobile);
-  const uiAttackDispatch = (page.match(/type: 'ATTACK'/g) || []).length;
-  const iaAttackDispatch = (ia.match(/type: 'ATTACK'/g) || []).length;
-  ok(`★★ B4${tag} 桌機招式鈕／招式清單／手機選單都經過 initiateAttack，頁面直接送 ATTACK 的只有 initiateAttack 裡那一處`, btnOk && listOk && mobOk && uiAttackDispatch === 1 && iaAttackDispatch === 1 && !/type: 'ATTACK'/.test(mobile), JSON.stringify({ btnOk, listOk, mobOk, uiAttackDispatch, iaAttackDispatch }));
+  // ⭐（審查 P2-1）頁面送 ATTACK 有兩種寫法：`type: 'ATTACK'` 字面與 `GameActions.attack(`；兩種都要數。
+  //   允許的位置（白名單）：script 段只能在 initiateAttack 與「只能由 initiateAttack 打開的選擇視窗」的確認函式裡；
+  //   樣板段只能在 preAttackDiscard 視窗（同樣只能由 initiateAttack 打開）裡。白名單以外出現 ⇒ 可能繞過 1 秒防護 ⇒ 紅。
+  const SCRIPT_OK = new Set(['initiateAttack', 'finishBorrowChain', 'skipRocketCommand', 'confirmPreAttackDiscard']);
+  const scriptEnd = page.indexOf('<' + '/script>');
+  const sites = [...page.matchAll(/GameActions\.attack\(|type: 'ATTACK'/g)].map((m) => {
+    const pre = page.slice(0, m.index);
+    if (m.index < scriptEnd) {
+      const fns = [...pre.matchAll(/function (\w+)\(/g)];
+      const fn = fns.length ? fns[fns.length - 1][1] : '?';
+      return { where: 'fn:' + fn, ok: SCRIPT_OK.has(fn) };
+    }
+    const win = pre.split('\n').slice(-120).join('\n');
+    return { where: 'tpl', ok: /\{#if preAttackDiscard\b/.test(win) };
+  });
+  const bad = sites.filter((x) => !x.ok).map((x) => x.where);
+  const iaAttackDispatch = (ia.match(/GameActions\.attack\(|type: 'ATTACK'/g) || []).length;
+  ok(`★★ B4${tag} 桌機招式鈕／招式清單／手機選單都經過 initiateAttack；頁面送 ATTACK 的位置全在白名單內（共 ${sites.length} 處）`, btnOk && listOk && mobOk && scriptEnd > 0 && sites.length >= 8 && bad.length === 0 && iaAttackDispatch >= 2 && !/GameActions\.attack\(|type: 'ATTACK'/.test(mobile), JSON.stringify({ btnOk, listOk, mobOk, n: sites.length, bad, iaAttackDispatch }));
   ok(`★ B5${tag} 判準只有一份（頁面沒有自己比 1000ms）`, iG > 0 && !/TURN_START_ATTACK_GUARD_MS/.test(page) && !/myTurnShownAt\s*[<>]=?|Date\.now\(\)\s*-\s*myTurnShownAt/.test(page));
 }
 

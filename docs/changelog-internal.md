@@ -1,6 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
-見 docs/changelog-internal.md v6.640
+## v6.640 — 回合開始 1 秒內招式鈕不出招（2026-11-13）
+
+- BASE `f697be88`（v6.639）。玩家回報錦標賽 evt_mwcx3he43kc3_r1_m1：對手土龍節節ex 換上後「還沒動就自動打出第一招」。
+- 調查：伺服器步驟紀錄 ver100→101，輪到該玩家 0.79 秒後收到 ATTACK（貪心之牙）。全站送 ATTACK 的入口（招式鈕、招式清單、手機選單、gate 重開、計時到期、AI）逐一查過，沒有程式會自己出招；計時到期走 timeout-action 會寫 log 標記，本局沒有。最可疑的是回合開始 1.5 秒、全畫面、pointer-events:none 的「你的回合」橫幅：點它想關掉的那一下穿透到剛出現的招式按鈕。沒有點擊遙測，無法 100% 證明，但時間差證明不是看完盤面才選的招。
+- 站長選擇：「橫幅期間招式鈕不接受點擊」。中央判準 `src/lib/game/turn-start-guard.ts`（attackClickGuarded，1000ms）；`initiateAttack` 在 canAct 後呼叫，擋下時只關橫幅；已宣告招式（attackGatePendingFor 非 null）不擋；只有「輪到自己且真的顯示橫幅」才記時間（重新整理、背景分頁回來、對手回合都記 null）。純前端，沒有新增任何請求（Rule 92）。
+- 守衛 `test-v6640-turn-start-attack-guard.mjs`：A 判準邊界、B 接線（剝註解）、B4 頁面送 ATTACK 的兩種寫法（`type: 'ATTACK'`／`GameActions.attack(`）都只能出現在白名單位置、H HEAD-FAIL 逐條紅＋正對照。突變 8 個殺 7 個（`myTurnShownAt == null` 拿掉是等價突變：Number.isFinite(null) 為 false）；另加「按鈕 ondblclick 直接 dispatch 攻擊」繞過突變被 B4 殺掉。
+- Rule 40：`test-v6580` S9 原本逐字釘 `if (!animObserve(game).baseline) turnBanner = …`；animObserve 有狀態不能呼叫兩次，抽成 `_showBanner` 變數，S9 只多接受這一種逐字等價寫法（突變 `if (true)` 會紅）。還原表 `revert-v6640-turn-start-guard.mjs` 接在 revertV6639IfPresent 鏈頭，逐位元驗證還原回 v6.639／v6.638。
+- 首輪全套（fd8d9ec9）3 紅：v6370 已知平行假紅（單跑綠）；`test-changelog-size-and-archive` ⑫ 抓到對外 changelog 引用「你的回合」算第二人稱 ⇒ 改成「回合開始的提示橫幅」；v6580 S9 見上。
+- Opus 5.5 獨立審查：P1 無。P2-1 B4 只數 `type: 'ATTACK'` 字面、漏 `GameActions.attack(` ⇒ 已改白名單並補繞過突變。P3-1 import 註解錯位 ⇒ 已修。P3-2 內部紀錄佔位 ⇒ 本段。P3-3 1 秒內在已開的招式選單點招式會關掉選單（要重開）⇒ 機率低，接受。P3-4 B 段為靜態接線比對 ⇒ 接受（判準有單元測試）。
 
 ## v6.639 — 本機雙人視角跟隨必要操作（2026-11-13）
 

@@ -196,8 +196,8 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { createAnimObserver, makeLocalSeenStore, type AnimObserveResult } from '$lib/game/anim-live';   // ⭐v6.580 動畫只在當下播放
   import { computeRevealEvents, revealLabel, type RevealEvent } from '$lib/game/card-reveal';   // ⭐v6.581 出牌／抽牌放到中間翻開
   import { DISCARD_TABS, discardTabMatches, discardTabCounts, type DiscardTab } from '$lib/game/discard-filter';   // ⭐v6.582 棄牌區分類頁籤
-  import { attackGatePendingFor, uiAttackStep, gateReopenTarget, gateFieldCardsLoaded } from '$lib/game/attack-gate';
-  import { attackClickGuarded } from '$lib/game/turn-start-guard';   // ⭐v6.640 回合開始防誤觸（唯一判準）   // ⭐v6.595 出招前擲幣判定（混亂／招式失敗）在選擇之前
+  import { attackGatePendingFor, uiAttackStep, gateReopenTarget, gateFieldCardsLoaded } from '$lib/game/attack-gate';   // ⭐v6.595 出招前擲幣判定（混亂／招式失敗）在選擇之前
+  import { attackClickGuarded } from '$lib/game/turn-start-guard';   // ⭐v6.640 回合開始防誤觸（唯一判準）
   import { defaultBattleLayout } from '$lib/game/battle-layout-default';   // ⭐v6.596 直立大螢幕預設新版桌墊
   import { buildConcededGame } from '$lib/game/concede';   // ⭐v6.582 認輸並提議重新開局（本機 vs AI 也走同一份認輸盤面）
   import { dprFileUrl, dpFromOfSearch, dpReplayIdOfSearch } from '$lib/deck-posts/replays';   // ⭐v6.583 牌組公布欄附加的對戰紀錄
