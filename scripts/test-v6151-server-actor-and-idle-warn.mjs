@@ -157,7 +157,8 @@ const IDLE = 3;               // 3 分鐘判負
   ok('v6.119 的輕量讀降載沒有被破壞（仍先只讀 lastActionAt/updatedAt）',
     /projection: \{ lastActionAt: 1, updatedAt: 1(?:, '[A-Za-z_]+\.[A-Za-z_.]+': 1)* \}/.test(seg));   // v6.212 只准多帶帶點的子路徑
   ok('v6.119 守衛比對的早退字面沒有被改動（它用「輕量讀後 N 字元」的窗口掃）',
-    seg.indexOf('if (now <= _lastLight + idleMin * 60000) continue;') - seg.indexOf('projection: { lastActionAt: 1, updatedAt: 1') < 3500);   // v6.212 對帳區塊插在中間
+    // ⭐server v1.81（Rule 40，意圖不變）：v6.119 守衛已改成「剝掉 v181 已宣告哨兵再取段」⇒ 這裡同樣剝掉那一段再量距離（判準 3500 不動）。
+    ((s2) => s2.indexOf('if (now <= _lastLight + idleMin * 60000) continue;') - s2.indexOf('projection: { lastActionAt: 1, updatedAt: 1'))(seg.replace(/[ \t]*\/\/ >>> v181-reconcile-pending-verdict[\s\S]*?\/\/ <<< v181-reconcile-pending-verdict\r?\n/, '')) < 3500);   // v6.212 對帳區塊插在中間
 }
 
 // ── 3. 靜態：伺服器權威 actorSeat 的產生與回傳 ─────────────────────────────
