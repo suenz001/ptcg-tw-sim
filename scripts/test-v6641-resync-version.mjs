@@ -89,7 +89,7 @@ else {
   const bp = pass - before; pass = before; fail = fb;
   console.log('    BASE 紅：' + reds.join('｜'));
   ok('★★★ H1 BASE 上 A1、B1 紅', ['A1@BASE', 'B1@BASE'].every((k) => reds.some((r) => r.includes(k))), reds.join(','));
-  ok('★★ H2 BASE 上「前提」與 A2～A5 綠（正對照：抽取器與替身沒壞，v=-1 本來就會走這些路徑）', !reds.some((r) => /前提|A2@|A3|A4|A5|A6/.test(r)) && bp >= 5, reds.join(',') + ' ' + bp);
+  ok('★★ H2 BASE 上「前提」與 A2～A5 綠（正對照：抽取器與替身沒壞，v=-1 本來就會走這些路徑）', !reds.some((r) => /前提|A2b?@|A3|A4|A5|A6/.test(r)) && bp >= 5, reds.join(',') + ' ' + bp);
 }
 console.log(`=== v6.641 重新同步帶目前版本：${pass} PASS / ${fail} FAIL ===`);
 process.exit(fail ? 1 : 0);

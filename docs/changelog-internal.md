@@ -5,6 +5,8 @@
 - BASE `9c67d521`（v6.640＋server v1.81）。依據 Fable 5.2 擴容審查 P2-1：新鮮度看門狗在盤面 20 秒沒變（對手長考的正常狀態）後每 8 秒呼叫 `tForceResync`，它原本一律帶 `v=-1` ⇒ 伺服器每次讀整份房間、解碼、序列化整份盤面；但它只在 `fr.version !== tVersion` 時才採納，其餘用到的欄位在精簡 unchanged 回應裡都有。
 - 改法：`tForceResync` 帶目前版本（`_rsV`）；例外仍帶 -1：還沒有版本（tVersion 不是 ≥0 的數）、身分失效橫幅亮著（完整回應才驗身分，「立即重新同步」要能判斷好了沒）。輪詢停擺救援（`poll-stall`，同版本也要靠完整盤面回正本地預測）、進場、觀戰的 v=-1 都沒動。純前端，伺服器少做事（Rule 92）。
 - 守衛 `test-v6641-resync-version.mjs`：把頁面裡真正的 tForceResync 抽出來接假 tApi 實跑——A1 帶 v=42、A2／A2b 沒版本帶 -1、A3 身分失效帶 -1、A4 unchanged 不採納但欄位照更新、A5 新版本照採納、A6 同版本完整盤面不採納、B1 靜態；HEAD-FAIL A1／B1 紅、其餘在 BASE 綠。突變 3/3 被殺。還原表 `revert-v6641-resync-version.mjs` 接在 revertV6640IfPresent 鏈頭。
+- Opus 5.5 獨立審查（Fable 額度用完，11/20 才恢復）：P1 無。P2-1（既有問題，本版不動、待站長決定）：新鮮度看門狗、回前景、「立即重新同步」鈕都是 `tForceResync(); startTournamentPoll();`，後者同步 ++tPollGen ⇒ tForceResync 回來時代次不符整發丟棄，真正生效的是重啟後的主輪詢——也就是說看門狗那一發幾乎是純成本，本版把它變精簡回應是對的；之後可考慮讓看門狗只重啟輪詢。P3-1 遮蔽開啟時同版本不再順帶驗身分（已加註解）。P3-2 晚到的同版本完整回應以前會累加 `_staleAdoptDrops`／`stale-board-drop` 指紋，本版起不會 ⇒ 該指紋數字下降不代表狀況變好。P3-3 H2 正規式補 A2b（已修）。P3-4 admin.html 只有 SITE_VERSION_HINT 一行。
+- 全套 989 支，唯一紅燈 v6370 為已知平行假紅（單跑綠）。
 
 ## server v1.81 — 錦標賽 200 人降載第一批（2026-11-14，只動伺服器補丁，前端不 bump）
 

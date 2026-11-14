@@ -7590,6 +7590,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //   （lastActionAt、actorSeat、playerClock、longPoll、serverNow）在版本相符的精簡回應裡都有 ⇒ 改帶目前版本，
       //   版本相同拿精簡回應、不同才拿全量，行為一樣、伺服器少做事。新鮮度看門狗在對手長考時每 8 秒呼叫一次，省最多。
       //   ⚠ 例外仍帶 -1：①還沒有版本（tVersion < 0）②身分失效橫幅亮著（完整回應才會驗身分，按「立即重新同步」要能判斷好了沒）。
+      //   ⚠ 代價（審查 P3-1）：遮蔽開啟時，同版本的這一發不再順帶驗身分——身分壞掉但橫幅還沒亮時，要等版本變了才會 401（/action 也會 401）。
       const _rsV = (!(tVersion >= 0) || tAuthLost) ? -1 : tVersion;
       const fr = await tApi(`/state?room=${tActiveRoom}&v=${_rsV}&s=${mySeatIdx}`);   // v6.170 順便打心跳
       // <<< v6641-resync-version
