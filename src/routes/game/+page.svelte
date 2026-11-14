@@ -7584,7 +7584,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   主輪詢從 v5.586 起就有 `gen !== tPollGen` 這道守衛，這兩條 `v=-1` 路徑一直沒有。
     const _rv = tVersion, _rGen = tPollGen, _rRoom = tActiveRoom;
     try {
-      const fr = await tApi(`/state?room=${tActiveRoom}&v=-1&s=${mySeatIdx}`);   // v6.170 順便打心跳
+      // >>> v6641-resync-version
+      // ⭐v6.641（2026-11-14 擴容審查 P2-1）：原本一律帶 v=-1 ⇒ 伺服器每次都讀整份房間、解碼、序列化整份盤面。
+      //   但這支函式只在「版本不同」時才採納盤面（見下方 fr.version !== tVersion），其餘會用到的欄位
+      //   （lastActionAt、actorSeat、playerClock、longPoll、serverNow）在版本相符的精簡回應裡都有 ⇒ 改帶目前版本，
+      //   版本相同拿精簡回應、不同才拿全量，行為一樣、伺服器少做事。新鮮度看門狗在對手長考時每 8 秒呼叫一次，省最多。
+      //   ⚠ 例外仍帶 -1：①還沒有版本（tVersion < 0）②身分失效橫幅亮著（完整回應才會驗身分，按「立即重新同步」要能判斷好了沒）。
+      const _rsV = (!(tVersion >= 0) || tAuthLost) ? -1 : tVersion;
+      const fr = await tApi(`/state?room=${tActiveRoom}&v=${_rsV}&s=${mySeatIdx}`);   // v6.170 順便打心跳
+      // <<< v6641-resync-version
       if (_rGen !== tPollGen || _rRoom !== tActiveRoom) return;   // 已離開對戰／換房 ⇒ 這一發整發作廢
       if (fr) _tLastPollOkAt = Date.now();   // v6.149 同上：手動/看門狗同步成功也算存活（按了鈕橫幅要能立刻收掉）
       if (fr && fr.gameState && typeof fr.version === 'number') {
