@@ -446,10 +446,22 @@ T('[HEAD-FAIL⑥c] 對帳在「閒置門檻早退」之前 —— 寫在後面�
 T('[HEAD-FAIL⑥d] 對帳**真的呼叫** onMatchGameOver（剝除註解後仍在）', () => {
   assert.ok(/await onMatchGameOver\(/.test(BLOCK), '剝除註解後找不到呼叫');
 });
+// ⭐server v1.81（Rule 40，意圖不變）：v1.81 在對帳區塊內加了「照房間上的判決補寫」（v181-reconcile-pending-verdict）。
+//   那個判決是排程器在同一次 CAS 裡就決定好的，對帳只是照抄，不是「自作主張判勝負」⇒ 否定型掃描剝掉那一段再掃；
+//   被剝掉的那一段本身另外驗：只准寫 `$set: _pv.set`（不自己組勝負欄位）、而且一定要綁版本與 status:'playing'。
+const V181_RE = /[ \t]*\/\/ >>> v181-reconcile-pending-verdict[\s\S]*?\/\/ <<< v181-reconcile-pending-verdict\n/;
+const V181_SUB = (BLOCK_RAW.match(V181_RE) || [''])[0];
+const BLOCK_NEG = stripJs(BLOCK_RAW.replace(V181_RE, '')), BLOCK_NEG_ALL = stripJs(BLOCK_RAW.replace(V181_RE, ''), 'all');
 T('[否定型] 對帳區塊不得自作主張判勝負／推輪次', () => {
   for (const bad of ['advanceOrFinish', 'checkRoundAdvance', 'winnerUid', 'idleForfeit', 'TROOMS.updateOne', 'TMATCH.updateOne']) {
-    assert.ok(!BLOCK.includes(bad), '對帳區塊內不該有：' + bad);
-    assert.ok(!BLOCK_ALL.includes(bad), '（連字串一起抹）對帳區塊內不該有：' + bad);
+    assert.ok(!BLOCK_NEG.includes(bad), '對帳區塊內不該有：' + bad);
+    assert.ok(!BLOCK_NEG_ALL.includes(bad), '（連字串一起抹）對帳區塊內不該有：' + bad);
+  }
+  if (V181_SUB) {
+    const sub = stripJs(V181_SUB);
+    assert.ok(/_pv\.v === _rcRoom\.version/.test(sub), 'v1.81 補寫沒有綁房間版本');
+    assert.ok(/TMATCH\.updateOne\(\{ _id: m\._id, status: 'playing' \}, \{ \$set: _pv\.set \}\)/.test(sub), 'v1.81 補寫只准照抄房間上的判決（$set: _pv.set，且限 status:playing）');
+    for (const bad of ['winnerUid', 'idleForfeit', 'TROOMS.updateOne', 'onMatchGameOver']) assert.ok(!sub.includes(bad), 'v1.81 補寫段不該自己組勝負或改房間：' + bad);
   }
 });
 T('[自我驗證] 上一條否定型不是恆真（同樣的字串在整份檔案確實找得到）', () => {

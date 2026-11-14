@@ -405,7 +405,9 @@ async function topCutScenarios(P, L) {
     r.X4n = JSON.stringify([e1.swissRoundsAuto, e1.topCutAuto, e2.swissRoundsAuto, e2.topCutAuto, e3.swissRoundsAuto, upd]);
   }
   // X5（Fable P2-1）：投降／中途棄賽（兩種）／管理員裁定／閒置判負也記 endedAt（賽程表才看得到拖很久後投降的那幾場）；未進場不記（沒有對局）
-  const ended = (P.match(/status: 'done', (?:forfeit: true|adminResolved: true|idleForfeit: true|forfeit: true, dropForfeit: true)[^}]*endedAt: Date\.now\(\) \} \}\);/g) || []).length
+  // ⭐server v1.81（Rule 40，意圖不變）：閒置判負的欄位改成先組成 _vsIdle（同一份也隨 CAS 存進房間），TMATCH 寫 `$set: _vsIdle` ⇒ 這一種寫法也算（要兩者都在）。
+  const _idleV181 = /const _vsIdle = \{ winnerUid: wUid, winnerName: wName, status: 'done', idleForfeit: true, endedAt: Date\.now\(\) \};/.test(P) && /await TMATCH\.updateOne\(\{ _id: m\._id \}, \{ \$set: _vsIdle \}\);/.test(P) ? 1 : 0;
+  const ended = _idleV181 + (P.match(/status: 'done', (?:forfeit: true|adminResolved: true|idleForfeit: true|forfeit: true, dropForfeit: true)[^}]*endedAt: Date\.now\(\) \} \}\);/g) || []).length
     + (P.match(/doubleDrop: true, endedAt: Date\.now\(\) \} \}\);/g) || []).length;
   const noShowEnded = /noShow: true, endedAt/.test(P);
   const archTimes = /dropForfeit: !!m\.dropForfeit, gameStartedAt: m\.gameStartedAt \|\| null, endedAt: m\.endedAt \|\| null \}\)\),/.test(fnSrc(P, 'recordTournamentArchive') || '');

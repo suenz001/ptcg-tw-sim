@@ -11,11 +11,11 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '46274caa';
 const S = join(ROOT, `.v181eq-${process.pid}-s.js`), E = join(ROOT, `.v181eq-${process.pid}-e.ts`), O = join(ROOT, `.v181eq-${process.pid}-o.mjs`);
 process.on('exit', () => { for (const p of [S, E, O]) { try { unlinkSync(p); } catch { /* noop */ } } });
+if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v181 推進輪次等價（缺 BASE ' + BASE_SHA + '）'); process.exit(0); }   // 先檢查再打包（Fable P3）
 writeFileSync(S, 'export const base="";export const assets="";');
-writeFileSync(E, "export * from './src/lib/tournament/swiss';\nexport { createGame, applyAction } from './src/lib/game/engine';\nimport './src/lib/game/effects';\n");
+writeFileSync(E, "export * from './src/lib/tournament/swiss';\n");   // 推進輪次只用到瑞士制函式（Fable P3：不必打包整個引擎）
 await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node', target: 'node20', alias: { $lib: join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
 const TENG = await import(pathToFileURL(O).href);
-if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v181 推進輪次等價（缺 BASE ' + BASE_SHA + '）'); process.exit(0); }
 const _b = readBaseBlob(ROOT, BASE_SHA, 'oracle-admin/server_admin_patch.js');
 if (!_b.ok) { console.log('  FAIL 讀不到 BASE blob'); process.exit(1); }
 const HEAD = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8').replace(/\r\n/g, '\n'), BASE = _b.out.replace(/\r\n/g, '\n');

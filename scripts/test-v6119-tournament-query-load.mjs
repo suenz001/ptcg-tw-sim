@@ -14,7 +14,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const P = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
+const P_RAW = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
+// ⭐server v1.81（Rule 40，意圖不變）：v1.81 在輕量讀與完整讀之間的對帳區塊多插了一段「照判決補寫」（已宣告哨兵），
+//   會把完整讀推出本守衛固定長度的取段窗口 ⇒ 只剝掉那一段已宣告的哨兵再取段，判準一個字都不改。
+const P = P_RAW.replace(/[ \t]*\/\/ >>> v181-reconcile-pending-verdict[\s\S]*?\/\/ <<< v181-reconcile-pending-verdict\r?\n/, '');
 
 let pass = 0, fail = 0;
 function T(name, fn) {
@@ -44,7 +47,7 @@ T('⭐ TREPLAY 要有 matchId 索引（回放快照是最大的 collection 之�
 
 T('索引一律建在啟動時、且 best-effort（不得放進 request handler）', () => {
   // v6.603新索引由test-v6603行為驗證集中拒絕與重試；此處精確還原，維持舊啟動索引判準。
-  const legacy = P.includes('// >>> v6603-season-rank') ? revertAdminV176(P) : P;
+  const legacy = P_RAW.includes('// >>> v6603-season-rank') ? revertAdminV176(P_RAW) : P_RAW;   // ⭐v1.81：還原鏈要吃原始檔（不是剝過哨兵的 P）
   const lines = legacy.split('\n').filter((l) => l.includes('createIndex'));
   ok(lines.length >= 8, 'createIndex 數量異常：' + lines.length);
   for (const l of lines) {
