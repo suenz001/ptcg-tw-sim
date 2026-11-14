@@ -462,6 +462,7 @@ T('[否定型] 對帳區塊不得自作主張判勝負／推輪次', () => {
     assert.ok(/_pv\.v === _rcRoom\.version/.test(sub), 'v1.81 補寫沒有綁房間版本');
     assert.ok(/TMATCH\.updateOne\(\{ _id: m\._id, status: 'playing' \}, \{ \$set: _pv\.set \}\)/.test(sub), 'v1.81 補寫只准照抄房間上的判決（$set: _pv.set，且限 status:playing）');
     for (const bad of ['winnerUid', 'idleForfeit', 'TROOMS.updateOne', 'onMatchGameOver']) assert.ok(!sub.includes(bad), 'v1.81 補寫段不該自己組勝負或改房間：' + bad);
+    assert.ok((sub.match(/TMATCH\.updateOne\(/g) || []).length === 1, 'v1.81 補寫段只准有一次 TMATCH 寫入');   // Fable 複審 P3
   }
 });
 T('[自我驗證] 上一條否定型不是恆真（同樣的字串在整份檔案確實找得到）', () => {
