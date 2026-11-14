@@ -19,6 +19,7 @@
  * 【H】HEAD-FAIL：BASE（沒有排隊）跑同一個 B1 ⇒ 最長佔用 ≥ 400ms
  */
 import { revertAdminV180IfPresent } from './lib/sap-revert-admin-v180.mjs';
+import { revertAdminV181IfPresent } from './lib/sap-revert-admin-v181.mjs';   // ⭐server v1.81（Rule 40）
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -177,7 +178,7 @@ console.log('【C】靜態');
     const base = readBaseBlob(ROOT, BASE_SHA, P).out.replace(/\r\n/g, '\n');
     // ⭐v1.80（Rule 40）：後續版本的合法改動先用該版的單一還原表逐位元退回，意圖（v1.79 本身沒動錦標賽區塊、沒有別的改動）不變。
     //   v1.80 在本版哨兵內加了 requestTimeoutMs，C3 剝哨兵時一起剝掉；錦標賽區塊的 broadcastPush 由 PAIRS_V180 退回。
-    const SRCB = revertAdminV180IfPresent(SRC);
+    const SRCB = revertAdminV180IfPresent(revertAdminV181IfPresent(SRC));   // ⭐v1.81 由新到舊先退 v1.81
     ok('★★★ C2 錦標賽區塊逐位元未動（從第一支 /api/tournament 端點到檔尾與 BASE 相同）', SRCB.slice(SRCB.indexOf(TAIL_ANCHOR)) === base.slice(base.indexOf(TAIL_ANCHOR)));
     const stripped = SRCB.replace(/  \/\/ >>> v179-push-yield\n[\s\S]*?  \/\/ <<< v179-push-yield\n/, '');
     ok('★★ C3 剝掉本版哨兵區塊後整檔與 BASE 逐位元相同（本版沒有別的改動）', stripped === base && stripped !== SRC);

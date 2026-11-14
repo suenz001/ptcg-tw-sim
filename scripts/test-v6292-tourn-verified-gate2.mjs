@@ -51,9 +51,9 @@ import {
 // ⭐⭐⭐v6.365 站長裁定 六-2（錦標賽平手＝雙敗）：區塊又多了三段，全部以 // >>> v6365-xxx 哨兵宣告。
 //   本檔的 revert-diff 從此再串一節（先還原 v6.365 的三段，再往後退），一律串接、不放水。
 import {
-  NEW_TAIL_SHA_V180 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V180 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V180 as NEW_TEV_LEN_CUR, revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171, revertV173,
+  NEW_TAIL_SHA_V181 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V181 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V181 as NEW_TEV_LEN_CUR, revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171, revertV173,
   revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365, stripDeclaredBlocksNewerThan,
-} from './lib/tourn-revert-v180.mjs';
+} from './lib/tourn-revert-v181.mjs';
 const revertV171 = b => _rv171(revertV173(b));
 
 const revertV169 = (b) => _rv169(revertV171(b));   // v1.71 先逐字還原新修改，再接既有鎖。
@@ -63,7 +63,8 @@ const revertV154 = (b) => _rv154(revertV165(b));   // ⭐v1.65（Rule 54）：�
 const revertV6384 = (b) => _rv6384(revertV150(revertV152(revertV153(revertV154(b)))));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）；⭐v1.53 再長一節（報名牌組完整規則）；⭐v1.54 再長一節（全站 audit 降載）
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
 const revertV6365 = (b) => _rv6365(revertV6381(b));   // ⭐v6.381 鏈又長一節（別名：既有呼叫點一個字都不必改）
-import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
+import { normEol } from './lib/eol-agnostic.mjs';
+import { revertAdminV181IfPresent } from './lib/sap-revert-admin-v181.mjs';   // ⭐server v1.81（Rule 40）：A4 先逐位元退回 v1.81 的合法改動   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '410e21158c5780eda3fafadf875d7f0f4bd6db2a';   // v6.291
@@ -169,8 +170,11 @@ await T('A4 ⚠⚠ 本版零刪除：TREGS/TEVENTS/TMATCH/TCHAT 的刪除與改�
   //     ② 被剝掉的那些區塊**本身也要受檢**：一條刪除路徑都不准有，且每一個 updateOne 都必須帶
   //        CAS 條件（$ne／$in／…），不得無條件覆寫。
   //   ⭐ 並斷言「剝除器真的剝到東西」，否則哨兵被刪掉時它會靜默變成 no-op、這一條又變回整檔 pin。
-  const STRIPPED = stripDeclaredBlocksNewerThan(PATCH, 6292);
-  assert.ok(STRIPPED !== PATCH,
+  // ⭐server v1.81（Rule 40，意圖不變）：v1.81 把四處終局寫回收進 CAS helper（哨兵名 v181-* 的版本號比 6292 小、剝除器剝不到）⇒
+  //   先用 v1.81 的單一還原表逐位元退回，再照原本的方式數；不放寬任何一條判準。
+  const PATCH_A4 = revertAdminV181IfPresent(PATCH);
+  const STRIPPED = stripDeclaredBlocksNewerThan(PATCH_A4, 6292);
+  assert.ok(STRIPPED !== PATCH_A4,
     '⚠ 剝除器過期了：server_admin_patch.js 裡一組比 v6.292 新的 // >>> vNNNN-xxx 哨兵都沒有。'
     + '若確實沒有任何後續版本動過這個檔，請把這一條改回直接數 PATCH。');
   for (const pat2 of ['TREGS.deleteOne(', 'TREGS.deleteMany(', 'TREGS.updateOne(', 'TREGS.insertOne(',
@@ -180,7 +184,7 @@ await T('A4 ⚠⚠ 本版零刪除：TREGS/TEVENTS/TMATCH/TCHAT 的刪除與改�
       pat2 + ' 的出現次數與 BASE 不同（哨兵以外多了資料路徑）');
   }
   // ② 已宣告的新增區塊本身：零刪除 ＋ 改寫一律 CAS 搶占
-  const DECLARED = (PATCH.match(/[ \t]*\/\/ >>> v(\d+)-[\w-]+[\s\S]*?\/\/ <<< v\1-[\w-]+\r?\n/g) || [])
+  const DECLARED = (PATCH_A4.match(/[ \t]*\/\/ >>> v(\d+)-[\w-]+[\s\S]*?\/\/ <<< v\1-[\w-]+\r?\n/g) || [])
     .filter((blk) => Number(/>>> v(\d+)-/.exec(blk)[1]) > 6292).join('\n');
   assert.ok(DECLARED.length > 0, '抓不到任何已宣告的新增區塊（上一條已擋掉，這裡是雙保險）');
   for (const del of ['TREGS.deleteOne(', 'TREGS.deleteMany(', 'TEVENTS.deleteOne(', 'TEVENTS.deleteMany(',
@@ -308,7 +312,7 @@ await T('B6 ⚠⚠ 那 14 把鎖仍然「在守」：sha 比對式與自算 sha 
   const SELF = normEol(readFileSync(join(ROOT, 'scripts/test-v6292-tourn-verified-gate2.mjs'), 'utf8'));
   for (const [f2, s2] of [['test-v6276', v76], ['test-v6291', v91], ['test-v6292（本檔）', SELF]]) {
     // ⭐v1.65（Rule 40）：三支改接 tourn-revert-v165（鏈內含 v1.54 以前每一節）
-    assert.ok((s2.includes("from './lib/tourn-revert-v154.mjs'") || s2.includes("from './lib/tourn-revert-v165.mjs'") || s2.includes("from './lib/tourn-revert-v167.mjs'") || s2.includes("from './lib/tourn-revert-v180.mjs'")) && s2.includes('revertV6381('),
+    assert.ok((s2.includes("from './lib/tourn-revert-v154.mjs'") || s2.includes("from './lib/tourn-revert-v165.mjs'") || s2.includes("from './lib/tourn-revert-v167.mjs'") || s2.includes("from './lib/tourn-revert-v180.mjs'") || s2.includes("from './lib/tourn-revert-v181.mjs'")) && s2.includes('revertV6381('),
       f2 + ' 沒有串接 v6.381 的還原器（它的 revert-diff 會被停用）');
     assert.ok(s2.includes('revertV6365('), f2 + ' 掉了 v6.365 那一節（鏈斷了）');
   }

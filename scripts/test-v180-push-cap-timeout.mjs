@@ -26,6 +26,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { revertAdminV181IfPresent } from './lib/sap-revert-admin-v181.mjs';   // ⭐server v1.81（Rule 40）：D 組先退回 v1.81 的合法改動
 import { NEW_TAIL_SHA_V180, NEW_TEV_SHA_V180, NEW_TEV_LEN_V180, revertV180, NEW_TAIL_SHA_V176, NEW_TEV_SHA_V176, NEW_TEV_LEN_V176 } from './lib/tourn-revert-v180.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -192,7 +193,9 @@ console.log('【B】broadcastPush 上限與投影');
 
 console.log('【D】錦標賽區塊 28 把鎖');
 {
-  const tail = SRC.slice(SRC.indexOf(TAIL_ANCHOR)), tev = SRC.slice(SRC.indexOf(TEV_ANCHOR));
+  // ⭐server v1.81（Rule 40，意圖不變）：錦標賽區塊之後又被 v1.81（200 人降載第一批）合法改過 ⇒ 先用 v1.81 的單一還原表逐位元退回，再比對 v1.80 的值。
+  const SRCD = revertAdminV181IfPresent(SRC);
+  const tail = SRCD.slice(SRCD.indexOf(TAIL_ANCHOR)), tev = SRCD.slice(SRCD.indexOf(TEV_ANCHOR));
   ok('★★ D1 現行區塊指紋 ＝ NEW_*_V180（tail／tev／len）', sha(tail) === NEW_TAIL_SHA_V180 && sha(tev) === NEW_TEV_SHA_V180 && tev.length === NEW_TEV_LEN_V180, JSON.stringify([sha(tail), sha(tev), tev.length]));
   const rt = revertV180(tail), rv = revertV180(tev);
   ok('★★ D2 revertV180 之後逐位元回到 v1.76～v1.79 的值', sha(rt) === NEW_TAIL_SHA_V176 && sha(rv) === NEW_TEV_SHA_V176 && rv.length === NEW_TEV_LEN_V176);
@@ -213,7 +216,7 @@ console.log('【D】錦標賽區塊 28 把鎖');
   ok('★★ D4 v1.76 的舊指紋零殘留（還原鏈宣告端除外）', NEW_TAIL_SHA_V176 !== NEW_TAIL_SHA_V180 && stale.length === 0, stale.join(', '));
   const CONSUMERS = ['scripts/test-v6276-deck-tournament-stats.mjs', 'scripts/test-v6291-tourn-verified-gate.mjs', 'scripts/test-v6292-tourn-verified-gate2.mjs',
     'scripts/test-v6381-archive-gamedraw-and-swiss-note.mjs'];
-  const bad = CONSUMERS.filter((f) => !rd(f).includes("from './lib/tourn-revert-v180.mjs'"));
+  const bad = CONSUMERS.filter((f) => !/from '\.\/lib\/tourn-revert-v18[01]\.mjs'/.test(rd(f)));   // ⭐v1.81 起接 v181（鏈內含 v180）
   ok('★★ D5 錦標賽區塊的還原鏈消費者都改接 tourn-revert-v180', bad.length === 0, bad.join(', '));
   ok('★ D5b 整份補丁的還原入口（sap-revert-admin-v177）先退 v1.80 再剝 v1.79', /stripAdminV179IfPresent\(revertAdminV180IfPresent\(/.test(rd('scripts/lib/sap-revert-admin-v177.mjs')));
 }

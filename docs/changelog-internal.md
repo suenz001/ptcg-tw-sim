@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## server v1.81 — 錦標賽 200 人降載第一批（2026-11-14，只動伺服器補丁，前端不 bump）
+
+- BASE `46274caa`（server v1.80、前端 v6.640）。依據：Fable 5.2 擴容審查（專案文件 `claude/錦標賽200人擴容審查-fable-2026-11-14.md`）＋站長在 VM 唯讀檢查：pm2 max_memory_restart 1.5GB、restarts 2、unstable 0、Node 22.22；server.js 與補丁都沒有 unhandledRejection 處理；tournamentMatches 34,943 筆、avgObjSize 40,590 bytes。
+- P0-1：checkRoundAdvance（本輪）、單淘汰下一輪（輪空計數）、advanceSwiss、recordTournamentArchive 四處 `TMATCH.find` 只取實際用到的欄位（已結束對戰含 finalState＋finalLog，原本整批解碼再丟掉，同步 BSON 解碼卡事件迴圈）。四處都是純讀、不寫回。projection 直接寫在各自的 find 裡（既有守衛會把單一函式抽出來實跑）。
+- P1-2：檔頭加 `unhandledRejection` 處理器（只記 log、每分鐘最多 20 行、不讓進程結束；不攔 uncaughtException）。沒有 process.on 的沙盒環境略過。
+- P2-2：排程器四處終局整包寫回（閒置判負、雙方閒置／系統死角、時限雙敗、時限比獎賞）改走 `casGameOverV181`：以 version 為條件先寫房間，命中才寫對戰紀錄並推進；沒命中 ⇒ 本次不判，30 秒後下一次掃描用新盤面重判；寫入拋錯沿用舊 best-effort 照判。未進場判負、投降、管理員裁定、_forceGameOver 沒動（玩家不在場或為人工操作）。
+- P2-3：時限到「進行最後回合」公告同一次掃描合併成一則（一場時逐字同舊文、多場列前三場＋等、兩種判法分開）；放在 finally，迴圈中途拋錯也會發。
+- P2-6：回放逐動作緩衝上限 128→200（每場換手就寫出，通常只有幾格；v6561 守衛上限 ≤200）。
+- 刻意延後：P2-4（/event 每 3 秒查最近報名暱稱）——快取要接三支報名端點的失效，效益在 mongod 端、不卡 node，另版處理；P1-1 `/bracket` 版本比對、P2-1 前端看門狗 `v=-1` 為第二、三批。
+- 還原鏈（Rule 40／68）：`sap-revert-admin-v181.mjs`（PRE＝錦標賽區塊前、TAIL＝區塊內兩張表，各自全有或全無）接進 `sap-revert-admin-v177` 入口最內層；`tourn-revert-v181.mjs` 接在 v180 之前；消費者改接 v181；17 支守衛重釘 tail／tev／len；v6379 OLD_VALUES 加 v1.80、LIB_DECL 18；v180／v179／v6605／v6292 A4 先套 v1.81 還原再比（不放寬判準）。
+- 守衛 `test-v181-tourn-scale-batch1.mjs`：A1 四處帶 projection 且不含 finalState、A2 函式讀到的 m.<欄位> 全在 projection 內、A3 歸檔在照 projection 砍欄位的假 DB 上輸出與 BASE 逐欄位相同（A3b 正對照少一欄會紅）、B1～B5 CAS helper 行為與四處接線、C1～C4 公告合併、D1～D4 未處理錯誤保護、E1 上限、H HEAD-FAIL 逐條紅。突變 7/7 被殺。改前改後 harness＋免疫網 36 支相同。
 ## v6.640 — 回合開始 1 秒內招式鈕不出招（2026-11-13）
 
 - BASE `f697be88`（v6.639）。玩家回報錦標賽 evt_mwcx3he43kc3_r1_m1：對手土龍節節ex 換上後「還沒動就自動打出第一招」。
