@@ -10839,13 +10839,21 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //   ⇒ 同版本號、不同內容，該玩家畫面停住。改成：先以 version 為條件寫房間，命中才寫對戰紀錄並推進輪次；
     //   沒命中（版本已被改過）⇒ 這一場本次不判，下一次掃描（30 秒）用新盤面重新判斷（不增加任何查詢）。
     //   寫入拋錯 ⇒ 沿用舊行為照判（best-effort，與原本 try/catch 吞錯一致）。
-    async function casGameOverV181(roomId, room, buildOg, now) {
+    //   ⭐（Fable 審查 P1-1）判決（要寫進 TMATCH 的欄位＋之後要不要推進）跟盤面**同一次**寫進房間（pendingVerdictV181，綁新版本號）：
+    //   若之後 TMATCH 寫入拋錯、或進程剛好在兩個 await 之間結束，v6.212 對帳看到「房間 game-over、對戰仍 playing」時照它補寫並推進，
+    //   不會因為雙敗／雙方閒置／死角沒有勝方而整輪卡住。綁版本號：重賽會把房間版本往上推，舊判決不會被補到新對局。
+    //   verdict = { set: TMATCH 的 $set, adv: 'advance'（advanceOrFinish）| 'round'（checkRoundAdvance）| 'none', wUid, wName }
+    async function casGameOverV181(roomId, room, buildOg, now, verdict) {
       try {
         const og = buildOg();
         const filter = { _id: roomId };
         if (room && room.version != null) filter.version = room.version;
-        const r = await TROOMS.updateOne(filter, { $set: { gameState: og, version: ((room && room.version) || 1) + 1, updatedAt: now } });
-        return !(r && r.matchedCount === 0);
+        const nv = ((room && room.version) || 1) + 1;
+        const $set = { gameState: og, version: nv, updatedAt: now };
+        if (verdict && verdict.set) $set.pendingVerdictV181 = { v: nv, set: verdict.set, adv: verdict.adv || 'none', wUid: verdict.wUid == null ? null : verdict.wUid, wName: verdict.wName == null ? null : verdict.wName };
+        const r = await TROOMS.updateOne(filter, { $set });
+        if (r && r.matchedCount === 0) { console.warn('[tournament] v1.81 終局 CAS 沒命中（玩家剛好有動作），下一次掃描重判 room=' + roomId); return false; }
+        return true;
       } catch (e) { return true; }
     }
     // <<< v181-gameover-cas
@@ -13094,6 +13102,24 @@ import('firebase-admin').then(async ({ default: admin }) => {
               const _rcRoom = await TROOMS.findOne({ _id: m.roomId });
               const _rcGs = _rcRoom && _rcRoom.gameState;
               if (_rcGs && _rcGs.phase === 'game-over') {
+                // >>> v181-reconcile-pending-verdict
+                // ⭐server v1.81（Fable 審查 P1-1）：排程器先 CAS 寫房間、再寫 TMATCH；兩者之間失敗時，房間上留有同版本的判決 ⇒ 照它補寫並推進。
+                //   ⚠ 一定要 v === 房間版本（重賽會推高版本，舊判決作廢）；TMATCH 以 status:'playing' 為條件，補寫不會蓋掉已寫好的結果。
+                const _pv = _rcRoom.pendingVerdictV181;
+                if (_pv && _pv.set && _pv.v === _rcRoom.version) {
+                  try {
+                    const _pr = await TMATCH.updateOne({ _id: m._id, status: 'playing' }, { $set: _pv.set });
+                    if (_pr && _pr.modifiedCount > 0) {
+                      console.warn('[tournament] \u2699 對帳：依房間上的判決補寫對戰結果 match=' + m._id);
+                      if (_pv.adv === 'advance') await advanceOrFinish(m, _pv.wUid, _pv.wName);
+                      else if (_pv.adv === 'round') await checkRoundAdvance(ev._id);
+                    }
+                  } catch (_pvE) {
+                    console.warn('[tournament] \u26a0 對帳補寫判決失敗 match=' + m._id + ' :: ' + (_pvE && _pvE.message));
+                  }
+                  continue;
+                }
+                // <<< v181-reconcile-pending-verdict
                 // >>> v6365-reconcile-draw
                 // ⭐v6.365 六-2：平手（v6.361 的 isDraw）現在**有結果**了（雙敗）⇒ 也要補跑結算，
                 //   否則 /action 那一次呼叫失敗時，平手場照樣永遠停在 status:'playing'。
@@ -13199,8 +13225,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
             if (actor === 0 || actor === 1) {
               const winSeat = 1 - actor;
               const wUid = winSeat === 0 ? m.p1uid : m.p2uid, wName = winSeat === 0 ? m.p1name : m.p2name, lName = actor === 0 ? m.p1name : m.p2name;
-              if (!(await casGameOverV181(m.roomId, room, () => { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = (lName || '一方') + ' 閒置逾 ' + idleMin + ' 分鐘判負，' + wName + ' 勝'; return og; }, now))) continue;   // ⭐v1.81 先 CAS 寫房間：玩家剛好在讀與寫之間送出動作 ⇒ 本次不判，30 秒後的下一次掃描用新盤面重判
-              await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', idleForfeit: true, endedAt: Date.now() } });   // ⭐v1.65 endedAt
+              const _vsIdle = { winnerUid: wUid, winnerName: wName, status: 'done', idleForfeit: true, endedAt: Date.now() };   // ⭐v1.81 判決同時記在房間上（對帳可補寫）
+              if (!(await casGameOverV181(m.roomId, room, () => { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = (lName || '一方') + ' 閒置逾 ' + idleMin + ' 分鐘判負，' + wName + ' 勝'; return og; }, now, { set: _vsIdle, adv: 'advance', wUid, wName }))) continue;   // ⭐v1.81 先 CAS 寫房間：玩家剛好在讀與寫之間送出動作 ⇒ 本次不判，30 秒後的下一次掃描用新盤面重判
+              await TMATCH.updateOne({ _id: m._id }, { $set: _vsIdle });   // ⭐v1.65 endedAt（v1.81：欄位同 _vsIdle）
               await postSystemChat(swissPhase(ev) ? ('⏰ ' + (lName || '一方') + ' 閒置逾 ' + idleMin + ' 分鐘判負，本場由 ' + wName + ' 獲勝（瑞士制：雙方仍繼續後續輪次）。') : ('⏰ ' + (lName || '一方') + ' 閒置逾 ' + idleMin + ' 分鐘判負，' + wName + ' 獲勝。'));
               await advanceOrFinish(m, wUid, wName);
             } else if (actor === -1) {
@@ -13218,10 +13245,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
               //   會變成純文案，實質仍是雙淘汰。
               //   ⇒ 用 **'pending-admin'**：閒置／時限掃描都只找 `status: 'playing'`，不會再重複觸發；
               //     pending 清單（$ne 'done'）會列出它；resolve（status 非 done）可以裁定。
-              if (!(await casGameOverV181(m.roomId, room, () => { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = null; og.winReason = _deadlock ? '雙方皆已完成準備卻無人可行動（系統死角），本場改判平手，待站長人工裁定' : ('雙方皆閒置逾 ' + idleMin + ' 分鐘，雙淘汰'); return og; }, now))) continue;   // ⭐v1.81 先 CAS 寫房間：玩家剛好在讀與寫之間送出動作 ⇒ 本次不判，30 秒後的下一次掃描用新盤面重判
-              await TMATCH.updateOne({ _id: m._id }, { $set: _deadlock
+              const _vsDbl = _deadlock
                 ? { status: 'pending-admin', winnerUid: null, draw: true, deadlockDraw: true, deadlockAt: now }
-                : { status: 'done', winnerUid: null, doubleNoShow: true } });
+                : { status: 'done', winnerUid: null, doubleNoShow: true };   // ⭐v1.81 判決同時記在房間上（對帳可補寫）
+              if (!(await casGameOverV181(m.roomId, room, () => { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = null; og.winReason = _deadlock ? '雙方皆已完成準備卻無人可行動（系統死角），本場改判平手，待站長人工裁定' : ('雙方皆閒置逾 ' + idleMin + ' 分鐘，雙淘汰'); return og; }, now, { set: _vsDbl, adv: _deadlock ? 'none' : 'round' }))) continue;   // ⭐v1.81 先 CAS 寫房間：玩家剛好在讀與寫之間送出動作 ⇒ 本次不判，30 秒後的下一次掃描用新盤面重判
+              await TMATCH.updateOne({ _id: m._id }, { $set: _vsDbl });
               await postSystemChat(_deadlock ? ('\u2696\ufe0f 第 ' + m.round + ' 輪 ' + (m.p1name || 'P1') + ' vs ' + (m.p2name || 'P2') + '：雙方皆已完成準備卻無人可行動（系統死角），本場暫記**平手**並保留給管理員裁定 —— 請到 admin 的「待裁定場次」處理，處理完賽程才會往下走。') : (swissPhase(ev) ? ('⏰ 本場雙方皆閒置逾 ' + idleMin + ' 分鐘，以雙敗處理（瑞士制：雙方仍可繼續比賽）。') : ('⏰ 本場雙方皆閒置逾 ' + idleMin + ' 分鐘，雙淘汰，無人晉級。')));
               // ⚠ 死角場**不推進輪次**：它還沒有結果，等站長裁定完由 resolve 那條路徑推進。
               //   （單淘汰下若照推，這兩個人會直接從賽程消失。）
@@ -13289,16 +13317,18 @@ import('firebase-admin').then(async ({ default: admin }) => {
               // 雙方皆判敗（雙方淘汰，不需管理員）。bracket 對「無 winner 場」天生支援：兩人皆不晉級、下一輪對手輪空。
               //   'double-loss'：不比獎賞卡；'prizes'：雙方剩餘獎賞卡相同才會走到這裡。
               const _dl = _tlvM === 'double-loss';
-              if (!(await casGameOverV181(m.roomId, room, () => { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = null; og.winReason = _dl ? '對局時限到，最後回合結束後仍未分出勝負 → 雙方皆判敗（雙方淘汰）' : '對局時限到，最後回合結束後雙方剩餘獎賞卡相同 → 自動判雙敗（雙方淘汰）'; return og; }, now))) continue;   // ⭐v1.81 先 CAS 寫房間：玩家剛好在讀與寫之間送出動作 ⇒ 本次不判，30 秒後的下一次掃描用新盤面重判
-              await TMATCH.updateOne({ _id: m._id }, { $set: { status: 'done', winnerUid: null, winnerName: null, timeLimit: true, draw: true, endedAt: now } });
+              const _vsTl = { status: 'done', winnerUid: null, winnerName: null, timeLimit: true, draw: true, endedAt: now };   // ⭐v1.81 判決同時記在房間上
+              if (!(await casGameOverV181(m.roomId, room, () => { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = null; og.winReason = _dl ? '對局時限到，最後回合結束後仍未分出勝負 → 雙方皆判敗（雙方淘汰）' : '對局時限到，最後回合結束後雙方剩餘獎賞卡相同 → 自動判雙敗（雙方淘汰）'; return og; }, now, { set: _vsTl, adv: 'advance', wUid: null, wName: null }))) continue;   // ⭐v1.81 先 CAS 寫房間：玩家剛好在讀與寫之間送出動作 ⇒ 本次不判，30 秒後的下一次掃描用新盤面重判
+              await TMATCH.updateOne({ _id: m._id }, { $set: _vsTl });
               await postSystemChat((_dl ? '⏰ 對局時限到，最後回合結束後仍未分出勝負 → 雙方皆判敗' : '⏰ 對局時限到，最後回合結束後仍平手 → 自動判雙敗') + (swissPhase(ev) ? swissContinueNote(ev) : '，雙方淘汰（下一輪對手輪空）') + '。');
               await advanceOrFinish(m, null, null);
               continue;
             }
             const winSeat = (p0rem < p1rem) ? 0 : 1;
             const wUid = winSeat === 0 ? m.p1uid : m.p2uid, wName = winSeat === 0 ? m.p1name : m.p2name;
-            if (!(await casGameOverV181(m.roomId, room, () => { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = '對局時限到（最後回合結束），依取得獎賞卡數判定（取得較多者勝）：' + wName + ' 勝'; return og; }, now))) continue;   // ⭐v1.81 先 CAS 寫房間：玩家剛好在讀與寫之間送出動作 ⇒ 本次不判，30 秒後的下一次掃描用新盤面重判
-            await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', timeLimit: true, endedAt: now } });
+            const _vsTlw = { winnerUid: wUid, winnerName: wName, status: 'done', timeLimit: true, endedAt: now };   // ⭐v1.81 判決同時記在房間上
+            if (!(await casGameOverV181(m.roomId, room, () => { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = '對局時限到（最後回合結束），依取得獎賞卡數判定（取得較多者勝）：' + wName + ' 勝'; return og; }, now, { set: _vsTlw, adv: 'advance', wUid, wName }))) continue;   // ⭐v1.81 先 CAS 寫房間：玩家剛好在讀與寫之間送出動作 ⇒ 本次不判，30 秒後的下一次掃描用新盤面重判
+            await TMATCH.updateOne({ _id: m._id }, { $set: _vsTlw });
             await postSystemChat('⏰ 對局時限到（最後回合結束）：' + wName + ' 取得的獎賞卡較多（剩餘較少），獲勝。');
             await advanceOrFinish(m, wUid, wName);
           }
@@ -13309,7 +13339,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
               const grp = _tlAnnounceV181.filter((x) => x.mode === mode);
               const msg = grp.length === 1
                 ? ('⏰ 「' + grp[0].name + '」對局時限(' + limitMin + '分)到！進行最後回合：後攻方結束他的下一個回合後，' + _tlTail(mode))
-                : ('⏰ ' + grp.length + ' 場對局時限(' + limitMin + '分)到（' + grp.slice(0, 3).map((x) => '「' + x.name + '」').join('、') + (grp.length > 3 ? ' 等' : '') + '）！進行最後回合：後攻方結束他的下一個回合後，' + _tlTail(mode));
+                : ('⏰ ' + grp.length + ' 場對局時限(' + limitMin + '分)到（' + grp.slice(0, 3).map((x) => '「' + (x.name.length > 20 ? x.name.slice(0, 19) + '…' : x.name) + '」').join('、') + (grp.length > 3 ? ' 等' : '') + '）！進行最後回合：後攻方結束他的下一個回合後，' + _tlTail(mode));
               try { await postSystemChat(msg); } catch (_e) { /* best-effort 公告 */ }
             }
           }

@@ -63,8 +63,8 @@ const revertV154 = (b) => _rv154(revertV165(b));   // ⭐v1.65（Rule 54）：�
 const revertV6384 = (b) => _rv6384(revertV150(revertV152(revertV153(revertV154(b)))));   // ⭐v1.50 鍰又長一節（每日固定網站賽一鍵建立）；⭐v1.52 再長一節（/bracket 只讀用得到的欄位）；⭐v1.53 再長一節（報名牌組完整規則）；⭐v1.54 再長一節（全站 audit 降載）
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
 const revertV6365 = (b) => _rv6365(revertV6381(b));   // ⭐v6.381 鏈又長一節（別名：既有呼叫點一個字都不必改）
-import { normEol } from './lib/eol-agnostic.mjs';
-import { revertAdminV181IfPresent } from './lib/sap-revert-admin-v181.mjs';   // ⭐server v1.81（Rule 40）：A4 先逐位元退回 v1.81 的合法改動   // v6.377 C-9: CRLF 工作樹的多行錨點定位
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
+import { revertAdminV181IfPresent } from './lib/sap-revert-admin-v181.mjs';   // ⭐server v1.81（Rule 40）：A4 先逐位元退回 v1.81 的合法改動
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '410e21158c5780eda3fafadf875d7f0f4bd6db2a';   // v6.291

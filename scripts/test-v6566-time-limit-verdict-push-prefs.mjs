@@ -156,9 +156,13 @@ async function limitScenarios(P) {
     const gs = { phase: 'playing', turn, players: [{ prizes: Array(prizes[0]).fill({}) }, { prizes: Array(prizes[1]).fill({}) }] };
     const TROOMS = Col([{ _id: 'R', version: 3, gameState: gs }]);
     const chats = [], adv = [];
-    const f = new Function('ev', 'now', 'TMATCH', 'TROOMS', 'postSystemChat', 'advanceOrFinish', 'swissPhase', 'swissContinueNote', 'tTimeLimitVerdict', 'TLV_MODES',
+    // ⭐server v1.81（Rule 40，意圖不變）：時限判定的終局寫回改走補丁裡的 casGameOverV181（版本 CAS）。
+    //   這裡把「補丁裡真的那一份」抽出來、綁在同一個假 TROOMS 上注入（不另寫替身）；BASE 沒有它就傳 undefined（BASE 區塊也不會用到）。
+    const _casSrc = (() => { const i = P.indexOf('    async function casGameOverV181('); const j = i >= 0 ? P.indexOf('\n    }\n', i) : -1; return i >= 0 && j > i ? P.slice(i, j + 6) : ''; })();
+    const casGameOverV181 = _casSrc ? new Function('TROOMS', _casSrc + '\nreturn casGameOverV181;')(TROOMS) : undefined;
+    const f = new Function('ev', 'now', 'TMATCH', 'TROOMS', 'postSystemChat', 'advanceOrFinish', 'swissPhase', 'swissContinueNote', 'tTimeLimitVerdict', 'TLV_MODES', 'casGameOverV181',
       'return (async () => {\n' + blk + '\n})();');
-    await f(ev, now, TMATCH, TROOMS, async (t) => { chats.push(t); }, async (m, u, n) => { adv.push([u, n]); }, () => false, () => '', async () => cfgMode, ['double-loss', 'prizes']);
+    await f(ev, now, TMATCH, TROOMS, async (t) => { chats.push(t); }, async (m, u, n) => { adv.push([u, n]); }, () => false, () => '', async () => cfgMode, ['double-loss', 'prizes'], casGameOverV181);
     return { m: TMATCH.rows[0], room: TROOMS.rows[0], chats, adv };
   };
   // T1：時間到（第一次）⇒ 記下目前判法；公告依判法

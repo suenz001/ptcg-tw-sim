@@ -93,8 +93,11 @@ async function checkB(src, tag) {
   if (body) { try { fn = new Function('TROOMS', '"use strict";\n' + body + '\nreturn casGameOverV181;')(TROOMS); } catch { fn = null; } }
   const F = fn || (async () => 'MISSING');
   const og = { phase: 'game-over' };
-  mode = 'hit'; const r1 = await F('R1', { version: 7 }, () => og, 99);
-  ok(`★★★ B1${tag} 以 version 為條件寫房間；命中 ⇒ true，寫入版本＋1`, r1 === true && calls[0] && calls[0].f._id === 'R1' && calls[0].f.version === 7 && calls[0].u.$set.version === 8 && calls[0].u.$set.gameState === og && calls[0].u.$set.updatedAt === 99, JSON.stringify(calls[0]));
+  const VD = { set: { status: 'done', winnerUid: null, timeLimit: true }, adv: 'advance', wUid: null, wName: null };
+  mode = 'hit'; const r1 = await F('R1', { version: 7 }, () => og, 99, VD);
+  const pv = calls[0] && calls[0].u.$set.pendingVerdictV181;
+  ok(`★★★ B1${tag} 以 version 為條件寫房間；命中 ⇒ true，寫入版本＋1，判決（綁新版本號）與盤面同一次寫入`, r1 === true && calls[0] && calls[0].f._id === 'R1' && calls[0].f.version === 7 && calls[0].u.$set.version === 8 && calls[0].u.$set.gameState === og && calls[0].u.$set.updatedAt === 99
+    && pv && pv.v === 8 && pv.set === VD.set && pv.adv === 'advance' && pv.wUid === null, JSON.stringify(calls[0]));
   mode = 'miss'; const r2 = await F('R1', { version: 7 }, () => og, 99);
   ok(`★★★ B2${tag} 版本已被玩家動作改過（沒命中）⇒ false（本次不判）`, r2 === false);
   mode = 'throw'; const r3 = await F('R1', { version: 7 }, () => og, 99);
@@ -103,9 +106,35 @@ async function checkB(src, tag) {
   ok(`★★ B4${tag} 舊房間沒有 version 欄位 ⇒ 不加版本條件（照舊可寫），版本寫 2`, r4 === true && calls[0] && !('version' in calls[0].f) && calls[0].u.$set.version === 2, JSON.stringify(calls[0]));
   // B5 四處排程器接線：先 CAS（失敗 continue），再寫對戰紀錄；排程器內不再有舊式無條件整包寫回
   const scan = (() => { const i = src.indexOf('// 閒置判負：對局中(雙方都已進場)'); const j = src.indexOf('// v0.58 清掉「已結束賽事底下', i); return i > 0 && j > i ? src.slice(i, j) : ''; })();
-  const sites = [...scan.matchAll(/if \(!\(await casGameOverV181\(m\.roomId, room, \(\) => \{[^\n]*\}, now\)\)\) continue;[^\n]*\n\s*await TMATCH\.updateOne\(\{ _id: m\._id \}/g)];
+  const sites = [...scan.matchAll(/if \(!\(await casGameOverV181\(m\.roomId, room, \(\) => \{[^\n]*\}, now, \{ set: (_vs\w+), adv: [^\n]*\)\)\) continue;[^\n]*\n\s*await TMATCH\.updateOne\(\{ _id: m\._id \}, \{ \$set: (_vs\w+) \}\)/g)].filter((x) => x[1] === x[2]);   // ⭐判決物件與 TMATCH 寫入是同一份
   const legacy = (scan.match(/await TROOMS\.updateOne\(\{ _id: m\.roomId \}, \{ \$set: \{ gameState: og,/g) || []).length;
-  ok(`★★★ B5${tag} 閒置判負／雙方閒置／時限雙敗／時限比獎賞四處都先 CAS、失敗就 continue，之後才寫對戰紀錄；排程器內沒有舊式無條件寫回`, scan.length > 5000 && sites.length === 4 && legacy === 0, JSON.stringify({ scanLen: scan.length, sites: sites.length, legacy }));
+  ok(`★★★ B5${tag} 閒置判負／雙方閒置／時限雙敗／時限比獎賞四處都先 CAS（帶同一份判決）、失敗就 continue，之後才寫同一份對戰紀錄；排程器內沒有舊式無條件寫回`, scan.length > 5000 && sites.length === 4 && legacy === 0, JSON.stringify({ scanLen: scan.length, sites: sites.length, legacy }));
+}
+
+// 【B6】對帳補寫：房間 game-over＋同版本判決、對戰仍 playing ⇒ 補寫並依 adv 推進；版本不符 ⇒ 不補寫
+async function checkB6(src, tag) {
+  const i = src.indexOf('                // >>> v181-reconcile-pending-verdict'), j = src.indexOf('                // <<< v181-reconcile-pending-verdict');
+  const blk = i > 0 && j > i ? src.slice(i, j) : '';
+  const run = async (room, mStatus = 'playing') => {
+    if (!blk) return { missing: true };
+    const writes = [], adv = [], rounds = [];
+    const TMATCH = { updateOne: async (f, u) => { writes.push({ f, u }); return { modifiedCount: f.status === 'playing' && mStatus === 'playing' ? 1 : 0 }; } };
+    let cont = false;
+    await new Function('_rcRoom', 'm', 'ev', 'TMATCH', 'advanceOrFinish', 'checkRoundAdvance', 'console', '"use strict"; return (async () => { for (const _once of [1]) {' + blk + '\n return "fell"; } return "continued"; })();')(
+      room, { _id: 'M1' }, { _id: 'E1' }, TMATCH, async (m, u, n) => { adv.push([m._id, u, n]); }, async (e) => { rounds.push(e); }, { warn: () => {} }).then((x) => { cont = x === 'continued'; });
+    return { writes, adv, rounds, cont };
+  };
+  const set = { status: 'done', winnerUid: null, timeLimit: true, draw: true };
+  const a = await run({ version: 9, pendingVerdictV181: { v: 9, set, adv: 'advance', wUid: null, wName: null } });
+  ok(`★★★ B6${tag} 對帳：同版本判決 ⇒ 以 status:'playing' 為條件補寫 TMATCH，adv=advance 時推進（雙敗 winner null 也不會卡住）`,
+    !a.missing && a.writes.length === 1 && a.writes[0].f.status === 'playing' && a.writes[0].u.$set === set && a.adv.length === 1 && a.adv[0][1] === null && a.cont, JSON.stringify(a));
+  const b = await run({ version: 10, pendingVerdictV181: { v: 9, set, adv: 'advance' } });
+  ok(`★★★ B7${tag} 版本不符（例如重賽後）⇒ 不補寫、不推進，交給原本的對帳分支`, !b.missing && b.writes.length === 0 && b.adv.length === 0 && !b.cont, JSON.stringify(b));
+  const c = await run({ version: 3, pendingVerdictV181: { v: 3, set: { status: 'pending-admin' }, adv: 'none' } });
+  const d = await run({ version: 3, pendingVerdictV181: { v: 3, set: { status: 'done', doubleNoShow: true }, adv: 'round' } });
+  const e = await run({ version: 3, pendingVerdictV181: { v: 3, set, adv: 'advance' } }, 'done');
+  ok(`★★ B8${tag} 死角（none）只補寫不推進；雙方閒置（round）推進輪次；已寫過（modifiedCount 0）不重複推進`,
+    !c.missing && c.writes.length === 1 && c.adv.length === 0 && c.rounds.length === 0 && d.rounds.length === 1 && d.rounds[0] === 'E1' && e.writes.length === 1 && e.adv.length === 0, JSON.stringify({ c, d, e }));
 }
 
 // 【C】時限公告合併
@@ -162,6 +191,7 @@ const a3 = await runArchive(arch);
 let baseArch = null;
 console.log('【B】終局 CAS');
 await checkB(SRC, '');
+await checkB6(SRC, '');
 console.log('【C】時限公告合併');
 await checkC(SRC, '');
 console.log('【D】未處理錯誤保護');
@@ -183,13 +213,13 @@ else {
   const am = await runArchive(mutArch);
   ok('★★ A3b 正對照：歸檔 projection 少了 timeLimit ⇒ 輸出與 BASE 不同（A3 抓得到漏欄位）', mutArch !== arch && JSON.stringify(am.doc) !== JSON.stringify(baseArch.doc));
   const before = pass, fb = fail; const log = console.log; const lines = []; console.log = (s) => lines.push(String(s));
-  checkA(BSRC, '@BASE'); await checkB(BSRC, '@BASE'); await checkC(BSRC, '@BASE'); checkD(BSRC, '@BASE'); checkE(BSRC, '@BASE');
+  checkA(BSRC, '@BASE'); await checkB(BSRC, '@BASE'); await checkB6(BSRC, '@BASE'); await checkC(BSRC, '@BASE'); checkD(BSRC, '@BASE'); checkE(BSRC, '@BASE');
   console.log = log;
   const reds = lines.filter((l) => /FAIL/.test(l)).map((l) => l.trim().slice(5, 30));
   const bp = pass - before; pass = before; fail = fb;
   console.log('    BASE 紅：' + reds.join('｜'));
-  const want = ['A1', 'A2', 'B1', 'B2', 'B4', 'B5', 'C1', 'C2', 'C3', 'C4', 'D1', 'D2', 'D3', 'D4', 'E1'];
-  ok('★★★ H1 BASE 上 A1／A2／B1／B2／B4／B5／C1～C4／D1～D4／E1 逐條紅', want.every((k) => reds.some((r) => r.includes(k + '@BASE'))), reds.join(','));
+  const want = ['A1', 'A2', 'B1', 'B2', 'B4', 'B5', 'B6', 'B7', 'B8', 'C1', 'C2', 'C3', 'C4', 'D1', 'D2', 'D3', 'D4', 'E1'];
+  ok('★★★ H1 BASE 上 A1／A2／B1／B2／B4～B8／C1～C4／D1～D4／E1 逐條紅', want.every((k) => reds.some((r) => r.includes(k + '@BASE'))), reds.join(','));
   ok('★★ H2 BASE 上「前提」照樣綠（正對照：抽取器沒壞）', !reds.some((r) => r.includes('前提')) && bp >= 1, String(bp));
 }
 console.log(`=== server v1.81 錦標賽降載第一批：${pass} PASS / ${fail} FAIL ===`);
