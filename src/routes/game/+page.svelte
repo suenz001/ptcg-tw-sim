@@ -12302,8 +12302,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <!-- ⭐v6.645 自動配對：找到對手 ⇒ 雙方 15 秒內按接受 -->
     {#if cmView?.state === 'found'}
       <div class="cm-found-backdrop" role="dialog" aria-modal="true" aria-label="找到對手">
-        <div class="cm-found">
-          <h3>⚡ 找到對手！</h3>
+        <div class="cm-found" use:modalDrag>
+          <h3 class="modal-drag-handle">⚡ 找到對手！</h3>
           <p class="cm-opp">{cmView.opponentNick}</p>
           <p class="cm-left">剩下 {Math.ceil((cmView.msLeft ?? 0) / 1000)} 秒</p>
           {#if cmView.accepted}
@@ -21778,6 +21778,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .btn-create-room-cta .cri-title { color: #005500; }
     :global(html[data-theme='light']:not([data-battle-view])) .btn-create-room-cta .cri-sub { color: #213345; }
     :global(html[data-theme='light']:not([data-battle-view])) .btn-create-room-cta .cri-chevron { color: #005500; }
+    :global(html[data-theme='light']:not([data-battle-view])) .cm-block .cm-cta { background: linear-gradient(135deg,#e4e7ee 0%,#eceef3 100%); border-color: #5d7dbb; }
+    :global(html[data-theme='light']:not([data-battle-view])) .cm-block .cm-cta:hover { background: linear-gradient(135deg,#dce0e9 0%,#e8eaf0 100%); }
+    :global(html[data-theme='light']:not([data-battle-view])) .cm-block .cm-cta .cri-title, :global(html[data-theme='light']:not([data-battle-view])) .cm-block .cm-cta .cri-chevron { color: #001a43; }
+    :global(html[data-theme='light']:not([data-battle-view])) .cm-status { border: 1px solid #5d7dbb; background: #f0f2f6; color: #020918; }
+    :global(html[data-theme='light']:not([data-battle-view])) .cm-hint { color: #435567; }
+    :global(html[data-theme='light']:not([data-battle-view])) .cm-notice { color: #754e00; }
+    :global(html[data-theme='light']:not([data-battle-view])) .cm-found { background: #f0f2f5; border: 2px solid #6285d9; color: #00040f; }
+    :global(html[data-theme='light']:not([data-battle-view])) .cm-found .cm-opp { color: #755800; }
+    :global(html[data-theme='light']:not([data-battle-view])) .cm-found .cm-left { color: #435567; }
     :global(html[data-theme='light']:not([data-battle-view])) .create-room-inline { background: #f2f5f2; border: 1px solid #73b773; }
     :global(html[data-theme='light']:not([data-battle-view])) .cri-header h3 { color: #005500; }
     :global(html[data-theme='light']:not([data-battle-view])) .btn-link { color: #246824; }

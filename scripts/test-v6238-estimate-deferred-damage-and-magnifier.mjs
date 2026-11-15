@@ -446,7 +446,8 @@ console.log('\n⑨ 【B】三種桌機版面：unused CSS 警告集合必須與�
   //   `.action-btns > .btn-act.atk:nth-of-type(N)` 整組失聯 —— svelte 編譯器的
   //   unused-CSS 警告就是當時抓到它的儀器。這裡把它變成常設守衛。
   const BASELINE = [
-    '.battle-root textarea', '.mini-poke-btn img', '.online-form h2', '.online-form select',
+    '.battle-root textarea', '.mini-poke-btn img', '.online-form h2',
+    // ⭐v6.645（Rule 40）：大廳「⚡ 自動配對」的牌組選單是 .online-form 裡的 select ⇒ '.online-form select' 從「沒有對象」變成有用（變少不是失聯）
     '.preset-toggle-row input', '.settings-section h4', '.setup-screen h2',
     // ⭐v6.507（Rule 40）：全站頁首統一把大廳的 h1 與三份 .auth-user 換成共用元件 PageHeader／AccountBar（刻意的結構改動，不是失聯）
     //   ⇒ 這 6 條舊樣式沒有對象。本條原意（防止「意外」失聯）不變，逐條登記；之後清理對戰頁樣式時一起刪掉並從這裡移除。

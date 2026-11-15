@@ -344,9 +344,8 @@ const SRV = rd(SRV_REL);
   const RV181 = await import('./lib/tourn-revert-v181.mjs');   // ⭐v1.82：v1.81 的「新值」現在也是舊值
   const RV182 = await import('./lib/tourn-revert-v182.mjs');   // ⭐v1.83：v1.82 的「新值」現在也是舊值
   const RV183 = await import('./lib/tourn-revert-v183.mjs');   // ⭐v1.84：v1.83 的「新值」現在也是舊值
-  const RV184 = await import('./lib/tourn-revert-v184.mjs');   // ⭐v1.85：v1.84 的「新值」現在也是舊值
+  // ⭐v1.85 只動錦標賽區塊之前 ⇒ tail／tev 指紋與 v1.84 相同，v1.84 的值仍是「現行值」，不列入舊值（列進去會讓「零殘留」誤紅）
   const OLD_VALUES = [
-    ['v1.84 tail', RV184.NEW_TAIL_SHA_V184], ['v1.84 tev', RV184.NEW_TEV_SHA_V184],
     ['v1.83 tail', RV183.NEW_TAIL_SHA_V183], ['v1.83 tev', RV183.NEW_TEV_SHA_V183],
     ['v1.82 tail', RV182.NEW_TAIL_SHA_V182], ['v1.82 tev', RV182.NEW_TEV_SHA_V182],
     ['v1.81 tail', RV181.NEW_TAIL_SHA_V181], ['v1.81 tev', RV181.NEW_TEV_SHA_V181],

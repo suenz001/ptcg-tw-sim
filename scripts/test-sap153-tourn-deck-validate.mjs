@@ -128,7 +128,14 @@ ok('★★[S1] helper 在哨兵內、且在 TAIL_ANCHOR 之前（不進錦標賽
   ok('[S2b] helper 沒有自己寫任何牌組規則（沒有 4 張／ACE SPEC／基礎寶可夢的字面）', !/=== ?4|> ?4|ACE|Basic|基礎/.test(code));
 }
 {
-  const calls = CUR.split('tournDeckIssue(').length - 1;   // 1 個定義＋3 個呼叫
+  // ⭐server v1.85（Rule 40，意圖不變）：休閒「⚡ 自動配對」依站長裁定「只做標準賽」，在 /api/casual-match/join 也呼叫同一支 tournDeckIssue
+  //   （規則仍只有一份）。那一處在 v185-casual-automatch 哨兵裡、恰好一次（test-v185 S2 實跑鎖行為）；計數時把哨兵區塊拿掉，其餘仍須恰好三處。
+  const _b185 = (() => { const i = CUR.indexOf('// >>> v185-casual-automatch'), j = CUR.indexOf('// <<< v185-casual-automatch'); return i >= 0 && j > i ? [i, j] : null; })();
+  const _blk185 = _b185 ? CUR.slice(_b185[0], _b185[1]) : '';
+  ok('★★[S3-v185] 自動配對區塊恰好一個呼叫，而且在 /api/casual-match/join 裡', !!_b185 && _blk185.split('tournDeckIssue(').length - 1 === 1
+    && _blk185.indexOf('tournDeckIssue(') > _blk185.indexOf("app.post('/api/casual-match/join'") && _blk185.indexOf('tournDeckIssue(') < _blk185.indexOf("app.post('/api/casual-match/poll'"));
+  const _CUR_S3 = _b185 ? CUR.slice(0, _b185[0]) + CUR.slice(_b185[1]) : CUR;
+  const calls = _CUR_S3.split('tournDeckIssue(').length - 1;   // 1 個定義＋3 個呼叫
   const inEp = Object.entries(EP).map(([k, h]) => {
     const s = handlerSrc(CUR, h);
     const i60 = s.indexOf("if (deckCount(deckEntries) !== 60)"), iCall = s.indexOf('tournDeckIssue('), iWrite = s.search(/insertOne\(/);

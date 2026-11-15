@@ -236,7 +236,17 @@ await T('D1 ⭐⭐⭐ 匿名玩家的大廳（把 {#if} 依「匿名」求值剪
   //   這是本版的合法改動；內容由 test-v6525 鎖）。逐字拿掉這一段再比（必須恰好出現一次）；其餘匿名大廳仍須與 BASE 逐字相同。
   const _V6525 = "        <!-- v6.525 你之前的房間（房主關掉頁面／換瀏覽器後回得去；自己的房不套大廳的死房過濾） -->\n        {#if myOldRooms.length > 0}\n          <div class=\"my-old-rooms\">\n            <h3>🔙 之前的房間還在</h3>\n            {#each myOldRooms as r (r.roomId)}\n              <div class=\"mor-row\">\n                <span class=\"mor-name\">🎮 {r.roomName}</span>\n                <code class=\"mor-code\">{r.roomId}</code>\n                {#if r.status}<span class=\"mor-st\">{r.status === 'playing' ? '對戰中' : '等待中'}</span>{/if}\n                <button class=\"btn-sm primary mor-act\" onclick={() => handleReturnToOldRoom(r)} disabled={onlineLoading || !myName.trim()}>回到房間</button>\n              </div>\n            {/each}\n            <p class=\"mor-hint\">也可以直接開新房間；開新房時，這個瀏覽器裡已經沒在用、還沒開打的舊房會自動關掉，別人就不會進去空等。</p>\n          </div>\n        {/if}\n\n";
   assert.strictEqual(GAME.split(_V6525).length - 1, 1, 'v6.525 登記的「之前的房間還在」區塊不是恰好一處');
-  const GAME_D1 = GAME.replace(_AL, '').replace(_V6507[0], _V6507[1]).replace(_V6525, '');
+  // ⭐v6.645（Rule 40，意圖不變）：休閒「⚡ 自動配對」在大廳加了入口區塊與「找到對手」視窗（匿名玩家看得到入口，展開後只顯示「請先登入」；
+  //   內容由 test-v6645 鎖）。以兩段的起訖註解逐字切掉（各必須恰好一處）；其餘匿名大廳仍須與 BASE 逐字相同。
+  const _cut6645 = (src, a, b) => {
+    assert.strictEqual(src.split(a).length - 1, 1, 'v6.645 登記的區塊起點不是恰好一處：' + a.slice(0, 40));
+    const i = src.indexOf(a), j = src.indexOf(b, i);
+    assert.ok(j > i && j - i < 8000, 'v6.645 登記的區塊終點找不到或太長');
+    return src.slice(0, i) + src.slice(j);
+  };
+  const _G6645 = _cut6645(_cut6645(GAME, '    <!-- ⭐v6.645 自動配對：找到對手', "    {#if onlineStep === 'join' || onlineStep === 'choose' || onlineStep === 'create'}"),
+    '        <!-- ⭐v6.645 自動配對（標準賽）', '        <!-- 建立新房間：折疊式 inline 表單');
+  const GAME_D1 = _G6645.replace(_AL, '').replace(_V6507[0], _V6507[1]).replace(_V6525, '');
   for (const pm of [false, true]) {
     const a = asAnon(GAME_D1, pm), b = asAnon(BASE_GAME, pm);
     assert.ok(a.length > 3000, '剪枝後只剩 ' + a.length + ' 字元 ⇒ 剪枝器把東西吃掉了');

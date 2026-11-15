@@ -142,7 +142,12 @@ T('★★★[權限] 休閒明細含玩家 email ⇒ 讀取端必須有 isTournA
   assert.ok(iEarly > iGate, '休閒早退排在管理員 gate 之前 ⇒ 任何人都拿得到玩家 email');
 });
 T('★★[容量] 本版沒有新增端點、collection、索引（休閒批共用既有那一張表）', () => {
-  assert.ok(!/app\.(get|post)\('\/api\/[^']*casual[^']*'/.test(SRV), '出現了休閒專用端點');
+  // ⭐server v1.85（Rule 40，意圖不變）：休閒「⚡ 自動配對」是站長要求的新功能，端點 /api/casual-match/* 全在 v185-casual-automatch 哨兵裡
+  //   （行為由 test-v185 鎖）。本條守的是 v6.269「休閒監控批」沒有另開休閒專用端點 ⇒ 把那個哨兵區塊拿掉再掃，其餘仍不得出現。
+  const _i185 = SRV.indexOf('// >>> v185-casual-automatch'), _j185 = SRV.indexOf('// <<< v185-casual-automatch');
+  assert.ok(_i185 > 0 && _j185 > _i185, 'v1.85 自動配對哨兵不見了（Rule 40 的排除條件過期）');
+  const _SRV269 = SRV.slice(0, _i185) + SRV.slice(_j185);
+  assert.ok(!/app\.(get|post)\('\/api\/[^']*casual[^']*'/.test(_SRV269), '出現了休閒專用端點');
   const cols = [...SRV.matchAll(/db\.collection\('([A-Za-z]+)'\)/g)].map((m) => m[1]);
   assert.ok(!cols.some((c) => /casual/i.test(c)), '出現了休閒專用 collection');
   assert.equal((SRV.match(/TCDIAG\.createIndex\(/g) || []).length, 1, 'tournamentClientDiag 多了索引');
