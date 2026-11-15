@@ -10291,7 +10291,6 @@ import('firebase-admin').then(async ({ default: admin }) => {
     const TCHAT = db.collection('tournamentChat');
     const TCONFIG = db.collection('tournamentConfig'); // v0.36 聊天清空標記等
     const _chatRate = new Map(); // uid -> last post ts（記憶體限速）
-    const _chatNickCache = new Map(); // v0.76 uid -> { name, at }：非報名者聊天暱稱(最近一次錦標賽報名暱稱)5分鐘快取
     /**
      * v6.144【中央收斂】取某個 uid「最近一次錦標賽報名時填的暱稱」。
      *
@@ -10305,17 +10304,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
      */
     async function getLastRegisteredNick(uid) {
       if (!uid) return null;
-      const now = Date.now();
-      const c = _chatNickCache.get(uid);
-      if (c && (now - c.at) < 300000) return c.name;
-      let nick = null;
+      // >>> v184-nick-unify
+      // ⭐server v1.84：與 /event 的 evLastNickV183 收斂成同一份（同一個查詢、同一個快取）。
+      //   原本這裡另有一份 5 分鐘快取、而且不排除空暱稱（最近一次報名沒填名字就回 null），報名／取消時也不會失效
+      //   ⇒ 改名後聊天與牌組公布欄最多 5 分鐘才換。現在：最近一次「有填」的報名暱稱、60 秒快取、報名與取消時立即失效。
       try {
-        const lr = await TREGS.find({ uid }, { projection: { name: 1, registeredAt: 1 } })
-          .sort({ registeredAt: -1 }).limit(1).toArray();
-        nick = (lr[0] && lr[0].name) || null;
-      } catch (_e) { /* best-effort：查不到就當沒報過 */ }
-      _chatNickCache.set(uid, { name: nick, at: now });
-      return nick;
+        const lr = await evLastNickV183(uid);
+        return (lr[0] && lr[0].name) || null;
+      } catch (_e) { return null; }   // best-effort：查不到就當沒報過
+      // <<< v184-nick-unify
     }
     // v0.57 大廳聊天效能：①建 {room,ts} 索引→/chat 的 `ts > since` + sort 走索引範圍掃描，不再每次全表掃+記憶體排序
     //   （訊息越多越慢，高流量下每位玩家每 3s 都打一次會拖垮）。索引建立冪等，重啟重複呼叫安全。
@@ -11440,7 +11437,16 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const winSeat = 1 - mySeat;
         const wUid = winSeat === 0 ? m.p1uid : m.p2uid, wName = winSeat === 0 ? m.p1name : m.p2name;
         const lName = mySeat === 0 ? m.p1name : m.p2name;
-        await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', forfeit: true, endedAt: Date.now() } });   // ⭐v1.65 endedAt：賽程表顯示對局時間
+        // >>> v184-forfeit-resolve-cas
+        // ⭐server v1.84（擴容審查剩下的小事）：投降比照 /drop 改成條件式寫入——只有這一場「仍在對戰中」才寫成投降。
+        //   從上面的 findOne 到這裡之間，這一場可能已經被別的路徑收掉（正常打完、時限判定、對手同時投降、棄賽）；
+        //   原本無條件覆寫 ⇒ 會把已經判好的結果改成投降，而且房間／公告／推進輪次會再做一次。沒搶到 ⇒ 什麼都不做。
+        //   ⭐（審查 P3-5）房間盤面已經是 game-over（勝負已分，只是 TMATCH 還沒寫入、等對帳補寫）⇒ 也不寫投降，免得勝方按「投降離開」把結果翻掉。
+        //   只投影 gameState.phase 一個欄位；投降是低頻動作，不影響負載。
+        if (m.roomId) { const _rpV184 = await TROOMS.findOne({ _id: m.roomId }, { projection: { 'gameState.phase': 1 } }); if (_rpV184 && _rpV184.gameState && _rpV184.gameState.phase === 'game-over') return res.json({ ok: true, note: '對戰已結束' }); }
+        const _fwV184 = await TMATCH.updateOne({ _id: m._id, status: 'playing' }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', forfeit: true, endedAt: Date.now() } });   // ⭐v1.65 endedAt：賽程表顯示對局時間
+        if (_fwV184 && _fwV184.matchedCount === 0) return res.json({ ok: true, note: '對戰已結束' });
+        // <<< v184-forfeit-resolve-cas
         if (m.roomId) { try { await forceRoomGameOverV183(m.roomId, (room) => { const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = (lName || '對手') + ' 投降，' + wName + ' 勝'; return og; }, Date.now()); } catch (e) { /* best-effort */ } }   // ⭐v1.83（審查 P2-1）版本 CAS＋重試
         await postSystemChat('🏳 ' + (lName || '一方') + ' 投降，' + wName + ' 獲勝。');
         await advanceOrFinish(m, wUid, wName);
@@ -11530,7 +11536,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (winnerSeat !== 0 && winnerSeat !== 1) return res.status(400).json({ error: 'winnerSeat 需 0 或 1' });
         const wUid = winnerSeat === 0 ? m.p1uid : m.p2uid, wName = winnerSeat === 0 ? m.p1name : m.p2name;
         if (!wUid) return res.status(400).json({ error: '該座位無玩家，無法判勝' });
-        await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', adminResolved: true, endedAt: Date.now() } });   // ⭐v1.65 endedAt
+        // >>> v184-forfeit-resolve-cas
+        // ⭐server v1.84：管理員裁定同樣改條件式——上面檢查過「未結束」之後若剛好被別的路徑收掉，就不覆寫、不重複公告與推進。
+        const _rwV184 = await TMATCH.updateOne({ _id: m._id, status: { $ne: 'done' } }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', adminResolved: true, endedAt: Date.now() } });   // ⭐v1.65 endedAt
+        if (_rwV184 && _rwV184.matchedCount === 0) return res.status(409).json({ error: '該場次已結束' });
+        // <<< v184-forfeit-resolve-cas
         if (m.roomId) { try { await forceRoomGameOverV183(m.roomId, (room) => { const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winnerSeat; og.winReason = '管理員裁定：' + wName + ' 勝'; return og; }, Date.now()); } catch (e) { /* best-effort */ } }   // ⭐v1.83（審查 P2-1）版本 CAS＋重試
         await postSystemChat('⚖️ 管理員裁定：' + wName + ' 獲勝。');
         await advanceOrFinish(m, wUid, wName);
