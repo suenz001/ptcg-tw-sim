@@ -9,6 +9,7 @@
 - v6.641 審查 P2-1（前端，v6643-watchdog-poll-only）：新鮮度看門狗收尾原本 `tForceResync(); startTournamentPoll();`，前者結果一直被後者的 ++tPollGen 丟棄 ⇒ 只留 startTournamentPoll（第一個 tick 約 0.4 秒後就重抓）。回前景、「立即重新同步」等其他呼叫點不動。
 - Rule 40：v6198 3a／3b／3e 自癒錨點改成 startTournamentPoll（另斷言 tForceResync 沒被搬進診斷 if）；v6119 暱稱查詢接受 helper 形狀（查詢逐字同）；v6120 全域否定在 forceRoomGameOverV183 的 build 內改驗 helper 自己的讀取是完整讀；sap154 /event 與 v6188 /drop 的 harness 餵真的 v183 helper。錦標賽鎖鏈：sap-revert-admin-v183、tourn-revert-v183、v6379 LIB_DECL 20（通用腳本 /tmp/chainstep.py 產生，逐位元驗證）。
 - Opus 5.5 獨立審查：P1 無。P2-1（已修）：同型還有投降 /match/forfeit 與管理員裁定 admin/match/resolve 兩處無條件整包寫回 ⇒ 也接上 forceRoomGameOverV183（v1.81 列的四處至此全部完成）。P3-2（已修）：三次衝突後改成補一發不帶版本條件、`$inc: { version: 1 }` 的寫入（結果一定寫成、不產生重複版本號）。P3-1（已修）：暱稱快取加世代號，查詢在途時發生失效 ⇒ 結果照回但不寫回快取。P3-3（既有競態，已修，v183-gameover-claim）：onMatchGameOver 一般勝負的對戰紀錄改成 `status ≠ done` 條件式搶占、沒搶到就不推進（比照平手那條路；避免玩家剛打完的同一瞬間被棄賽／投降收掉後又被蓋回、輪次推進兩次）。P3-4（已修）：守衛加 N6。未修：P3-5 聊天用 getLastRegisteredNick 是另一份 5 分鐘快取、不排除空暱稱（v1.54 起的既有分歧，改了會影響聊天與公布欄顯示名，需站長決定）；P3-6 兩支 CAS helper 的版本計算可再抽共用。全套首輪 991 支紅 2 支：v6370 已知平行假紅、v6630 單跑 35/35（瀏覽器偶發）。
+- 複審：無新 P1／P2。P3（未修、待下批）：投降 /match/forfeit 與管理員裁定的 TMATCH 寫入仍無條件——若 onMatchGameOver 先搶到（對局剛好在同幾毫秒結算），投降會把結果蓋成投降並再推進一次；建議比照 /drop 改條件式、沒命中就跳過寫房間／公告／推進（既有問題、窗口極小）。最終全套 991 支只紅 v6370（已知平行假紅，單跑綠）。
 - 守衛 `test-v183-batch4.mjs`：N1～N4（快取 TTL、失效、上限、查詢逐字、所有寫入點後緊接失效）、F1～F5（CAS 命中／被搶先重讀／三次放棄／null 不寫／兩處接線）、C1（沒有進行中賽事不查、有則走索引）、W1／W2（看門狗只重建輪詢、其他呼叫點保留）、HEAD-FAIL。突變 11/11 被殺（含審查修正後加的搶占、世代號、$inc、管理員裁定接線）。
 
 ## v6.642＋server v1.82 — 錦標賽賽程表 /bracket 內容簽章（2026-11-15，hidden）
