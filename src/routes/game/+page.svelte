@@ -9453,6 +9453,26 @@ function _setupSelfPending(g: any, seat: number): string | null {
   const cmAvailable = casualMatchAvailable();
   let cmOpen = $state(false);              // 「自動配對」區塊展開
   let cmDeckId = $state('');               // 配對用的牌組
+  // >>> v6646-automatch-firstpref
+  // ⭐v6.646（站長 2026-11-16）：配對畫面也能選先後攻（贏得擲硬幣時），預設帶入上次手動選的；選牌組時帶入牌組預設的先後攻（與對戰房、錦標賽相同）
+  let cmFirstPref = $state<'random' | 'first' | 'second' | 'opponent'>(_readLastFirstPref());
+  let cmRoomOverlay = $state<{ opp: string; at: number } | null>(null);   // 配對成功、進房到開局之間蓋住房間畫面（站長：直接進對戰畫面）
+  let cmOverlayTimer: ReturnType<typeof setTimeout> | null = null;
+  function cmPickDeck(id: string) {
+    cmDeckId = id;
+    const _cp = id ? normalizeDeckCoinPref(allDecks.find((d) => d.id === id)?.coinPref) : undefined;
+    if (_cp) cmFirstPref = _cp;   // 牌組沒設定 ⇒ 不動；不寫進「上次選的偏好」（同對戰房 v6.599 的裁定）
+  }
+  function cmShowRoomOverlay(opp: string) {
+    cmRoomOverlay = { opp, at: Date.now() };
+    if (cmOverlayTimer) clearTimeout(cmOverlayTimer);
+    // 60 秒還沒開局（例如對方自動準備失敗）⇒ 拿掉遮罩、露出房間畫面讓玩家自己處理
+    cmOverlayTimer = setTimeout(() => { cmOverlayTimer = null; if (cmRoomOverlay) { cmRoomOverlay = null; onlineError = '自動開局逾時，請在房間裡確認牌組並按準備'; } }, 60000);
+  }
+  function cmHideRoomOverlay() { cmRoomOverlay = null; if (cmOverlayTimer) { clearTimeout(cmOverlayTimer); cmOverlayTimer = null; } }
+  // 開局（game 出現）、離開房間、或房間不再是等待中 ⇒ 拿掉遮罩
+  $effect(() => { if (cmRoomOverlay && (game || onlineStep !== 'room' || (roomData && roomData.status !== 'lobby'))) cmHideRoomOverlay(); });
+  // <<< v6646-automatch-firstpref
   let cmView = $state<CasualMatchView | null>(null);
   let cmBusy = $state(false);
   let cmError = $state('');
@@ -9529,6 +9549,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const wasActive = cmActive;
     cmGen++; cmClearTimer(); cmRestoreTitle();
     if (cmHostWaitTimer) { clearTimeout(cmHostWaitTimer); cmHostWaitTimer = null; }   // 審查 P2-4：離開頁面時不留殭屍計時器
+    if (cmOverlayTimer) { clearTimeout(cmOverlayTimer); cmOverlayTimer = null; }
     cmView = null; cmEntering = false;
     if (wasActive) void casualMatchLeave({ keepalive });
   }
@@ -9548,10 +9569,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!roomCode) return;
     myDeckId = cmDeckId;
     const ok = await handleSetDeck();
-    if (!ok) return;
-    const _cp = normalizeDeckCoinPref(allDecks.find((d) => d.id === cmDeckId)?.coinPref);
-    if (_cp) await setSeatFirstChoice(roomCode, _cp).catch(() => { /* best-effort */ });
-    await setSeatReady(roomCode, true).catch((e: any) => { onlineError = e?.message ?? '自動準備失敗，請手動按準備'; });
+    if (!ok) { cmHideRoomOverlay(); return; }   // 牌組沒套上 ⇒ 露出房間畫面讓玩家處理（handleSetDeck 會寫錯誤訊息）
+    await setSeatFirstChoice(roomCode, cmFirstPref).catch(() => { /* best-effort */ });   // ⭐v6.646 用配對畫面選的先後攻
+    await setSeatReady(roomCode, true).catch((e: any) => { cmHideRoomOverlay(); onlineError = e?.message ?? '自動準備失敗，請手動按準備'; });
   }
   async function cmHostCreate(v: CasualMatchView, gen: number) {
     cmEntering = true;
@@ -9578,6 +9598,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       roomCode = code;
       amIHost = true;
       onlineStep = 'room';
+      cmShowRoomOverlay(v.opponentNick ?? '');   // ⭐v6.646 直接顯示「正在進入對戰」，不露出房間畫面
       startRoomSubscription();
       setIdleTimeout(roomCode, _readLastIdle()).catch(() => { /* best-effort */ });
       await cmSeatReady();
@@ -9619,6 +9640,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         roomCode = code;
         amIHost = false;
         onlineStep = 'room';
+        cmShowRoomOverlay(cmView?.opponentNick ?? '');   // ⭐v6.646
         startRoomSubscription();
         await cmSeatReady();
         return;
@@ -12299,6 +12321,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
       </div>
     {/if}
 
+    <!-- ⭐v6.646 自動配對：配對成功後直接顯示「正在進入對戰」，蓋住房間畫面直到開局 -->
+    {#if cmRoomOverlay}
+      <div class="cm-found-backdrop cm-enter-backdrop" role="status" aria-live="polite">
+        <div class="cm-found" use:modalDrag>
+          <h3 class="modal-drag-handle">⚡ 配對成功！</h3>
+          <p class="cm-opp">{cmRoomOverlay.opp}</p>
+          <p class="cm-left">正在進入對戰…</p>
+        </div>
+      </div>
+    {/if}
     <!-- ⭐v6.645 自動配對：找到對手 ⇒ 雙方 15 秒內按接受 -->
     {#if cmView?.state === 'found'}
       <div class="cm-found-backdrop" role="dialog" aria-modal="true" aria-label="找到對手">
@@ -12361,12 +12393,23 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   <p class="warn">自動配對限定登入的玩家使用，請先登入。</p>
                 {:else}
                   <label>使用牌組
-                    <select class="name-input" bind:value={cmDeckId}>
+                    <select class="name-input" value={cmDeckId} onchange={(e) => cmPickDeck((e.currentTarget as HTMLSelectElement).value)}>
                       <option value="">— 選擇牌組 —</option>
-                      {#each allDecks as d (d.id)}<option value={d.id}>{d.name}</option>{/each}
+                      {#if decks.length > 0}
+                        <optgroup label="📁 我的牌組">{#each decks as d (d.id)}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+                      {/if}
+                      {#if PRESET_DECKS.length > 0}
+                        <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d (d.id)}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+                      {/if}
                     </select>
                   </label>
-                  <p class="cm-hint">只開放標準賽合法的牌組。找到對手後請在 15 秒內按「接受」；配對中請保持這個頁面開著（切到其他分頁時，找到對手會在分頁標題提示）。配對開的房間開放觀戰。</p>
+                  <div class="first-pref-group lobby cm-first-pref">
+                    <div class="first-pref-label">贏得擲硬幣時</div>
+                    <label class="first-pref-radio"><input type="radio" name="cm-first-pref" value="random" checked={cmFirstPref === 'random'} onchange={() => { cmFirstPref = 'random'; _saveFirstPref('random'); }} /><span>🎲 隨機</span></label>
+                    <label class="first-pref-radio"><input type="radio" name="cm-first-pref" value="first" checked={cmFirstPref === 'first'} onchange={() => { cmFirstPref = 'first'; _saveFirstPref('first'); }} /><span>⚡ 先攻</span></label>
+                    <label class="first-pref-radio"><input type="radio" name="cm-first-pref" value="second" checked={cmFirstPref === 'second'} onchange={() => { cmFirstPref = 'second'; _saveFirstPref('second'); }} /><span>🛡️ 後攻</span></label>
+                    <label class="first-pref-radio"><input type="radio" name="cm-first-pref" value="opponent" checked={cmFirstPref === 'opponent'} onchange={() => { cmFirstPref = 'opponent'; _saveFirstPref('opponent'); }} /><span>🤝 對手決定</span></label>
+                  </div>
                   <div class="form-btns">
                     <button class="btn-primary" onclick={cmStart} disabled={cmBusy || !cmDeckId}>{cmBusy ? '準備中…' : '開始配對'}</button>
                   </div>
@@ -17896,7 +17939,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .cm-status .cm-text{ flex:1; min-width:12rem; }
   .cm-spin{ display:inline-block; animation:cm-pulse 1.2s ease-in-out infinite; font-size:1.2rem; }
   @keyframes cm-pulse{ 0%,100%{ opacity:.45; } 50%{ opacity:1; } }
-  .cm-hint{ font-size:.78rem; color:#9ab; margin:.2rem 0 .4rem; }
+  .cm-block .cm-first-pref{ margin:.5rem 0 .2rem; }
   .cm-notice{ font-size:.85rem; color:#ffd88a; margin:0; }
   .cm-found-backdrop{ position:fixed; inset:0; z-index:9000; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.6); padding:16px; }
   .cm-found{ background:#18243c; border:2px solid #6a8ad8; border-radius:14px; padding:1.2rem 1.4rem; max-width:22rem; width:100%; text-align:center; color:#f0f4ff; box-shadow:0 10px 40px rgba(0,0,0,.5); }
@@ -21782,7 +21825,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .cm-block .cm-cta:hover { background: linear-gradient(135deg,#dce0e9 0%,#e8eaf0 100%); }
     :global(html[data-theme='light']:not([data-battle-view])) .cm-block .cm-cta .cri-title, :global(html[data-theme='light']:not([data-battle-view])) .cm-block .cm-cta .cri-chevron { color: #001a43; }
     :global(html[data-theme='light']:not([data-battle-view])) .cm-status { border: 1px solid #5d7dbb; background: #f0f2f6; color: #020918; }
-    :global(html[data-theme='light']:not([data-battle-view])) .cm-hint { color: #435567; }
     :global(html[data-theme='light']:not([data-battle-view])) .cm-notice { color: #754e00; }
     :global(html[data-theme='light']:not([data-battle-view])) .cm-found { background: #f0f2f5; border: 2px solid #6285d9; color: #00040f; }
     :global(html[data-theme='light']:not([data-battle-view])) .cm-found .cm-opp { color: #755800; }

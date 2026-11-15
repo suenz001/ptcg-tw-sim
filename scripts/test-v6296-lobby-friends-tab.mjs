@@ -244,7 +244,8 @@ await T('D1 ⭐⭐⭐ 匿名玩家的大廳（把 {#if} 依「匿名」求值剪
     assert.ok(j > i && j - i < 8000, 'v6.645 登記的區塊終點找不到或太長');
     return src.slice(0, i) + src.slice(j);
   };
-  const _G6645 = _cut6645(_cut6645(GAME, '    <!-- ⭐v6.645 自動配對：找到對手', "    {#if onlineStep === 'join' || onlineStep === 'choose' || onlineStep === 'create'}"),
+  // ⭐v6.646：進場遮罩加在接受視窗之前 ⇒ 起點改成 v6.646 那段註解（有的話）；同樣恰好一處
+  const _G6645 = _cut6645(_cut6645(GAME, GAME.includes('    <!-- ⭐v6.646 自動配對：配對成功後') ? '    <!-- ⭐v6.646 自動配對：配對成功後' : '    <!-- ⭐v6.645 自動配對：找到對手', "    {#if onlineStep === 'join' || onlineStep === 'choose' || onlineStep === 'create'}"),
     '        <!-- ⭐v6.645 自動配對（標準賽）', '        <!-- 建立新房間：折疊式 inline 表單');
   const GAME_D1 = _G6645.replace(_AL, '').replace(_V6507[0], _V6507[1]).replace(_V6525, '');
   for (const pm of [false, true]) {
