@@ -1097,8 +1097,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
             //   同一個卡住的版本稍後若真的惡化成「輪詢不通」仍然報得出來。
             if (_why) { _staleDiagVersion = tVersion; _staleDiagWhy = _why; _tSendClientDiag('stale-version'); }
           }
-          tForceResync();
+          // >>> v6643-watchdog-poll-only
+          // ⭐v6.643（擴容審查追加，Opus 審查 v6.641 P2-1）：原本這裡是「tForceResync(); startTournamentPoll();」。
+          //   但 startTournamentPoll 會同步 ++tPollGen，tForceResync 回來時代次對不上 ⇒ 那一發的結果**一直都被整發丟棄**，
+          //   真正把盤面抓回來的是重建後的輪詢（第一個 tick 約 0.4 秒後就會送出）。⇒ 拿掉那一發純成本的請求，
+          //   只重建輪詢（自救仍無條件執行、不受上面的診斷判準影響）。回前景、「立即重新同步」等其他呼叫點不動。
           startTournamentPoll();
+          // <<< v6643-watchdog-poll-only
         }
         // v5.933 隱形手牌指紋偵測(v5.932 已修根因,此為確認+未來防護):手牌有卡卻一張都不可見+arriving 殘留 → 回傳一次診斷
         // ⭐v6.581（審查 P3-1）：抽到的牌正在畫面中間展示時本來就會暫時隱藏 ⇒ 只算「不是中間展示造成的」arriving，避免假診斷

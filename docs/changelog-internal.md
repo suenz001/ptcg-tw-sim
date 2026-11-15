@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.643＋server v1.83 — 錦標賽擴容第四批（2026-11-15，hidden）
+
+- BASE `a01413b7`（v6.642＋server v1.82）。站長要求：Fable 擴容報告剩下的幾項都做、務必審查。
+- P2-4（server，v183-event-lastnick-cache）：/event 每 3 秒查「最近一次有暱稱的報名」（索引只有 uid、mongod 記憶體排序）⇒ 每人記憶體快取 60 秒，上限 5000 人（滿了整個清空）；查詢條件逐字不變、回傳形狀不變。失效點：/register、/register-and-checkin、遲到報名、報名回滾、取消報名（只清該人）、刪除賽事（整個清空）。失效點寫成 `typeof … === 'function'`（既有守衛會單獨抽報名端點實跑）；最壞 60 秒自然過期。
+- P2-2 剩下兩處（server，v183-force-gameover-cas）：棄賽 `_forceGameOver` 與未進場判負的寫房間 game-over 改走 `forceRoomGameOverV183`：以 version 為條件寫，沒命中就重讀再試，最多 3 次（結果是確定的，一定要寫成；正常第一次命中，查詢數同舊版）；三次都衝突印一行警告。未進場那處 build 遇到已 game-over 回 null 不寫（同舊條件）。
+- P2-5（server，v183-clock-active-rooms）：個人時計 activeRooms 原本 `{ status:'playing' }` 全集合掃描 ⇒ 先取 status:'running' 的賽事 id（沒有就回空、不查對戰），再 `{ eventId:{$in}, status:'playing' }` 走既有索引。只在個人時計啟用時才跑（目前預設關）。
+- v6.641 審查 P2-1（前端，v6643-watchdog-poll-only）：新鮮度看門狗收尾原本 `tForceResync(); startTournamentPoll();`，前者結果一直被後者的 ++tPollGen 丟棄 ⇒ 只留 startTournamentPoll（第一個 tick 約 0.4 秒後就重抓）。回前景、「立即重新同步」等其他呼叫點不動。
+- Rule 40：v6198 3a／3b／3e 自癒錨點改成 startTournamentPoll（另斷言 tForceResync 沒被搬進診斷 if）；v6119 暱稱查詢接受 helper 形狀（查詢逐字同）；v6120 全域否定在 forceRoomGameOverV183 的 build 內改驗 helper 自己的讀取是完整讀；sap154 /event 與 v6188 /drop 的 harness 餵真的 v183 helper。錦標賽鎖鏈：sap-revert-admin-v183、tourn-revert-v183、v6379 LIB_DECL 20（通用腳本 /tmp/chainstep.py 產生，逐位元驗證）。
+- 守衛 `test-v183-batch4.mjs`：N1～N4（快取 TTL、失效、上限、查詢逐字、所有寫入點後緊接失效）、F1～F5（CAS 命中／被搶先重讀／三次放棄／null 不寫／兩處接線）、C1（沒有進行中賽事不查、有則走索引）、W1／W2（看門狗只重建輪詢、其他呼叫點保留）、HEAD-FAIL。突變 7/7 被殺。
+
 ## v6.642＋server v1.82 — 錦標賽賽程表 /bracket 內容簽章（2026-11-15，hidden）
 
 - BASE `725fbc37`（v6.641＋server v1.81）。依據 Fable 5.2 擴容審查 P1-1：/bracket 回應是整場所有輪次的對戰＋排名表（200 人 6 輪約 104KB），換輪後大廳每人每 9 秒抓一次，內容只在有對局結束時才變。

@@ -192,14 +192,16 @@ T('2g ⭐tServerActorSeat 為 undefined（v6.157 以前的伺服器）不得被�
 });
 
 // ── 3) ⭐⭐⭐自癒正對照：收緊診斷絕不可以動到自救 ─────────────────────
-T('3a ★★★自癒 tForceResync()/startTournamentPoll() 必須在診斷 if **之外**', () => {
+T('3a ★★★自癒（v6.643 起只剩 startTournamentPoll()）必須在診斷 if **之外**', () => {
   const i = PAGE_NC.indexOf("_tSendClientDiag('stale-version')");
   assert.ok(i > 0, '找不到 stale-version 送出點');
   // 從送出點往回找它所屬的最外層 if（＝新鮮度看門狗那一段）的收尾，
   // 再確認 tForceResync/startTournamentPoll 在「診斷 if」關掉之後才出現。
-  const j = PAGE_NC.indexOf('tForceResync();', i);
-  const k = PAGE_NC.indexOf('startTournamentPoll();', i);
-  assert.ok(j > i && k > j, '看門狗結尾的自癒兩行不見了');
+  // ⭐v6.643（Rule 40，意圖不變）：看門狗那一發 tForceResync 的結果一直被 startTournamentPoll 的 ++tPollGen 整發丟棄（純成本）⇒ 拿掉，
+  //   自癒只剩「重建輪詢」（第一個 tick 就會重抓）。判準照舊：自癒必須在診斷 if 之外；另斷言 tForceResync 確實沒有被搬進診斷 if 裡。
+  const j = PAGE_NC.indexOf('startTournamentPoll();', i);
+  assert.ok(j > i, '看門狗結尾的自癒（重建輪詢）不見了');
+  assert.ok(!/tForceResync\(/.test(PAGE_NC.slice(i, j)), 'tForceResync 不該出現在診斷送出點與自癒之間（被搬進診斷 if？）');
   const between = PAGE_NC.slice(i, j);
   // 診斷 if 必須在自癒之前就收掉：兩者之間的 '}' 要多於 '{'。
   const open = (between.match(/\{/g) || []).length;
@@ -211,8 +213,9 @@ T('3b ★★★自癒不得被任何 staleWhy 判準 gate 住', () => {
   const j = PAGE_NC.indexOf('startTournamentPoll();', i);
   assert.ok(i >= 0 && j > i, 'anchor（stale-version 診斷／startTournamentPoll）失效 ⇒ 下面的否定斷言會恆真（v6.323 fail-open 同型修正）');
   const seg = PAGE_NC.slice(i, j);
-  const fr = seg.indexOf('tForceResync');
-  assert.ok(fr >= 0, 'anchor tForceResync 不在區段內 ⇒ 下面的否定斷言會恆真（v6.323 fail-open 同型修正）');
+  // ⭐v6.643（Rule 40）：自癒只剩 startTournamentPoll ⇒ 改看「診斷 if 收尾的最後一個 } 到自癒」之間（下限：那段必須存在）
+  const fr = seg.lastIndexOf('}');
+  assert.ok(fr >= 0, 'anchor 診斷 if 收尾不在區段內 ⇒ 下面的否定斷言會恆真（v6.323 fail-open 同型修正）');
   assert.equal(/_staleVersionWhyNow\s*\(/.test(seg.slice(fr)), false,
     '自癒與判準之間出現了新的耦合');
 });
@@ -232,7 +235,7 @@ T('3d 舊有的四道前置條件仍在（收緊是「再加一道」，不是�
 T('3e ⭐判準不成立時**不**設 _staleDiagVersion（否則條件 a 之後累積起來就永遠報不出來）', () => {
   const i = PAGE_NC.indexOf('const _why = _staleVersionWhyNow();');
   assert.ok(i > 0, '找不到判準求值');
-  const j = PAGE_NC.indexOf('tForceResync();', i);
+  const j = PAGE_NC.indexOf('startTournamentPoll();', i);   // ⭐v6.643（Rule 40）：錨點改成自癒的重建輪詢
   const seg = PAGE_NC.slice(i, j);
   const a = seg.indexOf('if (_why)');
   const b = seg.indexOf('_staleDiagVersion = tVersion');

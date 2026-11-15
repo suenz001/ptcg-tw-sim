@@ -177,6 +177,8 @@ function makeServer(uid, email) {
     fnSrc('recordTournamentArchive'),
     fnSrc('advanceOrFinish'),
     fnSrc('pairingsToMatches'),
+    // ⭐server v1.83（Rule 40，意圖不變）：_forceGameOver 改走 forceRoomGameOverV183（版本 CAS＋重試）⇒ 餵**真的** helper（不是替身）
+    (P.includes('    async function forceRoomGameOverV183(') ? fnSrc('forceRoomGameOverV183') : ''),
     fnSrc('_forceGameOver'),
     fnSrc('finishSwissWithSurvivor'),
     fnSrc('finishIfLastSurvivor'),

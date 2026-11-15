@@ -178,10 +178,16 @@ T('⚠ 全域否定：任何「整包寫回 gameState」的讀取都不得帶 pr
   let i = -1;
   while ((i = P.indexOf('JSON.parse(JSON.stringify(', i + 1)) >= 0) marks.push(i);
   ok(marks.length >= 4, '整包 clone 寫回的地方變少了？請重新檢視本守衛：' + marks.length);
+  { // ⭐server v1.83：forceRoomGameOverV183 自己的讀取必須是完整讀（它會整包寫回）
+    const hi = P.indexOf('async function forceRoomGameOverV183(');
+    if (hi >= 0) { const hb = P.slice(hi, P.indexOf('\n    }\n', hi)); ok(/await TROOMS\.findOne\(\{ _id: roomId \}\);/.test(hb) && !/projection/.test(hb), 'forceRoomGameOverV183 的讀取帶了 projection ⇒ 殘缺盤面會被整包寫回'); }
+  }
   for (const at of marks) {
     const before = P.slice(Math.max(0, at - 1200), at);
     const last = before.lastIndexOf('TROOMS.findOne(');
     if (last < 0) continue; // 這次 clone 的來源不是 TROOMS 讀取（例如 gs 由上層傳入）
+    // ⭐server v1.83（Rule 40，意圖不變）：clone 若在 forceRoomGameOverV183(…, (room) => …) 的 build 裡，來源是 helper 自己的讀取（下方另驗必須是完整讀）
+    if (before.lastIndexOf('forceRoomGameOverV183(') > last) continue;
     const call = before.slice(last, before.indexOf(')', last) + 1);
     ok(!/projection/.test(call),
       '有一支「讀出來 → clone → 整包 $set 回去」的 TROOMS.findOne 帶了 projection：\n'

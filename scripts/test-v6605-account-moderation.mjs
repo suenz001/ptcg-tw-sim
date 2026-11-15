@@ -4,6 +4,7 @@ import { revertV6633ChangelogIfPresent } from './lib/revert-v6633-changelog.mjs'
 import { revertV6632ChangelogIfPresent } from './lib/revert-v6632-changelog.mjs';   // ⭐v6.632（Rule 40）：最新一版先還原
 import { revertV6631ChangelogIfPresent } from './lib/revert-v6631-changelog.mjs';   // ⭐v6.631（Rule 40）：最新一版先還原
 import { revertAdminV180IfPresent } from './lib/sap-revert-admin-v180.mjs';
+import { revertAdminV183IfPresent } from './lib/sap-revert-admin-v183.mjs';   // ⭐server v1.83（Rule 40）
 import { revertAdminV182IfPresent } from './lib/sap-revert-admin-v182.mjs';   // ⭐server v1.82（Rule 40）
 import { revertAdminV181IfPresent } from './lib/sap-revert-admin-v181.mjs';   // ⭐server v1.81（Rule 40）
 import assert from 'node:assert/strict';
@@ -64,7 +65,7 @@ function setup() {
 }
 const baseFile=p=>execFileSync('git',['show','92520fbe:'+p],{cwd:ROOT,encoding:'utf8',maxBuffer:8*1024*1024}).replace(/\r\n/g,'\n');
 // ⭐v1.80（Rule 40）：之後版本對錦標賽尾段的合法改動先用該版的單一還原表逐位元退回，意圖（本版沒動錦標賽尾段）不變。
-await test('P1 既有錦標賽尾段逐位元相同',()=>{const anchor="app.get('/api/tournament";const cur=revertAdminV180IfPresent(revertAdminV181IfPresent(revertAdminV182IfPresent(sap)));assert.equal(cur.slice(cur.indexOf(anchor)),baseFile('oracle-admin/server_admin_patch.js').split(anchor).slice(1).join(anchor).replace(/^/,anchor));});
+await test('P1 既有錦標賽尾段逐位元相同',()=>{const anchor="app.get('/api/tournament";const cur=revertAdminV180IfPresent(revertAdminV181IfPresent(revertAdminV182IfPresent(revertAdminV183IfPresent(sap))));assert.equal(cur.slice(cur.indexOf(anchor)),baseFile('oracle-admin/server_admin_patch.js').split(anchor).slice(1).join(anchor).replace(/^/,anchor));});
 await test('P2 對外更新紀錄精確還原後保持原文',()=>{for(const p of ['static/changelog.html','static/changelog-bodies.html','static/changelog-archive.html']){const source=read(p),base=baseFile(p);assert.equal(source===base?source:revertV6606Changelog(p,source),base);}});
 await test('A1 服務插入先於私訊與兩段聊天',()=>{assert.ok(block);const gate=sap.indexOf('async function accountModerationGate');for(const path of ["app.post('/api/friends/dm/send'","app.post('/api/tournament/chat'","app.post('/api/deck-posts-comments'"])assert.ok(gate<sap.indexOf(path));});
 await test('A2 管理端點拒絕普通會員與偽造UID',async()=>{const f=setup();for(const action of ['lookup','history','grant','revoke']){assert.equal((await f.call(action,f.body(),player)).code,403);assert.equal((await f.call(action,f.body(),{...admin,verified:false})).code,403);}assert.equal(f.c.reads+f.c.writes,0);});

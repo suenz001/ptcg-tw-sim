@@ -96,8 +96,8 @@ if (!FR || !FR.includes('async function _frTournPlayingEmails(')) {
   console.log('\n══ v6.300 守衛：' + pass + ' PASS / ' + (fail || 1) + ' FAIL（HEAD-FAIL：本版改動不在，後續無法進行）══');
   process.exit(1);
 }
-const TOURN_TAIL_SHA256 = '5ef85f2399821c5fec124b919aa2b7cd753d7baca0b46da900d0439167c2ca90';   // 與 test-v6272 ⑨ 同一把
-const TOURN_ANCHOR_SHA256 = '8c7fd6f95e0ba1f0fa7e5d69234226f12922d1ff07da956d6e824a68d28c75ba'; // 與 test-v6278 I1 同一把
+const TOURN_TAIL_SHA256 = 'fb17bf4008f4da0819d41b80d145ff57842c930c7ff2a0cd0b7fae94621cdc75';   // 與 test-v6272 ⑨ 同一把
+const TOURN_ANCHOR_SHA256 = 'a6532852bff23f35b4360832091a849a0c12dcce86662e63b39bce9a285db9f9'; // 與 test-v6278 I1 同一把
 await T('A1 ⚠⚠ 錦標賽區塊逐位元未動（兩把既有 sha256）；好友區塊整段在第一支 /api/tournament 之前', () => {
   const first = PATCH.indexOf("app.get('/api/tournament");
   assert.ok(first > 0, '找不到第一支 /api/tournament 端點');

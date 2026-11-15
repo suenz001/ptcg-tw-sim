@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto';
 import { revertAdminV173 as _revertAdminV173 } from './lib/sap-revert-admin-v173.mjs';
 import { revertAdminV174 } from './lib/sap-revert-admin-v174.mjs';   // ⭐v6.601（server v1.74，Rule 40）：我的錦標賽對戰回傳 result（行為由 test-v6601 守）
 const revertAdminV173 = (s) => _revertAdminV173(revertAdminV174(s));   // 鏈又長一節（既有呼叫點一個字都不必改）
-import { NEW_TAIL_SHA_V182 as NEW_TAIL_SHA_V180, NEW_TEV_SHA_V182 as NEW_TEV_SHA_V180, NEW_TEV_LEN_V182 as NEW_TEV_LEN_V180, revertV173 } from './lib/tourn-revert-v182.mjs';   // ⭐server v1.81（Rule 40）：現行值改取 v1.81（本地別名沿用舊名，斷言一個字都不動）
+import { NEW_TAIL_SHA_V183 as NEW_TAIL_SHA_V180, NEW_TEV_SHA_V183 as NEW_TEV_SHA_V180, NEW_TEV_LEN_V183 as NEW_TEV_LEN_V180, revertV173 } from './lib/tourn-revert-v183.mjs';   // ⭐server v1.81（Rule 40）：現行值改取 v1.81（本地別名沿用舊名，斷言一個字都不動）
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { revertV6592Game, V6592_GAME_PAIRS } from './lib/revert-v6592-game.mjs';
 import { revertV6599Game } from './lib/revert-v6599-pages.mjs';   // ⭐v6.599（Rule 40）：牌組先後攻偏好接線（行為由 test-v6599 守）

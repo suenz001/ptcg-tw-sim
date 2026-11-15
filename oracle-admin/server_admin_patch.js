@@ -8082,8 +8082,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
       savePolicy: (policy) => db.collection('tournamentConfig').updateOne(
         { _id: PLAYER_CLOCK_ID }, { $set: policy }, { upsert: true }),
       activeRooms: async () => {
+        // >>> v183-clock-active-rooms
+        // ⭐server v1.83（擴容審查 P2-5）：原本 `{ status: 'playing' }` 沒有可用索引（TMATCH 的索引都以 eventId 開頭）⇒ 每 5 秒全集合掃描
+        //   （目前 3.5 萬筆、只增不減）。改成先取進行中賽事（很少），再用 eventId＋status 走現有索引。只在個人時計啟用時才會跑。
+        const _runEvIds = (await db.collection('tournamentEvents').find({ status: 'running' }, { projection: { _id: 1 } }).toArray()).map((e) => e._id);
+        if (!_runEvIds.length) return [];
         const matches = await db.collection('tournamentMatches').find(
-          { status: 'playing' }, { projection: { roomId: 1 } }).limit(512).toArray();
+          { eventId: { $in: _runEvIds }, status: 'playing' }, { projection: { roomId: 1 } }).limit(512).toArray();
+        // <<< v183-clock-active-rooms
         return matches.map(m => m.roomId).filter(Boolean);
       },
       loadRoom: id => TROOMS.findOne({ _id: id }),
@@ -9326,6 +9332,27 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //   索引不改變查詢結果（只換 query plan），且只在服務啟動時建一次。
     TEVENTS.createIndex({ status: 1 }).catch(() => { /* best-effort，已存在即略過 */ });
     const TREGS = db.collection('tournamentRegistrations');
+    // >>> v183-event-lastnick-cache
+    // ⭐server v1.83（2026-11-14 擴容審查 P2-4）：/event 每 3 秒都查一次「本人最近一次有暱稱的報名」（索引只有 uid ⇒ mongod 要取出
+    //   這個人歷來所有報名再排序），而它只在報名／取消報名時才會變。⇒ 每人記憶體快取 60 秒；三支報名端點寫入、取消報名、
+    //   報名失敗回滾、刪除賽事時清掉（刪除賽事會影響很多人 ⇒ 整個清空）。上限 5000 人，超過就整個清空重來（不會無限長大）。
+    //   回傳形狀與原本 `TREGS.find(...).toArray()` 完全相同（陣列，最多 1 筆）。
+    //   ⚠ 失效點寫成 `if (typeof evLastNickInvalidateV183 === 'function') …`：既有守衛會把單一報名端點抽出來實跑（沒有這支 helper），
+    //     正式環境一定有定義；快取失效本來就是 best-effort（最壞 60 秒後自己過期）。
+    const _evLastNickCacheV183 = new Map();
+    const EV_LASTNICK_TTL_MS_V183 = 60000;
+    function evLastNickInvalidateV183(uid) { if (uid == null) _evLastNickCacheV183.clear(); else _evLastNickCacheV183.delete(String(uid)); }
+    async function evLastNickV183(uid) {
+      const k = String(uid);
+      const now = Date.now();
+      const c = _evLastNickCacheV183.get(k);
+      if (c && (now - c.at) < EV_LASTNICK_TTL_MS_V183) return c.rows;
+      const rows = await TREGS.find({ uid, name: { $nin: [null, ''] } }, { projection: { name: 1, registeredAt: 1 } }).sort({ registeredAt: -1 }).limit(1).toArray();
+      if (_evLastNickCacheV183.size >= 5000) _evLastNickCacheV183.clear();
+      _evLastNickCacheV183.set(k, { rows, at: now });
+      return rows;
+    }
+    // <<< v183-event-lastnick-cache
     // v6.119 效能：TREGS 從來沒有索引，但它是**永久累積**的（正常完賽不刪報名，
     //   而且 v0.84 預填暱稱、v0.90 聊天暱稱都刻意依賴歷史報名）。熱路徑全是全表掃：
     //     ・/event 每人每 3 秒 find({ uid })          ← 最痛，人數 × 歷屆報名量
@@ -9500,7 +9527,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const _myRegIds = [...new Set([...shared.openList.map((_e) => _e._id), ...(ev ? [ev._id] : [])])].map((_eid) => String(_eid) + '__' + id.uid);
         const [myRegs, _lastRegs] = await Promise.all([
           _myRegIds.length ? TREGS.find({ _id: { $in: _myRegIds } }).toArray() : Promise.resolve([]),
-          TREGS.find({ uid: id.uid, name: { $nin: [null, ''] } }, { projection: { name: 1, registeredAt: 1 } }).sort({ registeredAt: -1 }).limit(1).toArray(),
+          evLastNickV183(id.uid),   // ⭐v1.83 每人 60 秒快取（報名／取消時清掉）
         ]);
         // <<< v154-event-myregs
         const myRegBy = new Map(myRegs.map((r) => [r.eventId, r]));
@@ -9594,6 +9621,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const _sanDid = (app.locals && app.locals._sanitizeDeckId) || null;
         const _deckId = _sanDid ? _sanDid(req.body && req.body.deckId) : null;
         await TREGS.insertOne({ _id: regId, eventId: ev._id, uid: id.uid, email: id.email || null, name: nickname, deckName, deckEntries, coinPref, checkedIn: false, registeredAt: Date.now(), ...(_deckId ? { deckId: _deckId } : {}) });
+        if (typeof evLastNickInvalidateV183 === 'function') evLastNickInvalidateV183(id.uid);   // ⭐v1.83 最近暱稱快取失效
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -9658,10 +9686,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
             registeredAt: _now, checkedInAt: _now, clientVer: _clientVer,
             ...(_deckId ? { deckId: _deckId } : {}),
           });
+          if (typeof evLastNickInvalidateV183 === 'function') evLastNickInvalidateV183(id.uid);   // ⭐v1.83 最近暱稱快取失效（遲到報名）
           // ⚠⚠ 這一手把 TOCTOU 關死：窗口若在我們寫入的同時關上，就把自己收回去並明確拒絕。
           const _fresh1 = await TEVENTS.findOne({ _id: ev._id }, { projection: { status: 1 } });
           if (!_fresh1 || _fresh1.status !== 'checkin') {
             await TREGS.deleteOne({ _id: regId });
+            if (typeof evLastNickInvalidateV183 === 'function') evLastNickInvalidateV183(id.uid);   // ⭐v1.83 最近暱稱快取失效（回滾）
             return { code: 409, error: '報到已截止，本場賽程即將產生。' };
           }
           return { ok: true };
@@ -9719,6 +9749,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const _deckId = _sanDid ? _sanDid(b.deckId) : null;
         const cp0 = String(b.coinPref || 'random');
         await TREGS.insertOne({ _id: ev._id + '__' + id.uid, eventId: ev._id, uid: id.uid, email: id.email || null, name: nickname, deckName: String(b.deckName || '').slice(0, 40), deckEntries, coinPref: (cp0 === 'first' || cp0 === 'second') ? cp0 : 'random', checkedIn: false, registeredAt: now, ...(_deckId ? { deckId: _deckId } : {}) });
+        if (typeof evLastNickInvalidateV183 === 'function') evLastNickInvalidateV183(id.uid);   // ⭐v1.83 最近暱稱快取失效
         await postSystemChat('📣 玩家發起社群賽「' + ev.name + '」（' + (fmt === 'swiss-then-cut' ? '瑞士制+TopCut' : '單淘汰') + '）！募集 ' + rallyMin + ' 分鐘、期間都可報名，時間到達 ' + minPlayers + ' 人以上就能開賽，快來「響應」報名～');
         // v0.98 推播給全站（排除發起者本人；已關閉此類通知者不推）。
         //   Wilson 裁定內容＝賽事名稱＋賽制與開賽門檻＋募集剩餘時間（不含發起人暱稱），
@@ -9748,6 +9779,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const ev = await resolveEventFromReq(req);
         if (!ev || ev.status !== 'registration') return res.status(409).json({ error: '目前無法退賽' });
         await TREGS.deleteOne({ _id: ev._id + '__' + id.uid });
+        if (typeof evLastNickInvalidateV183 === 'function') evLastNickInvalidateV183(id.uid);   // ⭐v1.83 最近暱稱快取失效（取消報名）
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -10215,6 +10247,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const ev = await resolveEventFromReq(req);
         if (!ev) return res.status(404).json({ error: '沒有進行中的賽事' });
         await TREGS.deleteMany({ eventId: ev._id });
+        if (typeof evLastNickInvalidateV183 === 'function') evLastNickInvalidateV183(null);   // ⭐v1.83 刪除賽事影響很多人 ⇒ 整個清空
         await TMATCH.deleteMany({ eventId: ev._id });
         await TEVENTS.deleteOne({ _id: ev._id });
         res.json({ ok: true }); // 註：tournamentArchives 永久歸檔不刪
@@ -10901,16 +10934,36 @@ import('firebase-admin').then(async ({ default: admin }) => {
       return out;
     }
     // ⭐v6.188 把「把房間盤面推成 game-over」抽成中央 helper（投降／裁定／判負各自複製貼上已經三份）。
+    // >>> v183-force-gameover-cas
+    // ⭐server v1.83（擴容審查 P2-2 剩下的兩處）：棄賽（_forceGameOver）與未進場判負的「把房間寫成 game-over」原本是無條件整包寫回。
+    //   這兩種是人為或規則確定的結果（一定要寫成），但若玩家的動作剛好落在「讀房間」與「寫回」之間，/action 寫出 version+1、
+    //   這裡又用同一個版本號蓋掉 ⇒ 同版本號、不同內容，畫面停住。⇒ 以 version 為條件寫，沒命中就重讀再試（最多 3 次）；
+    //   正常情況第一次就命中，查詢數與原本相同。build(room) 回 null ＝ 不需要寫（例如已經是 game-over）。
+    async function forceRoomGameOverV183(roomId, build, now) {
+      for (let _try = 0; _try < 3; _try++) {
+        const room = await TROOMS.findOne({ _id: roomId });
+        if (!room || !room.gameState) return false;
+        const og = build(room);
+        if (!og) return false;
+        const filter = { _id: roomId };
+        if (room.version != null) filter.version = room.version;
+        const r = await TROOMS.updateOne(filter, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now != null ? now : Date.now() } });
+        if (!(r && r.matchedCount === 0)) return true;
+      }
+      console.warn('[tournament] v1.83 終局寫房間連續 3 次版本衝突，放棄這次 room=' + roomId);
+      return false;
+    }
+    // <<< v183-force-gameover-cas
     async function _forceGameOver(m, winSeat, reason) {
       if (!m || !m.roomId) return;
       try {
-        const room = await TROOMS.findOne({ _id: m.roomId });
-        if (!room || !room.gameState) return;
-        const og = JSON.parse(JSON.stringify(room.gameState));
-        og.phase = 'game-over';
-        og.winner = (winSeat === 0 || winSeat === 1) ? winSeat : null;
-        og.winReason = reason;
-        await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: Date.now() } });
+        await forceRoomGameOverV183(m.roomId, (room) => {   // ⭐v1.83 版本 CAS＋重試
+          const og = JSON.parse(JSON.stringify(room.gameState));
+          og.phase = 'game-over';
+          og.winner = (winSeat === 0 || winSeat === 1) ? winSeat : null;
+          og.winReason = reason;
+          return og;
+        });
       } catch (e) { /* best-effort */ }
     }
     // ⭐⭐⭐v6.188 站長裁定③：只剩 1 位未棄賽者 ⇒ 直接判該人冠軍完賽。
@@ -13089,7 +13142,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
                 const wUid = e0 ? m.p1uid : m.p2uid, wName = e0 ? m.p1name : m.p2name, lName = e0 ? m.p2name : m.p1name;
                 await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', noShow: true } });
                 // v0.34：勝方已進場(卡在 setup 等待)→把房間設 game-over 讓勝方看到勝利畫面 + 返回賽事大廳
-                if (m.roomId) { try { const room = await TROOMS.findOne({ _id: m.roomId }); if (room && room.gameState && room.gameState.phase !== 'game-over') { const winSeat = e0 ? 0 : 1; const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = (lName || '對手') + ' 未進場，判定你獲勝'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now } }); } } catch (e) { /* best-effort */ } }
+                if (m.roomId) { try { await forceRoomGameOverV183(m.roomId, (room) => { if (room.gameState.phase === 'game-over') return null; const winSeat = e0 ? 0 : 1; const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = (lName || '對手') + ' 未進場，判定你獲勝'; return og; }, now); } catch (e) { /* best-effort */ } }   // ⭐v1.83 版本 CAS＋重試
                 await postSystemChat(swissPhase(ev) ? ('⏰ ' + (lName || '一方') + ' 未進場，本場由 ' + wName + ' 獲勝（瑞士制：雙方仍繼續後續輪次）。') : ('⏰ ' + (lName || '一方') + ' 未進場判負，' + wName + ' 獲勝。'));
                 await advanceOrFinish(m, wUid, wName);
               } else {

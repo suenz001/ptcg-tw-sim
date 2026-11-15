@@ -102,7 +102,9 @@ T('⭐ /event 不得把本人所有歷屆報名的完整牌表拉回來', () => 
   // ⭐server v1.54（Rule 40，意圖不變且更嚴）：改成只用主鍵取「開放中賽事」那幾筆（可帶 deckEntries，筆數有上限），
   //   暱稱改由資料庫取最新一筆（只投影 name／registeredAt、limit 1）⇒ 根本不再整批讀歷屆報名。
   if (/TREGS\.find\(\{ _id: \{ \$in: _myRegIds \} \}\)/.test(P)) {
-    ok(/TREGS\.find\(\{ uid: id\.uid, name: \{ \$nin: \[null, ''\] \} \}, \{ projection: \{ name: 1, registeredAt: 1 \} \}\)\.sort\(\{ registeredAt: -1 \}\)\.limit\(1\)/.test(P),
+    // ⭐server v1.83（Rule 40，意圖不變）：同一支查詢搬進每人 60 秒快取 helper（參數名 uid），/event 呼叫 evLastNickV183(id.uid) ⇒ 兩種寫法擇一，查詢本身逐字不變
+    ok((/TREGS\.find\(\{ uid: id\.uid, name: \{ \$nin: \[null, ''\] \} \}, \{ projection: \{ name: 1, registeredAt: 1 \} \}\)\.sort\(\{ registeredAt: -1 \}\)\.limit\(1\)/.test(P))
+      || (/evLastNickV183\(id\.uid\),/.test(P) && /TREGS\.find\(\{ uid, name: \{ \$nin: \[null, ''\] \} \}, \{ projection: \{ name: 1, registeredAt: 1 \} \}\)\.sort\(\{ registeredAt: -1 \}\)\.limit\(1\)/.test(P)),
       'v1.54 形狀：暱稱查詢必須只投影 name／registeredAt 且 limit 1');
     ok(!/TREGS\.find\(\{ uid: id\.uid \}/.test(P), 'v1.54 形狀：不可以再有整批讀本人歷屆報名的查詢');
     ok(/deckCount: deckCount\(reg\.deckEntries\)/.test(P), 'deckCount 沒有改讀主鍵查回來的那筆');
