@@ -763,9 +763,11 @@ const PREV_ALLOWED = [
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
   // ⭐v6.644：v6.644 牌庫搜尋選擇區與 validIids 取交集（deckSearchVisible）、openDeckViewReshuffle 宣告 validIids []、三處 inline 收斂、消毒閘先判上限
   'src/lib/game/effects/_shared.ts',
+  'src/lib/game/effects/cards/m6a_wave4.ts',   // ⭐v6.644 站長裁定：整人變身先檢視
   'src/lib/game/effects/cards/v2401_i_wave2_draw_swap_search.ts',
   'src/lib/game/effects/cards/v2402_mega_gardevoir.ts',
   'src/lib/game/effects/cards/v2550_i_wave5_meta.ts',
+  'src/lib/game/effects/cards/v2620_i_wave12_misc5.ts',   // ⭐v6.644 站長裁定：籌備／築窩先檢視
   'src/lib/game/engine.ts',
   'src/lib/game/selection-candidates.ts',
   'src/lib/game/selection-filter.ts',   // ⭐v6.644 審查 P2-1：中央 TOP_N 述詞

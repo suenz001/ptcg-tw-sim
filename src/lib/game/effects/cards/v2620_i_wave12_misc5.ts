@@ -11,7 +11,7 @@ import { defNextAtkReducePost, selfDmgReducePost } from '../../effects'; // v5.8
 import { oppCountersMultiplyPre } from '../../effects'; // ⭐v6.399 收斂：對手傷害指示物 × N（中央唯一一份）
 import { computeActiveRetreatCostFor } from '../../engine';  // v5.690 有效撤退費
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, countAttachedEnergyAsUnits,
-  getOwnBenchLimit,
+  getOwnBenchLimit, openDeckViewReshuffle,
 } from '../_shared';
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
 import { mandatoryTargetCount } from '../_shared'; // ⭐v6.305 卡面寫死目標隻數 → 強制選滿
@@ -434,10 +434,8 @@ function deckSearchTrainerSubtypePost(
       return card?.supertype === 'Trainer' && card.subtype === filter;
     });
     if (valid.length === 0) {
-      return updatePlayer(
-        addLog(state, `${label}：牌庫無 ${filter}；重洗`, aIdx),
-        aIdx, p => ({ ...p, deck: shuffle(p.deck) }),
-      );
+      // ⭐v6.644（站長裁定：統一成先檢視）：牌庫沒有符合的卡 ⇒ 照樣開檢視（選擇區留空、整副牌庫在下方），確認後重洗；原本直接重洗、不讓玩家看牌庫
+      return openDeckViewReshuffle(state, aIdx, label, { log: `${label}：牌庫無 ${filter}；檢視牌庫後重洗` });
     }
     const s = addLog(state, `${label}：從牌庫挑 1 張 ${filter} 加手牌（重洗）`, aIdx);
     return withPending(s, {

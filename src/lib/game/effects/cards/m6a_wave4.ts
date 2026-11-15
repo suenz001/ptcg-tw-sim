@@ -31,7 +31,7 @@
 import type { CardInstance } from '../../types';
 import {
   regPost, regR, ATTACK_PRE_DISCARD_CHOICE,
-  addLog, updatePlayer, withPending, shuffle,
+  addLog, updatePlayer, withPending, shuffle, openDeckViewReshuffle,
   toBareCard,              // 離場／回牌庫一律裸化（白名單），防暫時性旗標外洩到下一次入場
   abilityUsedAfterSwap,    // v5.625 官方 QA：卡片互換後「特性本回合已使用」以**特性名稱**判定
 } from '../_shared';
@@ -177,8 +177,8 @@ regPost('百變怪|整人變身', (state, aIdx, pool) => {
   //   海豚俠ex｜全能靈魂「只可依據『海豚俠』的特性『全能變身』的效果放置於場上」⇒「不可以」互換 ⇒ 排除（中央述詞 isAllPowerSoulBlocked）。
   const pokeIids = p.deck.filter(d => { const c = pool.get(d.cardId); return c?.supertype === 'Pokemon' && !isAllPowerSoulBlocked(c); }).map(d => d.iid);
   if (pokeIids.length === 0) {
-    return updatePlayer(addLog(r.state, '整人變身：牌庫沒有寶可夢卡，重洗牌庫', aIdx), aIdx,
-      pl => ({ ...pl, deck: shuffle([...pl.deck]) }));
+    // ⭐v6.644（站長裁定：統一成先檢視）：牌庫沒有可互換的寶可夢卡 ⇒ 照樣開檢視（選擇區留空），確認後重洗；原本直接重洗、不讓玩家看牌庫
+    return openDeckViewReshuffle(r.state, aIdx, '整人變身', { log: '整人變身：牌庫沒有寶可夢卡，檢視牌庫後重洗' });
   }
   const s = addLog(r.state,
     '整人變身：正面 — 從牌庫選 1 張寶可夢卡與這隻寶可夢互換（所附加的卡・傷害指示物・特殊狀態・效果等全部保留）', aIdx);

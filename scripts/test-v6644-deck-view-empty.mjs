@@ -14,7 +14,7 @@
 // 【A】deckSearchVisible 單元：[] ⇒ 空；undefined／非陣列 ⇒ 不縮限；子集保留原順序
 // 【B】感應【超】能量（實跑 SPECIAL_ENERGY_ATTACH）：無基礎【超】⇒ 檢視 pending、validIids []、選擇區空；
 //      正對照：有基礎【超】⇒ 照常開放備戰搜尋；送牌庫裡任一張的 iid 也拿不到（引擎閘）；確認後牌庫張數不變、手牌不變
-// 【C】三處收斂點（實跑 ATTACK_POST）：validIids []、viewOnly、紀錄字樣逐字不變
+// 【C】收斂點（實跑 ATTACK_POST）：validIids []、viewOnly、紀錄字樣；含站長裁定統一先檢視的籌備×2、築窩、百變怪｜整人變身
 // 【D】靜態 lint：src/lib/game 下所有 deck-search 物件字面量，maxCount 寫死 0 的一律宣告 validIids（含掃描器下限與正對照）
 // 【E】性質：被 deckSearchVisible 拿掉的卡，引擎 sanitizeSelectedIids 一律拒收；留下的一律接受（＝不會藏起可選的卡）
 //      E2／E3：引擎消毒閘先判上限再收（maxCount 0 ⇒ 0 張；原本先收再比，「只能檢視」照樣收 1 張）
@@ -141,6 +141,10 @@ function checkC(M, tag) {
   for (const [k, atk] of [['蛋蛋|果實盈滿', '果實盈滿'], ['急凍鳥|冰冷羽擊', '冰冷羽擊'], ['雷電雲|充電', '充電']]) {
     cases.push({ k, label: atk, log: `${atk}：牌庫無基本能量；檢視牌庫後重洗`, st: () => ST({ active: I(PLAIN), deck: [I(PLAIN), I(ITEM)] }, { active: I(PLAIN) }) });
   }
+  // ⭐站長裁定（2026-11-15）：原本「牌庫無符合卡 → 直接重洗、不讓玩家看牌庫」的四招統一成先檢視
+  for (const [k, atk, what] of [['探探鼠|籌備', '籌備', 'Item'], ['火箭隊的咩利羊|籌備', '籌備', 'Item'], ['赫普的沙包蛇|築窩', '築窩', 'Stadium']]) {
+    cases.push({ k, label: atk, log: `${atk}：牌庫無 ${what}；檢視牌庫後重洗`, st: () => ST({ active: I(PLAIN), deck: [I(PLAIN), I(PLAIN)] }, { active: I(PLAIN) }) });
+  }
   const res = cases.map((c) => {
     const fn = post(c.k);
     if (typeof fn !== 'function') return { k: c.k, why: '沒註冊' };
@@ -151,8 +155,21 @@ function checkC(M, tag) {
       && ps.params?.label === `${c.label}（檢視牌庫）`;
     return { k: c.k, good, logOk: logHas(r, c.log), params: ps?.params };
   });
-  ok(`★★★ C1${tag} 三處收斂點（${cases.length} 招）牌庫無符合卡 ⇒ validIids []、viewOnly、標題「○○（檢視牌庫）」`, res.every((x) => x.good), JSON.stringify(res.filter((x) => !x.good)));
-  ok(`★★ C2${tag} 三處收斂點紀錄字樣逐字不變（opts.log）`, res.every((x) => x.logOk), JSON.stringify(res.filter((x) => !x.logOk).map((x) => x.k)));
+  // 百變怪｜整人變身：擲幣正面才搜尋 ⇒ 最多試 40 次取一次正面（牌庫只有物品卡＝沒有可互換的寶可夢卡）
+  {
+    const fn = post('百變怪|整人變身');
+    let got = null;
+    for (let t = 0; t < 40 && typeof fn === 'function' && !got; t++) {
+      let r; try { r = fn(ST({ active: I(PLAIN), deck: [I(ITEM), I(ITEM)] }, { active: I(PLAIN) }), 0, pool, {}); } catch (e) { got = { k: '百變怪|整人變身', why: e.message }; break; }
+      if (logHas(r, '整人變身：反面')) continue;
+      const ps = r?.pendingSelection;
+      got = { k: '百變怪|整人變身', good: ps?.type === 'deck-search' && ps.effectKey === 'search-to-hand-reshuffle' && ps.maxCount === 0 && Array.isArray(ps.params?.validIids) && ps.params.validIids.length === 0 && ps.params?.label === '整人變身（檢視牌庫）',
+        logOk: logHas(r, '整人變身：牌庫沒有寶可夢卡，檢視牌庫後重洗'), params: ps?.params };
+    }
+    res.push(got ?? { k: '百變怪|整人變身', why: typeof fn === 'function' ? '40 次都反面' : '沒註冊' });
+  }
+  ok(`★★★ C1${tag} 收斂點（${res.length} 招，含站長裁定統一先檢視的籌備×2／築窩／整人變身）牌庫無符合卡 ⇒ validIids []、viewOnly、標題「○○（檢視牌庫）」`, res.every((x) => x.good), JSON.stringify(res.filter((x) => !x.good)));
+  ok(`★★ C2${tag} 紀錄字樣（原有的逐字不變；四招新寫「檢視牌庫後重洗」）`, res.every((x) => x.logOk), JSON.stringify(res.filter((x) => !x.logOk).map((x) => x.k)));
   // 牌庫空 ⇒ 不開 pending、只寫「牌庫已空」（與收斂前相同）
   const fn = post('超級沙奈朵ex|盈溢祈願');
   let re; try { re = fn?.(ST({ active: I(PSYMON), bench: [I(PLAIN)], deck: [] }, { active: I(PLAIN) }), 0, pool, {}); } catch (e) { re = { err: e.message }; }
@@ -318,10 +335,10 @@ else {
     if (process.env.V6644_DEBUG) for (const l of lines) if (/FAIL/.test(l)) log(l);
     const bp = pass - before; pass = before; fail = fb;
     console.log('    BASE 紅：' + reds.join('｜'));
-    ok('★★★ H1 BASE 上 A1／A2／A3／A4／B1／B3／C1／D1／D3／E1／E2／F1／G1／G1b／G2 都紅（本版修的正是這些；B3＝舊版送 1 張 iid 真的會從牌庫拿到手牌）',
-      ['A1@', 'A2@', 'A3@', 'A4@', 'B1@', 'B3@', 'C1@', 'D1@', 'D3@', 'E1@', 'E2@', 'F1@', 'G1@', 'G1b@', 'G2@'].every((k) => reds.some((r) => r.includes(k))), reds.join(','));
-    ok('★★ H2 BASE 上「前提」、B2（正對照）、C2／C3（紀錄字樣）、D2（掃描器）、E3（零回歸）、F2／F3 綠',
-      !reds.some((r) => /前提|B2@|C2@|C3@|D2@|E3@|F2@|F3@|G1c@/.test(r)) && bp >= 8, reds.join(',') + ' ' + bp);
+    ok('★★★ H1 BASE 上 A1／A2／A3／A4／B1／B3／C1／C2／D1／D3／E1／E2／F1／G1／G1b／G2 都紅（本版修的正是這些；B3＝舊版送 1 張 iid 真的會從牌庫拿到手牌）',
+      ['A1@', 'A2@', 'A3@', 'A4@', 'B1@', 'B3@', 'C1@', 'C2@', 'D1@', 'D3@', 'E1@', 'E2@', 'F1@', 'G1@', 'G1b@', 'G2@'].every((k) => reds.some((r) => r.includes(k))), reds.join(','));
+    ok('★★ H2 BASE 上「前提」、B2（正對照）、C3（紀錄字樣）、D2（掃描器）、E3（零回歸）、F2／F3 綠',
+      !reds.some((r) => /前提|B2@|C3@|D2@|E3@|F2@|F3@|G1c@/.test(r)) && bp >= 8, reds.join(',') + ' ' + bp);
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 console.log(`=== v6.644 牌庫檢視選擇區留空：${pass} PASS / ${fail} FAIL ===`);
