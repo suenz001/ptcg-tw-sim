@@ -37,7 +37,9 @@ if(hasBaseCommit(ROOT,BASE)){
   const old=base.match(block),current=source.match(block);
   if(old?.length!==1||current?.length!==1)throw new Error('淺色哨兵必須唯一');
   const revertForRule40=(input,pre=(x,p)=>revertMobileUiV6590(revertV6592Game(revertV6595Game(revertV6596Game(revertV6598Game(x)))),p))=>{
-  let restored=pre(input,PAGE).replace(current[0],old[0]);
+  // ⭐v6.645（Rule 40，意圖不變）：新版的還原鏈會先把淺色哨兵裡較新版本的產生器輸出還原掉 ⇒ 用還原後那份的淺色區塊（恰好一段）整段換回上一版，不再拿原始檔的字面比
+  let restored=pre(input,PAGE);
+  {const _m=restored.match(new RegExp(block.source));if(_m)restored=restored.replace(_m[0],()=>old[0]);}
   let unique=true;
   for(const [now,prev]of V6587_GAME_PAIRS){
     if(restored.split(now).length!==2){unique=false;continue;}
