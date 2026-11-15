@@ -1,4 +1,4 @@
-// server v1.85 錦標賽區塊鎖（Rule 68）：本版改了錦標賽區塊 ⇒ 指紋換新值；
+// server v1.85 錦標賽區塊鎖（Rule 68）：本版只動錦標賽區塊之前（tail／tev 指紋與 v184 相同，PAIRS_V185_TAIL 為空）；
 //   舊的 revertV184／revertTo* 全部先套 revertV185 再交給上一節（鏈又長一節，既有呼叫點只改 import 路徑）。
 import { revertAdminV185IfPresent } from './sap-revert-admin-v185.mjs';
 import * as Prev from './tourn-revert-v184.mjs';

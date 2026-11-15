@@ -13,6 +13,8 @@
 //   S11 回報房號：不是房主 409、房號格式錯 400；S12 開房前離開 ⇒ 對手回佇列
 //   S13 負擔：查詢狀態（poll）一次都不碰資料庫；只有「加入配對」讀一次好友表
 //   S14 已在配對流程中再按加入 ⇒ 冪等；配對完成後再加入 ⇒ 重新排隊
+//   S15（審查 P3-2）回報的房號要是房主自己剛開的等待中房間；S16（審查 P3-1）佇列沒變動時配對最多每秒一次；S17（審查 P3-4）讀封鎖名單時取消 ⇒ 不會幽靈排隊
+//   S8 沒在查詢的移出時間放寬到 75 秒（審查 P2-3）
 // 【H】HEAD-FAIL：BASE（b3fa288d＝v6.644／v1.84）上沒有這個區塊 ⇒ 逐條紅；前提（抽取器）在 HEAD 綠
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -32,10 +34,14 @@ function makeEnv(blk, opts = {}) {
   const clock = { t: 1_800_000_000_000 };
   const dbCalls = [];
   const blocks = opts.blocks || [];   // [{a, b}] status blocked
-  const db = { collection: (name) => { dbCalls.push(name); return { find: (q) => ({ limit: () => ({ toArray: async () => {
-    const me = q.$or[0].a;
-    return blocks.filter((d) => d.a === me || d.b === me).map((d) => ({ a: d.a, b: d.b }));
-  } }) }) }; } };
+  const rooms = opts.rooms || {};   // 房號 -> { status, seats:[{email}] }（/room 會讀一次確認是房主自己開的房）
+  const db = { collection: (name) => { dbCalls.push(name); return {
+    find: (q) => ({ limit: () => ({ toArray: async () => {
+      const me = q.$or[0].a;
+      return blocks.filter((d) => d.a === me || d.b === me).map((d) => ({ a: d.a, b: d.b }));
+    } }) }),
+    findOne: async (q) => (name === 'rooms' ? (rooms[q._id] ?? (opts.autoRooms === false ? null : { status: 'lobby', seats: [{ email: opts.roomOwner?.[q._id] ?? 'a@x.com' }] })) : null),
+  }; } };
   const ids = opts.ids || {};
   const tournIdentity = async (req) => { const t = req.headers.authorization; if (!t) return { error: '需要登入', code: 401 }; if (t === 'anon') return { error: '匿名', code: 403 }; return ids[t]; };
   const tournDeckIssue = opts.deckIssue || (() => null);
@@ -49,7 +55,7 @@ function makeEnv(blk, opts = {}) {
     await f({ headers: { authorization: who }, body }, res);
     return { status, out };
   }
-  return { call, clock, dbCalls, err, routes };
+  return { call, clock, dbCalls, err, routes, rooms };
 }
 const D60 = [{ cardId: '1', count: 60 }];
 const IDS = { A: { uid: 'uA', email: 'a@x.com', verified: true }, B: { uid: 'uB', email: 'b@x.com', verified: true }, C: { uid: 'uC', email: 'c@x.com', verified: true }, D: { uid: 'uD', email: 'd@x.com', verified: true } };
@@ -133,9 +139,17 @@ async function checkAll(src, tag) {
   {
     const E = makeEnv(blk, { ids: IDS });
     await join_(E, 'A');
-    E.clock.t += 15001;
+    E.clock.t += 75001;
     const b = await join_(E, 'B');
-    ok(`★★ S8${tag} A 15 秒沒查詢 ⇒ 移出佇列，B 加入時不會配到他`, b.out?.state === 'searching' && b.out.waitingCount === 1, JSON.stringify(b.out));
+    ok(`★★ S8${tag} A 75 秒沒查詢（背景分頁會被節流，放寬到 75 秒） ⇒ 移出佇列，B 加入時不會配到他`, b.out?.state === 'searching' && b.out.waitingCount === 1, JSON.stringify(b.out));
+  }
+  // S8b 30 秒沒查詢（例如分頁在背景被節流）⇒ 還在佇列裡，照樣配得到
+  {
+    const E = makeEnv(blk, { ids: IDS });
+    await join_(E, 'A');
+    E.clock.t += 30000;
+    const b = await join_(E, 'B');
+    ok(`★★ S8b${tag} 30 秒沒查詢 ⇒ 仍在佇列，B 加入就配到`, b.out?.state === 'found', JSON.stringify(b.out));
   }
   // S9 封鎖
   {
@@ -202,20 +216,71 @@ async function checkAll(src, tag) {
   }
 }
 
+async function checkMore(src, tag) {
+  const blk = blockOf(src, 'v185-casual-automatch');
+  // S15 房號驗證：不是房主自己開的房（座位 0 email 不同）、或房間不存在／已開打 ⇒ 409，配對仍是 host 可以重報
+  {
+    const E = makeEnv(blk, { ids: IDS, rooms: { OTHR: { status: 'lobby', seats: [{ email: 'z@x.com' }] }, PLAY: { status: 'playing', seats: [{ email: 'a@x.com' }] }, MINE: { status: 'lobby', seats: [{ email: 'A@X.com' }] } }, autoRooms: false });
+    await join_(E, 'A'); const b = await join_(E, 'B'); const mid = b.out?.matchId;
+    await E.call('accept', 'A', { matchId: mid, accept: true }); await E.call('accept', 'B', { matchId: mid, accept: true });
+    const r1 = await E.call('room', 'A', { matchId: mid, roomCode: 'OTHR' });
+    const r2 = await E.call('room', 'A', { matchId: mid, roomCode: 'PLAY' });
+    const r3 = await E.call('room', 'A', { matchId: mid, roomCode: 'NONE' });
+    const st = (await E.call('poll', 'A')).out?.state;
+    const r4 = await E.call('room', 'A', { matchId: mid, roomCode: 'MINE' });
+    ok(`★★★ S15${tag} 回報的房號要是房主自己剛開、還在等待中的房（email 不分大小寫）；別人的房／已開打／不存在 ⇒ 409`,
+      r1.status === 409 && r2.status === 409 && r3.status === 409 && st === 'host' && r4.out?.state === 'hosting', JSON.stringify([r1.out?.code, r2.out?.code, r3.out?.code, st, r4.out]));
+  }
+  // S16 配對節流：佇列沒變動時，poll 最多每秒跑一次配對（大量互相封鎖的帳號拖不慢伺服器）
+  {
+    const E = makeEnv(blk, { ids: IDS, blocks: [{ a: 'a@x.com', b: 'b@x.com' }] });
+    await join_(E, 'A'); await join_(E, 'B');
+    // 量：100 次 poll 在同一毫秒 ⇒ 配對最多跑 1 次（看不到，改量時間是否同步線性）；這裡用行為端：解除封鎖後要等節流過才會配
+    const src2 = blk.replace('if (!force && !_cmPairDirty && now - _cmPairAt < 1000) return;', 'if (!force && !_cmPairDirty && now - _cmPairAt < 1000) { globalThis.__cmSkip = (globalThis.__cmSkip || 0) + 1; return; }');
+    globalThis.__cmSkip = 0;
+    const E2 = makeEnv(src2, { ids: IDS, blocks: [{ a: 'a@x.com', b: 'b@x.com' }] });
+    await join_(E2, 'A'); await join_(E2, 'B');
+    for (let i = 0; i < 50; i++) await E2.call('poll', i % 2 ? 'A' : 'B');
+    const skipped = globalThis.__cmSkip;
+    E2.clock.t += 1001; await E2.call('poll', 'A');
+    ok(`★★ S16${tag} 佇列沒變動時同一秒內的 poll 不重跑配對（50 次 poll 跳過 ≥ 49 次）`, skipped >= 49 && src2 !== blk, skipped);
+  }
+  // S17 join 在讀封鎖名單時送了 leave ⇒ 這次 join 作廢，不會變成幽靈排隊
+  {
+    let release; const gate = new Promise((r) => { release = r; });
+    const E = makeEnv(blk, { ids: IDS });
+    const origDb = E;   // 換成慢的好友表
+    const routes = {};
+    const app = { post: (p, f) => { routes[p] = f; }, get: () => {} };
+    const clock = { t: 1_800_000_000_000 };
+    const slowDb = { collection: () => ({ find: () => ({ limit: () => ({ toArray: async () => { await gate; return []; } }) }), findOne: async () => null }) };
+    try { new Function('app', 'tournIdentity', 'tournDeckIssue', 'db', 'FR_COLL', 'Date', blk)(app, async (r) => IDS[r.headers.authorization], () => null, slowDb, 'friendships', { now: () => clock.t }); } catch { /* noop */ }
+    const call = async (path, who, body = {}) => { let out = null; const res = { status: () => res, json: (o) => { out = o; return res; } }; await routes['/api/casual-match/' + path]?.({ headers: { authorization: who }, body }, res); return out; };
+    const pj = call('join', 'A', { deckEntries: D60, name: 'A' });
+    await call('leave', 'A');
+    release();
+    const j = await pj;
+    const p = await call('poll', 'A');
+    ok(`★★ S17${tag} 加入配對還在讀封鎖名單時就取消 ⇒ 不會被放回佇列`, typeof routes['/api/casual-match/join'] === 'function' && j?.state === 'idle' && p?.state === 'idle', JSON.stringify([j, p]));
+  }
+}
+
 const src = readFileSync(join(ROOT, SAP), 'utf8').replace(/\r\n/g, '\n');
 console.log('【S】自動配對佇列（實跑）');
 await checkAll(src, '');
+await checkMore(src, '');
 console.log('【H】HEAD-FAIL');
 if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('H（缺 BASE ' + BASE_SHA + '）');
 else {
   const b = readBaseBlob(ROOT, BASE_SHA, SAP);
   const before = pass, fb = fail; const log = console.log; const lines = []; console.log = (s) => lines.push(String(s));
   await checkAll(b.ok ? b.out.replace(/\r\n/g, '\n') : '', '@BASE');
+  await checkMore(b.ok ? b.out.replace(/\r\n/g, '\n') : '', '@BASE');
   console.log = log;
   const reds = lines.filter((l) => /FAIL/.test(l)).map((l) => l.trim().slice(5, 30));
   pass = before; fail = fb;
   console.log('    BASE 紅：' + reds.length + ' 條');
-  ok('★★★ H1 BASE 上沒有配對區塊 ⇒ 前提與 S1～S14 逐條紅（每條各自紅，不是整支 throw）', ['前提@', 'S1@', 'S2@', 'S3@', 'S4@', 'S5@', 'S6@', 'S7@', 'S9@', 'S10@', 'S11@', 'S12@', 'S13@'].every((k) => reds.some((r) => r.includes(k))), reds.join(','));
+  ok('★★★ H1 BASE 上沒有配對區塊 ⇒ 前提與 S1～S14 逐條紅（每條各自紅，不是整支 throw）', ['前提@', 'S1@', 'S2@', 'S3@', 'S4@', 'S5@', 'S6@', 'S7@', 'S8b@', 'S9@', 'S10@', 'S11@', 'S12@', 'S13@', 'S15@', 'S16@', 'S17@'].every((k) => reds.some((r) => r.includes(k))), reds.join(','));
 }
 console.log(`=== server v1.85 休閒自動配對：${pass} PASS / ${fail} FAIL ===`);
 process.exit(fail ? 1 : 0);

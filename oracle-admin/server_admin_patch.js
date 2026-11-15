@@ -8940,7 +8940,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //     客人下一次查詢拿到房號，用既有的加入流程進房 ⇒ 房間格式、觀戰、聊天、斷線處理全部沿用，沒有第二份規則。
     //   ・各階段都有逾時：沒在查詢的人 15 秒後移出佇列；接受 15 秒；房主建房 25 秒；任何一段失敗，沒做錯的那一方自動回到佇列（保留原本的排隊順序）。
     //   ・回應帶哨兵 casualMatchApi: 1（前端用它分辨「伺服器還沒更新」）。
-    const CM_POLL_STALE_MS = 15000;      // 超過這麼久沒查詢 ⇒ 視為離開
+    const CM_POLL_STALE_MS = 75000;      // 超過這麼久沒查詢 ⇒ 視為離開（審查 P2-3：背景分頁／手機切走時計時器會被節流，15 秒太短；配到之後仍有接受時限把關）
     const CM_ACCEPT_MS = 15000;          // 「找到對手」接受時限
     const CM_CREATE_MS = 25000;          // 房主建房並回報房號的時限
     const CM_DONE_KEEP_MS = 60000;       // 配對完成後保留多久（讓客人拿到房號）
@@ -8954,6 +8954,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
     const _cmNotice = new Map();         // uid -> { msg, at }（回到佇列的原因，查一次就清）
     const _cmLastOpp = new Map();        // email -> { opp: email, at }
     let _cmSeq = 0;
+    let _cmPairDirty = false, _cmPairAt = 0;   // 審查 P3-1：佇列有變動才配對；只剩時間觸發（上一場對手等滿 15 秒）的情形最多每秒一次
+    const _cmLeaveEpoch = new Map();   // uid -> 次數（審查 P3-4：join 在等封鎖名單時送了 leave ⇒ 這次 join 作廢）
     function _cmNick(s) { const t = String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 24); return t || '玩家'; }
     function _cmIsBlocked(x, y) { return !!((x.blocked && x.blocked.has(y.email)) || (y.blocked && y.blocked.has(x.email))); }
     function _cmIsRepeat(x, y, now) {
@@ -8964,6 +8966,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
     function _cmRequeue(entry, msg, now) {
       _cmByUid.delete(entry.uid);
       if (!_cmQueue.has(entry.uid)) _cmQueue.set(entry.uid, { ...entry, lastSeen: now });
+      _cmPairDirty = true;
       if (msg) _cmNotice.set(entry.uid, { msg, at: now });
     }
     function _cmDropUser(uid, msg, now) {
@@ -9001,7 +9004,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
       if (_cmLastOpp.size > 5000) for (const [k, v] of _cmLastOpp) if (now - v.at > CM_LAST_OPP_KEEP_MS) _cmLastOpp.delete(k);
     }
     /** 先到先配：依排隊順序，每個人找第一個可以配的；上一場的對手只在雙方都等滿 CM_REPEAT_WAIT_MS 且沒有別人時才配。 */
-    function _cmTryPair(now) {
+    function _cmTryPair(now, force) {
+      if (!force && !_cmPairDirty && now - _cmPairAt < 1000) return;
+      _cmPairDirty = false; _cmPairAt = now;
       const waiting = [..._cmQueue.values()].filter((e) => !_cmByUid.has(e.uid)).sort((x, y) => x.joinedAt - y.joinedAt);
       const used = new Set();
       for (let i = 0; i < waiting.length; i++) {
@@ -9079,9 +9084,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
         }
         const cur = _cmQueue.get(me.uid);
         if (!cur && _cmQueue.size >= CM_QUEUE_MAX) return res.status(503).json({ casualMatchApi: 1, error: '目前配對的人太多，請稍後再試', code: 'casual-match-full' });
+        const _ep = _cmLeaveEpoch.get(me.uid) || 0;
         const blocked = await _cmLoadBlocked(me.email);
+        if ((_cmLeaveEpoch.get(me.uid) || 0) !== _ep) return res.json(_cmView(me.uid, now));   // 等封鎖名單時已經取消 ⇒ 不放回佇列
         _cmQueue.set(me.uid, { uid: me.uid, email: me.email, nick: _cmNick(body.name), joinedAt: cur ? cur.joinedAt : now, lastSeen: now, blocked });
-        _cmTryPair(now);
+        _cmPairDirty = true;
+        _cmTryPair(now, true);
         res.json(_cmView(me.uid, now));
       } catch (e) { res.status(500).json({ casualMatchApi: 1, error: e.message }); }
     });
@@ -9129,6 +9137,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const m = _cmMatches.get(String(body.matchId || ''));
         if (!m || m.hostUid !== me.uid || m.phase !== 'create') return res.status(409).json({ ..._cmView(me.uid, now), error: '這場配對已經失效', code: 'casual-match-stale' });
         if (!CM_ROOM_RE.test(code)) return res.status(400).json({ casualMatchApi: 1, error: '房號格式不正確', code: 'casual-match-room' });
+        // 審查 P3-2：確認這間房真的是房主自己剛開的（座位 0 是他的 email、還在等待中），不能拿別人的房號（例如別人的私密房）來配。
+        //   只讀一份小投影；每場配對只有這一次。⚠ 座位的 uid 是各瀏覽器的匿名身分，不能拿 Firebase uid 比 ⇒ 比 email（建房時寫入）。
+        let _room = null;
+        try { _room = await db.collection('rooms').findOne({ _id: code }, { projection: { status: 1, 'seats.email': 1 } }); } catch (e) { _room = null; }
+        const _s0 = _room && Array.isArray(_room.seats) && _room.seats[0] ? String(_room.seats[0].email || '').trim().toLowerCase() : '';
+        if (!_room || _room.status !== 'lobby' || _s0 !== me.email) return res.status(409).json({ ..._cmView(me.uid, now), error: '找不到你剛建立的房間', code: 'casual-match-room-check' });
+        if (m.phase !== 'create') return res.status(409).json({ ..._cmView(me.uid, now), error: '這場配對已經失效', code: 'casual-match-stale' });   // 讀房間的這段時間配對逾時／被取消
         m.roomCode = code; m.phase = 'done'; m.doneAt = now;
         _cmQueue.delete(m.a.uid); _cmQueue.delete(m.b.uid);
         _cmLastOpp.set(m.a.email, { opp: m.b.email, at: now });
@@ -9141,6 +9156,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const me = await _cmAuth(req, res); if (!me) return;
         const now = Date.now();
         _cmSweep(now);
+        _cmLeaveEpoch.set(me.uid, (_cmLeaveEpoch.get(me.uid) || 0) + 1);
+        if (_cmLeaveEpoch.size > 5000) _cmLeaveEpoch.clear();
         const mid = _cmByUid.get(me.uid);
         const m = mid ? _cmMatches.get(mid) : null;
         if (m && (m.phase === 'accept' || m.phase === 'create')) {

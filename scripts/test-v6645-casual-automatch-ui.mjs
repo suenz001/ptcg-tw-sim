@@ -6,6 +6,7 @@
 //   並回報房號；B 用既有 joinRoom 進同一間；E3 雙方進房後自動帶入配對用的牌組（handleSetDeck）並按準備（setSeatReady true）
 //   E4 B 拒絕 ⇒ B 收掉配對、A 回到搜尋（附原因）；E5 取消配對 ⇒ 送 leave、停止輪詢；E6 匿名／沒選牌組 ⇒ 一發請求都不送
 //   E7 房主開好房但對手 45 秒沒進房 ⇒ 自動離房並提示；E8 開始配對前先過版本閘（casualVerGate）
+//   E9～E12（審查）：離開線上大廳自動取消、回到前景立刻查、房主開房途中離開不進房、客人座位被搶不變觀戰
 // 【A】match-api.ts 單元：輪詢間隔（搜尋 3 秒、找到後 1 秒、其餘不輪詢）、房名、沒有伺服器的 build 不顯示入口；
 //   post()：匿名不發請求、沒有哨兵 ⇒「伺服器尚未支援」、帶 Bearer token
 // 【R】房間模組：兩套（Oracle／Firestore）createRoom 都收 autoMatch 旗標；大廳列表把「等待中的自動配對房」藏起來、開打後照常列出
@@ -57,7 +58,8 @@ function makeServer(sapSrc, clock) {
   const routes = {};
   const app = { post: (p, f) => { routes[p] = f; }, get: () => {} };
   const ids = { tA: { uid: 'fA', email: 'a@x.com', verified: true }, tB: { uid: 'fB', email: 'b@x.com', verified: true } };
-  const db = { collection: () => ({ find: () => ({ limit: () => ({ toArray: async () => [] }) }) }) };
+  const dbRooms = {};
+  const db = { collection: (name) => ({ find: () => ({ limit: () => ({ toArray: async () => [] }) }), findOne: async (q) => (name === 'rooms' ? dbRooms[q._id] ?? null : null) }) };
   let err = null;
   try { new Function('app', 'tournIdentity', 'tournDeckIssue', 'db', 'FR_COLL', 'Date', blk)(app, async (r) => ids[r.headers.authorization] || { error: 'x', code: 401 }, () => null, db, 'friendships', { now: () => clock.t }); } catch (e) { err = e.message; }
   const calls = [];
@@ -72,7 +74,7 @@ function makeServer(sapSrc, clock) {
     if (status >= 400) return { ok: false, message: out.error, code: out.code, status };
     return { ok: true, view: out };
   }
-  return { call, calls, ok: !!blk && !err, err };
+  return { call, calls, ok: !!blk && !err, err, dbRooms };
 }
 
 // ── 把頁面腳本區塊變成可執行的「一個玩家」
@@ -82,13 +84,14 @@ async function pageBlockJs(pageSrc) {
   let code = blk
     .replace(/\$state<[^>]*?>\(/g, '(').replace(/\$state\(/g, '(')
     .replace(/const cmActive = \$derived\(([\s\S]*?)\);\n/, 'const __cmActive = () => ($1);\n')
-    .replace(/onDestroy\(\(\) => cmStop\(true\)\);/, '__onDestroy(() => cmStop(true));');
+    .replace(/onDestroy\(\(\) => cmStop\(true\)\);/, '__onDestroy(() => cmStop(true));')
+    .replace(/\$effect\(/g, '__effect(');
   code = code.replace(/\bcmActive\b/g, '__cmActive()');
   const r = await transform(code, { loader: 'ts' });
   return r.code;
 }
 async function makePlayer(js, server, clock, me, shared) {
-  const st = { calls: [], seat: null, ready: false, deckSet: null, rooms: shared.rooms, onlineError: '', onlineStep: 'join', roomCode: '', amIHost: false, destroy: null, left: [] };
+  const st = { effects: [], vis: null, calls: [], seat: null, ready: false, deckSet: null, rooms: shared.rooms, onlineError: '', onlineStep: 'join', roomCode: '', amIHost: false, destroy: null, left: [] };
   const DECKS = [{ id: 'd1', name: '我的牌組', entries: [{ cardId: '1', count: 60 }], coinPref: 'first' }, { id: 'bad', name: '59張', entries: [{ cardId: '1', count: 59 }] }];
   const env = {
     casualMatchAvailable: () => true,
@@ -96,14 +99,17 @@ async function makePlayer(js, server, clock, me, shared) {
     casualMatchJoin: (en, dn, name) => server.call('join', me.token, { deckEntries: en, deckName: dn, name }),
     casualMatchPoll: () => server.call('poll', me.token),
     casualMatchAccept: (mid, a) => server.call('accept', me.token, { matchId: mid, accept: a }),
-    casualMatchReportRoom: (mid, code) => server.call('room', me.token, { matchId: mid, roomCode: code }),
+    casualMatchReportRoom: async (mid, code) => { const r = await server.call('room', me.token, { matchId: mid, roomCode: code }); if (shared.onReport) await shared.onReport(me); return r; },
     casualMatchLeave: (o) => server.call('leave', me.token),
     casualMatchRoomName: shared.roomName,
     countDeckCards: (en) => en.reduce((s, e) => s + e.count, 0),
     normalizeDeckCoinPref: (x) => x,
     casualVerGate: async (k, act) => { st.calls.push('gate:' + k); return false; },
-    createRoom: async (name, host, undo, visible, extra) => { const code = 'R' + (++shared.seq) + 'XY'; shared.rooms[code] = { name, host, undo, visible, extra, seats: [{ uid: me.token }, { uid: null }], status: 'lobby' }; st.calls.push('createRoom'); return code; },
-    joinRoom: async (code, name) => { const r = shared.rooms[code]; if (!r) throw new Error('找不到房間'); r.seats[1] = { uid: me.token }; st.calls.push('joinRoom:' + code); return r; },
+    createRoom: async (name, host, undo, visible, extra) => { const code = 'R' + (++shared.seq) + 'XY'; shared.rooms[code] = { name, host, undo, visible, extra, seats: [{ uid: me.token }, { uid: null }], status: 'lobby' }; server.dbRooms[code] = { status: 'lobby', seats: [{ email: me.email }] }; st.calls.push('createRoom'); if (shared.onCreate) await shared.onCreate(me); return code; },
+    joinRoom: async (code, name) => { const r = shared.rooms[code]; if (!r) throw new Error('找不到房間'); const idx = r.seats[1].uid ? 2 : 1; r.seats[idx] = { uid: me.token }; st.calls.push('joinRoom:' + code); return r; },
+    findMySeatIdx: (seats, uid) => seats.findIndex((x) => x && x.uid === uid),
+    oracleAuth: async () => ({ uid: me.token }),
+    __effect: (f) => { st.effects.push(f); },
     leaveRoom: async (code) => { st.left.push(code); },
     releaseOldLobbyRooms: () => {},
     startRoomSubscription: () => { st.calls.push('subscribe'); },
@@ -114,11 +120,11 @@ async function makePlayer(js, server, clock, me, shared) {
     leaveOnlineGame: async () => { st.calls.push('leaveOnlineGame'); st.onlineStep = 'join'; },
     __onDestroy: (f) => { st.destroy = f; },
     setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout,
-    document: { title: 'PTCG' },
+    document: { title: 'PTCG', visibilityState: 'visible', addEventListener: (ev, f) => { st.vis = f; }, removeEventListener: () => {} },
   };
   const names = Object.keys(env);
   const body = `
-    let isAnonymous = __anon, myName = __name, myDeckId = '', myOldRooms = [];
+    let isAnonymous = __anon, myName = __name, myDeckId = '', myOldRooms = [], myUid = null, mode = 'online';
     const allDecks = __decks;
     const __st = __S;
     let roomData = null;
@@ -127,7 +133,7 @@ async function makePlayer(js, server, clock, me, shared) {
     async function handleSetDeck() { __st.deckSet = myDeckId; return true; }
     ${js}
     return {
-      api: { cmStart, cmStop, cmAnswer, setDeck: (id) => { cmDeckId = id; }, setAnon: (v) => { isAnonymous = v; }, setRoomData: (r) => { roomData = r; } },
+      api: { cmStart, cmStop, cmAnswer, setDeck: (id) => { cmDeckId = id; }, setAnon: (v) => { isAnonymous = v; }, setRoomData: (r) => { roomData = r; }, setMode: (m) => { mode = m; }, runEffects: () => { for (const f of __st.effects) f(); } },
       peek: () => ({ view: cmView, err: cmError, notice: cmNotice, roomCode, amIHost, onlineStep, onlineError, active: __cmActive() }),
     };`;
   let inst;
@@ -158,11 +164,11 @@ async function checkE(pageSrc, sapSrc, tag) {
     const clock = makeClock();
     const server = makeServer(sapSrc, clock);
     const shared = { rooms: {}, seq: 0, pollMs, roomName };
-    const A = await makePlayer(js || '', server, clock, { token: 'tA', name: '小明' }, shared);
-    const B = await makePlayer(js || '', server, clock, { token: 'tB', name: '小華' }, shared);
+    const A = await makePlayer(js || '', server, clock, { token: 'tA', email: 'a@x.com', name: '小明' }, shared);
+    const B = await makePlayer(js || '', server, clock, { token: 'tB', email: 'b@x.com', name: '小華' }, shared);
     return { clock, server, shared, A, B };
   }
-  if (!js) { for (const k of ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8']) ok(`${k}${tag} （腳本區塊不存在）`, false); return; }
+  if (!js) { for (const k of ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'E10', 'E11', 'E12']) ok(`${k}${tag} （腳本區塊不存在）`, false); return; }
   // E1～E3
   {
     const { clock, server, shared, A, B } = await scenario();
@@ -256,6 +262,46 @@ async function checkE(pageSrc, sapSrc, tag) {
     A.api.setDeck('d1'); await A.api.cmStart();
     ok(`★ E8${tag} 開始配對前先過版本閘（casualVerGate 'automatch'）`, A.st.calls.includes('gate:automatch'), JSON.stringify(A.st.calls));
   }
+  // E9（審查 P2-2）離開線上大廳（mode 不是 online）⇒ 自動取消配對
+  {
+    const { clock, server, A } = await scenario();
+    A.api.setDeck('d1'); await A.api.cmStart(); await clock.advance(100);
+    A.api.setMode(null); A.api.runEffects(); await clock.advance(10);
+    ok(`★★★ E9${tag} 按「← 返回」離開線上大廳 ⇒ 自動取消配對（送 leave、停止輪詢）`, A.st.effects.length >= 1 && server.calls.some((c) => c.path === 'leave') && A.peek().view === null, JSON.stringify(server.calls.slice(-3)));
+  }
+  // E10（審查 P2-3）分頁回到前景 ⇒ 立刻查一次
+  {
+    const { clock, server, A } = await scenario();
+    A.api.setDeck('d1'); await A.api.cmStart(); await clock.advance(100);
+    const n = server.calls.filter((c) => c.path === 'poll').length;
+    A.api.runEffects();
+    if (A.st.vis) await A.st.vis();
+    await clock.advance(10);
+    ok(`★★ E10${tag} 分頁回到前景 ⇒ 立刻查一次（不等 3 秒的計時器）`, typeof A.st.vis === 'function' && server.calls.filter((c) => c.path === 'poll').length === n + 1, `${n} ${server.calls.filter((c) => c.path === 'poll').length}`);
+  }
+  // E11（審查 P2-1）房主在「正在建立房間」時沒有取消鈕；若在回報房號途中離開頁面 ⇒ 不進房、把房收掉
+  {
+    const { clock, shared, A, B } = await scenario();
+    A.api.setDeck('d1'); B.api.setDeck('d1');
+    await A.api.cmStart(); await B.api.cmStart(); await clock.advance(3100);
+    shared.onReport = async (me) => { if (me.token === 'tA') { A.st.destroy && A.st.destroy(); } };   // 房號已回報成功、回應還沒回來時離開頁面
+    await A.api.cmAnswer(true); await B.api.cmAnswer(true);
+    await clock.advance(3000);
+    const a = A.peek();
+    ok(`★★★ E11${tag} 房主回報房號途中離開頁面 ⇒ 不進房、不自動準備、把剛開的房收掉`, a.onlineStep !== 'room' && A.st.ready === false && A.st.left.length === 1, JSON.stringify({ a, left: A.st.left, ready: A.st.ready }));
+  }
+  // E12（審查 P3-3）客人進房時對戰位被別人搶走 ⇒ 離房、提示，不變成觀戰
+  {
+    const { clock, shared, A, B } = await scenario();
+    A.api.setDeck('d1'); B.api.setDeck('d1');
+    await A.api.cmStart(); await B.api.cmStart(); await clock.advance(3100);
+    shared.onCreate = async (me) => { if (me.token === 'tA') { for (const r of Object.values(shared.rooms)) r.seats[1] = { uid: 'intruder' }; } };
+    // createRoom 之後才搶位：onCreate 在 createRoom 裡跑，那時房間已經存在
+    await A.api.cmAnswer(true); await B.api.cmAnswer(true);
+    await clock.advance(5000);
+    const b = B.peek();
+    ok(`★★ E12${tag} 客人進房時 P2 已被別人坐走 ⇒ 離房並提示，不會自動準備`, b.onlineStep !== 'room' && B.st.ready === false && /佔走/.test(b.err) && B.st.left.length === 1, JSON.stringify({ b, left: B.st.left }));
+  }
 }
 
 async function checkA(srcRoot, key, tag) {
@@ -277,6 +323,9 @@ async function checkA(srcRoot, key, tag) {
   globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => ({ error: 'Not Found' }) });
   r = M ? await M.casualMatchPoll() : null;
   ok(`★★ A6${tag} 回應沒有 casualMatchApi 哨兵（伺服器還沒更新）⇒「伺服器尚未支援自動配對」`, r && r.ok === false && r.code === 'unsupported' && /尚未支援/.test(r.message), JSON.stringify(r));
+  globalThis.fetch = async () => ({ ok: false, status: 502, json: async () => { throw new Error('not json'); } });
+  r = M ? await M.casualMatchPoll() : null;
+  ok(`★★ A7${tag} 伺服器重啟中（502、不是 JSON）⇒ 顯示「連線不穩」而不是「尚未支援」`, r && r.ok === false && r.code === 'network' && /連線不穩/.test(r.message), JSON.stringify(r));
 }
 
 function checkR(oracleSrc, fsSrc, tag) {
@@ -313,6 +362,7 @@ function checkU(pageRaw, tag) {
   const cr = page.slice(page.indexOf('async function handleCreateRoomCommit()'), page.indexOf('async function handleCreateRoomCommit()') + 600);
   const jr = page.slice(page.indexOf('async function handleJoinRoomCommit()'), page.indexOf('async function handleJoinRoomCommit()') + 600);
   ok(`★★ U3${tag} 手動開房／進房會先取消自動配對`, /cmActive\) cmStop\(\);/.test(cr) && /cmActive\) cmStop\(\);/.test(jr));
+  ok(`★★ U5${tag} 「取消配對」只在搜尋中／找到對手時出現（審查 P2-1：開房中途取消會變成半套）`, /\{#if cmView\?\.state === 'searching' \|\| cmView\?\.state === 'found'\}<button class="btn-sm cm-cancel" onclick=\{\(\) => cmStop\(\)\}>取消配對<\/button>\{\/if\}/.test(page));
   ok(`★ U4${tag} 離開頁面 onDestroy 收尾（不帶大括號的箭頭函式，不影響以大括號 onDestroy 當錨點的舊守衛）`, /onDestroy\(\(\) => cmStop\(true\)\);/.test(page));
 }
 
@@ -339,7 +389,7 @@ else {
     const reds = lines.filter((l) => /FAIL/.test(l)).map((l) => l.trim().slice(5, 30));
     pass = before; fail = fb;
     console.log('    BASE 紅：' + reds.length + ' 條');
-    ok('★★★ H1 BASE 上 E1～E8（含 E1b）、A1～A6（模組不存在）、R1～R3、U1～U4 逐條紅', ['E1@', 'E2@', 'E3@', 'E4@', 'E5@', 'E6@', 'E7@', 'E8@', 'A1@', 'A4@', 'A5@', 'A6@', 'R1@', 'R2@', 'R3@', 'U1@', 'U2@', 'U3@', 'U4@'].every((k) => reds.some((r) => r.includes(k))), reds.join(','));
+    ok('★★★ H1 BASE 上 E1～E8（含 E1b）、A1～A6（模組不存在）、R1～R3、U1～U4 逐條紅', ['E1@', 'E2@', 'E3@', 'E4@', 'E5@', 'E6@', 'E7@', 'E8@', 'A1@', 'A4@', 'A5@', 'A6@', 'A7@', 'R1@', 'R2@', 'R3@', 'U1@', 'U2@', 'U3@', 'U4@', 'U5@', 'E9@', 'E10@', 'E11@', 'E12@'].every((k) => reds.some((r) => r.includes(k))), reds.join(','));
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 console.log(`=== v6.645 休閒自動配對（前端）：${pass} PASS / ${fail} FAIL ===`);

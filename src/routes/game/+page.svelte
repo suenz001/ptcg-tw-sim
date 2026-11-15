@@ -9462,22 +9462,27 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let cmHostWaitTimer: ReturnType<typeof setTimeout> | null = null;
   let cmEntering = false;                   // 正在建房／進房（只做一次）
   let cmOrigTitle: string | null = null;   // 「找到對手」時暫存原本的分頁標題
+  let cmReqSeq = 0, cmAppliedSeq = 0;      // 審查 P2-1：同一世代內回應可能亂序（accept 與 poll 同時在途）⇒ 只採用比已採用的更晚送出的回應
   const cmActive = $derived(!!cmView && cmView.state !== 'idle' && cmView.state !== 'hosting' && cmView.state !== 'join');
   function cmClearTimer() { if (cmTimer) { clearTimeout(cmTimer); cmTimer = null; } }
   function cmSchedule(gen: number) {
     cmClearTimer();
     const ms = casualMatchPollMs(cmView?.state ?? 'idle');
     if (!ms) return;
-    cmTimer = setTimeout(async () => {
-      if (gen !== cmGen) return;
-      const r = await casualMatchPoll();
-      if (gen !== cmGen) return;
-      if (!r.ok) { cmError = r.message; cmSchedule(gen); return; }   // 網路抖一下 ⇒ 下一輪再試
-      cmApply(r.view, gen);
-    }, ms);
+    cmTimer = setTimeout(() => { void cmPollNow(gen); }, ms);
   }
-  function cmApply(v: CasualMatchView, gen: number) {
+  async function cmPollNow(gen: number) {
     if (gen !== cmGen) return;
+    const seq = ++cmReqSeq;
+    const r = await casualMatchPoll();
+    if (gen !== cmGen) return;
+    if (!r.ok) { cmError = r.message; cmSchedule(gen); return; }   // 網路抖一下 ⇒ 下一輪再試
+    cmApply(r.view, gen, seq);
+  }
+  function cmApply(v: CasualMatchView, gen: number, seq: number) {
+    if (gen !== cmGen) return;
+    if (seq < cmAppliedSeq) return;   // 比已採用的更早送出的回應 ⇒ 丟掉（不讓舊的 found 蓋回 host）
+    cmAppliedSeq = seq;
     cmError = '';
     if (v.notice) cmNotice = v.notice;
     const prev = cmView?.state;
@@ -9511,10 +9516,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
     try {
       const gen = ++cmGen;
       cmEntering = false;
+      const seq = ++cmReqSeq;
       const r = await casualMatchJoin(deck.entries, deck.name, myName.trim());
       if (gen !== cmGen) return;
       if (!r.ok) { cmError = r.message; cmView = null; return; }
-      cmApply(r.view, gen);
+      cmApply(r.view, gen, seq);
     } finally { cmBusy = false; }
   }
   /** 取消配對（按鈕、離開頁面）。 */
@@ -9522,6 +9528,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   function cmStop(keepalive = false) {
     const wasActive = cmActive;
     cmGen++; cmClearTimer(); cmRestoreTitle();
+    if (cmHostWaitTimer) { clearTimeout(cmHostWaitTimer); cmHostWaitTimer = null; }   // 審查 P2-4：離開頁面時不留殭屍計時器
     cmView = null; cmEntering = false;
     if (wasActive) void casualMatchLeave({ keepalive });
   }
@@ -9529,11 +9536,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const v = cmView;
     if (!v || v.state !== 'found' || !v.matchId) return;
     const gen = cmGen;
+    const seq = ++cmReqSeq;
     const r = await casualMatchAccept(v.matchId, accept);
     if (gen !== cmGen) return;
     if (!accept) { cmGen++; cmClearTimer(); cmRestoreTitle(); cmView = null; cmNotice = '已拒絕這次配對'; return; }
     if (!r.ok) { cmError = r.message; cmSchedule(gen); return; }
-    cmApply(r.view, gen);
+    cmApply(r.view, gen, seq);
   }
   /** 進房後：帶入配對用的牌組（含牌組的先後攻偏好）並按準備 ⇒ 既有流程在雙方都準備好時自動開局。 */
   async function cmSeatReady() {
@@ -9551,12 +9559,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const _oldRooms = myOldRooms.slice();
       const code = await createRoom(casualMatchRoomName(myName.trim(), v.opponentNick ?? ''), myName.trim(), false, true, { autoMatch: true });
       if (gen !== cmGen) { leaveRoom(code).catch(() => { /* noop */ }); return; }
+      const seq = ++cmReqSeq;
       const r = await casualMatchReportRoom(v.matchId ?? '', code);
+      if (gen !== cmGen) { leaveRoom(code).catch(() => { /* noop */ }); return; }   // 這段時間離開了頁面／大廳 ⇒ 收掉房間
       if (!r.ok || r.view.state !== 'hosting') {
         // 配對在這段時間失效（對手取消、逾時）⇒ 把剛開的房收掉，交給伺服器回的狀態（通常是回到佇列）
         leaveRoom(code).catch(() => { /* noop */ });
         cmEntering = false;
-        if (r.ok) { cmApply(r.view, gen); } else { cmError = r.message; cmSchedule(gen); }
+        if (r.ok) { cmApply(r.view, gen, seq); } else { cmError = r.message; cmSchedule(gen); }
         return;
       }
       cmView = r.view;
@@ -9588,7 +9598,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
     for (let i = 0; i < 3; i++) {
       if (gen !== cmGen) return;
       try {
-        await joinRoom(code, myName.trim());
+        const _oldRooms = myOldRooms.slice();
+        const _joined = await joinRoom(code, myName.trim());
+        if (gen !== cmGen) { leaveRoom(code).catch(() => { /* noop */ }); return; }
+        // 審查 P3-3：一定要坐在對戰位 P2（座位 1）；被別人搶先坐走 ⇒ 離房並提示（不要變成觀戰）
+        const _uid = myUid || (await oracleAuth().catch(() => null))?.uid || null;
+        if (!_uid || findMySeatIdx(_joined?.seats ?? [], _uid) !== 1) {
+          leaveRoom(code).catch(() => { /* noop */ });
+          cmEntering = false;
+          cmError = '對戰位置被別人佔走了，請重新開始自動配對';
+          cmStop();
+          return;
+        }
+        releaseOldLobbyRooms(_oldRooms, code);   // 審查 P3-7：同手動進房，釋放自己還沒開打的舊房
         roomCode = code;
         amIHost = false;
         onlineStep = 'room';
@@ -9601,6 +9623,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
     cmError = '進房失敗：' + lastErr;
     cmStop();
   }
+  // 審查 P2-2：離開線上大廳（← 返回、切到本機對戰）⇒ 取消配對；否則配到了也看不到接受視窗，只會白白逾時
+  $effect(() => { if (mode !== 'online' && cmActive) cmStop(); });
+  // 審查 P2-3：分頁回到前景 ⇒ 立刻查一次（背景分頁的計時器會被瀏覽器節流）
+  function cmOnVisible() { if (typeof document !== 'undefined' && document.visibilityState === 'visible' && cmActive) { cmClearTimer(); void cmPollNow(cmGen); } }
+  $effect(() => {
+    if (typeof document === 'undefined') return;
+    document.addEventListener('visibilitychange', cmOnVisible);
+    return () => document.removeEventListener('visibilitychange', cmOnVisible);
+  });
   onDestroy(() => cmStop(true));
   // <<< v6645-casual-automatch
 
@@ -12301,7 +12332,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 {:else}
                   <span class="cm-text">配對成功（對手：<b>{cmView?.opponentNick}</b>），正在建立房間…</span>
                 {/if}
-                <button class="btn-sm cm-cancel" onclick={() => cmStop()}>取消配對</button>
+                {#if cmView?.state === 'searching' || cmView?.state === 'found'}<button class="btn-sm cm-cancel" onclick={() => cmStop()}>取消配對</button>{/if}
               </div>
             {:else if !cmOpen}
               <button class="btn-create-room-cta cm-cta" onclick={() => { cmOpen = true; cmError = ''; }}>
@@ -12327,7 +12358,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                       {#each allDecks as d (d.id)}<option value={d.id}>{d.name}</option>{/each}
                     </select>
                   </label>
-                  <p class="cm-hint">只開放標準賽合法的牌組。找到對手後請在 15 秒內按「接受」；配對開的房間開放觀戰。</p>
+                  <p class="cm-hint">只開放標準賽合法的牌組。找到對手後請在 15 秒內按「接受」；配對中請保持這個頁面開著（切到其他分頁時，找到對手會在分頁標題提示）。配對開的房間開放觀戰。</p>
                   <div class="form-btns">
                     <button class="btn-primary" onclick={cmStart} disabled={cmBusy || !cmDeckId}>{cmBusy ? '準備中…' : '開始配對'}</button>
                   </div>

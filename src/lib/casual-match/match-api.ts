@@ -70,6 +70,8 @@ async function post(path: string, body: Record<string, unknown>, opts: { keepali
   let j: Record<string, unknown> | null = null;
   try { j = (await res.json()) as Record<string, unknown>; } catch { j = null; }
   if (!j || j.casualMatchApi !== 1) {
+    // 5xx（伺服器重啟中、閘道錯誤）⇒ 連線問題，不是「不支援」（審查 P3-6）
+    if (res.status >= 500) return { ok: false, message: '連線不穩或伺服器忙碌，請稍後再試', code: 'network', status: res.status };
     // 沒有哨兵 ⇒ 伺服器還沒更新到有自動配對的版本
     return { ok: false, message: '伺服器尚未支援自動配對', code: 'unsupported', status: res.status };
   }
