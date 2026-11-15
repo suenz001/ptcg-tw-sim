@@ -1,5 +1,25 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.648 — 自動配對接受後直接進對戰，不露出房間畫面（2026-11-16 站長）
+
+- 站長：「配對成功後，還是會先跳到房間的畫面…不要顯示這個畫面，避免玩家誤按到房間中的按鈕，並且可以加快讀取速度，直接讓玩家按接受後，就直接進入對戰的擲硬幣決定先後攻、set up階段的對戰畫面」。
+- v6.646 的遮罩只在進房那一刻才出現、而且是半透明（rgba .6）⇒ 房間畫面看得到；房間變成 playing 時（盤面還沒出來）就拿掉 ⇒ 房間畫面會閃一下。
+- 改法（哨兵 v6648-automatch-direct，在 v6646 區塊內）：
+  ・雙方都接受（伺服器進到 host／wait-host／join）就在 cmApply 立刻顯示遮罩（inRoom=false）；進房時再標 inRoom=true。
+  ・拿掉遮罩的判準收在 cmOverlayShouldHide：盤面出來／房間不見／錯誤／cmError ⇒ 拿掉；在房間裡只有「不是 lobby 也不是 playing」才拿掉；還沒進房 ⇒ 伺服器狀態離開 host／wait-host／hosting／join 才拿掉；進過房又離開 ⇒ 拿掉。60 秒保險絲照舊。
+  ・遮罩上的「離開」：還沒進房 ⇒ 取消配對（cmStop）；進了房 ⇒ 照舊離開房間。
+  ・.cm-enter-backdrop 改實色（深色 #0c1424，淺色由產生器轉成 #f6f7fa）⇒ 底下的房間畫面看不到也按不到。
+- 速度：網路往返沒有變少（建房→回報房號→對方輪詢 1 秒→進房→套牌組／先後攻／準備，都是既有的必要步驟）；玩家看到的是一個連續的「正在進入對戰」畫面，不再有大廳與房間畫面的切換。
+- 守衛 test-v6648-automatch-no-room（D1～D7 共用 casual-match-harness 實跑真的伺服器配對區塊與對戰頁腳本、C1 實色；突變 14 個全殺）。
+- test-v6646 N5b（Rule 40，站長新裁定）：「房間開打 ⇒ 拿掉」改成「房間開打、盤面還沒出來 ⇒ 留著；盤面出來 ⇒ 拿掉」，意圖「開局後一定拿掉」不變。
+- Opus 審查（無 P1／P2）P3 修正：
+  ①守衛缺口：房主建房途中（host）、對手進房途中（join）、房間已結束、暫時性 cmError 都沒守到 ⇒ 補 D1b／D1c／D2b／D6（共用 harness 加 createGate／joinGate 讓建房、進房晚一點回來，加 setCmError）；審查列出的 4 個存活突變＋join 突變全殺。
+  ②60 秒保險絲的訊息依位置給：房間等待中 ⇒ 照舊「請在房間裡確認牌組並按準備」；房間已開打 ⇒「對戰畫面載入逾時，請重新整理頁面」；還沒進房 ⇒ 結束配對（否則下一次輪詢會把遮罩又蓋回去）並提示重新開始（房間已開打那支由 D7 守、還沒進房那支由 D7b 守）。
+  ③還沒進房時輪詢偶爾失敗一次（cmError）不再拿掉遮罩（以前會閃出大廳約 1 秒）；真正的失敗都會走 cmStop 或伺服器狀態改變。
+  ④guest 在 join 取消時房主要等 45 秒、myUid 為空時 oracleAuth 那段沒有 gen 檢查 —— 都是 v6.646 既有行為，本版不動。
+  ⑤速度：網路往返沒有變少（每邊三次串行座位寫入＋guest 1 秒輪詢），本版只有體感改善；要真的縮短要另開一版。
+- 複審（無 P1／P2）P3-A：保險絲「還沒進房 ⇒ cmStop」那一支沒有守衛 ⇒ 補 D7b（刪掉 cmStop 的突變會紅）。另：遮罩蓋著時 cmError 文字看不到，最多 60 秒（伺服器 25 秒會先結束）。全套 998 支只有已知會隨機紅的 test-v6370（單跑 91/0）。
+
 ## v6.647＋server v1.86 — 個人參賽紀錄點開賽程（2026-11-16 玩家需求）
 
 - server v1.86：_aggregateArchives 的每筆參賽紀錄多帶 eventId（舊歸檔沒有 ⇒ null）。只多一個字串欄位，查詢與快取不變。錦標賽區塊鎖 v185→v186。
@@ -794,7 +814,7 @@ BASE `63787814`（v6.594）。站長 2026-10-23 回報超級甲賀忍蛙ex（新
 - D：錦標賽對戰結束的兩個結束視窗加「下載復盤檔」：抓 /replay＋逐動作格（沿用 withTournPerActionSteps），`tournReplayToData` 轉成與一般對戰相同的 ReplayData（kind tournament、revealed true——錦標賽回放本來就公開；viewerSeat＝下載者座位），走同一個下載出口。
 - 順帶：2a 執行後混亂自傷非 KO 分支以 players[aIdx] 為底寫回（原本用 attacker 會把剛清掉的招式失敗旗標寫回去）。
 - Rule 40：test-v6293／test-v6441 還原鏈串上 revert-v6595-game（difflib 產生、逐位元還原到 BASE）；test-confusion-selfko-prize-central、test-confusion-self-damage-override 的盤面補足能量（現在要先通過宣告檢查才擲混亂，意圖不變）；test-v6452 取消鈕允許 `disabled={attackGateLocked}` 與鎖住那一行；test-v6561 C6 允許同一行多 import。
-- 守衛 test-v6595-attack-gate-and-tourn-replay（24 項：U 判準、A 順序、B 不能宣告不擲、C 兩步出招與鎖、T 逾時、R 復盤轉換、S 接線、HEAD-FAIL 在 BASE 上 17 項逐條紅＋C2/C3 正對照）。突變 13 個全殺（混亂不需擲幣、閘不比回合、閘鎖放行、允許重送第一步、第二步重擲、第一步不停下、引擎不套鎖、逾時不補出招、UI 永遠一步、重開不看 tag、回放不揭示、視角寫死、2a 後寫回舊旗標）。harness＋35 支免疫網修改前後皆綠。
+- 守衛 test-v6595-attack-gate-and-tourn-replay（24 項：U 判準、A 順序、B 不能宣告不擲、C 兩步出招與鎖、T 逾時、R 復盤轉換、S 接線、HEAD-FAIL 在 BASE 上 17 項逐條紅＋C2/C3 正對照）。突變 14 個全殺（混亂不需擲幣、閘不比回合、閘鎖放行、允許重送第一步、第二步重擲、第一步不停下、引擎不套鎖、逾時不補出招、UI 永遠一步、重開不看 tag、回放不揭示、視角寫死、2a 後寫回舊旗標）。harness＋35 支免疫網修改前後皆綠。
 - 部署：引擎與 timeout-action 在錦標賽伺服器 bundle 裡 ⇒ 站長先跑 update-tournament.bat，再 redeploy-oracle.bat。
 - Opus 5.5 獨立審查（第一輪）：無 P1。修正：
   - P2-1 第一步停下來時 recordTurnAction 也記了一筆「攻擊」⇒ 對手回合面板同一招兩筆。引擎在 `_gateOnly` 且結果帶 attackGatePassed 時不記（哨兵 v6595-gate-not-recorded）；混亂反面照記。守衛 C4／C5。

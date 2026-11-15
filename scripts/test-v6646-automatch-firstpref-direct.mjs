@@ -97,7 +97,11 @@ async function checkBehavior(pageSrc, sapSrc, tag) {
     ok(`★★★ N5${tag} 進房後雙方立刻顯示「配對成功、正在進入對戰」遮罩（帶對手暱稱），不露出房間畫面`, oa?.opp === '小華' && ob?.opp === '小明' && A.peek().onlineStep === 'room', JSON.stringify({ oa, ob }));
     A.api.setGame({ phase: 'setup' }); A.api.runEffects();
     B.api.setRoomData({ status: 'playing', seats: [] }); B.api.runEffects();
-    ok(`★★ N5b${tag} 開局（game 出現）或房間開打 ⇒ 遮罩拿掉`, A.peek().overlay === null && B.peek().overlay === null, JSON.stringify([A.peek().overlay, B.peek().overlay]));
+    // ⭐v6.648 Rule 40（站長 2026-11-16：配對成功後不要露出房間畫面）：房間變成對戰中、盤面還沒出來的那一小段遮罩要留著（以前在這裡拿掉 ⇒ 房間畫面閃一下）；
+    //   意圖「開局後遮罩一定拿掉」不變 ⇒ B 的盤面出來後必須拿掉。
+    const bMid = B.peek().overlay;
+    B.api.setGame({ phase: 'setup' }); B.api.runEffects();
+    ok(`★★ N5b${tag} 開局（game 出現）⇒ 遮罩拿掉；房間已開打但盤面還沒出來 ⇒ 遮罩留著（v6.648）`, A.peek().overlay === null && !!bMid && B.peek().overlay === null, JSON.stringify([A.peek().overlay, bMid, B.peek().overlay]));
   }
   {
     const { clock, A, B } = await scenario('random');

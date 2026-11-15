@@ -79,8 +79,8 @@ export async function makePlayer(js, server, clock, me, shared) {
     countDeckCards: (en) => en.reduce((s, e) => s + e.count, 0),
     normalizeDeckCoinPref: shared.normalizeDeckCoinPref ?? ((x) => x),   // v6.646 起 test-v6646 傳入真的 coin-pref.ts（審查：mock 會讓亂值照單全收）
     casualVerGate: async (k, act) => { st.calls.push('gate:' + k); return false; },
-    createRoom: async (name, host, undo, visible, extra) => { const code = 'R' + (++shared.seq) + 'XY'; shared.rooms[code] = { name, host, undo, visible, extra, seats: [{ uid: me.token }, { uid: null }], status: 'lobby' }; server.dbRooms[code] = { status: 'lobby', seats: [{ email: me.email }] }; st.calls.push('createRoom'); if (shared.onCreate) await shared.onCreate(me); return code; },
-    joinRoom: async (code, name) => { const r = shared.rooms[code]; if (!r) throw new Error('找不到房間'); const idx = r.seats[1].uid ? 2 : 1; r.seats[idx] = { uid: me.token }; st.calls.push('joinRoom:' + code); return r; },
+    createRoom: async (name, host, undo, visible, extra) => { if (shared.createGate) await shared.createGate; const code = 'R' + (++shared.seq) + 'XY'; shared.rooms[code] = { name, host, undo, visible, extra, seats: [{ uid: me.token }, { uid: null }], status: 'lobby' }; server.dbRooms[code] = { status: 'lobby', seats: [{ email: me.email }] }; st.calls.push('createRoom'); if (shared.onCreate) await shared.onCreate(me); return code; },
+    joinRoom: async (code, name) => { if (shared.joinGate) await shared.joinGate; const r = shared.rooms[code]; if (!r) throw new Error('找不到房間'); const idx = r.seats[1].uid ? 2 : 1; r.seats[idx] = { uid: me.token }; st.calls.push('joinRoom:' + code); return r; },
     findMySeatIdx: (seats, uid) => seats.findIndex((x) => x && x.uid === uid),
     oracleAuth: async () => ({ uid: me.token }),
     __effect: (f) => { st.effects.push(f); },
@@ -110,7 +110,7 @@ export async function makePlayer(js, server, clock, me, shared) {
     async function handleSetDeck() { if (__st.deckFail) return false; __st.deckSet = myDeckId; return true; }
     ${js}
     return {
-      api: { cmStart, cmStop, cmAnswer, setDeck: (id) => { if (typeof cmPickDeck === 'function') cmPickDeck(id); else cmDeckId = id; }, setGame: (g) => { game = g; }, setFirstPref: (v) => { cmFirstPref = v; }, setOnlineStep: (v) => { onlineStep = v; }, setRoomGone: (v) => { roomGone = v; }, setOnlineError: (v) => { onlineError = v; }, leaveOverlay: () => (typeof cmLeaveFromOverlay === 'function' ? cmLeaveFromOverlay() : null), setAnon: (v) => { isAnonymous = v; }, setRoomData: (r) => { roomData = r; }, setMode: (m) => { mode = m; }, runEffects: () => { for (const f of __st.effects) f(); } },
+      api: { cmStart, cmStop, cmAnswer, setDeck: (id) => { if (typeof cmPickDeck === 'function') cmPickDeck(id); else cmDeckId = id; }, setGame: (g) => { game = g; }, setFirstPref: (v) => { cmFirstPref = v; }, setOnlineStep: (v) => { onlineStep = v; }, setRoomGone: (v) => { roomGone = v; }, setOnlineError: (v) => { onlineError = v; }, setCmError: (v) => { cmError = v; }, leaveOverlay: () => (typeof cmLeaveFromOverlay === 'function' ? cmLeaveFromOverlay() : null), setAnon: (v) => { isAnonymous = v; }, setRoomData: (r) => { roomData = r; }, setMode: (m) => { mode = m; }, runEffects: () => { for (const f of __st.effects) f(); } },
       peek: () => ({ view: cmView, err: cmError, notice: cmNotice, roomCode, amIHost, onlineStep, onlineError, active: __cmActive(), overlay: typeof cmRoomOverlay === 'undefined' ? undefined : cmRoomOverlay, firstPref: typeof cmFirstPref === 'undefined' ? undefined : cmFirstPref }),
     };`;
   let inst;

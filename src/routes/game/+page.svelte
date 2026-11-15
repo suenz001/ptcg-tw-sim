@@ -9467,25 +9467,43 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // >>> v6646-automatch-firstpref
   // ⭐v6.646（站長 2026-11-16）：配對畫面也能選先後攻（贏得擲硬幣時），預設帶入上次手動選的；選牌組時帶入牌組預設的先後攻（與對戰房、錦標賽相同）
   let cmFirstPref = $state<'random' | 'first' | 'second' | 'opponent'>(_readLastFirstPref());
-  let cmRoomOverlay = $state<{ opp: string; at: number } | null>(null);   // 配對成功、進房到開局之間蓋住房間畫面（站長：直接進對戰畫面）
+  let cmRoomOverlay = $state<{ opp: string; at: number; inRoom?: boolean } | null>(null);   // 配對成功、進房到開局之間蓋住房間畫面（站長：直接進對戰畫面）
   let cmOverlayTimer: ReturnType<typeof setTimeout> | null = null;
   function cmPickDeck(id: string) {
     cmDeckId = id;
     const _cp = id ? normalizeDeckCoinPref(allDecks.find((d) => d.id === id)?.coinPref) : undefined;
     if (_cp) cmFirstPref = _cp;   // 牌組沒設定 ⇒ 不動；不寫進「上次選的偏好」（同對戰房 v6.599 的裁定）
   }
-  function cmShowRoomOverlay(opp: string) {
+  function cmShowRoomOverlay(opp: string, inRoom = true) {
     onlineError = '';   // 進場前大廳殘留的錯誤訊息清掉（否則遮罩一出現就被「有錯誤」條件拿掉）
-    cmRoomOverlay = { opp, at: Date.now() };
+    cmRoomOverlay = { opp, at: Date.now(), inRoom };   // ⭐v6.648 inRoom＝已經進了房（之後離開房間就拿掉）；false＝雙方剛接受、還在建房／等房號
     if (cmOverlayTimer) clearTimeout(cmOverlayTimer);
     // 60 秒還沒開局（例如對方自動準備失敗）⇒ 拿掉遮罩、露出房間畫面讓玩家自己處理
-    cmOverlayTimer = setTimeout(() => { cmOverlayTimer = null; if (cmRoomOverlay) { cmRoomOverlay = null; if (!onlineError) onlineError = '自動開局逾時，請在房間裡確認牌組並按準備'; } }, 60000);   // 審查 P2-1：已有錯誤訊息就不覆寫（保留真正的原因）
+    cmOverlayTimer = setTimeout(() => { cmOverlayTimer = null; if (cmRoomOverlay) { cmRoomOverlay = null; cmOverlayTimeout(); } }, 60000);   // 審查 P2-1：已有錯誤訊息就不覆寫（保留真正的原因）
+  }
+  // ⭐v6.648（審查 P3-2）：逾時訊息依玩家當下在哪裡給（房間等待中／房間已開打／還沒進房）；還沒進房 ⇒ 直接結束配對（否則下一次輪詢會把遮罩又蓋回去）
+  function cmOverlayTimeout() {
+    if (onlineStep === 'room' && (!roomData || roomData.status === 'lobby')) { if (!onlineError) onlineError = '自動開局逾時，請在房間裡確認牌組並按準備'; return; }
+    if (onlineStep === 'room') { if (!onlineError) onlineError = '對戰畫面載入逾時，請重新整理頁面'; return; }
+    cmStop(); cmError = '進入對戰逾時，請重新開始自動配對';
   }
   function cmHideRoomOverlay() { cmRoomOverlay = null; if (cmOverlayTimer) { clearTimeout(cmOverlayTimer); cmOverlayTimer = null; } }
-  // 開局（game 出現）、離開房間、房間不再是等待中、房間不見了、或出現任何錯誤（建局失敗等）⇒ 拿掉遮罩、露出房間畫面（審查 P2-1／P2-2）
-  $effect(() => { if (cmRoomOverlay && (game || onlineStep !== 'room' || roomGone || onlineError || (roomData && roomData.status !== 'lobby'))) cmHideRoomOverlay(); });
-  /** 遮罩上的「離開」：放棄這場、回大廳（審查 P3-4） */
-  function cmLeaveFromOverlay() { cmHideRoomOverlay(); leaveOnlineGame().catch(() => { /* noop */ }); }
+  // >>> v6648-automatch-direct
+  // ⭐v6.648（站長 2026-11-16：配對成功後還是會先跳到房間畫面 ⇒ 不要顯示房間畫面，避免誤按、按接受後直接進對戰的擲硬幣／設置畫面）
+  //   ・雙方都按接受（伺服器進到 host／wait-host／join）就立刻顯示「正在進入對戰」全頁遮罩（不透明），一路蓋到對戰畫面出來為止。
+  //   ・房間變成「對戰中」到盤面真的出來之間還有一小段（建局、同步）⇒ 以前在這段就把遮罩拿掉，房間畫面會閃一下；現在等 game 出現才拿掉。
+  //   ・出錯、配對中斷、房間不見了、房間結束 ⇒ 照舊拿掉遮罩（露出房間或大廳讓玩家處理），60 秒保險絲照舊。
+  const CM_PRE_ROOM_STATES = ['host', 'wait-host', 'hosting', 'join'];
+  function cmOverlayShouldHide(): boolean {
+    if (game || roomGone || onlineError) return true;   // 審查 P3-3：不看 cmError —— 還沒進房時輪詢偶爾失敗一次不該露出大廳；真的失敗都會走 cmStop 或伺服器狀態改變
+    if (onlineStep === 'room') return !!roomData && roomData.status !== 'lobby' && roomData.status !== 'playing';
+    if (cmRoomOverlay?.inRoom) return true;   // 進過房又離開了 ⇒ 拿掉
+    return !(cmView && CM_PRE_ROOM_STATES.includes(cmView.state));   // 還沒進房：只有在「建房／等房號／進房」這幾個狀態才留著
+  }
+  $effect(() => { if (cmRoomOverlay && cmOverlayShouldHide()) cmHideRoomOverlay(); });
+  /** 遮罩上的「離開」：放棄這場、回大廳（審查 P3-4）；還沒進房 ⇒ 取消配對 */
+  function cmLeaveFromOverlay() { cmHideRoomOverlay(); if (onlineStep === 'room') leaveOnlineGame().catch(() => { /* noop */ }); else void cmStop(); }
+  // <<< v6648-automatch-direct
   // <<< v6646-automatch-firstpref
   let cmView = $state<CasualMatchView | null>(null);
   let cmBusy = $state(false);
@@ -9525,6 +9543,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (v.state === 'found' && prev !== 'found') { try { cmOrigTitle = document.title; document.title = '⚡ 找到對手！'; } catch { /* noop */ } }
     if (v.state !== 'found' && cmOrigTitle !== null) { try { document.title = cmOrigTitle; } catch { /* noop */ } cmOrigTitle = null; }
     if (v.state === 'idle' && prev && prev !== 'idle') { cmGen++; cmClearTimer(); if (!v.notice) cmNotice = '配對已中斷，請重新開始'; return; }
+    if (CM_PRE_ROOM_STATES.includes(v.state) && !cmRoomOverlay) cmShowRoomOverlay(v.opponentNick ?? cmView?.opponentNick ?? '', false);   // ⭐v6.648 雙方都接受了 ⇒ 立刻蓋上「正在進入對戰」
     if (v.state === 'host' && !cmEntering) { void cmHostCreate(v, gen); return; }
     if (v.state === 'join' && v.roomCode && !cmEntering) { void cmGuestJoin(v.roomCode, gen); return; }
     cmSchedule(gen);
@@ -17974,6 +17993,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .cm-block .cm-first-pref{ margin:.5rem 0 .2rem; }
   .cm-notice{ font-size:.85rem; color:#ffd88a; margin:0; }
   .cm-found-backdrop{ position:fixed; inset:0; z-index:9000; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.6); padding:16px; }
+  /* ⭐v6.648 進入對戰的遮罩不透明：底下的房間畫面完全看不到、也按不到 */
+  .cm-found-backdrop.cm-enter-backdrop{ background:#0c1424; }
   .cm-found{ background:#18243c; border:2px solid #6a8ad8; border-radius:14px; padding:1.2rem 1.4rem; max-width:22rem; width:100%; text-align:center; color:#f0f4ff; box-shadow:0 10px 40px rgba(0,0,0,.5); }
   .cm-found h3{ margin:0 0 .4rem; font-size:1.25rem; }
   .cm-found .cm-opp{ font-size:1.15rem; font-weight:700; color:#ffe28a; margin:.2rem 0; word-break:break-all; }
@@ -21859,6 +21880,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .cm-block .cm-cta .cri-title, :global(html[data-theme='light']:not([data-battle-view])) .cm-block .cm-cta .cri-chevron { color: #001a43; }
     :global(html[data-theme='light']:not([data-battle-view])) .cm-status { border: 1px solid #5d7dbb; background: #f0f2f6; color: #020918; }
     :global(html[data-theme='light']:not([data-battle-view])) .cm-notice { color: #754e00; }
+    :global(html[data-theme='light']:not([data-battle-view])) .cm-found-backdrop.cm-enter-backdrop { background: #f6f7fa; }
     :global(html[data-theme='light']:not([data-battle-view])) .cm-found { background: #f0f2f5; border: 2px solid #6285d9; color: #00040f; }
     :global(html[data-theme='light']:not([data-battle-view])) .cm-found .cm-opp { color: #755800; }
     :global(html[data-theme='light']:not([data-battle-view])) .cm-found .cm-left { color: #435567; }
