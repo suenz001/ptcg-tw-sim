@@ -10549,6 +10549,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const _pendingGame = newGame;
     _startGameReadyMs = Date.now() - _onlineReadyAt;
     _startGameCalls++;   // ⭐v6.280 純計數指紋（Rule 30/31：先量到再談要不要加重入旗標）
+    // ⭐v6.646（審查 P3）：每次建局前清掉上一次的寫入錯誤，免得同一頁面以前失敗過一次，之後正常的 won=false（對方先建好）也顯示那則舊錯誤
+    try { delete (globalThis as any).__ptcgStartGameError; } catch { /* noop */ }
     startGame(roomCode, _pendingGame).then((won) => {
       _startGameWon = won;   // ⭐v6.265 純診斷紀錄（休閒指紋 casual-phantom-adopt 會帶出來）
       if (won) {

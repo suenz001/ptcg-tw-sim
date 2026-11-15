@@ -12,6 +12,7 @@
 // 【N5】直接進對戰：進房後立刻顯示「配對成功！正在進入對戰…」蓋住房間畫面；開局（game 出現）／房間開打／離開房間 ⇒ 拿掉；
 //       60 秒沒開局或自動準備失敗 ⇒ 拿掉遮罩露出房間畫面並提示；房間不見了／建局出錯 ⇒ 立刻拿掉且不蓋掉原本的錯誤；先後攻寫不進 ⇒ 不自動準備；遮罩上可以離開
 // 【N6】說明文字已移除（連樣式也不留）
+// 【N7】建局前清掉上一次的 startGame 寫入錯誤（審查 P3）
 // 【H】HEAD-FAIL：BASE（8fd5c54d＝v6.645）上 N1～N6 紅
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -53,6 +54,7 @@ function checkStatic(pageRaw, tag) {
   ok(`★★★ N2${tag} 先後攻選項：四個值、順序與文字都和對戰房座位相同；手動選會記成上次的偏好`, roomSpans.length === 4 && JSON.stringify(cmSpans) === JSON.stringify(roomSpans)
     && ['random', 'first', 'second', 'opponent'].every((v) => form.includes(`onchange={() => { cmFirstPref = '${v}'; _saveFirstPref('${v}'); }}`)) && /贏得擲硬幣時/.test(form), JSON.stringify({ roomSpans, cmSpans }));
   ok(`★★ N6${tag} 配對說明文字已移除（連 .cm-hint 樣式也不留）`, !/cm-hint/.test(pageRaw) && !/配對中請保持這個頁面開著/.test(pageRaw) && !/只開放標準賽合法的牌組。找到對手後/.test(pageRaw));
+  ok(`★★ N7${tag} 建局前清掉上一次的 startGame 寫入錯誤（審查 P3：否則舊錯誤會讓進場遮罩提早拿掉並顯示無關訊息）`, /try \{ delete \(globalThis as any\)\.__ptcgStartGameError; \} catch \{[^}]*\}\s*startGame\(roomCode, _pendingGame\)\.then\(/.test(page));
   ok(`★★ N5a${tag} 「配對成功！正在進入對戰…」遮罩與房間畫面在同一個線上區塊裡、早於房間畫面`, /\{#if cmRoomOverlay\}\s*<div class="cm-found-backdrop cm-enter-backdrop"/.test(page) && page.indexOf('{#if cmRoomOverlay}') < page.indexOf("{:else if onlineStep === 'room'}") && /正在進入對戰…/.test(page));
 }
 
@@ -171,7 +173,7 @@ else {
   const reds = lines.filter((l) => /FAIL/.test(l)).map((l) => l.trim().slice(5, 30));
   pass = before; fail = fb;
   console.log('    BASE 紅：' + reds.join('｜'));
-  ok('★★★ H1 BASE 上 N1～N6 都紅（前提＝抓得到表單在 BASE 也綠）', ['N1@', 'N2@', 'N3@', 'N4@', 'N5@', 'N5a@', 'N5b@', 'N5c@', 'N5f@', 'N5g@', 'N5i@', 'N5j@', 'N6@'].every((k) => reds.some((r) => r.includes(k))) && !reds.some((r) => r.includes('前提')), reds.join(','));
+  ok('★★★ H1 BASE 上 N1～N6 都紅（前提＝抓得到表單在 BASE 也綠）', ['N1@', 'N2@', 'N3@', 'N4@', 'N5@', 'N5a@', 'N5b@', 'N5c@', 'N5f@', 'N5g@', 'N5i@', 'N5j@', 'N6@', 'N7@'].every((k) => reds.some((r) => r.includes(k))) && !reds.some((r) => r.includes('前提')), reds.join(','));
 }
 console.log(`=== v6.646 自動配對先後攻與直接進對戰：${pass} PASS / ${fail} FAIL ===`);
 process.exit(fail ? 1 : 0);
