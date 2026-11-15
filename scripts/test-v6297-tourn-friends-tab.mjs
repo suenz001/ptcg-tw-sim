@@ -649,7 +649,16 @@ await T('G1 ⭐⭐ `/friends` 這條獨立路由與 DmPanel.svelte **逐位元�
 await T('G2 新增的區塊零 {@html}；錦標賽好友分頁區間零 {#each}（沒有新的無 key 清單）；共用元件仍零 {@html}', () => {
   const fr = GAME.indexOf("{:else if tTab === 'friends'}");
   const err = GAME.indexOf('{#if tError}<p class="warn">'/* ⭐ 只當位置錨點：那一行後來加了關閉鈕，改用前綴（斷言內容未變） */);
-  const seg = GAME.slice(fr, err) + GAME.slice(GAME.indexOf('{#snippet dmFoot()}'), GAME.indexOf('{/snippet}', GAME.indexOf('{#snippet dmFoot()}')));
+  // ⭐v6.647 Rule 40：歷屆賽程／對戰戰報三個視窗（既有程式、內容逐字未改，test-v6647 F2b 守）搬到分頁條件式收尾之後、tError 之前
+  //   ⇒ 好友分頁區間的終點改到那三個視窗之前（意圖「好友分頁區間零無 key 清單」不變；視窗在 BASE 裡本來就不屬於這一段）。
+  const hofAt = GAME.indexOf('{#if tHofLoading}');
+  const segEnd = hofAt > fr && hofAt < err ? hofAt : err;
+  // 複審 P3：視窗結尾到 tError 之間那一段也要納入（以後有人塞東西進去照樣抓得到）
+  const logAt = GAME.indexOf('{#if tMatchLog || tMatchLogLoading}');
+  const trioEnd = segEnd !== err && logAt > hofAt ? (() => { const re = /\{#if\b|\{\/if\}/g; re.lastIndex = logAt; let d = 0, m; while ((m = re.exec(GAME))) { if (m[0] === '{/if}') { d--; if (d === 0) return m.index + 5; } else d++; } return -1; })() : -1;
+  const tailSeg = trioEnd > 0 && trioEnd <= err ? GAME.slice(trioEnd, err) : '';
+  if (segEnd !== err) assert.ok(trioEnd > 0, '⚠ 找不到戰報視窗的收尾（錨點失效）');
+  const seg = GAME.slice(fr, segEnd) + tailSeg + GAME.slice(GAME.indexOf('{#snippet dmFoot()}'), GAME.indexOf('{/snippet}', GAME.indexOf('{#snippet dmFoot()}')));
   assert.ok(seg.length > 300, '新增區塊只有 ' + seg.length + ' 字元 ⇒ 錨點抓錯');
   assert.ok(!seg.includes('{@html'), '⚠⚠ 新增區塊出現 {@html}');
   assert.strictEqual((seg.match(/\{#each/g) || []).length, 0, '新增區塊出現了沒有 key 保證的 each');

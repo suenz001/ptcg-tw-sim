@@ -26,6 +26,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { revertAdminV186IfPresent } from './lib/sap-revert-admin-v186.mjs';   // ⭐server v1.86（Rule 40）
 import { revertAdminV185IfPresent } from './lib/sap-revert-admin-v185.mjs';   // ⭐server v1.85（Rule 40）
 import { revertAdminV184IfPresent } from './lib/sap-revert-admin-v184.mjs';   // ⭐server v1.84（Rule 40）
 import { revertAdminV183IfPresent } from './lib/sap-revert-admin-v183.mjs';   // ⭐server v1.83（Rule 40）
@@ -198,7 +199,7 @@ console.log('【B】broadcastPush 上限與投影');
 console.log('【D】錦標賽區塊 28 把鎖');
 {
   // ⭐server v1.81（Rule 40，意圖不變）：錦標賽區塊之後又被 v1.81（200 人降載第一批）合法改過 ⇒ 先用 v1.81 的單一還原表逐位元退回，再比對 v1.80 的值。
-  const SRCD = revertAdminV181IfPresent(revertAdminV182IfPresent(revertAdminV183IfPresent(revertAdminV184IfPresent(revertAdminV185IfPresent(SRC)))));   // ⭐v1.82 由新到舊
+  const SRCD = revertAdminV181IfPresent(revertAdminV182IfPresent(revertAdminV183IfPresent(revertAdminV184IfPresent(revertAdminV185IfPresent(revertAdminV186IfPresent(SRC))))));   // ⭐v1.82 由新到舊
   const tail = SRCD.slice(SRCD.indexOf(TAIL_ANCHOR)), tev = SRCD.slice(SRCD.indexOf(TEV_ANCHOR));
   ok('★★ D1 現行區塊指紋 ＝ NEW_*_V180（tail／tev／len）', sha(tail) === NEW_TAIL_SHA_V180 && sha(tev) === NEW_TEV_SHA_V180 && tev.length === NEW_TEV_LEN_V180, JSON.stringify([sha(tail), sha(tev), tev.length]));
   const rt = revertV180(tail), rv = revertV180(tev);
@@ -220,7 +221,7 @@ console.log('【D】錦標賽區塊 28 把鎖');
   ok('★★ D4 v1.76 的舊指紋零殘留（還原鏈宣告端除外）', NEW_TAIL_SHA_V176 !== NEW_TAIL_SHA_V180 && stale.length === 0, stale.join(', '));
   const CONSUMERS = ['scripts/test-v6276-deck-tournament-stats.mjs', 'scripts/test-v6291-tourn-verified-gate.mjs', 'scripts/test-v6292-tourn-verified-gate2.mjs',
     'scripts/test-v6381-archive-gamedraw-and-swiss-note.mjs'];
-  const bad = CONSUMERS.filter((f) => !/from '\.\/lib\/tourn-revert-v18[0-5]\.mjs'/.test(rd(f)));   // ⭐v1.81 起接 v181（鏈內含 v180）
+  const bad = CONSUMERS.filter((f) => !/from '\.\/lib\/tourn-revert-v18[0-6]\.mjs'/.test(rd(f)));   // ⭐v1.81 起接 v181（鏈內含 v180）
   ok('★★ D5 錦標賽區塊的還原鏈消費者都改接 tourn-revert-v180', bad.length === 0, bad.join(', '));
   ok('★ D5b 整份補丁的還原入口（sap-revert-admin-v177）先退 v1.80 再剝 v1.79', /stripAdminV179IfPresent\(revertAdminV180IfPresent\(/.test(rd('scripts/lib/sap-revert-admin-v177.mjs')));
 }

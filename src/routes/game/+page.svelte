@@ -6108,6 +6108,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
     catch { tProfileStale = true; }
     finally { tProfileLoading = false; }
   }
+  // ⭐v6.647 賽程／戰報視窗搬到所有分頁共用 ⇒ 分頁真的換了就一併關掉（以前是跟著「賽事」分頁一起隱藏）。
+  //   寫成 $effect 而不是塞進 tSwitchTab：不論哪條路徑改到分頁都收得到，tSwitchTab 本身逐字不動（v6.297／v6.299／v6.603 守衛抽它實跑）。
+  let _v6647TabSeen: string | null = null;
+  $effect(() => {
+    const t = tTabRaw;
+    // 第一次只記下現在的分頁
+    if (_v6647TabSeen === null) { _v6647TabSeen = t; return; }
+    if (t === _v6647TabSeen) return;
+    _v6647TabSeen = t;
+    untrack(() => { tHofClose(); tMatchLogClose(); });
+  });
   function tSwitchTab(tab: 'events' | 'leaderboard' | 'profile' | 'friends') {
     // ⭐⭐⭐v6.299 切分頁先清掉錯誤訊息。
     //   大廳的 `tError` 是印在 <main> 最底下的【分頁外】元素（見上方 v6.167 的註解），
@@ -11823,74 +11834,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {/if}
         </div>
       {/if}
-      {#if tHofLoading}
-        <!-- ⭐v6.420：資訊類視窗一律要有出口（✕ ＋ 點背景關閉）＋ 可拖曳 -->
-        <div class="hof-modal-backdrop" role="presentation" onclick={tHofClose}>
-          <div class="hof-modal" use:modalDrag role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
-            <div class="tourn-bracket-head modal-drag-handle">📋 載入賽程中…<button class="hof-modal-x" onclick={tHofClose} aria-label="關閉">✕</button></div>
-            <p class="muted" style="text-align:center;margin:18px 0;">載入賽程中…</p>
-          </div>
-        </div>
-      {/if}
-      {#if tHofView}
-        {@const _hr = Math.max(1, tHofView.rounds ?? 1)}
-        {@const _hpg = Math.min(Math.max(1, tHofPage), _hr)}
-        {@const _hrm = (tHofView.matches ?? []).filter((m: any) => m.round === _hpg)}
-        <div class="hof-modal-backdrop" role="presentation" onclick={tHofClose}>
-          <div class="hof-modal" use:modalDrag role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Escape' && tHofClose()}>
-            <div class="tourn-bracket-head modal-drag-handle">📋 {tHofView.eventName ?? '錦標賽'}{#if tHofView.championName} ｜ 🏆 {tHofView.championName}{/if}<button class="hof-modal-x" onclick={tHofClose} aria-label="關閉">✕</button></div>
-            <div class="tourn-bracket-pager">
-              <button class="tourn-pg-btn" onclick={() => tHofPage = Math.max(1, _hpg - 1)} disabled={_hpg <= 1}>◀ 上一輪</button>
-              <span class="tourn-pg-title">{_hpg === _hr ? '🏆 決賽' : '第 ' + _hpg + ' 輪'}</span>
-              <button class="tourn-pg-btn" onclick={() => tHofPage = Math.min(_hr, _hpg + 1)} disabled={_hpg >= _hr}>下一輪 ▶</button>
-            </div>
-            <div class="tourn-round">
-              {#if _hrm.length === 0}<div class="muted small" style="text-align:center;padding:14px;">此輪無對戰紀錄</div>{/if}
-              {#each _hrm as m}
-                {@const _hasLog = m.status === 'done' && !m.bye && m.p1name && m.p2name}
-                {@const _mt = tMatchTimes[String(tHofEventId)]?.[matchTimeKey(m.round, m.idx)]}
-                <div class="tourn-match" class:done={m.status === 'done'} class:bye={m.bye} class:tourn-match-log={_hasLog} class:has-time={!!_mt}
-                  role={_hasLog ? 'button' : undefined} tabindex={_hasLog ? 0 : undefined}
-                  title={_hasLog ? '點擊查看這場對戰戰報' : ''}
-                  onclick={() => { if (_hasLog) tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name); }}
-                  onkeydown={(e) => { if (_hasLog && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name); } }}>
-                  <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
-                  {#if _hasLog}
-                    <button class="tm-vs tm-vs-replay" title="🎬 觀看這場對戰回放" onclick={(e) => { e.stopPropagation(); const _mid = tHofEventId + '_r' + m.round + '_m' + m.idx; tHofClose(); tStartReplay(_mid); }}>▶回放</button>
-                  {:else}
-                    <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
-                  {/if}
-                  <span class="tm-side tm-p2" class:win={m.winner === 'p2'} title={m.p2name ?? ''}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
-                  {#if _mt}<span class="tm-time" class:live={_mt.live} title={matchTimeTitle(_mt)}>⏱ {fmtMatchDuration(_mt.ms)}</span>{/if}
-                </div>
-              {/each}
-            </div>
-          </div>
-        </div>
-      {/if}
-      {#if tMatchLog || tMatchLogLoading}
-        <div class="hof-modal-backdrop" role="presentation" onclick={tMatchLogClose}>
-          <div class="hof-modal mlog-modal" use:modalDrag role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Escape' && tMatchLogClose()}>
-            <div class="tourn-bracket-head modal-drag-handle">📜 對戰戰報 ｜ {tMatchLogTitle}<button class="hof-modal-x" onclick={tMatchLogClose} aria-label="關閉">✕</button></div>
-            {#if tMatchLogLoading}
-              <p class="muted" style="text-align:center;margin:18px 0;">載入戰報中…</p>
-            {:else if !tMatchLog || (tMatchLog.log?.length ?? 0) === 0}
-              <p class="muted" style="text-align:center;margin:18px 0;">{tMatchLog?.error ?? '這場沒有可顯示的戰報紀錄。'}</p>
-            {:else}
-              {#if tMatchLog.winnerName}<p class="muted small" style="text-align:center;margin:2px 0 8px;">🏆 勝者：{tMatchLog.winnerName}{#if tMatchLog.turn} ｜ 共 {tMatchLog.turn} 回合{/if}</p>{/if}
-              <div class="mlog-list">
-                {#each tMatchLog.log as entry}
-                  {@const _mlc = logLineClass(entry.message ?? '')}
-                  {@const _mtk = tokenizeLogMessage(entry.message ?? '', cardNamesSorted, tMatchLogNames)}
-                  <div class="log-line {_mlc}" class:log-sys={entry.playerIndex === null}>
-                    {#each _mtk as tok}{#if tok.cls === 'log-card-link'}<button type="button" class="log-card-link" onclick={() => openZoomByName(tok.text, tok.iid ?? entry.sourceIid, entry.playerIndex)}>{tok.text}</button>{:else}<span class={tok.cls}>{tok.text}</span>{/if}{/each}
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </div>
-        </div>
-      {/if}
       {:else if tTab === 'leaderboard'}
         <div class="tourn-lb">
           {#if tSeasonError}<p role="status">{tSeasonError} <button onclick={tLeaderboardLoad}>重試</button></p>{/if}
@@ -12043,10 +11986,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
               <div class="tourn-lb-title">📋 參賽紀錄</div>
               {#if !tProfile.events?.length}<div class="tourn-lb-empty">尚無參賽紀錄</div>{/if}
               {#each (tProfile.events ?? []) as ev}
+                <!-- ⭐v6.647 有賽事代號的紀錄可以直接點開那場的賽程（同歷屆冠軍；舊快取沒有代號的就維持純文字） -->
+                {#if ev.eventId}
+                  <div class="tourn-pf-evrow tourn-pf-evrow-go" role="button" tabindex="0" title="查看這場賽事的賽程" onclick={() => tHofOpen(ev)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tHofOpen(ev); } }}>
+                    <span class="tourn-pf-evname">{ev.communityEvent ? '🎖️' : '🏛️'} {ev.eventName}</span>
+                    <span class="tourn-pf-evmeta">{formatDateTW(ev.date)} ｜ {ev.wins ?? 0} 勝 {ev.losses ?? 0} 敗{#if ev.result} ｜ {ev.result}{/if}<span class="tourn-hof-go">賽程 ▸</span></span>
+                  </div>
+                {:else}
                 <div class="tourn-pf-evrow">
                   <span class="tourn-pf-evname">{ev.communityEvent ? '🎖️' : '🏛️'} {ev.eventName}</span>
                   <span class="tourn-pf-evmeta">{formatDateTW(ev.date)} ｜ {ev.wins ?? 0} 勝 {ev.losses ?? 0} 敗{#if ev.result} ｜ {ev.result}{/if}</span>
                 </div>
+                {/if}
               {/each}
             </div>
           {/if}
@@ -12058,6 +12009,75 @@ function _setupSelfPending(g: any, seat: number): string | null {
              ⚠ 私聊面板走 foot snippet 渲染在 .fr-panel **裡面** ⇒ 才吃得到 --fr-* 色票（繼承）。 -->
         <div class="tourn-tab-panel">
           <FriendsPanel embedded ondm={openDm} dmMsg={dmNegMsg} dmActiveFid={dmState?.fid ?? ''} onafteract={dmAfterAct} foot={dmFoot} />
+        </div>
+      {/if}
+      <!-- ⭐v6.647 歷屆賽程／對戰戰報視窗搬到所有分頁的條件式收尾之後：「個人」分頁的參賽紀錄也能直接打開那場的賽程（玩家需求）。視窗本身一字未改。 -->
+      {#if tHofLoading}
+        <!-- ⭐v6.420：資訊類視窗一律要有出口（✕ ＋ 點背景關閉）＋ 可拖曳 -->
+        <div class="hof-modal-backdrop" role="presentation" onclick={tHofClose}>
+          <div class="hof-modal" use:modalDrag role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+            <div class="tourn-bracket-head modal-drag-handle">📋 載入賽程中…<button class="hof-modal-x" onclick={tHofClose} aria-label="關閉">✕</button></div>
+            <p class="muted" style="text-align:center;margin:18px 0;">載入賽程中…</p>
+          </div>
+        </div>
+      {/if}
+      {#if tHofView}
+        {@const _hr = Math.max(1, tHofView.rounds ?? 1)}
+        {@const _hpg = Math.min(Math.max(1, tHofPage), _hr)}
+        {@const _hrm = (tHofView.matches ?? []).filter((m: any) => m.round === _hpg)}
+        <div class="hof-modal-backdrop" role="presentation" onclick={tHofClose}>
+          <div class="hof-modal" use:modalDrag role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Escape' && tHofClose()}>
+            <div class="tourn-bracket-head modal-drag-handle">📋 {tHofView.eventName ?? '錦標賽'}{#if tHofView.championName} ｜ 🏆 {tHofView.championName}{/if}<button class="hof-modal-x" onclick={tHofClose} aria-label="關閉">✕</button></div>
+            <div class="tourn-bracket-pager">
+              <button class="tourn-pg-btn" onclick={() => tHofPage = Math.max(1, _hpg - 1)} disabled={_hpg <= 1}>◀ 上一輪</button>
+              <span class="tourn-pg-title">{_hpg === _hr ? '🏆 決賽' : '第 ' + _hpg + ' 輪'}</span>
+              <button class="tourn-pg-btn" onclick={() => tHofPage = Math.min(_hr, _hpg + 1)} disabled={_hpg >= _hr}>下一輪 ▶</button>
+            </div>
+            <div class="tourn-round">
+              {#if _hrm.length === 0}<div class="muted small" style="text-align:center;padding:14px;">此輪無對戰紀錄</div>{/if}
+              {#each _hrm as m}
+                {@const _hasLog = m.status === 'done' && !m.bye && m.p1name && m.p2name}
+                {@const _mt = tMatchTimes[String(tHofEventId)]?.[matchTimeKey(m.round, m.idx)]}
+                <div class="tourn-match" class:done={m.status === 'done'} class:bye={m.bye} class:tourn-match-log={_hasLog} class:has-time={!!_mt}
+                  role={_hasLog ? 'button' : undefined} tabindex={_hasLog ? 0 : undefined}
+                  title={_hasLog ? '點擊查看這場對戰戰報' : ''}
+                  onclick={() => { if (_hasLog) tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name); }}
+                  onkeydown={(e) => { if (_hasLog && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name); } }}>
+                  <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
+                  {#if _hasLog}
+                    <button class="tm-vs tm-vs-replay" title="🎬 觀看這場對戰回放" onclick={(e) => { e.stopPropagation(); const _mid = tHofEventId + '_r' + m.round + '_m' + m.idx; tHofClose(); tStartReplay(_mid); }}>▶回放</button>
+                  {:else}
+                    <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
+                  {/if}
+                  <span class="tm-side tm-p2" class:win={m.winner === 'p2'} title={m.p2name ?? ''}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
+                  {#if _mt}<span class="tm-time" class:live={_mt.live} title={matchTimeTitle(_mt)}>⏱ {fmtMatchDuration(_mt.ms)}</span>{/if}
+                </div>
+              {/each}
+            </div>
+          </div>
+        </div>
+      {/if}
+      {#if tMatchLog || tMatchLogLoading}
+        <div class="hof-modal-backdrop" role="presentation" onclick={tMatchLogClose}>
+          <div class="hof-modal mlog-modal" use:modalDrag role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Escape' && tMatchLogClose()}>
+            <div class="tourn-bracket-head modal-drag-handle">📜 對戰戰報 ｜ {tMatchLogTitle}<button class="hof-modal-x" onclick={tMatchLogClose} aria-label="關閉">✕</button></div>
+            {#if tMatchLogLoading}
+              <p class="muted" style="text-align:center;margin:18px 0;">載入戰報中…</p>
+            {:else if !tMatchLog || (tMatchLog.log?.length ?? 0) === 0}
+              <p class="muted" style="text-align:center;margin:18px 0;">{tMatchLog?.error ?? '這場沒有可顯示的戰報紀錄。'}</p>
+            {:else}
+              {#if tMatchLog.winnerName}<p class="muted small" style="text-align:center;margin:2px 0 8px;">🏆 勝者：{tMatchLog.winnerName}{#if tMatchLog.turn} ｜ 共 {tMatchLog.turn} 回合{/if}</p>{/if}
+              <div class="mlog-list">
+                {#each tMatchLog.log as entry}
+                  {@const _mlc = logLineClass(entry.message ?? '')}
+                  {@const _mtk = tokenizeLogMessage(entry.message ?? '', cardNamesSorted, tMatchLogNames)}
+                  <div class="log-line {_mlc}" class:log-sys={entry.playerIndex === null}>
+                    {#each _mtk as tok}{#if tok.cls === 'log-card-link'}<button type="button" class="log-card-link" onclick={() => openZoomByName(tok.text, tok.iid ?? entry.sourceIid, entry.playerIndex)}>{tok.text}</button>{:else}<span class={tok.cls}>{tok.text}</span>{/if}{/each}
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
         </div>
       {/if}
       <!-- ⭐⭐⭐v6.299 大廳的錯誤訊息。這個 <p> 在【所有分頁的條件式收尾之後】（＝ <main> 層級），
@@ -16746,6 +16766,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tourn-pf-events { border: 1px solid #4a6a4a; border-radius: 12px; padding: 12px 14px; background: #142414; }
   .tourn-pf-evrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 6px 0; border-bottom: 1px solid #20301f; }
   .tourn-pf-evrow:last-child { border-bottom: none; }
+  .tourn-pf-evrow.tourn-pf-evrow-go { cursor: pointer; }   /* ⭐v6.647 可點開賽程的參賽紀錄 */
+  .tourn-pf-evrow.tourn-pf-evrow-go:hover { background: #1f1a0c; border-radius: 6px; }
+  .tourn-pf-evrow.tourn-pf-evrow-go .tourn-hof-go { margin-left: 8px; }
   .tourn-pf-evname { color: #eaffea; font-size: .9rem; font-weight: 600; }
   .tourn-pf-evmeta { color: #9fdca0; font-size: .78rem; }
   /* ══ v6.032 賽事通知設定卡（個人資料分頁）══
@@ -21707,6 +21730,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-pf-lbl { color: #216223; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-pf-events { border: 1px solid #94b694; background: #f5f8f5; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-pf-evrow { border-bottom: 1px solid #b3ceb1; }
+    :global(html[data-theme='light']:not([data-battle-view])) .tourn-pf-evrow.tourn-pf-evrow-go:hover { background: #faf9f7; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-pf-evname { color: #001500; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-pf-evmeta { color: #216223; }
     :global(html[data-theme='light']:not([data-battle-view])) .tourn-nt { border: 1px solid #94b694; background: #f5f8f5; }
@@ -21920,6 +21944,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .auth-error { color: #bd0000; }
     /* ── 手調：復盤清單每一列（深色版是半透明黑底，產生器不轉 rgba）── */
     :global(html[data-theme='light']:not([data-battle-view])) .replay-list li { background: var(--ui-bg-elev); }
+    /* ── 手調（v6.647 審查 P3-3）：個人分頁可點開賽程的參賽紀錄，產生器轉出的 hover 底色跟清單底色幾乎一樣 ⇒ 給一個看得出來的淡綠灰 ── */
+    :global(html[data-theme='light']:not([data-battle-view])) .tourn-pf-evrow.tourn-pf-evrow-go:hover { background: #dfe8df; }
     /* ── 手調（不是產生器產生的）：選模式的兩張大卡改成白卡＋陰影，跟其他頁的卡片一致 ── */
     :global(html[data-theme='light']:not([data-battle-view])) .mode-card { background: var(--ui-bg-elev); box-shadow: var(--ui-shadow); }
     :global(html[data-theme='light']:not([data-battle-view])) .mode-card:hover:not(:disabled) { background: var(--ui-bg-elev); box-shadow: var(--ui-shadow-hover); }

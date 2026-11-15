@@ -345,7 +345,9 @@ const SRV = rd(SRV_REL);
   const RV182 = await import('./lib/tourn-revert-v182.mjs');   // ⭐v1.83：v1.82 的「新值」現在也是舊值
   const RV183 = await import('./lib/tourn-revert-v183.mjs');   // ⭐v1.84：v1.83 的「新值」現在也是舊值
   // ⭐v1.85 只動錦標賽區塊之前 ⇒ tail／tev 指紋與 v1.84 相同，v1.84 的值仍是「現行值」，不列入舊值（列進去會讓「零殘留」誤紅）
+  const RV185 = await import('./lib/tourn-revert-v185.mjs');   // ⭐v1.86：v1.85 的「新值」現在也是舊值
   const OLD_VALUES = [
+    ['v1.85 tail', RV185.NEW_TAIL_SHA_V185], ['v1.85 tev', RV185.NEW_TEV_SHA_V185],
     ['v1.83 tail', RV183.NEW_TAIL_SHA_V183], ['v1.83 tev', RV183.NEW_TEV_SHA_V183],
     ['v1.82 tail', RV182.NEW_TAIL_SHA_V182], ['v1.82 tev', RV182.NEW_TEV_SHA_V182],
     ['v1.81 tail', RV181.NEW_TAIL_SHA_V181], ['v1.81 tev', RV181.NEW_TEV_SHA_V181],
@@ -397,9 +399,10 @@ const SRV = rd(SRV_REL);
     'scripts/lib/tourn-revert-v183.mjs',
     'scripts/lib/tourn-revert-v184.mjs',
     'scripts/lib/tourn-revert-v185.mjs',
+    'scripts/lib/tourn-revert-v186.mjs',
     'scripts/test-v6292-tourn-verified-gate2.mjs']);
   chk('★★ D3-前提：被豁免的 ' + LIB_DECL.size + ' 個檔案**每一個**都真的是還原鏈的一員（豁免不能隨便加）',
-    LIB_DECL.size === 22 && [...LIB_DECL]   /* ⭐v1.67 納入 v1.65 節點 ⇒ 11；⭐v1.69 納入 v1.67 節點 ⇒ 12 */.every((rel) => {   // ⭐v1.50 鏈多一節 ⇒ 7；⭐v1.52 再一節 ⇒ 8；⭐v1.53 再一節 ⇒ 9；⭐v1.54 再一節 ⇒ 10
+    LIB_DECL.size === 23 && [...LIB_DECL]   /* ⭐v1.67 納入 v1.65 節點 ⇒ 11；⭐v1.69 納入 v1.67 節點 ⇒ 12 */.every((rel) => {   // ⭐v1.50 鏈多一節 ⇒ 7；⭐v1.52 再一節 ⇒ 8；⭐v1.53 再一節 ⇒ 9；⭐v1.54 再一節 ⇒ 10
       const s = rd(rel);
       const isLib = /^scripts\/lib\/tourn-revert-v\d+\.mjs$/.test(rel);
       const isConsumer = /from '\.\/lib\/tourn-revert-v\d+\.mjs'/.test(s);

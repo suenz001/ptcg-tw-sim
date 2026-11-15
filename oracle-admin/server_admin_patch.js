@@ -12916,7 +12916,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
           else if (!isComm && cut.finals.has(p.uid)) result = '亞軍';
           else if (!isComm && cut.top4.has(p.uid)) result = '4強';
           else if (!isComm && cut.top8.has(p.uid)) result = '8強';
-          s.events.push({ eventName: a.eventName || '錦標賽', date: evDate, format: a.format || 'single-elim', communityEvent: isComm, wins: evW.get(p.email) || 0, losses: evL.get(p.email) || 0, result });
+          s.events.push({ eventId: a.eventId || null, eventName: a.eventName || '錦標賽', date: evDate,   // ⭐v1.86 帶賽事代號：個人參賽紀錄可直接點開那場的賽程（/champion-bracket）
+             format: a.format || 'single-elim', communityEvent: isComm, wins: evW.get(p.email) || 0, losses: evL.get(p.email) || 0, result });
         }
       }
       return acc;

@@ -37,7 +37,7 @@ import { revertV6292 } from './lib/tourn-revert-v6292.mjs';
 // ⭐v6.381：鏈又長一節（B 組：歸檔補 gameDraw ＋ 平手公告加「瑞士制仍可繼續」）。
 //   ⚠ 用**別名**把 v6.381 那一節接在最前面 ⇒ 下面每一個既有呼叫點一個字都不必改，
 //     語意也不變（還原後仍是 v6.292 的區塊）。test-v6292 B6 在守這條鏈。
-import { revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171, revertV173, revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365 } from './lib/tourn-revert-v185.mjs';
+import { revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171, revertV173, revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365 } from './lib/tourn-revert-v186.mjs';
 const revertV171 = b => _rv171(revertV173(b));
 
 const revertV169 = (b) => _rv169(revertV171(b));   // v1.71 先逐字還原新修改，再接既有鎖。
@@ -134,8 +134,8 @@ const TEV_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
 const OLD_TAIL_SHA = '34a8448b7de92a1f9a3a30c02c01ecd274409e1520fcc73fe5e92d6da47cc12c';
 const OLD_TEV_SHA = '54cd122681c99f050eadf22e7823159bc5f40ecbc88118f49e5de88cb683b196';
 const OLD_TEV_LEN = 218193;
-const NEW_TAIL_SHA = 'd9982d40222737578fa3e0438ed443b1bd45e74c57ed15bb90dc8e403b8a1d13';
-const NEW_TEV_SHA = '1792d8972148ca8f23f98deffa4397989400ab0ffb1f79082dd38cad866ef0b7';
+const NEW_TAIL_SHA = 'dc041826c0f73eeeba63d64655d26a5aec02071992ab05db537997c6a079f78c';
+const NEW_TEV_SHA = '33c4153cc0be6de6d9d804bc8332c3eec5eb83ad32d542f8f9a4a8d111c1e455';
 
 console.log('\n══ 【A】結構（每一條在 BASE v6.275 上都必須紅，見【H】）═══════════════════');
 
