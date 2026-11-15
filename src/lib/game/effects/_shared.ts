@@ -1916,16 +1916,22 @@ export const PENDING_REFRESH_ON_POP = new Map<string, PendingRefreshOnPopFn>();
 //   依 v5.424 規則：牌庫=未知資訊→可【不選】；只要牌庫非空就開 picker，不直接略過（符合「搜尋牌庫」
 //   公開規則：對手知道你搜尋過、你重洗）。filter:'any' 顯示全牌庫、maxCount:0 僅檢視、
 //   search-to-hand-reshuffle 確認/不選後重洗（0 picks 不加手牌）。牌庫全空才略過（無可看）。
-export function openDeckViewReshuffle(state: GameState, idx: 0 | 1, label: string): GameState {
+// >>> v6644-deck-view-empty
+// ⭐v6.644（玩家回報：牌庫沒有基礎【超】寶可夢時，感應【超】能量的選擇視窗列出整副剩餘牌庫）：
+//   「牌庫無符合卡」時，選擇區必須是**空的**（沒有任何可選的卡）；整副牌庫只放在下方「📖 查看牌庫剩餘全部」（候選為 0 時自動展開）。
+//   ⇒ 這裡宣告 params.validIids: []（＝這個 picker 一張都不能勾），UI 的 deck-search 候選一律與 validIids 取交集（同引擎消毒閘），
+//     所以選擇區是空的；resolver（search-to-hand-reshuffle）照舊只重洗。站內所有「牌庫無符合卡 → 檢視後重洗」都走這一支（opts.log 保留各卡原本的紀錄字樣）。
+export function openDeckViewReshuffle(state: GameState, idx: 0 | 1, label: string, opts?: { log?: string }): GameState {
   if (state.players[idx].deck.length === 0) return addLog(state, `${label}：牌庫已空`, idx);
-  const s = addLog(state, `${label}：牌庫無符合卡，檢視牌庫後重洗`, idx);
+  const s = addLog(state, opts?.log ?? `${label}：牌庫無符合卡，檢視牌庫後重洗`, idx);
   return withPending(s, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'any', minCount: 0, maxCount: 0,
     effectKey: 'search-to-hand-reshuffle',
-    params: { label: `${label}（檢視牌庫）` },
+    params: { label: `${label}（檢視牌庫）`, validIids: [], viewOnly: true },
   });
 }
+// <<< v6644-deck-view-empty
 
 /**
  * v5.680：「查看自己牌庫上方 N 張，回復原樣；若希望，將(選定的)那些卡丟棄」型招式的中央入口。

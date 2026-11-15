@@ -1,4 +1,8 @@
 <details open>
+        <summary><span class="ver-badge">v6.644</span> <b>牌庫沒有符合的卡時，選擇區改為空白</b><br>搜尋牌庫卻沒有符合條件的卡時（例：感應【超】能量找不到基礎【超】寶可夢），選擇區不再列出整副牌庫。</summary>
+        <div class="log-body">有玩家回報：牌庫沒有基礎【超】寶可夢時，把感應【超】能量附到【超】寶可夢身上，選擇視窗卻列出所有剩餘的牌庫卡。這種情況其實沒有任何卡可以選，現在選擇區會顯示「沒有符合條件的卡牌」，剩餘牌庫照樣可以在下方「📖 查看牌庫剩餘全部」檢視（會自動展開），按確認後重洗牌庫。同樣「找不到符合的卡、只能檢視後重洗」的其他效果（盈溢祈願、閃焰渦輪、果實盈滿、冰冷羽擊、充電等）一併改好；其他牌庫搜尋的選擇區也只會列出真正可以選的卡。</div>
+      </details>
+      <details>
         <summary><span class="ver-badge">v6.640</span> <b>回合剛開始時避免誤按招式</b><br>輪到自己的回合後約 1 秒內，點招式按鈕不會出招，只會關掉回合開始的提示橫幅。</summary>
         <div class="log-body">有玩家回報換回合時還沒動就打出了招式。回合開始時畫面會跳出提示橫幅，想點掉提示的那一下可能剛好按在下面新出現的招式按鈕上。現在回合開始約 1 秒內點招式按鈕只會關掉提示，不會出招；過了這段時間就照常出招。已經宣告、正在選擇的招式不受影響。</div>
       </details>
@@ -42,9 +46,8 @@
         <summary><span class="ver-badge">v6.629</span> <b>改善手機牌組投稿按鈕辨識度</b><br>牌組公布欄的投稿按鈕統一使用綠底白字。</summary>
         <div class="log-body">手機與電腦、淺色與深色模式的「＋ 投稿牌組」按鈕統一使用森林綠底白字，讓文字更清楚。</div>
       </details>
-      <details>
+      <details data-ver="v6.626">
         <summary><span class="ver-badge">v6.626</span> <b>修正公開牌組分享資訊與熱門統計</b><br>改善牌組分享資訊、熱門統計可靠性與手機版顯示。</summary>
-        <div class="log-body"><p>修正分享頁的牌組名稱、筆記與卡圖；合併並行統計查詢，避免短暫故障造成錯誤統計快取，並穩定手機與桌機排行顯示。</p></div>
       </details>
       <details data-ver="v6.622">
         <summary><span class="ver-badge">v6.622</span> <b>抽牌飛入手牌動畫、我方重抽手牌揭示、修正手機起手設置畫面下推</b><br>自己抽牌在中央翻開後會往下飛入手牌；起手無基礎寶可夢重抽時自己也能查看那 7 張牌；修正手機版起手設置結束時畫面往下跳動。</summary>
@@ -111,9 +114,6 @@
       </details>
       <details data-ver="v6.599">
         <summary><span class="ver-badge">v6.599</span> <b>牌組可以設定先攻／後攻，選牌組時自動帶入</b><br>牌組編輯器可以替每副牌組設定贏得擲硬幣時要先攻、後攻或隨機，對戰與報名錦標賽選這副牌組時會自動帶入。</summary>
-      </details>
-      <details data-ver="v6.598">
-        <summary><span class="ver-badge">v6.598</span> <b>手機彈出視窗不再跑進狀態列底下，關閉鈕一直按得到</b><br>牌組公布欄等頁面的彈出視窗在 iPhone 上不再被狀態列蓋住，往下捲時關閉鈕也固定在右上角。</summary>
       </details>
       <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
         📚 這裡顯示<b>最近的更新內容</b>。更早的紀錄完整保留在 →

@@ -157,7 +157,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
            casualResyncGapMs, casualResyncInLastChance, RESYNC_BASE_MS,
            nextRestartBaseline, setupSeatRank } from '$lib/game/sync-guards';
   import { staleVersionDiagWhy } from '$lib/tournament/stale-diag';
-  import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates, handDiscardCandidates, damageDistributeCandidates } from '$lib/game/selection-candidates';
+  import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates, handDiscardCandidates, damageDistributeCandidates, deckSearchVisible } from '$lib/game/selection-candidates';   // ⭐v6.644 deckSearchVisible
   import { selectionAllowsSkip, selectionAllowsCancel, selectionConfirmFloor, selectionHasNoExit, aiStuckSelectionPayload } from '$lib/game/selection-ui';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
@@ -4778,7 +4778,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   **直接 throw、整個對戰頁白屏**（v5.606 已被咬過一次）。正常盤面 iid 唯一（引擎出口有
   //   normalizeNonFieldStacks ＋ 守恆測試），這個 dedupe 純屬保險：萬一版本 skew 或引擎瞬時
   //   產生重複 iid，寧可少顯示一張也不要整頁崩掉。
-  const selectionItems = $derived.by(() => dedupeByIid(selectionItemsRaw));
+  // >>> v6644-deck-view-empty
+  // ⭐v6.644 牌庫搜尋（deck-search）的選擇區一律與 params.validIids 取交集——與引擎中央消毒閘（sanitizeSelectedIids）同一條規則：
+  //   validIids 是「這個 picker 到底能勾什麼」的權威。原本只有少數 filter 各自交集，'any' 等其餘 filter 會無視它 ⇒
+  //   「牌庫無符合卡、只能檢視」（validIids: []）時選擇區列出整副牌庫（玩家回報：感應【超】能量）。整副牌庫仍在下方「📖 查看牌庫剩餘全部」。
+  //   判準在 selection-candidates.ts 的 deckSearchVisible（唯一一份，Rule 38）。
+  const selectionItems = $derived.by(() => dedupeByIid(pendingSelection?.type === 'deck-search'
+    ? deckSearchVisible(selectionItemsRaw, pendingSelection.params as Record<string, unknown> | undefined)
+    : selectionItemsRaw));
+  // <<< v6644-deck-view-empty
 
   // ⭐ v6.108 防呆：把「已選了哪幾張」轉成玩家看得懂的卡名。
   //   玩家 DCG_Bear 回報「我要拿的是祭典會場，結果變成捕蟲組合」——引擎與送出路徑逐項查證都正確

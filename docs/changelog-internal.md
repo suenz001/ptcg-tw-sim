@@ -1,5 +1,7 @@
 # 內部改版紀錄（不打包進網站）
 
+見 docs/changelog-internal.md v6.644
+
 ## v6.643＋server v1.83 — 錦標賽擴容第四批（2026-11-15，hidden）
 
 - BASE `a01413b7`（v6.642＋server v1.82）。站長要求：Fable 擴容報告剩下的幾項都做、務必審查。

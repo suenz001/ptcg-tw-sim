@@ -1572,9 +1572,12 @@ export function sanitizeSelectedIids(state: GameState, pending: PendingSelection
     const seenH = new Set<string>();
     const outH: string[] = [];
     for (const iid of iids) {
+      // >>> v6644-sanitize-cap-first
+      // ⭐v6.644：先判上限再收（原本先 push 再比 ⇒ maxCount 0 的「只能檢視」照樣收 1 張）
+      if (typeof pending.maxCount === 'number' && outH.length >= pending.maxCount) break;
+      // <<< v6644-sanitize-cap-first
       if (seenH.has(iid) || !okSet.has(iid)) continue;
       seenH.add(iid); outH.push(iid);
-      if (typeof pending.maxCount === 'number' && outH.length >= pending.maxCount) break;
     }
     return outH;
   }
@@ -1610,10 +1613,13 @@ export function sanitizeSelectedIids(state: GameState, pending: PendingSelection
   const seen = new Set<string>();
   const out: string[] = [];
   for (const iid of iids) {
+    // >>> v6644-sanitize-cap-first
+    // ⭐v6.644：先判上限再收（原本先 push 再比 ⇒ maxCount 0 的「只能檢視」牌庫搜尋照樣收 1 張，可從牌庫拿走 1 張卡）
+    if (typeof pending.maxCount === 'number' && out.length >= pending.maxCount) break;
+    // <<< v6644-sanitize-cap-first
     if (seen.has(iid) || !zoneSet.has(iid)) continue;
     if (validSet && !validSet.has(iid)) continue;
     seen.add(iid); out.push(iid);
-    if (typeof pending.maxCount === 'number' && out.length >= pending.maxCount) break;
   }
   // v6.018 批5 Stage2:對「已收錄 filter」做語義驗證——把不符卡面 filter 的 client iid 濾掉（稜鏡塞非能量卡等）。
   //   單項三態 fail-open：evaluateSelectionFilter 回 false 才濾，回 null（未收錄/查不到卡）一律保留，不誤殺；

@@ -143,3 +143,18 @@ export function activeEnergyDiscardCandidates(
   const eListA = src.active?.energyAttached ?? [];
   return validIidsA ? eListA.filter(e => validIidsA.includes(e.iid)) : eListA;
 }
+
+// >>> v6644-deck-view-empty
+/**
+ * ⭐v6.644 牌庫搜尋（deck-search）選擇區「看得到什麼」的最後一道：pending 有宣告 params.validIids（陣列）就只留在裡面的卡。
+ *   與引擎 sanitizeSelectedIids 對 deck-search 的 validIids 交集同一條規則（玩家看得到的＝勾得動的，v6.109）。
+ *   validIids: [] ＝ 只能檢視（例：牌庫無符合卡 → 檢視後重洗）⇒ 選擇區為空，整副牌庫由 UI 下方「查看牌庫剩餘全部」呈現。
+ *   沒宣告（undefined／非陣列）⇒ 不縮限（既有 filter 行為不變）。
+ */
+export function deckSearchVisible<T extends { iid: string }>(items: readonly T[], params: Record<string, unknown> | undefined): T[] {
+  const vi = params ? params.validIids : undefined;
+  if (!Array.isArray(vi)) return items.slice();
+  const allow = new Set(vi as string[]);
+  return items.filter((c) => allow.has(c.iid));
+}
+// <<< v6644-deck-view-empty

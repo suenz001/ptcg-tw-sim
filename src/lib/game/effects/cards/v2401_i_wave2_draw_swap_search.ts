@@ -21,7 +21,7 @@ import { canApplyEffectToTarget } from '../../defense'; // v5.837 換位免疫 g
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle, drawCards,
-  ATTACK_PRE_DISCARD_CHOICE, energyMatchesType,
+  ATTACK_PRE_DISCARD_CHOICE, energyMatchesType, openDeckViewReshuffle
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
 
@@ -106,13 +106,8 @@ function deckSearchBasicEnergyPost(
       .map(c => c.iid);
     if (validIids.length === 0) {
       // v5.495：牌庫非空仍開 view-picker 檢視牌庫 + 重洗（PTCG 隱藏資訊規則）。
-      const sv = addLog(state, `${label}：牌庫無基本能量；檢視牌庫後重洗`, aIdx);
-      return withPending(sv, {
-        type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-        filter: 'any', minCount: 0, maxCount: 0,
-        effectKey: 'search-to-hand-reshuffle',
-        params: { label: `${label}（檢視牌庫）` },
-      });
+      // ⭐v6.644：收斂到中央 openDeckViewReshuffle（選擇區留空；紀錄字樣不變）
+      return openDeckViewReshuffle(state, aIdx, label, { log: `${label}：牌庫無基本能量；檢視牌庫後重洗` });
     }
     const s = addLog(state, `${label}：從牌庫選最多 ${n} 張基本能量附於自身`, aIdx);
     return withPending(s, {

@@ -25,7 +25,7 @@
 import type { CardInstance, PlayerState } from '../../types';
 import {
   regPre, regPost, regR,
-  addLog, updatePlayer, shuffle, withPending,
+  addLog, updatePlayer, shuffle, withPending, openDeckViewReshuffle
 } from '../_shared';
 import { countEnergyTypeHostAware } from '../../effects';  // v5.616：型別計數中央 helper(火箭隊能量=2超)
 
@@ -81,14 +81,8 @@ regPost('超級沙奈朵ex|盈溢祈願', (state, aIdx, pool) => {
   //   貼近 v2.42 行為與 picker UX 簡潔，直接 skip 不開 picker）
   if (psyEnergies.length === 0) {
     // v5.495：牌庫非空仍開 view-picker 讓玩家檢視整副牌庫 + 重洗（PTCG 隱藏資訊規則）。
-    if (player.deck.length === 0) return addLog(state, '盈溢祈願：牌庫已空', aIdx);
-    const sv = addLog(state, '盈溢祈願：牌庫中無基本【超】能量；檢視牌庫後重洗', aIdx);
-    return withPending(sv, {
-      type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: 'any', minCount: 0, maxCount: 0,
-      effectKey: 'search-to-hand-reshuffle',
-      params: { label: '盈溢祈願（檢視牌庫）' },
-    });
+    // ⭐v6.644：收斂到中央 openDeckViewReshuffle（選擇區留空、整副牌庫只在下方「查看牌庫剩餘全部」；紀錄字樣不變）
+    return openDeckViewReshuffle(state, aIdx, '盈溢祈願', { log: '盈溢祈願：牌庫中無基本【超】能量；檢視牌庫後重洗' });
   }
 
   // Stage 1 picker：選 0 ~ min(bench.length, psyEnergies.length) 張基本【超】能量
