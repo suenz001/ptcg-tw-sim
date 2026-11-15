@@ -29,7 +29,7 @@ import {
 // ⭐v1.53（Rule 40，意圖不變）：錦標賽區塊之後又被 v1.53（報名牌組完整規則）合法改過 ⇒ D 節先剝 v1.53 再比對 v1.52 的值。
 import { revertV153 } from './lib/tourn-revert-v153.mjs';
 import { revertV154 as _rv154, revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171 } from './lib/tourn-revert-v171.mjs';   // ⭐v1.54（Rule 40）：再先剝一節；⭐v1.65 再長一節
-import { revertV173 } from './lib/tourn-revert-v181.mjs';
+import { revertV173 } from './lib/tourn-revert-v182.mjs';
 const revertV171 = b => _rv171(revertV173(b));
 const revertV169 = (b) => _rv169(revertV171(b));   // v1.71 先逐字還原新修改，再接既有鎖。
 const revertV167 = (b) => _rv167(revertV169(b));   // ⭐v1.69（Rule 54）：鏈再長一節（重賽系統訊息「擲硬幣」；既有呼叫點一個字都不必改）
@@ -115,7 +115,9 @@ const TENG = {
 
 /** 把 handler（＋本版哨兵區塊）組成可執行的端點。回 { call(uid), log }。 */
 function buildEndpoint(src, withSentinel, data, opts = {}) {
-  const block = withSentinel ? sentinel(src, 'v152-bracket-light') : '';
+  // ⭐server v1.82（Rule 40，意圖不變）：/bracket 多了內容簽章 bv（helper 在 v182-bracket-version 哨兵裡，緊接在 v152 哨兵之後）⇒ 有就一起帶進來。
+  let _v182 = ''; try { _v182 = sentinel(src, 'v182-bracket-version'); } catch { _v182 = ''; }
+  const block = withSentinel ? sentinel(src, 'v152-bracket-light') + _v182 : '';
   const ep = handlerSrc(src, "app.get('/api/tournament/bracket',");
   const routes = {};
   const app = { get: (p, h) => { routes[p] = h; } };
@@ -153,8 +155,10 @@ for (const format of ['single-elim', 'swiss-then-cut']) {
   if (BASE) {
     const old = buildEndpoint(BASE, false, makeData(format));
     const a0 = await old.call('u1'), b0 = await old.call('u4');
+    // ⭐server v1.82（Rule 40）：v1.82 只多回一個內容簽章 bv ⇒ 比對前拿掉它（其餘逐欄位比，不放寬）
+    const _nobv = (x) => { const y = JSON.parse(JSON.stringify(x)); if (y && y.body) delete y.body.bv; return y; };
     ok(`B1 [${format}] 回應內容與 v1.51 逐欄位相同（兩位不同玩家：mine／viewers 也一樣）`,
-      JSON.stringify(a) === JSON.stringify(a0) && JSON.stringify(b) === JSON.stringify(b0) && a.status === 200 && a.body.matches.length === 6,
+      JSON.stringify(_nobv(a)) === JSON.stringify(a0) && JSON.stringify(_nobv(b)) === JSON.stringify(b0) && typeof a.body.bv === 'string' && a.status === 200 && a.body.matches.length === 6,
       (() => { const x = JSON.stringify([a, b]), y = JSON.stringify([a0, b0]); let i = 0; while (i < x.length && x[i] === y[i]) i++; return '第一個差異：' + x.slice(Math.max(0, i - 80), i + 80) + ' ⟂ ' + y.slice(Math.max(0, i - 80), i + 80); })());
     ok(`B1 前提 [${format}] v1.51 的 handler 確實讀了完整文件（沒有 projection）`, old.log.some((x) => x.name === 'TMATCH' && !x.proj));
   }
@@ -207,7 +211,7 @@ console.log('\n【D】錦標賽區塊 28 把鎖重釘');
   const CONSUMERS = ['scripts/test-v6276-deck-tournament-stats.mjs', 'scripts/test-v6291-tourn-verified-gate.mjs', 'scripts/test-v6292-tourn-verified-gate2.mjs',
     'scripts/test-v6303-ui-batch.mjs', 'scripts/test-v6381-archive-gamedraw-and-swiss-note.mjs'];
   // （⭐v1.65 起消費者改接 tourn-revert-v165，它的鏈內含本版；v1.80 起接 tourn-revert-v180、v1.81 起接 tourn-revert-v181（鏈仍含本版）；Rule 40 意圖不變）
-  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(/from '\.\/lib\/tourn-revert-v1(?:[56]\d|7[136]|8[01])\.mjs'/.test(s) && s.includes('revertV152(')); });
+  const bad = CONSUMERS.filter((f) => { const s = rd(f); return !(/from '\.\/lib\/tourn-revert-v1(?:[56]\d|7[136]|8[0-2])\.mjs'/.test(s) && s.includes('revertV152(')); });
   ok('D5 五支消費者都 import 新 lib 且呼叫 revertV152(', bad.length === 0, bad.join(', '));
   ok('D5b test-v6303 的 SAP 還原鏈最內層是 revertAdminV152', /revertAdminV150\(revertAdminV152\((?:SAP_RAW|revertAdminV15\d\()/.test(rd('scripts/test-v6303-ui-batch.mjs')));
 }

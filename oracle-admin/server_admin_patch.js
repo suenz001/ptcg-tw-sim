@@ -11178,6 +11178,26 @@ import('firebase-admin').then(async ({ default: admin }) => {
       return _p;
     }
     // <<< v152-bracket-light
+    // >>> v182-bracket-version
+    // ⭐server v1.82（2026-11-14 擴容審查 P1-1）：/bracket 回應是「整場賽事所有輪次的對戰＋整張排名表」，200 人 6 輪約 104KB，
+    //   換輪後大廳每人每 9 秒抓一次，而內容只在有對局結束時才變。比照 /state 的 ?v=：回應附內容簽章 bv，
+    //   前端下一發帶 ?bv=；簽章相同 ⇒ 只回 { unchanged, bv, viewers }（請求數不變，省掉兩次 map、JSON 化、gzip 與傳輸）。
+    //   ・簽章＝快取重建時對 [matchesRaw, standingsRaw] 算一次（每 3 秒最多一次）＋每個請求對 event 小物件算一次；
+    //     mine（每人不同，但簽章相同＝資料相同，前端沿用自己上一份）與 viewers（即時值）不進簽章，viewers 隨 unchanged 另外帶。
+    //   ・舊前端不帶 bv ⇒ 照舊拿完整回應（只多一個 bv 欄位）。FNV-1a 雙 32 位元（本檔是 ESM host，沒有 crypto）；
+    //     碰撞的後果只是「內容變了卻回了一次 unchanged」，內容再變簽章就再變（同 v1.17 /api/rooms 的 digest）。
+    function bracketDigestV182(str) {
+      let h1 = 0x811c9dc5 >>> 0, h2 = 0xcbf29ce4 >>> 0;
+      const t = String(str);
+      for (let i = 0; i < t.length; i++) {
+        const c = t.charCodeAt(i);
+        h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
+        h2 = Math.imul(h2 ^ ((c + 131) & 0xffff), 16777619) >>> 0;
+      }
+      return h1.toString(16) + h2.toString(16) + '-' + t.length.toString(36);
+    }
+    const bracketMatchKeyV182 = (m) => m.round + ':' + m.idx + ':' + (m.phase || '');
+    // <<< v182-bracket-version
     const BRACKET_TTL_MS = 3000;
     app.get('/api/tournament/bracket', async (req, res) => {
       try {
@@ -11211,15 +11231,25 @@ import('firebase-admin').then(async ({ default: admin }) => {
             } catch (e) { standingsRaw = null; }
           }
           const matchesRaw = matches.map((m) => ({ round: m.round, idx: m.idx, phase: m.phase || null, p1uid: m.p1uid, p2uid: m.p2uid, p1name: m.p1name, p2name: m.p2name, winnerName: m.winnerName, winnerUid: m.winnerUid, status: m.status, bye: m.bye, roomId: m.roomId || null }));
-          const _built = { at: _now, round: ev.currentRound, status: ev.status, matchesRaw, standingsRaw };   // ⭐v1.54 原本直接寫 _cache
+          const _built = { at: _now, round: ev.currentRound, status: ev.status, matchesRaw, standingsRaw, sigV182: bracketDigestV182(JSON.stringify([matchesRaw, standingsRaw])) };   // ⭐v1.54 原本直接寫 _cache；⭐v1.82 附內容簽章（每次重建算一次）
           _bracketCache.set(ev._id, _built);
           // v0.69：上限 20 個 event(防歷史/社群賽 eventId 累積漏記憶體);超過刪最舊(插入序)。
           if (_bracketCache.size > 20) { const _oldest = _bracketCache.keys().next().value; if (_oldest !== ev._id) _bracketCache.delete(_oldest); }
           return _built;   // ⭐v1.54
           });   // ⭐v1.54
         }
+        const _evOutV182 = { _id: ev._id, name: ev.name, status: ev.status, currentRound: ev.currentRound, rounds: ev.rounds, championName: ev.championName || null, format: ev.format || 'single-elim', phase: ev.phase || null, swissRounds: ev.swissRounds || null, topCut: ev.topCut || null };
+        // >>> v182-bracket-unchanged
+        const _bvV182 = String(_cache.sigV182 || '') + '.' + bracketDigestV182(JSON.stringify(_evOutV182));
+        if (_cache.sigV182 && typeof req.query.bv === 'string' && req.query.bv === _bvV182) {
+          const _vw = {};
+          for (const m of _cache.matchesRaw) if (m.status === 'playing' && m.roomId) _vw[bracketMatchKeyV182(m)] = countSpectators(m.roomId);
+          return res.json({ unchanged: true, bv: _bvV182, viewers: _vw });
+        }
+        // <<< v182-bracket-unchanged
         res.json({
-          event: { _id: ev._id, name: ev.name, status: ev.status, currentRound: ev.currentRound, rounds: ev.rounds, championName: ev.championName || null, format: ev.format || 'single-elim', phase: ev.phase || null, swissRounds: ev.swissRounds || null, topCut: ev.topCut || null },
+          bv: _bvV182,   // ⭐v1.82 內容簽章（前端下一發帶 ?bv=）
+          event: _evOutV182,
           matches: _cache.matchesRaw.map((m) => ({ round: m.round, idx: m.idx, phase: m.phase, p1name: m.p1name, p2name: m.p2name, winnerName: m.winnerName, winner: (m.winnerUid && m.winnerUid === m.p1uid) ? 'p1' : (m.winnerUid && m.winnerUid === m.p2uid) ? 'p2' : null, status: m.status, bye: m.bye, mine: (m.p1uid === id.uid || m.p2uid === id.uid), roomId: m.status === 'playing' ? (m.roomId || null) : null, viewers: (m.status === 'playing' && m.roomId) ? countSpectators(m.roomId) : 0 })),
           standings: _cache.standingsRaw ? _cache.standingsRaw.map((s) => ({ rank: s.rank, name: s.name, matchPoints: s.matchPoints, w: s.w, l: s.l, owp: s.owp, oowp: s.oowp, dropped: !!s.dropped, mine: s.uid === id.uid })) : null,
         });

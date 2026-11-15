@@ -645,7 +645,7 @@ await TA('M7 admin.html 拿掉 msgCounts 參數 ⇒「按開關要帶 msgCounts=
 // ⑨ ⭐⭐ 錦標賽區塊逐位元未動（內嵌 sha256，淺複製下也在守）
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑨ 錦標賽區塊逐位元未動');
-const TOURN_TAIL_SHA256 = '8e6d0e00536c2a80863d228e2aa7bdff998814c8354cc22c800c0f4a3af01e58' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
+const TOURN_TAIL_SHA256 = 'b61eebdff4ce4341ba9fbd3aa9b0641a14c9f7ea780eef449ee3b7effdd62de2' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
 function tournTail(src) {
   const i = src.indexOf("app.get('/api/tournament");
   if (i < 0) throw new assert.AssertionError({ message: '找不到第一支 /api/tournament 端點' });
@@ -670,7 +670,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '9c67d5210b9e1d30fda49aa7d9c137b673014a6b';   // v6.640（上一版）
+const PREV_SHA = '725fbc3785d0207d0ad27092fb2ec45396c4a399';   // v6.641（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -759,13 +759,20 @@ const PREV_SHA = '9c67d5210b9e1d30fda49aa7d9c137b673014a6b';   // v6.640（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.641 前移：PREV_SHA 從 9c67d521（v6.640）起算。
+  // ⚠⚠ v6.642 前移：PREV_SHA 從 725fbc37（v6.641）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.641：v6.641 錦標賽 tForceResync 帶目前版本（擴容審查 P2-1）
+  // ⭐v6.642：v6.642 /bracket 帶內容簽章 bv（擴容審查 P1-1，搭配 server v1.82）
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.641）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.641 前移：PREV_SHA 從 9c67d521（v6.640）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.641：v6.641 錦標賽 tForceResync 帶目前版本（擴容審查 P2-1）
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/site-version.txt',
 // ── 上一版（v6.640）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.640 前移：PREV_SHA 從 f697be88（v6.639）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -900,12 +907,6 @@ const PREV_ALLOWED = [
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.628）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.628 前移：PREV_SHA 從 a8e412c2（v6.627）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.628：僅admin歷史牌組入口，玩家端只有版本標記；不改server、卡池、遊戲或公開changelog。
-//   'src/lib/version.ts',
 //   'static/site-version.txt',
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + [...PREV_ALLOWED].sort().join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }

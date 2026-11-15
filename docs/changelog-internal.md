@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.642＋server v1.82 — 錦標賽賽程表 /bracket 內容簽章（2026-11-15，hidden）
+
+- BASE `725fbc37`（v6.641＋server v1.81）。依據 Fable 5.2 擴容審查 P1-1：/bracket 回應是整場所有輪次的對戰＋排名表（200 人 6 輪約 104KB），換輪後大廳每人每 9 秒抓一次，內容只在有對局結束時才變。
+- 伺服器（v182-bracket-version／v182-bracket-unchanged 哨兵）：快取重建時對 [matchesRaw, standingsRaw] 算 FNV-1a 雙 32 位元簽章（每 3 秒最多一次），每個請求再對 event 小物件算一次，組成 bv；請求帶 `?bv=` 且相同 ⇒ 只回 `{ unchanged, bv, viewers }`（viewers 涵蓋所有進行中對戰，含 0 人，key＝輪次:桌號:階段）。完整回應多一個 bv 欄位，其餘逐欄位不變；舊前端不帶 bv 照舊完整回應。
+- 前端（v6642-bracket-version）：只有上一份好資料有 bv 才帶 `&bv=`；回 unchanged 且 bv 對得上 ⇒ `tBracketApplyUnchanged` 沿用上一份（新物件）只換觀戰人數；對不上或沒有上一份 ⇒ 當成這筆不可信，交給既有的 mergeKeyedOrKeep（沿用舊的＋stale）。新舊前後端任意組合都能動，部署順序不影響正確性。
+- 還原鏈：`sap-revert-admin-v182`（全在錦標賽區塊內）接進 v177 入口最內層；`tourn-revert-v182` 接在 v181 之前；消費者改接 v182；17 支重釘；v6379 OLD_VALUES 加 v1.81、LIB_DECL 19；v180／v179／v6605／v6292 A4 先套 v1.82 還原；sap152 B1 與 sap154 B3 比對前拿掉 bv（Rule 40，其餘逐欄位）；前端 `revert-v6642-bracket-version` 接在 revertV6641IfPresent 鏈頭。
+- 守衛 `test-v182-bracket-version.mjs`：S1 完整回應帶 bv 且其餘與 BASE 逐欄位相同、S2 unchanged＋viewers、S3 對戰改變 bv 變、S4 只改賽事欄位 bv 也變、S5 錯 bv 照完整；F1 tBracketApplyUnchanged、F2 送／收接線；HEAD-FAIL S1～S4／F1／F2 紅、S5 綠。突變 4/4 被殺（不雜湊 event、viewers 略過 0 人、簽章只算長度、前端不比對 bv）。
+
 ## v6.641 — 錦標賽「重新同步」帶目前版本（2026-11-15，hidden，對外 changelog 不寫）
 
 - BASE `9c67d521`（v6.640＋server v1.81）。依據 Fable 5.2 擴容審查 P2-1：新鮮度看門狗在盤面 20 秒沒變（對手長考的正常狀態）後每 8 秒呼叫 `tForceResync`，它原本一律帶 `v=-1` ⇒ 伺服器每次讀整份房間、解碼、序列化整份盤面；但它只在 `fr.version !== tVersion` 時才採納，其餘用到的欄位在精簡 unchanged 回應裡都有。

@@ -5940,6 +5940,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   `{#each tBrackets}` 一筆都不畫 ⇒ 整區憑空消失，而且要等下一次輪詢才回來
   //   （v6.161 之後：有本輪對戰 9 秒、出局/本輪打完 27 秒、背景分頁 63 秒）。
   //   改成逐 eventId 合併：成功的用新的、失敗的**沿用上一份好資料**並標 stale。
+  // >>> v6642-bracket-version
+  /** /bracket 回 unchanged 時：沿用上一份，只更新「進行中」對戰的觀戰人數（key＝輪次:桌號:階段，與伺服器 bracketMatchKeyV182 同一套）。 */
+  function tBracketApplyUnchanged(prev: any, r: any): any {
+    const vw = (r && r.viewers && typeof r.viewers === 'object') ? r.viewers : {};
+    const matches = Array.isArray(prev.matches) ? prev.matches.map((m: any) => {
+      const k = m.round + ':' + m.idx + ':' + (m.phase || '');
+      return (m && m.status === 'playing' && Object.prototype.hasOwnProperty.call(vw, k)) ? { ...m, viewers: Number(vw[k]) || 0 } : m;
+    }) : prev.matches;
+    return { ...prev, matches, bv: r.bv };
+  }
+  // <<< v6642-bracket-version
   async function tBracketLoad() {
     // v5.937 官方+社群賽並行:每個進行中賽事各抓一次 /bracket?eventId=(伺服器 per-eventId 3s 快取,N≤2,並發不序列)。
     try {
@@ -5948,12 +5959,27 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //   （v6.177 起 tournLoadEvent 對壞回應整發不採納 ⇒ tEvents 只會被成功回應改寫）。
       if (!evs || evs.length === 0) { tBrackets = []; tBracketsStale = false; return; }
       const _seq = ++_tBracketSeq;
-      const rs = await Promise.all(evs.map((ev: any) => tApi('/bracket?eventId=' + encodeURIComponent(ev._id)).catch(() => null)));
+      // >>> v6642-bracket-version
+      // ⭐v6.642（擴容審查 P1-1，搭配 server v1.82）：帶上一份好資料的內容簽章 bv；伺服器簽章相同就只回 { unchanged, bv, viewers }，
+      //   這裡沿用上一份賽程、只更新觀戰人數（mine 每人不同，但簽章相同＝資料相同 ⇒ 沿用自己上一份是對的）。
+      //   沒有上一份、或上一份是舊伺服器給的（沒有 bv）⇒ 不帶 bv，照舊拿完整回應。舊伺服器不認 bv ⇒ 永遠回完整回應，行為同舊版。
+      const _prevByEv = new Map<string, any>();
+      for (const b of (tBrackets || [])) { const k = String(b && b.event && b.event._id); if (k && !_prevByEv.has(k)) _prevByEv.set(k, b); }
+      const _sentBv = evs.map((ev: any) => { const p = _prevByEv.get(String(ev && ev._id)); return (p && typeof p.bv === 'string' && p.bv) ? p.bv : ''; });
+      const rs = await Promise.all(evs.map((ev: any, i: number) => tApi('/bracket?eventId=' + encodeURIComponent(ev._id) + (_sentBv[i] ? '&bv=' + encodeURIComponent(_sentBv[i]) : '')).catch(() => null)));
+      // <<< v6642-bracket-version
       // ⭐v6.177 亂序守衛（比照 v6.139 deck-posts 的 listSeq）：tLobbyResume 會讓下一發提早送出，
       //   慢的那一發後到時，**合併版**會把舊回應當成權威新資料收編（比舊的 filter 版更難察覺）。
       if (_seq !== _tBracketSeq) return;
       const incoming = evs.map((ev: any, i: number) => {
-        const r: any = rs[i];
+        let r: any = rs[i];
+        // >>> v6642-bracket-version
+        // 簽章相同 ⇒ 用上一份重建一個新物件（觸發畫面更新），只換觀戰人數；簽章對不上或沒有上一份 ⇒ 當成這一筆不可信（沿用舊的＋stale）
+        if (r && r.unchanged === true) {
+          const p = _prevByEv.get(String(ev && ev._id));
+          r = (p && _sentBv[i] && r.bv === _sentBv[i]) ? tBracketApplyUnchanged(p, r) : null;
+        }
+        // <<< v6642-bracket-version
         // 可信＝真的拿到這場賽事的賽程；否則一律 null（= 這一筆不可信，交給中央述詞沿用舊的）
         const ok = !!(r && r.event && Array.isArray(r.matches));
         return { key: String(ev && ev._id), value: ok ? r : null };
