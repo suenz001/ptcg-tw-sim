@@ -10,7 +10,7 @@
 // 【N3】行為：預設帶入上次手動選的；選有預設先後攻的牌組 ⇒ 自動帶入；選沒設定的牌組 ⇒ 不動；牌組帶入不寫進「上次選的偏好」
 // 【N4】端到端（兩位玩家＋真的伺服器區塊）：進房後送出的是配對畫面選的先後攻（手動改過的以手動為準）
 // 【N5】直接進對戰：進房後立刻顯示「配對成功！正在進入對戰…」蓋住房間畫面；開局（game 出現）／房間開打／離開房間 ⇒ 拿掉；
-//       60 秒沒開局或自動準備失敗 ⇒ 拿掉遮罩露出房間畫面並提示
+//       60 秒沒開局或自動準備失敗 ⇒ 拿掉遮罩露出房間畫面並提示；房間不見了／建局出錯 ⇒ 立刻拿掉且不蓋掉原本的錯誤；先後攻寫不進 ⇒ 不自動準備；遮罩上可以離開
 // 【N6】說明文字已移除（連樣式也不留）
 // 【H】HEAD-FAIL：BASE（8fd5c54d＝v6.645）上 N1～N6 紅
 import { readFileSync } from 'node:fs';
@@ -20,6 +20,14 @@ import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { makeClock, makeServer, pageBlockJs, makePlayer } from './lib/casual-match-harness.mjs';
+import { build } from 'esbuild';
+import { pathToFileURL } from 'node:url';
+import { writeFileSync, unlinkSync } from 'node:fs';
+// 真的 normalizeDeckCoinPref（唯一判準 src/lib/decks/coin-pref.ts）
+const _CP_O = join(fileURLToPath(new URL('..', import.meta.url)), `.v6646-cp-${process.pid}.mjs`);
+process.on('exit', () => { try { unlinkSync(_CP_O); } catch { /* noop */ } });
+await build({ entryPoints: [join(fileURLToPath(new URL('..', import.meta.url)), 'src/lib/decks/coin-pref.ts')], outfile: _CP_O, bundle: true, format: 'esm', platform: 'node', logLevel: 'error' });
+const { normalizeDeckCoinPref } = await import(pathToFileURL(_CP_O).href);
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '8fd5c54d';
@@ -55,12 +63,12 @@ async function checkBehavior(pageSrc, sapSrc, tag) {
   async function scenario(lastPref) {
     const clock = makeClock();
     const server = makeServer(sapSrc, clock);
-    const shared = { rooms: {}, seq: 0, pollMs, roomName, lastPref };
+    const shared = { rooms: {}, seq: 0, pollMs, roomName, lastPref, normalizeDeckCoinPref };
     const A = await makePlayer(js || '', server, clock, { token: 'tA', email: 'a@x.com', name: '小明' }, shared);
     const B = await makePlayer(js || '', server, clock, { token: 'tB', email: 'b@x.com', name: '小華' }, shared);
     return { clock, server, shared, A, B };
   }
-  if (!js) { for (const k of ['N3', 'N4', 'N5']) ok(`${k}${tag} （腳本區塊不存在）`, false); return; }
+  if (!js) { for (const k of ['N3', 'N4', 'N5', 'N5f', 'N5g', 'N5i', 'N5j']) ok(`${k}${tag} （腳本區塊不存在）`, false); return; }
   // N3
   {
     const { A } = await scenario('opponent');
@@ -68,8 +76,9 @@ async function checkBehavior(pageSrc, sapSrc, tag) {
     A.api.setDeck('d3'); const p1 = A.peek().firstPref;
     A.api.setDeck('d2'); const p2 = A.peek().firstPref;
     A.api.setDeck('d1'); const p3 = A.peek().firstPref;
+    A.api.setDeck('d4'); const p4 = A.peek().firstPref;   // 牌組存的是不合法的值（'opponent' 不是牌組可設的值）⇒ 不動
     ok(`★★★ N3${tag} 預設＝上次手動選的（對手決定）；選偏好後攻的牌組 ⇒ 後攻；選沒設定的 ⇒ 不動；選偏好先攻的 ⇒ 先攻；牌組帶入不記成上次偏好`,
-      p0 === 'opponent' && p1 === 'second' && p2 === 'second' && p3 === 'first' && !A.st.calls.some((c) => c.startsWith('save:')), JSON.stringify({ p0, p1, p2, p3, calls: A.st.calls }));
+      p0 === 'opponent' && p1 === 'second' && p2 === 'second' && p3 === 'first' && p4 === 'first' && !A.st.calls.some((c) => c.startsWith('save:')), JSON.stringify({ p0, p1, p2, p3, p4, calls: A.st.calls }));
   }
   // N4 + N5
   {
@@ -98,6 +107,45 @@ async function checkBehavior(pageSrc, sapSrc, tag) {
     await clock.advance(61000);
     ok(`★★ N5c${tag} 60 秒還沒開局 ⇒ 遮罩拿掉、提示到房間裡手動準備`, !!before && A.peek().overlay === null && /自動開局逾時/.test(A.peek().onlineError), JSON.stringify({ before, after: A.peek() }));
   }
+  // N5e～N5i（審查）：遮罩在各種異常都會拿掉、不蓋掉原本的錯誤、遮罩上可以離開
+  async function entered(opts = {}) {
+    const sc = await scenario('random');
+    Object.assign(sc.shared, opts.shared || {});
+    if (opts.deckFail) sc.A.st.deckFail = true;
+    sc.A.api.setDeck('d1'); sc.B.api.setDeck('d1');
+    await sc.A.api.cmStart(); await sc.B.api.cmStart(); await sc.clock.advance(3100);
+    await sc.A.api.cmAnswer(true); await sc.B.api.cmAnswer(true);
+    await sc.clock.advance(5000);
+    return sc;
+  }
+  {
+    const sc = await entered();
+    const had = !!sc.A.peek().overlay;
+    sc.A.api.setOnlineStep('join'); sc.A.api.runEffects();
+    ok(`★★ N5e${tag} 離開房間（onlineStep 不是 room）⇒ 遮罩拿掉`, had && sc.A.peek().overlay === null);
+    const s2 = await entered();
+    s2.A.api.setRoomGone(true); s2.A.api.runEffects();
+    ok(`★★ N5f${tag} 房間不見了／連線中斷（roomGone）⇒ 遮罩拿掉（審查 P2-2）`, s2.A.peek().overlay === null);
+    const s3 = await entered();
+    s3.A.api.setOnlineError('建局卡住：缺少卡片 id'); s3.A.api.runEffects();
+    const g1 = s3.A.peek().overlay;
+    ok(`★★★ N5g${tag} 建局出錯 ⇒ 遮罩立刻拿掉、露出房間畫面與錯誤（審查 P2-1）`, g1 === null && s3.A.peek().onlineError === '建局卡住：缺少卡片 id', JSON.stringify(s3.A.peek()));
+    // 逾時保險絲本身也不可以蓋掉已有的錯誤（假設 effect 沒來得及跑）
+    const s3b = await entered();
+    s3b.A.api.setOnlineError('建局卡住：缺少卡片 id');
+    await s3b.clock.advance(61000);
+    ok(`★★ N5g2${tag} 60 秒逾時時已經有錯誤 ⇒ 保留原本的錯誤，不用逾時訊息覆寫`, s3b.A.peek().overlay === null && s3b.A.peek().onlineError === '建局卡住：缺少卡片 id', JSON.stringify(s3b.A.peek()));
+    const s4 = await entered({ deckFail: true });
+    ok(`★★ N5h${tag} 牌組沒套上座位 ⇒ 遮罩拿掉、不按準備`, s4.A.peek().overlay === null && s4.A.st.ready === false, JSON.stringify(s4.A.peek()));
+    const s5 = await entered({ shared: { firstFail: true } });
+    ok(`★★★ N5i${tag} 先後攻寫不進座位（重試一次仍失敗）⇒ 不自動準備、遮罩拿掉並提示（不悄悄用隨機開局，審查 P3-3）`, s5.A.peek().overlay === null && s5.A.st.ready === false && /先後攻設定失敗/.test(s5.A.peek().onlineError), JSON.stringify(s5.A.peek()));
+    const s6 = await entered();
+    s6.A.api.leaveOverlay(); await s6.clock.advance(10);
+    ok(`★★ N5j${tag} 遮罩上的「離開」⇒ 拿掉遮罩並離開房間回大廳（審查 P3-4）`, s6.A.peek().overlay === null && s6.A.st.calls.includes('leaveOnlineGame'), JSON.stringify(s6.A.st.calls.slice(-3)));
+    const s7 = await entered();
+    s7.A.api.cmStop(); 
+    ok(`★★ N5k${tag} 結束配對（cmStop）⇒ 遮罩一起拿掉（審查 P3-1）`, s7.A.peek().overlay === null);
+  }
   {
     const { clock, shared, A, B } = await scenario('random');
     shared.readyFail = true;
@@ -123,7 +171,7 @@ else {
   const reds = lines.filter((l) => /FAIL/.test(l)).map((l) => l.trim().slice(5, 30));
   pass = before; fail = fb;
   console.log('    BASE 紅：' + reds.join('｜'));
-  ok('★★★ H1 BASE 上 N1～N6 都紅（前提＝抓得到表單在 BASE 也綠）', ['N1@', 'N2@', 'N3@', 'N4@', 'N5@', 'N5a@', 'N5b@', 'N5c@', 'N6@'].every((k) => reds.some((r) => r.includes(k))) && !reds.some((r) => r.includes('前提')), reds.join(','));
+  ok('★★★ H1 BASE 上 N1～N6 都紅（前提＝抓得到表單在 BASE 也綠）', ['N1@', 'N2@', 'N3@', 'N4@', 'N5@', 'N5a@', 'N5b@', 'N5c@', 'N5f@', 'N5g@', 'N5i@', 'N5j@', 'N6@'].every((k) => reds.some((r) => r.includes(k))) && !reds.some((r) => r.includes('前提')), reds.join(','));
 }
 console.log(`=== v6.646 自動配對先後攻與直接進對戰：${pass} PASS / ${fail} FAIL ===`);
 process.exit(fail ? 1 : 0);

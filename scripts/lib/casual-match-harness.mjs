@@ -66,7 +66,7 @@ export async function pageBlockJs(pageSrc) {
 }
 export async function makePlayer(js, server, clock, me, shared) {
   const st = { effects: [], vis: null, calls: [], seat: null, ready: false, deckSet: null, rooms: shared.rooms, onlineError: '', onlineStep: 'join', roomCode: '', amIHost: false, destroy: null, left: [] };
-  const DECKS = [{ id: 'd1', name: '我的牌組', entries: [{ cardId: '1', count: 60 }], coinPref: 'first' }, { id: 'bad', name: '59張', entries: [{ cardId: '1', count: 59 }] }, { id: 'd2', name: '沒設先後攻', entries: [{ cardId: '1', count: 60 }] }, { id: 'd3', name: '偏好後攻', entries: [{ cardId: '1', count: 60 }], coinPref: 'second' }];
+  const DECKS = [{ id: 'd1', name: '我的牌組', entries: [{ cardId: '1', count: 60 }], coinPref: 'first' }, { id: 'bad', name: '59張', entries: [{ cardId: '1', count: 59 }] }, { id: 'd2', name: '沒設先後攻', entries: [{ cardId: '1', count: 60 }] }, { id: 'd3', name: '偏好後攻', entries: [{ cardId: '1', count: 60 }], coinPref: 'second' }, { id: 'd4', name: '亂值', entries: [{ cardId: '1', count: 60 }], coinPref: 'opponent' }];
   const env = {
     casualMatchAvailable: () => true,
     casualMatchPollMs: shared.pollMs,
@@ -77,7 +77,7 @@ export async function makePlayer(js, server, clock, me, shared) {
     casualMatchLeave: (o) => server.call('leave', me.token),
     casualMatchRoomName: shared.roomName,
     countDeckCards: (en) => en.reduce((s, e) => s + e.count, 0),
-    normalizeDeckCoinPref: (x) => x,
+    normalizeDeckCoinPref: shared.normalizeDeckCoinPref ?? ((x) => x),   // v6.646 起 test-v6646 傳入真的 coin-pref.ts（審查：mock 會讓亂值照單全收）
     casualVerGate: async (k, act) => { st.calls.push('gate:' + k); return false; },
     createRoom: async (name, host, undo, visible, extra) => { const code = 'R' + (++shared.seq) + 'XY'; shared.rooms[code] = { name, host, undo, visible, extra, seats: [{ uid: me.token }, { uid: null }], status: 'lobby' }; server.dbRooms[code] = { status: 'lobby', seats: [{ email: me.email }] }; st.calls.push('createRoom'); if (shared.onCreate) await shared.onCreate(me); return code; },
     joinRoom: async (code, name) => { const r = shared.rooms[code]; if (!r) throw new Error('找不到房間'); const idx = r.seats[1].uid ? 2 : 1; r.seats[idx] = { uid: me.token }; st.calls.push('joinRoom:' + code); return r; },
@@ -91,7 +91,7 @@ export async function makePlayer(js, server, clock, me, shared) {
     _readLastIdle: () => 60,
     _readLastFirstPref: () => (shared.lastPref ?? 'random'),
     _saveFirstPref: (p) => { st.calls.push('save:' + p); },
-    setSeatFirstChoice: async (code, cp) => { st.calls.push('first:' + cp); },
+    setSeatFirstChoice: async (code, cp) => { if (shared.firstFail) throw new Error('寫入失敗'); st.calls.push('first:' + cp); },
     setSeatReady: async (code, v) => { if (shared.readyFail) throw new Error('寫入失敗'); st.ready = v; st.calls.push('ready:' + code); },
     leaveOnlineGame: async () => { st.calls.push('leaveOnlineGame'); st.onlineStep = 'join'; },
     __onDestroy: (f) => { st.destroy = f; },
@@ -104,13 +104,13 @@ export async function makePlayer(js, server, clock, me, shared) {
     let isAnonymous = __anon, myName = __name, myDeckId = '', myOldRooms = [], myUid = null, mode = 'online';
     const allDecks = __decks;
     const __st = __S;
-    let roomData = null, game = null;
+    let roomData = null, game = null, roomGone = false;
     Object.defineProperty(__st, 'roomCodeLive', { get: () => roomCode });
     let roomCode = '', onlineError = '', amIHost = false, onlineStep = 'join';
-    async function handleSetDeck() { __st.deckSet = myDeckId; return true; }
+    async function handleSetDeck() { if (__st.deckFail) return false; __st.deckSet = myDeckId; return true; }
     ${js}
     return {
-      api: { cmStart, cmStop, cmAnswer, setDeck: (id) => { if (typeof cmPickDeck === 'function') cmPickDeck(id); else cmDeckId = id; }, setGame: (g) => { game = g; }, setFirstPref: (v) => { cmFirstPref = v; }, setOnlineStep: (v) => { onlineStep = v; }, setAnon: (v) => { isAnonymous = v; }, setRoomData: (r) => { roomData = r; }, setMode: (m) => { mode = m; }, runEffects: () => { for (const f of __st.effects) f(); } },
+      api: { cmStart, cmStop, cmAnswer, setDeck: (id) => { if (typeof cmPickDeck === 'function') cmPickDeck(id); else cmDeckId = id; }, setGame: (g) => { game = g; }, setFirstPref: (v) => { cmFirstPref = v; }, setOnlineStep: (v) => { onlineStep = v; }, setRoomGone: (v) => { roomGone = v; }, setOnlineError: (v) => { onlineError = v; }, leaveOverlay: () => (typeof cmLeaveFromOverlay === 'function' ? cmLeaveFromOverlay() : null), setAnon: (v) => { isAnonymous = v; }, setRoomData: (r) => { roomData = r; }, setMode: (m) => { mode = m; }, runEffects: () => { for (const f of __st.effects) f(); } },
       peek: () => ({ view: cmView, err: cmError, notice: cmNotice, roomCode, amIHost, onlineStep, onlineError, active: __cmActive(), overlay: typeof cmRoomOverlay === 'undefined' ? undefined : cmRoomOverlay, firstPref: typeof cmFirstPref === 'undefined' ? undefined : cmFirstPref }),
     };`;
   let inst;

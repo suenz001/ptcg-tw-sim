@@ -9464,14 +9464,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (_cp) cmFirstPref = _cp;   // 牌組沒設定 ⇒ 不動；不寫進「上次選的偏好」（同對戰房 v6.599 的裁定）
   }
   function cmShowRoomOverlay(opp: string) {
+    onlineError = '';   // 進場前大廳殘留的錯誤訊息清掉（否則遮罩一出現就被「有錯誤」條件拿掉）
     cmRoomOverlay = { opp, at: Date.now() };
     if (cmOverlayTimer) clearTimeout(cmOverlayTimer);
     // 60 秒還沒開局（例如對方自動準備失敗）⇒ 拿掉遮罩、露出房間畫面讓玩家自己處理
-    cmOverlayTimer = setTimeout(() => { cmOverlayTimer = null; if (cmRoomOverlay) { cmRoomOverlay = null; onlineError = '自動開局逾時，請在房間裡確認牌組並按準備'; } }, 60000);
+    cmOverlayTimer = setTimeout(() => { cmOverlayTimer = null; if (cmRoomOverlay) { cmRoomOverlay = null; if (!onlineError) onlineError = '自動開局逾時，請在房間裡確認牌組並按準備'; } }, 60000);   // 審查 P2-1：已有錯誤訊息就不覆寫（保留真正的原因）
   }
   function cmHideRoomOverlay() { cmRoomOverlay = null; if (cmOverlayTimer) { clearTimeout(cmOverlayTimer); cmOverlayTimer = null; } }
-  // 開局（game 出現）、離開房間、或房間不再是等待中 ⇒ 拿掉遮罩
-  $effect(() => { if (cmRoomOverlay && (game || onlineStep !== 'room' || (roomData && roomData.status !== 'lobby'))) cmHideRoomOverlay(); });
+  // 開局（game 出現）、離開房間、房間不再是等待中、房間不見了、或出現任何錯誤（建局失敗等）⇒ 拿掉遮罩、露出房間畫面（審查 P2-1／P2-2）
+  $effect(() => { if (cmRoomOverlay && (game || onlineStep !== 'room' || roomGone || onlineError || (roomData && roomData.status !== 'lobby'))) cmHideRoomOverlay(); });
+  /** 遮罩上的「離開」：放棄這場、回大廳（審查 P3-4） */
+  function cmLeaveFromOverlay() { cmHideRoomOverlay(); leaveOnlineGame().catch(() => { /* noop */ }); }
   // <<< v6646-automatch-firstpref
   let cmView = $state<CasualMatchView | null>(null);
   let cmBusy = $state(false);
@@ -9549,7 +9552,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const wasActive = cmActive;
     cmGen++; cmClearTimer(); cmRestoreTitle();
     if (cmHostWaitTimer) { clearTimeout(cmHostWaitTimer); cmHostWaitTimer = null; }   // 審查 P2-4：離開頁面時不留殭屍計時器
-    if (cmOverlayTimer) { clearTimeout(cmOverlayTimer); cmOverlayTimer = null; }
+    cmHideRoomOverlay();   // 審查 P3-1：結束配對時遮罩一起拿掉（含計時器）
     cmView = null; cmEntering = false;
     if (wasActive) void casualMatchLeave({ keepalive });
   }
@@ -9570,7 +9573,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
     myDeckId = cmDeckId;
     const ok = await handleSetDeck();
     if (!ok) { cmHideRoomOverlay(); return; }   // 牌組沒套上 ⇒ 露出房間畫面讓玩家處理（handleSetDeck 會寫錯誤訊息）
-    await setSeatFirstChoice(roomCode, cmFirstPref).catch(() => { /* best-effort */ });   // ⭐v6.646 用配對畫面選的先後攻
+    // ⭐v6.646 用配對畫面選的先後攻；失敗重試一次，仍失敗 ⇒ 不自動準備、露出房間畫面（審查 P3-3：不要悄悄用預設的隨機開局）
+    let _fpOk = await setSeatFirstChoice(roomCode, cmFirstPref).then(() => true, () => false);
+    if (!_fpOk) _fpOk = await setSeatFirstChoice(roomCode, cmFirstPref).then(() => true, () => false);
+    if (!_fpOk) { cmHideRoomOverlay(); onlineError = '先後攻設定失敗，請在房間裡確認後按準備'; return; }
     await setSeatReady(roomCode, true).catch((e: any) => { cmHideRoomOverlay(); onlineError = e?.message ?? '自動準備失敗，請手動按準備'; });
   }
   async function cmHostCreate(v: CasualMatchView, gen: number) {
@@ -12328,6 +12334,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <h3 class="modal-drag-handle">⚡ 配對成功！</h3>
           <p class="cm-opp">{cmRoomOverlay.opp}</p>
           <p class="cm-left">正在進入對戰…</p>
+          <div class="form-btns"><button class="btn-sm" onclick={cmLeaveFromOverlay}>離開</button></div>
         </div>
       </div>
     {/if}
@@ -12375,7 +12382,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 {#if cmView?.state === 'searching' || cmView?.state === 'found'}<button class="btn-sm cm-cancel" onclick={() => cmStop()}>取消配對</button>{/if}
               </div>
             {:else if !cmOpen}
-              <button class="btn-create-room-cta cm-cta" onclick={() => { cmOpen = true; cmError = ''; }}>
+              <button class="btn-create-room-cta cm-cta" onclick={() => { cmOpen = true; cmError = ''; if (!cmDeckId) cmFirstPref = _readLastFirstPref(); }}>
                 <span class="cri-icon">⚡</span>
                 <span class="cri-text">
                   <span class="cri-title">自動配對（標準賽）</span>

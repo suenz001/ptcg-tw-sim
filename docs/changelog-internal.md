@@ -6,7 +6,9 @@
 - 牌組選單改成與對戰房座位相同的兩個 optgroup（📁 我的牌組／🎴 內建預組）；原本 allDecks 是預組在前。
 - 先後攻：cmFirstPref（預設 _readLastFirstPref）、四個選項的值與文字與對戰房座位相同；手動選會 _saveFirstPref；cmPickDeck 選牌組時帶入 normalizeDeckCoinPref(deck.coinPref)（沒設定不動、不寫進上次偏好，同 v6.599 裁定）；進房後 setSeatFirstChoice 送 cmFirstPref（原本只送牌組偏好）。
 - 直接進對戰：房間流程本來就是雙方準備好自動開局；本版在進房到開局之間顯示「⚡ 配對成功！正在進入對戰…」遮罩蓋住房間畫面。開局（game 出現）／房間不再是等待中／離開房間 ⇒ 拿掉；60 秒沒開局或自動帶牌組、準備失敗 ⇒ 拿掉並提示，玩家可以在房間畫面自己處理。
-- 守衛 test-v6646（12 條，突變 9 個全殺）；v6.645 的守衛 harness 抽成 scripts/lib/casual-match-harness.mjs 共用。test-v6296 D1 的 v6.645 切段起點改成 v6.646 註解（Rule 40）。
+- Opus 審查（無 P1）修正：P2-1 建局出錯（onlineError）⇒ 遮罩立刻拿掉，逾時保險絲不覆寫既有錯誤；P2-2 房間不見了（roomGone）⇒ 拿掉；P3 cmStop 一併拿掉遮罩、展開配對區塊時重讀上次偏好、先後攻寫不進座位時重試一次仍失敗就不自動準備並提示、遮罩上加「離開」。進場時清掉大廳殘留的錯誤訊息。
+- 審查備註：錦標賽報名的先後攻是三選項下拉（沒有「對手決定」），本版比照對戰房的四選項。
+- 守衛 test-v6646（20 條，突變 17 個全殺；normalizeDeckCoinPref 改用真的 coin-pref.ts）；v6.645 的守衛 harness 抽成 scripts/lib/casual-match-harness.mjs 共用。test-v6296 D1 的 v6.645 切段起點改成 v6.646 註解（Rule 40）。
 
 ## v6.645＋server v1.85 — 休閒線上對戰「⚡ 自動配對」（2026-11-15）
 
