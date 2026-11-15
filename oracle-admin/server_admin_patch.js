@@ -9339,15 +9339,19 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //   回傳形狀與原本 `TREGS.find(...).toArray()` 完全相同（陣列，最多 1 筆）。
     //   ⚠ 失效點寫成 `if (typeof evLastNickInvalidateV183 === 'function') …`：既有守衛會把單一報名端點抽出來實跑（沒有這支 helper），
     //     正式環境一定有定義；快取失效本來就是 best-effort（最壞 60 秒後自己過期）。
+    //   ⭐（審查 P3-1）世代號：查詢在途時若發生失效（例如同時報名），回來的舊結果不寫回快取（避免舊暱稱再被快取 60 秒）。
     const _evLastNickCacheV183 = new Map();
     const EV_LASTNICK_TTL_MS_V183 = 60000;
-    function evLastNickInvalidateV183(uid) { if (uid == null) _evLastNickCacheV183.clear(); else _evLastNickCacheV183.delete(String(uid)); }
+    let _evLastNickGenV183 = 0;
+    function evLastNickInvalidateV183(uid) { _evLastNickGenV183++; if (uid == null) _evLastNickCacheV183.clear(); else _evLastNickCacheV183.delete(String(uid)); }
     async function evLastNickV183(uid) {
       const k = String(uid);
       const now = Date.now();
       const c = _evLastNickCacheV183.get(k);
       if (c && (now - c.at) < EV_LASTNICK_TTL_MS_V183) return c.rows;
+      const gen = _evLastNickGenV183;
       const rows = await TREGS.find({ uid, name: { $nin: [null, ''] } }, { projection: { name: 1, registeredAt: 1 } }).sort({ registeredAt: -1 }).limit(1).toArray();
+      if (gen !== _evLastNickGenV183) return rows;   // 在途期間有失效 ⇒ 這次結果照用，但不快取
       if (_evLastNickCacheV183.size >= 5000) _evLastNickCacheV183.clear();
       _evLastNickCacheV183.set(k, { rows, at: now });
       return rows;
@@ -10950,8 +10954,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const r = await TROOMS.updateOne(filter, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now != null ? now : Date.now() } });
         if (!(r && r.matchedCount === 0)) return true;
       }
-      console.warn('[tournament] v1.83 終局寫房間連續 3 次版本衝突，放棄這次 room=' + roomId);
-      return false;
+      // ⭐（審查 P3-2）結果是確定的、一定要寫成 ⇒ 三次都衝突時最後補一發不帶版本條件、用 $inc 推版本（不會產生重複的版本號）
+      try {
+        const room = await TROOMS.findOne({ _id: roomId });
+        const og = room && room.gameState ? build(room) : null;
+        if (!og) return false;
+        await TROOMS.updateOne({ _id: roomId }, { $set: { gameState: og, updatedAt: now != null ? now : Date.now() }, $inc: { version: 1 } });
+        console.warn('[tournament] v1.83 終局寫房間連續 3 次版本衝突，改用 $inc 強制寫入 room=' + roomId);
+        return true;
+      } catch (e) { return false; }
     }
     // <<< v183-force-gameover-cas
     async function _forceGameOver(m, winSeat, reason) {
@@ -11165,8 +11176,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
       if (wSeat == null) return;
       const winnerUid = doc.seats[wSeat]; const winnerName = (doc.names && doc.names[wSeat]) || '';
       // v0.37 永久快照：把最終盤面 + 逐回合對戰 log 寫進 match 紀錄，供日後 debug（即使房間被清也留得住）。
-      await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid, winnerName, status: 'done',
+      // >>> v183-gameover-claim
+      // ⭐server v1.83（審查 P3-3，既有競態）：比照平手那條路改成條件式搶占——讀到對戰之後，若棄賽／投降／管理員裁定已先把它收掉，
+      //   這裡不可以把結果蓋回、也不可以再推進一次輪次（沒搶到 ⇒ 直接結束）。
+      const _winClaim = await TMATCH.updateOne({ _id: m._id, status: { $ne: 'done' } }, { $set: { winnerUid, winnerName, status: 'done',
         finalLog: Array.isArray(gs.log) ? gs.log : [], finalState: gs, finalWinReason: gs.winReason || null, finalTurn: gs.turn || null, endedAt: Date.now() } });
+      if (!_winClaim || _winClaim.matchedCount !== 1) return;
+      // <<< v183-gameover-claim
       await advanceOrFinish(m, winnerUid, winnerName);
     }
 
@@ -11425,7 +11441,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const wUid = winSeat === 0 ? m.p1uid : m.p2uid, wName = winSeat === 0 ? m.p1name : m.p2name;
         const lName = mySeat === 0 ? m.p1name : m.p2name;
         await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', forfeit: true, endedAt: Date.now() } });   // ⭐v1.65 endedAt：賽程表顯示對局時間
-        if (m.roomId) { try { const room = await TROOMS.findOne({ _id: m.roomId }); if (room && room.gameState) { const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = (lName || '對手') + ' 投降，' + wName + ' 勝'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: Date.now() } }); } } catch (e) { /* best-effort */ } }
+        if (m.roomId) { try { await forceRoomGameOverV183(m.roomId, (room) => { const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = (lName || '對手') + ' 投降，' + wName + ' 勝'; return og; }, Date.now()); } catch (e) { /* best-effort */ } }   // ⭐v1.83（審查 P2-1）版本 CAS＋重試
         await postSystemChat('🏳 ' + (lName || '一方') + ' 投降，' + wName + ' 獲勝。');
         await advanceOrFinish(m, wUid, wName);
         res.json({ ok: true });
@@ -11515,7 +11531,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const wUid = winnerSeat === 0 ? m.p1uid : m.p2uid, wName = winnerSeat === 0 ? m.p1name : m.p2name;
         if (!wUid) return res.status(400).json({ error: '該座位無玩家，無法判勝' });
         await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', adminResolved: true, endedAt: Date.now() } });   // ⭐v1.65 endedAt
-        if (m.roomId) { try { const room = await TROOMS.findOne({ _id: m.roomId }); if (room && room.gameState) { const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winnerSeat; og.winReason = '管理員裁定：' + wName + ' 勝'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: Date.now() } }); } } catch (e) { /* best-effort */ } }
+        if (m.roomId) { try { await forceRoomGameOverV183(m.roomId, (room) => { const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winnerSeat; og.winReason = '管理員裁定：' + wName + ' 勝'; return og; }, Date.now()); } catch (e) { /* best-effort */ } }   // ⭐v1.83（審查 P2-1）版本 CAS＋重試
         await postSystemChat('⚖️ 管理員裁定：' + wName + ' 獲勝。');
         await advanceOrFinish(m, wUid, wName);
         res.json({ ok: true });

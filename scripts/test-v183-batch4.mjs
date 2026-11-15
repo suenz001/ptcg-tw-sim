@@ -50,6 +50,18 @@ async function checkN(src, tag) {
     n2ok = afterOne === before + 1 && afterAll === afterOne + 1 && api._evLastNickCacheV183.size <= 2;
   }
   ok(`★★ N2${tag} 失效：只清指定的人；null 整個清空；超過 5000 人整個清空`, n2ok);
+  let n5 = false;
+  if (blk) {
+    let release; const gate = new Promise((r) => { release = r; }); let nq = 0;
+    const T2 = { find: () => ({ sort: () => ({ limit: () => ({ toArray: async () => { nq++; await gate; return [{ name: 'OLD' }]; } }) }) }) };
+    const api2 = new Function('TREGS', 'Date', blk + '\nreturn { evLastNickV183, evLastNickInvalidateV183, _evLastNickCacheV183 };')(T2, { now: () => 1 });
+    const pr = api2.evLastNickV183('u9');
+    api2.evLastNickInvalidateV183('u9');
+    release();
+    const got = await pr;
+    n5 = got[0].name === 'OLD' && !api2._evLastNickCacheV183.has('u9') && nq === 1;
+  }
+  ok(`★★ N5${tag} 查詢在途時有人報名（失效）⇒ 這次結果照回，但不寫回快取`, n5);
   const q0 = q[0] || {};
   ok(`★★ N3${tag} 查詢條件與原本逐字相同（排除空暱稱、只投影 name/registeredAt、新到舊、取 1）`, JSON.stringify(q0.f) === JSON.stringify({ uid: 'u1', name: { $nin: [null, ''] } }) && JSON.stringify(q0.o) === JSON.stringify({ projection: { name: 1, registeredAt: 1 } }) && JSON.stringify(q0.s) === JSON.stringify({ registeredAt: -1 }) && q0.n === 1, JSON.stringify(q0));
   const useOk = /evLastNickV183\(id\.uid\),/.test(src) && !/TREGS\.find\(\{ uid: id\.uid, name: \{ \$nin: \[null, ''\] \} \}/.test(src);
@@ -59,6 +71,11 @@ async function checkN(src, tag) {
     const end = l.includes('insertOne({') && !l.includes('});') ? lines.findIndex((x, k) => k > i && /^\s*\}\);/.test(x)) : i;
     return !/^\s*if \(typeof evLastNickInvalidateV183 === 'function'\) evLastNickInvalidateV183\(/.test(lines[end + 1] || '');
   }).map(([l]) => l.trim().slice(0, 70));
+  // N6（審查 P3-4）：TREGS 的 update 若改到 name 或 registeredAt，也必須緊接失效（目前一處都沒有；防將來新增漏接）
+  const upd = lines.map((l, i) => [l, i]).filter(([l]) => /await TREGS\.update(One|Many)\(/.test(l) && /\$set: \{[^}]*\b(name|registeredAt):/.test(l));
+  const updMiss = upd.filter(([, i]) => !/evLastNickInvalidateV183\(/.test(lines[i + 1] || ''));
+  const scanned = lines.filter((l) => /await TREGS\.update(One|Many)\(/.test(l)).length;
+  ok(`★ N6${tag} TREGS 的 update 改到 name／registeredAt 也要緊接失效（掃了 ${scanned} 處 update，改暱稱的 ${upd.length} 處）`, scanned >= 3 && updMiss.length === 0, JSON.stringify(updMiss.map(([l]) => l.trim().slice(0, 80))));
   ok(`★★★ N4${tag} /event 改用快取；所有 TREGS 報名寫入／刪除點後面緊接失效（共 ${writeIdx.length} 處）`, useOk && writeIdx.length >= 6 && missing.length === 0, JSON.stringify({ useOk, missing }));
 }
 
@@ -80,17 +97,22 @@ async function checkF(src, tag) {
   rooms = [{ version: 5, gameState: { phase: 'playing', turn: 3 } }, { version: 6, gameState: { phase: 'playing', turn: 4 } }]; writes = []; miss = 1;
   const b = await F('R', build, 1);
   ok(`★★★ F2${tag} 被玩家動作搶先（沒命中）⇒ 重讀新盤面再寫（版本 6→7、turn 4）`, b === true && writes.length === 2 && writes[1].f.version === 6 && writes[1].u.$set.version === 7 && writes[1].u.$set.gameState.turn === 4, JSON.stringify(writes));
-  rooms = [1, 2, 3, 4].map((v) => ({ version: v, gameState: { phase: 'playing' } })); writes = []; miss = 9;
+  rooms = [1, 2, 3, 4].map((v) => ({ version: v, gameState: { phase: 'playing' } })); writes = []; miss = 3;
   const c = await F('R', build, 1);
-  ok(`★★ F3${tag} 連續 3 次衝突 ⇒ 放棄（回 false、印一行警告、不會無限重試）`, c === false && writes.length === 3 && warns.length === 1, JSON.stringify({ c, w: writes.length }));
+  const last = writes[writes.length - 1] || {};
+  ok(`★★ F3${tag} 連續 3 次衝突 ⇒ 最後補一發不帶版本條件、用 $inc 推版本（結果一定寫成、不產生重複版本號），印一行警告`, c === true && writes.length === 4 && !('version' in (last.f || {})) && last.u && last.u.$inc && last.u.$inc.version === 1 && !('version' in last.u.$set) && last.u.$set.gameState.phase === 'game-over' && warns.length === 1, JSON.stringify({ c, w: writes.length, last }));
   rooms = [{ version: 5, gameState: { phase: 'game-over' } }]; writes = []; miss = 0;
   const d = await F('R', () => null, 1);
   rooms = [{ gameState: { phase: 'playing' } }]; writes = []; miss = 0;
   const e = await F('R', build, 1);
   ok(`★★ F4${tag} build 回 null ⇒ 不寫；舊房間沒有 version ⇒ 不加版本條件、寫 2`, d === false && e === true && writes.length === 1 && !('version' in writes[0].f) && writes[0].u.$set.version === 2, JSON.stringify(writes));
   const fgo = (() => { const i = src.indexOf('    async function _forceGameOver(m, winSeat, reason) {'); const j = src.indexOf('\n    }\n', i); return i >= 0 && j > i ? src.slice(i, j) : ''; })();
-  const nsLine = src.split('\n').find((l) => l.includes("未進場，判定你獲勝")) || '';
-  ok(`★★★ F5${tag} _forceGameOver 與未進場判負都走 forceRoomGameOverV183，不再有無條件整包寫回`, /forceRoomGameOverV183\(m\.roomId,/.test(fgo) && !/TROOMS\.updateOne/.test(fgo) && /forceRoomGameOverV183\(m\.roomId,/.test(nsLine) && !/TROOMS\.updateOne/.test(nsLine), JSON.stringify({ fgo: fgo.length, ns: nsLine.slice(0, 120) }));
+  const lineOf = (needle) => src.split('\n').find((l) => l.includes(needle)) || '';
+  const sites = { noShow: lineOf('未進場，判定你獲勝'), forfeit: lineOf("og.winReason = (lName || '對手') + ' 投降"), admin: lineOf("og.winReason = '管理員裁定：' + wName") };
+  const bad = Object.entries(sites).filter(([, l]) => !/forceRoomGameOverV183\(m\.roomId,/.test(l) || /TROOMS\.updateOne/.test(l)).map(([k]) => k);
+  ok(`★★★ F5${tag} 棄賽、未進場、投降、管理員裁定四處都走 forceRoomGameOverV183，不再有無條件整包寫回`, /forceRoomGameOverV183\(m\.roomId,/.test(fgo) && !/TROOMS\.updateOne/.test(fgo) && bad.length === 0, JSON.stringify({ fgo: fgo.length, bad }));
+  const cl = blockOf(src, 'v183-gameover-claim');
+  ok(`★★★ G1${tag} onMatchGameOver 一般勝負：對戰紀錄只在還沒結束時寫（status ≠ done），沒搶到就不推進`, /TMATCH\.updateOne\(\{ _id: m\._id, status: \{ \$ne: 'done' \} \}/.test(cl) && /if \(!_winClaim \|\| _winClaim\.matchedCount !== 1\) return;/.test(cl), cl.slice(0, 200));
 }
 
 async function checkC(src, tag) {
@@ -136,7 +158,7 @@ else {
   const reds = lines.filter((l) => /FAIL/.test(l)).map((l) => l.trim().slice(5, 30));
   const bpass = pass - before; pass = before; fail = fb;
   console.log('    BASE 紅：' + reds.join('｜'));
-  ok('★★★ H1 BASE 上 N1～N4、F1～F5、C1、W1 逐條紅', ['N1', 'N2', 'N3', 'N4', 'F1', 'F2', 'F3', 'F4', 'F5', 'C1', 'W1'].every((k) => reds.some((r) => r.includes(k + '@BASE'))), reds.join(','));
+  ok('★★★ H1 BASE 上 N1～N5、F1～F5、G1、C1、W1 逐條紅', ['N1', 'N2', 'N3', 'N4', 'N5', 'F1', 'F2', 'F3', 'F4', 'F5', 'G1', 'C1', 'W1'].every((k) => reds.some((r) => r.includes(k + '@BASE'))), reds.join(','));
   ok('★★ H2 BASE 上 W2 綠（正對照：tForceResync 其他呼叫點本來就在）', !reds.some((r) => r.includes('W2@BASE')) && bpass >= 1, reds.join(','));
 }
 console.log(`=== server v1.83／v6.643 擴容第四批：${pass} PASS / ${fail} FAIL ===`);

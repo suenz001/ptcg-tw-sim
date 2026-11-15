@@ -134,8 +134,8 @@ const TEV_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
 const OLD_TAIL_SHA = '34a8448b7de92a1f9a3a30c02c01ecd274409e1520fcc73fe5e92d6da47cc12c';
 const OLD_TEV_SHA = '54cd122681c99f050eadf22e7823159bc5f40ecbc88118f49e5de88cb683b196';
 const OLD_TEV_LEN = 218193;
-const NEW_TAIL_SHA = 'fb17bf4008f4da0819d41b80d145ff57842c930c7ff2a0cd0b7fae94621cdc75';
-const NEW_TEV_SHA = 'a6532852bff23f35b4360832091a849a0c12dcce86662e63b39bce9a285db9f9';
+const NEW_TAIL_SHA = '419cc4a0b635827653a7c8d64f6a255cba9811056340e8e28627c644f320c549';
+const NEW_TEV_SHA = '2aebe3b998628e082d9978978e7ff09445bc855ad5b5a57065d81d839845aa50';
 
 console.log('\n══ 【A】結構（每一條在 BASE v6.275 上都必須紅，見【H】）═══════════════════');
 
