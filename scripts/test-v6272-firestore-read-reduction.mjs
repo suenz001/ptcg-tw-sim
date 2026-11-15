@@ -670,7 +670,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '9e5510bcda894457d830ced3e8b76aa96bbd1898';   // v6.643（上一版）
+const PREV_SHA = 'b3fa288d03e7a9ade6fda7e582d0b33d38504935';   // v6.644（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -759,18 +759,12 @@ const PREV_SHA = '9e5510bcda894457d830ced3e8b76aa96bbd1898';   // v6.643（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.644 前移：PREV_SHA 從 9e5510bc（v6.643）起算。
+  // ⚠⚠ v6.645 前移：PREV_SHA 從 b3fa288d（v6.644）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.644：v6.644 牌庫搜尋選擇區與 validIids 取交集（deckSearchVisible）、openDeckViewReshuffle 宣告 validIids []、三處 inline 收斂、消毒閘先判上限
-  'src/lib/game/effects/_shared.ts',
-  'src/lib/game/effects/cards/m6a_wave4.ts',   // ⭐v6.644 站長裁定：整人變身先檢視
-  'src/lib/game/effects/cards/v2401_i_wave2_draw_swap_search.ts',
-  'src/lib/game/effects/cards/v2402_mega_gardevoir.ts',
-  'src/lib/game/effects/cards/v2550_i_wave5_meta.ts',
-  'src/lib/game/effects/cards/v2620_i_wave12_misc5.ts',   // ⭐v6.644 站長裁定：籌備／築窩先檢視
-  'src/lib/game/engine.ts',
-  'src/lib/game/selection-candidates.ts',
-  'src/lib/game/selection-filter.ts',   // ⭐v6.644 審查 P2-1：中央 TOP_N 述詞
+  // ⭐v6.645：v6.645 休閒線上自動配對（新模組 casual-match/match-api.ts、+page.svelte 大廳入口與流程、兩套房間模組 autoMatch 旗標；搭配 server v1.85）
+  'src/lib/casual-match/match-api.ts',
+  'src/lib/game/room-oracle.ts',
+  'src/lib/game/room.ts',
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
@@ -778,6 +772,25 @@ const PREV_ALLOWED = [
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.644）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.644 前移：PREV_SHA 從 9e5510bc（v6.643）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.644：v6.644 牌庫搜尋選擇區與 validIids 取交集（deckSearchVisible）、openDeckViewReshuffle 宣告 validIids []、三處 inline 收斂、消毒閘先判上限
+//   'src/lib/game/effects/_shared.ts',
+//   'src/lib/game/effects/cards/m6a_wave4.ts',   // ⭐v6.644 站長裁定：整人變身先檢視
+//   'src/lib/game/effects/cards/v2401_i_wave2_draw_swap_search.ts',
+//   'src/lib/game/effects/cards/v2402_mega_gardevoir.ts',
+//   'src/lib/game/effects/cards/v2550_i_wave5_meta.ts',
+//   'src/lib/game/effects/cards/v2620_i_wave12_misc5.ts',   // ⭐v6.644 站長裁定：籌備／築窩先檢視
+//   'src/lib/game/engine.ts',
+//   'src/lib/game/selection-candidates.ts',
+//   'src/lib/game/selection-filter.ts',   // ⭐v6.644 審查 P2-1：中央 TOP_N 述詞
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.643）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.643 前移：PREV_SHA 從 a01413b7（v6.642）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -902,18 +915,6 @@ const PREV_ALLOWED = [
 //   'src/lib/game/effects.ts',
 //   'src/lib/game/effects/cards/m6a_wave4.ts',
 //   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.631）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.631 前移：PREV_SHA 從 797f0435（v6.630）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.631：img-retry 卡住看門狗（只對外部卡圖、背景不計時）與額度用完切回前景再試；牌組頁觸控分支與頂端列明暗鈕的表情符號圖示彈性置中；首頁 changelog 三步搬運
-//   'src/lib/SiteTopBar.svelte',
-//   'src/lib/img-retry.ts',
-//   'src/lib/version.ts',
-//   'src/routes/decks/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
 //   'static/changelog.html',

@@ -222,6 +222,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
     clearUndoRequest as clearUndoRequestApi,
     type Room, type Seat, type ChatMessage,
   } from '$lib/game/room';
+  import { casualMatchAvailable, casualMatchPollMs, casualMatchJoin, casualMatchPoll, casualMatchAccept, casualMatchReportRoom, casualMatchLeave, casualMatchRoomName, type CasualMatchView } from '$lib/casual-match/match-api';   // ⭐v6.645 自動配對
   // ⭐v6.525 回到我之前的房間（中央模組）
   import { myRoomsFromList, mergeMyOldRooms, fetchMyCasualRoom, reclaimCasualSeat, releasableOldRooms, type MyOldRoom } from '$lib/game/casual-reclaim';
   import { getAIAction } from '$lib/game/ai';
@@ -9387,6 +9388,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   async function handleCreateRoomCommit() {
     if (!myName.trim()) { onlineError = '請輸入玩家名稱'; return; }
     if (!roomNameInput.trim()) { onlineError = '請輸入房間名稱'; return; }
+    if (typeof cmActive !== 'undefined' && cmActive) cmStop();   // ⭐v6.645 自己開房／進房 ⇒ 取消自動配對（typeof：守衛會單獨抽這支函式實跑）
     onlineLoading = true; onlineError = '';
     try {
       // v4.75：傳 allowUndo 旗標決定是否為練習房
@@ -9421,6 +9423,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   async function handleJoinRoomCommit() {
     if (!myName.trim()) { onlineError = '請輸入玩家名稱'; return; }
     if (!joinInput.trim()) { onlineError = '請輸入房號'; return; }
+    if (typeof cmActive !== 'undefined' && cmActive) cmStop();   // ⭐v6.645 自己開房／進房 ⇒ 取消自動配對（typeof：守衛會單獨抽這支函式實跑）
     onlineLoading = true; onlineError = '';
     try {
       // ⭐v6.525（Fable 審查 P1-1）：伺服器說這間是「我 email 的房」⇒ 先把座位認回現在的身分再進房。
@@ -9442,6 +9445,164 @@ function _setupSelfPending(g: any, seat: number): string | null {
     } catch(e: any) { onlineError = e.message ?? '加入房間失敗'; }
     finally { onlineLoading = false; }
   }
+
+  // >>> v6645-casual-automatch
+  // ⭐v6.645 休閒線上對戰「⚡ 自動配對」（站長 2026-11-15）。前端 API 與流程說明在 $lib/casual-match/match-api.ts；伺服器是 server v1.85。
+  //   只做標準賽（伺服器跑錦標賽報名同一支檢查）、配對成功要雙方按接受、開出來的房開放觀戰、限定登入玩家。
+  //   進房後沿用既有流程：自動帶入牌組（handleSetDeck）＋按準備 ⇒ 雙方都準備好就自動開局。
+  const cmAvailable = casualMatchAvailable();
+  let cmOpen = $state(false);              // 「自動配對」區塊展開
+  let cmDeckId = $state('');               // 配對用的牌組
+  let cmView = $state<CasualMatchView | null>(null);
+  let cmBusy = $state(false);
+  let cmError = $state('');
+  let cmNotice = $state('');
+  let cmGen = 0;                            // 輪詢世代號：停止／重新開始時 +1，舊的計時器自動作廢
+  let cmTimer: ReturnType<typeof setTimeout> | null = null;
+  let cmHostWaitTimer: ReturnType<typeof setTimeout> | null = null;
+  let cmEntering = false;                   // 正在建房／進房（只做一次）
+  let cmOrigTitle: string | null = null;   // 「找到對手」時暫存原本的分頁標題
+  const cmActive = $derived(!!cmView && cmView.state !== 'idle' && cmView.state !== 'hosting' && cmView.state !== 'join');
+  function cmClearTimer() { if (cmTimer) { clearTimeout(cmTimer); cmTimer = null; } }
+  function cmSchedule(gen: number) {
+    cmClearTimer();
+    const ms = casualMatchPollMs(cmView?.state ?? 'idle');
+    if (!ms) return;
+    cmTimer = setTimeout(async () => {
+      if (gen !== cmGen) return;
+      const r = await casualMatchPoll();
+      if (gen !== cmGen) return;
+      if (!r.ok) { cmError = r.message; cmSchedule(gen); return; }   // 網路抖一下 ⇒ 下一輪再試
+      cmApply(r.view, gen);
+    }, ms);
+  }
+  function cmApply(v: CasualMatchView, gen: number) {
+    if (gen !== cmGen) return;
+    cmError = '';
+    if (v.notice) cmNotice = v.notice;
+    const prev = cmView?.state;
+    cmView = v;
+    // 找到對手時分頁標題提示（切到別的分頁也看得到）；離開這個狀態就還原
+    if (v.state === 'found' && prev !== 'found') { try { cmOrigTitle = document.title; document.title = '⚡ 找到對手！'; } catch { /* noop */ } }
+    if (v.state !== 'found' && cmOrigTitle !== null) { try { document.title = cmOrigTitle; } catch { /* noop */ } cmOrigTitle = null; }
+    if (v.state === 'idle' && prev && prev !== 'idle') { cmGen++; cmClearTimer(); if (!v.notice) cmNotice = '配對已中斷，請重新開始'; return; }
+    if (v.state === 'host' && !cmEntering) { void cmHostCreate(v, gen); return; }
+    if (v.state === 'join' && v.roomCode && !cmEntering) { void cmGuestJoin(v.roomCode, gen); return; }
+    cmSchedule(gen);
+  }
+  async function cmStart() {
+    if (cmBusy) return;
+    cmError = ''; cmNotice = '';
+    if (isAnonymous) { cmError = '自動配對限定登入的玩家使用，請先登入'; return; }
+    if (!myName.trim()) { cmError = '請輸入玩家名稱'; return; }
+    const deck = allDecks.find((d) => d.id === cmDeckId);
+    if (!deck) { cmError = '請先選擇牌組'; return; }
+    if (countDeckCards(deck.entries) !== 60) { cmError = '牌組必須剛好 60 張'; return; }
+    cmBusy = true;
+    try {
+      if (await casualVerGate('automatch', cmStartCommit)) return;   // 舊版玩家先提示更新（同建房／加入）
+    } finally { cmBusy = false; }
+    await cmStartCommit();
+  }
+  async function cmStartCommit() {
+    const deck = allDecks.find((d) => d.id === cmDeckId);
+    if (!deck) { cmError = '請先選擇牌組'; return; }
+    cmBusy = true;
+    try {
+      const gen = ++cmGen;
+      cmEntering = false;
+      const r = await casualMatchJoin(deck.entries, deck.name, myName.trim());
+      if (gen !== cmGen) return;
+      if (!r.ok) { cmError = r.message; cmView = null; return; }
+      cmApply(r.view, gen);
+    } finally { cmBusy = false; }
+  }
+  /** 取消配對（按鈕、離開頁面）。 */
+  function cmRestoreTitle() { if (cmOrigTitle !== null) { try { document.title = cmOrigTitle; } catch { /* noop */ } cmOrigTitle = null; } }
+  function cmStop(keepalive = false) {
+    const wasActive = cmActive;
+    cmGen++; cmClearTimer(); cmRestoreTitle();
+    cmView = null; cmEntering = false;
+    if (wasActive) void casualMatchLeave({ keepalive });
+  }
+  async function cmAnswer(accept: boolean) {
+    const v = cmView;
+    if (!v || v.state !== 'found' || !v.matchId) return;
+    const gen = cmGen;
+    const r = await casualMatchAccept(v.matchId, accept);
+    if (gen !== cmGen) return;
+    if (!accept) { cmGen++; cmClearTimer(); cmRestoreTitle(); cmView = null; cmNotice = '已拒絕這次配對'; return; }
+    if (!r.ok) { cmError = r.message; cmSchedule(gen); return; }
+    cmApply(r.view, gen);
+  }
+  /** 進房後：帶入配對用的牌組（含牌組的先後攻偏好）並按準備 ⇒ 既有流程在雙方都準備好時自動開局。 */
+  async function cmSeatReady() {
+    if (!roomCode) return;
+    myDeckId = cmDeckId;
+    const ok = await handleSetDeck();
+    if (!ok) return;
+    const _cp = normalizeDeckCoinPref(allDecks.find((d) => d.id === cmDeckId)?.coinPref);
+    if (_cp) await setSeatFirstChoice(roomCode, _cp).catch(() => { /* best-effort */ });
+    await setSeatReady(roomCode, true).catch((e: any) => { onlineError = e?.message ?? '自動準備失敗，請手動按準備'; });
+  }
+  async function cmHostCreate(v: CasualMatchView, gen: number) {
+    cmEntering = true;
+    try {
+      const _oldRooms = myOldRooms.slice();
+      const code = await createRoom(casualMatchRoomName(myName.trim(), v.opponentNick ?? ''), myName.trim(), false, true, { autoMatch: true });
+      if (gen !== cmGen) { leaveRoom(code).catch(() => { /* noop */ }); return; }
+      const r = await casualMatchReportRoom(v.matchId ?? '', code);
+      if (!r.ok || r.view.state !== 'hosting') {
+        // 配對在這段時間失效（對手取消、逾時）⇒ 把剛開的房收掉，交給伺服器回的狀態（通常是回到佇列）
+        leaveRoom(code).catch(() => { /* noop */ });
+        cmEntering = false;
+        if (r.ok) { cmApply(r.view, gen); } else { cmError = r.message; cmSchedule(gen); }
+        return;
+      }
+      cmView = r.view;
+      releaseOldLobbyRooms(_oldRooms, code);
+      roomCode = code;
+      amIHost = true;
+      onlineStep = 'room';
+      startRoomSubscription();
+      setIdleTimeout(roomCode, _readLastIdle()).catch(() => { /* best-effort */ });
+      await cmSeatReady();
+      // 對手 45 秒內沒進房 ⇒ 收掉這間房，請玩家重新配對
+      if (cmHostWaitTimer) clearTimeout(cmHostWaitTimer);
+      const _code = code;
+      cmHostWaitTimer = setTimeout(() => {
+        cmHostWaitTimer = null;
+        if (roomCode !== _code || roomData?.status !== 'lobby' || roomData?.seats?.[1]?.uid) return;
+        leaveOnlineGame().catch(() => { /* noop */ });
+        onlineError = '對手沒有進房，已取消這次配對，可以重新開始自動配對';
+      }, 45000);
+    } catch (e: any) {
+      cmEntering = false;
+      cmError = e?.message ?? '建立房間失敗';
+      cmStop();
+    }
+  }
+  async function cmGuestJoin(code: string, gen: number) {
+    cmEntering = true;
+    let lastErr = '';
+    for (let i = 0; i < 3; i++) {
+      if (gen !== cmGen) return;
+      try {
+        await joinRoom(code, myName.trim());
+        roomCode = code;
+        amIHost = false;
+        onlineStep = 'room';
+        startRoomSubscription();
+        await cmSeatReady();
+        return;
+      } catch (e: any) { lastErr = e?.message ?? '加入房間失敗'; await new Promise((r) => setTimeout(r, 1000)); }
+    }
+    cmEntering = false;
+    cmError = '進房失敗：' + lastErr;
+    cmStop();
+  }
+  onDestroy(() => cmStop(true));
+  // <<< v6645-casual-automatch
 
   // v2.73 殭屍房間心跳機制：玩家在房內時每 15s 寫 lastSeenAt 到 Firestore
   function startHeartbeat() {
@@ -12099,6 +12260,25 @@ function _setupSelfPending(g: any, seat: number): string | null {
       </div>
     {/if}
 
+    <!-- ⭐v6.645 自動配對：找到對手 ⇒ 雙方 15 秒內按接受 -->
+    {#if cmView?.state === 'found'}
+      <div class="cm-found-backdrop" role="dialog" aria-modal="true" aria-label="找到對手">
+        <div class="cm-found">
+          <h3>⚡ 找到對手！</h3>
+          <p class="cm-opp">{cmView.opponentNick}</p>
+          <p class="cm-left">剩下 {Math.ceil((cmView.msLeft ?? 0) / 1000)} 秒</p>
+          {#if cmView.accepted}
+            <p class="cm-text">已接受，等待對手接受…</p>
+          {:else}
+            <div class="form-btns">
+              <button class="btn-primary" onclick={() => cmAnswer(true)}>接受</button>
+              <button class="btn-sm" onclick={() => cmAnswer(false)}>拒絕</button>
+            </div>
+          {/if}
+        </div>
+      </div>
+    {/if}
+
     {#if onlineStep === 'join' || onlineStep === 'choose' || onlineStep === 'create'}
       {#if lobbyTab === 'online'}
       <!-- v5.008：統一大廳頁面 — 建立 / 加入 / 房間列表 合併單頁顯示 -->
@@ -12107,6 +12287,57 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <span class="name-label">玩家名稱</span>
           <input class="name-input" placeholder="輸入你的名稱" aria-label="你的名稱" bind:value={myName} />
         </label>
+
+        <!-- ⭐v6.645 自動配對（標準賽）：只有正式站（有連線對戰伺服器）才顯示；限定登入玩家 -->
+        {#if cmAvailable}
+          <div class="cm-block" class:expanded={cmOpen || cmActive}>
+            {#if cmActive}
+              <div class="cm-status">
+                {#if cmView?.state === 'searching'}
+                  <span class="cm-spin">⚡</span>
+                  <span class="cm-text">搜尋對手中… 已等待 {Math.floor((cmView.waitedMs ?? 0) / 1000)} 秒{#if (cmView.waitingCount ?? 0) > 1}（目前 {cmView.waitingCount} 人在配對）{/if}</span>
+                {:else if cmView?.state === 'found'}
+                  <span class="cm-text">找到對手：<b>{cmView.opponentNick}</b>{cmView.accepted ? '，等待對手接受…' : ''}</span>
+                {:else}
+                  <span class="cm-text">配對成功（對手：<b>{cmView?.opponentNick}</b>），正在建立房間…</span>
+                {/if}
+                <button class="btn-sm cm-cancel" onclick={() => cmStop()}>取消配對</button>
+              </div>
+            {:else if !cmOpen}
+              <button class="btn-create-room-cta cm-cta" onclick={() => { cmOpen = true; cmError = ''; }}>
+                <span class="cri-icon">⚡</span>
+                <span class="cri-text">
+                  <span class="cri-title">自動配對（標準賽）</span>
+                  <span class="cri-sub">選好牌組就幫你找對手，雙方接受後自動開房對戰（限登入玩家）</span>
+                </span>
+                <span class="cri-chevron">▾</span>
+              </button>
+            {:else}
+              <div class="create-room-inline">
+                <div class="cri-header">
+                  <h3>⚡ 自動配對（標準賽）</h3>
+                  <button class="btn-link cri-collapse" onclick={() => { cmOpen = false; cmError = ''; }} title="收合">▴ 收合</button>
+                </div>
+                {#if isAnonymous}
+                  <p class="warn">自動配對限定登入的玩家使用，請先登入。</p>
+                {:else}
+                  <label>使用牌組
+                    <select class="name-input" bind:value={cmDeckId}>
+                      <option value="">— 選擇牌組 —</option>
+                      {#each allDecks as d (d.id)}<option value={d.id}>{d.name}</option>{/each}
+                    </select>
+                  </label>
+                  <p class="cm-hint">只開放標準賽合法的牌組。找到對手後請在 15 秒內按「接受」；配對開的房間開放觀戰。</p>
+                  <div class="form-btns">
+                    <button class="btn-primary" onclick={cmStart} disabled={cmBusy || !cmDeckId}>{cmBusy ? '準備中…' : '開始配對'}</button>
+                  </div>
+                {/if}
+              </div>
+            {/if}
+            {#if cmError}<p class="warn">{cmError}</p>{/if}
+            {#if cmNotice && !cmError}<p class="cm-notice">{cmNotice}</p>{/if}
+          </div>
+        {/if}
 
         <!-- 建立新房間：折疊式 inline 表單（預設收合，點按鈕展開）-->
         <div class="create-room-block" class:expanded={showCreateForm}>
@@ -17617,6 +17848,23 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .btn-create-room-cta .cri-title{ font-size:1rem; font-weight:700; color:#aaffaa; }
   .btn-create-room-cta .cri-sub{ font-size:.78rem; color:#bcd; }
   .btn-create-room-cta .cri-chevron{ font-size:1.2rem; color:#aaffaa; }
+  /* ⭐v6.645 自動配對 */
+  .cm-block{ display:flex; flex-direction:column; gap:.4rem; margin-bottom:.6rem; }
+  .cm-block .cm-cta{ width:100%; background:linear-gradient(135deg,#2a3f6a 0%,#1c2a4a 100%); border-color:#4a6aa8; }
+  .cm-block .cm-cta:hover{ background:linear-gradient(135deg,#34508a 0%,#22345c 100%); }
+  .cm-block .cm-cta .cri-title, .cm-block .cm-cta .cri-chevron{ color:#bcd6ff; }
+  .cm-status{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; padding:.7rem .9rem; border:1px solid #4a6aa8; border-radius:10px; background:#16223a; color:#e8eefc; }
+  .cm-status .cm-text{ flex:1; min-width:12rem; }
+  .cm-spin{ display:inline-block; animation:cm-pulse 1.2s ease-in-out infinite; font-size:1.2rem; }
+  @keyframes cm-pulse{ 0%,100%{ opacity:.45; } 50%{ opacity:1; } }
+  .cm-hint{ font-size:.78rem; color:#9ab; margin:.2rem 0 .4rem; }
+  .cm-notice{ font-size:.85rem; color:#ffd88a; margin:0; }
+  .cm-found-backdrop{ position:fixed; inset:0; z-index:9000; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.6); padding:16px; }
+  .cm-found{ background:#18243c; border:2px solid #6a8ad8; border-radius:14px; padding:1.2rem 1.4rem; max-width:22rem; width:100%; text-align:center; color:#f0f4ff; box-shadow:0 10px 40px rgba(0,0,0,.5); }
+  .cm-found h3{ margin:0 0 .4rem; font-size:1.25rem; }
+  .cm-found .cm-opp{ font-size:1.15rem; font-weight:700; color:#ffe28a; margin:.2rem 0; word-break:break-all; }
+  .cm-found .cm-left{ font-size:.85rem; color:#9ab; margin:.2rem 0 .8rem; }
+  .cm-found .form-btns{ display:flex; gap:.6rem; justify-content:center; }
   /* 展開狀態：完整 inline 表單 */
   .create-room-inline{
     background:#1e2e1e; border:1px solid #4a8a4a; border-radius:10px;

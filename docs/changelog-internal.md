@@ -1,5 +1,19 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.645＋server v1.85 — 休閒線上對戰「⚡ 自動配對」（2026-11-15）
+
+- 站長需求與裁定：只做標準賽；配對成功雙方按接受；開房後開放觀戰；盡量避免連續同一個對手（真的沒人還是要配）、封鎖名單不配；限定登入玩家。
+- 伺服器（server v1.85，哨兵 v185-casual-automatch，放在錦標賽區塊之前 ⇒ 錦標賽 tail／tev 指紋不變，鎖鏈 v184→v185 只多一組 PRE 還原對）：
+  記憶體佇列（pm2 單一 fork），/api/casual-match/join／poll／accept／room／leave。查詢狀態不讀資料庫；只有加入時讀一次好友表封鎖名單（a/b＋status 索引）。
+  牌組走錦標賽報名同一支 tournDeckIssue（卡牌政策 H/I/J）＋60 張；登入走 tournIdentity（verified＋email，匿名 403）。
+  逾時：15 秒沒查詢移出、接受 15 秒、房主建房 25 秒；失敗時沒做錯的一方回佇列且排隊順序不變。上一場的對手：有別人就配別人，只剩他時雙方都等滿 15 秒才配。
+  伺服器不建房間：先排隊的人當房主，用既有 createRoom 開房並回報房號，對方用既有 joinRoom 進房。回應只有暱稱，不含 email／uid；哨兵 casualMatchApi:1。
+- 前端（v6.645）：新模組 src/lib/casual-match/match-api.ts（只有正式站有伺服器 ⇒ 測試站入口不顯示）；大廳「⚡ 自動配對（標準賽）」、搜尋中狀態列、找到對手的接受視窗（分頁標題提示）；
+  進房後自動帶入配對牌組（handleSetDeck＋牌組先後攻偏好）並按準備 ⇒ 既有流程自動開局。房主 45 秒等不到對手就自動離房。手動開房／進房會先取消配對；離開頁面送 leave（keepalive）。
+  兩套房間模組 createRoom 多一個 autoMatch 旗標；大廳列表藏起「等待中」的自動配對房（免得路人坐進空位），開打後照常列在「對戰中」供觀戰。
+- 守衛：test-v185-casual-automatch（實跑伺服器區塊 21 條）、test-v6645-casual-automatch-ui（兩位玩家接真的伺服器區塊端到端，26 條）。突變 23 個：22 殺、1 個等價（進房後才改輪詢間隔，進房後本來就不輪詢）。
+- ⚠ 驗收只能在正式站（測試站沒有連線對戰伺服器）：部署要跑 update-tournament.bat（伺服器）與 redeploy-oracle.bat（前端）。
+
 ## v6.644＋server v1.84 — 牌庫搜尋選擇區只列可選的卡、投降／裁定條件式、暱稱收斂（2026-11-15）
 
 - 玩家回報：牌庫沒有基礎【超】寶可夢時，感應【超】能量的選擇視窗列出整副剩餘牌庫。根因：中央 openDeckViewReshuffle（filter 'any'、maxCount 0）沒宣告 validIids，UI 對 'any' 等 filter 不參考 validIids。

@@ -37,7 +37,7 @@ import { revertV6292 } from './lib/tourn-revert-v6292.mjs';
 // ⭐v6.381：鏈又長一節（B 組：歸檔補 gameDraw ＋ 平手公告加「瑞士制仍可繼續」）。
 //   ⚠ 用**別名**把 v6.381 那一節接在最前面 ⇒ 下面每一個既有呼叫點一個字都不必改，
 //     語意也不變（還原後仍是 v6.292 的區塊）。test-v6292 B6 在守這條鏈。
-import { revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171, revertV173, revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365 } from './lib/tourn-revert-v184.mjs';
+import { revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171, revertV173, revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365 } from './lib/tourn-revert-v185.mjs';
 const revertV171 = b => _rv171(revertV173(b));
 
 const revertV169 = (b) => _rv169(revertV171(b));   // v1.71 先逐字還原新修改，再接既有鎖。

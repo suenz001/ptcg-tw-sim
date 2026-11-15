@@ -8929,6 +8929,230 @@ import('firebase-admin').then(async ({ default: admin }) => {
       }
     });
     // <<< v178-seo-meta-and-sitemaps
+    // >>> v185-casual-automatch
+    // ⭐⭐ server v1.85（2026-11-15 站長需求）：休閒線上對戰「⚡ 自動配對」。
+    //   站長裁定：①只做標準賽（牌組必須通過與錦標賽報名同一支 tournDeckIssue 的檢查）②配對成功要雙方按「接受」
+    //   ③開出來的房間開放觀戰 ④盡量避免連續配到同一個對手，但真的沒有別人時還是要配；封鎖名單裡的人不配對 ⑤限定登入玩家。
+    //   設計（站長最在意「不可加重伺服器負擔造成玩家 lag」）：
+    //   ・佇列只放在記憶體（pm2 單一 fork 行程）；查詢狀態完全不讀資料庫。只有「加入配對」讀一次好友表（封鎖名單，走 a/b＋status 索引）。
+    //     pm2 重啟 ⇒ 佇列清空，玩家下一次查詢拿到 idle，前端顯示「配對已中斷，請重新開始」。
+    //   ・伺服器**不建房間**：配對成功、雙方接受後指定先排隊的人當房主，房主用既有的建房流程開房、回報房號，
+    //     客人下一次查詢拿到房號，用既有的加入流程進房 ⇒ 房間格式、觀戰、聊天、斷線處理全部沿用，沒有第二份規則。
+    //   ・各階段都有逾時：沒在查詢的人 15 秒後移出佇列；接受 15 秒；房主建房 25 秒；任何一段失敗，沒做錯的那一方自動回到佇列（保留原本的排隊順序）。
+    //   ・回應帶哨兵 casualMatchApi: 1（前端用它分辨「伺服器還沒更新」）。
+    const CM_POLL_STALE_MS = 15000;      // 超過這麼久沒查詢 ⇒ 視為離開
+    const CM_ACCEPT_MS = 15000;          // 「找到對手」接受時限
+    const CM_CREATE_MS = 25000;          // 房主建房並回報房號的時限
+    const CM_DONE_KEEP_MS = 60000;       // 配對完成後保留多久（讓客人拿到房號）
+    const CM_REPEAT_WAIT_MS = 15000;     // 只剩上一場的對手時，雙方都等滿這麼久才配
+    const CM_LAST_OPP_KEEP_MS = 30 * 60 * 1000;   // 「上一場的對手」記多久
+    const CM_QUEUE_MAX = 500;            // 佇列上限（防濫用；正常不會碰到）
+    const CM_ROOM_RE = /^[A-Z0-9]{4,8}$/;
+    const _cmQueue = new Map();          // uid -> { uid, email, nick, joinedAt, lastSeen, blocked: Set<email> }
+    const _cmMatches = new Map();        // matchId -> { id, a, b, hostUid, phase, createdAt, deadline, acc: {uid: true|false}, roomCode, doneAt }
+    const _cmByUid = new Map();          // uid -> matchId（進行中的配對）
+    const _cmNotice = new Map();         // uid -> { msg, at }（回到佇列的原因，查一次就清）
+    const _cmLastOpp = new Map();        // email -> { opp: email, at }
+    let _cmSeq = 0;
+    function _cmNick(s) { const t = String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 24); return t || '玩家'; }
+    function _cmIsBlocked(x, y) { return !!((x.blocked && x.blocked.has(y.email)) || (y.blocked && y.blocked.has(x.email))); }
+    function _cmIsRepeat(x, y, now) {
+      const lx = _cmLastOpp.get(x.email), ly = _cmLastOpp.get(y.email);
+      return !!((lx && lx.opp === y.email && now - lx.at < CM_LAST_OPP_KEEP_MS) || (ly && ly.opp === x.email && now - ly.at < CM_LAST_OPP_KEEP_MS));
+    }
+    /** 某人回到佇列（保留原本的 joinedAt ＝ 排隊順序不變），附上原因給他下一次查詢看。 */
+    function _cmRequeue(entry, msg, now) {
+      _cmByUid.delete(entry.uid);
+      if (!_cmQueue.has(entry.uid)) _cmQueue.set(entry.uid, { ...entry, lastSeen: now });
+      if (msg) _cmNotice.set(entry.uid, { msg, at: now });
+    }
+    function _cmDropUser(uid, msg, now) {
+      _cmByUid.delete(uid);
+      _cmQueue.delete(uid);
+      if (msg) _cmNotice.set(uid, { msg, at: now });
+    }
+    /** 清掉逾時的人與配對；冪等，每次端點呼叫都先跑一次（佇列很小，純記憶體）。 */
+    function _cmSweep(now) {
+      for (const [mid, m] of _cmMatches) {
+        if (m.phase === 'accept' && now > m.deadline) {
+          // 接受逾時：有按接受的回佇列，沒按的移出
+          for (const p of [m.a, m.b]) {
+            if (m.acc[p.uid] === true) _cmRequeue(p, '對手沒有接受，繼續為你配對', now);
+            else _cmDropUser(p.uid, '沒有在時限內接受，已退出配對', now);
+          }
+          m.phase = 'cancelled'; m.doneAt = now;
+        } else if (m.phase === 'create' && now > m.deadline) {
+          // 房主沒在時限內開好房：客人回佇列、房主移出
+          const host = m.a.uid === m.hostUid ? m.a : m.b, guest = host === m.a ? m.b : m.a;
+          _cmRequeue(guest, '對手開房失敗，繼續為你配對', now);
+          _cmDropUser(host.uid, '開房逾時，已退出配對', now);
+          m.phase = 'cancelled'; m.doneAt = now;
+        }
+        if ((m.phase === 'done' || m.phase === 'cancelled') && now - (m.doneAt || now) > CM_DONE_KEEP_MS) {
+          _cmMatches.delete(mid);
+          for (const p of [m.a, m.b]) if (_cmByUid.get(p.uid) === mid) _cmByUid.delete(p.uid);
+        }
+      }
+      for (const [uid, e] of _cmQueue) {
+        if (_cmByUid.has(uid)) continue;   // 配對中的人由配對的逾時處理
+        if (now - e.lastSeen > CM_POLL_STALE_MS) _cmQueue.delete(uid);
+      }
+      for (const [k, v] of _cmNotice) if (now - v.at > CM_DONE_KEEP_MS) _cmNotice.delete(k);
+      if (_cmLastOpp.size > 5000) for (const [k, v] of _cmLastOpp) if (now - v.at > CM_LAST_OPP_KEEP_MS) _cmLastOpp.delete(k);
+    }
+    /** 先到先配：依排隊順序，每個人找第一個可以配的；上一場的對手只在雙方都等滿 CM_REPEAT_WAIT_MS 且沒有別人時才配。 */
+    function _cmTryPair(now) {
+      const waiting = [..._cmQueue.values()].filter((e) => !_cmByUid.has(e.uid)).sort((x, y) => x.joinedAt - y.joinedAt);
+      const used = new Set();
+      for (let i = 0; i < waiting.length; i++) {
+        const x = waiting[i];
+        if (used.has(x.uid)) continue;
+        let pick = null, repeat = null;
+        for (let j = i + 1; j < waiting.length; j++) {
+          const y = waiting[j];
+          if (used.has(y.uid) || y.email === x.email || _cmIsBlocked(x, y)) continue;
+          if (_cmIsRepeat(x, y, now)) { if (!repeat) repeat = y; continue; }
+          pick = y; break;
+        }
+        if (!pick && repeat && now - x.joinedAt >= CM_REPEAT_WAIT_MS && now - repeat.joinedAt >= CM_REPEAT_WAIT_MS) pick = repeat;
+        if (!pick) continue;
+        used.add(x.uid); used.add(pick.uid);
+        const id = 'cm' + now.toString(36) + (++_cmSeq).toString(36);
+        const m = { id, a: { ...x }, b: { ...pick }, hostUid: x.uid, phase: 'accept', createdAt: now, deadline: now + CM_ACCEPT_MS, acc: {}, roomCode: null, doneAt: 0 };
+        _cmMatches.set(id, m);
+        _cmByUid.set(x.uid, id); _cmByUid.set(pick.uid, id);
+      }
+    }
+    /** 給某個人看的狀態（唯一的對外形狀；不含任何 email／uid）。 */
+    function _cmView(uid, now) {
+      const base = { casualMatchApi: 1, waitingCount: [..._cmQueue.keys()].filter((u) => !_cmByUid.has(u)).length };
+      const n = _cmNotice.get(uid);
+      const notice = n ? n.msg : null;
+      if (n) _cmNotice.delete(uid);
+      const mid = _cmByUid.get(uid);
+      const m = mid ? _cmMatches.get(mid) : null;
+      if (m && m.phase !== 'cancelled') {
+        const me = m.a.uid === uid ? m.a : m.b, opp = me === m.a ? m.b : m.a;
+        const isHost = m.hostUid === uid;
+        if (m.phase === 'accept') return { ...base, state: 'found', matchId: m.id, opponentNick: opp.nick, accepted: m.acc[uid] === true, msLeft: Math.max(0, m.deadline - now), notice };
+        if (m.phase === 'create') return { ...base, state: isHost ? 'host' : 'wait-host', matchId: m.id, opponentNick: opp.nick, msLeft: Math.max(0, m.deadline - now), notice };
+        if (m.phase === 'done') return { ...base, state: isHost ? 'hosting' : 'join', matchId: m.id, opponentNick: opp.nick, roomCode: m.roomCode, notice };
+      }
+      if (_cmQueue.has(uid)) { const e = _cmQueue.get(uid); return { ...base, state: 'searching', waitedMs: now - e.joinedAt, notice }; }
+      return { ...base, state: 'idle', notice };
+    }
+    /** 登入閘：一律要求 Firebase ID token 驗過且有 email（匿名在 tournIdentity 就回 403）。 */
+    async function _cmAuth(req, res) {
+      let id = null;
+      try { id = await tournIdentity(req); } catch (e) { id = null; }
+      if (!id || id.error || !id.verified || !id.email) {
+        res.status((id && id.code === 403) ? 403 : 401).json({ casualMatchApi: 1, error: '自動配對限定登入的玩家使用', code: 'casual-match-auth' });
+        return null;
+      }
+      return { uid: String(id.uid), email: String(id.email).trim().toLowerCase() };
+    }
+    async function _cmLoadBlocked(email) {
+      const out = new Set();
+      try {
+        const docs = await db.collection(FR_COLL).find({ $or: [{ a: email, status: 'blocked' }, { b: email, status: 'blocked' }] }, { projection: { a: 1, b: 1 } }).limit(500).toArray();
+        for (const d of docs) out.add(d.a === email ? d.b : d.a);
+      } catch (e) { /* 讀不到封鎖名單 ⇒ 不擋配對（封鎖本來就是 best-effort 的社交功能） */ }
+      return out;
+    }
+    app.post('/api/casual-match/join', async (req, res) => {
+      try {
+        const me = await _cmAuth(req, res); if (!me) return;
+        const now = Date.now();
+        _cmSweep(now);
+        const body = req.body || {};
+        const entries = Array.isArray(body.deckEntries) ? body.deckEntries : null;
+        const total = entries ? entries.reduce((s, e) => s + (Number(e && e.count) || 0), 0) : 0;
+        if (!entries || total !== 60) return res.status(400).json({ casualMatchApi: 1, error: '牌組必須剛好 60 張', code: 'casual-match-deck' });
+        let issue = null;
+        try { issue = tournDeckIssue(entries, body.deckName); } catch (e) { return res.status(503).json({ casualMatchApi: 1, error: '伺服器卡表尚未就緒，請稍後再試', code: 'casual-match-not-ready' }); }
+        if (issue) return res.status(400).json({ casualMatchApi: 1, error: '自動配對只開放標準賽牌組。' + issue, code: 'casual-match-deck' });
+        {
+          // 已經在配對流程中（等接受／等開房）⇒ 冪等回目前狀態；上一場已完成或取消的紀錄 ⇒ 清掉後重新排隊
+          const _mid = _cmByUid.get(me.uid), _m = _mid ? _cmMatches.get(_mid) : null;
+          if (_m && (_m.phase === 'accept' || _m.phase === 'create')) return res.json(_cmView(me.uid, now));
+          _cmByUid.delete(me.uid);
+        }
+        const cur = _cmQueue.get(me.uid);
+        if (!cur && _cmQueue.size >= CM_QUEUE_MAX) return res.status(503).json({ casualMatchApi: 1, error: '目前配對的人太多，請稍後再試', code: 'casual-match-full' });
+        const blocked = await _cmLoadBlocked(me.email);
+        _cmQueue.set(me.uid, { uid: me.uid, email: me.email, nick: _cmNick(body.name), joinedAt: cur ? cur.joinedAt : now, lastSeen: now, blocked });
+        _cmTryPair(now);
+        res.json(_cmView(me.uid, now));
+      } catch (e) { res.status(500).json({ casualMatchApi: 1, error: e.message }); }
+    });
+    app.post('/api/casual-match/poll', async (req, res) => {
+      try {
+        const me = await _cmAuth(req, res); if (!me) return;
+        const now = Date.now();
+        const e = _cmQueue.get(me.uid);
+        if (e) e.lastSeen = now;
+        _cmSweep(now);
+        _cmTryPair(now);
+        res.json(_cmView(me.uid, now));
+      } catch (e) { res.status(500).json({ casualMatchApi: 1, error: e.message }); }
+    });
+    app.post('/api/casual-match/accept', async (req, res) => {
+      try {
+        const me = await _cmAuth(req, res); if (!me) return;
+        const now = Date.now();
+        _cmSweep(now);
+        const body = req.body || {};
+        const m = _cmMatches.get(String(body.matchId || ''));
+        if (!m || _cmByUid.get(me.uid) !== m.id || m.phase !== 'accept') return res.json(_cmView(me.uid, now));
+        const e = _cmQueue.get(me.uid); if (e) e.lastSeen = now;
+        if (body.accept === true) {
+          m.acc[me.uid] = true;
+          if (m.acc[m.a.uid] === true && m.acc[m.b.uid] === true) { m.phase = 'create'; m.deadline = now + CM_CREATE_MS; }
+        } else {
+          // 拒絕：自己退出配對；對手回佇列
+          const opp = m.a.uid === me.uid ? m.b : m.a;
+          m.phase = 'cancelled'; m.doneAt = now;
+          _cmDropUser(me.uid, null, now);
+          _cmRequeue(opp, '對手沒有接受，繼續為你配對', now);
+        }
+        _cmTryPair(now);
+        res.json(_cmView(me.uid, now));
+      } catch (e) { res.status(500).json({ casualMatchApi: 1, error: e.message }); }
+    });
+    app.post('/api/casual-match/room', async (req, res) => {
+      try {
+        const me = await _cmAuth(req, res); if (!me) return;
+        const now = Date.now();
+        _cmSweep(now);
+        const body = req.body || {};
+        const code = String(body.roomCode || '').toUpperCase();
+        const m = _cmMatches.get(String(body.matchId || ''));
+        if (!m || m.hostUid !== me.uid || m.phase !== 'create') return res.status(409).json({ ..._cmView(me.uid, now), error: '這場配對已經失效', code: 'casual-match-stale' });
+        if (!CM_ROOM_RE.test(code)) return res.status(400).json({ casualMatchApi: 1, error: '房號格式不正確', code: 'casual-match-room' });
+        m.roomCode = code; m.phase = 'done'; m.doneAt = now;
+        _cmQueue.delete(m.a.uid); _cmQueue.delete(m.b.uid);
+        _cmLastOpp.set(m.a.email, { opp: m.b.email, at: now });
+        _cmLastOpp.set(m.b.email, { opp: m.a.email, at: now });
+        res.json(_cmView(me.uid, now));
+      } catch (e) { res.status(500).json({ casualMatchApi: 1, error: e.message }); }
+    });
+    app.post('/api/casual-match/leave', async (req, res) => {
+      try {
+        const me = await _cmAuth(req, res); if (!me) return;
+        const now = Date.now();
+        _cmSweep(now);
+        const mid = _cmByUid.get(me.uid);
+        const m = mid ? _cmMatches.get(mid) : null;
+        if (m && (m.phase === 'accept' || m.phase === 'create')) {
+          const opp = m.a.uid === me.uid ? m.b : m.a;
+          m.phase = 'cancelled'; m.doneAt = now;
+          _cmRequeue(opp, '對手取消了配對，繼續為你配對', now);
+        }
+        _cmDropUser(me.uid, null, now);
+        res.json(_cmView(me.uid, now));
+      } catch (e) { res.status(500).json({ casualMatchApi: 1, error: e.message }); }
+    });
+    // <<< v185-casual-automatch
     app.get('/api/tournament/state', async (req, res) => {
       try {
         const room = String(req.query.room || 'TOURNAMENT-TEST');

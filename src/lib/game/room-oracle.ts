@@ -179,6 +179,7 @@ export async function createRoom(
   hostName: string,
   allowUndo: boolean = false,  // v4.75 練習模式
   visible: boolean = true,     // v5.003 私密房旗標（false = 不在大廳顯示）
+  extra?: { autoMatch?: true }, // ⭐v6.645 自動配對開的房（等待中不在大廳顯示，開打後照常可觀戰）
 ): Promise<string> {
   const uid = await getMyUid();
   for (let attempt = 0; attempt < 10; attempt++) {
@@ -199,6 +200,7 @@ export async function createRoom(
       ...(allowUndo ? { allowUndo: true } : {}),
       // v5.003：私密房旗標（預設 true = 公開，只在 false 時寫入省 doc 大小）
       ...(visible === false ? { visible: false } : {}),
+      ...(extra?.autoMatch === true ? { autoMatch: true } : {}),   // ⭐v6.645
     };
     // upsert with no expectedVersion → creates if missing
     // ⚠v6.245 建房失敗**有狀態副作用**（伺服器其實建好了、client 卻以為失敗 → 換房號再建一間
@@ -887,6 +889,8 @@ export function filterAndSortOpenRooms(all: OracleRoom[]): Room[] {
       if (r.status === 'playing' && r.spectatorsAllowed === false) return false;
       // v5.004：私密房 (visible === false) 不出現在大廳列表，只能透過房號加入
       if (r.visible === false) return false;
+      // ⭐v6.645 自動配對開的房：等待中（兩人還在進房、帶牌組）不列出，免得路人搶先坐進空位；開打後照常列在「對戰中」供觀戰
+      if (r.status === 'lobby' && (r as { autoMatch?: boolean }).autoMatch === true) return false;
       // v5.393：房主(座位0)心跳過期 > 3min 的 lobby 死房不列出（可逆）
       if (isLobbyHostDead(r as unknown as RoomData)) return false;
       // v5.463：開房超過 10 分鐘的 lobby 房不列出（房主長掛分頁的殭屍練習房；用 createdAt 因 updatedAt 被心跳 bump）

@@ -134,6 +134,7 @@ export interface RoomData {
   /** v5.003：私密房旗標 — undefined 或 true = 公開（顯示在大廳列表）；
    *  false = 私密（不出現在 subscribeOpenRooms 結果，只能透過房號加入）。 */
   visible?: boolean;
+  autoMatch?: boolean;   // ⭐v6.645 自動配對開的房（等待中不列在大廳）
   /**
    * v4.75 悔棋請求（runtime negotiation state）。
    * - fromSeatIdx: 發起方座位 (0=P1, 1=P2)
@@ -229,6 +230,7 @@ export async function createRoom(
   hostName: string,
   allowUndo: boolean = false,  // v4.75 練習模式：host 開房時可勾選
   visible: boolean = true,     // v5.003 私密房旗標（false = 不在大廳顯示）
+  extra?: { autoMatch?: true }, // ⭐v6.645 自動配對開的房（等待中不在大廳顯示，開打後照常可觀戰）
 ): Promise<string> {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('尚未登入');
@@ -253,6 +255,7 @@ export async function createRoom(
     ...(allowUndo ? { allowUndo: true } : {}),
     // v5.003：私密房旗標（預設 true = 公開，只在 false 時寫入省 doc 大小）
     ...(visible === false ? { visible: false } : {}),
+    ...(extra?.autoMatch === true ? { autoMatch: true } : {}),   // ⭐v6.645
   };
   await setDoc(doc(db, 'rooms', code), {
     ...data,
@@ -1101,6 +1104,7 @@ export function subscribeOpenRooms(
         if (data.status === 'playing' && data.spectatorsAllowed === false) return;
         // v5.003：私密房 (visible === false) 不出現在大廳列表，只能透過房號加入
         if (data.visible === false) return;
+        if (data.status === 'lobby' && (data as { autoMatch?: boolean }).autoMatch === true) return;   // ⭐v6.645 自動配對房等待中不列出
         // v5.393：房主(座位0)心跳過期 > 3min 的 lobby 死房不列出（可逆，房主回來自動重現）
         if (isLobbyHostDead(data)) return;
         // v5.463：開房超過 10 分鐘的 lobby 房不列出（房主長掛分頁的殭屍練習房；用 createdAt 因 updatedAt 被心跳 bump）
