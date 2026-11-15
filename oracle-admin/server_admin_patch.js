@@ -11441,9 +11441,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
         // ⭐server v1.84（擴容審查剩下的小事）：投降比照 /drop 改成條件式寫入——只有這一場「仍在對戰中」才寫成投降。
         //   從上面的 findOne 到這裡之間，這一場可能已經被別的路徑收掉（正常打完、時限判定、對手同時投降、棄賽）；
         //   原本無條件覆寫 ⇒ 會把已經判好的結果改成投降，而且房間／公告／推進輪次會再做一次。沒搶到 ⇒ 什麼都不做。
-        //   ⭐（審查 P3-5）房間盤面已經是 game-over（勝負已分，只是 TMATCH 還沒寫入、等對帳補寫）⇒ 也不寫投降，免得勝方按「投降離開」把結果翻掉。
-        //   只投影 gameState.phase 一個欄位；投降是低頻動作，不影響負載。
-        if (m.roomId) { const _rpV184 = await TROOMS.findOne({ _id: m.roomId }, { projection: { 'gameState.phase': 1 } }); if (_rpV184 && _rpV184.gameState && _rpV184.gameState.phase === 'game-over') return res.json({ ok: true, note: '對戰已結束' }); }
+        //   ⭐（審查 P3-5）房間盤面已經是 game-over 而且**勝負已定**（winner 是 0／1 或平手；只是 TMATCH 還沒寫入、等對帳補寫）⇒ 也不寫投降，
+        //     免得勝方按「投降離開」把結果翻掉。沒有勝方的 game-over（對帳會印「需人工確認」的死角）照舊允許投降收尾。
+        //   只投影三個小欄位；投降是低頻動作，不影響負載。
+        if (m.roomId) { const _rpV184 = await TROOMS.findOne({ _id: m.roomId }, { projection: { 'gameState.phase': 1, 'gameState.winner': 1, 'gameState.isDraw': 1 } }); const _gV184 = _rpV184 && _rpV184.gameState; if (_gV184 && _gV184.phase === 'game-over' && (_gV184.winner === 0 || _gV184.winner === 1 || _gV184.isDraw === true)) return res.json({ ok: true, note: '對戰已結束' }); }
         const _fwV184 = await TMATCH.updateOne({ _id: m._id, status: 'playing' }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', forfeit: true, endedAt: Date.now() } });   // ⭐v1.65 endedAt：賽程表顯示對局時間
         if (_fwV184 && _fwV184.matchedCount === 0) return res.json({ ok: true, note: '對戰已結束' });
         // <<< v184-forfeit-resolve-cas

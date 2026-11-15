@@ -1,6 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
-見 docs/changelog-internal.md v6.644
+## v6.644＋server v1.84 — 牌庫搜尋選擇區只列可選的卡、投降／裁定條件式、暱稱收斂（2026-11-15）
+
+- 玩家回報：牌庫沒有基礎【超】寶可夢時，感應【超】能量的選擇視窗列出整副剩餘牌庫。根因：中央 openDeckViewReshuffle（filter 'any'、maxCount 0）沒宣告 validIids，UI 對 'any' 等 filter 不參考 validIids。
+- 中央修法：openDeckViewReshuffle 宣告 validIids []／viewOnly（純標記），三處 inline 同型（盈溢祈願、閃焰渦輪、果實盈滿／冰冷羽擊／充電）收斂；selection-candidates.ts 新增 deckSearchVisible，+page.svelte 的 deck-search 選擇區一律與 validIids 取交集（＝引擎 sanitizeSelectedIids 同一條規則，300 個隨機盤面性質測試）。
+- 引擎 sanitizeSelectedIids（deck-search／hand-discard）改先判上限再收：舊版 maxCount 0 的「只能檢視」仍收 1 張（竄改用戶端可從牌庫拿走 1 張卡，UI 本身勾不了）。
+- Opus 審查 P2-1：岩狗狗｜挖回、燭光靈｜光照燃燒（openDeckTopRevealOptionalDiscard）用 filter 'any' ⇒ 下方「查看牌庫剩餘全部」攤開整副牌庫。新增中央述詞 TOP_N（只認 params.topIids），helper 改用它；describeFilter 補「牌庫上方的卡」（複審 P3-A）。lint G2：帶 top*Iids 的 deck-search filter 一律 TOP 型（G 標辛俐、正輝的輸送除外）。
+- 稽核待站長決定（未改）：籌備×2、築窩（v2620 deckSearchTrainerSubtypePost）、百變怪｜整人變身在牌庫無符合卡時直接重洗、不開檢視。
+- server v1.84：/match/forfeit 條件式 status:'playing'、沒命中不寫房間／公告／推進；投降前讀房間 gameState.phase／winner／isDraw，勝負已定（等對帳補寫）就不寫投降，沒有勝方的死角照舊允許（審查 P3-5、複審 P3-B）；/admin/match/resolve 條件式 $ne:'done'，沒命中 409。getLastRegisteredNick 改走 evLastNickV183（排除空暱稱、60 秒、報名即失效），移除 _chatNickCache。錦標賽區塊鎖 v183→v184。
+- Rule 40：revert-v6644 還原表含 +page.svelte、version、site-version、changelog 三檔、engine.ts、selection-filter.ts（v6605 P2、v6608 P11 因本版合法改動翻紅，意圖不變）。
+- 守衛 test-v6644-deck-view-empty（30 條，突變 12 個全殺）、test-v184-forfeit-resolve-nick（17 條，突變 7 個全殺）。harness 與 36 支免疫網改前改後逐字相同。Opus 審查無 P1；P2-1 已修；複審無 P1／P2。
 
 ## v6.643＋server v1.83 — 錦標賽擴容第四批（2026-11-15，hidden）
 

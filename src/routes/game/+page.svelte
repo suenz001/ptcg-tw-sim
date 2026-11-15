@@ -10815,6 +10815,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       'AnyTrainer':                    '訓練家卡',
       'Any':                           '任意卡',
       'any':                           '任意卡',
+      'TOP_N':                         '牌庫上方的卡',   // ⭐v6.644（複審 P3-A）挖回／光照燃燒改用中央 TOP_N
       'Energy':                        '能量',
       'Item':                          '物品卡',
       'Supporter':                     '支援者',

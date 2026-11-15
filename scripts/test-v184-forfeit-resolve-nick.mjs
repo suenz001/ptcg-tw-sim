@@ -4,7 +4,7 @@
 //   P1 正常：這一場仍在對戰中 ⇒ 寫成投降（條件含 status:'playing'）、寫房間 game-over、公告、推進輪次各一次
 //   P2 搶輸：findOne 之後這一場已經被別的路徑收掉（updateOne 沒命中）⇒ 不寫房間、不公告、不推進，回 ok＋note
 //   P3 沒有對戰中的場 ⇒ 照舊回「無進行中對戰」，不寫任何東西
-//   P4（審查 P3-5）房間盤面已是 game-over（TMATCH 等對帳補寫）⇒ 不寫投降（只投影 gameState.phase）
+//   P4（審查 P3-5）房間盤面已是 game-over 且勝負已定（TMATCH 等對帳補寫）⇒ 不寫投降；P4b 沒有勝方的 game-over 照舊允許投降
 // 【A】/admin/match/resolve（管理員裁定）改條件式寫入
 //   A1 正常：條件含 status $ne 'done'，寫房間／公告／推進各一次
 //   A2 搶輸 ⇒ 409「該場次已結束」，不寫房間、不公告、不推進
@@ -47,9 +47,9 @@ function fnBody(src, head) {
 }
 
 // 假環境：TMATCH.updateOne 依 filter 對「資料庫現況」判斷有沒有命中
-function makeEnv({ dbMatch, findMatch, admin = true, roomPhase = 'main' }) {
+function makeEnv({ dbMatch, findMatch, admin = true, roomPhase = 'main', roomWinner, roomDraw }) {
   const log = { upd: [], room: 0, chat: [], adv: 0, find: 0, roomRead: [] };
-  const TROOMS = { findOne: async (f, o) => { log.roomRead.push({ f, o }); return { _id: f._id, gameState: { phase: roomPhase } }; } };
+  const TROOMS = { findOne: async (f, o) => { log.roomRead.push({ f, o }); return { _id: f._id, gameState: { phase: roomPhase, ...(roomWinner !== undefined && { winner: roomWinner }), ...(roomDraw !== undefined && { isDraw: roomDraw }) } }; } };
   const TMATCH = {
     findOne: async () => { log.find++; return findMatch ? JSON.parse(JSON.stringify(findMatch)) : null; },
     updateOne: async (f, u) => {
@@ -110,12 +110,19 @@ async function checkP(src, tag) {
   }
   // P4（審查 P3-5）房間已是 game-over、TMATCH 還沒寫（等對帳）⇒ 不寫投降
   {
+    const res4 = [];
+    for (const [w, dr] of [[0, undefined], [1, undefined], [undefined, true]]) {
+      const db = M(); const env = makeEnv({ dbMatch: db, findMatch: M(), roomPhase: 'game-over', roomWinner: w, roomDraw: dr });
+      const r = await runHandler(src, '/api/tournament/match/forfeit', env, { room: 'R1' });
+      const rr = env.log.roomRead[0];
+      res4.push(!r.err && r.out?.ok === true && env.log.upd.length === 0 && db.status === 'playing' && env.log.room === 0 && env.log.chat.length === 0 && env.log.adv === 0
+        && rr && JSON.stringify(rr.o) === JSON.stringify({ projection: { 'gameState.phase': 1, 'gameState.winner': 1, 'gameState.isDraw': 1 } }));
+    }
+    ok(`★★★ P4${tag} 房間已 game-over 且勝負已定（winner 0／1 或平手）⇒ 不寫投降、不公告、不推進（只投影三個小欄位）`, res4.every(Boolean), JSON.stringify(res4));
+    // P4b（複審 P3-B）沒有勝方的 game-over（需人工確認的死角）⇒ 照舊允許投降收尾
     const db = M(); const env = makeEnv({ dbMatch: db, findMatch: M(), roomPhase: 'game-over' });
     const r = await runHandler(src, '/api/tournament/match/forfeit', env, { room: 'R1' });
-    const rr = env.log.roomRead[0];
-    ok(`★★★ P4${tag} 房間盤面已是 game-over ⇒ 不寫投降、不公告、不推進（只投影 gameState.phase）`,
-      !r.err && r.out?.ok === true && env.log.upd.length === 0 && db.status === 'playing' && env.log.room === 0 && env.log.chat.length === 0 && env.log.adv === 0
-        && rr && JSON.stringify(rr.o) === JSON.stringify({ projection: { 'gameState.phase': 1 } }), JSON.stringify({ r, log: env.log }));
+    ok(`★★ P4b${tag} game-over 但沒有勝方（需人工確認的死角）⇒ 照舊允許投降收尾`, !r.err && db.status === 'done' && db.forfeit === true && env.log.adv === 1, JSON.stringify({ r, db }));
   }
   // P3 沒有對戰中的場
   {
@@ -200,7 +207,7 @@ else {
   const bp = pass - before; pass = before; fail = fb;
   console.log('    BASE 紅：' + reds.join('｜'));
   ok('★★★ H1 BASE 上 P1b／P2／P4／A1b／A2／N1／N2／N4 都紅（本版修的正是這些）', ['P1b@', 'P2@', 'P4@', 'A1b@', 'A2@', 'N1@', 'N2@', 'N4@'].every((k) => reds.some((r) => r.includes(k))), reds.join(','));
-  ok('★★ H2 BASE 上「前提」、P1／P3／A1／A3／N3 綠（正對照：抽取器與假資料庫沒壞）', !reds.some((r) => /前提|P1@|P3@|A1@|A3@|N3@/.test(r)) && bp >= 6, reds.join(',') + ' ' + bp);
+  ok('★★ H2 BASE 上「前提」、P1／P3／A1／A3／N3 綠（正對照：抽取器與假資料庫沒壞）', !reds.some((r) => /前提|P1@|P3@|P4b@|A1@|A3@|N3@/.test(r)) && bp >= 6, reds.join(',') + ' ' + bp);
 }
 console.log(`=== server v1.84 投降／裁定條件式＋暱稱收斂：${pass} PASS / ${fail} FAIL ===`);
 process.exit(fail ? 1 : 0);
