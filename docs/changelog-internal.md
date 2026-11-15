@@ -9,7 +9,7 @@
 - 站長裁定（2026-11-15）統一成先檢視：籌備×2、築窩（v2620 deckSearchTrainerSubtypePost）、百變怪｜整人變身在牌庫無符合卡時原本直接重洗、不開檢視 ⇒ 改走 openDeckViewReshuffle（守衛 C1 共 9 招）。
 - server v1.84：/match/forfeit 條件式 status:'playing'、沒命中不寫房間／公告／推進；投降前讀房間 gameState.phase／winner／isDraw，勝負已定（等對帳補寫）就不寫投降，沒有勝方的死角照舊允許（審查 P3-5、複審 P3-B）；/admin/match/resolve 條件式 $ne:'done'，沒命中 409。getLastRegisteredNick 改走 evLastNickV183（排除空暱稱、60 秒、報名即失效），移除 _chatNickCache。錦標賽區塊鎖 v183→v184。
 - Rule 40：revert-v6644 還原表含 +page.svelte、version、site-version、changelog 三檔、engine.ts、selection-filter.ts（v6605 P2、v6608 P11 因本版合法改動翻紅，意圖不變）。
-- 守衛 test-v6644-deck-view-empty（30 條，突變 12 個全殺）、test-v184-forfeit-resolve-nick（17 條，突變 7 個全殺）。harness 與 36 支免疫網改前改後逐字相同。Opus 審查無 P1；P2-1 已修；複審無 P1／P2。
+- 守衛 test-v6644-deck-view-empty（30 條，突變 12 個全殺）、test-v184-forfeit-resolve-nick（17 條，突變 7 個全殺）。harness 與 36 支免疫網改前改後逐字相同。Opus 審查無 P1；P2-1 已修；複審兩輪：第一輪 P3-A／P3-B 已修，最後一輪（d251c1cd，含站長裁定四招）無 P1／P2／P3。全套 993/993 綠（FAIL／TIMEOUT 0）。
 
 ## v6.643＋server v1.83 — 錦標賽擴容第四批（2026-11-15，hidden）
 
