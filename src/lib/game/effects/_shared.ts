@@ -1914,7 +1914,7 @@ export const PENDING_REFRESH_ON_POP = new Map<string, PendingRefreshOnPopFn>();
 
 // v5.496：牌庫搜尋型「無符合卡」的統一處理 — 仍開 deck-search 檢視 picker 讓玩家看過整副牌庫 + 重洗。
 //   依 v5.424 規則：牌庫=未知資訊→可【不選】；只要牌庫非空就開 picker，不直接略過（符合「搜尋牌庫」
-//   公開規則：對手知道你搜尋過、你重洗）。filter:'any' 顯示全牌庫、maxCount:0 僅檢視、
+//   公開規則：對手知道你搜尋過、你重洗）。v6.644 起選擇區留空（validIids: []）、整副牌庫在下方「查看牌庫剩餘全部」、maxCount:0 僅檢視、
 //   search-to-hand-reshuffle 確認/不選後重洗（0 picks 不加手牌）。牌庫全空才略過（無可看）。
 // >>> v6644-deck-view-empty
 // ⭐v6.644（玩家回報：牌庫沒有基礎【超】寶可夢時，感應【超】能量的選擇視窗列出整副剩餘牌庫）：
@@ -1928,7 +1928,7 @@ export function openDeckViewReshuffle(state: GameState, idx: 0 | 1, label: strin
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'any', minCount: 0, maxCount: 0,
     effectKey: 'search-to-hand-reshuffle',
-    params: { label: `${label}（檢視牌庫）`, validIids: [], viewOnly: true },
+    params: { label: `${label}（檢視牌庫）`, validIids: [], viewOnly: true },   // viewOnly 是純標記（給日後的 log／診斷看）；UI 與引擎只看 validIids
   });
 }
 // <<< v6644-deck-view-empty
@@ -1948,9 +1948,10 @@ export function openDeckTopRevealOptionalDiscard(state: GameState, idx: 0 | 1, c
     addLog(state, `${label}：查看牌庫上方 ${n} 張`, idx),
     {
       type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
-      filter: 'any', minCount: 0, maxCount: n,
+      // ⭐v6.644（Opus 審查 P2-1）：filter 改中央 TOP_N（讀 params.topIids）⇒「查看牌庫剩餘全部」不再攤開整副牌庫（卡面只准看上方 N 張）
+      filter: 'TOP_N', minCount: 0, maxCount: n,
       effectKey: 'deck-top-reveal-discard',
-      params: { validIids: topIids, label, titleOverride: `${label}：查看牌庫上方 ${n} 張，選擇要丟棄的（可不選＝回復原樣）` },
+      params: { validIids: topIids, topIids, label, titleOverride: `${label}：查看牌庫上方 ${n} 張，選擇要丟棄的（可不選＝回復原樣）` },
     },
   );
 }

@@ -768,6 +768,7 @@ const PREV_ALLOWED = [
   'src/lib/game/effects/cards/v2550_i_wave5_meta.ts',
   'src/lib/game/engine.ts',
   'src/lib/game/selection-candidates.ts',
+  'src/lib/game/selection-filter.ts',   // ⭐v6.644 審查 P2-1：中央 TOP_N 述詞
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',

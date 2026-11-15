@@ -19,6 +19,7 @@
 // 【E】性質：被 deckSearchVisible 拿掉的卡，引擎 sanitizeSelectedIids 一律拒收；留下的一律接受（＝不會藏起可選的卡）
 //      E2／E3：引擎消毒閘先判上限再收（maxCount 0 ⇒ 0 張；原本先收再比，「只能檢視」照樣收 1 張）
 // 【F】UI 接線（剝註解後）：import、selectionItems 對 deck-search 套用、候選為 0 時「查看牌庫剩餘全部」自動展開、手機版不另算候選
+// 【G】查看牌庫上方 N 張不攤開全牌庫（Opus 審查 P2-1）：挖回／光照燃燒 filter 改中央 TOP_N；lint 查看牌庫頂一律 TOP 型
 // 【H】HEAD-FAIL：BASE（v6.643）上 A／B1／B3／C1／D1／D3／E1／E2／F1 紅，B2／E3 等正對照綠
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, statSync, mkdtempSync, rmSync } from 'node:fs';
@@ -55,7 +56,7 @@ async function loadBundle(srcRoot, tag) {
   tmpFiles.push(S, E, O);
   writeFileSync(S, 'export const base="";export const assets="";');
   writeFileSync(E, "import * as ENG from './src/lib/game/engine';\nimport * as EFF from './src/lib/game/effects';\n"
-    + "import * as SH from './src/lib/game/effects/_shared';\nimport * as SC from './src/lib/game/selection-candidates';\nexport { ENG, EFF, SH, SC };\n");
+    + "import * as SH from './src/lib/game/effects/_shared';\nimport * as SC from './src/lib/game/selection-candidates';\nimport * as SF from './src/lib/game/selection-filter';\nexport { ENG, EFF, SH, SC, SF };\n");
   await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node', target: 'node20',
     alias: { '$lib': join(srcRoot, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
   return import(pathToFileURL(O).href + '?t=' + tag);
@@ -243,6 +244,46 @@ function checkF(pageRaw, mobRaw, tag) {
   ok(`★ F4${tag} 頁面沒有第二份「deck-search 與 validIids 取交集」的通用寫法`, (page.match(/deckSearchVisible\(/g) || []).length === 1);
 }
 
+// 【G】（Opus 審查 P2-1）「查看牌庫上方 N 張」型：下方「📖 查看牌庫剩餘全部」不可攤開整副牌庫（卡面只准看上方 N 張）
+//   G1 岩狗狗｜挖回、燭光靈｜光照燃燒（中央 openDeckTopRevealOptionalDiscard）的 filter 是 TOP 型（頁面據此隱藏全牌庫下拉），
+//      選擇區＝上方 N 張；中央述詞 TOP_N 只認 params.topIids
+//   G2 lint：H/I/J 的 deck-search 只要帶 top*Iids／topIids（＝查看牌庫頂），filter 一律是 TOP 型（G 標的辛俐、正輝的輸送除外）
+const ROCK = findId('岩狗狗', (c) => c.attacks?.some((a) => a.name === '挖回'));
+const pageHidesFullDeck = (f) => !!f && (f.startsWith('TOP') || f.includes(':TOP'));   // ＝ +page.svelte 全牌庫下拉的隱藏條件（F5 逐字比對）
+function checkG(M, srcRoot, pageRaw, tag) {
+  const EFF = M.EFF, SF = M.SF, SC = M.SC;
+  const vis = typeof SC?.deckSearchVisible === 'function' ? SC.deckSearchVisible : (x) => x;
+  const res = [];
+  for (const k of ['岩狗狗|挖回', '燭光靈|光照燃燒']) {
+    const fn = EFF?.ATTACK_POST?.get?.(k);
+    if (typeof fn !== 'function') { res.push({ k, why: '沒註冊' }); continue; }
+    const deck = [I(PLAIN), I(ITEM), I(PLAIN), I(ITEM)];
+    let r; try { r = fn(ST({ active: I(ROCK ?? PLAIN), deck: deck.slice() }, { active: I(PLAIN) }), 0, pool, {}); } catch (e) { res.push({ k, why: e.message }); continue; }
+    const ps = r?.pendingSelection;
+    const raw = r?.players?.[0]?.deck?.filter((c) => { try { return SF.evaluateSelectionFilter('deck-search', ps.filter, c, pool.get(c.cardId), { params: ps.params }) !== false; } catch { return true; } }) ?? [];
+    const shown = vis(raw, ps?.params).map((c) => c.iid);
+    const n = ps?.maxCount;
+    res.push({ k, hide: pageHidesFullDeck(ps?.filter), filter: ps?.filter, shownOk: n >= 1 && JSON.stringify(shown) === JSON.stringify(deck.slice(0, n).map((c) => c.iid)) });
+  }
+  ok(`★★★ G1${tag} 挖回／光照燃燒：filter 是 TOP 型（全牌庫下拉隱藏），選擇區＝牌庫上方 N 張`, res.length === 2 && res.every((x) => x.hide && x.shownOk), JSON.stringify(res));
+  let g1b = false;
+  try { const top = I(PLAIN), other = I(PLAIN); const ctx = { params: { topIids: [top.iid] } };
+    g1b = SF.evaluateSelectionFilter('deck-search', 'TOP_N', top, pool.get(PLAIN), ctx) === true && SF.evaluateSelectionFilter('deck-search', 'TOP_N', other, pool.get(PLAIN), ctx) === false
+      && SF.isKnownSelectionFilter('deck-search', 'TOP_N') === true; } catch { g1b = false; }
+  ok(`★★ G1b${tag} 中央述詞 TOP_N：上方 N 張內 true、之外 false，且列為已收錄 filter（引擎消毒閘會驗）`, g1b);
+  const page = stripCommentsBlankChecked(normEol(pageRaw), 'svelte');
+  ok(`★ G1c${tag} 頁面全牌庫下拉的隱藏條件仍是「TOP 開頭或含 :TOP」（與本檔 pageHidesFullDeck 同一條）`,
+    /\{#if pendingSelection\.type==='deck-search' && game\s*&& !\(pendingSelection\.filter\?\.startsWith\('TOP'\) \|\| pendingSelection\.filter\?\.includes\(':TOP'\)\)\}/.test(page));
+  const G_MARK_KEYS = new Set(['shinli-pick', 'masaki-transport']);   // 辛俐、正輝的輸送：G 標（不在標準賽範圍，站長裁定不處理）
+  const all = scanDeckSearch(srcRoot);
+  const peeks = all.filter((o) => /\btop\w*Iids\b|\bpeekIids\b/.test(o.obj));
+  const bad = peeks.filter((o) => { const fl = (o.obj.match(/filter:\s*'([^']*)'/) || [])[1]; const ek = (o.obj.match(/effectKey:\s*'([^']*)'/) || [])[1];
+    if (G_MARK_KEYS.has(ek)) return false;
+    if (fl === undefined) return /filter:\s*[^'\s]/.test(o.obj) ? false : true;   // 動態 filter（變數）交給行為端；沒寫 filter ⇒ 違規
+    return !pageHidesFullDeck(fl); }).map((o) => `${o.name}:${o.line}`);
+  ok(`★★ G2${tag} 查看牌庫頂的 deck-search（${peeks.length} 處）filter 一律 TOP 型（G 標兩張除外）`, peeks.length >= 8 && bad.length === 0, bad.join(' '));
+}
+
 // ═════ 現行版
 console.log('【A】deckSearchVisible 單元');
 const HEAD = await loadBundle(ROOT, 'head');
@@ -257,6 +298,8 @@ console.log('【E】性質：看得到的＝勾得動的');
 checkE(HEAD, '');
 console.log('【F】UI 接線');
 checkF(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'), readFileSync(join(ROOT, 'src/routes/game/MobilePortraitBattle.svelte'), 'utf8'), '');
+console.log('【G】查看牌庫頂 N 張不攤開全牌庫');
+checkG(HEAD, ROOT, readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'), '');
 
 // ═════ HEAD-FAIL
 console.log('【H】HEAD-FAIL');
@@ -267,7 +310,7 @@ else {
     execSync(`git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`, { stdio: 'ignore', shell: '/bin/bash' });
     const before = pass, fb = fail; const log = console.log; const lines = []; console.log = (s) => lines.push(String(s));
     let B = null; try { B = await loadBundle(tmp, 'base'); } catch (e) { lines.push('  FAIL 前提@BASE bundle ' + e.message); }
-    if (B) { checkA(B.SC, '@BASE'); checkB(B, '@BASE'); checkC(B, '@BASE'); checkE(B, '@BASE'); }
+    if (B) { checkA(B.SC, '@BASE'); checkB(B, '@BASE'); checkC(B, '@BASE'); checkE(B, '@BASE'); checkG(B, tmp, readFileSync(join(tmp, 'src/routes/game/+page.svelte'), 'utf8'), '@BASE'); }
     checkD(tmp, '@BASE');
     checkF(readFileSync(join(tmp, 'src/routes/game/+page.svelte'), 'utf8'), readFileSync(join(tmp, 'src/routes/game/MobilePortraitBattle.svelte'), 'utf8'), '@BASE');
     console.log = log;
@@ -275,10 +318,10 @@ else {
     if (process.env.V6644_DEBUG) for (const l of lines) if (/FAIL/.test(l)) log(l);
     const bp = pass - before; pass = before; fail = fb;
     console.log('    BASE 紅：' + reds.join('｜'));
-    ok('★★★ H1 BASE 上 A1／A2／A3／A4／B1／B3／C1／D1／D3／E1／E2／F1 都紅（本版修的正是這些；B3＝舊版送 1 張 iid 真的會從牌庫拿到手牌）',
-      ['A1@', 'A2@', 'A3@', 'A4@', 'B1@', 'B3@', 'C1@', 'D1@', 'D3@', 'E1@', 'E2@', 'F1@'].every((k) => reds.some((r) => r.includes(k))), reds.join(','));
+    ok('★★★ H1 BASE 上 A1／A2／A3／A4／B1／B3／C1／D1／D3／E1／E2／F1／G1／G1b／G2 都紅（本版修的正是這些；B3＝舊版送 1 張 iid 真的會從牌庫拿到手牌）',
+      ['A1@', 'A2@', 'A3@', 'A4@', 'B1@', 'B3@', 'C1@', 'D1@', 'D3@', 'E1@', 'E2@', 'F1@', 'G1@', 'G1b@', 'G2@'].every((k) => reds.some((r) => r.includes(k))), reds.join(','));
     ok('★★ H2 BASE 上「前提」、B2（正對照）、C2／C3（紀錄字樣）、D2（掃描器）、E3（零回歸）、F2／F3 綠',
-      !reds.some((r) => /前提|B2@|C2@|C3@|D2@|E3@|F2@|F3@/.test(r)) && bp >= 8, reds.join(',') + ' ' + bp);
+      !reds.some((r) => /前提|B2@|C2@|C3@|D2@|E3@|F2@|F3@|G1c@/.test(r)) && bp >= 8, reds.join(',') + ' ' + bp);
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 console.log(`=== v6.644 牌庫檢視選擇區留空：${pass} PASS / ${fail} FAIL ===`);

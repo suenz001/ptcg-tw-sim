@@ -370,6 +370,11 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
   'BasicEnergy:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && c.supertype === 'Energy' && c.subtype === 'Basic',
   'Pokemon:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && c.supertype === 'Pokemon' && inValidParam(ctx, inst),   // ⭐v6.634 validIids 交集
   'Trainer:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && c.supertype === 'Trainer',
+  // >>> v6644-top-reveal-filter
+  // ⭐v6.644（Opus 審查 P2-1）：「查看牌庫上方 N 張（任何卡）」通用型。原本 openDeckTopRevealOptionalDiscard 用 filter 'any'，
+  //   選擇區下方的「📖 查看牌庫剩餘全部」只認 TOP 型 filter 才隱藏 ⇒ 岩狗狗｜挖回、燭光靈｜光照燃燒能看到整副剩餘牌庫（卡面只准看上方 N 張）。
+  'TOP_N': (_c, ctx, inst) => inTopParam(ctx, 'topIids', inst),
+  // <<< v6644-top-reveal-filter
   // <<< v6543-top-filters-central
 };
 
