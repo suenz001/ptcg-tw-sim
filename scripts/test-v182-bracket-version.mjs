@@ -6,6 +6,8 @@
 //   S3 對戰結果改變（快取過期重建）⇒ bv 改變、回完整回應
 //   S4 只有賽事欄位改變（冠軍、輪次狀態）⇒ bv 也改變
 //   S5 帶錯的 bv、或空字串 ⇒ 照舊完整回應
+//   S6 換帳號帶別人的 bv ⇒ 完整回應、mine 是自己的；S7 TTL 內仍 unchanged；S8 輪次推進 bv 變
+//   F3 登出清賽程表
 // 【F】前端
 //   F1 tBracketApplyUnchanged：只更新進行中對戰的觀戰人數、回新物件、其他欄位沿用、bv 換成新的
 //   F2 tBracketLoad：只有上一份有 bv 才帶 &bv=；unchanged 只有「bv 對得上且有上一份」才採用，否則當成這筆不可信
@@ -117,18 +119,26 @@ async function checkS(src, base, tag) {
     const a = await ep.call('u1'), b = await ep.call('u4');
     let same = true;
     if (base) { const c2 = { t: 1000 }; const old = buildEndpoint(base, makeData(format), c2); const a0 = await old.call('u1'), b0 = await old.call('u4'); same = JSON.stringify(strip(a.body)) === JSON.stringify(strip(a0.body)) && JSON.stringify(strip(b.body)) === JSON.stringify(strip(b0.body)); }
-    ok(`★★★ S1${tag} [${format}] 完整回應帶 bv，其餘內容與 BASE 逐欄位相同`, typeof a.body.bv === 'string' && a.body.bv.length > 8 && a.body.bv === b.body.bv && same && a.body.matches.length === 6);
+    ok(`★★★ S1${tag} [${format}] 完整回應帶 bv（不同玩家不同，因為 mine 依帳號），其餘內容與 BASE 逐欄位相同`, typeof a.body.bv === 'string' && a.body.bv.length > 8 && a.body.bv !== b.body.bv && same && a.body.matches.length === 6);
     const u = await ep.call('u1', { bv: a.body.bv });
     ok(`★★★ S2${tag} [${format}] 帶回同一個 bv ⇒ 只回 unchanged＋bv＋viewers（三場進行中都有，RP1 有 2 人）`,
       u.body.unchanged === true && u.body.bv === a.body.bv && !('matches' in u.body) && !('standings' in u.body)
       && JSON.stringify(u.body.viewers) === JSON.stringify({ ['2:0:' + (format === 'swiss-then-cut' ? 'swiss' : '')]: 0, ['2:1:' + (format === 'swiss-then-cut' ? 'swiss' : '')]: 2, ['2:2:' + (format === 'swiss-then-cut' ? 'swiss' : '')]: 0 }), JSON.stringify(u.body));
+    const sw = await ep.call('u4', { bv: a.body.bv });
+    const u4m = sw.body.matches ? sw.body.matches.filter((m) => m.mine).length : -1, u1m = a.body.matches.filter((m) => m.mine).length;
+    ok(`★★★ S6${tag} [${format}] 換帳號（u4 帶 u1 的 bv）⇒ 完整回應，mine 是 u4 自己的（不會沿用別人的「我的對局」）`, !sw.body.unchanged && Array.isArray(sw.body.matches) && JSON.stringify(sw.body.matches.map((m) => m.mine)) === JSON.stringify(b.body.matches.map((m) => m.mine)) && u4m > 0 && u1m > 0, JSON.stringify({ u4m, u1m, un: sw.body.unchanged }));
     d.matches[3].status = 'done'; d.matches[3].winnerUid = d.matches[3].p1uid; d.matches[3].winnerName = d.matches[3].p1name;
+    const inTtl = await ep.call('u1', { bv: a.body.bv });
+    ok(`★★ S7${tag} [${format}] 快取 TTL（3 秒）內對局結束 ⇒ 完整回應也還是同一份快取 ⇒ 仍回 unchanged（兩條路徑一致）`, inTtl.body.unchanged === true && inTtl.body.bv === a.body.bv);
     clock.t += 3001;
     const c = await ep.call('u1', { bv: a.body.bv });
     ok(`★★★ S3${tag} [${format}] 對戰結果改變（快取過期重建）⇒ bv 改變、回完整回應`, !c.body.unchanged && Array.isArray(c.body.matches) && typeof c.body.bv === 'string' && c.body.bv !== a.body.bv, JSON.stringify(c.body).slice(0, 200));
     d.ev.championName = '冠軍';
     const e = await ep.call('u1', { bv: c.body.bv });
     ok(`★★ S4${tag} [${format}] 只有賽事欄位改變（冠軍）⇒ bv 也改變`, !e.body.unchanged && e.body.bv && e.body.bv !== c.body.bv && e.body.event.championName === '冠軍');
+    const r0 = e.body.bv; d.ev.currentRound = 3;
+    const rr = await ep.call('u1', { bv: r0 });
+    ok(`★★ S8${tag} [${format}] 輪次推進（TTL 內也會讓快取失效）⇒ bv 改變、回完整回應`, !rr.body.unchanged && rr.body.bv !== r0 && rr.body.event.currentRound === 3);
     const w = await ep.call('u1', { bv: 'x' }), z = await ep.call('u1', { bv: '' });
     ok(`★★ S5${tag} [${format}] 錯的 bv／空字串 ⇒ 完整回應`, Array.isArray(w.body.matches) && !w.body.unchanged && Array.isArray(z.body.matches) && !z.body.unchanged);
   }
@@ -154,6 +164,8 @@ function checkF(pageRaw, tag) {
   const sendOk = /\(_sentBv\[i\] \? '&bv=' \+ encodeURIComponent\(_sentBv\[i\]\) : ''\)/.test(ld) && /typeof p\.bv === 'string' && p\.bv\) \? p\.bv : ''/.test(ld);
   const recvOk = /if \(r && r\.unchanged === true\) \{[\s\S]{0,200}r = \(p && _sentBv\[i\] && r\.bv === _sentBv\[i\]\) \? tBracketApplyUnchanged\(p, r\) : null;/.test(ld);
   const order = ld.indexOf('r.unchanged === true') > 0 && ld.indexOf('r.unchanged === true') < ld.indexOf('const ok = !!(r && r.event && Array.isArray(r.matches));');
+  const lo = sliceFn(page, 'async function tournLogout()');
+  ok(`★★★ F3${tag} 登出時清掉賽程表（mine 依帳號）並讓路上的回應失效`, /tBrackets = \[\];[^\n]*tBracketsEverOk = false;[^\n]*_tBracketSeq\+\+;/.test(lo) && lo.indexOf('tBrackets = []') < lo.indexOf('signOut(auth)'), lo.slice(0, 200));
   ok(`★★★ F2${tag} 只有上一份有 bv 才帶 &bv=；unchanged 要 bv 對得上且有上一份才採用，否則交給「沿用舊的＋stale」`, ld.length > 500 && sendOk && recvOk && order, JSON.stringify({ sendOk, recvOk, order }));
 }
 
@@ -171,7 +183,9 @@ else {
   const reds = lines.filter((l) => /FAIL/.test(l)).map((l) => l.trim().slice(5, 40));
   pass = before; fail = fb;
   console.log('    BASE 紅：' + reds.join('｜'));
-  ok('★★★ H1 BASE 上 S1～S4、F1、F2 逐條紅', ['S1@BASE', 'S2@BASE', 'S3@BASE', 'S4@BASE', 'F1@BASE', 'F2@BASE'].every((k) => reds.some((r) => r.includes(k))), reds.join(','));
+  const needFmt = ['S1', 'S2', 'S3', 'S4'].flatMap((k) => ['single-elim', 'swiss-then-cut'].map((f) => [k + '@BASE', f]));
+  const fmtOk = needFmt.every(([k, f]) => lines.some((l) => /FAIL/.test(l) && l.includes(k) && l.includes('[' + f + ']')));
+  ok('★★★ H1 BASE 上 S1～S4 兩種賽制都紅，F1、F2、F3 紅', fmtOk && ['F1@BASE', 'F2@BASE', 'F3@BASE'].every((k) => reds.some((r) => r.includes(k))), reds.join(','));
   ok('★★ H2 BASE 上 S5 照樣綠（正對照：BASE 本來就只回完整回應）', !reds.some((r) => r.includes('S5@BASE')), reds.join(','));
 }
 console.log(`=== server v1.82／v6.642 /bracket 內容簽章：${pass} PASS / ${fail} FAIL ===`);

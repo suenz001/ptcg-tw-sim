@@ -11240,7 +11240,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
         }
         const _evOutV182 = { _id: ev._id, name: ev.name, status: ev.status, currentRound: ev.currentRound, rounds: ev.rounds, championName: ev.championName || null, format: ev.format || 'single-elim', phase: ev.phase || null, swissRounds: ev.swissRounds || null, topCut: ev.topCut || null };
         // >>> v182-bracket-unchanged
-        const _bvV182 = String(_cache.sigV182 || '') + '.' + bracketDigestV182(JSON.stringify(_evOutV182));
+        // ⚠ 混入 uid（審查 P1-1）：回應裡的 mine 依 uid 而定；同一分頁換帳號時前端若沿用上一個帳號的 bv，不可回 unchanged（否則沿用別人的 mine ⇒ 進場按鈕被藏）。
+        const _bvV182 = String(_cache.sigV182 || '') + '.' + bracketDigestV182(String(id.uid || '') + '|' + JSON.stringify(_evOutV182));
         if (_cache.sigV182 && typeof req.query.bv === 'string' && req.query.bv === _bvV182) {
           const _vw = {};
           for (const m of _cache.matchesRaw) if (m.status === 'playing' && m.roomId) _vw[bracketMatchKeyV182(m)] = countSpectators(m.roomId);

@@ -5775,6 +5775,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tDeckId = ''; tError = ''; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
+    // >>> v6642-bracket-version
+    // ⭐v6.642（審查 P1-1）：賽程表裡的 mine（我的對局）是依帳號算的 ⇒ 登出時一併清掉，換帳號不沿用上一個人的（伺服器 bv 也混入 uid，雙保險）。
+    tBrackets = []; tBracketsStale = false; tBracketsEverOk = false; _tBracketSeq++;
+    // <<< v6642-bracket-version
     try { await signOut(auth); } catch { /* ignore */ }
   }
   // v5.650 錦標賽系統播報分類上色：依訊息開頭 emoji／關鍵字歸類，回傳對應 CSS class（皆亮色系，不傷眼）
@@ -5957,7 +5961,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const evs = tRunningEvents;
       // ⚠ 這裡的「空」只有在 /event 真的成功回了一份不含進行中賽事的清單時才算權威
       //   （v6.177 起 tournLoadEvent 對壞回應整發不採納 ⇒ tEvents 只會被成功回應改寫）。
-      if (!evs || evs.length === 0) { tBrackets = []; tBracketsStale = false; return; }
+      if (!evs || evs.length === 0) { tBrackets = []; tBracketsStale = false; _tBracketSeq++; return; }   // ⭐v6.642（審查 P3-2）：同時讓路上的舊回應失效
       const _seq = ++_tBracketSeq;
       // >>> v6642-bracket-version
       // ⭐v6.642（擴容審查 P1-1，搭配 server v1.82）：帶上一份好資料的內容簽章 bv；伺服器簽章相同就只回 { unchanged, bv, viewers }，

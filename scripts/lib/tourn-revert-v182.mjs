@@ -3,9 +3,9 @@
 import { revertAdminV182IfPresent } from './sap-revert-admin-v182.mjs';
 import * as Prev from './tourn-revert-v181.mjs';
 export * from './tourn-revert-v181.mjs';
-export const NEW_TAIL_SHA_V182 = 'b61eebdff4ce4341ba9fbd3aa9b0641a14c9f7ea780eef449ee3b7effdd62de2';
-export const NEW_TEV_SHA_V182 = 'c0c08a025ca23a0ec76b9e1ae2b8b815323632ce101f992b9db70e0e37ead775';
-export const NEW_TEV_LEN_V182 = 256022;
+export const NEW_TAIL_SHA_V182 = '5ef85f2399821c5fec124b919aa2b7cd753d7baca0b46da900d0439167c2ca90';
+export const NEW_TEV_SHA_V182 = '8c7fd6f95e0ba1f0fa7e5d69234226f12922d1ff07da956d6e824a68d28c75ba';
+export const NEW_TEV_LEN_V182 = 256160;
 export const revertV182 = (b) => revertAdminV182IfPresent(b);
 export function revertV181(b) { return Prev.revertV181(revertV182(b)); }
 export function revertV180(b) { return Prev.revertV180(revertV182(b)); }

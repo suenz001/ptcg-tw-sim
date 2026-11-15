@@ -7,6 +7,7 @@
 - 前端（v6642-bracket-version）：只有上一份好資料有 bv 才帶 `&bv=`；回 unchanged 且 bv 對得上 ⇒ `tBracketApplyUnchanged` 沿用上一份（新物件）只換觀戰人數；對不上或沒有上一份 ⇒ 當成這筆不可信，交給既有的 mergeKeyedOrKeep（沿用舊的＋stale）。新舊前後端任意組合都能動，部署順序不影響正確性。
 - 還原鏈：`sap-revert-admin-v182`（全在錦標賽區塊內）接進 v177 入口最內層；`tourn-revert-v182` 接在 v181 之前；消費者改接 v182；17 支重釘；v6379 OLD_VALUES 加 v1.81、LIB_DECL 19；v180／v179／v6605／v6292 A4 先套 v1.82 還原；sap152 B1 與 sap154 B3 比對前拿掉 bv（Rule 40，其餘逐欄位）；前端 `revert-v6642-bracket-version` 接在 revertV6641IfPresent 鏈頭。
 - 守衛 `test-v182-bracket-version.mjs`：S1 完整回應帶 bv 且其餘與 BASE 逐欄位相同、S2 unchanged＋viewers、S3 對戰改變 bv 變、S4 只改賽事欄位 bv 也變、S5 錯 bv 照完整；F1 tBracketApplyUnchanged、F2 送／收接線；HEAD-FAIL S1～S4／F1／F2 紅、S5 綠。突變 4/4 被殺（不雜湊 event、viewers 略過 0 人、簽章只算長度、前端不比對 bv）。
+- Opus 5.5 獨立審查（Fable 額度用完）：⭐P1-1（必修，已修）bv 原本沒混入 uid，而回應的 mine 依帳號 ⇒ 同分頁換帳號時前端沿用上一個帳號的 bv 會拿到 unchanged、沿用別人的 mine ⇒ `tMatchAlreadyDone` 誤判 ⇒ 進場按鈕被藏、吃未進場判負。修：伺服器 bv 混入 uid；前端 tournLogout 清 tBrackets／tBracketsEverOk 並 ++_tBracketSeq（雙保險）。守衛改 S1「不同玩家 bv 不同」、加 S6 換帳號帶別人 bv ⇒ 完整回應且 mine 是自己的、S7 TTL 內仍 unchanged、S8 輪次推進 bv 變、F3 登出清賽程表；H1 改逐賽制檢查。P3-2：沒有進行中賽事時清賽程表也 ++_tBracketSeq（既有競態順手修）。P2-1（F2 為字串比對）未改成純函式實跑，記一筆。突變另加 2/2 被殺（bv 不含 uid、登出不清）。admin-v177 動態 import 路徑改 v182（全套首輪唯一紅燈）。
 
 ## v6.641 — 錦標賽「重新同步」帶目前版本（2026-11-15，hidden，對外 changelog 不寫）
 
