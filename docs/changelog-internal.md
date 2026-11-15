@@ -1,5 +1,40 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.649 — 回放 R1（鍵盤）＋R3（步驟摘要、紀錄標示與定位）＋共用索引
+
+- 來源：站長 2026-11-16 指定實作 E:\ptcg-tw-sim-local\replay-R1-R2-R3-R5-R6-handoff-20261115\給Opus5.5的實作提示詞.md 的 R1／R2／R3／R5／R6（不含 R4），分版做；本版＝索引＋R1＋R3。參考介面 app.ptcgym.com。
+  （研究資料夾 ptcgym-replay-and-options-20261115 讀取權限被拒，依提示詞本文與站長截圖實作。）
+- 共用索引 src/lib/game/replay-index.ts（每份回放只建一次，依 tReplay 身分記憶；O(格數＋行數)，4000 格／20000 行約 4ms）：
+  ・replayStepLog＝「第 i 格顯示到哪一行」的唯一判準（tReplayGoto 改呼叫它，行為逐字不變：終局整份／缺 logLen 切到上一回合／其他前 logLen 行）。
+  ・lineStep：第 k 行第一次出現在哪一格（前綴型與回合過濾型各用一個指標掃，一行只指派一次）；lineStart／lines（CSR）：每一格新增的行。
+  ・turnStarts／halfOf：沿用 replay-record 的 nextTurnStepIndex 走出來，不另寫換回合判準。
+  ・turnOnly：整份沒有 logLen ⇒ 摘要提示「此回放僅提供回合級定位」。
+  ・replayStepSummary：新增行的行動者一致才標人，混雜或系統行 ⇒ 中性；只讀 message，絕不讀 privateMessage。
+  ・tReplaySteps 也改成依 tReplay 身分記憶（以前每次重繪、每次走步都 map＋sort 一次）。
+- R1 鍵盤：判準在 src/lib/game/replay-keys.ts（replayKeyAction）；對戰頁只從既有的唯一入口 onGlobalKey 呼叫 replayHandleKey（既有快捷鍵之後、Esc 之前）。
+  ・←/→ 一步、Shift+←/→ 一回合（＝既有 prev/nextTurnStepIndex）、空白鍵 播放／暫停（＝既有 replayTogglePlay）；手動走步會停掉自動播放。
+  ・不處理：組字中、Ctrl／Alt／⌘、焦點在 input（含時間軸 range）／textarea／select／contenteditable／role=textbox…；方向鍵在 role=tab／radio／listbox… 交還；空白鍵在 button／連結／role=button／tab… 交還（不會變成按了按鈕又切換播放）。
+  ・有遮罩（REPLAY_KEY_BLOCKING_OVERLAYS，守衛掃對戰頁每一個 *-overlay／*-backdrop／*-mask 元素確認涵蓋）時不處理；只有處理的鍵才 preventDefault；長按方向鍵 90ms 節流、長按空白只吃掉不切換。
+  ・鍵盤說明只在 matchMedia('(hover: hover) and (pointer: fine)') 才渲染（不新增媒體查詢：test-v6466 S6 限制本頁數量）。
+  ・回放自己的控制鈕（控制列、紀錄欄頂端、定位鈕；REPLAY_KEY_OWN_CONTROLS）上按空白鍵仍是播放／暫停（點過按鈕後焦點停在上面，不然空白鍵會改按那顆鈕）。
+- R3：摘要／📜 整局／鍵盤說明放在紀錄欄最下方 .log-replay-head（sticky bottom:0；紀錄欄是 column-reverse ⇒ 第一個子元素＝畫面最下方；見第三輪複審）；浮動控制列不加列、不多蓋盤面。
+  ・摘要：訊息本身以行動者名字開頭就不再加「名字：」前綴。
+  ・對戰紀錄每行 data-log-idx；這一步新增的行 .log-step-new（outline＋inset box-shadow，不蓋既有底色與邊框）；每行前面獨立的 ↗ 定位鈕（不在卡名連結裡），跳到那一行第一次出現的那一步並只捲紀錄欄。
+  ・📜 整局紀錄：改列 finalLog，之後的行 .log-future 變淡；預設仍只列到這一步；這個模式下打開或換步會把新增的第一行（沒有新增 ⇒ 目前最後一行）捲進來，扣掉頂端列的高度；log-latest 標目前這一步的最後一行。進入點與離開回放都歸零。
+  ・離開回放 ⇒ 記憶的 steps／索引一併放掉（不留著上一份最多 4000 格盤面）。
+  ・⤴ 在 Linux 字型缺字 ⇒ 定位鈕用 ↗。
+- 不發任何請求、不增加伺服器負擔；本機／AI 對戰不新增錄製。手機版的摘要面板在下一版（R6）。
+- 守衛 test-v6649-replay-index-keys（I 索引實跑＋300 份隨機性質與 replayStepLog 同一份判準比對、K 真瀏覽器 DOM、F 接線與 replayHandleKey／tReplaySteps 抽出實跑、E 真瀏覽器 build 走鍵盤／遮罩／定位／整局紀錄、H HEAD-FAIL 逐條）；突變 14 個全殺。
+- Opus 審查：P1 新增的媒體查詢讓 test-v6466 S6 紅 ⇒ 改 matchMedia；P2 第三列讓浮動控制列多蓋 35px 盤面、test-v6576 R6 的 Rule 40 調整等於放寬 ⇒ 撤掉第三列與 R6 調整，改放紀錄欄頂端；
+  P3：記憶放掉、整局紀錄的 log-latest 與捲動目標、摘要重複人名、按鈕焦點下空白鍵（OWN_CONTROLS）、守衛補 E11～E14（整局紀錄捲動、📜 鈕上空白鍵、定位停播、重開回放歸零）與 K7；舊資料兩處提示（控制列的「舊版快照」與紀錄欄的「僅提供回合級定位」）位置不同，保留；小數 logLen 伺服器不會寫，不處理。
+- 複審（P1／P2 已解）：新 P2 鍵盤說明 nowrap 撐出紀錄欄橫向捲動（1024 寬 20px、834 寬 57px）⇒ 縮短成「⌨ ←/→ 步・Shift 回合・空白鍵 播放」（完整說明放 title）並可換行；
+  P3：頂端列改成「摘要＋📜 整局」同一行、鍵盤說明另一行（1024 寬頂端列 ≤48px，E14 守）；sticky top:-.3rem 貼齊紀錄欄頂（不露縫）；「✕ 離開」「🔗 複製連結」不算 OWN_CONTROLS（空白鍵照常按下它們，K7 守）；
+  記憶清除改用 $effect.pre（函式裡的清除在離開後沒人呼叫）；E14 原本用整頁重載驗歸零是安慰劑 ⇒ 改成 F7 靜態守 openReplayData 歸零＋$effect.pre，E14 改驗 1024 寬無橫向捲動。收合紀錄欄時摘要一起藏起來（取捨，記錄）。
+- 第三輪複審：P2 頂端列在 fable（1376／1024）與 blue 834 被浮動控制列蓋住（📜 按不到）⇒ 回放列改放紀錄欄最下方（column-reverse 的第一個子元素、sticky bottom:0、緊貼最新紀錄；同色 box-shadow 補 padding 縫）；
+  守衛 E15：blue／classic／fable／tabletop × 1376／1024 的 📜 中心點 elementFromPoint 打到自己、紀錄欄無橫向捲動。$effect.pre 不會誤清（tReplay 只會直接換新物件或設 null）。
+- 第四輪複審：無 P1／P2（14 種版面×尺寸實測回放列都按得到、最新一行不被蓋、無橫向捲動）。P3：box-shadow 補的縫只遮畫面不攔點擊（2～8px，可能點到看不見的紀錄行）；紀錄欄很矮（classic／tabletop 1024 以下）時整局紀錄的目標行放不完整 —— 記錄，不改。
+- 全套：test-v6604 Esc 情境（Rule 40）：替身補 replayHandleKey（回 false，並斷言兩次 Esc 都有走到它），意圖「Esc 先關 lightbox／放大卡、最後才關牌庫」不變；test-v6370 已知偶發（單跑 91/0）。
+
 ## v6.648 — 自動配對接受後直接進對戰，不露出房間畫面（2026-11-16 站長）
 
 - 站長：「配對成功後，還是會先跳到房間的畫面…不要顯示這個畫面，避免玩家誤按到房間中的按鈕，並且可以加快讀取速度，直接讓玩家按接受後，就直接進入對戰的擲硬幣決定先後攻、set up階段的對戰畫面」。

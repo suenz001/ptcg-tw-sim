@@ -1,0 +1,140 @@
+/**
+ * ⭐ v6.649 回放的共用索引（每載入一份回放只建一次；鍵盤快捷鍵、步驟摘要、紀錄定位、之後的時間軸節點都讀這一份）。
+ *
+ * 設計（2026-11-16 回放 R1／R2／R3／R5／R6 交接提示詞）：
+ *   ・每一格（step）→ 回合／行動方、這一格「新增」了哪幾行對戰紀錄。
+ *   ・對戰紀錄第 k 行 → 第一個包含它的格（定位用）。
+ *   ・回合開頭 → 一律用 replay-record.ts 的 nextTurnStepIndex 走出來，不另寫一套「換回合」判準。
+ *   ・「這一格顯示到哪裡」與對戰頁 tReplayGoto 切 log 用同一支 replayStepLog（唯一判準）。
+ *
+ * ⚠ logLen 不是動作編號：同一個 logLen 可能連續好幾格（盤面變了但沒有新紀錄）、也可能缺（舊資料）。
+ *   ・沒有新紀錄的格 ⇒ 摘要寫「盤面更新」。
+ *   ・整份回放都沒有 logLen（回放上線前的舊對戰）⇒ turnOnly＝true，畫面提示「此回放僅提供回合級定位」。
+ * ⚠ 隱藏資訊：摘要只讀每行的公開 message，絕不讀 privateMessage。
+ * ⚠ 純函式、不碰 DOM、不發請求；O(格數＋紀錄行數)。
+ */
+import { nextTurnStepIndex, type ReplayPlayStep } from './replay-record';
+
+/** 回放的一格（與對戰頁 tReplaySteps 同形；只列這裡用到的欄位）。 */
+export interface ReplayIndexStep extends ReplayPlayStep {
+  logLen: number | null;
+}
+
+/** 對戰紀錄的一行（只列這裡用到的欄位）。 */
+export interface ReplayLogLine {
+  message?: string;
+  playerIndex?: number | null;
+  turn?: number;
+}
+
+/**
+ * 第 step 格要顯示的對戰紀錄（tReplayGoto 與索引共用的唯一判準）。
+ *   ・終局 ⇒ 整份。
+ *   ・缺 logLen（舊資料，那一格是回合開頭的快照）⇒ 只留上一個回合以前的（v5.943）。
+ *   ・其他 ⇒ 前 logLen 行。
+ */
+export function replayStepLog<T extends ReplayLogLine>(step: ReplayIndexStep, fullLog: T[]): T[] {
+  if (step.isFinal) return fullLog.slice();
+  if (step.logLen == null) { const upto = step.turn; return fullLog.filter((e) => (e.turn ?? 0) < upto); }
+  return fullLog.slice(0, step.logLen);
+}
+
+export interface ReplayIndex {
+  /** 格數 */
+  n: number;
+  /** 對戰紀錄第 k 行第一次出現在哪一格；-1＝沒有任何一格包含它 */
+  lineStep: Int32Array;
+  /** 第 i 格新增的紀錄行號：lines.slice(lineStart[i], lineStart[i + 1]) */
+  lineStart: Int32Array;
+  lines: Int32Array;
+  /** 每個半回合的第一格（由 nextTurnStepIndex 走出來，含第 0 格） */
+  turnStarts: number[];
+  /** 第 i 格屬於第幾個半回合（turnStarts 的索引） */
+  halfOf: Int32Array;
+  /** 整份都沒有 logLen ⇒ 只有回合級定位 */
+  turnOnly: boolean;
+}
+
+/** 建索引（每份回放一次）。 */
+export function buildReplayIndex(steps: ReplayIndexStep[], fullLog: ReplayLogLine[]): ReplayIndex {
+  const n = steps.length, L = fullLog.length;
+  const lineStep = new Int32Array(L).fill(-1);
+  // ── 對戰紀錄第 k 行 → 第一個包含它的格 ──
+  //   前綴型（有 logLen／終局）：第 i 格包含 [0, len_i) ⇒ 掃描時記「已涵蓋到哪一行」，每行只指派一次。
+  //   回合過濾型（缺 logLen）：第 i 格包含 turn < upto 的行 ⇒ 先把行號依 turn 穩定排序，同樣用「已涵蓋到的 upto」往前推。
+  let prefMax = 0;
+  const byTurn = Array.from({ length: L }, (_, k) => k).sort((a, b) => ((fullLog[a].turn ?? 0) - (fullLog[b].turn ?? 0)) || (a - b));
+  let q = 0;
+  for (let i = 0; i < n; i++) {
+    const s = steps[i];
+    if (s.isFinal || s.logLen != null) {
+      // slice(0, x) 的實際長度（與 replayStepLog 一致，含負數的 slice 語義）
+      const len = s.isFinal ? L : (s.logLen! < 0 ? Math.max(0, L + s.logLen!) : Math.min(s.logLen!, L));
+      for (let k = prefMax; k < len; k++) if (lineStep[k] < 0) lineStep[k] = i;
+      if (len > prefMax) prefMax = len;
+    } else {
+      const upto = s.turn;
+      while (q < L && (fullLog[byTurn[q]].turn ?? 0) < upto) { const k = byTurn[q]; if (lineStep[k] < 0) lineStep[k] = i; q++; }
+    }
+  }
+  // ── 每一格新增的行（CSR）──
+  const cnt = new Int32Array(n + 1);
+  for (let k = 0; k < L; k++) if (lineStep[k] >= 0) cnt[lineStep[k] + 1]++;
+  for (let i = 0; i < n; i++) cnt[i + 1] += cnt[i];
+  const lineStart = cnt.slice();
+  const fill = cnt.slice(0, n);
+  const lines = new Int32Array(cnt[n]);
+  for (let k = 0; k < L; k++) { const i = lineStep[k]; if (i >= 0) lines[fill[i]++] = k; }
+  // ── 半回合開頭：沿用 nextTurnStepIndex（不另寫判準）──
+  const turnStarts: number[] = [];
+  const halfOf = new Int32Array(n);
+  if (n > 0) {
+    turnStarts.push(0);
+    let j = 0;
+    while (j < n - 1) {
+      const nx = nextTurnStepIndex(steps, j);
+      if (nx <= j) break;
+      // nextTurnStepIndex 找不到下一個半回合時回最後一格 ⇒ 那一格若仍與第 j 格同一個半回合（且不是終局）就不算新的開頭
+      const sameHalf = !steps[nx].isFinal && steps[nx].turn === steps[j].turn && steps[nx].activePlayerIndex === steps[j].activePlayerIndex;
+      if (sameHalf) break;
+      turnStarts.push(nx);
+      j = nx;
+    }
+    let h = 0;
+    for (let i = 0; i < n; i++) { while (h + 1 < turnStarts.length && turnStarts[h + 1] <= i) h++; halfOf[i] = h; }
+  }
+  const turnOnly = !steps.some((s) => !s.isFinal && s.logLen != null);
+  return { n, lineStep, lineStart, lines, turnStarts, halfOf, turnOnly };
+}
+
+/** 第 i 格新增的紀錄行號（依原始順序）。 */
+export function replayStepLines(idx: ReplayIndex, i: number): number[] {
+  if (i < 0 || i >= idx.n) return [];
+  return Array.from(idx.lines.subarray(idx.lineStart[i], idx.lineStart[i + 1]));
+}
+
+export interface ReplayStepSummary {
+  /** 確定是誰做的（新增的每一行若有行動者都是同一個人）；不確定 ⇒ null（畫面用中性的寫法） */
+  actor: 0 | 1 | null;
+  /** 代表這一格的那一行（公開 message）；沒有新紀錄 ⇒ '' */
+  text: string;
+  /** 新增的行數 */
+  count: number;
+}
+
+/** 第 i 格的摘要（只讀公開的 message）。 */
+export function replayStepSummary(idx: ReplayIndex, i: number, fullLog: ReplayLogLine[]): ReplayStepSummary {
+  const ks = replayStepLines(idx, i);
+  if (ks.length === 0) return { actor: null, text: '', count: 0 };
+  let actor: 0 | 1 | null = null, mixed = false, pick = -1;
+  for (const k of ks) {
+    const p = fullLog[k]?.playerIndex;
+    if (p === 0 || p === 1) {
+      if (pick < 0) pick = k;
+      if (actor === null) actor = p; else if (actor !== p) mixed = true;
+    }
+  }
+  if (pick < 0) pick = ks[0];
+  const text = String(fullLog[pick]?.message ?? '').replace(/\s+/g, ' ').trim();
+  return { actor: mixed ? null : actor, text, count: ks.length };
+}

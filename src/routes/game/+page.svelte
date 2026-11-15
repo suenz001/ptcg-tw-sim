@@ -148,6 +148,8 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import ReplayRowLabel from '$lib/game/ReplayRowLabel.svelte';
   import { canAskOppArchetype, oppArchetypeFrom } from '$lib/game/replay-label';   // ⭐v6.600 問對手原型的時機與取值（唯一判準）   // ⭐v6.600 復盤清單：勝敗＋雙方牌組（獨立元件、自己的樣式）
   import { createReplayRecorder, recordStep, finalizeReplay, stepsForStorage, nextTurnStepIndex, prevTurnStepIndex, type ReplayRecorder, type ReplayData } from '$lib/game/replay-record';
+  import { buildReplayIndex, replayStepLog, replayStepSummary, type ReplayIndex } from '$lib/game/replay-index';   // ⭐v6.649 回放共用索引（每份回放只建一次）
+  import { replayKeyAction, REPLAY_KEY_BLOCKING_OVERLAYS } from '$lib/game/replay-keys';   // ⭐v6.649 回放鍵盤快捷鍵的唯一判準
   import { saveReplay, listReplays, loadReplay, deleteReplay, saveInProgress, loadInProgress, downloadReplayFile, parseReplayBytes, MAX_SAVED_REPLAYS, type SavedReplayInfo } from '$lib/game/replay-store';
   import { replayRevealsOpponent } from '$lib/game/replay-policy';   // ⭐v6.557 手牌互疊量依實際寬度計算（唯一判準）
   import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemonExCard,
@@ -3575,6 +3577,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   function onGlobalKey(e: KeyboardEvent) {
     if (energyViewHost && e.key !== 'Escape') return;
     if (runKbdShortcut(e)) return;   // ⭐v6.488 鍵盤快捷鍵（設定裡打開才生效；只按畫面上唯一一顆能按的按鈕）
+    if (replayHandleKey(e)) return;   // ⭐v6.649 回放：←／→ 一步、Shift+←／→ 一回合、空白鍵 播放（Esc 不碰，照下面原本的行為）
     if (e.key === 'Escape') {
       // v2.129：lightbox 最上層，Esc 先關 lightbox
       if (lightboxUrl) { closeLightboxImg(); return; }
@@ -6181,8 +6184,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   // 觀戰：進入某場對戰（read-only，伺服器已 redact 雙方手牌；本端額外把手牌渲染成卡背）
   // ── v5.939 對戰回放 ──
+  // ⭐v6.649 每份回放只排序一次：依 tReplay 的身分記憶（載入新回放＝換一個物件 ⇒ 自動重算；回放資料載入後不會再被改）。
+  //   以前每次重繪、每次走步都重新 map＋sort 一遍（最多 4000 格）。
+  let _rsMemo: { src: any; steps: any[] } = { src: null, steps: [] };
   function tReplaySteps(): any[] {
-    if (!tReplay) return [];
+    if (!tReplay) { if (_rsMemo.src) _rsMemo = { src: null, steps: [] }; return []; }   // 離開回放 ⇒ 放掉上一份（審查 P3-1）
+    if (_rsMemo.src === tReplay) return _rsMemo.steps;
     const finalLogLen = (tReplay.finalLog || []).length;
     // v5.940 半回合逐步:每格帶 activePlayerIndex(先攻/後攻)+logLen(該格對戰 log 進度)
     const steps = (tReplay.snapshots || []).map((s: any) => ({
@@ -6201,6 +6208,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       activePlayerIndex: null, logLen: finalLogLen, state: tReplay.finalState, isFinal: true,
       at: Number.isFinite(tReplay.meta?.endedAt) ? tReplay.meta.endedAt : (Number.isFinite(tReplay.meta?.savedAt) ? tReplay.meta.savedAt : null),   // ⭐v6.564 終局＝結束時間
     });
+    _rsMemo = { src: tReplay, steps };
     return steps;
   }
   function tReplayGoto(i: number) {
@@ -6214,14 +6222,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const st = JSON.parse(JSON.stringify(step.state));
     // v5.940 對戰 log 逐步顯示:用 logLen 切到「這一步為止」的 log(先攻/後攻各自進度);缺 logLen 退回 turn 過濾
     const fullLog = (tReplay.finalLog || []);
-    if (step.isFinal) {
-      st.log = fullLog.slice();
-    } else if (step.logLen == null) {
-      const upto = step.turn;
-      st.log = fullLog.filter((e: any) => (e.turn ?? 0) < upto);  // v5.943 舊格快照=turn 開頭,log 切到上一 turn 結尾(原 <= 會多納整個 turn→log 超前盤面一整回合)
-    } else {
-      st.log = fullLog.slice(0, step.logLen);
-    }
+    //   ⭐v6.649 判準搬到 replay-index.ts 的 replayStepLog（索引、步驟摘要、紀錄定位共用同一份；行為逐字不變）：
+    //   終局＝整份；缺 logLen 的舊格＝切到上一 turn 結尾（v5.943）；其他＝前 logLen 行。
+    st.log = replayStepLog(step, fullLog);
     // v5.942 視角=當前出牌方在底部(本機雙人語義):spectatorView='auto'→myIdx 跟 game.activePlayerIndex(state 一定有,新舊快照皆robust);不在此強制,讓玩家手動看P1/P2可持續override
     st.pendingSelection = null;  // v5.944 兜底:回放不開 picker(避免 turn-start 殘留 pendingSelection)
     coinFlipStage = 'done';
@@ -6260,6 +6263,78 @@ function _setupSelfPending(g: any, seat: number): string | null {
     replaySpeed = REPLAY_SPEEDS[(i + 1) % REPLAY_SPEEDS.length];
   }
   // <<< v6582-replay-autoplay
+  // >>> v6649-replay-index-keys
+  // ⭐v6.649 回放 R1（鍵盤）＋R3（步驟摘要、紀錄標示與定位）。全部在瀏覽器裡算，不發任何請求、不增加伺服器負擔。
+  //   ・索引每份回放只建一次（依 tReplay 身分記憶），走步、播放、重繪都只是查表。
+  //   ・鍵盤走 onGlobalKey 這個唯一入口；判準在 replay-keys.ts；動作接到既有的 tReplayGoto／prevTurnStepIndex／nextTurnStepIndex／replayTogglePlay。
+  let _riMemo: { src: any; idx: ReplayIndex | null } = { src: null, idx: null };
+  function replayIndex(): ReplayIndex | null {
+    if (!tReplay) { if (_riMemo.src) _riMemo = { src: null, idx: null }; return null; }   // 離開回放 ⇒ 放掉上一份（審查 P3-1）
+    if (_riMemo.src !== tReplay) _riMemo = { src: tReplay, idx: buildReplayIndex(tReplaySteps(), tReplay.finalLog || []) };
+    return _riMemo.idx;
+  }
+  // 離開回放（tReplay 變成 null）⇒ 放掉記憶的 steps 與索引（不留著上一份最多 4000 格盤面；複審 P3-B：函式裡的清除沒人會呼叫到）
+  $effect.pre(() => { if (!tReplay) { _rsMemo = { src: null, steps: [] }; _riMemo = { src: null, idx: null }; } });
+  /** 有實體鍵盤／滑鼠的裝置才顯示鍵盤說明（不新增媒體查詢：test-v6187／v6195／v6466 S6 限制本頁媒體查詢數量） */
+  let replayFinePointer = $state(false);
+  $effect(() => { if (!isTReplay) return; try { replayFinePointer = typeof matchMedia === 'function' && matchMedia('(hover: hover) and (pointer: fine)').matches; } catch { replayFinePointer = false; } });
+  /** 📜 整局紀錄：把之後的紀錄也列出來（變淡）；預設照舊只看到這一步為止。進入點與離開回放都歸零。 */
+  let replayLogFull = $state(false);
+  $effect.pre(() => { if (!isTReplay) replayLogFull = false; });
+  /** 手動走步（鍵盤、紀錄定位）⇒ 先停掉自動播放 */
+  function replayManualGoto(i: number) { replayPlaying = false; tReplayGoto(i); }
+  let _replayKeyAt = 0;
+  /** onGlobalKey 呼叫：回放中處理 ←／→、Shift+←／→、空白鍵；有處理才回 true（並 preventDefault）。 */
+  function replayHandleKey(e: KeyboardEvent): boolean {
+    if (!isTReplay || !tReplay || !game) return false;
+    const act = replayKeyAction(e, e.target);
+    if (!act) return false;
+    try { if (document.querySelector(REPLAY_KEY_BLOCKING_OVERLAYS)) return false; } catch { /* 查不到就當沒有遮罩 */ }
+    e.preventDefault();
+    if (act === 'swallow') return true;
+    if (act === 'toggle') { replayTogglePlay(); return true; }
+    // 長按方向鍵：每格要深拷貝一次盤面 ⇒ 至少隔 90ms 才走下一格
+    const now = Date.now();
+    if (e.repeat && now - _replayKeyAt < 90) return true;
+    _replayKeyAt = now;
+    const steps = tReplaySteps(), cur = tReplayStep;
+    const to = act === 'prev' ? cur - 1 : act === 'next' ? cur + 1 : act === 'prevTurn' ? prevTurnStepIndex(steps, cur) : nextTurnStepIndex(steps, cur);
+    if (to >= 0 && to <= steps.length - 1 && to !== cur) replayManualGoto(to);
+    return true;
+  }
+  /** 紀錄定位：跳到這一行第一次出現的那一步，並把那一行捲進紀錄欄看得到的地方 */
+  async function replayLocateLine(k: number) {
+    const idx = replayIndex(); if (!idx) return;
+    const i = k >= 0 && k < idx.lineStep.length ? idx.lineStep[k] : -1;
+    if (i < 0) return;
+    replayManualGoto(i);
+    await tick();
+    replayScrollLogLine(k);
+  }
+  /** 只捲紀錄欄本身（不用 scrollIntoView ⇒ 不會連整頁一起捲） */
+  function replayScrollLogLine(k: number) {
+    try {
+      const el = document.querySelector(`.log-col [data-log-idx="${k}"]`) as HTMLElement | null;
+      const box = el?.closest('.log-col') as HTMLElement | null;
+      if (!el || !box) return;
+      const eb = el.getBoundingClientRect(), bb = box.getBoundingClientRect();
+      // 最下方那一列（sticky）會蓋住最下面一段 ⇒ 可見範圍到它的上緣為止
+      const hd = box.querySelector('.log-replay-head') as HTMLElement | null;
+      const top = bb.top, bottom = hd ? Math.min(bb.bottom, hd.getBoundingClientRect().top) : bb.bottom;
+      if (eb.top < top || eb.bottom > bottom) box.scrollTop += (eb.top - top) - (bottom - top - eb.height) / 2;
+    } catch { /* */ }
+  }
+  // 整局紀錄模式下跟著走：打開或換步就把這一步新增的第一行（沒有新增 ⇒ 目前看到的最後一行）捲進來（預設模式最新一行本來就在最上面，不捲）
+  $effect(() => {
+    if (!isTReplay || !replayLogFull) return;
+    const at = tReplayStep;
+    const idx = untrack(() => replayIndex());
+    if (!idx || at < 0 || at >= idx.n) return;
+    const a = idx.lineStart[at], b = idx.lineStart[at + 1];
+    const k = b > a ? idx.lines[a] : untrack(() => (game?.log?.length ?? 0) - 1);
+    if (k >= 0) void tick().then(() => replayScrollLogLine(k));
+  });
+  // <<< v6649-replay-index-keys
   async function tStartReplay(matchId: string) {
     if (!matchId) return;
     tError = '';
@@ -6283,7 +6358,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⚠⚠v6.190 先把上一份盤面清掉再開回放旗標：isTReplay 一旦為 true，桌機獎賞縮圖就會
     //   翻正面（(_pz.faceUp || replayShowsHidden)，v6.560 前是 isTReplay），而底下還有一個 await 才會把 game 換成回放快照。
     //   進入點同時歸零獎賞卡檢視視窗（離開回放有 7 條路徑，在進入點歸零才是單一來源）。
-    game = null; prizeViewOpen = false; replayDeckSeat = null;
+    game = null; prizeViewOpen = false; replayDeckSeat = null; replayLogFull = false;   // ⭐v6.649 整局紀錄每份回放從預設（只看到這一步）開始
     const _seat = data?.meta?.viewerSeat;
     const _lockedView: 'p1' | 'p2' | 'auto' = (!replayRevealAll && (_seat === 0 || _seat === 1)) ? (_seat === 0 ? 'p1' : 'p2') : 'auto';
     isTReplay = true; isTournSpectator = true; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; battleLogOpen = true; spectatorView = _lockedView;  // v5.942 開log面板+視角自動跟當前出牌方(本機雙人;可手動看P1/P2 override)；v6.560 遮蔽的復盤固定記錄者視角
@@ -13185,7 +13260,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
        手機橫向標題被隱藏時也有地方抓；把手由中央 modalDrag 自動加 touch-action:none ⇒ 不會變成整頁平移。 -->
   <div class="treplay-bar" use:modalDrag={{ clamp: 'contain', handle: '.treplay-bar', overlay: false }}>
     <span class="treplay-grip" title="按住拖曳，移動回放控制列" aria-hidden="true">⠿</span>
-    <button class="treplay-btn" onclick={tExitReplay} title="離開回放">✕ 離開</button>
+    <button class="treplay-btn treplay-exit" onclick={tExitReplay} title="離開回放">✕ 離開</button>
     <span class="treplay-title">{replayKind === 'casual' ? '🎞️ 復盤：' : '🎬 回放：'}<b>{tReplay.meta?.p1name ?? '?'}</b> vs <b>{tReplay.meta?.p2name ?? '?'}</b>{#if tReplay.meta?.winnerName} ｜ 🏆 {tReplay.meta.winnerName}{/if}</span>
     {#if _isOldFmt}<span class="treplay-oldfmt" title="這場對戰是在回放系統上線前打的,只存了{_finalOnly ? '終局盤面' : '整回合粒度'}資料,無法逐半回合切換視角。上線後打的新對戰才有完整逐半回合回放。">⚠ {_finalOnly ? '舊對戰（僅終局盤面）' : '舊版快照（整回合粒度）'}</span>{/if}
     <div class="treplay-nav">
@@ -13197,7 +13272,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <button class="treplay-btn" onclick={() => tReplayGoto(nextTurnStepIndex(_steps, tReplayStep))} disabled={tReplayStep >= _steps.length - 1} title="跳到下一個回合的開頭">下一回合 ⏩</button>
       <button class="treplay-btn" onclick={() => tReplayGoto(_steps.length - 1)} disabled={tReplayStep >= _steps.length - 1}>⏭</button>
     </div>
-    {#if replayKind === 'tournament'}<button class="treplay-btn" onclick={() => tCopyReplayLink(tReplay.meta?.matchId)} title="複製分享連結">🔗 複製連結</button>{/if}
+    {#if replayKind === 'tournament'}<button class="treplay-btn treplay-share" onclick={() => tCopyReplayLink(tReplay.meta?.matchId)} title="複製分享連結">🔗 複製連結</button>{/if}
     <!-- >>> v6582-replay-timeline -->
     <div class="treplay-timeline">
       <button class="treplay-btn treplay-play" onclick={replayTogglePlay} disabled={_steps.length <= 1}
@@ -13628,15 +13703,40 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {/if}
 
       <div class="log-col" title="向下滾動可查看從戰鬥開始到現在的完整記錄">
+        <!-- >>> v6649-replay-loghead -->
+        <!-- ⭐v6.649 回放：紀錄欄最下方固定一列＝這一步的摘要（誰做了什麼）＋📜 整局＋鍵盤說明。紀錄欄是 column-reverse ⇒ 第一個子元素＝畫面最下方，緊貼最新的紀錄；放下方是因為浮動控制列預設在畫面上方，部分版面會蓋到紀錄欄頂端。放在紀錄欄裡 ⇒ 控制列不變高、不多蓋盤面。 -->
+        {#if isTReplay && tReplay && replayIndex()}
+          {@const _ri = replayIndex()!}
+          {@const _sum = replayStepSummary(_ri, tReplayStep, tReplay.finalLog || [])}
+          {@const _who = _sum.actor !== null ? String(game.players?.[_sum.actor]?.name ?? '') : ''}
+          <div class="log-replay-head">
+            <div class="log-replay-row">
+              <div class="log-replay-sum" title={_sum.text || '這一步沒有新的對戰紀錄'}>
+                {#if _ri.turnOnly}<span class="log-replay-note">此回放僅提供回合級定位</span>{/if}
+                {#if _sum.count === 0}<span class="log-replay-text">盤面更新</span>
+                {:else}{#if _who && !_sum.text.startsWith(_who)}<b class="log-replay-who">{_who}</b>：{/if}<span class="log-replay-text">{_sum.text}</span>{#if _sum.count > 1}<span class="log-replay-n">（共 {_sum.count} 行）</span>{/if}{/if}
+              </div>
+              <button type="button" class="log-replay-full" class:active={replayLogFull} aria-pressed={replayLogFull} onclick={() => replayLogFull = !replayLogFull}
+                title={replayLogFull ? '只看到這一步為止的紀錄' : '列出整局紀錄（之後的紀錄會變淡；點紀錄旁的 ↗ 可跳到那一步）'}>📜 整局</button>
+            </div>
+            {#if replayFinePointer}<div class="log-replay-keys" title="← / →：上一步／下一步　Shift + ← / →：上一回合／下一回合　空白鍵：播放／暫停">⌨ ←/→ 步・Shift 回合・空白鍵 播放</div>{/if}
+          </div>
+        {/if}
+        <!-- <<< v6649-replay-loghead -->
         <!-- v5.724：用原始 log index 當 each key，避免新動作時整個列表 DOM 重建→捲動位置被重置(玩家回顧被跳掉) -->
-        {#each [...(game.log??[]).entries()].reverse() as [origIdx, entry], i (origIdx)}
+        <!-- ⭐v6.649 回放：📜 整局紀錄打開時改列整份紀錄（之後的行變淡）；其他時候照舊只列到這一步 -->
+        {#each [...((isTReplay && replayLogFull && tReplay?.finalLog ? tReplay.finalLog : game.log)??[]).entries()].reverse() as [origIdx, entry], i (origIdx)}
           <!-- v2.130：privateMessage 只給 entry.playerIndex 本人看（對手 / 系統 fallback 到 message） -->
           <!-- v2.88：tokenize 後依類別套色 + 整行類別（turn-marker / victory）-->
           {@const _isPrivate = !!(entry.privateMessage && entry.playerIndex === myIdx)}
           {@const _msgText = _isPrivate ? entry.privateMessage : entry.message}
           {@const _lineCls = logLineClass(_msgText ?? '')}
           {@const _tokens = tokenizeLogMessage(_msgText ?? '', cardNamesSorted, logPlayerNames)}
-          <div class="log-line {_lineCls}" class:log-sys={entry.playerIndex===null} class:log-latest={i===0} class:log-private={_isPrivate}>
+          {@const _rIdxL = isTReplay ? replayIndex() : null}
+          {@const _rStepL = _rIdxL && origIdx < _rIdxL.lineStep.length ? _rIdxL.lineStep[origIdx] : -1}
+          <div class="log-line {_lineCls}" class:log-sys={entry.playerIndex===null} class:log-latest={isTReplay && replayLogFull ? origIdx === (game.log?.length ?? 0) - 1 : i===0} class:log-private={_isPrivate}
+            class:log-step-new={_rIdxL !== null && _rStepL === tReplayStep} class:log-future={_rIdxL !== null && _rStepL > tReplayStep} data-log-idx={origIdx}>
+            {#if _rIdxL !== null && _rStepL >= 0}<button type="button" class="log-locate" title="跳到這一行發生的那一步" aria-label="跳到這一行發生的那一步" onclick={() => replayLocateLine(origIdx)}>↗</button>{/if}
             {#if formatLogTime(entry, game?.gameStartTime)}<span class="log-time">{formatLogTime(entry, game?.gameStartTime)}</span>{/if}
             {#if _isPrivate}<span class="log-private-icon" title="只有你看得到">🔒</span>{/if}
             {#each _tokens as tok}{#if tok.cls === 'log-card-link'}<button type="button" class="log-card-link" title="點擊查看 {tok.text} 卡片詳情" onclick={() => openZoomByName(tok.text, tok.iid ?? entry.sourceIid, entry.playerIndex)}>{tok.text}</button>{:else}<span class={tok.cls}>{tok.text}</span>{/if}{/each}
@@ -19540,6 +19640,29 @@ function _setupSelfPending(g: any, seat: number): string | null {
     background:rgba(170,140,255,.05); border-left:2px solid rgba(170,140,255,.4); padding-left:.3rem;
   }
   .log-private-icon { margin-right:.2rem; opacity:.8; font-size:.85em; }
+  /* >>> v6649-replay-log-css */
+  /* ⭐v6.649 紀錄欄頂端的回放列（捲動時固定在上方） */
+  /* 紀錄欄是 column-reverse：這一列是第一個子元素＝畫面最下方；sticky bottom:0 ⇒ 捲動時固定在下方。
+     紀錄欄各版面的 padding 不同（4.8～8px）⇒ 用往下 10px 的同色 box-shadow 補滿 padding 那條縫，捲動時紀錄不會從縫裡露出來（紀錄欄 overflow 會裁掉多的） */
+  .log-replay-head { position: sticky; bottom: 0; z-index: 2; background: #0f1a2e; border-top: 1px solid rgba(143,176,224,.35); box-shadow: 0 10px 0 0 #0f1a2e; padding: 3px 6px; margin: 4px 0 0; display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; min-width: 0; }
+  /* 摘要與「📜 整局」同一行（紀錄欄很矮時也只佔一行；鍵盤說明另一行、可換行，不撐出橫向捲動） */
+  .log-replay-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .log-replay-sum { flex: 1 1 auto; min-width: 0; color: #d8e4ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log-replay-who { color: #ffe08a; }
+  .log-replay-note { color: #ffcf70; margin-right: 6px; }
+  .log-replay-n { color: #8fb0e0; margin-left: 4px; }
+  .log-replay-full { flex: 0 0 auto; background: rgba(43,95,184,.25); border: 1px solid #4a6fae; color: #d8e4ff; border-radius: 5px; font-size: .75rem; padding: 1px 7px; cursor: pointer; }
+  .log-replay-full.active { background: #2b5fb8; border-color: #6d9cf0; color: #fff; }
+  .log-replay-keys { color: #8fb0e0; font-size: .7rem; white-space: normal; overflow-wrap: anywhere; }
+  /* ⭐v6.649 回放：這一步新增的紀錄（外框＋左側亮條，用 outline／box-shadow ⇒ 不蓋掉昏厥、回合標記等既有底色與邊框） */
+  .log-line.log-step-new { outline: 1px solid rgba(255,207,112,.55); outline-offset: -1px; box-shadow: inset 3px 0 0 #ffcf70; }
+  /* 📜 整局紀錄模式：還沒發生的紀錄變淡 */
+  .log-line.log-future { opacity: .42; }
+  /* 定位鈕（與卡名連結分開的獨立小按鈕） */
+  .log-locate { background: transparent; border: 1px solid rgba(143,176,224,.45); color: #8fb0e0; border-radius: 4px; font-size: .72em; line-height: 1.2; padding: 0 .25rem; margin-right: .25rem; cursor: pointer; vertical-align: baseline; }
+  .log-locate:hover { color: #fff; background: rgba(79,140,255,.25); }
+  .log-locate:focus-visible { outline: 1px dotted #a0d0ff; outline-offset: 1px; }
+  /* <<< v6649-replay-log-css */
 
   /* v3.93：撤退按鈕放大 + 配色改顯眼橘黃（玩家反映找不到按鈕）*/
   .btn-retreat{ padding:.25rem .55rem; font-size:.78rem; font-weight:600; background:#d97a2a; border:1px solid #f4a040; border-radius:5px; color:#fff; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.3); transition:background .15s, transform .1s; }

@@ -35,8 +35,9 @@ try{
   });
   await test('Escape先關lightbox與放大卡，最後才關牌庫',()=>{
     const start=g.indexOf('  function onGlobalKey('),end=g.indexOf('  // ── AI 驅動迴圈',start);assert.ok(start>0&&end>start);const code=transformSync(g.slice(start,end),{loader:'ts'}).code;let closed=0;
-    const S={energyViewHost:null,energyView:null,runKbdShortcut:()=>false,lightboxUrl:null,zoomCard:{id:'card'},zoomStack:[],isTReplay:true,replayDeckSeat:0,closeLightboxImg:()=>{},popZoom:()=>{},closeReplayDeck:()=>{closed++;S.replayDeckSeat=null;},closeZoom:()=>{S.zoomCard=null;},floatingEvoMenu:null,floatingRetreatMenu:null,viewDiscardFor:null,selectionPicked:new Set(),selectionCounts:{}};
-    const run=()=>new Function('S','e','with(S){'+code+';onGlobalKey(e);}')(S,{key:'Escape'});run();assert.equal(S.replayDeckSeat,0);assert.equal(closed,0);run();assert.equal(closed,1);assert.equal(S.replayDeckSeat,null);
+    // ⭐v6.649 Rule 40：onGlobalKey 在既有快捷鍵之後多呼叫 replayHandleKey（回放鍵盤）；替身回 false（Esc 本來就不處理），並確認確實有走到它。意圖「Esc 先關 lightbox／放大卡、最後才關牌庫」不變。
+    const S={energyViewHost:null,energyView:null,runKbdShortcut:()=>false,replayHandleKey:(ev)=>{S.rk=(S.rk||0)+1;return false;},lightboxUrl:null,zoomCard:{id:'card'},zoomStack:[],isTReplay:true,replayDeckSeat:0,closeLightboxImg:()=>{},popZoom:()=>{},closeReplayDeck:()=>{closed++;S.replayDeckSeat=null;},closeZoom:()=>{S.zoomCard=null;},floatingEvoMenu:null,floatingRetreatMenu:null,viewDiscardFor:null,selectionPicked:new Set(),selectionCounts:{}};
+    const run=()=>new Function('S','e','with(S){'+code+';onGlobalKey(e);}')(S,{key:'Escape'});run();assert.equal(S.replayDeckSeat,0);assert.equal(closed,0);run();assert.equal(closed,1);assert.equal(S.replayDeckSeat,null);assert.equal(S.rk,2);
   });
   await test('指定賽季說明已移除，選單仍保留',()=>{assert.ok(!g.includes('依開賽時間計入賽季；本季尚無戰績時各榜顯示尚無資料。社群主辦榜依建立時間。'));assert.ok(g.includes('aria-label="排行賽季"'));});
   await test('真Svelte視窗：暫停、seat固定、步驟更新、hidden/空牌、圖卡放大、live關閉與長清單捲動',async()=>{

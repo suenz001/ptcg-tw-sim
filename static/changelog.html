@@ -1,4 +1,11 @@
 <details open>
+        <summary><span class="ver-badge">v6.649</span> <b>回放：鍵盤快捷鍵、步驟摘要與紀錄定位</b><br>看回放時可以用鍵盤操作，對戰紀錄會顯示這一步發生了什麼，也能直接跳到某一行發生的那一步。</summary>
+        <div class="log-body">・鍵盤：← / → 上一步／下一步，Shift + ← / → 上一回合／下一回合，空白鍵 播放／暫停（在輸入框裡打字、或開著卡片放大等視窗時不會作用）。
+・對戰紀錄最下方會顯示這一步是誰做了什麼；沒有新紀錄的步驟顯示「盤面更新」。
+・對戰紀錄裡，這一步新增的那幾行會用黃框標出；每一行前面的 ↗ 可以直接跳到那一行發生的那一步。
+・對戰紀錄下方的「📜 整局」可以列出整場的紀錄（還沒發生的會變淡），預設仍然只看到目前這一步為止。</div>
+      </details>
+      <details>
         <summary><span class="ver-badge">v6.648</span> <b>自動配對成功後直接進入對戰</b><br>自動配對雙方按下接受後，不再顯示房間畫面，直接進入擲硬幣與準備階段。</summary>
         <div class="log-body">自動配對成功、雙方都按下接受後，畫面會一直顯示「正在進入對戰…」，直到對戰畫面出來（擲硬幣決定先後攻、放置寶可夢）。過程中不會再看到房間畫面，也不會誤按到房間裡的按鈕。若建立對戰時出了問題，才會回到房間或大廳並顯示原因。</div>
       </details>
@@ -42,9 +49,8 @@
         <summary><span class="ver-badge">v6.635</span> <b>從棄牌區放上備戰區的對戰紀錄改列卡名，硃砂誘餌／傳喚之門不會超過備戰上限</b><br>刺龍王ex「王之號召」、鳳王「復生火焰」等招式的對戰紀錄改成列出實際放上的卡名；米立龍ex「硃砂誘餌」、人造細胞卵「傳喚之門」放上備戰區時一定不會超過備戰上限。</summary>
         <div class="log-body">之前從棄牌區把寶可夢放上備戰區的招式，對戰紀錄會寫成「放置 2 張「【水】寶可夢」到備戰」，現在改成列出實際放上的卡名。另外補強硃砂誘餌與傳喚之門：送出時若備戰區空位不夠，超出的寶可夢會留在牌庫一起重洗，不會超過備戰上限，也不會讓卡片不見。</div>
       </details>
-      <details>
+      <details data-ver="v6.634">
         <summary><span class="ver-badge">v6.634</span> <b>招式把寶可夢放上備戰區時不能放海豚俠ex</b><br>米立龍ex「硃砂誘餌」、人造細胞卵「傳喚之門」、超級妖火紅狐ex「戲法傳送門」、下石鳥「親送挑戰」、刺龍王ex「王之號召」不能再把海豚俠ex 放上備戰區。</summary>
-        <div class="log-body">海豚俠ex 的特性「全能靈魂」寫明「這張卡只可依據『海豚俠』的特性『全能變身』的效果放置於場上」。之前這幾個招式選卡時可以把海豚俠ex 直接放上備戰區，與卡面不符；現在選卡清單不會再出現海豚俠ex（查看牌庫上方的招式仍然看得到它，只是不能選）。上一版已修正從牌庫直接進化的招式，這次把放上備戰區的招式一起改好。</div>
       </details>
       <details data-ver="v6.633">
         <summary><span class="ver-badge">v6.633</span> <b>從牌庫直接進化的效果不能進化出海豚俠ex</b><br>雙卵細胞球「細胞進化」、人造細胞卵「細胞覺醒」、彩粉蝶「進化粉」不能再從牌庫把波普海豚進化成海豚俠ex。</summary>
@@ -111,9 +117,6 @@
       </details>
       <details data-ver="v6.604">
         <summary><span class="ver-badge">v6.604</span> <b>復盤查看牌庫順序，精簡排行說明</b><br>點牌庫即可查看當時由牌頂到牌底的順序。</summary>
-      </details>
-      <details data-ver="v6.603">
-        <summary><span class="ver-badge">v6.603</span> <b>錦標賽排行新增賽季切換</b><br>可切換查看不同賽季的排行榜。</summary>
       </details>
       <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
         📚 這裡顯示<b>最近的更新內容</b>。更早的紀錄完整保留在 →
