@@ -9481,7 +9481,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   function cmApply(v: CasualMatchView, gen: number, seq: number) {
     if (gen !== cmGen) return;
-    if (seq < cmAppliedSeq) return;   // 比已採用的更早送出的回應 ⇒ 丟掉（不讓舊的 found 蓋回 host）
+    if (seq < cmAppliedSeq) { if (v.notice) cmNotice = v.notice; return; }   // 比已採用的更早送出的回應 ⇒ 丟掉（不讓舊的 found 蓋回 host）；附帶的提示照樣顯示（伺服器的提示查一次就清）
     cmAppliedSeq = seq;
     cmError = '';
     if (v.notice) cmNotice = v.notice;
@@ -9566,9 +9566,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
         // 配對在這段時間失效（對手取消、逾時）⇒ 把剛開的房收掉，交給伺服器回的狀態（通常是回到佇列）
         leaveRoom(code).catch(() => { /* noop */ });
         cmEntering = false;
-        if (r.ok) { cmApply(r.view, gen, seq); } else { cmError = r.message; cmSchedule(gen); }
+        if (r.ok) { cmApply(r.view, gen, seq); return; }
+        // 複審 P3-3：伺服器確認不到這間房（不是重試會好的問題）⇒ 直接結束配對，不要每秒建一間收一間
+        if (r.code === 'casual-match-room-check') { cmStop(); cmError = '建立配對房間失敗，請重新開始自動配對'; return; }
+        cmError = r.message; cmSchedule(gen);
         return;
       }
+      cmAppliedSeq = seq;   // 複審 P3-1：之前送出、還在途中的 poll 回來時不可以把 hosting 蓋回 host
       cmView = r.view;
       releaseOldLobbyRooms(_oldRooms, code);
       roomCode = code;
@@ -9603,10 +9607,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
         if (gen !== cmGen) { leaveRoom(code).catch(() => { /* noop */ }); return; }
         // 審查 P3-3：一定要坐在對戰位 P2（座位 1）；被別人搶先坐走 ⇒ 離房並提示（不要變成觀戰）
         const _uid = myUid || (await oracleAuth().catch(() => null))?.uid || null;
-        if (!_uid || findMySeatIdx(_joined?.seats ?? [], _uid) !== 1) {
+        const _myIdx = _uid ? findMySeatIdx(_joined?.seats ?? [], _uid) : -1;
+        if (_myIdx !== 1) {
           leaveRoom(code).catch(() => { /* noop */ });
           cmEntering = false;
-          cmError = '對戰位置被別人佔走了，請重新開始自動配對';
+          cmError = _myIdx === 0 ? '對手已離開房間，請重新開始自動配對' : '對戰位置被別人佔走了，請重新開始自動配對';
           cmStop();
           return;
         }
@@ -9626,11 +9631,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // 審查 P2-2：離開線上大廳（← 返回、切到本機對戰）⇒ 取消配對；否則配到了也看不到接受視窗，只會白白逾時
   $effect(() => { if (mode !== 'online' && cmActive) cmStop(); });
   // 審查 P2-3：分頁回到前景 ⇒ 立刻查一次（背景分頁的計時器會被瀏覽器節流）
+  function cmOnPageHide() { if (cmActive) cmStop(true); }
   function cmOnVisible() { if (typeof document !== 'undefined' && document.visibilityState === 'visible' && cmActive) { cmClearTimer(); void cmPollNow(cmGen); } }
   $effect(() => {
     if (typeof document === 'undefined') return;
     document.addEventListener('visibilitychange', cmOnVisible);
-    return () => document.removeEventListener('visibilitychange', cmOnVisible);
+    // 複審 P2-A：直接關分頁／重新整理不會觸發 onDestroy ⇒ pagehide 時也送 leave（keepalive），不讓自己在佇列裡當 75 秒的幽靈
+    window.addEventListener('pagehide', cmOnPageHide);
+    return () => { document.removeEventListener('visibilitychange', cmOnVisible); window.removeEventListener('pagehide', cmOnPageHide); };
   });
   onDestroy(() => cmStop(true));
   // <<< v6645-casual-automatch

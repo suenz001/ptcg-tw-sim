@@ -120,6 +120,7 @@ async function makePlayer(js, server, clock, me, shared) {
     leaveOnlineGame: async () => { st.calls.push('leaveOnlineGame'); st.onlineStep = 'join'; },
     __onDestroy: (f) => { st.destroy = f; },
     setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout,
+    window: { addEventListener: (ev, f) => { if (ev === 'pagehide') st.pagehide = f; }, removeEventListener: () => {} },
     document: { title: 'PTCG', visibilityState: 'visible', addEventListener: (ev, f) => { st.vis = f; }, removeEventListener: () => {} },
   };
   const names = Object.keys(env);
@@ -168,7 +169,7 @@ async function checkE(pageSrc, sapSrc, tag) {
     const B = await makePlayer(js || '', server, clock, { token: 'tB', email: 'b@x.com', name: '小華' }, shared);
     return { clock, server, shared, A, B };
   }
-  if (!js) { for (const k of ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'E10', 'E11', 'E12']) ok(`${k}${tag} （腳本區塊不存在）`, false); return; }
+  if (!js) { for (const k of ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9', 'E10', 'E11', 'E12', 'E13', 'E14']) ok(`${k}${tag} （腳本區塊不存在）`, false); return; }
   // E1～E3
   {
     const { clock, server, shared, A, B } = await scenario();
@@ -290,6 +291,26 @@ async function checkE(pageSrc, sapSrc, tag) {
     const a = A.peek();
     ok(`★★★ E11${tag} 房主回報房號途中離開頁面 ⇒ 不進房、不自動準備、把剛開的房收掉`, a.onlineStep !== 'room' && A.st.ready === false && A.st.left.length === 1, JSON.stringify({ a, left: A.st.left, ready: A.st.ready }));
   }
+  // E13（複審 P2-A）直接關分頁（pagehide）⇒ 送 leave
+  {
+    const { clock, server, A } = await scenario();
+    A.api.setDeck('d1'); await A.api.cmStart(); await clock.advance(100);
+    A.api.runEffects();
+    if (A.st.pagehide) A.st.pagehide();
+    await clock.advance(10);
+    ok(`★★★ E13${tag} 直接關分頁／重新整理（pagehide）⇒ 送 leave，不在佇列當幽靈`, typeof A.st.pagehide === 'function' && server.calls.some((c) => c.path === 'leave') && A.peek().view === null, JSON.stringify(server.calls.slice(-2)));
+  }
+  // E14（複審 P3-3）伺服器確認不到房主的房 ⇒ 直接結束配對，不反覆建房
+  {
+    const { clock, server, shared, A, B } = await scenario();
+    A.api.setDeck('d1'); B.api.setDeck('d1');
+    await A.api.cmStart(); await B.api.cmStart(); await clock.advance(3100);
+    shared.onCreate = async () => { for (const k of Object.keys(server.dbRooms)) delete server.dbRooms[k]; };   // 房間沒寫進資料庫
+    await A.api.cmAnswer(true); await B.api.cmAnswer(true);
+    await clock.advance(10000);
+    const nCreate = A.st.calls.filter((c) => c === 'createRoom').length;
+    ok(`★★ E14${tag} 回報房號被伺服器拒絕（確認不到房間）⇒ 只建一次房、收掉、結束配對並提示`, nCreate === 1 && A.st.left.length === 1 && A.peek().view === null && /建立配對房間失敗/.test(A.peek().err), JSON.stringify({ nCreate, left: A.st.left, p: A.peek() }));
+  }
   // E12（審查 P3-3）客人進房時對戰位被別人搶走 ⇒ 離房、提示，不變成觀戰
   {
     const { clock, shared, A, B } = await scenario();
@@ -389,7 +410,7 @@ else {
     const reds = lines.filter((l) => /FAIL/.test(l)).map((l) => l.trim().slice(5, 30));
     pass = before; fail = fb;
     console.log('    BASE 紅：' + reds.length + ' 條');
-    ok('★★★ H1 BASE 上 E1～E8（含 E1b）、A1～A6（模組不存在）、R1～R3、U1～U4 逐條紅', ['E1@', 'E2@', 'E3@', 'E4@', 'E5@', 'E6@', 'E7@', 'E8@', 'A1@', 'A4@', 'A5@', 'A6@', 'A7@', 'R1@', 'R2@', 'R3@', 'U1@', 'U2@', 'U3@', 'U4@', 'U5@', 'E9@', 'E10@', 'E11@', 'E12@'].every((k) => reds.some((r) => r.includes(k))), reds.join(','));
+    ok('★★★ H1 BASE 上 E1～E8（含 E1b）、A1～A6（模組不存在）、R1～R3、U1～U4 逐條紅', ['E1@', 'E2@', 'E3@', 'E4@', 'E5@', 'E6@', 'E7@', 'E8@', 'A1@', 'A4@', 'A5@', 'A6@', 'A7@', 'R1@', 'R2@', 'R3@', 'U1@', 'U2@', 'U3@', 'U4@', 'U5@', 'E9@', 'E10@', 'E11@', 'E12@', 'E13@', 'E14@'].every((k) => reds.some((r) => r.includes(k))), reds.join(','));
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
 console.log(`=== v6.645 休閒自動配對（前端）：${pass} PASS / ${fail} FAIL ===`);
