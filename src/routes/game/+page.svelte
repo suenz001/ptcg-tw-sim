@@ -1533,6 +1533,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
   function openProfileModal(t: ProfileLookupTarget) {
     profileModalTarget = t;
   }
+  function openBattleSeatProfile(seatIdx: number, fallbackNick?: string) {
+    if (mode !== 'online') return;
+    openProfileModal(isTournament ? { tournRoom: tActiveRoom, seatIdx, fallbackNick } : { roomCode, seatIdx, fallbackNick });
+  }
+  function onBattleSeatProfileKey(e: KeyboardEvent, seatIdx: number, fallbackNick?: string) {
+    if (mode === 'online' && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      openBattleSeatProfile(seatIdx, fallbackNick);
+    }
+  }
   function syncMyProfileNick(p: PlayerProfileSelf) {
     profileSelf = p;
     if (p.nick) {
@@ -13248,7 +13258,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <span class="hand-counts" title="雙方手牌張數（手牌內容仍為隱私，僅顯示張數）">
       {#each game.players as pl, pi}
         <!-- ⭐v6.574（站長：手牌張數不該被過長的玩家名稱擋住，尤其 iPad）：名稱與張數拆成兩欄，只有名稱會縮成「…」，張數永遠完整；完整名稱放 title -->
-        <span class="chip hand-count-chip" class:hc-active={pi === aIdx} class:prof-link={mode === 'online'} role={mode === 'online' ? 'button' : undefined} tabindex={mode === 'online' ? 0 : undefined} title={mode === 'online' ? `${pl.name ?? `P${pi+1}`} 手牌 ${pl.hand.length} 張（點擊查看名片）` : `${pl.name ?? `P${pi+1}`} 手牌 ${pl.hand.length} 張`} onclick={() => { if (mode === 'online') openProfileModal(isTournament ? { tournRoom: tActiveRoom, seatIdx: pi, fallbackNick: pl.name } : { roomCode, seatIdx: pi, fallbackNick: pl.name }); }} onkeydown={(e) => { if (mode === 'online' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openProfileModal(isTournament ? { tournRoom: tActiveRoom, seatIdx: pi, fallbackNick: pl.name } : { roomCode, seatIdx: pi, fallbackNick: pl.name }); } }}>
+        <span class="chip hand-count-chip" class:hc-active={pi === aIdx} class:prof-link={mode === 'online'} role={mode === 'online' ? 'button' : undefined} tabindex={mode === 'online' ? 0 : undefined} title={mode === 'online' ? `${pl.name ?? `P${pi+1}`} 手牌 ${pl.hand.length} 張（點擊查看名片）` : `${pl.name ?? `P${pi+1}`} 手牌 ${pl.hand.length} 張`} onclick={function () { openBattleSeatProfile(pi, pl.name); }} onkeydown={function (e) { onBattleSeatProfileKey(e, pi, pl.name); }}>
           <span class="hc-name">✋ {pl.name ?? `P${pi+1}`}</span><span class="hc-num">手牌 {pl.hand.length} 張</span>
         </span>
       {/each}

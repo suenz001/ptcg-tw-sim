@@ -14,6 +14,8 @@ import { fileURLToPath } from 'node:url';
 import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { revertV6653IfPresent } from './lib/revert-v6653-player-profile.mjs';
+import { revertAdminV187IfPresent } from './lib/sap-revert-admin-v187.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = 'e8d902f0';
@@ -90,8 +92,8 @@ async function checkF4(pageRaw, tag) {
   } catch (e) { err = e.message; ok(`★★ F4${tag} tHofOpen 實跑`, false, err); }
 }
 
-const sap = readFileSync(join(ROOT, SAP), 'utf8').replace(/\r\n/g, '\n');
-const page = readFileSync(join(ROOT, PAGE), 'utf8');
+const sap = revertAdminV187IfPresent(readFileSync(join(ROOT, SAP), 'utf8').replace(/\r\n/g, '\n'));
+const page = revertV6653IfPresent(PAGE, readFileSync(join(ROOT, PAGE), 'utf8'));
 console.log('【S】伺服器'); checkS(sap, '');
 console.log('【F】前端'); checkF(page, ''); await checkF4(page, '');
 if (hasBaseCommit(ROOT, BASE_SHA)) {

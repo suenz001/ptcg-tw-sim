@@ -9197,11 +9197,20 @@ import('firebase-admin').then(async ({ default: admin }) => {
       db.collection(PROF_COLL).createIndex({ nickLower: 1 }).catch(() => {});
     } catch (_e) { /* db 尚未就緒時略過 */ }
 
-    const cryptoModProf = require('crypto');
+    function _profHash20(str) {
+      let h1 = 0x811c9dc5, h2 = 0x01000193 ^ 0x7fffffff, h3 = 0x9e3779b9;
+      for (let i = 0; i < str.length; i++) {
+        const c = str.charCodeAt(i);
+        h1 ^= c; h1 = Math.imul(h1, 0x01000193) >>> 0;
+        h2 ^= (c * 31 + i) & 0xffff; h2 = Math.imul(h2, 0x01000193) >>> 0;
+        h3 ^= (c * 131 + i * 7) & 0xffff; h3 = Math.imul(h3, 0x85ebca6b) >>> 0;
+      }
+      return (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0') + h3.toString(16).padStart(8, '0')).slice(0, 20);
+    }
     function _profKeyForEmail(email) {
       const em = _frNormEmail(email);
       if (!em) return '';
-      return cryptoModProf.createHash('sha256').update('ptcg_prof_key:' + em).digest('hex').slice(0, 20);
+      return _profHash20('ptcg_prof_key:' + em);
     }
     function _profCleanText(raw, maxLen) {
       if (typeof raw !== 'string') return '';
@@ -9811,10 +9820,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
               nickA: isA ? myNick : tgtNick,
               nickB: isA ? tgtNick : myNick,
               addedVia: String(b.via || 'profile').slice(0, 24),
+              blockedBy: null,
+              blockedAt: null,
+              rejectedAt: null,
               updatedAt: now,
             },
             $setOnInsert: { createdAt: now },
-            $unset: { blockedBy: '', blockedAt: '', rejectedAt: '' },
           },
           { upsert: true }
         );

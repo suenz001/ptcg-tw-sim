@@ -16,12 +16,13 @@ import { readBaseBlob,hasBaseCommit,shallowSkip } from './lib/base-blob.mjs';
 import { standingsFixture,measureStandings } from './lib/swiss-standings-fixture.mjs';
 import { revertMobileUiV6590 } from './lib/mobile-ui-v6590-pairs.mjs';
 import { V6587_GAME_PAIRS } from './lib/revert-v6587-game.mjs';
+import { revertV6653IfPresent } from './lib/revert-v6653-player-profile.mjs';
 
 const ROOT=dirname(dirname(fileURLToPath(import.meta.url)));
 const PAGE='src/routes/game/+page.svelte';
 const BASE='34f59afb705b3a30db7abd1056303b08edbc1f26';
 const rd=p=>readFileSync(join(ROOT,p),'utf8').replace(/\r\n/g,'\n');
-const source=rd(PAGE),layout=rd('src/routes/+layout.svelte'),raw=readFileSync(join(ROOT,PAGE));
+const source=revertV6653IfPresent(PAGE,rd(PAGE)),layout=rd('src/routes/+layout.svelte'),raw=readFileSync(join(ROOT,PAGE));
 let pass=0,fail=0;
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 function ok(name,value,details=''){if(value){pass++;console.log('PASS '+name);}else{fail++;console.error('FAIL '+name+' '+details);}}
