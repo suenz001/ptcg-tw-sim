@@ -73,6 +73,8 @@
   // v4.49：能量屬性顯示（彩色 chip + 文字摘要）
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
+  import AvatarCircle from '$lib/profile/AvatarCircle.svelte';
+  import type { AvatarCrop } from '$lib/profile/profile-api';
 
   interface Props {
     game: GameState;
@@ -130,6 +132,9 @@
     undoAvailable?: boolean;
     onUndo?: () => void;
     onResync?: () => void;  // v5.618 錦標賽：點狀態列強制重新同步(免重整)
+    oppAvatar?: AvatarCrop | null;
+    myAvatar?: AvatarCrop | null;
+    onOpenPlayerProfile?: (seatIdx: number, fallbackNick?: string) => void;
   }
 
   let {
@@ -158,7 +163,21 @@
     undoAvailable = false,
     onUndo,
     onResync,
+    oppAvatar = null,
+    myAvatar = null,
+    onOpenPlayerProfile,
   }: Props = $props();
+
+  function handleTurnOrderClick(seatIdx: number, fallbackNick?: string) {
+    if (onOpenPlayerProfile) onOpenPlayerProfile(seatIdx, fallbackNick);
+  }
+  function handleTurnOrderKey(e: KeyboardEvent, seatIdx: number, fallbackNick?: string) {
+    if (!onOpenPlayerProfile) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onOpenPlayerProfile(seatIdx, fallbackNick);
+    }
+  }
 
   // v5.194：手機版 log timestamp helper（鏡射 +page.svelte formatLogTime）
   function formatLogTimeShort(entry: { timestamp?: number }, gameStartTime: number | undefined): string {
@@ -859,9 +878,9 @@
 
   <!-- ─── 對手 active ─── -->
   <div class="mp-active-row">
-    <!-- v5.383：先攻/後攻標示（左側空白處，鏡射桌面版） -->
+    <!-- v5.383：先攻/後攻標示（左側空白處，鏡射桌面版）＋ v6.654 玩家小頭像（點擊開啟名片） -->
     {#if game.firstPlayerIdx !== undefined}
-      <span class="mp-turn-order" class:mp-turn-now={game.activePlayerIndex === oppIdx}>{game.firstPlayerIdx === oppIdx ? '先攻' : '後攻'}</span>
+      <span class="mp-turn-order" class:mp-turn-now={game.activePlayerIndex === oppIdx} class:mp-turn-click={!!onOpenPlayerProfile} role={onOpenPlayerProfile ? 'button' : undefined} tabindex={onOpenPlayerProfile ? 0 : undefined} title={onOpenPlayerProfile ? '點擊查看玩家名片' : undefined} onclick={() => handleTurnOrderClick(oppIdx, oppPlayer?.name)} onkeydown={(e) => handleTurnOrderKey(e, oppIdx, oppPlayer?.name)}><span class="mp-turn-av"><AvatarCircle avatar={oppAvatar} name={oppPlayer?.name ?? '對手'} size={16} /></span><span class="mp-turn-txt">{game.firstPlayerIdx === oppIdx ? '先攻' : '後攻'}</span></span>
     {/if}
     {#if oppPlayer.active}
       {@const inst = oppPlayer.active}
@@ -933,9 +952,9 @@
 
   <!-- ─── 我方 active ─── -->
   <div class="mp-active-row">
-    <!-- v5.383：先攻/後攻標示（左側空白處，鏡射桌面版） -->
+    <!-- v5.383：先攻/後攻標示（左側空白處，鏡射桌面版）＋ v6.654 玩家小頭像（點擊開啟名片） -->
     {#if game.firstPlayerIdx !== undefined}
-      <span class="mp-turn-order" class:mp-turn-now={game.activePlayerIndex === myIdx}>{game.firstPlayerIdx === myIdx ? '先攻' : '後攻'}</span>
+      <span class="mp-turn-order" class:mp-turn-now={game.activePlayerIndex === myIdx} class:mp-turn-click={!!onOpenPlayerProfile} role={onOpenPlayerProfile ? 'button' : undefined} tabindex={onOpenPlayerProfile ? 0 : undefined} title={onOpenPlayerProfile ? '點擊查看玩家名片' : undefined} onclick={() => handleTurnOrderClick(myIdx, myPlayer?.name)} onkeydown={(e) => handleTurnOrderKey(e, myIdx, myPlayer?.name)}><span class="mp-turn-av"><AvatarCircle avatar={myAvatar} name={myPlayer?.name ?? '我'} size={16} /></span><span class="mp-turn-txt">{game.firstPlayerIdx === myIdx ? '先攻' : '後攻'}</span></span>
     {/if}
     {#if myPlayer.active}
       {@const inst = myPlayer.active}
@@ -1451,11 +1470,19 @@
   .mp-turn-order {
     position: absolute; left: 6px; top: 50%; transform: translateY(-50%);
     writing-mode: vertical-rl; text-orientation: upright;
+    display: inline-flex; align-items: center; justify-content: center; gap: 3px;
     font-size: 0.6rem; font-weight: 700; letter-spacing: 1px; line-height: 1.05;
     padding: 4px 3px; border-radius: 5px; z-index: 2; pointer-events: none;
     color: #cfd8e8; background: rgba(60,70,100,0.55); border: 1px solid #4a5878;
   }
+  .mp-turn-av {
+    writing-mode: horizontal-tb;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0; border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.5);
+  }
   .mp-turn-order.mp-turn-now { color: #1a1a1a; background: rgba(224,176,48,0.92); border-color: #e0b030; }
+  .mp-turn-order.mp-turn-click { pointer-events: auto; cursor: pointer; }
   .mp-active {
     /* v6.186 ⚠ 必須明寫 border-box（真因）：setup 的對手戰鬥位是 <div class="mp-active">，
        playing 是 <button class="mp-active">。<button> UA 預設 border-box、<div> content-box，

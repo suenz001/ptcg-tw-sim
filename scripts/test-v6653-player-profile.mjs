@@ -68,6 +68,7 @@ const MODAL_PATH = 'src/lib/profile/PlayerProfileModal.svelte';
 const EDIT_PATH = 'src/lib/profile/PlayerProfileEditor.svelte';
 const SRV_PATH = 'oracle-admin/server_admin_patch.js';
 const GAME_PATH = 'src/routes/game/+page.svelte';
+const MPB_PATH = 'src/routes/game/MobilePortraitBattle.svelte';
 const DP_PATH = 'src/routes/deck-posts/+page.svelte';
 const FR_PAGE_PATH = 'src/routes/friends/+page.svelte';
 const FRP_PATH = 'src/lib/friends/FriendsPanel.svelte';
@@ -90,7 +91,7 @@ async function loadProfileApi(srcOverride) {
   const tmp = mkdtempSync(join(tmpdir(), 'v6653-api-'));
   try {
     const stubPool = join(tmp, 'pool.mjs');
-    writeFileSync(stubPool, 'export async function loadIndex(){return [];}\nexport async function loadSet(){return [];}\nexport async function loadCardSetMap(){return {};}\n');
+    writeFileSync(stubPool, 'export async function loadIndex(){return [];}\nexport async function loadSet(){return [];}\nexport async function loadAllSets(){return [];}\nexport async function loadCardSetMap(){return {};}\n');
     const prepped = src
       .replace(marker, JSON.stringify('http://api.local'))
       .replace(/from '\$lib\/cards\/pool'/g, `from '${pathToFileURL(stubPool).href}'`);
@@ -131,6 +132,24 @@ async function assertCropAndApi(mod) {
   assert.strictEqual(emojiNick, '🦊'.repeat(16));
   assert.strictEqual(mod.cardImageUrlFromId('19145'), 'https://asia.pokemon-card.com/tw/card-img/tw00019145.png');
   assert.strictEqual(mod.cardImageUrlFromId('abc'), null);
+
+  // buildSelfProfilePreview offline self-preview contract
+  const pv = mod.buildSelfProfilePreview({
+    profileKey: 'pk1',
+    nick: '測試者',
+    defaultNick: '預設',
+    bio: '打牌啦',
+    avatar: { cardId: '19145', x: 0.5, y: 0.34, zoom: 1.4 },
+    googleVerified: true,
+    champOfficial: 2,
+    champCommunity: 1,
+    pinnedHonorIds: ['e2', 'missing'],
+    availableHonors: [{ eventId: 'e2', eventName: '盃賽2', date: 1700000000000, kind: 'site', placementLabel: '冠軍' }],
+  });
+  assert.strictEqual(pv.friendStatus, 'self');
+  assert.strictEqual(pv.canFriend, false);
+  assert.strictEqual(pv.pinnedHonors.length, 1);
+  assert.strictEqual(pv.pinnedHonors[0].eventId, 'e2');
 
   // fetch wrappers
   const calls = [];
@@ -532,7 +551,9 @@ const chromium = pwChromium('v6.653');
 if (chromium) {
   const dir = mkdtempSync(join(tmpdir(), 'v6653-ui-'));
   try {
-    const rewriteRel = (code) => code.replace(/['"]\.\/AvatarCircle\.svelte['"]/g, "'./AvatarCircle.js'");
+    const rewriteRel = (code) => code
+      .replace(/['"]\.\/AvatarCircle\.svelte['"]/g, "'./AvatarCircle.js'")
+      .replace(/['"]\.\/PlayerProfileModal\.svelte['"]/g, "'./PlayerProfileModal.js'");
     writeFileSync(join(dir, 'profile-api.ts'), R(API_PATH));
     writeFileSync(join(dir, 'AvatarCircle.js'), compile(R(AV_PATH), { generate: 'client', filename: 'AvatarCircle.svelte', runes: true, css: 'injected' }).js.code);
     writeFileSync(join(dir, 'PlayerProfileModal.js'), rewriteRel(compile(R(MODAL_PATH), { generate: 'client', filename: 'PlayerProfileModal.svelte', runes: true, css: 'injected' }).js.code));
@@ -553,7 +574,7 @@ if (chromium) {
     writeFileSync(stubRetry, 'export function retryImg(){ return { update(){}, destroy(){} }; }\n');
     writeFileSync(stubLock, 'export function pageScrollLock(){ return { destroy(){} }; }\n');
     writeFileSync(stubDecks, 'export function loadDecks(){ return []; }\n');
-    writeFileSync(stubPool, "export async function loadIndex(){ return [{ code:'SV5M', name:'幻影', cardCount:2 }]; }\nexport async function loadSet(){ return [{ id:'19145', name:'多龍巴魯托ex', imageUrl:'https://asia.pokemon-card.com/tw/card-img/tw00019145.png' }, { id:'20001', name:'博士的研究', imageUrl:'https://asia.pokemon-card.com/tw/card-img/tw00020001.png' }]; }\nexport async function loadCardSetMap(){ return {}; }\n");
+    writeFileSync(stubPool, "export async function loadIndex(){ return [{ code:'SV5M', name:'幻影', cardCount:2 }]; }\nexport async function loadSet(){ return [{ id:'19145', name:'多龍巴魯托ex', imageUrl:'https://asia.pokemon-card.com/tw/card-img/tw00019145.png' }, { id:'20001', name:'博士的研究', imageUrl:'https://asia.pokemon-card.com/tw/card-img/tw00020001.png' }]; }\nexport async function loadAllSets(){ return loadSet(); }\nexport async function loadCardSetMap(){ return {}; }\n");
 
     await build({
       entryPoints: [join(dir, 'entry.js')],
@@ -710,9 +731,22 @@ if (chromium) {
           await pg.evaluate(() => {
             window.__mountEditor(document.getElementById('app'), {
               getAuthCtx: async () => ({ uid: 'me', token: 'tok' }),
+              collapsible: true,
+              storageKey: 'test-v6654-collapse',
             });
           });
           await pg.waitForSelector('.ppe-stage');
+          const edText = await pg.evaluate(() => document.body.innerText || '');
+          assert.ok(!edText.includes('全卡池開放選取'), 'v6.654 應移除（全卡池開放選取）冗餘說明文字');
+
+          // v6.654：點「🪪 名片」即時預覽自己的名片
+          await pg.click('.ppe-self-card-btn');
+          await pg.waitForSelector('.ppm-card');
+          const pvNick = await pg.evaluate(() => document.querySelector('.ppm-nick')?.textContent?.trim() || '');
+          assert.strictEqual(pvNick, '原本暱稱', '預覽自己名片應顯示目前暱稱');
+          await pg.click('.ppm-close');
+          await pg.waitForSelector('.ppm-card', { state: 'detached' });
+
           const beforeTransform = await pg.evaluate(() => document.querySelector('.ppe-stage-img').style.transform);
           const stageBox = await pg.locator('.ppe-stage').boundingBox();
           await pg.mouse.move(stageBox.x + stageBox.width / 2, stageBox.y + stageBox.height / 2);
@@ -722,13 +756,28 @@ if (chromium) {
           const afterTransform = await pg.evaluate(() => document.querySelector('.ppe-stage-img').style.transform);
           assert.notStrictEqual(afterTransform, beforeTransform, '拖曳卡片後裁切 transform 沒跟著移動');
 
-          // 打開選卡器、切到依卡包並選訓練家卡
+          // 打開選卡器、切到依卡包、檢查第一項為 ALL 全部卡牌、直接打字搜尋選訓練家卡
           await pg.click('button:has-text("更換卡片")');
           await pg.click('button:has-text("依卡包")');
+          await pg.waitForSelector('.ppe-select');
+          const selInfo = await pg.evaluate(() => {
+            const s = document.querySelector('.ppe-select');
+            return { value: s?.value, firstVal: s?.options?.[0]?.value, firstText: s?.options?.[0]?.textContent || '' };
+          });
+          assert.strictEqual(selInfo.firstVal, 'all', '下拉選單第一項必須為全卡池 all');
+          assert.strictEqual(selInfo.value, 'all', '依卡包／卡名預設應停在全卡池 all');
+          await pg.fill('.ppe-search', '博士');
           await pg.waitForSelector('button:has-text("博士的研究")');
           await pg.click('button:has-text("博士的研究")');
           const newSrc = await pg.evaluate(() => document.querySelector('.ppe-stage-img').getAttribute('src'));
           assert.ok(newSrc && newSrc.includes('20001'), '選完訓練家卡片後預覽沒換成新卡圖：' + newSrc);
+
+          // v6.654：錦標賽可收合編輯區，收合後仍保留摘要與「🪪 名片」鈕
+          await pg.click('.ppe-collapse-btn');
+          assert.strictEqual(await pg.locator('.ppe-field').count(), 0, '收合後表單欄位應隱藏');
+          assert.strictEqual(await pg.locator('.ppe-self-card-btn').count(), 1, '收合後仍應保留 🪪 名片預覽鈕');
+          await pg.click('.ppe-collapse-btn');
+          assert.ok(await pg.locator('.ppe-field').count() > 0, '再次展開後表單應恢復顯示');
           await ctx.close();
         });
       } finally {
@@ -760,13 +809,20 @@ await T('D1 game/+page.svelte 線上大廳三顆短標分頁、個人分頁純�
   assert.strictEqual(new Function('friendsEntryOn', 'lobbyTabRaw', 'return (' + lt[1] + ');')(false, 'profile'), 'online');
   assert.strictEqual(new Function('friendsEntryOn', 'lobbyTabRaw', 'return (' + lt[1] + ');')(true, 'profile'), 'profile');
 
-  // battleRegion 零 friend
+  // battleRegion 零 friend ＋ v6.654 先攻／後攻小頭像點擊查看名片 + 錦標賽名片設定可收合
   const bs = G.indexOf('{#if isPortraitMobile && game}');
   const be = G.indexOf('<!-- ══════════════════════════════════════════════════════════════════════\n     正式對戰', bs > 0 ? 0 : 0);
   const bStart = bs > 0 ? bs : G.indexOf('<div class="battle-root"');
   const bAuth = G.indexOf('<!-- Settings Modal', bStart);
   const battleSeg = G.slice(bStart, bAuth);
   assert.strictEqual((battleSeg.match(/friend/gi) || []).length, 0, 'battleRegion 不可出現 friend 字樣');
+  assert.ok(battleSeg.includes('toc-avatar') && battleSeg.includes('<AvatarCircle') && battleSeg.includes('openBattleSeatProfile'), '桌面對戰先攻／後攻旁缺玩家小頭像點擊名片');
+  assert.ok(battleSeg.includes('oppAvatar={seatAvatarFor(oppIdx)}') && battleSeg.includes('onOpenPlayerProfile={openBattleSeatProfile}'), '手機直式元件未傳入頭像與名片開啟回呼');
+  assert.ok(/collapsible=\{true\}[\s\S]{0,120}storageKey="ptcg-tw-sim:tournProfCollapsed:v1"/.test(G), '錦標賽名片設定區應開啟可收合與記憶開關');
+
+  const MPB = R(MPB_PATH);
+  assert.strictEqual((MPB.match(/friend/gi) || []).length, 0, 'MobilePortraitBattle.svelte 不可出現 friend 字樣');
+  assert.ok(MPB.includes('mp-turn-av') && MPB.includes('<AvatarCircle') && MPB.includes('handleTurnOrderClick'), '手機直式對戰先攻／後攻旁缺小頭像與點擊名片');
 
   // 牌組公布欄零 {@html}（先剝註解，避免標頭「不得出現 {@html}」自爆）
   const DP = R(DP_PATH);

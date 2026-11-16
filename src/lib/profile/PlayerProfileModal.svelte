@@ -19,11 +19,13 @@
   let {
     open = false,
     target = null,
+    previewCard = null,
     getAuthCtx,
     onclose,
   }: {
     open?: boolean;
     target?: ProfileLookupTarget | null;
+    previewCard?: PlayerProfilePublic | null;
     getAuthCtx: () => Promise<ProfileAuthCtx | null>;
     onclose: () => void;
   } = $props();
@@ -36,10 +38,30 @@
   let loadSeq = 0;
 
   $effect(() => {
-    if (!open || !target) {
+    if (!open) {
+      loadSeq++;
       card = null;
       errMsg = '';
       frMsg = '';
+      frBusy = false;
+      loading = false;
+      return;
+    }
+    if (previewCard) {
+      loadSeq++;
+      card = previewCard;
+      errMsg = '';
+      frMsg = '';
+      frBusy = false;
+      loading = false;
+      return;
+    }
+    if (!target) {
+      loadSeq++;
+      card = null;
+      errMsg = '';
+      frMsg = '';
+      frBusy = false;
       loading = false;
       return;
     }
@@ -48,6 +70,7 @@
     loading = true;
     errMsg = '';
     frMsg = '';
+    frBusy = false;
     card = null;
     void (async () => {
       const ctx = await getAuthCtx().catch(() => null);
@@ -63,16 +86,20 @@
   });
 
   async function handleAddFriend() {
-    if (!target || !card || frBusy) return;
+    if (previewCard || !target || !card || frBusy) return;
+    const seq = loadSeq;
+    const curTarget = target;
     frBusy = true;
     frMsg = '';
     try {
       const ctx = await getAuthCtx();
+      if (!open || previewCard || seq !== loadSeq || target !== curTarget || !card) return;
       if (!ctx || !ctx.token) {
         frMsg = '請先登入非匿名帳號再加好友';
         return;
       }
-      const res = await sendFriendRequestFromProfile(ctx, target, 'profile');
+      const res = await sendFriendRequestFromProfile(ctx, curTarget, 'profile');
+      if (!open || previewCard || seq !== loadSeq || target !== curTarget || !card) return;
       if (!res.ok) {
         frMsg = res.message || '送出好友申請失敗';
         return;
@@ -85,7 +112,9 @@
         frMsg = res.data.already ? '先前已送出好友邀請' : '已送出好友申請！';
       }
     } finally {
-      frBusy = false;
+      if (seq === loadSeq && target === curTarget) {
+        frBusy = false;
+      }
     }
   }
 

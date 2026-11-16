@@ -9,7 +9,7 @@
  *       y ∈ [0.5 / (zoom * H/W), 1 - 0.5 / (zoom * H/W)]。
  */
 import type { Card } from '$lib/cards/types';
-import { loadIndex, loadSet, loadCardSetMap } from '$lib/cards/pool';
+import { loadIndex, loadSet, loadAllSets, loadCardSetMap } from '$lib/cards/pool';
 
 export const PROF_NICK_MAX = 16;
 export const PROF_BIO_MAX = 100;
@@ -149,6 +149,38 @@ export function formatHonorDate(ts: number): string {
   return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
 }
 
+export function buildSelfProfilePreview(
+  p: PlayerProfileSelf,
+  override?: {
+    nick?: string;
+    bio?: string;
+    avatar?: AvatarCrop | null;
+    pinnedHonorIds?: string[];
+  },
+): PlayerProfilePublic {
+  const avail = p.availableHonors || [];
+  const honorMap = new Map(avail.map((h) => [h.eventId, h]));
+  const ids = override?.pinnedHonorIds ?? p.pinnedHonorIds ?? [];
+  const pinned = ids
+    .map((id) => honorMap.get(id))
+    .filter((h): h is ProfileHonor => !!h)
+    .slice(0, PROF_MAX_HONORS);
+  const rawNick = override?.nick ?? p.nick ?? p.defaultNick ?? '玩家';
+  return {
+    found: true,
+    profileKey: p.profileKey || '',
+    nick: clampProfileNick(rawNick) || clampProfileNick(p.defaultNick) || '玩家',
+    bio: override?.bio !== undefined ? clampProfileBio(override.bio) : clampProfileBio(p.bio),
+    avatar: override?.avatar !== undefined ? clampAvatarCrop(override.avatar) : clampAvatarCrop(p.avatar),
+    googleVerified: !!p.googleVerified,
+    champOfficial: p.champOfficial ?? 0,
+    champCommunity: p.champCommunity ?? 0,
+    pinnedHonors: pinned,
+    canFriend: false,
+    friendStatus: 'self',
+  };
+}
+
 async function reqJson<T>(
   path: string,
   opts: { method?: 'GET' | 'POST'; body?: unknown; ctx?: ProfileAuthCtx | null } = {},
@@ -281,6 +313,10 @@ export async function listAllCardSetsForPicker() {
 
 export async function loadCardsForPickerSet(setCode: string): Promise<Card[]> {
   return loadSet(setCode);
+}
+
+export async function loadAllCardsForPicker(): Promise<Card[]> {
+  return loadAllSets();
 }
 
 export async function loadCardSetLookup(): Promise<Record<string, string>> {

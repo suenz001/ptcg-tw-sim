@@ -11,6 +11,7 @@
   import { retryImg } from '$lib/img-retry';
   import { loadDecks } from '$lib/decks/storage';
   import AvatarCircle from './AvatarCircle.svelte';
+  import PlayerProfileModal from './PlayerProfileModal.svelte';
   import {
     PROF_NICK_MAX,
     PROF_BIO_MAX,
@@ -18,14 +19,17 @@
     PROF_CARD_HW,
     PROF_DEFAULT_CROP,
     clampAvatarCrop,
+    buildSelfProfilePreview,
     cardImageUrlFromId,
     formatHonorDate,
     fetchMyProfile,
     saveMyProfile,
     listAllCardSetsForPicker,
     loadCardsForPickerSet,
+    loadAllCardsForPicker,
     loadCardSetLookup,
     type AvatarCrop,
+    type PlayerProfilePublic,
     type PlayerProfileSelf,
     type ProfileAuthCtx,
     type ProfileHonor,
@@ -38,10 +42,14 @@
     getAuthCtx,
     onsaved,
     onloaded,
+    collapsible = false,
+    storageKey = '',
   }: {
     getAuthCtx: () => Promise<ProfileAuthCtx | null>;
     onsaved?: ((profile: PlayerProfileSelf) => void) | null;
     onloaded?: ((profile: PlayerProfileSelf) => void) | null;
+    collapsible?: boolean;
+    storageKey?: string;
   } = $props();
 
   let loading = $state(true);
@@ -49,6 +57,8 @@
   let saving = $state(false);
   let saveMsg = $state('');
   let saveOk = $state(false);
+  let collapsed = $state(false);
+  let selfPreviewOpen = $state(false);
 
   let serverProfile = $state<PlayerProfileSelf | null>(null);
   let nick = $state('');
@@ -63,8 +73,9 @@
   let pickerErr = $state('');
   let pickerQuery = $state('');
   let pickerSets = $state<Array<{ code: string; name: string; cardCount: number }>>([]);
-  let pickerSelectedSet = $state('');
+  let pickerSelectedSet = $state('all');
   let pickerCards = $state<Card[]>([]);
+  let allPoolCardsCache: Card[] | null = null;
   let deckCardChoices = $state<Card[]>([]);
   let pickerLimit = $state(36);
 
@@ -74,17 +85,64 @@
 
   const previewUrl = $derived(avatar ? cardImageUrlFromId(avatar.cardId) : null);
   const effectiveNick = $derived((nick.trim() || serverProfile?.defaultNick || '玩家').slice(0, PROF_NICK_MAX));
+  const pickerTotalCount = $derived(pickerSets.reduce((sum, st) => sum + (Number(st.cardCount) || 0), 0));
+  const livePreviewCard = $derived.by<PlayerProfilePublic>(() => {
+    const base: PlayerProfileSelf = serverProfile ?? {
+      profileKey: '',
+      nick: effectiveNick,
+      defaultNick: '玩家',
+      bio: '',
+      avatar: null,
+      googleVerified: false,
+      champOfficial: 0,
+      champCommunity: 0,
+      pinnedHonorIds: [],
+      availableHonors: [],
+    };
+    return buildSelfProfilePreview(base, {
+      nick: effectiveNick,
+      bio,
+      avatar,
+      pinnedHonorIds: pinnedIds,
+    });
+  });
   const filteredCards = $derived.by(() => {
     const src = pickerSource === 'decks' ? deckCardChoices : pickerCards;
     const q = pickerQuery.trim().toLowerCase();
     if (!q) return src;
-    return src.filter((c) => (c.name && c.name.toLowerCase().includes(q)) || String(c.id).includes(q));
+    const hits = src.filter((c) => (c.name && c.name.toLowerCase().includes(q)) || String(c.id).toLowerCase().includes(q));
+    const rank = (c: Card) => {
+      const n = (c.name || '').toLowerCase();
+      const cid = String(c.id).toLowerCase();
+      if (n === q || cid === q) return 0;
+      if (n.startsWith(q)) return 1;
+      return 2;
+    };
+    return hits.slice().sort((a, b) => rank(a) - rank(b));
   });
   const visibleCards = $derived(filteredCards.slice(0, pickerLimit));
 
   onMount(() => {
+    if (collapsible && storageKey) {
+      try {
+        collapsed = localStorage.getItem(storageKey) === '1';
+      } catch {
+        collapsed = false;
+      }
+    }
     void loadProfile();
   });
+
+  function toggleCollapsed() {
+    collapsed = !collapsed;
+    if (collapsible && storageKey) {
+      try {
+        localStorage.setItem(storageKey, collapsed ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 
   async function loadProfile(refresh = false) {
     loading = true;
@@ -207,6 +265,33 @@
     }
   }
 
+  function dedupeCardsById(cards: Card[]): Card[] {
+    const seen = new Set<string>();
+    const out: Card[] = [];
+    for (const c of cards) {
+      if (!c || !c.id || seen.has(c.id)) continue;
+      seen.add(c.id);
+      out.push(c);
+    }
+    return out;
+  }
+
+  async function loadCardsForSelection(code: string, seq: number) {
+    if (code === 'all') {
+      if (!allPoolCardsCache) {
+        const all = await loadAllCardsForPicker();
+        if (seq !== pickerSeq) return;
+        allPoolCardsCache = dedupeCardsById(all);
+      }
+      if (seq !== pickerSeq) return;
+      pickerCards = allPoolCardsCache;
+    } else {
+      const cards = await loadCardsForPickerSet(code);
+      if (seq !== pickerSeq) return;
+      pickerCards = dedupeCardsById(cards);
+    }
+  }
+
   async function loadSetList() {
     const seq = ++pickerSeq;
     pickerLoading = true;
@@ -216,15 +301,10 @@
         const idx = await listAllCardSetsForPicker();
         if (seq !== pickerSeq) return;
         pickerSets = Array.isArray(idx) ? idx : [];
-        if (pickerSets.length > 0 && !pickerSelectedSet) {
-          pickerSelectedSet = pickerSets[0].code;
-        }
       }
-      if (pickerSelectedSet) {
-        const cards = await loadCardsForPickerSet(pickerSelectedSet);
-        if (seq !== pickerSeq) return;
-        pickerCards = cards;
-      }
+      const targetSet = pickerSelectedSet || 'all';
+      pickerSelectedSet = targetSet;
+      await loadCardsForSelection(targetSet, seq);
     } catch {
       if (seq === pickerSeq) pickerErr = '讀取卡包清單失敗';
     } finally {
@@ -234,14 +314,12 @@
 
   async function selectSetCode(code: string) {
     const seq = ++pickerSeq;
-    pickerSelectedSet = code;
+    pickerSelectedSet = code || 'all';
     pickerLimit = 36;
     pickerLoading = true;
     pickerErr = '';
     try {
-      const cards = await loadCardsForPickerSet(code);
-      if (seq !== pickerSeq) return;
-      pickerCards = cards;
+      await loadCardsForSelection(pickerSelectedSet, seq);
     } catch {
       if (seq === pickerSeq) pickerErr = '讀取卡包資料失敗';
     } finally {
@@ -316,19 +394,33 @@
 
 <div class="ppe-wrap">
   <div class="ppe-head">
-    <h3>🪪 玩家名片與頭像設定</h3>
-    {#if serverProfile?.googleVerified}
-      <span class="ppe-g-tag">✓ Google 已認證</span>
+    <div class="ppe-head-l">
+      <h3>🪪 玩家名片與頭像設定</h3>
+      {#if serverProfile?.googleVerified}
+        <span class="ppe-g-tag">✓ Google 已認證</span>
+      {/if}
+    </div>
+    {#if collapsible}
+      <button
+        type="button"
+        class="ppe-btn ppe-collapse-btn"
+        aria-expanded={!collapsed}
+        onclick={toggleCollapsed}
+      >
+        {collapsed ? '▼ 展開設定' : '▲ 收合設定'}
+      </button>
     {/if}
   </div>
 
   {#if loading}
-    <p class="ppe-muted">讀取名片資料中…</p>
+    {#if !collapsible || !collapsed}
+      <p class="ppe-muted">讀取名片資料中…</p>
+    {/if}
   {:else if loadErr}
     <p class="ppe-err">{loadErr}</p>
   {:else if serverProfile}
-    <!-- 名片預覽列 -->
-    <div class="ppe-preview-bar">
+    <!-- 名片預覽列（即使設定區收合，仍保留摘要與查看自己名片鈕） -->
+    <div class="ppe-preview-bar" class:is-collapsed={collapsible && collapsed}>
       <AvatarCircle {avatar} name={effectiveNick} size={56} ring />
       <AvatarCircle {avatar} name={effectiveNick} size={28} />
       <div class="ppe-pv-info">
@@ -337,8 +429,17 @@
           🏛️ 網站賽 {serverProfile.champOfficial} 冠 ｜ 🎖️ 社群賽 {serverProfile.champCommunity} 冠
         </div>
       </div>
+      <button
+        type="button"
+        class="ppe-btn ppe-self-card-btn"
+        onclick={() => { selfPreviewOpen = true; }}
+        title="預覽我的玩家名片"
+      >
+        🪪 名片
+      </button>
     </div>
 
+    {#if !collapsible || !collapsed}
     <!-- 暱稱與自我介紹 -->
     <label class="ppe-field">
       <span class="ppe-label">玩家暱稱 <small>（最多 {PROF_NICK_MAX} 字）</small></span>
@@ -368,7 +469,7 @@
     <!-- 官方卡片圓圈頭像設定 -->
     <div class="ppe-section">
       <div class="ppe-label-row">
-        <span class="ppe-label">官方卡牌圓圈頭像 <small>（全卡池開放選取）</small></span>
+        <span class="ppe-label">官方卡牌圓圈頭像</span>
         <div class="ppe-av-btns">
           <button type="button" class="ppe-btn" onclick={openCardPicker}>
             {pickerOpen ? '▲ 收合選卡' : (avatar ? '🎴 更換卡片' : '🎴 挑選官方卡片')}
@@ -388,12 +489,13 @@
           <div class="ppe-picker-filters">
             {#if pickerSource === 'sets'}
               <select class="ppe-select" aria-label="選擇卡包" value={pickerSelectedSet} onchange={(e) => selectSetCode(e.currentTarget.value)}>
+                <option value="all">ALL 全部卡牌{pickerTotalCount > 0 ? `（${pickerTotalCount}）` : ''}</option>
                 {#each pickerSets as st (st.code)}
                   <option value={st.code}>{st.code} {st.name}（{st.cardCount}）</option>
                 {/each}
               </select>
             {/if}
-            <input class="ppe-search" type="search" placeholder="搜尋卡名或卡號…" bind:value={pickerQuery} />
+            <input class="ppe-search" type="search" placeholder="搜尋卡名或卡號…" bind:value={pickerQuery} oninput={() => { pickerLimit = 36; }} />
           </div>
           {#if pickerLoading}
             <p class="ppe-muted">載入卡片中…</p>
@@ -498,8 +600,16 @@
         <span class={saveOk ? 'ppe-save-ok' : 'ppe-err'} role="status">{saveMsg}</span>
       {/if}
     </div>
+    {/if}
   {/if}
 </div>
+
+<PlayerProfileModal
+  open={selfPreviewOpen}
+  previewCard={livePreviewCard}
+  {getAuthCtx}
+  onclose={() => { selfPreviewOpen = false; }}
+/>
 
 <style>
   .ppe-wrap {
@@ -523,7 +633,19 @@
     flex-wrap: wrap;
     margin-bottom: 10px;
   }
+  .ppe-head-l {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
+    flex: 1;
+  }
   .ppe-head h3 { margin: 0; font-size: 1rem; }
+  .ppe-collapse-btn, .ppe-self-card-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
   .ppe-g-tag {
     font-size: 0.72rem;
     font-weight: 700;
@@ -548,6 +670,7 @@
     border: 1px solid rgba(120, 196, 138, 0.2);
     margin-bottom: 12px;
   }
+  .ppe-preview-bar.is-collapsed { margin-bottom: 0; }
   :global(html[data-theme='light']:not([data-battle-view])) .ppe-preview-bar {
     background: var(--ui-bg-sunken, #dfe5e1);
     border-color: var(--ui-border, #bbc7bf);

@@ -1,5 +1,24 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.654 — 對戰「先攻／後攻」旁小頭像開名片＋名片設定收合與預覽＋頭像 ALL 全卡池選項＋CI 防呆規則（2026-11-17）
+
+基準：`22fbcbeb`（v6.653）。
+
+- **對戰中頭像與名片互動**（`src/routes/game/+page.svelte`、`src/routes/game/MobilePortraitBattle.svelte`）：
+  - 於電腦版 4 種桌墊（`classic` / `tabletop` / `fable` / `blue`）的 `.turn-order-chip` 及手機直式 `MobilePortraitBattle.svelte` 的 `.mp-turn-order` 內，「先攻／後攻」旁顯示玩家 16px 圓形頭像（`AvatarCircle`），點選（或 Enter/空白鍵）開啟該玩家名片彈窗；於線上／錦標賽對局進入牌桌時，平行懶載入雙方座位公開名片頭像（`battleSeatAvatars`），且觀戰／復盤模式維持不滲透觀眾自身頭像。
+  - `battleRegion` 與 `MobilePortraitBattle.svelte` 全檔嚴守零 `friend` 字樣、`<span class="chip hand-count-chip">` 屬性零 `=>`，經 `test-v6614`（含 `704×830` 8 備戰擠壓檢測）與 `test-v6466`（10 種視窗）實測版面幾何零位移。
+- **名片編輯與預覽體驗**（`src/lib/profile/profile-api.ts`、`PlayerProfileModal.svelte`、`PlayerProfileEditor.svelte`）：
+  - `PlayerProfileModal` 新增可選 `previewCard` prop；抽出共用 `buildSelfProfilePreview()` helper 供名片編輯頁「🪪 名片」即時預覽按鈕與單機對戰自檢名片共用，離線也可零請求開自己名片。
+  - `PlayerProfileEditor` 新增 `collapsible` 與 `storageKey` props，於錦標賽「🪪 個人」啟用收合／展開記憶（收合後仍保留摘要列與「🪪 名片」預覽鈕及載入錯誤提示）。
+  - 移除頭像區塊冗餘文字「（全卡池開放選取）」；「依卡包／卡名」卡包下拉選單最上方新增 `<option value="all">ALL 全部卡牌…</option>` 且預設選取，搭配 `loadAllCardsForPicker()` 記憶體快取、去重與精確／前綴排序，開選卡即可直接打字搜尋全卡池。
+- **規則持久化**（`GEMINI.md`）：新增第 3 節「GitHub Actions CI 與測試站部署防呆教訓（必守）」，記錄動態圖 `use:retryImg` 白名單（`test-v6101`）、Oracle ESM 零 `require('crypto')` 與 `$unset`（`test-v6244`）、對戰頁紅線、還原鏈及推送前獨立 AI 審查規定。
+- **獨立對抗式審查（`0d91ea52`，只讀 `pro` 模型，對 `git diff 22fbcbeb`）**：**0 P1 / 4 P2 / 2 P3**，6 項建議全數修補並復測：
+  - **P2-1**：`seatAvatarFor` 於 `isSpectator` 為真且非線上模式（如本地復盤）時強制回 `null`，防止觀眾自身頭像錯誤標在 Seat 0 先攻玩家上。
+  - **P2-2**：單機／AI 對戰點擊人類自己座位時，優先以共用 `buildSelfProfilePreview(profileSelf)` 直接離線預覽完整名片（含認證、冠數與代表榮譽），避免發出無謂網路請求與斷網誤報失敗。
+  - **P2-3**：補齊本段 `v6.654` 內部改版與審查紀錄至 `docs/changelog-internal.md`。
+  - **P2-4**：`PlayerProfileModal.handleAddFriend` 加入 `loadSeq` 與 `curTarget` 雙重世代鎖並於 `$effect` 重設 `frBusy`，防止快速切換或關閉名片時異步加好友回應污染新目標狀態。
+  - **P3-1 & P3-2**：收合狀態下保留 `loadErr` 錯誤顯示，並統一將卡片 ID 比對改為 `.toLowerCase()`。
+
 ## v6.653 — 玩家個人名片＋官方卡牌圓圈頭像＋線上大廳個人分頁（server v1.87）（2026-11-16）
 
 基準：`66fc6069`（v6.652）。備份分支：`backup-v6652-pre-profile`。

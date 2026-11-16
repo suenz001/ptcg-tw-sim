@@ -113,7 +113,16 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { friendsCtxFromAuth } from '$lib/friends/auth-ctx';   // ⭐ v6.297 私聊內嵌：取身分的中央出口（匿名回 null ⇒ 一發請求都不發）
   import PlayerProfileModal from '$lib/profile/PlayerProfileModal.svelte';
   import PlayerProfileEditor from '$lib/profile/PlayerProfileEditor.svelte';
-  import { fetchMyProfile, type PlayerProfileSelf, type ProfileLookupTarget } from '$lib/profile/profile-api';
+  import AvatarCircle from '$lib/profile/AvatarCircle.svelte';
+  import {
+    fetchMyProfile,
+    fetchPlayerProfileView,
+    buildSelfProfilePreview,
+    type AvatarCrop,
+    type PlayerProfilePublic,
+    type PlayerProfileSelf,
+    type ProfileLookupTarget,
+  } from '$lib/profile/profile-api';
   // ⚠⚠ v6.297 私聊只引用**型別**（import type 編譯後完全消失）；實作（dm-session / dm-poller / DmPanel）一律走動態 import()，
   //   對戰頁的主 chunk 一個位元組都不會多（守衛 test-v6297【D】用**靜態 import 相依圖**證明）。
   import type { DmSession, DmSessionState } from '$lib/friends/dm-session';
@@ -1528,17 +1537,65 @@ function _setupSelfPending(g: any, seat: number): string | null {
   const lobbyTab = $derived(friendsEntryOn ? lobbyTabRaw : 'online');
   function lobbySwitchTab(tab: 'online' | 'friends' | 'profile') { lobbyTabRaw = tab; }
   let profileModalTarget = $state<ProfileLookupTarget | null>(null);
+  let profileModalPreview = $state<PlayerProfilePublic | null>(null);
   let profileSelf = $state<PlayerProfileSelf | null>(null);
   let _profileBootUid = '';
+  let battleSeatAvatars = $state<[AvatarCrop | null, AvatarCrop | null]>([null, null]);
+  let _battleAvRoomKey = '';
+  function seatAvatarFor(seatIdx: number): AvatarCrop | null {
+    if (isSpectator) {
+      return mode === 'online' ? (battleSeatAvatars[seatIdx] ?? null) : null;
+    }
+    if (mode === 'online') {
+      if (battleSeatAvatars[seatIdx]) return battleSeatAvatars[seatIdx];
+      return myPlayerIndex === seatIdx ? (profileSelf?.avatar ?? null) : null;
+    }
+    if (aiPlayerIndex !== null) {
+      return seatIdx === aiPlayerIndex ? null : (profileSelf?.avatar ?? null);
+    }
+    return seatIdx === 0 ? (profileSelf?.avatar ?? null) : null;
+  }
   function openProfileModal(t: ProfileLookupTarget) {
+    profileModalPreview = null;
     profileModalTarget = t;
   }
   function openBattleSeatProfile(seatIdx: number, fallbackNick?: string) {
-    if (mode !== 'online') return;
-    openProfileModal(isTournament ? { tournRoom: tActiveRoom, seatIdx, fallbackNick } : { roomCode, seatIdx, fallbackNick });
+    if (mode === 'online') {
+      openProfileModal(isTournament ? { tournRoom: tActiveRoom, seatIdx, fallbackNick } : { roomCode, seatIdx, fallbackNick });
+      return;
+    }
+    const u = firebaseUser;
+    const isHumanSelf = mode !== 'online' && !isSpectator && (
+      aiPlayerIndex !== null ? seatIdx !== aiPlayerIndex : seatIdx === 0
+    );
+    if (isHumanSelf && profileSelf) {
+      profileModalTarget = null;
+      profileModalPreview = buildSelfProfilePreview(profileSelf, {
+        nick: profileSelf.nick || fallbackNick || profileSelf.defaultNick || '玩家',
+      });
+      return;
+    }
+    if (isHumanSelf && friendsEntryOn && u && !u.isAnonymous) {
+      openProfileModal({ targetUid: u.uid, fallbackNick });
+      return;
+    }
+    profileModalTarget = null;
+    profileModalPreview = {
+      found: aiPlayerIndex !== null && seatIdx === aiPlayerIndex,
+      profileKey: '',
+      nick: (fallbackNick || `P${seatIdx + 1}`).slice(0, 16),
+      bio: aiPlayerIndex !== null && seatIdx === aiPlayerIndex ? '🤖 AI 對戰對手' : '',
+      avatar: seatAvatarFor(seatIdx),
+      googleVerified: false,
+      champOfficial: 0,
+      champCommunity: 0,
+      pinnedHonors: [],
+      canFriend: false,
+      friendStatus: 'unavailable',
+    };
   }
   function onBattleSeatProfileKey(e: KeyboardEvent, seatIdx: number, fallbackNick?: string) {
-    if (mode === 'online' && (e.key === 'Enter' || e.key === ' ')) {
+    if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       openBattleSeatProfile(seatIdx, fallbackNick);
     }
@@ -1556,9 +1613,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       _profileBootUid = '';
       profileSelf = null;
       profileModalTarget = null;
+      profileModalPreview = null;
       return;
     }
-    if (!isTournament && mode !== 'online') return;
     if (_profileBootUid === u.uid) return;
     const bootUid = u.uid;
     _profileBootUid = bootUid;
@@ -1568,6 +1625,29 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const r = await fetchMyProfile(ctx);
       if (firebaseUser?.uid !== bootUid) return;
       if (r.ok) syncMyProfileNick(r.data);
+    })();
+  });
+  $effect(() => {
+    const key = mode === 'online' && game ? (isTournament ? `T:${tActiveRoom}` : `R:${roomCode}`) : '';
+    if (!key || key === 'T:' || key === 'R:') {
+      _battleAvRoomKey = '';
+      battleSeatAvatars = [null, null];
+      return;
+    }
+    if (_battleAvRoomKey === key) return;
+    _battleAvRoomKey = key;
+    battleSeatAvatars = [null, null];
+    void (async () => {
+      const ctx = await friendsCtxFromAuth().catch(() => null);
+      const resList = await Promise.all(([0, 1] as const).map((sIdx) => {
+        const t = isTournament ? { tournRoom: tActiveRoom, seatIdx: sIdx } : { roomCode, seatIdx: sIdx };
+        return fetchPlayerProfileView(t, ctx).catch(() => null);
+      }));
+      if (_battleAvRoomKey !== key) return;
+      battleSeatAvatars = [
+        resList[0]?.ok ? resList[0].data.avatar : null,
+        resList[1]?.ok ? resList[1].data.avatar : null,
+      ];
     })();
   });
   // ⭐⭐ v6.297 錦標賽分頁：tTab 的「未開放就鎖回賽事」鎖。
@@ -5867,7 +5947,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⭐v6.642（審查 P1-1）：賽程表裡的 mine（我的對局）是依帳號算的 ⇒ 登出時一併清掉，換帳號不沿用上一個人的（伺服器 bv 也混入 uid，雙保險）。
     tBrackets = []; tBracketsStale = false; tBracketsEverOk = false; _tBracketSeq++;
     // <<< v6642-bracket-version
-    _profileBootUid = ''; profileSelf = null; profileModalTarget = null;
+    _profileBootUid = ''; profileSelf = null; profileModalTarget = null; profileModalPreview = null; battleSeatAvatars = [null, null]; _battleAvRoomKey = '';
     try { await signOut(auth); } catch { /* ignore */ }
   }
   // v5.650 錦標賽系統播報分類上色：依訊息開頭 emoji／關鍵字歸類，回傳對應 CSS class（皆亮色系，不傷眼）
@@ -12144,7 +12224,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
             </details>
           </div>
           <div style="margin-bottom:14px;">
-            <PlayerProfileEditor getAuthCtx={friendsCtxFromAuth} onloaded={syncMyProfileNick} onsaved={syncMyProfileNick} />
+            <PlayerProfileEditor
+              getAuthCtx={friendsCtxFromAuth}
+              collapsible={true}
+              storageKey="ptcg-tw-sim:tournProfCollapsed:v1"
+              onloaded={syncMyProfileNick}
+              onsaved={syncMyProfileNick}
+            />
           </div>
           {#if tProfileLoading && !tProfile}
             <p class="muted small" style="text-align:center;padding:18px;">載入個人資料中…</p>
@@ -13196,6 +13282,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       }}
       undoAvailable={undoBtnVisible}
       onUndo={performUndo}
+      oppAvatar={seatAvatarFor(oppIdx)}
+      myAvatar={seatAvatarFor(myIdx)}
+      onOpenPlayerProfile={openBattleSeatProfile}
     />
     {#if isTReplay && tReplay}
       {@const _msteps = tReplaySteps()}
@@ -13459,10 +13548,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <!-- 對手場地（永遠在上方） -->
     <div class="field-row opponent-row">
       {#if game}
-        <div class="turn-order-chip" class:active-turn={game.activePlayerIndex === oppIdx}
+        <div
+          class="turn-order-chip prof-link"
+          class:active-turn={game.activePlayerIndex === oppIdx}
+          role="button"
+          tabindex="0"
           title={(game.firstPlayerIdx === oppIdx ? '對手為先攻玩家' : '對手為後攻玩家')
-            + (game.activePlayerIndex === oppIdx ? '・目前回合' : '')}>
-          {game.firstPlayerIdx === oppIdx ? '先攻' : '後攻'}
+            + (game.activePlayerIndex === oppIdx ? '・目前回合' : '')
+            + '（點擊頭像查看玩家名片）'}
+          onclick={function () { openBattleSeatProfile(oppIdx, oppPlayer?.name); }}
+          onkeydown={function (e) { onBattleSeatProfileKey(e, oppIdx, oppPlayer?.name); }}
+        >
+          <span class="toc-avatar"><AvatarCircle avatar={seatAvatarFor(oppIdx)} name={oppPlayer?.name ?? '對手'} size={16} /></span>
+          <span class="toc-text">{game.firstPlayerIdx === oppIdx ? '先攻' : '後攻'}</span>
         </div>
       {/if}
       <div class="zone-pile">
@@ -13875,10 +13973,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <!-- 我方場地（永遠在下方） -->
     <div class="field-row my-row">
       {#if game}
-        <div class="turn-order-chip" class:active-turn={game.activePlayerIndex === myIdx}
+        <div
+          class="turn-order-chip prof-link"
+          class:active-turn={game.activePlayerIndex === myIdx}
+          role="button"
+          tabindex="0"
           title={(game.firstPlayerIdx === myIdx ? '我方為先攻玩家' : '我方為後攻玩家')
-            + (game.activePlayerIndex === myIdx ? '・目前回合' : '')}>
-          {game.firstPlayerIdx === myIdx ? '先攻' : '後攻'}
+            + (game.activePlayerIndex === myIdx ? '・目前回合' : '')
+            + '（點擊頭像查看玩家名片）'}
+          onclick={function () { openBattleSeatProfile(myIdx, myPlayer?.name); }}
+          onkeydown={function (e) { onBattleSeatProfileKey(e, myIdx, myPlayer?.name); }}
+        >
+          <span class="toc-avatar"><AvatarCircle avatar={seatAvatarFor(myIdx)} name={myPlayer?.name ?? '我'} size={16} /></span>
+          <span class="toc-text">{game.firstPlayerIdx === myIdx ? '先攻' : '後攻'}</span>
         </div>
       {/if}
       <div class="zone-prizes">
@@ -16944,10 +17051,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
 {/if}
 
 <PlayerProfileModal
-  open={!!profileModalTarget}
+  open={!!profileModalTarget || !!profileModalPreview}
   target={profileModalTarget}
+  previewCard={profileModalPreview}
   getAuthCtx={friendsCtxFromAuth}
-  onclose={() => { profileModalTarget = null; }}
+  onclose={() => { profileModalTarget = null; profileModalPreview = null; }}
 />
 
 <!-- ⭐⭐⭐ v6.297 私聊面板：用 snippet 傳進 FriendsPanel 的 foot 位置，渲染在 .fr-panel **裡面**
@@ -19030,7 +19138,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     flex-shrink:0;
     align-self:center;
     font-size:.72rem; font-weight:700;
-    padding:.2rem .45rem;
+    padding:.2rem .35rem;
     border-radius:6px;
     background:rgba(60,60,80,.45);
     color:#99a;
@@ -19038,8 +19146,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
     letter-spacing:.1em;
     writing-mode:vertical-rl; text-orientation:upright;
     min-height:3rem;
-    display:flex; align-items:center; justify-content:center;
+    display:flex; align-items:center; justify-content:center; gap:4px;
     transition:background .2s, color .2s, border-color .2s, box-shadow .2s;
+  }
+  .turn-order-chip .toc-avatar{
+    writing-mode:horizontal-tb;
+    display:inline-flex; align-items:center; justify-content:center;
+    flex-shrink:0; border-radius:50%;
+    box-shadow:0 0 0 1px rgba(255,255,255,.45);
   }
   .turn-order-chip.active-turn{
     background:linear-gradient(180deg, rgba(255,200,60,.25), rgba(255,140,40,.25));
@@ -22690,7 +22804,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .playmat.layout-blue .opponent-row > .turn-order-chip,
   .playmat.layout-blue .my-row > .turn-order-chip{
     writing-mode:horizontal-tb; text-orientation:mixed; min-height:0;
-    padding:0 9px; border-radius:999px; font-size:11px; line-height:15px; letter-spacing:.06em;
+    padding:0 5px 0 3px; gap:2px; border-radius:999px; font-size:11px; line-height:17px; letter-spacing:.06em;
   }
   .playmat.layout-blue .opponent-row > .turn-order-chip{ top:12px; bottom:auto; right:auto; left:calc(10px + var(--bl-side) - 54px); }
   .playmat.layout-blue .my-row > .turn-order-chip{ top:auto; left:auto; right:calc(10px + var(--log-w) + var(--mat-gap) + 8px); bottom:calc(8px + var(--bl-bench-h) - 21px); }
