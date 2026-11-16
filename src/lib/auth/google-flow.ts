@@ -3,17 +3,31 @@ export interface GoogleAccount {
   uid: string;
   isAnonymous: boolean;
   email?: string | null;
-  providerData: readonly { providerId: string }[];
+  providerData: readonly { providerId: string; uid?: string; email?: string | null }[];
 }
 
 export function authUiState(user: GoogleAccount | null | undefined, revision = 0) {
   // Firebase 綁定可能保留同一個 User 物件；revision 讓介面重讀 providerData。
+  // >>> v6652-google-management
+  const password = user?.providerData.find(p => p.providerId === 'password');
+  const google = user?.providerData.find(p => p.providerId === 'google.com');
+  const passwordEmail = password ? password.email || user?.email || null : null;
+  // 密碼登入信箱與 Google 信箱可能不同，不能拿 Google 的信箱驗證原密碼。
+  const email = passwordEmail || user?.email || null;
+  const googleEmail = google?.email || null;
+  const googleKey = google?.uid || googleEmail?.trim().toLowerCase() || null;
+  // <<< v6652-google-management
   return {
     revision,
-    email: user?.email ?? null,
+    email,
     isAnonymous: user?.isAnonymous ?? true,
-    password: !!user?.providerData.some(p => p.providerId === 'password'),
-    google: !!user?.providerData.some(p => p.providerId === 'google.com'),
+    password: !!password,
+    google: !!google,
+    passwordEmail,
+    googleEmail,
+    googleKey,
+    differentGoogleEmail: !!googleEmail && googleEmail.trim().toLowerCase() !== email?.trim().toLowerCase(),
+    canUnlinkGoogle: !!googleKey && !!passwordEmail,
   };
 }
 
@@ -36,14 +50,17 @@ export interface GoogleFlowAdapter<U extends GoogleAccount> {
   signInCredential(credential: unknown): Promise<U>;
   busy(value: boolean): void;
   changed(user: U): void;
+  reauthenticate?(user: U, email: string, password: string): Promise<void>;
+  unlink?(user: U): Promise<U>;
 }
 
 export function createGoogleFlow<U extends GoogleAccount>(api: GoogleFlowAdapter<U>) {
   let running = false;
-  return async function continueGoogle(linkOnly = false): Promise<U> {
+  async function continueGoogle(linkOnly = false, expectedUid?: string): Promise<U> {
     if (running) throw { code: 'google/busy' };
     const initial = api.currentUser();
     if (linkOnly && (!initial || initial.isAnonymous)) throw { code: 'google/login-required' };
+    if (linkOnly && expectedUid && initial?.uid !== expectedUid) throw { code: 'google/account-changed' };
     if (linkOnly && authUiState(initial).google) return initial!;
     const link = linkOnly || !!initial?.isAnonymous;
     running = true;
@@ -72,7 +89,36 @@ export function createGoogleFlow<U extends GoogleAccount>(api: GoogleFlowAdapter
       running = false;
       api.busy(false);
     }
-  };
+  }
+  // >>> v6652-google-management
+  async function disconnectGoogle(password: string, expectedUid: string, expectedGoogleKey: string): Promise<U> {
+    if (running) throw { code: 'google/busy' };
+    const user = api.currentUser();
+    if (!user || user.isAnonymous || user.uid !== expectedUid) throw { code: 'google/account-changed' };
+    const before = authUiState(user);
+    if (!before.google) throw { code: 'google/not-linked' };
+    if (!before.canUnlinkGoogle) throw { code: 'google/last-provider' };
+    if (!expectedGoogleKey || before.googleKey !== expectedGoogleKey) throw { code: 'google/account-changed' };
+    if (!password) throw { code: 'google/password-required' };
+    if (!api.reauthenticate || !api.unlink) throw { code: 'google/unlink-unavailable' };
+    running = true;
+    api.busy(true);
+    try {
+      await api.reauthenticate(user, before.passwordEmail!, password);
+      if (api.currentUser()?.uid !== expectedUid) throw { code: 'google/account-changed' };
+      const current = authUiState(api.currentUser());
+      if (!current.google || !current.canUnlinkGoogle || current.passwordEmail !== before.passwordEmail || current.googleKey !== expectedGoogleKey) throw { code: 'google/account-changed' };
+      const result = await api.unlink(user);
+      if (api.currentUser()?.uid !== expectedUid || result.uid !== expectedUid) throw { code: 'google/account-changed' };
+      api.changed(result);
+      return result;
+    } finally {
+      running = false;
+      api.busy(false);
+    }
+  }
+  return Object.assign(continueGoogle, { disconnectGoogle });
+  // <<< v6652-google-management
 }
 
 export function googleAuthError(error: unknown): string {
@@ -94,6 +140,15 @@ export function googleAuthError(error: unknown): string {
     'google/account-changed': '登入期間帳號已變更，請確認目前帳號後再試。',
     'google/login-required': '請先登入原帳號，再綁定 Google。',
     'google/busy': '另一個 Google 登入正在處理中。',
+    // >>> v6652-google-management
+    'google/not-linked': '目前沒有綁定 Google，請重新確認帳號。',
+    'google/last-provider': 'Google 是目前唯一的登入方式，不能解除，以免無法登入。',
+    'google/password-required': '請輸入原帳號的登入密碼。',
+    'google/unlink-unavailable': '目前無法解除綁定，請稍後重試。',
+    'auth/invalid-credential': '原帳號信箱或密碼驗證失敗，未解除綁定。',
+    'auth/wrong-password': '原帳號密碼不正確，未解除綁定。',
+    'auth/requires-recent-login': '請重新登入原帳號，再解除 Google 綁定。',
+    // <<< v6652-google-management
   };
   return messages[code] ?? 'Google 登入未完成，請重試或使用 Email 登入。';
 }

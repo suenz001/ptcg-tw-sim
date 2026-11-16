@@ -5350,11 +5350,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (cpNewPassword.length < 6) { cpError = '新密碼至少需要 6 個字元'; return; }
     if (cpNewPassword !== cpNewPasswordConfirm) { cpError = '兩次輸入的新密碼不一致'; return; }
     const user = auth.currentUser;
-    if (!user || !user.email || !authUiState(user).password) { cpError = '請使用具密碼登入方式的帳號'; return; }
+    const passwordEmail = authUiState(user).passwordEmail; // v6652：驗證密碼登入方式的信箱，不使用 Google 信箱。
+    if (!user || !passwordEmail) { cpError = '請使用具密碼登入方式的帳號'; return; }
     if (cpNewPassword === cpOldPassword) { cpError = '新密碼不能與舊密碼相同'; return; }
     cpLoading = true; cpError = null;
     try {
-      const cred = EmailAuthProvider.credential(user.email, cpOldPassword);
+      const cred = EmailAuthProvider.credential(passwordEmail, cpOldPassword);
       await reauthenticateWithCredential(user, cred);
       await updatePassword(user, cpNewPassword);
       cpSuccess = true;

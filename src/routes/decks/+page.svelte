@@ -1736,12 +1736,13 @@
     if (cpNewPassword.length < 6) { cpError = '新密碼至少需要 6 個字元'; return; }
     if (cpNewPassword !== cpNewPasswordConfirm) { cpError = '兩次輸入的新密碼不一致'; return; }
     const user = auth.currentUser;
-    if (!user || !user.email || !authUiState(user).password) { cpError = '請使用具密碼登入方式的帳號'; return; }
+    const passwordEmail = authUiState(user).passwordEmail; // v6652：驗證密碼登入方式的信箱，不使用 Google 信箱。
+    if (!user || !passwordEmail) { cpError = '請使用具密碼登入方式的帳號'; return; }
     if (cpNewPassword === cpOldPassword) { cpError = '新密碼不能與舊密碼相同'; return; }
     cpLoading = true; cpError = null;
     try {
       // 先用舊密碼 reauthenticate（Firebase 對敏感操作要求最近一次登入認證）
-      const cred = EmailAuthProvider.credential(user.email, cpOldPassword);
+      const cred = EmailAuthProvider.credential(passwordEmail, cpOldPassword);
       await reauthenticateWithCredential(user, cred);
       // 通過後 updatePassword
       await updatePassword(user, cpNewPassword);

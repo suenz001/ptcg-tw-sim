@@ -1,7 +1,7 @@
 // Google 登入／綁定：實際共用流程、Svelte 同物件更新、過期雲端回應及版面。
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync as rawReadFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
@@ -11,8 +11,14 @@ import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
 import { revertV6651IfPresent, V6651_PAIRS } from './lib/revert-v6651-google-auth.mjs';
+import { revertV6652IfPresent } from './lib/revert-v6652-google-management.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+// Rule 40：本版只還原 v6.652 合法新增層，再執行原 v6.651 判準／突變。
+function readFileSync(path, encoding) {
+  const value = rawReadFileSync(path, encoding);
+  return typeof value === 'string' ? revertV6652IfPresent(relative(ROOT, path).replace(/\\/g, '/'), value) : value;
+}
 const BASE = 'a84cdd89679c07253d8dd7d841764d53f5aac89e';
 const CORE = 'src/lib/auth/google-flow.ts';
 const PAGES = ['src/routes/game/+page.svelte', 'src/routes/decks/+page.svelte'];
@@ -204,7 +210,10 @@ function complete(u){user=u;modal=false;window.h.completed++;}
 <button class="open" onclick={()=>modal=true}>開啟登入</button>`);
   const compiled = await build({ stdin: { contents: `import {mount} from 'svelte';import F from ${JSON.stringify(fixture)};mount(F,{target:document.body});`, resolveDir: ROOT }, bundle: true, write: false, format: 'iife', conditions: ['browser'], nodePaths: [join(ROOT, 'node_modules')], tsconfigRaw: {}, logLevel: 'silent',
     alias: { '$lib/firebase': firebase, 'firebase/auth': sdk, '$lib': join(ROOT, 'src/lib') },
-    plugins: [{ name: 'actual-svelte', setup(b) { b.onLoad({ filter: /\.svelte$/ }, args => ({ contents: compile(readFileSync(args.path, 'utf8'), { generate: 'client', css: 'injected', filename: args.path }).js.code, loader: 'js', resolveDir: join(args.path, '..') })); } }] });
+    plugins: [{ name: 'actual-svelte', setup(b) {
+      b.onLoad({ filter: /[\\/]src[\\/]lib[\\/]auth[\\/].*\.ts$/ }, args => ({ contents: readFileSync(args.path, 'utf8'), loader: 'ts', resolveDir: join(args.path, '..') }));
+      b.onLoad({ filter: /\.svelte$/ }, args => ({ contents: compile(readFileSync(args.path, 'utf8'), { generate: 'client', css: 'injected', filename: args.path }).js.code, loader: 'js', resolveDir: join(args.path, '..') }));
+    } }] });
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); const pg = await ctx.newPage();
   try {
     await pg.route('https://auth-fixture.invalid/**', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:8px}button{font:inherit}</style>' }));

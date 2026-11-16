@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { GoogleAuthProvider, linkWithPopup, signInWithPopup, signInWithCredential, type AuthCredential, type User } from 'firebase/auth';
+import { GoogleAuthProvider, EmailAuthProvider, reauthenticateWithCredential, unlink, linkWithPopup, signInWithPopup, signInWithCredential, type AuthCredential, type User } from 'firebase/auth';
 import { auth } from '$lib/firebase';
 import { createGoogleFlow } from './google-flow';
 export { authUiState, createAuthGeneration } from './google-flow';
@@ -19,4 +19,9 @@ export const continueGoogle = createGoogleFlow<User>({
   signInCredential: credential => signInWithCredential(auth, credential as AuthCredential).then(result => result.user),
   busy: value => googleAuthBusy.set(value),
   changed: () => googleAuthRevision.update(value => value + 1),
+  // >>> v6652-google-management
+  reauthenticate: (user, email, password) => reauthenticateWithCredential(user, EmailAuthProvider.credential(email, password)).then(() => {}),
+  unlink: user => unlink(user, 'google.com'),
+  // <<< v6652-google-management
 });
+export const disconnectGoogle = continueGoogle.disconnectGoogle;
