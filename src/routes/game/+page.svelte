@@ -148,7 +148,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import ReplayRowLabel from '$lib/game/ReplayRowLabel.svelte';
   import { canAskOppArchetype, oppArchetypeFrom } from '$lib/game/replay-label';   // ⭐v6.600 問對手原型的時機與取值（唯一判準）   // ⭐v6.600 復盤清單：勝敗＋雙方牌組（獨立元件、自己的樣式）
   import { createReplayRecorder, recordStep, finalizeReplay, stepsForStorage, nextTurnStepIndex, prevTurnStepIndex, type ReplayRecorder, type ReplayData } from '$lib/game/replay-record';
-  import { buildReplayIndex, replayStepLog, replayStepSummary, type ReplayIndex } from '$lib/game/replay-index';   // ⭐v6.649 回放共用索引（每份回放只建一次）
+  import { buildReplayIndex, replayStepLog, replayStepSummary, replayTimelineMarks, type ReplayIndex } from '$lib/game/replay-index';   // ⭐v6.649 回放共用索引（每份回放只建一次）
   import { replayKeyAction, REPLAY_KEY_BLOCKING_OVERLAYS } from '$lib/game/replay-keys';   // ⭐v6.649 回放鍵盤快捷鍵的唯一判準
   import { saveReplay, listReplays, loadReplay, deleteReplay, saveInProgress, loadInProgress, downloadReplayFile, parseReplayBytes, MAX_SAVED_REPLAYS, type SavedReplayInfo } from '$lib/game/replay-store';
   import { replayRevealsOpponent } from '$lib/game/replay-policy';   // ⭐v6.557 手牌互疊量依實際寬度計算（唯一判準）
@@ -6280,6 +6280,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
   $effect(() => { if (!isTReplay) return; try { replayFinePointer = typeof matchMedia === 'function' && matchMedia('(hover: hover) and (pointer: fine)').matches; } catch { replayFinePointer = false; } });
   /** 📜 整局紀錄：把之後的紀錄也列出來（變淡）；預設照舊只看到這一步為止。進入點與離開回放都歸零。 */
   let replayLogFull = $state(false);
+  // >>> v6650-replay-marks-state
+  /** ⭐v6.650 手機回放的「詳情」面板（R6）：預設收起；關閉時焦點回到開關鈕。進入點與離開回放都歸零。 */
+  let replayMobPanel = $state(false);
+  let replayMobToggleEl = $state<HTMLButtonElement | null>(null);
+  $effect.pre(() => { if (!isTReplay) replayMobPanel = false; });
+  function replayMobPanelClose() { replayMobPanel = false; void tick().then(() => { try { replayMobToggleEl?.focus(); } catch { /* */ } }); }
+  /** 時間軸記號的卡名（昏厥節點的說明用） */
+  function replayFaintTitle(f: { step: number; side: 0 | 1; count: number; cardIds: string[] }): string {
+    const who = String(game?.players?.[f.side]?.name ?? (f.side === 0 ? '玩家1' : '玩家2'));
+    const names = f.cardIds.map((id) => getCard(id)?.name ?? '寶可夢').join('、');
+    return `第 ${f.step + 1} 步：${who} 的 ${names} 昏厥／被丟棄${f.count > 1 ? `（${f.count} 隻）` : ''}`;
+  }
+  // <<< v6650-replay-marks-state
   $effect.pre(() => { if (!isTReplay) replayLogFull = false; });
   /** 手動走步（鍵盤、紀錄定位）⇒ 先停掉自動播放 */
   function replayManualGoto(i: number) { replayPlaying = false; tReplayGoto(i); }
@@ -6358,7 +6371,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⚠⚠v6.190 先把上一份盤面清掉再開回放旗標：isTReplay 一旦為 true，桌機獎賞縮圖就會
     //   翻正面（(_pz.faceUp || replayShowsHidden)，v6.560 前是 isTReplay），而底下還有一個 await 才會把 game 換成回放快照。
     //   進入點同時歸零獎賞卡檢視視窗（離開回放有 7 條路徑，在進入點歸零才是單一來源）。
-    game = null; prizeViewOpen = false; replayDeckSeat = null; replayLogFull = false;   // ⭐v6.649 整局紀錄每份回放從預設（只看到這一步）開始
+    game = null; prizeViewOpen = false; replayDeckSeat = null; replayLogFull = false; replayMobPanel = false;   // ⭐v6.649 整局紀錄每份回放從預設（只看到這一步）開始；⭐v6.650 手機詳情面板收起
     const _seat = data?.meta?.viewerSeat;
     const _lockedView: 'p1' | 'p2' | 'auto' = (!replayRevealAll && (_seat === 0 || _seat === 1)) ? (_seat === 0 ? 'p1' : 'p2') : 'auto';
     isTReplay = true; isTournSpectator = true; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; battleLogOpen = true; spectatorView = _lockedView;  // v5.942 開log面板+視角自動跟當前出牌方(本機雙人;可手動看P1/P2 override)；v6.560 遮蔽的復盤固定記錄者視角
@@ -13111,7 +13124,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <button class="treplay-mob-btn treplay-mob-main" onclick={() => tReplayGoto(tReplayStep - 1)} disabled={tReplayStep <= 0} aria-label="上一步">◀</button>
         <!-- >>> v6582-replay-timeline-mob -->
         <span class="treplay-mob-mid">
-          <span class="treplay-mob-step">{_mcur?.isFinal ? '🏁' : (_mact === _mfirst ? '先' : '後') + '·T' + (_mcur?.turn ?? '?')} {tReplayStep + 1}/{_msteps.length}</span>
+          <!-- ⭐v6.650（審查 P2-3）：步數字樣本身就是「詳情」開關（不另外浮一顆在盤面上，免得蓋到對手的卡） -->
+          <button type="button" class="treplay-mob-step treplay-mob-more" bind:this={replayMobToggleEl} aria-expanded={replayMobPanel} aria-controls="treplay-mob-panel"
+            aria-label={replayMobPanel ? '收起回放詳情' : '打開回放詳情'}
+            onclick={() => { if (replayMobPanel) replayMobPanelClose(); else { replayMobPanel = true; void tick().then(() => { try { (document.querySelector('#treplay-mob-panel .treplay-mob-close') as HTMLElement | null)?.focus(); } catch { /* */ } }); } }}>{_mcur?.isFinal ? '🏁' : (_mact === _mfirst ? '先' : '後') + '·T' + (_mcur?.turn ?? '?')} {tReplayStep + 1}/{_msteps.length} {replayMobPanel ? '▴' : '▾'}</button>
           <input class="treplay-range" type="range" min="0" max={Math.max(0, _msteps.length - 1)} step="1" value={tReplayStep}
             aria-label="回放時間軸" oninput={(e) => tReplayGoto(Number((e.currentTarget as HTMLInputElement).value))} />
         </span>
@@ -13122,6 +13138,26 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <button class="treplay-mob-btn treplay-mob-speed" onclick={replayCycleSpeed} aria-label="播放速度">{replaySpeed}x</button>
         {#if replayKind === 'tournament'}<button class="treplay-mob-btn" onclick={() => tCopyReplayLink(tReplay.meta?.matchId)} aria-label="複製分享連結">🔗</button>{/if}
       </div>
+      <!-- >>> v6650-replay-mob-panel -->
+      <!-- ⭐v6.650 手機回放的「詳情」（R6）：點控制列中間的步數字樣開關，預設收起；打開後是控制列正下方的面板（只蓋對手上半部，不蓋手牌與下方操作），內容可在面板內捲動。 -->
+      {#if replayMobPanel}
+        {@const _ri = replayIndex()}
+        <div class="treplay-mob-panel" id="treplay-mob-panel" role="region" aria-label="回放詳情"
+          onkeydown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); replayMobPanelClose(); } }}>
+          {#if _ri}
+            {@const _sum = replayStepSummary(_ri, tReplayStep, tReplay.finalLog || [])}
+            {@const _who = _sum.actor !== null ? String(game?.players?.[_sum.actor]?.name ?? '') : ''}
+            <div class="treplay-mob-sum">
+              {#if _ri.turnOnly}<span class="log-replay-note">此回放僅提供回合級定位</span>{/if}
+              {#if _sum.count === 0}盤面更新{:else}{#if _who && !_sum.text.startsWith(_who)}<b class="log-replay-who">{_who}</b>：{/if}{_sum.text}{#if _sum.count > 1}<span class="log-replay-n">（共 {_sum.count} 行）</span>{/if}{/if}
+            </div>
+            <div class="treplay-mob-track">{@render replayMarks('mob')}</div>
+            {@render replayLegend('mob')}
+          {/if}
+          <button type="button" class="treplay-mob-btn treplay-mob-close" onclick={replayMobPanelClose}>收起</button>
+        </div>
+      {/if}
+      <!-- <<< v6650-replay-mob-panel -->
     {/if}
   {:else}
 
@@ -13278,9 +13314,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <button class="treplay-btn treplay-play" onclick={replayTogglePlay} disabled={_steps.length <= 1}
         title={replayPlaying ? '暫停自動播放' : '自動播放'} aria-label={replayPlaying ? '暫停' : '播放'}>{replayPlaying ? '⏸ 暫停' : '▶ 播放'}</button>
       <span class="treplay-tl-n">1</span>
-      <input class="treplay-range" type="range" min="0" max={Math.max(0, _steps.length - 1)} step="1" value={tReplayStep}
-        aria-label="回放時間軸" oninput={(e) => tReplayGoto(Number((e.currentTarget as HTMLInputElement).value))} />
+      <!-- ⭐v6.650 時間軸上的回合記號與昏厥節點（R2）：疊在時間軸上、不改變這一列的高度 -->
+      <span class="treplay-track">
+        <input class="treplay-range" type="range" min="0" max={Math.max(0, _steps.length - 1)} step="1" value={tReplayStep}
+          aria-label="回放時間軸" oninput={(e) => tReplayGoto(Number((e.currentTarget as HTMLInputElement).value))} />
+        {@render replayMarks('desk')}
+      </span>
       <span class="treplay-tl-n">{_steps.length}</span>
+      {@render replayLegend('desk')}
       <span class="treplay-speeds" role="group" aria-label="播放速度">
         {#each REPLAY_SPEEDS as sp}<button class="treplay-speed" class:active={replaySpeed === sp} onclick={() => replaySpeed = sp}>{sp}x</button>{/each}
       </span>
@@ -16824,6 +16865,40 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <DmPanelComp sess={dmState} mobile={isPortraitMobile} onclose={closeDm} onsend={(t: string) => { void _dm?.send(t); }} onmore={() => { void _dm?.loadMore(); }} onretry={() => _dm?.retry()} />
   {/if}
 {/snippet}
+<!-- >>> v6650-replay-marks-snippet -->
+<!-- ⭐v6.650 回放時間軸記號（R2）：回合開頭的細線＋昏厥節點。桌機疊在控制列的時間軸上，手機放在「詳情」面板裡的放大時間軸。
+     昏厥＝盤面上「場上的寶可夢進到同一位玩家的棄牌區」（replay-index.ts replayFaints），不看紀錄文字；顏色之外一定有符號（● 玩家1／◆ 玩家2）。 -->
+{#snippet replayMarks(kind: 'desk' | 'mob')}
+  {@const _ri = isTReplay && tReplay ? replayIndex() : null}
+  {#if _ri && _ri.n > 1}
+    {@const _mk = replayTimelineMarks(_ri, tReplaySteps(), kind === 'mob' ? 0.03 : 0.012)}
+    {@const _span = _ri.n - 1}
+    <span class="treplay-marks" class:mob={kind === 'mob'}>
+      {#each _mk.ticks as t (t.step)}
+        <button type="button" class="treplay-tick" class:s0={t.side === 0} class:s1={t.side === 1} tabindex="-1"
+          style="left: calc(var(--tl-pad) + (100% - 2 * var(--tl-pad)) * {t.step / _span})"
+          title={`第 ${t.turn} 回合${t.side !== null ? '・' + String(game?.players?.[t.side]?.name ?? '') : ''}（第 ${t.step + 1} 步）`}
+          aria-label={`跳到第 ${t.turn} 回合開頭`} onclick={() => replayManualGoto(t.step)}></button>
+      {/each}
+      {#each _mk.faints as f (f.side + ':' + f.step)}
+        <button type="button" class="treplay-faint" class:s0={f.side === 0} class:s1={f.side === 1} class:here={tReplayStep >= f.firstStep && tReplayStep <= f.lastStep}
+          style="left: calc(var(--tl-pad) + (100% - 2 * var(--tl-pad)) * {f.step / _span})"
+          title={replayFaintTitle(f)} aria-label={replayFaintTitle(f) + '（跳過去）'} onclick={() => replayManualGoto(f.firstStep)}>{f.side === 0 ? '●' : '◆'}{#if f.count > 1}<span class="treplay-faint-n">{f.count}</span>{/if}</button>
+      {/each}
+    </span>
+  {/if}
+{/snippet}
+{#snippet replayLegend(kind: 'desk' | 'mob')}
+  {#if isTReplay && tReplay && replayIndex()}
+    <span class="treplay-legend" class:mob={kind === 'mob'} title="時間軸記號：細線＝回合開始；● ◆＝那位玩家的寶可夢昏厥（從場上進到棄牌區），數字＝相近的幾隻合併">
+      <span class="lg-tick">｜回合</span>
+      <span class="lg-f s0">● {String(game?.players?.[0]?.name ?? '玩家1').slice(0, 8)}</span>
+      <span class="lg-f s1">◆ {String(game?.players?.[1]?.name ?? '玩家2').slice(0, 8)}</span>
+      <span class="lg-note">昏厥</span>
+    </span>
+  {/if}
+{/snippet}
+<!-- <<< v6650-replay-marks-snippet -->
 
 <style>
   /* 錦標賽大廳/提示（v0.4 伺服器權威）*/
@@ -17094,6 +17169,38 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .treplay-mob-mid .treplay-range { width: 100%; min-width: 0; height: 22px; }
   .treplay-mob-play { min-width: 40px; font-weight: 700; }
   .treplay-mob-speed { min-width: 34px; font-size: .72rem; }
+  /* >>> v6650-replay-marks-css */
+  /* ⭐v6.650 時間軸記號：疊在 range 上、絕對定位 ⇒ 這一列高度不變；--tl-pad＝range 滑塊半徑（記號對齊滑塊中心能走到的範圍） */
+  .treplay-track { position: relative; flex: 1 1 auto; min-width: 80px; display: flex; align-items: center; --tl-pad: 8px; }
+  .treplay-track .treplay-range { width: 100%; }
+  .treplay-marks { position: absolute; left: 0; right: 0; top: 0; bottom: 0; pointer-events: none; }
+  .treplay-tick { position: absolute; bottom: -2px; width: 2px; height: 6px; margin-left: -1px; padding: 0; border: 0; background: #6d86b0; pointer-events: auto; cursor: pointer; }
+  .treplay-tick.s0 { background: #7fb2ff; } .treplay-tick.s1 { background: #ff9a8a; }
+  .treplay-faint { position: absolute; top: -9px; transform: translateX(-50%); padding: 0 1px; border: 0; background: transparent; font-size: .7rem; line-height: 1; cursor: pointer; pointer-events: auto; text-shadow: 0 0 2px #000; }
+  .treplay-faint.s0 { color: #7fb2ff; } .treplay-faint.s1 { color: #ff9a8a; }
+  .treplay-faint.here { outline: 1px solid #ffe08a; border-radius: 3px; }
+  .treplay-faint:focus-visible, .treplay-tick:focus-visible { outline: 2px solid #ffe08a; outline-offset: 1px; }
+  .treplay-faint-n { font-size: .6rem; margin-left: 1px; }
+  .treplay-legend { display: inline-flex; align-items: center; gap: 5px; font-size: .68rem; color: #8fb0e0; white-space: nowrap; }
+  .treplay-legend .lg-f.s0 { color: #7fb2ff; } .treplay-legend .lg-f.s1 { color: #ff9a8a; }
+  /* 手機詳情面板裡的放大時間軸：記號放大成好按的尺寸 */
+  .treplay-mob-track { position: relative; height: 66px; margin: 6px 4px 2px; --tl-pad: 6px; border-bottom: 2px solid #2c4470; }
+  /* 回合記號：看起來是細線，可點範圍左右各加寬到 24px（透明 ::before） */
+  .treplay-marks.mob .treplay-tick { bottom: 0; width: 4px; height: 14px; margin-left: -2px; }
+  .treplay-marks.mob .treplay-tick::before { content: ''; position: absolute; left: -10px; right: -10px; top: -10px; bottom: 0; }
+  /* 兩位玩家的昏厥節點分上下兩排，不會疊在一起 */
+  .treplay-marks.mob .treplay-faint { top: 0; min-width: 24px; min-height: 24px; font-size: .9rem; }
+  .treplay-marks.mob .treplay-faint.s1 { top: 26px; }
+  .treplay-legend.mob { flex-wrap: wrap; white-space: normal; font-size: .72rem; }
+  /* 手機「詳情」開關與面板（R6）：控制列正下方；用 --safe-* 避開瀏海與圓角 */
+  /* 步數字樣＝「詳情」開關：淡底色看得出是按鈕；上下加 padding 再用負 margin 抵銷 ⇒ 可點範圍 ≥24px、控制列高度不變（.treplay-mob-step 有 overflow:hidden，不能用 ::before 往外擴） */
+  .treplay-mob-mid .treplay-mob-more, .treplay-mob-more { position: relative; z-index: 1; background: rgba(255,211,90,.14); background-clip: content-box; border: 0; border-radius: 4px; padding: 4px 4px 9px; margin: -4px 0 -9px; cursor: pointer; font-family: inherit; }
+  .treplay-mob-panel { position: fixed; z-index: 81; top: calc(var(--safe-top, 0px) + 54px); left: max(var(--safe-left, 0px), 6px); right: max(var(--safe-right, 0px), 6px);
+    max-height: 42vh; overflow-y: auto; overscroll-behavior: contain; background: #0f1730; border: 1px solid #3a5a8a; border-top: 0; border-radius: 0 0 10px 10px;
+    padding: 8px 10px 10px; box-shadow: 0 6px 16px rgba(0,0,0,.55); color: #d8e4ff; font-size: .8rem; display: flex; flex-direction: column; gap: 6px; }
+  .treplay-mob-sum { line-height: 1.35; overflow-wrap: anywhere; }
+  .treplay-mob-close { align-self: flex-end; min-height: 36px; }
+  /* <<< v6650-replay-marks-css */
   /* <<< v6582-replay-timeline-css */
   /* v5.953 手機版回放導覽浮層 — 只在 isPortraitMobile 手機分支渲染(是 <MobilePortraitBattle/> 的兄弟節點)。
      position:fixed 蓋在 .mp-top + 計時細條之上、不佔文檔流→對手機盤面零位移。桌機 .treplay-bar 不動。 */
@@ -19013,8 +19120,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
        .selection-modal／.prize-view-modal／.pv-inner，語意不同不收）＋
        非 vh 清單 4（.open-room-list 420px／.chat-messages 240px／.log-col 100%／
        .playmat.layout-fable .action-bar > .log-col none）＋ .scroll-list 自己 1。
-     ⚠ **遷移後**現況（守衛 C5 盯住這個數字，不是盯註解）：那 18 條會剩 **15 條** ＝
-       modal 容器 9（⭐v6.449 多了 v6449-picker-shell 的桌機 .selection-modal 外框：85dvh＋視窗內捲動；
+     ⚠ **遷移後**現況（守衛 C5 盯住這個數字，不是盯註解）：那 18 條會剩 **16 條** ＝
+       modal 容器 10（⭐v6.650 多了手機回放詳情面板 .treplay-mob-panel 42vh＋面板內捲動；⭐v6.449 多了 v6449-picker-shell 的桌機 .selection-modal 外框：85dvh＋視窗內捲動；
        ⭐v6.450 多了 v6450-picker-sheet 的手機棄牌區／獎賞 sheet .zoom-modal.discard-modal；
        ⭐v6.454 多了浮動進化選單 .float-evo-menu 的高度上限）＋
        非 vh 清單 5（⭐v6.562 多了聊天室置頂公告的 .tchat-pin-text 6.5em）＋ 下面這條群組規則自己 1；被遷移的 7 個清單 class 一條都不在。

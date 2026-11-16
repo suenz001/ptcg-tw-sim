@@ -18,7 +18,27 @@ import { nextTurnStepIndex, type ReplayPlayStep } from './replay-record';
 /** 回放的一格（與對戰頁 tReplaySteps 同形；只列這裡用到的欄位）。 */
 export interface ReplayIndexStep extends ReplayPlayStep {
   logLen: number | null;
+  /** 這一格的盤面（v6.650 昏厥節點用；沒有就不算昏厥） */
+  state?: ReplayStateLite | null;
 }
+
+/** 盤面裡昏厥偵測用到的欄位（只讀場上與棄牌區的 iid／cardId） */
+interface ReplayInstLite { iid?: string; cardId?: string }
+interface ReplayPlayerLite { active?: ReplayInstLite | null; bench?: (ReplayInstLite | null)[] | null; discard?: (ReplayInstLite | null)[] | null; prizes?: unknown[] | null }
+export interface ReplayStateLite { players?: (ReplayPlayerLite | null | undefined)[] }
+
+/**
+ * ⭐v6.650 昏厥事件（R2 時間軸節點）：不看紀錄文字，看盤面——
+ *   前一格在某位玩家場上（戰鬥位／備戰）的寶可夢實例，這一格不在場上、而且出現在「同一位玩家」的棄牌區 ⇒ 那位玩家的寶可夢昏厥。
+ *   ・誰的寶可夢一定確定（就是場上那位玩家）⇒ side 一定有值。
+ *   ・回到手牌／牌庫、放逐區（不是棄牌區）都不算；進化、撤退、換位實例還在場上，也不算。
+ *   ・再對獎賞卡：對手的獎賞卡張數要在這一格起 3 格內減少（取獎可能晚一兩個動作）才算 ⇒ 換場地後被丟棄的備戰、
+ *     自願丟棄等「進棄牌區但不是昏厥」不會被算進來（v6.650 審查 P2-1）。代價：不給獎賞卡的昏厥（例：脆弱蛻殼）不會標出來。
+ *     盤面沒有獎賞卡欄位（不明格式）⇒ 不做這道確認。
+ *   ・同一格可能有多隻（一次招式打倒多隻）⇒ 逐隻列出。
+ *   ・終局那一格若與最後一格快照相同 ⇒ 沒有差異，不會重複。
+ */
+export interface ReplayFaint { step: number; side: 0 | 1; cardId: string }
 
 /** 對戰紀錄的一行（只列這裡用到的欄位）。 */
 export interface ReplayLogLine {
@@ -53,6 +73,73 @@ export interface ReplayIndex {
   halfOf: Int32Array;
   /** 整份都沒有 logLen ⇒ 只有回合級定位 */
   turnOnly: boolean;
+  /** ⭐v6.650 昏厥事件（依格排序） */
+  faints: ReplayFaint[];
+}
+
+/** 由盤面差異找昏厥（純函式；每份回放算一次）。 */
+export function replayFaints(steps: ReplayIndexStep[]): ReplayFaint[] {
+  const out: ReplayFaint[] = [];
+  const fieldOf = (p: ReplayPlayerLite | null | undefined): ReplayInstLite[] => {
+    if (!p) return [];
+    const a: ReplayInstLite[] = [];
+    if (p.active && p.active.iid) a.push(p.active);
+    for (const b of p.bench ?? []) if (b && b.iid) a.push(b);
+    return a;
+  };
+  const prizeN = (i: number, side: number): number | null => { const pz = steps[i]?.state?.players?.[side]?.prizes; return Array.isArray(pz) ? pz.length : null; };
+  /** 對手（拿獎賞的那一方）的獎賞卡在 [i, i+3] 內比 i-1 少 */
+  const oppTookPrize = (i: number, side: number): boolean => {
+    const opp = 1 - side, base = prizeN(i - 1, opp);
+    if (base === null) return true;
+    for (let j = i; j < Math.min(steps.length, i + 4); j++) { const n = prizeN(j, opp); if (n !== null && n < base) return true; }
+    return false;
+  };
+  for (let i = 1; i < steps.length; i++) {
+    const A = steps[i - 1]?.state, B = steps[i]?.state;
+    if (!A?.players || !B?.players) continue;
+    for (const side of [0, 1] as const) {
+      const pa = A.players[side], pb = B.players[side];
+      if (!pa || !pb) continue;
+      const before = fieldOf(pa);
+      if (!before.length) continue;
+      const after = new Set(fieldOf(pb).map((c) => c.iid));
+      let disc: Set<string> | null = null;
+      for (const c of before) {
+        if (after.has(c.iid)) continue;
+        if (!disc) { disc = new Set(); for (const d of pb.discard ?? []) if (d && d.iid) disc.add(d.iid); }
+        if (disc.has(c.iid!) && oppTookPrize(i, side)) out.push({ step: i, side, cardId: String(c.cardId ?? '') });
+      }
+    }
+  }
+  return out;
+}
+
+export interface ReplayTick { step: number; turn: number; side: 0 | 1 | null }
+export interface ReplayFaintNode { step: number; side: 0 | 1; count: number; cardIds: string[]; firstStep: number; lastStep: number }
+
+/**
+ * ⭐v6.650 時間軸上的記號（R2）：
+ *   ・回合記號＝每個半回合的第一格（turnStarts），帶回合數與行動方（不確定 ⇒ null，畫中性色）。
+ *   ・昏厥節點：同一位玩家、位置相近（相差不到 mergeFrac × 總長）的合併成一顆，顯示數量；點下去跳到那一群的第一格。
+ *   ・mergeFrac 讓手機（窄）合併得多一點、桌機少一點。
+ */
+export function replayTimelineMarks(idx: ReplayIndex, steps: ReplayIndexStep[], mergeFrac = 0.012): { ticks: ReplayTick[]; faints: ReplayFaintNode[] } {
+  const ticks: ReplayTick[] = idx.turnStarts.map((st) => {
+    const s = steps[st];
+    const ap = s?.activePlayerIndex;
+    return { step: st, turn: Number(s?.turn ?? 0), side: s?.isFinal ? null : (ap === 0 || ap === 1 ? ap : null) };
+  });
+  const span = Math.max(1, idx.n - 1), gap = Math.max(0, mergeFrac) * span;
+  const faints: ReplayFaintNode[] = [];
+  const last: Record<number, ReplayFaintNode | undefined> = {};
+  for (const f of idx.faints) {
+    const g = last[f.side];
+    if (g && f.step - g.lastStep <= gap) { g.count++; g.cardIds.push(f.cardId); g.lastStep = f.step; continue; }
+    const node: ReplayFaintNode = { step: f.step, side: f.side, count: 1, cardIds: [f.cardId], firstStep: f.step, lastStep: f.step };
+    faints.push(node); last[f.side] = node;
+  }
+  return { ticks, faints };
 }
 
 /** 建索引（每份回放一次）。 */
@@ -104,7 +191,7 @@ export function buildReplayIndex(steps: ReplayIndexStep[], fullLog: ReplayLogLin
     for (let i = 0; i < n; i++) { while (h + 1 < turnStarts.length && turnStarts[h + 1] <= i) h++; halfOf[i] = h; }
   }
   const turnOnly = !steps.some((s) => !s.isFinal && s.logLen != null);
-  return { n, lineStep, lineStart, lines, turnStarts, halfOf, turnOnly };
+  return { n, lineStep, lineStart, lines, turnStarts, halfOf, turnOnly, faints: replayFaints(steps) };
 }
 
 /** 第 i 格新增的紀錄行號（依原始順序）。 */

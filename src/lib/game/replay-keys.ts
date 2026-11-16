@@ -35,7 +35,8 @@ export const REPLAY_KEY_EDITABLE =
 export const REPLAY_KEY_ARROW_NATIVE =
   '[role="tab"], [role="tablist"], [role="radio"], [role="radiogroup"], [role="menu"], [role="menuitem"], [role="option"], [role="listbox"], [role="tree"], [role="treeitem"], [role="grid"]';
 /** 回放自己的控制鈕（控制列、紀錄欄頂端、定位鈕）：點過之後焦點會停在上面 ⇒ 空白鍵照樣是「播放／暫停」，不去按那顆鈕（審查 P3-4）。 */
-export const REPLAY_KEY_OWN_CONTROLS = '.treplay-bar button:not(.treplay-exit):not(.treplay-share), .log-replay-head button, .log-locate';
+export const REPLAY_KEY_OWN_CONTROLS = '.treplay-bar button:not(.treplay-exit):not(.treplay-share):not(.treplay-tick):not(.treplay-faint), .log-replay-head button, .log-locate';
+// ↑ v6.650：時間軸記號（回合／昏厥）上的空白鍵照常按下它（跳到那一步），不切換播放
 // ↑「✕ 離開」「🔗 複製連結」不算：鍵盤使用者用空白鍵按它們時照常按下（複審建議）
 /** 空白鍵會「按下去」的元件 ⇒ 空白鍵交還。 */
 export const REPLAY_KEY_SPACE_NATIVE = 'button, a[href], summary, [role="button"], [role="link"], [role="checkbox"], [role="switch"], [role="tab"], [role="radio"], [role="menuitem"], [role="option"]';
