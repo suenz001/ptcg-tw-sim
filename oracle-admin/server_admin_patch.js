@@ -9174,7 +9174,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
     // >>> v187-player-profile
     // ══ server v1.87（v6.653）玩家個人名片與官方卡牌圓圈頭像 ════════════════════════
     //   ・collection：playerProfiles（_id＝正規化 email）
-    //   ・唯一不可逆公開識別碼：profileKey（sha256 前 20 碼 hex）→ 所有公開 API 一律零 email
+    //   ・唯一不可逆公開識別碼：profileKey（_profHash20 20 碼 hex，ESM host 零相依）→ 所有公開 API 一律零 email
     //   ・選卡範圍：TPOOL 全部開放（寶可夢／訓練家／能量皆可），僅存 { cardId, x, y, zoom }
     //   ・代表榮譽：後端只從 tournamentArchives 推導（網站賽 冠軍/亞軍/4強/8強 + 社群賽冠軍），最多掛 10 筆
     //   ・未報名時的錦標賽聊天室暱稱：透過 pre-TAIL middleware 在管理員/本場已報名之外套用個人檔案暱稱
@@ -9195,6 +9195,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
       db.collection(PROF_COLL).createIndex({ profileKey: 1 }, { unique: true, sparse: true }).catch(() => {});
       db.collection(PROF_COLL).createIndex({ uid: 1 }).catch(() => {});
       db.collection(PROF_COLL).createIndex({ nickLower: 1 }).catch(() => {});
+      db.collection('tournamentArchives').createIndex({ 'players.email': 1 }, { sparse: true }).catch(() => {});
+      db.collection('tournamentArchives').createIndex({ 'players.name': 1 }, { sparse: true }).catch(() => {});
+      db.collection('tournamentEvents').createIndex({ proposerName: 1 }, { sparse: true }).catch(() => {});
     } catch (_e) { /* db 尚未就緒時略過 */ }
 
     function _profHash20(str) {
@@ -9214,13 +9217,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
     }
     function _profCleanText(raw, maxLen) {
       if (typeof raw !== 'string') return '';
-      return raw.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLen);
+      return Array.from(raw.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, maxLen).join('');
     }
     function _profCleanBio(raw) {
       if (typeof raw !== 'string') return '';
       // 保留最多兩個換行，濾除控制字元與過多空白
       const norm = raw.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim();
-      return norm.slice(0, PROF_BIO_MAX);
+      return Array.from(norm).slice(0, PROF_BIO_MAX).join('');
     }
     function _profClampCrop(raw) {
       if (!raw || typeof raw !== 'object') return null;
@@ -9727,6 +9730,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const viewer = await _profVerifyAuth(req, { required: false });
         const viewerEmail = viewer && viewer.email ? viewer.email : null;
+        const now = Date.now();
+        const bKey = 'batch:' + (viewerEmail || req.ip || 'anon');
+        const prevBatch = _profRateMap.get(bKey) || 0;
+        if (now - prevBatch < 300) return res.status(429).json({ playerProfileApi: 1, error: '請求過於頻繁，請稍候再試' });
+        _profRateMap.set(bKey, now);
+        if (_profRateMap.size > 3000) _profRateMap.clear();
         const items = (req.body && Array.isArray(req.body.items)) ? req.body.items.slice(0, 40) : [];
         const profiles = {};
         if (!items.length) return res.json({ playerProfileApi: 1, profiles });

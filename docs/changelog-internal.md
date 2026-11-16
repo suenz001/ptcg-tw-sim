@@ -19,6 +19,12 @@
   - `src/lib/friends/FriendsPanel.svelte` & `src/routes/friends/+page.svelte`：新增可選 `onprofile` 回呼（「🪪 名片」鈕置於 `.acts` 之外以維持 `test-v6411` 320px 按鈕預算）。
   - `src/routes/deck-posts/+page.svelte`：C 區（公開牌組列表與明細視窗作者名片鈕）零 `{@html}`、零清單縮圖增加。
 - 守衛與還原鏈：`scripts/test-v6653-player-profile.mjs`、`scripts/lib/sap-revert-admin-v187.mjs`、`scripts/lib/revert-v6653-player-profile.mjs`（精確還原至 `66fc6069`）。
+- 獨立審查（`1cba3c42`，只讀對抗式複核）：**0 P1 / 4 P2 / 2 P3**，已全數修補並復測：
+  - P2-1：補建 `tournamentArchives`（`{ 'players.email': 1 }`, `{ 'players.name': 1 }`）與 `tournamentEvents`（`{ proposerName: 1 }`）稀疏索引，並為公開 `POST /api/player-profile/batch` 加上 300ms 節流（防止 `lbNick` 重複掃描；補測於 `test-v6653` B1）。
+  - P2-2：`tournLogout()` 與匿名狀態變化重設 `_profileBootUid`／`profileSelf`／`profileModalTarget`，`syncMyProfileNick` 支援回退 `defaultNick`，async 載入加 `bootUid` 世代比對避免換帳號延遲覆蓋或殘留舊暱稱。
+  - P2-3：`PlayerProfileEditor.svelte` 新增 `pickerSeq` 競態序號防衛，防止快速切換卡包／來源時舊回應蓋過新選清單（且過期請求的 `finally` 不提前關閉載入狀態）。
+  - P2-4：`game/+page.svelte` 的 `lbBoard(title: string, rows: any[], unit: string)` 補齊型別標註，消除 `svelte-check` 的 `'r' is of type 'unknown'` 錯誤。
+  - P3-1 & P3-2：前後端暱稱／自介截斷改用 `Array.from(...)` 避免切斷 UTF-16 emoji 代理對（補測於 `test-v6653` A1），並更新 `_profHash20` 註解說明（零 `require('crypto')`，相容 Oracle ESM host；`friend-request` 改以 `$set` 寫 `null` 取代 `$unset` 以守 `test-v6244`）。
 
 ## v6.652 — Google 解除綁定／信箱辨識（2026-11-16）
 

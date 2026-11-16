@@ -126,6 +126,9 @@ async function assertCropAndApi(mod) {
   }
   assert.strictEqual(mod.clampProfileNick('  ab\n\t cd   ef  ' + 'x'.repeat(20)), 'ab cd ef xxxxxxx');
   assert.strictEqual(mod.clampProfileBio('line1\nline2' + 'z'.repeat(120)).length, 100);
+  const emojiNick = mod.clampProfileNick('🦊'.repeat(20));
+  assert.strictEqual(Array.from(emojiNick).length, 16);
+  assert.strictEqual(emojiNick, '🦊'.repeat(16));
   assert.strictEqual(mod.cardImageUrlFromId('19145'), 'https://asia.pokemon-card.com/tw/card-img/tw00019145.png');
   assert.strictEqual(mod.cardImageUrlFromId('abc'), null);
 
@@ -451,6 +454,13 @@ await T('B1 後端 /me /save /view /batch 完整流程、全卡池、榮譽驗�
     const serialized = JSON.stringify(v.body).toLowerCase();
     assert.ok(!serialized.includes('alice@example.com') && !serialized.includes('@'), '⚠️ 回傳洩漏了 email: ' + serialized);
   }
+
+  // /batch 預載＋節流 429 實跑
+  const b1 = await invoke('POST', '/api/player-profile/batch', { token: 'tokB', body: { items: [{ k: 'uA', targetUid: 'uidA' }] } });
+  assert.strictEqual(b1.statusCode, 200);
+  assert.strictEqual(b1.body.profiles.uA.nick, '小艾Alice');
+  const b2 = await invoke('POST', '/api/player-profile/batch', { token: 'tokB', body: { items: [{ k: 'uA', targetUid: 'uidA' }] } });
+  assert.strictEqual(b2.statusCode, 429);
 
   // 未報名錦標賽聊天室 middleware
   const cRes = await invoke('POST', '/api/tournament/chat', { token: 'tokA', body: { text: '大家好！' } });

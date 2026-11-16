@@ -127,12 +127,12 @@ export function clampAvatarCrop(raw: Partial<AvatarCrop> | null | undefined): Av
 
 export function clampProfileNick(raw: unknown): string {
   if (typeof raw !== 'string') return '';
-  return raw.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, PROF_NICK_MAX);
+  return Array.from(raw.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim()).slice(0, PROF_NICK_MAX).join('');
 }
 
 export function clampProfileBio(raw: unknown): string {
   if (typeof raw !== 'string') return '';
-  return raw.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim().slice(0, PROF_BIO_MAX);
+  return Array.from(raw.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim()).slice(0, PROF_BIO_MAX).join('');
 }
 
 /** 依官方卡號解析圖片 URL（固定 `https://asia.pokemon-card.com/tw/card-img/tw{id}.png`）。 */

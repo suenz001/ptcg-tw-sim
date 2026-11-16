@@ -158,6 +158,8 @@
     }
   }
 
+  let pickerSeq = 0;
+
   async function switchPickerSource(src: 'decks' | 'sets') {
     pickerSource = src;
     pickerLimit = 36;
@@ -167,6 +169,7 @@
   }
 
   async function loadDeckPoolChoices() {
+    const seq = ++pickerSeq;
     pickerLoading = true;
     pickerErr = '';
     try {
@@ -182,58 +185,67 @@
         }
       }
       if (!ids.length) {
-        deckCardChoices = [];
+        if (seq === pickerSeq) deckCardChoices = [];
         return;
       }
       const cardSetMap = await loadCardSetLookup();
+      if (seq !== pickerSeq) return;
       const setsToFetch = new Set<string>();
       for (const id of ids) {
         const sc = cardSetMap[id];
         if (sc) setsToFetch.add(sc);
       }
       const loaded = await Promise.all([...setsToFetch].map((sc) => loadCardsForPickerSet(sc).catch(() => [] as Card[])));
+      if (seq !== pickerSeq) return;
       const byId = new Map<string, Card>();
       for (const arr of loaded) for (const c of arr) byId.set(c.id, c);
       deckCardChoices = ids.map((id) => byId.get(id)).filter((c): c is Card => !!c);
     } catch {
-      pickerErr = '讀取牌組卡片失敗';
+      if (seq === pickerSeq) pickerErr = '讀取牌組卡片失敗';
     } finally {
-      pickerLoading = false;
+      if (seq === pickerSeq) pickerLoading = false;
     }
   }
 
   async function loadSetList() {
+    const seq = ++pickerSeq;
     pickerLoading = true;
     pickerErr = '';
     try {
       if (pickerSets.length === 0) {
         const idx = await listAllCardSetsForPicker();
+        if (seq !== pickerSeq) return;
         pickerSets = Array.isArray(idx) ? idx : [];
         if (pickerSets.length > 0 && !pickerSelectedSet) {
           pickerSelectedSet = pickerSets[0].code;
         }
       }
       if (pickerSelectedSet) {
-        pickerCards = await loadCardsForPickerSet(pickerSelectedSet);
+        const cards = await loadCardsForPickerSet(pickerSelectedSet);
+        if (seq !== pickerSeq) return;
+        pickerCards = cards;
       }
     } catch {
-      pickerErr = '讀取卡包清單失敗';
+      if (seq === pickerSeq) pickerErr = '讀取卡包清單失敗';
     } finally {
-      pickerLoading = false;
+      if (seq === pickerSeq) pickerLoading = false;
     }
   }
 
   async function selectSetCode(code: string) {
+    const seq = ++pickerSeq;
     pickerSelectedSet = code;
     pickerLimit = 36;
     pickerLoading = true;
     pickerErr = '';
     try {
-      pickerCards = await loadCardsForPickerSet(code);
+      const cards = await loadCardsForPickerSet(code);
+      if (seq !== pickerSeq) return;
+      pickerCards = cards;
     } catch {
-      pickerErr = '讀取卡包資料失敗';
+      if (seq === pickerSeq) pickerErr = '讀取卡包資料失敗';
     } finally {
-      pickerLoading = false;
+      if (seq === pickerSeq) pickerLoading = false;
     }
   }
 

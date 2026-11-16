@@ -1545,20 +1545,28 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   function syncMyProfileNick(p: PlayerProfileSelf) {
     profileSelf = p;
-    if (p.nick) {
-      myName = p.nick;
+    const nextNick = p.nick || p.defaultNick || '';
+    if (nextNick) {
+      myName = nextNick;
     }
   }
   $effect(() => {
     const u = firebaseUser;
-    if (!friendsEntryOn || !u || u.isAnonymous) return;
+    if (!friendsEntryOn || !u || u.isAnonymous) {
+      _profileBootUid = '';
+      profileSelf = null;
+      profileModalTarget = null;
+      return;
+    }
     if (!isTournament && mode !== 'online') return;
     if (_profileBootUid === u.uid) return;
-    _profileBootUid = u.uid;
+    const bootUid = u.uid;
+    _profileBootUid = bootUid;
     void (async () => {
       const ctx = await friendsCtxFromAuth();
-      if (!ctx) return;
+      if (!ctx || firebaseUser?.uid !== bootUid) return;
       const r = await fetchMyProfile(ctx);
+      if (firebaseUser?.uid !== bootUid) return;
       if (r.ok) syncMyProfileNick(r.data);
     })();
   });
@@ -5859,6 +5867,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⭐v6.642（審查 P1-1）：賽程表裡的 mine（我的對局）是依帳號算的 ⇒ 登出時一併清掉，換帳號不沿用上一個人的（伺服器 bv 也混入 uid，雙保險）。
     tBrackets = []; tBracketsStale = false; tBracketsEverOk = false; _tBracketSeq++;
     // <<< v6642-bracket-version
+    _profileBootUid = ''; profileSelf = null; profileModalTarget = null;
     try { await signOut(auth); } catch { /* ignore */ }
   }
   // v5.650 錦標賽系統播報分類上色：依訊息開頭 emoji／關鍵字歸類，回傳對應 CSS class（皆亮色系，不傷眼）
@@ -12018,7 +12027,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {:else if !tLeaderboard}
             <p class="muted small" style="text-align:center;padding:18px;">排行榜尚未開放，或目前還沒有已結束的賽事資料。</p>
           {:else}
-            {#snippet lbBoard(title, rows, unit)}
+            {#snippet lbBoard(title: string, rows: any[], unit: string)}
               <div class="tourn-lb-card">
                 <div class="tourn-lb-title">{title}</div>
                 {#if !rows || rows.length === 0}
