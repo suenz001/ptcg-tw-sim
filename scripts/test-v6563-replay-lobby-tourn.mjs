@@ -12,6 +12,7 @@
  *   E：真瀏覽器（build/）：開始對戰頁只有兩張卡、清單直接顯示；錦標賽對戰（攔截 API 回假資料）按 ▶ 觀看 ⇒ 回放 ⇒ 離開回清單；未登入顯示提示。
  * 【H】BASE（v6.562）：S／L／W／E 紅。
  */
+import { revertV6651IfPresent } from './lib/revert-v6651-google-auth.mjs';
 import { readFileSync, existsSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -249,7 +250,7 @@ const LABEL = {
 };
 
 const P = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
-const PAGE = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
+const PAGE = revertV6651IfPresent('src/routes/game/+page.svelte', normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8')));
 const g = async (fn) => { try { const x = await fn(); return x && typeof x === 'object' ? x : {}; } catch { return {}; } };
 async function all(P0, PG0, L0) { return { ...(await g(() => serverScenarios(P0))), ...(await g(() => leafScenarios(L0))), ...(await g(() => pageScenarios(PG0))) }; }
 const L = await loadLeaf(ROOT);

@@ -14,6 +14,7 @@
  *      錦標賽（登入服務被擋）先顯示「確認登入狀態中」、沒有登入表單，8 秒後才出現表單
  * 【H】HEAD-FAIL：靜態判準餵 v6.508 全紅
  */
+import { revertV6651IfPresent } from './lib/revert-v6651-google-auth.mjs';
 import { readFileSync, existsSync, createReadStream, statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -27,7 +28,7 @@ import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.508。
 const BASE_SHA = '6e130e66';
-const rd = (r) => { try { return readFileSync(join(ROOT, r), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
+const rd = (r) => { try { return revertV6651IfPresent(r, readFileSync(join(ROOT, r), 'utf8')).replace(/\r\n/g, '\n'); } catch { return ''; } };
 let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c) { pass++; console.log('  PASS ' + n); } else { fail++; console.log('  FAIL ' + n + (x !== undefined ? ' — ' + x : '')); } };
 

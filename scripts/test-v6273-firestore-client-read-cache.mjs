@@ -24,6 +24,7 @@
 //
 // ⚠⚠ 只捕捉 assert.AssertionError —— 其他例外（打錯字/抽取器壞掉）必須直接炸掉。
 // Run: node scripts/test-v6273-firestore-client-read-cache.mjs
+import { revertV6651IfPresent } from './lib/revert-v6651-google-auth.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,8 +45,8 @@ const readOr = (p) => (existsSync(p) ? readFileSync(p, 'utf8') : '');
 const HC = readOr(P_HC);       // 新檔：不存在時空字串 ⇒ 各條各自紅
 const HP = readFileSync(P_HP, 'utf8');
 const CL = readFileSync(P_CL, 'utf8');
-const DK = readFileSync(P_DK, 'utf8');
-const GP = readFileSync(P_GP, 'utf8');
+const DK = revertV6651IfPresent('src/routes/decks/+page.svelte', readFileSync(P_DK, 'utf8'));
+const GP = revertV6651IfPresent('src/routes/game/+page.svelte', readFileSync(P_GP, 'utf8'));
 const BC = readFileSync(P_BC, 'utf8');
 
 let pass = 0, fail = 0;

@@ -28,6 +28,7 @@
 //
 // ⚠ 守衛安慰劑八種型態逐一避開：只捕 assert.AssertionError；不 pin 死版本號／整檔 sha256；
 //   每個掃描器都有下限斷言與正對照；所有條件求值不比字面。
+import { revertV6651IfPresent } from './lib/revert-v6651-google-auth.mjs';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,7 +55,10 @@ const P_DMPANEL = join(ROOT, 'src/routes/friends/DmPanel.svelte');
 const P_FRPAGE = join(ROOT, 'src/routes/friends/+page.svelte');
 const P_PKG = join(ROOT, 'package.json');
 const BASE_SHA = 'c9bba2280289e324367f1a9a12850ea9900d6ea2';   // v6.296（本版的 BASE）
-const rd = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+const rd = (p) => {
+  const source = readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+  return p === P_GAME ? revertV6651IfPresent('src/routes/game/+page.svelte', source) : source;
+};
 
 let pass = 0, fail = 0; const skipped = [];
 const T = async (name, fn) => {

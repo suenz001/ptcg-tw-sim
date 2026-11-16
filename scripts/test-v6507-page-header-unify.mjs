@@ -13,6 +13,7 @@
  *      手機底部導覽列第一顆是首頁（在首頁時亮起）；公布欄載入中頁面也至少一個畫面高
  * 【H】HEAD-FAIL：同一批靜態判準餵 v6.506 全紅
  */
+import { revertV6651IfPresent } from './lib/revert-v6651-google-auth.mjs';
 import { readFileSync, writeFileSync, unlinkSync, existsSync, createReadStream, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -23,7 +24,7 @@ import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠⚠ BASE_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）：v6.506（admin v1.78 在它之後，只動 admin／伺服器）。
 const BASE_SHA = '64cf7c50';
-const rd = (r) => { try { return readFileSync(join(ROOT, r), 'utf8').replace(/\r\n/g, '\n'); } catch { return ''; } };
+const rd = (r) => { try { return revertV6651IfPresent(r, readFileSync(join(ROOT, r), 'utf8')).replace(/\r\n/g, '\n'); } catch { return ''; } };
 let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c) { pass++; console.log('  PASS ' + n); } else { fail++; console.log('  FAIL ' + n + (x !== undefined ? ' — ' + x : '')); } };
 const noCmt = (s) => s.replace(/<!--[\s\S]*?-->/g, '');

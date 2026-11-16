@@ -9,6 +9,7 @@ import { compile } from 'svelte/compiler';
 import { pwLaunch } from './lib/pw.mjs';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';
 import { revertV6651IfPresent, V6651_PAIRS } from './lib/revert-v6651-google-auth.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -103,7 +104,7 @@ function wiring(raw, name) {
     P1: s.includes('async function loginWithEmail()') && s.includes('signInWithEmailAndPassword') && s.includes('async function submitChangePassword()'),
   };
 }
-let source = existsSync(join(ROOT, CORE)) ? readFileSync(join(ROOT, CORE), 'utf8') : '';
+let source = existsSync(join(ROOT, CORE)) ? normEol(readFileSync(join(ROOT, CORE), 'utf8')) : '';
 const M = source ? await moduleFrom(source) : null;
 for (const [name, test] of Object.entries(cases)) await T(name, async () => { assert.ok(M, '共用登入模組不存在'); await test(M); });
 for (const page of PAGES) for (const [k, value] of Object.entries(wiring(readFileSync(join(ROOT, page), 'utf8'), page))) await T(k + ' ' + page, () => assert.equal(value, true));
@@ -143,7 +144,7 @@ async function bootstrapObserver(raw, game, rejected = false) {
   assert.equal(x.get().authInitializing,false,'匿名初始化成功或失敗後應解除');
 }
 for(const page of PAGES) {
-  const raw=readFileSync(join(ROOT,page),'utf8').replace(/\r\n/g,'\n');
+  const raw=normEol(readFileSync(join(ROOT,page),'utf8'));
   for(const rejected of [false,true]) await T('G bootstrap '+page+(rejected?' 失敗':' 成功')+' 必須等真實 observer await 完成',()=>bootstrapObserver(raw,page.includes('/game/'),rejected));
   await T('M8 '+page+' 提前解除匿名初始化必須被攔下',async()=>{
     const needle='authInitializing = true;\n        try { await signInAnonymously(auth); }';assert.equal(raw.split(needle).length,2);

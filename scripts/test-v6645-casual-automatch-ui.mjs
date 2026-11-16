@@ -16,7 +16,7 @@ import { build, transform } from 'esbuild';
 import { readFileSync, writeFileSync, unlinkSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execSync } from 'node:child_process';
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
@@ -287,7 +287,7 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('H（缺 BASE ' + BASE_SHA + '�
 else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6645-'));
   try {
-    execSync(`git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`, { stdio: 'ignore', shell: '/bin/bash' });
+    extractBaseArchive(ROOT, BASE_SHA, ['src'], tmp);
     const bp = readFileSync(join(tmp, PAGE), 'utf8'), bs = readBaseBlob(ROOT, BASE_SHA, SAP);
     const before = pass, fb = fail; const log = console.log; const lines = []; console.log = (s) => lines.push(String(s));
     await checkE(normEol(bp), bs.ok ? bs.out.replace(/\r\n/g, '\n') : '', '@BASE');

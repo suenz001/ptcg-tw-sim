@@ -23,9 +23,9 @@
 // 【H】HEAD-FAIL：BASE（v6.643）上 A／B1／B3／C1／D1／D3／E1／E2／F1 紅，B2／E3 等正對照綠
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, statSync, mkdtempSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execSync } from 'node:child_process';
+import { extractBaseArchive } from './lib/base-archive.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
@@ -182,7 +182,7 @@ function scanDeckSearch(srcRoot) {
   const walk = (d) => { for (const f of readdirSync(d)) { const p = join(d, f); if (statSync(p).isDirectory()) walk(p); else if (p.endsWith('.ts')) files.push(p); } };
   walk(join(srcRoot, 'src/lib/game'));
   const out = [];
-  for (const f of files) out.push(...scanText(stripCommentsBlankChecked(normEol(readFileSync(f, 'utf8')), 'ts'), f.slice(srcRoot.length + 1)));
+  for (const f of files) out.push(...scanText(stripCommentsBlankChecked(normEol(readFileSync(f, 'utf8')), 'ts'), relative(srcRoot, f).replace(/\\/g, '/')));
   return out;
 }
 function scanText(s, name) {
@@ -324,7 +324,7 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) shallowSkip('H（缺 BASE ' + BASE_SHA + '�
 else {
   const tmp = mkdtempSync(join(tmpdir(), 'v6644-'));
   try {
-    execSync(`git -C "${ROOT}" archive ${BASE_SHA} src | tar -x -C "${tmp}"`, { stdio: 'ignore', shell: '/bin/bash' });
+    extractBaseArchive(ROOT, BASE_SHA, ['src'], tmp);
     const before = pass, fb = fail; const log = console.log; const lines = []; console.log = (s) => lines.push(String(s));
     let B = null; try { B = await loadBundle(tmp, 'base'); } catch (e) { lines.push('  FAIL 前提@BASE bundle ' + e.message); }
     if (B) { checkA(B.SC, '@BASE'); checkB(B, '@BASE'); checkC(B, '@BASE'); checkE(B, '@BASE'); checkG(B, tmp, readFileSync(join(tmp, 'src/routes/game/+page.svelte'), 'utf8'), '@BASE'); }
