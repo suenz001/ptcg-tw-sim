@@ -57,7 +57,10 @@ const P_PKG = join(ROOT, 'package.json');
 const BASE_SHA = 'c9bba2280289e324367f1a9a12850ea9900d6ea2';   // v6.296（本版的 BASE）
 const rd = (p) => {
   const source = readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
-  return p === P_GAME ? revertV6651IfPresent('src/routes/game/+page.svelte', source) : source;
+  if (p === P_GAME) return revertV6651IfPresent('src/routes/game/+page.svelte', source);
+  if (p === P_FRPAGE) return revertV6651IfPresent('src/routes/friends/+page.svelte', source);
+  if (p === P_FRP) return revertV6651IfPresent('src/lib/friends/FriendsPanel.svelte', source);
+  return source;
 };
 
 let pass = 0, fail = 0; const skipped = [];

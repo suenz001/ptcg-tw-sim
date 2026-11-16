@@ -68,6 +68,8 @@
     joinBlockedMsg = '',
     /** 對某位好友做完 accept／reject／remove／block／unblock 之後通知外面（例如關掉私聊面板）。 */
     onafteract,
+    /** 點選好友查看個人名片：null／undefined ⇒ 不顯示「🪪 名片」鈕。 */
+    onprofile,
   }: {
     embedded?: boolean;
     head?: Snippet;
@@ -79,6 +81,7 @@
     onjoinroom?: ((roomId: string) => void) | null;
     joinBlockedMsg?: string;
     onafteract?: ((fid: string) => void) | null;
+    onprofile?: ((r: FriendRow) => void) | null;
   } = $props();
 
   let firebaseUser = $state<User | null>(null);
@@ -342,6 +345,7 @@
                 <span class="nick">{r.alias || r.nick}</span>
                 {#if r.alias}<span class="orig-nick">原暱稱：{r.nick}</span>{/if}
                 <span class="meta">{viaLabel(r)}{r.at ? '・' + fmtDate(r.at) : ''}</span>
+                {#if onprofile}<button type="button" class="small fr-prof-btn" title="查看玩家名片" onclick={() => onprofile?.(r)}>🪪 名片</button>{/if}
                 <span class="spacer"></span>
                 {#if confirmFid === r.fid && confirmKind === 'remove'}
                   <!-- v6.288 站長裁定：解除好友就連對話一起刪 ⇒ 文案必須明講、且不可逆 -->
@@ -408,6 +412,7 @@
                 <span class="nick">{r.alias || r.nick}</span>
                 {#if r.alias}<span class="orig-nick">原暱稱：{r.nick}</span>{/if}
                 <span class="meta">{viaLabel(r)}{r.at ? '・' + fmtDate(r.at) : ''}</span>
+                {#if onprofile}<button type="button" class="small fr-prof-btn" title="查看玩家名片" onclick={() => onprofile?.(r)}>🪪 名片</button>{/if}
                 <span class="spacer"></span>
                 <!-- ⭐ v6.406：四個區的按鈕群一律包進 .acts（收斂式：同一個折斷規則，十一種列都一致）。 -->
                 <span class="acts">
@@ -433,6 +438,7 @@
                 <span class="nick">{r.alias || r.nick}</span>
                 {#if r.alias}<span class="orig-nick">原暱稱：{r.nick}</span>{/if}
                 <span class="meta">等待對方確認{r.at ? '・' + fmtDate(r.at) : ''}</span>
+                {#if onprofile}<button type="button" class="small fr-prof-btn" title="查看玩家名片" onclick={() => onprofile?.(r)}>🪪 名片</button>{/if}
                 <span class="spacer"></span>
                 <span class="acts">
                   <button class="small" disabled={!!actBusy} onclick={() => act('remove', r.fid)}>取消邀請</button>
@@ -455,6 +461,7 @@
                 <span class="nick">{r.alias || r.nick}</span>
                 {#if r.alias}<span class="orig-nick">原暱稱：{r.nick}</span>{/if}
                 <span class="meta">{r.at ? fmtDate(r.at) : ''}</span>
+                {#if onprofile}<button type="button" class="small fr-prof-btn" title="查看玩家名片" onclick={() => onprofile?.(r)}>🪪 名片</button>{/if}
                 <span class="spacer"></span>
                 {#if confirmFid === r.fid && confirmKind === 'unblock'}
                   <span class="confirm">解除封鎖後關係會歸零，要重新邀請才會成為好友；和這位玩家的私聊對話也會一起刪除，無法復原。</span>
@@ -616,6 +623,7 @@
   .alias-err { flex: 1 1 100%; }
 
   button.small, button.primary { padding: 5px 12px; border-radius: 6px; border: 1px solid var(--fr-tab-bd); background: var(--fr-tab-bg); cursor: pointer; font: inherit; font-size: .85rem; color: var(--fr-tab-fg); }
+  button.fr-prof-btn { padding: 2px 7px; font-size: .74rem; line-height: 1.25; }
   button.primary { background: linear-gradient(180deg, var(--fr-tab-on-from), var(--fr-tab-on-to)); border-color: var(--fr-tab-on-bd); color: var(--fr-tab-on-fg); font-weight: 600; }
   button.danger { color: var(--fr-danger); border-color: var(--fr-danger); }
   button:disabled { opacity: .45; cursor: default; }

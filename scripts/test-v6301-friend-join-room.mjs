@@ -31,6 +31,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
+import { revertV6653IfPresent } from './lib/revert-v6653-player-profile.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_FR = join(ROOT, 'src/lib/friends/friend-rooms.ts');
@@ -60,9 +61,9 @@ function mutate(src, from, to) {
 /** 「房名（房主：X）」那一行的模板形狀 —— ⚠ 只比字串 'fr-room' 會被 CSS 規則餵飽（安慰劑）。 */
 const RE_FR_ROOM = /<span class="fr-room">🎮 \{_rs\.room\.roomName\}（房主：\{_rs\.room\.hostName\}）<\/span>/;
 const FR = existsSync(P_FR) ? readFileSync(P_FR, 'utf8') : '';
-const FRP = readFileSync(P_FRP, 'utf8');
-const GAME = readFileSync(P_GAME, 'utf8');
-const FRIENDS_PAGE = readFileSync(P_FRIENDS_PAGE, 'utf8');
+const FRP = revertV6653IfPresent('src/lib/friends/FriendsPanel.svelte', readFileSync(P_FRP, 'utf8'));
+const GAME = revertV6653IfPresent('src/routes/game/+page.svelte', readFileSync(P_GAME, 'utf8'));
+const FRIENDS_PAGE = revertV6653IfPresent('src/routes/friends/+page.svelte', readFileSync(P_FRIENDS_PAGE, 'utf8'));
 
 // ══════════════════════════════════════════════════════════════════════
 console.log('\n【A】HEAD-FAIL 錨點');

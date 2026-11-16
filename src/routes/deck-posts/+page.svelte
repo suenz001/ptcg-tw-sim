@@ -43,6 +43,20 @@
   import { adoptOrKeep } from '$lib/ui/stale-keep';
   // ⭐v6.583 投稿附加對戰紀錄（錦標賽回放＋一般對戰復盤）
   import { DPR_API, parseDprList, parseDprCandidates, dprWatchUrl, dprResultText, isAttachableLocalReplay, type DprList, type DprCandidate } from '$lib/deck-posts/replays';
+  import PlayerProfileModal from '$lib/profile/PlayerProfileModal.svelte';
+  import type { ProfileAuthCtx, ProfileLookupTarget } from '$lib/profile/profile-api';
+
+  let profileTarget = $state<ProfileLookupTarget | null>(null);
+  function openAuthorProfile(post: { id: string; authorName: string }) {
+    profileTarget = { postId: post.id, fallbackNick: post.authorName };
+  }
+  async function getProfileAuthCtx(): Promise<ProfileAuthCtx | null> {
+    const u = firebaseUser ?? auth.currentUser;
+    if (!u || u.isAnonymous) return null;
+    let token: string | null = null;
+    try { token = await u.getIdToken(); } catch { token = null; }
+    return { uid: u.uid, token };
+  }
 
   type PostSummary = {
     id: string;
@@ -1159,6 +1173,7 @@
               <div class="row2">
                 <span class="post-meta">
                   <span class="author">{p.authorName}</span>
+                  <span role="button" tabindex="0" class="author-card-trig" title="查看作者名片" aria-label="查看作者名片" onclick={(e) => { e.stopPropagation(); openAuthorProfile(p); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openAuthorProfile(p); } }}>🪪</span>
                   <span class="dot">·</span>
                   <span class="date">{fmtDate(p.createdAt)}</span>
                 </span>
@@ -1204,6 +1219,7 @@
         </header>
         <div class="meta">
           <span class="author">{openPost.authorName}</span>
+          <button type="button" class="author-card-btn" title="查看作者名片" onclick={() => openAuthorProfile(openPost!)}>🪪 名片</button>
           <span class="dot">·</span>
           <span>{fmtDate(openPost.createdAt)}</span>
           <span class="dot">·</span>
@@ -1521,6 +1537,13 @@
     </div>
   </div>
 {/if}
+
+<PlayerProfileModal
+  open={!!profileTarget}
+  target={profileTarget}
+  getAuthCtx={getProfileAuthCtx}
+  onclose={() => { profileTarget = null; }}
+/>
 
 <style>
   /* iOS 動態島／瀏海：viewport-fit=cover 已在 app.html，env() 才有值。
@@ -1897,6 +1920,10 @@
   .dpz-nav button:disabled { opacity: .4; cursor: default; }
   .dpz-nav .dpz-close { background: var(--ui-chip-active-bg, #236447); color: var(--ui-chip-active-text, #fff); border-color: var(--ui-chip-active-bg, #236447); font-weight: 600; }
   /* <<< v6594-deck-post-thumbs-css */
+  .author-card-trig { display: inline-flex; align-items: center; justify-content: center; padding: 0 4px; border-radius: 5px; cursor: pointer; font-size: .78rem; opacity: .88; flex-shrink: 0; }
+  .author-card-trig:hover { background: rgba(128,128,128,.2); opacity: 1; }
+  .author-card-btn { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--ui-border, rgba(128,128,128,.35)); background: transparent; color: inherit; font: inherit; font-size: .74rem; cursor: pointer; }
+  .author-card-btn:hover { background: rgba(128,128,128,.16); }
   .meta-bar { background: var(--ui-bg-elev, #fff); border: 1px solid var(--ui-border, rgba(128,128,128,.25)); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; box-shadow: var(--ui-shadow, none); }
   .meta-bar-head { display: flex; align-items: center; margin-bottom: 8px; }
   .meta-bar-title { font-weight: 700; font-size: .9rem; color: var(--ui-text, inherit); }

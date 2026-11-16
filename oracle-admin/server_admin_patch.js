@@ -9170,6 +9170,662 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ casualMatchApi: 1, error: e.message }); }
     });
     // <<< v185-casual-automatch
+
+    // >>> v187-player-profile
+    // ══ server v1.87（v6.653）玩家個人名片與官方卡牌圓圈頭像 ════════════════════════
+    //   ・collection：playerProfiles（_id＝正規化 email）
+    //   ・唯一不可逆公開識別碼：profileKey（sha256 前 20 碼 hex）→ 所有公開 API 一律零 email
+    //   ・選卡範圍：TPOOL 全部開放（寶可夢／訓練家／能量皆可），僅存 { cardId, x, y, zoom }
+    //   ・代表榮譽：後端只從 tournamentArchives 推導（網站賽 冠軍/亞軍/4強/8強 + 社群賽冠軍），最多掛 10 筆
+    //   ・未報名時的錦標賽聊天室暱稱：透過 pre-TAIL middleware 在管理員/本場已報名之外套用個人檔案暱稱
+    //     （完全不改動 TAIL 區塊，TOURN_TAIL_SHA256 逐位元維持原值）
+    const PROF_COLL = 'playerProfiles';
+    const PROF_NICK_MAX = 16;
+    const PROF_BIO_MAX = 100;
+    const PROF_MAX_HONORS = 10;
+    const PROF_CARD_HW = 1212 / 868;
+    const PROF_TTL_MS = 60 * 1000;
+    const PROF_AUTH_TTL_MS = 10 * 60 * 1000;
+    const _profSummaryCache = new Map(); // email -> { at, data }
+    const _profGoogleCache = new Map();  // uid -> { at, googleVerified }
+    const _profRateMap = new Map();      // key -> ts
+    const _profChatRate = new Map();     // fallback chat rate limiter
+
+    try {
+      db.collection(PROF_COLL).createIndex({ profileKey: 1 }, { unique: true, sparse: true }).catch(() => {});
+      db.collection(PROF_COLL).createIndex({ uid: 1 }).catch(() => {});
+      db.collection(PROF_COLL).createIndex({ nickLower: 1 }).catch(() => {});
+    } catch (_e) { /* db 尚未就緒時略過 */ }
+
+    const cryptoModProf = require('crypto');
+    function _profKeyForEmail(email) {
+      const em = _frNormEmail(email);
+      if (!em) return '';
+      return cryptoModProf.createHash('sha256').update('ptcg_prof_key:' + em).digest('hex').slice(0, 20);
+    }
+    function _profCleanText(raw, maxLen) {
+      if (typeof raw !== 'string') return '';
+      return raw.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLen);
+    }
+    function _profCleanBio(raw) {
+      if (typeof raw !== 'string') return '';
+      // 保留最多兩個換行，濾除控制字元與過多空白
+      const norm = raw.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim();
+      return norm.slice(0, PROF_BIO_MAX);
+    }
+    function _profClampCrop(raw) {
+      if (!raw || typeof raw !== 'object') return null;
+      const cid = String(raw.cardId || '').trim();
+      if (!cid) return null;
+      const zRaw = Number(raw.zoom);
+      const zoom = Math.round(Math.min(3.5, Math.max(1, Number.isFinite(zRaw) ? zRaw : 1.4)) * 1000) / 1000;
+      const minX = 0.5 / zoom;
+      const maxX = 1 - minX;
+      const minY = 0.5 / (zoom * PROF_CARD_HW);
+      const maxY = 1 - minY;
+      const xRaw = Number(raw.x);
+      const yRaw = Number(raw.y);
+      const x = Math.round(Math.min(maxX, Math.max(minX, Number.isFinite(xRaw) ? xRaw : 0.5)) * 10000) / 10000;
+      const y = Math.round(Math.min(maxY, Math.max(minY, Number.isFinite(yRaw) ? yRaw : 0.34)) * 10000) / 10000;
+      return { cardId: cid, x, y, zoom };
+    }
+    async function _profVerifyAuth(req, { required = false } = {}) {
+      const h = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
+      const m = /^Bearer\s+(.+)$/.exec(h);
+      if (!m) return required ? { error: '請先登入帳號', code: 401 } : null;
+      if (TADMIN && TADMIN.apps && TADMIN.apps.length) {
+        try {
+          const dec = await TADMIN.auth().verifyIdToken(m[1]);
+          if (dec.firebase && dec.firebase.sign_in_provider === 'anonymous') {
+            return required ? { error: '匿名帳號尚未建立完整登入資料，請先登入或綁定帳號', code: 403 } : null;
+          }
+          const email = _frNormEmail(dec.email || '');
+          if (!email) return required ? { error: '此帳號沒有可用的 email', code: 403 } : null;
+          const fb = dec.firebase || {};
+          const hasGoogle = fb.sign_in_provider === 'google.com' || !!(fb.identities && fb.identities['google.com']);
+          if (dec.uid) {
+            _profGoogleCache.set(dec.uid, { at: Date.now(), googleVerified: !!hasGoogle });
+            if (_profGoogleCache.size > 2000) _profGoogleCache.clear();
+          }
+          return {
+            uid: dec.uid,
+            email,
+            name: String(dec.name || '').trim().slice(0, PROF_NICK_MAX),
+            googleVerified: !!hasGoogle,
+            verified: true,
+          };
+        } catch (_e) {
+          return required ? { error: '登入憑證無效或過期，請重新登入', code: 401 } : null;
+        }
+      }
+      // 測試環境或無 TADMIN 時交由 tournIdentity 檢查（但禁止非驗證 token 改寫正式檔案）
+      if (!required) return null;
+      return { error: '登入驗證服務未就緒', code: 503 };
+    }
+    async function _profIsGoogleVerified(uid, storedFlag) {
+      if (storedFlag === true) return true;
+      if (!uid || !(TADMIN && TADMIN.apps && TADMIN.apps.length)) return !!storedFlag;
+      const c = _profGoogleCache.get(uid);
+      if (c && (Date.now() - c.at) < PROF_AUTH_TTL_MS) return c.googleVerified;
+      try {
+        const u = await TADMIN.auth().getUser(uid);
+        const gv = !!(u && Array.isArray(u.providerData) && u.providerData.some((p) => p && p.providerId === 'google.com'));
+        _profGoogleCache.set(uid, { at: Date.now(), googleVerified: gv });
+        if (_profGoogleCache.size > 2000) _profGoogleCache.clear();
+        return gv;
+      } catch (_e) {
+        return !!storedFlag;
+      }
+    }
+    async function _profLoadSummary(email, forceRefresh = false) {
+      const em = _frNormEmail(email);
+      if (!em) return { champOfficial: 0, champCommunity: 0, honors: [], lastDisplayName: '', lastUid: '' };
+      const cached = _profSummaryCache.get(em);
+      if (!forceRefresh && cached && (Date.now() - cached.at) < PROF_TTL_MS) return cached.data;
+      const archColl = db.collection('tournamentArchives');
+      const archives = await archColl.find(
+        { 'players.email': { $in: [em] } },
+        { projection: { eventId: 1, eventName: 1, finishedAt: 1, startedAt: 1, createdAt: 1, communityEvent: 1, championUid: 1, players: 1, matches: 1 } }
+      ).toArray();
+      const cutFn = (app.locals && typeof app.locals._detectCutPlacements === 'function')
+        ? app.locals._detectCutPlacements
+        : (() => ({ finals: new Set(), top4: new Set(), top8: new Set() }));
+      let champOfficial = 0, champCommunity = 0, lastDisplayName = '', lastUid = '', lastFin = -1;
+      const honors = [];
+      for (const a of archives) {
+        const isComm = !!a.communityEvent;
+        const fin = a.finishedAt || 0;
+        const evDate = a.startedAt || a.createdAt || fin || 0;
+        const emailByUid = new Map();
+        for (const p of (a.players || [])) {
+          if (p && p.uid && p.email) emailByUid.set(p.uid, _frNormEmail(p.email));
+        }
+        const champEmail = a.championUid ? emailByUid.get(a.championUid) : null;
+        const cut = !isComm ? cutFn(a.matches || []) : { finals: new Set(), top4: new Set(), top8: new Set() };
+        for (const p of (a.players || [])) {
+          if (!p || _frNormEmail(p.email) !== em) continue;
+          if (fin >= lastFin) {
+            lastFin = fin;
+            if (p.name) lastDisplayName = String(p.name);
+            if (p.uid) lastUid = String(p.uid);
+          }
+          const isChamp = champEmail === em;
+          let placementLabel = '';
+          if (isChamp) {
+            placementLabel = '冠軍';
+            if (isComm) champCommunity++; else champOfficial++;
+          } else if (!isComm) {
+            if (cut.finals && cut.finals.has(p.uid)) placementLabel = '亞軍';
+            else if (cut.top4 && cut.top4.has(p.uid)) placementLabel = '4強';
+            else if (cut.top8 && cut.top8.has(p.uid)) placementLabel = '8強';
+          }
+          if (placementLabel && a.eventId) {
+            honors.push({
+              eventId: String(a.eventId),
+              eventName: String(a.eventName || '錦標賽').slice(0, 48),
+              date: evDate,
+              kind: isComm ? 'comm' : 'site',
+              placementLabel,
+            });
+          }
+        }
+      }
+      honors.sort((x, y) => (y.date || 0) - (x.date || 0));
+      const data = { champOfficial, champCommunity, honors, lastDisplayName, lastUid };
+      _profSummaryCache.set(em, { at: Date.now(), data });
+      if (_profSummaryCache.size > 1500) _profSummaryCache.clear();
+      return data;
+    }
+    async function _profEmailByUid(uid) {
+      const u = String(uid || '').trim();
+      if (!u) return { email: null, fallbackNick: '' };
+      const prof = await db.collection(PROF_COLL).findOne({ uid: u }, { projection: { _id: 1, nick: 1 } });
+      if (prof && prof._id) return { email: _frNormEmail(prof._id), fallbackNick: prof.nick || '' };
+      const idn = await db.collection(FR_ID_COLL).findOne({ $or: [{ uid: u }, { 'uids.uid': u }] }, { projection: { _id: 1 } });
+      if (idn && idn._id) return { email: _frNormEmail(idn._id), fallbackNick: '' };
+      const reg = await db.collection(FR_REG_COLL).find({ uid: u, email: { $ne: null } }, { projection: { email: 1, name: 1 } }).sort({ registeredAt: -1 }).limit(1).toArray();
+      if (reg && reg[0] && reg[0].email) return { email: _frNormEmail(reg[0].email), fallbackNick: reg[0].name || '' };
+      return { email: null, fallbackNick: '' };
+    }
+    async function _profResolveTarget(spec, viewerEmail) {
+      if (!spec || typeof spec !== 'object') return { email: null, fallbackNick: '', uid: '' };
+      const s = spec;
+      // ① profileKey 直接對應（零 email）
+      if (s.profileKey) {
+        const doc = await db.collection(PROF_COLL).findOne({ profileKey: String(s.profileKey).trim() }, { projection: { _id: 1, nick: 1, uid: 1 } });
+        if (doc && doc._id) return { email: _frNormEmail(doc._id), fallbackNick: doc.nick || '', uid: doc.uid || '' };
+      }
+      // ② 好友清單 fid（需登入且本人為雙方之一，且不被被封鎖保護洩漏）
+      if (s.fid && viewerEmail) {
+        const fdoc = await db.collection(FR_COLL).findOne({ fid: String(s.fid).trim() }, { projection: { a: 1, b: 1, status: 1, blockedBy: 1, nickA: 1, nickB: 1 } });
+        if (fdoc && (fdoc.a === viewerEmail || fdoc.b === viewerEmail)) {
+          if (fdoc.status === 'blocked' && fdoc.blockedBy !== viewerEmail) return { email: null, fallbackNick: '', uid: '' };
+          const other = fdoc.a === viewerEmail ? fdoc.b : fdoc.a;
+          const fb = fdoc.a === viewerEmail ? (fdoc.nickB || '') : (fdoc.nickA || '');
+          return { email: _frNormEmail(other), fallbackNick: fb, uid: '' };
+        }
+      }
+      // ③ 休閒線上房間／等待室（roomCode + seatIdx / targetUid）
+      if (s.roomCode) {
+        const rc = String(s.roomCode).trim().toUpperCase().slice(0, 12);
+        const rm = await db.collection('rooms').findOne({ _id: rc }, { projection: { seats: 1 } });
+        if (rm && Array.isArray(rm.seats)) {
+          if (s.seatIdx !== undefined && s.seatIdx !== null && s.seatIdx !== '') {
+            const idx = Number(s.seatIdx);
+            const seat = (Number.isInteger(idx) && idx >= 0 && idx < rm.seats.length) ? rm.seats[idx] : null;
+            if (seat) {
+              if (seat.email) return { email: _frNormEmail(seat.email), fallbackNick: seat.name || '', uid: seat.uid || '' };
+              if (seat.uid) {
+                const byU = await _profEmailByUid(seat.uid);
+                return { email: byU.email, fallbackNick: seat.name || byU.fallbackNick || '', uid: seat.uid };
+              }
+            }
+          }
+          if (s.targetUid) {
+            const tu = String(s.targetUid).trim();
+            const seat = rm.seats.find((x) => x && x.uid === tu);
+            if (seat && seat.email) return { email: _frNormEmail(seat.email), fallbackNick: seat.name || '', uid: tu };
+            const byU = await _profEmailByUid(tu);
+            return { email: byU.email, fallbackNick: (seat && seat.name) || s.fallbackNick || byU.fallbackNick || '', uid: tu };
+          }
+        }
+      }
+      // ④ 錦標賽對戰房（tournRoom + seatIdx）
+      if (s.tournRoom) {
+        const tr = await db.collection('tournamentRooms').findOne({ _id: String(s.tournRoom).trim() }, { projection: { seats: 1, names: 1 } });
+        const idx = Number(s.seatIdx);
+        if (tr && Array.isArray(tr.seats) && (idx === 0 || idx === 1) && tr.seats[idx]) {
+          const tu = String(tr.seats[idx]);
+          const byU = await _profEmailByUid(tu);
+          return { email: byU.email, fallbackNick: (tr.names && tr.names[idx]) || byU.fallbackNick || '', uid: tu };
+        }
+      }
+      // ⑤ 錦標賽賽程表場次 / 瑞士排名 / 大廳冠軍（eventId + round/idx/side OR standingName OR champOnly）
+      if (s.eventId) {
+        const eid = String(s.eventId).trim();
+        let targetUid = '';
+        let fbNick = _profCleanText(s.fallbackNick || '', 32);
+        if (s.round !== undefined && s.idx !== undefined && (s.side === 'p1' || s.side === 'p2')) {
+          const mid = eid + '_r' + Number(s.round) + '_m' + Number(s.idx);
+          const md = await db.collection('tournamentMatches').findOne({ _id: mid }, { projection: { p1uid: 1, p2uid: 1, p1name: 1, p2name: 1 } });
+          if (md) {
+            targetUid = s.side === 'p1' ? (md.p1uid || '') : (md.p2uid || '');
+            fbNick = (s.side === 'p1' ? md.p1name : md.p2name) || fbNick;
+          } else {
+            const arch = await db.collection('tournamentArchives').findOne({ _id: 'arch_' + eid }, { projection: { matches: 1, players: 1 } });
+            const am = arch && Array.isArray(arch.matches) ? arch.matches.find((m) => Number(m.round) === Number(s.round) && Number(m.idx) === Number(s.idx)) : null;
+            if (am) {
+              targetUid = s.side === 'p1' ? (am.p1uid || '') : (am.p2uid || '');
+              fbNick = (s.side === 'p1' ? am.p1name : am.p2name) || fbNick;
+              const ap = targetUid && Array.isArray(arch.players) ? arch.players.find((p) => p && p.uid === targetUid) : null;
+              if (ap && ap.email) return { email: _frNormEmail(ap.email), fallbackNick: ap.name || fbNick, uid: targetUid };
+            }
+          }
+        } else if (s.hofChamp === '1' || s.hofChamp === true) {
+          const ch = await db.collection('tournamentChampions').findOne({ eventId: eid }, { projection: { championUid: 1, championName: 1 } });
+          if (ch && ch.championUid) {
+            targetUid = ch.championUid;
+            fbNick = ch.championName || fbNick;
+          }
+          const arch = await db.collection('tournamentArchives').findOne({ _id: 'arch_' + eid }, { projection: { championUid: 1, championName: 1, players: 1 } });
+          if (arch) {
+            const cu = targetUid || arch.championUid || '';
+            const ap = cu && Array.isArray(arch.players) ? arch.players.find((p) => p && p.uid === cu) : null;
+            if (ap && ap.email) return { email: _frNormEmail(ap.email), fallbackNick: ap.name || arch.championName || fbNick, uid: cu };
+            if (!targetUid && cu) targetUid = cu;
+            if (!fbNick && arch.championName) fbNick = arch.championName;
+          }
+        } else if (s.standingName) {
+          const sn = String(s.standingName).trim();
+          fbNick = sn || fbNick;
+          const reg = await db.collection(FR_REG_COLL).findOne({ eventId: eid, name: sn }, { projection: { email: 1, uid: 1, name: 1 } });
+          if (reg) {
+            if (reg.email) return { email: _frNormEmail(reg.email), fallbackNick: reg.name || sn, uid: reg.uid || '' };
+            if (reg.uid) targetUid = reg.uid;
+          }
+        }
+        if (targetUid) {
+          const reg = await db.collection(FR_REG_COLL).findOne({ eventId: eid, uid: targetUid }, { projection: { email: 1, name: 1 } });
+          if (reg && reg.email) return { email: _frNormEmail(reg.email), fallbackNick: reg.name || fbNick, uid: targetUid };
+          const byU = await _profEmailByUid(targetUid);
+          return { email: byU.email, fallbackNick: fbNick || byU.fallbackNick, uid: targetUid };
+        }
+      }
+      // ⑥ 牌組公布欄作者（postId）
+      if (s.postId) {
+        const dp = await db.collection('deckPosts').findOne({ _id: String(s.postId).trim(), status: 'published' }, { projection: { uid: 1, authorName: 1 } });
+        if (dp && dp.uid) {
+          const byU = await _profEmailByUid(dp.uid);
+          return { email: byU.email, fallbackNick: dp.authorName || byU.fallbackNick || '', uid: dp.uid };
+        }
+      }
+      // ⑦ 錦標賽聊天室 / 通用 targetUid
+      if (s.targetUid) {
+        const tu = String(s.targetUid).trim();
+        const byU = await _profEmailByUid(tu);
+        return { email: byU.email, fallbackNick: _profCleanText(s.fallbackNick || '', 32) || byU.fallbackNick || '', uid: tu };
+      }
+      // ⑧ 排行榜玩家名稱（lbNick）
+      if (s.lbNick) {
+        const ln = String(s.lbNick).trim();
+        const prof = await db.collection(PROF_COLL).findOne({ nickLower: ln.toLowerCase() }, { projection: { _id: 1, nick: 1, uid: 1 } });
+        if (prof && prof._id) return { email: _frNormEmail(prof._id), fallbackNick: prof.nick || ln, uid: prof.uid || '' };
+        const arch = await db.collection('tournamentArchives').find({ 'players.name': ln }, { projection: { players: 1 } }).sort({ finishedAt: -1 }).limit(1).toArray();
+        if (arch && arch[0] && Array.isArray(arch[0].players)) {
+          const mp = arch[0].players.find((p) => p && p.name === ln && p.email);
+          if (mp && mp.email) return { email: _frNormEmail(mp.email), fallbackNick: mp.name || ln, uid: mp.uid || '' };
+        }
+        const commEv = await db.collection('tournamentEvents').find({ proposerName: ln, createdBy: { $ne: null } }, { projection: { createdBy: 1 } }).sort({ createdAt: -1 }).limit(1).toArray();
+        if (commEv && commEv[0] && commEv[0].createdBy) {
+          return { email: _frNormEmail(commEv[0].createdBy), fallbackNick: ln, uid: '' };
+        }
+        return { email: null, fallbackNick: ln, uid: '' };
+      }
+      return { email: null, fallbackNick: _profCleanText(s.fallbackNick || '', 32), uid: '' };
+    }
+    async function _profBuildPublicCard(targetEmail, fallbackNick, fallbackUid, viewerEmail) {
+      const em = _frNormEmail(targetEmail);
+      if (!em) {
+        return {
+          playerProfileApi: 1,
+          found: false,
+          profileKey: '',
+          nick: fallbackNick || '玩家',
+          bio: '',
+          avatar: null,
+          googleVerified: false,
+          champOfficial: 0,
+          champCommunity: 0,
+          pinnedHonors: [],
+          canFriend: false,
+          friendStatus: 'unavailable',
+        };
+      }
+      const [doc, summary] = await Promise.all([
+        db.collection(PROF_COLL).findOne({ _id: em }),
+        _profLoadSummary(em),
+      ]);
+      const uidForGoogle = (doc && doc.uid) || fallbackUid || summary.lastUid || '';
+      const googleVerified = await _profIsGoogleVerified(uidForGoogle, doc && doc.googleVerified);
+      const honorByEvent = new Map(summary.honors.map((h) => [h.eventId, h]));
+      const pinnedIds = Array.isArray(doc && doc.pinnedHonorIds) ? doc.pinnedHonorIds : [];
+      const pinnedHonors = [];
+      for (const eid of pinnedIds) {
+        const h = honorByEvent.get(String(eid));
+        if (h && pinnedHonors.length < PROF_MAX_HONORS) pinnedHonors.push(h);
+      }
+      const nick = (doc && doc.nick) || fallbackNick || summary.lastDisplayName || '玩家';
+      let friendStatus = 'none';
+      let canFriend = false;
+      if (viewerEmail) {
+        if (viewerEmail === em) {
+          friendStatus = 'self';
+        } else {
+          const pid = _frPairId(viewerEmail, em);
+          const fdoc = await db.collection(FR_COLL).findOne({ _id: pid }, { projection: { status: 1, requester: 1, blockedBy: 1 } });
+          if (!fdoc) {
+            friendStatus = 'none';
+            canFriend = true;
+          } else if (fdoc.status === 'accepted') {
+            friendStatus = 'accepted';
+          } else if (fdoc.status === 'pending') {
+            friendStatus = fdoc.requester === viewerEmail ? 'pending_out' : 'pending_in';
+            canFriend = fdoc.requester !== viewerEmail; // 對方已先送出 ⇒ 可直接成為好友
+          } else if (fdoc.status === 'blocked') {
+            if (fdoc.blockedBy === viewerEmail) friendStatus = 'blocked_by_me';
+            else { friendStatus = 'none'; canFriend = true; } // 保護封鎖者：不洩漏被封鎖狀態
+          } else {
+            // rejected
+            friendStatus = 'none';
+            canFriend = true;
+          }
+        }
+      }
+      return {
+        playerProfileApi: 1,
+        found: true,
+        profileKey: (doc && doc.profileKey) || _profKeyForEmail(em),
+        nick,
+        bio: (doc && doc.bio) || '',
+        avatar: _profClampCrop(doc && doc.avatar),
+        googleVerified: !!googleVerified,
+        champOfficial: summary.champOfficial,
+        champCommunity: summary.champCommunity,
+        pinnedHonors,
+        canFriend: canFriend && (await friendsEnabled()),
+        friendStatus,
+      };
+    }
+
+    // ── Middleware：未報名錦標賽聊天室顯示名稱同步個人名片暱稱（不動 TAIL 區塊）──
+    app.use(async function _profTournChatMw(req, res, next) {
+      try {
+        if (req.method !== 'POST' || req.path !== '/api/tournament/chat') return next();
+        const id = await tournIdentity(req);
+        if (!id || id.error || !id.verified || !id.email) return next();
+        if (typeof isTournAdmin === 'function' && isTournAdmin(id)) return next();
+        const openEv = await db.collection('tournamentEvents').find({ status: { $in: ['registration', 'checkin', 'running'] } }, { projection: { _id: 1 } }).toArray();
+        const openIds = openEv.map((e) => e._id);
+        if (openIds.length) {
+          const regc = await db.collection(FR_REG_COLL).findOne({ eventId: { $in: openIds }, uid: id.uid }, { projection: { _id: 1, name: 1 } });
+          if (regc && regc.name) return next();
+        }
+        const em = _frNormEmail(id.email);
+        const prof = em ? await db.collection(PROF_COLL).findOne({ _id: em }, { projection: { nick: 1 } }) : null;
+        if (!prof || !prof.nick) return next();
+        const text = String((req.body && req.body.text) || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+        if (!text) return res.status(400).json({ error: '訊息不可空白' });
+        const rateMap = (typeof _chatRate !== 'undefined') ? _chatRate : _profChatRate;
+        const now = Date.now();
+        if (now - (rateMap.get(id.uid) || 0) < 1200) return res.status(429).json({ error: '發言太快，請稍候' });
+        rateMap.set(id.uid, now);
+        if (rateMap.size > 3000) rateMap.clear();
+        await db.collection('tournamentChat').insertOne({ room: 'lobby', uid: id.uid, name: prof.nick, text, ts: now });
+        return res.json({ ok: true });
+      } catch (_e) {
+        return next(); // 任何例外 fail-open 走原本的聊天 handler
+      }
+    });
+
+    // GET /api/player-profile/me：讀取本人名片設定＋後端核實的可選代表榮譽清單
+    app.get('/api/player-profile/me', async (req, res) => {
+      try {
+        const me = await _profVerifyAuth(req, { required: true });
+        if (me.error) return res.status(me.code || 401).json({ playerProfileApi: 1, error: me.error });
+        const em = me.email;
+        const [doc, summary, lastReg] = await Promise.all([
+          db.collection(PROF_COLL).findOne({ _id: em }),
+          _profLoadSummary(em, req.query.refresh === '1'),
+          db.collection(FR_REG_COLL).find({ email: em, name: { $nin: ['', null] } }, { projection: { name: 1 } }).sort({ registeredAt: -1 }).limit(1).toArray(),
+        ]);
+        const defaultNick = (lastReg[0] && lastReg[0].name) || summary.lastDisplayName || me.name || '';
+        const validSet = new Set(summary.honors.map((h) => h.eventId));
+        const rawPinned = Array.isArray(doc && doc.pinnedHonorIds) ? doc.pinnedHonorIds : [];
+        const pinnedHonorIds = rawPinned.map(String).filter((eid) => validSet.has(eid)).slice(0, PROF_MAX_HONORS);
+        return res.json({
+          playerProfileApi: 1,
+          profile: {
+            profileKey: (doc && doc.profileKey) || _profKeyForEmail(em),
+            nick: (doc && doc.nick) || '',
+            defaultNick,
+            bio: (doc && doc.bio) || '',
+            avatar: _profClampCrop(doc && doc.avatar),
+            googleVerified: !!(me.googleVerified || (doc && doc.googleVerified)),
+            champOfficial: summary.champOfficial,
+            champCommunity: summary.champCommunity,
+            pinnedHonorIds,
+            availableHonors: summary.honors,
+          },
+        });
+      } catch (e) {
+        console.warn('[player-profile] me failed:', e && e.message);
+        res.status(500).json({ playerProfileApi: 1, error: '讀取個人名片失敗，請稍後重試' });
+      }
+    });
+
+    // POST /api/player-profile/save：儲存本人暱稱、自我介紹、官方卡片圓圈頭像與代表榮譽
+    app.post('/api/player-profile/save', async (req, res) => {
+      try {
+        const me = await _profVerifyAuth(req, { required: true });
+        if (me.error) return res.status(me.code || 401).json({ playerProfileApi: 1, error: me.error });
+        const em = me.email;
+        const now = Date.now();
+        const prevRate = _profRateMap.get('save:' + em) || 0;
+        if (now - prevRate < 800) return res.status(429).json({ playerProfileApi: 1, error: '儲存太頻繁，請稍候再試' });
+        _profRateMap.set('save:' + em, now);
+        if (_profRateMap.size > 3000) _profRateMap.clear();
+
+        const b = req.body && typeof req.body === 'object' ? req.body : {};
+        const nick = _profCleanText(b.nick || '', PROF_NICK_MAX);
+        const bio = _profCleanBio(b.bio || '');
+        let avatar = null;
+        if (b.avatar !== null && b.avatar !== undefined) {
+          avatar = _profClampCrop(b.avatar);
+          if (!avatar) return res.status(400).json({ playerProfileApi: 1, error: '頭像卡片格式不正確' });
+          if (typeof TPOOL !== 'undefined' && TPOOL instanceof Map && TPOOL.size > 0 && !TPOOL.has(avatar.cardId)) {
+            return res.status(400).json({ playerProfileApi: 1, error: '找不到指定的官方卡片，請重新選擇' });
+          }
+        }
+        const summary = await _profLoadSummary(em, true);
+        const validIds = new Set(summary.honors.map((h) => h.eventId));
+        const seenHonor = new Set();
+        const pinnedHonorIds = [];
+        if (Array.isArray(b.pinnedHonorIds)) {
+          for (const rawId of b.pinnedHonorIds) {
+            const eid = String(rawId || '').trim();
+            if (!eid || seenHonor.has(eid) || !validIds.has(eid)) continue;
+            seenHonor.add(eid);
+            pinnedHonorIds.push(eid);
+            if (pinnedHonorIds.length >= PROF_MAX_HONORS) break;
+          }
+        }
+        const pKey = _profKeyForEmail(em);
+        const updateDoc = {
+          profileKey: pKey,
+          uid: me.uid,
+          nick,
+          nickLower: nick ? nick.toLowerCase() : '',
+          bio,
+          avatar,
+          pinnedHonorIds,
+          googleVerified: !!me.googleVerified,
+          updatedAt: now,
+        };
+        await db.collection(PROF_COLL).updateOne(
+          { _id: em },
+          { $set: updateDoc, $setOnInsert: { createdAt: now } },
+          { upsert: true }
+        );
+        const honorByEvent = new Map(summary.honors.map((h) => [h.eventId, h]));
+        return res.json({
+          playerProfileApi: 1,
+          ok: true,
+          profile: {
+            profileKey: pKey,
+            nick,
+            bio,
+            avatar,
+            googleVerified: !!me.googleVerified,
+            champOfficial: summary.champOfficial,
+            champCommunity: summary.champCommunity,
+            pinnedHonorIds,
+            availableHonors: summary.honors,
+            pinnedHonors: pinnedHonorIds.map((eid) => honorByEvent.get(eid)).filter(Boolean),
+          },
+        });
+      } catch (e) {
+        console.warn('[player-profile] save failed:', e && e.message);
+        res.status(500).json({ playerProfileApi: 1, error: '儲存個人名片失敗，請稍後重試' });
+      }
+    });
+
+    // GET /api/player-profile/view：公開名片檢視（支援多種上下文定位，永不回傳 email）
+    app.get('/api/player-profile/view', async (req, res) => {
+      try {
+        const viewer = await _profVerifyAuth(req, { required: false });
+        const viewerEmail = viewer && viewer.email ? viewer.email : null;
+        const resolved = await _profResolveTarget(req.query || {}, viewerEmail);
+        const card = await _profBuildPublicCard(resolved.email, resolved.fallbackNick, resolved.uid, viewerEmail);
+        return res.json(card);
+      } catch (e) {
+        console.warn('[player-profile] view failed:', e && e.message);
+        res.status(500).json({ playerProfileApi: 1, error: '無法載入玩家名片' });
+      }
+    });
+
+    // POST /api/player-profile/batch：列表與聊天室輕量預載（僅 nick / avatar / profileKey / googleVerified，零 email）
+    app.post('/api/player-profile/batch', async (req, res) => {
+      try {
+        const viewer = await _profVerifyAuth(req, { required: false });
+        const viewerEmail = viewer && viewer.email ? viewer.email : null;
+        const items = (req.body && Array.isArray(req.body.items)) ? req.body.items.slice(0, 40) : [];
+        const profiles = {};
+        if (!items.length) return res.json({ playerProfileApi: 1, profiles });
+        const emailByTag = new Map();
+        for (let i = 0; i < items.length; i++) {
+          const it = items[i];
+          if (!it || typeof it !== 'object') continue;
+          const k = String(it.k || i).slice(0, 80);
+          const resT = await _profResolveTarget(it, viewerEmail);
+          if (resT && resT.email) emailByTag.set(k, resT);
+        }
+        const emails = [...new Set([...emailByTag.values()].map((x) => x.email).filter(Boolean))];
+        const docsMap = new Map();
+        if (emails.length) {
+          const docs = await db.collection(PROF_COLL).find({ _id: { $in: emails } }, { projection: { _id: 1, profileKey: 1, nick: 1, avatar: 1, googleVerified: 1 } }).toArray();
+          for (const d of docs) docsMap.set(_frNormEmail(d._id), d);
+        }
+        for (const [k, resT] of emailByTag.entries()) {
+          const d = docsMap.get(resT.email);
+          profiles[k] = {
+            profileKey: (d && d.profileKey) || _profKeyForEmail(resT.email),
+            nick: (d && d.nick) || resT.fallbackNick || '',
+            avatar: _profClampCrop(d && d.avatar),
+            googleVerified: !!(d && d.googleVerified),
+          };
+        }
+        return res.json({ playerProfileApi: 1, profiles });
+      } catch (e) {
+        console.warn('[player-profile] batch failed:', e && e.message);
+        res.status(500).json({ playerProfileApi: 1, error: '載入頭像摘要失敗' });
+      }
+    });
+
+    // POST /api/player-profile/friend-request：從玩家名片直接送出好友申請（復用 friendships 與同一套隱私/冷卻/上限規則）
+    app.post('/api/player-profile/friend-request', async (req, res) => {
+      try {
+        if (!(await friendsEnabled())) return res.status(503).json({ error: '好友功能尚未開放', friendsApi: 1 });
+        const me = await _profVerifyAuth(req, { required: true });
+        if (me.error) return res.status(me.code || 401).json({ error: me.error, friendsApi: 1 });
+        const em = me.email;
+        const b = req.body && typeof req.body === 'object' ? req.body : {};
+        const resolved = await _profResolveTarget(b.target && typeof b.target === 'object' ? b.target : b, em);
+        if (!resolved || !resolved.email) return res.status(404).json({ error: '無法識別該玩家帳號', code: 'profile-target-missing', friendsApi: 1 });
+        const tgtEmail = _frNormEmail(resolved.email);
+        if (!tgtEmail) return res.status(404).json({ error: '無法識別該玩家帳號', code: 'profile-target-missing', friendsApi: 1 });
+        if (tgtEmail === em) return res.status(400).json({ error: '不能加自己為好友', code: 'friends-self', friendsApi: 1 });
+
+        const c = db.collection(FR_COLL);
+        const pid = _frPairId(em, tgtEmail);
+        const now = Date.now();
+        const cur = await c.findOne({ _id: pid });
+        if (cur && cur.status === 'blocked') {
+          if (cur.blockedBy === em) return res.status(409).json({ error: '你已封鎖對方，請先解除封鎖', code: 'friends-blocked-by-you', friendsApi: 1 });
+          return res.json({ ok: true, friendsApi: 1, status: 'pending' }); // 靜默保護封鎖者
+        }
+        if (cur && cur.status === 'accepted') return res.json({ ok: true, friendsApi: 1, status: 'accepted', already: true, fid: cur.fid || _frFid(pid) });
+        if (cur && cur.status === 'pending') {
+          if (cur.requester === em) return res.json({ ok: true, friendsApi: 1, status: 'pending', already: true, fid: cur.fid || _frFid(pid) });
+          const [cntMe, cntTgt] = await Promise.all([
+            c.countDocuments({ $or: [{ a: em }, { b: em }], status: 'accepted' }),
+            c.countDocuments({ $or: [{ a: tgtEmail }, { b: tgtEmail }], status: 'accepted' }),
+          ]);
+          if (cntMe >= FR_MAX_FRIENDS) return res.status(409).json({ error: '你的好友人數已達上限（' + FR_MAX_FRIENDS + ' 人）', friendsApi: 1 });
+          if (cntTgt >= FR_MAX_FRIENDS) return res.status(409).json({ error: '對方的好友人數已達上限', friendsApi: 1 });
+          await c.updateOne({ _id: pid }, { $set: { status: 'accepted', updatedAt: now, acceptedAt: now } });
+          return res.json({ ok: true, friendsApi: 1, status: 'accepted', fid: cur.fid || _frFid(pid) });
+        }
+        if (cur && cur.status === 'rejected' && cur.requester === em && (now - (cur.rejectedAt || 0)) < FR_REJECT_COOLDOWN_MS) {
+          return res.status(429).json({ error: '對方最近才婉拒過你的邀請，請於 24 小時後再試', code: 'friends-rejected-cooldown', friendsApi: 1 });
+        }
+        const cntMyFriends = await c.countDocuments({ $or: [{ a: em }, { b: em }], status: 'accepted' });
+        if (cntMyFriends >= FR_MAX_FRIENDS) return res.status(409).json({ error: '你的好友人數已達上限（' + FR_MAX_FRIENDS + ' 人）', friendsApi: 1 });
+
+        const [myProf, tgtProf] = await Promise.all([
+          db.collection(PROF_COLL).findOne({ _id: em }, { projection: { nick: 1 } }),
+          db.collection(PROF_COLL).findOne({ _id: tgtEmail }, { projection: { nick: 1 } }),
+        ]);
+        const myNick = (myProf && myProf.nick) || _frNick(me.name) || '玩家';
+        const tgtNick = (tgtProf && tgtProf.nick) || _frNick(resolved.fallbackNick) || '玩家';
+        const isA = em < tgtEmail;
+        const fid = _frFid(pid);
+        await c.updateOne(
+          { _id: pid },
+          {
+            $set: {
+              a: isA ? em : tgtEmail,
+              b: isA ? tgtEmail : em,
+              fid,
+              status: 'pending',
+              requester: em,
+              nickA: isA ? myNick : tgtNick,
+              nickB: isA ? tgtNick : myNick,
+              addedVia: String(b.via || 'profile').slice(0, 24),
+              updatedAt: now,
+            },
+            $setOnInsert: { createdAt: now },
+            $unset: { blockedBy: '', blockedAt: '', rejectedAt: '' },
+          },
+          { upsert: true }
+        );
+        return res.json({ ok: true, friendsApi: 1, status: 'pending', fid });
+      } catch (e) {
+        console.warn('[player-profile] friend-request failed:', e && e.message);
+        res.status(500).json({ error: '送出好友申請失敗，請稍後重試', friendsApi: 1 });
+      }
+    });
+    // <<< v187-player-profile
+
     app.get('/api/tournament/state', async (req, res) => {
       try {
         const room = String(req.query.room || 'TOURNAMENT-TEST');

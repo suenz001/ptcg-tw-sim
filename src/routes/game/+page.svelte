@@ -111,6 +111,9 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import FriendsPanel from '$lib/friends/FriendsPanel.svelte';   // ⭐ v6.296 大廳第二個分頁「👥 好友名單」；與 /friends 頁**共用同一份**（不要兩份漂移）
   import LobbyUnify from '$lib/LobbyUnify.svelte';   // ⭐v6.505 全站版面統一：大廳頁首與模式卡片（只有樣式，牌桌不受影響）
   import { friendsCtxFromAuth } from '$lib/friends/auth-ctx';   // ⭐ v6.297 私聊內嵌：取身分的中央出口（匿名回 null ⇒ 一發請求都不發）
+  import PlayerProfileModal from '$lib/profile/PlayerProfileModal.svelte';
+  import PlayerProfileEditor from '$lib/profile/PlayerProfileEditor.svelte';
+  import { fetchMyProfile, type PlayerProfileSelf, type ProfileLookupTarget } from '$lib/profile/profile-api';
   // ⚠⚠ v6.297 私聊只引用**型別**（import type 編譯後完全消失）；實作（dm-session / dm-poller / DmPanel）一律走動態 import()，
   //   對戰頁的主 chunk 一個位元組都不會多（守衛 test-v6297【D】用**靜態 import 相依圖**證明）。
   import type { DmSession, DmSessionState } from '$lib/friends/dm-session';
@@ -1521,9 +1524,34 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //     就算 lobbyTabRaw 被別的路徑改成 'friends'，只要 friendsEntryOn 是 false 就一定渲染既有的大廳版面
   //     ⇒ 匿名玩家看到的大廳與上一版**逐字相同**（守衛 test-v6296 把條件求值後剪枝，再與 BASE 逐字比對）。
   //   ⚠ 切分頁**完全不動 onlineStep**（房間列表訂閱／輪詢照常跑，在好友分頁時房間更新不會停）。
-  let lobbyTabRaw = $state<'online' | 'friends'>('online');
+  let lobbyTabRaw = $state<'online' | 'friends' | 'profile'>('online');
   const lobbyTab = $derived(friendsEntryOn ? lobbyTabRaw : 'online');
-  function lobbySwitchTab(tab: 'online' | 'friends') { lobbyTabRaw = tab; }
+  function lobbySwitchTab(tab: 'online' | 'friends' | 'profile') { lobbyTabRaw = tab; }
+  let profileModalTarget = $state<ProfileLookupTarget | null>(null);
+  let profileSelf = $state<PlayerProfileSelf | null>(null);
+  let _profileBootUid = '';
+  function openProfileModal(t: ProfileLookupTarget) {
+    profileModalTarget = t;
+  }
+  function syncMyProfileNick(p: PlayerProfileSelf) {
+    profileSelf = p;
+    if (p.nick) {
+      myName = p.nick;
+    }
+  }
+  $effect(() => {
+    const u = firebaseUser;
+    if (!friendsEntryOn || !u || u.isAnonymous) return;
+    if (!isTournament && mode !== 'online') return;
+    if (_profileBootUid === u.uid) return;
+    _profileBootUid = u.uid;
+    void (async () => {
+      const ctx = await friendsCtxFromAuth();
+      if (!ctx) return;
+      const r = await fetchMyProfile(ctx);
+      if (r.ok) syncMyProfileNick(r.data);
+    })();
+  });
   // ⭐⭐ v6.297 錦標賽分頁：tTab 的「未開放就鎖回賽事」鎖。
   //   ⚠ 宣告必須在 friendsEntryOn 之後（同一個元件實例的 $derived 是懶求值，但寫在前面容易讓人誤以為可以直接讀）。
   const tTab = $derived(tTabRaw === 'friends' && !friendsEntryOn ? 'events' : tTabRaw);
@@ -11621,7 +11649,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <div class="tourn-chat-msgs" bind:this={tLobbyChatEl} onscroll={onLobbyChatScroll}>
           {#if tChatFiltered.length === 0}<div class="tcmsg muted">{tChat.length === 0 ? '還沒有人發言，來說聲哈囉吧～' : '目前的篩選把所有訊息都藏起來了 —— 請勾選【聊天】或【系統】。'}</div>{/if}
           {#each tChatFiltered as m (m.id)}
-            <div class="tcmsg {m.sys ? tSysClass(m.text) : ''}" class:tcsys={m.sys} class:tcadmin={m.admin}>{#if m.ts}<span class="tctime">{tFmtMsgTime(m.ts)}</span>{/if}<span class="tcname">{#if m.admin}🛡️ {/if}{m.name}</span>：{m.text}</div>
+            <div class="tcmsg {m.sys ? tSysClass(m.text) : ''}" class:tcsys={m.sys} class:tcadmin={m.admin}>{#if m.ts}<span class="tctime">{tFmtMsgTime(m.ts)}</span>{/if}<span class="tcname" class:prof-link={!m.sys && !m.admin && !!m.uid} role={!m.sys && !m.admin && m.uid ? 'button' : undefined} tabindex={!m.sys && !m.admin && m.uid ? 0 : undefined} title={!m.sys && !m.admin && m.uid ? '查看玩家名片' : undefined} onclick={() => { if (!m.sys && !m.admin && m.uid) openProfileModal({ targetUid: m.uid, fallbackNick: m.name }); }} onkeydown={(e) => { if (!m.sys && !m.admin && m.uid && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openProfileModal({ targetUid: m.uid, fallbackNick: m.name }); } }}>{#if m.admin}🛡️ {/if}{m.name}</span>：{m.text}</div>
           {/each}
         </div>
         {#if tCanChat || tIsAdmin}
@@ -11837,7 +11865,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               <div style="font-weight:700;color:#9ab;text-align:center;">#</div><div style="font-weight:700;color:#9ab;">玩家</div><div style="font-weight:700;color:#9ab;text-align:center;">戰績</div><div style="font-weight:700;color:#9ab;text-align:center;">OWP</div><div style="font-weight:700;color:#9ab;text-align:center;">OOWP</div>
               {#each standingsKeyed(brk.standings) as s (s._k)}
                 <div class:tourn-standing-self={s.mine} style="text-align:center;">{s.rank}</div>
-                <div class:tourn-standing-self={s.mine} style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{s.name}{#if s.mine} （你）{/if}</div>
+                <div class="prof-link" class:tourn-standing-self={s.mine} role="button" tabindex="0" title="查看玩家名片" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onclick={() => openProfileModal({ eventId: _bkId, standingName: s.name, fallbackNick: s.name })} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProfileModal({ eventId: _bkId, standingName: s.name, fallbackNick: s.name }); } }}>{s.name}{#if s.mine} （你）{/if}</div>
                 <div style="text-align:center;">{s.w}-{s.l}</div>
                 <div style="text-align:center;color:#9ab;">{s.owp}%</div>
                 <div style="text-align:center;color:#9ab;">{s.oowp}%</div>
@@ -11879,7 +11907,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   {@const _mid = brk.event._id + '_r' + m.round + '_m' + m.idx}
                   {@const _mt = tMatchTimes[String(brk.event._id)]?.[matchTimeKey(m.round, m.idx)]}
                   <div class="tourn-match" class:mine={m.mine} class:done={m.status === 'done'} class:bye={m.bye} class:has-time={!!_mt}>
-                    <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
+                    <span class="tm-side tm-p1" class:win={m.winner === 'p1'} class:prof-link={!!m.p1name && !m.bye} role={m.p1name && !m.bye ? 'button' : undefined} tabindex={m.p1name && !m.bye ? 0 : undefined} title={m.p1name ? `${m.p1name}（點擊查看名片）` : ''} onclick={() => { if (m.p1name && !m.bye) openProfileModal({ eventId: brk.event._id, round: m.round, idx: m.idx, side: 'p1', fallbackNick: m.p1name }); }} onkeydown={(e) => { if (m.p1name && !m.bye && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openProfileModal({ eventId: brk.event._id, round: m.round, idx: m.idx, side: 'p1', fallbackNick: m.p1name }); } }}>{m.p1name ?? '—'}</span>
                     {#if _canSpec}
                       <button class="tm-vs tm-vs-spec" title="👁 點此觀戰這場對戰（目前 {m.viewers ?? 0} 人觀戰中）" onclick={() => tSpectate(m.roomId)} disabled={tBusy}>VS👁{(m.viewers ?? 0) > 0 ? '(' + m.viewers + ')' : ''}</button>
                     {:else if m.status === 'playing' && (m.viewers ?? 0) > 0}
@@ -11889,7 +11917,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     {:else}
                       <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
                     {/if}
-                    <span class="tm-side tm-p2" class:win={m.winner === 'p2'} title={m.p2name ?? ''}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
+                    <span class="tm-side tm-p2" class:win={m.winner === 'p2'} class:prof-link={!m.bye && !!m.p2name} role={!m.bye && m.p2name ? 'button' : undefined} tabindex={!m.bye && m.p2name ? 0 : undefined} title={m.p2name ? `${m.p2name}（點擊查看名片）` : ''} onclick={() => { if (!m.bye && m.p2name) openProfileModal({ eventId: brk.event._id, round: m.round, idx: m.idx, side: 'p2', fallbackNick: m.p2name }); }} onkeydown={(e) => { if (!m.bye && m.p2name && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openProfileModal({ eventId: brk.event._id, round: m.round, idx: m.idx, side: 'p2', fallbackNick: m.p2name }); } }}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
                     {#if _mt}<span class="tm-time" class:live={_mt.live} title={matchTimeTitle(_mt)}>⏱ {fmtMatchDuration(_mt.ms)}</span>{/if}
                   </div>
                 {/each}
@@ -11942,7 +11970,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {#each tChampions.filter((c) => !c.communityEvent) as c (c.id)}
             <div class="tourn-hof-row tourn-hof-clickable" role="button" tabindex="0" onclick={() => tHofOpen(c)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && tHofOpen(c)}>
               <span class="tourn-hof-trophy">🏆</span>
-              <span class="tourn-hof-name">{c.championName}</span>
+              <span class="tourn-hof-name prof-link" role="button" tabindex="0" title="查看冠軍玩家名片" onclick={(e) => { e.stopPropagation(); openProfileModal({ eventId: c.eventId, hofChamp: '1', fallbackNick: c.championName }); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openProfileModal({ eventId: c.eventId, hofChamp: '1', fallbackNick: c.championName }); } }}>{c.championName}</span>
               <span class="tourn-hof-meta">{c.eventName}{#if c.deckName} ｜ {c.deckName}{/if}{#if c.playerCount} ｜ {c.playerCount} 人{/if}{#if tournamentStartMs(c)} ｜ {tournamentDateTW(c)}{/if}</span>
               {#if c.eventId}<span class="tourn-hof-go">賽程 ▸</span>{/if}
             </div>
@@ -11959,7 +11987,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {#each tChampions.filter((c) => c.communityEvent) as c (c.id)}
             <div class="tourn-hof-row tourn-hof-clickable" role="button" tabindex="0" onclick={() => tHofOpen(c)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && tHofOpen(c)}>
               <span class="tourn-hof-trophy">🎖️</span>
-              <span class="tourn-hof-name" style="color:#8fdcc0;">{c.championName} <span style="font-size:.6rem;background:#2a6a55;color:#dff;border-radius:4px;padding:1px 5px;vertical-align:middle;">社群</span></span>
+              <span class="tourn-hof-name prof-link" style="color:#8fdcc0;" role="button" tabindex="0" title="查看冠軍玩家名片" onclick={(e) => { e.stopPropagation(); openProfileModal({ eventId: c.eventId, hofChamp: '1', fallbackNick: c.championName }); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openProfileModal({ eventId: c.eventId, hofChamp: '1', fallbackNick: c.championName }); } }}>{c.championName} <span style="font-size:.6rem;background:#2a6a55;color:#dff;border-radius:4px;padding:1px 5px;vertical-align:middle;">社群</span></span>
               <span class="tourn-hof-meta">{c.eventName}{#if c.deckName} ｜ {c.deckName}{/if}{#if c.playerCount} ｜ {c.playerCount} 人{/if}{#if tournamentStartMs(c)} ｜ {tournamentDateTW(c)}{/if}</span>
               {#if c.eventId}<span class="tourn-hof-go">賽程 ▸</span>{/if}
             </div>
@@ -11989,7 +12017,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   {#each lbTopRows(rows, tLbTop) as r, i}
                     <div class="tourn-lb-row">
                       <span class="tourn-lb-rank tourn-lb-rank-{i + 1}">{i + 1}</span>
-                      <span class="tourn-lb-name">{r.displayName}</span>
+                      <span class="tourn-lb-name prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={() => openProfileModal({ lbNick: r.displayName, fallbackNick: r.displayName })} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProfileModal({ lbNick: r.displayName, fallbackNick: r.displayName }); } }}>{r.displayName}</span>
                       <span class="tourn-lb-cnt">{r.count} {unit}</span>
                     </div>
                   {/each}
@@ -12012,14 +12040,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     <div class="tourn-lb-sub">🏛️ 網站賽</div>
                     {#if !tLeaderboard.champions?.official?.length}<div class="tourn-lb-empty">尚無資料</div>{/if}
                     {#each lbTopRows(tLeaderboard.champions?.official, tLbTop) as r, i}
-                      <div class="tourn-lb-row"><span class="tourn-lb-rank tourn-lb-rank-{i + 1}">{i + 1}</span><span class="tourn-lb-name">{r.displayName}</span><span class="tourn-lb-cnt">{r.count} 冠</span></div>
+                      <div class="tourn-lb-row"><span class="tourn-lb-rank tourn-lb-rank-{i + 1}">{i + 1}</span><span class="tourn-lb-name prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={() => openProfileModal({ lbNick: r.displayName, fallbackNick: r.displayName })} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProfileModal({ lbNick: r.displayName, fallbackNick: r.displayName }); } }}>{r.displayName}</span><span class="tourn-lb-cnt">{r.count} 冠</span></div>
                     {/each}
                   </div>
                   <div>
                     <div class="tourn-lb-sub">🎖️ 社群賽</div>
                     {#if !tLeaderboard.champions?.community?.length}<div class="tourn-lb-empty">尚無資料</div>{/if}
                     {#each lbTopRows(tLeaderboard.champions?.community, tLbTop) as r, i}
-                      <div class="tourn-lb-row"><span class="tourn-lb-rank tourn-lb-rank-{i + 1}">{i + 1}</span><span class="tourn-lb-name">{r.displayName}</span><span class="tourn-lb-cnt">{r.count} 冠</span></div>
+                      <div class="tourn-lb-row"><span class="tourn-lb-rank tourn-lb-rank-{i + 1}">{i + 1}</span><span class="tourn-lb-name prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={() => openProfileModal({ lbNick: r.displayName, fallbackNick: r.displayName })} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProfileModal({ lbNick: r.displayName, fallbackNick: r.displayName }); } }}>{r.displayName}</span><span class="tourn-lb-cnt">{r.count} 冠</span></div>
                     {/each}
                   </div>
                 </div>
@@ -12096,6 +12124,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {/if}
             </details>
           </div>
+          <div style="margin-bottom:14px;">
+            <PlayerProfileEditor getAuthCtx={friendsCtxFromAuth} onloaded={syncMyProfileNick} onsaved={syncMyProfileNick} />
+          </div>
           {#if tProfileLoading && !tProfile}
             <p class="muted small" style="text-align:center;padding:18px;">載入個人資料中…</p>
           {:else if !tProfile}
@@ -12141,7 +12172,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
              ⚠ 只有切到這個分頁時才掛載 ⇒ 切之前對好友端點一發請求都沒有；切走就卸載。
              ⚠ 私聊面板走 foot snippet 渲染在 .fr-panel **裡面** ⇒ 才吃得到 --fr-* 色票（繼承）。 -->
         <div class="tourn-tab-panel">
-          <FriendsPanel embedded ondm={openDm} dmMsg={dmNegMsg} dmActiveFid={dmState?.fid ?? ''} onafteract={dmAfterAct} foot={dmFoot} />
+          <FriendsPanel embedded ondm={openDm} dmMsg={dmNegMsg} dmActiveFid={dmState?.fid ?? ''} onafteract={dmAfterAct} foot={dmFoot}
+            onprofile={(r) => openProfileModal({ fid: r.fid, fallbackNick: r.alias || r.nick })} />
         </div>
       {/if}
       <!-- ⭐v6.647 歷屆賽程／對戰戰報視窗搬到所有分頁的條件式收尾之後：「個人」分頁的參賽紀錄也能直接打開那場的賽程（玩家需求）。視窗本身一字未改。 -->
@@ -12176,13 +12208,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   title={_hasLog ? '點擊查看這場對戰戰報' : ''}
                   onclick={() => { if (_hasLog) tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name); }}
                   onkeydown={(e) => { if (_hasLog && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name); } }}>
-                  <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
+                  <span class="tm-side tm-p1" class:win={m.winner === 'p1'} class:prof-link={!m.bye && !!m.p1name} role={!m.bye && m.p1name ? 'button' : undefined} tabindex={!m.bye && m.p1name ? 0 : undefined} title={m.p1name ? `${m.p1name}（點擊查看名片）` : ''} onclick={(e) => { if (!m.bye && m.p1name) { e.stopPropagation(); openProfileModal({ eventId: tHofEventId, round: m.round, idx: m.idx, side: 'p1', fallbackNick: m.p1name }); } }} onkeydown={(e) => { if (!m.bye && m.p1name && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); openProfileModal({ eventId: tHofEventId, round: m.round, idx: m.idx, side: 'p1', fallbackNick: m.p1name }); } }}>{m.p1name ?? '—'}</span>
                   {#if _hasLog}
                     <button class="tm-vs tm-vs-replay" title="🎬 觀看這場對戰回放" onclick={(e) => { e.stopPropagation(); const _mid = tHofEventId + '_r' + m.round + '_m' + m.idx; tHofClose(); tStartReplay(_mid); }}>▶回放</button>
                   {:else}
                     <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
                   {/if}
-                  <span class="tm-side tm-p2" class:win={m.winner === 'p2'} title={m.p2name ?? ''}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
+                  <span class="tm-side tm-p2" class:win={m.winner === 'p2'} class:prof-link={!m.bye && !!m.p2name} role={!m.bye && m.p2name ? 'button' : undefined} tabindex={!m.bye && m.p2name ? 0 : undefined} title={m.p2name ? `${m.p2name}（點擊查看名片）` : ''} onclick={(e) => { if (!m.bye && m.p2name) { e.stopPropagation(); openProfileModal({ eventId: tHofEventId, round: m.round, idx: m.idx, side: 'p2', fallbackNick: m.p2name }); } }} onkeydown={(e) => { if (!m.bye && m.p2name && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); openProfileModal({ eventId: tHofEventId, round: m.round, idx: m.idx, side: 'p2', fallbackNick: m.p2name }); } }}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
                   {#if _mt}<span class="tm-time" class:live={_mt.live} title={matchTimeTitle(_mt)}>⏱ {fmtMatchDuration(_mt.ms)}</span>{/if}
                 </div>
               {/each}
@@ -12476,9 +12508,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
          ⚠⚠ friendsEntryOn 為 false（匿名／伺服器不支援／尚未開放）時整條不渲染，
             而且 lobbyTab 會被 $derived 鎖回 'online' ⇒ 大廳與上一版逐字相同。 -->
     {#if friendsEntryOn && onlineStep !== 'room'}
-      <div class="lobby-tabs" role="tablist" aria-label="線上對戰與好友">
-        <button class="lobby-tab" class:active={lobbyTab === 'online'} role="tab" aria-selected={lobbyTab === 'online'} onclick={() => lobbySwitchTab('online')}>🌐 線上連線對戰</button>
-        <button class="lobby-tab" class:active={lobbyTab === 'friends'} role="tab" aria-selected={lobbyTab === 'friends'} onclick={() => lobbySwitchTab('friends')}>👥 好友名單</button>
+      <div class="lobby-tabs" role="tablist" aria-label="線上對戰、好友與個人">
+        <button class="lobby-tab" class:active={lobbyTab === 'online'} role="tab" aria-selected={lobbyTab === 'online'} onclick={() => lobbySwitchTab('online')}>🌐 對戰</button>
+        <button class="lobby-tab" class:active={lobbyTab === 'friends'} role="tab" aria-selected={lobbyTab === 'friends'} onclick={() => lobbySwitchTab('friends')}>👥 好友</button>
+        <button class="lobby-tab" class:active={lobbyTab === 'profile'} role="tab" aria-selected={lobbyTab === 'profile'} onclick={() => lobbySwitchTab('profile')}>🪪 個人</button>
       </div>
     {/if}
 
@@ -12740,8 +12773,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
                ⚠ openRooms 是大廳本來就在跑的訂閱（每 2 秒），這裡只是把同一份資料再用一次 ⇒ 零新請求。
                ⚠ 加入／觀戰走的是既有的 handleJoinFromList（與房間列表上的按鈕同一條路）。 -->
           <FriendsPanel embedded ondm={openDm} dmMsg={dmNegMsg} dmActiveFid={dmState?.fid ?? ''} onafteract={dmAfterAct} foot={dmFoot}
+            onprofile={(r) => openProfileModal({ fid: r.fid, fallbackNick: r.alias || r.nick })}
             rooms={openRooms} onjoinroom={(rc) => { void handleJoinFromList(rc); }}
-            joinBlockedMsg={myName.trim() ? '' : '請先切回「🌐 線上連線對戰」分頁填寫玩家名稱，才能加入或觀戰好友的房間。'} />
+            joinBlockedMsg={myName.trim() ? '' : '請先切回「🌐 對戰」分頁填寫玩家名稱，才能加入或觀戰好友的房間。'} />
+        </div>
+      {/if}
+      {#if lobbyTab === 'profile'}
+        <div class="lobby-tab-panel">
+          <PlayerProfileEditor getAuthCtx={friendsCtxFromAuth} onloaded={syncMyProfileNick} onsaved={syncMyProfileNick} />
         </div>
       {/if}
 
@@ -12837,7 +12876,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 <div class="seat battle-seat {s.uid ? 'taken' : 'empty'} {isMine ? 'mine' : ''} {s.ready ? 'ready' : ''}">
                   <div class="seat-label">對戰玩家 {i + 1}</div>
                   {#if s.uid}
-                    <div class="seat-name">{s.name}{isMine ? '（你）' : ''}</div>
+                    <div class="seat-name prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={() => openProfileModal({ roomCode, seatIdx: i, fallbackNick: s.name })} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProfileModal({ roomCode, seatIdx: i, fallbackNick: s.name }); } }}>{s.name}{isMine ? '（你）' : ''}</div>
                     {#if isMine}
                       <!-- 我的座位：內嵌牌組選擇 + 準備按鈕 -->
                       <select class="seat-deck-select"
@@ -12925,7 +12964,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   {@const isMine = mySeatIdx === seatIdx}
                   <div class="seat spec-seat {s.uid ? 'taken' : 'empty'} {isMine ? 'mine' : ''}">
                     {#if s.uid}
-                      <div class="seat-name small">{s.name}{isMine ? '（你）' : ''}</div>
+                      <div class="seat-name small prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={() => openProfileModal({ roomCode, seatIdx, fallbackNick: s.name })} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProfileModal({ roomCode, seatIdx, fallbackNick: s.name }); } }}>{s.name}{isMine ? '（你）' : ''}</div>
                     {:else}
                       <button class="btn-spec-take"
                         onclick={() => handleTakeSeat(seatIdx)}
@@ -12954,7 +12993,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {:else}
                 {#each chatMessages as m (m.id)}
                   <div class="chat-msg {m.uid === myUid ? 'mine' : ''}">
-                    <span class="chat-name">{m.name}</span>
+                    <span class="chat-name prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={() => openProfileModal({ roomCode, targetUid: m.uid, fallbackNick: m.name })} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProfileModal({ roomCode, targetUid: m.uid, fallbackNick: m.name }); } }}>{m.name}</span>
                     <span class="chat-time">{fmtChatTime(m.createdAt)}</span>
                     <div class="chat-text">{m.text}</div>
                   </div>
@@ -13209,7 +13248,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <span class="hand-counts" title="雙方手牌張數（手牌內容仍為隱私，僅顯示張數）">
       {#each game.players as pl, pi}
         <!-- ⭐v6.574（站長：手牌張數不該被過長的玩家名稱擋住，尤其 iPad）：名稱與張數拆成兩欄，只有名稱會縮成「…」，張數永遠完整；完整名稱放 title -->
-        <span class="chip hand-count-chip" class:hc-active={pi === aIdx} title={`${pl.name ?? `P${pi+1}`} 手牌 ${pl.hand.length} 張`}>
+        <span class="chip hand-count-chip" class:hc-active={pi === aIdx} class:prof-link={mode === 'online'} role={mode === 'online' ? 'button' : undefined} tabindex={mode === 'online' ? 0 : undefined} title={mode === 'online' ? `${pl.name ?? `P${pi+1}`} 手牌 ${pl.hand.length} 張（點擊查看名片）` : `${pl.name ?? `P${pi+1}`} 手牌 ${pl.hand.length} 張`} onclick={() => { if (mode === 'online') openProfileModal(isTournament ? { tournRoom: tActiveRoom, seatIdx: pi, fallbackNick: pl.name } : { roomCode, seatIdx: pi, fallbackNick: pl.name }); }} onkeydown={(e) => { if (mode === 'online' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openProfileModal(isTournament ? { tournRoom: tActiveRoom, seatIdx: pi, fallbackNick: pl.name } : { roomCode, seatIdx: pi, fallbackNick: pl.name }); } }}>
           <span class="hc-name">✋ {pl.name ?? `P${pi+1}`}</span><span class="hc-num">手牌 {pl.hand.length} 張</span>
         </span>
       {/each}
@@ -15810,7 +15849,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             {:else}
               {#each tChatFiltered as m (m.id)}
                 <div class="chat-msg {m.sys ? tSysClass(m.text) : ''}" class:tcsys={m.sys} class:tcadmin={m.admin}>
-                  <span class="chat-name">{#if m.admin}🛡️ {/if}{m.name}</span>
+                  <span class="chat-name" class:prof-link={!m.sys && !m.admin && !!m.uid} role={!m.sys && !m.admin && m.uid ? 'button' : undefined} tabindex={!m.sys && !m.admin && m.uid ? 0 : undefined} title={!m.sys && !m.admin && m.uid ? '查看玩家名片' : undefined} onclick={() => { if (!m.sys && !m.admin && m.uid) openProfileModal({ targetUid: m.uid, fallbackNick: m.name }); }} onkeydown={(e) => { if (!m.sys && !m.admin && m.uid && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openProfileModal({ targetUid: m.uid, fallbackNick: m.name }); } }}>{#if m.admin}🛡️ {/if}{m.name}</span>
                   {#if m.ts}<span class="chat-time">{tFmtMsgTime(m.ts)}</span>{/if}
                   <div class="chat-text">{m.text}</div>
                 </div>
@@ -15821,7 +15860,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {:else}
             {#each chatMessages as m (m.id)}
               <div class="chat-msg {m.uid === myUid ? 'mine' : ''}">
-                <span class="chat-name">{m.name}</span>
+                <span class="chat-name prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={() => openProfileModal({ roomCode, targetUid: m.uid, fallbackNick: m.name })} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProfileModal({ roomCode, targetUid: m.uid, fallbackNick: m.name }); } }}>{m.name}</span>
                 <span class="chat-time">{fmtChatTime(m.createdAt)}</span>
                 <div class="chat-text">{m.text}</div>
               </div>
@@ -16884,6 +16923,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   </div>
 {/if}
 {/if}
+
+<PlayerProfileModal
+  open={!!profileModalTarget}
+  target={profileModalTarget}
+  getAuthCtx={friendsCtxFromAuth}
+  onclose={() => { profileModalTarget = null; }}
+/>
 
 <!-- ⭐⭐⭐ v6.297 私聊面板：用 snippet 傳進 FriendsPanel 的 foot 位置，渲染在 .fr-panel **裡面**
      ⇒ CSS 自訂屬性（--fr-*）靠 DOM 繼承吃得到，與 `/friends` 頁的做法逐條相同。
@@ -18198,6 +18244,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .lobby-tab:hover{ background:#18301a; }
   .lobby-tab.active{ background:linear-gradient(180deg,#2a5a3a,#1d4029); color:#eaffea; border-color:#6ab87a; box-shadow:0 0 0 1px #6ab87a inset; }
   .lobby-tab-panel{ max-width:calc(560px + 2.5rem + 2px); margin:0; width:100%; text-align:left; }
+  .prof-link{ cursor:pointer; text-decoration:underline dotted rgba(160,225,180,.55); text-underline-offset:2px; }
+  .prof-link:hover{ filter:brightness(1.15); }
   .lobby-unified .name-row{ flex-direction:row; align-items:center; gap:.6rem; background:#162616; border:1px solid #2a4a2a; border-radius:8px; padding:.6rem .85rem; }
   .lobby-unified .name-label{ font-size:.88rem; color:#aaffcc; font-weight:600; min-width:64px; }
   .lobby-unified .name-row .name-input{ flex:1; }

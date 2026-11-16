@@ -32,6 +32,7 @@ import { pruneIfs, normalizeMarkup } from './lib/svelte-if-prune.mjs';
 import { sectionInner, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';   // ⭐v6.317 抽 script；v6.318 單趟行級狀態機；v6.319 殘留護欄（game 的 {@html '<style>'} 是唯一宣告的例外）
 import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.318 腳本內文剝註解走行級 helper（本檔的 stripCmt 是區塊正則，會吃掉 game 腳本 :208 起 177 行）
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
+import { revertV6653IfPresent } from './lib/revert-v6653-player-profile.mjs';
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -43,7 +44,13 @@ const P_GAME = join(ROOT, 'src/routes/game/+page.svelte');
 const P_MPB = join(ROOT, 'src/routes/game/MobilePortraitBattle.svelte');
 const P_SRV = join(ROOT, 'oracle-admin/server_admin_patch.js');
 const P_PKG = join(ROOT, 'package.json');
-const rd = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+const REVERT_TARGET = new Set(['src/lib/friends/FriendsPanel.svelte', 'src/routes/friends/+page.svelte', 'src/routes/game/+page.svelte']);
+const rd = (p) => {
+  const raw = readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+  const normP = p.replace(/\\/g, '/'), normR = ROOT.replace(/\\/g, '/').replace(/\/?$/, '/');
+  const rel = normP.startsWith(normR) ? normP.slice(normR.length) : '';
+  return REVERT_TARGET.has(rel) ? revertV6653IfPresent(rel, raw) : raw;
+};
 
 let pass = 0, fail = 0; const skipped = [];
 const T = async (name, fn) => {

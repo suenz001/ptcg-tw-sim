@@ -26,6 +26,7 @@ import assert from 'node:assert';
 import { createHash } from 'node:crypto';
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 import { styleBlockOf } from './lib/svelte-style-block.mjs';
+import { revertV6653IfPresent } from './lib/revert-v6653-player-profile.mjs';
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -63,10 +64,10 @@ await T('F0 HEAD-FAIL：friends-api.ts／routes/friends/+page.svelte／+page.ts 
   assert.ok(existsSync(P_PAGE), '缺 ' + P_PAGE);
   assert.ok(existsSync(P_PAGE_TS), '缺 ' + P_PAGE_TS);
   assert.ok(existsSync(P_PANEL), '缺 ' + P_PANEL);
-  PANEL = normEol(readFileSync(P_PANEL, 'utf8'));
+  PANEL = revertV6653IfPresent('src/lib/friends/FriendsPanel.svelte', normEol(readFileSync(P_PANEL, 'utf8')));
   assert.ok(PANEL.length > 3000, 'FriendsPanel.svelte 只有 ' + PANEL.length + ' 字元 —— 被掏空');
-  API = normEol(readFileSync(P_API, 'utf8')); PAGE = normEol(readFileSync(P_PAGE, 'utf8')); PAGE_TS = normEol(readFileSync(P_PAGE_TS, 'utf8'));
-  GAME = normEol(readFileSync(P_GAME, 'utf8')); MPB = normEol(readFileSync(P_MPB, 'utf8')); SRV = normEol(readFileSync(P_SRV, 'utf8'));
+  API = normEol(readFileSync(P_API, 'utf8')); PAGE = revertV6653IfPresent('src/routes/friends/+page.svelte', normEol(readFileSync(P_PAGE, 'utf8'))); PAGE_TS = normEol(readFileSync(P_PAGE_TS, 'utf8'));
+  GAME = revertV6653IfPresent('src/routes/game/+page.svelte', normEol(readFileSync(P_GAME, 'utf8'))); MPB = normEol(readFileSync(P_MPB, 'utf8')); SRV = normEol(readFileSync(P_SRV, 'utf8'));
   assert.ok(API.length > 3000, 'friends-api.ts 只有 ' + API.length + ' 字元 —— 被掏空');
   assert.ok(PAGE.length > 3000, '+page.svelte 只有 ' + PAGE.length + ' 字元 —— 被掏空');
 });

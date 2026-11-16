@@ -26,6 +26,8 @@
   import { friendsCtxFromAuth } from '$lib/friends/auth-ctx';
   import FriendsPanel from '$lib/friends/FriendsPanel.svelte';
   import DmPanel from './DmPanel.svelte';
+  import PlayerProfileModal from '$lib/profile/PlayerProfileModal.svelte';
+  import type { ProfileLookupTarget } from '$lib/profile/profile-api';
 
   /** 手機直式／桌機兩套分支的開關：JS 量視窗，⚠ 不用 @media。 */
   let isMobile = $state(false);
@@ -34,6 +36,7 @@
   let dmState = $state<DmSessionState | null>(null);
   /** 私聊在這台伺服器不可用（尚未開放／舊伺服器）的說明；非空 ⇒ 藏掉所有 💬（本次頁面停留期間記住）。 */
   let dmNegMsg = $state('');
+  let profileTarget = $state<ProfileLookupTarget | null>(null);
 
   /** 取身分：⚠ 匿名回 null。與好友名單**共用同一份**（$lib/friends/auth-ctx.ts）。 */
   const ctx = friendsCtxFromAuth;
@@ -68,6 +71,7 @@
   function closeDm() { dm?.close(); }
   /** 面板正開著這一位時，對方被解除／封鎖／拒絕 ⇒ 關掉（對話已刪或已無權讀）。 */
   function afterAct(fid: string) { if (dmState && dmState.fid === fid) closeDm(); }
+  function openFriendProfile(r: FriendRow) { profileTarget = { fid: r.fid, fallbackNick: r.alias || r.nick }; }
 </script>
 
 <svelte:head>
@@ -85,7 +89,8 @@
 </svelte:head>
 
 <main>
-  <FriendsPanel {head} {foot} ondm={openDm} dmMsg={dmNegMsg} dmActiveFid={dmState?.fid ?? ''} onafteract={afterAct} />
+  <FriendsPanel {head} {foot} ondm={openDm} dmMsg={dmNegMsg} dmActiveFid={dmState?.fid ?? ''} onafteract={afterAct} onprofile={openFriendProfile} />
+  <PlayerProfileModal open={!!profileTarget} target={profileTarget} getAuthCtx={ctx} onclose={() => { profileTarget = null; }} />
 </main>
 
 <!-- ⭐ 頁首與分頁列：用 snippet 傳進 FriendsPanel **裡面**渲染 ⇒ 吃得到面板宣告的 --fr-* 色票。

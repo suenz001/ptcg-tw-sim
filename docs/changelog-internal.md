@@ -1,5 +1,25 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.653 — 玩家個人名片＋官方卡牌圓圈頭像＋線上大廳個人分頁（server v1.87）（2026-11-16）
+
+基準：`66fc6069`（v6.652）。備份分支：`backup-v6652-pre-profile`。
+
+- 後端（`oracle-admin/server_admin_patch.js` `// >>> v187-player-profile`，位於 `TAIL_ANCHOR` `app.get('/api/tournament/state'` 之前，不改動錦標賽區塊指紋 `TOURN_TAIL_SHA256`）：
+  - 新增 `playerProfiles`（`_id`＝正規化 email；索引 `{profileKey:1}` 唯一稀疏、`{uid:1}`、`{nickLower:1}`）與不可逆公開識別碼 `profileKey`（sha256 前 20 碼 hex）；所有 `/api/player-profile/*` 回應絕不洩漏 email。
+  - `GET /api/player-profile/me` / `POST /api/player-profile/save`：全卡池 `TPOOL` 開放（寶可夢／訓練家／能量皆可選），僅保存 `{ cardId, x, y, zoom }` 並以後端等比例邊界夾制確保圓形頭像任何尺寸都不會出現空白邊；代表榮譽僅從 `tournamentArchives`（複用 `app.locals._detectCutPlacements`）推導，含網站賽名次（冠軍／亞軍／4強／8強）與社群賽冠軍，上限 10 筆、偽造 eventId 一律剔除。
+  - `GET /api/player-profile/view` / `POST /api/player-profile/batch` / `POST /api/player-profile/friend-request`：支援 `profileKey`、`fid`、`roomCode`+`seatIdx`/`targetUid`、`tournRoom`、`eventId`（賽程表／瑞士排名／歷屆冠軍）、`postId`、`lbNick` 等全站上下文定位；直接復用既有 `friendships` 表、`friendsEnabled()`、封鎖靜默保護、24 小時拒邀冷卻與 100 好友上限。
+  - Pre-TAIL middleware `_profTournChatMw`：對已登入非管理員且目前未報名任何開放中賽事的玩家，於 `POST /api/tournament/chat` 套用名片暱稱（已報名者與系統管理員交回原 handler 處理）。
+- 前端共用模組（`src/lib/profile/`）：
+  - `profile-api.ts`：集中所有 `/api/player-profile/*` 請求、幾何夾制常數與全卡池懶載入（零輪詢，route 檔零新增 `fetch(` 以守 `test-v6340` C11）。
+  - `AvatarCircle.svelte`：全尺寸無縫等比圓形卡圖裁切＋失敗退回首字彩徽（接 `cardThumb` + `use:retryImg`）。
+  - `PlayerProfileModal.svelte`：精簡名片彈窗（依站長核定稿：無隱私廢話、無卡包出處字樣、右側單行冠數與 `44×44` 關閉鈕、暱稱／Google 認證／加好友鈕置於橫幅下方零重疊、單行截斷榮譽列表），全程掛 `use:pageScrollLock`＋`--safe-top`/`--safe-bottom` 避讓 iPhone 動態島與底部橫條。
+  - `PlayerProfileEditor.svelte`：全卡池選卡（從我的牌組／依卡包與卡名）＋固定中央亮圓框（`touch-action:none`、Pointer Events 拖曳底卡＋縮放滑桿＋即時預覽）＋代表榮譽勾選（10 筆上限）。
+- 頁面接線：
+  - `src/routes/game/+page.svelte`：線上大廳改三短標分頁（`🌐 對戰` / `👥 好友` / `🪪 個人`，`🪪 個人` 僅放名片編輯器，匿名鎖與 `lobbyTab` 結構保持一致）；錦標賽 `🪪 個人` 保留通知／戰績／參賽紀錄並加入名片編輯器；暱稱同步 `myName`（`ptcg-tw-sim:lastMyName`）；A 區（對戰上方資訊列、等待室座位與觀戰、聊天室、錦標賽聊天室）與 B 區（瑞士排名、賽程對戰、歷屆冠軍榜、排行榜）皆可點擊開啟名片；`PlayerProfileModal` 掛於 `battleRegion` 之外以維持 `test-v6283` 零 `friend` 不變量。
+  - `src/lib/friends/FriendsPanel.svelte` & `src/routes/friends/+page.svelte`：新增可選 `onprofile` 回呼（「🪪 名片」鈕置於 `.acts` 之外以維持 `test-v6411` 320px 按鈕預算）。
+  - `src/routes/deck-posts/+page.svelte`：C 區（公開牌組列表與明細視窗作者名片鈕）零 `{@html}`、零清單縮圖增加。
+- 守衛與還原鏈：`scripts/test-v6653-player-profile.mjs`、`scripts/lib/sap-revert-admin-v187.mjs`、`scripts/lib/revert-v6653-player-profile.mjs`（精確還原至 `66fc6069`）。
+
 ## v6.652 — Google 解除綁定／信箱辨識（2026-11-16）
 
 基準：`b8bf25ce`（v6.651）。
