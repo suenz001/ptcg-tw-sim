@@ -1,5 +1,17 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.651 — Google 登入／帳號綁定／原頁完成（2026-11-16）
+
+基準：`a84cdd89`（v6.650）。站長已啟用 Firebase Google provider 及正式／測試網域。
+
+- 玩家：對戰／牌組編輯帳號視窗、錦標賽登入、配對提示共用 Google popup；登入留在原路由及 query/hash，不自動排隊／報名。Email 會員帳號列可綁定 Google；Google-only 不提供需舊密碼的更改密碼入口。
+- 帳號：匿名先 linkWithPopup 保 UID；只有匿名 credential-already-in-use 才以同份已驗證 credential 登入既有 Google UID，不合併兩個帳號。正式會員綁定碰撞維持原帳號、提供原登入方式提示。沒有 redirect、額外 auth observer、Oracle API 或輪詢；雲端同步保持既有 merge 政策。
+- 審查修正：獨立 Codex 初審 0 P1／2 P2；同 UID 綁定時 Firebase 不通知 onAuthStateChanged，故中央 revision snapshot 補 email 及既有 reactive gates；既有 async 雲端載入補登入世代／UID guard，阻擋過期回應、catch、首次上傳及延後 save。另於匿名初始化完成前停用 Google，避免慢 bootstrap 蓋掉新登入。整包審查另提 1 P3：原 UI fixture 未驗實際匿名初始化時序；已補兩頁真 observer 的 deferred 成功／失敗及提早解除突變。實際截圖再發現錦標賽按鈕未對齊中央 Email 表單，僅為該入口加 wide 排版及 B0 置中量測。早期全套為補守衛／排版中止；最終來源重新 build 並整套重跑。同一位審查者四輪複審後 0 未解 P1／P2／P3，確認全套綠後可推。
+- 驗收：改前／改後 AI harness＋35 支免疫測試網均 36/36 綠；新守衛 63 PASS／0 FAIL，使用實際共用流程、兩頁真 auth observer 及實際 Svelte 元件（僅 stub Firebase 網路邊界）。涵蓋 same User object 升級、延遲雲端成功／失敗、匿名初始化等待、原頁 query/hash、取消、provider、320／390／768／1376 寬、錦標賽寬版按鈕置中。HEAD-FAIL 7 條 wiring＋4 條真 observer 逐條紅、Email 正對照兩版綠；9 個突變全殺。8 檔逐字還原對 BASE 全同、BASE 自身不變。tsc、production build、anti-pattern-lint、guard-hygiene 綠；build 成品的對戰／組牌／錦標賽 × 390／1376 六組 Google 按鈕＋Email 介面零溢出、零 pageerror。最終全套結果待補。
+- 邊界：自動化不操作真實 Google 帳號授權；正式 Google 選帳號／同 Email 碰撞由測試站真人驗收。Safari/PWA 真機未代替成 Chromium 模擬通過。標準 popup 取消／阻擋／停用／網域／帳號碰撞有清楚提示，不強制 redirect。
+- 全套順序依 IRON_RULES 第 2712 行既有規定：bump → build → 本機具名 commit → 全套。新 auth 檔未 commit 時，test-v6272 ⑩ 的 git diff BASE 看不到新檔會紅；不放寬範圍斷言、不使用 git add -N。前述 target／審查完成後先提交可逆本機版本，全套綠前不 push。
+- 部署：不改 server patch；CI 全綠後站長自行執行 redeploy-oracle.bat，AI 不代跑部署。
+
 ## v6.650 — 回放 R2（時間軸回合記號＋昏厥節點＋圖例）＋R6（手機詳情面板）
 
 - 來源：站長 2026-11-16 指定的回放交接提示詞 R2／R6（不含 R4）；本版第二批。

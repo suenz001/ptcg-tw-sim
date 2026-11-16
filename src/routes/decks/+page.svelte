@@ -56,6 +56,8 @@
   import { loadFavorites, saveFavorites } from '$lib/decks/favorites';
   import { saveFavoritesToCloud, loadFavoritesFromCloud } from '$lib/decks/favoritesCloud';
   import { VERSION } from '$lib/version';
+  import GoogleAuthButton from '$lib/auth/GoogleAuthButton.svelte';
+  import { authUiState, createAuthGeneration, googleAuthBusy, googleAuthRevision } from '$lib/auth/google-auth';
   import { auth } from '$lib/firebase';
   import {
     signInAnonymously,
@@ -82,6 +84,8 @@
 
   // ── Firebase / cloud state ─────────────────────────────────────────────
   let firebaseUser = $state<User | null>(null);
+  let authInitializing = $state(true);
+  const authGeneration = createAuthGeneration(() => auth.currentUser?.uid ?? null);
   let syncStatus = $state<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   // v5.114：dirty tracking — 牌組編輯後標 dirty，等手動「💾 存檔」才推 cloud
   //   取代 v5.078/v5.092 的自動 debounce push（每次編輯都 setDoc）。
@@ -111,7 +115,8 @@
   let cpSuccess = $state(false);
   let cpLoading = $state(false);
 
-  const isAnonymous = $derived(firebaseUser?.isAnonymous ?? true);
+  const accountAuthState = $derived(authUiState(firebaseUser, $googleAuthRevision));
+  const isAnonymous = $derived(accountAuthState.isAnonymous);
 
   // ── UI state ───────────────────────────────────────────────────────────
   let search = $state('');
@@ -760,16 +765,20 @@
 
     // ② Firebase anonymous auth; on sign-in, merge cloud ↔ local decks
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      const authCurrent = authGeneration.begin(user?.uid ?? null);
       firebaseUser = user;
+      if (user) authInitializing = false;
       if (!user) {
         // v4.985: 若 admin tab 已登入（localStorage 'ptcg_admin_active' flag），
         //   跳過匿名 sign-in — 等 IndexedDB 從 admin tab cross-tab sync 過來。
         //   避免覆蓋 admin user 導致 admin polling 拿到 anonymous token → 403。
         const isAdminActive = typeof window !== 'undefined'
           && !!localStorage.getItem('ptcg_admin_active');
-        if (isAdminActive) return;
+        if (isAdminActive) { authInitializing = false; return; }
         // Not signed in yet — start anonymous sign-in
+        authInitializing = true;
         try { await signInAnonymously(auth); } catch { /* will retry on next visit */ }
+        finally { authInitializing = false; }
         return;
       }
 
@@ -784,14 +793,20 @@
         //   localStorage 的牌組，省掉整批 getDocs（每副牌 1 讀）。任何不確定（首次進站/
         //   換裝置/換帳號/隱私模式/meta 不存在/讀取失敗）一律回 false，走原本的全拉＋merge。
         const cloudUnchanged = await cloudDecksUnchanged(user.uid, local.length);
+        if (!authCurrent()) return;
         const cloud = cloudUnchanged ? [] : await withTimeout(loadDecksFromCloud(user.uid));
+        if (!authCurrent()) return;
 
         if (cloudUnchanged) {
           // 雲端沒變 → localStorage 裡就是上次 merge 的最新結果（此分支只讀不寫）
           decks = sortDecks(local);
         } else if (cloud.length === 0 && local.length > 0) {
           // First-time cloud: push existing local decks up
-          for (const d of local) await syncDeckToCloud(user.uid, d);
+          for (const d of local) {
+            if (!authCurrent()) return;
+            await syncDeckToCloud(user.uid, d);
+          }
+          if (!authCurrent()) return;
           void bumpCloudDecksRev(user.uid);  // v6.273：首次上傳完成 → 建 meta
           decks = local;
         } else if (cloud.length > 0) {
@@ -803,7 +818,8 @@
           }
           decks = sortDecks([...merged.values()]); // v5.352：自訂順序優先
           // Persist merged result locally
-          import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
+          const mergedDecks = decks;
+          import('$lib/decks/storage').then(({ saveDecks }) => { if (authCurrent()) saveDecks(mergedDecks); });
           void recordCloudDecksRev(user.uid);  // v6.273：全拉完成 → 記下當下雲端 rev
         } else {
           decks = local;
@@ -811,11 +827,13 @@
 
         syncStatus = 'synced';
       } catch {
+        if (!authCurrent()) return;
         // Cloud unavailable — fall back to local silently
         decks = local;
         syncStatus = 'error';
       }
 
+      if (!authCurrent()) return;
       if (decks.length === 0) {
         const first = newDeck('我的第一個牌組');
         decks = upsertDeck(first);
@@ -842,6 +860,7 @@
     }
 
     return () => {
+      authGeneration.invalidate();
       unsubAuth();
       // v5.078：cleanup — flush 待推 + 移除 beforeunload listener
       flushPendingPushes();
@@ -1652,6 +1671,7 @@
 
   /** 匿名帳號升級為 Email 帳號（保留現有 uid 與牌組） */
   async function upgradeAccount() {
+    if (authLoading || $googleAuthBusy) return;
     if (!authEmail || !authPassword) { authError = '請輸入 Email 和密碼'; return; }
     authLoading = true; authError = null;
     try {
@@ -1665,6 +1685,7 @@
 
   /** 用 Email 登入（切換帳號，從雲端載入該帳號的牌組） */
   async function loginWithEmail() {
+    if (authLoading || $googleAuthBusy) return;
     if (!authEmail || !authPassword) { authError = '請輸入 Email 和密碼'; return; }
     authLoading = true; authError = null;
     try {
@@ -1678,6 +1699,7 @@
 
   /** 登出（回到匿名狀態） */
   async function handleSignOut() {
+    if ($googleAuthBusy) return;
     if (!confirm('確定登出？登出後將以匿名模式繼續使用。')) return;
     await signOut(auth);
     // onAuthStateChanged 會觸發並以匿名重新登入
@@ -1685,6 +1707,7 @@
 
   // v3.92 忘記密碼：寄送 Firebase 重設信
   async function sendResetEmail() {
+    if (authLoading || $googleAuthBusy) return;
     if (!authEmail) { authError = '請輸入 Email'; return; }
     authLoading = true; authError = null; resetEmailSent = false;
     try {
@@ -1708,11 +1731,12 @@
 
   // v3.92 送出更改密碼：reauthenticate 舊密碼 → updatePassword 新密碼
   async function submitChangePassword() {
+    if (cpLoading || authLoading || $googleAuthBusy) return;
     if (!cpOldPassword || !cpNewPassword) { cpError = '請輸入舊密碼與新密碼'; return; }
     if (cpNewPassword.length < 6) { cpError = '新密碼至少需要 6 個字元'; return; }
     if (cpNewPassword !== cpNewPasswordConfirm) { cpError = '兩次輸入的新密碼不一致'; return; }
     const user = auth.currentUser;
-    if (!user || !user.email) { cpError = '未登入或非 Email 帳號'; return; }
+    if (!user || !user.email || !authUiState(user).password) { cpError = '請使用具密碼登入方式的帳號'; return; }
     if (cpNewPassword === cpOldPassword) { cpError = '新密碼不能與舊密碼相同'; return; }
     cpLoading = true; cpError = null;
     try {
@@ -1832,8 +1856,8 @@
     {/snippet}
     {#snippet account()}
       {#if firebaseUser}
-        <AccountBar email={firebaseUser.email} anonymous={isAnonymous} {syncStatus} {syncError} unsaved={dirtyDeckIds.size}
-          onCreateAccount={openAuthModal} onChangePassword={openChangePasswordModal} onSignOut={handleSignOut} />
+        <AccountBar email={accountAuthState.email} anonymous={isAnonymous} {syncStatus} {syncError} unsaved={dirtyDeckIds.size} busy={authInitializing || authLoading || cpLoading || $googleAuthBusy} googleUser={firebaseUser} onGoogleComplete={(user) => { firebaseUser = user; }}
+          onCreateAccount={openAuthModal} onChangePassword={accountAuthState.password ? openChangePasswordModal : undefined} onSignOut={handleSignOut} />
       {:else}
         <AccountBar {syncStatus} {syncError} unsaved={dirtyDeckIds.size} />
       {/if}
@@ -2405,6 +2429,7 @@
       <button class="pv-close" onclick={() => { showAuthModal = false; }} aria-label="關閉">×</button>
 
       <h3 class="modal-title">帳號管理</h3>
+      <GoogleAuthButton user={firebaseUser} disabled={authInitializing || authLoading || cpLoading} oncomplete={(user) => { firebaseUser = user; authPassword = ''; showAuthModal = false; }} />
 
       <!-- Tab bar -->
       <div class="auth-tabs">
@@ -2426,7 +2451,7 @@
           <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && upgradeAccount()} />
           <input type="password" placeholder="密碼（至少 6 碼）" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && upgradeAccount()} />
           {#if authError}<p class="auth-error">{authError}</p>{/if}
-          <button class="small primary" onclick={upgradeAccount} disabled={authLoading}>
+          <button class="small primary" onclick={upgradeAccount} disabled={authLoading || $googleAuthBusy}>
             {authLoading ? '處理中…' : isAnonymous ? '建立並綁定帳號' : '建立帳號'}
           </button>
         </div>
@@ -2438,7 +2463,7 @@
             <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
             <input type="password" placeholder="密碼" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
             {#if authError}<p class="auth-error">{authError}</p>{/if}
-            <button class="small primary" onclick={loginWithEmail} disabled={authLoading}>
+            <button class="small primary" onclick={loginWithEmail} disabled={authLoading || $googleAuthBusy}>
               {authLoading ? '登入中…' : '登入'}
             </button>
             <button class="auth-link" onclick={() => { forgotMode = true; authError = null; resetEmailSent = false; }}>
@@ -2451,7 +2476,7 @@
             <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && sendResetEmail()} />
             {#if authError}<p class="auth-error">{authError}</p>{/if}
             {#if resetEmailSent}<p class="auth-success">重設信已寄出！請查收信箱（含垃圾郵件夾），點擊信中連結重設密碼。</p>{/if}
-            <button class="small primary" onclick={sendResetEmail} disabled={authLoading}>
+            <button class="small primary" onclick={sendResetEmail} disabled={authLoading || $googleAuthBusy}>
               {authLoading ? '寄送中…' : '寄送重設信'}
             </button>
             <button class="auth-link" onclick={() => { forgotMode = false; authError = null; resetEmailSent = false; }}>

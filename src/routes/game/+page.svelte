@@ -171,6 +171,8 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { JAMMING_TOWER_STADIUMS } from '$lib/game/effects/cards/stadiums';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
+  import GoogleAuthButton from '$lib/auth/GoogleAuthButton.svelte';
+  import { authUiState, createAuthGeneration, googleAuthBusy, googleAuthRevision } from '$lib/auth/google-auth';
   import { auth } from '$lib/firebase';
   import {
     signInAnonymously,
@@ -732,7 +734,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   const tHasCommunityEvent = $derived(tEvents.some((e: any) => e.createdByPlayer));
   let tMe = $state<any>({ registered: false });
   // 多賽事：在任一開放賽事報名過即可發言/視為已參賽
-  const tCanChat = $derived(!!firebaseUser?.email || tIsAdmin); // v5.920 後端 v0.68 已放寬:任何已登入者皆可聊天(不限報名)
+  const tCanChat = $derived(!!accountAuthState.email || tIsAdmin); // v5.920 後端 v0.68 已放寬:任何已登入者皆可聊天(不限報名)
   // v5.620：賽事分組——進行中/即將開始(checkin/running/bracket_ready/seeding)排上面、報名中/籌備中(registration/draft)排下面
   // v5.622：賽事卡依「開賽時間(registrationCloseAt)」由近到遠排序——越接近開賽排越上面。
   const _evStart = (e: any) => (e.registrationCloseAt ?? e.registrationOpenAt ?? Infinity);
@@ -958,7 +960,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     && (tAlertMatch.enterOpenAt ?? Infinity) <= tAlertNow
   );
   $effect(() => {
-    if (isTournament && firebaseUser && !firebaseUser.isAnonymous && tStep !== 'playing') {
+    if (isTournament && firebaseUser && !isAnonymous && tStep !== 'playing') {
       if (!tEventPollTimer) {
         // 首次進大廳：5 支全抓一次（即時顯示）
         tNow = Date.now() + tClockOffset; tournLoadEvent().then(() => tBracketLoad()); tChatLoad(); tChampionsLoad();
@@ -1125,7 +1127,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   });
   // v5.585 跨房提醒輪詢：非錦標賽頁 + 已登入(非匿名) → 每 60 秒(v6.217④ 原 30 秒)查一次我的錦標賽對戰，1 秒 tick 算倒數
   $effect(() => {
-    if (!isTournament && firebaseUser && !firebaseUser.isAnonymous) {
+    if (!isTournament && firebaseUser && !isAnonymous) {
       if (!tAlertPollTimer) {
         const poll = async () => {
           try {
@@ -1485,6 +1487,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let _unsubAuth: (() => void) | null = null;
   // v4.913 port 牌組編輯器的登入 dashboard 到模式選擇畫面
   let firebaseUser = $state<User | null>(null);
+  let authInitializing = $state(true);
+  const authGeneration = createAuthGeneration(() => auth.currentUser?.uid ?? null);
   // ⭐v6.509（玩家回報 2026-10-07：手機按下錦標賽後「畫面停在登入畫面，要等一段時間才會進入錦標賽」，幾乎每次）：
   //   Firebase 開頁時要先從手機儲存區讀回帳號、再連 Google 驗證一次（accounts:lookup，實測 0.4 秒起跳，手機更久），
   //   這段期間 firebaseUser 還是 null ⇒ isAnonymous 為 true ⇒ 錦標賽顯示「請登入」表單，看起來像沒登入。
@@ -1509,7 +1513,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let cpError = $state<string | null>(null);
   let cpSuccess = $state(false);
   let cpLoading = $state(false);
-  const isAnonymous = $derived(firebaseUser?.isAnonymous ?? true);
+  const accountAuthState = $derived(authUiState(firebaseUser, $googleAuthRevision));
+  const isAnonymous = $derived(accountAuthState.isAnonymous);
   const friendsEntryOn = $derived(friendsEntryVisible(firebaseUser?.uid ?? null, isAnonymous));   // v6.283 非匿名＋沒有負向快取才顯示
   // ⭐⭐ v6.296 線上大廳的**真分頁**（站長交辦：把「線上連線對戰」與「好友名單」做成兩個分頁；作法比照錦標賽的 tTab）。
   //   ⚠⚠ 匿名玩家不顯示分頁列（站長已裁定）⇒ lobbyTab 用 $derived **強制鎖回 'online'**：
@@ -5060,7 +5065,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⭐v6.509 保險：8 秒內都沒收到登入狀態（例：網路擋掉 Google 登入服務）⇒ 照舊顯示登入表單，不讓玩家卡在「確認中」
     setTimeout(() => { if (!tAuthResolved) tAuthResolved = true; }, 8000);
     _unsubAuth = onAuthStateChanged(auth, async u => {   // ⭐v6.307 存退訂函式（onDestroy 解除）
+      const authCurrent = authGeneration.begin(u?.uid ?? null);
       firebaseUser = u;
+      if (u) authInitializing = false;
       tAuthResolved = true;   // ⭐v6.509 第一次收到登入狀態（含「沒登入」）⇒ 錦標賽才決定要不要顯示登入表單
       // Oracle build 下 myUid 必須走 Oracle JWT uid（房間 API 簽 JWT 用），
       // 不能被 Firebase uid 蓋掉 → 加 gate 阻擋 callback 覆寫 myUid。
@@ -5084,10 +5091,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
         const isAdminActive = typeof window !== 'undefined'
           && !!localStorage.getItem('ptcg_admin_active');
         if (isAdminSpyURL || isAdminActive) {
+          authInitializing = false;
           // 不 sign-in，等 SDK 從 IndexedDB load admin user 後 callback 會再 fire
           return;
         }
+        authInitializing = true;
         try { await signInAnonymously(auth); } catch { /* retry on next visit */ }
+        finally { authInitializing = false; }
         return;
       }
       // v4.925：跟著 user 變化同步雲端牌組（修「換帳號後仍顯示舊牌組」bug）。
@@ -5098,10 +5108,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
           const local = loadDecks();
           // v6.273 Firestore 讀取減量：1 讀 meta 判斷雲端牌組沒變 → 直接用 localStorage
           //   （與 /decks 共用同一套 rev 記錄）；任何不確定一律回 false 走原本的全拉＋merge。
-          if (await cloudDecksUnchanged(u.uid, local.length)) {
+          const unchanged = await cloudDecksUnchanged(u.uid, local.length);
+          if (!authCurrent()) return;
+          if (unchanged) {
             decks = sortDecks(local);
           } else {
             const cloud = await loadDecksFromCloud(u.uid);
+            if (!authCurrent()) return;
             if (cloud.length > 0) {
               const merged = new Map<string, Deck>();
               for (const d of [...local, ...cloud]) {
@@ -5117,6 +5130,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             }
           }
         } catch {
+          if (!authCurrent()) return;
           // cloud 不可用 → fallback localStorage（不洗成空）
           decks = loadDecks();
         }
@@ -5124,6 +5138,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         // 匿名身份：純 localStorage
         decks = loadDecks();
       }
+      if (!authCurrent()) return;
       // v4.935 Firebase 額度分流 trigger — URL `?mode=online`
       //   來源：GitHub Pages 站點擊「線上連線對戰」自動 redirect 到 Oracle 站時帶此參數。
       //   行為：auto-set mode='online' + 清掉 query string（避免分享 URL 時帶 ?mode=online）。
@@ -5254,6 +5269,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     unsubRoom?.();
     unsubOpenRooms?.();
     _unsubOracleUid?.(); _unsubOracleUid = null;   // ⭐v6.197 不解除就會每次重進 /game 疊一個
+    authGeneration.invalidate();
     _unsubAuth?.(); _unsubAuth = null;             // ⭐⭐v6.307 同型缺口：auth 監聽器也會疊（見宣告處註解）
     // v4.40：補 chat messages listener leak（玩家硬改網址不走 leaveOnlineGame 時殘留）
     unsubMessages?.(); unsubMessages = null;
@@ -5271,6 +5287,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   /** 匿名帳號升級為 Email 帳號（保留現有 uid） */
   async function upgradeAccount() {
+    if (authLoading || $googleAuthBusy) return;
     if (!authEmail || !authPassword) { authError = '請輸入 Email 和密碼'; return; }
     authLoading = true; authError = null;
     try {
@@ -5284,6 +5301,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   /** 用 Email 登入（切換帳號） */
   async function loginWithEmail() {
+    if (authLoading || $googleAuthBusy) return;
     if (!authEmail || !authPassword) { authError = '請輸入 Email 和密碼'; return; }
     authLoading = true; authError = null;
     try {
@@ -5296,12 +5314,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   /** 登出（回到匿名狀態） */
   async function handleSignOut() {
+    if ($googleAuthBusy) return;
     if (!confirm('確定登出？登出後將以匿名模式繼續使用。')) return;
     await signOut(auth);
   }
 
   // 忘記密碼：寄送 Firebase 重設信
   async function sendResetEmail() {
+    if (authLoading || $googleAuthBusy) return;
     if (!authEmail) { authError = '請輸入 Email'; return; }
     authLoading = true; authError = null; resetEmailSent = false;
     try {
@@ -5325,11 +5345,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   // 送出更改密碼
   async function submitChangePassword() {
+    if (cpLoading || authLoading || $googleAuthBusy) return;
     if (!cpOldPassword || !cpNewPassword) { cpError = '請輸入舊密碼與新密碼'; return; }
     if (cpNewPassword.length < 6) { cpError = '新密碼至少需要 6 個字元'; return; }
     if (cpNewPassword !== cpNewPasswordConfirm) { cpError = '兩次輸入的新密碼不一致'; return; }
     const user = auth.currentUser;
-    if (!user || !user.email) { cpError = '未登入或非 Email 帳號'; return; }
+    if (!user || !user.email || !authUiState(user).password) { cpError = '請使用具密碼登入方式的帳號'; return; }
     if (cpNewPassword === cpOldPassword) { cpError = '新密碼不能與舊密碼相同'; return; }
     cpLoading = true; cpError = null;
     try {
@@ -5416,7 +5437,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     myEmailOldRoom = { roomId: code, roomName: hit?.roomName ? String(hit.roomName) : code, status: st, seatIdx: null, via: 'email', lastSeenAt: null };
   }
   $effect(() => {
-    const loggedIn = !!(firebaseUser && !firebaseUser.isAnonymous && firebaseUser.email);
+    const loggedIn = !!(firebaseUser && !isAnonymous && accountAuthState.email);
     if (!isTournament && !isTReplay && mode === 'online' && onlineStep === 'join' && loggedIn) {   // ⭐v6.560 同上
       void refreshMyEmailOldRoom();
       if (_myRoomTimer) clearInterval(_myRoomTimer);
@@ -5774,6 +5795,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     } finally { clearTimeout(_to); }
   }
   async function tournLogin() {
+    if (tBusy || $googleAuthBusy) return;
     if (!authEmail || !authPassword) { authError = '請輸入 Email 和密碼'; return; }
     authError = null; tBusy = true;
     try { await signInWithEmailAndPassword(auth, authEmail, authPassword); authPassword = ''; }
@@ -5781,6 +5803,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     finally { tBusy = false; }
   }
   async function tournRegister() {
+    if (tBusy || $googleAuthBusy) return;
     if (!authEmail || !authPassword) { authError = '請輸入 Email 和密碼（至少 6 碼）'; return; }
     authError = null; tBusy = true;
     try { await createUserWithEmailAndPassword(auth, authEmail, authPassword); authPassword = ''; }
@@ -5788,6 +5811,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     finally { tBusy = false; }
   }
   async function tournLogout() {
+    if ($googleAuthBusy) return;
     // 登出：清錦標賽狀態 + signOut → onAuthStateChanged 退回匿名 → isAnonymous 觸發登入閘門
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
@@ -6578,7 +6602,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   $effect(() => {
     // 回到「開始對戰」畫面（mode===null、不在錦標賽頁）就刷新清單；登入狀態改變時也重抓錦標賽那一區
     if (mode !== null || isTournament) return;
-    const _u = firebaseUser?.uid ?? '';
+    const _u = (firebaseUser?.uid ?? '') + '|' + isAnonymous;
     untrack(() => { replayLobbyOpen = true; void refreshReplayList(); _myTournAt = 0; void loadMyTournMatches(); });
     void _u;
   });
@@ -8915,7 +8939,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let _pushSubDone = $state(false);
   $effect(() => {
     const u = firebaseUser;
-    if (!isTournament || _pushSubDone || !u || u.isAnonymous) return;
+    if (!isTournament || _pushSubDone || !u || isAnonymous) return;
     if (!getNotifyEnabled() || getNotifyPermission() !== 'granted') return;
     void (async () => { const r = await subscribePush(tApi); if (r.ok) { _pushSubDone = true; notifyCommunity = getNotifyCommunity(); }   /* ⭐v6.566 登記後勾選框跟伺服器同步 */ })();
   });
@@ -11532,7 +11556,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     <PageHeader title="🏆 錦標賽對戰" sub="賽事報名與對戰、排行榜、個人戰績"
       account={tStep !== 'waiting' && !isAnonymous && firebaseUser ? tournAccount : undefined} />
     {#snippet tournAccount()}
-      <AccountBar email={firebaseUser?.email ?? null} busy={tBusy} onChangePassword={openChangePasswordModal} onSignOut={tournLogout} />
+      <AccountBar email={accountAuthState.email} busy={authInitializing || tBusy || cpLoading || $googleAuthBusy} googleUser={firebaseUser} onGoogleComplete={(user) => { firebaseUser = user; }} onChangePassword={accountAuthState.password ? openChangePasswordModal : undefined} onSignOut={tournLogout} />
     {/snippet}
     {#if tStep === 'waiting'}
       <!-- v5.597：waiting 畫面依情境分流。原本寫死「測試房」文案＋重置鈕，進真實對戰(tActiveRoom='mr_…')
@@ -11552,7 +11576,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <!-- ⭐v6.509 還在讀回登入狀態：不先顯示登入表單（玩家回報「停在登入畫面」） -->
       <p class="tourn-wait">⏳ 正在確認登入狀態…</p>
     {:else if isAnonymous}
-      <p class="tourn-gate">🔒 錦標賽需要 email 帳號（不開放匿名）。請登入，或註冊新帳號：</p>
+      <p class="tourn-gate">🔒 請使用 Google 或 Email 帳號登入後參加錦標賽。</p>
+      <GoogleAuthButton user={firebaseUser} wide disabled={authInitializing || tBusy || cpLoading} oncomplete={(user) => { firebaseUser = user; authPassword = ''; }} />
       <label class="tourn-field">Email
         <input class="name-input" type="email" aria-label="Email" bind:value={authEmail} placeholder="you@example.com" />
       </label>
@@ -11561,8 +11586,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       </label>
       {#if authError}<p class="warn">{authError}</p>{/if}
       <div class="tourn-auth-btns">
-        <button class="btn-primary" onclick={tournLogin} disabled={tBusy}>登入</button>
-        <button class="btn-secondary" onclick={tournRegister} disabled={tBusy}>註冊新帳號</button>
+        <button class="btn-primary" onclick={tournLogin} disabled={tBusy || $googleAuthBusy}>登入</button>
+        <button class="btn-secondary" onclick={tournRegister} disabled={tBusy || $googleAuthBusy}>註冊新帳號</button>
       </div>
     {:else}
       <div class="tourn-tabs" role="tablist">
@@ -11612,7 +11637,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <div class="tourn-event"><p class="muted small">目前沒有開放中的賽事。</p></div>
       {/if}
       <!-- v5.629 玩家發起社群賽 -->
-      {#if firebaseUser?.email && !tHasCommunityEvent}
+      {#if accountAuthState.email && !tHasCommunityEvent}
         {#if !tProposeOpen}
           <button class="btn-primary tourn-join" style="margin:4px 0;" onclick={() => { tProposeOpen = true; tError = ''; }} disabled={tBusy}>📣 我要發起社群賽</button>
         {:else}
@@ -12077,7 +12102,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {:else}
             <div class="tourn-pf-head">
               <div class="tourn-pf-name">{tProfile.displayName ?? '（未命名）'}</div>
-              <div class="tourn-pf-email">{tProfile.email ?? firebaseUser?.email}</div>
+              <div class="tourn-pf-email">{tProfile.email ?? accountAuthState.email}</div>
             </div>
             <div class="tourn-pf-tiles">
               <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.championsOfficial ?? 0}</div><div class="tourn-pf-lbl">網站賽奪冠</div></div>
@@ -12248,8 +12273,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   <!-- ⭐v6.507 大廳帳號列（模式選擇／本機／線上三個畫面共用一份） -->
   {#snippet lobbyAccount()}
-    <AccountBar email={firebaseUser?.email ?? null} anonymous={isAnonymous} {syncStatus} {syncError}
-      onCreateAccount={openAuthModal} onChangePassword={openChangePasswordModal} onSignOut={handleSignOut} />
+    <AccountBar email={accountAuthState.email} anonymous={isAnonymous} {syncStatus} {syncError} busy={authInitializing || authLoading || cpLoading || $googleAuthBusy} googleUser={firebaseUser} onGoogleComplete={(user) => { firebaseUser = user; }}
+      onCreateAccount={openAuthModal} onChangePassword={accountAuthState.password ? openChangePasswordModal : undefined} onSignOut={handleSignOut} />
   {/snippet}
   {#if mode === null}
   <!-- ─── 模式選擇 ─── -->
@@ -12526,7 +12551,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   <button class="btn-link cri-collapse" onclick={() => { cmOpen = false; cmError = ''; }} title="收合">▴ 收合</button>
                 </div>
                 {#if isAnonymous}
-                  <p class="warn">自動配對限定登入的玩家使用，請先登入。</p>
+                  <p class="warn">請先使用 Google 或 Email 登入，再開始自動配對。</p>
+                  <GoogleAuthButton user={firebaseUser} disabled={authInitializing || authLoading || cpLoading} oncomplete={(user) => { firebaseUser = user; }} />
+                  <button class="btn-link" onclick={openAuthModal} disabled={$googleAuthBusy}>使用 Email 登入</button>
                 {:else}
                   <label>使用牌組
                     <select class="name-input" value={cmDeckId} onchange={(e) => cmPickDeck((e.currentTarget as HTMLSelectElement).value)}>
@@ -16771,6 +16798,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <button class="pv-close" onclick={() => { showAuthModal = false; }} aria-label="關閉">×</button>
 
       <h3 class="modal-title modal-drag-handle">帳號管理</h3>
+      <GoogleAuthButton user={firebaseUser} disabled={authInitializing || authLoading || cpLoading} oncomplete={(user) => { firebaseUser = user; authPassword = ''; showAuthModal = false; }} />
 
       <div class="auth-tabs">
         <button class:active={authTab === 'upgrade'} onclick={() => { authTab = 'upgrade'; authError = null; }}>
@@ -16791,7 +16819,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && upgradeAccount()} />
           <input type="password" placeholder="密碼（至少 6 碼）" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && upgradeAccount()} />
           {#if authError}<p class="auth-error">{authError}</p>{/if}
-          <button class="small primary" onclick={upgradeAccount} disabled={authLoading}>
+          <button class="small primary" onclick={upgradeAccount} disabled={authLoading || $googleAuthBusy}>
             {authLoading ? '處理中…' : isAnonymous ? '建立並綁定帳號' : '建立帳號'}
           </button>
         </div>
@@ -16802,7 +16830,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
             <input type="password" placeholder="密碼" bind:value={authPassword} onkeydown={(e) => e.key === 'Enter' && loginWithEmail()} />
             {#if authError}<p class="auth-error">{authError}</p>{/if}
-            <button class="small primary" onclick={loginWithEmail} disabled={authLoading}>
+            <button class="small primary" onclick={loginWithEmail} disabled={authLoading || $googleAuthBusy}>
               {authLoading ? '登入中…' : '登入'}
             </button>
             <button class="auth-link" onclick={() => { forgotMode = true; authError = null; resetEmailSent = false; }}>
@@ -16815,7 +16843,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <input type="email" placeholder="Email" bind:value={authEmail} onkeydown={(e) => e.key === 'Enter' && sendResetEmail()} />
             {#if authError}<p class="auth-error">{authError}</p>{/if}
             {#if resetEmailSent}<p class="auth-success">重設信已寄出！請查收信箱（含垃圾郵件夾），點擊信中連結重設密碼。</p>{/if}
-            <button class="small primary" onclick={sendResetEmail} disabled={authLoading}>
+            <button class="small primary" onclick={sendResetEmail} disabled={authLoading || $googleAuthBusy}>
               {authLoading ? '寄送中…' : '寄送重設信'}
             </button>
             <button class="auth-link" onclick={() => { forgotMode = false; authError = null; resetEmailSent = false; }}>

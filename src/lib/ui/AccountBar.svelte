@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { User } from 'firebase/auth';
+  import GoogleAuthButton from '$lib/auth/GoogleAuthButton.svelte';
   /**
    * ⭐v6.507 全站頁首統一：帳號列（PageHeader 的第 3 層）。
    *   左：雲端同步狀態＋帳號（email 太長時以「…」截斷）；右：更改密碼、登出（匿名時是「建立帳號」）。
@@ -17,6 +19,8 @@
     onChangePassword = undefined,
     onSignOut = undefined,
     busy = false,
+    googleUser = null,
+    onGoogleComplete = undefined,
   }: {
     email?: string | null;
     anonymous?: boolean;
@@ -30,6 +34,8 @@
     onSignOut?: () => void;
     /** 處理中（例：錦標賽送出請求時）⇒ 按鈕暫時不能按 */
     busy?: boolean;
+    googleUser?: User | null;
+    onGoogleComplete?: (user: User) => void;
   } = $props();
 
   // 同步狀態：種類（決定顏色）、文字、滑鼠停留說明
@@ -64,6 +70,9 @@
         <button class="acct-btn primary auth-btn anon" onclick={onCreateAccount} disabled={busy} title="建立帳號以跨裝置保存牌組">建立帳號</button>
       {/if}
     {:else}
+      {#if googleUser && onGoogleComplete}
+        <GoogleAuthButton user={googleUser} linkOnly disabled={busy} oncomplete={onGoogleComplete} />
+      {/if}
       {#if onChangePassword}
         <button class="acct-btn" onclick={onChangePassword} disabled={busy} title="更改密碼">🔑 更改密碼</button>
       {/if}
@@ -99,6 +108,9 @@
   }
   .acct-btns {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 100%;
     gap: 8px;
     flex: 0 0 auto;
     margin-left: auto;

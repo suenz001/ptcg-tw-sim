@@ -670,7 +670,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '42512b4ea0597cc9f78f8b90997fa45b3a7aa5b5';   // v6.649（上一版）
+const PREV_SHA = 'a84cdd89679c07253d8dd7d841764d53f5aac89e';   // v6.650（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -759,18 +759,33 @@ const PREV_SHA = '42512b4ea0597cc9f78f8b90997fa45b3a7aa5b5';   // v6.649（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.650 前移：PREV_SHA 從 42512b4e（v6.649）起算。
+  // ⚠⚠ v6.651 前移：PREV_SHA 從 a84cdd89（v6.650）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.650：v6.650 回放時間軸記號（回合＋昏厥）與手機詳情面板
-  'src/lib/game/replay-index.ts',
-  'src/lib/game/replay-keys.ts',   // v6.650 審查 P2-2：時間軸記號上的空白鍵交還
+  // ⭐v6.651：Google 登入、保 UID 綁定、原頁完成及登入世代防護；不更改遊戲引擎、伺服器 API 或輪詢頻率。
+  'src/lib/auth/GoogleAuthButton.svelte',
+  'src/lib/auth/google-auth.ts',
+  'src/lib/auth/google-flow.ts',
+  'src/lib/ui/AccountBar.svelte',
   'src/lib/version.ts',
+  'src/routes/decks/+page.svelte',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.650）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.650 前移：PREV_SHA 從 42512b4e（v6.649）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.650：v6.650 回放時間軸記號（回合＋昏厥）與手機詳情面板
+//   'src/lib/game/replay-index.ts',
+//   'src/lib/game/replay-keys.ts',   // v6.650 審查 P2-2：時間軸記號上的空白鍵交還
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.649）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.649 前移：PREV_SHA 從 b4595082（v6.648）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -892,17 +907,6 @@ const PREV_ALLOWED = [
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
 // ⭐v6.638：元素爆破丟能量候選及舊選擇續接校正；不改其他卡牌、卡池、API或版面。
 //   'src/lib/game/effects.ts',
-//   'src/lib/version.ts',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.637）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.637 前移：PREV_SHA 從 8b206259（v6.636）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.637：官方進階規則F：檢查最後同時確認昏厥；固定狀態區不可插入其他效果，僅結果有差時由下一回合玩家選順序。
-//   'src/lib/game/engine.ts',
-//   'src/lib/game/types.ts',
 //   'src/lib/version.ts',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',
