@@ -681,7 +681,7 @@ export function createHarness(api) {
   });
   await TA('R5d 未核准集合不讀內容',async()=>{
 let reads=0;
-    const ref={get:async()=>({exists:false}),listCollections:async()=>[{id:'private-other',limit(){reads++;throw new Error('must not read');}}]};
+    const ref={get:async()=>({exists:false}),listCollections:async()=>[{id:'private-other',get:async()=>{reads++;return {size:0,docs:[]};},limit(){reads++;return this;}}]};
     const result=await scanCandidates({auth:{listUsers:async()=>({users:[authOld]})},db:{collection:()=>({doc:()=>ref})},opts:{days:180,limitUsers:0,maxReads:100,qps:20},now,pace:async()=>{}});
     ok(reads===0&&result.candidates.length===0);
   });
