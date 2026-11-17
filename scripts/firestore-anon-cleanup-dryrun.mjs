@@ -17,6 +17,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 
 export const DEFAULT_CONFIG = Object.freeze({
@@ -285,16 +286,28 @@ async function runCli() {
     return;
   }
 
-  let admin;
-  try {
-    admin = await import('firebase-admin');
-  } catch (e) {
-    console.error('缺少 firebase-admin 套件，請於伺服器／Admin 維護環境執行：', e?.message || e);
+  const candidateDirs = [
+    process.env.FIREBASE_ADMIN_PATH,
+    '/opt/ptcg/api/node_modules/firebase-admin',
+    join(process.cwd(), 'node_modules', 'firebase-admin'),
+  ].filter(Boolean);
+  const resolvedDir = candidateDirs.find((d) => existsSync(join(d, 'package.json')));
+  if (!resolvedDir) {
+    console.error('找不到 firebase-admin（本專案前端建置不附帶），請於 Oracle 維護機 /opt/ptcg/api 執行或設定 FIREBASE_ADMIN_PATH。');
     process.exitCode = 1;
     return;
   }
-
-  const app = admin.default?.apps?.length ? admin.default.app() : admin.default.initializeApp();
+  const req = createRequire(import.meta.url);
+  let admin;
+  try {
+    admin = req(resolvedDir);
+  } catch (e) {
+    console.error('載入 firebase-admin 失敗：', e?.message || e);
+    process.exitCode = 1;
+    return;
+  }
+  const adminMod = admin?.default ?? admin;
+  const app = adminMod.apps?.length ? adminMod.app() : adminMod.initializeApp();
   const auth = app.auth();
   const db = app.firestore();
 
