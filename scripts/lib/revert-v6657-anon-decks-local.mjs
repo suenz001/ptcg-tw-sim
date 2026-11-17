@@ -1,3 +1,4 @@
+import { revertV6658IfPresent } from './revert-v6658-sync-safety.mjs';
 // v6.657 合法 UI／同步／索引／changelog 變更的精確逆轉；保留所有舊版逐位元斷言。
 import assert from 'node:assert/strict';
 import { normEol } from './eol-agnostic.mjs';
@@ -238,7 +239,7 @@ export const V6657_PAIRS = {
 };
 
 export function revertV6657IfPresent(path, source) {
-  let s = normEol(String(source));
+  let s = revertV6658IfPresent(path, source);
   const pairs = V6657_PAIRS[path];
   if (!pairs || (!s.includes('v6657') && !s.includes('6.657') && !pairs.some(([from]) => s.includes(from)))) return s;
   for (const [from, to] of pairs) {

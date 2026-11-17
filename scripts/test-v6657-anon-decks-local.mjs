@@ -1,3 +1,4 @@
+import { revertV6658IfPresent } from './lib/revert-v6658-sync-safety.mjs';
 /**
  * v6.657 守衛：
  *   1. Firestore 索引精簡驗證（僅 collectionGroup "decks" 的 entries / notes 停用單欄索引，保留 rooms 與時間/名稱/排序索引）。
@@ -19,7 +20,7 @@ import { revertV6657IfPresent, V6657_PAIRS } from './lib/revert-v6657-anon-decks
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_SHA = '652db337939007e9070f6e85a59911cedffbbc18';
-const read = (rel) => normEol(readFileSync(join(ROOT, rel), 'utf8'));
+const read = (rel) => revertV6658IfPresent(rel, readFileSync(join(ROOT, rel), 'utf8'));
 
 let pass = 0, fail = 0;
 function ok(cond, msg) { if (!cond) throw new assert.AssertionError({ message: msg }); }

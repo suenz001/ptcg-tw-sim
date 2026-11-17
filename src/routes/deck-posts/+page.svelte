@@ -573,7 +573,8 @@
       const u = auth.currentUser;
       const memberUid = u && !u.isAnonymous ? u.uid : null;
       if (memberUid) {
-        isolateCrossAccountLocalStorage(memberUid, readLocalDecksRevUid());
+        const isolated = isolateCrossAccountLocalStorage(memberUid, readLocalDecksRevUid());
+        if (!isolated.save.ok) throw new Error(isolated.save.error);
       }
       upsertDeck(d);
       if (typeof localStorage !== 'undefined' && !loadDecks().some((x) => x.id === d.id)) {
@@ -587,7 +588,7 @@
       //   而它的「從雲端載入」是整包覆蓋 ⇒ 匯入後沒編輯過的牌組會被無聲洗掉。
       if (u && !u.isAnonymous) {
         void syncDeckToCloud(u.uid, d)
-          .then(() => { markMemberCloudPushSucceeded(u.uid, [d.id]); })
+          .then(() => { markMemberCloudPushSucceeded(u.uid, [d.id], [d]); })
           .catch(() => { /* 離線時靜默，已記於 pendingUpsertIds 待同步 */ });
       }
       // 合法性只是提示，不擋匯入 —— 標準輪替後舊投稿仍有保存與參考價值。

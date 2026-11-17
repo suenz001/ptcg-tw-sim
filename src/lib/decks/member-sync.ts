@@ -11,6 +11,38 @@ import { saveFavoritesChecked } from './favorites';
 
 export const DECKS_OWNER_LS_KEY = 'ptcg-tw-sim:decks-owner-v1';
 export const FAVS_OWNER_LS_KEY = 'ptcg-tw-sim:favs-owner-v1';
+// >>> v6658-sync-safety
+export const RECOVERY_LS_KEY = 'ptcg-tw-sim:decks-recovery-v1';
+export function readLocalRecovery(): { sourceUid: string | null; decks: Deck[]; favorites: string[]; memberOnly?: boolean }[] {
+  if (typeof localStorage === 'undefined') return [];
+  const raw = localStorage.getItem(RECOVERY_LS_KEY);
+  const data = raw ? JSON.parse(raw) : [];
+  if (!Array.isArray(data)) throw new Error('本機保留牌組紀錄損毀，請先匯出瀏覽器資料');
+  return data;
+}
+
+/** 先可靠保留副本再隔離；備份讀寫失敗時不得繼續清除。 */
+function preserveLocalRecovery(sourceUid: string | null, decks: Deck[], memberOnly: boolean): LocalSaveResult {
+  try {
+    const favorites = JSON.parse(localStorage.getItem('ptcg-tw-sim:favorites') || '[]');
+    if (decks.length === 0 && favorites.length === 0) return { ok: true };
+    const archive = readLocalRecovery();
+    const item = { sourceUid, decks, favorites, memberOnly };
+    if (!archive.some((x) => JSON.stringify(x) === JSON.stringify(item))) archive.push(item);
+    localStorage.setItem(RECOVERY_LS_KEY, JSON.stringify(archive));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: `無法保留舊牌組，已中止隔離：${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
+/** 只有實際匿名 Auth UID 與舊快取 UID 一致，才能證明舊版資料可遷移。 */
+export function initializeLegacyAnonymousOwnership(anonymousUid: string, legacyUid: string | null): LocalSaveResult {
+  if (hasDeckOwnershipRecord() || !anonymousUid || legacyUid !== anonymousUid) return { ok: true };
+  const decks = loadDecks();
+  return markAnonLocalEdit(decks.map((d) => d.id));
+}
+// <<< v6658-sync-safety
 
 export interface LocalDeckOwnership {
   kind: 'anon' | 'member';
@@ -178,7 +210,7 @@ export function markMemberCloudDeleteResult(memberUid: string, deckId: string, s
   if (succeeded) {
     known.delete(deckId);
     pendDel.delete(deckId);
-  } else if (known.has(deckId)) {
+  } else {
     pendDel.add(deckId);
   }
   return writeDeckOwnership({
@@ -426,6 +458,8 @@ export function isolateCrossAccountLocalStorage(
   let rFavOwn: LocalSaveResult = { ok: true };
 
   if (shouldIsolateDecks) {
+    const backup = preserveLocalRecovery(cur.memberUid || legacyCloudRevUid, allLocal, cur.kind === 'member');
+    if (!backup.ok) return { isolatedDecks: [], clearedFavorites: false, ownership: cur, save: backup };
     const anonSet = new Set(cur.anonIds);
     nextDecks = allLocal.filter((d) => anonSet.has(d.id));
     const keptAnonIds = nextDecks.map((d) => d.id);
@@ -439,12 +473,13 @@ export function isolateCrossAccountLocalStorage(
       pendingFavorites: curFavOwner === 'anon' ? !!cur.pendingFavorites : false,
     };
     rDecks = saveDecksChecked(nextDecks);
+    if (!rDecks.ok) return { isolatedDecks: [], clearedFavorites: false, ownership: cur, save: rDecks };
     rOwn = writeDeckOwnership(nextOwnership);
   }
 
   if (shouldClearFavs) {
     rFav = saveFavoritesChecked(new Set());
-    rFavOwn = writeFavOwner('anon');
+    if (rFav.ok) rFavOwn = writeFavOwner('anon');
   }
 
   return {
@@ -464,13 +499,17 @@ export function filterDecksForAnonView(allLocal: Deck[]): Deck[] {
 }
 
 /** 會員單筆雲端寫入成功後（如 deck-posts 匯入後立即 syncDeckToCloud），收錄 knownCloudIds 並清掉該筆待傳標記。 */
-export function markMemberCloudPushSucceeded(memberUid: string, deckIds: string[]): LocalSaveResult {
+export function markMemberCloudPushSucceeded(memberUid: string, deckIds: string[], snapshots?: Deck[]): LocalSaveResult {
   if (!memberUid || deckIds.length === 0) return { ok: true };
   const cur = readDeckOwnership();
   // 若期間已登出回匿名模式或已切換帳號，絕不回頭寫回已登出／他帳號之會員歸屬
   if (cur.kind !== 'member' || cur.memberUid !== memberUid) return { ok: true };
   const known = new Set(cur.kind === 'member' ? cur.knownCloudIds : []);
-  const idSet = new Set(deckIds);
+  const local = new Map(loadDecks().map((d) => [d.id, d]));
+  const idSet = new Set(deckIds.filter((id) => {
+    const sent = snapshots?.find((d) => d.id === id), now = local.get(id);
+    return !!sent && !!now && deckPayloadEqual(sent, now);
+  }));
   for (const id of deckIds) known.add(id);
   return writeDeckOwnership({
     kind: 'member',
@@ -489,11 +528,16 @@ export function planFavoritesMigration(params: {
   cloudFavorites: Set<string>;
   favOwner: string | null;
   isCrossAccount: boolean;
+  replaceOwned?: boolean;
 }): { merged: Set<string>; needsCloudUpload: boolean } {
   const { uid, localFavorites, cloudFavorites, favOwner, isCrossAccount } = params;
   const foreignOwner = (!!favOwner && favOwner !== 'anon' && favOwner !== uid) || (isCrossAccount && favOwner !== 'anon');
   if (foreignOwner) {
     return { merged: new Set(cloudFavorites), needsCloudUpload: false };
+  }
+  if (params.replaceOwned && favOwner === uid) {
+    return { merged: new Set(localFavorites), needsCloudUpload: localFavorites.size !== cloudFavorites.size
+      || [...localFavorites].some((id) => !cloudFavorites.has(id)) };
   }
   const merged = new Set<string>(cloudFavorites);
   let needsCloudUpload = false;

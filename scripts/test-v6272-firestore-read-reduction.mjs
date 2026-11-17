@@ -670,7 +670,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '652db337939007e9070f6e85a59911cedffbbc18';   // v6.656（上一版）
+const PREV_SHA = '919f6d0fd1a6a6989639253e3bbf95fe5973b1ca';   // v6.657（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -759,15 +759,11 @@ const PREV_SHA = '652db337939007e9070f6e85a59911cedffbbc18';   // v6.656（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.657 前移：PREV_SHA 從 652db337（v6.656）起算。
+  // ⚠⚠ v6.658 前移：PREV_SHA 從 919f6d0f（v6.657）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.657：純匿名訪客組牌／常用卡牌改為純瀏覽器本機儲存（0 Firestore 讀寫）、會員安全差異同步與跨帳號隔離，加測與版本輪替。
-  'src/lib/decks/DecksSyncBanner.svelte',
-  'src/lib/decks/cloud.ts',
-  'src/lib/decks/favorites.ts',
+  // ⭐v6.658：牌組資料安全與同步競態修復；不改索引、引擎與卡牌判定。
   'src/lib/decks/member-sync.ts',
-  'src/lib/decks/storage.ts',
-  'src/lib/ui/AccountBar.svelte',
+  'src/lib/decks/sync-commit.ts',
   'src/lib/version.ts',
   'src/routes/deck-posts/+page.svelte',
   'src/routes/decks/+page.svelte',
@@ -777,6 +773,24 @@ const PREV_ALLOWED = [
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.657）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.657 前移：PREV_SHA 從 652db337（v6.656）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.657：純匿名訪客組牌／常用卡牌改為純瀏覽器本機儲存（0 Firestore 讀寫）、會員安全差異同步與跨帳號隔離，加測與版本輪替。
+//   'src/lib/decks/DecksSyncBanner.svelte',
+//   'src/lib/decks/cloud.ts',
+//   'src/lib/decks/favorites.ts',
+//   'src/lib/decks/member-sync.ts',
+//   'src/lib/decks/storage.ts',
+//   'src/lib/ui/AccountBar.svelte',
+//   'src/lib/version.ts',
+//   'src/routes/deck-posts/+page.svelte',
+//   'src/routes/decks/+page.svelte',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.656）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 //   'src/lib/cards/CostFilters.svelte',
 //   'src/lib/cards/TraitFilters.svelte',
@@ -956,13 +970,6 @@ const PREV_ALLOWED = [
 // ⚠⚠ v6.642 前移：PREV_SHA 從 725fbc37（v6.641）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
 // ⭐v6.642：v6.642 /bracket 帶內容簽章 bv（擴容審查 P1-1，搭配 server v1.82）
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'static/site-version.txt',
-// ── 上一版（v6.641）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.641 前移：PREV_SHA 從 9c67d521（v6.640）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.641：v6.641 錦標賽 tForceResync 帶目前版本（擴容審查 P2-1）
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
 //   'static/site-version.txt',

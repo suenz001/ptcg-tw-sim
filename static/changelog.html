@@ -1,4 +1,8 @@
 <details open>
+        <summary><span class="ver-badge">v6.658</span> <b>修正牌組同步與本機資料保留</b><br>保留同步期間的最新修改，改善舊版牌組遷移與本機備份。</summary>
+        <div class="log-body">修正登入、存檔與排序期間的牌組同步狀態；舊版來源未明的牌組保留本機備份，可下載後匯入。</div>
+      </details>
+      <details>
         <summary><span class="ver-badge">v6.657</span> <b>未登入組牌改為瀏覽器本機保存，登入後自動同步至雲端</b><br>未登入訪客的牌組與常用卡牌僅保存於此瀏覽器，登入帳號或升級會員後自動合併並保留本機編輯。</summary>
         <div class="log-body">未登入時建立、修改與排序的牌組僅寫入此瀏覽器本機空間；註冊或登入正式帳號後，系統只比對差異並上傳本機新增或較新的牌組，不會以舊紀錄覆蓋雲端較新資料。本機寫入或雲端同步失敗時會顯示明確錯誤與重試提示；頁面亦標示未登入資料僅存於此瀏覽器。</div>
       </details>
@@ -46,9 +50,8 @@
         <summary><span class="ver-badge">v6.647</span> <b>參賽紀錄可以直接查看那場的賽程</b><br>錦標賽「個人」分頁的參賽紀錄，點一下就能打開那場賽事的賽程。</summary>
         <div class="log-body">錦標賽「個人」分頁的「📋 參賽紀錄」，每一筆都可以直接點開，查看那場賽事的完整賽程（和歷屆冠軍的賽程相同，也能點對戰看戰報）。伺服器更新後才會出現可點的連結；較早的紀錄若沒有賽事代號，會維持一般文字。</div>
       </details>
-      <details>
+      <details data-ver="v6.646">
         <summary><span class="ver-badge">v6.646</span> <b>自動配對可選先後攻，配對成功直接進入對戰</b><br>自動配對的牌組選單改成「我的牌組」在上、內建預組在下；新增先後攻選項；配對成功後直接進入對戰畫面。</summary>
-        <div class="log-body">自動配對的牌組選單和對戰房相同：自己建立的牌組排在最上面，網站內建預組在下面。新增「贏得擲硬幣時」的先後攻選項（隨機／先攻／後攻／對手決定），選牌組時會自動帶入該牌組預設的先後攻，和對戰房、錦標賽一樣。雙方接受配對後不再停在房間畫面，會依照選好的牌組與先後攻直接進入對戰。配對說明文字也一併精簡。</div>
       </details>
       <details data-ver="v6.645">
         <summary><span class="ver-badge">v6.645</span> <b>線上對戰新增「自動配對」</b><br>線上連線對戰大廳新增「⚡ 自動配對（標準賽）」：選好牌組就自動找對手，雙方接受後自動開房對戰。</summary>
@@ -115,9 +118,6 @@
       </details>
       <details data-ver="v6.614">
         <summary><span class="ver-badge">v6.614</span> <b>摺疊機、直立平板的新版桌墊改成和電腦版相同的排列</b><br>新版桌墊在摺疊機展開、直立平板上，改用和電腦版一樣的位置：雙方戰鬥寶可夢在中間、備戰區在上下、對戰紀錄在右側。</summary>
-      </details>
-      <details data-ver="v6.613">
-        <summary><span class="ver-badge">v6.613</span> <b>直立的平板／摺疊機上，行動按鈕拉開距離，不容易按錯</b><br>新版桌墊在直立的大螢幕（平板、摺疊機展開）上，招式、跳過攻擊、撤退等按鈕變大、拉開距離，減少誤按。</summary>
       </details>
       <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
         📚 這裡顯示<b>最近的更新內容</b>。更早的紀錄完整保留在 →

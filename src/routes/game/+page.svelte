@@ -97,6 +97,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   // v4.925：雲端 sync — 同帳號切換時 game 頁需重載牌組
   import { loadDecksFromCloud, cloudDecksUnchanged, recordCloudDecksRev, readLocalDecksRevUid } from '$lib/decks/cloud';  // v6.273 讀取減量
   import {
+    initializeLegacyAnonymousOwnership,
     readDeckOwnership,
     hasDeckOwnershipRecord,
     isCrossAccountOwnership,
@@ -5305,6 +5306,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         let local = loadDecks();
         if (isCross) {
           const iso = isolateCrossAccountLocalStorage(u.uid, legacyRevUid);
+          if (!iso.save.ok) { decks = []; return; }
           local = iso.isolatedDecks;
           ownership = iso.ownership;
           hasOwnerRec = true;
@@ -5325,6 +5327,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
           } else {
             const cloud = await loadDecksFromCloud(u.uid);
             if (!authCurrent()) return;
+            local = loadDecks(); // 等待雲端期間其他頁／分頁的新修改不可被舊快照蓋掉
+            ownership = readDeckOwnership();
+            hasOwnerRec = hasDeckOwnershipRecord();
+            if (ownership.kind === 'member' && ownership.memberUid !== u.uid) { decks = []; return; }
             const plan = planMemberDeckSync({
               uid: u.uid,
               localDecks: local,
@@ -5344,7 +5350,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         }
       } else if (u && u.isAnonymous) {
         // 匿名身份：純 localStorage，且只保留匿名自建／未歸屬牌組
+        initializeLegacyAnonymousOwnership(u.uid, readLocalDecksRevUid());
         const iso = isolateCrossAccountLocalStorage(null);
+        if (!iso.save.ok) { decks = []; return; }
         decks = sortDecks(filterDecksForAnonView(iso.isolatedDecks));
       }
       if (!authCurrent()) return;
@@ -5526,6 +5534,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if ($googleAuthBusy) return;
     if (!confirm('確定登出？登出後將以匿名模式繼續使用。')) return;
     const iso = isolateCrossAccountLocalStorage(null);
+    if (!iso.save.ok) { alert(iso.save.error); return; }
     decks = iso.isolatedDecks;
     await signOut(auth);
   }
@@ -6034,6 +6043,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // <<< v6642-bracket-version
     _profileBootUid = ''; profileSelf = null; profileModalTarget = null; profileModalPreview = null; battleSeatAvatars = [null, null]; _battleAvRoomKey = '';
     const iso = isolateCrossAccountLocalStorage(null);
+    if (!iso.save.ok) { alert(iso.save.error); return; }
     decks = iso.isolatedDecks;
     try { await signOut(auth); } catch { /* ignore */ }
   }

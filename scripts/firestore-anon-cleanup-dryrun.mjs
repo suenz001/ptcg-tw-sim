@@ -62,8 +62,8 @@ export function parseTimestampMs(v) {
         return null;
       }
     }
-    if (typeof v.seconds === 'number') return v.seconds * 1000;
-    if (typeof v._seconds === 'number') return v._seconds * 1000;
+    const seconds = typeof v.seconds === 'number' ? v.seconds : v._seconds;
+    if (typeof seconds === 'number') return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null;
   }
   return null;
 }
@@ -76,7 +76,8 @@ export function classifyPureAnonymousAuth(authUser) {
   if (!authUser || typeof authUser !== 'object') {
     return { eligible: false, reason: 'missing_auth_user' };
   }
-  const providers = Array.isArray(authUser.providerData) ? authUser.providerData : [];
+  if (!Array.isArray(authUser.providerData)) return { eligible: false, reason: 'missing_provider_data' };
+  const providers = authUser.providerData;
   if (providers.length > 0) {
     return { eligible: false, reason: `has_provider(${providers.map((p) => p?.providerId || 'unknown').join(',')})` };
   }
@@ -128,8 +129,10 @@ export function evaluateUidCandidate({
 
   const allActivityMs = [...authSignals];
   if (userDocExists && userDocData) {
-    const uUp = parseTimestampMs(userDocData.updatedAt) ?? parseTimestampMs(userDocData._updateTime);
-    const uCr = parseTimestampMs(userDocData.createdAt) ?? parseTimestampMs(userDocData._createTime);
+    const times = [userDocData.updatedAt, userDocData._updateTime, userDocData.createdAt, userDocData._createTime].map(parseTimestampMs).filter((t) => t !== null);
+    allActivityMs.push(...times);
+    const uUp = times.length ? Math.max(...times) : null;
+    const uCr = uUp;
     if (uUp !== null) allActivityMs.push(uUp);
     if (uCr !== null) allActivityMs.push(uCr);
     if (uUp === null && uCr === null) {
@@ -146,8 +149,10 @@ export function evaluateUidCandidate({
     }
     subCounts[sub.name] = (sub.docs || []).length;
     for (const d of sub.docs || []) {
-      const dUp = parseTimestampMs(d.data?.updatedAt) ?? parseTimestampMs(d.updateTimeMs);
-      const dCr = parseTimestampMs(d.data?.createdAt) ?? parseTimestampMs(d.createTimeMs);
+      const times = [d.data?.updatedAt, d.updateTimeMs, d.data?.createdAt, d.createTimeMs].map(parseTimestampMs).filter((t) => t !== null);
+      allActivityMs.push(...times);
+      const dUp = times.length ? Math.max(...times) : null;
+      const dCr = dUp;
       if (dUp === null && dCr === null) {
         return { eligible: false, excludeReason: `subdoc_missing_timestamp(${sub.name}/${d.id})`, latestActivityMs: null, counts: emptyCounts() };
       }
@@ -241,12 +246,12 @@ export function loadOrInitDailyQuotaState(stateFile, datePT = getBillingDayPT())
 export function createRateLimiter(qps) {
   const minIntervalMs = qps > 0 ? Math.ceil(1000 / qps) : 0;
   let lastAt = 0;
-  return async function pace() {
+  return async function pace(units = 1) {
     if (minIntervalMs <= 0) return;
     const now = Date.now();
     const wait = lastAt + minIntervalMs - now;
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    lastAt = Date.now();
+    lastAt = Date.now() + Math.max(0, units - 1) * minIntervalMs;
   };
 }
 
@@ -269,6 +274,95 @@ function parseCliArgs(argv) {
   }
   return opts;
 }
+
+// >>> v6658-read-budget
+export async function scanAnonymousCandidates({ auth, db, opts, now = Date.now(), pace = createRateLimiter(opts.qps) }) {
+  const cutoffMs = now - opts.days * 86400 * 1000;
+  const summary = {
+    mode: 'DRY_RUN_READ_ONLY',
+    generatedAt: new Date().toISOString(),
+    billingDayPT: getBillingDayPT(),
+    inactivityDays: opts.days,
+    cutoffIso: new Date(cutoffMs).toISOString(),
+    scannedAuthUsers: 0,
+    estimatedFirestoreReads: 0,
+    candidatesCount: 0,
+    candidateDocs: { parentUsers: 0, decks: 0, favorites: 0, meta: 0, total: 0 },
+    excludedByReason: {},
+    stoppedByReadBudget: false,
+    note: '僅預覽，未執行任何刪除；正式執行前須先完成備份、二次覆驗並取得站長明確同意。',
+  };
+
+  const candidates = [];
+  const excluded = [];
+  let pageToken;
+
+  scanLoop:
+  do {
+    const res = await auth.listUsers(1000, pageToken);
+    pageToken = res.pageToken;
+    for (const u of res.users) {
+      if (opts.limitUsers > 0 && summary.scannedAuthUsers >= opts.limitUsers) break scanLoop;
+      summary.scannedAuthUsers++;
+      const exclude = (reason) => {
+        summary.excludedByReason[reason] = (summary.excludedByReason[reason] || 0) + 1;
+        excluded.push({ uid: u.uid, reason });
+      };
+      const anon = classifyPureAnonymousAuth(u);
+      if (!anon.eligible) { exclude(anon.reason); continue; }
+      const signin = parseTimestampMs(u.metadata?.lastSignInTime);
+      const refresh = parseTimestampMs(u.metadata?.lastRefreshTime);
+      const creation = parseTimestampMs(u.metadata?.creationTime);
+      if (signin === null || refresh === null) { exclude('missing_auth_signin_or_refresh_time'); continue; }
+      if (Math.max(signin, refresh, creation || 0) > cutoffMs) { exclude('recent_auth_activity'); continue; }
+      // 父文件讀取及子集合列舉保守各預留一個額度；不足時連請求都不發。
+      if (opts.maxReads - summary.estimatedFirestoreReads < 2) { summary.stoppedByReadBudget = true; break scanLoop; }
+      const userRef = db.collection('users').doc(u.uid);
+      await pace(2);
+      const userSnap = await userRef.get();
+      summary.estimatedFirestoreReads++;
+      const cols = await userRef.listCollections();
+      summary.estimatedFirestoreReads++;
+      if (cols.some((c) => !DEFAULT_CONFIG.approvedSubcollections.includes(c.id))) {
+        exclude('unapproved_subcollection'); continue;
+      }
+      const subcollections = [];
+      for (const col of cols) {
+        const docs = [];
+        let cursor = null;
+        while (true) {
+          const remaining = opts.maxReads - summary.estimatedFirestoreReads;
+          if (remaining <= 0) { summary.stoppedByReadBudget = true; break scanLoop; }
+          const pageSize = Math.min(100, Math.max(1, Math.floor(opts.qps)), remaining);
+          let query = col.limit(pageSize);
+          if (cursor) query = query.startAfter(cursor);
+          await pace(pageSize);
+          const snap = await query.get();
+          summary.estimatedFirestoreReads += Math.max(1, snap.size);
+          docs.push(...snap.docs.map((d) => ({ id: d.id, data: d.data(),
+            createTimeMs: d.createTime?.toMillis?.() ?? null, updateTimeMs: d.updateTime?.toMillis?.() ?? null })));
+          if (snap.size < pageSize) break;
+          cursor = snap.docs[snap.docs.length - 1];
+        }
+        subcollections.push({ name: col.id, docs });
+      }
+      const ev = evaluateUidCandidate({ uid: u.uid, authUser: u, userDocExists: userSnap.exists,
+        userDocData: userSnap.exists ? { ...userSnap.data(), _createTime: userSnap.createTime?.toMillis?.() ?? null,
+          _updateTime: userSnap.updateTime?.toMillis?.() ?? null } : null, subcollections, cutoffMs });
+      if (ev.eligible) {
+        summary.candidatesCount++;
+        summary.candidateDocs.parentUsers += ev.counts.parentUserDoc;
+        for (const k of DEFAULT_CONFIG.approvedSubcollections) summary.candidateDocs[k] += ev.counts.subcollections[k] || 0;
+        summary.candidateDocs.total += ev.counts.totalFirestoreDocs;
+        candidates.push({ uid: u.uid, latestActivityIso: new Date(ev.latestActivityMs).toISOString(),
+          authMetadata: ev.authMetadataSnapshot, counts: ev.counts });
+      } else exclude(ev.excludeReason);
+    }
+  } while (pageToken);
+  return { summary, candidates, excluded };
+}
+
+// <<< v6658-read-budget
 
 async function runCli() {
   const opts = parseCliArgs(process.argv.slice(2));
@@ -314,102 +408,7 @@ async function runCli() {
   const outDir = opts.outDir;
   mkdirSync(outDir, { recursive: true });
 
-  const cutoffMs = Date.now() - opts.days * 86400 * 1000;
-  const pace = createRateLimiter(opts.qps);
-  const summary = {
-    mode: 'DRY_RUN_READ_ONLY',
-    generatedAt: new Date().toISOString(),
-    billingDayPT: getBillingDayPT(),
-    inactivityDays: opts.days,
-    cutoffIso: new Date(cutoffMs).toISOString(),
-    scannedAuthUsers: 0,
-    estimatedFirestoreReads: 0,
-    candidatesCount: 0,
-    candidateDocs: { parentUsers: 0, decks: 0, favorites: 0, meta: 0, total: 0 },
-    excludedByReason: {},
-    stoppedByReadBudget: false,
-    note: '僅預覽，未執行任何刪除；正式執行前須先完成備份、二次覆驗並取得站長明確同意。',
-  };
-
-  const candidates = [];
-  const excluded = [];
-  let pageToken;
-
-  scanLoop:
-  do {
-    const res = await auth.listUsers(1000, pageToken);
-    pageToken = res.pageToken;
-    for (const u of res.users) {
-      if (opts.limitUsers > 0 && summary.scannedAuthUsers >= opts.limitUsers) break scanLoop;
-      if (summary.estimatedFirestoreReads >= opts.maxReads) {
-        summary.stoppedByReadBudget = true;
-        break scanLoop;
-      }
-      summary.scannedAuthUsers++;
-
-      const anon = classifyPureAnonymousAuth(u);
-      if (!anon.eligible) {
-        summary.excludedByReason[anon.reason] = (summary.excludedByReason[anon.reason] || 0) + 1;
-        continue;
-      }
-
-      await pace();
-      const userRef = db.collection('users').doc(u.uid);
-      const [userSnap, cols] = await Promise.all([userRef.get(), userRef.listCollections()]);
-      summary.estimatedFirestoreReads += 1 + cols.length;
-
-      const subcollections = [];
-      for (const col of cols) {
-        if (summary.estimatedFirestoreReads >= opts.maxReads) {
-          summary.stoppedByReadBudget = true;
-          break scanLoop;
-        }
-        await pace();
-        const snap = await col.get();
-        summary.estimatedFirestoreReads += Math.max(1, snap.size);
-        subcollections.push({
-          name: col.id,
-          docs: snap.docs.map((d) => ({
-            id: d.id,
-            data: d.data(),
-            createTimeMs: d.createTime?.toMillis?.() ?? null,
-            updateTimeMs: d.updateTime?.toMillis?.() ?? null,
-          })),
-        });
-      }
-
-      const ev = evaluateUidCandidate({
-        uid: u.uid,
-        authUser: u,
-        userDocExists: userSnap.exists,
-        userDocData: userSnap.exists ? {
-          ...userSnap.data(),
-          _createTime: userSnap.createTime?.toMillis?.() ?? null,
-          _updateTime: userSnap.updateTime?.toMillis?.() ?? null,
-        } : null,
-        subcollections,
-        cutoffMs,
-      });
-
-      if (ev.eligible) {
-        summary.candidatesCount++;
-        summary.candidateDocs.parentUsers += ev.counts.parentUserDoc;
-        for (const k of DEFAULT_CONFIG.approvedSubcollections) {
-          summary.candidateDocs[k] += ev.counts.subcollections[k] || 0;
-        }
-        summary.candidateDocs.total += ev.counts.totalFirestoreDocs;
-        candidates.push({
-          uid: u.uid,
-          latestActivityIso: new Date(ev.latestActivityMs).toISOString(),
-          authMetadata: ev.authMetadataSnapshot,
-          counts: ev.counts,
-        });
-      } else {
-        summary.excludedByReason[ev.excludeReason] = (summary.excludedByReason[ev.excludeReason] || 0) + 1;
-        excluded.push({ uid: u.uid, reason: ev.excludeReason });
-      }
-    }
-  } while (pageToken);
+  const { summary, candidates, excluded } = await scanAnonymousCandidates({ auth, db, opts });
 
   const manifestJson = JSON.stringify({ summary, candidates }, null, 2);
   const sha256 = crypto.createHash('sha256').update(manifestJson).digest('hex');
