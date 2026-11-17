@@ -125,12 +125,30 @@ export const V6656_PAIRS = {
       "  <h1>完整更新歷史</h1>\n  <p class=\"sub\">首頁只顯示最近的更新；這裡列出每一版的更新重點（依版本由新到舊）。</p>\n<details>\n        <summary><span class=\"ver-badge\">v6.611</span> <b>特殊能量標記改成一顆小膠囊，不再蓋住卡片</b><br>寶可夢身上的特殊能量標記合成一顆小膠囊，例如「燃火×2・稜鏡」，不再疊成好幾顆大按鈕蓋住卡圖。</summary>\n        <div class=\"log-body\">對戰中寶可夢附的特殊能量，原本每一種各一顆大按鈕，新版桌墊上會疊成兩排、蓋住卡圖和招式。現在同一隻寶可夢合成一顆小膠囊：電腦版超過兩種時寫「燃火×2 等3種」，手機版全部列出；備戰區一樣是「特2種」這類短標。點膠囊照樣打開完整清單與卡圖，名稱和張數都看得到。</div>\n      </details>\n      <details>\n        <summary><span class=\"ver-badge\">v6.610</span> <b>精簡特殊能量名稱與數量顯示</b><br>特殊能量改用兩字短名，單張省略數量。</summary>\n        <div class=\"log-body\">例如新衝天顯示「衝天」、火箭隊顯示「火箭」、回力鏢顯示「回力」。兩張以上桌機顯示「硬岩 ×2」，手機顯示「硬岩2」；仍可點選查看完整卡名與張數。</div>\n      </details>\n",
       "  <h1>完整更新歷史</h1>\n  <p class=\"sub\">首頁只顯示最近的更新；這裡列出每一版的更新重點（依版本由新到舊）。</p>\n<details>\n        <summary><span class=\"ver-badge\">v6.610</span> <b>精簡特殊能量名稱與數量顯示</b><br>特殊能量改用兩字短名，單張省略數量。</summary>\n        <div class=\"log-body\">例如新衝天顯示「衝天」、火箭隊顯示「火箭」、回力鏢顯示「回力」。兩張以上桌機顯示「硬岩 ×2」，手機顯示「硬岩2」；仍可點選查看完整卡名與張數。</div>\n      </details>\n"
     ]
+  ],
+  "src/lib/version.ts": [
+    [
+      " * 每次 push 新版本前更新此字串，UI 會顯示在頁首，\n * 讓使用者確認瀏覽器是否同步到最新版本（vs 快取舊版）。\n */\nexport const VERSION = '6.656';\n",
+      " * 每次 push 新版本前更新此字串，UI 會顯示在頁首，\n * 讓使用者確認瀏覽器是否同步到最新版本（vs 快取舊版）。\n */\nexport const VERSION = '6.655';\n"
+    ]
+  ],
+  "static/site-version.txt": [
+    [
+      "6.656\n",
+      "6.655\n"
+    ]
+  ],
+  "oracle-admin/admin.html": [
+    [
+      "// v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。\n//   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，\n//     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。\nwindow.SITE_VERSION_HINT = '6.656';\n// v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。\n//   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。\n//   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。\n",
+      "// v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。\n//   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，\n//     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。\nwindow.SITE_VERSION_HINT = '6.655';\n// v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。\n//   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。\n//   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。\n"
+    ]
   ]
 };
 export function revertV6656IfPresent(path, source) {
   let s = normEol(String(source));
   const pairs = V6656_PAIRS[path];
-  if (!pairs || (!s.includes('v6656-') && !s.includes('v6.656'))) return s;
+  if (!pairs || (!s.includes('v6656-') && !s.includes('6.656') && !pairs.some(([from]) => s.includes(from)))) return s;
   for (const [from, to] of pairs) {
     assert.equal(s.split(from).length, 2, 'v6656 還原錨點缺失或重複 ' + path);
     s = s.replace(from, () => to);

@@ -44,6 +44,7 @@
  * Run: node scripts/test-v6213-mobile-deck-editor.mjs
  */
 import { revertV6598Game, revertV6598Cards, revertV6598Decks, V6598_CARDS_PAIRS } from './lib/revert-v6598-pages.mjs';   // ⭐v6.598（Rule 40）：手機彈出視窗上緣／關閉鈕，先還原成 v6.597
+import { revertV6656IfPresent } from './lib/revert-v6656-card-traits.mjs'; // v6.656 精確逆轉已核准篩選版面，舊桌機指紋不變
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -51,7 +52,7 @@ import { fileURLToPath } from 'node:url';
 import { styleEndIndex } from './lib/svelte-style-block.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const DECKS = readFileSync(join(ROOT, 'src/routes/decks/+page.svelte'), 'utf8');
+const DECKS = revertV6656IfPresent('src/routes/decks/+page.svelte', readFileSync(join(ROOT, 'src/routes/decks/+page.svelte'), 'utf8'));
 const CARDS = readFileSync(join(ROOT, 'src/routes/cards/+page.svelte'), 'utf8');
 const APPHTML = readFileSync(join(ROOT, 'src/app.html'), 'utf8');
 

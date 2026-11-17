@@ -6,6 +6,8 @@ import { build } from 'esbuild';
 import { compile } from 'svelte/compiler';
 import http from 'node:http';
 import { pwLaunch } from './lib/pw.mjs';
+import { readBaseBlob } from './lib/base-blob.mjs';
+import { revertV6656IfPresent, V6656_PAIRS } from './lib/revert-v6656-card-traits.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SOURCE = process.env.PTCG_TRAIT_SOURCE_ROOT || ROOT;
 const rd = p => existsSync(join(SOURCE, p)) ? readFileSync(join(SOURCE, p), 'utf8').replace(/\r\n/g, '\n') : '';
@@ -68,6 +70,15 @@ ok('D cards 網址讀寫已接線', cards.includes('readTraitFilterSearch(locati
 ok('D cards 兩條件改變重設分頁', /function allFilterKey\(\)[\s\S]{0,600}selectedRarity, selectedAbility/.test(cards));
 const traits = rd('src/lib/cards/TraitFilters.svelte'), costs = rd('src/lib/cards/CostFilters.svelte');
 ok('D 純前端判準與控制項沒有請求或輪詢', !!traits && !!rd('src/lib/cards/trait-filter.ts') && !/\b(fetch|setTimeout|setInterval)\s*\(/.test(traits + costs + rd('src/lib/cards/trait-filter.ts')));
+// 執行真正的逆轉函式；只有驗表格會漏掉沒有新版本文字的 bodies／archive 入口。
+for (const path of Object.keys(V6656_PAIRS)) {
+  const blob=readBaseBlob(ROOT,'a5900f143b1bb770743e00ef3ab73411e2a43cbe',path);
+  const base=blob.ok?blob.out.replace(/\r\n/g,'\n'):null;
+  const current=rd(path);let restored=null,stable=false;
+  try { restored=revertV6656IfPresent(path,current); stable=base!==null&&revertV6656IfPresent(path,base)===base; } catch {}
+  ok('R 真逆轉逐字回BASE '+path,base!==null&&restored===base&&current!==base);
+  ok('R 已是BASE維持不變 '+path,stable);
+}
 const uiLabels = ['稀有卡操作', '有特性交集', '一般卡交集', '無特性交集', '不限保留其他組', '費用零純數字', '費用多選', '費用不限', '欄位與按鈕對齊', '按鈕完整可見與無溢出', '鍵盤切換', '無腳本錯誤'];
 if (traits && costs && Object.keys(M).length) {
   const fixtures = [

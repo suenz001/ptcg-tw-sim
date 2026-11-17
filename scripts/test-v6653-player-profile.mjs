@@ -18,6 +18,7 @@
  */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { revertV6656IfPresent } from './lib/revert-v6656-card-traits.mjs'; // v6.656 後續合法版本與篩選變更先精確還原
 import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -61,7 +62,7 @@ const mutantMustBreak = async (name, fn, frag) => {
   }
 };
 
-const R = (rel) => normEol(readFileSync(join(ROOT, rel), 'utf8'));
+const R = (rel) => revertV6656IfPresent(rel, normEol(readFileSync(join(ROOT, rel), 'utf8')));
 const API_PATH = 'src/lib/profile/profile-api.ts';
 const AV_PATH = 'src/lib/profile/AvatarCircle.svelte';
 const MODAL_PATH = 'src/lib/profile/PlayerProfileModal.svelte';
