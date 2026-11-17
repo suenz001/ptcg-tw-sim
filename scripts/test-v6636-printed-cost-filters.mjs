@@ -61,7 +61,7 @@ for(const [name,src]of[['cards',cards],['decks',decks]]){
 }
 ok('D cards 費用寫入及還原網址',cards.includes('writeCostFilterSearch(writeCardsUrlSearch(location.search, st), costs)')&&cards.includes('readCostFilterSearch(location.search, retreatOptions, attackOptions)'));
 ok('D cards 條件變更重設頁碼',/function allFilterKey\(\)[\s\S]{0,450}\[\.\.\.selectedRetreatCosts\], \[\.\.\.selectedAttackCosts\]/.test(cards));
-ok('D 共用按鈕可讀標籤與 pressed 狀態',ui.includes('不需能量')&&ui.includes('aria-pressed={attack.has(value)}')&&ui.includes('aria-pressed={retreat.has(value)}'));
+ok('D 共用按鈕可讀標籤與 pressed 狀態',ui.includes('>{value}</button>')&&ui.includes('aria-pressed={attack.has(value)}')&&ui.includes('aria-pressed={retreat.has(value)}'));
 ok('D 本版純前端不新增請求或計時器',!!text&&!!ui&&!/\b(fetch|setInterval|setTimeout)\s*\(/.test(text+ui));
 // 正對照在 BASE 與新版都要綠：原有網址分類／搜尋不因本版改變。
 const legacy=await build({stdin:{contents:rd('src/lib/cards/url-state.ts'),loader:'ts'},bundle:true,write:false,format:'esm'});
@@ -104,9 +104,9 @@ if (ui && text) {
         await r.getByRole('button',{name:'0',exact:true}).click();ok('E '+width+' '+UI_LABELS[1],await shown()==='a,z');
         await r.getByRole('button',{name:'1',exact:true}).click();ok('E '+width+' '+UI_LABELS[2],await shown()==='z');
         await r.getByRole('button',{name:'不限',exact:true}).click();ok('E '+width+' '+UI_LABELS[3],await shown()==='a,z,f,t');
-        await a.getByRole('button',{name:'3顆',exact:true}).click();ok('E '+width+' '+UI_LABELS[4],await shown()==='a');
-        await a.getByRole('button',{name:'不需能量',exact:true}).click();ok('E '+width+' '+UI_LABELS[5],await shown()==='a,z');
-        await a.getByRole('button',{name:'3顆',exact:true}).click();ok('E '+width+' '+UI_LABELS[6],await shown()==='z');
+        await a.getByRole('button',{name:'3',exact:true}).click();ok('E '+width+' '+UI_LABELS[4],await shown()==='a');
+        await a.getByRole('button',{name:'0',exact:true}).click();ok('E '+width+' '+UI_LABELS[5],await shown()==='a,z');
+        await a.getByRole('button',{name:'3',exact:true}).click();ok('E '+width+' '+UI_LABELS[6],await shown()==='z');
         await r.getByRole('button',{name:'4',exact:true}).click();ok('E '+width+' '+UI_LABELS[7],await shown()==='');
         await a.getByRole('button',{name:'不限',exact:true}).click();ok('E '+width+' '+UI_LABELS[8],await shown()==='f');
         ok('E '+width+' '+UI_LABELS[9],await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&errors.length===0);

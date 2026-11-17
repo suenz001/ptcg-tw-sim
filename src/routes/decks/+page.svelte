@@ -1,4 +1,8 @@
 <script lang="ts">
+  // >>> v6656-trait-filter-imports
+  import TraitFilters from '$lib/cards/TraitFilters.svelte';
+  import { matchesCardTraits, type RarityFilter, type AbilityFilter } from '$lib/cards/trait-filter';
+  // <<< v6656-trait-filter-imports
   // >>> v6636-cost-filter-imports
   import CostFilters from '$lib/cards/CostFilters.svelte';
   import { matchesPrintedCosts, printedCostOptions } from '$lib/cards/cost-filter';
@@ -277,6 +281,10 @@
   const STAGE_LABEL: Record<StageKey, string> = { Basic: '基礎', Stage1: '1階進化', Stage2: '2階進化' };
   const STAGE_ORDER: StageKey[] = ['Basic', 'Stage1', 'Stage2'];
   let selectedStages = $state<Set<StageKey>>(new Set());
+  // >>> v6656-trait-filter-state
+  let selectedRarity = $state<RarityFilter>('all');
+  let selectedAbility = $state<AbilityFilter>('all');
+  // <<< v6656-trait-filter-state
   // >>> v6636-cost-filter-state
   let selectedRetreatCosts = $state<Set<number>>(new Set());
   let selectedAttackCosts = $state<Set<number>>(new Set());
@@ -329,7 +337,7 @@
   });
   const activeFilterCount = $derived(countActiveFilters(
     [selectedCategories, selectedTags, selectedTypes, selectedStages, selectedRetreatCosts, selectedAttackCosts, regMarksNarrowed],
-    [favoritesOnly, setFilter !== ''],
+    [favoritesOnly, setFilter !== '', selectedRarity !== 'all', selectedAbility !== 'all'],
   ));
   const showFilters = $derived(!narrowView.current || filtersOpen);
   // <<< v6497-mobile-filter-fold
@@ -510,8 +518,10 @@
     const types = selectedTypes;
     const stages = selectedStages;
     const marks = selectedRegMarks;
+    const rarity = selectedRarity, ability = selectedAbility; // v6656：在清單推導本體追蹤
     const retreatCosts = selectedRetreatCosts, attackCosts = selectedAttackCosts; // v6636：明確追蹤兩組選擇
     return pool.filter((c) => {
+      if (!matchesCardTraits(c, rarity, ability)) return false; // v6656：共用稀有度與特性判準
       if (!matchesPrintedCosts(c, retreatCosts, attackCosts)) return false; // v6636：只讀印刷費用
       // Category chip filter
       if (cats.size > 0 && !cats.has(cardCategory(c))) return false;
@@ -2125,24 +2135,29 @@
         <!-- <<< v6497-mobile-filter-toggle -->
         <div class="pk-chip-row" role="group" aria-label="分類">
           <span class="pk-label">分類：</span>
+          <div class="pk-options">
           <button class="pk-chip" class:active={selectedCategories.size === 0}
             onclick={clearCategories}>全部</button>
           {#each CATEGORY_ORDER as cat (cat)}
             <button class="pk-chip" class:active={selectedCategories.has(cat)}
               onclick={() => toggleCategory(cat)}>{CATEGORY_LABEL[cat]}</button>
           {/each}
+          </div>
         </div>
         <div class="pk-chip-row" role="group" aria-label="標籤">
           <span class="pk-label">標籤：</span>
+          <div class="pk-options">
           <button class="pk-chip pk-chip-tag" class:active={selectedTags.size === 0}
             onclick={clearTags}>不限</button>
           {#each TAG_ORDER as tag (tag)}
             <button class="pk-chip pk-chip-tag" class:active={selectedTags.has(tag)}
               onclick={() => toggleTag(tag)}>{tag}</button>
           {/each}
+          </div>
         </div>
         <div class="pk-chip-row" role="group" aria-label="屬性">
           <span class="pk-label">屬性：</span>
+          <div class="pk-options">
           <button class="pk-chip pk-chip-type" class:active={selectedTypes.size === 0}
             onclick={clearTypes}>不限</button>
           {#each ENERGY_ORDER as etype (etype)}
@@ -2151,38 +2166,49 @@
               <span class="pk-type-dot" style:background={ENERGY_COLOR[etype]} style:color={ENERGY_TEXT_COLOR[etype]}>{ENERGY_LABEL[etype]}</span>
             </button>
           {/each}
+          </div>
         </div>
         <div class="pk-chip-row" role="group" aria-label="階段">
           <span class="pk-label">階段：</span>
+          <div class="pk-options">
           <button class="pk-chip pk-chip-stage" class:active={selectedStages.size === 0}
             onclick={clearStages}>不限</button>
           {#each STAGE_ORDER as stg (stg)}
             <button class="pk-chip pk-chip-stage" class:active={selectedStages.has(stg)}
               onclick={() => toggleStage(stg)}>{STAGE_LABEL[stg]}</button>
           {/each}
+          </div>
         </div>
+    <!-- >>> v6656-trait-filters -->
+    <TraitFilters bind:rarity={selectedRarity} bind:ability={selectedAbility} />
+    <!-- <<< v6656-trait-filters -->
     <!-- >>> v6636-cost-filters -->
     <CostFilters bind:retreat={selectedRetreatCosts} bind:attack={selectedAttackCosts}
       {retreatOptions} {attackOptions} />
     <!-- <<< v6636-cost-filters -->
         <div class="pk-chip-row" role="group" aria-label="賽季">
           <span class="pk-label">賽季：</span>
+          <div class="pk-options">
           <button class="pk-chip pk-chip-mark" class:active={selectedRegMarks.size === 0}
             onclick={clearRegMarks}>不限</button>
           {#each REG_MARK_ORDER as m (m)}
             <button class="pk-chip pk-chip-mark" class:active={selectedRegMarks.has(m)}
               onclick={() => toggleRegMark(m)}>{m} 標</button>
           {/each}
+          </div>
         </div>
         <div class="pk-chip-row" role="group" aria-label="常用">
           <span class="pk-label">常用：</span>
+          <div class="pk-options">
           <button class="pk-chip pk-chip-fav" class:active={!favoritesOnly}
             onclick={() => favoritesOnly = false}>全部</button>
           <button class="pk-chip pk-chip-fav fav-only" class:active={favoritesOnly}
             onclick={() => favoritesOnly = true}>⭐ 只看常用（{favorites.size}）</button>
+          </div>
         </div>
         <div class="pk-chip-row">
           <span class="pk-label">卡包：</span>
+          <div class="pk-options">
           <select class="pk-set-select" aria-label="卡包篩選" bind:value={setFilter}>
             <option value="">全部卡包</option>
             {#each sets as s}
@@ -2191,6 +2217,7 @@
               </option>
             {/each}
           </select>
+          </div>
         </div>
         {/if}<!-- v6497-mobile-filter-toggle -->
       </div>
@@ -4488,4 +4515,13 @@
   :global(html) .to-board { color: var(--ui-link); border-color: var(--ui-border); background: var(--ui-bg-elev); }
   :global(html) .sync-idle { background: var(--ui-bg-sunken); color: var(--ui-text-muted); }   /* 「⬜ 本機」標籤：深色主題下原本是亮白色 */
   /* <<< v6504-unify */
+
+  /* >>> v6656-aligned-filter-rows */
+  .pk-filters { --card-filter-label-width: 4.75rem; gap: .45rem; min-width: 0; }
+  .pk-filters .pk-chip-row { display: grid; grid-template-columns: var(--card-filter-label-width) minmax(0, 1fr); gap: .4rem; align-items: start; }
+  .pk-filters .pk-label { width: auto; text-align: left; margin: 0; font-size: .8rem; line-height: 36px; white-space: nowrap; }
+  .pk-filters .pk-options { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; min-width: 0; }
+  .pk-filters .pk-chip { min-height: 36px; min-width: 36px; box-sizing: border-box; }
+  .pk-filters .pk-set-select { min-width: 0; max-width: 100%; min-height: 36px; }
+  /* <<< v6656-aligned-filter-rows */
 </style>

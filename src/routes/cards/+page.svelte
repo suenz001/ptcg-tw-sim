@@ -1,4 +1,8 @@
 <script lang="ts">
+  // >>> v6656-trait-filter-imports
+  import TraitFilters from '$lib/cards/TraitFilters.svelte';
+  import { matchesCardTraits, readTraitFilterSearch, writeTraitFilterSearch, type RarityFilter, type AbilityFilter } from '$lib/cards/trait-filter';
+  // <<< v6656-trait-filter-imports
   // >>> v6636-cost-filter-imports
   import CostFilters from '$lib/cards/CostFilters.svelte';
   import { matchesPrintedCosts, printedCostOptions, readCostFilterSearch, writeCostFilterSearch } from '$lib/cards/cost-filter';
@@ -200,6 +204,10 @@
   };
   const STAGE_ORDER: StageKey[] = ['Basic', 'Stage1', 'Stage2'];
   let selectedStages = $state<Set<StageKey>>(new Set());
+  // >>> v6656-trait-filter-state
+  let selectedRarity = $state<RarityFilter>('all');
+  let selectedAbility = $state<AbilityFilter>('all');
+  // <<< v6656-trait-filter-state
   // >>> v6636-cost-filter-state
   let selectedRetreatCosts = $state<Set<number>>(new Set());
   let selectedAttackCosts = $state<Set<number>>(new Set());
@@ -242,7 +250,7 @@
   //   桌機（>600px）永遠展開，與原本完全相同。
   const narrowView = new MediaQuery(MOBILE_FILTER_QUERY, false);
   let filtersOpen = $state(false);
-  const activeFilterCount = $derived(countActiveFilters([selectedCategories, selectedTags, selectedTypes, selectedStages, selectedRetreatCosts, selectedAttackCosts, selectedRegMarks]));
+  const activeFilterCount = $derived(countActiveFilters([selectedCategories, selectedTags, selectedTypes, selectedStages, selectedRetreatCosts, selectedAttackCosts, selectedRegMarks], [selectedRarity !== 'all', selectedAbility !== 'all']));
   const showFilters = $derived(!narrowView.current || filtersOpen);
   // <<< v6497-mobile-filter-fold
 
@@ -349,6 +357,8 @@
     selectedRegMarks = new Set(st.mark as RegMarkKey[]);
     const costs = readCostFilterSearch(location.search, retreatOptions, attackOptions); // v6636
     selectedRetreatCosts = new Set(costs.retreat); selectedAttackCosts = new Set(costs.attack);
+    const traits = readTraitFilterSearch(location.search);
+    selectedRarity = traits.rarity; selectedAbility = traits.ability;
     selected = st.card ? setCards.find((x) => String(x.id) === st.card) ?? null : null;
     lastAllFilterKey = allFilterKey(); // 導頁還原不是玩家修改篩選，不重設還原的頁碼
   }
@@ -362,10 +372,11 @@
       stage: [...selectedStages], mark: [...selectedRegMarks], card: selected ? String(selected.id) : null,
     };
     const costs = { retreat: selectedRetreatCosts, attack: selectedAttackCosts }; // v6636：在 effect 中追蹤
+    const traits = { rarity: selectedRarity, ability: selectedAbility }; // v6656：篩選網址往返
     const pageToWrite = data.setCode === 'ALL' ? pageRange.page : null; // v6.586 在 effect 內追蹤頁碼
     const id = setTimeout(() => {
       try {
-        const conditions = writeCostFilterSearch(writeCardsUrlSearch(location.search, st), costs);
+        const conditions = writeTraitFilterSearch(writeCostFilterSearch(writeCardsUrlSearch(location.search, st), costs), traits);
         const next = pageToWrite === null ? conditions : writeCardsPageSearch(conditions, pageToWrite);
         if (next !== location.search) replaceState(location.pathname + next + location.hash, {});
       } catch { /* 路由還沒準備好等情況：不寫網址，不影響畫面 */ }
@@ -435,8 +446,10 @@
     const types = selectedTypes;
     const stages = selectedStages;
     const marks = selectedRegMarks;
+    const rarity = selectedRarity, ability = selectedAbility; // v6656：在清單推導本體追蹤
     const retreatCosts = selectedRetreatCosts, attackCosts = selectedAttackCosts; // v6636：明確追蹤兩組選擇
     return setCards.filter((c) => {
+      if (!matchesCardTraits(c, rarity, ability)) return false; // v6656：共用稀有度與特性判準
       if (!matchesPrintedCosts(c, retreatCosts, attackCosts)) return false; // v6636：只讀印刷費用
       if (cats.size > 0 && !cats.has(cardCategory(c))) return false;
       // tag filter: OR across selected tags
@@ -480,7 +493,7 @@
   /** 任何會改變 filtered 的輸入變動 → 回到第一頁。 */
   function allFilterKey() {
     return JSON.stringify([query, searchMode, keywordScope, data.mode === 'set' ? data.setCode : '',
-      [...selectedCategories], [...selectedTags], [...selectedTypes], [...selectedStages], [...selectedRegMarks], [...selectedRetreatCosts], [...selectedAttackCosts]]);
+      [...selectedCategories], [...selectedTags], [...selectedTypes], [...selectedStages], [...selectedRegMarks], [...selectedRetreatCosts], [...selectedAttackCosts], selectedRarity, selectedAbility]);
   }
   $effect(() => {
     const filterKey = allFilterKey();
@@ -656,8 +669,9 @@
         >{CATEGORY_LABEL[cat]}</button>
       {/each}
     </div>
-    <div class="filters tagFilters" role="group" aria-label="標籤篩選（可複選）">
+    <div class="filters tagFilters filter-row" role="group" aria-label="標籤篩選（可複選）">
       <span class="tagLabel">標籤：</span>
+      <div class="filter-options">
       <button
         class="filter filter-tag"
         class:active={selectedTags.size === 0}
@@ -672,9 +686,11 @@
           title="點一次選取、點兩次取消"
         >{tag}</button>
       {/each}
+      </div>
     </div>
-    <div class="filters typeFilters" role="group" aria-label="屬性篩選（可複選）">
+    <div class="filters typeFilters filter-row" role="group" aria-label="屬性篩選（可複選）">
       <span class="tagLabel">屬性：</span>
+      <div class="filter-options">
       <button
         class="filter filter-type"
         class:active={selectedTypes.size === 0}
@@ -693,9 +709,11 @@
           <span class="typeChip" style:background={ENERGY_COLOR[etype]} style:color={ENERGY_TEXT_COLOR[etype]}>{ENERGY_LABEL[etype]}</span>
         </button>
       {/each}
+      </div>
     </div>
-    <div class="filters stageFilters" role="group" aria-label="階段篩選（可複選）">
+    <div class="filters stageFilters filter-row" role="group" aria-label="階段篩選（可複選）">
       <span class="tagLabel">階段：</span>
+      <div class="filter-options">
       <button
         class="filter filter-stage"
         class:active={selectedStages.size === 0}
@@ -710,13 +728,18 @@
           title="點一次選取、點兩次取消"
         >{STAGE_LABEL[stg]}</button>
       {/each}
+      </div>
     </div>
+    <!-- >>> v6656-trait-filters -->
+    <TraitFilters bind:rarity={selectedRarity} bind:ability={selectedAbility} />
+    <!-- <<< v6656-trait-filters -->
     <!-- >>> v6636-cost-filters -->
     <CostFilters bind:retreat={selectedRetreatCosts} bind:attack={selectedAttackCosts}
       {retreatOptions} {attackOptions} />
     <!-- <<< v6636-cost-filters -->
-    <div class="filters markFilters" role="group" aria-label="賽季標記篩選（可複選）">
+    <div class="filters markFilters filter-row" role="group" aria-label="賽季標記篩選（可複選）">
       <span class="tagLabel">賽季：</span>
+      <div class="filter-options">
       <button
         class="filter filter-mark"
         class:active={selectedRegMarks.size === 0}
@@ -731,6 +754,7 @@
           title="點一次選取、點兩次取消"
         >{regMarkFilterLabel(m)}</button>
       {/each}
+      </div>
     </div>
     {/if}<!-- v6497-mobile-filter-toggle -->
   </div>
@@ -1986,4 +2010,12 @@
   :global(html[data-ui-wide]) :global(.ph.cards-ph.cards-ph) { max-width: 1200px; margin: 24px auto 20px; }
   :global(html:not([data-ui-wide])) :global(.ph.cards-ph.cards-ph) { margin: calc(12px + var(--safe-top, 0px)) 12px 14px; }
   /* <<< v6504-unify */
+
+  /* >>> v6656-aligned-filter-rows */
+  .controls { gap: .65rem; --card-filter-label-width: 4.75rem; }
+  .controls .filters.filter-row { display: grid; grid-template-columns: var(--card-filter-label-width) minmax(0, 1fr); flex: 0 0 100%; gap: .4rem; align-items: start; min-width: 0; }
+  .controls .filter-row .tagLabel { margin: 0; font-size: .8rem; line-height: 36px; white-space: nowrap; }
+  .controls .filter-options { display: flex; flex-wrap: wrap; gap: .35rem; min-width: 0; }
+  .controls .filter-options .filter { min-height: 36px; min-width: 36px; box-sizing: border-box; }
+  /* <<< v6656-aligned-filter-rows */
 </style>

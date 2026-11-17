@@ -670,7 +670,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '63aa660c3b485fffa0f9958f4c97b1809e920ab7';   // v6.654（上一版）
+const PREV_SHA = 'a5900f143b1bb770743e00ef3ab73411e2a43cbe';   // v6.655（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -759,16 +759,31 @@ const PREV_SHA = '63aa660c3b485fffa0f9958f4c97b1809e920ab7';   // v6.654（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.655 前移：PREV_SHA 從 63aa660c（v6.654）起算。
+  // ⚠⚠ v6.656 前移：PREV_SHA 從 a5900f14（v6.655）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.655：修正錦標賽對戰／觀戰／回放 P1 點擊名片誤載入系統管理員帳號（game/+page.svelte resolveBattleSeatTarget + server_admin_patch.js 防護）
+  // ⭐v6.656：查卡與組牌新增稀有度／特性篩選，招式費用純數字，調整兩頁篩選排列；不改引擎、卡池、伺服器或輪詢。
+  'src/lib/cards/CostFilters.svelte',
+  'src/lib/cards/TraitFilters.svelte',
+  'src/lib/cards/rarity-index.json',
+  'src/lib/cards/trait-filter.ts',
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
+  'src/routes/cards/+page.svelte',
+  'src/routes/decks/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.655）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.655 前移：PREV_SHA 從 63aa660c（v6.654）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.655：修正錦標賽對戰／觀戰／回放 P1 點擊名片誤載入系統管理員帳號（game/+page.svelte resolveBattleSeatTarget + server_admin_patch.js 防護）
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.654）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.654 前移：PREV_SHA 從 22fbcbeb（v6.653）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -935,17 +950,6 @@ const PREV_ALLOWED = [
 // ⭐v6.641：v6.641 錦標賽 tForceResync 帶目前版本（擴容審查 P2-1）
 //   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
-//   'static/site-version.txt',
-// ── 上一版（v6.640）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.640 前移：PREV_SHA 從 f697be88（v6.639）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.640：v6.640 回合開始防誤觸：新中央判準 turn-start-guard.ts，+page.svelte 的 initiateAttack 開頭呼叫。
-//   'src/lib/game/turn-start-guard.ts',
-//   'src/lib/version.ts',
-//   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
 //   'static/site-version.txt',
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + [...PREV_ALLOWED].sort().join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }
