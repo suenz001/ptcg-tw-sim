@@ -1,5 +1,24 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.655 — 修正錦標賽對戰／觀戰／回放 P1 點擊名片誤載入系統管理員帳號（2026-11-17）
+
+基準：`63aa660c`（v6.654）。
+
+- **問題根因**：
+  - `src/routes/game/+page.svelte` 預設 `tActiveRoom = 'TOURNAMENT-TEST'`（測試房常數 `T_ROOM`）；錦標賽觀戰（`tSpectate`）僅設定 `tSpectateRoom`，對戰回放（`openReplayData`）亦不改寫 `tActiveRoom`（從 `/game` 打開錦標賽回放時 `isTournament` 甚至為 `false`）。
+  - 前版 `openBattleSeatProfile` 與 `battleSeatAvatars` `$effect` 僅判斷 `isTournament ? { tournRoom: tActiveRoom, seatIdx } : { roomCode, seatIdx }`，導致觀戰與回放一律送出 `tournRoom=TOURNAMENT-TEST&seatIdx=0`；伺服端 `tournamentRooms._id='TOURNAMENT-TEST'` 殘留站長測試時寫入的 `seats[0]`，因此點開 P1 必定顯示管理員名片（若雙方未設頭像或頭像為 `null`，畫面上 `AvatarCircle` 仍依 `players[0].name` 顯示正確首字，因而出現「小頭像正確但點進去顯示管理員名片」的現象）。
+- **客戶端修正（`src/routes/game/+page.svelte`）**：
+  - 新增 `parseTournMatchSpec()` 與統一出口 `resolveBattleSeatTarget(seatIdx, fallbackNick)`：
+    1. **回放（`isTReplay`）**：優先取 `tReplay?.meta?.matchId`（含已匯入的 `kind === 'tournament'` 復盤 `gameId`），解析為 `{ eventId, round, idx, side: seatIdx === 0 ? 'p1' : 'p2' }`，直接對準已部署的後端 Step ⑤；一般本地復盤回 `null`，不送網路請求並於點擊時顯示本地回放預覽名片。
+    2. **錦標賽實戰／觀戰（`isTournament`）**：依 `isTournSpectator ? tSpectateRoom : tActiveRoom` 取房間代碼；`mr_<eventId>_r<round>_m<idx>` 直接拆解為 `{ eventId, round, idx, side }`（若房間無 matchId 則維持 `{ tournRoom, seatIdx }`）；測試房 `TOURNAMENT-TEST` 僅在 `roomData?.seats?.[seatIdx]?.uid` 為真實帳號 UID（非 `'t0'`/`'t1'`/空值）時才改走 `{ targetUid }`，絕不查詢 `tournRoom: 'TOURNAMENT-TEST'`。
+    3. **休閒線上（`mode === 'online'`）**：使用 `{ roomCode, seatIdx }`。
+  - `openBattleSeatProfile` 與 `battleSeatAvatars` `$effect` 共用 `resolveBattleSeatTarget`。
+- **後端加固（`oracle-admin/server_admin_patch.js`）**：
+  - `_profResolveTarget` Step ④ 明確忽略 `trId === 'TOURNAMENT-TEST'`（防止未重整的舊版前端繼續誤讀測試房殘留管理員座位），並於 `mr_<eventId>_r<round>_m<idx>` 房間已清理或查無座位時自動退回 Step ⑤（`tournamentMatches` / `tournamentArchives`）。
+  - `_profEmailByUid` 調整查表順序：先查 `playerProfiles`（已認證）→ 已驗證信箱的 `tournamentRegistrations` → 最後才退回 `playerIdentity`（未驗證休閒紀錄），避免休閒未驗證紀錄遮蔽正式賽事註冊帳號。
+- **守衛與還原鏈**：`scripts/test-v6653-player-profile.mjs`、`scripts/lib/sap-revert-admin-v187.mjs` 與 `scripts/lib/revert-v6653-player-profile.mjs` 同步更新並通過精確還原鏈。
+- **獨立對抗式審查（`99644d5c`，只讀 `pro` 模型，對 `git diff 63aa660c`）**：**0 P1 / 0 P2 / 2 P3**（通過綠燈）。審查確認回放／觀戰／實戰／測試房／賽程／排行榜／名人堂全路徑、數值 `0` 輪次邊界、貪婪正則、`battleSeatAvatars` `$effect` 競態防禦及所有鐵律守衛均完整；順手移除 `openBattleSeatProfile` L1627 冗餘 `mode !== 'online'` 以消除 `svelte-check` 窄化型別警告。
+
 ## v6.654 — 對戰「先攻／後攻」旁小頭像開名片＋名片設定收合與預覽＋頭像 ALL 全卡池選項＋CI 防呆規則（2026-11-17）
 
 基準：`22fbcbeb`（v6.653）。

@@ -1559,13 +1559,72 @@ function _setupSelfPending(g: any, seat: number): string | null {
     profileModalPreview = null;
     profileModalTarget = t;
   }
+  function parseTournMatchSpec(rawId: unknown, seatIdx: number, fallbackNick?: string): ProfileLookupTarget | null {
+    const mid = typeof rawId === 'string' ? rawId.trim() : '';
+    const m = /^(.+)_r(\d+)_m(\d+)$/.exec(mid);
+    if (!m) return null;
+    return {
+      eventId: m[1],
+      round: Number(m[2]),
+      idx: Number(m[3]),
+      side: seatIdx === 0 ? 'p1' : 'p2',
+      ...(fallbackNick ? { fallbackNick } : {}),
+    };
+  }
+  function resolveBattleSeatTarget(seatIdx: number, fallbackNick?: string): ProfileLookupTarget | null {
+    if (seatIdx !== 0 && seatIdx !== 1) return null;
+    if (isTReplay) {
+      const rawMid = tReplay?.meta?.matchId || (tReplay?.meta?.kind === 'tournament' ? tReplay?.meta?.gameId : '');
+      return parseTournMatchSpec(rawMid, seatIdx, fallbackNick);
+    }
+    if (isTournament) {
+      const tr = String(isTournSpectator ? tSpectateRoom : tActiveRoom).trim();
+      if (!tr) return null;
+      const mid = matchIdOfTournRoom(tr);
+      if (mid) {
+        return parseTournMatchSpec(mid, seatIdx, fallbackNick)
+          ?? { tournRoom: tr, seatIdx, ...(fallbackNick ? { fallbackNick } : {}) };
+      }
+      if (tr === T_ROOM) {
+        const seatUid = String(roomData?.seats?.[seatIdx]?.uid || '').trim();
+        if (seatUid && seatUid !== 't0' && seatUid !== 't1') {
+          return { targetUid: seatUid, ...(fallbackNick ? { fallbackNick } : {}) };
+        }
+        return null;
+      }
+      return { tournRoom: tr, seatIdx, ...(fallbackNick ? { fallbackNick } : {}) };
+    }
+    if (mode === 'online') {
+      const rc = String(roomCode || '').trim();
+      return rc ? { roomCode: rc, seatIdx, ...(fallbackNick ? { fallbackNick } : {}) } : null;
+    }
+    return null;
+  }
   function openBattleSeatProfile(seatIdx: number, fallbackNick?: string) {
     if (mode === 'online') {
-      openProfileModal(isTournament ? { tournRoom: tActiveRoom, seatIdx, fallbackNick } : { roomCode, seatIdx, fallbackNick });
+      const t = resolveBattleSeatTarget(seatIdx, fallbackNick);
+      if (t) {
+        openProfileModal(t);
+        return;
+      }
+      profileModalTarget = null;
+      profileModalPreview = {
+        found: false,
+        profileKey: '',
+        nick: (fallbackNick || `P${seatIdx + 1}`).slice(0, 16),
+        bio: isTReplay ? '🎞️ 對戰回放紀錄' : '',
+        avatar: seatAvatarFor(seatIdx),
+        googleVerified: false,
+        champOfficial: 0,
+        champCommunity: 0,
+        pinnedHonors: [],
+        canFriend: false,
+        friendStatus: 'unavailable',
+      };
       return;
     }
     const u = firebaseUser;
-    const isHumanSelf = mode !== 'online' && !isSpectator && (
+    const isHumanSelf = !isSpectator && (
       aiPlayerIndex !== null ? seatIdx !== aiPlayerIndex : seatIdx === 0
     );
     if (isHumanSelf && profileSelf) {
@@ -1628,8 +1687,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
     })();
   });
   $effect(() => {
-    const key = mode === 'online' && game ? (isTournament ? `T:${tActiveRoom}` : `R:${roomCode}`) : '';
-    if (!key || key === 'T:' || key === 'R:') {
+    const t0 = mode === 'online' && game ? resolveBattleSeatTarget(0) : null;
+    const t1 = mode === 'online' && game ? resolveBattleSeatTarget(1) : null;
+    const key = t0 || t1 ? JSON.stringify([t0, t1]) : '';
+    if (!key) {
       _battleAvRoomKey = '';
       battleSeatAvatars = [null, null];
       return;
@@ -1639,10 +1700,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     battleSeatAvatars = [null, null];
     void (async () => {
       const ctx = await friendsCtxFromAuth().catch(() => null);
-      const resList = await Promise.all(([0, 1] as const).map((sIdx) => {
-        const t = isTournament ? { tournRoom: tActiveRoom, seatIdx: sIdx } : { roomCode, seatIdx: sIdx };
-        return fetchPlayerProfileView(t, ctx).catch(() => null);
-      }));
+      const resList = await Promise.all(([t0, t1] as const).map((t) => (
+        t ? fetchPlayerProfileView(t, ctx).catch(() => null) : Promise.resolve(null)
+      )));
       if (_battleAvRoomKey !== key) return;
       battleSeatAvatars = [
         resList[0]?.ok ? resList[0].data.avatar : null,

@@ -9353,10 +9353,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
       if (!u) return { email: null, fallbackNick: '' };
       const prof = await db.collection(PROF_COLL).findOne({ uid: u }, { projection: { _id: 1, nick: 1 } });
       if (prof && prof._id) return { email: _frNormEmail(prof._id), fallbackNick: prof.nick || '' };
-      const idn = await db.collection(FR_ID_COLL).findOne({ $or: [{ uid: u }, { 'uids.uid': u }] }, { projection: { _id: 1 } });
-      if (idn && idn._id) return { email: _frNormEmail(idn._id), fallbackNick: '' };
       const reg = await db.collection(FR_REG_COLL).find({ uid: u, email: { $ne: null } }, { projection: { email: 1, name: 1 } }).sort({ registeredAt: -1 }).limit(1).toArray();
       if (reg && reg[0] && reg[0].email) return { email: _frNormEmail(reg[0].email), fallbackNick: reg[0].name || '' };
+      const idn = await db.collection(FR_ID_COLL).findOne({ $or: [{ uid: u }, { 'uids.uid': u }] }, { projection: { _id: 1 } });
+      if (idn && idn._id) return { email: _frNormEmail(idn._id), fallbackNick: '' };
       return { email: null, fallbackNick: '' };
     }
     async function _profResolveTarget(spec, viewerEmail) {
@@ -9402,33 +9402,46 @@ import('firebase-admin').then(async ({ default: admin }) => {
           }
         }
       }
-      // ④ 錦標賽對戰房（tournRoom + seatIdx）
+      // ④ 錦標賽對戰房（tournRoom + seatIdx；絕不解析殘留測試房 TOURNAMENT-TEST，找不到房時退回 mr_<eventId>_r<round>_m<idx>）
+      let eid = s.eventId ? String(s.eventId).trim() : '';
+      let eRound = s.round;
+      let eIdx = s.idx;
+      let eSide = s.side;
       if (s.tournRoom) {
-        const tr = await db.collection('tournamentRooms').findOne({ _id: String(s.tournRoom).trim() }, { projection: { seats: 1, names: 1 } });
+        const trId = String(s.tournRoom).trim();
         const idx = Number(s.seatIdx);
-        if (tr && Array.isArray(tr.seats) && (idx === 0 || idx === 1) && tr.seats[idx]) {
-          const tu = String(tr.seats[idx]);
-          const byU = await _profEmailByUid(tu);
-          return { email: byU.email, fallbackNick: (tr.names && tr.names[idx]) || byU.fallbackNick || '', uid: tu };
+        if (trId && trId !== 'TOURNAMENT-TEST') {
+          const mr = /^mr_(.+)_r(\d+)_m(\d+)$/.exec(trId);
+          if (mr && (idx === 0 || idx === 1)) {
+            if (!eid) eid = mr[1];
+            if (eRound === undefined || eRound === null || eRound === '') eRound = Number(mr[2]);
+            if (eIdx === undefined || eIdx === null || eIdx === '') eIdx = Number(mr[3]);
+            if (eSide !== 'p1' && eSide !== 'p2') eSide = idx === 0 ? 'p1' : 'p2';
+          }
+          const tr = await db.collection('tournamentRooms').findOne({ _id: trId }, { projection: { seats: 1, names: 1 } });
+          if (tr && Array.isArray(tr.seats) && (idx === 0 || idx === 1) && tr.seats[idx]) {
+            const tu = String(tr.seats[idx]);
+            const byU = await _profEmailByUid(tu);
+            return { email: byU.email, fallbackNick: (tr.names && tr.names[idx]) || byU.fallbackNick || _profCleanText(s.fallbackNick || '', 32), uid: tu };
+          }
         }
       }
       // ⑤ 錦標賽賽程表場次 / 瑞士排名 / 大廳冠軍（eventId + round/idx/side OR standingName OR champOnly）
-      if (s.eventId) {
-        const eid = String(s.eventId).trim();
+      if (eid) {
         let targetUid = '';
         let fbNick = _profCleanText(s.fallbackNick || '', 32);
-        if (s.round !== undefined && s.idx !== undefined && (s.side === 'p1' || s.side === 'p2')) {
-          const mid = eid + '_r' + Number(s.round) + '_m' + Number(s.idx);
+        if (eRound !== undefined && eRound !== null && eRound !== '' && eIdx !== undefined && eIdx !== null && eIdx !== '' && (eSide === 'p1' || eSide === 'p2')) {
+          const mid = eid + '_r' + Number(eRound) + '_m' + Number(eIdx);
           const md = await db.collection('tournamentMatches').findOne({ _id: mid }, { projection: { p1uid: 1, p2uid: 1, p1name: 1, p2name: 1 } });
           if (md) {
-            targetUid = s.side === 'p1' ? (md.p1uid || '') : (md.p2uid || '');
-            fbNick = (s.side === 'p1' ? md.p1name : md.p2name) || fbNick;
+            targetUid = eSide === 'p1' ? (md.p1uid || '') : (md.p2uid || '');
+            fbNick = (eSide === 'p1' ? md.p1name : md.p2name) || fbNick;
           } else {
             const arch = await db.collection('tournamentArchives').findOne({ _id: 'arch_' + eid }, { projection: { matches: 1, players: 1 } });
-            const am = arch && Array.isArray(arch.matches) ? arch.matches.find((m) => Number(m.round) === Number(s.round) && Number(m.idx) === Number(s.idx)) : null;
+            const am = arch && Array.isArray(arch.matches) ? arch.matches.find((m) => Number(m.round) === Number(eRound) && Number(m.idx) === Number(eIdx)) : null;
             if (am) {
-              targetUid = s.side === 'p1' ? (am.p1uid || '') : (am.p2uid || '');
-              fbNick = (s.side === 'p1' ? am.p1name : am.p2name) || fbNick;
+              targetUid = eSide === 'p1' ? (am.p1uid || '') : (am.p2uid || '');
+              fbNick = (eSide === 'p1' ? am.p1name : am.p2name) || fbNick;
               const ap = targetUid && Array.isArray(arch.players) ? arch.players.find((p) => p && p.uid === targetUid) : null;
               if (ap && ap.email) return { email: _frNormEmail(ap.email), fallbackNick: ap.name || fbNick, uid: targetUid };
             }

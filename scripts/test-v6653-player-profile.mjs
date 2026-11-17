@@ -533,6 +533,75 @@ await T('B2 後端名片「+ 加好友」：mutual accept、封鎖靜默保護�
   assert.strictEqual(acDoc.status, 'blocked', '被封鎖方不該改動 DB 狀態');
 });
 
+async function assertBackendTournP1Guard(buildFn = buildBackendHarness) {
+  const { db, invoke } = buildFn();
+  await db.collection('playerProfiles').insertOne({
+    _id: 'admin@example.com',
+    profileKey: 'pk_admin',
+    uid: 'uidAdmin',
+    nick: '系統管理員',
+  });
+  await db.collection('playerProfiles').insertOne({
+    _id: 'alice@example.com',
+    profileKey: 'pk_alice',
+    uid: 'uidA',
+    nick: '小艾Alice',
+    avatar: { cardId: '19145', x: 0.5, y: 0.34, zoom: 1.5 },
+  });
+  await db.collection('tournamentRooms').insertOne({
+    _id: 'TOURNAMENT-TEST',
+    seats: ['uidAdmin', null],
+    names: ['系統管理員', null],
+  });
+  await db.collection('tournamentMatches').insertOne({
+    _id: 'ev1_r1_m0',
+    eventId: 'ev1',
+    round: 1,
+    idx: 0,
+    p1uid: 'uidA',
+    p2uid: 'uidB',
+    p1name: 'A選手',
+    p2name: 'B選手',
+  });
+
+  // TOURNAMENT-TEST 殘留管理員座位不可被舊請求誤讀為 P1
+  const vTest = await invoke('GET', '/api/player-profile/view', {
+    token: 'tokB',
+    query: { tournRoom: 'TOURNAMENT-TEST', seatIdx: '0', fallbackNick: '真實P1' },
+  });
+  assert.strictEqual(vTest.statusCode, 200);
+  assert.strictEqual(vTest.body.found, false, 'TOURNAMENT-TEST 絕不可解析殘留管理員帳號');
+  assert.strictEqual(vTest.body.nick, '真實P1', 'TOURNAMENT-TEST 應安全退回 fallbackNick');
+
+  // tournamentRooms['mr_ev1_r1_m0'] 已清理/不存在時，必須自動從 mr_<eid>_r<r>_m<i> 退回 Step ⑤ tournamentMatches/Archives 解析 P1
+  const vMrFallback = await invoke('GET', '/api/player-profile/view', {
+    token: 'tokB',
+    query: { tournRoom: 'mr_ev1_r1_m0', seatIdx: '0', fallbackNick: 'A選手' },
+  });
+  assert.strictEqual(vMrFallback.statusCode, 200);
+  assert.strictEqual(vMrFallback.body.found, true, 'mr_ 房間清理後應自動退回賽程場次解析');
+  assert.strictEqual(vMrFallback.body.nick, '小艾Alice');
+
+  // 已驗證報名的 tournamentRegistrations 必須優先於未驗證的 playerIdentity（防止休閒冒名 UID 陰影覆蓋）
+  await db.collection('playerIdentity').insertOne({ _id: 'admin@example.com', uid: 'uidRegOnly' });
+  await db.collection('tournamentRegistrations').insertOne({
+    _id: 'ev2__uidRegOnly',
+    eventId: 'ev2',
+    uid: 'uidRegOnly',
+    email: 'alice@example.com',
+    name: '已驗證報名者',
+    registeredAt: 1700000000000,
+  });
+  const vRegOrder = await invoke('GET', '/api/player-profile/view', {
+    token: 'tokB',
+    query: { targetUid: 'uidRegOnly' },
+  });
+  assert.strictEqual(vRegOrder.statusCode, 200);
+  assert.strictEqual(vRegOrder.body.nick, '小艾Alice', 'verified 報名紀錄應優先於未驗證 playerIdentity');
+}
+
+await T('B3 後端阻斷 TOURNAMENT-TEST 管理員殘留誤讀、mr_ 退回場次解析與已驗證註冊優先順序（v6.655）', () => assertBackendTournP1Guard());
+
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【C】Svelte 編譯 + Playwright iPhone Dynamic Island 與觸控拖曳實測');
 await T('C1 三支新元件可乾淨編譯（零 error、零 {@html}、零 unused CSS）', () => {
@@ -835,6 +904,88 @@ await T('D1 game/+page.svelte 線上大廳三顆短標分頁、個人分頁純�
   assert.ok(R(FRP_PATH).includes('fr-prof-btn'), 'FriendsPanel 缺名片鈕');
 });
 
+await T('D2 實跑 resolveBattleSeatTarget（v6.655）：回放／觀戰／實戰／測試房絕不送 TOURNAMENT-TEST', () => {
+  const G = R(GAME_PATH);
+  const extractFn = (name) => {
+    const start = G.indexOf('  function ' + name + '(');
+    assert.ok(start >= 0, '找不到函式 ' + name);
+    let i = G.indexOf('{', start), depth = 0, inS = false, q = '';
+    for (; i < G.length; i++) {
+      const ch = G[i], prev = i > 0 ? G[i - 1] : '';
+      if (inS) { if (ch === q && prev !== '\\') inS = false; continue; }
+      if (ch === "'" || ch === '"' || ch === '`') { inS = true; q = ch; continue; }
+      if (ch === '{') depth++;
+      else if (ch === '}') { depth--; if (depth === 0) return G.slice(start, i + 1); }
+    }
+    throw new Error('括號未閉合：' + name);
+  };
+  const tsSnippet = extractFn('parseTournMatchSpec') + '\n' + extractFn('resolveBattleSeatTarget');
+  const jsCode = transformSync(tsSnippet, { loader: 'ts', format: 'esm' }).code
+    .replace(/\bexport\s+/g, '');
+  const mkResolver = (env) => {
+    const matchIdOfTournRoom = (r) => (typeof r === 'string' && r.startsWith('mr_') && r.length > 3 ? r.slice(3) : null);
+    const fn = new Function(
+      'isTReplay', 'tReplay', 'isTournament', 'isTournSpectator', 'tSpectateRoom', 'tActiveRoom',
+      'T_ROOM', 'roomData', 'mode', 'roomCode', 'matchIdOfTournRoom',
+      jsCode + '\nreturn { resolveBattleSeatTarget };'
+    );
+    return fn(
+      !!env.isTReplay, env.tReplay ?? null, !!env.isTournament, !!env.isTournSpectator,
+      env.tSpectateRoom ?? '', env.tActiveRoom ?? 'TOURNAMENT-TEST', 'TOURNAMENT-TEST',
+      env.roomData ?? null, env.mode ?? 'online', env.roomCode ?? '', matchIdOfTournRoom
+    ).resolveBattleSeatTarget;
+  };
+
+  // 1) 錦標賽回放（預設 tActiveRoom='TOURNAMENT-TEST'）
+  const rReplay = mkResolver({
+    isTReplay: true, isTournament: true, isTournSpectator: true, tActiveRoom: 'TOURNAMENT-TEST',
+    tReplay: { meta: { matchId: 'evt123_r2_m1', kind: 'tournament' } },
+  });
+  assert.deepStrictEqual(rReplay(0, 'P1名'), { eventId: 'evt123', round: 2, idx: 1, side: 'p1', fallbackNick: 'P1名' });
+  assert.deepStrictEqual(rReplay(1, 'P2名'), { eventId: 'evt123', round: 2, idx: 1, side: 'p2', fallbackNick: 'P2名' });
+
+  // 2) 從 /game 匯入或開啟的錦標賽回放（isTournament=false, meta.kind='tournament', gameId='evt9_r1_m3'）
+  const rGameReplay = mkResolver({
+    isTReplay: true, isTournament: false, tReplay: { meta: { kind: 'tournament', gameId: 'evt9_r1_m3' } },
+  });
+  assert.deepStrictEqual(rGameReplay(0), { eventId: 'evt9', round: 1, idx: 3, side: 'p1' });
+
+  // 3) 一般對戰本地復盤（不可發送預設測試房或空房請求）
+  const rCasualReplay = mkResolver({
+    isTReplay: true, isTournament: false, tReplay: { meta: { kind: 'casual', gameId: 'loc_1' } },
+  });
+  assert.strictEqual(rCasualReplay(0, '玩家A'), null);
+
+  // 4) 錦標賽現場觀戰（isTournSpectator=true, tActiveRoom 仍為 'TOURNAMENT-TEST'）
+  const rSpec = mkResolver({
+    isTournament: true, isTournSpectator: true, tSpectateRoom: 'mr_evt55_r3_m0', tActiveRoom: 'TOURNAMENT-TEST',
+  });
+  assert.deepStrictEqual(rSpec(0, '選手1'), { eventId: 'evt55', round: 3, idx: 0, side: 'p1', fallbackNick: '選手1' });
+  assert.deepStrictEqual(rSpec(1, '選手2'), { eventId: 'evt55', round: 3, idx: 0, side: 'p2', fallbackNick: '選手2' });
+
+  // 5) 錦標賽正式對戰（tActiveRoom='mr_...'）
+  const rLive = mkResolver({ isTournament: true, tActiveRoom: 'mr_evt77_r1_m2' });
+  assert.deepStrictEqual(rLive(0), { eventId: 'evt77', round: 1, idx: 2, side: 'p1' });
+
+  // 6) 測試房 TOURNAMENT-TEST：僅真實 UID 用 targetUid，占位 t0/t1 回 null，絕不回 tournRoom:'TOURNAMENT-TEST'
+  const rTest = mkResolver({
+    isTournament: true, tActiveRoom: 'TOURNAMENT-TEST',
+    roomData: { seats: [{ uid: 'realUid0' }, { uid: 't1' }] },
+  });
+  assert.deepStrictEqual(rTest(0, '測試一'), { targetUid: 'realUid0', fallbackNick: '測試一' });
+  assert.strictEqual(rTest(1, '測試二'), null);
+
+  // 7) 確認 openBattleSeatProfile 與 battleSeatAvatars 均收斂至 resolveBattleSeatTarget 且無舊版直查 tActiveRoom
+  const segOpen = extractFn('openBattleSeatProfile');
+  assert.ok(segOpen.includes('resolveBattleSeatTarget('), 'openBattleSeatProfile 未改用 resolveBattleSeatTarget');
+  assert.ok(!segOpen.includes('tournRoom: tActiveRoom'), 'openBattleSeatProfile 仍直接送 tournRoom: tActiveRoom');
+  const avIdx = G.indexOf('battleSeatAvatars = [null, null];', G.indexOf('let _profileBootUid'));
+  const avStart = G.lastIndexOf('$effect(() => {', avIdx);
+  const avBlock = G.slice(avStart, avStart + 900);
+  assert.ok(avBlock.includes('resolveBattleSeatTarget(0)') && avBlock.includes('resolveBattleSeatTarget(1)'), 'battleSeatAvatars $effect 未改用 resolveBattleSeatTarget');
+  assert.ok(!avBlock.includes('tournRoom: tActiveRoom'), 'battleSeatAvatars 仍直接送 tournRoom: tActiveRoom');
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【E】精確還原檢查＋突變自我驗證');
 await T('E1 sap-revert-admin-v187 與 revert-v6653 能逐位元還原成 BASE（且對 BASE 是 no-op）', async () => {
@@ -882,6 +1033,12 @@ await T('E3 突變：裁切器若放寬 x>=0 不檢查半徑 ⇒ A1 必紅', asy
   assert.notStrictEqual(mutated, R(API_PATH), '突變錨點沒命中');
   const mod = await loadProfileApi(mutated);
   await mutantMustBreak('裁切未扣圓半徑', () => assertCropAndApi(mod), '水平圓框出界');
+});
+
+await T('E4 突變：後端若未擋掉 TOURNAMENT-TEST ⇒ B3 必紅', async () => {
+  const mutated = R(SRV_PATH).replace("if (trId && trId !== 'TOURNAMENT-TEST') {", 'if (trId) {');
+  assert.notStrictEqual(mutated, R(SRV_PATH), '突變錨點沒命中');
+  await mutantMustBreak('未阻斷 TOURNAMENT-TEST', () => assertBackendTournP1Guard(() => buildBackendHarness(mutated)), 'TOURNAMENT-TEST');
 });
 
 console.log(`\n══ v6.653 玩家名片與圓圈頭像守衛：${pass} PASS / ${fail} FAIL ══`);
