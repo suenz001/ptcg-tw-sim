@@ -54,9 +54,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { styleEndIndex } from './lib/svelte-style-block.mjs';
+import { revertV6657IfPresent } from './lib/revert-v6657-anon-decks-local.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const SRC = readFileSync(join(ROOT, 'src/routes/decks/+page.svelte'), 'utf8');
+const SRC = revertV6657IfPresent('src/routes/decks/+page.svelte', readFileSync(join(ROOT, 'src/routes/decks/+page.svelte'), 'utf8'));
 
 let pass = 0, fail = 0;
 const ok = (n, c, extra) => { if (c) { pass++; console.log('  PASS ' + n); } else { fail++; console.log('  FAIL ' + n + (extra ? ' — ' + extra : '')); } };

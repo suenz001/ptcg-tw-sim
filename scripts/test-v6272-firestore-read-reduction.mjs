@@ -670,7 +670,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'a5900f143b1bb770743e00ef3ab73411e2a43cbe';   // v6.655（上一版）
+const PREV_SHA = '652db337939007e9070f6e85a59911cedffbbc18';   // v6.656（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -759,21 +759,36 @@ const PREV_SHA = 'a5900f143b1bb770743e00ef3ab73411e2a43cbe';   // v6.655（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.656 前移：PREV_SHA 從 a5900f14（v6.655）起算。
+  // ⚠⚠ v6.657 前移：PREV_SHA 從 652db337（v6.656）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.656：查卡與組牌新增稀有度／特性篩選，招式費用純數字，調整兩頁篩選排列；不改引擎、卡池、伺服器或輪詢。
-  'src/lib/cards/CostFilters.svelte',
-  'src/lib/cards/TraitFilters.svelte',
-  'src/lib/cards/rarity-index.json',
-  'src/lib/cards/trait-filter.ts',
+  // ⭐v6.657：純匿名訪客組牌／常用卡牌改為純瀏覽器本機儲存（0 Firestore 讀寫）、會員安全差異同步與跨帳號隔離，加測與版本輪替。
+  'src/lib/decks/DecksSyncBanner.svelte',
+  'src/lib/decks/cloud.ts',
+  'src/lib/decks/favorites.ts',
+  'src/lib/decks/member-sync.ts',
+  'src/lib/decks/storage.ts',
+  'src/lib/ui/AccountBar.svelte',
   'src/lib/version.ts',
-  'src/routes/cards/+page.svelte',
+  'src/routes/deck-posts/+page.svelte',
   'src/routes/decks/+page.svelte',
+  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.656）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+//   'src/lib/cards/CostFilters.svelte',
+//   'src/lib/cards/TraitFilters.svelte',
+//   'src/lib/cards/rarity-index.json',
+//   'src/lib/cards/trait-filter.ts',
+//   'src/lib/version.ts',
+//   'src/routes/cards/+page.svelte',
+//   'src/routes/decks/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.655）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.655 前移：PREV_SHA 從 63aa660c（v6.654）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。

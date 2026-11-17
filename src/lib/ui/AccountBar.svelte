@@ -49,6 +49,7 @@
   );
   const syncTitle = $derived(
     unsaved > 0 ? `有 ${unsaved} 個牌組未存檔（按 💾 存檔 推到雲端）`
+      : anonymous ? '目前為匿名／本機模式，資料僅存在此瀏覽器；登入或建立帳號後可同步跨裝置使用'
       : syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : ''
   );
 </script>
@@ -59,7 +60,7 @@
       <span class="sync-pill sync-{syncKind}" title={syncTitle}>{syncLabel}</span>
     {/if}
     {#if anonymous}
-      <span class="auth-email">👤 匿名（建立帳號後可跨裝置保存牌組）</span>
+      <span class="auth-email">👤 匿名（目前僅存在此瀏覽器，登入後可同步跨裝置使用）</span>
     {:else if email}
       <span class="auth-email" title={email}>✉️ {email}</span>
     {/if}

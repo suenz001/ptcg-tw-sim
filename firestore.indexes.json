@@ -9,5 +9,16 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "decks",
+      "fieldPath": "entries",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "decks",
+      "fieldPath": "notes",
+      "indexes": []
+    }
+  ]
 }

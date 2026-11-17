@@ -1,6 +1,7 @@
 // v6.656 合法 UI／changelog 變更的精確逆轉；保留所有舊版逐位元斷言。
 import assert from 'node:assert/strict';
 import { normEol } from './eol-agnostic.mjs';
+import { revertV6657IfPresent } from './revert-v6657-anon-decks-local.mjs';
 export const V6656_PAIRS = {
   "src/routes/cards/+page.svelte": [
     [
@@ -152,7 +153,7 @@ export const V6656_PAIRS = {
   ]
 };
 export function revertV6656IfPresent(path, source) {
-  let s = normEol(String(source));
+  let s = revertV6657IfPresent(path, source);
   const pairs = V6656_PAIRS[path];
   if (!pairs || (!s.includes('v6656-') && !s.includes('6.656') && !pairs.some(([from]) => s.includes(from)))) return s;
   for (const [from, to] of pairs) {

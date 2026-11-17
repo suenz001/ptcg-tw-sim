@@ -52,9 +52,10 @@ const readOr = (p) => (existsSync(p) ? normEol(readFileSync(p, 'utf8')) : '');
 const DS = readOr(P_DS);      // 新檔：不存在時給空字串 ⇒ 下面每一條各自紅，不會整支崩掉
 const RO = normEol(readFileSync(P_RO, 'utf8'));
 const RT = normEol(readFileSync(P_RT, 'utf8'));
-const GP = normEol(readFileSync(P_GP, 'utf8'));
-const DK = normEol(readFileSync(P_DK, 'utf8'));
-const ST = normEol(readFileSync(P_ST, 'utf8'));
+const { revertV6657IfPresent } = await import('./lib/revert-v6657-anon-decks-local.mjs');
+const GP = revertV6657IfPresent('src/routes/game/+page.svelte', normEol(readFileSync(P_GP, 'utf8')));
+const DK = revertV6657IfPresent('src/routes/decks/+page.svelte', normEol(readFileSync(P_DK, 'utf8')));
+const ST = revertV6657IfPresent('src/lib/decks/storage.ts', normEol(readFileSync(P_ST, 'utf8')));
 
 let pass = 0, fail = 0;
 const T = async (n, f) => {

@@ -72,6 +72,18 @@ function writeLocalDecksRev(uid: string, rev: string): void {
   try { localStorage.setItem(DECKS_REV_LS_KEY, JSON.stringify({ uid, rev })); } catch { /* 寫不進去無妨：下次全拉 */ }
 }
 
+/** 讀取本地 rev 記錄所屬的會員 uid（用於跨帳號切換與舊版升級歸屬判斷）。 */
+export function readLocalDecksRevUid(): string | null {
+  try {
+    const raw = localStorage.getItem(DECKS_REV_LS_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw) as { uid?: unknown };
+    return typeof o?.uid === 'string' && o.uid ? o.uid : null;
+  } catch {
+    return null;
+  }
+}
+
 /** 清掉本地 rev 記錄（之後進頁必定全拉）。 */
 export function clearLocalDecksRev(): void {
   try { localStorage.removeItem(DECKS_REV_LS_KEY); } catch { /* ignore */ }

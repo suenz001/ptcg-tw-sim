@@ -95,7 +95,15 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { getBroadcastConfig, type BroadcastConfig } from '$lib/game/broadcast';
   import { loadDecks, saveDecks, sortDecks } from '$lib/decks/storage';
   // v4.925：雲端 sync — 同帳號切換時 game 頁需重載牌組
-  import { loadDecksFromCloud, cloudDecksUnchanged, recordCloudDecksRev } from '$lib/decks/cloud';  // v6.273 讀取減量
+  import { loadDecksFromCloud, cloudDecksUnchanged, recordCloudDecksRev, readLocalDecksRevUid } from '$lib/decks/cloud';  // v6.273 讀取減量
+  import {
+    readDeckOwnership,
+    hasDeckOwnershipRecord,
+    isCrossAccountOwnership,
+    planMemberDeckSync,
+    isolateCrossAccountLocalStorage,
+    filterDecksForAnonView,
+  } from '$lib/decks/member-sync';
   import type { Deck } from '$lib/decks/types';
   import { deckCoinPrefOr, normalizeDeckCoinPref } from '$lib/decks/coin-pref';   // ⭐v6.599 牌組先後攻偏好（唯一判準）
   // >>> v6602-managed-presets
@@ -5290,39 +5298,54 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //   邏輯跟 decks/+page.svelte:409+ 同套：cloud + local merge by updatedAt。
       //   匿名 user 沒雲端帳號 → 只讀 localStorage。
       if (u && !u.isAnonymous) {
+        const legacyRevUid = readLocalDecksRevUid();
+        let ownership = readDeckOwnership();
+        let hasOwnerRec = hasDeckOwnershipRecord();
+        const isCross = isCrossAccountOwnership(u.uid, ownership, hasOwnerRec, legacyRevUid);
+        let local = loadDecks();
+        if (isCross) {
+          const iso = isolateCrossAccountLocalStorage(u.uid, legacyRevUid);
+          local = iso.isolatedDecks;
+          ownership = iso.ownership;
+          hasOwnerRec = true;
+        }
         try {
-          const local = loadDecks();
           // v6.273 Firestore 讀取減量：1 讀 meta 判斷雲端牌組沒變 → 直接用 localStorage
-          //   （與 /decks 共用同一套 rev 記錄）；任何不確定一律回 false 走原本的全拉＋merge。
-          const unchanged = await cloudDecksUnchanged(u.uid, local.length);
+          //   （與 /decks 共用同一套 rev 記錄）；跨帳號或有待補傳時走完整比對。
+          const canFastHit = !isCross
+            && ownership.kind === 'member'
+            && ownership.memberUid === u.uid
+            && ownership.pendingUpsertIds.length === 0
+            && ownership.pendingDeleteIds.length === 0
+            && local.length > 0;
+          const unchanged = canFastHit ? await cloudDecksUnchanged(u.uid, local.length) : false;
           if (!authCurrent()) return;
           if (unchanged) {
             decks = sortDecks(local);
           } else {
             const cloud = await loadDecksFromCloud(u.uid);
             if (!authCurrent()) return;
-            if (cloud.length > 0) {
-              const merged = new Map<string, Deck>();
-              for (const d of [...local, ...cloud]) {
-                const existing = merged.get(d.id);
-                if (!existing || d.updatedAt > existing.updatedAt) merged.set(d.id, d);
-              }
-              decks = sortDecks([...merged.values()]); // v5.352：自訂順序優先（對戰選牌組與編輯器一致）
-              saveDecks(decks);
-              void recordCloudDecksRev(u.uid);  // v6.273：全拉完成 → 記下當下雲端 rev
-            } else {
-              // cloud 空 → 用 local（保持原樣，不改動）
-              decks = local;
-            }
+            const plan = planMemberDeckSync({
+              uid: u.uid,
+              localDecks: local,
+              cloudDecks: cloud,
+              ownership,
+              hasOwnershipRecord: hasOwnerRec,
+              legacyCloudRevUid: legacyRevUid,
+            });
+            decks = sortDecks(plan.mergedDecks);
+            saveDecks(decks);
+            if (cloud.length > 0) void recordCloudDecksRev(u.uid);  // v6.273：全拉完成 → 記下當下雲端 rev
           }
         } catch {
           if (!authCurrent()) return;
-          // cloud 不可用 → fallback localStorage（不洗成空）
-          decks = loadDecks();
+          // cloud 不可用 → 使用已隔離之 localStorage（絕不暴露前會員牌組）
+          decks = sortDecks(local);
         }
       } else if (u && u.isAnonymous) {
-        // 匿名身份：純 localStorage
-        decks = loadDecks();
+        // 匿名身份：純 localStorage，且只保留匿名自建／未歸屬牌組
+        const iso = isolateCrossAccountLocalStorage(null);
+        decks = sortDecks(filterDecksForAnonView(iso.isolatedDecks));
       }
       if (!authCurrent()) return;
       // v4.935 Firebase 額度分流 trigger — URL `?mode=online`
@@ -5502,6 +5525,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   async function handleSignOut() {
     if ($googleAuthBusy) return;
     if (!confirm('確定登出？登出後將以匿名模式繼續使用。')) return;
+    const iso = isolateCrossAccountLocalStorage(null);
+    decks = iso.isolatedDecks;
     await signOut(auth);
   }
 
@@ -6008,6 +6033,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     tBrackets = []; tBracketsStale = false; tBracketsEverOk = false; _tBracketSeq++;
     // <<< v6642-bracket-version
     _profileBootUid = ''; profileSelf = null; profileModalTarget = null; profileModalPreview = null; battleSeatAvatars = [null, null]; _battleAvRoomKey = '';
+    const iso = isolateCrossAccountLocalStorage(null);
+    decks = iso.isolatedDecks;
     try { await signOut(auth); } catch { /* ignore */ }
   }
   // v5.650 錦標賽系統播報分類上色：依訊息開頭 emoji／關鍵字歸類，回傳對應 CSS class（皆亮色系，不傷眼）

@@ -362,6 +362,16 @@ const CRITERIA = {
       // ⭐v6.621（Rule 40）：實戰環境熱門牌組排行（loadMetaStats：抓 GET /api/meta-stats，不碰 Firestore；舊伺服器沒有端點時靜默不顯示）。
       'fetch(': 2,
     },
+    'src/routes/decks/+page.svelte': {
+      // ⭐v6.657（Rule 40）：純匿名訪客停發一切 decks/favorites/meta Firestore 讀寫後，
+      //   僅對正式會員（!user.isAnonymous）於 saveAllDecksToCloud／syncMemberAccount 補齊差異遷移與離線待刪同步：
+      //   +2 removeDeckFromCloud(（saveAllDecksToCloud 清 pendingDeleteIds + syncMemberAccount 差異移除）
+      //   +1 loadFavoritesFromCloud( / +1 saveFavoritesToCloud(（syncMemberAccount 會員常用卡牌差異遷移）
+      //   名實相符由下面 C11f 釘，行為由 test-v6657 守。
+      'removeDeckFromCloud(': 2,
+      'loadFavoritesFromCloud(': 1,
+      'saveFavoritesToCloud(': 1,
+    },
   };
   if (hasBaseCommit(ROOT, BASE_SHA)) {
     const drift = [];
@@ -408,6 +418,13 @@ const CRITERIA = {
         const g = read('src/routes/game/+page.svelte'), d = read('src/routes/deck-posts/+page.svelte');
         return g.includes('const url = dprFileUrl(id);') && g.includes('const res = await fetch(url, { headers });')
           && d.includes('try { res = await fetch(DPR_API + path, init); }') && (d.match(/\bfetch\(DPR_API/g) || []).length === 1;
+      })());
+    chk('C11f ⭐⭐ v6.657 /decks 登記的雲端同步呼叫確實只在正式會員路徑（!user.isAnonymous / isMemberUser）執行',
+      (() => {
+        const dk = read('src/routes/decks/+page.svelte');
+        return /\bconst\s+isMemberUser\b/.test(dk)
+          && dk.includes('if (user.isAnonymous)')
+          && dk.includes('if (!isMemberUser(firebaseUser))');
       })());
     // 反安慰劑：判準真的分辨得出差異
     chk('C11b ⭐反安慰劑：countOf 對「多一個 fetch(」判得出來',

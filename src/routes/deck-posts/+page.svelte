@@ -25,7 +25,13 @@
   // <<< v6594-deck-post-thumbs
   import { migrateDeck, migrateCardId } from '$lib/decks/cardIdMigration';
   import { newDeck, upsertDeck, loadDecks } from '$lib/decks/storage';
-  import { syncDeckToCloud } from '$lib/decks/cloud';
+  import { syncDeckToCloud, readLocalDecksRevUid } from '$lib/decks/cloud';
+  import {
+    isolateCrossAccountLocalStorage,
+    markAnonLocalEdit,
+    markMemberLocalEdit,
+    markMemberCloudPushSucceeded,
+  } from '$lib/decks/member-sync';
   import { validateDeck } from '$lib/decks/validation';
   // ⭐ v6.340：這一頁也會跑 validateDeck。不載政策的話，玩家從外部連結直接開公布欄時
   //   會拿程式內建政策判定 ⇒ 出現「公布欄說合法、牌組編輯器說不合法」的分裂。
@@ -564,11 +570,26 @@
         entries: p.entries.map((e) => ({ cardId: e.cardId, count: e.count })),
         order: minOrder - 1,
       });
+      const u = auth.currentUser;
+      const memberUid = u && !u.isAnonymous ? u.uid : null;
+      if (memberUid) {
+        isolateCrossAccountLocalStorage(memberUid, readLocalDecksRevUid());
+      }
       upsertDeck(d);
+      if (typeof localStorage !== 'undefined' && !loadDecks().some((x) => x.id === d.id)) {
+        throw new Error('瀏覽器本機儲存失敗，無法保存匯入牌組');
+      }
+      const ownRes = memberUid ? markMemberLocalEdit(memberUid, [d.id]) : markAnonLocalEdit([d.id]);
+      if (!ownRes.ok) {
+        throw new Error('本機歸屬紀錄寫入失敗：' + ownRes.error);
+      }
       // ⚠ 雲端同步不能等玩家去編輯才做：牌組編輯器只在「儲存」時 syncDeckToCloud，
       //   而它的「從雲端載入」是整包覆蓋 ⇒ 匯入後沒編輯過的牌組會被無聲洗掉。
-      const u = auth.currentUser;
-      if (u && !u.isAnonymous) void syncDeckToCloud(u.uid, d).catch(() => { /* 離線時靜默，牌組已在本機 */ });
+      if (u && !u.isAnonymous) {
+        void syncDeckToCloud(u.uid, d)
+          .then(() => { markMemberCloudPushSucceeded(u.uid, [d.id]); })
+          .catch(() => { /* 離線時靜默，已記於 pendingUpsertIds 待同步 */ });
+      }
       // 合法性只是提示，不擋匯入 —— 標準輪替後舊投稿仍有保存與參考價值。
       const v = validateDeck(d, detailCards);
       if (!v.legal && v.issues.length) importWarn = v.issues[0];

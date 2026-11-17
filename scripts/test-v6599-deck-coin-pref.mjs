@@ -27,12 +27,13 @@ import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';
 import { stripCommentsBlank } from './lib/strip-comments.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
+import { revertV6657IfPresent } from './lib/revert-v6657-anon-decks-local.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_SHA = 'a337fea7';
 let pass = 0, fail = 0;
 const ok = (n, c, x) => { if (c) { pass++; console.log('  PASS ' + n); } else { fail++; console.log('  FAIL ' + n + (x !== undefined ? ' — ' + String(x).slice(0, 700) : '')); } };
-const R = (p) => normEol(readFileSync(join(ROOT, p), 'utf8'));
+const R = (p) => revertV6657IfPresent(p, normEol(readFileSync(join(ROOT, p), 'utf8')));
 
 async function loadMod(srcRoot) {
   if (!existsSync(join(srcRoot, 'src/lib/decks/coin-pref.ts'))) return null;

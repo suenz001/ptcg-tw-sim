@@ -6,6 +6,12 @@ import { migrateCardId, migrateDeck } from './cardIdMigration';
 
 const KEY = 'ptcg-tw-sim:decks';
 
+export type LocalSaveResult = { ok: true } | { ok: false; error: string };
+
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e || '本機儲存失敗');
+}
+
 function browserOnly<T>(fallback: T, fn: () => T): T {
   if (typeof localStorage === 'undefined') return fallback;
   try {
@@ -38,26 +44,43 @@ export function loadDecks(): Deck[] {
   });
 }
 
-export function saveDecks(decks: Deck[]): void {
-  browserOnly<void>(undefined, () => {
+/** 寫入本機牌組並回報是否成功（絕不靜默吞掉 QuotaExceeded / 寫入權限錯誤）。 */
+export function saveDecksChecked(decks: Deck[]): LocalSaveResult {
+  if (typeof localStorage === 'undefined') return { ok: true };
+  try {
     localStorage.setItem(KEY, JSON.stringify(decks));
-  });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: errMsg(e) };
+  }
 }
 
-export function upsertDeck(deck: Deck): Deck[] {
+export function saveDecks(decks: Deck[]): boolean {
+  return saveDecksChecked(decks).ok;
+}
+
+export function upsertDeckChecked(deck: Deck): { decks: Deck[]; save: LocalSaveResult } {
   const decks = loadDecks();
   const i = decks.findIndex((d) => d.id === deck.id);
   const next = { ...deck, updatedAt: new Date().toISOString() };
   if (i >= 0) decks[i] = next;
   else decks.push(next);
-  saveDecks(decks);
-  return decks.map(migrateDeck);
+  const save = saveDecksChecked(decks);
+  return { decks: decks.map(migrateDeck), save };
+}
+
+export function upsertDeck(deck: Deck): Deck[] {
+  return upsertDeckChecked(deck).decks;
+}
+
+export function deleteDeckChecked(id: string): { decks: Deck[]; save: LocalSaveResult } {
+  const next = loadDecks().filter((d) => d.id !== id);
+  const save = saveDecksChecked(next);
+  return { decks: next, save };
 }
 
 export function deleteDeck(id: string): Deck[] {
-  const next = loadDecks().filter((d) => d.id !== id);
-  saveDecks(next);
-  return next;
+  return deleteDeckChecked(id).decks;
 }
 
 export function newDeck(name = '新牌組'): Deck {

@@ -30,8 +30,9 @@
   import { filterPlayerSelectable, resolvePlayerFacingCardId } from '$lib/cards/visibility';
   import {
     loadDecks,
-    upsertDeck,
-    deleteDeck,
+    saveDecksChecked,
+    upsertDeckChecked,
+    deleteDeckChecked,
     newDeck,
     sortDecks
   } from '$lib/decks/storage';
@@ -54,10 +55,29 @@
   //   splitTwoCardStadiumEntries：匯入時攤成左右各半（v6.094）
   //   mergeTwoCardStadiumEntries：v6.101 匯出到官網前把右半併回官方 id（官網沒有右半的 id）
   import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud,
-    cloudDecksUnchanged, recordCloudDecksRev, bumpCloudDecksRev } from '$lib/decks/cloud';  // v6.273 讀取減量
+    cloudDecksUnchanged, recordCloudDecksRev, bumpCloudDecksRev, readLocalDecksRevUid } from '$lib/decks/cloud';  // v6.273 讀取減量
+  import {
+    readDeckOwnership,
+    writeDeckOwnership,
+    hasDeckOwnershipRecord,
+    readFavOwner,
+    writeFavOwner,
+    markAnonLocalEdit,
+    markAnonLocalDelete,
+    markMemberLocalEdit,
+    markMemberCloudDeleteResult,
+    markFavoritesLocalChange,
+    planMemberDeckSync,
+    finalizeOwnershipAfterSync,
+    planFavoritesMigration,
+    combineLocalSaveResults,
+    isCrossAccountOwnership,
+    isolateCrossAccountLocalStorage,
+  } from '$lib/decks/member-sync';
+  import DecksSyncBanner from '$lib/decks/DecksSyncBanner.svelte';
   // v6.267 套牌戰績：`/api/deck-stats` 的唯一出口（快取／防連點／哨兵判定都在裡面）
   import { fetchDeckStats, deckStatsHidden, deckStatsTournamentReady, type DeckStats } from '$lib/decks/deck-stats';
-  import { loadFavorites, saveFavorites } from '$lib/decks/favorites';
+  import { loadFavorites, saveFavoritesChecked } from '$lib/decks/favorites';
   import { saveFavoritesToCloud, loadFavoritesFromCloud } from '$lib/decks/favoritesCloud';
   import { VERSION } from '$lib/version';
   import GoogleAuthButton from '$lib/auth/GoogleAuthButton.svelte';
@@ -90,6 +110,18 @@
   let firebaseUser = $state<User | null>(null);
   let authInitializing = $state(true);
   const authGeneration = createAuthGeneration(() => auth.currentUser?.uid ?? null);
+  let _authSessionEpoch = 0;
+  let _lastEpochUid: string | null = null;
+  let _pageDestroyed = false;
+  function trackSessionUid(uid: string | null) {
+    if (uid !== _lastEpochUid) {
+      _lastEpochUid = uid;
+      _authSessionEpoch++;
+    }
+  }
+  function isOpAlive(uid: string, epoch: number): boolean {
+    return !_pageDestroyed && epoch === _authSessionEpoch && auth.currentUser?.uid === uid;
+  }
   let syncStatus = $state<'idle' | 'syncing' | 'synced' | 'error'>('idle');
   // v5.114：dirty tracking — 牌組編輯後標 dirty，等手動「💾 存檔」才推 cloud
   //   取代 v5.078/v5.092 的自動 debounce push（每次編輯都 setDoc）。
@@ -97,6 +129,45 @@
   //   防丟資料：localStorage 既有 saveDecks 同步寫；beforeunload dirty 才警告。
   let dirtyDeckIds = $state<Set<string>>(new Set());
   let syncError = $state<string | null>(null);
+  let localSaveError = $state<string | null>(null);
+  let _localSaveErrSlots: { decks?: string; favs?: string; owner?: string } = {};
+  const isMemberUser = (u: User | null | undefined): u is User => !!u && !u.isAnonymous;
+
+  function recordLocalSaveResult(
+    res: { ok: true } | { ok: false; error: string },
+    slot: 'decks' | 'favs' | 'owner' | 'all' = 'all',
+  ): boolean {
+    const msg = (e: string) => `⚠️ 瀏覽器本機儲存失敗（${e}）：請檢查瀏覽器容量或隱私設定，重新整理後變更可能會遺失。`;
+    if (slot === 'all') {
+      _localSaveErrSlots = res.ok ? {} : { decks: res.error };
+    } else if (!res.ok) {
+      _localSaveErrSlots = { ..._localSaveErrSlots, [slot]: res.error };
+    } else if (_localSaveErrSlots[slot] !== undefined) {
+      const next = { ..._localSaveErrSlots };
+      delete next[slot];
+      _localSaveErrSlots = next;
+    }
+    const errs = Object.values(_localSaveErrSlots).filter(Boolean) as string[];
+    localSaveError = errs.length > 0 ? msg(errs.join('；')) : null;
+    return res.ok;
+  }
+
+  function persistSingleDeckLocally(deck: Deck): Deck[] {
+    const res = upsertDeckChecked(deck);
+    recordLocalSaveResult(res.save, 'decks');
+    if (!res.save.ok) {
+      const next = [...decks];
+      const idx = next.findIndex((d) => d.id === deck.id);
+      if (idx >= 0) next[idx] = { ...deck, updatedAt: new Date().toISOString() };
+      else next.push({ ...deck, updatedAt: new Date().toISOString() });
+      return sortDecks(next);
+    }
+    const rOwn = isMemberUser(firebaseUser)
+      ? markMemberLocalEdit(firebaseUser.uid, [deck.id])
+      : markAnonLocalEdit([deck.id]);
+    recordLocalSaveResult(rOwn, 'owner');
+    return res.decks;
+  }
 
   // ── Auth modal state ───────────────────────────────────────────────────
   let showAuthModal = $state(false);
@@ -138,25 +209,69 @@
   //   讓自訂順序跨裝置 / 對戰選牌組都一致（原本只 saveDecks 本地、且各處用 createdAt 排序會洗掉）。
   function persistDeckOrder(arr: Deck[]) {
     const now = new Date().toISOString();
-    const renum = arr.map((d, idx) => (d.order === idx ? d : { ...d, order: idx, updatedAt: now }));
+    const changedIds: string[] = [];
+    const renum = arr.map((d, idx) => {
+      if (d.order === idx) return d;
+      changedIds.push(d.id);
+      return { ...d, order: idx, updatedAt: now };
+    });
     decks = renum;
-    // v5.356：此檔故意不在頂層 import saveDecks（見 line ~1021 註解）；用動態 import 寫法，
-    //   否則直接呼叫 saveDecks 會 ReferenceError(玩家回報「卡在牌組套用中 / 順序存不了」真因)。
-    import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(renum));
-    if (firebaseUser && !firebaseUser.isAnonymous) {
+    const rDecks = saveDecksChecked(renum);
+    recordLocalSaveResult(rDecks, 'decks');
+    const rOwn = (rDecks.ok && changedIds.length > 0)
+      ? (isMemberUser(firebaseUser) ? markMemberLocalEdit(firebaseUser.uid, changedIds) : markAnonLocalEdit(changedIds))
+      : null;
+    if (rOwn) recordLocalSaveResult(rOwn, 'owner');
+    if (isMemberUser(firebaseUser) && changedIds.length > 0) {
       const uid = firebaseUser.uid;
-      let orderPushed = false;  // v6.273
-      renum.forEach((d, idx) => {
-        if (arr[idx]?.order !== idx) { orderPushed = true; syncDeckToCloud(uid, d).catch(() => { /* best-effort */ }); }
-      });
-      if (orderPushed) void bumpCloudDecksRev(uid);  // v6.273：order 補寫也是雲端寫入（整批一次）
+      const epoch = _authSessionEpoch;
+      const changedDecks = renum.filter((d) => changedIds.includes(d.id));
+      void (async () => {
+        if (_activeMemberSync && _activeMemberSync.uid === uid) {
+          await _activeMemberSync.promise.catch(() => {});
+          if (!isOpAlive(uid, epoch)) return;
+        }
+        const failedIds: string[] = [];
+        let pushedCount = 0;
+        for (const d of changedDecks) {
+          if (!isOpAlive(uid, epoch)) return;
+          try {
+            await withTimeout(syncDeckToCloud(uid, d));
+            pushedCount++;
+          } catch {
+            failedIds.push(d.id);
+          }
+        }
+        if (!isOpAlive(uid, epoch)) return;
+        let revOk = true;
+        if (pushedCount > 0) {
+          try {
+            await bumpCloudDecksRev(uid);
+          } catch {
+            revOk = false;
+          }
+        }
+        if (!isOpAlive(uid, epoch)) return;
+        if (failedIds.length > 0 || !revOk) {
+          dirtyDeckIds = new Set([...dirtyDeckIds, ...failedIds]);
+          syncStatus = 'error';
+          syncError = '牌組順序雲端同步失敗，已保留於本機，請按存檔或重試同步';
+        } else {
+          const cur = readDeckOwnership();
+          if (cur.kind === 'member' && cur.memberUid === uid) {
+            const known = new Set([...cur.knownCloudIds, ...changedIds]);
+            const nextPend = cur.pendingUpsertIds.filter((id) => !changedIds.includes(id));
+            recordLocalSaveResult(writeDeckOwnership({ ...cur, knownCloudIds: [...known], pendingUpsertIds: nextPend }), 'owner');
+          }
+        }
+      })();
     }
   }
   // v5.798：新增 / 複製 / 匯入產生的新牌組一律置於最頂（越新越頂）。
   //   upsertDeck 會 push 到尾；改為加入後重排成 index 0 並 persistDeckOrder（寫 order 欄位，
   //   跨重載 / 雲端都維持置頂）。所有「產生新牌組」路徑統一走此 helper。
   function addDeckOnTop(d: Deck): void {
-    const all = upsertDeck(d);
+    const all = persistSingleDeckLocally(d);
     const created = all.find(x => x.id === d.id);
     if (!created) { decks = all; return; }
     persistDeckOrder([created, ...all.filter(x => x.id !== d.id)]);
@@ -193,7 +308,11 @@
     if (next.has(cardId)) next.delete(cardId);
     else next.add(cardId);
     favorites = next;  // Svelte 5: 重新賦值觸發 reactivity
-    saveFavorites(next);
+    const rFav = saveFavoritesChecked(next);
+    recordLocalSaveResult(rFav, 'favs');
+    if (rFav.ok) {
+      recordLocalSaveResult(markFavoritesLocalChange(!isMemberUser(firebaseUser), firebaseUser?.uid ?? null), 'owner');
+    }
   }
   // v5.330：常用卡牌雲端存/讀已合併進「牌組存檔/讀取」按鈕（saveAllDecksToCloud /
   //   loadAllDecksFromCloud），不再有獨立的常用存/讀函式與按鈕。
@@ -574,13 +693,17 @@
 
   // v5.078：actualPushDeck 是真正的 cloud setDoc 動作（被 pushDeck debounce 包覆）
   async function actualPushDeck(deck: Deck) {
-    if (!firebaseUser) return;
+    if (!isMemberUser(firebaseUser)) return;
+    const uid = firebaseUser.uid;
+    const epoch = _authSessionEpoch;
     syncStatus = 'syncing';
     try {
-      await withTimeout(syncDeckToCloud(firebaseUser.uid, deck));
-      void bumpCloudDecksRev(firebaseUser.uid);  // v6.273：此路徑目前無人呼叫（v5.114 改手動存檔），防未來啟用時漏 bump
+      await withTimeout(syncDeckToCloud(uid, deck));
+      if (!isOpAlive(uid, epoch)) return;
+      void bumpCloudDecksRev(uid);  // v6.273：此路徑目前無人呼叫（v5.114 改手動存檔），防未來啟用時漏 bump
       syncStatus = 'synced';
     } catch (e) {
+      if (!isOpAlive(uid, epoch)) return;
       syncStatus = 'error';
       syncError = e instanceof Error ? e.message : String(e);
     }
@@ -605,7 +728,7 @@
   const lastPushedSnapshot = new Map<string, string>();
 
   function pushDeck(deck: Deck) {
-    if (!firebaseUser) return;
+    if (!isMemberUser(firebaseUser)) return;
     // v5.092 dirty-check：snapshot 跟上次成功推送完全一樣就 skip 整個排程
     //   注意：必須跟「上次成功推送」比，不能跟 pendingPushes 比 — 那是「下次要推」
     const snapshot = JSON.stringify(deck);
@@ -622,7 +745,7 @@
       const finalDeck = pendingPushes.get(deck.id);
       pendingPushes.delete(deck.id);
       pushTimers.delete(deck.id);
-      if (!finalDeck) return;
+      if (!finalDeck || !isMemberUser(firebaseUser)) return;
       // v5.092 dirty-check (二次)：timer fire 時 final snapshot 跟上次 push 比
       //   若玩家 add→remove 又 revert 回原狀 → 沒實質變更就 skip setDoc
       const finalSnapshot = JSON.stringify(finalDeck);
@@ -642,18 +765,27 @@
   }
 
   // v5.114：setDirty — 取代 pushDeck 在編輯場景的呼叫。
-  //   只標記為「待存檔」，不觸發 Firebase setDoc。玩家必須按「💾 存檔」才推 cloud。
-  //   localStorage 仍同步寫（upsertDeck/saveDecks 是同步），重整頁面不丟。
+  //   匿名訪客僅更新本機歸屬紀錄、絕不觸發 Firestore 同步；正式會員標記待存檔。
   function setDirty(deckId: string) {
-    if (!firebaseUser) return;  // 未登入無 cloud sync 概念
+    if (!isMemberUser(firebaseUser)) {
+      recordLocalSaveResult(markAnonLocalEdit([deckId]), 'owner');
+      return;
+    }
+    recordLocalSaveResult(markMemberLocalEdit(firebaseUser.uid, [deckId]), 'owner');
     if (dirtyDeckIds.has(deckId)) return;  // 已 dirty 不重複（避免 reactive 重渲染）
     dirtyDeckIds = new Set([...dirtyDeckIds, deckId]);
   }
 
   /** 立即執行所有 pending push（beforeunload / onDestroy 用）。
    *  v5.114 後：pushTimers 永遠空（編輯場景已改 setDirty），這個函式變成 no-op。
-   *  保留以防將來想啟用 auto-push fallback。 */
+   *  v6.657：匿名狀態僅清計時器、絕不寫入雲端。 */
   function flushPendingPushes() {
+    if (!isMemberUser(firebaseUser)) {
+      for (const timer of pushTimers.values()) clearTimeout(timer);
+      pushTimers.clear();
+      pendingPushes.clear();
+      return;
+    }
     for (const [deckId, timer] of pushTimers) {
       clearTimeout(timer);
       const deck = pendingPushes.get(deckId);
@@ -671,78 +803,406 @@
   }
 
   async function dropDeck(deckId: string) {
-    if (!firebaseUser) return;
+    if (!isMemberUser(firebaseUser)) {
+      recordLocalSaveResult(markAnonLocalDelete(deckId), 'owner');
+      return;
+    }
+    const uid = firebaseUser.uid;
+    const epoch = _authSessionEpoch;
+    if (dirtyDeckIds.has(deckId)) {
+      const nextDirty = new Set(dirtyDeckIds);
+      nextDirty.delete(deckId);
+      dirtyDeckIds = nextDirty;
+    }
     syncStatus = 'syncing';
     try {
-      await withTimeout(removeDeckFromCloud(firebaseUser.uid, deckId));
-      void bumpCloudDecksRev(firebaseUser.uid);  // v6.273：刪除也是雲端牌組寫入
-      syncStatus = 'synced';
+      await withTimeout(removeDeckFromCloud(uid, deckId));
+      if (!isOpAlive(uid, epoch)) return;
+      recordLocalSaveResult(markMemberCloudDeleteResult(uid, deckId, true), 'owner');
+      void bumpCloudDecksRev(uid);  // v6.273：刪除也是雲端牌組寫入
+      syncStatus = dirtyDeckIds.size > 0 ? 'error' : 'synced';
     } catch (e) {
+      if (!isOpAlive(uid, epoch)) return;
+      recordLocalSaveResult(markMemberCloudDeleteResult(uid, deckId, false), 'owner');
       syncStatus = 'error';
       syncError = e instanceof Error ? e.message : String(e);
     }
   }
 
-  /** v5.114：手動存檔 — 只推 dirty 的牌組（不再 push all）。 */
+  /** v5.114：手動存檔 — 匿名模式僅保存本機並明確提示；會員推差異且失敗保留狀態可重試。 */
   async function saveAllDecksToCloud() {
-    if (!firebaseUser) { alert('尚未登入，無法存檔。'); return; }
-    const dirtyList = decks.filter(d => dirtyDeckIds.has(d.id));
-    syncStatus = 'syncing';
-    try {
-      for (const d of dirtyList) {
-        await withTimeout(syncDeckToCloud(firebaseUser.uid, d));
-      }
-      // v6.273：有實際寫入才 bump 雲端牌組 rev（整批一次，不是每副一次）
-      if (dirtyList.length > 0) void bumpCloudDecksRev(firebaseUser.uid);
-      import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
-      dirtyDeckIds = new Set();  // 清空 dirty（紅點消失）
-      // v5.330：常用卡牌一併存檔；v5.331 改 best-effort — 常用存檔失敗不影響牌組存檔結果
-      let favMsg = ` + ${favorites.size} 張常用卡牌`;
-      try {
-        await withTimeout(saveFavoritesToCloud(firebaseUser.uid, favorites));
-      } catch (fe) {
-        favMsg = `（常用卡牌存檔失敗：${fe instanceof Error ? fe.message : String(fe)}）`;
-      }
-      syncStatus = 'synced';
-      alert(`已存檔 ${dirtyList.length} 個牌組${favMsg}至雲端！`);
-    } catch (e) {
-      syncStatus = 'error';
-      syncError = e instanceof Error ? e.message : String(e);
-      alert('存檔失敗：' + syncError);
+    const rDecksSave = saveDecksChecked(decks);
+    const rFavSave = saveFavoritesChecked(favorites);
+    const okDecks = recordLocalSaveResult(rDecksSave, 'decks');
+    const okFavs = recordLocalSaveResult(rFavSave, 'favs');
+    if (!okDecks || !okFavs) {
+      alert(localSaveError || '瀏覽器本機儲存失敗，請檢查空間或權限設定。');
+      return;
     }
+    if (!isMemberUser(firebaseUser)) {
+      dirtyDeckIds = new Set();
+      syncStatus = 'idle';
+      syncError = null;
+      alert(`已將 ${decks.length} 個牌組與 ${favorites.size} 張常用卡牌保存於此瀏覽器本機（匿名模式不會上傳雲端；登入或建立帳號後可同步跨裝置使用）。`);
+      return;
+    }
+    const uid = firebaseUser.uid;
+    const epoch = _authSessionEpoch;
+    const ownBefore = readDeckOwnership();
+    const sameMemberOwn = ownBefore.kind === 'member' && ownBefore.memberUid === uid;
+    const pendingSet = new Set(sameMemberOwn ? ownBefore.pendingUpsertIds : []);
+    const dirtyList = decks.filter(d => dirtyDeckIds.has(d.id) || pendingSet.has(d.id));
+    const pendingDelIds = sameMemberOwn ? ownBefore.pendingDeleteIds : [];
+    syncStatus = 'syncing';
+    syncError = null;
+    const uploadedIds: string[] = [];
+    const failedIds: string[] = [];
+    const deletedIds: string[] = [];
+    const failedDelIds: string[] = [];
+    for (const delId of pendingDelIds) {
+      if (!isOpAlive(uid, epoch)) return;
+      try {
+        await withTimeout(removeDeckFromCloud(uid, delId));
+        deletedIds.push(delId);
+      } catch {
+        failedDelIds.push(delId);
+      }
+    }
+    for (const d of dirtyList) {
+      if (!isOpAlive(uid, epoch)) return;
+      try {
+        await withTimeout(syncDeckToCloud(uid, d));
+        uploadedIds.push(d.id);
+      } catch {
+        failedIds.push(d.id);
+      }
+    }
+    if (!isOpAlive(uid, epoch)) return;
+    // v6.273：有實際寫入才 bump 雲端牌組 rev（整批一次，不是每副一次）
+    if (uploadedIds.length > 0 || deletedIds.length > 0) void bumpCloudDecksRev(uid);
+    // v5.330：常用卡牌一併存檔
+    let favMsg = ` + ${favorites.size} 張常用卡牌`;
+    let favOk = true;
+    let rFavOwn: { ok: true } | { ok: false; error: string } = { ok: true };
+    try {
+      await withTimeout(saveFavoritesToCloud(uid, favorites));
+      if (!isOpAlive(uid, epoch)) return;
+      rFavOwn = writeFavOwner(uid);
+    } catch (fe) {
+      if (!isOpAlive(uid, epoch)) return;
+      favOk = false;
+      favMsg = `（常用卡牌存檔失敗：${fe instanceof Error ? fe.message : String(fe)}）`;
+    }
+    if (!isOpAlive(uid, epoch)) return;
+    const nextKnown = new Set(sameMemberOwn ? ownBefore.knownCloudIds : []);
+    for (const id of uploadedIds) nextKnown.add(id);
+    for (const id of deletedIds) nextKnown.delete(id);
+    const rOwnWrite = writeDeckOwnership({
+      kind: 'member',
+      memberUid: uid,
+      knownCloudIds: [...nextKnown],
+      pendingUpsertIds: failedIds,
+      pendingDeleteIds: failedDelIds,
+      anonIds: ownBefore.anonIds.filter((id) => !uploadedIds.includes(id) && !deletedIds.includes(id)),
+      pendingFavorites: !favOk,
+    });
+    recordLocalSaveResult(combineLocalSaveResults(rFavOwn, rOwnWrite), 'owner');
+    if (failedIds.length > 0 || failedDelIds.length > 0 || !favOk) {
+      dirtyDeckIds = new Set(failedIds);
+      syncStatus = 'error';
+      syncError = failedIds.length + failedDelIds.length > 0
+        ? `有 ${failedIds.length + failedDelIds.length} 項雲端同步失敗，本機資料已保留，請重試。`
+        : favMsg;
+      alert('部分雲端存檔未完成（已保留於本機，請稍後重試）：' + syncError);
+      return;
+    }
+    dirtyDeckIds = new Set();  // 清空 dirty（紅點消失）
+    syncStatus = 'synced';
+    alert(`已存檔 ${dirtyList.length} 個牌組${favMsg}至雲端！`);
   }
 
   /** Force reload all decks from Firebase (discard local changes). */
   async function loadAllDecksFromCloud() {
-    if (!firebaseUser) { alert('尚未登入，無法讀取。'); return; }
+    if (!isMemberUser(firebaseUser)) {
+      alert('目前為匿名／本機模式（牌組僅存在此瀏覽器），請先登入或建立帳號再從雲端讀取。');
+      return;
+    }
     if (!confirm('確定要從雲端重新讀取牌組與常用卡牌嗎？目前未存檔的本地變更將會被覆蓋。')) return;
+    const uid = firebaseUser.uid;
+    const epoch = _authSessionEpoch;
     syncStatus = 'syncing';
+    syncError = null;
     try {
-      const cloud = await withTimeout(loadDecksFromCloud(firebaseUser.uid));
-      if (cloud.length > 0) {
-        decks = sortDecks(cloud); // v5.352：自訂順序優先
-        import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
-        activeId = decks[0]?.id ?? null;
-        dirtyDeckIds = new Set();  // v5.114：cloud 已是 source of truth，清 dirty
-        void recordCloudDecksRev(firebaseUser.uid);  // v6.273：手動全拉後也記 rev（下次進頁可跳過）
-      }
+      const cloud = await withTimeout(loadDecksFromCloud(uid));
+      if (!isOpAlive(uid, epoch)) return;
+      const nextDecks = cloud.length > 0 ? sortDecks(cloud) : [newDeck('我的第一個牌組')];
+      decks = nextDecks;
+      const rDecksSave = saveDecksChecked(decks);
+      activeId = decks[0]?.id ?? null;
+      dirtyDeckIds = new Set();  // v5.114：cloud 已是 source of truth，清 dirty
+      const rOwnWrite = writeDeckOwnership({
+        kind: 'member',
+        memberUid: uid,
+        knownCloudIds: cloud.map((d) => d.id),
+        pendingUpsertIds: [],
+        pendingDeleteIds: [],
+        anonIds: [],
+        pendingFavorites: false,
+      });
+      if (cloud.length > 0) void recordCloudDecksRev(uid);  // v6.273：手動全拉後也記 rev（下次進頁可跳過）
       // v5.330：常用卡牌一併讀取；v5.331 改 best-effort — 常用讀取失敗不影響牌組讀取結果
       let favMsg = '';
+      let favOk = true;
+      let rFavSave: { ok: true } | { ok: false; error: string } = { ok: true };
+      let rFavOwn: { ok: true } | { ok: false; error: string } = { ok: true };
       try {
-        const favCloud = await withTimeout(loadFavoritesFromCloud(firebaseUser.uid));
+        const favCloud = await withTimeout(loadFavoritesFromCloud(uid));
+        if (!isOpAlive(uid, epoch)) return;
         favorites = favCloud;
-        saveFavorites(favCloud);
-        favMsg = ` + ${favCloud.size} 張常用卡牌`;
+        rFavSave = saveFavoritesChecked(favCloud);
+        if (rFavSave.ok) rFavOwn = writeFavOwner(uid);
+        favMsg = rFavSave.ok ? ` + ${favCloud.size} 張常用卡牌` : ` + ${favCloud.size} 張常用卡牌（本機寫入失敗）`;
       } catch (fe) {
+        if (!isOpAlive(uid, epoch)) return;
+        favOk = false;
         favMsg = `（常用卡牌讀取失敗：${fe instanceof Error ? fe.message : String(fe)}）`;
       }
-      syncStatus = 'synced';
+      recordLocalSaveResult(rDecksSave, 'decks');
+      recordLocalSaveResult(rFavSave, 'favs');
+      recordLocalSaveResult(combineLocalSaveResults(rOwnWrite, rFavOwn), 'owner');
+      syncStatus = favOk ? 'synced' : 'error';
+      if (!favOk) syncError = favMsg;
       alert(`已從雲端載入 ${cloud.length} 個牌組${favMsg}。`);
     } catch (e) {
+      if (!isOpAlive(uid, epoch)) return;
       syncStatus = 'error';
       syncError = e instanceof Error ? e.message : String(e);
       alert('讀取失敗：' + syncError);
     }
+  }
+
+  let _activeMemberSync: { uid: string; forceCloudRead: boolean; promise: Promise<void> } | null = null;
+  let _lastManualMemberSync = { uid: '', at: 0 };
+
+  async function syncMemberAccount(
+    user: User,
+    authCurrent: () => boolean,
+    opts: { forceCloudRead?: boolean } = {},
+  ): Promise<void> {
+    const uid = user.uid;
+    trackSessionUid(uid);
+    const runPromise = (async () => {
+      const legacyRevUid = readLocalDecksRevUid();
+      const rawOwnership = readDeckOwnership();
+      const rawHasOwnerRec = hasDeckOwnershipRecord();
+      const isCrossAccount = isCrossAccountOwnership(uid, rawOwnership, rawHasOwnerRec, legacyRevUid);
+
+      // P1-2：偵測到跨帳號切換時，發起任何雲端請求前立即清洗 localStorage 與記憶體中前帳號的快取與常用清單，
+      // 確保即使後續讀取雲端失敗且玩家離線編輯，重試時也絕不會把前會員資料誤傳給新帳號。
+      let local = loadDecks();
+      let ownership = rawOwnership;
+      let hasOwnerRec = rawHasOwnerRec;
+      let isoSaveRes: { ok: true } | { ok: false; error: string } = { ok: true };
+      const curFavOwner = readFavOwner();
+      if (isCrossAccount || (!!curFavOwner && curFavOwner !== 'anon' && curFavOwner !== uid)) {
+        const iso = isolateCrossAccountLocalStorage(uid, legacyRevUid);
+        isoSaveRes = iso.save;
+        if (iso.clearedFavorites) favorites = new Set();
+        local = iso.isolatedDecks;
+        ownership = iso.ownership;
+        hasOwnerRec = true;
+        decks = sortDecks(local);
+        dirtyDeckIds = new Set();
+        activeId = (activeId && decks.some((d) => d.id === activeId)) ? activeId : (decks[0]?.id ?? null);
+        recordLocalSaveResult(isoSaveRes, 'all');
+      }
+
+      syncStatus = 'syncing';
+      syncError = null;
+
+      try {
+        const canCheckUnchanged =
+          !opts.forceCloudRead
+          && !isCrossAccount
+          && ownership.kind === 'member'
+          && ownership.memberUid === uid
+          && ownership.pendingUpsertIds.length === 0
+          && ownership.pendingDeleteIds.length === 0
+          && !ownership.pendingFavorites
+          && dirtyDeckIds.size === 0
+          && local.length > 0;
+
+        if (canCheckUnchanged) {
+          const unchanged = await cloudDecksUnchanged(uid, local.length);
+          if (!authCurrent()) return;
+          if (unchanged) {
+            decks = sortDecks(local);
+            activeId = (activeId && decks.some((d) => d.id === activeId)) ? activeId : (decks[0]?.id ?? null);
+            syncStatus = 'synced';
+            syncError = null;
+            return;
+          }
+        }
+
+        const cloud = await withTimeout(loadDecksFromCloud(uid));
+        if (!authCurrent()) return;
+
+        const plan = planMemberDeckSync({
+          uid,
+          localDecks: local,
+          cloudDecks: cloud,
+          ownership,
+          hasOwnershipRecord: hasOwnerRec,
+          legacyCloudRevUid: legacyRevUid,
+        });
+
+        const deletedIds: string[] = [];
+        const failedDeleteIds: string[] = [];
+        for (const delId of plan.toDeleteFromCloud) {
+          if (!authCurrent()) return;
+          try {
+            await withTimeout(removeDeckFromCloud(uid, delId));
+            deletedIds.push(delId);
+          } catch {
+            failedDeleteIds.push(delId);
+          }
+        }
+
+        const uploadedIds: string[] = [];
+        const failedUploadIds: string[] = [];
+        for (const d of plan.toUpload) {
+          if (!authCurrent()) return;
+          try {
+            await withTimeout(syncDeckToCloud(uid, d));
+            uploadedIds.push(d.id);
+          } catch {
+            failedUploadIds.push(d.id);
+          }
+        }
+        if (!authCurrent()) return;
+
+        if (uploadedIds.length > 0 || deletedIds.length > 0) {
+          await bumpCloudDecksRev(uid);
+        } else if (cloud.length > 0 && failedUploadIds.length === 0 && failedDeleteIds.length === 0) {
+          void recordCloudDecksRev(uid);
+        }
+        if (!authCurrent()) return;
+
+        // 常用卡牌遷移（僅在跨帳號、首次升級或本機有待同步常用卡時讀取／補差上傳）
+        let favOk = true;
+        let pendingFavoritesRemaining = !!ownership.pendingFavorites;
+        let rFavSave: { ok: true } | { ok: false; error: string } = { ok: true };
+        let rFavOwn: { ok: true } | { ok: false; error: string } = { ok: true };
+        const needFavSync =
+          opts.forceCloudRead
+          || ownership.kind !== 'member'
+          || ownership.memberUid !== uid
+          || !!ownership.pendingFavorites
+          || isCrossAccount
+          || plan.isCrossAccount;
+        if (needFavSync) {
+          try {
+            const cloudFav = await withTimeout(loadFavoritesFromCloud(uid));
+            if (!authCurrent()) return;
+            const favPlan = planFavoritesMigration({
+              uid,
+              localFavorites: favorites,
+              cloudFavorites: cloudFav,
+              favOwner: readFavOwner(),
+              isCrossAccount: isCrossAccount || plan.isCrossAccount,
+            });
+            if (favPlan.needsCloudUpload) {
+              await withTimeout(saveFavoritesToCloud(uid, favPlan.merged));
+              if (!authCurrent()) return;
+            }
+            favorites = favPlan.merged;
+            rFavSave = saveFavoritesChecked(favPlan.merged);
+            if (rFavSave.ok) rFavOwn = writeFavOwner(uid);
+            pendingFavoritesRemaining = false;
+          } catch {
+            if (!authCurrent()) return;
+            favOk = false;
+          }
+        }
+
+        let rDecksSave: { ok: true } | { ok: false; error: string };
+        if (plan.mergedDecks.length === 0) {
+          const first = newDeck('我的第一個牌組');
+          rDecksSave = saveDecksChecked([first]);
+          decks = [first];
+          activeId = first.id;
+        } else {
+          rDecksSave = saveDecksChecked(plan.mergedDecks);
+          decks = plan.mergedDecks;
+          activeId = (activeId && decks.some((d) => d.id === activeId)) ? activeId : (decks[0]?.id ?? null);
+        }
+
+        const nextOwnership = finalizeOwnershipAfterSync({
+          uid,
+          cloudIdsBefore: cloud.map((d) => d.id),
+          uploadedIds,
+          failedUploadIds,
+          deletedIds,
+          failedDeleteIds,
+          pendingFavoritesRemaining,
+        });
+        const rOwnSave = writeDeckOwnership(nextOwnership);
+        recordLocalSaveResult(isoSaveRes, 'all');
+        recordLocalSaveResult(rDecksSave, 'decks');
+        recordLocalSaveResult(rFavSave, 'favs');
+        recordLocalSaveResult(combineLocalSaveResults(rFavOwn, rOwnSave), 'owner');
+
+        dirtyDeckIds = new Set(failedUploadIds);
+        if (failedUploadIds.length > 0 || failedDeleteIds.length > 0 || !favOk) {
+          syncStatus = 'error';
+          syncError = '部分牌組或常用卡牌同步失敗，已保留於本機，請檢查網路後重試。';
+        } else {
+          syncStatus = 'synced';
+          syncError = null;
+        }
+      } catch (e) {
+        if (!authCurrent()) return;
+        decks = isCrossAccount ? local : sortDecks(local);
+        activeId = (activeId && decks.some((d) => d.id === activeId)) ? activeId : (decks[0]?.id ?? null);
+        syncStatus = 'error';
+        syncError = e instanceof Error ? e.message : String(e || '雲端同步失敗');
+      }
+    })();
+
+    const tracker = { uid, forceCloudRead: !!opts.forceCloudRead, promise: runPromise };
+    _activeMemberSync = tracker;
+    try {
+      await runPromise;
+    } finally {
+      if (_activeMemberSync === tracker) _activeMemberSync = null;
+    }
+  }
+
+  async function triggerMemberSyncAfterAuth(user: User | null | undefined) {
+    if (!user) return;
+    firebaseUser = user;
+    authInitializing = false;
+    if (!isMemberUser(user)) return;
+    if (_activeMemberSync && _activeMemberSync.uid === user.uid) {
+      const hadForce = _activeMemberSync.forceCloudRead;
+      await _activeMemberSync.promise;
+      if (hadForce || auth.currentUser?.uid !== user.uid) return;
+    }
+    _lastManualMemberSync = { uid: user.uid, at: Date.now() };
+    const authCurrent = authGeneration.begin(user.uid);
+    await syncMemberAccount(user, authCurrent, { forceCloudRead: true });
+  }
+
+  async function retryMemberSync() {
+    if (!isMemberUser(firebaseUser)) return;
+    const targetUser = firebaseUser;
+    if (_activeMemberSync && _activeMemberSync.uid === targetUser.uid) {
+      const hadForce = _activeMemberSync.forceCloudRead;
+      await _activeMemberSync.promise;
+      if (hadForce || auth.currentUser?.uid !== targetUser.uid) return;
+    }
+    const authCurrent = authGeneration.begin(targetUser.uid);
+    await syncMemberAccount(targetUser, authCurrent, { forceCloudRead: true });
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────
@@ -773,9 +1233,23 @@
       }));
     }).catch(() => {/* non-critical */});
 
-    // ② Firebase anonymous auth; on sign-in, merge cloud ↔ local decks
+    // ② Firebase auth; anonymous stays local-only, members run diff sync
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      if (user && !user.isAnonymous) {
+        if (_activeMemberSync && _activeMemberSync.uid === user.uid) {
+          firebaseUser = user;
+          authInitializing = false;
+          await _activeMemberSync.promise;
+          return;
+        }
+        if (_lastManualMemberSync.uid === user.uid && Date.now() - _lastManualMemberSync.at < 3000) {
+          firebaseUser = user;
+          authInitializing = false;
+          return;
+        }
+      }
       const authCurrent = authGeneration.begin(user?.uid ?? null);
+      trackSessionUid(user?.uid ?? null);
       firebaseUser = user;
       if (user) authInitializing = false;
       if (!user) {
@@ -792,66 +1266,32 @@
         return;
       }
 
-      // Load local decks first so UI is responsive immediately
-      const local = loadDecks();
-
-      // Then fetch cloud decks and merge
-      try {
-        syncStatus = 'syncing';
-        // v6.273 Firestore 讀取減量：先用 1 讀（users/{uid}/meta/decks）判斷雲端牌組
-        //   自上次全拉後有沒有變；沒變且本地牌組非空 → 直接沿用上次 merge 存進
-        //   localStorage 的牌組，省掉整批 getDocs（每副牌 1 讀）。任何不確定（首次進站/
-        //   換裝置/換帳號/隱私模式/meta 不存在/讀取失敗）一律回 false，走原本的全拉＋merge。
-        const cloudUnchanged = await cloudDecksUnchanged(user.uid, local.length);
+      if (user.isAnonymous) {
+        // v6.657：純匿名訪客只使用瀏覽器本機儲存，對 Firestore 發 0 次讀寫；若先前提他頁登出殘留前帳號快取亦先隔離
+        dirtyDeckIds = new Set();
+        syncStatus = 'idle';
+        syncError = null;
+        _lastManualMemberSync = { uid: '', at: 0 };
+        const iso = isolateCrossAccountLocalStorage(null);
+        if (iso.clearedFavorites) favorites = new Set();
+        const local = iso.isolatedDecks;
         if (!authCurrent()) return;
-        const cloud = cloudUnchanged ? [] : await withTimeout(loadDecksFromCloud(user.uid));
-        if (!authCurrent()) return;
-
-        if (cloudUnchanged) {
-          // 雲端沒變 → localStorage 裡就是上次 merge 的最新結果（此分支只讀不寫）
-          decks = sortDecks(local);
-        } else if (cloud.length === 0 && local.length > 0) {
-          // First-time cloud: push existing local decks up
-          for (const d of local) {
-            if (!authCurrent()) return;
-            await syncDeckToCloud(user.uid, d);
-          }
-          if (!authCurrent()) return;
-          void bumpCloudDecksRev(user.uid);  // v6.273：首次上傳完成 → 建 meta
-          decks = local;
-        } else if (cloud.length > 0) {
-          // Merge by updatedAt: newer wins
-          const merged = new Map<string, Deck>();
-          for (const d of [...local, ...cloud]) {
-            const existing = merged.get(d.id);
-            if (!existing || d.updatedAt > existing.updatedAt) merged.set(d.id, d);
-          }
-          decks = sortDecks([...merged.values()]); // v5.352：自訂順序優先
-          // Persist merged result locally
-          const mergedDecks = decks;
-          import('$lib/decks/storage').then(({ saveDecks }) => { if (authCurrent()) saveDecks(mergedDecks); });
-          void recordCloudDecksRev(user.uid);  // v6.273：全拉完成 → 記下當下雲端 rev
+        if (local.length === 0) {
+          const first = newDeck('我的第一個牌組');
+          const res = upsertDeckChecked(first);
+          recordLocalSaveResult(iso.save, 'all');
+          recordLocalSaveResult(res.save, 'decks');
+          decks = res.save.ok ? res.decks : [first];
+          activeId = first.id;
         } else {
+          recordLocalSaveResult(iso.save, 'all');
           decks = local;
+          activeId = (activeId && decks.some((d) => d.id === activeId)) ? activeId : decks[0].id;
         }
-
-        syncStatus = 'synced';
-      } catch {
-        if (!authCurrent()) return;
-        // Cloud unavailable — fall back to local silently
-        decks = local;
-        syncStatus = 'error';
+        return;
       }
 
-      if (!authCurrent()) return;
-      if (decks.length === 0) {
-        const first = newDeck('我的第一個牌組');
-        decks = upsertDeck(first);
-        setDirty(first.id);  // v5.114
-        activeId = first.id;
-      } else {
-        activeId = decks[0].id;
-      }
+      await syncMemberAccount(user, authCurrent, { forceCloudRead: false });
     });
 
     // v5.114：beforeunload 改成「未存檔 dirty 才警告離開」。
@@ -859,7 +1299,7 @@
     //   表示玩家編輯後沒按存檔；觸發瀏覽器原生「未儲存變更，確定離開？」prompt。
     //   localStorage 已 sync 寫過 → 重整不丟，僅警告 cloud 同步缺失。
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (dirtyDeckIds.size > 0) {
+      if (dirtyDeckIds.size > 0 || localSaveError !== null) {
         e.preventDefault();
         e.returnValue = '';  // 瀏覽器顯示原生 prompt
         return '';
@@ -870,6 +1310,8 @@
     }
 
     return () => {
+      _pageDestroyed = true;
+      _authSessionEpoch++;
       authGeneration.invalidate();
       unsubAuth();
       // v5.078：cleanup — flush 待推 + 移除 beforeunload listener
@@ -890,9 +1332,11 @@
 
   function removeDeck(id: string) {
     if (!confirm('確定要刪除這個牌組嗎？')) return;
-    decks = deleteDeck(id);
+    const res = deleteDeckChecked(id);
+    recordLocalSaveResult(res.save, 'decks');
+    decks = res.save.ok ? res.decks : decks.filter((d) => d.id !== id);
     if (activeId === id) activeId = decks[0]?.id ?? null;
-    dropDeck(id);
+    void dropDeck(id);
   }
 
   // ══ v6.267 套牌戰績（🔍，就在 ✕ 旁邊）══════════════════════════════════════
@@ -942,7 +1386,7 @@
   function setActiveNotes(notes: string) {
     if (!active || isPresetActive) return;
     const updated = { ...active, notes };
-    decks = upsertDeck(updated);
+    decks = persistSingleDeckLocally(updated);
     setDirty(updated.id);
   }
 
@@ -952,14 +1396,14 @@
     const p = normalizeDeckCoinPref(v);
     const updated: Deck = { ...active };
     if (p) updated.coinPref = p; else delete updated.coinPref;
-    decks = upsertDeck(updated);
+    decks = persistSingleDeckLocally(updated);
     setDirty(updated.id);
   }
 
   function renameActive(name: string) {
     if (!active || isPresetActive) return;
     const updated = { ...active, name };
-    decks = upsertDeck(updated);
+    decks = persistSingleDeckLocally(updated);
     setDirty(updated.id);  // v5.114
   }
 
@@ -996,7 +1440,7 @@
     bump(card.id, 1);
     if (partnerId) bump(partnerId, 1);
     const updated = { ...active, entries };
-    decks = upsertDeck(updated);
+    decks = persistSingleDeckLocally(updated);
     setDirty(updated.id);  // v5.114
   }
 
@@ -1009,7 +1453,7 @@
       .map((e) => (drop.has(e.cardId) ? { ...e, count: e.count - 1 } : e))
       .filter((e) => e.count > 0);
     const updated = { ...active, entries };
-    decks = upsertDeck(updated);
+    decks = persistSingleDeckLocally(updated);
     setDirty(updated.id);  // v5.114
   }
 
@@ -1017,7 +1461,7 @@
     if (!active || isPresetActive) return;
     if (!confirm('清空此牌組？')) return;
     const updated = { ...active, entries: [] };
-    decks = upsertDeck(updated);
+    decks = persistSingleDeckLocally(updated);
     setDirty(updated.id);  // v5.114
   }
 
@@ -1344,8 +1788,7 @@
       //   這裡原本寫 `Date.now()`（數字）⇒ 雲端合併的 `d.updatedAt > existing.updatedAt`
       //   會拿數字跟 ISO 字串比大小，永遠比不出正確結果。
       const updated = { ...active!, entries: mergedEntries, updatedAt: new Date().toISOString() };
-      decks = decks.map(d => d.id === active!.id ? updated : d);
-      import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
+      decks = persistSingleDeckLocally(updated);
       setDirty(updated.id);  // v5.114
       const totalCards = mergedEntries.reduce((s, e) => s + e.count, 0);
       const cachedNote = data.cached ? '（cache hit）' : '';
@@ -1679,15 +2122,18 @@
     showAuthModal = true;
   }
 
-  /** 匿名帳號升級為 Email 帳號（保留現有 uid 與牌組） */
+  /** 匿名帳號升級為 Email 帳號（保留現有 uid 與牌組；同 UID 升級也必須遞增 revision 並主動觸發遷移同步） */
   async function upgradeAccount() {
     if (authLoading || $googleAuthBusy) return;
     if (!authEmail || !authPassword) { authError = '請輸入 Email 和密碼'; return; }
     authLoading = true; authError = null;
     try {
       const credential = EmailAuthProvider.credential(authEmail, authPassword);
-      await linkWithCredential(auth.currentUser!, credential);
+      const result = await linkWithCredential(auth.currentUser!, credential);
       showAuthModal = false;
+      authPassword = '';
+      googleAuthRevision.update((v) => v + 1);
+      await triggerMemberSyncAfterAuth(result?.user ?? auth.currentUser);
     } catch (e: any) {
       authError = friendlyAuthError(e.code);
     } finally { authLoading = false; }
@@ -1699,9 +2145,11 @@
     if (!authEmail || !authPassword) { authError = '請輸入 Email 和密碼'; return; }
     authLoading = true; authError = null;
     try {
-      await signInWithEmailAndPassword(auth, authEmail, authPassword);
-      // onAuthStateChanged 會自動觸發，重新載入雲端牌組
+      const result = await signInWithEmailAndPassword(auth, authEmail, authPassword);
       showAuthModal = false;
+      authPassword = '';
+      googleAuthRevision.update((v) => v + 1);
+      await triggerMemberSyncAfterAuth(result?.user ?? auth.currentUser);
     } catch (e: any) {
       authError = friendlyAuthError(e.code);
     } finally { authLoading = false; }
@@ -1710,7 +2158,25 @@
   /** 登出（回到匿名狀態） */
   async function handleSignOut() {
     if ($googleAuthBusy) return;
-    if (!confirm('確定登出？登出後將以匿名模式繼續使用。')) return;
+    const msg = dirtyDeckIds.size > 0
+      ? `尚有 ${dirtyDeckIds.size} 個牌組尚未同步至雲端，確定要登出嗎？登出後將改回匿名本機模式。`
+      : '確定登出？登出後將以匿名模式繼續使用。';
+    if (!confirm(msg)) return;
+    _authSessionEpoch++;
+    authGeneration.invalidate();
+    for (const timer of pushTimers.values()) clearTimeout(timer);
+    pushTimers.clear();
+    pendingPushes.clear();
+    dirtyDeckIds = new Set();
+    syncStatus = 'idle';
+    syncError = null;
+    _lastManualMemberSync = { uid: '', at: 0 };
+    // 登出後隔離前帳號的本機快取（僅保留匿名自建牌組與匿名常用清單），避免共用瀏覽器殘留或跨帳號誤認
+    const iso = isolateCrossAccountLocalStorage(null);
+    decks = iso.isolatedDecks;
+    activeId = decks[0]?.id ?? null;
+    if (iso.clearedFavorites) favorites = new Set();
+    recordLocalSaveResult(iso.save);
     await signOut(auth);
     // onAuthStateChanged 會觸發並以匿名重新登入
   }
@@ -1867,7 +2333,7 @@
     {/snippet}
     {#snippet account()}
       {#if firebaseUser}
-        <AccountBar email={accountAuthState.email} anonymous={isAnonymous} {syncStatus} {syncError} unsaved={dirtyDeckIds.size} busy={authInitializing || authLoading || cpLoading || $googleAuthBusy} googleUser={firebaseUser} onGoogleComplete={(user) => { firebaseUser = user; }}
+        <AccountBar email={accountAuthState.email} anonymous={isAnonymous} {syncStatus} {syncError} unsaved={dirtyDeckIds.size} busy={authInitializing || authLoading || cpLoading || $googleAuthBusy} googleUser={firebaseUser} onGoogleComplete={(user) => { void triggerMemberSyncAfterAuth(user); }}
           onCreateAccount={openAuthModal} onChangePassword={accountAuthState.password ? openChangePasswordModal : undefined} onSignOut={handleSignOut} />
       {:else}
         <AccountBar {syncStatus} {syncError} unsaved={dirtyDeckIds.size} />
@@ -1886,10 +2352,11 @@
         <strong>我的牌組</strong>
         <div class="rail-actions">
           <button class="small" onclick={createDeck}>+ 新增</button>
-          <button class="small cloud-btn" class:has-dirty={dirtyDeckIds.size > 0} onclick={saveAllDecksToCloud} title={dirtyDeckIds.size > 0 ? `有 ${dirtyDeckIds.size} 個牌組待存檔（連同常用卡牌一起存）` : '將牌組與常用卡牌存檔至雲端'}>存檔{#if dirtyDeckIds.size > 0} ●{/if}</button>
-          <button class="small cloud-btn" onclick={loadAllDecksFromCloud} title="從雲端重新讀取牌組與常用卡牌">讀取</button>
+          <button class="small cloud-btn" class:has-dirty={dirtyDeckIds.size > 0} onclick={saveAllDecksToCloud} title={isAnonymous ? '儲存至目前瀏覽器本機（匿名模式不會上傳雲端）' : (dirtyDeckIds.size > 0 ? `有 ${dirtyDeckIds.size} 個牌組待存檔（連同常用卡牌一起存）` : '將牌組與常用卡牌存檔至雲端')}>存檔{#if dirtyDeckIds.size > 0} ●{/if}</button>
+          <button class="small cloud-btn" onclick={loadAllDecksFromCloud} title={isAnonymous ? '登入或建立帳號後可從雲端讀取牌組' : '從雲端重新讀取牌組與常用卡牌'}>讀取</button>
         </div>
       </div>
+      <DecksSyncBanner anonymous={isAnonymous} initializing={authInitializing} {syncStatus} {syncError} {localSaveError} onOpenAuth={openAuthModal} onRetrySync={retryMemberSync} />
       <ul class="deck-list">
         {#each decks as d (d.id)}
           <li class:active={d.id === activeId} data-deck-sort-item data-deck-id={d.id}>
@@ -2457,7 +2924,7 @@
       <button class="pv-close" onclick={() => { showAuthModal = false; }} aria-label="關閉">×</button>
 
       <h3 class="modal-title">帳號管理</h3>
-      <GoogleAuthButton user={firebaseUser} disabled={authInitializing || authLoading || cpLoading} oncomplete={(user) => { firebaseUser = user; authPassword = ''; showAuthModal = false; }} />
+      <GoogleAuthButton user={firebaseUser} disabled={authInitializing || authLoading || cpLoading} oncomplete={(user) => { authPassword = ''; showAuthModal = false; void triggerMemberSyncAfterAuth(user); }} />
 
       <!-- Tab bar -->
       <div class="auth-tabs">

@@ -19,9 +19,18 @@ export function loadFavorites(): Set<string> {
   });
 }
 
-/** 寫入本地. caller 應自己先 mutate set, 再呼叫此函式. */
-export function saveFavorites(set: Set<string>): void {
-  browserOnly<void>(undefined, () => {
+/** 寫入本地並回報是否成功（不靜默吞錯）. */
+export function saveFavoritesChecked(set: Set<string>): { ok: true } | { ok: false; error: string } {
+  if (typeof localStorage === 'undefined') return { ok: true };
+  try {
     localStorage.setItem(KEY, JSON.stringify([...set]));
-  });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e || '本機常用卡牌儲存失敗') };
+  }
+}
+
+/** 寫入本地. caller 應自己先 mutate set, 再呼叫此函式. */
+export function saveFavorites(set: Set<string>): boolean {
+  return saveFavoritesChecked(set).ok;
 }

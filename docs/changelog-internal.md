@@ -1,5 +1,31 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.657 — Firestore 索引精簡部署、匿名組牌純本機化與第三階段 Dry-Run 清理方案（2026-11-17）
+
+基準：`652db337`（v6.656）。
+
+### 第一階段：Firestore 索引精簡（已部署至線上 `ptcg-tw-sim`）
+- **部署前核對與還原依據**：透過 `firebase firestore:indexes` 確認線上原有 1 組 `rooms` 複合索引（`status ASC, createdAt DESC`）與 `fieldOverrides: []`（無額外 `decks` collection-group 索引）。全站 `src/` 與 `oracle-admin/` 僅 `server_admin_patch.js` 的寫入 Audit 查詢 `createdAt`／`updatedAt`；`entries` 與 `notes` 未被任何 `where`／`orderBy`／複合索引使用。
+- **部署變更**：更新 [firestore.indexes.json](../firestore.indexes.json)，保留既有 `rooms` 複合索引，僅針對 `collectionGroup: "decks"` 的 `entries`、`notes` 設定 `indexes: []`（停用自動單欄索引）；未套用 `fieldPath: "*"`，保留 `name`、`createdAt`、`updatedAt`、`order`。已執行 `firebase deploy --only firestore:indexes` 並再次查詢 `firebase firestore:indexes` 驗證線上生效。
+- **保守口徑**：索引儲存回收與帳單金額需待後續計費週期實測觀察，不預先宣稱「100% 不影響」或保證尚未量測的降幅；同時紀錄原 `oracle-admin`「每個 `count()` 只算一次讀取」註解並不準確（依官方計費是按掃描索引筆數每 1,000 筆計 1 次）。
+
+### 第二階段：純匿名訪客組牌改為本機儲存＋安全差異遷移
+- **匿名零雲端寫入／讀取**：`src/routes/decks/+page.svelte` 保留 `signInAnonymously` 供其他功能正常運作，但當 `user.isAnonymous` 或尚未登入時，`decks`、`favorites`、`meta` 對 Firestore 發出 **0 次讀寫**。新增 `DecksSyncBanner.svelte` 與 `AccountBar.svelte` 提示，匿名模式明確顯示「目前僅存在此瀏覽器，登入後可同步跨裝置使用」。
+- **本機寫入錯誤不吞掉**：`storage.ts` 與 `favorites.ts` 新增 `saveDecksChecked`、`upsertDeckChecked`、`deleteDeckChecked`、`saveFavoritesChecked`（並保留原有相容函式簽名）；若 `localStorage` 寫入拋錯（例如無痕／配額已滿），介面明確顯示 `localSaveError`，不假裝保存成功，也不會誤切為雲端已同步。
+- **本機歸屬隔離與差異同步（`src/lib/decks/member-sync.ts`）**：
+  - 以 `LocalDeckOwnership`（`ptcg-tw-sim:decks-owner-v1`）與 `FAVS_OWNER_LS_KEY`（`ptcg-tw-sim:favs-owner-v1`）區分匿名自建 `anonIds` 與曾屬特定會員 UID 的雲端快取 `knownCloudIds`，並以 `pendingUpsertIds` / `pendingDeleteIds` / `pendingFavorites` 記錄離線待補操作。
+  - 覆蓋所有登入／升級入口：`onAuthStateChanged`、匿名升級 Email（同 UID `linkWithCredential`）、綁定 Google（同 UID `linkWithPopup`）、既有帳號碰撞切換（`signInWithCredential`）、以及 `AccountBar`／`AuthModal` 的 `GoogleAuthButton` callback (`triggerMemberSyncAfterAuth`)。
+  - 修補原本 `cloud.length > 0` 只合併本機而不上傳新增／較新牌組卻誤標 `synced` 的缺口：`planMemberDeckSync` 僅上傳新增或 `updatedAt` 嚴格較新且內容非等價的差異牌組，不以較舊或無變動本機覆蓋雲端較新資料；跨帳號切換不誤傳前會員牌組／常用卡牌；`handleSignOut` 亦會清理非匿名快取；`AuthGeneration` 守住登出／切換 UID 後過期非同步任務不再回寫畫面或錯寫雲端；失敗保留本機與可重試狀態（`syncStatus = 'error'`），僅全部成功後才標為 `'synced'`。
+
+### 第三階段：舊匿名資料清理 Dry-Run 與備份／還原方案（尚未執行任何正式刪除）
+- 另建唯讀預覽工具 `scripts/firestore-anon-cleanup-dryrun.mjs`（預設強制 Dry-Run；未經站長明確核准與備份驗證前絕不刪除任何資料），規劃含：`lastSignInTime` + `lastRefreshTime` + Firestore `updatedAt`/`createdAt` 綜合判定、檢查所有 `providerData`（非僅無 Email）、正式刪除前二次覆驗與競態排除、單獨列計父文件與各子集合、全專案同計費日（太平洋時間重置）跨執行累積上限（保留當日其他刪除餘裕 <18,000/日）、可還原 JSON/GCS 備份與稽核名單、僅限核准 Firestore 路徑（不刪 Auth／MongoDB），以及舊分頁未更新寫入過渡說明。
+
+### 驗證與獨立審查
+- **跨頁與元件補齊**：同步處理 `src/routes/game/+page.svelte`（登入／登出與匿名檢視隔離）及 `src/routes/deck-posts/+page.svelte`（投稿匯入依匿名／會員分別記錄 `anonIds` 或 `pendingUpsertIds`，推送成功後更新 `knownCloudIds` 且防併發登出回寫）。
+- **獨立唯讀審查／複審**：已由唯讀 `research` 子代理完成兩輪審查與最終確認；初審提出的 3 項 P1（4 支既有守衛還原鏈、跨帳號初始讀取失敗隔離、`/game`＋`/deck-posts` 對齊）、4 項 P2（`DecksSyncBanner` 淺色選擇器 `[data-theme="light"]`、`_localSaveErrSlots` 分槽錯誤避免小筆寫入清掉大筆錯誤、存／讀補差與 epoch 鎖、同 UID Email 升級遞增 `googleAuthRevision`）及 P3（Dry-Run 嚴格要求 `lastRefreshTime`＋二次覆驗＋迴圈讀預算檢查）已全數修妥並經複審認定 **0 P1 / 0 P2**。
+- **本機與實測證據**：`npm run build` 完成正式靜態建置；`test-v6657-anon-decks-local.mjs` **15 PASS / 0 FAIL**（含 Mock Firebase 同步狀態機、同 UID 升級、跨帳號離線失敗重試與 Chromium Playwright 元件實測）；`test-v6272` (**42/0**)、`test-v6273` (**58/0**)、`test-v6340` (**59/0**)、`test-v6271` (**40/0**)、`test-v6267` (**56/0**)、`test-v6277` (**79/0**)、`test-v6599` (**18/0**)、`test-v6283` (**30/0**)、`test-v6297` (**42/0**)、`test-v6474` (**44/0**)、`test-deck-posts-page` (**29/0**)、`test-v6264` (**38/0**)、`test-changelog-size-and-archive` (**16/0**)、`test-v6651` (**63/0**)、`test-v6652` (**83/0**)、`test-v6653` (**17/0**)、`test-v6656` (**111/0**)、`test-v6101` (**53/0**)、`test-pw-gate` (**26/0**)、`test-runner-and-chain-hygiene` (**16/0**)、`test-sandbox-head-index` (**31/0**)、`anti-pattern-lint` 與 `svelte-check` 均已跑驗；註 `test-v6477` 在 Windows 本機因 Python stdout CRLF (`29077` vs `28834`) 呈 `16 PASS / 1 FAIL`（`<style>` 逐字未動），CI（Linux）及完整 `npm test` 交由 GitHub Actions `Iron Rules Audit`／`Deploy to GitHub Pages` 最終把關。
+
+
 ## v6.656 — 查卡／組牌稀有度與特性篩選、費用數字化與 RWD 對齊（2026-11-17）
 
 基準：`a5900f14`（v6.655）。

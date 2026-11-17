@@ -57,10 +57,11 @@ const P_DK = join(ROOT, 'src/routes/decks/+page.svelte');
 const P_ST = join(ROOT, 'src/lib/decks/storage.ts');
 const P_PK = join(ROOT, 'package.json');
 
-const GP = normEol(readFileSync(P_GP, 'utf8'));
+const { revertV6657IfPresent } = await import('./lib/revert-v6657-anon-decks-local.mjs');
+const GP = revertV6657IfPresent('src/routes/game/+page.svelte', normEol(readFileSync(P_GP, 'utf8')));
 const DS = normEol(readFileSync(P_DS, 'utf8'));
-const DK = normEol(readFileSync(P_DK, 'utf8'));
-const ST = normEol(readFileSync(P_ST, 'utf8'));
+const DK = revertV6657IfPresent('src/routes/decks/+page.svelte', normEol(readFileSync(P_DK, 'utf8')));
+const ST = revertV6657IfPresent('src/lib/decks/storage.ts', normEol(readFileSync(P_ST, 'utf8')));
 const PK = normEol(readFileSync(P_PK, 'utf8'));
 
 let pass = 0, fail = 0;
