@@ -422,25 +422,73 @@ else if (chromium) {
       await pg.locator('.treplay-btn', { hasText: '離開' }).click(); await pg.waitForTimeout(400);
       const back = await pg.evaluate(() => !!document.querySelector('.replay-lobby') && !document.querySelector('.treplay-bar'));
       ok('★★[E5] 離開復盤回到復盤清單', back);
-      // 記錄：開一局 vs AI，打到自己的回合再結束幾次 ⇒ 瀏覽器裡有這一局的進行中記錄
+      // 本機雙人不記錄：明確關掉預設 AI，真的完成兩席設置並換回合。
       await pg.goto(`http://localhost:${port}/game`, { waitUntil: 'load' });
       await pg.waitForSelector('.mode-card:not([disabled])', { timeout: 60000 });
       await pg.locator('.mode-card', { hasText: '本機雙人' }).click();
+      const aiToggle = pg.locator('main.lobby .ai-toggle input[type=checkbox]');
+      await aiToggle.uncheck();
+      if (await aiToggle.isChecked() || !(await pg.getByLabel('玩家 2 名稱', { exact: true }).isVisible())) throw new Error('E6 未切成本機雙人');
       const sels = pg.locator('main.lobby select');
       await sels.nth(0).selectOption('__preset_tactic_dragonite__');
       await sels.nth(1).selectOption('__preset_tactic_gardevoir__');
       const start = pg.locator('button.btn-primary', { hasText: '開始' });
       for (let i = 0; i < 30 && !(await start.isEnabled()); i++) await pg.waitForTimeout(500);
       await start.click();
-      await pg.waitForSelector('.hand-card.draggable', { timeout: 60000 }); await pg.waitForTimeout(1200);
-      const a = await pg.locator('.hand-card.draggable').first().boundingBox(), z = await pg.locator('.my-active-zone').boundingBox();
-      await pg.mouse.move(a.x + a.width / 2, a.y + a.height / 2); await pg.mouse.down();
-      await pg.mouse.move(a.x + 20, a.y - 10, { steps: 3 }); await pg.mouse.move(z.x + z.width / 2, z.y + z.height / 2, { steps: 12 }); await pg.mouse.up(); await pg.waitForTimeout(700);
-      const sysBtn = pg.locator('button:visible:not([disabled])', { hasText: /^確定|我看完了|不選|確認補抽|完成補抽|準備完成|跳過攻擊|結束回合/ });
+      await pg.waitForSelector('.playmat', { timeout: 60000 });
+      const setupTrace = [], setupDeadline = Date.now() + 60000;
+      let prepared = 0, ended = 0;
+      // 固定盲按十五次會吞掉遮罩／拖牌失敗，且無法替第二席設置。只按當前可見的合法操作；逾時連同盤面回報。
+      while (Date.now() < setupDeadline) {
+        await pg.waitForTimeout(350);
+        const state = await pg.evaluate(() => ({
+          turn: document.querySelector('.turn-info')?.textContent ?? '',
+          modal: [...document.querySelectorAll('.selection-modal')].filter(e => e.getBoundingClientRect().width > 0).map(e => e.textContent.trim().slice(0, 180)),
+          empty: !!document.querySelector('.my-active-zone .active-empty'),
+          buttons: [...document.querySelectorAll('.action-btns button')].map(e => ({ text: e.textContent.trim(), disabled: e.disabled })),
+        }));
+        setupTrace.push(state);
+        const turn = Number((state.turn.match(/回合\s*(\d+)/) || [])[1] || 0);
+        if (turn >= 2 && prepared === 2 && ended > 0) break;
+        const modal = pg.locator('.selection-modal:visible').last();
+        if (await modal.count()) {
+          const confirm = modal.locator('button:visible:not([disabled])', { hasText: /我看完了|確認補抽|用牠開局/ }).first();
+          if (await confirm.count()) { state.clicked = (await confirm.textContent()).trim(); await confirm.click({ timeout: 5000 }); }
+          continue;
+        }
+        const finish = pg.locator('.action-btns button:visible:not([disabled])', { hasText: '準備完成' });
+        if (await finish.count()) { await finish.click({ timeout: 5000 }); prepared++; state.clicked = '準備完成'; continue; }
+        const postBench = pg.locator('.action-btns button:visible:not([disabled])', { hasText: '完成補抽後設置' });
+        if (await postBench.count()) { await postBench.click({ timeout: 5000 }); state.clicked = '完成補抽後設置'; continue; }
+        const end = pg.locator('.action-btns button:visible:not([disabled])', { hasText: /跳過攻擊|結束回合/ }).first();
+        if (await end.count()) { await end.click({ timeout: 5000 }); ended++; state.clicked = '結束回合'; continue; }
+        if (state.empty) {
+          // 扇形手牌會重疊；取真正能命中該張卡的可見點，不能只依外框中心猜測。
+          await pg.waitForTimeout(750);
+          const from = await pg.evaluate(() => {
+            for (const card of document.querySelectorAll('.hand-card.draggable')) {
+              const r = card.getBoundingClientRect();
+              for (const dx of [0.5, 0.2, 0.8]) for (const dy of [0.5, 0.25, 0.75]) {
+                const x = r.left + r.width * dx, y = r.top + r.height * dy;
+                if (document.elementFromPoint(x, y)?.closest('.hand-card') === card) return { x, y, title: card.title };
+              }
+            }
+            return null;
+          });
+          const to = await pg.locator('.my-active-zone [data-drop-type="active-empty"]').boundingBox();
+          if (from && to) {
+            state.dragged = from.title;
+            await pg.mouse.move(from.x, from.y); await pg.mouse.down();
+            await pg.mouse.move(from.x + 20, from.y - 10, { steps: 3 });
+            await pg.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 }); await pg.mouse.up();
+          }
+        }
+      }
       let ip = null;
-      // ⭐v6.563（Rule 40，站長：本機不記）：打 15 輪動作後，瀏覽器裡必須**沒有**這一局的記錄（記錄端的正對照在 W5 線上路徑）
+      // ⭐v6.563（Rule 40，站長：本機不記）：設置完成後再推進 15 輪，瀏覽器裡必須沒有記錄（記錄端正對照在 W5 線上路徑）。
       for (let w = 0; w < 15; w++) {
-        if (await sysBtn.count()) await sysBtn.first().click().catch(() => {});
+        const end = pg.locator('.action-btns button:visible:not([disabled])', { hasText: /跳過攻擊|結束回合/ }).first();
+        if (await end.count()) await end.click({ timeout: 5000 });
         await pg.waitForTimeout(600);
         if (w % 5 === 4) ip = await pg.evaluate(async () => {
           const db = await new Promise((res) => { const r = indexedDB.open('ptcg-tw-sim-replays', 1); r.onsuccess = () => res(r.result); r.onerror = () => res(null); r.onupgradeneeded = () => { r.result.createObjectStore('replays', { keyPath: 'id' }); }; });
@@ -455,7 +503,7 @@ else if (chromium) {
       // 正對照（Opus 審查 P3-5）：對局真的進入 playing 並換過回合（否則「沒有記錄」可能只是卡在 setup）
       const turnTxt = await pg.evaluate(() => document.querySelector('.turn-info')?.textContent || '');
       const turnNo = Number((turnTxt.match(/回合\s*(\d+)/) || [])[1] || 0);
-      ok('★★★[E6] 本機對局（v6.563 起不記）：已經打到第 2 回合以上，瀏覽器裡仍然沒有進行中的記錄', turnNo >= 2 && !!ip && ip.steps === 0, JSON.stringify({ turnNo, ip }));
+      ok('★★★[E6] 本機對局（v6.563 起不記）：已經打到第 2 回合以上，瀏覽器裡仍然沒有進行中的記錄', turnNo >= 2 && prepared === 2 && ended > 0 && !!ip && ip.steps === 0, JSON.stringify({ turnNo, prepared, ended, ip, setupTrace }));
       ok('★[E7] 沒有 JS 例外', errs.length === 0, errs.slice(0, 3).join(' ｜ '));
       // E8：replay-store 在真的 IndexedDB 上跑（同源頁面注入本版模組）：存 11 場 ⇒ 只留最新 10 場；同一局重存只留一份；存檔後清掉進行中那份；讀回內容一致
       {
