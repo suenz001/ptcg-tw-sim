@@ -174,7 +174,8 @@ else {
           const g = () => pg.evaluate(() => ({ sy: scrollY, fits: document.scrollingElement.scrollHeight <= innerHeight + 1, board: Math.round(document.querySelector('.playmat').getBoundingClientRect().top * 10) / 10,
             bar: Math.round(document.querySelector('.treplay-bar').getBoundingClientRect().top), ob: [getComputedStyle(document.documentElement).overscrollBehaviorY, getComputedStyle(document.body).overscrollBehaviorY],
             t: (() => { const r = document.querySelector('.treplay-title').getBoundingClientRect(); return { x: r.left + Math.min(40, r.width / 2), y: r.top + r.height / 2 }; })(),
-            st: (() => { const r = document.querySelector('.treplay-step').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })() }));
+            // 文字整框中心靠近下排昏厥按鈕時，Chromium 會校正觸控目標；改取可見文字左上側，仍須驗證真實 pointerdown。
+            st: (() => { const range = document.createRange(); range.selectNodeContents(document.querySelector('.treplay-step')); const r = range.getClientRects()[0]; return { x: r.left + Math.min(5, r.width / 4), y: r.top + Math.min(1, r.height / 4) }; })() }));
           const cdp = await ctx.newCDPSession(pg);
           const a = await g();
           await touchDrag(pg, cdp, a.t.x, a.t.y, 0, 200);
@@ -183,13 +184,20 @@ else {
           await touchDrag(pg, cdp, pm.x, pm.y, 0, -250);
           const c = await g();
           // 按住「XX 的回合」（不是標題）往下拖 100px ⇒ 整條控制列都是把手，也要跟手（審查 P2-2）
+          await pg.evaluate(() => { window.__stepHit = false; document.addEventListener('pointerdown', (e) => { window.__stepHit = !!e.target.closest('.treplay-step') && !e.target.closest('button,input,[role="button"],[data-no-drag]'); }, { capture: true, once: true }); });
           await touchDrag(pg, cdp, c.st.x, c.st.y, 0, 100);
           const d = await g();
-          rows.push({ layout, w, h, got, fits: a.fits, barMove: b.bar - a.bar, stepMove: d.bar - c.bar, boardMove: b.board - a.board, sy: [a.sy, b.sy, c.sy, d.sy], boardAfterSwipe: c.board - a.board, ob: a.ob });
+          const stepHit = await pg.evaluate(() => window.__stepHit);
+          // 負對照：速度按鈕仍是操作控制，不能因整列可拖就跟著移動。
+          const buttonPoint = await pg.evaluate(() => { window.__buttonHit = false; document.addEventListener('pointerdown', (e) => { window.__buttonHit = !!e.target.closest('.treplay-speed'); }, { capture: true, once: true }); const r = document.querySelector('.treplay-speed.active').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+          await touchDrag(pg, cdp, buttonPoint.x, buttonPoint.y, 0, 40);
+          const e = await g();
+          const buttonHit = await pg.evaluate(() => window.__buttonHit);
+          rows.push({ layout, w, h, got, fits: a.fits, barMove: b.bar - a.bar, stepMove: d.bar - c.bar, stepHit, buttonHit, buttonMove: e.bar - d.bar, boardMove: b.board - a.board, sy: [a.sy, b.sy, c.sy, d.sy, e.sy], boardAfterSwipe: c.board - a.board, ob: a.ob });
           await ctx.close();
         }
       } finally { srv.close(); }
-      const okRow = (x) => x.got && x.fits && x.barMove >= 190 && x.barMove <= 210 && x.stepMove >= 95 && x.stepMove <= 105 && Math.abs(x.boardMove) <= 0.5 && Math.abs(x.boardAfterSwipe) <= 0.5 && x.sy.every((v) => v === 0) && x.ob[0] === 'none' && x.ob[1] === 'none';
+      const okRow = (x) => x.got && x.fits && x.barMove >= 190 && x.barMove <= 210 && x.stepMove >= 95 && x.stepMove <= 105 && x.stepHit && x.buttonHit && x.buttonMove === 0 && Math.abs(x.boardMove) <= 0.5 && Math.abs(x.boardAfterSwipe) <= 0.5 && x.sy.every((v) => v === 0) && x.ob[0] === 'none' && x.ob[1] === 'none';
       ok('★★★ R1 iPad 7 種尺寸 × 4 種桌墊回放：整頁本來就不可捲；拖標題或拖「XX 的回合」⇒ 控制列跟手、盤面不動；在盤面上滑動也不動；整頁關閉彈性回彈',
         rows.length === 28 && rows.every(okRow), JSON.stringify(rows.filter((x) => !okRow(x)).length ? rows.filter((x) => !okRow(x)) : rows.slice(0, 2)));
     }

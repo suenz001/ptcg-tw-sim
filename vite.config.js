@@ -79,6 +79,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins,
     define: { __CARD_DATA_HASHES__: JSON.stringify(cardDataHashes()) },
-    build: { rollupOptions: { output: { experimentalMinChunkSize: 1500 } } },
+    // v6.656：依 Rollup 的原始碼估算大小合併小型共用片段，保留首頁 ≤12 個預載的預算。
+    build: { rollupOptions: { output: { experimentalMinChunkSize: 3000 } } },
   };
 });

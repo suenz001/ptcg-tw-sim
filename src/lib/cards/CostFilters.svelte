@@ -29,7 +29,6 @@
     {/each}
     </div>
   </div>
-  <p>依卡面費用篩選，可複選；任一招式符合即顯示。</p>
 </div>
 <!-- <<< v6636-cost-filter-controls -->
 
@@ -41,5 +40,4 @@
   button { min-width: 36px; min-height: 36px; padding: .3rem .55rem; border: 1px solid var(--ui-border, #c5d0c8); border-radius: 999px; background: var(--ui-bg-elev, #f1f4f0); color: inherit; font: inherit; font-size: .8rem; cursor: pointer; }
   button[aria-pressed="true"] { background: var(--ui-chip-active-bg, #286443); color: var(--ui-chip-active-text, #fff); border-color: var(--ui-chip-active-bg, #286443); }
   button:focus-visible { outline: 2px solid var(--ui-accent, #286443); outline-offset: 2px; }
-  p { margin: .3rem 0; color: var(--ui-text-muted, #526258); font-size: .75rem; line-height: 1.5; }
 </style>
