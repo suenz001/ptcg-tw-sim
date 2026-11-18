@@ -125,7 +125,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import AvatarCircle from '$lib/profile/AvatarCircle.svelte';
   import {
     fetchMyProfile,
-    fetchPlayerProfileView,
+    fetchProfileBatch,
     buildSelfProfilePreview,
     type AvatarCrop,
     type AvatarFrameId,
@@ -1650,6 +1650,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         nick: (fallbackNick || `P${seatIdx + 1}`).slice(0, 16),
         bio: isTReplay ? '🎞️ 對戰回放紀錄' : '',
         avatar: seatAvatarFor(seatIdx),
+        avatarFrame: seatFrameFor(seatIdx),
         googleVerified: false,
         champOfficial: 0,
         champCommunity: 0,
@@ -1681,6 +1682,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       nick: (fallbackNick || `P${seatIdx + 1}`).slice(0, 16),
       bio: aiPlayerIndex !== null && seatIdx === aiPlayerIndex ? '🤖 AI 對戰對手' : '',
       avatar: seatAvatarFor(seatIdx),
+      avatarFrame: seatFrameFor(seatIdx),
       googleVerified: false,
       champOfficial: 0,
       champCommunity: 0,
@@ -1722,6 +1724,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     }
     if (_profileBootUid === u.uid) return;
     const bootUid = u.uid;
+    if (_profileBootUid) profileModalPreview = null;
+    profileSelf = null;
     _profileBootUid = bootUid;
     void (async () => {
       const ctx = await friendsCtxFromAuth();
@@ -1747,17 +1751,25 @@ function _setupSelfPending(g: any, seat: number): string | null {
     battleSeatFrames = [null, null];
     void (async () => {
       const ctx = await friendsCtxFromAuth().catch(() => null);
-      const resList = await Promise.all(([t0, t1] as const).map((t) => (
-        t ? fetchPlayerProfileView(t, ctx).catch(() => null) : Promise.resolve(null)
-      )));
+      const items = [
+        ...(t0 ? [{ ...t0, k: 'seat0' }] : []),
+        ...(t1 ? [{ ...t1, k: 'seat1' }] : []),
+      ];
+      let res = await fetchProfileBatch(items, ctx).catch(() => null);
+      if (res && !res.ok && res.status === 429) {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        if (_battleAvRoomKey !== key) return;
+        res = await fetchProfileBatch(items, ctx).catch(() => null);
+      }
       if (_battleAvRoomKey !== key) return;
+      if (!res?.ok) return;
       battleSeatAvatars = [
-        resList[0]?.ok ? resList[0].data.avatar : null,
-        resList[1]?.ok ? resList[1].data.avatar : null,
+        res.data.seat0?.avatar ?? null,
+        res.data.seat1?.avatar ?? null,
       ];
       battleSeatFrames = [
-        resList[0]?.ok ? (resList[0].data.avatarFrame ?? null) : null,
-        resList[1]?.ok ? (resList[1].data.avatarFrame ?? null) : null,
+        res.data.seat0?.avatarFrame ?? null,
+        res.data.seat1?.avatarFrame ?? null,
       ];
     })();
   });
@@ -3733,14 +3745,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (isAdminMode) return;                  // admin spy 不寫
     // v5.409：線上 P1 或 P2 皆 fire（觀戰者 mySeatIdx=-1 跳過）；server $setOnInsert 防重複
     if (mode === 'online' && mySeatIdx !== 0 && mySeatIdx !== 1) return;
+    const winner = mode === 'online' && !isTournament && !isTReplay && roomCode &&
+      mySeatIdx === game.winner && firebaseUser && !firebaseUser.isAnonymous ? firebaseUser : null;
+    // 休閒勝方等既有房間訂閱看到終局才上報，讓後端可核對已落盤資料。
+    if (winner && (roomData?.gameState?.id !== game.id || roomData.status !== 'ended' ||
+        roomData.gameState.phase !== 'game-over' || roomData.gameState.winner !== game.winner)) return;
     recordedMatchId = game.id;
-    fireMatchRecord(game);
+    fireMatchRecord(game, winner);
   });
 
   // v5.005 匯出對戰紀錄到 Oracle backend (matchRecords collection)
   //   email source：線上 → roomData.seats[0/1].email；本機 → P1 用 firebaseUser?.email
   //   cardIds aggregate：deck/hand/bench/active/discard/prizes + evolvedFromStack 去重
-  async function fireMatchRecord(g: GameState) {
+  async function fireMatchRecord(g: GameState, verifiedWinner: User | null = null) {
     const apiUrl = (((import.meta as unknown) as { env?: { VITE_ORACLE_API_URL?: string } }).env?.VITE_ORACLE_API_URL) || '';
     if (!apiUrl) return;  // 只 Oracle build 記錄；GitHub Pages build 跳過
     // v5.006 改：Aggregate cardId → count (deck/hand/bench/active/discard/prizes + evolvedFromStack)
@@ -3783,8 +3800,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       matchId: g.id,
       roomCode: roomCode || null,
       mode: mode === 'online' ? 'online' : 'local',
-      vsAI: aiPlayerIndex !== null,
-      aiSide: aiPlayerIndex,
+      vsAI: mode === 'local' && aiPlayerIndex !== null,
+      aiSide: mode === 'local' ? aiPlayerIndex : null,
       winner: g.winner ?? null,
       winReason: g.winReason ?? '',
       finalTurn: g.turn,
@@ -3805,10 +3822,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
         cardCounts: collectCardCounts(g.players[1]),
       },
     };
+    const token = await verifiedWinner?.getIdToken().catch(() => null);
     try {
       await fetch(`${apiUrl}/api/match-result`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
         body: JSON.stringify(payload),
       });
     } catch {
@@ -5300,7 +5318,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         if (sharedCardKey && /^[0-9a-f]{12,40}$/i.test(sharedCardKey)) {
           openProfileModal({ profileKey: sharedCardKey });
           cardUrl.searchParams.delete('card');
-          window.history.replaceState({}, '', cardUrl.toString());
+          window.history.replaceState(window.history.state, '', cardUrl.toString());
         }
       } catch { /* ignore */ }
     }
@@ -12375,6 +12393,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             </details>
           </div>
           <div style="margin-bottom:14px;">
+            {#key firebaseUser?.uid}
             <PlayerProfileEditor
               getAuthCtx={friendsCtxFromAuth}
               collapsible={true}
@@ -12382,6 +12401,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               onloaded={syncMyProfileNick}
               onsaved={syncMyProfileNick}
             />
+            {/key}
           </div>
           {#if tProfileLoading && !tProfile}
             <p class="muted small" style="text-align:center;padding:18px;">載入個人資料中…</p>
@@ -13036,7 +13056,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {/if}
       {#if lobbyTab === 'profile'}
         <div class="lobby-tab-panel">
+          {#key firebaseUser?.uid}
           <PlayerProfileEditor getAuthCtx={friendsCtxFromAuth} onloaded={syncMyProfileNick} onsaved={syncMyProfileNick} />
+          {/key}
         </div>
       {/if}
 

@@ -60,6 +60,7 @@
   let saveOk = $state(false);
   let collapsed = $state(false);
   let selfPreviewOpen = $state(false);
+  let active = true;
 
   let serverProfile = $state<PlayerProfileSelf | null>(null);
   let nick = $state('');
@@ -144,6 +145,7 @@
       }
     }
     void loadProfile();
+    return () => { active = false; };
   });
 
   function toggleCollapsed() {
@@ -162,11 +164,13 @@
     loadErr = '';
     try {
       const ctx = await getAuthCtx();
+      if (!active) return;
       if (!ctx || !ctx.token) {
         loadErr = '請先使用 Google 或 Email 帳號登入後編輯個人名片。';
         return;
       }
       const res = await fetchMyProfile(ctx, refresh);
+      if (!active) return;
       if (!res.ok) {
         loadErr = res.message;
         return;
@@ -193,6 +197,7 @@
     saveOk = false;
     try {
       const ctx = await getAuthCtx();
+      if (!active) return;
       if (!ctx || !ctx.token) {
         saveMsg = '登入狀態已失效，請重新登入後再儲存。';
         return;
@@ -206,6 +211,7 @@
         showOfficialCrowns,
         showCommunityCrowns,
       });
+      if (!active) return;
       if (!res.ok) {
         saveMsg = res.message;
         return;

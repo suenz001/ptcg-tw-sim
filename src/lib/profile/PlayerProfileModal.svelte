@@ -45,17 +45,25 @@
   let dlBusy = $state(false);
   let loadSeq = 0;
   let prevTargetRef: ProfileLookupTarget | null = null;
+  let prevAuthKey: string | null = null;
+  let loadedAuthKey = $state<string | null>(null);
+  let loadedTarget = $state.raw<ProfileLookupTarget | null>(null);
 
-  const isSelfView = $derived(!!card && card.friendStatus === 'self');
+  const isSelfView = $derived(open && card?.friendStatus === 'self' && (
+    previewCard ? previewCard.friendStatus === 'self'
+      : !!viewerUid && loadedTarget === target && loadedAuthKey === viewerUid
+  ));
   const frameSpec = $derived(card ? getAvatarFrameSpec(card.avatarFrame) : null);
 
   $effect(() => {
-    const _authKey = String(viewerUid || '');
-    void _authKey;
-    if (!open) {
+    const authKey = viewerUid;
+    if (!open || previewCard || !target) {
       loadSeq++;
       prevTargetRef = null;
-      card = null;
+      prevAuthKey = null;
+      loadedAuthKey = null;
+      loadedTarget = null;
+      card = open ? previewCard : null;
       errMsg = '';
       frMsg = '';
       frBusy = false;
@@ -63,46 +71,33 @@
       loading = false;
       return;
     }
-    if (previewCard) {
-      loadSeq++;
-      prevTargetRef = null;
-      card = previewCard;
-      errMsg = '';
-      frMsg = '';
-      frBusy = false;
-      dlBusy = false;
-      loading = false;
-      return;
-    }
-    if (!target) {
-      loadSeq++;
-      prevTargetRef = null;
-      card = null;
-      errMsg = '';
-      frMsg = '';
-      frBusy = false;
-      dlBusy = false;
-      loading = false;
-      return;
-    }
-    const seq = ++loadSeq;
     const t = target;
-    const targetChanged = t !== prevTargetRef;
+    if (t === prevTargetRef && authKey === prevAuthKey) return;
     prevTargetRef = t;
-    if (targetChanged || !card) {
-      loading = true;
-      card = null;
-    }
+    prevAuthKey = authKey;
+    const seq = ++loadSeq;
+    loadedAuthKey = null;
+    loadedTarget = null;
+    loading = true;
+    card = null;
     errMsg = '';
     frMsg = '';
     frBusy = false;
     dlBusy = false;
     void (async () => {
-      const ctx = await getAuthCtx().catch(() => null);
+      const ctx = authKey ? await getAuthCtx().catch(() => null) : null;
+      if (seq !== loadSeq) return;
+      if (authKey && ctx?.uid !== authKey) {
+        loading = false;
+        errMsg = '登入狀態已變更，請重新開啟名片';
+        return;
+      }
       const res = await fetchPlayerProfileView(t, ctx);
       if (seq !== loadSeq) return;
       loading = false;
       if (res.ok) {
+        loadedAuthKey = authKey;
+        loadedTarget = t;
         card = res.data;
       } else {
         errMsg = res.message || '載入玩家名片失敗';
@@ -150,18 +145,20 @@
 
   async function handleDownloadCard() {
     if (!card || !isSelfView || dlBusy) return;
+    const seq = loadSeq;
     dlBusy = true;
     frMsg = '';
     try {
-      const res = await downloadProfileCardPng(card);
-      frMsg = res.ok ? `✅ 已下載名片圖片（${res.filename}）` : (res.error || '下載名片失敗');
+      const res = await downloadProfileCardPng(card, () => loadSeq === seq && isSelfView);
+      if (loadSeq === seq) frMsg = res.ok ? `✅ 已下載名片圖片（${res.filename}）` : (res.error || '下載名片失敗');
     } finally {
-      dlBusy = false;
+      if (loadSeq === seq) dlBusy = false;
     }
   }
 
   async function handleShareCard() {
     if (!card || !isSelfView) return;
+    const seq = loadSeq;
     if (!card.profileKey) {
       frMsg = '請先按下「💾 儲存個人名片」產生專屬分享網址';
       return;
@@ -178,6 +175,7 @@
         copied = true;
       }
     } catch { /* fallback below */ }
+    if (seq !== loadSeq || !isSelfView) return;
     if (!copied && typeof document !== 'undefined') {
       try {
         const ta = document.createElement('textarea');

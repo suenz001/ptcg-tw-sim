@@ -18,6 +18,8 @@
   //   ・全頁零 {@html}（暱稱／備註名都是玩家自由輸入）。
   import PageHeader from '$lib/ui/PageHeader.svelte';   // ⭐v6.507 全站頁首統一
   import { onMount } from 'svelte';
+  import { onAuthStateChanged } from 'firebase/auth';
+  import { auth } from '$lib/firebase';
   import { base } from '$app/paths';
   import { VERSION } from '$lib/version';
   import type { FriendRow } from '$lib/friends/friends-api';
@@ -37,11 +39,15 @@
   /** 私聊在這台伺服器不可用（尚未開放／舊伺服器）的說明；非空 ⇒ 藏掉所有 💬（本次頁面停留期間記住）。 */
   let dmNegMsg = $state('');
   let profileTarget = $state<ProfileLookupTarget | null>(null);
+  let profileViewerUid = $state('');
 
   /** 取身分：⚠ 匿名回 null。與好友名單**共用同一份**（$lib/friends/auth-ctx.ts）。 */
   const ctx = friendsCtxFromAuth;
 
   onMount(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      profileViewerUid = user && !user.isAnonymous ? user.uid : '';
+    });
     const onResize = () => { isMobile = Math.min(window.innerWidth, window.innerHeight) <= 600; };
     onResize();
     window.addEventListener('resize', onResize);
@@ -55,6 +61,7 @@
       ...browserPollerDeps(),
     });
     return () => {
+      unsubscribeAuth();
       window.removeEventListener('resize', onResize);
       document.removeEventListener('visibilitychange', onVis);
       // ⚠⚠ 離開頁面：關掉面板 ⇒ 輪詢停止（零請求）
@@ -90,7 +97,7 @@
 
 <main>
   <FriendsPanel {head} {foot} ondm={openDm} dmMsg={dmNegMsg} dmActiveFid={dmState?.fid ?? ''} onafteract={afterAct} onprofile={openFriendProfile} />
-  <PlayerProfileModal open={!!profileTarget} target={profileTarget} getAuthCtx={ctx} onclose={() => { profileTarget = null; }} />
+  <PlayerProfileModal open={!!profileTarget} target={profileTarget} viewerUid={profileViewerUid} getAuthCtx={ctx} onclose={() => { profileTarget = null; }} />
 </main>
 
 <!-- ⭐ 頁首與分頁列：用 snippet 傳進 FriendsPanel **裡面**渲染 ⇒ 吃得到面板宣告的 --fr-* 色票。

@@ -21,6 +21,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { createHash } from 'node:crypto';
+import { revertV6660IfPresent } from './lib/revert-v6660-profile-hardening.mjs';
 import {
   readPatch, extractBlock, FR_START, FR_END, ID_START, ID_END, EN_START, EN_END,
   buildFriends, makeFakeDb, asUser, findEmails, makeYield, fakeTournIdentity, fakeIsTournAdmin,
@@ -28,7 +29,7 @@ import {
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PATCH_PATH = join(ROOT, 'oracle-admin/server_admin_patch.js');
-const PATCH = readPatch(PATCH_PATH);
+const PATCH = revertV6660IfPresent('oracle-admin/server_admin_patch.js', readPatch(PATCH_PATH));
 
 let pass = 0, fail = 0;
 const T = async (name, fn) => {

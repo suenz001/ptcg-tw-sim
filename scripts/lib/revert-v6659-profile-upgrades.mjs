@@ -1,6 +1,7 @@
 // v6.659 精確逆轉：只轉回本版個人名片五大升級與 Admin 專屬頭像外框之變更，保留前版所有驗收判準。
 import assert from 'node:assert/strict';
 import { normEol } from './eol-agnostic.mjs';
+import { revertV6660IfPresent } from './revert-v6660-profile-hardening.mjs';
 
 export const V6659_PAIRS = {
   "src/lib/profile/profile-api.ts": [
@@ -364,9 +365,11 @@ export const V6659_PAIRS = {
 };
 
 export function revertV6659IfPresent(path, source) {
-  let s = normEol(String(source));
+  let s = revertV6660IfPresent(path, normEol(String(source)));
   const pairs = V6659_PAIRS[path];
-  if (!pairs || !pairs.every(([from]) => s.includes(from))) return s;
+  if (!pairs || pairs.every(([from]) => !s.includes(from))) return s;
+  const missing = pairs.findIndex(([from]) => !s.includes(from));
+  assert.equal(missing, -1, 'v6659 還原錨點缺失 ' + path + ' #' + (missing + 1));
   for (const [from, to] of pairs) {
     assert.equal(s.split(from).length, 2, 'v6659 inverse ' + path);
     s = s.replace(from, () => to);

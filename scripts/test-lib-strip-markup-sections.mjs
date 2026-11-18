@@ -529,7 +529,7 @@ T('5-2 ⭐ 每支 .svelte 用 svelte/compiler parse() 當**範圍級**裁判：h
   //   ⚠ 位移以 LF 計（站長本機 autocrlf=true、工作樹是 CRLF ⇒ 先正規化再比，裁判兩邊吃同一份字串）。
   const KNOWN_DEVIATION = {
     // ⭐v6.507（Rule 40）＋v6.653：好友頁 script 新增名片彈窗接線 ⇒ <svelte:head><style> 整體往後移；偏差本身（形狀、內容）不變，只重釘位移。
-    'src/routes/friends/+page.svelte': { extraHelper: [{ tag: 'style', start: 4003, end: 4100, innerStart: 4010, innerEnd: 4092 }], svelteHeadStyleText: '<style>html, body { margin: 0; background-color: #162816 !important; min-height: 100vh; }</style>' },
+    'src/routes/friends/+page.svelte': { extraHelper: [{ tag: 'style', start: 4300, end: 4397, innerStart: 4307, innerEnd: 4389 }], svelteHeadStyleText: '<style>html, body { margin: 0; background-color: #162816 !important; min-height: 100vh; }</style>' },
   };
   const files = listTracked().filter((f) => f.endsWith('.svelte'));
   assert.ok(files.length >= 12, '只列到 ' + files.length + ' 支 .svelte（v6.319 有 14 支）');

@@ -1563,6 +1563,7 @@
 <PlayerProfileModal
   open={!!profileTarget}
   target={profileTarget}
+  viewerUid={firebaseUser && !firebaseUser.isAnonymous ? firebaseUser.uid : ''}
   getAuthCtx={getProfileAuthCtx}
   onclose={() => { profileTarget = null; }}
 />

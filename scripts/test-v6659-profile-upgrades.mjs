@@ -188,6 +188,7 @@ function makeFakeDb() {
     obj
   );
   const matchCond = (val, cond) => {
+    if (cond instanceof RegExp) return typeof val === 'string' && cond.test(val);
     if (cond && typeof cond === 'object' && !Array.isArray(cond)) {
       if ('$in' in cond) {
         const arr = Array.isArray(val) ? val : [val];
@@ -197,6 +198,8 @@ function makeFakeDb() {
       if ('$ne' in cond) return val !== cond.$ne;
       if ('$lt' in cond) return val < cond.$lt;
       if ('$gt' in cond) return val > cond.$gt;
+      if ('$gte' in cond) return val >= cond.$gte;
+      if ('$not' in cond) return !matchCond(val, cond.$not);
     }
     if (Array.isArray(val)) return val.includes(cond);
     return val === cond;
@@ -262,7 +265,7 @@ function makeFakeDb() {
   };
 }
 
-function buildBackendHarness(srcOverride) {
+function buildBackendHarness(srcOverride, friendFeatureOn = true) {
   const srv = srcOverride ?? read(SRV_PATH);
   const block = extractProfileServerBlock(srv);
   assert.ok(!block.includes("app.get('/api/tournament"), '⚠ v187 內出現 app.get(/api/tournament 字面，會打亂 TAIL 錨點');
@@ -303,7 +306,8 @@ function buildBackendHarness(srcOverride) {
   const tournIdentity = async (req) => {
     const h = (req.headers && req.headers.authorization) || '';
     const m = /^Bearer\s+(.+)$/.exec(h);
-    if (!m || !tokens.has(m[1])) return { error: 'no auth', verified: false };
+    if (!m || !tokens.has(m[1])) return req.body?.playerId || req.query?.playerId
+      ? { uid: 'unverified', verified: false } : { error: 'no auth', verified: false };
     const t = tokens.get(m[1]);
     return { uid: t.uid, email: normE(t.email), name: t.name, verified: true };
   };
@@ -319,7 +323,7 @@ function buildBackendHarness(srcOverride) {
     app, db, TADMIN, TPOOL,
     normE, pairId, fidOf, (s) => String(s || '').trim().slice(0, 16),
     'friendships', 'tournamentRegistrations', 'playerIdentity', 100, 86400000,
-    async () => true, tournIdentity, isTournAdmin, new Map()
+    async () => friendFeatureOn, tournIdentity, isTournAdmin, new Map()
   );
 
   const invoke = async (method, path, { token, query = {}, body = {} } = {}) => {
@@ -346,15 +350,16 @@ async function assertBackendUpgrades(buildFn = buildBackendHarness) {
 
   // 1. Sparse indexes registered on matchRecords
   const mrIdxs = db.indexes.filter((x) => x.name === 'matchRecords').map((x) => JSON.stringify(x.spec));
-  assert.ok(mrIdxs.includes('{"p1.email":1,"winner":1}'), '缺少 matchRecords p1.email + winner 索引');
-  assert.ok(mrIdxs.includes('{"p2.email":1,"winner":1}'), '缺少 matchRecords p2.email + winner 索引');
+  assert.deepStrictEqual(mrIdxs, ['{"profileVerifiedWinner":1}'], '名片只需要已核實勝方索引');
 
   // 2. Seed casual online matches, AI/local matches (no roomCode), AFK turn-1, and tournament matches (with bye/noShow)
-  await db.collection('matchRecords').insertOne({ _id: 'm1', roomCode: 'AB1234', winner: 0, p1: { email: 'alice@example.com' }, p2: { email: 'bob@example.com' }, finalTurn: 6, winReason: '獎賞卡拿完' });
-  await db.collection('matchRecords').insertOne({ _id: 'm2_ai_null', roomCode: null, winner: 0, p1: { email: 'alice@example.com' }, p2: { email: null }, finalTurn: 5, winReason: '單機 AI 對戰' });
-  await db.collection('matchRecords').insertOne({ _id: 'm3_ai_empty', roomCode: '', winner: 1, p1: { email: null }, p2: { email: 'alice@example.com' }, finalTurn: 4, winReason: '單機雙人' });
-  await db.collection('matchRecords').insertOne({ _id: 'm4_afk_t1', roomCode: 'CD5678', winner: 0, p1: { email: 'alice@example.com' }, p2: { email: 'bob@example.com' }, finalTurn: 1, winReason: '第 1 回合未進場無回應' });
-  await db.collection('matchRecords').insertOne({ _id: 'm5_loss', roomCode: 'EF9012', winner: 1, p1: { email: 'alice@example.com' }, p2: { email: 'bob@example.com' }, finalTurn: 8, winReason: '投降' });
+  const row = { roomCode: 'AB1234', mode: 'online', vsAI: false, winner: 0,
+    profileVerifiedWinner: 'alice@example.com', finalTurn: 6, winReason: '獎賞卡拿完' };
+  for (const [i, patch] of [{}, { vsAI: true }, { mode: 'local' }, { roomCode: ' ' },
+    { finalTurn: 1, winReason: '第 1 回合未進場無回應' }, { profileVerifiedWinner: 'bob@example.com' },
+    { profileVerifiedWinner: undefined, p1: { email: 'alice@example.com' } }].entries()) {
+    await db.collection('matchRecords').insertOne({ _id: 'm' + i, ...row, ...patch });
+  }
 
   await db.collection('tournamentArchives').insertOne({
     _id: 'arch_ev1',
@@ -482,6 +487,105 @@ async function assertBackendUpgrades(buildFn = buildBackendHarness) {
 
 await T('B1 後端 v187 總勝場（排除 AI／T1 無回應／bye／noShow）、隱藏切換、零 email 與 Admin 專屬外框權限', () => assertBackendUpgrades());
 
+async function assertFirstShare(src) {
+  const { invoke } = buildBackendHarness(src);
+  const me = await invoke('GET', '/api/player-profile/me', { token: 'tokA' });
+  assert.equal(me.statusCode, 200);
+  const profileKey = me.body.profile.profileKey;
+  assert.match(profileKey, /^[0-9a-f]{20}$/);
+  const shared = await invoke('GET', '/api/player-profile/view', { query: { profileKey } });
+  assert.equal(shared.body.found, true, '首次讀取本人名片後，連結立即可公開解析');
+}
+await T('B2 尚未存過名片即可分享', () => assertFirstShare());
+
+async function assertVisibilityRace(src) {
+  const { invoke, db } = buildBackendHarness(src);
+  const me = await invoke('GET', '/api/player-profile/me', { token: 'tokA' });
+  const profileKey = me.body.profile.profileKey;
+  await db.collection('matchRecords').insertOne({ _id: 'normal', roomCode: 'ABCD', mode: 'online',
+    winner: 0, finalTurn: 4, p1: { email: 'alice@example.com' }, profileVerifiedWinner: 'alice@example.com' });
+  const held = Promise.withResolvers();
+  const arrived = Promise.withResolvers();
+  const collect = db.collection.bind(db);
+  db.collection = (name) => {
+    const col = collect(name);
+    if (name === 'playerProfiles') {
+      const update = col.updateOne;
+      col.updateOne = async (...args) => {
+        if (args[1]?.$set?.nick === '舊頁籤') {
+          arrived.resolve();
+          await held.promise;
+        }
+        return update(...args);
+      };
+    }
+    return col;
+  };
+  const earlier = invoke('POST', '/api/player-profile/save', { token: 'tokA', body: { nick: '舊頁籤' } });
+  await arrived.promise;
+  try {
+    await new Promise(resolve => setTimeout(resolve, 850));
+    const hidden = await invoke('POST', '/api/player-profile/save', { token: 'tokA', body: { nick: '新頁籤',
+      showTotalWins: false, showOfficialCrowns: false, showCommunityCrowns: false } });
+    assert.equal(hidden.statusCode, 200);
+  } finally { held.resolve(); }
+  const finished = await earlier;
+  assert.equal(finished.statusCode, 200);
+  assert.equal(finished.body.profile.showTotalWins, false);
+  const view = await invoke('GET', '/api/player-profile/view', { query: { profileKey } });
+  assert.equal(view.body.totalWins, 0);
+  for (const key of ['showTotalWins', 'showOfficialCrowns', 'showCommunityCrowns']) {
+    assert.equal(view.body[key], false, key + ' 不得被舊頁籤恢復公開');
+  }
+}
+await T('B3 舊存檔晚到不會恢復任一隱私旗標', () => assertVisibilityRace());
+
+await T('B4 好友停用、管理員只有合法的認證及明確外框欄位可更新', async () => {
+  const { invoke } = buildBackendHarness(undefined, false);
+  const me = await invoke('GET', '/api/player-profile/me', { token: 'tokA' });
+  const profileKey = me.body.profile.profileKey;
+  const guest = await invoke('GET', '/api/player-profile/view', { query: { profileKey } });
+  assert.equal(guest.body.friendStatus, 'unavailable');
+  const adminPath = '/api/admin/player-profile/frame';
+  assert.equal((await invoke('GET', adminPath, { query: { playerId: 'x', email: 'alice@example.com' } })).statusCode, 401);
+  assert.equal((await invoke('POST', adminPath, { body: { playerId: 'x', email: 'alice@example.com' } })).statusCode, 401);
+  await invoke('POST', adminPath, { token: 'tokAdm', body: { email: 'alice@example.com', avatarFrame: 'cyber_neon' } });
+  assert.equal((await invoke('POST', adminPath, { token: 'tokAdm', body: { email: 'alice@example.com' } })).statusCode, 400);
+  assert.equal((await invoke('GET', adminPath, { token: 'tokAdm', query: { email: 'alice@example.com' } })).body.avatarFrame, 'cyber_neon');
+});
+
+await T('B5 同帳號併發統計只查一次，查詢失敗不寫入快取', async () => {
+  const { invoke, db } = buildBackendHarness();
+  const wait = Promise.withResolvers();
+  const started = Promise.withResolvers();
+  const collect = db.collection.bind(db);
+  let counts = 0;
+  db.collection = (name) => {
+    const col = collect(name);
+    if (name === 'matchRecords') {
+      col.countDocuments = async (_query, options) => {
+        assert.deepStrictEqual(options?.hint, { profileVerifiedWinner: 1 }, '索引未完成時不得退整庫掃描');
+        counts++;
+        if (counts === 1) { started.resolve(); await wait.promise; throw new Error('模擬資料庫中斷'); }
+        return 2;
+      };
+      col.find = () => { throw new Error('名片勝場不能讀回歷史列'); };
+    }
+    return col;
+  };
+  const run = () => invoke('GET', '/api/player-profile/me', { token: 'tokA' });
+  const requests = [run(), run(), run()];
+  await started.promise;
+  await new Promise(resolve => setImmediate(resolve));
+  const inFlightCount = counts;
+  wait.resolve();
+  assert.deepStrictEqual((await Promise.all(requests)).map(result => result.statusCode), [500, 500, 500]);
+  assert.equal(inFlightCount, 1);
+  assert.equal((await run()).body.profile.casualOnlineWins, 2);
+  assert.equal((await run()).body.profile.casualOnlineWins, 2);
+  assert.equal(counts, 2);
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【C】Playwright 真瀏覽器實測＋全站接線檢查');
 
@@ -563,9 +667,11 @@ async function assertModalSelfVsOtherUi(browser, bundle) {
   const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true });
   const pg = await ctx.newPage();
   const pageErrors = [];
+  let authenticatedViews = 0;
+  const delayedViewer = Promise.withResolvers();
   pg.on('pageerror', (e) => pageErrors.push(e.message));
   try {
-    await pg.route('**/*', (route) => {
+    await pg.route('**/*', async (route) => {
       const url = route.request().url();
       if (url.endsWith('.png') || url.includes('.webp')) {
         return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="868" height="1212"><rect width="868" height="1212" fill="#2c5"/></svg>' });
@@ -586,6 +692,8 @@ async function assertModalSelfVsOtherUi(browser, bundle) {
       if (url.includes('/api/player-profile/view?profileKey=pk_self')) {
         const auth = route.request().headers()['authorization'] || '';
         const isAuth = auth.includes('t_self');
+        if (isAuth) authenticatedViews++;
+        if (auth.includes('t_next')) await delayedViewer.promise;
         return route.fulfill({
           contentType: 'application/json',
           body: JSON.stringify({
@@ -605,7 +713,7 @@ async function assertModalSelfVsOtherUi(browser, bundle) {
             avatar: null, googleVerified: false, avatarFrame: null,
             totalWins: 5, champOfficial: 0, champCommunity: 0,
             showTotalWins: true, showOfficialCrowns: true, showCommunityCrowns: true,
-            pinnedHonors: [], canFriend: false, friendStatus: 'none',
+            pinnedHonors: [], canFriend: false, friendStatus: 'unavailable',
           }),
         });
       }
@@ -705,6 +813,15 @@ async function assertModalSelfVsOtherUi(browser, bundle) {
     });
     await pg.waitForSelector('.ppm-nick');
     assert.strictEqual(await pg.locator('.ppm-fr-btn').count(), 0, '已登入且後端回 canFriend=false 時不可誤顯示加好友鈕');
+    await pg.setContent(`<div id="app"></div><script>${bundle}</script>`);
+    await pg.evaluate(() => {
+      window.__mountModal(document.getElementById('app'), {
+        open: true, target: { profileKey: 'pk_disabled_fr' }, getAuthCtx: async () => null,
+        onRequestLogin: () => {}, onclose: () => {},
+      });
+    });
+    await pg.waitForSelector('.ppm-nick');
+    assert.equal(await pg.locator('.ppm-fr-btn').count(), 0, '好友停用也不對訪客引導登入');
 
     // 5. Check ?card= startup auth race: viewerUid transitions '' -> 'u1' re-fetches authenticated & updates to self view
     await pg.setContent(`<!DOCTYPE html><html><head><style>:root{--safe-top:59px;--safe-bottom:34px;}body{margin:0;}</style></head><body><div id="app"></div><script>${bundle}</script></body></html>`);
@@ -712,21 +829,33 @@ async function assertModalSelfVsOtherUi(browser, bundle) {
       window.__curRaceToken = '';
       window.__mountRaceHarness(document.getElementById('app'), {
         target: { profileKey: 'pk_self' },
-        getAuthCtx: async () => (window.__curRaceToken ? { uid: 'u1', token: window.__curRaceToken } : null),
+        getAuthCtx: async () => (window.__curRaceToken
+          ? { uid: window.__curRaceToken === 't_next' ? 'u2' : 'u1', token: window.__curRaceToken } : null),
       });
     });
     await pg.waitForSelector('.ppm-fr-btn');
     assert.strictEqual(await pg.locator('.ppm-self-actions').count(), 0, '登入完成前暫為未認證狀態');
+    authenticatedViews = 0;
     await pg.evaluate(() => {
       window.__curRaceToken = 't_self';
       window.__setRaceViewerUid('u1');
     });
-    await pg.waitForTimeout(200);
+    await pg.waitForTimeout(300);
     assert.strictEqual(await pg.locator('.ppm-self-actions').count(), 1, '登入完成後必須自動重抓並顯示自己名片操作區');
     assert.strictEqual(await pg.locator('.ppm-fr-btn').count(), 0, '登入完成後必須自動重抓為自己名片，不該殘留加好友鈕');
+    assert.equal(authenticatedViews, 1, '登入切換只能送出一次名片查詢');
+    await pg.evaluate(() => {
+      window.__curRaceToken = 't_next';
+      window.__setRaceViewerUid('u2');
+    });
+    await pg.waitForTimeout(35);
+    assert.equal(await pg.locator('.ppm-self-actions').count(), 0, '新帳號查詢在途不可操作前一個帳號的名片');
+    delayedViewer.resolve();
+    await pg.waitForSelector('.ppm-nick');
 
     assert.deepStrictEqual(pageErrors, [], 'Playwright 不可有 pageerror：' + pageErrors.join('; '));
   } finally {
+    delayedViewer.resolve();
     await ctx.close();
   }
 }
@@ -857,10 +986,9 @@ if (chromium) {
         }
       });
 
-      await T('C2b Playwright admin.html <script type="module"> 外框選單切換零 ReferenceError 且色票正確更新', async () => {
-        const adm = read(ADMIN_PATH);
+      const assertAdminFrameLookup = async (adm) => {
         const sIdx = adm.indexOf('const PROF_FRAME_OPTIONS = [');
-        const eIdx = adm.indexOf('window.profAdminFillSelf =', sIdx);
+        const eIdx = adm.indexOf('\nfunction renderUsers(el)', sIdx);
         assert.ok(sIdx > 0 && eIdx > sIdx, 'admin.html 找不到 PROF_FRAME_OPTIONS 區段');
         const snippet = adm.slice(sIdx, eIdx);
         const ctx = await browser.newContext({ viewport: { width: 800, height: 600 } });
@@ -868,8 +996,41 @@ if (chromium) {
         const errs = [];
         pg.on('pageerror', (e) => errs.push(e.message));
         try {
-          await pg.setContent(`<!DOCTYPE html><html><body><div id="tab-users"><div class="table-wrap"></div></div><script type="module">const escapeHtml=(s)=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');\n${snippet}\nmountProfFrameAdminBox(document.getElementById('tab-users'));\n</script></body></html>`);
+          await pg.setContent(`<!DOCTYPE html><html><body><div id="tab-users"><div class="table-wrap"></div></div><script type="module">
+            const escapeHtml=(s)=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            const currentUser = {email:'new@example.test'};
+            const api = async (url, opts) => {
+              if (opts?.method === 'POST') {
+                if (window.__savedFrame) return {ok:true,...JSON.parse(opts.body)};
+                window.__savedFrame = JSON.parse(opts.body);
+                return new Promise(resolve => { window.__finishSave = () => resolve({ok:true,...window.__savedFrame}); });
+              }
+              if (url.includes('old%40')) return new Promise(resolve => { window.__returnOld = resolve; });
+              return {ok:true, email:currentUser.email, avatarFrame:'cyber_neon'};
+            };
+            ${snippet}\n
+            window.__competingFrameSave = () => saveProfFrame(currentUser.email, null);
+            mountProfFrameAdminBox(document.getElementById('tab-users'));
+          </script></body></html>`);
           await pg.waitForSelector('#prof-frame-select');
+          const email = pg.locator('#prof-frame-email');
+          const save = pg.locator('#prof-frame-save-btn');
+          assert.ok(await save.isDisabled(), '初次查詢前不能套用');
+          await email.fill('old@example.test');
+          await pg.locator('#prof-frame-lookup-btn').click();
+          await pg.waitForFunction(() => !!window.__returnOld);
+          assert.ok(await save.isDisabled(), '查詢中不能套用');
+          await pg.evaluate(() => window.profAdminFillSelf());
+          await pg.waitForFunction(() => !document.getElementById('prof-frame-save-btn').disabled);
+          await pg.evaluate(() => window.__returnOld({ok:true,email:'old@example.test',avatarFrame:'admin_gold'}));
+          assert.equal(await pg.locator('#prof-frame-select').inputValue(), 'cyber_neon', '遲到的帳號查詢不可覆蓋新目標');
+          await save.click();
+          assert.deepStrictEqual(await pg.evaluate(() => window.__savedFrame), {email:'new@example.test',avatarFrame:'cyber_neon'});
+          assert.ok(await email.isDisabled() && await pg.locator('#prof-frame-lookup-btn').isDisabled(), '外框儲存期間鎖住同一帳號的重新查詢');
+          assert.ok((await pg.evaluate(() => window.__competingFrameSave())).error, '另一個後台入口同時儲存同一帳號會被攔下');
+          assert.equal(await pg.evaluate(() => window.__savedFrame.avatarFrame), 'cyber_neon');
+          await pg.evaluate(() => window.__finishSave());
+          await pg.waitForFunction(() => !document.getElementById('prof-frame-save-btn').disabled);
           await pg.selectOption('#prof-frame-select', 'cyber_neon');
           const bg = await pg.evaluate(() => getComputedStyle(document.getElementById('prof-frame-swatch')).backgroundColor);
           assert.strictEqual(bg, 'rgb(0, 229, 255)', 'cyber_neon 外框選取後色票應即時更新為 #00e5ff');
@@ -877,6 +1038,88 @@ if (chromium) {
         } finally {
           await ctx.close();
         }
+      };
+      const assertDetailFrameLookup = async (adm) => {
+        const a = adm.lastIndexOf("    if (email && email.includes('@')) {", adm.indexOf("const fSel = box.querySelector('#modal-prof-frame-select');"));
+        const end = adm.indexOf('\n  })();', a);
+        assert.ok(a >= 0 && end > a);
+        const select = adm.match(/<select id="modal-prof-frame-select"[^>]+>/)?.[0];
+        const button = adm.match(/<button id="modal-prof-frame-save"[^>]+>/)?.[0];
+        const saveHelper = adm.slice(adm.indexOf('const profFrameSavingEmails'), adm.indexOf('function resetProfFrameEditor'));
+        assert.match(saveHelper, /async function saveProfFrame/);
+        assert.ok(select && button, '缺玩家詳情的外框元素');
+        const pg = await browser.newPage();
+        try {
+          await pg.setContent(`<div id="test">${select}<option value="">無</option><option value="emerald_leaf">葉</option></select>${button}套用</button><div id="modal-prof-frame-msg"></div></div><script>
+            const box=document.getElementById('test'),email='player@example.test';
+            const PROF_FRAME_OPTIONS=[{id:'',label:'無'},{id:'emerald_leaf',label:'葉'}];
+            const profFrameSwatchUpdate=()=>{};
+            const api=async (_url, opts)=>{
+              if(opts?.method==='POST'){window.__detailSaved=JSON.parse(opts.body);return {ok:true,avatarFrame:window.__detailSaved.avatarFrame};}
+              return new Promise(resolve=>{window.__detailLoaded=resolve;});
+            };
+            ${saveHelper}
+            void (async()=>{${adm.slice(a,end)}})();
+          </script>`);
+          const save = pg.locator('#modal-prof-frame-save');
+          const selectNode = pg.locator('#modal-prof-frame-select');
+          await pg.waitForFunction(() => !!window.__detailLoaded);
+          assert.ok(await save.isDisabled() && await selectNode.isDisabled(), '初次查詢未完成時，玩家詳情外框控制項必須鎖住');
+          await save.evaluate((el) => el.click());
+          assert.equal(await pg.evaluate(() => window.__detailSaved), undefined);
+          await pg.evaluate(() => window.__detailLoaded({ok:true,avatarFrame:'emerald_leaf'}));
+          await pg.waitForFunction(() => !document.getElementById('modal-prof-frame-save').disabled);
+          assert.equal(await selectNode.inputValue(), 'emerald_leaf');
+          await selectNode.selectOption('');
+          await save.click();
+          assert.deepStrictEqual(await pg.evaluate(() => window.__detailSaved), {email:'player@example.test',avatarFrame:null});
+        } finally { await pg.close(); }
+      };
+      await T('C2b Playwright 驗證主表外框錯序、同帳號儲存互斥與色票', async () => {
+        const adm = read(ADMIN_PATH);
+        await assertAdminFrameLookup(adm);
+        const race = adm.replace('    if (!stillCurrent()) return;\n    if (!r || r.error) { if (st) st.textContent = \'查詢失敗',
+          '    if (!r || r.error) { if (st) st.textContent = \'查詢失敗');
+        assert.notEqual(race, adm);
+        await mutantMustBreak('M_admin_frame_late_lookup', () => assertAdminFrameLookup(race), '遲到的帳號查詢');
+        const noLock = adm.replace('  if (profFrameSavingEmails.has(key)) return', '  if (false) return');
+        assert.notEqual(noLock, adm);
+        await mutantMustBreak('M_admin_frame_concurrent_save', () => assertAdminFrameLookup(noLock), '同時儲存同一帳號');
+      });
+      await T('C2c 玩家詳情外框在初次 GET 前維持鎖定，完成後才可清除', async () => {
+        const adm = read(ADMIN_PATH);
+        await assertDetailFrameLookup(adm);
+        const unlocked = adm.replace(/(id="modal-prof-frame-(?:select|save)"[^>]+) disabled/g, '$1');
+        assert.notEqual(unlocked, adm);
+        await mutantMustBreak('M_admin_detail_frame_early_write', () => assertDetailFrameLookup(unlocked), '玩家詳情外框控制項必須鎖住');
+      });
+      await T('C2d 頭像及 PNG 降級保留完整 Emoji，兩條失敗圖片短期只查一次', async () => {
+        const pg = await browser.newPage();
+        let imgCalls = 0;
+        await pg.route('**/*', route => { imgCalls++; return route.abort(); });
+        try {
+          await pg.setContent(`<div id="app"></div><script>${defaultBundle}</script>`);
+          await pg.evaluate(() => window.__mountAvatar(document.getElementById('app'), { name: '😀測試', avatar: null }));
+          assert.equal(await pg.locator('.prof-avatar-fallback').textContent(), '😀');
+          const initials = await pg.evaluate(async () => {
+            const values = [];
+            const old = CanvasRenderingContext2D.prototype.fillText;
+            CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) {
+              values.push(text);
+              return old.call(this, text, ...rest);
+            };
+            try {
+              const card = { found: true, nick: '😀測試', avatar: { cardId: '19145', x: .5, y: .5, zoom: 1.4 },
+                totalWins: 100, showTotalWins: false, pinnedHonors: [] };
+              await window.__renderCardCanvas(card);
+              await window.__renderCardCanvas(card);
+              return values;
+            } finally { CanvasRenderingContext2D.prototype.fillText = old; }
+          });
+          assert.equal(initials.filter(t => t === '😀').length, 2);
+          assert.ok(initials.every(t => !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(t)));
+          assert.equal(imgCalls, 2, '同一圖片兩路失敗後再次下載應短期略過');
+        } finally { await pg.close(); }
       });
     } finally {
       await browser.close();
@@ -892,6 +1135,11 @@ await T('C3 全站接線與公開／內部紀錄隔離（game ?card=／viewerUid
   assert.ok(gp.includes('pendingSharedCardTarget') && gp.includes('requestLoginFromProfile'), '應有未登入名片＋加好友登入接力機制');
   assert.ok(gp.includes('dismissAuthModal') && gp.includes('viewerUid={firebaseUser && !firebaseUser.isAnonymous ? firebaseUser.uid : \'\'}'), '應有取消登入清除 pending 與 viewerUid 重抓接線');
   assert.ok(gp.includes('battleSeatFrames') && gp.includes('onRequestLogin={requestLoginFromProfile}'), '應傳遞對戰頭像外框與登入接力回呼');
+  assert.ok(gp.includes('fetchProfileBatch(items, ctx)') && !gp.includes('fetchPlayerProfileView'), '進房頭像只走輕量批次');
+  assert.match(gp, /history\.replaceState\(window\.history\.state, '', cardUrl\.toString\(\)\)/);
+  assert.equal(gp.match(/avatarFrame: seatFrameFor\(seatIdx\)/g)?.length, 2, '兩個 fallback 都需使用同席位外框');
+  assert.match(read('src/routes/friends/+page.svelte'), /viewerUid=\{profileViewerUid\}/);
+  assert.match(read('src/routes/deck-posts/+page.svelte'), /viewerUid=\{firebaseUser && !firebaseUser.isAnonymous/);
 
   const mpb = read(MPB_PATH);
   assert.ok(!/friend/i.test(mpb), 'MobilePortraitBattle.svelte 不可出現 friend 字樣');
@@ -929,16 +1177,25 @@ await T('D2 BASE (a41829bc) 無法通過 v6.659 新斷言（證明非恆真）',
   assert.ok(apiBase.ok && srvBase.ok);
   await mutantMustBreak('BASE_profileApi', () => assertProfileApiContract(normEol(apiBase.out)));
   await mutantMustBreak('BASE_backend', () => assertBackendUpgrades(() => buildBackendHarness(normEol(srvBase.out))));
+  const checks = [
+    ['外框圖鑑', apiBase.out, /export const AVATAR_FRAMES/],
+    ['PNG 匯出', apiBase.out, /export async function downloadProfileCardPng/],
+    ['分享連結', apiBase.out, /export function buildProfileShareUrl/],
+    ['勝場索引', srvBase.out, /profileVerifiedWinner/],
+    ['獨立統計旗標', srvBase.out, /showTotalWins/],
+    ['外框管理路由', srvBase.out, /app\.post\('\/api\/admin\/player-profile\/frame'/],
+  ];
+  for (const [label, src, re] of checks) await mutantMustBreak('BASE_' + label, () => assert.match(src, re));
 });
 
-await T('D3 六組真實突變體均被本守衛精準攔截（M1~M6）', async () => {
+await T('D3 真實突變覆蓋勝場、外框權限、隱私與登入重抓', async () => {
   const srv = read(SRV_PATH);
   const api = read(API_PATH);
 
   // M1: 後端一般勝場忘記排除無房號的單機/AI場
   const srvM1 = srv.replace(
-    "if (!r || typeof r.roomCode !== 'string' || !r.roomCode.trim()) continue;",
-    "if (!r) continue;",
+    "mode: 'online', vsAI: { $ne: true }, roomCode: /\\S/,",
+    "mode: 'online', roomCode: /\\S/,",
   );
   assert.notStrictEqual(srvM1, srv, 'M1 anchor');
   await mutantMustBreak('M1_allow_ai_roomCode', () => assertBackendUpgrades(() => buildBackendHarness(srvM1)), 'AI');
@@ -953,14 +1210,14 @@ await T('D3 六組真實突變體均被本守衛精準攔截（M1~M6）', async 
 
   // M3: Admin 設定與查詢外框忘記檢查 isTournAdmin 權限
   const srvM3 = srv.replace(
-    "        if (!id.verified || !isTournAdmin(id)) {\n          return res.status(403).json({ error: '只有管理員可設定頭像特殊外框', playerProfileApi: 1 });\n        }",
-    "        if (!id.verified) {\n          return res.status(403).json({ error: '只有管理員可設定頭像特殊外框', playerProfileApi: 1 });\n        }",
+    "        if (!isTournAdmin(id)) {\n          return res.status(403).json({ error: '只有管理員可設定頭像特殊外框', playerProfileApi: 1 });\n        }",
+    "",
   );
   assert.notStrictEqual(srvM3, srv, 'M3 anchor');
   await mutantMustBreak('M3_non_admin_set_frame', () => assertBackendUpgrades(() => buildBackendHarness(srvM3)), '403');
   const srvM3Get = srv.replace(
-    "        if (!id.verified || !isTournAdmin(id)) {\n          return res.status(403).json({ error: '只有管理員可管理頭像特殊外框', playerProfileApi: 1 });\n        }",
-    "        if (!id.verified) {\n          return res.status(403).json({ error: '只有管理員可管理頭像特殊外框', playerProfileApi: 1 });\n        }",
+    "        if (!isTournAdmin(id)) {\n          return res.status(403).json({ error: '只有管理員可管理頭像特殊外框', playerProfileApi: 1 });\n        }",
+    "",
   );
   assert.notStrictEqual(srvM3Get, srv, 'M3Get anchor');
   await mutantMustBreak('M3b_non_admin_get_frame', () => assertBackendUpgrades(() => buildBackendHarness(srvM3Get)), '403');
@@ -988,17 +1245,17 @@ await T('D3 六組真實突變體均被本守衛精準攔截（M1~M6）', async 
       try {
         const modal = read(MODAL_PATH);
         const modalM6 = modal.replace(
-          "const isSelfView = $derived(!!card && card.friendStatus === 'self');",
-          "const isSelfView = $derived(!!card && (card.friendStatus === 'self' || !!previewCard));",
-        );
+          "previewCard ? previewCard.friendStatus === 'self'",
+          "previewCard ? true",
+        ).replace("open && card?.friendStatus === 'self' && (", "open && !!card && (");
         assert.notStrictEqual(modalM6, modal, 'M6 anchor');
         const badBundle = await buildUiBundle(modalM6);
         await mutantMustBreak('M6_preview_ai_card_shows_download', () => assertModalSelfVsOtherUi(browser, badBundle), '非本人 previewCard');
 
         // M7: 拿掉 viewerUid 追蹤 ⇒ 啟動登入接力重抓必須翻紅
         const modalM7 = modal.replace(
-          "    const _authKey = String(viewerUid || '');\n    void _authKey;",
-          "    const _authKey = '';\n    void _authKey;",
+          't === prevTargetRef && authKey === prevAuthKey',
+          't === prevTargetRef',
         );
         assert.notStrictEqual(modalM7, modal, 'M7 anchor');
         const badRaceBundle = await buildUiBundle(modalM7);
@@ -1007,6 +1264,24 @@ await T('D3 六組真實突變體均被本守衛精準攔截（M1~M6）', async 
         await browser.close();
       }
     }
+  }
+});
+
+const v6659Sha = '9b7494b3269bd2369795a8bdb2d31e72e4ef3a60';
+await T('D4 v6.659 的分享無文件與隱私交錯逐項必紅', async () => {
+  if (!hasBaseCommit(ROOT, v6659Sha)) { shallowSkip('v6659 個別競態反證', '需要歷史 commit'); return; }
+  const previous = readBaseBlob(ROOT, v6659Sha, SRV_PATH);
+  assert.ok(previous.ok);
+  await mutantMustBreak('v6659_first_share', () => assertFirstShare(normEol(previous.out)), '立即可公開解析');
+  await mutantMustBreak('v6659_visibility_race', () => assertVisibilityRace(normEol(previous.out)));
+  if (chromium) {
+    const original = readBaseBlob(ROOT, v6659Sha, MODAL_PATH);
+    assert.ok(original.ok);
+    const browser = await pwLaunchWith(chromium, 'v6.659-race-base');
+    if (browser) try {
+      const bundle = await buildUiBundle(normEol(original.out));
+      await mutantMustBreak('v6659_repeat_request', () => assertModalSelfVsOtherUi(browser, bundle), '只能送出一次');
+    } finally { await browser.close(); }
   }
 });
 

@@ -1588,10 +1588,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //   - 若兩者都沒 → 存空 cardCounts {}
     //   - 字元限長：name 60, email 120
     //   - cardCounts 最多 100 keys，每個 count 0-60（validate 已過濾，這裡再 sanitize 一次）
+    function mrEmail(raw) {
+      return typeof raw === 'string' ? raw.trim().toLowerCase() || null : null;
+    }
     function makePlayerDoc(p) {
       const doc = {
         name: String(p.name).substring(0, 60),
-        email: p.email ? String(p.email).substring(0, 120) : null,
+        email: mrEmail(p.email)?.slice(0, 120) || null,
         cardCounts: {},
       };
       if (p.cardCounts && typeof p.cardCounts === 'object' && !Array.isArray(p.cardCounts)) {
@@ -1668,6 +1671,29 @@ import('firebase-admin').then(async ({ default: admin }) => {
     }
     // <<< PTCG-PLAYER-IDENTITY-END
 
+    // >>> v6660-verified-profile-win
+    async function verifyProfileMatchWinner(req, doc, room) {
+      const state = room && room.gameState;
+      if (!adminAuth || doc.mode !== 'online' || doc.vsAI || room?.status !== 'ended' ||
+          state?.phase !== 'game-over' || state.id !== doc._id || state.winner !== doc.winner ||
+          (state.winner !== 0 && state.winner !== 1)) return null;
+      const [first, second] = Array.isArray(room.seats) ? room.seats : [];
+      if (!first?.uid || !second?.uid || first.uid === second.uid) return null;
+      const seat = state.winner === 0 ? first : second;
+      const email = mrEmail(seat.email);
+      const token = /^Bearer\s+(.+)$/.exec(req.headers.authorization || '')?.[1];
+      if (!email || !token || !Number.isInteger(state.turn) || state.turn < 1 ||
+          (typeof state.winReason === 'string' && /無回應/.test(state.winReason) && state.turn < 2)) return null;
+      try {
+        const identity = await adminAuth.verifyIdToken(token);
+        if (identity.firebase?.sign_in_provider === 'anonymous' ||
+            mrEmail(identity.email) !== email) return null;
+        return { email, winner: state.winner, finalTurn: state.turn,
+          winReason: typeof state.winReason === 'string' ? state.winReason.slice(0, 200) : '' };
+      } catch (_e) { return null; }
+    }
+    // <<< v6660-verified-profile-win
+
     app.post('/api/match-result', async (req, res) => {
       const ip = (req.headers['x-forwarded-for'] || req.ip || 'unknown').toString().split(',')[0].trim();
       if (!mrRateLimitCheck(ip)) {
@@ -1686,7 +1712,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         // 用 matchId 為 _id，upsert 防重複（client 端可能多次 fire）。
         const doc = {
           _id: body.matchId,
-          roomCode: body.roomCode || null,
+          roomCode: typeof body.roomCode === 'string' ? body.roomCode.trim().toUpperCase().slice(0, 12) || null : null,
           mode: body.mode,
           vsAI: !!body.vsAI,
           aiSide: typeof body.aiSide === 'number' ? body.aiSide : null,
@@ -1706,34 +1732,37 @@ import('firebase-admin').then(async ({ default: admin }) => {
         //   ⚠ 只有 0／1 才寫；沒送（舊 client）就一個位元都不動，doc 與 v1.58 逐位元相同（欄位缺席＝不知道誰先攻）。
         if (body.firstPlayerIdx === 0 || body.firstPlayerIdx === 1) doc.firstSeat = body.firstPlayerIdx;
         // <<< v159-first-seat
+        let verifiedWin = null;
         // >>> PTCG-MATCH-EMAIL-ENRICH-START (守衛會抽出實跑)
-        // v1.20(v6.220): seats[].email 已不再下發給玩家端(隱私) → 線上對局的 email 歸屬
-        //   改由伺服器從房間 doc 補上(房間 doc 內仍保存 email)。舊 client 若有送 email
-        //   以送來的值優先(行為不變);補不到就維持 null;任何失敗都不影響戰績寫入。
+        // 線上紀錄的 Email 取自房間座位，查不到時保留 null。上報及終局核實共用既有房間查詢。
         // v1.28(v6.266): **deckId 併進同一發 findOne**(套牌戰績)。
         //   ⚠⚠ 為什麼一定要走「房間 seat」而不能只靠 payload：/api/match-result 是
         //     `$setOnInsert` ⇒ **只有先送到的那一發會落地**，而每個 client 只知道
         //     「自己」用了哪一副牌(對手的 deckId 在對手瀏覽器的 localStorage 裡)
         //     ⇒ 只靠 payload 的話，慢的那一側永遠缺 deckId、對局有一半會是瘸的。
-        //   ⚠ 成本＝**零額外查詢**：v6.220 起 seats[].email 已不下發玩家端 ⇒ 線上 client
-        //     送來的 p1/p2.email 一律是 null ⇒ 上面那個 email 條件在線上路徑本來就恆真、
-        //     這一發 findOne 本來每場就會發。deckId 只是讓同一發多帶兩個小欄位回來。
         //   ⚠ seats[].deckId 是 **client 下一版才會寫入**的欄位(本版 server 先上;
         //     白名單會丟掉 client 送來的新欄位，所以順序不能反)。現在補不到 ⇒ 什麼都不寫。
         //   ⚠ 一律 fail-open：查不到／欄位不合格／DB 掛 → 戰績照常寫入，只是少一個欄位。
+        // 線上身分須由房間補齊。查不到時省略上報者自填的 Email。
+        if (doc.mode === 'online') {
+          doc.p1.email = null;
+          doc.p2.email = null;
+        }
         try {
-          const _needEmail = !doc.p1.email || !doc.p2.email;
           const _needDeckId = !doc.p1.deckId || !doc.p2.deckId;
-          if (doc.roomCode && (_needEmail || _needDeckId)) {
+          if (doc.roomCode && (doc.mode === 'online' || _needDeckId)) {
             const _rm = await db.collection('rooms').findOne(
-              { _id: String(doc.roomCode).toUpperCase() },
-              { projection: { 'seats.uid': 1, 'seats.email': 1, 'seats.deckId': 1 } },
+              { _id: doc.roomCode },
+              { projection: { 'seats.uid': 1, 'seats.email': 1, 'seats.deckId': 1, status: 1,
+                'gameState.id': 1, 'gameState.phase': 1, 'gameState.winner': 1, 'gameState.turn': 1, 'gameState.winReason': 1 } },
             );
             const _st = _rm && Array.isArray(_rm.seats) ? _rm.seats : [];
-            if (!doc.p1.email && _st[0] && _st[0].email) doc.p1.email = String(_st[0].email).substring(0, 120);
-            if (!doc.p2.email && _st[1] && _st[1].email) doc.p2.email = String(_st[1].email).substring(0, 120);
-            // ⚠ 與 email 同一條規則：client 有送就以 client 為準(它才知道自己按了哪一副)，
-            //   沒送才用房間 seat 補；補到不合格的值一律當作沒有。
+            if (doc.mode === 'online') {
+              doc.p1.email = mrEmail(_st[0]?.email)?.slice(0, 120) || null;
+              doc.p2.email = mrEmail(_st[1]?.email)?.slice(0, 120) || null;
+              verifiedWin = await verifyProfileMatchWinner(req, doc, _rm);
+            }
+            // 牌組 ID 保留舊版相容性：上報者已提供合法牌組時，房間只補另一側空值。
             if (!doc.p1.deckId && _st[0]) { const _d = sanitizeDeckId(_st[0].deckId); if (_d) doc.p1.deckId = _d; }
             if (!doc.p2.deckId && _st[1]) { const _d = sanitizeDeckId(_st[1].deckId); if (_d) doc.p2.deckId = _d; }
             // v1.36(v6.282) 好友功能:playerIdentity 對照表(email ↔ 最近 uid ↔ 暱稱)順手寫 —— 同一發 findOne
@@ -1743,10 +1772,17 @@ import('firebase-admin').then(async ({ default: admin }) => {
           }
         } catch (_e) { /* email/deckId 補寫失敗不影響戰績寫入 */ }
         // <<< PTCG-MATCH-EMAIL-ENRICH-END
+        const write = { $setOnInsert: doc };
+        if (verifiedWin) {
+          // 後到的已驗證勝方上報可補記勝場，並校正早到的舊版戰報終局欄位。
+          write.$set = { profileVerifiedWinner: verifiedWin.email, roomCode: doc.roomCode, mode: 'online',
+            vsAI: false, winner: verifiedWin.winner, finalTurn: verifiedWin.finalTurn, winReason: verifiedWin.winReason };
+          for (const key of Object.keys(write.$set)) delete doc[key];
+        }
         // upsert — 已存在的 matchId 不會 dup（同場 game-over 多次觸發保護）
         const result = await db.collection('matchRecords').updateOne(
           { _id: body.matchId },
-          { $setOnInsert: doc },
+          write,
           { upsert: true }
         );
         const inserted = result.upsertedCount === 1;
@@ -9196,6 +9232,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
     ];
     const PROF_VALID_FRAMES = new Set(PROF_FRAME_CATALOG.map((f) => f.id));
     const _profSummaryCache = new Map(); // email -> { at, data }
+    const _profSummaryInFlight = new Map();
     const _profGoogleCache = new Map();  // uid -> { at, googleVerified }
     const _profRateMap = new Map();      // key -> ts
     const _profChatRate = new Map();     // fallback chat rate limiter
@@ -9207,8 +9244,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       db.collection('tournamentArchives').createIndex({ 'players.email': 1 }, { sparse: true }).catch(() => {});
       db.collection('tournamentArchives').createIndex({ 'players.name': 1 }, { sparse: true }).catch(() => {});
       db.collection('tournamentEvents').createIndex({ proposerName: 1 }, { sparse: true }).catch(() => {});
-      db.collection('matchRecords').createIndex({ 'p1.email': 1, winner: 1 }, { sparse: true }).catch(() => {});
-      db.collection('matchRecords').createIndex({ 'p2.email': 1, winner: 1 }, { sparse: true }).catch(() => {});
+      db.collection('matchRecords').createIndex({ profileVerifiedWinner: 1 }, { sparse: true }).catch(() => {});
     } catch (_e) { /* db 尚未就緒時略過 */ }
 
     function _profClampFrame(raw) {
@@ -9306,29 +9342,36 @@ import('firebase-admin').then(async ({ default: admin }) => {
         return !!storedFlag;
       }
     }
-    function _profCountCasualOnlineWins(rows) {
-      let wins = 0;
-      for (const r of (rows || [])) {
-        if (!r || typeof r.roomCode !== 'string' || !r.roomCode.trim()) continue;
-        if (typeof r.winReason === 'string' && /無回應/.test(r.winReason) && !(Number(r.finalTurn) >= 2)) continue;
-        wins++;
-      }
-      return wins;
-    }
     async function _profLoadSummary(email, forceRefresh = false) {
       const em = _frNormEmail(email);
       if (!em) return { champOfficial: 0, champCommunity: 0, casualOnlineWins: 0, tournamentWins: 0, totalWins: 0, honors: [], lastDisplayName: '', lastUid: '' };
       const cached = _profSummaryCache.get(em);
       if (!forceRefresh && cached && (Date.now() - cached.at) < PROF_TTL_MS) return cached.data;
+      const inflight = _profSummaryInFlight.get(em);
+      if (inflight) return inflight;
+      const pending = _profReadSummary(em);
+      _profSummaryInFlight.set(em, pending);
+      try {
+        const data = await pending;
+        if (_profSummaryCache.size >= 1500) _profSummaryCache.delete(_profSummaryCache.keys().next().value);
+        _profSummaryCache.set(em, { at: Date.now(), data });
+        return data;
+      } finally {
+        _profSummaryInFlight.delete(em);
+      }
+    }
+    async function _profReadSummary(em) {
       const archColl = db.collection('tournamentArchives');
       const mrColl = db.collection('matchRecords');
-      const [archives, p1Wins, p2Wins] = await Promise.all([
+      const [archives, casualOnlineWins] = await Promise.all([
         archColl.find(
           { 'players.email': { $in: [em] } },
           { projection: { eventId: 1, eventName: 1, finishedAt: 1, startedAt: 1, createdAt: 1, communityEvent: 1, championUid: 1, players: 1, matches: 1 } }
         ).toArray(),
-        mrColl.find({ 'p1.email': em, winner: 0 }, { projection: { roomCode: 1, winReason: 1, finalTurn: 1 } }).toArray().catch(() => []),
-        mrColl.find({ 'p2.email': em, winner: 1 }, { projection: { roomCode: 1, winReason: 1, finalTurn: 1 } }).toArray().catch(() => []),
+        mrColl.countDocuments({
+          profileVerifiedWinner: em, mode: 'online', vsAI: { $ne: true }, roomCode: /\S/,
+          $or: [{ winReason: { $not: /無回應/ } }, { finalTurn: { $gte: 2 } }],
+        }, { hint: { profileVerifiedWinner: 1 }, maxTimeMS: 3000 }),
       ]);
       const cutFn = (app.locals && typeof app.locals._detectCutPlacements === 'function')
         ? app.locals._detectCutPlacements
@@ -9375,17 +9418,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
           }
         }
         for (const m of (a.matches || [])) {
-          if (!m || m.bye || m.noShow || !m.winnerUid) continue;
+          if (!m || m.bye || m.noShow || m.doubleNoShow || !m.winnerUid) continue;
           if (myArchUids.has(String(m.winnerUid))) tournamentWins++;
         }
       }
-      const casualOnlineWins = _profCountCasualOnlineWins(p1Wins) + _profCountCasualOnlineWins(p2Wins);
       const totalWins = casualOnlineWins + tournamentWins;
       honors.sort((x, y) => (y.date || 0) - (x.date || 0));
-      const data = { champOfficial, champCommunity, casualOnlineWins, tournamentWins, totalWins, honors, lastDisplayName, lastUid };
-      _profSummaryCache.set(em, { at: Date.now(), data });
-      if (_profSummaryCache.size > 1500) _profSummaryCache.clear();
-      return data;
+      return { champOfficial, champCommunity, casualOnlineWins, tournamentWins, totalWins, honors, lastDisplayName, lastUid };
     }
     async function _profEmailByUid(uid) {
       const u = String(uid || '').trim();
@@ -9584,12 +9623,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (h && pinnedHonors.length < PROF_MAX_HONORS) pinnedHonors.push(h);
       }
       const nick = (doc && doc.nick) || fallbackNick || summary.lastDisplayName || '玩家';
-      let friendStatus = 'none';
+      const friendFeatureOn = await friendsEnabled();
+      let friendStatus = friendFeatureOn ? 'none' : 'unavailable';
       let canFriend = false;
-      if (viewerEmail) {
-        if (viewerEmail === em) {
-          friendStatus = 'self';
-        } else {
+      if (viewerEmail === em) {
+        friendStatus = 'self';
+      } else if (viewerEmail && friendFeatureOn) {
           const pid = _frPairId(viewerEmail, em);
           const fdoc = await db.collection(FR_COLL).findOne({ _id: pid }, { projection: { status: 1, requester: 1, blockedBy: 1 } });
           if (!fdoc) {
@@ -9608,7 +9647,6 @@ import('firebase-admin').then(async ({ default: admin }) => {
             friendStatus = 'none';
             canFriend = true;
           }
-        }
       }
       const showTotalWins = !(doc && doc.showTotalWins === false);
       const showOfficialCrowns = !(doc && doc.showOfficialCrowns === false);
@@ -9629,7 +9667,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         showOfficialCrowns,
         showCommunityCrowns,
         pinnedHonors,
-        canFriend: canFriend && (await friendsEnabled()),
+        canFriend,
         friendStatus,
       };
     }
@@ -9670,11 +9708,23 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const me = await _profVerifyAuth(req, { required: true });
         if (me.error) return res.status(me.code || 401).json({ playerProfileApi: 1, error: me.error });
         const em = me.email;
-        const [doc, summary, lastReg] = await Promise.all([
-          db.collection(PROF_COLL).findOne({ _id: em }),
+        const profiles = db.collection(PROF_COLL);
+        let [doc, summary, lastReg] = await Promise.all([
+          profiles.findOne({ _id: em }),
           _profLoadSummary(em, req.query.refresh === '1'),
           db.collection(FR_REG_COLL).find({ email: em, name: { $nin: ['', null] } }, { projection: { name: 1 } }).sort({ registeredAt: -1 }).limit(1).toArray(),
         ]);
+        if (!doc?.profileKey) {
+          const profileKey = _profKeyForEmail(em);
+          if (!doc) {
+            await profiles.updateOne({ _id: em },
+              { $setOnInsert: { profileKey, uid: me.uid, createdAt: Date.now() } }, { upsert: true });
+          } else {
+            await profiles.updateOne({ _id: em, profileKey: { $in: [null, ''] } }, { $set: { profileKey } });
+          }
+          doc = await profiles.findOne({ _id: em });
+          if (!doc?.profileKey) throw new Error('個人名片分享代號未寫入');
+        }
         const defaultNick = (lastReg[0] && lastReg[0].name) || summary.lastDisplayName || me.name || '';
         const validSet = new Set(summary.honors.map((h) => h.eventId));
         const rawPinned = Array.isArray(doc && doc.pinnedHonorIds) ? doc.pinnedHonorIds : [];
@@ -9730,10 +9780,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
             return res.status(400).json({ playerProfileApi: 1, error: '找不到指定的官方卡片，請重新選擇' });
           }
         }
-        const [curDoc, summary] = await Promise.all([
-          db.collection(PROF_COLL).findOne({ _id: em }),
-          _profLoadSummary(em, true),
-        ]);
+        const summary = await _profLoadSummary(em, true);
         const validIds = new Set(summary.honors.map((h) => h.eventId));
         const seenHonor = new Set();
         const pinnedHonorIds = [];
@@ -9746,10 +9793,6 @@ import('firebase-admin').then(async ({ default: admin }) => {
             if (pinnedHonorIds.length >= PROF_MAX_HONORS) break;
           }
         }
-        const showTotalWins = typeof b.showTotalWins === 'boolean' ? b.showTotalWins : !(curDoc && curDoc.showTotalWins === false);
-        const showOfficialCrowns = typeof b.showOfficialCrowns === 'boolean' ? b.showOfficialCrowns : !(curDoc && curDoc.showOfficialCrowns === false);
-        const showCommunityCrowns = typeof b.showCommunityCrowns === 'boolean' ? b.showCommunityCrowns : !(curDoc && curDoc.showCommunityCrowns === false);
-        const preservedFrame = _profClampFrame(curDoc && curDoc.avatarFrame);
         const pKey = _profKeyForEmail(em);
         const updateDoc = {
           profileKey: pKey,
@@ -9758,18 +9801,22 @@ import('firebase-admin').then(async ({ default: admin }) => {
           nickLower: nick ? nick.toLowerCase() : '',
           bio,
           avatar,
-          showTotalWins,
-          showOfficialCrowns,
-          showCommunityCrowns,
           pinnedHonorIds,
           googleVerified: !!me.googleVerified,
           updatedAt: now,
         };
-        await db.collection(PROF_COLL).updateOne(
+        const onInsert = { createdAt: now };
+        for (const field of ['showTotalWins', 'showOfficialCrowns', 'showCommunityCrowns']) {
+          if (typeof b[field] === 'boolean') updateDoc[field] = b[field];
+          else onInsert[field] = true;
+        }
+        const profiles = db.collection(PROF_COLL);
+        await profiles.updateOne(
           { _id: em },
-          { $set: updateDoc, $setOnInsert: { createdAt: now } },
+          { $set: updateDoc, $setOnInsert: onInsert },
           { upsert: true }
         );
+        const current = await profiles.findOne({ _id: em });
         const honorByEvent = new Map(summary.honors.map((h) => [h.eventId, h]));
         return res.json({
           playerProfileApi: 1,
@@ -9779,16 +9826,16 @@ import('firebase-admin').then(async ({ default: admin }) => {
             nick,
             bio,
             avatar,
-            avatarFrame: preservedFrame,
+            avatarFrame: _profClampFrame(current?.avatarFrame),
             googleVerified: !!me.googleVerified,
             champOfficial: summary.champOfficial,
             champCommunity: summary.champCommunity,
             casualOnlineWins: summary.casualOnlineWins,
             tournamentWins: summary.tournamentWins,
             totalWins: summary.totalWins,
-            showTotalWins,
-            showOfficialCrowns,
-            showCommunityCrowns,
+            showTotalWins: current?.showTotalWins !== false,
+            showOfficialCrowns: current?.showOfficialCrowns !== false,
+            showCommunityCrowns: current?.showCommunityCrowns !== false,
             pinnedHonorIds,
             availableHonors: summary.honors,
             pinnedHonors: pinnedHonorIds.map((eid) => honorByEvent.get(eid)).filter(Boolean),
@@ -9939,10 +9986,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
     app.get('/api/admin/player-profile/frame', async (req, res) => {
       try {
         const id = await tournIdentity(req);
-        if (!id || id.error) {
-          return res.status((id && id.code) || 401).json({ error: (id && id.error) || '請先登入帳號', playerProfileApi: 1 });
+        if (!id?.verified || id.error) {
+          return res.status(401).json({ error: id?.error || '請先登入帳號', playerProfileApi: 1 });
         }
-        if (!id.verified || !isTournAdmin(id)) {
+        if (!isTournAdmin(id)) {
           return res.status(403).json({ error: '只有管理員可管理頭像特殊外框', playerProfileApi: 1 });
         }
         const em = _frNormEmail(String((req.query && req.query.email) || ''));
@@ -9970,22 +10017,19 @@ import('firebase-admin').then(async ({ default: admin }) => {
     app.post('/api/admin/player-profile/frame', async (req, res) => {
       try {
         const id = await tournIdentity(req);
-        if (!id || id.error) {
-          return res.status((id && id.code) || 401).json({ error: (id && id.error) || '請先登入帳號', playerProfileApi: 1 });
+        if (!id?.verified || id.error) {
+          return res.status(401).json({ error: id?.error || '請先登入帳號', playerProfileApi: 1 });
         }
-        if (!id.verified || !isTournAdmin(id)) {
+        if (!isTournAdmin(id)) {
           return res.status(403).json({ error: '只有管理員可設定頭像特殊外框', playerProfileApi: 1 });
         }
         const b = req.body && typeof req.body === 'object' ? req.body : {};
         const em = _frNormEmail(String(b.email || ''));
         if (!em) return res.status(400).json({ error: '請提供有效的玩家 email', playerProfileApi: 1 });
         const rawFrame = b.avatarFrame;
-        let cleanFrame = null;
-        if (rawFrame !== null && rawFrame !== undefined && rawFrame !== '') {
-          cleanFrame = _profClampFrame(String(rawFrame));
-          if (!cleanFrame) {
-            return res.status(400).json({ error: '找不到指定的頭像外框款式', playerProfileApi: 1 });
-          }
+        const cleanFrame = _profClampFrame(rawFrame);
+        if (!Object.hasOwn(b, 'avatarFrame') || (rawFrame !== null && !cleanFrame)) {
+          return res.status(400).json({ error: '請指定有效的頭像外框，移除時請傳 null', playerProfileApi: 1 });
         }
         const now = Date.now();
         await db.collection(PROF_COLL).updateOne(

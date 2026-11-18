@@ -467,11 +467,30 @@ function corsCardCandidates(cardId: string): string[] {
   return out;
 }
 
+const failedProfileImageUntil = new Map<string, number>();
+
+export function profileNameInitial(name: string): string {
+  return (Array.from(String(name || '玩').trim())[0] || '玩').toUpperCase();
+}
+
 function defaultLoadCorsImage(url: string): Promise<HTMLImageElement | null> {
   if (typeof Image === 'undefined') return Promise.resolve(null);
+  if ((failedProfileImageUntil.get(url) ?? 0) > Date.now()) return Promise.resolve(null);
+  failedProfileImageUntil.delete(url);
   return new Promise((resolve) => {
     let settled = false;
-    const done = (v: HTMLImageElement | null) => { if (!settled) { settled = true; resolve(v); } };
+    const done = (v: HTMLImageElement | null) => {
+      if (settled) return;
+      settled = true;
+      if (!v) {
+        if (failedProfileImageUntil.size >= 64) {
+          const oldest = failedProfileImageUntil.keys().next().value;
+          if (oldest) failedProfileImageUntil.delete(oldest);
+        }
+        failedProfileImageUntil.set(url, Date.now() + 60_000);
+      }
+      resolve(v);
+    };
     const timer = setTimeout(() => done(null), 6000);
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -636,7 +655,7 @@ export async function renderProfileCardToCanvas(
     const imgH = imgW * PROF_CARD_HW;
     ctx.drawImage(avImg, AV_CX - crop.x * imgW, AV_CY - crop.y * imgH, imgW, imgH);
   } else {
-    const initial = (String(card.nick || '玩').trim()[0] || '玩').toUpperCase();
+    const initial = profileNameInitial(card.nick);
     ctx.fillStyle = '#e6f5ea';
     ctx.font = `bold 62px ${FONT}`;
     ctx.textAlign = 'center';
@@ -788,12 +807,14 @@ export async function renderProfileCardToCanvas(
 
 export async function downloadProfileCardPng(
   card: PlayerProfilePublic,
+  stillOwnCard: () => boolean = () => true,
 ): Promise<{ ok: boolean; filename: string; error?: string }> {
   const safeNick = (card.nick || 'player').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 24) || 'player';
   const filename = `ptcg-名片-${safeNick}.png`;
   try {
     const canvas = await renderProfileCardToCanvas(card);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
+    if (!stillOwnCard()) return { ok: false, filename };
     if (!blob) return { ok: false, filename, error: '無法產生 PNG 圖片檔' };
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

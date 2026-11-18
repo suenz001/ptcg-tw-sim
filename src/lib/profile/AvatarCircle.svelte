@@ -9,6 +9,7 @@
     cardImageUrlFromId,
     clampAvatarCrop,
     getAvatarFrameSpec,
+    profileNameInitial,
     PROF_CARD_HW,
     type AvatarCrop,
   } from './profile-api';
@@ -31,7 +32,7 @@
   const frameSpec = $derived(getAvatarFrameSpec(frame ?? (avatar as { frame?: string | null } | null)?.frame));
   const rawUrl = $derived(crop ? cardImageUrlFromId(crop.cardId) : null);
   const thumbUrl = $derived(rawUrl ? cardThumb(rawUrl) : null);
-  const initial = $derived((String(name || '玩').trim()[0] || '玩').toUpperCase());
+  const initial = $derived(profileNameInitial(name));
   const ringPad = $derived(frameSpec ? Math.max(2, Math.round(size * 0.06)) : 0);
 
   let prevUrl = '';

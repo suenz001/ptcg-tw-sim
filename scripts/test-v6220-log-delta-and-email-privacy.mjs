@@ -25,9 +25,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
+import { revertV6660IfPresent } from './lib/revert-v6660-profile-hardening.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PATCH = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
+const PATCH = revertV6660IfPresent('oracle-admin/server_admin_patch.js', normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8')));
 const OC = normEol(readFileSync(join(ROOT, 'src/lib/game/oracle-client.ts'), 'utf8'));
 
 let pass = 0, fail = 0;

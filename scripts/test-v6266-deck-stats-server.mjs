@@ -23,13 +23,14 @@ import { createHash } from 'node:crypto';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { committedEolIsLf, normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
+import { revertV6660IfPresent } from './lib/revert-v6660-profile-hardening.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 // ⭐v6.378 C-7：「admin.html 必須維持 LF」要問 git index（真的會被部署的那份位元組），
 //   不是問工作樹 —— core.autocrlf=true 的本機工作樹一律 CRLF ⇒ 舊寫法恆紅、CI 恆綠。
 const ADMIN_EOL = committedEolIsLf(ROOT, 'oracle-admin/admin.html');
 const BASE_SHA = 'cef06975e99502eb8eb20f26e07ac713267f41b3';   // v6.265
-const pat = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
+const pat = revertV6660IfPresent('oracle-admin/server_admin_patch.js', normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8')));
 const adm = normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
 const verTs = normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'));
 // ⚠ 第 1 行是版本沿革註解（裡面什麼字都有）⇒ 所有「全檔掃描」一律先切掉它，
