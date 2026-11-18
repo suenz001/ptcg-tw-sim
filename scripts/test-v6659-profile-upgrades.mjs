@@ -498,14 +498,20 @@ async function assertFirstShare(src) {
 }
 await T('B2 尚未存過名片即可分享', () => assertFirstShare());
 
+function deferredResolution() {
+  let resolve;
+  const promise = new Promise(settle => { resolve = settle; });
+  return { promise, resolve };
+}
+
 async function assertVisibilityRace(src) {
   const { invoke, db } = buildBackendHarness(src);
   const me = await invoke('GET', '/api/player-profile/me', { token: 'tokA' });
   const profileKey = me.body.profile.profileKey;
   await db.collection('matchRecords').insertOne({ _id: 'normal', roomCode: 'ABCD', mode: 'online',
     winner: 0, finalTurn: 4, p1: { email: 'alice@example.com' }, profileVerifiedWinner: 'alice@example.com' });
-  const held = Promise.withResolvers();
-  const arrived = Promise.withResolvers();
+  const held = deferredResolution();
+  const arrived = deferredResolution();
   const collect = db.collection.bind(db);
   db.collection = (name) => {
     const col = collect(name);
@@ -556,8 +562,8 @@ await T('B4 好友停用、管理員只有合法的認證及明確外框欄位�
 
 await T('B5 同帳號併發統計只查一次，查詢失敗不寫入快取', async () => {
   const { invoke, db } = buildBackendHarness();
-  const wait = Promise.withResolvers();
-  const started = Promise.withResolvers();
+  const wait = deferredResolution();
+  const started = deferredResolution();
   const collect = db.collection.bind(db);
   let counts = 0;
   db.collection = (name) => {
@@ -668,7 +674,7 @@ async function assertModalSelfVsOtherUi(browser, bundle) {
   const pg = await ctx.newPage();
   const pageErrors = [];
   let authenticatedViews = 0;
-  const delayedViewer = Promise.withResolvers();
+  const delayedViewer = deferredResolution();
   pg.on('pageerror', (e) => pageErrors.push(e.message));
   try {
     await pg.route('**/*', async (route) => {
