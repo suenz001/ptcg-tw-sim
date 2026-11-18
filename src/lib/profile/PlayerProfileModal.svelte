@@ -11,6 +11,9 @@
     fetchPlayerProfileView,
     sendFriendRequestFromProfile,
     formatHonorDate,
+    buildProfileShareUrl,
+    downloadProfileCardPng,
+    getAvatarFrameSpec,
     type PlayerProfilePublic,
     type ProfileAuthCtx,
     type ProfileLookupTarget,
@@ -20,14 +23,18 @@
     open = false,
     target = null,
     previewCard = null,
+    viewerUid = '',
     getAuthCtx,
     onclose,
+    onRequestLogin = null,
   }: {
     open?: boolean;
     target?: ProfileLookupTarget | null;
     previewCard?: PlayerProfilePublic | null;
+    viewerUid?: string;
     getAuthCtx: () => Promise<ProfileAuthCtx | null>;
     onclose: () => void;
+    onRequestLogin?: (() => void) | null;
   } = $props();
 
   let loading = $state(false);
@@ -35,43 +42,61 @@
   let card = $state<PlayerProfilePublic | null>(null);
   let frBusy = $state(false);
   let frMsg = $state('');
+  let dlBusy = $state(false);
   let loadSeq = 0;
+  let prevTargetRef: ProfileLookupTarget | null = null;
+
+  const isSelfView = $derived(!!card && card.friendStatus === 'self');
+  const frameSpec = $derived(card ? getAvatarFrameSpec(card.avatarFrame) : null);
 
   $effect(() => {
+    const _authKey = String(viewerUid || '');
+    void _authKey;
     if (!open) {
       loadSeq++;
+      prevTargetRef = null;
       card = null;
       errMsg = '';
       frMsg = '';
       frBusy = false;
+      dlBusy = false;
       loading = false;
       return;
     }
     if (previewCard) {
       loadSeq++;
+      prevTargetRef = null;
       card = previewCard;
       errMsg = '';
       frMsg = '';
       frBusy = false;
+      dlBusy = false;
       loading = false;
       return;
     }
     if (!target) {
       loadSeq++;
+      prevTargetRef = null;
       card = null;
       errMsg = '';
       frMsg = '';
       frBusy = false;
+      dlBusy = false;
       loading = false;
       return;
     }
     const seq = ++loadSeq;
     const t = target;
-    loading = true;
+    const targetChanged = t !== prevTargetRef;
+    prevTargetRef = t;
+    if (targetChanged || !card) {
+      loading = true;
+      card = null;
+    }
     errMsg = '';
     frMsg = '';
     frBusy = false;
-    card = null;
+    dlBusy = false;
     void (async () => {
       const ctx = await getAuthCtx().catch(() => null);
       const res = await fetchPlayerProfileView(t, ctx);
@@ -95,7 +120,12 @@
       const ctx = await getAuthCtx();
       if (!open || previewCard || seq !== loadSeq || target !== curTarget || !card) return;
       if (!ctx || !ctx.token) {
-        frMsg = '請先登入非匿名帳號再加好友';
+        if (onRequestLogin) {
+          frMsg = '請先登入正式帳號再加好友';
+          onRequestLogin();
+        } else {
+          frMsg = '請先登入非匿名帳號再加好友';
+        }
         return;
       }
       const res = await sendFriendRequestFromProfile(ctx, curTarget, 'profile');
@@ -116,6 +146,54 @@
         frBusy = false;
       }
     }
+  }
+
+  async function handleDownloadCard() {
+    if (!card || !isSelfView || dlBusy) return;
+    dlBusy = true;
+    frMsg = '';
+    try {
+      const res = await downloadProfileCardPng(card);
+      frMsg = res.ok ? `✅ 已下載名片圖片（${res.filename}）` : (res.error || '下載名片失敗');
+    } finally {
+      dlBusy = false;
+    }
+  }
+
+  async function handleShareCard() {
+    if (!card || !isSelfView) return;
+    if (!card.profileKey) {
+      frMsg = '請先按下「💾 儲存個人名片」產生專屬分享網址';
+      return;
+    }
+    const shareUrl = buildProfileShareUrl(card.profileKey);
+    if (!shareUrl) {
+      frMsg = '無法產生名片分享連結';
+      return;
+    }
+    let copied = false;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        copied = true;
+      }
+    } catch { /* fallback below */ }
+    if (!copied && typeof document !== 'undefined') {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = shareUrl;
+        ta.setAttribute('readonly', '1');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        copied = document.execCommand('copy');
+        ta.remove();
+      } catch { /* fallback to message */ }
+    }
+    frMsg = copied
+      ? '✅ 已複製名片分享連結！傳給朋友點開即可查看名片並加你好友'
+      : `分享連結：${shareUrl}`;
   }
 
   function onBackdropKey(e: KeyboardEvent) {
@@ -146,10 +224,13 @@
     >
       <div class="ppm-banner">
         <div class="ppm-banner-badges">
-          {#if card && card.champOfficial > 0}
+          {#if card && card.showTotalWins !== false && (card.totalWins ?? 0) > 0}
+            <span class="ppm-crown wins">⚔️ 總勝 {card.totalWins} 勝</span>
+          {/if}
+          {#if card && card.showOfficialCrowns !== false && card.champOfficial > 0}
             <span class="ppm-crown site">🏛️ 網站賽 {card.champOfficial} 冠</span>
           {/if}
-          {#if card && card.champCommunity > 0}
+          {#if card && card.showCommunityCrowns !== false && card.champCommunity > 0}
             <span class="ppm-crown comm">🎖️ 社群賽 {card.champCommunity} 冠</span>
           {/if}
         </div>
@@ -164,7 +245,7 @@
         <div class="ppm-body">
           <div class="ppm-head-row">
             <div class="ppm-av-wrap">
-              <AvatarCircle avatar={card.avatar} name={card.nick} size={72} ring />
+              <AvatarCircle avatar={card.avatar} frame={card.avatarFrame} name={card.nick} size={72} ring />
             </div>
             <div class="ppm-identity">
               <div class="ppm-nick">{card.nick}</div>
@@ -172,13 +253,16 @@
                 {#if card.googleVerified}
                   <span class="ppm-g-badge">✓ Google 已認證</span>
                 {/if}
+                {#if frameSpec}
+                  <span class="ppm-frame-pill">{frameSpec.name}</span>
+                {/if}
                 {#if card.friendStatus === 'accepted'}
                   <span class="ppm-fr-pill is-friend">👥 已是好友</span>
                 {:else if card.friendStatus === 'pending_out'}
                   <span class="ppm-fr-pill is-pending">✓ 已送出申請</span>
                 {:else if card.friendStatus === 'blocked_by_me'}
                   <span class="ppm-fr-pill is-muted">🚫 已封鎖</span>
-                {:else if card.canFriend && (card.friendStatus === 'none' || card.friendStatus === 'pending_in')}
+                {:else if (card.canFriend && (card.friendStatus === 'none' || card.friendStatus === 'pending_in')) || (!viewerUid && !previewCard && card.found && card.friendStatus === 'none' && !!onRequestLogin)}
                   <button
                     type="button"
                     class="ppm-fr-btn"
@@ -221,6 +305,26 @@
                   </li>
                 {/each}
               </ul>
+            </div>
+          {/if}
+
+          {#if isSelfView}
+            <div class="ppm-self-actions">
+              <button
+                type="button"
+                class="ppm-act-btn"
+                disabled={dlBusy}
+                onclick={handleDownloadCard}
+              >
+                {dlBusy ? '繪製中…' : '📥 下載名片'}
+              </button>
+              <button
+                type="button"
+                class="ppm-act-btn is-share"
+                onclick={handleShareCard}
+              >
+                🔗 分享名片
+              </button>
             </div>
           {/if}
         </div>
@@ -270,8 +374,8 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    padding: 0 6px 0 92px;
-    gap: 6px;
+    padding: 0 4px 0 88px;
+    gap: 4px;
   }
   :global(html[data-theme='light']:not([data-battle-view])) .ppm-banner {
     background: linear-gradient(135deg, #cce3d4, #dfeee4);
@@ -280,20 +384,28 @@
   .ppm-banner-badges {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     min-width: 0;
     overflow: hidden;
     flex-wrap: nowrap;
   }
   .ppm-crown {
     white-space: nowrap;
-    font-size: 0.72rem;
+    font-size: 0.65rem;
     font-weight: 700;
-    padding: 2px 7px;
+    padding: 2px 5px;
     border-radius: 999px;
     background: rgba(11, 20, 15, 0.65);
     border: 1px solid rgba(255, 211, 90, 0.42);
     color: #ffe28a;
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ppm-crown.wins {
+    border-color: rgba(130, 224, 166, 0.48);
+    color: #b8f5cb;
   }
   .ppm-crown.comm {
     border-color: rgba(143, 220, 192, 0.45);
@@ -303,6 +415,10 @@
     background: rgba(255, 255, 255, 0.85);
     color: #7d5300;
     border-color: #d6b665;
+  }
+  :global(html[data-theme='light']:not([data-battle-view])) .ppm-crown.wins {
+    color: #165e32;
+    border-color: #84c599;
   }
   :global(html[data-theme='light']:not([data-battle-view])) .ppm-crown.comm {
     color: #165e46;
@@ -501,5 +617,58 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .ppm-frame-pill {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 224, 130, 0.14);
+    border: 1px solid rgba(255, 215, 100, 0.45);
+    color: #ffe89e;
+    white-space: nowrap;
+  }
+  :global(html[data-theme='light']:not([data-battle-view])) .ppm-frame-pill {
+    background: #fdf4d8;
+    border-color: #d6b665;
+    color: #785100;
+  }
+  .ppm-self-actions {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(120, 196, 138, 0.18);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ppm-act-btn {
+    flex: 1;
+    min-height: 38px;
+    padding: 6px 12px;
+    border-radius: 9px;
+    border: 1px solid #599166;
+    background: #1a3522;
+    color: #dcf7e2;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .ppm-act-btn.is-share {
+    background: linear-gradient(180deg, #2b623f, #1d472c);
+    border-color: #6ab87a;
+    color: #ecffef;
+  }
+  .ppm-act-btn:disabled { opacity: 0.55; cursor: default; }
+  :global(html[data-theme='light']:not([data-battle-view])) .ppm-act-btn {
+    background: #e1efe6;
+    border-color: #84be98;
+    color: #16482b;
+  }
+  :global(html[data-theme='light']:not([data-battle-view])) .ppm-act-btn.is-share {
+    background: #236447;
+    border-color: #236447;
+    color: #fff;
   }
 </style>

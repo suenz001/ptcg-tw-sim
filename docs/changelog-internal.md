@@ -1,5 +1,16 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.659 — 個人名片五大升級（總勝場／點擊切換／下載／分享連結／Admin 專屬頭像外框）（2026-11-18）
+
+基準：`a41829bc`（v6.658）。由站長指派施工個人名片優化（v6.659），不動 Firestore 資料清理／索引腳本。
+
+- **真人線上總勝場（排除單機／AI）**：`server_admin_patch.js`（`v187-player-profile` 區段內）新增 `matchRecords` 稀疏索引 `{ 'p1.email': 1, winner: 1 }`、`{ 'p2.email': 1, winner: 1 }` 與 `_profCountCasualOnlineWins`，強制只計具非空 `roomCode` 之一般線上勝場（排除單機 AI 場 `roomCode: null/''` 與第 1 回合未進場判負），加上錦標賽勝場（排除 `bye`／`noShow`）計算 `totalWins`；於頭像上方左側顯示 `⚔️ 總勝 X 勝`。
+- **直覺點擊切換顯示與隱藏**：`PlayerProfileEditor.svelte` 將「⚔️ 總勝」、「🏛️ 網站賽」、「🎖️ 社群賽」改為單擊切換按鈕（`aria-pressed`），即時同步名片預覽、Canvas 輸出與 `/api/player-profile/save`（公用 `/view` 對隱藏項目回傳 `0`）。
+- **名片下載與連結分享（嚴格本人／預覽專屬）**：`profile-api.ts` 新增 `buildProfileShareUrl` 與 Canvas 2D 高解析 PNG 匯出（含頭像裁切／特殊外框／CORS 安全備援與純首字繪製降級）；`PlayerProfileModal.svelte` 嚴格限定 `card.friendStatus === 'self'`（含本人名片編輯器預覽，並排除 AI／熱座 P2／未解析座位）才顯示「📥 下載名片」與「🔗 分享名片」，查看他人名片不顯示。
+- **分享網址進入與登入接力**：`src/routes/game/+page.svelte` 支援 `?card=<profileKey>` 開啟對方名片、傳入 `viewerUid` 於 Auth 就緒後自動重抓認證狀態，未登入訪客點「＋ 加好友」會先關閉名片彈窗、開啟登入視窗，登入成功後自動重新開啟目標名片；關閉／取消登入視窗會清除暫存目標（且當已登入而後端 `canFriend === false` 時不再誤顯示加好友鈕）。
+- **Admin 專屬可擴充頭像外框系統**：`AVATAR_FRAMES` / `PROF_FRAME_CATALOG` 先行內建 6 款雙層外框（`admin_gold`、`champion_master`、`sponsor_diamond`、`flame_flare`、`emerald_leaf`、`cyber_neon`）；玩家 `/save` 無法自填或覆蓋，僅能透過 `GET/POST /api/admin/player-profile/frame`（未登入 401、非管理員 403）與 `oracle-admin/admin.html`（玩家帳號分頁＋玩家總覽彈窗）依 Email 指派或移除（不寫入首頁公開更新紀錄，僅記於 `CL_ADMIN_ONLY_ENTRIES` 與本內部紀錄）。
+- **驗證與獨立審查**：`scripts/test-v6659-profile-upgrades.mjs`（9 PASS / 0 FAIL）、受影響回歸守衛與 `tsc --noEmit`、`npm run build` 通過；獨立唯讀審查代理人 `Independent v6.659 Reviewer` 覆審結果 `APPROVE (0 P1, 0 P2)`。
+
 ## v6.658 — 牌組遷移與同步競態、唯讀清理預覽安全修復（2026-11-18）
 
 基準：`919f6d0f`（v6.657）。依站長授權處理已由 Argon 再確認的 R1～R5；正式站部署 bat 仍由站長自己執行。

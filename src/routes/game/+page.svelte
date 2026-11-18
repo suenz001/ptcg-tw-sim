@@ -128,6 +128,7 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
     fetchPlayerProfileView,
     buildSelfProfilePreview,
     type AvatarCrop,
+    type AvatarFrameId,
     type PlayerProfilePublic,
     type PlayerProfileSelf,
     type ProfileLookupTarget,
@@ -1549,7 +1550,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let profileModalPreview = $state<PlayerProfilePublic | null>(null);
   let profileSelf = $state<PlayerProfileSelf | null>(null);
   let _profileBootUid = '';
+  let pendingSharedCardTarget: ProfileLookupTarget | null = null;
   let battleSeatAvatars = $state<[AvatarCrop | null, AvatarCrop | null]>([null, null]);
+  let battleSeatFrames = $state<[AvatarFrameId | null, AvatarFrameId | null]>([null, null]);
   let _battleAvRoomKey = '';
   function seatAvatarFor(seatIdx: number): AvatarCrop | null {
     if (isSpectator) {
@@ -1564,9 +1567,33 @@ function _setupSelfPending(g: any, seat: number): string | null {
     }
     return seatIdx === 0 ? (profileSelf?.avatar ?? null) : null;
   }
+  function seatFrameFor(seatIdx: number): AvatarFrameId | null {
+    if (isSpectator) {
+      return mode === 'online' ? (battleSeatFrames[seatIdx] ?? null) : null;
+    }
+    if (mode === 'online') {
+      if (battleSeatFrames[seatIdx]) return battleSeatFrames[seatIdx];
+      return myPlayerIndex === seatIdx ? (profileSelf?.avatarFrame ?? null) : null;
+    }
+    if (aiPlayerIndex !== null) {
+      return seatIdx === aiPlayerIndex ? null : (profileSelf?.avatarFrame ?? null);
+    }
+    return seatIdx === 0 ? (profileSelf?.avatarFrame ?? null) : null;
+  }
   function openProfileModal(t: ProfileLookupTarget) {
     profileModalPreview = null;
     profileModalTarget = t;
+  }
+  function requestLoginFromProfile() {
+    pendingSharedCardTarget = profileModalTarget;
+    profileModalTarget = null;
+    profileModalPreview = null;
+    openAuthModal();
+    authTab = 'login';
+  }
+  function dismissAuthModal() {
+    showAuthModal = false;
+    pendingSharedCardTarget = null;
   }
   function parseTournMatchSpec(rawId: unknown, seatIdx: number, fallbackNick?: string): ProfileLookupTarget | null {
     const mid = typeof rawId === 'string' ? rawId.trim() : '';
@@ -1678,11 +1705,20 @@ function _setupSelfPending(g: any, seat: number): string | null {
   $effect(() => {
     const u = firebaseUser;
     if (!friendsEntryOn || !u || u.isAnonymous) {
+      const wasBooted = !!_profileBootUid;
       _profileBootUid = '';
       profileSelf = null;
-      profileModalTarget = null;
-      profileModalPreview = null;
+      if (wasBooted) {
+        profileModalTarget = null;
+        profileModalPreview = null;
+        pendingSharedCardTarget = null;
+      }
       return;
+    }
+    if (pendingSharedCardTarget) {
+      const restore = pendingSharedCardTarget;
+      pendingSharedCardTarget = null;
+      openProfileModal(restore);
     }
     if (_profileBootUid === u.uid) return;
     const bootUid = u.uid;
@@ -1702,11 +1738,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!key) {
       _battleAvRoomKey = '';
       battleSeatAvatars = [null, null];
+      battleSeatFrames = [null, null];
       return;
     }
     if (_battleAvRoomKey === key) return;
     _battleAvRoomKey = key;
     battleSeatAvatars = [null, null];
+    battleSeatFrames = [null, null];
     void (async () => {
       const ctx = await friendsCtxFromAuth().catch(() => null);
       const resList = await Promise.all(([t0, t1] as const).map((t) => (
@@ -1716,6 +1754,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       battleSeatAvatars = [
         resList[0]?.ok ? resList[0].data.avatar : null,
         resList[1]?.ok ? resList[1].data.avatar : null,
+      ];
+      battleSeatFrames = [
+        resList[0]?.ok ? (resList[0].data.avatarFrame ?? null) : null,
+        resList[1]?.ok ? (resList[1].data.avatarFrame ?? null) : null,
       ];
     })();
   });
@@ -5250,6 +5292,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // 由 unlockBgmOnGesture 在玩家第一次點擊時補播。
     void tick().then(() => tryPlayBgm());
     window.addEventListener('pointerdown', unlockBgmOnGesture);
+    // v6.659：分享名片連結 ?card=<profileKey> 進站自動開啟名片（並從網址列清除參數）
+    if (typeof window !== 'undefined') {
+      try {
+        const cardUrl = new URL(window.location.href);
+        const sharedCardKey = (cardUrl.searchParams.get('card') || '').trim();
+        if (sharedCardKey && /^[0-9a-f]{12,40}$/i.test(sharedCardKey)) {
+          openProfileModal({ profileKey: sharedCardKey });
+          cardUrl.searchParams.delete('card');
+          window.history.replaceState({}, '', cardUrl.toString());
+        }
+      } catch { /* ignore */ }
+    }
     // 匿名登入（線上對戰需要）— v4.924 改用 Firebase + Oracle 並行：
     //   v4.65 原本是 if/else 二擇一，但 vite 沒 swap $lib/firebase，Firebase
     //   Auth SDK 在 Oracle build 下完全可用（牌組編輯器頁就是這樣跑的）。
@@ -6041,7 +6095,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⭐v6.642（審查 P1-1）：賽程表裡的 mine（我的對局）是依帳號算的 ⇒ 登出時一併清掉，換帳號不沿用上一個人的（伺服器 bv 也混入 uid，雙保險）。
     tBrackets = []; tBracketsStale = false; tBracketsEverOk = false; _tBracketSeq++;
     // <<< v6642-bracket-version
-    _profileBootUid = ''; profileSelf = null; profileModalTarget = null; profileModalPreview = null; battleSeatAvatars = [null, null]; _battleAvRoomKey = '';
+    _profileBootUid = ''; profileSelf = null; profileModalTarget = null; profileModalPreview = null; battleSeatAvatars = [null, null]; battleSeatFrames = [null, null]; _battleAvRoomKey = '';
     const iso = isolateCrossAccountLocalStorage(null);
     if (!iso.save.ok) { alert(iso.save.error); return; }
     decks = iso.isolatedDecks;
@@ -13381,6 +13435,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       onUndo={performUndo}
       oppAvatar={seatAvatarFor(oppIdx)}
       myAvatar={seatAvatarFor(myIdx)}
+      oppFrame={seatFrameFor(oppIdx)}
+      myFrame={seatFrameFor(myIdx)}
       onOpenPlayerProfile={openBattleSeatProfile}
     />
     {#if isTReplay && tReplay}
@@ -13656,7 +13712,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           onclick={function () { openBattleSeatProfile(oppIdx, oppPlayer?.name); }}
           onkeydown={function (e) { onBattleSeatProfileKey(e, oppIdx, oppPlayer?.name); }}
         >
-          <span class="toc-avatar"><AvatarCircle avatar={seatAvatarFor(oppIdx)} name={oppPlayer?.name ?? '對手'} size={16} /></span>
+          <span class="toc-avatar"><AvatarCircle avatar={seatAvatarFor(oppIdx)} frame={seatFrameFor(oppIdx)} name={oppPlayer?.name ?? '對手'} size={16} /></span>
           <span class="toc-text">{game.firstPlayerIdx === oppIdx ? '先攻' : '後攻'}</span>
         </div>
       {/if}
@@ -14081,7 +14137,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           onclick={function () { openBattleSeatProfile(myIdx, myPlayer?.name); }}
           onkeydown={function (e) { onBattleSeatProfileKey(e, myIdx, myPlayer?.name); }}
         >
-          <span class="toc-avatar"><AvatarCircle avatar={seatAvatarFor(myIdx)} name={myPlayer?.name ?? '我'} size={16} /></span>
+          <span class="toc-avatar"><AvatarCircle avatar={seatAvatarFor(myIdx)} frame={seatFrameFor(myIdx)} name={myPlayer?.name ?? '我'} size={16} /></span>
           <span class="toc-text">{game.firstPlayerIdx === myIdx ? '先攻' : '後攻'}</span>
         </div>
       {/if}
@@ -17056,9 +17112,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
 <!-- ── v4.913 Auth modal (port 自牌組編輯器) ─────────────────────────── -->
 {#if showAuthModal}
-  <div class="pv-overlay" onclick={() => { showAuthModal = false; }}>
+  <div class="pv-overlay" onclick={dismissAuthModal}>
     <div class="pv-inner auth-modal" use:modalDrag onclick={(e) => e.stopPropagation()}>
-      <button class="pv-close" onclick={() => { showAuthModal = false; }} aria-label="關閉">×</button>
+      <button class="pv-close" onclick={dismissAuthModal} aria-label="關閉">×</button>
 
       <h3 class="modal-title modal-drag-handle">帳號管理</h3>
       <GoogleAuthButton user={firebaseUser} disabled={authInitializing || authLoading || cpLoading} oncomplete={(user) => { firebaseUser = user; authPassword = ''; showAuthModal = false; }} />
@@ -17151,7 +17207,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   open={!!profileModalTarget || !!profileModalPreview}
   target={profileModalTarget}
   previewCard={profileModalPreview}
+  viewerUid={firebaseUser && !firebaseUser.isAnonymous ? firebaseUser.uid : ''}
   getAuthCtx={friendsCtxFromAuth}
+  onRequestLogin={requestLoginFromProfile}
   onclose={() => { profileModalTarget = null; profileModalPreview = null; }}
 />
 

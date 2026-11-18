@@ -24,6 +24,7 @@
     formatHonorDate,
     fetchMyProfile,
     saveMyProfile,
+    getAvatarFrameSpec,
     listAllCardSetsForPicker,
     loadCardsForPickerSet,
     loadAllCardsForPicker,
@@ -65,6 +66,9 @@
   let bio = $state('');
   let avatar = $state<AvatarCrop | null>(null);
   let pinnedIds = $state<string[]>([]);
+  let showTotalWins = $state(true);
+  let showOfficialCrowns = $state(true);
+  let showCommunityCrowns = $state(true);
 
   // 卡池選擇器（打開時才懶載入）
   let pickerOpen = $state(false);
@@ -85,6 +89,7 @@
 
   const previewUrl = $derived(avatar ? cardImageUrlFromId(avatar.cardId) : null);
   const effectiveNick = $derived((nick.trim() || serverProfile?.defaultNick || '玩家').slice(0, PROF_NICK_MAX));
+  const serverFrameSpec = $derived(getAvatarFrameSpec(serverProfile?.avatarFrame));
   const pickerTotalCount = $derived(pickerSets.reduce((sum, st) => sum + (Number(st.cardCount) || 0), 0));
   const livePreviewCard = $derived.by<PlayerProfilePublic>(() => {
     const base: PlayerProfileSelf = serverProfile ?? {
@@ -96,6 +101,11 @@
       googleVerified: false,
       champOfficial: 0,
       champCommunity: 0,
+      totalWins: 0,
+      showTotalWins: true,
+      showOfficialCrowns: true,
+      showCommunityCrowns: true,
+      avatarFrame: null,
       pinnedHonorIds: [],
       availableHonors: [],
     };
@@ -104,6 +114,9 @@
       bio,
       avatar,
       pinnedHonorIds: pinnedIds,
+      showTotalWins,
+      showOfficialCrowns,
+      showCommunityCrowns,
     });
   });
   const filteredCards = $derived.by(() => {
@@ -164,6 +177,9 @@
       bio = p.bio || '';
       avatar = clampAvatarCrop(p.avatar);
       pinnedIds = [...(p.pinnedHonorIds || [])];
+      showTotalWins = p.showTotalWins !== false;
+      showOfficialCrowns = p.showOfficialCrowns !== false;
+      showCommunityCrowns = p.showCommunityCrowns !== false;
       onloaded?.(p);
     } finally {
       loading = false;
@@ -186,6 +202,9 @@
         bio,
         avatar,
         pinnedHonorIds: pinnedIds,
+        showTotalWins,
+        showOfficialCrowns,
+        showCommunityCrowns,
       });
       if (!res.ok) {
         saveMsg = res.message;
@@ -197,6 +216,9 @@
       bio = p.bio || '';
       avatar = clampAvatarCrop(p.avatar);
       pinnedIds = [...(p.pinnedHonorIds || [])];
+      showTotalWins = p.showTotalWins !== false;
+      showOfficialCrowns = p.showOfficialCrowns !== false;
+      showCommunityCrowns = p.showCommunityCrowns !== false;
       saveOk = true;
       saveMsg = '✅ 已儲存個人名片';
       onsaved?.(p);
@@ -421,19 +443,50 @@
   {:else if serverProfile}
     <!-- 名片預覽列（即使設定區收合，仍保留摘要與查看自己名片鈕） -->
     <div class="ppe-preview-bar" class:is-collapsed={collapsible && collapsed}>
-      <AvatarCircle {avatar} name={effectiveNick} size={56} ring />
-      <AvatarCircle {avatar} name={effectiveNick} size={28} />
+      <AvatarCircle {avatar} frame={serverProfile.avatarFrame} name={effectiveNick} size={56} ring />
+      <AvatarCircle {avatar} frame={serverProfile.avatarFrame} name={effectiveNick} size={28} />
       <div class="ppe-pv-info">
-        <div class="ppe-pv-nick">{effectiveNick}</div>
-        <div class="ppe-pv-crowns">
-          🏛️ 網站賽 {serverProfile.champOfficial} 冠 ｜ 🎖️ 社群賽 {serverProfile.champCommunity} 冠
+        <div class="ppe-pv-nick">
+          {effectiveNick}
+          {#if serverFrameSpec}
+            <span class="ppe-pv-frame-tag">✨ {serverFrameSpec.name}</span>
+          {/if}
         </div>
+        <div class="ppe-pv-crowns" role="group" aria-label="點擊切換名片統計顯示與隱藏">
+          <button
+            type="button"
+            class="ppe-stat-toggle is-wins"
+            class:is-off={!showTotalWins}
+            aria-pressed={showTotalWins}
+            title="點一下顯示／再點一下不顯示總勝場數"
+            onclick={() => { showTotalWins = !showTotalWins; saveMsg = ''; }}
+          >{showTotalWins ? '⚔️' : '🙈'} 總勝 {serverProfile.totalWins ?? 0} 勝</button>
+          <button
+            type="button"
+            class="ppe-stat-toggle is-site"
+            class:is-off={!showOfficialCrowns}
+            aria-pressed={showOfficialCrowns}
+            title="點一下顯示／再點一下不顯示網站賽奪冠數"
+            onclick={() => { showOfficialCrowns = !showOfficialCrowns; saveMsg = ''; }}
+          >{showOfficialCrowns ? '🏛️' : '🙈'} 網站賽 {serverProfile.champOfficial} 冠</button>
+          <button
+            type="button"
+            class="ppe-stat-toggle is-comm"
+            class:is-off={!showCommunityCrowns}
+            aria-pressed={showCommunityCrowns}
+            title="點一下顯示／再點一下不顯示社群賽奪冠數"
+            onclick={() => { showCommunityCrowns = !showCommunityCrowns; saveMsg = ''; }}
+          >{showCommunityCrowns ? '🎖️' : '🙈'} 社群賽 {serverProfile.champCommunity} 冠</button>
+        </div>
+        {#if !collapsible || !collapsed}
+          <div class="ppe-pv-tip">💡 點一下上方戰績徽章即可切換「顯示／不顯示」（按下方儲存後生效）</div>
+        {/if}
       </div>
       <button
         type="button"
         class="ppe-btn ppe-self-card-btn"
         onclick={() => { selfPreviewOpen = true; }}
-        title="預覽我的玩家名片"
+        title="預覽、下載或分享我的玩家名片"
       >
         🪪 名片
       </button>
@@ -676,9 +729,75 @@
     border-color: var(--ui-border, #bbc7bf);
   }
   .ppe-pv-info { min-width: 0; flex: 1; }
-  .ppe-pv-nick { font-weight: 700; font-size: 0.96rem; overflow-wrap: anywhere; }
-  .ppe-pv-crowns { font-size: 0.76rem; color: #ffe087; margin-top: 2px; }
-  :global(html[data-theme='light']:not([data-battle-view])) .ppe-pv-crowns { color: #7b5300; }
+  .ppe-pv-nick { font-weight: 700; font-size: 0.96rem; overflow-wrap: anywhere; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .ppe-pv-frame-tag {
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 215, 100, 0.45);
+    background: rgba(255, 224, 130, 0.14);
+    color: #ffe89e;
+  }
+  :global(html[data-theme='light']:not([data-battle-view])) .ppe-pv-frame-tag {
+    background: #fdf4d8;
+    border-color: #d6b665;
+    color: #785100;
+  }
+  .ppe-pv-crowns {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 5px;
+  }
+  .ppe-stat-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 211, 90, 0.48);
+    background: rgba(15, 29, 20, 0.72);
+    color: #ffe087;
+    font: inherit;
+    font-size: 0.73rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.14s ease, filter 0.14s ease;
+  }
+  .ppe-stat-toggle.is-wins {
+    border-color: rgba(130, 224, 166, 0.48);
+    color: #b8f5cb;
+  }
+  .ppe-stat-toggle.is-comm {
+    border-color: rgba(143, 220, 192, 0.45);
+    color: #9ae8cb;
+  }
+  .ppe-stat-toggle.is-off {
+    opacity: 0.46;
+    text-decoration: line-through;
+    filter: grayscale(0.5);
+  }
+  :global(html[data-theme='light']:not([data-battle-view])) .ppe-stat-toggle {
+    background: #fff;
+    color: #7b5300;
+    border-color: #d6b665;
+  }
+  :global(html[data-theme='light']:not([data-battle-view])) .ppe-stat-toggle.is-wins {
+    color: #165e32;
+    border-color: #84c599;
+  }
+  :global(html[data-theme='light']:not([data-battle-view])) .ppe-stat-toggle.is-comm {
+    color: #165e46;
+    border-color: #8bc7ae;
+  }
+  .ppe-pv-tip {
+    margin-top: 4px;
+    font-size: 0.7rem;
+    opacity: 0.78;
+    line-height: 1.35;
+  }
   .ppe-field {
     display: flex;
     flex-direction: column;

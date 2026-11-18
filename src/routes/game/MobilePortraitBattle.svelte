@@ -134,6 +134,8 @@
     onResync?: () => void;  // v5.618 錦標賽：點狀態列強制重新同步(免重整)
     oppAvatar?: AvatarCrop | null;
     myAvatar?: AvatarCrop | null;
+    oppFrame?: string | null;
+    myFrame?: string | null;
     onOpenPlayerProfile?: (seatIdx: number, fallbackNick?: string) => void;
   }
 
@@ -165,6 +167,8 @@
     onResync,
     oppAvatar = null,
     myAvatar = null,
+    oppFrame = null,
+    myFrame = null,
     onOpenPlayerProfile,
   }: Props = $props();
 
@@ -880,7 +884,7 @@
   <div class="mp-active-row">
     <!-- v5.383：先攻/後攻標示（左側空白處，鏡射桌面版）＋ v6.654 玩家小頭像（點擊開啟名片） -->
     {#if game.firstPlayerIdx !== undefined}
-      <span class="mp-turn-order" class:mp-turn-now={game.activePlayerIndex === oppIdx} class:mp-turn-click={!!onOpenPlayerProfile} role={onOpenPlayerProfile ? 'button' : undefined} tabindex={onOpenPlayerProfile ? 0 : undefined} title={onOpenPlayerProfile ? '點擊查看玩家名片' : undefined} onclick={() => handleTurnOrderClick(oppIdx, oppPlayer?.name)} onkeydown={(e) => handleTurnOrderKey(e, oppIdx, oppPlayer?.name)}><span class="mp-turn-av"><AvatarCircle avatar={oppAvatar} name={oppPlayer?.name ?? '對手'} size={16} /></span><span class="mp-turn-txt">{game.firstPlayerIdx === oppIdx ? '先攻' : '後攻'}</span></span>
+      <span class="mp-turn-order" class:mp-turn-now={game.activePlayerIndex === oppIdx} class:mp-turn-click={!!onOpenPlayerProfile} role={onOpenPlayerProfile ? 'button' : undefined} tabindex={onOpenPlayerProfile ? 0 : undefined} title={onOpenPlayerProfile ? '點擊查看玩家名片' : undefined} onclick={() => handleTurnOrderClick(oppIdx, oppPlayer?.name)} onkeydown={(e) => handleTurnOrderKey(e, oppIdx, oppPlayer?.name)}><span class="mp-turn-av"><AvatarCircle avatar={oppAvatar} frame={oppFrame} name={oppPlayer?.name ?? '對手'} size={16} /></span><span class="mp-turn-txt">{game.firstPlayerIdx === oppIdx ? '先攻' : '後攻'}</span></span>
     {/if}
     {#if oppPlayer.active}
       {@const inst = oppPlayer.active}
@@ -954,7 +958,7 @@
   <div class="mp-active-row">
     <!-- v5.383：先攻/後攻標示（左側空白處，鏡射桌面版）＋ v6.654 玩家小頭像（點擊開啟名片） -->
     {#if game.firstPlayerIdx !== undefined}
-      <span class="mp-turn-order" class:mp-turn-now={game.activePlayerIndex === myIdx} class:mp-turn-click={!!onOpenPlayerProfile} role={onOpenPlayerProfile ? 'button' : undefined} tabindex={onOpenPlayerProfile ? 0 : undefined} title={onOpenPlayerProfile ? '點擊查看玩家名片' : undefined} onclick={() => handleTurnOrderClick(myIdx, myPlayer?.name)} onkeydown={(e) => handleTurnOrderKey(e, myIdx, myPlayer?.name)}><span class="mp-turn-av"><AvatarCircle avatar={myAvatar} name={myPlayer?.name ?? '我'} size={16} /></span><span class="mp-turn-txt">{game.firstPlayerIdx === myIdx ? '先攻' : '後攻'}</span></span>
+      <span class="mp-turn-order" class:mp-turn-now={game.activePlayerIndex === myIdx} class:mp-turn-click={!!onOpenPlayerProfile} role={onOpenPlayerProfile ? 'button' : undefined} tabindex={onOpenPlayerProfile ? 0 : undefined} title={onOpenPlayerProfile ? '點擊查看玩家名片' : undefined} onclick={() => handleTurnOrderClick(myIdx, myPlayer?.name)} onkeydown={(e) => handleTurnOrderKey(e, myIdx, myPlayer?.name)}><span class="mp-turn-av"><AvatarCircle avatar={myAvatar} frame={myFrame} name={myPlayer?.name ?? '我'} size={16} /></span><span class="mp-turn-txt">{game.firstPlayerIdx === myIdx ? '先攻' : '後攻'}</span></span>
     {/if}
     {#if myPlayer.active}
       {@const inst = myPlayer.active}

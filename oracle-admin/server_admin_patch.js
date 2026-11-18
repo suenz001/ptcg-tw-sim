@@ -9186,6 +9186,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
     const PROF_CARD_HW = 1212 / 868;
     const PROF_TTL_MS = 60 * 1000;
     const PROF_AUTH_TTL_MS = 10 * 60 * 1000;
+    const PROF_FRAME_CATALOG = [
+      { id: 'admin_gold', name: '👑 皇家輝金框' },
+      { id: 'champion_master', name: '🏆 殿堂大師框' },
+      { id: 'sponsor_diamond', name: '💎 星鑽極光框' },
+      { id: 'flame_flare', name: '🔥 烈焰傳說框' },
+      { id: 'emerald_leaf', name: '🌿 森林翡翠框' },
+      { id: 'cyber_neon', name: '⚡ 雷霆電光框' },
+    ];
+    const PROF_VALID_FRAMES = new Set(PROF_FRAME_CATALOG.map((f) => f.id));
     const _profSummaryCache = new Map(); // email -> { at, data }
     const _profGoogleCache = new Map();  // uid -> { at, googleVerified }
     const _profRateMap = new Map();      // key -> ts
@@ -9198,7 +9207,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
       db.collection('tournamentArchives').createIndex({ 'players.email': 1 }, { sparse: true }).catch(() => {});
       db.collection('tournamentArchives').createIndex({ 'players.name': 1 }, { sparse: true }).catch(() => {});
       db.collection('tournamentEvents').createIndex({ proposerName: 1 }, { sparse: true }).catch(() => {});
+      db.collection('matchRecords').createIndex({ 'p1.email': 1, winner: 1 }, { sparse: true }).catch(() => {});
+      db.collection('matchRecords').createIndex({ 'p2.email': 1, winner: 1 }, { sparse: true }).catch(() => {});
     } catch (_e) { /* db 尚未就緒時略過 */ }
+
+    function _profClampFrame(raw) {
+      if (typeof raw !== 'string') return null;
+      const id = raw.trim();
+      return PROF_VALID_FRAMES.has(id) ? id : null;
+    }
 
     function _profHash20(str) {
       let h1 = 0x811c9dc5, h2 = 0x01000193 ^ 0x7fffffff, h3 = 0x9e3779b9;
@@ -9289,26 +9306,41 @@ import('firebase-admin').then(async ({ default: admin }) => {
         return !!storedFlag;
       }
     }
+    function _profCountCasualOnlineWins(rows) {
+      let wins = 0;
+      for (const r of (rows || [])) {
+        if (!r || typeof r.roomCode !== 'string' || !r.roomCode.trim()) continue;
+        if (typeof r.winReason === 'string' && /無回應/.test(r.winReason) && !(Number(r.finalTurn) >= 2)) continue;
+        wins++;
+      }
+      return wins;
+    }
     async function _profLoadSummary(email, forceRefresh = false) {
       const em = _frNormEmail(email);
-      if (!em) return { champOfficial: 0, champCommunity: 0, honors: [], lastDisplayName: '', lastUid: '' };
+      if (!em) return { champOfficial: 0, champCommunity: 0, casualOnlineWins: 0, tournamentWins: 0, totalWins: 0, honors: [], lastDisplayName: '', lastUid: '' };
       const cached = _profSummaryCache.get(em);
       if (!forceRefresh && cached && (Date.now() - cached.at) < PROF_TTL_MS) return cached.data;
       const archColl = db.collection('tournamentArchives');
-      const archives = await archColl.find(
-        { 'players.email': { $in: [em] } },
-        { projection: { eventId: 1, eventName: 1, finishedAt: 1, startedAt: 1, createdAt: 1, communityEvent: 1, championUid: 1, players: 1, matches: 1 } }
-      ).toArray();
+      const mrColl = db.collection('matchRecords');
+      const [archives, p1Wins, p2Wins] = await Promise.all([
+        archColl.find(
+          { 'players.email': { $in: [em] } },
+          { projection: { eventId: 1, eventName: 1, finishedAt: 1, startedAt: 1, createdAt: 1, communityEvent: 1, championUid: 1, players: 1, matches: 1 } }
+        ).toArray(),
+        mrColl.find({ 'p1.email': em, winner: 0 }, { projection: { roomCode: 1, winReason: 1, finalTurn: 1 } }).toArray().catch(() => []),
+        mrColl.find({ 'p2.email': em, winner: 1 }, { projection: { roomCode: 1, winReason: 1, finalTurn: 1 } }).toArray().catch(() => []),
+      ]);
       const cutFn = (app.locals && typeof app.locals._detectCutPlacements === 'function')
         ? app.locals._detectCutPlacements
         : (() => ({ finals: new Set(), top4: new Set(), top8: new Set() }));
-      let champOfficial = 0, champCommunity = 0, lastDisplayName = '', lastUid = '', lastFin = -1;
+      let champOfficial = 0, champCommunity = 0, tournamentWins = 0, lastDisplayName = '', lastUid = '', lastFin = -1;
       const honors = [];
       for (const a of archives) {
         const isComm = !!a.communityEvent;
         const fin = a.finishedAt || 0;
         const evDate = a.startedAt || a.createdAt || fin || 0;
         const emailByUid = new Map();
+        const myArchUids = new Set();
         for (const p of (a.players || [])) {
           if (p && p.uid && p.email) emailByUid.set(p.uid, _frNormEmail(p.email));
         }
@@ -9316,6 +9348,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const cut = !isComm ? cutFn(a.matches || []) : { finals: new Set(), top4: new Set(), top8: new Set() };
         for (const p of (a.players || [])) {
           if (!p || _frNormEmail(p.email) !== em) continue;
+          if (p.uid) myArchUids.add(String(p.uid));
           if (fin >= lastFin) {
             lastFin = fin;
             if (p.name) lastDisplayName = String(p.name);
@@ -9341,9 +9374,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
             });
           }
         }
+        for (const m of (a.matches || [])) {
+          if (!m || m.bye || m.noShow || !m.winnerUid) continue;
+          if (myArchUids.has(String(m.winnerUid))) tournamentWins++;
+        }
       }
+      const casualOnlineWins = _profCountCasualOnlineWins(p1Wins) + _profCountCasualOnlineWins(p2Wins);
+      const totalWins = casualOnlineWins + tournamentWins;
       honors.sort((x, y) => (y.date || 0) - (x.date || 0));
-      const data = { champOfficial, champCommunity, honors, lastDisplayName, lastUid };
+      const data = { champOfficial, champCommunity, casualOnlineWins, tournamentWins, totalWins, honors, lastDisplayName, lastUid };
       _profSummaryCache.set(em, { at: Date.now(), data });
       if (_profSummaryCache.size > 1500) _profSummaryCache.clear();
       return data;
@@ -9518,9 +9557,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
           nick: fallbackNick || '玩家',
           bio: '',
           avatar: null,
+          avatarFrame: null,
           googleVerified: false,
           champOfficial: 0,
           champCommunity: 0,
+          totalWins: 0,
+          showTotalWins: false,
+          showOfficialCrowns: false,
+          showCommunityCrowns: false,
           pinnedHonors: [],
           canFriend: false,
           friendStatus: 'unavailable',
@@ -9566,6 +9610,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
           }
         }
       }
+      const showTotalWins = !(doc && doc.showTotalWins === false);
+      const showOfficialCrowns = !(doc && doc.showOfficialCrowns === false);
+      const showCommunityCrowns = !(doc && doc.showCommunityCrowns === false);
       return {
         playerProfileApi: 1,
         found: true,
@@ -9573,9 +9620,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
         nick,
         bio: (doc && doc.bio) || '',
         avatar: _profClampCrop(doc && doc.avatar),
+        avatarFrame: _profClampFrame(doc && doc.avatarFrame),
         googleVerified: !!googleVerified,
-        champOfficial: summary.champOfficial,
-        champCommunity: summary.champCommunity,
+        champOfficial: showOfficialCrowns ? summary.champOfficial : 0,
+        champCommunity: showCommunityCrowns ? summary.champCommunity : 0,
+        totalWins: showTotalWins ? summary.totalWins : 0,
+        showTotalWins,
+        showOfficialCrowns,
+        showCommunityCrowns,
         pinnedHonors,
         canFriend: canFriend && (await friendsEnabled()),
         friendStatus,
@@ -9635,9 +9687,16 @@ import('firebase-admin').then(async ({ default: admin }) => {
             defaultNick,
             bio: (doc && doc.bio) || '',
             avatar: _profClampCrop(doc && doc.avatar),
+            avatarFrame: _profClampFrame(doc && doc.avatarFrame),
             googleVerified: !!(me.googleVerified || (doc && doc.googleVerified)),
             champOfficial: summary.champOfficial,
             champCommunity: summary.champCommunity,
+            casualOnlineWins: summary.casualOnlineWins,
+            tournamentWins: summary.tournamentWins,
+            totalWins: summary.totalWins,
+            showTotalWins: !(doc && doc.showTotalWins === false),
+            showOfficialCrowns: !(doc && doc.showOfficialCrowns === false),
+            showCommunityCrowns: !(doc && doc.showCommunityCrowns === false),
             pinnedHonorIds,
             availableHonors: summary.honors,
           },
@@ -9648,7 +9707,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       }
     });
 
-    // POST /api/player-profile/save：儲存本人暱稱、自我介紹、官方卡片圓圈頭像與代表榮譽
+    // POST /api/player-profile/save：儲存本人暱稱、自我介紹、官方卡片圓圈頭像、展示偏好與代表榮譽
     app.post('/api/player-profile/save', async (req, res) => {
       try {
         const me = await _profVerifyAuth(req, { required: true });
@@ -9671,7 +9730,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
             return res.status(400).json({ playerProfileApi: 1, error: '找不到指定的官方卡片，請重新選擇' });
           }
         }
-        const summary = await _profLoadSummary(em, true);
+        const [curDoc, summary] = await Promise.all([
+          db.collection(PROF_COLL).findOne({ _id: em }),
+          _profLoadSummary(em, true),
+        ]);
         const validIds = new Set(summary.honors.map((h) => h.eventId));
         const seenHonor = new Set();
         const pinnedHonorIds = [];
@@ -9684,6 +9746,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
             if (pinnedHonorIds.length >= PROF_MAX_HONORS) break;
           }
         }
+        const showTotalWins = typeof b.showTotalWins === 'boolean' ? b.showTotalWins : !(curDoc && curDoc.showTotalWins === false);
+        const showOfficialCrowns = typeof b.showOfficialCrowns === 'boolean' ? b.showOfficialCrowns : !(curDoc && curDoc.showOfficialCrowns === false);
+        const showCommunityCrowns = typeof b.showCommunityCrowns === 'boolean' ? b.showCommunityCrowns : !(curDoc && curDoc.showCommunityCrowns === false);
+        const preservedFrame = _profClampFrame(curDoc && curDoc.avatarFrame);
         const pKey = _profKeyForEmail(em);
         const updateDoc = {
           profileKey: pKey,
@@ -9692,6 +9758,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
           nickLower: nick ? nick.toLowerCase() : '',
           bio,
           avatar,
+          showTotalWins,
+          showOfficialCrowns,
+          showCommunityCrowns,
           pinnedHonorIds,
           googleVerified: !!me.googleVerified,
           updatedAt: now,
@@ -9710,9 +9779,16 @@ import('firebase-admin').then(async ({ default: admin }) => {
             nick,
             bio,
             avatar,
+            avatarFrame: preservedFrame,
             googleVerified: !!me.googleVerified,
             champOfficial: summary.champOfficial,
             champCommunity: summary.champCommunity,
+            casualOnlineWins: summary.casualOnlineWins,
+            tournamentWins: summary.tournamentWins,
+            totalWins: summary.totalWins,
+            showTotalWins,
+            showOfficialCrowns,
+            showCommunityCrowns,
             pinnedHonorIds,
             availableHonors: summary.honors,
             pinnedHonors: pinnedHonorIds.map((eid) => honorByEvent.get(eid)).filter(Boolean),
@@ -9763,7 +9839,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const emails = [...new Set([...emailByTag.values()].map((x) => x.email).filter(Boolean))];
         const docsMap = new Map();
         if (emails.length) {
-          const docs = await db.collection(PROF_COLL).find({ _id: { $in: emails } }, { projection: { _id: 1, profileKey: 1, nick: 1, avatar: 1, googleVerified: 1 } }).toArray();
+          const docs = await db.collection(PROF_COLL).find({ _id: { $in: emails } }, { projection: { _id: 1, profileKey: 1, nick: 1, avatar: 1, avatarFrame: 1, googleVerified: 1 } }).toArray();
           for (const d of docs) docsMap.set(_frNormEmail(d._id), d);
         }
         for (const [k, resT] of emailByTag.entries()) {
@@ -9772,6 +9848,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
             profileKey: (d && d.profileKey) || _profKeyForEmail(resT.email),
             nick: (d && d.nick) || resT.fallbackNick || '',
             avatar: _profClampCrop(d && d.avatar),
+            avatarFrame: _profClampFrame(d && d.avatarFrame),
             googleVerified: !!(d && d.googleVerified),
           };
         }
@@ -9855,6 +9932,86 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) {
         console.warn('[player-profile] friend-request failed:', e && e.message);
         res.status(500).json({ error: '送出好友申請失敗，請稍後重試', friendsApi: 1 });
+      }
+    });
+
+    // GET /api/admin/player-profile/frame：Admin 查詢玩家目前特殊頭像外框
+    app.get('/api/admin/player-profile/frame', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (!id || id.error) {
+          return res.status((id && id.code) || 401).json({ error: (id && id.error) || '請先登入帳號', playerProfileApi: 1 });
+        }
+        if (!id.verified || !isTournAdmin(id)) {
+          return res.status(403).json({ error: '只有管理員可管理頭像特殊外框', playerProfileApi: 1 });
+        }
+        const em = _frNormEmail(String((req.query && req.query.email) || ''));
+        if (!em) return res.status(400).json({ error: '請提供有效的玩家 email', playerProfileApi: 1 });
+        const doc = await db.collection(PROF_COLL).findOne(
+          { _id: em },
+          { projection: { _id: 1, avatarFrame: 1, nick: 1, frameUpdatedAt: 1 } },
+        );
+        return res.json({
+          playerProfileApi: 1,
+          ok: true,
+          email: em,
+          avatarFrame: _profClampFrame(doc && doc.avatarFrame),
+          nick: (doc && doc.nick) || '',
+          frameUpdatedAt: (doc && doc.frameUpdatedAt) || null,
+          frames: PROF_FRAME_CATALOG,
+        });
+      } catch (e) {
+        console.warn('[player-profile] admin frame get failed:', e && e.message);
+        res.status(500).json({ error: '查詢頭像外框失敗', playerProfileApi: 1 });
+      }
+    });
+
+    // POST /api/admin/player-profile/frame：Admin 指定玩家 email 套用／移除特殊頭像外框（即時清快取）
+    app.post('/api/admin/player-profile/frame', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (!id || id.error) {
+          return res.status((id && id.code) || 401).json({ error: (id && id.error) || '請先登入帳號', playerProfileApi: 1 });
+        }
+        if (!id.verified || !isTournAdmin(id)) {
+          return res.status(403).json({ error: '只有管理員可設定頭像特殊外框', playerProfileApi: 1 });
+        }
+        const b = req.body && typeof req.body === 'object' ? req.body : {};
+        const em = _frNormEmail(String(b.email || ''));
+        if (!em) return res.status(400).json({ error: '請提供有效的玩家 email', playerProfileApi: 1 });
+        const rawFrame = b.avatarFrame;
+        let cleanFrame = null;
+        if (rawFrame !== null && rawFrame !== undefined && rawFrame !== '') {
+          cleanFrame = _profClampFrame(String(rawFrame));
+          if (!cleanFrame) {
+            return res.status(400).json({ error: '找不到指定的頭像外框款式', playerProfileApi: 1 });
+          }
+        }
+        const now = Date.now();
+        await db.collection(PROF_COLL).updateOne(
+          { _id: em },
+          {
+            $set: {
+              profileKey: _profKeyForEmail(em),
+              avatarFrame: cleanFrame,
+              frameUpdatedAt: now,
+              frameUpdatedBy: _frNormEmail(id.email || '') || 'admin',
+            },
+            $setOnInsert: { createdAt: now },
+          },
+          { upsert: true },
+        );
+        _profSummaryCache.delete(em);
+        return res.json({
+          playerProfileApi: 1,
+          ok: true,
+          email: em,
+          avatarFrame: cleanFrame,
+          frameUpdatedAt: now,
+        });
+      } catch (e) {
+        console.warn('[player-profile] admin frame save failed:', e && e.message);
+        res.status(500).json({ error: '設定頭像外框失敗', playerProfileApi: 1 });
       }
     });
     // <<< v187-player-profile

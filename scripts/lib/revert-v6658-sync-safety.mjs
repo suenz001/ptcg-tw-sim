@@ -1,6 +1,7 @@
 // v6.658 精確逆轉：只轉回本版變更，保留前版所有驗收判準。
 import assert from 'node:assert/strict';
 import { normEol } from './eol-agnostic.mjs';
+import { revertV6659IfPresent } from './revert-v6659-profile-upgrades.mjs';
 export const V6658_PAIRS = {
   "oracle-admin/admin.html": [
     [
@@ -222,7 +223,7 @@ export const V6658_PAIRS = {
   ]
 };
 export function revertV6658IfPresent(path, source) {
- let s = normEol(String(source));
+ let s = revertV6659IfPresent(path, normEol(String(source)));
  const pairs=V6658_PAIRS[path];
  if (!pairs || !pairs.every(([from])=>s.includes(from))) return s;
  for(const [from,to] of pairs) { assert.equal(s.split(from).length,2,'v6658 inverse '+path); s=s.replace(from,()=>to); }
