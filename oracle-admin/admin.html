@@ -7737,7 +7737,7 @@ function mountProfFrameAdminBox(el) {
     + '<button id="prof-frame-lookup-btn" class="btn" type="button" onclick="profAdminLookupFrame()">查詢目前外框</button>'
     + '<span id="prof-frame-swatch" style="display:inline-block;width:16px;height:16px;border-radius:999px;border:2px solid #94a3b8;background:#cbd5e1;flex:none;"></span>'
     + '<select id="prof-frame-select" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#111827;">' + profFrameOptionHtml('') + '</select>'
-    + '<button id="prof-frame-save-btn" class="btn" type="button" onclick="profAdminSaveFrame()" style="background:#1d4ed8;color:#fff;border-color:#1d4ed8;">套用外框</button>'
+    + '<button id="prof-frame-save-btn" class="btn" type="button" onclick="profAdminSaveFrame()">套用外框</button>'
     + '</div>'
     + '<div id="prof-frame-status" class="small muted" style="margin-top:6px;">尚未查詢；亦可點擊玩家名單進入「玩家詳情」直接指派。</div>';
   const wrap = el.querySelector('.table-wrap');
@@ -9357,7 +9357,7 @@ window.showPlayerDetail = async function(email) {
             + '<span class="small" style="font-weight:700;">🖼️ 特殊頭像外框：</span>'
             + '<span id="modal-prof-frame-swatch" style="display:inline-block;width:14px;height:14px;border-radius:999px;border:2px solid #94a3b8;background:#cbd5e1;flex:none;"></span>'
             + '<select id="modal-prof-frame-select" style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#111827;">' + profFrameOptionHtml('') + '</select>'
-            + '<button id="modal-prof-frame-save" class="btn" type="button" style="padding:4px 10px;background:#1d4ed8;color:#fff;border-color:#1d4ed8;">套用外框</button>'
+            + '<button id="modal-prof-frame-save" class="btn" type="button" style="padding:4px 10px;">套用外框</button>'
             + '<span id="modal-prof-frame-msg" class="small muted">讀取中…</span>'
             + '</div>'
           : '')
