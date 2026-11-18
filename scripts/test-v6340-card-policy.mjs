@@ -22,6 +22,7 @@ import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 //   `loadCardPolicyOnce()`、`getCardPolicy().allowedMarks`、`_syncCardPolicy` 這些字，
 //   不剝的話「把真正的呼叫整行註解掉」會照樣全綠（Opus 5 對抗性審查實測 M2 沒抓到）。
 import { stripCommentsBlank } from './lib/strip-comments.mjs';
+import { revertV6658IfPresent } from './lib/revert-v6658-sync-safety.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = 'a1f2c5e71b7be017f1c16bcf00ee38d21c544b6a';   // v6.339（v6.340 的上一版）
@@ -378,7 +379,8 @@ const CRITERIA = {
     for (const [rel, want] of Object.entries(EXPECT_LOADER)) {
       const b = readBaseBlob(ROOT, BASE_SHA, rel);
       if (!b.ok) { drift.push(rel + '(讀不到 BASE)'); continue; }
-      const now = countOf(read(rel));
+      // v6.658 收斂重複的同步呼叫；先精確還原這版差異，保留原有逐項等式。
+      const now = countOf(stripCommentsBlank(revertV6658IfPresent(rel, readRaw(rel))));
       const base = countOf(stripCommentsBlank(b.out));
       if (base[LOADER] !== 0) drift.push(`${rel}:BASE 竟然已經有 ${LOADER}`);
       if (now[LOADER] !== want) drift.push(`${rel}:政策載入呼叫 ${now[LOADER]} 次（期望 ${want}）`);

@@ -276,7 +276,7 @@ try {
   ].join('\n');
 
   const harnessTs = join(TMP, 'decks-harness.ts');
-  const additions = dkSrc.includes('v6658-sync-safety') ? `import {cloneDecks,reconcileDeckSync,favoritesEqual,createCloudTaskQueue} from ${JSON.stringify(join(PRODUCT,'src/lib/decks/sync-commit.ts'))};\nimport {readLocalRecovery,initializeLegacyAnonymousOwnership,markMemberCloudPushSucceeded} from ${JSON.stringify(join(PRODUCT,'src/lib/decks/member-sync.ts'))};` : ''; 
+  const additions = dkSrc.includes('v6658-sync-safety') ? `import {cloneDecks,reconcileDeckSync,favoritesEqual,createCloudTaskQueue} from ${JSON.stringify(join(PRODUCT,'src/lib/decks/sync-commit.ts'))};\nimport {readLocalRecovery,initializeLegacyAnonymousOwnership,markMemberCloudPushSucceeded} from ${JSON.stringify(join(PRODUCT,'src/lib/decks/member-sync.ts'))};` : '';
   writeFileSync(harnessTs, `
 import {
   loadDecks, saveDecksChecked, upsertDeckChecked, deleteDeckChecked, newDeck, sortDecks
@@ -691,6 +691,10 @@ let reads=0;
       const base=readBaseBlob(ROOT,BASE_SHA,rel);ok(base.ok,'BASE blob missing '+rel);
       assert.strictEqual(revertV6658IfPresent(rel,readFileSync(join(ROOT,rel),'utf8')),normEol(base.out),rel);
       assert.strictEqual(revertV6658IfPresent(rel,normEol(base.out)),normEol(base.out),rel+' BASE noop');
+      if (rel === 'src/routes/decks/+page.svelte') {
+        const extra = '\nfetch("/unexpected-net"); getDoc(unexpectedRef);\n';
+        assert.strictEqual(revertV6658IfPresent(rel,readFileSync(join(ROOT,rel),'utf8')+extra),normEol(base.out)+extra,'未登記網路增量不可被逆轉吞掉');
+      }
     }
   });
   console.log(`\n${pass} PASS / ${fail} FAIL`);
