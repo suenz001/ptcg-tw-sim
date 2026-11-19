@@ -1,9 +1,9 @@
 /**
- * v6.664 / v6.665 回歸守衛：
+ * v6.664 / v6.665 / v6.666 回歸守衛：
  *   1. 大廳點擊玩家名稱嚴格以 UID 優先（座位換人絕不開成他人、換座仍在房命中、刪房退回 UID、查無 UID 明確未找到、缺／空白 UID 不猜人且維持純文字、對戰純 seatIdx 維持相容），含 v6.663 (0329ee55) 反證、v6.664 (b390744e) 空白 UID 反證與真實突變。
- *   2. 20 款立體 SVG 外框逐款實際像素檢查（瀏覽器 DOM SVG、實際瀏覽器合成截圖 element.screenshot、780px Canvas PNG 與強制 Canvas PNG 備援內圓 r<46 / r<AV_R 皆為 0 像素干擾、外圈具可見裝飾、超能星環外弧去遮罩含描邊 r>=49、40 實例多實例 ID 唯一），含 v6.664 (b390744e) HEAD-FAIL 與移除遮罩／恢復光暈滲透／移除備援裁切突變。
+ *   2. 20 款立體 SVG 外框逐款實際像素檢查（瀏覽器 DOM SVG、16px DPR 1/2/3 與 28/56/72px 含奇偶數容器實際瀏覽器合成截圖＋光暈存在差值、780px Canvas PNG 與 20 款強制 Canvas PNG 備援內圓皆為 0 像素干擾、外圈具可見裝飾、超能星環外弧去遮罩含描邊 r>=49、40 實例多實例 ID 唯一），含 v6.664/v6.665 HEAD-FAIL 與移除遮罩／恢復光暈滲透／移除備援裁切／恢復小尺寸裁切／移除瀏覽器光暈突變。
  *   3. 桌機 1280px 與手機 393px 深／淺色大廳房間連結高對比（>=4.5:1）、鍵盤 Enter/Space 與不誤觸加入／觀戰按鈕。
- *   4. Rule 40 精確歷史還原鏈（revertV6665IfPresent 還原至 b390744e、revertV6664IfPresent 還原至 0329ee55，且對歷史基準為 no-op）。
+ *   4. Rule 40 精確歷史還原鏈（D1 以固定歷史 Git blob 驗證 4fed8ee3 → b390744e → 0329ee55 與 no-op，不隨未來升版誤紅；D2 動態驗證現行版本與公開 changelog 隔離）。
  *
  * Run: node scripts/test-v6664-lobby-and-frame-mask.mjs
  */
@@ -24,6 +24,7 @@ import { V6665_PAIRS, revertV6665IfPresent } from './lib/revert-v6665-glow-and-b
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_V6663 = '0329ee552aa25ca84fc7875a7ab3146a2b104900';
 const BASE_V6664 = 'b390744eb59dbda885b7b93fe40654c4664809b9';
+const COMMIT_V6665 = '4fed8ee34616c0b9299de02686dcf9c575b9031e';
 
 const API_PATH = 'src/lib/profile/profile-api.ts';
 const AV_PATH = 'src/lib/profile/AvatarCircle.svelte';
@@ -331,72 +332,161 @@ async function buildFrameBundle({ apiSrc, avSrc } = {}) {
   }
 }
 
-/** 實際瀏覽器合成截圖檢查（量得到頁面 CSS drop-shadow 與 SVG filter 光暈）：逐款驗證 20 款內圓 r<46 為 0 像素、外圈具可見裝飾。 */
-async function assertBrowserCompositeScreenshotClean(browser, bundle) {
-  const ctx = await browser.newContext({ viewport: { width: 400, height: 400 }, deviceScaleFactor: 2 });
-  const pg = await ctx.newPage();
-  const pageErrors = [];
-  pg.on('pageerror', (e) => pageErrors.push(e.message));
-  try {
-    await pg.setContent(`<!DOCTYPE html><html><body style="margin:0;background:transparent;"><div id="comp-box" style="width:200px;height:200px;display:flex;align-items:center;justify-content:center;"></div><script>${bundle}</script></body></html>`);
-    const ids = await pg.evaluate(() => window.__api.AVATAR_FRAMES.map((f) => f.id));
-    assert.strictEqual(ids.length, 20, '應有 20 款外框可供合成截圖檢查');
-    for (const id of ids) {
-      await pg.evaluate((fid) => {
-        const box = document.getElementById('comp-box');
-        box.innerHTML = '';
-        // size=92 => 內圓直徑 92 CSS px 剛好對應 viewBox 140×140 內的 r=46（1 CSS px = 1 SVG unit）
-        window.__mountAvatar(box, { name: '測', size: 92, frame: fid, ring: false });
-        const inner = box.querySelector('.prof-avatar-circle');
-        if (inner) inner.style.visibility = 'hidden';
-      }, id);
-      const buf = await pg.locator('#comp-box').screenshot({ omitBackground: true });
-      const b64 = 'data:image/png;base64,' + buf.toString('base64');
-      const m = await pg.evaluate(async (url) => {
-        const img = await new Promise((res, rej) => {
-          const i = new Image();
-          i.onload = () => res(i);
-          i.onerror = rej;
-          i.src = url;
-        });
-        const c = document.createElement('canvas');
-        c.width = img.width;
-        c.height = img.height;
-        const x = c.getContext('2d');
-        x.drawImage(img, 0, 0);
-        const d = x.getImageData(0, 0, c.width, c.height).data;
-        const cx = c.width / 2;
-        const cy = c.height / 2;
-        const scale = c.width / 200;
-        let inside = 0;
-        let maxAlpha = 0;
-        let outside = 0;
-        for (let py = 0; py < c.height; py++) {
-          for (let px = 0; px < c.width; px++) {
-            const a = d[(py * c.width + px) * 4 + 3];
-            if (a > 0) {
-              const r = Math.hypot((px + 0.5 - cx) / scale, (py + 0.5 - cy) / scale);
-              if (r < 46) {
-                inside++;
-                if (a > maxAlpha) maxAlpha = a;
-              } else if (a > 32) {
-                outside++;
-              }
+const COMPOSITE_PROFILES = [
+  { size: 16, dpr: 1, box: 64, minOut: 70, minGlowWeight: 500, requireGlowOut: false },
+  { size: 16, dpr: 1, box: 65, minOut: 70, minGlowWeight: 500, requireGlowOut: false },
+  { size: 16, dpr: 2, box: 64, minOut: 350, minGlowWeight: 4000, requireGlowOut: true },
+  { size: 16, dpr: 3, box: 64, minOut: 750, minGlowWeight: 8000, requireGlowOut: true },
+  { size: 28, dpr: 2, box: 80, minOut: 1100, minGlowWeight: 10000, requireGlowOut: true },
+  { size: 56, dpr: 2, box: 140, minOut: 5000, minGlowWeight: 50000, requireGlowOut: true },
+  { size: 56, dpr: 2, box: 141, minOut: 5000, minGlowWeight: 50000, requireGlowOut: true },
+  { size: 72, dpr: 2, box: 160, minOut: 8500, minGlowWeight: 80000, requireGlowOut: true },
+  { size: 72, dpr: 2, box: 161, minOut: 8500, minGlowWeight: 80000, requireGlowOut: true },
+];
+
+/**
+ * 實際瀏覽器合成截圖檢查（量得到頁面 CSS 與 SVG drop-shadow 光暈與小尺寸抗鋸齒）：
+ * 涵蓋 16px (DPR 1/2/3)、28px、56px、72px，逐款以 SVG 座標 (r<46) 與畫面實際圓心幾何 (r<size/2)
+ * 驗證內圓為 0 像素侵入、外圈具可見裝飾，並以有光暈 vs 停用光暈差值驗證瀏覽器光暈確實存在。
+ */
+async function assertBrowserCompositeScreenshotClean(browser, bundle, profiles = COMPOSITE_PROFILES) {
+  for (const prof of profiles) {
+    const { size, dpr, box, minOut, minGlowWeight, requireGlowOut } = prof;
+    const cols = 5;
+    const rows = 4;
+    const gridW = cols * box;
+    const gridH = rows * box;
+    const ctx = await browser.newContext({
+      viewport: { width: Math.max(840, gridW + 32), height: Math.max(680, gridH + 32) },
+      deviceScaleFactor: dpr,
+    });
+    const pg = await ctx.newPage();
+    const pageErrors = [];
+    pg.on('pageerror', (e) => pageErrors.push(e.message));
+    try {
+      await pg.setContent(`<!DOCTYPE html><html><body style="margin:0;background:transparent;"><div id="comp-grid" style="display:grid;grid-template-columns:repeat(${cols},${box}px);grid-auto-rows:${box}px;width:${gridW}px;height:${gridH}px;"></div><script>${bundle}</script></body></html>`);
+      const frameCount = await pg.evaluate((sz) => {
+        const grid = document.getElementById('comp-grid');
+        const frames = window.__api.AVATAR_FRAMES;
+        for (const f of frames) {
+          const cell = document.createElement('div');
+          cell.className = 'comp-cell';
+          cell.dataset.frameId = f.id;
+          cell.style.cssText = 'display:flex;align-items:center;justify-content:center;position:relative;';
+          grid.appendChild(cell);
+          window.__mountAvatar(cell, { name: '測', size: sz, frame: f.id, ring: false });
+          const inner = cell.querySelector('.prof-avatar-circle');
+          if (inner) inner.style.visibility = 'hidden';
+        }
+        return frames.length;
+      }, size);
+      assert.strictEqual(frameCount, 20, '應有 20 款外框可供合成截圖檢查');
+
+      const captureMetrics = async (disableGlow) => {
+        await pg.evaluate((noG) => {
+          for (const g of document.querySelectorAll('#comp-grid svg g[mask] > g')) {
+            if (noG) {
+              if (!g.dataset.origFilter) g.dataset.origFilter = g.style.filter || '';
+              g.style.filter = 'none';
+            } else if (g.dataset.origFilter !== undefined) {
+              g.style.filter = g.dataset.origFilter;
             }
           }
+        }, disableGlow);
+        const gridRect = await pg.locator('#comp-grid').boundingBox();
+        const rects = await pg.evaluate(() => Array.from(document.querySelectorAll('#comp-grid .comp-cell')).map((cell) => {
+          const cb = cell.getBoundingClientRect();
+          const wb = cell.querySelector('.prof-avatar-circle').getBoundingClientRect();
+          const sb = cell.querySelector('svg.prof-av-frame-svg').getBoundingClientRect();
+          return {
+            id: cell.dataset.frameId,
+            cell: { x: cb.x, y: cb.y, w: cb.width, h: cb.height },
+            wrap: { x: wb.x, y: wb.y, w: wb.width, h: wb.height },
+            svg: { x: sb.x, y: sb.y, w: sb.width, h: sb.height },
+          };
+        }));
+        const buf = await pg.locator('#comp-grid').screenshot({ omitBackground: true });
+        const b64 = 'data:image/png;base64,' + buf.toString('base64');
+        return await pg.evaluate(async ({ url, gridRect, rects }) => {
+          const img = await new Promise((res, rej) => {
+            const i = new Image();
+            i.onload = () => res(i);
+            i.onerror = rej;
+            i.src = url;
+          });
+          const c = document.createElement('canvas');
+          c.width = img.width;
+          c.height = img.height;
+          const x = c.getContext('2d');
+          x.drawImage(img, 0, 0);
+          const d = x.getImageData(0, 0, c.width, c.height).data;
+          const sx = c.width / gridRect.width;
+          const sy = c.height / gridRect.height;
+          return rects.map((r) => {
+            const x0 = Math.max(0, Math.floor((r.cell.x - gridRect.x) * sx));
+            const y0 = Math.max(0, Math.floor((r.cell.y - gridRect.y) * sy));
+            const x1 = Math.min(c.width, Math.ceil((r.cell.x + r.cell.w - gridRect.x) * sx));
+            const y1 = Math.min(c.height, Math.ceil((r.cell.y + r.cell.h - gridRect.y) * sy));
+            const acx = (r.wrap.x + r.wrap.w / 2 - gridRect.x) * sx;
+            const acy = (r.wrap.y + r.wrap.h / 2 - gridRect.y) * sy;
+            const aRad = (r.wrap.w / 2) * sx;
+            const scx = (r.svg.x + r.svg.w / 2 - gridRect.x) * sx;
+            const scy = (r.svg.y + r.svg.h / 2 - gridRect.y) * sy;
+            const svgUnitsPerPx = 140 / (r.svg.w * sx);
+            let insideSvg = 0;
+            let insideCss = 0;
+            let maxAlpha = 0;
+            let outside = 0;
+            let weight = 0;
+            for (let py = y0; py < y1; py++) {
+              for (let px = x0; px < x1; px++) {
+                const a = d[(py * c.width + px) * 4 + 3];
+                if (a > 0) {
+                  const rSvg = Math.hypot(px + 0.5 - scx, py + 0.5 - scy) * svgUnitsPerPx;
+                  const rCss = Math.hypot(px + 0.5 - acx, py + 0.5 - acy);
+                  if (rSvg < 46) {
+                    insideSvg++;
+                    if (a > maxAlpha) maxAlpha = a;
+                  }
+                  if (rCss < aRad) {
+                    insideCss++;
+                    if (a > maxAlpha) maxAlpha = a;
+                  }
+                  if (rSvg >= 46) {
+                    if (a > 8) outside++;
+                    weight += a;
+                  }
+                }
+              }
+            }
+            return { id: r.id, insideSvg, insideCss, maxAlpha, outside, weight };
+          });
+        }, { url: b64, gridRect, rects });
+      };
+
+      const actualList = await captureMetrics(false);
+      const noGlowList = await captureMetrics(true);
+      assert.deepStrictEqual(pageErrors, [], `size=${size}@${dpr}x 瀏覽器合成截圖不可有 JS 錯誤：` + pageErrors.join('; '));
+
+      for (let i = 0; i < actualList.length; i++) {
+        const act = actualList[i];
+        const ng = noGlowList[i];
+        assert.strictEqual(act.insideSvg, 0, `瀏覽器合成截圖外框 ${act.id} (${size}px@${dpr}x) SVG 內圓 r<46 不可有外框／光暈像素，實得 ${act.insideSvg} (maxAlpha=${act.maxAlpha})`);
+        assert.strictEqual(act.insideCss, 0, `瀏覽器合成截圖外框 ${act.id} (${size}px@${dpr}x) 畫面內圓 r<size/2 不可有外框／光暈像素，實得 ${act.insideCss} (maxAlpha=${act.maxAlpha})`);
+        assert.ok(act.outside >= minOut, `瀏覽器合成截圖外框 ${act.id} (${size}px@${dpr}x) 外圈裝飾不足：${act.outside} < ${minOut}`);
+        const glowDelta = act.weight - ng.weight;
+        assert.ok(glowDelta >= minGlowWeight, `瀏覽器光暈缺失 ${act.id} (${size}px@${dpr}x)：有光暈權重 ${act.weight} vs 停用光暈 ${ng.weight} (差值 ${glowDelta} < ${minGlowWeight})`);
+        if (requireGlowOut) {
+          assert.ok(act.outside > ng.outside, `瀏覽器光暈缺失 ${act.id} (${size}px@${dpr}x)：有光暈外圈像素 ${act.outside} 未高於無光暈 ${ng.outside}`);
         }
-        return { inside, maxAlpha, outside };
-      }, b64);
-      assert.strictEqual(m.inside, 0, `瀏覽器合成截圖外框 ${id} 內圓 r<46 不可有外框／光暈像素，實得 ${m.inside} (maxAlpha=${m.maxAlpha})`);
-      assert.ok(m.outside >= 8000, `瀏覽器合成截圖外框 ${id} 外圈裝飾不足：${m.outside}`);
+      }
+    } finally {
+      await ctx.close();
     }
-    assert.deepStrictEqual(pageErrors, [], '瀏覽器合成截圖檢查不可有 JS 錯誤：' + pageErrors.join('; '));
-  } finally {
-    await ctx.close();
   }
 }
 
-/** 強制走 Canvas PNG 備援（SVG 外框載入失敗但保留固定頭像），逐像素驗證內圓零改動、外圈有備援裝飾且可匯出 PNG。 */
+/** 強制走 Canvas PNG 備援（SVG 外框載入失敗但保留固定頭像），逐款驗證 20 款內圓零改動、外圈有備援裝飾且可匯出 PNG。 */
 async function assertCanvasFallbackPixelClean(browser, bundle) {
   const ctx = await browser.newContext({ viewport: { width: 900, height: 600 } });
   const pg = await ctx.newPage();
@@ -404,7 +494,7 @@ async function assertCanvasFallbackPixelClean(browser, bundle) {
   pg.on('pageerror', (e) => pageErrors.push(e.message));
   try {
     await pg.setContent(`<!DOCTYPE html><html><body><script>${bundle}</script></body></html>`);
-    const fb = await pg.evaluate(async () => {
+    const results = await pg.evaluate(async () => {
       const api = window.__api;
       const sc = document.createElement('canvas');
       sc.width = 160;
@@ -418,10 +508,9 @@ async function assertCanvasFallbackPixelClean(browser, bundle) {
       blankC.height = 2;
       const blankUrl = blankC.toDataURL('image/png');
 
-      const card = {
+      const baseCard = {
         found: true, profileKey: 'pk_1', nick: '測試', bio: '',
         avatar: { cardId: '19145', x: 0.5, y: 0.5, zoom: 1.4 },
-        avatarFrame: 'admin_gold',
         googleVerified: true, champOfficial: 1, champCommunity: 0, totalWins: 5,
         showTotalWins: true, showOfficialCrowns: true, showCommunityCrowns: true,
         pinnedHonors: [], canFriend: false, friendStatus: 'self',
@@ -439,42 +528,50 @@ async function assertCanvasFallbackPixelClean(browser, bundle) {
         i.onerror = () => res(null);
         i.src = avUrl;
       });
-      const baseC = await api.renderProfileCardToCanvas(card, { loadImage: loadWithBlankFrame });
-      const fbC = await api.renderProfileCardToCanvas(card, { loadImage: loadFallbackOnlyAvatar });
+      const baseC = await api.renderProfileCardToCanvas({ ...baseCard, avatarFrame: 'admin_gold' }, { loadImage: loadWithBlankFrame });
       const bd = baseC.getContext('2d').getImageData(0, 0, baseC.width, baseC.height).data;
-      const fd = fbC.getContext('2d').getImageData(0, 0, fbC.width, fbC.height).data;
       const AV_CX = 32 + 72 + 18;
       const AV_CY = 96 + 22;
       const AV_R = 72;
-      let modified = 0;
-      let deltaMax = 0;
-      let outerDiff = 0;
-      for (let dy = -AV_R - 30; dy <= AV_R + 30; dy++) {
-        for (let dx = -AV_R - 30; dx <= AV_R + 30; dx++) {
-          const dist = Math.hypot(dx + 0.5, dy + 0.5);
-          const idx = ((AV_CY + dy) * fbC.width + (AV_CX + dx)) * 4;
-          const diff = Math.max(Math.abs(fd[idx] - bd[idx]), Math.abs(fd[idx + 1] - bd[idx + 1]), Math.abs(fd[idx + 2] - bd[idx + 2]));
-          if (dist < AV_R) {
-            if (diff > 0) {
-              modified++;
-              if (diff > deltaMax) deltaMax = diff;
+      const out = [];
+      for (const f of api.AVATAR_FRAMES) {
+        const fbC = await api.renderProfileCardToCanvas({ ...baseCard, avatarFrame: f.id }, { loadImage: loadFallbackOnlyAvatar });
+        const fd = fbC.getContext('2d').getImageData(0, 0, fbC.width, fbC.height).data;
+        let modified = 0;
+        let deltaMax = 0;
+        let outerDiff = 0;
+        for (let dy = -AV_R - 30; dy <= AV_R + 30; dy++) {
+          for (let dx = -AV_R - 30; dx <= AV_R + 30; dx++) {
+            const dist = Math.hypot(dx + 0.5, dy + 0.5);
+            const idx = ((AV_CY + dy) * fbC.width + (AV_CX + dx)) * 4;
+            const diff = Math.max(Math.abs(fd[idx] - bd[idx]), Math.abs(fd[idx + 1] - bd[idx + 1]), Math.abs(fd[idx + 2] - bd[idx + 2]));
+            if (dist < AV_R) {
+              if (diff > 0) {
+                modified++;
+                if (diff > deltaMax) deltaMax = diff;
+              }
+            } else if (dist >= AV_R + 1 && dist <= AV_R + 28) {
+              if (diff > 20) outerDiff++;
             }
-          } else if (dist >= AV_R + 1 && dist <= AV_R + 28) {
-            if (diff > 20) outerDiff++;
           }
         }
+        out.push({
+          id: f.id,
+          modified,
+          deltaMax,
+          outerDiff,
+          exportable: fbC.toDataURL('image/png').startsWith('data:image/png;base64,'),
+        });
       }
-      return {
-        modified,
-        deltaMax,
-        outerDiff,
-        exportable: fbC.toDataURL('image/png').startsWith('data:image/png;base64,'),
-      };
+      return out;
     });
     assert.deepStrictEqual(pageErrors, [], 'Canvas 備援檢查不可有 JS 錯誤：' + pageErrors.join('; '));
-    assert.strictEqual(fb.exportable, true, '圖片載入失敗時 Canvas PNG 外框降級仍須可匯出');
-    assert.strictEqual(fb.modified, 0, `Canvas PNG 降級外框不可改動頭像內圓像素，實得 ${fb.modified} (deltaMax=${fb.deltaMax})`);
-    assert.ok(fb.outerDiff >= 1500, `Canvas PNG 降級外框外圈應有可見裝飾，實得 ${fb.outerDiff}`);
+    assert.strictEqual(results.length, 20, 'Canvas PNG 備援應覆蓋全部 20 款外框');
+    for (const fb of results) {
+      assert.strictEqual(fb.exportable, true, `圖片載入失敗時 Canvas PNG 備援 ${fb.id} 仍須可匯出`);
+      assert.strictEqual(fb.modified, 0, `Canvas PNG 降級外框 ${fb.id} 不可改動頭像內圓像素，實得 ${fb.modified} (deltaMax=${fb.deltaMax})`);
+      assert.ok(fb.outerDiff >= 1500, `Canvas PNG 降級外框 ${fb.id} 外圈應有可見裝飾，實得 ${fb.outerDiff}`);
+    }
   } finally {
     await ctx.close();
   }
@@ -880,7 +977,7 @@ if (chromium) {
       await T('B1 20 款瀏覽器 DOM SVG 與 780px Canvas PNG 逐款像素檢查（內圓 r<46 零遮擋、外圈有裝飾、40 實例 ID 唯一、星環外弧 >=49）', () =>
         assertAll20FramesPixelClean(browser, okBundle));
 
-      await T('B1b 20 款實際 AvatarCircle 瀏覽器合成截圖（element.screenshot）與強制 Canvas PNG 備援像素檢查（內圓零光暈／陰影侵入、外圈有裝飾）', async () => {
+      await T('B1b 20 款實際 AvatarCircle 多尺寸合成截圖（16px DPR 1/2/3、28/56/72px）＋光暈存在驗證＋20 款強制 Canvas PNG 備援像素檢查', async () => {
         await assertBrowserCompositeScreenshotClean(browser, okBundle);
         await assertCanvasFallbackPixelClean(browser, okBundle);
       });
@@ -909,21 +1006,37 @@ if (chromium) {
         await mutantMustBreak('M_unmasked_center_line_png', () => assertAll20FramesPixelClean(browser, unmaskedCrossBundle), 'PNG 用 SVG 外框');
       });
 
-      await T('B3 v6.664 (b390744e) HEAD-FAIL ＋ 2 項獨立突變（恢復瀏覽器 CSS 光暈滲透、移除 Canvas 備援外圈裁切）各自必紅', async () => {
+      await T('B3 v6.664/v6.665 HEAD-FAIL ＋ 4 項獨立突變（外層光暈滲透、Canvas 備援裁切、恢復小尺寸裁切、移除瀏覽器光暈）各自必紅', async () => {
+        const p72 = [COMPOSITE_PROFILES[COMPOSITE_PROFILES.length - 2]];
+        const pSmall = COMPOSITE_PROFILES.slice(0, 7); // 16@1(偶/奇)/2/3, 28@2, 56@2(偶/奇)
+
         if (hasBaseCommit(ROOT, BASE_V6664)) {
           const oldAv = readBaseBlob(ROOT, BASE_V6664, AV_PATH);
           const oldApi = readBaseBlob(ROOT, BASE_V6664, API_PATH);
           assert.ok(oldAv.ok && oldApi.ok, '讀取 b390744e 外框檔案失敗');
           const oldAvBundle = await buildFrameBundle({ avSrc: normEol(oldAv.out), apiSrc: normEol(oldApi.out) });
-          await mutantMustBreak('HEAD_FAIL_v6664_css_glow_bleed', () => assertBrowserCompositeScreenshotClean(browser, oldAvBundle), '瀏覽器合成截圖外框');
+          await mutantMustBreak('HEAD_FAIL_v6664_css_glow_bleed', () => assertBrowserCompositeScreenshotClean(browser, oldAvBundle, p72), '瀏覽器合成截圖外框');
           await mutantMustBreak('HEAD_FAIL_v6664_canvas_fallback_shadow', () => assertCanvasFallbackPixelClean(browser, oldAvBundle), 'Canvas PNG 降級外框');
         } else {
           shallowSkip('v6665 B3 HEAD-FAIL', '需要 b390744e commit');
         }
 
-        // 突變 1：把 drop-shadow 移回外層 .prof-av-frame-svg（繞過 SVG 內圓 mask）
+        if (hasBaseCommit(ROOT, COMMIT_V6665)) {
+          const v665Av = readBaseBlob(ROOT, COMMIT_V6665, AV_PATH);
+          const v665Api = readBaseBlob(ROOT, COMMIT_V6665, API_PATH);
+          assert.ok(v665Av.ok && v665Api.ok, '讀取 4fed8ee3 外框檔案失敗');
+          const v665Bundle = await buildFrameBundle({ avSrc: normEol(v665Av.out), apiSrc: normEol(v665Api.out) });
+          await mutantMustBreak('HEAD_FAIL_v6665_small_size_bleed', () => assertBrowserCompositeScreenshotClean(browser, v665Bundle, pSmall), '瀏覽器合成截圖外框');
+        } else {
+          shallowSkip('v6666 B3 HEAD-FAIL', '需要 4fed8ee3 commit');
+        }
+
+        // 突變 1：把 drop-shadow 移回外層 .prof-av-frame-svg 並移除硬遮罩（重現外層光暈侵入 72px 內圓）
         const av = read(AV_PATH);
-        const avBleed = av
+        const avNoRadialMask = av
+          .replace('      style:mask-image={innerMaskHole}\n      style:-webkit-mask-image={innerMaskHole}\n', '');
+        assert.notStrictEqual(avNoRadialMask, av, 'B3 突變（移除小尺寸硬遮罩）錨點未命中');
+        const avBleed = avNoRadialMask
           .replace(
             '  style:height={`${size}px`}\n>',
             '  style:height={`${size}px`}\n  style:--pf-glow={frameSpec?.glow ?? \'transparent\'}\n>',
@@ -932,9 +1045,9 @@ if (chromium) {
             '    overflow: visible;\n  }\n  .prof-avatar-circle',
             '    overflow: visible;\n    filter: drop-shadow(0 0 3px var(--pf-glow, transparent));\n  }\n  .prof-avatar-circle',
           );
-        assert.notStrictEqual(avBleed, av, 'B3 突變 1 錨點未命中');
+        assert.notStrictEqual(avBleed, avNoRadialMask, 'B3 突變 1 錨點未命中');
         const mutGlowBundle = await buildFrameBundle({ avSrc: avBleed });
-        await mutantMustBreak('M_restore_css_drop_shadow_bleed', () => assertBrowserCompositeScreenshotClean(browser, mutGlowBundle), '瀏覽器合成截圖外框');
+        await mutantMustBreak('M_restore_css_drop_shadow_bleed', () => assertBrowserCompositeScreenshotClean(browser, mutGlowBundle, p72), '瀏覽器合成截圖外框');
 
         // 突變 2：移除 Canvas PNG 備援的 evenodd 外圈裁切（陰影重新侵入頭像內圓）
         const api = read(API_PATH);
@@ -942,6 +1055,19 @@ if (chromium) {
         assert.notStrictEqual(apiNoFbClip, api, 'B3 突變 2 錨點未命中');
         const mutFbBundle = await buildFrameBundle({ apiSrc: apiNoFbClip });
         await mutantMustBreak('M_remove_canvas_fallback_clip', () => assertCanvasFallbackPixelClean(browser, mutFbBundle), 'Canvas PNG 降級外框');
+
+        // 突變 3：恢復原本小尺寸裁切（僅移除外層螢幕像素硬遮罩，保留 SVG mask 46.5 與內層光暈）⇒ 小尺寸 16/28/56px 必紅
+        const mutSmallBundle = await buildFrameBundle({ avSrc: avNoRadialMask });
+        await mutantMustBreak('M_restore_small_size_clip', () => assertBrowserCompositeScreenshotClean(browser, mutSmallBundle, pSmall), '瀏覽器合成截圖外框');
+
+        // 突變 4：移除瀏覽器光暈（將 drop-shadow 改為 none）⇒ 光暈存在斷言必紅
+        const avNoGlow = av.replace(
+          'style:filter={`drop-shadow(0 0 3px ${frameSpec?.glow ?? \'transparent\'})`}',
+          "style:filter={'none'}",
+        );
+        assert.notStrictEqual(avNoGlow, av, 'B3 突變 4 錨點未命中');
+        const mutNoGlowBundle = await buildFrameBundle({ avSrc: avNoGlow });
+        await mutantMustBreak('M_remove_browser_glow', () => assertBrowserCompositeScreenshotClean(browser, mutNoGlowBundle, [COMPOSITE_PROFILES[0], ...p72]), '瀏覽器光暈缺失');
       });
 
       console.log('\n【C】深／淺色大廳房間玩家連結對比度、真實模板缺／空白／有效 UID 對照與互動');
@@ -1133,25 +1259,32 @@ if (chromium) {
   }
 }
 
-console.log('\n【D】Rule 40 精確還原鏈與更新紀錄隔離');
-await T('D1 revertV6665IfPresent 還原至 v6.664 (b390744e) 且 revertV6664IfPresent 還原至 v6.663 (0329ee55)，對歷史基準皆為 no-op', () => {
-  if (!hasBaseCommit(ROOT, BASE_V6664) || !hasBaseCommit(ROOT, BASE_V6663)) {
-    shallowSkip('v6664/v6665 D1 還原鏈', '需要 b390744e 與 0329ee55 commit');
+console.log('\n【D】Rule 40 精確歷史還原鏈（固定 Git blob）與現行版本／更新紀錄隔離');
+await T('D1 固定歷史 commit blob 逐位元還原：4fed8ee3 → b390744e → 0329ee55 且對歷史基準皆為 no-op（不隨未來升版誤紅）', () => {
+  if (!hasBaseCommit(ROOT, COMMIT_V6665) || !hasBaseCommit(ROOT, BASE_V6664) || !hasBaseCommit(ROOT, BASE_V6663)) {
+    shallowSkip('v6664/v6665 D1 還原鏈', '需要 4fed8ee3、b390744e 與 0329ee55 commit');
     return;
   }
   for (const rel of Object.keys(V6665_PAIRS)) {
-    const base664 = readBaseBlob(ROOT, BASE_V6664, rel);
-    assert.ok(base664.ok, '缺少 b390744e blob: ' + rel);
-    const bNorm = normEol(base664.out);
-    assert.strictEqual(revertV6665IfPresent(rel, read(rel)), bNorm, '無法精確還原至 b390744e：' + rel);
-    assert.strictEqual(revertV6665IfPresent(rel, bNorm), bNorm, '對 b390744e 必須為 no-op：' + rel);
+    const blob665 = readBaseBlob(ROOT, COMMIT_V6665, rel);
+    const blob664 = readBaseBlob(ROOT, BASE_V6664, rel);
+    assert.ok(blob665.ok && blob664.ok, '缺少 4fed8ee3 或 b390744e blob: ' + rel);
+    const s665 = normEol(blob665.out);
+    const s664 = normEol(blob664.out);
+    assert.strictEqual(revertV6665IfPresent(rel, s665), s664, '4fed8ee3 無法精確還原至 b390744e：' + rel);
+    assert.strictEqual(revertV6665IfPresent(rel, s664), s664, '對 b390744e 必須為 no-op：' + rel);
   }
   for (const rel of Object.keys(V6664_PAIRS)) {
-    const base663 = readBaseBlob(ROOT, BASE_V6663, rel);
-    assert.ok(base663.ok, '缺少 0329ee55 blob: ' + rel);
-    const bNorm = normEol(base663.out);
-    assert.strictEqual(revertV6664IfPresent(rel, read(rel)), bNorm, '無法精確還原至 0329ee55：' + rel);
-    assert.strictEqual(revertV6664IfPresent(rel, bNorm), bNorm, '對 0329ee55 必須為 no-op：' + rel);
+    const blob665 = readBaseBlob(ROOT, COMMIT_V6665, rel);
+    const blob664 = readBaseBlob(ROOT, BASE_V6664, rel);
+    const blob663 = readBaseBlob(ROOT, BASE_V6663, rel);
+    assert.ok(blob665.ok && blob664.ok && blob663.ok, '缺少 4fed8ee3 / b390744e / 0329ee55 blob: ' + rel);
+    const s665 = normEol(blob665.out);
+    const s664 = normEol(blob664.out);
+    const s663 = normEol(blob663.out);
+    assert.strictEqual(revertV6664IfPresent(rel, s665), s663, '4fed8ee3 串接還原至 0329ee55 失敗：' + rel);
+    assert.strictEqual(revertV6664IfPresent(rel, s664), s663, 'b390744e 無法精確還原至 0329ee55：' + rel);
+    assert.strictEqual(revertV6664IfPresent(rel, s663), s663, '對 0329ee55 必須為 no-op：' + rel);
   }
 });
 
@@ -1159,14 +1292,15 @@ await T('D2 後台版本提示動態同步 version.ts 且公開 changelog 不外
   const verMatch = /export\s+const\s+VERSION\s*=\s*'([^']+)'/.exec(read('src/lib/version.ts'));
   assert.ok(verMatch && verMatch[1], '讀不到 src/lib/version.ts 的 VERSION');
   const curVer = verMatch[1];
+  assert.strictEqual(read('static/site-version.txt').trim(), curVer, `static/site-version.txt 必須同步為 ${curVer}`);
   const adm = read(ADMIN_PATH);
-  assert.ok(adm.includes("ver:'v6.665'"), 'admin.html 必須保留 v6.665 內部紀錄');
+  assert.ok(adm.includes("ver:'v6.665'") && adm.includes("ver:'v6.666'"), 'admin.html 必須保留 v6.665 與 v6.666 內部紀錄');
   assert.ok(adm.includes(`window.SITE_VERSION_HINT = '${curVer}'`), `admin.html SITE_VERSION_HINT 必須同步為 ${curVer}`);
   const ch = read(CHLOG_PATH);
   const allPublicCh = ch + '\n' + read('static/changelog-archive.html');
-  assert.ok(allPublicCh.includes('v6.665'), '公開更新紀錄（首頁或封存頁）應包含 v6.665');
-  assert.ok(!ch.includes('_profResolveTarget') && !ch.includes('server_admin_patch') && !ch.includes('shadowBlur'), '公開首頁 changelog 不可外洩後台／內部實作字眼');
+  assert.ok(allPublicCh.includes('v6.665') && allPublicCh.includes('v6.666'), '公開更新紀錄（首頁或封存頁）應包含 v6.665 與 v6.666');
+  assert.ok(!ch.includes('_profResolveTarget') && !ch.includes('server_admin_patch') && !ch.includes('shadowBlur') && !ch.includes('mask-image'), '公開首頁 changelog 不可外洩後台／內部實作字眼');
 });
 
-console.log(`\n══ v6.664/v6.665 大廳名片 UID 解析與 20 款外框內圓／光暈保護守衛：${pass} PASS / ${fail} FAIL ══`);
+console.log(`\n══ v6.664/v6.665/v6.666 大廳名片 UID 解析與 20 款外框內圓／小尺寸／光暈保護守衛：${pass} PASS / ${fail} FAIL ══`);
 if (fail) process.exit(1);

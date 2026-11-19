@@ -44,6 +44,8 @@
   const rawUrl = $derived(crop ? cardImageUrlFromId(crop.cardId) : null);
   const thumbUrl = $derived(rawUrl ? cardThumb(rawUrl) : null);
   const initial = $derived(profileNameInitial(name));
+  // 螢幕像素級外圈硬遮罩（小尺寸 +0.5 CSS px、>=32px 含奇數容器子像素對齊 +0.75 CSS px）：抵銷 SVG mask 抗鋸齒與子像素取整滲入內圓
+  const innerMaskHole = $derived(`radial-gradient(circle at 50% 50%, transparent ${size / 2 + (size >= 32 ? 0.75 : 0.5)}px, #000 ${size / 2 + (size >= 32 ? 0.75 : 0.5)}px)`);
 </script>
 
 <span
@@ -76,7 +78,14 @@
     {/if}
   </span>
   {#if frameArt}
-    <svg class="prof-av-frame-svg" viewBox="0 0 140 140" fill="none" aria-hidden="true">
+    <svg
+      class="prof-av-frame-svg"
+      viewBox="0 0 140 140"
+      fill="none"
+      aria-hidden="true"
+      style:mask-image={innerMaskHole}
+      style:-webkit-mask-image={innerMaskHole}
+    >
       <defs>
         {#each frameArt.grads as g (g.id)}
           {#if g.kind === 'lin'}

@@ -1,5 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.666 — 修正小尺寸頭像外框邊緣滲入內圓、補齊多尺寸與光暈守衛並解耦歷史還原驗證（2026-11-20）
+
+基準 `4fed8ee3`（v6.665）。回應獨立複審抓出的 1 項 P2 與 2 項 P3：
+
+- **P2｜修正小尺寸頭像（16 / 28 / 56 / 72px，含 16px DPR 1 / 2 / 3）外框像素滲入內圓**：
+  - 原因分析：在 `16px`（1 CSS px = 5.75 SVG 單位）、`28px`、`56px` 及奇數容器子像素對齊下，固定 `AVATAR_FRAME_MASK_R = 46.5` 的 SVG `<mask>` 圓洞抗鋸齒與光暈羽化會向內回滲至 `r < 46`（16px DPR 1 最高達 `alpha = 92/255`，深約 `0.48 CSS px`）。
+  - 解法：`src/lib/profile/AvatarCircle.svelte` 保留既有內部 SVG `<mask>`（`AVATAR_FRAME_MASK_R = 46.5`）、外層 `viewBox="0 0 140 140"` 與 `<g style:filter="drop-shadow(...)">`，並於 `<svg class="prof-av-frame-svg">` 加上螢幕像素級徑向硬遮罩 `radial-gradient(circle at 50% 50%, transparent ${size / 2 + (size >= 32 ? 0.75 : 0.5)}px, #000 ...)`（同步輸出 `mask-image` 與 `-webkit-mask-image`），同時涵蓋小尺寸抗鋸齒與 56/72/92px 於奇數寬度容器的子像素取整偏移。
+  - 實測結果：在實際 Chromium 合成截圖下，覆蓋 `16px (DPR 1 偶／奇容器、DPR 2/3)`、`28px (DPR 2)`、`56px (DPR 2 偶／奇容器)`、`72px (DPR 2 偶／奇容器)` 全部 20 款外框，無論依 SVG 座標（`r < 46`）或畫面實際圓心幾何（`r < size / 2`）均達 `0` 像素侵入，且外圈裝飾與可見光暈完整保留；既有 780px Canvas PNG 正常匯出與 20 款強制備援（`modified = 0`）維持不變。
+- **P3｜像素守衛覆蓋小尺寸侵入與光暈存在性**：
+  - `scripts/test-v6664-lobby-and-frame-mask.mjs`：將 `B1b` 擴充為實測產品實際尺寸（`16px DPR 1/2/3`、`28px DPR 2`、`56px DPR 2`、`72px DPR 2`），同時比對 SVG 座標與實際畫面幾何，並針對有光暈 vs 停用光暈的外圈 alpha 權重與涵蓋像素差值斷言光暈確實存在；`B3` 補上 `v6.665 (4fed8ee3)` 小尺寸 HEAD-FAIL 反證與兩條獨立突變（「恢復小尺寸裁切移除硬遮罩」與「移除瀏覽器光暈」），各自命中預期斷言。
+- **P3｜歷史還原守衛 D1 改以固定 Git blob 為輸入，避免後續升版誤紅**：
+  - `scripts/test-v6664-lobby-and-frame-mask.mjs` `D1` 改由固定歷史 commit blob 驗證 `4fed8ee3 → b390744e → 0329ee55` 逐位元還原與歷史 no-op（淺複製維持 `shallowSkip`），`D2` 維持對現行工作樹的版本號／後台提示同步與公開 changelog 隔離檢查；另新增 `scripts/lib/revert-v6666-small-avatar-clip.mjs` 串接至 `revert-v6665-glow-and-blank-uid.mjs`，確保所有沿用同一還原鏈的舊守衛（`test-v6653`、`test-v6658`、`test-v6659`、`test-v6660`、`test-v6661`、`test-v6220`、`test-v6266`、`test-v6282`）在 `v6.666` 全數通過。
+
 ## v6.665 — 修正頭像外框光暈／備援陰影侵入內圓、大廳空白 UID 無效按鈕與補強實測守衛（2026-11-19）
 
 基準 `b390744e`（v6.664）。回應獨立複審抓出的 1 項 P2、2 項 P3 與 `b390744e` Pages CI 的 `test-v6392` A1 違規：
