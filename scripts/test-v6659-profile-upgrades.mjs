@@ -786,7 +786,7 @@ if (chromium) {
   defaultBundle = await buildUiBundle();
 }
 
-async function assertModalSelfVsOtherUi(browser, bundle) {
+async function assertModalSelfVsOtherUi(browser, bundle, { legacyBadges = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, isMobile: true, hasTouch: true });
   const pg = await ctx.newPage();
   const pageErrors = [];
@@ -805,7 +805,7 @@ async function assertModalSelfVsOtherUi(browser, bundle) {
           body: JSON.stringify({
             playerProfileApi: 1, found: true, profileKey: 'pk_other', nick: '對手選手', bio: '對手名片',
             avatar: null, googleVerified: true, avatarFrame: 'sponsor_diamond',
-            totalWins: 18, champOfficial: 3, champCommunity: 2,
+            totalWins: 1243, champOfficial: 12, champCommunity: 100,
             showTotalWins: true, showOfficialCrowns: true, showCommunityCrowns: true,
             pinnedHonors: [{ eventId: 'e1', eventName: '春季賽', date: 1760000000000, kind: 'site', placementLabel: '冠軍' }],
             canFriend: true, friendStatus: 'none',
@@ -872,6 +872,7 @@ async function assertModalSelfVsOtherUi(browser, bundle) {
         cardTop: card.getBoundingClientRect().top,
         badgeCount: badges.length,
         badgeTexts: badges.map((b) => b.textContent.trim()),
+        badgeClipped: badges.some((b) => b.scrollWidth > b.clientWidth),
         maxTopDiff: Math.max(...tops) - Math.min(...tops),
         badgesRight: Math.max(...rights),
         closeLeft: closeBtn.getBoundingClientRect().left,
@@ -881,7 +882,12 @@ async function assertModalSelfVsOtherUi(browser, bundle) {
     assert.strictEqual(geo.overflow, false, '393px 名片不得有水平捲動');
     assert.ok(geo.cardTop >= 59, '名片上緣不可被動態島遮住：' + geo.cardTop);
     assert.strictEqual(geo.badgeCount, 3, '頂部應完整顯示 3 個統計徽章');
-    assert.ok(geo.badgeTexts[0].startsWith('⚔️ 總勝'), '總勝場必須排在冠數左側：' + geo.badgeTexts[0]);
+    if (legacyBadges) {
+      assert.ok(geo.badgeTexts[0].startsWith('⚔️ 總勝'), '舊版總勝場應排在第一個');
+    } else {
+      assert.deepEqual(geo.badgeTexts, ['⚔️ 1243勝', '網站 12冠', '社群 100冠']);
+      assert.equal(geo.badgeClipped, false, '戰績徽章需顯示完整數字');
+    }
     assert.ok(geo.maxTopDiff < 8, 'iPhone 393px 下 3 顆徽章應維持單行：diff=' + geo.maxTopDiff);
     assert.ok(geo.badgesRight <= geo.closeLeft + 0.5, '徽章列不可撞進 ✕ 關閉鈕');
     assert.ok(geo.frameText.includes('星鑽極光框'), '他人名片應顯示特殊外框標籤');
@@ -1403,7 +1409,7 @@ await T('D4 v6.659 的分享無文件與隱私交錯逐項必紅', async () => {
     const browser = await pwLaunchWith(chromium, 'v6.659-race-base');
     if (browser) try {
       const bundle = await buildUiBundle(normEol(original.out));
-      await mutantMustBreak('v6659_repeat_request', () => assertModalSelfVsOtherUi(browser, bundle), '只能送出一次');
+      await mutantMustBreak('v6659_repeat_request', () => assertModalSelfVsOtherUi(browser, bundle, { legacyBadges: true }), '只能送出一次');
     } finally { await browser.close(); }
   }
 });

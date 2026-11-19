@@ -223,13 +223,13 @@
       <div class="ppm-banner">
         <div class="ppm-banner-badges">
           {#if card && card.showTotalWins !== false && (card.totalWins ?? 0) > 0}
-            <span class="ppm-crown wins">⚔️ 總勝 {card.totalWins} 勝</span>
+            <span class="ppm-crown wins">⚔️ {card.totalWins}勝</span>
           {/if}
           {#if card && card.showOfficialCrowns !== false && card.champOfficial > 0}
-            <span class="ppm-crown site">🏛️ 網站賽 {card.champOfficial} 冠</span>
+            <span class="ppm-crown site">網站 {card.champOfficial}冠</span>
           {/if}
           {#if card && card.showCommunityCrowns !== false && card.champCommunity > 0}
-            <span class="ppm-crown comm">🎖️ 社群賽 {card.champCommunity} 冠</span>
+            <span class="ppm-crown comm">社群 {card.champCommunity}冠</span>
           {/if}
         </div>
         <button type="button" class="ppm-close" aria-label="關閉名片" onclick={onclose}>✕</button>
@@ -366,7 +366,7 @@
   }
   .ppm-banner {
     position: relative;
-    height: 48px;
+    min-height: 48px;
     background: linear-gradient(135deg, #214530, #163022 65%, #1d3c2b);
     border-bottom: 1px solid rgba(120, 196, 138, 0.22);
     display: flex;
@@ -382,10 +382,10 @@
   .ppm-banner-badges {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 4px;
     min-width: 0;
-    overflow: hidden;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
   }
   .ppm-crown {
     white-space: nowrap;
@@ -396,10 +396,7 @@
     background: rgba(11, 20, 15, 0.65);
     border: 1px solid rgba(255, 211, 90, 0.42);
     color: #ffe28a;
-    flex-shrink: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    flex-shrink: 0;
   }
   .ppm-crown.wins {
     border-color: rgba(130, 224, 166, 0.48);

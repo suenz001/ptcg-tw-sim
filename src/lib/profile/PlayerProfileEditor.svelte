@@ -466,7 +466,7 @@
             aria-pressed={showTotalWins}
             title="點一下顯示／再點一下不顯示總勝場數"
             onclick={() => { showTotalWins = !showTotalWins; saveMsg = ''; }}
-          >{showTotalWins ? '⚔️' : '🙈'} 總勝 {serverProfile.totalWins ?? 0} 勝</button>
+          >⚔️ {serverProfile.totalWins ?? 0}勝</button>
           <button
             type="button"
             class="ppe-stat-toggle is-site"
@@ -474,7 +474,7 @@
             aria-pressed={showOfficialCrowns}
             title="點一下顯示／再點一下不顯示網站賽奪冠數"
             onclick={() => { showOfficialCrowns = !showOfficialCrowns; saveMsg = ''; }}
-          >{showOfficialCrowns ? '🏛️' : '🙈'} 網站賽 {serverProfile.champOfficial} 冠</button>
+          >網站 {serverProfile.champOfficial}冠</button>
           <button
             type="button"
             class="ppe-stat-toggle is-comm"
@@ -482,7 +482,7 @@
             aria-pressed={showCommunityCrowns}
             title="點一下顯示／再點一下不顯示社群賽奪冠數"
             onclick={() => { showCommunityCrowns = !showCommunityCrowns; saveMsg = ''; }}
-          >{showCommunityCrowns ? '🎖️' : '🙈'} 社群賽 {serverProfile.champCommunity} 冠</button>
+          >社群 {serverProfile.champCommunity}冠</button>
         </div>
         {#if !collapsible || !collapsed}
           <div class="ppe-pv-tip">💡 點一下上方戰績徽章即可切換「顯示／不顯示」（按下方儲存後生效）</div>

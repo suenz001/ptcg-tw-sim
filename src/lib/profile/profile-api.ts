@@ -574,13 +574,13 @@ export async function renderProfileCardToCanvas(
   // 右上角徽章（先總勝場，再網站賽／社群賽奪冠）
   const pills: Array<{ text: string; bg: string; border: string; fg: string }> = [];
   if (card.showTotalWins !== false && (card.totalWins ?? 0) > 0) {
-    pills.push({ text: `⚔️ 總勝 ${card.totalWins} 勝`, bg: 'rgba(11, 20, 15, 0.68)', border: 'rgba(130, 224, 166, 0.48)', fg: '#b8f5cb' });
+    pills.push({ text: `⚔️ ${card.totalWins}勝`, bg: 'rgba(11, 20, 15, 0.68)', border: 'rgba(130, 224, 166, 0.48)', fg: '#b8f5cb' });
   }
   if (card.showOfficialCrowns !== false && card.champOfficial > 0) {
-    pills.push({ text: `🏛️ 網站賽 ${card.champOfficial} 冠`, bg: 'rgba(11, 20, 15, 0.68)', border: 'rgba(255, 211, 90, 0.45)', fg: '#ffe28a' });
+    pills.push({ text: `網站 ${card.champOfficial}冠`, bg: 'rgba(11, 20, 15, 0.68)', border: 'rgba(255, 211, 90, 0.45)', fg: '#ffe28a' });
   }
   if (card.showCommunityCrowns !== false && card.champCommunity > 0) {
-    pills.push({ text: `🎖️ 社群賽 ${card.champCommunity} 冠`, bg: 'rgba(11, 20, 15, 0.68)', border: 'rgba(143, 220, 192, 0.45)', fg: '#9ae8cb' });
+    pills.push({ text: `社群 ${card.champCommunity}冠`, bg: 'rgba(11, 20, 15, 0.68)', border: 'rgba(143, 220, 192, 0.45)', fg: '#9ae8cb' });
   }
   ctx.font = `bold 21px ${FONT}`;
   ctx.textBaseline = 'middle';
