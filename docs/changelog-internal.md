@@ -1,5 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.665 — 修正頭像外框光暈／備援陰影侵入內圓、大廳空白 UID 無效按鈕與補強實測守衛（2026-11-19）
+
+基準 `b390744e`（v6.664）。回應獨立複審抓出的 1 項 P2、2 項 P3 與 `b390744e` Pages CI 的 `test-v6392` A1 違規：
+
+- **P2｜頭像外框瀏覽器光暈與 Canvas PNG 備援陰影嚴格限於外圈**：
+  - `src/lib/profile/AvatarCircle.svelte`：移除 `.prof-av-frame-svg` 外層 CSS `filter: drop-shadow(...)` 與未使用的 `--pf-glow`，改於 `<g mask="url(#...hole)">` 內層套用 `<g style:filter="drop-shadow(0 0 3px ...)">`，並將 `<mask>` 座標範圍擴充至 `x="-20" y="-20" width="180" height="180"`（維持 `AVATAR_FRAME_MASK_R = 46.5` 與超能星環雙外弧連同描邊 `r >= 49.27`）。實際 Chromium 合成截圖驗證 20 款外框內圓 `r < 46` 全數為 `0` 像素（原為最高 `alpha=64/255`、逾 5,000 像素侵入），且外圈立體裝飾與光暈完整保留。
+  - `src/lib/profile/profile-api.ts`：`renderProfileCardToCanvas` 在 SVG 外框載入失敗走 Canvas 備援圓環時，先以 `ctx.rect(0, 0, W, H)` 搭配 `ctx.arc(AV_CX, AV_CY, maskR, 0, Math.PI * 2, true)`（`maskR = Math.max((AV_R * AVATAR_FRAME_MASK_R) / 46, AV_R + 1)`）執行 `ctx.clip('evenodd')` 並將環半徑外移至 `AV_R + 4.5` 再套用 `shadowBlur = 14`。強制 SVG 失敗且保留固定 `#00ff88` 頭像時，內圓變更像素由原 `5,980` 降為 `0`（`deltaMax = 0`），外圈備援環與 PNG 匯出維持正常。
+- **P3｜大廳房主／P1／P2 統一採用正規化目標判斷可點擊與送出參數**：
+  - `src/routes/game/+page.svelte`：等待中與對戰中房間列表改以 `{@const _hostTarget = buildLobbyHostProfileTarget(r)}`、`{@const _p1Target = buildLobbySeatProfileTarget(r, 0)}`、`{@const _p2Target = buildLobbySeatProfileTarget(r, 1)}` 同時決定是否渲染 `.or-prof-link` 按鈕與傳入 `openProfileModal(...)` 的參數，移除冗餘的 `openLobbyHostProfile`／`openLobbySeatProfile` 包裝函式；缺少 UID 或僅含空白字元的 UID 維持純文字，有效 UID 保留滑鼠、Enter、Space 與阻止冒泡，且不影響實戰純 `roomCode + seatIdx` 等既有入口。
+- **P3 & CI｜升級回歸守衛與修復 `test-v6392` A1**：
+  - `scripts/test-v6664-lobby-and-frame-mask.mjs`：改用中央 helper `cssOf`（`scripts/lib/svelte-style-block.mjs`）取代手動搜尋樣式標籤（修復 `b390744e` Pages CI `test-v6392` A1 紅燈）；新增 20 款實際 `AvatarCircle` 瀏覽器合成截圖逐款像素檢查、強制 Canvas PNG 備援像素基準對照、直接編譯真實 `src/routes/game/+page.svelte` 大廳模板之缺 UID／空白 UID／有效 UID 互動對照，以及 `b390744e` 三條 HEAD-FAIL 反證與三項獨立突變（恢復 CSS 光暈滲透、移除 Canvas 備援外圈裁切、恢復原始 UID truthy 按鈕），全數維持 Node 20.20.2 相容。
+  - 新增 `scripts/lib/revert-v6665-glow-and-blank-uid.mjs` 並串接至 `revert-v6664-lobby-frame-fix.mjs`，維持全歷史精確還原鏈。
+
 ## v6.664 — 大廳名片 UID 優先解析、20 款外框內圓透明保護與淺色連結對比修正（2026-11-19）
 
 基準 `0329ee55`（v6.663）。回應獨立複審抓出的 2 項 P2 與 2 項 P3：

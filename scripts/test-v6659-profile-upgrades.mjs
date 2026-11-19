@@ -1331,7 +1331,7 @@ await T('C3 全站接線與公開／內部紀錄隔離（game ?card=／viewerUid
   assert.ok(gp.includes('fetchProfileBatch(items, ctx)') && !gp.includes('fetchPlayerProfileView'), '進房頭像只走輕量批次');
   assert.match(gp, /history\.replaceState\(window\.history\.state, '', cardUrl\.toString\(\)\)/);
   assert.equal(gp.match(/avatarFrame: seatFrameFor\(seatIdx\)/g)?.length, 2, '兩個 fallback 都需使用同席位外框');
-  assert.ok(gp.includes('openLobbyHostProfile(r)') && gp.includes('openLobbySeatProfile(r, 0)') && gp.includes('openLobbySeatProfile(r, 1)'), '線上大廳等待中與對戰中房間玩家名稱必須可點擊開啟名片');
+  assert.ok(gp.includes('buildLobbyHostProfileTarget(r)') && gp.includes('buildLobbySeatProfileTarget(r, 0)') && gp.includes('buildLobbySeatProfileTarget(r, 1)'), '線上大廳等待中與對戰中房間玩家名稱必須以正規化查詢目標開啟名片');
   assert.match(read('src/routes/friends/+page.svelte'), /viewerUid=\{profileViewerUid\}/);
   assert.match(read('src/routes/deck-posts/+page.svelte'), /viewerUid=\{firebaseUser && !firebaseUser.isAnonymous/);
 

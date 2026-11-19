@@ -1261,6 +1261,12 @@ export async function renderProfileCardToCanvas(
       const frameHalf = frameSize / 2;
       ctx.drawImage(frameImg, AV_CX - frameHalf, AV_CY - frameHalf, frameSize, frameSize);
     } else {
+      const maskR = Math.max((AV_R * AVATAR_FRAME_MASK_R) / 46, AV_R + 1);
+      ctx.beginPath();
+      ctx.rect(0, 0, W, H);
+      ctx.moveTo(AV_CX + maskR, AV_CY);
+      ctx.arc(AV_CX, AV_CY, maskR, 0, Math.PI * 2, true);
+      ctx.clip('evenodd');
       ctx.shadowColor = frameSpec.glow;
       ctx.shadowBlur = 14;
       const fg = ctx.createLinearGradient(AV_CX - AV_R, AV_CY - AV_R, AV_CX + AV_R, AV_CY + AV_R);
@@ -1269,7 +1275,7 @@ export async function renderProfileCardToCanvas(
       fg.addColorStop(0.7, frameSpec.stops[2]);
       fg.addColorStop(1, frameSpec.stops[3]);
       ctx.beginPath();
-      ctx.arc(AV_CX, AV_CY, AV_R + 4, 0, Math.PI * 2);
+      ctx.arc(AV_CX, AV_CY, AV_R + 4.5, 0, Math.PI * 2);
       ctx.lineWidth = 7;
       ctx.strokeStyle = fg;
       ctx.stroke();

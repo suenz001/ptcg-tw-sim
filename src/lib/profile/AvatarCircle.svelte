@@ -51,7 +51,6 @@
   class:has-frame={!!frameArt}
   style:width={`${size}px`}
   style:height={`${size}px`}
-  style:--pf-glow={frameSpec?.glow ?? 'transparent'}
 >
   <span
     class="prof-avatar-circle"
@@ -94,12 +93,13 @@
             </radialGradient>
           {/if}
         {/each}
-        <mask id={`${svgPrefix}hole`} maskUnits="userSpaceOnUse" x="-10" y="-10" width="160" height="160">
-          <rect x="-10" y="-10" width="160" height="160" fill="#ffffff" />
+        <mask id={`${svgPrefix}hole`} maskUnits="userSpaceOnUse" x="-20" y="-20" width="180" height="180">
+          <rect x="-20" y="-20" width="180" height="180" fill="#ffffff" />
           <circle cx="70" cy="70" r={AVATAR_FRAME_MASK_R} fill="#000000" />
         </mask>
       </defs>
       <g mask={`url(#${svgPrefix}hole)`}>
+        <g style:filter={`drop-shadow(0 0 3px ${frameSpec?.glow ?? 'transparent'})`}>
       {#each frameArt.shapes as s}
         {#if s.t === 'circle'}
           <circle
@@ -179,6 +179,7 @@
           />
         {/if}
       {/each}
+        </g>
       </g>
     </svg>
   {/if}
@@ -208,7 +209,6 @@
     pointer-events: none;
     z-index: 2;
     overflow: visible;
-    filter: drop-shadow(0 0 3px var(--pf-glow, transparent));
   }
   .prof-avatar-circle {
     position: relative;

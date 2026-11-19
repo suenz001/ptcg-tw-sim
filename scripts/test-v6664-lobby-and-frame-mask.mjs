@@ -1,9 +1,9 @@
 /**
- * v6.664 回歸守衛：
- *   1. 大廳點擊玩家名稱嚴格以 UID 優先（座位換人絕不開成他人、換座仍在房命中、刪房退回 UID、查無 UID 明確未找到、缺 UID 不猜人、對戰純 seatIdx 維持相容），含 v6.663 (0329ee55) 反證與後端突變。
- *   2. 20 款立體 SVG 外框逐款實際像素檢查（瀏覽器 DOM SVG 與 780px Canvas PNG 內圓 r<46 皆為 0 像素、外圈具可見裝飾、超能星環外弧去遮罩含描邊 r>=49、40 實例多實例 ID 唯一、圖片失敗降級安全），含移除遮罩雙突變。
+ * v6.664 / v6.665 回歸守衛：
+ *   1. 大廳點擊玩家名稱嚴格以 UID 優先（座位換人絕不開成他人、換座仍在房命中、刪房退回 UID、查無 UID 明確未找到、缺／空白 UID 不猜人且維持純文字、對戰純 seatIdx 維持相容），含 v6.663 (0329ee55) 反證、v6.664 (b390744e) 空白 UID 反證與真實突變。
+ *   2. 20 款立體 SVG 外框逐款實際像素檢查（瀏覽器 DOM SVG、實際瀏覽器合成截圖 element.screenshot、780px Canvas PNG 與強制 Canvas PNG 備援內圓 r<46 / r<AV_R 皆為 0 像素干擾、外圈具可見裝飾、超能星環外弧去遮罩含描邊 r>=49、40 實例多實例 ID 唯一），含 v6.664 (b390744e) HEAD-FAIL 與移除遮罩／恢復光暈滲透／移除備援裁切突變。
  *   3. 桌機 1280px 與手機 393px 深／淺色大廳房間連結高對比（>=4.5:1）、鍵盤 Enter/Space 與不誤觸加入／觀戰按鈕。
- *   4. Rule 40 精確歷史還原鏈（revertV6664IfPresent 還原至 0329ee55 且對歷史為 no-op）。
+ *   4. Rule 40 精確歷史還原鏈（revertV6665IfPresent 還原至 b390744e、revertV6664IfPresent 還原至 0329ee55，且對歷史基準為 no-op）。
  *
  * Run: node scripts/test-v6664-lobby-and-frame-mask.mjs
  */
@@ -17,10 +17,13 @@ import { compile as svelteCompile } from 'svelte/compiler';
 import { normEol } from './lib/eol-agnostic.mjs';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
+import { cssOf } from './lib/svelte-style-block.mjs';
 import { V6664_PAIRS, revertV6664IfPresent } from './lib/revert-v6664-lobby-frame-fix.mjs';
+import { V6665_PAIRS, revertV6665IfPresent } from './lib/revert-v6665-glow-and-blank-uid.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_V6663 = '0329ee552aa25ca84fc7875a7ab3146a2b104900';
+const BASE_V6664 = 'b390744eb59dbda885b7b93fe40654c4664809b9';
 
 const API_PATH = 'src/lib/profile/profile-api.ts';
 const AV_PATH = 'src/lib/profile/AvatarCircle.svelte';
@@ -278,9 +281,11 @@ async function assertLobbyResolutionContract(apiSrc, srvSrc) {
   assert.strictEqual(resNormal.body.found, true);
   assert.strictEqual(resNormal.body.profileKey, 'pk_b');
 
-  // 6. 缺少 UID 的舊資料不可猜人（即使有 hostName / seat.name）
+  // 6. 缺少 UID 或僅空白 UID 的舊資料不可猜人（即使有 hostName / seat.name）
   assert.strictEqual(api.buildLobbyHostProfileTarget({ roomId: 'ABCD', hostName: 'Bob新入座' }), null, '缺 hostUid 不可猜 seatIdx:0');
+  assert.strictEqual(api.buildLobbyHostProfileTarget({ roomId: 'ABCD', hostUid: '   \t ', hostName: 'Bob新入座' }), null, '空白 hostUid 必須回 null');
   assert.strictEqual(api.buildLobbySeatProfileTarget({ roomId: 'ABCD', seats: [{ name: 'Bob新入座' }] }, 0), null, '缺 seat.uid 不可猜 seatIdx');
+  assert.strictEqual(api.buildLobbySeatProfileTarget({ roomId: 'ABCD', seats: [{ uid: '  \n ', name: 'Bob新入座' }] }, 0), null, '空白 seat.uid 必須回 null');
 
   // 7. 向後相容正對照：對戰頁／等待室僅傳 { roomCode, seatIdx }（不含 targetUid）照常解析該席
   const resSeatOnly = await viewProfile({ roomCode: 'ABCD', seatIdx: '0' });
@@ -323,6 +328,155 @@ async function buildFrameBundle({ apiSrc, avSrc } = {}) {
     return res.outputFiles[0].text;
   } finally {
     rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+/** 實際瀏覽器合成截圖檢查（量得到頁面 CSS drop-shadow 與 SVG filter 光暈）：逐款驗證 20 款內圓 r<46 為 0 像素、外圈具可見裝飾。 */
+async function assertBrowserCompositeScreenshotClean(browser, bundle) {
+  const ctx = await browser.newContext({ viewport: { width: 400, height: 400 }, deviceScaleFactor: 2 });
+  const pg = await ctx.newPage();
+  const pageErrors = [];
+  pg.on('pageerror', (e) => pageErrors.push(e.message));
+  try {
+    await pg.setContent(`<!DOCTYPE html><html><body style="margin:0;background:transparent;"><div id="comp-box" style="width:200px;height:200px;display:flex;align-items:center;justify-content:center;"></div><script>${bundle}</script></body></html>`);
+    const ids = await pg.evaluate(() => window.__api.AVATAR_FRAMES.map((f) => f.id));
+    assert.strictEqual(ids.length, 20, '應有 20 款外框可供合成截圖檢查');
+    for (const id of ids) {
+      await pg.evaluate((fid) => {
+        const box = document.getElementById('comp-box');
+        box.innerHTML = '';
+        // size=92 => 內圓直徑 92 CSS px 剛好對應 viewBox 140×140 內的 r=46（1 CSS px = 1 SVG unit）
+        window.__mountAvatar(box, { name: '測', size: 92, frame: fid, ring: false });
+        const inner = box.querySelector('.prof-avatar-circle');
+        if (inner) inner.style.visibility = 'hidden';
+      }, id);
+      const buf = await pg.locator('#comp-box').screenshot({ omitBackground: true });
+      const b64 = 'data:image/png;base64,' + buf.toString('base64');
+      const m = await pg.evaluate(async (url) => {
+        const img = await new Promise((res, rej) => {
+          const i = new Image();
+          i.onload = () => res(i);
+          i.onerror = rej;
+          i.src = url;
+        });
+        const c = document.createElement('canvas');
+        c.width = img.width;
+        c.height = img.height;
+        const x = c.getContext('2d');
+        x.drawImage(img, 0, 0);
+        const d = x.getImageData(0, 0, c.width, c.height).data;
+        const cx = c.width / 2;
+        const cy = c.height / 2;
+        const scale = c.width / 200;
+        let inside = 0;
+        let maxAlpha = 0;
+        let outside = 0;
+        for (let py = 0; py < c.height; py++) {
+          for (let px = 0; px < c.width; px++) {
+            const a = d[(py * c.width + px) * 4 + 3];
+            if (a > 0) {
+              const r = Math.hypot((px + 0.5 - cx) / scale, (py + 0.5 - cy) / scale);
+              if (r < 46) {
+                inside++;
+                if (a > maxAlpha) maxAlpha = a;
+              } else if (a > 32) {
+                outside++;
+              }
+            }
+          }
+        }
+        return { inside, maxAlpha, outside };
+      }, b64);
+      assert.strictEqual(m.inside, 0, `瀏覽器合成截圖外框 ${id} 內圓 r<46 不可有外框／光暈像素，實得 ${m.inside} (maxAlpha=${m.maxAlpha})`);
+      assert.ok(m.outside >= 8000, `瀏覽器合成截圖外框 ${id} 外圈裝飾不足：${m.outside}`);
+    }
+    assert.deepStrictEqual(pageErrors, [], '瀏覽器合成截圖檢查不可有 JS 錯誤：' + pageErrors.join('; '));
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** 強制走 Canvas PNG 備援（SVG 外框載入失敗但保留固定頭像），逐像素驗證內圓零改動、外圈有備援裝飾且可匯出 PNG。 */
+async function assertCanvasFallbackPixelClean(browser, bundle) {
+  const ctx = await browser.newContext({ viewport: { width: 900, height: 600 } });
+  const pg = await ctx.newPage();
+  const pageErrors = [];
+  pg.on('pageerror', (e) => pageErrors.push(e.message));
+  try {
+    await pg.setContent(`<!DOCTYPE html><html><body><script>${bundle}</script></body></html>`);
+    const fb = await pg.evaluate(async () => {
+      const api = window.__api;
+      const sc = document.createElement('canvas');
+      sc.width = 160;
+      sc.height = 224;
+      const sx = sc.getContext('2d');
+      sx.fillStyle = '#00ff88';
+      sx.fillRect(0, 0, 160, 224);
+      const avUrl = sc.toDataURL('image/png');
+      const blankC = document.createElement('canvas');
+      blankC.width = 2;
+      blankC.height = 2;
+      const blankUrl = blankC.toDataURL('image/png');
+
+      const card = {
+        found: true, profileKey: 'pk_1', nick: '測試', bio: '',
+        avatar: { cardId: '19145', x: 0.5, y: 0.5, zoom: 1.4 },
+        avatarFrame: 'admin_gold',
+        googleVerified: true, champOfficial: 1, champCommunity: 0, totalWins: 5,
+        showTotalWins: true, showOfficialCrowns: true, showCommunityCrowns: true,
+        pinnedHonors: [], canFriend: false, friendStatus: 'self',
+      };
+      const loadWithBlankFrame = (u) => new Promise((res) => {
+        const i = new Image();
+        i.onload = () => res(i);
+        i.onerror = () => res(null);
+        i.src = String(u).startsWith('data:image/svg+xml') ? blankUrl : avUrl;
+      });
+      const loadFallbackOnlyAvatar = (u) => new Promise((res) => {
+        if (String(u).startsWith('data:image/svg+xml')) return res(null);
+        const i = new Image();
+        i.onload = () => res(i);
+        i.onerror = () => res(null);
+        i.src = avUrl;
+      });
+      const baseC = await api.renderProfileCardToCanvas(card, { loadImage: loadWithBlankFrame });
+      const fbC = await api.renderProfileCardToCanvas(card, { loadImage: loadFallbackOnlyAvatar });
+      const bd = baseC.getContext('2d').getImageData(0, 0, baseC.width, baseC.height).data;
+      const fd = fbC.getContext('2d').getImageData(0, 0, fbC.width, fbC.height).data;
+      const AV_CX = 32 + 72 + 18;
+      const AV_CY = 96 + 22;
+      const AV_R = 72;
+      let modified = 0;
+      let deltaMax = 0;
+      let outerDiff = 0;
+      for (let dy = -AV_R - 30; dy <= AV_R + 30; dy++) {
+        for (let dx = -AV_R - 30; dx <= AV_R + 30; dx++) {
+          const dist = Math.hypot(dx + 0.5, dy + 0.5);
+          const idx = ((AV_CY + dy) * fbC.width + (AV_CX + dx)) * 4;
+          const diff = Math.max(Math.abs(fd[idx] - bd[idx]), Math.abs(fd[idx + 1] - bd[idx + 1]), Math.abs(fd[idx + 2] - bd[idx + 2]));
+          if (dist < AV_R) {
+            if (diff > 0) {
+              modified++;
+              if (diff > deltaMax) deltaMax = diff;
+            }
+          } else if (dist >= AV_R + 1 && dist <= AV_R + 28) {
+            if (diff > 20) outerDiff++;
+          }
+        }
+      }
+      return {
+        modified,
+        deltaMax,
+        outerDiff,
+        exportable: fbC.toDataURL('image/png').startsWith('data:image/png;base64,'),
+      };
+    });
+    assert.deepStrictEqual(pageErrors, [], 'Canvas 備援檢查不可有 JS 錯誤：' + pageErrors.join('; '));
+    assert.strictEqual(fb.exportable, true, '圖片載入失敗時 Canvas PNG 外框降級仍須可匯出');
+    assert.strictEqual(fb.modified, 0, `Canvas PNG 降級外框不可改動頭像內圓像素，實得 ${fb.modified} (deltaMax=${fb.deltaMax})`);
+    assert.ok(fb.outerDiff >= 1500, `Canvas PNG 降級外框外圈應有可見裝飾，實得 ${fb.outerDiff}`);
+  } finally {
+    await ctx.close();
   }
 }
 
@@ -455,7 +609,6 @@ async function assertAll20FramesPixelClean(browser, bundle) {
       };
       const pngPixelResults = [];
       for (const f of frames) {
-        // First check buildAvatarFrameSvgDataUrl rasterized at 280x280 has 0 pixels inside r < 46
         const svgUrl = api.buildAvatarFrameSvgDataUrl(f.id);
         const fImg = await new Promise((res, rej) => {
           const i = new Image();
@@ -487,7 +640,6 @@ async function assertAll20FramesPixelClean(browser, bundle) {
         const AV_R = 72;
         let innerCovered = 0;
         let outerDecorated = 0;
-        // Pure green #00ff88 inside r < AV_R - 1.5 (well inside ctx.clip AA) must remain pure green
         for (let y = AV_CY - AV_R - 30; y <= AV_CY + AV_R + 30; y++) {
           for (let x = AV_CX - AV_R - 30; x <= AV_CX + AV_R + 30; x++) {
             const dist = Math.hypot(x + 0.5 - AV_CX, y + 0.5 - AV_CY);
@@ -496,7 +648,6 @@ async function assertAll20FramesPixelClean(browser, bundle) {
             if (dist < AV_R - 1.5) {
               if (r > 12 || g < 240 || Math.abs(b - 136) > 12) innerCovered++;
             } else if (dist >= AV_R + 2 && dist <= AV_R + 28) {
-              // Card background is dark green (~#132219 / #214530); frame pixels differ markedly
               if (r > 55 || g > 90 || b > 75) outerDecorated++;
             }
           }
@@ -504,7 +655,6 @@ async function assertAll20FramesPixelClean(browser, bundle) {
         pngPixelResults.push({ id: f.id, svgDataUrlInside, innerCovered, outerDecorated, exportable: dataUrl.startsWith('data:image/png;base64,') });
       }
 
-      // Also verify PNG fallback when frame image fails to load (loadImage => null)
       const fbCanvas = await api.renderProfileCardToCanvas({ ...baseCard, avatarFrame: 'admin_gold' }, { loadImage: async () => null });
       const fbExportable = fbCanvas.toDataURL('image/png').startsWith('data:image/png;base64,');
 
@@ -541,8 +691,148 @@ async function assertAll20FramesPixelClean(browser, bundle) {
   }
 }
 
+/** 抽取真實 src/routes/game/+page.svelte 的等待中與對戰中房間清單模板並以 Svelte 5 編譯，驗證缺／空白／有效 UID 互動行為。 */
+function extractLobbyUlBlock(gameSrc, openTag) {
+  const start = gameSrc.indexOf(openTag);
+  assert.ok(start >= 0, '找不到大廳房間清單：' + openTag);
+  const end = gameSrc.indexOf('</ul>', start);
+  assert.ok(end > start, '找不到大廳房間清單結尾 </ul>：' + openTag);
+  return gameSrc.slice(start, end + 5);
+}
+
+async function buildLobbyTemplateBundle(gameSrc, apiSrc) {
+  const waitUl = extractLobbyUlBlock(gameSrc, '<ul class="open-room-list">');
+  const playUl = extractLobbyUlBlock(gameSrc, '<ul class="open-room-list playing-list">');
+  const svelteHarness = [
+    '<script>',
+    "  import { buildLobbyHostProfileTarget, buildLobbySeatProfileTarget } from './profile-api.ts';",
+    '  let { lobbyRooms = [], playingRooms = [], roomArchetypes = {}, onProfile = () => {}, onJoin = () => {} } = $props();',
+    '  const onlineLoading = false;',
+    "  const myName = '測試玩家';",
+    "  const hostPresence = () => 'online';",
+    "  const fmtRoomAge = () => '1分';",
+    '  function openProfileModal(t) { onProfile(t); }',
+    '  function openLobbyHostProfile(r) { const t = buildLobbyHostProfileTarget(r); if (t) openProfileModal(t); }',
+    '  function openLobbySeatProfile(r, seatIdx) { const t = buildLobbySeatProfileTarget(r, seatIdx); if (t) openProfileModal(t); }',
+    '  function handleJoinFromList(roomId) { onJoin(roomId); }',
+    '</script>',
+    '<div class="lobby"><div class="online-form lobby-unified">',
+    '<div id="wait-sec">' + waitUl + '</div>',
+    '<div id="play-sec">' + playUl + '</div>',
+    '</div></div>',
+  ].join('\n');
+
+  const tmp = mkdtempSync(join(tmpdir(), 'v6665-lobby-'));
+  try {
+    writeFileSync(join(tmp, 'profile-api.ts'), apiSrc ?? read(API_PATH));
+    const compiled = svelteCompile(svelteHarness, { generate: 'client', css: 'injected', filename: 'LobbyRoomsHarness.svelte' });
+    writeFileSync(join(tmp, 'LobbyRoomsHarness.js'), compiled.js.code);
+    writeFileSync(join(tmp, 'entry.js'), [
+      "import { mount } from 'svelte';",
+      "import LobbyRoomsHarness from './LobbyRoomsHarness.js';",
+      "window.__mountLobby = (target, props) => mount(LobbyRoomsHarness, { target, props });",
+    ].join('\n'));
+    const res = await esbuildBuild({
+      entryPoints: [join(tmp, 'entry.js')],
+      bundle: true,
+      format: 'iife',
+      write: false,
+      nodePaths: [join(ROOT, 'node_modules')],
+      plugins: [{
+        name: 'stubs',
+        setup(b) {
+          b.onResolve({ filter: /^\$lib\/cards\/pool$/ }, () => ({ path: 'pool', namespace: 's' }));
+          b.onLoad({ filter: /^pool$/, namespace: 's' }, () => ({ contents: 'export const loadIndex=async()=>null;export const loadSet=async()=>[];export const loadAllSets=async()=>[];export const loadCardSetMap=async()=>({});' }));
+        },
+      }],
+    });
+    return res.outputFiles[0].text;
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+async function assertLobbyUidTemplateBehavior(browser, gameSrc, apiSrc) {
+  const bundle = await buildLobbyTemplateBundle(gameSrc, apiSrc);
+  const ctx = await browser.newContext({ viewport: { width: 900, height: 800 } });
+  const pg = await ctx.newPage();
+  const pageErrors = [];
+  pg.on('pageerror', (e) => pageErrors.push(e.message));
+  try {
+    await pg.setContent(`<!DOCTYPE html><html><body><div id="root"></div><script>${bundle}</script></body></html>`);
+    await pg.evaluate(() => {
+      window.__opened = [];
+      window.__joins = [];
+      window.__mountLobby(document.getElementById('root'), {
+        lobbyRooms: [
+          { roomId: 'W_OK', hostUid: '  uid_host_ok  ', hostName: '正常房主', createdAt: Date.now(), seats: [{ uid: '  uid_host_ok  ', name: '正常房主' }] },
+          { roomId: 'W_WS', hostUid: '   \t ', hostName: '空白房主', createdAt: Date.now(), seats: [{ uid: '   \t ', name: '空白房主' }] },
+          { roomId: 'W_NO', hostName: '無UID房主', createdAt: Date.now(), seats: [{ name: '無UID房主' }] },
+        ],
+        playingRooms: [
+          { roomId: 'P_OK', hostName: '快速開局', seats: [{ uid: 'uid_p1', name: 'LIN' }, { uid: '  uid_p2  ', name: 'hsuboyuan' }] },
+          { roomId: 'P_WS', hostName: '空白對戰', seats: [{ uid: '   ', name: '空白P1' }, { uid: '', name: '缺UIDP2' }] },
+          { roomId: 'P_WS2', hostName: '空白對戰2', seats: [{ uid: '', name: '缺UIDP1' }, { uid: ' \t ', name: '空白P2' }] },
+        ],
+        roomArchetypes: { P_OK: { p1: '超級龍頭地鼠', p2: '魔靈烈箭鷹' } },
+        onProfile: (t) => window.__opened.push(t),
+        onJoin: (id) => window.__joins.push(id),
+      });
+    });
+
+    const inspect = await pg.evaluate(() => {
+      const waitRows = Array.from(document.querySelectorAll('#wait-sec .open-room-row'));
+      const playRows = Array.from(document.querySelectorAll('#play-sec .open-room-row'));
+      const info = (row) => ({
+        metaText: row.querySelector('.or-meta')?.textContent || '',
+        btnCount: row.querySelectorAll('.or-meta [role="button"], .or-meta .or-prof-link').length,
+      });
+      return {
+        wOk: info(waitRows[0]),
+        wWs: info(waitRows[1]),
+        wNo: info(waitRows[2]),
+        pOk: info(playRows[0]),
+        pWs: info(playRows[1]),
+        pWs2: info(playRows[2]),
+      };
+    });
+
+    assert.deepStrictEqual(pageErrors, [], '大廳模板不可有 JS 錯誤：' + pageErrors.join('; '));
+    assert.strictEqual(inspect.wOk.btnCount, 1, '有效 hostUid 應顯示 1 個可點按鈕');
+    assert.strictEqual(inspect.wWs.btnCount, 0, '空白 hostUid 不可顯示無效按鈕（應維持純文字）');
+    assert.ok(inspect.wWs.metaText.includes('空白房主'), '空白 hostUid 仍須保留房主名稱純文字');
+    assert.strictEqual(inspect.wNo.btnCount, 0, '缺少 hostUid 不可顯示按鈕');
+    assert.ok(inspect.wNo.metaText.includes('無UID房主'), '缺少 hostUid 仍須保留房主名稱純文字');
+
+    assert.strictEqual(inspect.pOk.btnCount, 2, '有效 P1/P2 UID 應顯示 2 個可點按鈕');
+    assert.strictEqual(inspect.pWs.btnCount, 0, '空白或缺少 UID 的對戰雙方不可顯示無效按鈕');
+    assert.ok(inspect.pWs.metaText.includes('空白P1') && inspect.pWs.metaText.includes('缺UIDP2'), '空白／缺 UID 對戰雙方仍須保留純文字名稱');
+    assert.strictEqual(inspect.pWs2.btnCount, 0, 'P2 空白或 P1 缺少 UID 不可顯示無效按鈕');
+    assert.ok(inspect.pWs2.metaText.includes('缺UIDP1') && inspect.pWs2.metaText.includes('空白P2'), 'P2 空白／P1 缺 UID 仍須保留純文字名稱');
+
+    // 實測有效 UID：滑鼠點擊、Enter、Space，且送出已 trim 的正規化目標，不觸發加入／觀戰
+    await pg.locator('#wait-sec .open-room-row').nth(0).locator('.or-prof-link').click();
+    const p1Btn = pg.locator('#play-sec .open-room-row').nth(0).locator('.or-prof-link').nth(0);
+    const p2Btn = pg.locator('#play-sec .open-room-row').nth(0).locator('.or-prof-link').nth(1);
+    await p1Btn.focus();
+    await pg.keyboard.press('Enter');
+    await p2Btn.focus();
+    await pg.keyboard.press('Space');
+
+    const res = await pg.evaluate(() => ({ opened: window.__opened, joins: window.__joins }));
+    assert.deepStrictEqual(res.joins, [], '點擊有效玩家連結絕不可誤觸加入／觀戰');
+    assert.deepStrictEqual(res.opened, [
+      { roomCode: 'W_OK', targetUid: 'uid_host_ok', fallbackNick: '正常房主' },
+      { roomCode: 'P_OK', targetUid: 'uid_p1', fallbackNick: 'LIN' },
+      { roomCode: 'P_OK', targetUid: 'uid_p2', fallbackNick: 'hsuboyuan' },
+    ], '點擊／鍵盤操作必須傳遞正規化後的 targetUid 與 roomCode');
+  } finally {
+    await ctx.close();
+  }
+}
+
 console.log('\n【A】大廳玩家名稱入口與後端 _profResolveTarget 實際整合與反證');
-await T('A1 現行大廳入口與後端：換人絕不開錯、換座命中、刪房退回 UID、查無回 found:false、缺 UID 不猜人與純 seatIdx 相容', () =>
+await T('A1 現行大廳入口與後端：換人絕不開錯、換座命中、刪房退回 UID、查無回 found:false、缺／空白 UID 不猜人與純 seatIdx 相容', () =>
   assertLobbyResolutionContract(read(API_PATH), read(SRV_PATH)));
 
 await T('A2 舊提交 v6.663 (0329ee55) 反證：「點 A 卻開 B」必須確實重現並翻紅', async () => {
@@ -580,7 +870,7 @@ await T('A3 真實突變：後端把 seatIdx 移回 targetUid 之前 ⇒ 同時�
   await mutantMustBreak('M_seatIdx_before_targetUid', () => assertLobbyResolutionContract(read(API_PATH), mutSrv), '不可改開另一人');
 });
 
-console.log('\n【B】20 款 SVG 外框逐款實際像素檢查（瀏覽器 SVG + Canvas PNG）＋移除遮罩雙突變');
+console.log('\n【B】20 款 SVG 外框逐款實際像素檢查（瀏覽器 SVG + 合成截圖 + Canvas PNG + 強制備援）＋HEAD-FAIL 與突變');
 const chromium = await pwChromium();
 if (chromium) {
   const browser = await pwLaunchWith(chromium, 'v6.664');
@@ -589,6 +879,11 @@ if (chromium) {
       const okBundle = await buildFrameBundle();
       await T('B1 20 款瀏覽器 DOM SVG 與 780px Canvas PNG 逐款像素檢查（內圓 r<46 零遮擋、外圈有裝飾、40 實例 ID 唯一、星環外弧 >=49）', () =>
         assertAll20FramesPixelClean(browser, okBundle));
+
+      await T('B1b 20 款實際 AvatarCircle 瀏覽器合成截圖（element.screenshot）與強制 Canvas PNG 備援像素檢查（內圓零光暈／陰影侵入、外圈有裝飾）', async () => {
+        await assertBrowserCompositeScreenshotClean(browser, okBundle);
+        await assertCanvasFallbackPixelClean(browser, okBundle);
+      });
 
       await T('B2 真實突變：停用 AvatarCircle SVG 內圓遮罩與停用 PNG SVG 內圓遮罩兩條皆必紅', async () => {
         const av = read(AV_PATH);
@@ -603,7 +898,6 @@ if (chromium) {
         const badPngBundle = await buildFrameBundle({ apiSrc: apiNoMask });
         await mutantMustBreak('M_disable_png_mask', () => assertAll20FramesPixelClean(browser, badPngBundle), 'PNG 用 SVG 外框');
 
-        // 額外確認：即使外框幾何出現跨過圓心的測試線段，有遮罩時 PNG 仍 0 像素遮擋，去遮罩時必紅
         const apiWithCross = api.replace(
           "{ t: 'circle', cx: 70, cy: 70, r: 49.6, stroke: '#2d1d04', sw: 6.2 },",
           "{ t: 'circle', cx: 70, cy: 70, r: 49.6, stroke: '#2d1d04', sw: 6.2 },{ t: 'line', x1: 20, y1: 70, x2: 120, y2: 70, stroke: '#ff0000', sw: 6 },",
@@ -615,12 +909,44 @@ if (chromium) {
         await mutantMustBreak('M_unmasked_center_line_png', () => assertAll20FramesPixelClean(browser, unmaskedCrossBundle), 'PNG 用 SVG 外框');
       });
 
-      console.log('\n【C】深／淺色大廳房間玩家連結對比度、鍵盤與不誤觸加入／觀戰（桌機 1280px 與手機 393px）');
+      await T('B3 v6.664 (b390744e) HEAD-FAIL ＋ 2 項獨立突變（恢復瀏覽器 CSS 光暈滲透、移除 Canvas 備援外圈裁切）各自必紅', async () => {
+        if (hasBaseCommit(ROOT, BASE_V6664)) {
+          const oldAv = readBaseBlob(ROOT, BASE_V6664, AV_PATH);
+          const oldApi = readBaseBlob(ROOT, BASE_V6664, API_PATH);
+          assert.ok(oldAv.ok && oldApi.ok, '讀取 b390744e 外框檔案失敗');
+          const oldAvBundle = await buildFrameBundle({ avSrc: normEol(oldAv.out), apiSrc: normEol(oldApi.out) });
+          await mutantMustBreak('HEAD_FAIL_v6664_css_glow_bleed', () => assertBrowserCompositeScreenshotClean(browser, oldAvBundle), '瀏覽器合成截圖外框');
+          await mutantMustBreak('HEAD_FAIL_v6664_canvas_fallback_shadow', () => assertCanvasFallbackPixelClean(browser, oldAvBundle), 'Canvas PNG 降級外框');
+        } else {
+          shallowSkip('v6665 B3 HEAD-FAIL', '需要 b390744e commit');
+        }
+
+        // 突變 1：把 drop-shadow 移回外層 .prof-av-frame-svg（繞過 SVG 內圓 mask）
+        const av = read(AV_PATH);
+        const avBleed = av
+          .replace(
+            '  style:height={`${size}px`}\n>',
+            '  style:height={`${size}px`}\n  style:--pf-glow={frameSpec?.glow ?? \'transparent\'}\n>',
+          )
+          .replace(
+            '    overflow: visible;\n  }\n  .prof-avatar-circle',
+            '    overflow: visible;\n    filter: drop-shadow(0 0 3px var(--pf-glow, transparent));\n  }\n  .prof-avatar-circle',
+          );
+        assert.notStrictEqual(avBleed, av, 'B3 突變 1 錨點未命中');
+        const mutGlowBundle = await buildFrameBundle({ avSrc: avBleed });
+        await mutantMustBreak('M_restore_css_drop_shadow_bleed', () => assertBrowserCompositeScreenshotClean(browser, mutGlowBundle), '瀏覽器合成截圖外框');
+
+        // 突變 2：移除 Canvas PNG 備援的 evenodd 外圈裁切（陰影重新侵入頭像內圓）
+        const api = read(API_PATH);
+        const apiNoFbClip = api.replace("      ctx.clip('evenodd');\n", '');
+        assert.notStrictEqual(apiNoFbClip, api, 'B3 突變 2 錨點未命中');
+        const mutFbBundle = await buildFrameBundle({ apiSrc: apiNoFbClip });
+        await mutantMustBreak('M_remove_canvas_fallback_clip', () => assertCanvasFallbackPixelClean(browser, mutFbBundle), 'Canvas PNG 降級外框');
+      });
+
+      console.log('\n【C】深／淺色大廳房間玩家連結對比度、真實模板缺／空白／有效 UID 對照與互動');
       await T('C1 深／淺色大廳房間連結對比 >=4.5:1、字色異於一般文字、鍵盤 Enter/Space 與不觸發加入／觀戰', async () => {
         const gameSrc = read(GAME_PATH);
-        const styleStart = gameSrc.lastIndexOf('\n<style>');
-        const styleEnd = gameSrc.lastIndexOf('</style>');
-        assert.ok(styleStart > 0 && styleEnd > styleStart);
         // Unwrap Svelte :global(...) handling nested parens such as :not(...)
         function unwrapGlobalCss(css) {
           let out = '';
@@ -641,7 +967,7 @@ if (chromium) {
           }
           return out;
         }
-        const rawCss = unwrapGlobalCss(gameSrc.slice(styleStart + 8, styleEnd).replace(/\/\*[\s\S]*?\*\//g, ''));
+        const rawCss = unwrapGlobalCss(cssOf(gameSrc, GAME_PATH).replace(/\/\*[\s\S]*?\*\//g, ''));
 
         const checkViewport = async (vp) => {
           const ctx = await browser.newContext({ viewport: vp });
@@ -733,7 +1059,6 @@ if (chromium) {
             assert.ok(light.underlineContrast >= 4.5, `${vp.width}px 淺色底線對比不足：${light.underlineContrast.toFixed(2)}`);
             assert.notStrictEqual(light.linkColor, light.metaColor, '淺色連結文字色不可與一般灰色資訊同色');
 
-            // Test mouse click + keyboard Enter/Space without triggering join/spectate/row click
             await pg.locator('#lnk-host').click();
             await pg.locator('#lnk-p1').focus();
             await pg.keyboard.press('Enter');
@@ -756,6 +1081,52 @@ if (chromium) {
         await checkViewport({ width: 1280, height: 800 });
         await checkViewport({ width: 393, height: 852 });
       });
+
+      await T('C2 真實大廳模板：缺 UID／空白 UID 維持純文字、有效 UID 滑鼠與 Enter/Space 皆可用 ＋ v6.664 HEAD-FAIL 與空白 UID 突變必紅', async () => {
+        const gameSrc = read(GAME_PATH);
+        const apiSrc = read(API_PATH);
+        await assertLobbyUidTemplateBehavior(browser, gameSrc, apiSrc);
+
+        if (hasBaseCommit(ROOT, BASE_V6664)) {
+          const oldGame = readBaseBlob(ROOT, BASE_V6664, GAME_PATH);
+          const oldApi = readBaseBlob(ROOT, BASE_V6664, API_PATH);
+          assert.ok(oldGame.ok && oldApi.ok, '讀取 b390744e 大廳原始碼失敗');
+          await mutantMustBreak(
+            'HEAD_FAIL_v6664_blank_uid_button',
+            () => assertLobbyUidTemplateBehavior(browser, normEol(oldGame.out), normEol(oldApi.out)),
+            '空白 hostUid 不可顯示無效按鈕',
+          );
+        } else {
+          shallowSkip('v6665 C2 HEAD-FAIL', '需要 b390744e commit');
+        }
+
+        // 突變 3a：房主條件恢復以原始 r.hostUid 判斷
+        const mutHost = gameSrc.replace('{#if _hostTarget}', '{#if r.hostUid}');
+        assert.notStrictEqual(mutHost, gameSrc, 'C2 突變 3a 錨點未命中');
+        await mutantMustBreak(
+          'M_restore_raw_host_uid_truthy',
+          () => assertLobbyUidTemplateBehavior(browser, mutHost, apiSrc),
+          '空白 hostUid 不可顯示無效按鈕',
+        );
+
+        // 突變 3b：P1 條件恢復以原始 r.seats?.[0]?.uid 判斷
+        const mutSeat1 = gameSrc.replace('{#if _p1Target}', '{#if r.seats?.[0]?.uid}');
+        assert.notStrictEqual(mutSeat1, gameSrc, 'C2 突變 3b 錨點未命中');
+        await mutantMustBreak(
+          'M_restore_raw_seat1_uid_truthy',
+          () => assertLobbyUidTemplateBehavior(browser, mutSeat1, apiSrc),
+          '空白或缺少 UID 的對戰雙方不可顯示無效按鈕',
+        );
+
+        // 突變 3c：P2 條件恢復以原始 r.seats?.[1]?.uid 判斷
+        const mutSeat2 = gameSrc.replace('{#if _p2Target}', '{#if r.seats?.[1]?.uid}');
+        assert.notStrictEqual(mutSeat2, gameSrc, 'C2 突變 3c 錨點未命中');
+        await mutantMustBreak(
+          'M_restore_raw_seat2_uid_truthy',
+          () => assertLobbyUidTemplateBehavior(browser, mutSeat2, apiSrc),
+          'P2 空白或 P1 缺少 UID 不可顯示無效按鈕',
+        );
+      });
     } finally {
       await browser.close();
     }
@@ -763,20 +1134,39 @@ if (chromium) {
 }
 
 console.log('\n【D】Rule 40 精確還原鏈與更新紀錄隔離');
-await T('D1 revertV6664IfPresent 逐字還原回 v6.663 (0329ee55) 且對歷史基準為 no-op', () => {
-  if (!hasBaseCommit(ROOT, BASE_V6663)) { shallowSkip('v6664 D1 還原鏈', '需要 0329ee55 commit'); return; }
+await T('D1 revertV6665IfPresent 還原至 v6.664 (b390744e) 且 revertV6664IfPresent 還原至 v6.663 (0329ee55)，對歷史基準皆為 no-op', () => {
+  if (!hasBaseCommit(ROOT, BASE_V6664) || !hasBaseCommit(ROOT, BASE_V6663)) {
+    shallowSkip('v6664/v6665 D1 還原鏈', '需要 b390744e 與 0329ee55 commit');
+    return;
+  }
+  for (const rel of Object.keys(V6665_PAIRS)) {
+    const base664 = readBaseBlob(ROOT, BASE_V6664, rel);
+    assert.ok(base664.ok, '缺少 b390744e blob: ' + rel);
+    const bNorm = normEol(base664.out);
+    assert.strictEqual(revertV6665IfPresent(rel, read(rel)), bNorm, '無法精確還原至 b390744e：' + rel);
+    assert.strictEqual(revertV6665IfPresent(rel, bNorm), bNorm, '對 b390744e 必須為 no-op：' + rel);
+  }
   for (const rel of Object.keys(V6664_PAIRS)) {
-    const base = readBaseBlob(ROOT, BASE_V6663, rel);
-    assert.ok(base.ok, '缺少 0329ee55 blob: ' + rel);
-    const bNorm = normEol(base.out);
+    const base663 = readBaseBlob(ROOT, BASE_V6663, rel);
+    assert.ok(base663.ok, '缺少 0329ee55 blob: ' + rel);
+    const bNorm = normEol(base663.out);
     assert.strictEqual(revertV6664IfPresent(rel, read(rel)), bNorm, '無法精確還原至 0329ee55：' + rel);
     assert.strictEqual(revertV6664IfPresent(rel, bNorm), bNorm, '對 0329ee55 必須為 no-op：' + rel);
   }
-  const adm = read(ADMIN_PATH);
-  assert.ok(adm.includes("ver:'v6.664'") && adm.includes("window.SITE_VERSION_HINT = '6.664'"));
-  const ch = read(CHLOG_PATH);
-  assert.ok(ch.includes('v6.664') && !ch.includes('_profResolveTarget') && !ch.includes('server_admin_patch'));
 });
 
-console.log(`\n══ v6.664 大廳名片 UID 解析與 20 款外框內圓保護守衛：${pass} PASS / ${fail} FAIL ══`);
+await T('D2 後台版本提示動態同步 version.ts 且公開 changelog 不外洩內部實作關鍵字（淺複製亦執行）', () => {
+  const verMatch = /export\s+const\s+VERSION\s*=\s*'([^']+)'/.exec(read('src/lib/version.ts'));
+  assert.ok(verMatch && verMatch[1], '讀不到 src/lib/version.ts 的 VERSION');
+  const curVer = verMatch[1];
+  const adm = read(ADMIN_PATH);
+  assert.ok(adm.includes("ver:'v6.665'"), 'admin.html 必須保留 v6.665 內部紀錄');
+  assert.ok(adm.includes(`window.SITE_VERSION_HINT = '${curVer}'`), `admin.html SITE_VERSION_HINT 必須同步為 ${curVer}`);
+  const ch = read(CHLOG_PATH);
+  const allPublicCh = ch + '\n' + read('static/changelog-archive.html');
+  assert.ok(allPublicCh.includes('v6.665'), '公開更新紀錄（首頁或封存頁）應包含 v6.665');
+  assert.ok(!ch.includes('_profResolveTarget') && !ch.includes('server_admin_patch') && !ch.includes('shadowBlur'), '公開首頁 changelog 不可外洩後台／內部實作字眼');
+});
+
+console.log(`\n══ v6.664/v6.665 大廳名片 UID 解析與 20 款外框內圓／光暈保護守衛：${pass} PASS / ${fail} FAIL ══`);
 if (fail) process.exit(1);
