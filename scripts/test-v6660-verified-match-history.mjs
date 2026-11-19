@@ -168,6 +168,7 @@ for (const [label, body, mutateRoom] of [
   ['非勝方憑證', { authorization: 'Bearer opponent' }],
   ['本機雙人', { mode: 'local' }],
   ['AI', { vsAI: true }],
+  ['同一帳號雙開', {}, room => { room.seats[1].email = ' winner@EXAMPLE.test '; }],
   ['首回合未進場', {}, room => { room.gameState.turn = 1; room.gameState.winReason = '無回應'; }],
   ['房間未完成', {}, room => { room.status = 'playing'; }],
   ['不同勝方', { winner: 1 }],
@@ -176,7 +177,14 @@ for (const [label, body, mutateRoom] of [
   mutateRoom?.(h.room);
   assert.equal((await h.report({ authorization: 'Bearer member', ...body })).profileVerifiedWinner, undefined, label);
 }
-console.log('PASS 正常線上終局與八種排除案例');
+console.log('PASS 正常線上終局與九種排除案例');
+
+const withoutSameAccountCheck = source.replace('      if (firstEmail && firstEmail === secondEmail) return null;\n', '');
+assert.notEqual(withoutSameAccountCheck, source);
+const sameAccount = createReportHarness(withoutSameAccountCheck);
+sameAccount.room.seats[1].email = ' winner@EXAMPLE.test ';
+assert.equal((await sameAccount.report({ authorization: 'Bearer member' })).profileVerifiedWinner, 'winner@example.test');
+console.log('PASS 同一帳號雙開的判準移除後會誤記勝場');
 
 const withoutGameCheck = source.replace("state.id !== doc._id || state.winner", 'state.winner');
 assert.notEqual(withoutGameCheck, source);

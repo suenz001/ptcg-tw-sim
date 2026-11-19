@@ -229,6 +229,7 @@ function makeFakeDb() {
       const arr = getCol(name);
       return {
         createIndex: async (spec, opts) => { indexes.push({ name, spec, opts }); return 'idx'; },
+        indexes: async () => indexes.filter(index => index.name === name).map(({ spec }) => ({ key: spec })),
         findOne: async (q, opts) => {
           const hit = arr.find((d) => matchSingle(d, q));
           return hit ? project(hit, opts?.projection) : null;
@@ -265,7 +266,7 @@ function makeFakeDb() {
   };
 }
 
-function buildBackendHarness(srcOverride, friendFeatureOn = true) {
+function buildBackendHarness(srcOverride, friendFeatureOn = true, clock = Date.now) {
   const srv = srcOverride ?? read(SRV_PATH);
   const block = extractProfileServerBlock(srv);
   assert.ok(!block.includes("app.get('/api/tournament"), '⚠ v187 內出現 app.get(/api/tournament 字面，會打亂 TAIL 錨點');
@@ -316,14 +317,14 @@ function buildBackendHarness(srcOverride, friendFeatureOn = true) {
     'app', 'db', 'TADMIN', 'TPOOL',
     '_frNormEmail', '_frPairId', '_frFid', '_frNick',
     'FR_COLL', 'FR_REG_COLL', 'FR_ID_COLL', 'FR_MAX_FRIENDS', 'FR_REJECT_COOLDOWN_MS',
-    'friendsEnabled', 'tournIdentity', 'isTournAdmin', '_chatRate',
+    'friendsEnabled', 'tournIdentity', 'isTournAdmin', '_chatRate', 'Date',
     block
   );
   fn(
     app, db, TADMIN, TPOOL,
     normE, pairId, fidOf, (s) => String(s || '').trim().slice(0, 16),
     'friendships', 'tournamentRegistrations', 'playerIdentity', 100, 86400000,
-    async () => friendFeatureOn, tournIdentity, isTournAdmin, new Map()
+    async () => friendFeatureOn, tournIdentity, isTournAdmin, new Map(), class extends Date { static now() { return clock(); } }
   );
 
   const invoke = async (method, path, { token, query = {}, body = {} } = {}) => {
@@ -590,6 +591,122 @@ await T('B5 同帳號併發統計只查一次，查詢失敗不寫入快取', as
   assert.equal((await run()).body.profile.casualOnlineWins, 2);
   assert.equal((await run()).body.profile.casualOnlineWins, 2);
   assert.equal(counts, 2);
+});
+
+async function assertWinIndexRecovery(src) {
+  let now = 100000;
+  const { db, invoke } = buildBackendHarness(src, true, () => now);
+  await new Promise(resolve => setImmediate(resolve));
+  await db.collection('tournamentArchives').insertOne({ eventId: 'champion', championUid: 'uA',
+    players: [{ uid: 'uA', email: 'alice@example.com' }], matches: [] });
+  const collect = db.collection.bind(db);
+  let indexed = false, checks = 0, builds = 0, counts = 0, scans = 0;
+  let holdStaleFailures = false;
+  const staleFailures = [];
+  db.collection = (name) => {
+    const col = collect(name);
+    if (name !== 'matchRecords') return col;
+    col.indexes = async (options) => {
+      assert.deepEqual(options, { maxTimeMS: 3000 });
+      checks++;
+      return indexed ? [{ key: { profileVerifiedWinner: 1 } }] : [];
+    };
+    col.createIndex = async (key, options) => {
+      assert.deepEqual(key, { profileVerifiedWinner: 1 });
+      assert.equal(options.sparse, true);
+      builds++;
+      throw new Error('首次重建暫時失敗');
+    };
+    col.find = () => { scans++; throw new Error('不得讀整份歷史戰報'); };
+    col.countDocuments = async (_query, options) => {
+      counts++;
+      assert.deepEqual(options, { hint: { profileVerifiedWinner: 1 }, maxTimeMS: 3000 });
+      if (holdStaleFailures) await new Promise(resolve => staleFailures.push(resolve));
+      if (!indexed) throw Object.assign(new Error('hint provided does not correspond to an existing index'), { code: 2 });
+      return 3;
+    };
+    return col;
+  };
+  const me = () => invoke('GET', '/api/player-profile/me', { token: 'tokA' });
+  const [own, other] = await Promise.all([me(), invoke('GET', '/api/player-profile/me', { token: 'tokB' })]);
+  assert.equal(own.statusCode, 200, '索引缺席時本人名片可用');
+  assert.equal(other.statusCode, 200);
+  assert.equal(own.body.profile.casualOnlineWins, 0);
+  assert.equal(own.body.profile.champOfficial, 1);
+  const view = await invoke('GET', '/api/player-profile/view', { query: { profileKey: own.body.profile.profileKey } });
+  assert.equal(view.statusCode, 200);
+  assert.equal(view.body.found, true);
+  assert.equal(view.body.champOfficial, 1);
+  const save = await invoke('POST', '/api/player-profile/save', { token: 'tokA', body: { nick: '新暱稱' } });
+  assert.equal(save.statusCode, 200);
+  assert.deepEqual({ checks, builds, counts, scans }, { checks: 1, builds: 1, counts: 0, scans: 0 });
+  now += 10001;
+  assert.equal((await me()).statusCode, 200);
+  assert.deepEqual({ checks, builds, counts }, { checks: 2, builds: 2, counts: 0 }, '暫時失敗後再次補建');
+  indexed = true;
+  now += 10001;
+  assert.equal((await me()).body.profile.casualOnlineWins, 3, '降級的 0 勝未進 60 秒快取');
+  assert.equal((await me()).body.profile.casualOnlineWins, 3);
+  assert.deepEqual({ checks, builds, counts, scans }, { checks: 3, builds: 2, counts: 1, scans: 0 });
+
+  // 兩個帳號已送出帶 hint 的計數，索引此時被移除，第二個錯誤在補建嘗試結束後才到。
+  indexed = false;
+  holdStaleFailures = true;
+  const requests = ['tokA', 'tokB'].map(token => invoke('GET', '/api/player-profile/me', { token, query: { refresh: '1' } }));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(staleFailures.length, 2, '兩個請求都已用原本的索引就緒狀態');
+  for (let i = 0; i < requests.length; i++) {
+    staleFailures[i]();
+    const result = await requests[i];
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.body.profile.casualOnlineWins, 0);
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.deepEqual({ checks, builds, counts, scans }, { checks: 3, builds: 3, counts: 3, scans: 0 }, '遲到錯誤不可再次補建');
+}
+
+async function assertFirstShareDuplicate(src) {
+  const { db, invoke } = buildBackendHarness(src);
+  const collect = db.collection.bind(db);
+  let duplicates = 0;
+  db.collection = (name) => {
+    const col = collect(name);
+    if (name === 'playerProfiles') {
+      const update = col.updateOne;
+      col.updateOne = async (filter, fields, options) => {
+        if (!options?.upsert) return update(filter, fields, options);
+        if (filter._id === 'bob@example.com') throw Object.assign(new Error('其他寫入失敗'), { code: 7 });
+        await update(filter, fields, options); // 模擬先到的請求已插入相同文件。
+        duplicates++;
+        throw Object.assign(new Error('duplicate key'), { code: 11000 });
+      };
+    }
+    return col;
+  };
+  const first = await invoke('GET', '/api/player-profile/me', { token: 'tokA' });
+  assert.equal(duplicates, 1);
+  assert.equal(first.statusCode, 200, '同一文件的並行 E11000 應讀回名片');
+  const shared = await invoke('GET', '/api/player-profile/view', { query: { profileKey: first.body.profile.profileKey } });
+  assert.equal(shared.body.found, true);
+  assert.equal((await invoke('GET', '/api/player-profile/me', { token: 'tokB' })).statusCode, 500);
+}
+
+await T('B6 勝場索引缺席保留名片與榮譽，重試後以 hint 恢復計數', async () => {
+  const source = read(SRV_PATH);
+  await assertWinIndexRecovery(source);
+  for (const mutant of [source.replace('      if (!(await _profWinIndexReady())) return null;\n', ''),
+    source.replace('if (!data.winIndexUnavailable)', 'if (true)'),
+    source.replace('if (_profWinIndexStatus === ready)', 'if (true)')]) {
+    assert.notEqual(mutant, source);
+    await mutantMustBreak('M_v6661_match_index', () => assertWinIndexRecovery(mutant));
+  }
+});
+await T('B7 初次分享並行插入只容錯 E11000', async () => {
+  const source = read(SRV_PATH);
+  await assertFirstShareDuplicate(source);
+  const mutant = source.replace('              if (e?.code !== 11000) throw e;', '              throw e;');
+  assert.notEqual(mutant, source);
+  await mutantMustBreak('M_v6661_profile_upsert', () => assertFirstShareDuplicate(mutant));
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

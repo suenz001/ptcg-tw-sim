@@ -4951,4 +4951,7 @@
   .pk-filters .pk-chip { min-height: 36px; min-width: 36px; box-sizing: border-box; }
   .pk-filters .pk-set-select { min-width: 0; max-width: 100%; min-height: 36px; }
   /* <<< v6656-aligned-filter-rows */
+  /* 共用篩選列在卡牌資料庫使用橫向 flex。編輯器直排時，依內容決定區塊高度。 */
+  .pk-filters > :global(.trait-filters),
+  .pk-filters > :global(.cost-filters) { flex-basis: auto; }
 </style>

@@ -1,6 +1,7 @@
 // v6.660 的精確歷史還原，供舊版守衛使用。
 import assert from 'node:assert/strict';
 import { normEol } from './eol-agnostic.mjs';
+import { revertV6661IfPresent } from './revert-v6661-deck-filter-layout.mjs';
 
 export const V6660_PAIRS = {
   "oracle-admin/admin.html": [
@@ -268,7 +269,7 @@ export const V6660_PAIRS = {
 const V6660_MARKERS = {"oracle-admin/admin.html":[0,1,2,3,4],"oracle-admin/server_admin_patch.js":[0,1,2,3,4,5,6,7,8,9,10,11,13,14,15],"src/lib/profile/AvatarCircle.svelte":[0,1],"src/lib/profile/PlayerProfileEditor.svelte":[0,1,2,3,4],"src/lib/profile/PlayerProfileModal.svelte":[0,1,2],"src/lib/profile/profile-api.ts":[0,1,2],"src/lib/version.ts":[0],"src/routes/deck-posts/+page.svelte":[0],"src/routes/friends/+page.svelte":[0,1,2,3],"src/routes/game/+page.svelte":[0,1,2,3,4,5,6,7,8,9,10],"static/changelog-archive.html":[0],"static/changelog-bodies.html":[0,1],"static/changelog.html":[0,1,2],"static/site-version.txt":[0]};
 
 export function revertV6660IfPresent(path, source) {
-  let text = normEol(String(source));
+  let text = revertV6661IfPresent(path, normEol(String(source)));
   const pairs = V6660_PAIRS[path];
   if (!pairs || V6660_MARKERS[path].every(index => !text.includes(pairs[index][0]))) return text;
   for (const [index, [from]] of pairs.entries()) {

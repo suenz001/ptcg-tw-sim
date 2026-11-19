@@ -1679,8 +1679,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
           (state.winner !== 0 && state.winner !== 1)) return null;
       const [first, second] = Array.isArray(room.seats) ? room.seats : [];
       if (!first?.uid || !second?.uid || first.uid === second.uid) return null;
-      const seat = state.winner === 0 ? first : second;
-      const email = mrEmail(seat.email);
+      const firstEmail = mrEmail(first.email);
+      const secondEmail = mrEmail(second.email);
+      if (firstEmail && firstEmail === secondEmail) return null;
+      const email = state.winner === 0 ? firstEmail : secondEmail;
       const token = /^Bearer\s+(.+)$/.exec(req.headers.authorization || '')?.[1];
       if (!email || !token || !Number.isInteger(state.turn) || state.turn < 1 ||
           (typeof state.winReason === 'string' && /無回應/.test(state.winReason) && state.turn < 2)) return null;
@@ -9236,6 +9238,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
     const _profGoogleCache = new Map();  // uid -> { at, googleVerified }
     const _profRateMap = new Map();      // key -> ts
     const _profChatRate = new Map();     // fallback chat rate limiter
+    const PROF_WIN_INDEX = { profileVerifiedWinner: 1 };
+    const PROF_WIN_INDEX_RETRY_MS = 10 * 1000;
+    const PROF_WIN_QUERY_MAX_MS = 3000;
+    let _profWinIndexStatus = null;
+    let _profWinIndexCheck = null;
+    let _profWinIndexCreation = null;
 
     try {
       db.collection(PROF_COLL).createIndex({ profileKey: 1 }, { unique: true, sparse: true }).catch(() => {});
@@ -9244,8 +9252,40 @@ import('firebase-admin').then(async ({ default: admin }) => {
       db.collection('tournamentArchives').createIndex({ 'players.email': 1 }, { sparse: true }).catch(() => {});
       db.collection('tournamentArchives').createIndex({ 'players.name': 1 }, { sparse: true }).catch(() => {});
       db.collection('tournamentEvents').createIndex({ proposerName: 1 }, { sparse: true }).catch(() => {});
-      db.collection('matchRecords').createIndex({ profileVerifiedWinner: 1 }, { sparse: true }).catch(() => {});
     } catch (_e) { /* db 尚未就緒時略過 */ }
+    _profEnsureWinIndex();
+
+    function _profEnsureWinIndex() {
+      if (_profWinIndexCreation) return;
+      try {
+        _profWinIndexCreation = db.collection('matchRecords').createIndex(PROF_WIN_INDEX, { sparse: true })
+          .catch(() => {}).finally(() => { _profWinIndexCreation = null; });
+      } catch (_e) { /* 索引狀態檢查會再試 */ }
+    }
+
+    async function _profWinIndexReady() {
+      const now = Date.now();
+      const status = _profWinIndexStatus;
+      if (status && now - status.at < (status.ok ? PROF_TTL_MS : PROF_WIN_INDEX_RETRY_MS)) return status.ok;
+      if (_profWinIndexCheck) return _profWinIndexCheck;
+      if (_profWinIndexCreation) return false;
+      const pending = (async () => {
+        let ok = false;
+        try {
+          const indexes = await db.collection('matchRecords').indexes({ maxTimeMS: PROF_WIN_QUERY_MAX_MS });
+          const matching = indexes.filter(({ key }) => key?.profileVerifiedWinner === 1 && Object.keys(key).length === 1);
+          ok = matching.some(({ hidden, buildUUID }) => !hidden && !buildUUID);
+          if (matching.length === 0) _profEnsureWinIndex();
+        } catch (e) {
+          if (e?.code === 26) _profEnsureWinIndex(); // 集合尚未建立
+        }
+        _profWinIndexStatus = { ok, at: Date.now() };
+        return ok;
+      })();
+      _profWinIndexCheck = pending;
+      try { return await pending; }
+      finally { _profWinIndexCheck = null; }
+    }
 
     function _profClampFrame(raw) {
       if (typeof raw !== 'string') return null;
@@ -9353,26 +9393,45 @@ import('firebase-admin').then(async ({ default: admin }) => {
       _profSummaryInFlight.set(em, pending);
       try {
         const data = await pending;
-        if (_profSummaryCache.size >= 1500) _profSummaryCache.delete(_profSummaryCache.keys().next().value);
-        _profSummaryCache.set(em, { at: Date.now(), data });
+        if (!data.winIndexUnavailable) {
+          if (_profSummaryCache.size >= 1500) _profSummaryCache.delete(_profSummaryCache.keys().next().value);
+          _profSummaryCache.set(em, { at: Date.now(), data });
+        }
         return data;
       } finally {
         _profSummaryInFlight.delete(em);
       }
     }
+    async function _profReadCasualWins(em) {
+      if (!(await _profWinIndexReady())) return null;
+      const ready = _profWinIndexStatus;
+      if (!ready?.ok) return null;
+      try {
+        return await db.collection('matchRecords').countDocuments({
+          profileVerifiedWinner: em, mode: 'online', vsAI: { $ne: true }, roomCode: /\S/,
+          $or: [{ winReason: { $not: /無回應/ } }, { finalTurn: { $gte: 2 } }],
+        }, { hint: PROF_WIN_INDEX, maxTimeMS: PROF_WIN_QUERY_MAX_MS });
+      } catch (e) {
+        // 索引可能在就緒檢查後才被移除，這時維持名片可用並等候索引重建。
+        if (e?.code !== 2 || !/hint provided does not correspond to an existing index/i.test(e.message || '')) throw e;
+        if (_profWinIndexStatus === ready) {
+          _profWinIndexStatus = { ok: false, at: Date.now() };
+          _profEnsureWinIndex();
+        }
+        return null;
+      }
+    }
+
     async function _profReadSummary(em) {
       const archColl = db.collection('tournamentArchives');
-      const mrColl = db.collection('matchRecords');
-      const [archives, casualOnlineWins] = await Promise.all([
+      const [archives, countedWins] = await Promise.all([
         archColl.find(
           { 'players.email': { $in: [em] } },
           { projection: { eventId: 1, eventName: 1, finishedAt: 1, startedAt: 1, createdAt: 1, communityEvent: 1, championUid: 1, players: 1, matches: 1 } }
         ).toArray(),
-        mrColl.countDocuments({
-          profileVerifiedWinner: em, mode: 'online', vsAI: { $ne: true }, roomCode: /\S/,
-          $or: [{ winReason: { $not: /無回應/ } }, { finalTurn: { $gte: 2 } }],
-        }, { hint: { profileVerifiedWinner: 1 }, maxTimeMS: 3000 }),
+        _profReadCasualWins(em),
       ]);
+      const casualOnlineWins = countedWins ?? 0;
       const cutFn = (app.locals && typeof app.locals._detectCutPlacements === 'function')
         ? app.locals._detectCutPlacements
         : (() => ({ finals: new Set(), top4: new Set(), top8: new Set() }));
@@ -9424,7 +9483,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
       }
       const totalWins = casualOnlineWins + tournamentWins;
       honors.sort((x, y) => (y.date || 0) - (x.date || 0));
-      return { champOfficial, champCommunity, casualOnlineWins, tournamentWins, totalWins, honors, lastDisplayName, lastUid };
+      return { champOfficial, champCommunity, casualOnlineWins, tournamentWins, totalWins, honors, lastDisplayName, lastUid,
+        winIndexUnavailable: countedWins === null };
     }
     async function _profEmailByUid(uid) {
       const u = String(uid || '').trim();
@@ -9717,8 +9777,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (!doc?.profileKey) {
           const profileKey = _profKeyForEmail(em);
           if (!doc) {
-            await profiles.updateOne({ _id: em },
-              { $setOnInsert: { profileKey, uid: me.uid, createdAt: Date.now() } }, { upsert: true });
+            try {
+              await profiles.updateOne({ _id: em },
+                { $setOnInsert: { profileKey, uid: me.uid, createdAt: Date.now() } }, { upsert: true });
+            } catch (e) {
+              if (e?.code !== 11000) throw e;
+              // 另一個請求可能已經建檔，下方統一讀回並驗證分享代號。
+            }
           } else {
             await profiles.updateOne({ _id: em, profileKey: { $in: [null, ''] } }, { $set: { profileKey } });
           }
