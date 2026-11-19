@@ -127,6 +127,8 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
     fetchMyProfile,
     fetchProfileBatch,
     buildSelfProfilePreview,
+    buildLobbyHostProfileTarget,
+    buildLobbySeatProfileTarget,
     type AvatarCrop,
     type AvatarFrameId,
     type PlayerProfilePublic,
@@ -1585,20 +1587,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
     profileModalTarget = t;
   }
   function openLobbyHostProfile(r: Room) {
-    if (!r?.roomId) return;
-    openProfileModal(r.hostUid
-      ? { roomCode: r.roomId, targetUid: r.hostUid, fallbackNick: r.hostName ?? '' }
-      : { roomCode: r.roomId, seatIdx: 0, fallbackNick: r.hostName ?? '' });
+    const t = buildLobbyHostProfileTarget(r);
+    if (t) openProfileModal(t);
   }
   function openLobbySeatProfile(r: Room, seatIdx: 0 | 1) {
-    const seat = r?.seats?.[seatIdx];
-    if (!r?.roomId || (!seat?.name && !seat?.uid)) return;
-    openProfileModal({
-      roomCode: r.roomId,
-      seatIdx,
-      ...(seat?.uid ? { targetUid: seat.uid } : {}),
-      fallbackNick: seat?.name ?? '',
-    });
+    const t = buildLobbySeatProfileTarget(r, seatIdx);
+    if (t) openProfileModal(t);
   }
   function requestLoginFromProfile() {
     pendingSharedCardTarget = profileModalTarget;
@@ -12989,7 +12983,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   </div>
                   <!-- v6.114 第二行：次要資訊縮成一行小字 -->
                   <div class="or-meta">
-                    <span class="or-host-name" title={_host === 'online' ? '房主在線' : '房主可能已離開（心跳逾時）'}>{_host === 'online' ? '🟢' : '⚪'} 房主：{#if r.hostName || r.hostUid}<span class="prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={() => openLobbyHostProfile(r)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLobbyHostProfile(r); } }}>{r.hostName || '?'}</span>{:else}{r.hostName}{/if}</span>
+                    <span class="or-host-name" title={_host === 'online' ? '房主在線' : '房主可能已離開（心跳逾時）'}>{_host === 'online' ? '🟢' : '⚪'} 房主：{#if r.hostUid}<span class="prof-link or-prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={(e) => { e.stopPropagation(); openLobbyHostProfile(r); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLobbyHostProfile(r); } }}>{r.hostName || '?'}</span>{:else}{r.hostName}{/if}</span>
                     <span class="or-age">· {fmtRoomAge(r.createdAt)}</span>
                     <span class="or-code">房號 {r.roomId}</span>
                   </div>
@@ -13025,9 +13019,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
                        且伺服器在開局放置階段不回（那時對手還看不到你的場面）。 -->
                   <div class="or-meta">
                     <span class="or-host-name">
-                      {#if r.seats?.[0]?.name || r.seats?.[0]?.uid}<span class="prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={() => openLobbySeatProfile(r, 0)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLobbySeatProfile(r, 0); } }}>{r.seats?.[0]?.name ?? '?'}</span>{:else}?{/if}{#if _arch?.p1}<span class="or-arch">【{_arch.p1}】</span>{/if}
+                      {#if r.seats?.[0]?.uid}<span class="prof-link or-prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={(e) => { e.stopPropagation(); openLobbySeatProfile(r, 0); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLobbySeatProfile(r, 0); } }}>{r.seats?.[0]?.name || '?'}</span>{:else}{r.seats?.[0]?.name ?? '?'}{/if}{#if _arch?.p1}<span class="or-arch">【{_arch.p1}】</span>{/if}
                       <span class="or-vs">vs</span>
-                      {#if r.seats?.[1]?.name || r.seats?.[1]?.uid}<span class="prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={() => openLobbySeatProfile(r, 1)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLobbySeatProfile(r, 1); } }}>{r.seats?.[1]?.name ?? '?'}</span>{:else}?{/if}{#if _arch?.p2}<span class="or-arch">【{_arch.p2}】</span>{/if}
+                      {#if r.seats?.[1]?.uid}<span class="prof-link or-prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={(e) => { e.stopPropagation(); openLobbySeatProfile(r, 1); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openLobbySeatProfile(r, 1); } }}>{r.seats?.[1]?.name || '?'}</span>{:else}{r.seats?.[1]?.name ?? '?'}{/if}{#if _arch?.p2}<span class="or-arch">【{_arch.p2}】</span>{/if}
                     </span>
                     <span class="or-code">房號 {r.roomId}</span>
                   </div>
@@ -18566,6 +18560,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .lobby-tab-panel{ max-width:calc(560px + 2.5rem + 2px); margin:0; width:100%; text-align:left; }
   .prof-link{ cursor:pointer; text-decoration:underline dotted rgba(160,225,180,.55); text-underline-offset:2px; }
   .prof-link:hover{ filter:brightness(1.15); }
+  .or-prof-link{ color:#a8e6b8; font-weight:600; text-decoration:underline; text-decoration-style:dotted; text-decoration-color:currentColor; text-underline-offset:3px; border-radius:3px; }
+  .or-prof-link:hover{ color:#d6ffdf; text-decoration-style:solid; }
+  .or-prof-link:focus-visible{ outline:2px solid currentColor; outline-offset:2px; }
   .lobby-unified .name-row{ flex-direction:row; align-items:center; gap:.6rem; background:#162616; border:1px solid #2a4a2a; border-radius:8px; padding:.6rem .85rem; }
   .lobby-unified .name-label{ font-size:.88rem; color:#aaffcc; font-weight:600; min-width:64px; }
   .lobby-unified .name-row .name-input{ flex:1; }
@@ -22501,6 +22498,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     :global(html[data-theme='light']:not([data-battle-view])) .lobby-tab { border: 1px solid #a4c6a4; background: #f7f9f7; color: #216223; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby-tab:hover { background: #f2f6f3; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby .lobby-tab.active { background: linear-gradient(180deg,#e8efea,#eef4f0); color: #001500; border-color: #90cc9c; }
+    :global(html[data-theme='light']:not([data-battle-view])) .or-prof-link { color: #175928; }
+    :global(html[data-theme='light']:not([data-battle-view])) .or-prof-link:hover { color: #002909; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby-unified .name-row { background: #f5f7f5; border: 1px solid #add2ad; }
     :global(html[data-theme='light']:not([data-battle-view])) .lobby-unified .name-label { color: #005522; }
     :global(html[data-theme='light']:not([data-battle-view])) .btn-create-room-cta { background: linear-gradient(135deg,#e8efe8 0%,#eff4ef 100%); border: 1px solid #73b773; color: #0f0f0f; }

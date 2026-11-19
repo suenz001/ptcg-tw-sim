@@ -9533,11 +9533,18 @@ import('firebase-admin').then(async ({ default: admin }) => {
           return { email: _frNormEmail(other), fallbackNick: fb, uid: '' };
         }
       }
-      // ③ 休閒線上房間／等待室（roomCode + seatIdx / targetUid）
+      // ③ 休閒線上房間／等待室（roomCode + targetUid / seatIdx；有 targetUid 時絕不改用另一人的座位資料）
       if (s.roomCode) {
         const rc = String(s.roomCode).trim().toUpperCase().slice(0, 12);
         const rm = await db.collection('rooms').findOne({ _id: rc }, { projection: { seats: 1 } });
         if (rm && Array.isArray(rm.seats)) {
+          const tu = typeof s.targetUid === 'string' ? s.targetUid.trim() : '';
+          if (tu) {
+            const seat = rm.seats.find((x) => x && x.uid === tu);
+            if (seat && seat.email) return { email: _frNormEmail(seat.email), fallbackNick: seat.name || '', uid: tu };
+            const byU = await _profEmailByUid(tu);
+            return { email: byU.email, fallbackNick: (seat && seat.name) || _profCleanText(s.fallbackNick || '', 32) || byU.fallbackNick || '', uid: tu };
+          }
           if (s.seatIdx !== undefined && s.seatIdx !== null && s.seatIdx !== '') {
             const idx = Number(s.seatIdx);
             const seat = (Number.isInteger(idx) && idx >= 0 && idx < rm.seats.length) ? rm.seats[idx] : null;
@@ -9548,13 +9555,6 @@ import('firebase-admin').then(async ({ default: admin }) => {
                 return { email: byU.email, fallbackNick: seat.name || byU.fallbackNick || '', uid: seat.uid };
               }
             }
-          }
-          if (s.targetUid) {
-            const tu = String(s.targetUid).trim();
-            const seat = rm.seats.find((x) => x && x.uid === tu);
-            if (seat && seat.email) return { email: _frNormEmail(seat.email), fallbackNick: seat.name || '', uid: tu };
-            const byU = await _profEmailByUid(tu);
-            return { email: byU.email, fallbackNick: (seat && seat.name) || s.fallbackNick || byU.fallbackNick || '', uid: tu };
           }
         }
       }

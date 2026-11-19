@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.664 — 大廳名片 UID 優先解析、20 款外框內圓透明保護與淺色連結對比修正（2026-11-19）
+
+基準 `0329ee55`（v6.663）。回應獨立複審抓出的 2 項 P2 與 2 項 P3：
+
+- **P2｜大廳點玩家名稱改為嚴格 UID 優先**：新增 `buildLobbyHostProfileTarget`／`buildLobbySeatProfileTarget`（`src/lib/profile/profile-api.ts`），大廳等待中房主與對戰中 P1／P2 僅在具實際 UID 時才開放點擊，且只送 `{ roomCode, targetUid, fallbackNick }`（不再附帶 `seatIdx`、缺 UID 不猜測）。後端 `_profResolveTarget`（`oracle-admin/server_admin_patch.js`）步驟 ③ 同步改為有 `targetUid` 時優先於 `seatIdx`，只匹配同 UID 座位或退回 `_profEmailByUid`，即使舊頁籤同時送 `seatIdx` 與 `targetUid`、房間換座、座位換人或房間已刪除，皆不會誤開另一位玩家的名片；僅送 `seatIdx` 的既有對戰／等待室入口行為維持不變。
+- **P2｜20 款 SVG 外框內圓透明保護與裝飾外移**：調整侵入較深的裝飾幾何（奇異藤花、絨耳褐尾、熾焰龍翼、蒼海湧浪、超能星環星軌外弧與月牙、緋櫻吹雪等；超能星環雙外弧去遮罩含描邊亦維持 `r >= 49.27`），並在 `AvatarCircle.svelte` 與 `buildAvatarFrameSvgMarkup`／Canvas PNG 採用同一內圓保護遮罩（`<mask id="${prefix}hole">`、`AVATAR_FRAME_MASK_R = 46.5`，每實例獨立 ID 防撞），實測 20 款在瀏覽器 SVG 與 780px Canvas PNG 的頭像內圓 `r < 46` 皆為 0 可見像素且外圈裝飾完整、載入失敗降級不遮內圓。
+- **P3｜淺色大廳玩家連結對比與焦點樣式**：新增 `.or-prof-link`（深色 `#a8e6b8`、淺色由 `gen-lobby-light.py` 產生 `#175928`／hover `#002909`，於 `#f4f6f4` 上達 7.89:1 AAA 對比），底線與 `:focus-visible` 皆採 `currentColor`，點擊與 Enter／Space 阻止冒泡不誤觸加入／觀戰按鈕。
+- **P3｜補齊實際行為與像素回歸守衛**：新增 `scripts/test-v6664-lobby-and-frame-mask.mjs`（Node 20 相容）與 `scripts/lib/revert-v6664-lobby-frame-fix.mjs`，涵蓋大廳 7 情境＋`0329ee55` 換人開錯反證＋後端突變、20 款瀏覽器 SVG 與 Canvas PNG 逐款像素檢查＋移除遮罩雙突變＋40 實例多實例 ID 唯一性、桌機 1280px／手機 393px 深淺色大廳對比與互動驗證，並串接精確歷史還原鏈。
+
 ## v6.663 — 20 款立體裝飾頭像外框、純粹外框呈現與線上大廳房間名單可點開名片（2026-11-19）
 
 基準 `400278b9`（v6.662）。

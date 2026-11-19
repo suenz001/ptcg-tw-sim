@@ -11,6 +11,7 @@
   import { cardThumb } from '$lib/cards/thumb';
   import { retryImg } from '$lib/img-retry';
   import {
+    AVATAR_FRAME_MASK_R,
     cardImageUrlFromId,
     clampAvatarCrop,
     getAvatarFrameArt,
@@ -93,7 +94,12 @@
             </radialGradient>
           {/if}
         {/each}
+        <mask id={`${svgPrefix}hole`} maskUnits="userSpaceOnUse" x="-10" y="-10" width="160" height="160">
+          <rect x="-10" y="-10" width="160" height="160" fill="#ffffff" />
+          <circle cx="70" cy="70" r={AVATAR_FRAME_MASK_R} fill="#000000" />
+        </mask>
       </defs>
+      <g mask={`url(#${svgPrefix}hole)`}>
       {#each frameArt.shapes as s}
         {#if s.t === 'circle'}
           <circle
@@ -173,6 +179,7 @@
           />
         {/if}
       {/each}
+      </g>
     </svg>
   {/if}
 </span>
