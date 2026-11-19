@@ -2641,7 +2641,7 @@ window.manualRefresh = async function(btn) {
 //   data-internal="1" ＝ 與遊戲內容無關的內部維護版本（玩家看不到），這裡照樣列出並標示。
 const CL_SITE_BASE = 'https://suenz001.github.io/ptcg-tw-sim';
 // 只隨admin發布，永不寫入玩家首頁／公開更新檔。
-const CL_ADMIN_ONLY_ENTRIES = [ { ver:'v6.661', internal:true, dup:true, summaryHtml:'<b>名片勝場與分享後端加固</b>', bodyHtml:'勝場索引未就緒時保留名片、錦標賽統計與操作，背景重試並以索引恢復勝場。兩席使用同一帳號不計名片勝場。首次名片並行建立時讀回已建立的分享代號。' },{ ver:'v6.660', internal:true, dup:true, summaryHtml:'<b>頭像外框管理修正</b>', bodyHtml:'固定查詢時選定的帳號，等外框資料載入後才允許套用。資料格式有誤時保留原設定。' },{ ver:'v6.659', internal:true, dup:true, summaryHtml:'<b>管理員後台新增玩家頭像特殊外框指派功能</b>', bodyHtml:'後台玩家帳號與玩家總覽新增管理員專屬「頭像特殊外框指派」功能（6 款可擴充外框：admin_gold、champion_master、sponsor_diamond、flame_flare、emerald_leaf、cyber_neon），玩家端唯讀不可自行修改或覆蓋。' }, { ver:'v6.657', internal:true, dup:true, summaryHtml:'<b>Firestore decks 索引豁免與匿名組牌本機儲存內部紀錄</b>', bodyHtml:'第一階段已完成 firestore.indexes.json 部署：僅對 collectionGroup "decks" 的 entries、notes 停用自動單欄索引（indexes: []），完整保留既有 rooms 複合索引及 name、createdAt、updatedAt、order 等欄位索引。第二階段將純匿名訪客組牌與常用卡牌全面改為瀏覽器本機儲存（0 Firestore 讀寫），並實作僅上傳差異與防跨帳號污染之會員遷移；正式站資料未刪除，第三階段僅提供 Dry-Run 清理／備份方案待站長核准。' }, { ver:'v6.630', internal:true, dup:false, summaryHtml:'<b>後台工作導覽與手機介面重整</b>', bodyHtml:'桌機依工作分組導覽，手機新增常用入口及全部功能選單；長頁可跳區段及收合。一般表格提供摘要卡片與完整表格，摘要先顯示10筆並可繼續展開；更新紀錄20則、預設牌組清單10則本機分頁，搜尋仍含完整資料。彈窗頂端關閉與返回、焦點與背景捲動改善；修正房間列表底部跳頁讀值。原權限、查詢與管理確認流程維持不變。' }, { ver:'v6.629', internal:true, dup:true, summaryHtml:'<b>賽程勝方與原型、冠軍分頁及明確搜尋</b>', bodyHtml:'賽程以綠底與勝字標示獲勝者，玩家名稱後依當場牌表與中央原型規則顯示分類；冠軍榜每頁50筆。所有文字搜尋改按放大鏡或Enter才查詢／篩選，下拉與勾選篩選改按鈕套用，未提交草稿不影響背景回應與報告。公開更新只記錄投稿按鈕的綠底白字修正。' }, { ver:'v6.628', internal:true, dup:false, summaryHtml:'<b>歷史賽事參賽牌組與冠軍捷徑</b>', bodyHtml:'歷屆賽事新增冠軍牌組入口；賽程的冠軍、參賽名單與對戰雙方可查看當時保存的報名牌組並複製匯入文字。以賽事與玩家uid精確查找歸檔，不取目前牌組；未留存的舊資料明確標示。' }, { ver:'v6.627', internal:true, dup:false, summaryHtml:'<b>修正玩家查詢牌組文字匯回</b>', bodyHtml:'玩家儲存牌組明細改用精確卡號／完整卡包卡號格式，標題與統計以註解輸出；支援基本能量與雙張場地左右半。缺卡或數量異常禁止複製，複製失敗會提示。玩家匯入說明移除管理來源文字。' }, { ver:'v6.625', internal:true, dup:false, summaryHtml:'<b>公布欄熱門牌組勝率對齊後台原型統計淨化標準</b>', bodyHtml:'/api/meta-stats 的勝率統計改為與後台原型統計一致：排除 AI／本機對戰（只算有房號的真人線上對戰）、排除第 1 回合未進場無回應判負與前 2 回合中途離開／斷線，且只計算有分出勝負的場次（勝場 ÷ (勝場 + 敗場)）。' }, { ver:'v6.624', internal:true, dup:false, summaryHtml:'<b>修正牌組公布欄熱門牌組的冠軍數（N🏆）統計口徑</b>', bodyHtml:'/api/meta-stats 的冠軍數改為直接統計已發布在牌組公布欄內、標記為「網站賽｜冠軍」（tournament.placementLabel === "冠軍"，不含社群賽）的投稿篇數，移除原本對 tournamentChampions 自訂牌組名稱的模糊字串比對，使按鈕上的 N🏆 與點選篩選後看到的網站賽冠軍投稿篇數完全一致。' }, { ver:'v6.623', internal:true, dup:false, summaryHtml:'<b>修正部署腳本 START_MARKER 數量檢查誤報警告</b>', bodyHtml:'oracle_admin_update.sh 的 Sanity 檢查改為比對 server_admin_patch.js 本身的 START_MARKER 與 END_MARKER 數量（expected 7 / 1），消除因檔頭歷史版本註解導致每次執行 update-tournament.bat 時跳出 WARNING 的誤報。' }, { ver:'v6.621', internal:true, dup:false, summaryHtml:'<b>單卡頁結構化資料修正、牌組公布欄動態 SEO 與熱門環境牌組排行</b>', bodyHtml:'單卡頁 JSON-LD 改為 WebPage＋BreadcrumbList 解決 Search Console 產品摘要錯誤，並新增公開牌組搜尋導流；新增 /api/sitemap-decks.xml、/api/deck-share/:id 社群預覽與 /api/meta-stats 熱門牌組統計；牌組公布欄新增熱門環境牌組排行（電腦版標籤列、手機版改為下拉選單節約版面，奪冠數改為 N🏆 格式並移除冗餘說明）。' }, { ver:'v6.603', internal:true, dup:true, summaryHtml:'<b>錦標賽賽季管理</b>', bodyHtml:'賽事分頁新增立即換季、台灣日期00:00排程、改期及取消。提交前確認舊新賽季與生效時間；同年序號累加、跨年第一季。歷史與玩家資料保留，個人頁維持生涯累計。' }, { ver:'v6.602', internal:true, dup:true, summaryHtml:'<b>預設牌組管理</b>', bodyHtml:'新增預設牌組分頁，可文字貼上牌表、預覽精確卡號與合法性後匯入，下架與復原均需確認。管理清單統一提供給編輯器、一般對戰及錦標賽；不更動玩家副本或既有報名／對戰牌表。' }, { ver: 'v6.592', internal: true, dup: true, summaryHtml: '<b>個人操作時間控制</b>', bodyHtml: '監控分頁新增個人限時開關與1～120分鐘設定（初始15分鐘）；預設關閉。開啟、關閉及調整即時套用。玩家回合限時30秒與電腦必要收尾由伺服器管理。' }, { ver: 'v6.591', internal: true, dup: false,
+const CL_ADMIN_ONLY_ENTRIES = [ { ver:'v6.663', internal:true, dup:true, summaryHtml:'<b>後台頭像外框擴充至 20 款立體裝飾風格</b>', bodyHtml:'後台玩家帳號與玩家詳情「頭像特殊外框指派」下拉選單與 server_admin_patch.js 白名單同步擴充至 20 款原創寶可夢／PTCG 風格立體 SVG 裝飾外框（榮耀殿堂 5、屬性王牌 5、萌耳精靈 5、經典珍藏 5），既有 6 個外框 ID 完整向下相容；玩家端與 PNG 下載僅純粹顯示外框，不顯示外框名稱與角落小圖示。' },{ ver:'v6.661', internal:true, dup:true, summaryHtml:'<b>名片勝場與分享後端加固</b>', bodyHtml:'勝場索引未就緒時保留名片、錦標賽統計與操作，背景重試並以索引恢復勝場。兩席使用同一帳號不計名片勝場。首次名片並行建立時讀回已建立的分享代號。' },{ ver:'v6.660', internal:true, dup:true, summaryHtml:'<b>頭像外框管理修正</b>', bodyHtml:'固定查詢時選定的帳號，等外框資料載入後才允許套用。資料格式有誤時保留原設定。' },{ ver:'v6.659', internal:true, dup:true, summaryHtml:'<b>管理員後台新增玩家頭像特殊外框指派功能</b>', bodyHtml:'後台玩家帳號與玩家總覽新增管理員專屬「頭像特殊外框指派」功能（6 款可擴充外框：admin_gold、champion_master、sponsor_diamond、flame_flare、emerald_leaf、cyber_neon），玩家端唯讀不可自行修改或覆蓋。' }, { ver:'v6.657', internal:true, dup:true, summaryHtml:'<b>Firestore decks 索引豁免與匿名組牌本機儲存內部紀錄</b>', bodyHtml:'第一階段已完成 firestore.indexes.json 部署：僅對 collectionGroup "decks" 的 entries、notes 停用自動單欄索引（indexes: []），完整保留既有 rooms 複合索引及 name、createdAt、updatedAt、order 等欄位索引。第二階段將純匿名訪客組牌與常用卡牌全面改為瀏覽器本機儲存（0 Firestore 讀寫），並實作僅上傳差異與防跨帳號污染之會員遷移；正式站資料未刪除，第三階段僅提供 Dry-Run 清理／備份方案待站長核准。' }, { ver:'v6.630', internal:true, dup:false, summaryHtml:'<b>後台工作導覽與手機介面重整</b>', bodyHtml:'桌機依工作分組導覽，手機新增常用入口及全部功能選單；長頁可跳區段及收合。一般表格提供摘要卡片與完整表格，摘要先顯示10筆並可繼續展開；更新紀錄20則、預設牌組清單10則本機分頁，搜尋仍含完整資料。彈窗頂端關閉與返回、焦點與背景捲動改善；修正房間列表底部跳頁讀值。原權限、查詢與管理確認流程維持不變。' }, { ver:'v6.629', internal:true, dup:true, summaryHtml:'<b>賽程勝方與原型、冠軍分頁及明確搜尋</b>', bodyHtml:'賽程以綠底與勝字標示獲勝者，玩家名稱後依當場牌表與中央原型規則顯示分類；冠軍榜每頁50筆。所有文字搜尋改按放大鏡或Enter才查詢／篩選，下拉與勾選篩選改按鈕套用，未提交草稿不影響背景回應與報告。公開更新只記錄投稿按鈕的綠底白字修正。' }, { ver:'v6.628', internal:true, dup:false, summaryHtml:'<b>歷史賽事參賽牌組與冠軍捷徑</b>', bodyHtml:'歷屆賽事新增冠軍牌組入口；賽程的冠軍、參賽名單與對戰雙方可查看當時保存的報名牌組並複製匯入文字。以賽事與玩家uid精確查找歸檔，不取目前牌組；未留存的舊資料明確標示。' }, { ver:'v6.627', internal:true, dup:false, summaryHtml:'<b>修正玩家查詢牌組文字匯回</b>', bodyHtml:'玩家儲存牌組明細改用精確卡號／完整卡包卡號格式，標題與統計以註解輸出；支援基本能量與雙張場地左右半。缺卡或數量異常禁止複製，複製失敗會提示。玩家匯入說明移除管理來源文字。' }, { ver:'v6.625', internal:true, dup:false, summaryHtml:'<b>公布欄熱門牌組勝率對齊後台原型統計淨化標準</b>', bodyHtml:'/api/meta-stats 的勝率統計改為與後台原型統計一致：排除 AI／本機對戰（只算有房號的真人線上對戰）、排除第 1 回合未進場無回應判負與前 2 回合中途離開／斷線，且只計算有分出勝負的場次（勝場 ÷ (勝場 + 敗場)）。' }, { ver:'v6.624', internal:true, dup:false, summaryHtml:'<b>修正牌組公布欄熱門牌組的冠軍數（N🏆）統計口徑</b>', bodyHtml:'/api/meta-stats 的冠軍數改為直接統計已發布在牌組公布欄內、標記為「網站賽｜冠軍」（tournament.placementLabel === "冠軍"，不含社群賽）的投稿篇數，移除原本對 tournamentChampions 自訂牌組名稱的模糊字串比對，使按鈕上的 N🏆 與點選篩選後看到的網站賽冠軍投稿篇數完全一致。' }, { ver:'v6.623', internal:true, dup:false, summaryHtml:'<b>修正部署腳本 START_MARKER 數量檢查誤報警告</b>', bodyHtml:'oracle_admin_update.sh 的 Sanity 檢查改為比對 server_admin_patch.js 本身的 START_MARKER 與 END_MARKER 數量（expected 7 / 1），消除因檔頭歷史版本註解導致每次執行 update-tournament.bat 時跳出 WARNING 的誤報。' }, { ver:'v6.621', internal:true, dup:false, summaryHtml:'<b>單卡頁結構化資料修正、牌組公布欄動態 SEO 與熱門環境牌組排行</b>', bodyHtml:'單卡頁 JSON-LD 改為 WebPage＋BreadcrumbList 解決 Search Console 產品摘要錯誤，並新增公開牌組搜尋導流；新增 /api/sitemap-decks.xml、/api/deck-share/:id 社群預覽與 /api/meta-stats 熱門牌組統計；牌組公布欄新增熱門環境牌組排行（電腦版標籤列、手機版改為下拉選單節約版面，奪冠數改為 N🏆 格式並移除冗餘說明）。' }, { ver:'v6.603', internal:true, dup:true, summaryHtml:'<b>錦標賽賽季管理</b>', bodyHtml:'賽事分頁新增立即換季、台灣日期00:00排程、改期及取消。提交前確認舊新賽季與生效時間；同年序號累加、跨年第一季。歷史與玩家資料保留，個人頁維持生涯累計。' }, { ver:'v6.602', internal:true, dup:true, summaryHtml:'<b>預設牌組管理</b>', bodyHtml:'新增預設牌組分頁，可文字貼上牌表、預覽精確卡號與合法性後匯入，下架與復原均需確認。管理清單統一提供給編輯器、一般對戰及錦標賽；不更動玩家副本或既有報名／對戰牌表。' }, { ver: 'v6.592', internal: true, dup: true, summaryHtml: '<b>個人操作時間控制</b>', bodyHtml: '監控分頁新增個人限時開關與1～120分鐘設定（初始15分鐘）；預設關閉。開啟、關閉及調整即時套用。玩家回合限時30秒與電腦必要收尾由伺服器管理。' }, { ver: 'v6.591', internal: true, dup: false,
   summaryHtml: '<b>測試站搜尋收錄排除</b>',
   bodyHtml: '僅 GitHub Pages 發布時，替所有內容頁、卡片頁、404 與更新紀錄片段加入 noindex；正式站一般建置維持原搜尋設定。Google 擁有權驗證檔保持原文。現有搜尋結果需等爬蟲重新讀取，或由站長在 Search Console 提交暫時移除。' }, { ver: 'v6.589', internal: true, dup: false,
   summaryHtml: '<b>後台完整帳號統計</b>',
@@ -4759,7 +4759,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.662';
+window.SITE_VERSION_HINT = '6.663';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -7703,12 +7703,30 @@ async function loadUsers(reset = false) {
 
 const PROF_FRAME_OPTIONS = [
   { id: '', label: '無特殊外框（預設）', swatch: '#cbd5e1' },
-  { id: 'admin_gold', label: '👑 皇家輝金框（管理員／榮譽）', swatch: '#f5b700' },
-  { id: 'champion_master', label: '🏆 殿堂大師框（冠軍榮耀）', swatch: '#a855f7' },
-  { id: 'sponsor_diamond', label: '💎 星鑽極光框（贊助紀念）', swatch: '#38bdf8' },
-  { id: 'flame_flare', label: '🔥 烈焰傳說框（活動獎勵）', swatch: '#f97316' },
-  { id: 'emerald_leaf', label: '🌿 森林翡翠框（社群貢獻）', swatch: '#10b981' },
-  { id: 'cyber_neon', label: '⚡ 雷霆電光框（限定特典）', swatch: '#00e5ff' },
+  // 榮耀殿堂 (5)
+  { id: 'admin_gold', label: '👑 聖金冠翼（榮耀殿堂）', swatch: '#f5b700' },
+  { id: 'champion_master', label: '🏆 大師桂冠（榮耀殿堂）', swatch: '#8b5cf6' },
+  { id: 'sponsor_diamond', label: '💎 太晶星鑽（榮耀殿堂）', swatch: '#38bdf8' },
+  { id: 'premier_trophy', label: '🏅 紅白冠軍球（榮耀殿堂）', swatch: '#ef4444' },
+  { id: 'rainbow_rare', label: '🌈 虹彩超稀有（榮耀殿堂）', swatch: '#f472b6' },
+  // 屬性王牌 (5)
+  { id: 'flame_flare', label: '🔥 熾焰龍翼（屬性王牌）', swatch: '#f97316' },
+  { id: 'emerald_leaf', label: '🌿 奇異藤花（屬性王牌）', swatch: '#10b981' },
+  { id: 'aqua_wave', label: '🌊 蒼海湧浪（屬性王牌）', swatch: '#0ea5e9' },
+  { id: 'psychic_nebula', label: '🔮 超能星環（屬性王牌）', swatch: '#a855f7' },
+  { id: 'shadow_phantom', label: '👻 幽影鬼火（屬性王牌）', swatch: '#4f46e5' },
+  // 萌耳精靈 (5)
+  { id: 'cyber_neon', label: '⚡ 電氣萌耳（萌耳精靈）', swatch: '#facc15' },
+  { id: 'eevee_fluff', label: '🦊 絨耳褐尾（萌耳精靈）', swatch: '#b46e34' },
+  { id: 'fairy_ribbon', label: '🎀 仙子緞帶（萌耳精靈）', swatch: '#f472b6' },
+  { id: 'gengar_grin', label: '😈 暗紫鬼耳（萌耳精靈）', swatch: '#6d28d9' },
+  { id: 'snorlax_cozy', label: '💤 慵懶藍耳（萌耳精靈）', swatch: '#0f766e' },
+  // 經典珍藏 (5)
+  { id: 'dragon_crest', label: '🐉 古龍金鱗（經典珍藏）', swatch: '#059669' },
+  { id: 'frost_glacier', label: '❄️ 冰晶雪冠（經典珍藏）', swatch: '#7dd3fc' },
+  { id: 'steel_gear', label: '⚙️ 鋼鐵齒輪（經典珍藏）', swatch: '#94a3b8' },
+  { id: 'sakura_spring', label: '🌸 緋櫻吹雪（經典珍藏）', swatch: '#fbcfe8' },
+  { id: 'moon_eclipse', label: '🌗 日月雙曜（經典珍藏）', swatch: '#eab308' },
 ];
 function profFrameOptionHtml(selectedId) {
   const cur = String(selectedId || '');

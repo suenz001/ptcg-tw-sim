@@ -9225,12 +9225,30 @@ import('firebase-admin').then(async ({ default: admin }) => {
     const PROF_TTL_MS = 60 * 1000;
     const PROF_AUTH_TTL_MS = 10 * 60 * 1000;
     const PROF_FRAME_CATALOG = [
-      { id: 'admin_gold', name: '👑 皇家輝金框' },
-      { id: 'champion_master', name: '🏆 殿堂大師框' },
-      { id: 'sponsor_diamond', name: '💎 星鑽極光框' },
-      { id: 'flame_flare', name: '🔥 烈焰傳說框' },
-      { id: 'emerald_leaf', name: '🌿 森林翡翠框' },
-      { id: 'cyber_neon', name: '⚡ 雷霆電光框' },
+      // 榮耀殿堂 (5)
+      { id: 'admin_gold', name: '👑 聖金冠翼' },
+      { id: 'champion_master', name: '🏆 大師桂冠' },
+      { id: 'sponsor_diamond', name: '💎 太晶星鑽' },
+      { id: 'premier_trophy', name: '🏅 紅白冠軍球' },
+      { id: 'rainbow_rare', name: '🌈 虹彩超稀有' },
+      // 屬性王牌 (5)
+      { id: 'flame_flare', name: '🔥 熾焰龍翼' },
+      { id: 'emerald_leaf', name: '🌿 奇異藤花' },
+      { id: 'aqua_wave', name: '🌊 蒼海湧浪' },
+      { id: 'psychic_nebula', name: '🔮 超能星環' },
+      { id: 'shadow_phantom', name: '👻 幽影鬼火' },
+      // 萌耳精靈 (5)
+      { id: 'cyber_neon', name: '⚡ 電氣萌耳' },
+      { id: 'eevee_fluff', name: '🦊 絨耳褐尾' },
+      { id: 'fairy_ribbon', name: '🎀 仙子緞帶' },
+      { id: 'gengar_grin', name: '😈 暗紫鬼耳' },
+      { id: 'snorlax_cozy', name: '💤 慵懶藍耳' },
+      // 經典珍藏 (5)
+      { id: 'dragon_crest', name: '🐉 古龍金鱗' },
+      { id: 'frost_glacier', name: '❄️ 冰晶雪冠' },
+      { id: 'steel_gear', name: '⚙️ 鋼鐵齒輪' },
+      { id: 'sakura_spring', name: '🌸 緋櫻吹雪' },
+      { id: 'moon_eclipse', name: '🌗 日月雙曜' },
     ];
     const PROF_VALID_FRAMES = new Set(PROF_FRAME_CATALOG.map((f) => f.id));
     const _profSummaryCache = new Map(); // email -> { at, data }

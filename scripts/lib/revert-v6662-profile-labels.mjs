@@ -1,6 +1,7 @@
 // v6.662 的精確歷史還原，供舊版守衛使用。
 import assert from 'node:assert/strict';
 import { normEol } from './eol-agnostic.mjs';
+import { revertV6663IfPresent } from './revert-v6663-decorative-frames.mjs';
 
 export const V6662_PAIRS = {
   "oracle-admin/admin.html": [
@@ -82,7 +83,7 @@ export const V6662_PAIRS = {
 const V6662_MARKERS = {"oracle-admin/admin.html":[0],"src/lib/profile/PlayerProfileEditor.svelte":[0],"src/lib/profile/PlayerProfileModal.svelte":[0,1,2],"src/lib/profile/profile-api.ts":[0],"src/lib/version.ts":[0],"static/changelog-archive.html":[0],"static/changelog-bodies.html":[0,1],"static/changelog.html":[0,1,2],"static/site-version.txt":[0]};
 
 export function revertV6662IfPresent(path, source) {
-  let text = normEol(String(source));
+  let text = revertV6663IfPresent(path, normEol(String(source)));
   const pairs = V6662_PAIRS[path];
   if (!pairs || V6662_MARKERS[path].every(index => !text.includes(pairs[index][0]))) return text;
   for (const [index, [from]] of pairs.entries()) {

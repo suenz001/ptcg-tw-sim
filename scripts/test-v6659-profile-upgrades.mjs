@@ -100,13 +100,24 @@ async function loadProfileApi(srcOverride) {
 
 async function assertProfileApiContract(srcOverride) {
   const api = await loadProfileApi(srcOverride);
-  assert.ok(Array.isArray(api.AVATAR_FRAMES) && api.AVATAR_FRAMES.length >= 6, 'AVATAR_FRAMES 至少應有 6 款內建外框');
-  const expectedIds = ['admin_gold', 'champion_master', 'sponsor_diamond', 'flame_flare', 'emerald_leaf', 'cyber_neon'];
+  const expectedIds = [
+    'admin_gold', 'champion_master', 'sponsor_diamond', 'premier_trophy', 'rainbow_rare',
+    'flame_flare', 'emerald_leaf', 'aqua_wave', 'psychic_nebula', 'shadow_phantom',
+    'cyber_neon', 'eevee_fluff', 'fairy_ribbon', 'gengar_grin', 'snorlax_cozy',
+    'dragon_crest', 'frost_glacier', 'steel_gear', 'sakura_spring', 'moon_eclipse',
+  ];
+  assert.ok(Array.isArray(api.AVATAR_FRAMES) && api.AVATAR_FRAMES.length === 20, 'AVATAR_FRAMES 應包含完整 20 款立體裝飾外框');
   for (const fid of expectedIds) {
     const sp = api.getAvatarFrameSpec(fid);
     assert.ok(sp && sp.id === fid && sp.stops.length === 4 && sp.glow && sp.innerBorder && sp.badge, '外框規格缺欄位：' + fid);
+    const art = api.getAvatarFrameArt(fid);
+    assert.ok(art && Array.isArray(art.grads) && art.grads.length > 0 && Array.isArray(art.shapes) && art.shapes.length > 0, '外框 SVG 幾何缺欄位：' + fid);
+    const dataUrl = api.buildAvatarFrameSvgDataUrl(fid);
+    assert.ok(typeof dataUrl === 'string' && dataUrl.startsWith('data:image/svg+xml;charset=utf-8,'), 'SVG dataUrl 格式錯誤：' + fid);
+    assert.ok(decodeURIComponent(dataUrl).includes('viewBox="0 0 140 140"'), 'SVG viewBox 應為 0 0 140 140：' + fid);
   }
   assert.strictEqual(api.clampAvatarFrame('  sponsor_diamond  '), 'sponsor_diamond');
+  assert.strictEqual(api.clampAvatarFrame('moon_eclipse'), 'moon_eclipse');
   assert.strictEqual(api.clampAvatarFrame('fake_frame'), null, '無效外框 id 應回 null');
   assert.strictEqual(api.clampAvatarFrame(null), null);
 
@@ -452,6 +463,15 @@ async function assertBackendUpgrades(buildFn = buildBackendHarness) {
   // Admin invalid frame returns 400
   const badFrame = await invoke('POST', '/api/admin/player-profile/frame', { token: 'tokAdm', body: { email: 'alice@example.com', avatarFrame: 'non_existent' } });
   assert.strictEqual(badFrame.statusCode, 400, '無效外框 id 應回 400');
+
+  // Admin assigns new v6.663 frame (moon_eclipse) & verify frames catalog has 20 items
+  const admNew = await invoke('POST', '/api/admin/player-profile/frame', { token: 'tokAdm', body: { email: 'alice@example.com', avatarFrame: 'moon_eclipse' } });
+  assert.strictEqual(admNew.statusCode, 200);
+  assert.strictEqual(admNew.body.avatarFrame, 'moon_eclipse');
+  const admGetNew = await invoke('GET', '/api/admin/player-profile/frame', { token: 'tokAdm', query: { email: 'alice@example.com' } });
+  assert.strictEqual(admGetNew.statusCode, 200);
+  assert.strictEqual(admGetNew.body.avatarFrame, 'moon_eclipse');
+  assert.ok(Array.isArray(admGetNew.body.frames) && admGetNew.body.frames.length === 20, '後端外框白名單應有 20 款');
 
   // Admin assigns admin_gold
   const admSet = await invoke('POST', '/api/admin/player-profile/frame', { token: 'tokAdm', body: { email: 'alice@example.com', avatarFrame: 'admin_gold' } });
@@ -876,7 +896,9 @@ async function assertModalSelfVsOtherUi(browser, bundle, { legacyBadges = false 
         maxTopDiff: Math.max(...tops) - Math.min(...tops),
         badgesRight: Math.max(...rights),
         closeLeft: closeBtn.getBoundingClientRect().left,
-        frameText: document.querySelector('.ppm-frame-pill')?.textContent?.trim() || '',
+        framePillCount: document.querySelectorAll('.ppm-frame-pill').length,
+        frameBadgeCount: document.querySelectorAll('.prof-av-frame-badge').length,
+        frameSvgCount: document.querySelectorAll('.prof-av-frame-svg').length,
       };
     });
     assert.strictEqual(geo.overflow, false, '393px 名片不得有水平捲動');
@@ -887,10 +909,12 @@ async function assertModalSelfVsOtherUi(browser, bundle, { legacyBadges = false 
     } else {
       assert.deepEqual(geo.badgeTexts, ['⚔️ 1243勝', '網站 12冠', '社群 100冠']);
       assert.equal(geo.badgeClipped, false, '戰績徽章需顯示完整數字');
+      assert.strictEqual(geo.framePillCount, 0, '他人名片不可顯示外框名稱標籤（純粹顯示外框）');
+      assert.strictEqual(geo.frameBadgeCount, 0, '頭像外框不可顯示右上角小圖示');
+      assert.strictEqual(geo.frameSvgCount, 1, '他人名片應渲染立體 SVG 裝飾外框');
     }
     assert.ok(geo.maxTopDiff < 8, 'iPhone 393px 下 3 顆徽章應維持單行：diff=' + geo.maxTopDiff);
     assert.ok(geo.badgesRight <= geo.closeLeft + 0.5, '徽章列不可撞進 ✕ 關閉鈕');
-    assert.ok(geo.frameText.includes('星鑽極光框'), '他人名片應顯示特殊外框標籤');
 
     // Guest clicking '+ 加好友' triggers onRequestLogin
     await pg.locator('.ppm-fr-btn').click();
@@ -995,7 +1019,7 @@ if (chromium) {
     try {
       await T('C1 Playwright iPhone 393×852：嚴格本人下載/分享顯示、他人隱藏、3 徽章單行不重疊與訪客加好友登入接力', () => assertModalSelfVsOtherUi(browser, defaultBundle));
 
-      await T('C2 Playwright 編輯器點擊切換 3 項統計徽章（aria-pressed）、Canvas 780px PNG 輸出與 AvatarCircle 6 款外框渲染', async () => {
+      await T('C2 Playwright 編輯器點擊切換 3 項統計徽章（aria-pressed）、Canvas 780px PNG 輸出（純外框無標籤）與 AvatarCircle 20 款立體 SVG 外框渲染', async () => {
         const ctx = await browser.newContext({ viewport: { width: 800, height: 900 } });
         const pg = await ctx.newPage();
         try {
@@ -1073,43 +1097,83 @@ if (chromium) {
           assert.strictEqual(saved.showOfficialCrowns, true);
           assert.strictEqual(saved.showCommunityCrowns, true);
 
-          // Check all 6 AvatarCircle frames rendered
-          const avInfo = await pg.evaluate(() => Array.from(document.querySelectorAll('#av > div')).map((d) => ({
-            id: d.getAttribute('data-frame-id'),
-            hasFrame: !!d.querySelector('.prof-av-wrap.has-frame'),
-            badgeText: d.querySelector('.prof-av-frame-badge')?.textContent?.trim() || '',
-            rect: d.querySelector('.prof-av-wrap')?.getBoundingClientRect().width || 0,
-          })));
-          assert.strictEqual(avInfo.length, 6);
-          for (const a of avInfo) {
-            assert.ok(a.hasFrame && a.badgeText && a.rect > 40, '外框未正確渲染：' + JSON.stringify(a));
+          // Editor preview bar must NOT display frame name tag or corner badge
+          assert.strictEqual(await pg.locator('#ed .ppe-pv-frame-tag').count(), 0, '編輯器預覽列不可顯示外框名稱標籤');
+          assert.strictEqual(await pg.locator('#ed .prof-av-frame-badge').count(), 0, '編輯器預覽頭像不可顯示角落小圖示');
+          assert.strictEqual(await pg.locator('#ed .prof-av-frame-svg').count(), 2, '編輯器預覽列 56px 與 28px 皆應渲染 SVG 裝飾外框');
+
+          // Check all 20 AvatarCircle decorative SVG frames rendered with unique gradient IDs & zero corner badges
+          const avInfo = await pg.evaluate(() => {
+            const gradIds = [];
+            const items = Array.from(document.querySelectorAll('#av > div')).map((d) => {
+              const svg = d.querySelector('.prof-av-frame-svg');
+              const grads = svg ? Array.from(svg.querySelectorAll('linearGradient, radialGradient')).map((g) => g.getAttribute('id')) : [];
+              gradIds.push(...grads);
+              return {
+                id: d.getAttribute('data-frame-id'),
+                hasFrame: !!d.querySelector('.prof-av-wrap.has-frame'),
+                hasSvg: !!svg,
+                shapeCount: svg ? svg.querySelectorAll('circle, path, polygon, rect, ellipse, line').length : 0,
+                badgeCount: d.querySelectorAll('.prof-av-frame-badge').length,
+                rect: d.querySelector('.prof-av-wrap')?.getBoundingClientRect().width || 0,
+              };
+            });
+            return { items, uniqueGrads: new Set(gradIds).size, totalGrads: gradIds.length };
+          });
+          assert.strictEqual(avInfo.items.length, 20, '應渲染全部 20 款立體裝飾外框');
+          assert.strictEqual(avInfo.uniqueGrads, avInfo.totalGrads, '每個外框實例的 SVG 漸層 ID 不可碰撞');
+          for (const a of avInfo.items) {
+            assert.ok(a.hasFrame && a.hasSvg && a.shapeCount >= 5 && a.badgeCount === 0 && a.rect > 40, '立體 SVG 外框未正確渲染：' + JSON.stringify(a));
           }
 
-          // Check Canvas 2D PNG export
+          // Check Canvas 2D PNG export: draws SVG frame & ZERO frame name or corner icon text
           const pngCheck = await pg.evaluate(async () => {
-            const canvas = await window.__renderCardCanvas({
-              found: true,
-              profileKey: 'pk_me',
-              nick: '站長Wilson',
-              bio: 'PTCG 測試選手\n歡迎切磋！',
-              avatar: null,
-              googleVerified: true,
-              avatarFrame: 'admin_gold',
-              champOfficial: 2,
-              champCommunity: 1,
-              totalWins: 42,
-              showTotalWins: true,
-              showOfficialCrowns: true,
-              showCommunityCrowns: true,
-              pinnedHonors: [{ eventId: 'e1', eventName: '冬季大賽', date: 1760000000000, kind: 'site', placementLabel: '冠軍' }],
-              canFriend: false,
-              friendStatus: 'self',
-            });
-            return { w: canvas.width, h: canvas.height, url: canvas.toDataURL('image/png') };
+            const drawnTexts = [];
+            const origFillText = CanvasRenderingContext2D.prototype.fillText;
+            CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) {
+              drawnTexts.push(String(text));
+              return origFillText.call(this, text, ...rest);
+            };
+            const loadedUrls = [];
+            try {
+              const canvas = await window.__renderCardCanvas({
+                found: true,
+                profileKey: 'pk_me',
+                nick: '站長Wilson',
+                bio: 'PTCG 測試選手\n歡迎切磋！',
+                avatar: null,
+                googleVerified: true,
+                avatarFrame: 'admin_gold',
+                champOfficial: 2,
+                champCommunity: 1,
+                totalWins: 42,
+                showTotalWins: true,
+                showOfficialCrowns: true,
+                showCommunityCrowns: true,
+                pinnedHonors: [{ eventId: 'e1', eventName: '冬季大賽', date: 1760000000000, kind: 'site', placementLabel: '冠軍' }],
+                canFriend: false,
+                friendStatus: 'self',
+              }, {
+                loadImage: (u) => {
+                  loadedUrls.push(u);
+                  return new Promise((res) => {
+                    const img = new Image();
+                    img.onload = () => res(img);
+                    img.onerror = () => res(null);
+                    img.src = u;
+                  });
+                },
+              });
+              return { w: canvas.width, h: canvas.height, url: canvas.toDataURL('image/png'), drawnTexts, loadedUrls };
+            } finally {
+              CanvasRenderingContext2D.prototype.fillText = origFillText;
+            }
           });
           assert.strictEqual(pngCheck.w, 780, '匯出名片寬度應為 780px');
           assert.ok(pngCheck.h >= 360, '匯出名片高度不應異常');
           assert.ok(pngCheck.url.startsWith('data:image/png;base64,') && pngCheck.url.length > 5000, 'Canvas PNG 資料無效');
+          assert.ok(pngCheck.loadedUrls.some((u) => u.startsWith('data:image/svg+xml;charset=utf-8,')), 'PNG 匯出應以內嵌 SVG Data URL 繪製立體裝飾外框');
+          assert.ok(!pngCheck.drawnTexts.some((t) => t.includes('聖金冠翼') || t.includes('皇家輝金框') || t === '👑'), 'PNG 匯出不可繪製外框名稱或角落小圖示：' + JSON.stringify(pngCheck.drawnTexts));
         } finally {
           await ctx.close();
         }
@@ -1162,7 +1226,7 @@ if (chromium) {
           await pg.waitForFunction(() => !document.getElementById('prof-frame-save-btn').disabled);
           await pg.selectOption('#prof-frame-select', 'cyber_neon');
           const bg = await pg.evaluate(() => getComputedStyle(document.getElementById('prof-frame-swatch')).backgroundColor);
-          assert.strictEqual(bg, 'rgb(0, 229, 255)', 'cyber_neon 外框選取後色票應即時更新為 #00e5ff');
+          assert.strictEqual(bg, 'rgb(250, 204, 21)', 'cyber_neon 外框選取後色票應即時更新為 #facc15');
           assert.deepStrictEqual(errs, [], 'admin.html 外框切換不可拋出 ReferenceError：' + errs.join('; '));
         } finally {
           await ctx.close();
@@ -1267,6 +1331,7 @@ await T('C3 全站接線與公開／內部紀錄隔離（game ?card=／viewerUid
   assert.ok(gp.includes('fetchProfileBatch(items, ctx)') && !gp.includes('fetchPlayerProfileView'), '進房頭像只走輕量批次');
   assert.match(gp, /history\.replaceState\(window\.history\.state, '', cardUrl\.toString\(\)\)/);
   assert.equal(gp.match(/avatarFrame: seatFrameFor\(seatIdx\)/g)?.length, 2, '兩個 fallback 都需使用同席位外框');
+  assert.ok(gp.includes('openLobbyHostProfile(r)') && gp.includes('openLobbySeatProfile(r, 0)') && gp.includes('openLobbySeatProfile(r, 1)'), '線上大廳等待中與對戰中房間玩家名稱必須可點擊開啟名片');
   assert.match(read('src/routes/friends/+page.svelte'), /viewerUid=\{profileViewerUid\}/);
   assert.match(read('src/routes/deck-posts/+page.svelte'), /viewerUid=\{firebaseUser && !firebaseUser.isAnonymous/);
 
@@ -1276,13 +1341,16 @@ await T('C3 全站接線與公開／內部紀錄隔離（game ?card=／viewerUid
 
   const adm = read(ADMIN_PATH);
   assert.ok(adm.includes('admin-prof-frame-box') && adm.includes('modal-prof-frame-row'), 'admin.html 應有帳號分頁與玩家總覽之外框指派 UI');
-  assert.ok(adm.includes("ver:'v6.659'"), 'admin.html CL_ADMIN_ONLY_ENTRIES 應記錄 v6.659 內部外框功能');
+  assert.ok(adm.includes("ver:'v6.659'") && adm.includes("ver:'v6.663'"), 'admin.html CL_ADMIN_ONLY_ENTRIES 應記錄 v6.659 與 v6.663 內部外框功能');
   assert.ok(adm.includes('/api/admin/player-profile/frame'), 'admin.html 應呼叫管理員外框端點');
   assert.ok(!adm.includes('onchange="profFrameSwatchUpdate') && adm.includes('window.profFrameSwatchUpdate = profFrameSwatchUpdate'), 'admin.html <script type="module"> 不可依賴未掛 window 的行內 onchange');
+  for (const fid of ['premier_trophy', 'rainbow_rare', 'aqua_wave', 'psychic_nebula', 'shadow_phantom', 'eevee_fluff', 'fairy_ribbon', 'gengar_grin', 'snorlax_cozy', 'dragon_crest', 'frost_glacier', 'steel_gear', 'sakura_spring', 'moon_eclipse']) {
+    assert.ok(adm.includes(`id: '${fid}'`), 'admin.html PROF_FRAME_OPTIONS 缺少新外框：' + fid);
+  }
 
   const ch = read(CHLOG_PATH);
-  assert.ok(ch.includes('v6.659'), '首頁公開 changelog 應包含 v6.659 玩家可見升級');
-  assert.ok(!ch.includes('admin-prof-frame-box') && !ch.includes('/api/admin/player-profile/frame') && !ch.includes('後台玩家帳號'), 'Admin 後台功能不可寫入首頁公開 changelog');
+  assert.ok(ch.includes('v6.659') && ch.includes('v6.663'), '首頁公開 changelog 應包含 v6.659 與 v6.663 玩家可見升級');
+  assert.ok(!ch.includes('admin-prof-frame-box') && !ch.includes('/api/admin/player-profile/frame') && !ch.includes('後台玩家帳號') && !ch.includes('PROF_FRAME_OPTIONS'), 'Admin 後台功能不可寫入首頁公開 changelog');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

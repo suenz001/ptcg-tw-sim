@@ -1,15 +1,22 @@
 <!--
   v6.653 官方卡片圓圈頭像（任何尺寸等比顯示同一顆圓圈裁切）。
+  v6.663 支援 20 款立體 SVG 裝飾外框（純粹顯示外框，不顯示外框名稱與角落小圖示）。
   未設定頭像或圖片尚在載入/失敗時，平滑退回暱稱首字彩徽。
 -->
+<script module lang="ts">
+  let _avFrameUidSeq = 0;
+</script>
+
 <script lang="ts">
   import { cardThumb } from '$lib/cards/thumb';
   import { retryImg } from '$lib/img-retry';
   import {
     cardImageUrlFromId,
     clampAvatarCrop,
+    getAvatarFrameArt,
     getAvatarFrameSpec,
     profileNameInitial,
+    resolveFramePaint,
     PROF_CARD_HW,
     type AvatarCrop,
   } from './profile-api';
@@ -28,36 +35,26 @@
     ring?: boolean;
   } = $props();
 
+  const svgPrefix = `avf${++_avFrameUidSeq}_`;
   const crop = $derived(clampAvatarCrop(avatar));
-  const frameSpec = $derived(getAvatarFrameSpec(frame ?? (avatar as { frame?: string | null } | null)?.frame));
+  const rawFrame = $derived(frame ?? (avatar as { frame?: string | null } | null)?.frame);
+  const frameSpec = $derived(getAvatarFrameSpec(rawFrame));
+  const frameArt = $derived(frameSpec ? getAvatarFrameArt(frameSpec.id) : null);
   const rawUrl = $derived(crop ? cardImageUrlFromId(crop.cardId) : null);
   const thumbUrl = $derived(rawUrl ? cardThumb(rawUrl) : null);
   const initial = $derived(profileNameInitial(name));
-  const ringPad = $derived(frameSpec ? Math.max(2, Math.round(size * 0.06)) : 0);
-
-  let prevUrl = '';
-  $effect(() => {
-    const u = rawUrl || '';
-    if (u !== prevUrl) prevUrl = u;
-  });
 </script>
 
 <span
   class="prof-av-wrap"
-  class:has-frame={!!frameSpec}
+  class:has-frame={!!frameArt}
   style:width={`${size}px`}
   style:height={`${size}px`}
-  style:--pf-c1={frameSpec?.stops[0] ?? 'transparent'}
-  style:--pf-c2={frameSpec?.stops[1] ?? 'transparent'}
-  style:--pf-c3={frameSpec?.stops[2] ?? 'transparent'}
-  style:--pf-c4={frameSpec?.stops[3] ?? 'transparent'}
   style:--pf-glow={frameSpec?.glow ?? 'transparent'}
-  style:--pf-inner={frameSpec?.innerBorder ?? 'transparent'}
-  style:--pf-pad={`${ringPad}px`}
 >
   <span
     class="prof-avatar-circle"
-    class:has-ring={ring && !frameSpec}
+    class:has-ring={ring && !frameArt}
     style:width={`${size}px`}
     style:height={`${size}px`}
     style:--av-fsize={`${Math.max(11, Math.round(size * 0.44))}px`}
@@ -78,8 +75,105 @@
       <span class="prof-avatar-fallback" aria-hidden="true">{initial}</span>
     {/if}
   </span>
-  {#if frameSpec && size >= 40}
-    <span class="prof-av-frame-badge" title={frameSpec.name} aria-label={frameSpec.name}>{frameSpec.badge}</span>
+  {#if frameArt}
+    <svg class="prof-av-frame-svg" viewBox="0 0 140 140" fill="none" aria-hidden="true">
+      <defs>
+        {#each frameArt.grads as g (g.id)}
+          {#if g.kind === 'lin'}
+            <linearGradient id={`${svgPrefix}${g.id}`} x1={g.x1} y1={g.y1} x2={g.x2} y2={g.y2} gradientUnits="userSpaceOnUse">
+              {#each g.stops as st}
+                <stop offset={st[0]} stop-color={st[1]} />
+              {/each}
+            </linearGradient>
+          {:else}
+            <radialGradient id={`${svgPrefix}${g.id}`} cx={g.cx} cy={g.cy} r={g.r}>
+              {#each g.stops as st}
+                <stop offset={st[0]} stop-color={st[1]} />
+              {/each}
+            </radialGradient>
+          {/if}
+        {/each}
+      </defs>
+      {#each frameArt.shapes as s}
+        {#if s.t === 'circle'}
+          <circle
+            cx={s.cx}
+            cy={s.cy}
+            r={s.r}
+            fill={resolveFramePaint(s.fill, svgPrefix)}
+            fill-opacity={s.fo}
+            stroke={resolveFramePaint(s.stroke, svgPrefix)}
+            stroke-width={s.sw}
+            stroke-opacity={s.so}
+            stroke-dasharray={s.sd}
+            transform={s.tf}
+          />
+        {:else if s.t === 'path'}
+          <path
+            d={s.d}
+            fill={resolveFramePaint(s.fill, svgPrefix)}
+            fill-opacity={s.fo}
+            stroke={resolveFramePaint(s.stroke, svgPrefix)}
+            stroke-width={s.sw}
+            stroke-opacity={s.so}
+            stroke-linejoin={s.slj}
+            stroke-linecap={s.slc}
+            stroke-dasharray={s.sd}
+            transform={s.tf}
+          />
+        {:else if s.t === 'polygon'}
+          <polygon
+            points={s.points}
+            fill={resolveFramePaint(s.fill, svgPrefix)}
+            fill-opacity={s.fo}
+            stroke={resolveFramePaint(s.stroke, svgPrefix)}
+            stroke-width={s.sw}
+            stroke-opacity={s.so}
+            stroke-linejoin={s.slj}
+            transform={s.tf}
+          />
+        {:else if s.t === 'rect'}
+          <rect
+            x={s.x}
+            y={s.y}
+            width={s.w}
+            height={s.h}
+            rx={s.rx}
+            fill={resolveFramePaint(s.fill, svgPrefix)}
+            fill-opacity={s.fo}
+            stroke={resolveFramePaint(s.stroke, svgPrefix)}
+            stroke-width={s.sw}
+            stroke-opacity={s.so}
+            transform={s.tf}
+          />
+        {:else if s.t === 'ellipse'}
+          <ellipse
+            cx={s.cx}
+            cy={s.cy}
+            rx={s.rx}
+            ry={s.ry}
+            fill={resolveFramePaint(s.fill, svgPrefix)}
+            fill-opacity={s.fo}
+            stroke={resolveFramePaint(s.stroke, svgPrefix)}
+            stroke-width={s.sw}
+            stroke-opacity={s.so}
+            transform={s.tf}
+          />
+        {:else if s.t === 'line'}
+          <line
+            x1={s.x1}
+            y1={s.y1}
+            x2={s.x2}
+            y2={s.y2}
+            stroke={resolveFramePaint(s.stroke, svgPrefix)}
+            stroke-width={s.sw}
+            stroke-opacity={s.so}
+            stroke-linecap={s.slc}
+            transform={s.tf}
+          />
+        {/if}
+      {/each}
+    </svg>
   {/if}
 </span>
 
@@ -92,33 +186,22 @@
     flex-shrink: 0;
     vertical-align: middle;
     border-radius: 50%;
-    box-sizing: content-box;
+    overflow: visible;
   }
   .prof-av-wrap.has-frame {
-    padding: var(--pf-pad, 3px);
-    background: conic-gradient(from 135deg, var(--pf-c1), var(--pf-c2), var(--pf-c3), var(--pf-c4), var(--pf-c1));
-    box-shadow: 0 0 0 1px var(--pf-inner), 0 0 10px var(--pf-glow);
+    z-index: 1;
   }
-  .prof-av-wrap.has-frame .prof-avatar-circle {
-    box-shadow: 0 0 0 1.5px var(--pf-inner);
-  }
-  .prof-av-frame-badge {
+  .prof-av-frame-svg {
     position: absolute;
-    top: -3px;
-    right: -3px;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: #101e16;
-    border: 1.5px solid var(--pf-c2);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    line-height: 1;
+    left: 50%;
+    top: 50%;
+    width: 152.2%;
+    height: 152.2%;
+    transform: translate(-50%, -50%);
     pointer-events: none;
-    z-index: 3;
+    z-index: 2;
+    overflow: visible;
+    filter: drop-shadow(0 0 3px var(--pf-glow, transparent));
   }
   .prof-avatar-circle {
     position: relative;

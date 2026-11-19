@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.663 — 20 款立體裝飾頭像外框、純粹外框呈現與線上大廳房間名單可點開名片（2026-11-19）
+
+基準 `400278b9`（v6.662）。
+
+- **20 款原創寶可夢／PTCG 風格立體 SVG 裝飾頭像外框**：將原本的平面漸層圓環升級為透明中空、邊緣具立體裝飾細節的 20 款原創 SVG 外框（榮耀殿堂 5、屬性王牌 5、萌耳精靈 5、經典珍藏 5）；完整保留既有的 6 個外框 ID（`admin_gold`、`champion_master`、`sponsor_diamond`、`flame_flare`、`emerald_leaf`、`cyber_neon`）並新增 14 個 ID，前後端（`AVATAR_FRAMES`／`AVATAR_FRAME_ART`、`PROF_FRAME_CATALOG`、`PROF_FRAME_OPTIONS`）同步一致。Svelte 元件以原生宣告式 `<svg>` 渲染（零 `{@html}`、每實例獨立漸層 ID 防撞），Canvas PNG 下載使用同一份幾何描述序列化為內嵌 SVG Data URL 繪製（零外部網路請求）。
+- **玩家端與下載圖純粹呈現外框**：移除 `AvatarCircle.svelte` 角落小圖示（`.prof-av-frame-badge`）、`PlayerProfileModal.svelte` 外框名稱標籤（`.ppm-frame-pill`）、`PlayerProfileEditor.svelte` 預覽列外框名稱標籤（`.ppe-pv-frame-tag`），以及 Canvas 2D PNG 匯出的角落小圖示與外框名稱文字，並微調名片與編輯器預覽列留白防止立體裝飾裁切；後台下拉選單仍保留分類名稱與色點便於管理員指派。
+- **線上大廳房間名單可點擊查看玩家名片**：`src/routes/game/+page.svelte` 線上連線對戰主畫面的「等待中的房間」（房主名稱）與「對戰中的房間」（P1／P2 雙方玩家名稱，例如 `LIN【牌組】 vs hsuboyuan【牌組】`）均加上 `.prof-link` 可點擊與鍵盤操作，直接呼叫 `openProfileModal` 透過既有 `roomCode` + `targetUid`/`seatIdx` 解析玩家名片。
+
 ## v6.662 — 縮短名片戰績徽章（2026-11-19）
 
 基準 `1e7a2745`（v6.661）。名片、預覽與下載圖統一使用雙刀勝場與網站／社群冠數短標籤。名片在寬度不足時讓徽章換行，保留完整數字。依站長要求採短驗收，沿用既有名片守衛。

@@ -13,7 +13,6 @@
     formatHonorDate,
     buildProfileShareUrl,
     downloadProfileCardPng,
-    getAvatarFrameSpec,
     type PlayerProfilePublic,
     type ProfileAuthCtx,
     type ProfileLookupTarget,
@@ -53,7 +52,6 @@
     previewCard ? previewCard.friendStatus === 'self'
       : !!viewerUid && loadedTarget === target && loadedAuthKey === viewerUid
   ));
-  const frameSpec = $derived(card ? getAvatarFrameSpec(card.avatarFrame) : null);
 
   $effect(() => {
     const authKey = viewerUid;
@@ -251,9 +249,6 @@
                 {#if card.googleVerified}
                   <span class="ppm-g-badge">✓ Google 已認證</span>
                 {/if}
-                {#if frameSpec}
-                  <span class="ppm-frame-pill">{frameSpec.name}</span>
-                {/if}
                 {#if card.friendStatus === 'accepted'}
                   <span class="ppm-fr-pill is-friend">👥 已是好友</span>
                 {:else if card.friendStatus === 'pending_out'}
@@ -372,7 +367,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    padding: 0 4px 0 88px;
+    padding: 0 4px 0 98px;
     gap: 4px;
   }
   :global(html[data-theme='light']:not([data-battle-view])) .ppm-banner {
@@ -448,10 +443,11 @@
   .ppm-head-row {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
+    gap: 16px;
   }
   .ppm-av-wrap {
     margin-top: -28px;
+    margin-left: 4px;
     flex-shrink: 0;
     position: relative;
     z-index: 2;
@@ -612,21 +608,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .ppm-frame-pill {
-    font-size: 0.7rem;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: rgba(255, 224, 130, 0.14);
-    border: 1px solid rgba(255, 215, 100, 0.45);
-    color: #ffe89e;
-    white-space: nowrap;
-  }
-  :global(html[data-theme='light']:not([data-battle-view])) .ppm-frame-pill {
-    background: #fdf4d8;
-    border-color: #d6b665;
-    color: #785100;
   }
   .ppm-self-actions {
     margin-top: 14px;

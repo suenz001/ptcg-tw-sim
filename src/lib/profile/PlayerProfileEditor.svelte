@@ -24,7 +24,6 @@
     formatHonorDate,
     fetchMyProfile,
     saveMyProfile,
-    getAvatarFrameSpec,
     listAllCardSetsForPicker,
     loadCardsForPickerSet,
     loadAllCardsForPicker,
@@ -90,7 +89,6 @@
 
   const previewUrl = $derived(avatar ? cardImageUrlFromId(avatar.cardId) : null);
   const effectiveNick = $derived((nick.trim() || serverProfile?.defaultNick || '玩家').slice(0, PROF_NICK_MAX));
-  const serverFrameSpec = $derived(getAvatarFrameSpec(serverProfile?.avatarFrame));
   const pickerTotalCount = $derived(pickerSets.reduce((sum, st) => sum + (Number(st.cardCount) || 0), 0));
   const livePreviewCard = $derived.by<PlayerProfilePublic>(() => {
     const base: PlayerProfileSelf = serverProfile ?? {
@@ -452,12 +450,7 @@
       <AvatarCircle {avatar} frame={serverProfile.avatarFrame} name={effectiveNick} size={56} ring />
       <AvatarCircle {avatar} frame={serverProfile.avatarFrame} name={effectiveNick} size={28} />
       <div class="ppe-pv-info">
-        <div class="ppe-pv-nick">
-          {effectiveNick}
-          {#if serverFrameSpec}
-            <span class="ppe-pv-frame-tag">✨ {serverFrameSpec.name}</span>
-          {/if}
-        </div>
+        <div class="ppe-pv-nick">{effectiveNick}</div>
         <div class="ppe-pv-crowns" role="group" aria-label="點擊切換名片統計顯示與隱藏">
           <button
             type="button"
@@ -722,8 +715,8 @@
   .ppe-preview-bar {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
+    gap: 20px;
+    padding: 14px 14px 14px 18px;
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.045);
     border: 1px solid rgba(120, 196, 138, 0.2);
@@ -736,20 +729,6 @@
   }
   .ppe-pv-info { min-width: 0; flex: 1; }
   .ppe-pv-nick { font-weight: 700; font-size: 0.96rem; overflow-wrap: anywhere; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .ppe-pv-frame-tag {
-    font-size: 0.68rem;
-    font-weight: 600;
-    padding: 1px 7px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 215, 100, 0.45);
-    background: rgba(255, 224, 130, 0.14);
-    color: #ffe89e;
-  }
-  :global(html[data-theme='light']:not([data-battle-view])) .ppe-pv-frame-tag {
-    background: #fdf4d8;
-    border-color: #d6b665;
-    color: #785100;
-  }
   .ppe-pv-crowns {
     display: flex;
     align-items: center;

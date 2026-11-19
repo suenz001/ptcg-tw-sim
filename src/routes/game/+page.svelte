@@ -1584,6 +1584,22 @@ function _setupSelfPending(g: any, seat: number): string | null {
     profileModalPreview = null;
     profileModalTarget = t;
   }
+  function openLobbyHostProfile(r: Room) {
+    if (!r?.roomId) return;
+    openProfileModal(r.hostUid
+      ? { roomCode: r.roomId, targetUid: r.hostUid, fallbackNick: r.hostName ?? '' }
+      : { roomCode: r.roomId, seatIdx: 0, fallbackNick: r.hostName ?? '' });
+  }
+  function openLobbySeatProfile(r: Room, seatIdx: 0 | 1) {
+    const seat = r?.seats?.[seatIdx];
+    if (!r?.roomId || (!seat?.name && !seat?.uid)) return;
+    openProfileModal({
+      roomCode: r.roomId,
+      seatIdx,
+      ...(seat?.uid ? { targetUid: seat.uid } : {}),
+      fallbackNick: seat?.name ?? '',
+    });
+  }
   function requestLoginFromProfile() {
     pendingSharedCardTarget = profileModalTarget;
     profileModalTarget = null;
@@ -12973,7 +12989,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   </div>
                   <!-- v6.114 第二行：次要資訊縮成一行小字 -->
                   <div class="or-meta">
-                    <span class="or-host-name" title={_host === 'online' ? '房主在線' : '房主可能已離開（心跳逾時）'}>{_host === 'online' ? '🟢' : '⚪'} 房主：{r.hostName}</span>
+                    <span class="or-host-name" title={_host === 'online' ? '房主在線' : '房主可能已離開（心跳逾時）'}>{_host === 'online' ? '🟢' : '⚪'} 房主：{#if r.hostName || r.hostUid}<span class="prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={() => openLobbyHostProfile(r)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLobbyHostProfile(r); } }}>{r.hostName || '?'}</span>{:else}{r.hostName}{/if}</span>
                     <span class="or-age">· {fmtRoomAge(r.createdAt)}</span>
                     <span class="or-code">房號 {r.roomId}</span>
                   </div>
@@ -13009,9 +13025,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
                        且伺服器在開局放置階段不回（那時對手還看不到你的場面）。 -->
                   <div class="or-meta">
                     <span class="or-host-name">
-                      {r.seats?.[0]?.name ?? '?'}{#if _arch?.p1}<span class="or-arch">【{_arch.p1}】</span>{/if}
+                      {#if r.seats?.[0]?.name || r.seats?.[0]?.uid}<span class="prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={() => openLobbySeatProfile(r, 0)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLobbySeatProfile(r, 0); } }}>{r.seats?.[0]?.name ?? '?'}</span>{:else}?{/if}{#if _arch?.p1}<span class="or-arch">【{_arch.p1}】</span>{/if}
                       <span class="or-vs">vs</span>
-                      {r.seats?.[1]?.name ?? '?'}{#if _arch?.p2}<span class="or-arch">【{_arch.p2}】</span>{/if}
+                      {#if r.seats?.[1]?.name || r.seats?.[1]?.uid}<span class="prof-link" role="button" tabindex="0" title="查看玩家名片" onclick={() => openLobbySeatProfile(r, 1)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLobbySeatProfile(r, 1); } }}>{r.seats?.[1]?.name ?? '?'}</span>{:else}?{/if}{#if _arch?.p2}<span class="or-arch">【{_arch.p2}】</span>{/if}
                     </span>
                     <span class="or-code">房號 {r.roomId}</span>
                   </div>
