@@ -414,7 +414,8 @@ console.log('\n【D】對戰頁接線');
   D('D1 組別從 pending 讀（isGroupsFilter＋readSelectionGroups）', /const selGroups = \$derived\(pendingSelection && isGroupsFilter\(pendingSelection\.filter\)\s*\?\s*readSelectionGroups\(/);
   D('D2 每組張數走中央 selectionGroupCounts（只算已勾選的）', /selectionGroupCounts\(selGroups, selectionItems\.filter\(it => selectionPicked\.has\(it\.iid\)\), pool\)/);
   D('D3 變暗判準走中央 selectionGroupBlocked、已勾選的永遠可取消', /function isGroupPickDisabled\(item: CardInstance\): boolean \{\s*if \(!selGroups\) return false;\s*if \(selectionPicked\.has\(item\.iid\)\) return false;[^\n]*\s*return selectionGroupBlocked\(selGroups, selGroupCounts, item, pool\);/);
-  D('D4 卡片變暗（_bdDisabled 併入 isGroupPickDisabled）', /\{@const _bdDisabled = isBrocksDigDisabled\(item\) \|\| isFishnetDisabled\(item\) \|\| isGroupPickDisabled\(item\)\}/);
+  // ⭐v6.669（Rule 40）：豐收漁網的 isFishnetDisabled 收進同一套多組選擇 ⇒ _bdDisabled 少了那一項；意圖（變暗併入 isGroupPickDisabled）不變
+  D('D4 卡片變暗（_bdDisabled 併入 isGroupPickDisabled）', /\{@const _bdDisabled = isBrocksDigDisabled\(item\) \|\| isGroupPickDisabled\(item\)\}/);
   D('D5 點擊防呆：toggleSelection 拒絕變暗的卡', /if \(selGroups\) \{\s*const item = selectionItems\.find\(it => it\.iid === iid\);\s*if \(item && isGroupPickDisabled\(item\)\) return;\s*\}/);
   D('D6 確認鈕：任一組超過上限就不能確認', /if \(selGroups && selGroupCounts\.some\(\(n, i\) => n > groupMax\(selGroups\[i\]\)\)\) return false;/);
   D('D7 卡片左上角組別標籤（selectionGroupIndex 決定）', /\{#if _grpLabel\}<span class="sel-grp-tag">\{_grpLabel\}<\/span>\{\/if\}/.test(src) && /selectionGroupIndex\(selGroups, item, pool\.get\(item\.cardId\)\)/.test(src) ? /./ : /^\b$/);

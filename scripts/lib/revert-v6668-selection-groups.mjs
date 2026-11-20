@@ -2,6 +2,7 @@
 // 鏈：本版是目前最新一節；revert-v6666 的 revertV6666IfPresent 會先呼叫本檔（一版一節，既有呼叫點一個字都不必改）。
 import assert from 'node:assert/strict';
 import { normEol } from './eol-agnostic.mjs';
+import { revertV6669IfPresent } from './revert-v6669-fishnet-groups.mjs';   // v6.669 由新到舊
 
 export const V6668_PAIRS = {
   "oracle-admin/admin.html": [
@@ -351,7 +352,7 @@ export const V6668_PAIRS = {
 const V6668_MARKERS = {"oracle-admin/admin.html": [0], "src/lib/game/ai.ts": [0, 1, 2, 3], "src/lib/game/effects.ts": [0, 1, 2, 3, 4, 5, 6], "src/lib/game/effects/_shared.ts": [0], "src/lib/game/effects/cards/lopunny_serperior_flareon_festival.ts": [0, 1, 2, 3, 4], "src/lib/game/effects/cards/m6_wave10.ts": [0, 1], "src/lib/game/effects/cards/m6_wave14.ts": [0, 1, 2, 3, 4], "src/lib/game/effects/cards/mega_decks.ts": [0, 1, 2], "src/lib/game/effects/cards/v158_energy_chain.ts": [0], "src/lib/game/effects/cards/v169_supporters.ts": [0, 1, 2], "src/lib/game/effects/cards/v2996_g4_wave2.ts": [0, 1, 2, 5, 6], "src/lib/game/engine.ts": [0, 1, 2, 3, 4, 5], "src/lib/game/selection-candidates.ts": [0], "src/lib/game/selection-filter.ts": [0, 1, 3, 4, 5, 6], "src/lib/game/selection-ui.ts": [0], "src/lib/version.ts": [0], "src/routes/game/+page.svelte": [0, 1, 3, 4, 5, 6, 7], "static/changelog-archive.html": [0], "static/changelog-bodies.html": [0, 1], "static/changelog.html": [3], "static/site-version.txt": [0]};
 
 export function revertV6668IfPresent(path, source) {
-  let text = normEol(String(source));
+  let text = revertV6669IfPresent(path, normEol(String(source)));
   const pairs = V6668_PAIRS[path];
   if (!pairs || V6668_MARKERS[path].every((index) => !text.includes(pairs[index][0]))) return text;
   // 依序檢查＋還原（表是由新往舊逐段產生的，後面的錨點可能要前面先還原才出現）

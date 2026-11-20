@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.669 — 豐收漁網收進中央多組選擇
+
+基準 `64c7f253`（v6.668）。站長指示：v6.668 審查後的第 5 項（豐收漁網對戰頁自己寫一套「各 3 張、選滿變暗」）收進中央。
+- 豐收漁網改開 filter 'Groups'＋params.groups（【寶可夢】PokemonOfType=Water／【能量】BasicEnergyOf=Water，各 max 3），validIids 照舊。
+- selection-filter：棄牌區 'Groups' 述詞、組內前綴 PokemonOfType=。
+- engine 消毒閘：棄牌區多組選擇在 validIids 交集後去重、分組、夾總數；AI 棄牌區分支傳 params、每組取前 N 張；對戰頁棄牌區候選傳 params，刪除 fishnetPickState／isFishnetDisabled。
+- resolver fishnet-unified：有 groups 走 splitGroupedPick；沒有 groups 的舊 pending 維持各型上限 3。
+- 守衛 test-v6669-fishnet-groups（HEAD-FAIL、7 個突變全殺）；Rule 40：test-v6668 D4（_bdDisabled 少了 isFishnetDisabled）。
+
 ## v6.668 — 多組選擇（各選 1 張）中央管線
 
 基準 `fd0903d4`（v6.667）。玩家建議：小光逐段選、選過不能改 ⇒ 10 張卡（小光／鬥子／青木的手法／秘密箱／阿克羅瑪的執著／冒險提燈／杜若／大吾的巨金怪ex｜X啟動／烈焰猴｜火焰蹈舞／鴨嘴炎獸｜拍檔提升）改成同一個視窗自由選。

@@ -36,6 +36,7 @@ import { switchRetreatOrderInfo, switchRetreatOrderPending, fireSwitchRetreatAbi
 import { promoteOppBenchToActive } from '../_shared';  // ⭐ v6.174 換場目標解析失敗一律 no-op + 據實 log
 import { deckWithCardsToBottom } from '../_shared'; // v6.124 「重洗放回牌庫下方」中央管線
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
+import { splitGroupedPick } from '../_shared'; // ⭐v6.669 豐收漁網走中央多組選擇
 // v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
 import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferred_wave_b';
 // v3.08 美納斯｜平穩境地 — 阻擋對手寶可夢/附加卡 → 對手手牌
@@ -1476,23 +1477,42 @@ reg('豐收漁網', (st, idx, pool) => {
     return false;
   }).map(co => co.iid);
   st = addLog(st, '豐收漁網：從棄牌區選【水】寶可夢與基本【水】能量（各最多 3 張）放回牌庫並重洗', idx);
+  // >>> v6669-fishnet-groups
+  // ⭐v6.669：「各 3 張、選滿變暗」改走中央多組選擇（filter 'Groups'＋params.groups，每組 max 3），
+  //   UI 變暗／確認鈕／AI／engine 消毒閘／下方 resolver 都用 selection-filter 同一份判準（原本對戰頁自己寫一套）。
   return withPending(st, {
     type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'WaterPokemonOrBasicWaterEnergy', minCount: 0, maxCount,
+    filter: 'Groups', minCount: 0, maxCount,
     effectKey: 'fishnet-unified',
-    params: { validIids },
+    params: {
+      validIids,
+      groups: [
+        { label: '【寶可夢】', filter: 'PokemonOfType=Water', max: 3 },
+        { label: '【能量】', filter: 'BasicEnergyOf=Water', max: 3 },
+      ],
+    },
   });
+  // <<< v6669-fishnet-groups
 });
-regR('fishnet-unified', (st, idx, iids, _params, pool) => {
+regR('fishnet-unified', (st, idx, iids, params, pool) => {
   if (iids.length === 0) {
     return addLog(st, '豐收漁網：未選擇任何卡，效果結束', idx);
   }
   const p = st.players[idx];
-  const selected = p.discard.filter(c => iids.includes(c.iid));
-  // 防衛性各型上限 3（UI 端 fishnetPickState 已 enforce；此處避免 server/sim 收到超量）
-  const pokes = selected.filter(c => pool.get(c.cardId)?.supertype === 'Pokemon').slice(0, 3);
-  const energies = selected.filter(c => pool.get(c.cardId)?.supertype === 'Energy').slice(0, 3);
-  const picks = [...pokes, ...energies];
+  // >>> v6669-fishnet-groups
+  // 自驗：有 params.groups（v6.669 起）⇒ 走中央拆組（只收棄牌區、每組最多 3、首見保留）；
+  //   舊 pending（部署當下開出的、沒有 groups）⇒ 維持原本的各型上限 3。
+  let picks: CardInstance[];
+  if (Array.isArray((params as Record<string, unknown> | undefined)?.groups)) {
+    const { picked } = splitGroupedPick(iids, p.discard, params as Record<string, unknown> | undefined, pool, 'discard-search');
+    picks = picked.map(id => p.discard.find(c => c.iid === id)!);
+  } else {
+    const selected = p.discard.filter(c => iids.includes(c.iid));
+    const pokes = selected.filter(c => pool.get(c.cardId)?.supertype === 'Pokemon').slice(0, 3);
+    const energies = selected.filter(c => pool.get(c.cardId)?.supertype === 'Energy').slice(0, 3);
+    picks = [...pokes, ...energies];
+  }
+  // <<< v6669-fishnet-groups
   const pickSet = new Set(picks.map(c => c.iid));
   const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   st = addLog(st, `豐收漁網：${picks.length} 張（${names}）放回牌庫並重洗`, idx);

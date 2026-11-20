@@ -4960,7 +4960,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           const card = pool.get(c.cardId);
           if (!card) return false;
           // v6.017（P1-1 批4）：中央 selection filter 求值器（known 走中央、否則落原 inline chain）；UI 為 canonical，零行為變更
-          if (isKnownSelectionFilter('discard-search', f)) return evaluateSelectionFilter('discard-search', f, c, card, {}) === true;
+          if (isKnownSelectionFilter('discard-search', f)) return evaluateSelectionFilter('discard-search', f, c, card, { params: pendingSelection.params }) === true;   // ⭐v6.669 傳 params（'Groups'）
           if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon') || card.supertype === 'Energy';
           if (f === 'PokemonOrBasicEnergy') {
             // v2.43：夜間擔架用 — 寶可夢卡或「基本」能量卡（排除 Special Energy / Pokemon 道具）
@@ -5132,31 +5132,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (brocksDigPickState.hasBasic && isEvo) return true; // Basic 已選 → 擋 Evolution
     return false;
   }
-  // v5.489：豐收漁網 — 同 picker 內分類上限（【水】寶可夢 ≤3、基本【水】能量 ≤3）
-  const fishnetPickState = $derived.by(() => {
-    if (!pendingSelection || pendingSelection.effectKey !== 'fishnet-unified') {
-      return { pokeCount: 0, energyCount: 0 };
-    }
-    let pokeCount = 0, energyCount = 0;
-    for (const iid of selectionPicked) {
-      const item = selectionItems.find(it => it.iid === iid);
-      if (!item) continue;
-      const card = getCard(item.cardId);
-      if (!card) continue;
-      if (card.supertype === 'Pokemon') pokeCount++;
-      else if (card.supertype === 'Energy') energyCount++;
-    }
-    return { pokeCount, energyCount };
-  });
-  function isFishnetDisabled(item: CardInstance): boolean {
-    if (!pendingSelection || pendingSelection.effectKey !== 'fishnet-unified') return false;
-    if (selectionPicked.has(item.iid)) return false;  // 已選 → 允許取消
-    const card = getCard(item.cardId);
-    if (!card) return false;
-    if (card.supertype === 'Pokemon') return fishnetPickState.pokeCount >= 3;   // 寶可夢已選 3 → 擋
-    if (card.supertype === 'Energy') return fishnetPickState.energyCount >= 3;   // 能量已選 3 → 擋
-    return false;
-  }
+  // ⭐v6.669 豐收漁網原本在這裡自己寫一套「各 3 張、選滿變暗」（fishnetPickState／isFishnetDisabled），
+  //   已收進下方中央多組選擇（params.groups，每組 max 3）。
   // >>> v6668-selection-groups
   // ⭐v6.668 多組選擇（小光／鬥子／秘密箱…「各選 1 張」）：判準全在 selection-filter（selectionGroupIndex／selectionGroupBlocked）。
   //   這裡只把「目前勾了哪些」交給它算：每組幾張、哪張要變暗。
@@ -5191,9 +5168,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
       if (brocksDigPickState.hasBasic && brocksDigPickState.hasEvolution) return false;
       if (brocksDigPickState.hasEvolution && selectionPicked.size > 1) return false;
       if (brocksDigPickState.basicCount > 2) return false;
-    }
-    if (pendingSelection.effectKey === 'fishnet-unified') {
-      if (fishnetPickState.pokeCount > 3 || fishnetPickState.energyCount > 3) return false;
     }
     // >>> v6668-selection-groups
     if (selGroups && selGroupCounts.some((n, i) => n > groupMax(selGroups[i]))) return false;
@@ -11269,10 +11243,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const item = selectionItems.find(it => it.iid === iid);
       if (item && isBrocksDigDisabled(item)) return;
     }
-    if (pendingSelection?.effectKey === 'fishnet-unified') {
-      const item = selectionItems.find(it => it.iid === iid);
-      if (item && isFishnetDisabled(item)) return;
-    }
     // >>> v6668-selection-groups
     if (selGroups) {
       const item = selectionItems.find(it => it.iid === iid);
@@ -14770,7 +14740,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                  （太陽伊布ex｜精神出局、拍落、占為己有、驚嚇、鈴鈴吵鬧 … 共 10 招）。 -->
             {#each selectionItems as item (item.iid)}{@const c=getCard(item.cardId)}
               {#if c || concealed}
-                {@const _bdDisabled = isBrocksDigDisabled(item) || isFishnetDisabled(item) || isGroupPickDisabled(item)}
+                {@const _bdDisabled = isBrocksDigDisabled(item) || isGroupPickDisabled(item)}
                 {@const _grpLabel = selGroupLabel(item)}
                 <div class="sel-card-wrap" class:sel-picked={selectionPicked.has(item.iid)} class:sel-concealed={concealed} class:bd-disabled={_bdDisabled}>
                   {#if !concealed}

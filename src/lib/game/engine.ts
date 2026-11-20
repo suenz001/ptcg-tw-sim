@@ -1616,6 +1616,21 @@ export function sanitizeSelectedIids(state: GameState, pending: PendingSelection
       return iids.filter((iid) => baseSet.has(iid));
     }
     const allowSet = new Set(viRaw as string[]);
+    // >>> v6669-fishnet-groups
+    // ⭐v6.669 棄牌區的多組選擇（豐收漁網）：validIids 交集後，再依組別每組最多 N 張（首見保留）、去重、夾總數
+    if (t === 'discard-search' && pool && isGroupsFilter(pending.filter) && p && Array.isArray(p.discard)) {
+      const seenD = new Set<string>();
+      const instsD: CardInstance[] = [];
+      for (const iid of iids) {
+        if (seenD.has(iid) || !allowSet.has(iid)) continue;
+        const inst = p.discard.find(c => c.iid === iid);
+        if (!inst) continue;
+        seenD.add(iid); instsD.push(inst);
+      }
+      const groupedD = sanitizeSelectionSet('discard-search', pending.filter ?? '', instsD, pool, { params: pending.params as Record<string, unknown> | undefined });
+      return typeof pending.maxCount === 'number' ? groupedD.slice(0, Math.max(0, pending.maxCount)) : groupedD;
+    }
+    // <<< v6669-fishnet-groups
     return iids.filter((iid) => allowSet.has(iid));
   }
   const zoneSet = new Set((zone ?? []).map(c => c.iid));

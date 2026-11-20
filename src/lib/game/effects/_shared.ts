@@ -3251,7 +3251,7 @@ export function splitGroupedPick(
   zone: ReadonlyArray<CardInstance>,
   params: Record<string, unknown> | undefined,
   pool: Map<string, Card>,
-  zoneKind: 'deck-search' | 'hand-discard',
+  zoneKind: 'deck-search' | 'hand-discard' | 'discard-search',   // ⭐v6.669 棄牌區（豐收漁網）
 ): { picked: string[]; byGroup: string[][] } {
   const groups = readSelectionGroups(params);
   const seen = new Set<string>();

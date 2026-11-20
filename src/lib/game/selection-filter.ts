@@ -417,6 +417,10 @@ const DISCARD_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilte
   //   除外）與基本能量卡合計最多3張」⇒ 除外集合是**擁有規則的寶可夢**（ex/V/VSTAR/…），
   //   不是只有 ex。H/I/J 現況兩者等價（739＝739，v6.403 現查）⇒ 本版零行為變更，但判準對齊卡面。
   'PokemonNonExOrBasicEnergy': (c) => (c.supertype === 'Pokemon' && !isRulePokemon(c)) || (c.supertype === 'Energy' && c.subtype === 'Basic'),
+  // >>> v6669-fishnet-groups
+  // ⭐v6.669 棄牌區的多組選擇（豐收漁網：【水】寶可夢與基本【水】能量最多各 3 張）：同一份組別判準
+  'Groups': (c, ctx) => selectionGroupIndex(readSelectionGroups(ctx.params), { iid: '' }, c) >= 0,
+  // <<< v6669-fishnet-groups
   'WaterPokemonOrBasicWaterEnergy': (c) => {
     if (c.supertype === 'Pokemon' && c.pokemonType === 'Water') return true;
     if (isBasicEnergyOfType(c, 'Water')) return true;
@@ -447,7 +451,7 @@ const DISCARD_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilte
 /** deck-search 已收錄的「前綴型」filter（evaluateSelectionFilter 與 isKnownSelectionFilter 共用單一來源）。 */
 const DECK_SEARCH_NAME_PREFIXES = ['Name:', 'Pokemon:NamePrefix=', 'Pokemon:NameContains=',
   'Pokemon:Name=', 'Pokemon:Names=', 'NameContains:', 'Card:', 'Basic:NamePrefix=',
-  'Tool:NameContains=', 'Stage1Or2:', 'BasicEnergyOf='] as const;
+  'Tool:NameContains=', 'Stage1Or2:', 'BasicEnergyOf=', 'PokemonOfType='] as const;
 
 export function evaluateSelectionFilter(
   zone: SelectionFilterZone,
@@ -498,6 +502,10 @@ export function evaluateSelectionFilter(
     // ⭐v6.668 組內用：基本【X】能量（BasicEnergyOf=Fire）。走 isBasicEnergyOfType（基本能量 pokemonType 恒 null，從卡名【X】判）
     if (filter.startsWith('BasicEnergyOf=')) return isBasicEnergyOfType(card, filter.slice('BasicEnergyOf='.length) as EnergyType);
     // <<< v6668-selection-groups
+    // >>> v6669-fishnet-groups
+    // ⭐v6.669 組內用：印刷屬性為 X 的寶可夢卡（PokemonOfType=Water；與豐收漁網既有 gate 同一判準：card.pokemonType）
+    if (filter.startsWith('PokemonOfType=')) return card.supertype === 'Pokemon' && card.pokemonType === filter.slice('PokemonOfType='.length);
+    // <<< v6669-fishnet-groups
     if (filter.startsWith('Card:')) return card.name === filter.slice(5);
     if (filter.startsWith('Basic:NamePrefix=')) return isBasicPokemonCard(card) && card.name.startsWith(filter.slice('Basic:NamePrefix='.length));
     return null;   // 其餘(TOP/Evolution/params/generic Pokemon:/BasicEnergy: 等)批次遷移 → caller fallback

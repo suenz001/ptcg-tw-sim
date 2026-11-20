@@ -1202,7 +1202,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       let discard = discardBase.filter(c => {
         const card = pool.get(c.cardId);
         if (!card) return false;
-        if (isKnownSelectionFilter('discard-search', f)) return evaluateSelectionFilter('discard-search', f, c, card, {}) === true;
+        if (isKnownSelectionFilter('discard-search', f)) return evaluateSelectionFilter('discard-search', f, c, card, { params: sel.params }) === true;   // ⭐v6.669 傳 params（'Groups'）
         if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon') || card.supertype === 'Energy';
         if (f === 'PokemonOrBasicEnergy') {
           // v2.43：夜間擔架用 — 寶可夢或基本能量（排除 Special Energy / Pokemon 道具）
@@ -1234,6 +1234,13 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (f === 'Pokemon') return card.supertype === 'Pokemon';
         return true;
       });
+      // >>> v6669-fishnet-groups
+      // ⭐v6.669 棄牌區的多組選擇（豐收漁網）：每組各取前 N 張（同一份 sanitizeSelectionSet）
+      if (isGroupsFilter(f)) {
+        const keepD = new Set(sanitizeSelectionSet('discard-search', f, discard, pool, { params: sel.params }));
+        discard = discard.filter(c => keepD.has(c.iid));
+      }
+      // <<< v6669-fishnet-groups
       const count = Math.min(sel.maxCount, discard.length);
       return { type: 'RESOLVE_SELECTION', selectedIids: discard.slice(0, count).map(c => c.iid) };
     }
