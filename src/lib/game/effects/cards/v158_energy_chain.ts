@@ -302,6 +302,19 @@ export function startEnergyChain(
   });
 
   if (validTargets.length === 0) {
+    // >>> v6668-hand-chain-no-target
+    // ⭐v6.668（審查 P2-1）：來源是手牌而場上沒有可以附的目標（例如全被詛咒根鎖住）⇒ 能量退回手牌。
+    //   卡面是「從手牌選擇…附於」，附不上就什麼都不發生；原本會把手牌的能量丟進棄牌區（卡片平白損失）。
+    if (source === 'hand') {
+      const back = new Set(energyIids);
+      st = updatePlayer(st, aIdx, p => ({
+        ...p,
+        hand: [...p.hand, ...p.discard.filter(c => back.has(c.iid))],
+        discard: p.discard.filter(c => !back.has(c.iid)),
+      }));
+      return addLog(st, `${label}：場上沒有可以附加的寶可夢，${energyIids.length} 張能量留在手牌`, aIdx);
+    }
+    // <<< v6668-hand-chain-no-target
     // 場上無合法目標 → 能量留在 discard
     const ftDesc = filterType === 'Any' ? '寶可夢' :
       Array.isArray(filterType) ? filterType.join('/') + ' 寶可夢' :

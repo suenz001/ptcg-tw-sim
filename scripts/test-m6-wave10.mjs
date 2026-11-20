@@ -101,30 +101,35 @@ function mk(o={}){
     const card=inst(c.id);
     const f=inst(fire.id), l=inst(ltng.id);
     const st=mk({hand:[card],deck:[f,l,inst(PLAIN.id)]});
+    // ⭐v6.668（Rule 40）：兩步式改成同一個視窗自由選（多組選擇，【火】【雷】各 1 張）。
+    //   守的意圖不變：火與雷各 1 張都能拿到、公開揭示、最後才重洗、牌庫沒有時可以不選走完。
     const r1=applyAction(st,{type:'PLAY_TRAINER',iid:card.iid},pool);
     const p1=r1?.pendingSelection;
-    chk('冒險提燈：步驟1 開 deck-search filter=Energy:Fire',
-        p1?.type==='deck-search' && p1?.filter==='Energy:Fire' && p1?.maxCount===1,
-        `${p1?.type} filter=${p1?.filter} max=${p1?.maxCount}`);
-    const r2=applyAction(r1,{type:'RESOLVE_SELECTION',selectedIids:[f.iid]},pool);
-    const p2=r2?.pendingSelection;
-    chk('冒險提燈：步驟2 開 deck-search filter=Energy:Lightning',
-        p2?.type==='deck-search' && p2?.filter==='Energy:Lightning',
-        `${p2?.type} filter=${p2?.filter}`);
-    chk('冒險提燈：步驟1 公開揭示卡名（卡面「給對手看過」）',
-        logs(r2).some(m=>/搜到.*基本【火】能量.*加入手牌/.test(m)), logs(r2).filter(m=>/冒險提燈/.test(m)).join(' | '));
-    const r3=applyAction(r2,{type:'RESOLVE_SELECTION',selectedIids:[l.iid]},pool);
+    const gl=(p1?.params?.groups??[]).map(g=>g.label+'='+g.filter).join(',');
+    chk('冒險提燈：開一個多組選擇視窗（【火】【雷】各 1）',
+        p1?.type==='deck-search' && p1?.filter==='Groups' && p1?.maxCount===2 && p1?.minCount===0 && gl==='【火】=BasicEnergyOf=Fire,【雷】=BasicEnergyOf=Lightning',
+        `${p1?.type} filter=${p1?.filter} max=${p1?.maxCount} groups=${gl}`);
+    const r3=applyAction(r1,{type:'RESOLVE_SELECTION',selectedIids:[l.iid,f.iid]},pool);
+    chk('冒險提燈：選完就結束（不再開第二段）', !r3?.pendingSelection, r3?.pendingSelection?.type);
+    chk('冒險提燈：公開揭示卡名（卡面「給對手看過」）',
+        logs(r3).some(m=>/冒險提燈：給對手看過後加入手牌.*基本【火】能量/.test(m) && /基本【雷】能量/.test(m)), logs(r3).filter(m=>/冒險提燈/.test(m)).join(' | '));
     const hand=(r3?.players?.[0]?.hand ?? []).map(x=>x.iid);
     chk('冒險提燈：兩張能量都進手牌', hand.includes(f.iid) && hand.includes(l.iid), JSON.stringify(hand));
     chk('冒險提燈：兩張都離開牌庫',
         !(r3?.players?.[0]?.deck ?? []).some(x=>x.iid===f.iid||x.iid===l.iid));
+    // 同組兩張（兩張【火】）⇒ 只收 1 張（每組最多 1 張）
+    const card3=inst(c.id), f2=inst(fire.id), f3=inst(fire.id);
+    const st3=mk({hand:[card3],deck:[f2,f3,inst(PLAIN.id)]});
+    const s1=applyAction(st3,{type:'PLAY_TRAINER',iid:card3.iid},pool);
+    const s2=applyAction(s1,{type:'RESOLVE_SELECTION',selectedIids:[f2.iid,f3.iid]},pool);
+    const h3=(s2?.players?.[0]?.hand??[]).map(x=>x.iid);
+    chk('冒險提燈：送兩張【火】只收 1 張', h3.includes(f2.iid) && !h3.includes(f3.iid) && !s2?.pendingSelection, JSON.stringify(h3));
     // 牌庫沒有目標能量時要能 Pass（不卡死）
     const card2=inst(c.id);
     const stNo=mk({hand:[card2],deck:[inst(PLAIN.id)]});
     const q1=applyAction(stNo,{type:'PLAY_TRAINER',iid:card2.iid},pool);
     const q2=applyAction(q1,{type:'RESOLVE_SELECTION',selectedIids:[]},pool);
-    const q3=applyAction(q2,{type:'RESOLVE_SELECTION',selectedIids:[]},pool);
-    chk('冒險提燈：牌庫沒有對應能量時可 Pass 走完（不卡 pending）', !q3?.pendingSelection, q3?.pendingSelection?.type);
+    chk('冒險提燈：牌庫沒有對應能量時可 Pass 走完（不卡 pending）', !!q1?.pendingSelection && !q2?.pendingSelection, q2?.pendingSelection?.type);
   }
   chk('既有 阿克羅瑪的執著 仍有 handler（同型兩步式正對照）', !!akuroma && TRAINER_EFFECTS.has('阿克羅瑪的執著'));
 }

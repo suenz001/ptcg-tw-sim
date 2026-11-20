@@ -14,6 +14,7 @@ import { ENERGY_LABEL } from '$lib/cards/energy'; // v5.801 屬性→CJK 標籤(
 import { hasOakEye, faceAttackDamage } from './effects/_shared'; // v5.789 監視之眼 gate
 import { canEffectPlaceOnBench } from './effects/_shared'; // ⭐v6.634 效果放備戰：排除海豚俠ex｜全能靈魂
 import { withAttackDamageTaken, addToolDiscardLog } from './effects/_shared'; // ⭐v6.256「受到的招式的傷害」唯一中央寫入點
+import { openGroupedDeckSearch } from './effects/_shared'; // ⭐v6.668 「各選 1 張」多組選擇中央管線
 import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂（【無】被招式傷害KO 獎賞-1）
 import { markDamageCounterMovedFrom } from './effects/_shared'; // v5.947 移動指示物非治療
 import { hasStatusInAnySlot, countSpecialConditions } from './effects/_shared'; // v5.834 跨三槽狀態讀取
@@ -16263,18 +16264,16 @@ regR('wind-vortex-return', (st, idx, iids, _params, pool) => {
 
 // ── 阿克羅瑪的執著（Supporter） ── 從牌庫選競技場卡 + 能量卡各 1 張加手牌
 regG('阿克羅瑪的執著', (st, idx) => st.players[idx].deck.length > 0);
-reg('阿克羅瑪的執著', (st, idx, pool) => {
-  st = addLog(st, '阿克羅瑪的執著：步驟 1／2 — 從牌庫選 1 張競技場卡加手牌', idx);
-  // v2.993：卡面寫「各 1 張」mandatory；牌庫無競技場時允許 Pass
-  const hasStadium = st.players[idx].deck.some(c => pool.get(c.cardId)?.subtype === 'Stadium');
-  return withPending(st, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Stadium',
-    minCount: 0, maxCount: 1,
-    effectKey: 'akuroma-step1-stadium',
-  });
-});
+// >>> v6668-selection-groups
+// ⭐v6.668：同一個視窗自由選（akuroma-step1／2 保留給舊 pending）
+reg('阿克羅瑪的執著', (st, idx) => openGroupedDeckSearch(st, idx, {
+  label: '阿克羅瑪的執著',
+  groups: [
+    { label: '【競技場】', filter: 'Stadium' },
+    { label: '【能量】', filter: 'Energy' },
+  ],
+}));
+// <<< v6668-selection-groups
 regR('akuroma-step1-stadium', (st, idx, iids, _params, pool) => {
   let s = st;
   if (iids.length > 0) {
@@ -16633,19 +16632,20 @@ regR('reform-hammer-energy-pick', (st, idx, iids, params, pool) => {
 // ── 小光（Supporter） ───────────────────────────────────────────────────────
 // 卡面：從你的牌庫搜尋 1 張基礎寶可夢、1 張進化一階寶可夢、1 張進化二階寶可夢，
 //      展示給對手後加進手牌，並重洗牌庫。
-// 實裝：三段鏈式 deck-search（Basic → Stage1 → Stage2），每段 minCount:0 maxCount:1
-//      （牌庫找不到時玩家可以直接 Skip 進下一段）。最後階段結束才 shuffle。
+// 實裝：⭐v6.668 起同一個視窗自由選三組（openGroupedDeckSearch，每組 0～1 張，最後重洗一次）。
+//      下方 koharu-phase1～3（舊的三段鏈）只保留給部署當下還停在舊 pending 的對局。
 regG('小光', (st, idx) => st.players[idx].deck.length > 0);
-reg('小光', (st, idx) => {
-  const s = addLog(st, '小光：依序搜尋 1 基礎/1 進化一階/1 進化二階寶可夢加手牌', idx);
-  return withPending(s, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Basic',
-    minCount: 0, maxCount: 1,
-    effectKey: 'koharu-phase1',
-  });
-});
+// >>> v6668-selection-groups
+// ⭐v6.668（玩家建議）：改成同一個視窗自由選三組（openGroupedDeckSearch）；下方 koharu-phase1～3 保留給部署當下還停在舊 pending 的對局。
+reg('小光', (st, idx) => openGroupedDeckSearch(st, idx, {
+  label: '小光',
+  groups: [
+    { label: '【基礎】', filter: 'Basic' },
+    { label: '【1階進化】', filter: 'Stage1' },
+    { label: '【2階進化】', filter: 'Stage2' },
+  ],
+}));
+// <<< v6668-selection-groups
 regR('koharu-phase1', (st, idx, iids, _params, pool) => {
   // 第 1 階段：Basic
   if (iids.length > 0) {
@@ -16709,16 +16709,16 @@ regR('koharu-phase3', (st, idx, iids, _params, pool) => {
 // ── 鬥子（Supporter） ───────────────────────────────────────────────────────
 // 卡面：從你的牌庫搜尋 1 張進化寶可夢 + 1 張能量卡，展示後加進手牌並重洗牌庫。
 regG('鬥子', (st, idx) => st.players[idx].deck.length > 0);
-reg('鬥子', (st, idx) => {
-  const s = addLog(st, '鬥子：搜尋 1 張進化寶可夢 + 1 張能量加手牌', idx);
-  return withPending(s, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Evolution',
-    minCount: 0, maxCount: 1,
-    effectKey: 'touko-phase1',
-  });
-});
+// >>> v6668-selection-groups
+// ⭐v6.668：同一個視窗自由選（touko-phase1／2 保留給舊 pending）
+reg('鬥子', (st, idx) => openGroupedDeckSearch(st, idx, {
+  label: '鬥子',
+  groups: [
+    { label: '【進化】', filter: 'EvolutionPokemon' },
+    { label: '【能量】', filter: 'Energy' },
+  ],
+}));
+// <<< v6668-selection-groups
 regR('touko-phase1', (st, idx, iids, _params, pool) => {
   if (iids.length > 0) {
     const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
@@ -19307,13 +19307,18 @@ regR('mystery-box-step1', (state, aIdx, iids, _params, pool) => {
   s = { ...s, players };
   const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   s = addLog(s, `秘密箱：丟棄 ${picked.length} 張手牌（${names}）`, aIdx);
-  // v2.144 — 改為 4 步串接：物品 → 道具 → 支援者 → 競技場（各最多 1 張）
-  s = addLog(s, '秘密箱：第 1 步—從牌庫選 1 張「物品」加手牌（可跳過）', aIdx);
-  return withPending(s, {
-    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'Item', minCount: 0, maxCount: 1,
-    effectKey: 'mystery-box-pick-item',
+  // >>> v6668-selection-groups
+  // ⭐v6.668：四組同一個視窗自由選（mystery-box-pick-item／tool／supporter／stadium 保留給舊 pending）
+  return openGroupedDeckSearch(s, aIdx, {
+    label: '秘密箱',
+    groups: [
+      { label: '【物品】', filter: 'Item' },
+      { label: '【道具】', filter: 'Tool' },
+      { label: '【支援者】', filter: 'Supporter' },
+      { label: '【競技場】', filter: 'Stadium' },
+    ],
   });
+  // <<< v6668-selection-groups
 });
 
 // v2.144 — 秘密箱串接 resolver（不在中途重洗，最後一步才 shuffle）──

@@ -85,8 +85,12 @@ function scenarios(M) {
     const deck = [inst(ID.filler), inst(ID.sw), ...many(ID.W, 5), inst(ID.big), inst(ID.sw)];
     let s = mk({ hand: [inst(ID.tora)], deck });
     s = act(s, { type: 'PLAY_TRAINER', iid: s.players[0].hand[0].iid });
-    s = res(s, p1(deck));
-    if (key(s) === 'tora-trainer') s = res(s, p2(deck));
+    // ⭐v6.668（Rule 40）：杜若改成同一個視窗選兩組（grouped-search-to-hand）⇒ 兩段的 payload 合併一次送；舊兩段式照舊
+    if (key(s) === 'grouped-search-to-hand') s = res(s, [...p1(deck), ...p2(deck)]);
+    else {
+      s = res(s, p1(deck));
+      if (key(s) === 'tora-trainer') s = res(s, p2(deck));
+    }
     const ids = [...s.players[0].hand, ...s.players[0].deck].map((c) => c.iid);
     return { hand: s.players[0].hand.map((c) => c.cardId), total: ids.length, uniq: new Set(ids).size, big: s.players[0].hand.some((c) => c.cardId === ID.big) };
   };

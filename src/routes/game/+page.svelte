@@ -177,7 +177,8 @@ import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式�
   import { saveReplay, listReplays, loadReplay, deleteReplay, saveInProgress, loadInProgress, downloadReplayFile, parseReplayBytes, MAX_SAVED_REPLAYS, type SavedReplayInfo } from '$lib/game/replay-store';
   import { replayRevealsOpponent } from '$lib/game/replay-policy';   // ⭐v6.557 手牌互疊量依實際寬度計算（唯一判準）
   import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemonExCard,
-           isBasicEnergyOfType as isBasicEnergyOfTypeCentral } from '$lib/game/selection-filter';
+           isBasicEnergyOfType as isBasicEnergyOfTypeCentral,
+           isGroupsFilter, readSelectionGroups, selectionGroupCounts, selectionGroupBlocked, selectionGroupIndex, groupMax } from '$lib/game/selection-filter';   // ⭐v6.668 多組選擇
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
   import { resolveRoomUpdate, shouldAttemptStartGame, shouldResetStartGrace, startGraceRecheckDelayMs, decideBoardAdopt, decideStuckSelfHeal, isStaleFinishedGame,
            casualResyncGapMs, casualResyncInLastChance, RESYNC_BASE_MS,
@@ -5156,6 +5157,26 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (card.supertype === 'Energy') return fishnetPickState.energyCount >= 3;   // 能量已選 3 → 擋
     return false;
   }
+  // >>> v6668-selection-groups
+  // ⭐v6.668 多組選擇（小光／鬥子／秘密箱…「各選 1 張」）：判準全在 selection-filter（selectionGroupIndex／selectionGroupBlocked）。
+  //   這裡只把「目前勾了哪些」交給它算：每組幾張、哪張要變暗。
+  const selGroups = $derived(pendingSelection && isGroupsFilter(pendingSelection.filter)
+    ? readSelectionGroups(pendingSelection.params as Record<string, unknown> | undefined) : null);
+  const selGroupCounts = $derived.by(() => {
+    if (!selGroups) return [] as number[];
+    return selectionGroupCounts(selGroups, selectionItems.filter(it => selectionPicked.has(it.iid)), pool);
+  });
+  function isGroupPickDisabled(item: CardInstance): boolean {
+    if (!selGroups) return false;
+    if (selectionPicked.has(item.iid)) return false;   // 已選 → 允許取消
+    return selectionGroupBlocked(selGroups, selGroupCounts, item, pool);
+  }
+  function selGroupLabel(item: CardInstance): string {
+    if (!selGroups) return '';
+    const gi = selectionGroupIndex(selGroups, item, pool.get(item.cardId));
+    return gi >= 0 ? selGroups[gi].label : '';
+  }
+  // <<< v6668-selection-groups
   // damage-distribute 本批次加總的 counter 數（= 各 iid 的 count 之和）
   const selectionBatchSum = $derived.by(() => {
     let s = 0;
@@ -5174,6 +5195,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (pendingSelection.effectKey === 'fishnet-unified') {
       if (fishnetPickState.pokeCount > 3 || fishnetPickState.energyCount > 3) return false;
     }
+    // >>> v6668-selection-groups
+    if (selGroups && selGroupCounts.some((n, i) => n > groupMax(selGroups[i]))) return false;
+    // <<< v6668-selection-groups
     if (pendingSelection.type === 'damage-distribute') {
       const n = selectionBatchSum;
       return n >= pendingSelection.minCount && n <= pendingSelection.maxCount;
@@ -11249,6 +11273,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const item = selectionItems.find(it => it.iid === iid);
       if (item && isFishnetDisabled(item)) return;
     }
+    // >>> v6668-selection-groups
+    if (selGroups) {
+      const item = selectionItems.find(it => it.iid === iid);
+      if (item && isGroupPickDisabled(item)) return;
+    }
+    // <<< v6668-selection-groups
     const next = new Set(selectionPicked);
     if (next.has(iid)) {
       // 點已選 → 取消
@@ -14583,7 +14613,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {:else}
             <p class="sel-hint">
               選 {pendingSelection.minCount===pendingSelection.maxCount?`${pendingSelection.minCount}`:`${pendingSelection.minCount}～${pendingSelection.maxCount}`} 張
-              {#if pendingSelection.filter&&pendingSelection.filter!=='TOP6'&&!pendingSelection.filter.startsWith('Supporter')}（{describeFilter(pendingSelection.filter)}）{/if}
+              {#if selGroups}{#each selGroups as g, gi}<span class="sel-grp-chip" class:sel-grp-full={(selGroupCounts[gi] ?? 0) >= groupMax(g)}>{g.label} {selGroupCounts[gi] ?? 0}/{groupMax(g)}</span>{/each}
+              {:else if pendingSelection.filter&&pendingSelection.filter!=='TOP6'&&!pendingSelection.filter.startsWith('Supporter')}（{describeFilter(pendingSelection.filter)}）{/if}
               · 已選 {selectionPicked.size}{#if selectedNamesLabel}：<b class="sel-picked-names">{selectedNamesLabel}</b>{/if}
               {#if isPokePicker}· 點放大鏡 🔍 查看詳情{/if}
             </p>
@@ -14739,7 +14770,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
                  （太陽伊布ex｜精神出局、拍落、占為己有、驚嚇、鈴鈴吵鬧 … 共 10 招）。 -->
             {#each selectionItems as item (item.iid)}{@const c=getCard(item.cardId)}
               {#if c || concealed}
-                {@const _bdDisabled = isBrocksDigDisabled(item) || isFishnetDisabled(item)}
+                {@const _bdDisabled = isBrocksDigDisabled(item) || isFishnetDisabled(item) || isGroupPickDisabled(item)}
+                {@const _grpLabel = selGroupLabel(item)}
                 <div class="sel-card-wrap" class:sel-picked={selectionPicked.has(item.iid)} class:sel-concealed={concealed} class:bd-disabled={_bdDisabled}>
                   {#if !concealed}
                     {#if isEnergyPicker && energyOwnerMap.has(item.iid)}
@@ -14754,13 +14786,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     {/if}
                   {/if}
                   <button class="sel-card" disabled={_bdDisabled}
-                    title={_bdDisabled ? '依小剛的發掘規則，此卡目前不可選（Basic+Evolution 不可混選；Evolution 最多 1）' : ''}
+                    title={_bdDisabled && pendingSelection.effectKey === 'brocks-dig-unified' ? '依小剛的發掘規則，此卡目前不可選（Basic+Evolution 不可混選；Evolution 最多 1）' : ''}
                     onclick={()=>toggleSelection(item.iid)}>
                     {#if concealed}
                       <!-- v3.9998：concealed 模式（精神出局等「不看正面」）— 卡背 + 卡名隱藏 -->
                       <div class="sel-card-back"><div class="sel-card-back-icon">🎴</div><div class="sel-card-back-q">?</div></div>
                       <span class="sel-name">???</span>
                     {:else}
+                      {#if _grpLabel}<span class="sel-grp-tag">{_grpLabel}</span>{/if}
                       <img use:retryImg={c.imageUrl} src={cardThumb(c.imageUrl)} alt={c.name} loading="lazy"
                         class:legend-half-l={twoCardStadiumHalfIndex(selectionItems, item.iid, pool) === 0}
                         class:legend-half-r={twoCardStadiumHalfIndex(selectionItems, item.iid, pool) === 1}/><span class="sel-name">{c.name}</span>
@@ -20560,6 +20593,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .sel-card-wrap.bd-disabled{ opacity:.35; }
   .sel-card-wrap.bd-disabled .sel-card{ cursor:not-allowed; filter:grayscale(.6); border-color:#3a3a3a; }
   .sel-card-wrap.bd-disabled .sel-card:hover{ border-color:#3a3a3a; box-shadow:none; }
+  /* ⭐v6.668 多組選擇：卡片左上角的組別標籤＋提示列的組別計數 */
+  .sel-grp-tag{ position:absolute; top:3px; left:3px; z-index:1; font-size:.62rem; line-height:1.2; padding:1px 4px; border-radius:4px;
+    background:rgba(10,20,40,.85); color:#ffd54a; border:1px solid rgba(255,213,74,.55); pointer-events:none; white-space:nowrap; }
+  .sel-grp-chip{ display:inline-block; font-size:.72rem; padding:0 6px; margin:0 3px 2px 0; border-radius:8px; border:1px solid #4a5a7a; color:#cfd8ea; }
+  .sel-grp-chip.sel-grp-full{ border-color:#5aa86a; color:#9be0a8; }
   .sel-zoom{ position:absolute; top:.2rem; right:.2rem; z-index:2; background:rgba(0,0,0,.72); border:1px solid #6aaa6a; color:#cfc; font-size:.7rem; line-height:1; padding:.18rem .32rem; border-radius:4px; cursor:pointer; }
   .sel-zoom:hover{ background:rgba(74,138,74,.9); color:#fff; }
   .sel-card img{ width:64px; border-radius:3px; }

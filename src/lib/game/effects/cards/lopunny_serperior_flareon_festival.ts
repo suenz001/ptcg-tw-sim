@@ -26,6 +26,7 @@ import {
   rejectAbilityUse,         // ⭐v6.181 中央「拒絕出口」
 } from '../_shared';
 import { openDeckViewReshuffle } from '../_shared';  // v5.963 0-pick 重洗
+import { splitGroupedPick } from '../_shared';  // ⭐v6.668 多組選擇拆組
 import { isBasicEnergyOfType } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
 import { getEffectivePokemonTypes } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
@@ -217,8 +218,7 @@ regA('蓋諾賽克特ex', 0, (st, idx, pool) => {
 //   最多各 1 張，以任意方式附於自己的【超】或者【鋼】寶可夢身上。並且重洗牌庫。」
 //
 // 流程：
-//   1. 選 1 張基本【超】能量（可跳過）
-//   2. 選 1 張基本【鋼】能量（可跳過）
+//   1～2. ⭐v6.668 起同一個視窗選基本【超】與基本【鋼】能量各 0～1 張（多組選擇；舊的兩段 metagross-x-start-psy／met 只留給舊 pending）
 //   3. resolver：v2.158 升級為 startEnergyChain — 玩家逐張選目標（不再簡化附 active）
 //   4. 重洗牌庫
 //
@@ -239,16 +239,28 @@ regA('大吾的巨金怪ex', 0, (st, idx, pool) => {
   });
   if (!hasTarget) return addLog(st, 'X啟動：場上無【超】或【鋼】寶可夢', idx);
   
-  st = addLog(st, 'X啟動：從牌庫搜尋基本【超】能量與基本【鋼】能量各最多 1 張（自動附於【超】或【鋼】寶可夢）', idx);
+  st = addLog(st, 'X啟動：從牌庫選擇基本【超】能量與基本【鋼】能量各最多 1 張，附於自己的【超】或【鋼】寶可夢', idx);
+  // >>> v6668-selection-groups
+  // ⭐v6.668：兩組同一個視窗自由選（metagross-x-start-psy／met 保留給舊 pending）
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Energy:Psychic',
-    minCount: 0, maxCount: 1,
-    effectKey: 'metagross-x-start-psy',
-    params: { titleOverride: 'X啟動 (1/2)：選 ≤1 張基本【超】能量' },
+    filter: 'Groups',
+    minCount: 0, maxCount: 2,
+    effectKey: 'metagross-x-start-grouped',
+    params: {
+      groups: [{ label: '【超】', filter: 'BasicEnergyOf=Psychic' }, { label: '【鋼】', filter: 'BasicEnergyOf=Metal' }],
+      titleOverride: 'X啟動：從牌庫選擇',
+    },
   });
+  // <<< v6668-selection-groups
 });
+// >>> v6668-selection-groups
+regR('metagross-x-start-grouped', (st, idx, iids, params, pool) => {
+  const { byGroup } = splitGroupedPick(iids, st.players[idx].deck, params as Record<string, unknown> | undefined, pool, 'deck-search');
+  return commitMetagrossEnergy(st, idx, byGroup[0]?.[0] ?? null, byGroup[1]?.[0] ?? null, pool);
+});
+// <<< v6668-selection-groups
 
 // Step 2: 選完超能量 → 開鋼能量
 regR('metagross-x-start-psy', (st, idx, iids, _params, pool) => {

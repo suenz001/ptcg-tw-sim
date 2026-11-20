@@ -62,7 +62,41 @@ const TOPN_PARAMS = Object.fromEntries(
 
 const hasCJK = (s) => /[一-鿿]/.test(s);
 
-const violations = [];
+const PRE_VIOLATIONS = [];
+const violations0 = () => PRE_VIOLATIONS;
+// >>> v6668-selection-groups
+// ⭐v6.668 多組選擇（filter 'Groups'／'Groups:TOP_N'）的產能取決於 params.groups 裡每一組的 filter（小光：Basic／Stage1／Stage2…）。
+//   ⇒ 另外掃全部 `groups: [ { label, filter } … ]` 字面量：每一組的 filter 都必須被中央收錄且在現役卡池有產能
+//   （組內 filter 沒收錄 ＝ selectionGroupIndex 永遠不符 ＝ 那一組整組選不到）。
+//   'Groups' 本身則餵「全部掃到的組」當 params，退化成「至少有一組選得到」的卡型判定（守衛原意不變）。
+const GROUP_ENTRIES = [];
+for (const f of files) {
+  const src = readFileSync(f, 'utf8');
+  const reG = /groups:\s*\[([\s\S]*?)\]/g;
+  let g;
+  while ((g = reG.exec(src)) !== null) {
+    const reE = /\{\s*label:\s*'([^']*)',\s*filter:\s*'([^']+)'/g;
+    let e;
+    while ((e = reE.exec(g[1])) !== null) {
+      GROUP_ENTRIES.push({ label: e[1], filter: e[2], where: `${f.slice(ROOT.length).replace(/^[/\\]/, '').replace(/\\/g, '/')}:${src.slice(0, g.index).split('\n').length}` });
+    }
+  }
+}
+if (GROUP_ENTRIES.length < 20) violations0().push(`[U] 多組選擇的組別只掃到 ${GROUP_ENTRIES.length} 個（應 ≥ 20：小光 3、秘密箱 4…）—— 掃描器壞了？`);
+for (const ge of GROUP_ENTRIES) {
+  let y = 0, known = true;
+  for (const c of cards) {
+    const r = ev('deck-search', ge.filter, { iid: 'x' }, c, {});
+    if (r === null) { known = false; break; }
+    if (r === true) y++;
+  }
+  if (!known) violations0().push(`[U] ${ge.where} — 多組選擇的組 ${ge.label} 用的 filter '${ge.filter}' 沒有被中央 selection-filter 收錄 ⇒ 這一組永遠選不到`);
+  else if (y === 0) violations0().push(`[U] ${ge.where} — 多組選擇的組 ${ge.label}（filter '${ge.filter}'）在現役卡池零產能`);
+}
+const GROUPS_PARAMS = { ...TOPN_PARAMS, groups: GROUP_ENTRIES.map(({ label, filter }) => ({ label, filter })) };
+// <<< v6668-selection-groups
+
+const violations = [...PRE_VIOLATIONS];   // ⭐v6.668 多組選擇的組別檢查先收進來
 let okCount = 0, uncoveredCount = 0;
 for (const [, info] of found) {
   let yields = 0, evaluable = false;
@@ -70,7 +104,7 @@ for (const [, info] of found) {
     // v6.129：TOP 型 filter（'DarknessPokemon:TOP7' 等）的 predicate 依賴 params.topNIids。
     //   產能守衛問的是「這個 filter 對全卡池有沒有卡型產能」，TOP **範圍**限制不該影響這個判定
     //   → 餵一份「本卡就在牌庫頂」的 params，讓它退化成純卡型判定。
-    const r = ev(info.zone, info.fl, { iid: 'x' }, c, { params: TOPN_PARAMS });
+    const r = ev(info.zone, info.fl, { iid: 'x' }, c, { params: info.fl.startsWith('Groups') ? GROUPS_PARAMS : TOPN_PARAMS });   // ⭐v6.668
     if (r === true) { yields++; evaluable = true; } else if (r === false) evaluable = true;
   }
   const where = `${info.file}:${info.line}`;

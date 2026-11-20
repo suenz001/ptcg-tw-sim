@@ -1,6 +1,7 @@
 // v6.666 的精確歷史還原，供舊版守衛使用。
 import assert from 'node:assert/strict';
 import { normEol } from './eol-agnostic.mjs';
+import { revertV6668IfPresent } from './revert-v6668-selection-groups.mjs';   // v6.668 由新到舊
 
 export const V6666_PAIRS = {
   "oracle-admin/admin.html": [
@@ -70,7 +71,7 @@ export const V6666_PAIRS = {
 const V6666_MARKERS = {"oracle-admin/admin.html":[0,1],"src/lib/profile/AvatarCircle.svelte":[0,1],"src/lib/version.ts":[0],"static/changelog-archive.html":[0],"static/changelog-bodies.html":[0,1],"static/changelog.html":[0,1,2],"static/site-version.txt":[0]};
 
 export function revertV6666IfPresent(path, source) {
-  let text = normEol(String(source));
+  let text = revertV6668IfPresent(path, normEol(String(source)));
   const pairs = V6666_PAIRS[path];
   if (!pairs || V6666_MARKERS[path].every((index) => !text.includes(pairs[index][0]))) return text;
   for (const [index, [from]] of pairs.entries()) {

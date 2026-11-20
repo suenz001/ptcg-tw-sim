@@ -55,15 +55,18 @@ const HAT      = byName('超級烈空坐帽子');
     const st=mk({ active:self, bench:[eleki, other], hand:[f1,f2,l1,w] });
     const r=fn(st,0,pool,self);
     const ps=r.pendingSelection;
-    chk('拍檔提升：開手牌 picker', ps?.type==='hand-discard' && ps?.effectKey==='m6-partner-boost-pick', ps?.effectKey);
+    // ⭐v6.668（Rule 40）：改走多組選擇（filter 'Groups'，【火】【雷】選滿變暗）⇒ effectKey 換成 m6-partner-boost-grouped；
+    //   舊的 m6-partner-boost-pick 保留給部署當下的舊 pending（下方否定對照兩個 resolver 都驗）。
+    chk('拍檔提升：開手牌 picker', ps?.type==='hand-discard' && ps?.effectKey==='m6-partner-boost-grouped' && ps?.filter==='Groups', ps?.effectKey);
     const valid=new Set(ps?.params?.validIids ?? []);
     chk('拍檔提升：候選只含基本火/雷（不含水）', valid.has(f1.iid)&&valid.has(l1.iid)&&!valid.has(w.iid));
     const targets=new Set(ps?.params?.targetIids ?? []);
     chk('拍檔提升：目標只含電擊魔獸/鴨嘴炎獸（不含杖尾鱗甲龍）',
         targets.has(self.iid)&&targets.has(eleki.iid)&&!targets.has(other.iid), JSON.stringify([...targets]));
-    // ⭐ 否定對照：兩張火 → 只認 1 張（卡面「各最多 1 張」）
-    const rz=RESOLVERS.get('m6-partner-boost-pick');
-    chk('拍檔提升：有 resolver', typeof rz==='function');
+    // ⭐ 否定對照：兩張火 → 只認 1 張（卡面「各最多 1 張」）—— 新舊兩個 resolver 都驗
+    for (const key of ['m6-partner-boost-grouped','m6-partner-boost-pick']) {
+    const rz=RESOLVERS.get(key);
+    chk('拍檔提升：有 resolver '+key, typeof rz==='function');
     if (typeof rz==='function') {
       const r2=rz(r,0,[f1.iid,f2.iid],ps.params,pool);
       const chainPending=r2.pendingSelection;
@@ -71,6 +74,7 @@ const HAT      = byName('超級烈空坐帽子');
           !!chainPending, JSON.stringify(chainPending?.effectKey));
       chk('否定對照：另一張火留在手牌', r2.players[0].hand.some(c=>c.iid===f2.iid),
           JSON.stringify(r2.players[0].hand.map(c=>c.iid)));
+    }
     }
   }
 }

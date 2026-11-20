@@ -20,7 +20,7 @@ import type { Card } from '$lib/cards/types';
 import { CLEAR_ON_EXIT_FLAGS, PERSIST_ON_EXIT_FLAGS } from '../instance-flags';
 // v6.191 玳蘿：「超級進化寶可夢【ex】」中央述詞（selection-filter 只 import types，無循環）
 // v6.250 險惡廢墟：「場上【基礎】寶可夢」中央述詞同樣來自 selection-filter（同一個 leaf）
-import { isMegaExCard, isBasicPokemonOnField, isRocketTeamPokemonCard } from '../selection-filter';
+import { isMegaExCard, isBasicPokemonOnField, isRocketTeamPokemonCard, readSelectionGroups, sanitizeSelectionSet, groupsTotalMax, selectionGroupIndex, type SelectionGroup } from '../selection-filter';
 export { isRocketTeamPokemonCard };   // ⭐v6.551 定義搬到 selection-filter（leaf），原名 re-export
 // ⭐v6.213 sameEvoName 的名稱正規化唯一來源（stage2-index 是 leaf，只 import type，無循環）
 import { normalizeEvoVariantName } from '../stage2-index';
@@ -3175,3 +3175,100 @@ export function withAttackDamageTaken(
  */
 //   ⭐v6.551：定義搬到 selection-filter.ts（v6551-rocket-pred-leaf），本檔 re-export。
 // <<< v6534-rocket-holder
+
+
+// >>> v6668-selection-groups
+/**
+ * ⭐v6.668「從牌庫選擇 A 卡與 B 卡各 1 張，在給對手看過後加入手牌。並且重洗牌庫。」的中央管線
+ *   （小光、鬥子、青木的手法、秘密箱、阿克羅瑪的執著、冒險提燈、杜若）。
+ *   玩家建議：原本是一段一段依序選、選過的段落不能改 ⇒ 改成同一個視窗自由選，每組選滿後同組其他卡變暗。
+ *   ・組別判準唯一一份：selection-filter 的 selectionGroupIndex／sanitizeSelectionSet（UI 變暗、AI 選卡、engine 消毒閘、這個 resolver 全用它）。
+ *   ・每組下限 0：帶條件的搜尋可以宣告找不到（PTCG_RULES L832）。
+ *   ・代價（秘密箱丟 3 張、青木丟光手牌）由呼叫端先付，這裡只負責搜尋。
+ *   ・topIids：只能從牌庫上方這幾張裡選（杜若「查看牌庫上方7張」）；剩下的卡跟整副牌庫一起重洗（卡面「放回牌庫並重洗」）。
+ *   ⚠ 舊的逐段 effectKey（koharu-phase1… 等）保留註冊，部署當下還停在舊 pending 的對局照樣能走完。
+ */
+export const GROUPED_SEARCH_TO_HAND = 'grouped-search-to-hand';
+export function openGroupedDeckSearch(
+  st: GameState,
+  idx: 0 | 1,
+  opts: { label: string; groups: SelectionGroup[]; topIids?: string[] },
+): GameState {
+  const top = Array.isArray(opts.topIids);
+  const title = top ? `${opts.label}：從牌庫上方 ${opts.topIids!.length} 張選擇` : `${opts.label}：從牌庫選擇`;
+  const s = addLog(st, `${opts.label}：從牌庫選擇${opts.groups.map(g => g.label).join('、')}各 1 張`, idx);
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    filter: top ? 'Groups:TOP_N' : 'Groups',
+    minCount: 0, maxCount: groupsTotalMax(opts.groups),
+    effectKey: GROUPED_SEARCH_TO_HAND,
+    params: { label: opts.label, groups: opts.groups, titleOverride: title, ...(top ? { topIids: [...opts.topIids!] } : {}) },
+  });
+}
+regR(GROUPED_SEARCH_TO_HAND, (st, idx, iids, params, pool) => {
+  const label = typeof params?.label === 'string' ? params.label : '搜尋';
+  const groups = readSelectionGroups(params as Record<string, unknown> | undefined);
+  const topRaw = params?.topIids;
+  const topSet = Array.isArray(topRaw) ? new Set(topRaw as string[]) : null;
+  const deck = st.players[idx].deck;
+  // 自驗（不信任 payload）：只收牌庫裡的、（杜若）牌庫上方那幾張裡的、每組最多 N 張（首見保留）
+  const seen = new Set<string>();
+  const ordered: CardInstance[] = [];
+  for (const id of Array.isArray(iids) ? iids : []) {
+    if (seen.has(id) || (topSet && !topSet.has(id))) continue;
+    const inst = deck.find(c => c.iid === id);
+    if (!inst) continue;
+    seen.add(id); ordered.push(inst);
+  }
+  const keep = new Set(sanitizeSelectionSet('deck-search', topSet ? 'Groups:TOP_N' : 'Groups', ordered, pool, { params: params as Record<string, unknown> | undefined }));
+  const chosen = ordered.filter(c => keep.has(c.iid));
+  let s = st;
+  if (chosen.length > 0) {
+    // 卡面「在給對手看過後加入手牌」⇒ 公開卡名（附上組別）
+    const names = chosen.map(c => {
+      const card = pool.get(c.cardId);
+      const gi = selectionGroupIndex(groups, c, card);
+      return `${gi >= 0 ? groups[gi].label : ''}${card?.name ?? '?'}`;
+    }).join('、');
+    s = addLog(s, `${label}：給對手看過後加入手牌 ${names}`, idx);
+  } else {
+    s = addLog(s, `${label}：未選擇任何卡`, idx);
+  }
+  const chosenSet = new Set(chosen.map(c => c.iid));
+  return updatePlayer(s, idx, p => ({
+    ...p,
+    hand: [...p.hand, ...chosen],
+    deck: shuffle(p.deck.filter(c => !chosenSet.has(c.iid))),   // 卡面「並且重洗牌庫」：只在最後洗一次
+  }));
+});
+/**
+ * ⭐v6.668 附能型「最多各 1 張」（大吾的巨金怪ex｜X啟動、烈焰猴｜火焰蹈舞、鴨嘴炎獸｜拍檔提升）共用：
+ *   把 payload 依組別拆開（每組最多 N 張、首見保留、只收 zone 裡真的有的卡）。回傳 byGroup[i]＝第 i 組選到的 iid。
+ */
+export function splitGroupedPick(
+  iids: string[],
+  zone: ReadonlyArray<CardInstance>,
+  params: Record<string, unknown> | undefined,
+  pool: Map<string, Card>,
+  zoneKind: 'deck-search' | 'hand-discard',
+): { picked: string[]; byGroup: string[][] } {
+  const groups = readSelectionGroups(params);
+  const seen = new Set<string>();
+  const ordered: CardInstance[] = [];
+  for (const id of Array.isArray(iids) ? iids : []) {
+    if (seen.has(id)) continue;
+    const inst = zone.find(c => c.iid === id);
+    if (!inst) continue;
+    seen.add(id); ordered.push(inst);
+  }
+  const picked = sanitizeSelectionSet(zoneKind, 'Groups', ordered, pool, { params });
+  const byGroup: string[][] = groups.map(() => []);
+  for (const id of picked) {
+    const inst = ordered.find(c => c.iid === id)!;
+    const gi = selectionGroupIndex(groups, inst, pool.get(inst.cardId));
+    if (gi >= 0) byGroup[gi].push(id);
+  }
+  return { picked, byGroup };
+}
+// <<< v6668-selection-groups

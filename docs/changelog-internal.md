@@ -1,5 +1,15 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.668 — 多組選擇（各選 1 張）中央管線
+
+基準 `fd0903d4`（v6.667）。玩家建議：小光逐段選、選過不能改 ⇒ 10 張卡（小光／鬥子／青木的手法／秘密箱／阿克羅瑪的執著／冒險提燈／杜若／大吾的巨金怪ex｜X啟動／烈焰猴｜火焰蹈舞／鴨嘴炎獸｜拍檔提升）改成同一個視窗自由選。
+- 判準唯一一份：selection-filter.ts 的 'Groups'／'Groups:TOP_N' filter＋params.groups（readSelectionGroups／selectionGroupIndex／sanitizeSelectionSet／selectionGroupCounts／selectionGroupBlocked）；新增組內述詞 PokemonCard、前綴 BasicEnergyOf=。
+- 中央管線：_shared.ts openGroupedDeckSearch＋resolver grouped-search-to-hand（自驗 payload、topIids、公開卡名、最後重洗一次）；附能三張用 splitGroupedPick 後接 startEnergyChain。
+- engine 消毒閘（牌庫／手牌）先分組再夾總數；AI 依有用度排序後每組取前 N 張；UI 變暗、點擊防呆、確認鈕判定、卡片左上角組別標籤、提示列組別計數。
+- 舊的逐段 effectKey 全部保留註冊（部署當下停在舊 pending 的對局能走完）。
+- 守衛 test-v6668-selection-groups（65 條、HEAD-FAIL、10 個突變全殺）；Rule 40 調整 test-filter-yields-candidates（掃組內 filter）、test-m6-wave10／wave14、test-v6543、test-v6608。
+- 審查（Opus 5.5）：P1 兩支守衛漏改（test-v6125 ④ 死條目 flame-dance-pick-fire 移除；test-v6207 2j／4h 改一次送【超】【鋼】）；P2 能量鏈來源是手牌而場上沒有可附目標時改成能量留在手牌（原本丟進棄牌區），火焰蹈舞使用條件補「至少一隻沒被詛咒根鎖住」；P3 手牌分支無 pool 也夾總數、過期註解、守衛補 F1～F5。
+
 ## v6.667 — 解耦 11 支歷史還原守衛以防正常升版翻紅，並補齊公開 changelog 三檔隔離檢查（2026-11-20）
 
 基準 `3075b04c`（v6.666）。純內部守衛與版本維護更新（未更動玩家介面、頭像渲染、PNG 匯出、大廳或後端業務邏輯），回應獨立複審抓出的 2 項 P3：

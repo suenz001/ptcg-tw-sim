@@ -71,7 +71,7 @@ export function handDiscardCandidates(
   const vi = params?.validIids as string[] | undefined;
   let out = Array.isArray(vi) ? hand.filter(c => vi.includes(c.iid)) : hand;
   if (isKnownSelectionFilter('hand-discard', f)) {
-    out = out.filter(c => evaluateSelectionFilter('hand-discard', f, c, pool?.get(c.cardId), {}) !== false);
+    out = out.filter(c => evaluateSelectionFilter('hand-discard', f, c, pool?.get(c.cardId), { params }) !== false);   // ⭐v6.668 傳 params（多組選擇 'Groups' 讀 params.groups；其他手牌述詞不讀 ctx）
   }
   return out;
 }

@@ -41,6 +41,8 @@ import { getEffectiveHP } from '../../engine'; // v5.952 剩餘HP用有效HP
 import { applyHandAttachReactions } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import { buildDevolvedInstance } from '../_shared'; // v5.984 中央退化建構
+import { splitGroupedPick } from '../_shared'; // ⭐v6.668 多組選擇拆組
+import { startEnergyChain } from './v158_energy_chain'; // ⭐v6.668 「以任意方式附於」中央 chain
 import { canApplyEffectToTarget } from '../../defense'; // v5.984 特性效果免疫 gate(化隱/對戰圓形)
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import {
@@ -327,20 +329,31 @@ regR('archeops-primal-wing', (st, idx, iids, _params, pool) => {
 // gate：手牌至少有【火】或【鬥】基本能量
 // ══════════════════════════════════════════════════════════════════════════════
 regA('烈焰猴', 0, (st, idx, pool, _cardInst) => {
+  // >>> v6668-selection-groups
+  // ⭐v6.668：【火】【鬥】同一個視窗自由選（最多各 1 張），選完逐張選要附給哪隻（中央 startEnergyChain：「以任意方式」）。
+  //   flame-dance-pick-fire／attach-fire／pick-fight 保留給部署當下還停在舊 pending 的對局。
+  //   使用條件（手牌有基本【火】或基本【鬥】能量）在 engine getUsableAbilities。
   const p = st.players[idx];
-  // 開第一階段：選【火】基本能量（最多 1 張，可不選）
-  const fireIids = p.hand
-    .filter(c => isBasicEnergyOfType(pool.get(c.cardId), 'Fire'))
-    .map(c => c.iid);
-  const s = addLog(st, '火焰蹈舞：選擇要附加的「基本【火】能量」（最多 1 張，可跳過）', idx);
+  const groups = [{ label: '【火】', filter: 'BasicEnergyOf=Fire' }, { label: '【鬥】', filter: 'BasicEnergyOf=Fighting' }];
+  const has = (t: 'Fire' | 'Fighting') => p.hand.some(c => isBasicEnergyOfType(pool.get(c.cardId), t));
+  const s = addLog(st, '火焰蹈舞：從手牌選擇基本【火】能量與基本【鬥】能量最多各 1 張', idx);
   return withPending(s, {
-    type: 'hand-choose',
+    type: 'hand-discard',
     actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 0, maxCount: fireIids.length > 0 ? 1 : 0,
-    effectKey: 'flame-dance-pick-fire',
-    params: { validIids: fireIids },
+    filter: 'Groups',
+    minCount: 0, maxCount: (has('Fire') ? 1 : 0) + (has('Fighting') ? 1 : 0),
+    effectKey: 'flame-dance-grouped',
+    params: { groups, titleOverride: '火焰蹈舞：從手牌選擇', allowSkipZero: true },
   });
+  // <<< v6668-selection-groups
 });
+// >>> v6668-selection-groups
+regR('flame-dance-grouped', (st, idx, iids, params, pool) => {
+  const { picked } = splitGroupedPick(iids, st.players[idx].hand, params as Record<string, unknown> | undefined, pool, 'hand-discard');
+  if (picked.length === 0) return addLog(st, '火焰蹈舞：未選擇能量', idx);
+  return startEnergyChain(st, idx, picked, { label: '火焰蹈舞', source: 'hand', scope: 'any-own', filterType: 'Any' }, pool);
+});
+// <<< v6668-selection-groups
 // 第一階段 → 若有選【火】，先開附著 picker；無論選或不選，都串到第二階段【鬥】
 regR('flame-dance-pick-fire', (st, idx, iids, _params, pool) => {
   if (iids.length > 0) {

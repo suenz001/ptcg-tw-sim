@@ -375,6 +375,14 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
   //   選擇區下方的「📖 查看牌庫剩餘全部」只認 TOP 型 filter 才隱藏 ⇒ 岩狗狗｜挖回、燭光靈｜光照燃燒能看到整副剩餘牌庫（卡面只准看上方 N 張）。
   'TOP_N': (_c, ctx, inst) => inTopParam(ctx, 'topIids', inst),
   // <<< v6644-top-reveal-filter
+  // >>> v6668-selection-groups
+  // ⭐v6.668「各選 1 張」多組選擇（小光／鬥子／秘密箱…）：同一個選擇視窗裡自由選，判準在下方 selectionGroupIndex（唯一一份）。
+  //   'Groups'＝候選是「符合任一組」的卡；'Groups:TOP_N'＝再限定在牌庫上方 N 張（params.topIids，杜若）。
+  'Groups': (c, ctx, inst) => selectionGroupIndex(readSelectionGroups(ctx.params), inst, c) >= 0,
+  'Groups:TOP_N': (c, ctx, inst) => inTopParam(ctx, 'topIids', inst) && selectionGroupIndex(readSelectionGroups(ctx.params), inst, c) >= 0,
+  // 組內用的單卡述詞：「寶可夢卡」（不限階段、不讀 validIids）
+  'PokemonCard': (c) => c.supertype === 'Pokemon',
+  // <<< v6668-selection-groups
   // <<< v6543-top-filters-central
 };
 
@@ -390,6 +398,10 @@ const HAND_DISCARD_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterC
   'BasicPsychicEnergy':  (c) => isBasicEnergyOfType(c, 'Psychic'),
   'BasicFightingEnergy': (c) => isBasicEnergyOfType(c, 'Fighting'),
   'Item':                (c) => c.supertype === 'Trainer' && c.subtype === 'Item',
+  // >>> v6668-selection-groups
+  // ⭐v6.668 從手牌「最多各 1 張」（烈焰猴｜火焰蹈舞、鴨嘴炎獸｜拍檔提升）：同一份組別判準
+  'Groups':              (c, ctx) => selectionGroupIndex(readSelectionGroups(ctx.params), { iid: '' }, c) >= 0,
+  // <<< v6668-selection-groups
 };
 
 /**
@@ -435,7 +447,7 @@ const DISCARD_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilte
 /** deck-search 已收錄的「前綴型」filter（evaluateSelectionFilter 與 isKnownSelectionFilter 共用單一來源）。 */
 const DECK_SEARCH_NAME_PREFIXES = ['Name:', 'Pokemon:NamePrefix=', 'Pokemon:NameContains=',
   'Pokemon:Name=', 'Pokemon:Names=', 'NameContains:', 'Card:', 'Basic:NamePrefix=',
-  'Tool:NameContains=', 'Stage1Or2:'] as const;
+  'Tool:NameContains=', 'Stage1Or2:', 'BasicEnergyOf='] as const;
 
 export function evaluateSelectionFilter(
   zone: SelectionFilterZone,
@@ -482,6 +494,10 @@ export function evaluateSelectionFilter(
       const stage = card.stage ?? card.subtype;
       return stage === 'Stage1' || stage === 'Stage2';
     }
+    // >>> v6668-selection-groups
+    // ⭐v6.668 組內用：基本【X】能量（BasicEnergyOf=Fire）。走 isBasicEnergyOfType（基本能量 pokemonType 恒 null，從卡名【X】判）
+    if (filter.startsWith('BasicEnergyOf=')) return isBasicEnergyOfType(card, filter.slice('BasicEnergyOf='.length) as EnergyType);
+    // <<< v6668-selection-groups
     if (filter.startsWith('Card:')) return card.name === filter.slice(5);
     if (filter.startsWith('Basic:NamePrefix=')) return isBasicPokemonCard(card) && card.name.startsWith(filter.slice('Basic:NamePrefix='.length));
     return null;   // 其餘(TOP/Evolution/params/generic Pokemon:/BasicEnergy: 等)批次遷移 → caller fallback
@@ -533,7 +549,22 @@ export function sanitizeSelectionSet(
   filter: string,
   insts: ReadonlyArray<{ iid: string; cardId: string }>,
   pool: Map<string, Card>,
+  ctx: SelectionFilterCtx = {},
 ): string[] {
+  // >>> v6668-selection-groups
+  // ⭐v6.668 多組選擇：每組最多 max 張（首見保留）、不屬於任何組的濾掉。UI／AI／engine 消毒閘都走這裡。
+  if (isGroupsFilter(filter)) {
+    const groups = readSelectionGroups(ctx.params);
+    const used = groups.map(() => 0);
+    const out: string[] = [];
+    for (const it of insts) {
+      const gi = selectionGroupIndex(groups, it, pool.get(it.cardId));
+      if (gi < 0 || used[gi] >= groupMax(groups[gi])) continue;
+      used[gi]++; out.push(it.iid);
+    }
+    return out;
+  }
+  // <<< v6668-selection-groups
   if (zone === 'deck-search' && filter === 'BasicEnergy:DistinctTypes') {
     const seen = new Set<string>();
     const out: string[] = [];
@@ -546,3 +577,81 @@ export function sanitizeSelectionSet(
   }
   return insts.map(i => i.iid);
 }
+
+// >>> v6668-selection-groups
+/**
+ * ⭐v6.668「從牌庫（手牌）選擇 A 卡與 B 卡各 1 張」的多組選擇 —— 判準唯一一份。
+ *   玩家建議：小光原本依「基礎 → 1階 → 2階」逐段選，前面選了就不能改 ⇒ 改成同一個視窗自由選，
+ *   某組選滿後同組其他卡變暗（再點已選的卡可取消）。
+ *   pending.filter ＝ 'Groups'（牌庫／手牌）或 'Groups:TOP_N'（牌庫上方 N 張，杜若），
+ *   pending.params.groups ＝ [{ label: '【基礎】', filter: 'Basic', max?: 1 }, …]
+ *   ・組內 filter 一律是「只看卡片本身」的 deck-search 述詞（Basic／Stage1／Energy／BasicEnergyOf=Fire…），
+ *     沒收錄（回 null）視為不符合 ⇒ fail-closed，不會多給。
+ *   ・一張卡屬於「第一個符合的組」（現行 10 張卡的各組互斥，順序不影響結果）。
+ *   ・每組下限都是 0：帶條件的搜尋可以宣告找不到（PTCG_RULES L832）；手牌附能卡面是「最多各 1 張」。
+ */
+export interface SelectionGroup { label: string; filter: string; max?: number }
+
+export function isGroupsFilter(filter: string | undefined | null): boolean {
+  return filter === 'Groups' || filter === 'Groups:TOP_N';
+}
+
+/** 從 pending.params 讀出組別（格式不對的條目丟掉；組內不可再是 Groups，避免遞迴）。 */
+export function readSelectionGroups(params: Record<string, unknown> | undefined | null): SelectionGroup[] {
+  const raw = params?.groups;
+  if (!Array.isArray(raw)) return [];
+  const out: SelectionGroup[] = [];
+  for (const g of raw) {
+    if (!g || typeof g !== 'object') continue;
+    const { label, filter, max } = g as { label?: unknown; filter?: unknown; max?: unknown };
+    if (typeof filter !== 'string' || filter.length === 0 || filter.startsWith('Groups')) continue;
+    out.push({ label: typeof label === 'string' ? label : filter, filter, ...(typeof max === 'number' ? { max } : {}) });
+  }
+  return out;
+}
+
+/** 一組最多幾張（沒寫＝1；負數或非整數夾成 0 以上的整數）。 */
+export function groupMax(g: SelectionGroup): number {
+  return typeof g.max === 'number' && Number.isFinite(g.max) ? Math.max(0, Math.floor(g.max)) : 1;
+}
+
+/** 全部組別加起來最多幾張（＝pending.maxCount 的上限）。 */
+export function groupsTotalMax(groups: ReadonlyArray<SelectionGroup>): number {
+  return groups.reduce((n, g) => n + groupMax(g), 0);
+}
+
+/** 這張卡屬於第幾組；不屬於任何組 ⇒ -1。 */
+export function selectionGroupIndex(groups: ReadonlyArray<SelectionGroup>, inst: { iid: string }, card: Card | undefined): number {
+  if (!card) return -1;
+  for (let i = 0; i < groups.length; i++) {
+    if (evaluateSelectionFilter('deck-search', groups[i].filter, inst, card, {}) === true) return i;
+  }
+  return -1;
+}
+
+/** 已勾選的卡在各組各佔幾張（UI 的組別計數與「選滿變暗」用）。 */
+export function selectionGroupCounts(
+  groups: ReadonlyArray<SelectionGroup>,
+  picked: ReadonlyArray<{ iid: string; cardId: string }>,
+  pool: Map<string, Card>,
+): number[] {
+  const used = groups.map(() => 0);
+  for (const it of picked) {
+    const gi = selectionGroupIndex(groups, it, pool.get(it.cardId));
+    if (gi >= 0) used[gi]++;
+  }
+  return used;
+}
+
+/** UI：這張（尚未勾選的）卡現在能不能點 —— 它那一組已經選滿 ⇒ 不能點（變暗）。已勾選的卡永遠可以點（取消）。 */
+export function selectionGroupBlocked(
+  groups: ReadonlyArray<SelectionGroup>,
+  counts: ReadonlyArray<number>,
+  item: { iid: string; cardId: string },
+  pool: Map<string, Card>,
+): boolean {
+  const gi = selectionGroupIndex(groups, item, pool.get(item.cardId));
+  if (gi < 0) return true;
+  return (counts[gi] ?? 0) >= groupMax(groups[gi]);
+}
+// <<< v6668-selection-groups

@@ -23,7 +23,7 @@ import type {
   PlayerState, PendingSelection, LogEntry, TurnPhase, GamePhase, ActionRecord, TurnActionLog} from './types';
 import { RULE_BOX_SUBTYPES } from './types';
 // v6.018 批5：4 卡片述詞 helper + ZH_ENERGY_TYPE 下沉 selection-filter.ts（解循環）；engine re-export 給既有 importer
-import { isBasicPokemonCard, isBasicPokemonOnField, isRulePokemon, isPokemonExCard, isRuleBoxExOrV, isBasicEnergyOfType, getBasicEnergyType, isMegaExCard, ZH_ENERGY_TYPE, evaluateSelectionFilter, isKnownSelectionFilter, sanitizeSelectionSet } from './selection-filter';
+import { isBasicPokemonCard, isBasicPokemonOnField, isRulePokemon, isPokemonExCard, isRuleBoxExOrV, isBasicEnergyOfType, getBasicEnergyType, isMegaExCard, ZH_ENERGY_TYPE, evaluateSelectionFilter, isKnownSelectionFilter, sanitizeSelectionSet, isGroupsFilter } from './selection-filter';
 // v6.176：場上目標型 picker 的候選述詞（UI 與中央消毒閘共用同一份，見 selection-candidates.ts）
 import { fieldPickerBaseIids, FIELD_TARGET_PICKER_TYPES, handDiscardCandidates, damageDistributeCandidates } from './selection-candidates';
 export { isBasicPokemonCard, isBasicPokemonOnField, isRulePokemon, isPokemonExCard, isRuleBoxExOrV, isBasicEnergyOfType, getBasicEnergyType };
@@ -1574,11 +1574,22 @@ export function sanitizeSelectedIids(state: GameState, pending: PendingSelection
     for (const iid of iids) {
       // >>> v6644-sanitize-cap-first
       // ⭐v6.644：先判上限再收（原本先 push 再比 ⇒ maxCount 0 的「只能檢視」照樣收 1 張）
-      if (typeof pending.maxCount === 'number' && outH.length >= pending.maxCount) break;
+      if (typeof pending.maxCount === 'number' && outH.length >= pending.maxCount && !isGroupsFilter(pending.filter)) break;   // ⭐v6.668 多組選擇先分組再夾總數（見下方）
       // <<< v6644-sanitize-cap-first
       if (seenH.has(iid) || !okSet.has(iid)) continue;
       seenH.add(iid); outH.push(iid);
     }
+    // >>> v6668-selection-groups
+    // ⭐v6.668 從手牌「最多各 1 張」（filter 'Groups'）：同一份每組上限（首見保留）
+    if (pool && isGroupsFilter(pending.filter)) {
+      const instsH = outH.map(iid => p.hand.find(c => c.iid === iid)).filter((c): c is CardInstance => !!c);
+      //   先分組再夾總數：[火,火,鬥] 不可以先被夾成 [火,火] 再分組成只剩 [火]（鬥被誤丟）
+      const grouped = sanitizeSelectionSet('hand-discard', pending.filter ?? '', instsH, pool, { params: pending.params as Record<string, unknown> | undefined });
+      return typeof pending.maxCount === 'number' ? grouped.slice(0, Math.max(0, pending.maxCount)) : grouped;
+    }
+    // 沒傳 pool 的舊呼叫端：照樣夾總數（與牌庫分支對稱，審查 P3-2）
+    if (isGroupsFilter(pending.filter) && typeof pending.maxCount === 'number') return outH.slice(0, Math.max(0, pending.maxCount));
+    // <<< v6668-selection-groups
     return outH;
   }
   if (t === 'damage-distribute') {
@@ -1615,7 +1626,7 @@ export function sanitizeSelectedIids(state: GameState, pending: PendingSelection
   for (const iid of iids) {
     // >>> v6644-sanitize-cap-first
     // ⭐v6.644：先判上限再收（原本先 push 再比 ⇒ maxCount 0 的「只能檢視」牌庫搜尋照樣收 1 張，可從牌庫拿走 1 張卡）
-    if (typeof pending.maxCount === 'number' && out.length >= pending.maxCount) break;
+    if (typeof pending.maxCount === 'number' && out.length >= pending.maxCount && !isGroupsFilter(pending.filter)) break;   // ⭐v6.668 多組選擇先分組再夾總數（見下方）
     // <<< v6644-sanitize-cap-first
     if (seen.has(iid) || !zoneSet.has(iid)) continue;
     if (validSet && !validSet.has(iid)) continue;
@@ -1639,8 +1650,15 @@ export function sanitizeSelectedIids(state: GameState, pending: PendingSelection
     const insts = bySemantic
       .map((iid) => (zone ?? []).find((c) => c.iid === iid) as CardInstance | undefined)
       .filter((c): c is CardInstance => !!c);
-    return sanitizeSelectionSet('deck-search', f, insts, pool);
+    // >>> v6668-selection-groups
+    // ⭐v6.668 多組選擇（params.groups）的「每組最多 N 張」也在這裡收（同一個 sanitizeSelectionSet）⇒ 要傳 params
+    const _setClean = sanitizeSelectionSet('deck-search', f, insts, pool, { params: pending.params as Record<string, unknown> | undefined });
+    //   多組選擇上面沒有先夾總數（先分組再夾），這裡補夾
+    return isGroupsFilter(f) && typeof pending.maxCount === 'number' ? _setClean.slice(0, Math.max(0, pending.maxCount)) : _setClean;
+    // <<< v6668-selection-groups
   }
+  // ⭐v6.668 沒傳 pool 的舊呼叫端：多組選擇照樣夾總數（不分組也不可以超過上限）
+  if (isGroupsFilter(f) && typeof pending.maxCount === 'number') return out.slice(0, Math.max(0, pending.maxCount));
   return out;
 }
 
@@ -12550,6 +12568,10 @@ export function getUsableAbilities(
           return false;
         });
         if (!hasFireOrFight) return;
+        // >>> v6668-hand-chain-no-target
+        // ⭐v6.668（審查 P2-1）：自己場上至少要有一隻可以從手牌附能的寶可夢（全被詛咒根鎖住 ⇒ 效果完全無法執行 ⇒ 不能按，判準①）
+        if (![player.active, ...player.bench].some(c => !!c && !c.cantAttachEnergyThisTurn)) return;
+        // <<< v6668-hand-chain-no-target
       }
       // 火箭隊的多邊獸Ｚ｜再構築：手牌 ≥ 2（要丟 2 張）+ 牌庫 ≥ 1（要抽 1 張）
       if (ab.name === '再構築') {

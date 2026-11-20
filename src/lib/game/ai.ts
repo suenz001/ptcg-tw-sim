@@ -29,7 +29,7 @@ import { ATTACK_PRE_DISCARD_CHOICE, getEnergyDiscardUnits, preDiscardOptInThresh
 import { hasEffectiveAbilityByInst } from './defense';
 import { isAllPowerSoulBlocked } from './usable-gates';   // ⭐v6.528 全能靈魂（壯偉碩木候選）
 import { activeEnergyDiscardCandidates, damageDistributeCandidates } from './selection-candidates';   // ⭐v6.523 能量 picker 候選與 UI 同一支；⭐v6.543 分配候選
-import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemonExCard } from './selection-filter'; // v6.013/6.016 P1-1:deck-search/hand-discard/discard-search filter 中央求值器
+import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard, isPokemonExCard, isGroupsFilter, sanitizeSelectionSet } from './selection-filter'; // v6.013/6.016 P1-1:deck-search/hand-discard/discard-search filter 中央求值器
 // v6.038 批次4b：AI 打法表（離線由高勝率對局整理出的策略表）。載入與適用判定都在 ai-playbook.ts，
 //   這裡只做**同步查詢**——getAIAction 是同步的，不能在決策路徑做 fetch。
 //   ⚠沒有表時所有查詢一律回 0/false，決策與接線前**完全等價**（有守衛以自對局逐步比對證明）。
@@ -929,6 +929,13 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           seenTypes.add(t); return true;
         });
       }
+      // >>> v6668-selection-groups
+      // ⭐v6.668 多組選擇（小光／鬥子／秘密箱…）：照上面的有用度排序，每組各取最前面的 N 張（同一份 sanitizeSelectionSet）
+      if (isGroupsFilter(f)) {
+        const keep = new Set(sanitizeSelectionSet('deck-search', f, candidates, pool, { params: sel.params }));
+        candidates = candidates.filter(c => keep.has(c.iid));
+      }
+      // <<< v6668-selection-groups
       const count = Math.min(sel.maxCount, candidates.length);
       return { type: 'RESOLVE_SELECTION', selectedIids: candidates.slice(0, count).map(c => c.iid) };
     }
@@ -1081,7 +1088,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       if (validIidsHD) hand = hand.filter(c => validIidsHD.includes(c.iid));
       // v6.016 批4:中央 selection filter 求值器（修 AI 缺 BasicEnergy:<T>/Energy:<T> 漂移，如妖火紅狐|閃焰魔法丟錯能量）；known 才走中央，否則落原 inline chain
       if (isKnownSelectionFilter('hand-discard', f)) {
-        hand = hand.filter(c => evaluateSelectionFilter('hand-discard', f, c, pool.get(c.cardId), {}) === true);
+        hand = hand.filter(c => evaluateSelectionFilter('hand-discard', f, c, pool.get(c.cardId), { params: sel.params }) === true);   // ⭐v6.668 傳 params（'Groups'）
       } else if (f === 'Energy') hand = hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
       else if (f === 'BasicEnergy') hand = hand.filter(c => {
         const card = pool.get(c.cardId);
@@ -1115,6 +1122,13 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         };
         return scoreOf(b) - scoreOf(a);
       });
+      // >>> v6668-selection-groups
+      // ⭐v6.668 從手牌「最多各 1 張」（烈焰猴／鴨嘴炎獸）：每組各取 1 張
+      if (isGroupsFilter(f)) {
+        const keepH = new Set(sanitizeSelectionSet('hand-discard', f, hand, pool, { params: sel.params }));
+        hand = hand.filter(c => keepH.has(c.iid));
+      }
+      // <<< v6668-selection-groups
       const count = Math.min(sel.maxCount, hand.length);
       return { type: 'RESOLVE_SELECTION', selectedIids: hand.slice(0, count).map(c => c.iid) };
     }

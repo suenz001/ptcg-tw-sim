@@ -28,7 +28,9 @@ export const OPTIONAL_SELECTION_EFFECT_KEYS: ReadonlySet<string> = new Set<strin
   'self-swap-active-bench',        // 狡兔三窟 等自身換場（共用 resolver）：若希望互換
   'lucky-gift-self',               // 信使鳥｜幸福禮物（自方階段）：若希望
   'lucky-gift-opp',                // 信使鳥｜幸福禮物（對手階段）：若希望
-  'flame-dance-pick-fire',         // 烈焰猴｜火焰蹈舞：最多各1、任意方式
+  // ⭐v6.668 移除 'flame-dance-pick-fire'：烈焰猴｜火焰蹈舞改走多組選擇（flame-dance-grouped，params.allowSkipZero 逐卡宣告），
+  //   沒有任何 withPending 再開這個 key（test-v6125 ④ 死條目）。regR 相容別名仍保留（舊 pending 走得完）。
+  //   'flame-dance-pick-fight' 仍由舊鏈的第二段 openFlameDanceFightStage 開出 ⇒ 保留。
   'flame-dance-pick-fight',        // 烈焰猴｜火焰蹈舞（鬥側）
   'lillie-ribombee-invite-place',  // 莉莉艾的蝶結萌虻：查看對手手牌任意數量（亦屬未知資訊）
   'loquat-discard-opp-items',      // 枇琶：查看對手手牌（未知資訊）

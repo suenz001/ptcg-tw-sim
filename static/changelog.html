@@ -1,4 +1,10 @@
 <details open>
+        <summary><span class="ver-badge">v6.668</span> <b>「各選 1 張」的卡改成同一個視窗自由選</b><br>小光、鬥子、秘密箱等「從牌庫選擇 A 卡與 B 卡各 1 張」的卡，不再一段一段依序選，改成同一個視窗一次選完，選錯可以直接取消重選。</summary>
+        <div class="log-body">・每張可選的卡左上角會標出組別（例：小光【基礎】【1階進化】【2階進化】、鬥子【進化】【能量】、秘密箱【物品】【道具】【支援者】【競技場】）；某一組選滿後，同組的其他卡會變暗，再點一次已選的卡就能取消。
+・適用：小光、鬥子、青木的手法、秘密箱、阿克羅瑪的執著、冒險提燈、杜若，以及特性 大吾的巨金怪ex｜X啟動、烈焰猴｜火焰蹈舞、鴨嘴炎獸｜拍檔提升（選完後照舊逐張選要附給哪隻）。
+・規則不變：牌庫沒有的組可以不選；給對手看過後加入手牌、最後重洗牌庫；秘密箱先丟 3 張、青木的手法先丟光手牌；杜若只能從牌庫上方 7 張裡選。</div>
+      </details>
+      <details>
         <summary><span class="ver-badge">v6.666</span> <b>修正小尺寸頭像外框邊緣滲入內圓</b><br>修正對戰先後攻列與名片預覽等小尺寸頭像顯示時，外框邊緣細微滲入頭像內圓的情況，同時保留 20 款外圈裝飾與光暈。</summary>
         <div class="log-body">針對對戰畫面與編輯預覽等各種尺寸的圓形頭像補強外圈裁切，避免小尺寸或不同螢幕解析度下外框抗鋸齒邊緣遮蓋頭像內圓，各款裝飾與外圈發光效果維持不變。</div>
       </details>
@@ -42,9 +48,8 @@
         <summary><span class="ver-badge">v6.656</span> <b>卡牌篩選新增稀有度與特性，改善排列</b><br>查卡與組牌可篩選稀有卡、有無特性，費用改為簡潔數字。</summary>
         <div class="log-body">卡牌資料庫與牌組編輯器新增稀有卡／一般卡、有特性／無特性篩選。招式費用改用0、1、2等數字，並改善桌機與手機的篩選列對齊及換行。</div>
       </details>
-      <details>
+      <details data-ver="v6.655">
         <summary><span class="ver-badge">v6.655</span> <b>修正錦標賽對戰與回放點選 P1 頭像／名片誤載入管理員帳號的問題</b><br>錦標賽觀戰與回放改依實際場次與觀戰房號解析雙方玩家名片，測試房不再讀取預設殘留的 P1 管理員紀錄。</summary>
-        <div class="log-body"><ul><li><b>統一對戰座位解析</b>：對戰頁雙方頭像預載與名片點擊改由 <code>resolveBattleSeatTarget()</code> 統一解析，錦標賽回放依 <code>matchId</code>、觀戰依實際觀戰房號、正式對戰依真實場次查詢，一般對戰本地復盤顯示本地紀錄名片而不誤查預設房。</li><li><b>後端與測試房雙重防呆</b>：測試房僅當下具備真實玩家 UID 時才查詢對應名片，後端同步阻斷讀取預設測試房殘留座位並優先以驗證報名的賽事紀錄解析帳號，避免 P1 固定顯示管理員名片。</li></ul></div>
       </details>
       <details data-ver="v6.654">
         <summary><span class="ver-badge">v6.654</span> <b>對戰「先攻／後攻」顯示小頭像查看名片；名片設定可收合與預覽、頭像支援 ALL 全部卡牌</b><br>對戰時在「先攻／後攻」旁顯示玩家小頭像（點一下查看名片），錦標賽的名片設定區可收合節省版面並可直接預覽自己的名片，頭像選卡預設顯示「ALL 全部卡牌」。</summary>
@@ -111,9 +116,6 @@
       </details>
       <details data-ver="v6.629">
         <summary><span class="ver-badge">v6.629</span> <b>改善手機牌組投稿按鈕辨識度</b><br>牌組公布欄的投稿按鈕統一使用綠底白字。</summary>
-      </details>
-      <details data-ver="v6.626">
-        <summary><span class="ver-badge">v6.626</span> <b>修正公開牌組分享資訊與熱門統計</b><br>改善牌組分享資訊、熱門統計可靠性與手機版顯示。</summary>
       </details>
       <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
         📚 這裡顯示<b>最近的更新內容</b>。更早的紀錄完整保留在 →

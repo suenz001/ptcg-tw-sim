@@ -13,7 +13,7 @@ import type { Card } from '$lib/cards/types';
 import {
   reg, regR, regG, regA, regPre, regPost,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardHand,
-  healResolver, getAllAttachedTools, joinCardNames, rejectAbilityUse } from '../_shared';
+  healResolver, getAllAttachedTools, joinCardNames, rejectAbilityUse, openGroupedDeckSearch } from '../_shared';
 import {
   hitBenchPickPost,
   TOOL_ATTACK_BONUS, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
@@ -341,14 +341,18 @@ regG('青木的手法', (st, idx) => st.players[idx].deck.length > 0);
 reg('青木的手法', (st, idx) => {
   // Step 0：手牌全棄
   let s = discardHand(st, idx);
-  s = addLog(s, '青木的手法：丟棄所有手牌，依序搜尋 1 寶可夢 / 1 支援者 / 1 基本能量', idx);
-  return withPending(s, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon',
-    minCount: 0, maxCount: 1,
-    effectKey: 'aoki-phase1',
+  s = addLog(s, '青木的手法：丟棄所有手牌', idx);
+  // >>> v6668-selection-groups
+  // ⭐v6.668：三組同一個視窗自由選（aoki-phase1～3 保留給舊 pending）
+  return openGroupedDeckSearch(s, idx, {
+    label: '青木的手法',
+    groups: [
+      { label: '【寶可夢】', filter: 'PokemonCard' },
+      { label: '【支援者】', filter: 'Supporter' },
+      { label: '【基本能量】', filter: 'BasicEnergy' },
+    ],
   });
+  // <<< v6668-selection-groups
 });
 regR('aoki-phase1', (st, idx, iids, _params, pool) => {
   if (iids.length > 0) {

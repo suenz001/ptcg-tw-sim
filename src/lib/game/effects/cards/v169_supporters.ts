@@ -17,7 +17,7 @@ import {
   reg, regR, regG,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit, isOwnFirstTurn,
-  deckWithCardsToBottom,
+  deckWithCardsToBottom, openGroupedDeckSearch,
 } from '../_shared';
 import type { CardInstance, PlayerState } from '../../types';
 import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
@@ -66,15 +66,18 @@ regG('杜若', (st, idx) => st.players[idx].deck.length > 0);
 reg('杜若', (st, idx) => {
   const top7 = st.players[idx].deck.slice(0, 7);
   if (top7.length === 0) return addLog(st, '杜若：牌庫為空', idx);
-  st = addLog(st, `杜若：查看牌庫上方 ${top7.length} 張，選 1 寶可夢加手（可跳過）`, idx);
-  return withPending(st, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon:TOP_N',
-    minCount: 0, maxCount: 1,
-    effectKey: 'tora-pokemon',
-    params: { topIids: top7.map(c => c.iid) },
+  st = addLog(st, `杜若：查看牌庫上方 ${top7.length} 張`, idx);
+  // >>> v6668-selection-groups
+  // ⭐v6.668：兩組同一個視窗自由選（只限上方 7 張；tora-pokemon／tora-trainer 保留給舊 pending）
+  return openGroupedDeckSearch(st, idx, {
+    label: '杜若',
+    groups: [
+      { label: '【寶可夢】', filter: 'PokemonCard' },
+      { label: '【訓練家】', filter: 'Trainer' },
+    ],
+    topIids: top7.map(c => c.iid),
   });
+  // <<< v6668-selection-groups
 });
 regR('tora-pokemon', (st, idx, iids, params, pool) => {
   const topIids = (params?.topIids as string[] | undefined) ?? [];

@@ -216,9 +216,11 @@ T('2j. 大吾的巨金怪ex｜X啟動：gate（lopunny…）與**能量鏈的合
   const r=ENG.applyAction(s,{type:'USE_ABILITY',abilityIndex:0,iid:s.players[0].active.iid},pool);
   assert.ok(r.pendingSelection,'gate 擋下了 ⇒ 場上有小碎鑽卻不認');
   const psyInDeck=s.players[0].deck.find(d=>pool.get(d.cardId)?.name?.includes('【超】'));
-  const r2=ENG.applyAction(r,{type:'RESOLVE_SELECTION',selectedIids:[psyInDeck.iid],actorIdx:0},pool);
   const metInDeck=s.players[0].deck.find(d=>pool.get(d.cardId)?.name?.includes('【鋼】'));
-  const r3=ENG.applyAction(r2,{type:'RESOLVE_SELECTION',selectedIids:[metInDeck.iid],actorIdx:0},pool);
+  // ⭐v6.668（Rule 40）：X啟動改成同一個視窗選【超】【鋼】（多組選擇）⇒ 一次送兩張；舊兩段式照舊逐段送。守的意圖（鏈的合法目標認得小碎鑽）不變
+  const r3=r.pendingSelection?.filter==='Groups'
+    ? ENG.applyAction(r,{type:'RESOLVE_SELECTION',selectedIids:[psyInDeck.iid,metInDeck.iid],actorIdx:0},pool)
+    : ENG.applyAction(ENG.applyAction(r,{type:'RESOLVE_SELECTION',selectedIids:[psyInDeck.iid],actorIdx:0},pool),{type:'RESOLVE_SELECTION',selectedIids:[metInDeck.iid],actorIdx:0},pool);
   const vi=r3.pendingSelection?.params?.validIids ?? [];
   assert.ok(vi.includes(kena.iid),'能量鏈的合法目標不含小碎鑽（看得到勾不動）：'+JSON.stringify(vi));
   assert.equal(vi.includes(other.iid),false,'把非【超】非【鋼】的寶可夢也放進來 ⇒ 放太寬');
@@ -433,9 +435,11 @@ T('4h. 能量鏈**走到底**：能量真的附到小碎鑽身上（涵蓋 v158 
   const s=ST({active:I(METAG),bench:[kena,other],deck:[I(PSYE),I(METE),I(PLAIN)]},{active:I(PLAIN)});
   const r=ENG.applyAction(s,{type:'USE_ABILITY',abilityIndex:0,iid:s.players[0].active.iid},pool);
   const psyInDeck=s.players[0].deck.find(d=>pool.get(d.cardId)?.name?.includes('【超】'));
-  const r2=ENG.applyAction(r,{type:'RESOLVE_SELECTION',selectedIids:[psyInDeck.iid],actorIdx:0},pool);
   const metInDeck=s.players[0].deck.find(d=>pool.get(d.cardId)?.name?.includes('【鋼】'));
-  let st=ENG.applyAction(r2,{type:'RESOLVE_SELECTION',selectedIids:[metInDeck.iid],actorIdx:0},pool);
+  // ⭐v6.668（Rule 40）：多組選擇一次送【超】【鋼】兩張；舊兩段式照舊
+  let st=r.pendingSelection?.filter==='Groups'
+    ? ENG.applyAction(r,{type:'RESOLVE_SELECTION',selectedIids:[psyInDeck.iid,metInDeck.iid],actorIdx:0},pool)
+    : ENG.applyAction(ENG.applyAction(r,{type:'RESOLVE_SELECTION',selectedIids:[psyInDeck.iid],actorIdx:0},pool),{type:'RESOLVE_SELECTION',selectedIids:[metInDeck.iid],actorIdx:0},pool);
   // 兩波（【超】→【鋼】）各選小碎鑽當目標，走完整條鏈
   let guard=0;
   while(st.pendingSelection && guard++<6){

@@ -4,7 +4,7 @@
 // ⚠「以任意方式附於…」一律走中央 startEnergyChain（逐張選目標分散），
 //    禁「選 1 隻塞全部」（v5.858 教訓）。
 
-import { regAByName, regR, addLog, updatePlayer, withPending, deckWithCardsToBottom, rejectAbilityUse } from '../_shared';
+import { regAByName, regR, addLog, updatePlayer, withPending, deckWithCardsToBottom, rejectAbilityUse, splitGroupedPick } from '../_shared';
 import { startEnergyChain } from './v158_energy_chain'; // v6.081 「以任意方式附加」中央 chain
 
 // ── 1. 鴨嘴炎獸｜拍檔提升 ─────────────────────────────────────────────────
@@ -36,17 +36,18 @@ regAByName('鴨嘴炎獸', '拍檔提升', (st, idx, pool) => {
   return withPending(
     addLog(st, '拍檔提升：從手牌選「基本【火】能量」與「基本【雷】能量」最多各 1 張', idx), {
       type: 'hand-discard', actorIdx: idx, sourcePlayerIdx: idx,
-      filter: 'Energy',
+      filter: 'Groups',   // ⭐v6.668 多組選擇：【火】【雷】同一個視窗、各最多 1 張（選滿變暗）
       // ⚠ v6.083：maxCount 依「有幾種屬性」而非總張數 —— 卡面是「各最多 1 張」，
       //   手牌只有 2 張火時上限應是 1（原本可勾 2 張，resolver 靜默只收 1 張＝體感沒做完）。
       minCount: 0, maxCount: (fireIids.length > 0 ? 1 : 0) + (ltngIids.length > 0 ? 1 : 0),
-      effectKey: 'm6-partner-boost-pick',
+      effectKey: 'm6-partner-boost-grouped',   // ⭐v6.668（m6-partner-boost-pick 保留給舊 pending）
     // v6.125 卡面：「…最多各1張，**以任意方式**附於自己的『電擊魔獸』或者『鴨嘴炎獸』身上。」→ 可 0 張
       params: {
         validIids: valid,
         fireIids, ltngIids,
         targetIids: targets.map(t => t.iid),
-        titleOverride: '拍檔提升：選基本【火】／基本【雷】能量（各最多 1 張，接著選要附給哪隻）',
+        groups: [{ label: '【火】', filter: 'BasicEnergyOf=Fire' }, { label: '【雷】', filter: 'BasicEnergyOf=Lightning' }],
+        titleOverride: '拍檔提升：從手牌選擇',
         allowSkipZero: true,
       },
     });
@@ -69,6 +70,17 @@ regR('m6-partner-boost-pick', (st, idx, iids, params, pool) => {
     label: '拍檔提升', source: 'hand', scope: 'any-own', filterType: 'Any', targetIids,
   }, pool);
 });
+
+// >>> v6668-selection-groups
+regR('m6-partner-boost-grouped', (st, idx, iids, params, pool) => {
+  const { picked } = splitGroupedPick(iids, st.players[idx].hand, params as Record<string, unknown> | undefined, pool, 'hand-discard');
+  if (picked.length === 0) return addLog(st, '拍檔提升：未選擇能量', idx);
+  const targetIids = (params?.targetIids as string[]) ?? [];
+  return startEnergyChain(st, idx, picked, {
+    label: '拍檔提升', source: 'hand', scope: 'any-own', filterType: 'Any', targetIids,
+  }, pool);
+});
+// <<< v6668-selection-groups
 
 // ── 2. 杖尾鱗甲龍｜鱗片律動 ───────────────────────────────────────────────
 // 卡面：在自己的回合時可使用1次。查看自己的牌庫上方6張卡，從其中選擇任意數量的

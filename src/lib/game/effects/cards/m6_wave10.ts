@@ -11,7 +11,7 @@
 //   ・主持人的帶動 → 與既有 SV9a 同名同文，已自動承接 handler
 
 import { reg, regG, regR, addLog, updatePlayer, withPending, shuffle,
-         clearActiveEffects, tryPromptPromoteActive, PENDING_REFRESH_ON_POP } from '../_shared';
+         clearActiveEffects, tryPromptPromoteActive, PENDING_REFRESH_ON_POP, openGroupedDeckSearch } from '../_shared';
 import { switchRetreatOrderInfo, switchRetreatOrderPending, fireSwitchRetreatAbility } from '../../effects';   // ⭐v6.548 回備戰特性 × 訓練家 的順序（中央）
 import type { GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -45,12 +45,16 @@ reg('美味飯糰', (st, idx, pool, trainerInst) => {
 //   ⚠「各 1 張」是 mandatory，但牌庫沒有時要能 Pass → minCount:0。
 //   ⚠ 重洗**只在最後一步做一次**（中途重洗會讓第二步的搜尋看到洗過的牌庫）。
 regG('冒險提燈', (st, idx) => st.players[idx].deck.length > 0);
-reg('冒險提燈', (st, idx) => withPending(
-  addLog(st, '冒險提燈：步驟 1／2 — 從牌庫選 1 張「基本【火】能量」加手牌', idx), {
-    type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Energy:Fire', minCount: 0, maxCount: 1,
-    effectKey: 'm6-lantern-step1-fire',
-  }));
+// >>> v6668-selection-groups
+// ⭐v6.668：兩組同一個視窗自由選（m6-lantern-step1／2 保留給舊 pending）
+reg('冒險提燈', (st, idx) => openGroupedDeckSearch(st, idx, {
+  label: '冒險提燈',
+  groups: [
+    { label: '【火】', filter: 'BasicEnergyOf=Fire' },
+    { label: '【雷】', filter: 'BasicEnergyOf=Lightning' },
+  ],
+}));
+// <<< v6668-selection-groups
 function lanternTake(st: GameState, idx: 0 | 1, iids: string[], pool: Map<string, Card>, label: string): GameState {
   if (iids.length === 0) return addLog(st, `冒險提燈：未選擇${label}`, idx);
   const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
