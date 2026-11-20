@@ -20,11 +20,13 @@ import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
 import { cssOf } from './lib/svelte-style-block.mjs';
 import { V6664_PAIRS, revertV6664IfPresent } from './lib/revert-v6664-lobby-frame-fix.mjs';
 import { V6665_PAIRS, revertV6665IfPresent } from './lib/revert-v6665-glow-and-blank-uid.mjs';
+import { V6666_PAIRS, revertV6666IfPresent } from './lib/revert-v6666-small-avatar-clip.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_V6663 = '0329ee552aa25ca84fc7875a7ab3146a2b104900';
 const BASE_V6664 = 'b390744eb59dbda885b7b93fe40654c4664809b9';
 const COMMIT_V6665 = '4fed8ee34616c0b9299de02686dcf9c575b9031e';
+const COMMIT_V6666 = '3075b04ce2e3de6fc55288452f03d8fa8fab488c';
 
 const API_PATH = 'src/lib/profile/profile-api.ts';
 const AV_PATH = 'src/lib/profile/AvatarCircle.svelte';
@@ -1259,47 +1261,86 @@ if (chromium) {
   }
 }
 
-console.log('\n【D】Rule 40 精確歷史還原鏈（固定 Git blob）與現行版本／更新紀錄隔離');
-await T('D1 固定歷史 commit blob 逐位元還原：4fed8ee3 → b390744e → 0329ee55 且對歷史基準皆為 no-op（不隨未來升版誤紅）', () => {
-  if (!hasBaseCommit(ROOT, COMMIT_V6665) || !hasBaseCommit(ROOT, BASE_V6664) || !hasBaseCommit(ROOT, BASE_V6663)) {
-    shallowSkip('v6664/v6665 D1 還原鏈', '需要 4fed8ee3、b390744e 與 0329ee55 commit');
+console.log('\n【D】Rule 40 精確歷史還原鏈（固定 Git blob）與現行版本／公開三檔更新紀錄隔離');
+await T('D1 固定歷史 commit blob 逐位元還原：3075b04c → 4fed8ee3 → b390744e → 0329ee55 且對歷史基準皆為 no-op（不隨未來升版誤紅）', () => {
+  if (!hasBaseCommit(ROOT, COMMIT_V6666) || !hasBaseCommit(ROOT, COMMIT_V6665) || !hasBaseCommit(ROOT, BASE_V6664) || !hasBaseCommit(ROOT, BASE_V6663)) {
+    shallowSkip('v6664/v6665/v6666 D1 還原鏈', '需要 3075b04c、4fed8ee3、b390744e 與 0329ee55 commit');
     return;
   }
+  for (const rel of Object.keys(V6666_PAIRS)) {
+    const blob666 = readBaseBlob(ROOT, COMMIT_V6666, rel);
+    const blob665 = readBaseBlob(ROOT, COMMIT_V6665, rel);
+    assert.ok(blob666.ok && blob665.ok, '缺少 3075b04c 或 4fed8ee3 blob: ' + rel);
+    const s666 = normEol(blob666.out);
+    const s665 = normEol(blob665.out);
+    assert.strictEqual(revertV6666IfPresent(rel, s666), s665, '3075b04c 無法精確還原至 4fed8ee3：' + rel);
+    assert.strictEqual(revertV6666IfPresent(rel, s665), s665, '對 4fed8ee3 必須為 no-op：' + rel);
+  }
   for (const rel of Object.keys(V6665_PAIRS)) {
+    const blob666 = readBaseBlob(ROOT, COMMIT_V6666, rel);
     const blob665 = readBaseBlob(ROOT, COMMIT_V6665, rel);
     const blob664 = readBaseBlob(ROOT, BASE_V6664, rel);
-    assert.ok(blob665.ok && blob664.ok, '缺少 4fed8ee3 或 b390744e blob: ' + rel);
+    assert.ok(blob666.ok && blob665.ok && blob664.ok, '缺少 3075b04c / 4fed8ee3 / b390744e blob: ' + rel);
+    const s666 = normEol(blob666.out);
     const s665 = normEol(blob665.out);
     const s664 = normEol(blob664.out);
+    assert.strictEqual(revertV6665IfPresent(rel, s666), s664, '3075b04c 串接還原至 b390744e 失敗：' + rel);
     assert.strictEqual(revertV6665IfPresent(rel, s665), s664, '4fed8ee3 無法精確還原至 b390744e：' + rel);
     assert.strictEqual(revertV6665IfPresent(rel, s664), s664, '對 b390744e 必須為 no-op：' + rel);
   }
   for (const rel of Object.keys(V6664_PAIRS)) {
+    const blob666 = readBaseBlob(ROOT, COMMIT_V6666, rel);
     const blob665 = readBaseBlob(ROOT, COMMIT_V6665, rel);
     const blob664 = readBaseBlob(ROOT, BASE_V6664, rel);
     const blob663 = readBaseBlob(ROOT, BASE_V6663, rel);
-    assert.ok(blob665.ok && blob664.ok && blob663.ok, '缺少 4fed8ee3 / b390744e / 0329ee55 blob: ' + rel);
+    assert.ok(blob666.ok && blob665.ok && blob664.ok && blob663.ok, '缺少 3075b04c / 4fed8ee3 / b390744e / 0329ee55 blob: ' + rel);
+    const s666 = normEol(blob666.out);
     const s665 = normEol(blob665.out);
     const s664 = normEol(blob664.out);
     const s663 = normEol(blob663.out);
+    assert.strictEqual(revertV6664IfPresent(rel, s666), s663, '3075b04c 串接還原至 0329ee55 失敗：' + rel);
     assert.strictEqual(revertV6664IfPresent(rel, s665), s663, '4fed8ee3 串接還原至 0329ee55 失敗：' + rel);
     assert.strictEqual(revertV6664IfPresent(rel, s664), s663, 'b390744e 無法精確還原至 0329ee55：' + rel);
     assert.strictEqual(revertV6664IfPresent(rel, s663), s663, '對 0329ee55 必須為 no-op：' + rel);
   }
 });
 
-await T('D2 後台版本提示動態同步 version.ts 且公開 changelog 不外洩內部實作關鍵字（淺複製亦執行）', () => {
+const PUBLIC_CHLOG_PATHS = ['static/changelog.html', 'static/changelog-bodies.html', 'static/changelog-archive.html'];
+const PUBLIC_CHLOG_FORBIDDEN = ['_profResolveTarget', 'server_admin_patch', 'shadowBlur', 'mask-image'];
+
+function assertPublicChangelogIsolation(fileMap) {
+  for (const rel of PUBLIC_CHLOG_PATHS) {
+    const body = fileMap[rel];
+    assert.strictEqual(typeof body, 'string', '缺少公開更新紀錄檔案：' + rel);
+    for (const tok of PUBLIC_CHLOG_FORBIDDEN) {
+      assert.ok(!body.includes(tok), `公開更新紀錄 ${rel} 不可外洩後台／內部實作字眼：${tok}`);
+    }
+  }
+}
+
+await T('D2 後台版本提示動態同步 version.ts 且公開三檔 changelog 均不外洩內部實作關鍵字（含三檔獨立突變，淺複製亦執行）', async () => {
   const verMatch = /export\s+const\s+VERSION\s*=\s*'([^']+)'/.exec(read('src/lib/version.ts'));
   assert.ok(verMatch && verMatch[1], '讀不到 src/lib/version.ts 的 VERSION');
   const curVer = verMatch[1];
   assert.strictEqual(read('static/site-version.txt').trim(), curVer, `static/site-version.txt 必須同步為 ${curVer}`);
   const adm = read(ADMIN_PATH);
-  assert.ok(adm.includes("ver:'v6.665'") && adm.includes("ver:'v6.666'"), 'admin.html 必須保留 v6.665 與 v6.666 內部紀錄');
+  assert.ok(adm.includes("ver:'v6.665'") && adm.includes("ver:'v6.666'") && adm.includes("ver:'v6.667'"), 'admin.html 必須保留 v6.665／v6.666／v6.667 內部紀錄');
   assert.ok(adm.includes(`window.SITE_VERSION_HINT = '${curVer}'`), `admin.html SITE_VERSION_HINT 必須同步為 ${curVer}`);
-  const ch = read(CHLOG_PATH);
-  const allPublicCh = ch + '\n' + read('static/changelog-archive.html');
+  const publicFiles = Object.fromEntries(PUBLIC_CHLOG_PATHS.map((rel) => [rel, read(rel)]));
+  const allPublicCh = publicFiles['static/changelog.html'] + '\n' + publicFiles['static/changelog-archive.html'];
   assert.ok(allPublicCh.includes('v6.665') && allPublicCh.includes('v6.666'), '公開更新紀錄（首頁或封存頁）應包含 v6.665 與 v6.666');
-  assert.ok(!ch.includes('_profResolveTarget') && !ch.includes('server_admin_patch') && !ch.includes('shadowBlur') && !ch.includes('mask-image'), '公開首頁 changelog 不可外洩後台／內部實作字眼');
+  for (const rel of PUBLIC_CHLOG_PATHS) {
+    assert.ok(!publicFiles[rel].includes('v6.667'), `公開更新紀錄 ${rel} 不應出現內部維護版本 v6.667`);
+  }
+  assertPublicChangelogIsolation(publicFiles);
+
+  // 三檔獨立突變：任一公開檔注入同一組內部實作字眼均須各自翻紅並同時指出檔名與違規字眼
+  for (const rel of PUBLIC_CHLOG_PATHS) {
+    for (const tok of PUBLIC_CHLOG_FORBIDDEN) {
+      const polluted = { ...publicFiles, [rel]: publicFiles[rel] + `\n<!-- mut --> ${tok}` };
+      await mutantMustBreak(`M_leak_${rel}_${tok}`, () => assertPublicChangelogIsolation(polluted), `公開更新紀錄 ${rel} 不可外洩後台／內部實作字眼：${tok}`);
+    }
+  }
 });
 
 console.log(`\n══ v6.664/v6.665/v6.666 大廳名片 UID 解析與 20 款外框內圓／小尺寸／光暈保護守衛：${pass} PASS / ${fail} FAIL ══`);

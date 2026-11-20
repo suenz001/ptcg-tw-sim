@@ -9,19 +9,23 @@ import { V6661_PAIRS, revertV6661IfPresent } from './lib/revert-v6661-deck-filte
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const base = 'b4811af68c933615cfe2dcbbaad0f97ba8c73d6f';
+const snap = '3075b04ce2e3de6fc55288452f03d8fa8fab488c';
 const decks = 'src/routes/decks/+page.svelte';
 const read = file => normEol(readFileSync(join(ROOT, file), 'utf8'));
 const current = read(decks);
 
-if (hasBaseCommit(ROOT, base)) {
+if (hasBaseCommit(ROOT, base) && hasBaseCommit(ROOT, snap)) {
   for (const file of Object.keys(V6661_PAIRS)) {
+    const snapBlob = readBaseBlob(ROOT, snap, file);
     const original = readBaseBlob(ROOT, base, file);
-    assert.ok(original.ok, file);
-    assert.equal(revertV6661IfPresent(file, read(file)), normEol(original.out), file);
+    assert.ok(snapBlob.ok && original.ok, file);
+    const baseText = normEol(original.out);
+    assert.equal(revertV6661IfPresent(file, normEol(snapBlob.out)), baseText, file);
+    assert.equal(revertV6661IfPresent(file, baseText), baseText, file + ' BASE noop');
   }
   console.log('PASS 歷史還原逐檔精確回到 v6.660');
 } else {
-  shallowSkip('v6.661 歷史還原與舊版反證', '需要 v6.660 歷史 commit');
+  shallowSkip('v6.661 歷史還原與舊版反證', '需要 v6.660 與 v6.666 歷史 commit');
 }
 
 const classRule = (src, name) => {

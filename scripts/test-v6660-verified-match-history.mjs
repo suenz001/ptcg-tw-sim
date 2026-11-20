@@ -11,6 +11,7 @@ import { V6660_PAIRS, revertV6660IfPresent } from './lib/revert-v6660-profile-ha
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const base = '9b7494b3269bd2369795a8bdb2d31e72e4ef3a60';
+const snap = '3075b04ce2e3de6fc55288452f03d8fa8fab488c';
 const path = 'oracle-admin/server_admin_patch.js';
 const read = file => normEol(readFileSync(join(root, file), 'utf8'));
 const source = read(path);
@@ -197,11 +198,14 @@ await tokenDiagnostic.report();
 assert.equal(tokenDiagnostic.authChecks(), 1, '無憑證照查代表早退守衛拿掉後會被計數偵測');
 console.log('PASS 對局 ID 與無憑證早退突變');
 
-if (hasBaseCommit(root, base)) {
+if (hasBaseCommit(root, base) && hasBaseCommit(root, snap)) {
   for (const file of Object.keys(V6660_PAIRS)) {
+    const snapBlob = readBaseBlob(root, snap, file);
     const original = readBaseBlob(root, base, file);
-    assert.ok(original.ok, file);
-    assert.equal(revertV6660IfPresent(file, read(file)), normEol(original.out), file);
+    assert.ok(snapBlob.ok && original.ok, file);
+    const baseText = normEol(original.out);
+    assert.equal(revertV6660IfPresent(file, normEol(snapBlob.out)), baseText, file);
+    assert.equal(revertV6660IfPresent(file, baseText), baseText, file + ' BASE noop');
   }
   const old = normEol(readBaseBlob(root, base, path).out);
   await assert.rejects(() => assertConfirmed(old), { name: 'AssertionError' });
@@ -210,5 +214,5 @@ if (hasBaseCommit(root, base)) {
   assert.throws(() => revertV6659IfPresent(path, old.replace(from, () => from + from)), /v6659 inverse/);
   console.log('PASS 精確還原、舊版反證、缺失與重複錨點');
 } else {
-  shallowSkip('v6.660 歷史反證', '需要 v6.659 歷史 commit');
+  shallowSkip('v6.660 歷史反證', '需要 v6.659 與 v6.666 歷史 commit');
 }

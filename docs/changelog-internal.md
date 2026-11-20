@@ -1,5 +1,20 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.667 — 解耦 11 支歷史還原守衛以防正常升版翻紅，並補齊公開 changelog 三檔隔離檢查（2026-11-20）
+
+基準 `3075b04c`（v6.666）。純內部守衛與版本維護更新（未更動玩家介面、頭像渲染、PNG 匯出、大廳或後端業務邏輯），回應獨立複審抓出的 2 項 P3：
+
+- **P3｜修正正常升版（含版本號、後台內部紀錄與公開三檔 changelog 輪替）會弄紅歷史還原守衛**：
+  - 在未修的 `3075b04c` 上以 `scripts/bump-version.py` 模擬升版後，除複審回報的 5 支（`test-v6653-player-profile.mjs`、`test-v6658-sync-safety.mjs`、`test-v6659-profile-upgrades.mjs`、`test-v6660-verified-match-history.mjs`、`test-v6661-deck-filter-layout.mjs`）外，另查出同條共用還原鏈上尚有 6 支守衛（`test-v6605-account-moderation.mjs`、`test-v6610-energy-labels.mjs`、`test-v6651-google-auth.mjs`、`test-v6652-google-management.mjs`、`test-v6656-card-trait-filters.mjs`、`test-v6657-anon-decks-local.mjs`）同樣因對現行 `version.ts` / `site-version.txt` / `oracle-admin/admin.html` / `changelog*.html` 做歷史逐位元還原而會在後續公開升版翻紅（共 11 支）。
+  - 解法：比照 `test-v6664` `D1`，將上述 11 支守衛的歷史逐位元還原斷言改由固定歷史 commit `3075b04ce2e3de6fc55288452f03d8fa8fab488c`（v6.666）讀取來源 blob，還原後與各自對應的歷史 `BASE` commit blob 比對；保留既有歷史 no-op、缺失／重複錨點反證、未登記網路差異守衛與淺複製明確 `shallowSkip` 訊息，所有現行程式行為、配線、版本同步與安全檢查仍讀取現行工作樹。同步擴充 `test-v6664` `D1` 驗證 `3075b04c → 4fed8ee3 → b390744e → 0329ee55` 四段固定 blob 還原與 no-op。
+- **P3｜補齊 `test-v6664` `D2` 對公開 changelog 三檔的隔離檢查**：
+  - `scripts/test-v6664-lobby-and-frame-mask.mjs` `D2` 改以 `assertPublicChangelogIsolation` 同時掃描 `static/changelog.html`、`static/changelog-bodies.html` 與 `static/changelog-archive.html`（失敗訊息明確指明違規檔名），並補上三檔各自獨立的突變反證（3 檔 × 4 組內部實作字眼），確認任一檔混入內部字眼即由對應檔名斷言攔截，同時維持現行版本號同步與隱藏／公開發版相容性。
+- **收尾（Claude 接手 argon 的交接，2026-11-20）**：
+  - 工作副本有 14 檔是 CRLF（HEAD 皆 0 CR）⇒ 雲端轉成 LF 後 commit（diff +146／−64，非整檔改寫）；副本裡路徑錯誤的 `E:ptcg-tw-simAI_HANDOFF.md` 未納入。
+  - 全套：本版 1010 支 FAIL 2（test-v6370／v6371 既有偶發，單跑 91/0、153/0）；以 `bump-version.py` 模擬 v6.668 公開升版後 1011 支 FAIL 1（v6371 偶發，單跑 153/0）⇒ 第一項 P3 已解。harness／免疫網全綠。
+  - test-v6477 S5 在 v6.666 雲端（LF）11/0 綠；本機紅是 Windows 工作樹 CRLF 造成的假紅，與本版無關。
+  - 獨立唯讀複審（Opus）：0 P1／0 P2；另行模擬公開與隱藏升版、單跑 45 支相關守衛全綠，全庫沒有其他守衛把現行版本檔餵進固定錨點還原鏈。P3（記錄不改）：9 支守衛的 R 段整份 PAIRS 都改讀快照，非升版檔失去還原器範圍鎖（意圖改由行為檢查守住，突變實測 test-v6661 仍會紅）；D2「三檔不得出現 v6.667」是子字串比對，日後公開條目提到「承 v6.667」會誤紅。
+
 ## v6.666 — 修正小尺寸頭像外框邊緣滲入內圓、補齊多尺寸與光暈守衛並解耦歷史還原驗證（2026-11-20）
 
 基準 `4fed8ee3`（v6.665）。回應獨立複審抓出的 1 項 P2 與 2 項 P3：

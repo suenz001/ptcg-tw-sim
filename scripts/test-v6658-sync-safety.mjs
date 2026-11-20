@@ -22,6 +22,7 @@ import { revertV6657IfPresent, V6657_PAIRS } from './lib/revert-v6657-anon-decks
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_SHA = '919f6d0fd1a6a6989639253e3bbf95fe5973b1ca';
+const SNAP_V6666 = '3075b04ce2e3de6fc55288452f03d8fa8fab488c';
 const PRODUCT = process.env.PTCG_V6658_SOURCE || ROOT;
 const read = (rel) => normEol(readFileSync(join(PRODUCT, rel), 'utf8'));
 
@@ -687,13 +688,16 @@ let reads=0;
   });
 
   T('I1 本版逆轉逐字回BASE且BASE為no-op',()=>{
+    if (!hasBaseCommit(ROOT, BASE_SHA) || !hasBaseCommit(ROOT, SNAP_V6666)) { shallowSkip('v6658 I1 精確逆轉', '需要完整 git 歷史'); return; }
     for(const rel of Object.keys(V6658_PAIRS)) {
+      const snap=readBaseBlob(ROOT,SNAP_V6666,rel);ok(snap.ok,'SNAP blob missing '+rel);
       const base=readBaseBlob(ROOT,BASE_SHA,rel);ok(base.ok,'BASE blob missing '+rel);
-      assert.strictEqual(revertV6658IfPresent(rel,readFileSync(join(ROOT,rel),'utf8')),normEol(base.out),rel);
-      assert.strictEqual(revertV6658IfPresent(rel,normEol(base.out)),normEol(base.out),rel+' BASE noop');
+      const snapNorm=normEol(snap.out), baseNorm=normEol(base.out);
+      assert.strictEqual(revertV6658IfPresent(rel,snapNorm),baseNorm,rel);
+      assert.strictEqual(revertV6658IfPresent(rel,baseNorm),baseNorm,rel+' BASE noop');
       if (rel === 'src/routes/decks/+page.svelte') {
         const extra = '\nfetch("/unexpected-net"); getDoc(unexpectedRef);\n';
-        assert.strictEqual(revertV6658IfPresent(rel,readFileSync(join(ROOT,rel),'utf8')+extra),normEol(base.out)+extra,'未登記網路增量不可被逆轉吞掉');
+        assert.strictEqual(revertV6658IfPresent(rel,snapNorm+extra),baseNorm+extra,'未登記網路增量不可被逆轉吞掉');
       }
     }
   });

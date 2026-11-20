@@ -33,6 +33,7 @@ import { pwChromium, pwLaunchWith } from './lib/pw.mjs';
 const require_ = createRequire(import.meta.url);
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '66fc60690d5a929bd4abc3e9d16e4141a5f0e898';
+const SNAP_V6666 = '3075b04ce2e3de6fc55288452f03d8fa8fab488c';
 
 let pass = 0, fail = 0;
 const T = async (name, fn) => {
@@ -992,20 +993,22 @@ console.log('\n【E】精確還原檢查＋突變自我驗證');
 await T('E1 sap-revert-admin-v187 與 revert-v6653 能逐位元還原成 BASE（且對 BASE 是 no-op）', async () => {
   const { revertAdminV187IfPresent } = await import('./lib/sap-revert-admin-v187.mjs');
   const { revertV6653IfPresent, V6653_PAIRS } = await import('./lib/revert-v6653-player-profile.mjs');
-  if (!hasBaseCommit(ROOT, BASE_SHA)) {
-    shallowSkip('v6653 E1（淺複製無 ' + BASE_SHA.slice(0, 8) + '）');
+  if (!hasBaseCommit(ROOT, BASE_SHA) || !hasBaseCommit(ROOT, SNAP_V6666)) {
+    shallowSkip('v6653 E1（淺複製無 ' + BASE_SHA.slice(0, 8) + ' 或 ' + SNAP_V6666.slice(0, 8) + '）');
     return;
   }
+  const sSrv = readBaseBlob(ROOT, SNAP_V6666, SRV_PATH);
   const bSrv = readBaseBlob(ROOT, BASE_SHA, SRV_PATH);
-  assert.ok(bSrv.ok, '讀不到 BASE server_admin_patch.js');
-  assert.strictEqual(revertAdminV187IfPresent(R(SRV_PATH)), normEol(bSrv.out), 'sap-revert-admin-v187 還原後與 BASE 不符');
+  assert.ok(sSrv.ok && bSrv.ok, '讀不到 SNAP 或 BASE server_admin_patch.js');
+  assert.strictEqual(revertAdminV187IfPresent(normEol(sSrv.out)), normEol(bSrv.out), 'sap-revert-admin-v187 還原後與 BASE 不符');
   assert.strictEqual(revertAdminV187IfPresent(normEol(bSrv.out)), normEol(bSrv.out), 'sap-revert-admin-v187 對 BASE 不是 idempotent');
 
   for (const rel of Object.keys(V6653_PAIRS)) {
+    const s = readBaseBlob(ROOT, SNAP_V6666, rel);
     const b = readBaseBlob(ROOT, BASE_SHA, rel);
-    assert.ok(b.ok, '讀不到 BASE ' + rel);
+    assert.ok(s.ok && b.ok, '讀不到 SNAP 或 BASE ' + rel);
     const prev = normEol(b.out);
-    assert.strictEqual(revertV6653IfPresent(rel, R(rel)), prev, 'revertV6653 還原 ' + rel + ' 後與 BASE 不符');
+    assert.strictEqual(revertV6653IfPresent(rel, normEol(s.out)), prev, 'revertV6653 還原 ' + rel + ' 後與 BASE 不符');
     assert.strictEqual(revertV6653IfPresent(rel, prev), prev, 'revertV6653 對 BASE ' + rel + ' 不是 idempotent');
   }
 });

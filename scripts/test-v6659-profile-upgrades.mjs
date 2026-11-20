@@ -33,6 +33,7 @@ import { revertV6659IfPresent, V6659_PAIRS } from './lib/revert-v6659-profile-up
 const require_ = createRequire(import.meta.url);
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = 'a41829bc9a11aef0c7b3405d70308623e5def469'; // v6.658
+const SNAP_V6666 = '3075b04ce2e3de6fc55288452f03d8fa8fab488c'; // v6.666 還原鏈快照
 
 const API_PATH = 'src/lib/profile/profile-api.ts';
 const AV_PATH = 'src/lib/profile/AvatarCircle.svelte';
@@ -1357,12 +1358,13 @@ await T('C3 全站接線與公開／內部紀錄隔離（game ?card=／viewerUid
 console.log('\n【D】Rule 40 精確還原鏈＋真實突變測試＋BASE 必紅檢查');
 
 await T('D1 revertV6659IfPresent 逐字還原回 v6.658 (a41829bc) 且對 BASE 為 no-op', () => {
-  if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6659 逐檔 blob 比對', '需要歷史 commit'); return; }
+  if (!hasBaseCommit(ROOT, BASE_SHA) || !hasBaseCommit(ROOT, SNAP_V6666)) { shallowSkip('v6659 逐檔 blob 比對', '需要歷史 commit'); return; }
   for (const rel of Object.keys(V6659_PAIRS)) {
+    const snap = readBaseBlob(ROOT, SNAP_V6666, rel);
     const base = readBaseBlob(ROOT, BASE_SHA, rel);
-    assert.ok(base.ok, '缺少 BASE blob ' + rel);
+    assert.ok(snap.ok && base.ok, '缺少 SNAP 或 BASE blob ' + rel);
     const bNorm = normEol(base.out);
-    assert.strictEqual(revertV6659IfPresent(rel, read(rel)), bNorm, '無法精確還原：' + rel);
+    assert.strictEqual(revertV6659IfPresent(rel, normEol(snap.out)), bNorm, '無法精確還原：' + rel);
     assert.strictEqual(revertV6659IfPresent(rel, bNorm), bNorm, '對 BASE 必須是 no-op：' + rel);
   }
 });

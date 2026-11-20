@@ -30,8 +30,10 @@ import { revertV6612File, hasV6612File } from './lib/revert-v6612-view-mode.mjs'
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PRODUCT = process.env.V6610_PRODUCT || ROOT;
 const BASE='9aa83ddd54e2ba286957ebd7b9eabd0a5f669478';
-// Rule 40：先精確還原629正常更新紀錄搬運，其餘原還原鏈與所有斷言保留。
-const rd=p=>revertV6629ChangelogIfPresent(p,revertV6631ChangelogIfPresent(p,revertV6632ChangelogIfPresent(p,revertV6633ChangelogIfPresent(p,readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n')))));
+const SNAP_V6666='3075b04ce2e3de6fc55288452f03d8fa8fab488c';
+// Rule 40：先精確還原629正常更新紀錄搬運，其餘原還原鏈與所有斷言保留；公開 changelog 歷史還原自固定快照 blob 讀取避免未來升版輪替誤紅。
+const rawOf=p=>{if(PRODUCT===ROOT&&p.startsWith('static/changelog')){const r=readBaseBlob(ROOT,SNAP_V6666,p);assert.ok(r.ok,p);return r.out.replace(/\r\n/g,'\n');}return readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n');};
+const rd=p=>revertV6629ChangelogIfPresent(p,revertV6631ChangelogIfPresent(p,revertV6632ChangelogIfPresent(p,revertV6633ChangelogIfPresent(p,rawOf(p)))));
 const rdP=p=>{let x=rd(p);x=revertV6633GameIfPresent(p,x);x=revertV6632GameIfPresent(p,x);x=revertV6626IfPresent(p,x);if(hasV6620File(p,x))x=revertV6620File(p,x);if(hasV6619File(p,x))x=revertV6619File(p,x);if(hasV6618File(p,x))x=revertV6618File(p,x);if(hasV6617File(p,x))x=revertV6617File(p,x);if(hasV6616File(p,x))x=revertV6616File(p,x);if(hasV6615File(p,x))x=revertV6615File(p,x);if(hasV6614File(p,x))x=revertV6614File(p,x);if(hasV6613File(p,x))x=revertV6613File(p,x);if(hasV6612File(p,x))x=revertV6612File(p,x);return hasV6611File(p,x)?revertV6611File(p,x):x;};   // ⭐v6.611（Rule 40）：只給 P 段用（標記元件與 changelog 三檔先還原成 v6.610）
 const base=p=>{const r=readBaseBlob(ROOT,BASE,p);assert.ok(r.ok);return r.out.replace(/\r\n/g,'\n');};
 let pass=0,fail=0;

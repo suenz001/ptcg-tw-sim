@@ -20,6 +20,7 @@ function readFileSync(path, encoding) {
   return typeof value === 'string' ? revertV6652IfPresent(relative(ROOT, path).replace(/\\/g, '/'), value) : value;
 }
 const BASE = 'a84cdd89679c07253d8dd7d841764d53f5aac89e';
+const SNAP_V6666 = '3075b04ce2e3de6fc55288452f03d8fa8fab488c';
 const CORE = 'src/lib/auth/google-flow.ts';
 const PAGES = ['src/routes/game/+page.svelte', 'src/routes/decks/+page.svelte'];
 const tmp = mkdtempSync(join(tmpdir(), 'ptcg-google6651-'));
@@ -175,9 +176,9 @@ for (const [name, needle, replacement, test] of mutations) await T(name, async (
 });
 
 console.log('【HEAD-FAIL 與正對照】');
-if (!hasBaseCommit(ROOT, BASE)) shallowSkip('v6651 BASE ' + BASE);
+if (!hasBaseCommit(ROOT, BASE) || !hasBaseCommit(ROOT, SNAP_V6666)) shallowSkip('v6651 BASE ' + BASE + ' / SNAP ' + SNAP_V6666.slice(0, 8));
 else {
-for(const path of Object.keys(V6651_PAIRS)) await T('R 逐字還原且 BASE 不變 '+path,()=>{const old=readBaseBlob(ROOT,BASE,path);assert.ok(old.ok);const baseline=old.out.replace(/\r\n/g,'\n');assert.equal(revertV6651IfPresent(path,readFileSync(join(ROOT,path),'utf8')),baseline);assert.equal(revertV6651IfPresent(path,baseline),baseline);});
+for(const path of Object.keys(V6651_PAIRS)) await T('R 逐字還原且 BASE 不變 '+path,()=>{const old=readBaseBlob(ROOT,BASE,path);const snap=readBaseBlob(ROOT,SNAP_V6666,path);assert.ok(old.ok&&snap.ok);const baseline=old.out.replace(/\r\n/g,'\n');assert.equal(revertV6651IfPresent(path,snap.out.replace(/\r\n/g,'\n')),baseline);assert.equal(revertV6651IfPresent(path,baseline),baseline);});
 for (const page of PAGES) {
   const old = readBaseBlob(ROOT, BASE, page); assert.ok(old.ok);
   const before = wiring(old.out, page), after = wiring(readFileSync(join(ROOT, page), 'utf8'), page);

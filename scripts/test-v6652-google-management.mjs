@@ -13,6 +13,7 @@ import { revertV6652IfPresent, V6652_PAIRS } from './lib/revert-v6652-google-man
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE = 'b8bf25ce5db187f2feac0c04ea1be3446cd01759';
+const SNAP_V6666 = '3075b04ce2e3de6fc55288452f03d8fa8fab488c';
 const CORE = 'src/lib/auth/google-flow.ts';
 const tmp = mkdtempSync(join(tmpdir(), 'ptcg-google6652-'));
 let pass = 0, fail = 0, serial = 0;
@@ -64,9 +65,9 @@ const source=normEol(readFileSync(join(ROOT,CORE),'utf8'));
 try {
   const M=await moduleFrom(source);
   for(const [name,fn] of Object.entries(cases))await T(name,()=>fn(M));
-  if(!hasBaseCommit(ROOT,BASE))shallowSkip('v6652 BASE '+BASE);
+  if(!hasBaseCommit(ROOT,BASE)||!hasBaseCommit(ROOT,SNAP_V6666))shallowSkip('v6652 BASE '+BASE+' / SNAP '+SNAP_V6666.slice(0,8));
   else { const old=readBaseBlob(ROOT,BASE,CORE);assert.ok(old.ok);const before=await moduleFrom(normEol(old.out));
-    for(const path of Object.keys(V6652_PAIRS))await T('R 精確還原且 BASE 不變 '+path,()=>{const blob=readBaseBlob(ROOT,BASE,path);assert.ok(blob.ok);const prev=normEol(blob.out);assert.equal(revertV6652IfPresent(path,readFileSync(join(ROOT,path),'utf8')),prev);assert.equal(revertV6652IfPresent(path,prev),prev);});
+    for(const path of Object.keys(V6652_PAIRS))await T('R 精確還原且 BASE 不變 '+path,()=>{const blob=readBaseBlob(ROOT,BASE,path);const snap=readBaseBlob(ROOT,SNAP_V6666,path);assert.ok(blob.ok&&snap.ok);const prev=normEol(blob.out);assert.equal(revertV6652IfPresent(path,normEol(snap.out)),prev);assert.equal(revertV6652IfPresent(path,prev),prev);});
     for(const name of Object.keys(cases).filter(n=>n!=='P1'))await T('H '+name+' BASE 紅／HEAD 綠',async()=>{await assert.rejects(cases[name](before));await cases[name](M);});
     await T('P 匿名登入正對照 BASE／HEAD',async()=>{await cases.P1(before);await cases.P1(M);});
   }

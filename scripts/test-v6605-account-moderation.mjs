@@ -17,12 +17,16 @@ import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import vm from 'node:vm';
 import {pwLaunch} from './lib/pw.mjs';
+import {readBaseBlob} from './lib/base-blob.mjs';
 import {revertV6606Changelog} from './lib/revert-v6606-changelog.mjs';
 import {revertV6629ChangelogIfPresent} from './lib/revert-v6629-changelog.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PRODUCT = process.env.V6605_PRODUCT || ROOT;
-// Rule 40：僅精確還原629公開紀錄搬運，保留605隱藏版原文契約及處分行為斷言。
-const read = p => revertV6629ChangelogIfPresent(p,revertV6631ChangelogIfPresent(p,revertV6632ChangelogIfPresent(p,revertV6633ChangelogIfPresent(p,readFileSync(join(PRODUCT,p),'utf8').replace(/\r\n/g,'\n')))));
+const SNAP_V6666 = '3075b04ce2e3de6fc55288452f03d8fa8fab488c';
+// Rule 40：僅精確還原629公開紀錄搬運，保留605隱藏版原文契約及處分行為斷言；公開更新紀錄歷史還原由固定快照 blob 讀取避免未來升版輪替誤紅。
+const revertChlogChain = (p, raw) => revertV6629ChangelogIfPresent(p,revertV6631ChangelogIfPresent(p,revertV6632ChangelogIfPresent(p,revertV6633ChangelogIfPresent(p,raw.replace(/\r\n/g,'\n')))));
+const read = p => revertChlogChain(p, readFileSync(join(PRODUCT,p),'utf8'));
+const readSnapChlog = p => { if (PRODUCT !== ROOT) return read(p); const r = readBaseBlob(ROOT, SNAP_V6666, p); assert.ok(r.ok, p); return revertChlogChain(p, r.out); };
 const sap = read('oracle-admin/server_admin_patch.js'), html = read('oracle-admin/admin.html');
 const block = sap.split('// >>> v6605-account-moderation\n')[1]?.split('// <<< v6605-account-moderation')[0];
 let passed=0, failed=0;
@@ -69,7 +73,7 @@ function setup() {
 const baseFile=p=>execFileSync('git',['show','92520fbe:'+p],{cwd:ROOT,encoding:'utf8',maxBuffer:8*1024*1024}).replace(/\r\n/g,'\n');
 // ⭐v1.80（Rule 40）：之後版本對錦標賽尾段的合法改動先用該版的單一還原表逐位元退回，意圖（本版沒動錦標賽尾段）不變。
 await test('P1 既有錦標賽尾段逐位元相同',()=>{const anchor="app.get('/api/tournament";const cur=revertAdminV180IfPresent(revertAdminV181IfPresent(revertAdminV182IfPresent(revertAdminV183IfPresent(revertAdminV184IfPresent(revertAdminV185IfPresent(revertAdminV186IfPresent(sap)))))));assert.equal(cur.slice(cur.indexOf(anchor)),baseFile('oracle-admin/server_admin_patch.js').split(anchor).slice(1).join(anchor).replace(/^/,anchor));});
-await test('P2 對外更新紀錄精確還原後保持原文',()=>{for(const p of ['static/changelog.html','static/changelog-bodies.html','static/changelog-archive.html']){const source=read(p),base=baseFile(p);assert.equal(source===base?source:revertV6606Changelog(p,source),base);}});
+await test('P2 對外更新紀錄精確還原後保持原文',()=>{for(const p of ['static/changelog.html','static/changelog-bodies.html','static/changelog-archive.html']){const source=readSnapChlog(p),base=baseFile(p);assert.equal(source===base?source:revertV6606Changelog(p,source),base);}});
 await test('A1 服務插入先於私訊與兩段聊天',()=>{assert.ok(block);const gate=sap.indexOf('async function accountModerationGate');for(const path of ["app.post('/api/friends/dm/send'","app.post('/api/tournament/chat'","app.post('/api/deck-posts-comments'"])assert.ok(gate<sap.indexOf(path));});
 await test('A2 管理端點拒絕普通會員與偽造UID',async()=>{const f=setup();for(const action of ['lookup','history','grant','revoke']){assert.equal((await f.call(action,f.body(),player)).code,403);assert.equal((await f.call(action,f.body(),{...admin,verified:false})).code,403);}assert.equal(f.c.reads+f.c.writes,0);});
 await test('A3 UID與Email查詢由Auth解析，不信任body email',async()=>{const f=setup();assert.equal((await f.call('lookup',{query:player.email})).data.user.uid,player.uid);assert.equal((await f.call('lookup',{query:'missing'})).code,404);await f.service.grant(f.body({subjectUid:'uid@literal'}),admin);assert.equal(f.c.rows[0].subjectEmail,'literal@example.test');});

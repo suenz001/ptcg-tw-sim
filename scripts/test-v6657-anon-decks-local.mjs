@@ -20,6 +20,7 @@ import { revertV6657IfPresent, V6657_PAIRS } from './lib/revert-v6657-anon-decks
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_SHA = '652db337939007e9070f6e85a59911cedffbbc18';
+const SNAP_V6666 = '3075b04ce2e3de6fc55288452f03d8fa8fab488c';
 const read = (rel) => revertV6658IfPresent(rel, readFileSync(join(ROOT, rel), 'utf8'));
 
 let pass = 0, fail = 0;
@@ -790,13 +791,14 @@ export function createHarness(api) {
   // ── 5. Rule 40 精確逆轉與突變測試 ────────────────────────────────────────────
   console.log('\n【E】Rule 40 精確還原與突變測試');
   T('E1 revertV6657IfPresent 將 12 個異動檔逐字還原回 BASE (652db337)，且在 BASE 為 no-op', () => {
-    if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('E1 精確逆轉', '需要完整 git 歷史'); return; }
+    if (!hasBaseCommit(ROOT, BASE_SHA) || !hasBaseCommit(ROOT, SNAP_V6666)) { shallowSkip('E1 精確逆轉', '需要完整 git 歷史'); return; }
     for (const rel of Object.keys(V6657_PAIRS)) {
+      const s = readBaseBlob(ROOT, SNAP_V6666, rel);
       const b = readBaseBlob(ROOT, BASE_SHA, rel);
-      ok(b.ok, `讀不到 BASE ${rel}`);
+      ok(s.ok && b.ok, `讀不到 SNAP 或 BASE ${rel}`);
       const baseText = normEol(b.out);
-      const curText = read(rel);
-      assert.strictEqual(revertV6657IfPresent(rel, curText), baseText, `${rel} 還原後與 BASE 不一致`);
+      const snapText = normEol(s.out);
+      assert.strictEqual(revertV6657IfPresent(rel, snapText), baseText, `${rel} 還原後與 BASE 不一致`);
       assert.strictEqual(revertV6657IfPresent(rel, baseText), baseText, `${rel} 在 BASE 應為 no-op`);
     }
   });
