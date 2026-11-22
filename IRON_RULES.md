@@ -2554,7 +2554,7 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
   - 判準唯一一份：`src/lib/cards/thumb.ts`（`cardThumb`／`isCardThumb`／`THUMB_PATTERN`）＝ `scripts/gen-card-thumbs.py` 的 `THUMB_RE`（守衛逐字比對）。
   - **小尺寸 `<img>` 一律 `src={cardThumb(X)} use:retryImg={X}`**（X＝官方網址）；`img-retry.ts` 遇縮圖失敗 **0 延遲**改官方原圖。少了 `use:retryImg` 就沒有退路（新卡沒縮圖會破圖）。
   - **放大檢視（zoom-img／lightbox／detailImg／pv-img）與卡片 SEO 頁 `/card/[id]` 用官方原圖**；手機場地背景（background-image，沒有退路）也維持官方原圖。
-  - **補新卡包後**在站長電腦跑 `python scripts\gen-card-thumbs.py --out E:\ptcg-tw-sim-img`（冪等，只抓缺的），再到 `E:\ptcg-tw-sim-img` commit＋push。沒跑不會壞，只是新卡走官方原圖。
+  - **補新卡包後**跑 `python scripts\gen-card-thumbs.py --out E:\ptcg-tw-sim-img`（冪等，只抓缺的），再到 `E:\ptcg-tw-sim-img` commit＋push。沒跑不會壞，只是新卡走官方原圖。⭐ 2026-11-22 起由 AI 自己做（見 Rule 93）。
   - 改對戰頁／資料庫頁的 `<img>` 時：test-v6441／v6293／v6439 會用 `scripts/lib/revert-v6464-thumbs.mjs` 先還原本版改動；那張表是 v6.463 的快照，**之後版本的改動不要加進那張表**，照各守衛原本的 LATER／還原鏈處理。
   - 守衛 test-v6464（轉換規則、產生器／轉換器一致、52 處接線＋掃描器正對照、img-retry 行為、HEAD-FAIL、突變）。
 - **評估後刻意不做**：`/match/enter` 回應直接附盤面（要在第二個端點重寫 /state 的遮蔽與身分判定，分歧＝盤面外洩或隱形手牌）；大廳 /event 與 /bracket 並行（只早 0.3 秒、牽動亂序守衛）；AI 模組動態 import（gzip 只省 16KB）。
@@ -2766,3 +2766,17 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
 3. 伺服器端改動優先選「只少做事、輸出逐位元不變」的方向（projection、in-flight 合併、快取），並用新舊兩版同一份假資料實跑證明輸出相同（skill ptcg-server-admin-change 第 8 節）。
 4. 送審時要請審查者明確回答「有沒有加重伺服器負擔」，結論寫進 docs/changelog-internal.md。
 5. 不要再提案的效能方向（站長已裁定）：長輪詢、改 nginx／Cloudflare 規則（skill ptcg-vm-infra）。
+
+## Rule 93（2026-11-22）：卡圖縮圖由 AI 自己產生並推送（站長授權）
+
+站長逐字（2026-11-22）：「那你就先記錄成鐵律和長期記憶、skills，以後縮圖由你自己處理」。背景：v6.670 補 M-P 15 張後，站長授權 AI 在站長電腦代跑縮圖，一次補齊 184 張（含先前幾批一直沒跑到的新卡）。
+
+1. **每次卡庫新增卡片（補卡、新卡包）推送後，AI 自己把縮圖補齊並推上縮圖 repo**，不再交給站長；回報時說明新增幾張、是否有失敗。
+2. **做法**（站長電腦 leon-pc，Windows-MCP PowerShell；工具 60 秒上限 ⇒ 長工作用 `Start-Process cmd.exe /c "… > log 2>&1"` 背景跑再讀 log）：
+   - 主工作樹 `E:\ptcg-tw-sim` 有站長未提交的檔案 ⇒ **不可修改、不可 commit**，只能讀；`git fetch` 可以（部署 bat 本來也會做）。
+   - 主工作樹的卡表若還沒更新到最新：用 `git show origin/main:<path>` 把 `scripts/gen-card-thumbs.py` 與有新卡的 `static/cards/*.json` 抽到 `E:\ptcg-tw-sim-local\<暫存資料夾>` 再跑（腳本從自己上一層的 `static/cards` 讀卡）；接著用主工作樹的卡表再整個跑一次，把其他缺的也補上（冪等，只抓缺的）。
+   - 跑完檢查 log 的「失敗 0」與 `E:\ptcg-tw-sim-img\_failed.txt` 是空的。
+   - `E:\ptcg-tw-sim-img`：**具名列檔** `git add --pathspec-from-file=<清單>`（清單由 `git ls-files --others --exclude-standard` 產生、確認全是 `w450/*.webp`），commit 訊息寫張數與來源，push 用背景跑；看 `HEAD -> main` 那一行判斷成功。
+   - 推完用 `https://suenz001.github.io/ptcg-tw-sim-img/w450/<檔名>.webp` 抽一張新卡確認回 200。
+3. 這條**只涵蓋縮圖 repo**；正式站部署 bat（update-tournament.bat、redeploy-oracle.bat 等）仍一律由站長自己跑，AI 絕不代跑。
+4. 現況（2026-11-22 站長告知）：admin「卡圖來源」設定為**官方原圖**，縮圖只當備用方案 ⇒ 補縮圖不影響玩家目前看到的畫面，但仍要保持完整，切回縮圖時新卡才不會缺圖。
