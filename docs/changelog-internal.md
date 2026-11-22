@@ -1,5 +1,14 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.670 — M-P 特典卡補漏收錄 15 張
+
+基準 `4e42533e`（v6.669）。玩家回報「超級席多藍恩ex 沒有收錄」。refresh-official-set-manifest 現查官方 M-P 比站上多 15 張；逐張看卡圖核對標記（I×4、J×11，與官網欄位一致），併入 M-P-I／M-P-J（格式空操作自證、card-set-map 文字層追加、index.json 外科式改張數）。
+- audit-new-set：12 張與既有卡同卡面（效果以卡名／特性名為 key 自動生效，守衛實跑確認）；新寫 2 項：超級席多藍恩ex｜巨重壓（中央 setSelfDamageBonusPendingPost，招式限定 +140）、支援者 春紫（擲幣正面 150／反面 30，gate 比照西餐廚師）。
+- 資料層還原表 scripts/lib/revert-v6670-mp-backfill.mjs；Rule 40：test-v6241（張數）、test-v6391 E4b、test-v6615、test-v6616 D4 先拿掉本版追加再比原意。
+- 官方清單快照 scripts/data/official-set-manifest.json 重抓（--write）。
+- 守衛 test-v6670-mp-backfill（HEAD-FAIL；突變 6 個全殺，突變腳本不入庫）。審查 P2-2 後補 B6 花之帷幔新印刷實跑、B7 同卡面招式註冊檢查。
+- 部署：卡池有新卡＋引擎有改 ⇒ 站長依序跑 update-tournament.bat（重產錦標賽卡池）→ redeploy-oracle.bat；新卡縮圖在站長電腦跑 gen-card-thumbs.py 後推縮圖 repo（沒跑會改用官方原圖，不會壞）。
+
 ## v6.669 — 豐收漁網收進中央多組選擇
 
 基準 `64c7f253`（v6.668）。站長指示：v6.668 審查後的第 5 項（豐收漁網對戰頁自己寫一套「各 3 張、選滿變暗」）收進中央。

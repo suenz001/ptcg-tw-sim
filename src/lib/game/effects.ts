@@ -22156,6 +22156,7 @@ import './effects/cards/m6a_wave7'; // v6.347 M6a **特性**實裝 批次7（主
 import './effects/cards/mf_wave1';  // v6.388 MF 招式實裝 批次1（純類推既有中央 helper）
 import './effects/cards/mf_wave2';  // v6.388 MF 招式實裝 批次2（6 招，需要新的中央 helper）
 import './effects/cards/mp_j_wave1'; // v6.391 M-P（J 標）招式實裝 批次1（11 招，全部純類推既有中央 helper）
+import './effects/cards/mp_j_wave2'; // v6.670 M-P 補漏收錄 批次2（超級席多藍恩ex｜巨重壓、支援者 春紫）
 import './effects/cards/svi_wave1'; // v6.616 SVI「Trianers Camp」招式實裝（6 招，全部純類推既有中央 helper）
 // ══════════════════════════════════════════════════════════════════════════════
 // ⭐ v6.345 M6a 批次5 —— 牌庫／手牌／棄牌區操作的中央出口

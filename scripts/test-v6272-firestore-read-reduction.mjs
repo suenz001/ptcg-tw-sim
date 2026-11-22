@@ -670,7 +670,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '64c7f2539079b261f840d9f7b866316c8cf66a28';   // v6.668（上一版）
+const PREV_SHA = '4e42533ee61df2d68096dc0e368401ceb12c2361';   // v6.669（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -759,21 +759,36 @@ const PREV_SHA = '64c7f2539079b261f840d9f7b866316c8cf66a28';   // v6.668（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.669 前移：PREV_SHA 從 64c7f253（v6.668）起算。
+  // ⚠⚠ v6.670 前移：PREV_SHA 從 4e42533e（v6.669）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.669：v6.669 豐收漁網收進中央多組選擇
-  'src/lib/game/ai.ts',
-  'src/lib/game/effects/_shared.ts',
-  'src/lib/game/effects/cards/items_misc.ts',
-  'src/lib/game/engine.ts',
-  'src/lib/game/selection-filter.ts',
+  // ⭐v6.670：v6.670 M-P 特典卡補漏收錄 15 張
+  'src/lib/game/effects.ts',
+  'src/lib/game/effects/cards/mp_j_wave2.ts',
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
+  'static/card-set-map.json',
+  'static/cards/M-P-I.json',
+  'static/cards/M-P-J.json',
+  'static/cards/index.json',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.669）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.669 前移：PREV_SHA 從 64c7f253（v6.668）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.669：v6.669 豐收漁網收進中央多組選擇
+//   'src/lib/game/ai.ts',
+//   'src/lib/game/effects/_shared.ts',
+//   'src/lib/game/effects/cards/items_misc.ts',
+//   'src/lib/game/engine.ts',
+//   'src/lib/game/selection-filter.ts',
+//   'src/lib/version.ts',
+//   'src/routes/game/+page.svelte',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.668）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.668 前移：PREV_SHA 從 fd0903d4（v6.667）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -954,18 +969,6 @@ const PREV_ALLOWED = [
 //   'src/lib/ui/AccountBar.svelte',
 //   'src/lib/version.ts',
 //   'src/routes/decks/+page.svelte',
-//   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.650）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.650 前移：PREV_SHA 從 42512b4e（v6.649）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.650：v6.650 回放時間軸記號（回合＋昏厥）與手機詳情面板
-//   'src/lib/game/replay-index.ts',
-//   'src/lib/game/replay-keys.ts',   // v6.650 審查 P2-2：時間軸記號上的空白鍵交還
-//   'src/lib/version.ts',
 //   'src/routes/game/+page.svelte',
 //   'static/changelog-archive.html',
 //   'static/changelog-bodies.html',

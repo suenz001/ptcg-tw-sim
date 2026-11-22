@@ -49,6 +49,7 @@ const J = (p) => JSON.parse(readFileSync(join(ROOT, p), 'utf8'));
 const HIJ = new Set(['H', 'I', 'J']);
 
 import { V6616_MP_IDS as MP_IDS, V6616_SVI_IDS as SVI_IDS } from './lib/revert-v6616-svi-mp.mjs';   // 單一來源（Rule 38）
+import { revertV6670Map } from './lib/revert-v6670-mp-backfill.mjs';   // ⭐v6.670（Rule 40）
 // SVI 站上沒有的卡面（14 隻，refresh 實測；逐張看過卡圖核對 HP／屬性／招式／弱點／抵抗／撤退）
 // ⚠ 密勒頓 11313：官網 detail 頁弱點寫【火】，卡圖印的是【鬥】⇒ 照卡圖，與 MC 16754 同卡面（重印）
 const SVI_NEW_FACES = ['11302', '11303', '11312', '11314', '11315', '11316', '11317', '11318', '11320', '11321', '11324', '11330', '11335', '11338'];
@@ -127,7 +128,8 @@ if (hasBaseCommit(ROOT, BASE_SHA)) {
     curIdx.length === baseIdx.length + 1 && curIdx.at(-1).code === 'SVI'
     && JSON.stringify(curIdx.slice(0, baseIdx.length).map(strip)) === JSON.stringify(baseIdx.map(strip)));
   const baseMap = rb('static/card-set-map.json');
-  const curMap = cur.map;
+  // ⭐v6.670（Rule 40）：v6.670 又追加 M-P 15 張 ⇒ 先用 v6.670 的還原表拿掉，再守「v6.616 新增的正好是 17＋58 張」這個原意
+  const curMap = revertV6670Map(cur.map);
   const lost = Object.entries(baseMap).filter(([k, v]) => curMap[k] !== v);
   const added = Object.keys(curMap).filter((k) => !(k in baseMap));
   ok('★★ D4 card-set-map.json：BASE 鍵值逐字保留，新增的正好是 17＋58 張', lost.length === 0

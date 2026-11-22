@@ -28,6 +28,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { revertV6670Index, revertV6670Map } from './lib/revert-v6670-mp-backfill.mjs';   // ⭐v6.670（Rule 40）
 import { revertV6616Index, revertV6616Map } from './lib/revert-v6616-svi-mp.mjs';   // ⭐v6.616（Rule 40）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -175,7 +176,8 @@ else {
   // 既有資料逐字未動
   const bIdx = rb('static/cards/index.json');
   // ⭐v6.616（Rule 40）：v6.616 追加 SVI、改了 M-P 兩筆張數 ⇒ 先用 v6.616 的還原表拿掉，再守「v6.615 只在後面追加四筆」這個原意
-  const idx615 = revertV6616Index(cur.idx), map615 = revertV6616Map(cur.map);
+  // ⭐v6.670（Rule 40）：由新到舊先還原 v6.670（M-P 追加 15 張），再還原 v6.616
+  const idx615 = revertV6616Index(revertV6670Index(cur.idx)), map615 = revertV6616Map(revertV6670Map(cur.map));
   ok('★★ index.json 既有筆數逐字等於 BASE（只在後面追加四筆）', JSON.stringify(idx615.slice(0, bIdx.length)) === JSON.stringify(bIdx) && idx615.length === bIdx.length + 4);
   const bMap = rb('static/card-set-map.json');
   ok('★★ card-set-map.json 既有鍵值逐字等於 BASE（只新增 94 筆）', Object.entries(bMap).every(([k, v]) => map615[k] === v) && Object.keys(map615).length === Object.keys(bMap).length + 94);

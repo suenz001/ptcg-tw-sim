@@ -2,6 +2,7 @@
 // 鏈：本版是目前最新一節；revert-v6668 的 revertV6668IfPresent 會先呼叫本檔。
 import assert from 'node:assert/strict';
 import { normEol } from './eol-agnostic.mjs';
+import { revertV6670IfPresent } from './revert-v6670-mp-backfill.mjs';   // v6.670 由新到舊
 
 export const V6669_PAIRS = {
   "oracle-admin/admin.html": [
@@ -149,7 +150,7 @@ export const V6669_PAIRS = {
 const V6669_MARKERS = {"oracle-admin/admin.html": [0], "src/lib/game/ai.ts": [0, 1], "src/lib/game/effects/_shared.ts": [0], "src/lib/game/effects/cards/items_misc.ts": [0, 1, 2, 3, 4, 5, 6], "src/lib/game/engine.ts": [0], "src/lib/game/selection-filter.ts": [0, 1, 2], "src/lib/version.ts": [0], "src/routes/game/+page.svelte": [3, 4], "static/changelog-archive.html": [0], "static/changelog-bodies.html": [0, 1], "static/changelog.html": [3], "static/site-version.txt": [0]};
 
 export function revertV6669IfPresent(path, source) {
-  let text = normEol(String(source));
+  let text = revertV6670IfPresent(path, normEol(String(source)));
   const pairs = V6669_PAIRS[path];
   if (!pairs || V6669_MARKERS[path].every((index) => !text.includes(pairs[index][0]))) return text;
   // 依序檢查＋還原（表是由新往舊逐段產生的，後面的錨點可能要前面先還原才出現）

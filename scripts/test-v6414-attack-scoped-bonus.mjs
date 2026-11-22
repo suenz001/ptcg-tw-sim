@@ -274,6 +274,8 @@ T('E2. ⭐⭐ 九張卡的登記逐一正確（5 張帶招式名、4 張不帶�
     ['美洛耶塔ex|回聲', 80, '回聲'],
     ['桃歹郎|糬猛攻', 50, '糬猛攻'],
     ['路卡利歐ex|龍捲風猛攻', 100, '龍捲風猛攻'],
+    // ⭐v6.670（Rule 40）：新卡 超級席多藍恩ex｜巨重壓（「這隻寶可夢「巨重壓」的傷害「+140」點」）讀卡面登記為招式限定
+    ['超級席多藍恩ex|巨重壓', 140, '巨重壓'],
   ];
   for (const [key, amt, atk] of scoped) {
     const re = new RegExp(`regPost\\('${key.replace(/[|]/g, '\\|')}',\\s*setSelfDamageBonusPendingPost\\(${amt},\\s*'[^']*',\\s*'${atk}'\\)\\)`);
@@ -299,7 +301,7 @@ T('E3. ⭐⭐ 招式名快照 `_attackTimeAttackName` 只有一個設定點與�
   const eff = SRC.get('src/lib/game/effects.ts') ?? '';
   assert.ok(/state\._attackTimeAttackName/.test(eff), 'effects.ts 沒有讀招式名快照 ⇒ 限定不會生效');
 });
-T('E4. ⭐ 卡面掃描：全卡池「招式限定」的恰好 5 支、「通用」的恰好 4 支（掃描器下限斷言）', () => {
+T('E4. ⭐ 卡面掃描：全卡池「招式限定」的恰好 6 支、「通用」的恰好 4 支（掃描器下限斷言）', () => {
   const seen = new Set(); let scoped = 0, generic = 0;
   for (const c of cards) {
     for (const a of (c.attacks || [])) {
@@ -313,7 +315,8 @@ T('E4. ⭐ 卡面掃描：全卡池「招式限定」的恰好 5 支、「通用
     }
   }
   assert.ok(seen.size >= 9, `只掃到 ${seen.size} 支「下個自己的回合」型招式，掃描器壞了？`);
-  assert.strictEqual(scoped, 5, `招式限定型掃到 ${scoped} 支（預期 5）—— 新卡加進來就要回來讀卡面登記`);
+  // ⭐v6.670（Rule 40）：5 → 6（超級席多藍恩ex｜巨重壓，已回來讀卡面登記到 E2）
+  assert.strictEqual(scoped, 6, `招式限定型掃到 ${scoped} 支（預期 6）—— 新卡加進來就要回來讀卡面登記`);
   assert.strictEqual(generic, 4, `通用型掃到 ${generic} 支（預期 4）`);
 });
 

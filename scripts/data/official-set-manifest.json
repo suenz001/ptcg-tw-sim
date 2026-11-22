@@ -1,10 +1,10 @@
 {
  "_note": "台灣官方卡牌檢索（asia.pokemon-card.com/tw）的卡包→卡片 id 快照。用途：離線比對「官方已發行但我們沒收錄」。重抓請跑 `node scripts/refresh-official-set-manifest.mjs --write`（該腳本沒帶 --write 什麼都不做）。",
  "_source": "https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=<expansionCode>",
- "fetchedAt": "2026-11-01",
+ "fetchedAt": "2026-11-22",
  "sets": {
   "M-P": {
-   "total": 212,
+   "total": 227,
    "localSetCodes": [
     "M-P-H",
     "M-P-I",
@@ -222,7 +222,22 @@
     "20100",
     "20101",
     "20102",
-    "20103"
+    "20103",
+    "20105",
+    "20106",
+    "20107",
+    "20108",
+    "20109",
+    "20110",
+    "20111",
+    "20112",
+    "20121",
+    "20122",
+    "20123",
+    "20124",
+    "20125",
+    "20126",
+    "20127"
    ]
   },
   "M1L": {
@@ -8723,7 +8738,7 @@
      "name": "能量輸送"
     },
     "5994": {
-     "site": "14807",
+     "site": "20125",
      "name": "能量回收器"
     },
     "5996": {
@@ -9169,7 +9184,7 @@
    "standardCount": 1,
    "reprintOf": {
     "593": {
-     "site": "14807",
+     "site": "20125",
      "name": "能量回收器"
     }
    },

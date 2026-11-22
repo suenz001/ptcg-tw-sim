@@ -356,30 +356,30 @@
   "code": "M-P-I",
   "name": "M-P特典卡(I)",
   "regulationMark": "I",
-  "cardCount": 62,
+  "cardCount": 66,
   "supertypeCounts": {
-   "Pokemon": 39,
-   "Trainer": 23
+   "Pokemon": 42,
+   "Trainer": 24
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014090.png",
   "scrapedAt": "2026-04-25T00:00:00.000Z",
   "releaseDate": null,
-  "count": 62
+  "count": 66
  },
  {
   "code": "M-P-J",
   "name": "M-P特典卡(J)",
   "regulationMark": "J",
-  "cardCount": 141,
+  "cardCount": 152,
   "supertypeCounts": {
-   "Pokemon": 108,
-   "Trainer": 15,
+   "Pokemon": 114,
+   "Trainer": 20,
    "Energy": 18
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018077.png",
   "scrapedAt": "2026-04-25T00:00:00.000Z",
   "releaseDate": null,
-  "count": 141
+  "count": 152
  },
  {
   "code": "M3",

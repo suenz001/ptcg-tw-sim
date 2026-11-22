@@ -4825,5 +4825,334 @@
    "Colorless"
   ],
   "illustrator": "5ban Graphics"
+ },
+ {
+  "id": "20107",
+  "name": "勝利之證",
+  "supertype": "Trainer",
+  "subtype": "Item",
+  "setCode": "M-P-J",
+  "collectorNumber": "M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020107.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20107/",
+  "scrapedAt": "2026-11-22T04:47:11.467Z",
+  "regulationMark": "J",
+  "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+  "illustrator": "5ban Graphics"
+ },
+ {
+  "id": "20108",
+  "name": "勝利之證",
+  "supertype": "Trainer",
+  "subtype": "Item",
+  "setCode": "M-P-J",
+  "collectorNumber": "M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020108.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20108/",
+  "scrapedAt": "2026-11-22T04:47:11.677Z",
+  "regulationMark": "J",
+  "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+  "illustrator": "5ban Graphics"
+ },
+ {
+  "id": "20109",
+  "name": "勝利之證",
+  "supertype": "Trainer",
+  "subtype": "Item",
+  "setCode": "M-P-J",
+  "collectorNumber": "M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020109.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20109/",
+  "scrapedAt": "2026-11-22T04:47:11.840Z",
+  "regulationMark": "J",
+  "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+  "illustrator": "5ban Graphics"
+ },
+ {
+  "id": "20110",
+  "name": "火焰鳥",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "220/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020110.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20110/",
+  "scrapedAt": "2026-11-22T04:47:12.071Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 120,
+  "pokemonType": "Fire",
+  "abilities": [
+   {
+    "label": "特性",
+    "name": "燃燒羽擊",
+    "effect": "若自己的場上有「急凍鳥」「閃電鳥」，則在自己的回合時可使用1次。從自己的手牌選擇1張「基本【火】能量」卡，附於這隻寶可夢身上。"
+   }
+  ],
+  "attacks": [
+   {
+    "name": "火焰旋渦",
+    "cost": [
+     "Fire",
+     "Fire",
+     "Colorless"
+    ],
+    "damage": "130",
+    "effect": "選擇2個這隻寶可夢身上附加的能量，將其丟棄。"
+   }
+  ],
+  "weakness": {
+   "type": "Water",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 146,
+  "species": "火焰寶可夢",
+  "illustrator": "Krgc"
+ },
+ {
+  "id": "20111",
+  "name": "急凍鳥",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "221/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020111.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20111/",
+  "scrapedAt": "2026-11-22T04:47:12.286Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 120,
+  "pokemonType": "Water",
+  "abilities": [
+   {
+    "label": "特性",
+    "name": "嚴寒羽擊",
+    "effect": "若自己的場上有「火焰鳥」「閃電鳥」，則在自己的回合時可使用1次。從自己的手牌選擇1張「基本【水】能量」卡，附於這隻寶可夢身上。"
+   }
+  ],
+  "attacks": [
+   {
+    "name": "冰雹",
+    "cost": [
+     "Water",
+     "Water",
+     "Colorless"
+    ],
+    "damage": "",
+    "effect": "對手的所有寶可夢各受到30點傷害。[在備戰區不計算弱點・抵抗力。]"
+   }
+  ],
+  "weakness": {
+   "type": "Metal",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 144,
+  "species": "冰凍寶可夢",
+  "illustrator": "Taira Akitsu"
+ },
+ {
+  "id": "20112",
+  "name": "閃電鳥",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "222/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020112.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20112/",
+  "scrapedAt": "2026-11-22T04:47:12.460Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 120,
+  "pokemonType": "Lightning",
+  "abilities": [
+   {
+    "label": "特性",
+    "name": "濺射羽擊",
+    "effect": "若自己的場上有「火焰鳥」「急凍鳥」，則在自己的回合時可使用1次。從自己的手牌選擇1張「基本【雷】能量」卡，附於這隻寶可夢身上。"
+   }
+  ],
+  "attacks": [
+   {
+    "name": "雷轟",
+    "cost": [
+     "Lightning",
+     "Lightning",
+     "Lightning",
+     "Colorless"
+    ],
+    "damage": "210",
+    "effect": "這隻寶可夢也受到60點傷害。"
+   }
+  ],
+  "weakness": {
+   "type": "Fighting",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 145,
+  "species": "電擊寶可夢",
+  "illustrator": "SIE NANAHARA"
+ },
+ {
+  "id": "20121",
+  "name": "泥偶小人",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "227/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020121.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20121/",
+  "scrapedAt": "2026-11-22T04:47:12.639Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 90,
+  "pokemonType": "Psychic",
+  "attacks": [
+   {
+    "name": "打擊",
+    "cost": [
+     "Psychic",
+     "Psychic"
+    ],
+    "damage": "50",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Darkness",
+   "value": "×2"
+  },
+  "resistance": {
+   "type": "Fighting",
+   "value": "-30"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 622,
+  "species": "魔像寶可夢",
+  "illustrator": "Satoshi Ito"
+ },
+ {
+  "id": "20123",
+  "name": "鬼斯",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "229/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020123.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20123/",
+  "scrapedAt": "2026-11-22T04:47:13.041Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Darkness",
+  "attacks": [
+   {
+    "name": "偷襲",
+    "cost": [
+     "Darkness"
+    ],
+    "damage": "30",
+    "effect": "擲1次硬幣若為反面，則這個招式失敗。"
+   }
+  ],
+  "weakness": {
+   "type": "Fighting",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 92,
+  "species": "氣體狀寶可夢",
+  "illustrator": "sowsow"
+ },
+ {
+  "id": "20124",
+  "name": "超級席多藍恩ex",
+  "supertype": "Pokemon",
+  "subtype": "ex",
+  "setCode": "M-P-J",
+  "collectorNumber": "230/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020124.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20124/",
+  "scrapedAt": "2026-11-22T04:47:13.218Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 300,
+  "pokemonType": "Metal",
+  "abilities": [
+   {
+    "label": "特性",
+    "name": "高密度盔甲",
+    "effect": "若這隻寶可夢的HP是全滿的狀態，則這隻寶可夢受到對手的寶可夢招式的傷害「-60」點。"
+   }
+  ],
+  "attacks": [
+   {
+    "name": "巨重壓",
+    "cost": [
+     "Metal",
+     "Metal",
+     "Metal"
+    ],
+    "damage": "140",
+    "effect": "在下個自己的回合，這隻寶可夢「巨重壓」的傷害「+140」點。"
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "resistance": {
+   "type": "Grass",
+   "value": "-30"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless",
+   "Colorless",
+   "Colorless"
+  ],
+  "illustrator": "Ultimateinudog"
+ },
+ {
+  "id": "20126",
+  "name": "春紫",
+  "supertype": "Trainer",
+  "subtype": "Supporter",
+  "setCode": "M-P-J",
+  "collectorNumber": "232/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020126.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20126/",
+  "scrapedAt": "2026-11-22T04:47:13.588Z",
+  "regulationMark": "J",
+  "rulesText": "擲1次硬幣。若為正面，則將自己的戰鬥寶可夢恢復「150」HP，若為反面，則將自己的戰鬥寶可夢恢復「30」HP。",
+  "illustrator": "SENZAKI MAKOTO"
+ },
+ {
+  "id": "20127",
+  "name": "沐淨",
+  "supertype": "Trainer",
+  "subtype": "Supporter",
+  "setCode": "M-P-J",
+  "collectorNumber": "233/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020127.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20127/",
+  "scrapedAt": "2026-11-22T04:47:13.752Z",
+  "regulationMark": "J",
+  "rulesText": "從自己的手牌將最多2張寶可夢卡（「擁有規則的寶可夢」除外）丟棄，從牌庫抽出與其張數×3張相同數量的卡。",
+  "illustrator": "nagimiso"
  }
 ]
