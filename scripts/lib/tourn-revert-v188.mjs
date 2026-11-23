@@ -3,9 +3,9 @@
 import { revertV6671IfPresent } from './revert-v6671-noshow-auto-drop.mjs';
 import * as Prev from './tourn-revert-v186.mjs';
 export * from './tourn-revert-v186.mjs';
-export const NEW_TAIL_SHA_V188 = '41a7746a8f5660844bf2df543de4bf4cb57b3e925bb4d5eac53e373289434533';
-export const NEW_TEV_SHA_V188 = 'd08890ecea6b1d2569a3dcde66ca1bcda769e6ef99d9e2a84e5960a134836cbd';
-export const NEW_TEV_LEN_V188 = 263357;
+export const NEW_TAIL_SHA_V188 = '66b82f1a9b6f526cdd1bc229bd6d5a48a3155d45f73aceee198fdc1fa59e0c25';
+export const NEW_TEV_SHA_V188 = '1899d805ccbf496e5cd21031641e819e9f2b621ff205bf4841e34822135de1b5';
+export const NEW_TEV_LEN_V188 = 263936;
 // 本版的錦標賽區塊改動只在 v6.671 的逐位元還原表（單一來源 revert-v6671；它也串在全站還原鏈上）
 export const revertV188 = (b) => revertV6671IfPresent('oracle-admin/server_admin_patch.js', b);
 export function revertV186(b) { return Prev.revertV186(revertV188(b)); }

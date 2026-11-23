@@ -66,7 +66,7 @@ async function runHelper(src, { matches, regs, swiss = true, uid = 'u1', curId =
   if (!h) return 'MISSING';
   const TMATCH = fakeColl(matches), TREGS = fakeColl(regs), chats = [];
   const fn = new Function('TMATCH', 'TREGS', 'postSystemChat', 'swissPhase', h + '\nreturn noShowAutoDropV188;')(
-    TMATCH, TREGS, async (t) => { chats.push(t); }, () => swiss);
+    TMATCH, TREGS, async (t) => { chats.push(t); }, () => swiss);   // helper 本身不可公告（審查 P2-1：公告併進判負那一則）
   const r = await fn({ _id: 'E' }, { _id: curId }, uid, '小明');
   const reg = regs.find((x) => x.uid === uid);
   return { r, dropped: !!reg?.dropped, reason: reg?.droppedReason ?? null, at: typeof reg?.droppedAt === 'number', chats: chats.length, findCalls: TMATCH.calls.filter((c) => c.op === 'find') };
@@ -84,36 +84,53 @@ async function scenarios(src) {
   await T('A5', () => runHelper(src, { matches: [M('b1', 'u1', null, null, { bye: true })], regs: REG() }));
   await T('A6', () => runHelper(src, { matches: [M('m1', 'u1', 'u2', 'u2')], regs: REG(), swiss: false }));
   await T('A7', () => runHelper(src, { matches: [M('m1', 'u1', 'u2', 'u2')], regs: [{ _id: 'E__u1', uid: 'u1', dropped: true }] }));
+  // 審查 P2-2：三個「不屬於本人之前敗場」的干擾場次 ⇒ 都不可以棄賽（各拿掉 $or／status／eventId 其中一個條件就會紅）
+  await T('A9', () => runHelper(src, { matches: [M('m1', 'u1', 'u2', 'u1'), M('m2', 'u2', 'u3', 'u3')], regs: REG() }));
+  await T('A10', () => runHelper(src, { matches: [M('m1', 'u1', 'u2', 'u1'), M('m2', 'u1', 'u3', null, { status: 'playing' })], regs: REG() }));
+  await T('A11', () => runHelper(src, { matches: [M('m1', 'u1', 'u2', 'u1'), M('m2', 'u1', 'u3', 'u3', { eventId: 'OTHER' })], regs: REG() }));
+  out.N = (() => { try {
+    const h = helperSrc(src); if (!h || !h.includes('function noShowAutoDropNoteV188(')) return 'MISSING';
+    const f = new Function('TMATCH', 'TREGS', 'postSystemChat', 'swissPhase', h + '\nreturn noShowAutoDropNoteV188;')(null, null, null, null);
+    return { one: f(['小明']), two: f(['小明', '小華']), none: f([]) };
+  } catch (e) { return 'ERR ' + e.message; } })();
   const sec = noShowSection(src);
   const s = sec ? stripLineComments(sec) : '';
   out.B = {
-    single: /noShow: true \} \}\);\s*try \{ if \(await noShowAutoDropV188\(ev, m, e0 \? m\.p2uid : m\.p1uid, lName\)\) _adAnyV188 = true; \} catch \(_adE\)[^\n]*\n[\s\S]*?await advanceOrFinish\(m, wUid, wName\);/.test(s),
-    double: /doubleNoShow: true \} \}\);\s*for \(const \[_adU, _adN\] of \[\[m\.p1uid, m\.p1name\], \[m\.p2uid, m\.p2name\]\]\) \{\s*try \{ if \(await noShowAutoDropV188\(ev, m, _adU, _adN\)\) _adAnyV188 = true; \} catch[\s\S]*?await checkRoundAdvance\(ev\._id\);/.test(s),
+    single: /noShow: true \} \}\);\s*let _adLoserV188 = false;\s*try \{ if \(await noShowAutoDropV188\(ev, m, e0 \? m\.p2uid : m\.p1uid, lName\)\) \{ _adAnyV188 = true; _adLoserV188 = true; \} \} catch \(_adE\)[^\n]*\n[\s\S]*?await postSystemChat\(swissPhase\(ev\) \? \('⏰ ' \+ \(lName \|\| '一方'\) \+ ' 未進場，本場由 ' \+ wName \+ ' 獲勝' \+ \(_adLoserV188 [^?]*\? '。' \+ noShowAutoDropNoteV188\(\[lName \|\| '一方'\]\) : '（瑞士制：雙方仍繼續後續輪次）。'\)\)[\s\S]*?await advanceOrFinish\(m, wUid, wName\);/.test(s),
+    double: /doubleNoShow: true \} \}\);\s*const _adNamesV188 = \[\];\s*for \(const \[_adU, _adN\] of \[\[m\.p1uid, m\.p1name\], \[m\.p2uid, m\.p2name\]\]\) \{\s*try \{ if \(await noShowAutoDropV188\(ev, m, _adU, _adN\)\) \{ _adAnyV188 = true; _adNamesV188\.push\(_adN \|\| '一位選手'\); \} \} catch[\s\S]*?noShowAutoDropNoteV188\(_adNamesV188\)[\s\S]*?await checkRoundAdvance\(ev\._id\);/.test(s),
     last: /if \(_adAnyV188\) \{ try \{ await finishIfLastSurvivor\(ev\._id\); \} catch/.test(s),
     declared: /let _adAnyV188 = false;/.test(s),
+    noStandalone: !/postSystemChat\('🏳/.test(s) && !/postSystemChat\('🏳/.test(helperSrc(src) || 'postSystemChat(\'🏳'),
   };
   return out;
 }
 
 const judge = (r) => ({
-  A1: r.A1?.r === true && r.A1.dropped && r.A1.reason === 'noShow' && r.A1.at && r.A1.chats === 1,
+  A1: r.A1?.r === true && r.A1.dropped && r.A1.reason === 'noShow' && r.A1.at && r.A1.chats === 0,
   A2: r.A2?.r === false && !r.A2.dropped && r.A2.chats === 0,
   A3: r.A3?.r === true && r.A3.dropped,
   A4: r.A4?.r === false && !r.A4.dropped && !!r.A4.findCalls?.[0]?.f?._id && r.A4.findCalls[0].f._id.$ne === 'cur',
   A5: r.A5?.r === false && !r.A5.dropped,
   A6: r.A6?.r === false && !r.A6.dropped && r.A6.findCalls?.length === 0,
   A7: r.A7?.r === false && r.A7.chats === 0,
+  A9: r.A9?.r === false && !r.A9.dropped, A10: r.A10?.r === false && !r.A10.dropped, A11: r.A11?.r === false && !r.A11.dropped,
+  N: typeof r.N === 'object' && r.N.one.includes('小明') && r.N.one.includes('自動棄賽') && r.N.two.includes('小明、小華') && r.N.none === '',
   A8: JSON.stringify(r.A1?.findCalls?.[0]?.opt) === JSON.stringify({ projection: { winnerUid: 1 } }),
-  B1: !!r.B?.single && r.B.declared, B2: !!r.B?.double, B3: !!r.B?.last,
+  B1: !!r.B?.single && r.B.declared, B4: !!r.B?.single && !!r.B?.double && !!r.B?.noStandalone, B2: !!r.B?.double, B3: !!r.B?.last,
 });
 const LABEL = {
-  A1: '★★★ A1 之前 1 敗 ⇒ 自動棄賽（dropped／droppedAt／droppedReason=noShow）＋一則系統公告',
+  A1: '★★★ A1 之前 1 敗 ⇒ 自動棄賽（dropped／droppedAt／droppedReason=noShow）；helper 本身不公告（公告併進判負那一則）',
   A2: '★★★ A2 之前全勝 ⇒ 不棄賽、不公告（0 敗的人還有一次機會）',
   A3: '★★★ A3「沒贏的都算」：之前一場雙方未進場（winnerUid null）⇒ 棄賽',
   A4: '★★★ A4 本場自己不算：查詢排除本場 _id',
   A5: '★★★ A5 bye 不算敗（只有 bye ⇒ 不棄賽）',
   A6: '★★★ A6 非瑞士階段（複賽／單淘汰）⇒ 不查、不動',
   A7: '★★★ A7 已經手動棄賽 ⇒ 不重複公告、回 false',
+  A9: '★★★ A9 別人之間的場次（u2 對 u3、u3 勝）不算本人敗場（守 $or 條件）',
+  A10: '★★★ A10 未結束的場次（status playing）不算敗場（守 status:done）',
+  A11: '★★★ A11 別的賽事的敗場不算（守 eventId）',
+  N: '★★★ N 公告文字單一來源：一人／兩人名字都列出、無人棄賽時為空字串',
+  B4: '★★★ B4 公告不矛盾：被棄賽者的判負公告不再寫「雙方仍繼續」，改附棄賽說明',
   A8: '★★★ A8 查詢只取 winnerUid（projection；不拉整份對戰紀錄）',
   B1: '★★★ B1 單方未進場：寫完未進場敗後、advanceOrFinish 之前，對「沒進場的那一方」呼叫，失敗有 try/catch',
   B2: '★★★ B2 雙方未進場：兩位各呼叫一次，在 checkRoundAdvance 之前',
@@ -123,7 +140,7 @@ const LABEL = {
 const SRC = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8').replace(/\r\n/g, '\n');
 console.log('【A／B】');
 const H = await scenarios(SRC), J = judge(H);
-for (const k of Object.keys(LABEL)) ok(LABEL[k], J[k], JSON.stringify(H[k] ?? H.B));
+for (const k of Object.keys(LABEL)) ok(LABEL[k], J[k], JSON.stringify(H[k] ?? H.B).slice(0, 300));
 
 console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {

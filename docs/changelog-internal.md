@@ -5,7 +5,9 @@
 基準 `c24b7701`（v6.670）。玩家建議＋站長裁定（2026-11-24）：瑞士輪未進場時，若該玩家本場之前已有 1 敗以上（沒贏的都算：一般敗、未進場敗、平手／時限雙敗、雙方未進場、雙方棄賽）⇒ 自動棄賽、後續不再配對；0 敗只判負；所有瑞士輪（網站賽與社群賽）。
 - server_admin_patch.js：helper noShowAutoDropV188（哨兵 v188-noshow-auto-drop）；未進場判負區塊在寫完結果之後、推進輪次之前呼叫；條件式搶占沿用 /api/tournament/drop（dropped:{$ne:true}），多記 droppedReason:'noShow'；有人被棄賽 ⇒ 迴圈後 finishIfLastSurvivor。
 - 伺服器負擔：只在判未進場那一刻、每位未進場者一個帶 projection 的小查詢，不在輪詢熱路徑。
-- 守衛 test-v6671-noshow-auto-drop（HEAD-FAIL、9 個突變全殺）。
+- 守衛 test-v6671-noshow-auto-drop（HEAD-FAIL；A 行為／B 接線／N 公告文字／D 錦標賽區塊鎖）。
+- Opus 審查：無 P1。P2-1 已修（helper 原本自己公告「自動棄賽」，緊接著的判負公告又說「雙方仍繼續後續輪次」⇒ 改成 helper 不公告，判負公告依結果改寫括號並附棄賽說明，文字單一來源 noShowAutoDropNoteV188）。P2-2 已修（補 A9 別人之間的場次／A10 未結束場次／A11 別的賽事 三個情境；拿掉 $or／status／eventId 各自翻紅，突變 8 個全殺）。P3（迴圈後 finishIfLastSurvivor 多餘但無害、棄賽不可逆、最後一輪未進場失去複賽資格、歸檔沒存棄賽原因、舊守衛變數名過時）回報站長，本版不改。
+- Rule 40：test-v6266 F1／test-v6282 A2 錦標賽鎖改量出貨檔本身（原本先經 v6.660 還原鏈，與 test-v6379「舊值零殘留」衝突）；test-v6291 A5 先經全站還原鏈剝掉之後版本的合法新增再數寫入次數。
 - 部署：update-tournament.bat（伺服器）→ redeploy-oracle.bat（更新紀錄）。
 
 ## v6.670 — M-P 特典卡補漏收錄 15 張

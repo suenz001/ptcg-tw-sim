@@ -388,7 +388,7 @@ await T('D2 ⭐ 整條鏈實跑：notify.ts bundle → SW message {type:ptcg-not
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【E】錦標賽區塊 sha256');
 const TOURN_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
-const TOURN_SHA = 'd08890ecea6b1d2569a3dcde66ca1bcda769e6ef99d9e2a84e5960a134836cbd';   // 與 test-v6278 I1／test-v6283 D1 同一把（凍結區塊）
+const TOURN_SHA = '1899d805ccbf496e5cd21031641e819e9f2b621ff205bf4841e34822135de1b5';   // 與 test-v6278 I1／test-v6283 D1 同一把（凍結區塊）
 await T('E1 ⚠⚠ 錦標賽區塊（錨點至檔尾）sha256 未變（本版不動 server_admin_patch.js）', () => {
   const i = SRV.indexOf(TOURN_ANCHOR);
   assert.ok(i > 0, '找不到錦標賽區塊錨點');
