@@ -11962,6 +11962,28 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //   ⚠ 非瑞士制回空字串 ⇒ 單淘汰的公告**逐字不變**（本版對單淘汰是零行為改變）。
     function swissContinueNote(ev) { return swissPhase(ev) ? '（瑞士制：雙方仍可繼續比賽）' : ''; }
     // <<< v6381-swiss-continue-note
+    // >>> v188-noshow-auto-drop
+    // ⭐server v1.88（v6.671，玩家建議＋站長裁定 2026-11-24）：瑞士輪未進場時，若該玩家**本場之前**已有 1 敗以上 ⇒ 自動棄賽，
+    //   後續輪次不再排入配對（省得對手每輪空等「倒數＋遲到容許」）。
+    //   站長裁定：①「敗」＝沒贏的都算（一般敗、未進場敗、平手／時限雙敗、雙方未進場、雙方棄賽）；②只看本場之前（0 敗的人未進場只判負，還有一次機會）；
+    //   ③所有瑞士輪都適用（網站賽與社群賽）。單淘汰／複賽不經過這裡（swissPhase 才呼叫）。
+    //   ⚠ 只在「判未進場」那一刻跑一次（每位未進場者一個帶 projection 的小查詢），不在任何輪詢熱路徑上 ⇒ 不加重伺服器負擔（鐵律 Rule 92）。
+    //   ⚠ 必須在推進輪次（advanceOrFinish／checkRoundAdvance）**之前**寫入 dropped，否則下一輪會先把他排進去。
+    //   ⚠ 沿用 /api/tournament/drop 的條件式搶占（dropped:{$ne:true}）⇒ 已經手動棄賽的不重複公告。
+    async function noShowAutoDropV188(ev, m, uid, name) {
+      if (!swissPhase(ev) || !uid) return false;
+      const prior = await TMATCH.find(
+        { eventId: ev._id, _id: { $ne: m._id }, status: 'done', bye: { $ne: true }, $or: [{ p1uid: uid }, { p2uid: uid }] },
+        { projection: { winnerUid: 1 } }).toArray();
+      const nonWins = prior.filter((x) => x.winnerUid !== uid).length;
+      if (nonWins < 1) return false;
+      const _claim = await TREGS.updateOne({ _id: ev._id + '__' + uid, dropped: { $ne: true } },
+        { $set: { dropped: true, droppedAt: Date.now(), droppedReason: 'noShow' } });
+      if (!_claim || _claim.modifiedCount !== 1) return false;
+      await postSystemChat('🏳 ' + (name || '一位選手') + ' 本輪未進場，且之前已有敗場，依規則自動棄賽，後續輪次不再排入配對。');
+      return true;
+    }
+    // <<< v188-noshow-auto-drop
     async function postSystemChat(text) {
       try { await TCHAT.insertOne({ room: 'lobby', uid: 'system', name: '系統', text: String(text).slice(0, 200), ts: Date.now(), sys: true }); }
       catch (e) { /* best-effort 通知 */ }
@@ -14372,6 +14394,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           const deadline = ev.roundStartedAt + (cdMin + nsMin) * 60000;
           if (now > deadline) {
             const pend = await TMATCH.find({ eventId: ev._id, round: ev.currentRound, status: { $ne: 'done' }, p1uid: { $ne: null }, p2uid: { $ne: null } }).toArray();
+            let _adAnyV188 = false;   // v188-noshow-auto-drop：本次有人被自動棄賽 ⇒ 迴圈後比照 /drop 檢查是否只剩一人
             for (const m of pend) {
               let e0 = !!(m.entered && m.entered[0]), e1 = !!(m.entered && m.entered[1]);
               // v0.56 防呆：對局若其實已開打(房間 gameState 進入 playing/game-over = 雙方都完成 setup 確實到場)，
@@ -14383,16 +14406,27 @@ import('firebase-admin').then(async ({ default: admin }) => {
               if (e0 || e1) {
                 const wUid = e0 ? m.p1uid : m.p2uid, wName = e0 ? m.p1name : m.p2name, lName = e0 ? m.p2name : m.p1name;
                 await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', noShow: true } });
+                // >>> v188-noshow-auto-drop
+                try { if (await noShowAutoDropV188(ev, m, e0 ? m.p2uid : m.p1uid, lName)) _adAnyV188 = true; } catch (_adE) { console.warn('[tournament] 未進場自動棄賽失敗 match=' + m._id + ' :: ' + (_adE && _adE.message)); }
+                // <<< v188-noshow-auto-drop
                 // v0.34：勝方已進場(卡在 setup 等待)→把房間設 game-over 讓勝方看到勝利畫面 + 返回賽事大廳
                 if (m.roomId) { try { await forceRoomGameOverV183(m.roomId, (room) => { if (room.gameState.phase === 'game-over') return null; const winSeat = e0 ? 0 : 1; const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = (lName || '對手') + ' 未進場，判定你獲勝'; return og; }, now); } catch (e) { /* best-effort */ } }   // ⭐v1.83 版本 CAS＋重試
                 await postSystemChat(swissPhase(ev) ? ('⏰ ' + (lName || '一方') + ' 未進場，本場由 ' + wName + ' 獲勝（瑞士制：雙方仍繼續後續輪次）。') : ('⏰ ' + (lName || '一方') + ' 未進場判負，' + wName + ' 獲勝。'));
                 await advanceOrFinish(m, wUid, wName);
               } else {
                 await TMATCH.updateOne({ _id: m._id }, { $set: { status: 'done', winnerUid: null, doubleNoShow: true } });
+                // >>> v188-noshow-auto-drop
+                for (const [_adU, _adN] of [[m.p1uid, m.p1name], [m.p2uid, m.p2name]]) {
+                  try { if (await noShowAutoDropV188(ev, m, _adU, _adN)) _adAnyV188 = true; } catch (_adE) { console.warn('[tournament] 未進場自動棄賽失敗 match=' + m._id + ' :: ' + (_adE && _adE.message)); }
+                }
+                // <<< v188-noshow-auto-drop
                 await postSystemChat(swissPhase(ev) ? '⏰ 本場雙方皆未進場，以雙敗處理（瑞士制：雙方仍可繼續比賽）。' : '⏰ 本場雙方皆未進場，雙淘汰，無人晉級。');
                 await checkRoundAdvance(ev._id);
               }
             }
+            // >>> v188-noshow-auto-drop
+            if (_adAnyV188) { try { await finishIfLastSurvivor(ev._id); } catch (_adE) { /* 與 /drop 相同的收尾；失敗不影響本次判負 */ } }
+            // <<< v188-noshow-auto-drop
           }
         }
         // 閒置判負：對局中(雙方都已進場)，輪到動作的一方逾 idleForfeitMin(預設3)分鐘無動作 → 判負(含斷線)。

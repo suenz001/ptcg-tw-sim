@@ -31,6 +31,8 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ADMIN_EOL = committedEolIsLf(ROOT, 'oracle-admin/admin.html');
 const BASE_SHA = 'cef06975e99502eb8eb20f26e07ac713267f41b3';   // v6.265
 const pat = revertV6660IfPresent('oracle-admin/server_admin_patch.js', normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8')));
+// ⭐v6.671（Rule 40）：F1／F2 的錦標賽區塊鎖量「出貨檔本身」（與其他鎖同一個現行值；pat 經還原鏈後是 v6.660 之前的樣子）
+const patRaw = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
 const adm = normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
 const verTs = normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'));
 // ⚠ 第 1 行是版本沿革註解（裡面什麼字都有）⇒ 所有「全檔掃描」一律先切掉它，
@@ -656,16 +658,16 @@ console.log('\n══ 【F】⭐⭐ 錦標賽零接觸（站長硬約束）═�
 const TOURN_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
 // ⚠ v6.276 起錦標賽區塊含 6 處 additive 的 deckId 插入（報名×3＋歸檔×1 等；
 //   「只有那 6 處、其餘逐位元同 v6.265」由 test-v6276 的 revert-diff 證明）。
-const TOURN_SHA_V6265 = '33c4153cc0be6de6d9d804bc8332c3eec5eb83ad32d542f8f9a4a8d111c1e455';
+const TOURN_SHA_V6265 = 'd08890ecea6b1d2569a3dcde66ca1bcda769e6ef99d9e2a84e5960a134836cbd';
 // ⚠ 這是 **JS 字串長度（UTF-16 code units）**：區塊內有 emoji（surrogate pair 各算 2），
 //   所以它比 Python／code-point 的 218,164 多 29。判準是下面的 sha256（對 UTF-8 bytes 算），
 //   長度只是讓失敗訊息好讀；兩個值都是從 **BASE v6.265 的 blob** 算出來的，不是從出貨檔。
-const TOURN_LEN_V6265 = 260974;   // ⭐v6.365 重釘（站長裁定 六-2：錦標賽平手＝雙敗，區塊加長 3050 字元（舊值不寫在這裡：守衛要求舊值零殘留））
+const TOURN_LEN_V6265 = 263357;   // ⭐v6.365 重釘（站長裁定 六-2：錦標賽平手＝雙敗，區塊加長 3050 字元（舊值不寫在這裡：守衛要求舊值零殘留））
 
 await T('F1 ⭐⭐ 錦標賽區塊與 v6.265 **逐位元相同**（sha256 內嵌快照，不需要 git 歷史）', () => {
-  const i = pat.indexOf(TOURN_ANCHOR);
+  const i = patRaw.indexOf(TOURN_ANCHOR);
   assert.ok(i > 0, '找不到錦標賽區塊錨點（' + TOURN_ANCHOR + '）—— 掃描器壞了或檔案被大改');
-  const blk = pat.slice(i);
+  const blk = patRaw.slice(i);
   assert.strictEqual(blk.length, TOURN_LEN_V6265,
     '錦標賽區塊長度變了：' + blk.length + '（v6.265 是 ' + TOURN_LEN_V6265 + '）');
   const sha = createHash('sha256').update(blk, 'utf8').digest('hex');
@@ -676,9 +678,9 @@ await T('F1 ⭐⭐ 錦標賽區塊與 v6.265 **逐位元相同**（sha256 內嵌
 });
 
 await T('F2 掃描器自驗：F1 的 sha 比對真的抓得到一個字元的差異（否則它是安慰劑）', () => {
-  const i = pat.indexOf(TOURN_ANCHOR);
-  const mutated = pat.slice(i).replace('tournamentEvents', 'tournamentEventsX');
-  assert.notStrictEqual(mutated, pat.slice(i), '突變錨點對不上');
+  const i = patRaw.indexOf(TOURN_ANCHOR);
+  const mutated = patRaw.slice(i).replace('tournamentEvents', 'tournamentEventsX');
+  assert.notStrictEqual(mutated, patRaw.slice(i), '突變錨點對不上');
   const sha = createHash('sha256').update(mutated, 'utf8').digest('hex');
   assert.notStrictEqual(sha, TOURN_SHA_V6265, 'sha 比對抓不到差異 —— F1 是安慰劑');
 });

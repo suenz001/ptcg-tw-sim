@@ -30,6 +30,8 @@ import {
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PATCH_PATH = join(ROOT, 'oracle-admin/server_admin_patch.js');
 const PATCH = revertV6660IfPresent('oracle-admin/server_admin_patch.js', readPatch(PATCH_PATH));
+// ⭐v6.671（Rule 40）：錦標賽區塊鎖量「出貨檔本身」（與其他 27 把鎖同一個現行值；PATCH 經還原鏈後是 v6.660 之前的樣子）
+const PATCH_RAW = readPatch(PATCH_PATH);
 
 let pass = 0, fail = 0;
 const T = async (name, fn) => {
@@ -65,15 +67,15 @@ await T('A1 三個區塊都抽得到且長度合理（掃描器下限）', () =>
   }
 });
 const TOURN_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
-const TOURN_SHA = '33c4153cc0be6de6d9d804bc8332c3eec5eb83ad32d542f8f9a4a8d111c1e455';   // 與 test-v6278 I1 同一把（凍結區塊）
+const TOURN_SHA = 'd08890ecea6b1d2569a3dcde66ca1bcda769e6ef99d9e2a84e5960a134836cbd';   // 與 test-v6278 I1 同一把（凍結區塊）
 await T('A2 ⚠⚠ 錦標賽區塊逐位元未動（anchor 至檔尾 sha256 與 test-v6278 I1 同一把）', () => {
-  const i = PATCH.indexOf(TOURN_ANCHOR);
+  const i = PATCH_RAW.indexOf(TOURN_ANCHOR);
   assert.ok(i > 0, '找不到錦標賽區塊錨點');
-  assert.strictEqual(createHash('sha256').update(PATCH.slice(i), 'utf8').digest('hex'), TOURN_SHA, '⚠⚠ 錦標賽區塊被動到了!');
+  assert.strictEqual(createHash('sha256').update(PATCH_RAW.slice(i), 'utf8').digest('hex'), TOURN_SHA, '⚠⚠ 錦標賽區塊被動到了!');
 });
 await T('A2b 掃描器自驗：sha 比對抓得到一個字元的差異', () => {
-  const i = PATCH.indexOf(TOURN_ANCHOR);
-  assert.notStrictEqual(createHash('sha256').update(PATCH.slice(i) + ' ', 'utf8').digest('hex'), TOURN_SHA);
+  const i = PATCH_RAW.indexOf(TOURN_ANCHOR);
+  assert.notStrictEqual(createHash('sha256').update(PATCH_RAW.slice(i) + ' ', 'utf8').digest('hex'), TOURN_SHA);
 });
 await T('A3 位置證明：friends 區塊整段落在「第一支 /api/tournament 的 app.get」與錦標賽錨點之前；且區塊/檔頭都不含那個字面（否則三把鎖的錨點會被往前挪）', () => {
   const s = PATCH.indexOf(FR_START), e = PATCH.indexOf(FR_END);

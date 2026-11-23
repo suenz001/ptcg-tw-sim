@@ -21,6 +21,7 @@ export function revertV6670Map(map) {
 
 // ── 文字檔（src／對外 changelog／admin）的逐位元還原：逐字回 4e42533e（v6.669）；鏈：revert-v6669 會先呼叫本檔 ──
 import { normEol } from './eol-agnostic.mjs';
+import { revertV6671IfPresent } from './revert-v6671-noshow-auto-drop.mjs';   // v6.671 由新到舊
 export const V6670_PAIRS = {
   "oracle-admin/admin.html": [
     [
@@ -85,7 +86,7 @@ export const V6670_PAIRS = {
 const V6670_MARKERS = {"oracle-admin/admin.html": [0], "src/lib/game/effects.ts": [0], "src/lib/version.ts": [0], "static/changelog-archive.html": [0], "static/changelog-bodies.html": [0, 1], "static/changelog.html": [3], "static/site-version.txt": [0]};
 
 export function revertV6670IfPresent(path, source) {
-  let text = normEol(String(source));
+  let text = revertV6671IfPresent(path, normEol(String(source)));
   const pairs = V6670_PAIRS[path];
   if (!pairs || V6670_MARKERS[path].every((index) => !text.includes(pairs[index][0]))) return text;
   // 依序檢查＋還原（表是由新往舊逐段產生的，後面的錨點可能要前面先還原才出現）

@@ -221,7 +221,7 @@ console.log('【D】錦標賽區塊 28 把鎖');
   ok('★★ D4 v1.76 的舊指紋零殘留（還原鏈宣告端除外）', NEW_TAIL_SHA_V176 !== NEW_TAIL_SHA_V180 && stale.length === 0, stale.join(', '));
   const CONSUMERS = ['scripts/test-v6276-deck-tournament-stats.mjs', 'scripts/test-v6291-tourn-verified-gate.mjs', 'scripts/test-v6292-tourn-verified-gate2.mjs',
     'scripts/test-v6381-archive-gamedraw-and-swiss-note.mjs'];
-  const bad = CONSUMERS.filter((f) => !/from '\.\/lib\/tourn-revert-v18[0-6]\.mjs'/.test(rd(f)));   // ⭐v1.81 起接 v181（鏈內含 v180）
+  const bad = CONSUMERS.filter((f) => !/from '\.\/lib\/tourn-revert-v18[0-8]\.mjs'/.test(rd(f)));   // ⭐v1.81 起接 v181（鏈內含 v180）
   ok('★★ D5 錦標賽區塊的還原鏈消費者都改接 tourn-revert-v180', bad.length === 0, bad.join(', '));
   ok('★ D5b 整份補丁的還原入口（sap-revert-admin-v177）先退 v1.80 再剝 v1.79', /stripAdminV179IfPresent\(revertAdminV180IfPresent\(/.test(rd('scripts/lib/sap-revert-admin-v177.mjs')));
 }

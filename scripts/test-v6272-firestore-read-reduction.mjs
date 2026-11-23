@@ -645,7 +645,7 @@ await TA('M7 admin.html 拿掉 msgCounts 參數 ⇒「按開關要帶 msgCounts=
 // ⑨ ⭐⭐ 錦標賽區塊逐位元未動（內嵌 sha256，淺複製下也在守）
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑨ 錦標賽區塊逐位元未動');
-const TOURN_TAIL_SHA256 = 'dc041826c0f73eeeba63d64655d26a5aec02071992ab05db537997c6a079f78c' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
+const TOURN_TAIL_SHA256 = '41a7746a8f5660844bf2df543de4bf4cb57b3e925bb4d5eac53e373289434533' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
 function tournTail(src) {
   const i = src.indexOf("app.get('/api/tournament");
   if (i < 0) throw new assert.AssertionError({ message: '找不到第一支 /api/tournament 端點' });
@@ -670,7 +670,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '4e42533ee61df2d68096dc0e368401ceb12c2361';   // v6.669（上一版）
+const PREV_SHA = 'c24b770104cd0901bcba8898821f7020c1a7a397';   // v6.670（上一版）
 // ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
 //   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
@@ -759,21 +759,30 @@ const PREV_SHA = '4e42533ee61df2d68096dc0e368401ceb12c2361';   // v6.669（上�
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⚠⚠ v6.670 前移：PREV_SHA 從 4e42533e（v6.669）起算。
+  // ⚠⚠ v6.671 前移：PREV_SHA 從 c24b7701（v6.670）起算。
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-  // ⭐v6.670：v6.670 M-P 特典卡補漏收錄 15 張
-  'src/lib/game/effects.ts',
-  'src/lib/game/effects/cards/mp_j_wave2.ts',
+  // ⭐v6.671：v6.671 瑞士輪未進場自動棄賽（server v1.88）
   'src/lib/version.ts',
-  'static/card-set-map.json',
-  'static/cards/M-P-I.json',
-  'static/cards/M-P-J.json',
-  'static/cards/index.json',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
   'static/site-version.txt',
 ];
+// ── 上一版（v6.670）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
+// ⚠⚠ v6.670 前移：PREV_SHA 從 4e42533e（v6.669）起算。
+//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
+// ⭐v6.670：v6.670 M-P 特典卡補漏收錄 15 張
+//   'src/lib/game/effects.ts',
+//   'src/lib/game/effects/cards/mp_j_wave2.ts',
+//   'src/lib/version.ts',
+//   'static/card-set-map.json',
+//   'static/cards/M-P-I.json',
+//   'static/cards/M-P-J.json',
+//   'static/cards/index.json',
+//   'static/changelog-archive.html',
+//   'static/changelog-bodies.html',
+//   'static/changelog.html',
+//   'static/site-version.txt',
 // ── 上一版（v6.669）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
 // ⚠⚠ v6.669 前移：PREV_SHA 從 64c7f253（v6.668）起算。
 //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
@@ -952,21 +961,6 @@ const PREV_ALLOWED = [
 //   'src/lib/auth/GoogleAuthButton.svelte',
 //   'src/lib/auth/google-auth.ts',
 //   'src/lib/auth/google-flow.ts',
-//   'src/lib/version.ts',
-//   'src/routes/decks/+page.svelte',
-//   'src/routes/game/+page.svelte',
-//   'static/changelog-archive.html',
-//   'static/changelog-bodies.html',
-//   'static/changelog.html',
-//   'static/site-version.txt',
-// ── 上一版（v6.651）的宣告，保留當歷史紀錄（不再被程式使用）──────────────
-// ⚠⚠ v6.651 前移：PREV_SHA 從 a84cdd89（v6.650）起算。
-//   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
-// ⭐v6.651：Google 登入、保 UID 綁定、原頁完成及登入世代防護；不更改遊戲引擎、伺服器 API 或輪詢頻率。
-//   'src/lib/auth/GoogleAuthButton.svelte',
-//   'src/lib/auth/google-auth.ts',
-//   'src/lib/auth/google-flow.ts',
-//   'src/lib/ui/AccountBar.svelte',
 //   'src/lib/version.ts',
 //   'src/routes/decks/+page.svelte',
 //   'src/routes/game/+page.svelte',

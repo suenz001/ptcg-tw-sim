@@ -88,8 +88,8 @@ await T('A0 HEAD-FAIL：dm-poller.ts／dm-session.ts／DmPanel.svelte 存在；F
   assert.ok(PAGE.includes('DmPanel'), '/friends 頁沒接 DmPanel');
 });
 if (fail) { console.log('\n══ v6.288 守衛：' + pass + ' PASS / ' + fail + ' FAIL（HEAD-FAIL：新檔／新區塊不存在，後續無法進行）══'); process.exit(1); }
-const TOURN_TAIL_SHA256 = 'dc041826c0f73eeeba63d64655d26a5aec02071992ab05db537997c6a079f78c';   // 與 test-v6272 ⑨ 同一把
-const TOURN_ANCHOR_SHA256 = '33c4153cc0be6de6d9d804bc8332c3eec5eb83ad32d542f8f9a4a8d111c1e455'; // 與 test-v6278 I1 同一把
+const TOURN_TAIL_SHA256 = '41a7746a8f5660844bf2df543de4bf4cb57b3e925bb4d5eac53e373289434533';   // 與 test-v6272 ⑨ 同一把
+const TOURN_ANCHOR_SHA256 = 'd08890ecea6b1d2569a3dcde66ca1bcda769e6ef99d9e2a84e5960a134836cbd'; // 與 test-v6278 I1 同一把
 await T('A1 ⚠⚠ 錦標賽區塊逐位元未動（兩把既有 sha256）；FRIENDS／DM 區塊都在第一支 /api/tournament 之前', () => {
   const first = PATCH.indexOf("app.get('/api/tournament");
   assert.ok(first > 0);

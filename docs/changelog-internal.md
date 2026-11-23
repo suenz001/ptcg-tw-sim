@@ -1,5 +1,13 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.671 — 瑞士輪未進場自動棄賽（server v1.88）
+
+基準 `c24b7701`（v6.670）。玩家建議＋站長裁定（2026-11-24）：瑞士輪未進場時，若該玩家本場之前已有 1 敗以上（沒贏的都算：一般敗、未進場敗、平手／時限雙敗、雙方未進場、雙方棄賽）⇒ 自動棄賽、後續不再配對；0 敗只判負；所有瑞士輪（網站賽與社群賽）。
+- server_admin_patch.js：helper noShowAutoDropV188（哨兵 v188-noshow-auto-drop）；未進場判負區塊在寫完結果之後、推進輪次之前呼叫；條件式搶占沿用 /api/tournament/drop（dropped:{$ne:true}），多記 droppedReason:'noShow'；有人被棄賽 ⇒ 迴圈後 finishIfLastSurvivor。
+- 伺服器負擔：只在判未進場那一刻、每位未進場者一個帶 projection 的小查詢，不在輪詢熱路徑。
+- 守衛 test-v6671-noshow-auto-drop（HEAD-FAIL、9 個突變全殺）。
+- 部署：update-tournament.bat（伺服器）→ redeploy-oracle.bat（更新紀錄）。
+
 ## v6.670 — M-P 特典卡補漏收錄 15 張
 
 基準 `4e42533e`（v6.669）。玩家回報「超級席多藍恩ex 沒有收錄」。refresh-official-set-manifest 現查官方 M-P 比站上多 15 張；逐張看卡圖核對標記（I×4、J×11，與官網欄位一致），併入 M-P-I／M-P-J（格式空操作自證、card-set-map 文字層追加、index.json 外科式改張數）。

@@ -47,9 +47,9 @@ import {
 //   本檔的 revert-diff 從此再串一節：先還原 v6.365 的三段，再往後退。
 //   ⚠ 站長明文禁止把鎖拿掉／改成不驗／只比片段 ⇒ 一律串接，不放水。
 import {
-  NEW_TAIL_SHA_V186 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V186 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V186 as NEW_TEV_LEN_CUR, revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171, revertV173,
+  NEW_TAIL_SHA_V188 as NEW_TAIL_SHA_CUR, NEW_TEV_SHA_V188 as NEW_TEV_SHA_CUR, NEW_TEV_LEN_V188 as NEW_TEV_LEN_CUR, revertV165 as _rv165, revertV167 as _rv167, revertV169 as _rv169, revertV171 as _rv171, revertV173,
   revertV154 as _rv154, revertV153, revertV152, revertV150, revertV6384 as _rv6384, revertV6381 as _rv6381, revertV6365 as _rv6365, stripDeclaredBlocksNewerThan,
-} from './lib/tourn-revert-v186.mjs';
+} from './lib/tourn-revert-v188.mjs';
 const revertV171 = b => _rv171(revertV173(b));
 
 const revertV169 = (b) => _rv169(revertV171(b));   // v1.71 先逐字還原新修改，再接既有鎖。
@@ -60,6 +60,7 @@ const revertV6384 = (b) => _rv6384(revertV150(revertV152(revertV153(revertV154(b
 const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
 const revertV6365 = (b) => _rv6365(revertV6381(b));   // ⭐v6.381 鏈又長一節（別名：既有呼叫點一個字都不必改）
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
+import { revertV6660IfPresent } from './lib/revert-v6660-profile-hardening.mjs';   // v6.671：A5 先剝掉之後版本的合法新增
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = 'bb3adda65b536a7e0be67b788bd1fd5934051bc7';   // v6.290
@@ -180,7 +181,11 @@ await T('A5 ⚠⚠ 本版零刪除：TREGS/TEVENTS 的刪除與改寫路徑數�
   assert.ok(b.ok, '讀不到 BASE blob');
   for (const pat2 of ['TREGS.deleteOne(', 'TREGS.deleteMany(', 'TREGS.updateOne(', 'TREGS.insertOne(',
     'TEVENTS.deleteOne(', 'TEVENTS.updateOne(', 'TEVENTS.insertOne(']) {
-    assert.strictEqual(PATCH.split(pat2).length, b.out.split(pat2).length, pat2 + ' 的出現次數與 BASE 不同');
+    // ⭐v6.671（Rule 40）：本條守的是「v6.291 只加判斷、不動資料」。v6.671（server v1.88）合法新增一處
+    //   TREGS.updateOne（瑞士輪未進場自動棄賽，沿用 /drop 的條件式寫入）⇒ 先經全站還原鏈剝掉 v6.660 之後的版本再數，
+    //   v6.291 本身的意圖不變（還原鏈每一對都逐位元驗證、命中數不對就 throw）。
+    const cur = revertV6660IfPresent(PATCH_REL, PATCH);
+    assert.strictEqual(cur.split(pat2).length, b.out.split(pat2).length, pat2 + ' 的出現次數與 BASE 不同');
   }
 });
 
