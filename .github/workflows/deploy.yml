@@ -34,8 +34,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      # npm#4828 workaround：npm ci 有時漏裝 rollup 平台 optional binary → vite build 快速 fail。強制補裝。
-      - run: npm install @rollup/rollup-linux-x64-gnu @esbuild/linux-x64 --no-save --no-package-lock
+      # npm#4828 workaround：npm ci 有時漏裝 rollup 平台 optional binary → vite build 快速 fail。
+      # ⭐v6.672：只在缺的時候照 lock 版本補裝，並驗證 node_modules 頂層版本全部等於 lock。
+      #   原本的 `npm install … --no-package-lock` 會忽略 lock 重算整棵樹（實測換掉 198 個套件），
+      #   2026-11-25 svelte 5.59 上架後讓守衛在 CI 紅、而且 CI 建置的根本不是 lock 釘住的版本。
+      - run: node scripts/ci-ensure-platform-binaries.mjs
       # ⭐ Playwright 的瀏覽器：只裝 chromium-headless-shell（約 115MB），不是三個完整瀏覽器。
       #   那 10 支有 PW 段的守衛一律 launch({ channel: 'chromium-headless-shell' })，
       #   裝完整 chromium 是白費 400MB。

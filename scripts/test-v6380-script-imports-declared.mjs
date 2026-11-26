@@ -26,7 +26,7 @@
 import assert from 'node:assert';
 import { readFileSync, writeFileSync, unlinkSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { builtinModules } from 'node:module';
 import * as acorn from 'acorn';
 import * as walk from 'acorn-walk';
@@ -269,12 +269,21 @@ console.log('\n【C】CI 現場口徑：為什麼「宣告」是必要的（真�
 {
   const wf = normEol(readFileSync(join(ROOT, '.github/workflows/deploy.yml'), 'utf8'));
   chk('★★ C1 deploy.yml 用 npm ci 安裝相依', /\bnpm ci\b/.test(wf));
-  chk('★★★ C2 deploy.yml 在 npm ci 之後還有一步帶 --no-package-lock（＝會依 package.json 重算並修剪整棵樹）'
-    + '\n        ⚠ 這一步若被移除，本條會紅 —— 屆時請回來檢視 B1 的理由是否改變（B1 本身仍應保留）',
-    /--no-package-lock/.test(wf));
-  chk('★★ C3 那一步確實在 npm ci 之後（順序決定了修剪會不會吃掉 npm ci 裝好的東西）',
-    wf.indexOf('npm ci') >= 0 && wf.indexOf('--no-package-lock') > wf.indexOf('npm ci'),
-    'ci@' + wf.indexOf('npm ci') + ' prune@' + wf.indexOf('--no-package-lock'));
+  // ⭐v6.672（依 C2 原註解「這一步若被移除，請回來檢視」）：那一步已換成 scripts/ci-ensure-platform-binaries.mjs
+  //   （只在缺時照 lock 版本補裝＋驗證不漂移）。B1「直接 import 的套件必須自己宣告」仍保留：
+  //   宣告是正確的相依契約，不依賴 CI 那一步的行為。
+  const runs = [...wf.matchAll(/^\s*-\s*run:\s*(.+)$/gm)].map((m) => m[1].trim());
+  chk('★★★ C2 deploy.yml 的 run 步驟不再帶 --no-package-lock（會忽略 lock 重算整棵樹 ⇒ CI 測／建的不是 lock 的版本）',
+    !runs.some((r) => /--no-package-lock/.test(r)), JSON.stringify(runs.filter((r) => /--no-package-lock/.test(r))));   // 只看實際執行的 run 行（註解提到它不算）
+  chk('★★★ C3 npm ci 的下一步就是 ci-ensure-platform-binaries（補裝＋漂移檢查）',
+    runs.indexOf('npm ci') >= 0 && runs[runs.indexOf('npm ci') + 1] === 'node scripts/ci-ensure-platform-binaries.mjs', JSON.stringify(runs.slice(0, 4)));
+  const CE = await import(pathToFileURL(join(ROOT, 'scripts/ci-ensure-platform-binaries.mjs')).href);
+  const LOCK = { packages: { '': {}, 'node_modules/svelte': { version: '5.55.4' }, 'node_modules/a/node_modules/svelte': { version: '1.0.0' }, 'node_modules/@esbuild/linux-x64': { version: '0.25.12' } } };
+  const inst = (m) => (n) => m[n] ?? null;
+  chk('★★★ C4 漂移判準：頂層版本不同 ⇒ 抓到（svelte 5.55.4 → 5.59.2）',
+    JSON.stringify(CE.findDrift(LOCK, inst({ svelte: '5.59.2', '@esbuild/linux-x64': '0.25.12' }))) === JSON.stringify([{ name: 'svelte', want: '5.55.4', got: '5.59.2' }]));
+  chk('★★ C5 負對照：版本相同、沒裝的、巢狀的都不算漂移', CE.findDrift(LOCK, inst({ svelte: '5.55.4' })).length === 0);
+  chk('★★ C6 補裝版本讀 lock（不是最新版）', CE.lockVersion(LOCK, '@esbuild/linux-x64') === '0.25.12' && CE.PLATFORM_BINARIES.includes('@rollup/rollup-linux-x64-gnu'));
 }
 
 // ════════════════════════════════════════════════════════════════════════════
