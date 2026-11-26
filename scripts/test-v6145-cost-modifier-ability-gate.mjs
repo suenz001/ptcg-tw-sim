@@ -157,7 +157,7 @@ const isGated = (name) =>
   // ⭐v6.672（Rule 40）：持有者是**場上另一隻**（摔角鷹人｜振奮聲援：「自己的寶可夢使用招式『奮勇戰鬥』所需的能量減少」）
   //   ⇒ abilityOn 只問出招者本身，不適用；改逐隻問中央 hasEffectiveAbilityByInst（底層同一支 isAbilityHolderEffective）。
   //   ⚠ 只認 effectiveAttackCost 範圍內的這種寫法（不是隨便哪裡出現都算）。
-  || (() => { const i = engineSrc.indexOf('export function effectiveAttackCost'); const j = i < 0 ? -1 : engineSrc.indexOf('\nexport function ', i + 10);
+  || (() => { const i = engineSrc.indexOf('export function effectiveAttackCost'); const j = i < 0 ? -1 : engineSrc.indexOf('export function ', i + 10);
       return i >= 0 && engineSrc.slice(i, j < 0 ? undefined : j).includes(`hasEffectiveAbilityByInst(state, attackerIdx, x, pool, '${name}')`); })();
 
 T('掃描器自我驗證：枚舉不得為空，且必須抓到已知成員（否則整條 B 是假綠）', () => {

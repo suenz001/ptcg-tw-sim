@@ -10257,12 +10257,11 @@ export function applyAction(
   // ⭐v6.595 已通過出招前的擲幣、正在等玩家選擇 ⇒ 宣告了就要出招：只接受同一招的 ATTACK（其他動作原樣不動）
   if (!attackGateAllows(state, action)) return state;
   // <<< v6595-attack-gate-lock
+  let raw = applyActionImpl(state, action, pool);
   // >>> v6672-blind-ko-transient
   // ⭐v6.672 障眼法的 per-action 記號（_blindKoNoPrize）：只活在這一個動作裡。
   //   ⚠ 必須在**最外層**清：applyActionImpl 尾段還有 drain／sanityKOSweep 等 KO 出口（複審 P2-1）。
-  //   進來時也清一次（舊存檔或外部帶進來的殘留不可影響這個動作）。
-  if (state._blindKoNoPrize !== undefined) { const _c0 = { ...state }; delete _c0._blindKoNoPrize; state = _c0; }
-  let raw = applyActionImpl(state, action, pool);
+  //   進來時的殘留由 applyActionImpl 開頭清（見同名哨兵）。
   if (raw._blindKoNoPrize !== undefined) { const _c1 = { ...raw }; delete _c1._blindKoNoPrize; raw = _c1; }
   // <<< v6672-blind-ko-transient
   // ⭐⭐⭐ v6.181 單一「拒絕出口」——「動作被拒絕」與「動作做了一半」從此不可能混淆。
@@ -10493,6 +10492,10 @@ function applyActionImpl(
   action: GameAction,
   pool: Map<string, Card>
 ): GameState {
+  // >>> v6672-blind-ko-transient-in
+  // ⭐v6.672 進來時清掉障眼法記號殘留（舊存檔／外部帶進來的不可影響這個動作）
+  if (state._blindKoNoPrize !== undefined) { const _c0 = { ...state }; delete _c0._blindKoNoPrize; state = _c0; }
+  // <<< v6672-blind-ko-transient-in
   if (state.phase === 'game-over') return state;
 
   let next: GameState;

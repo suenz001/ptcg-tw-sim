@@ -379,12 +379,12 @@ export const V6672_PAIRS = {
    "  },\n};\n"
   ],
   [
-   "  let raw = applyActionImpl(state, action, pool);\n  if (raw._blindKoNoPrize !== undefined) { const _c1 = { ...raw }; delete _c1._blindKoNoPrize; raw = _c1; }\n  // <<< v6672-blind-ko-transient\n  // ⭐⭐⭐ v6.181 單一「拒絕出口」——「動作被拒絕」與「動作做了一半」從此不可能混淆。\n",
-   "  let raw = applyActionImpl(state, action, pool);\n  // ⭐⭐⭐ v6.181 單一「拒絕出口」——「動作被拒絕」與「動作做了一半」從此不可能混淆。\n"
+   "): GameState {\n  // >>> v6672-blind-ko-transient-in\n  // ⭐v6.672 進來時清掉障眼法記號殘留（舊存檔／外部帶進來的不可影響這個動作）\n  if (state._blindKoNoPrize !== undefined) { const _c0 = { ...state }; delete _c0._blindKoNoPrize; state = _c0; }\n  // <<< v6672-blind-ko-transient-in\n  if (state.phase === 'game-over') return state;\n",
+   "): GameState {\n  if (state.phase === 'game-over') return state;\n"
   ],
   [
-   "  // <<< v6595-attack-gate-lock\n  // >>> v6672-blind-ko-transient\n  // ⭐v6.672 障眼法的 per-action 記號（_blindKoNoPrize）：只活在這一個動作裡。\n  //   ⚠ 必須在**最外層**清：applyActionImpl 尾段還有 drain／sanityKOSweep 等 KO 出口（複審 P2-1）。\n  //   進來時也清一次（舊存檔或外部帶進來的殘留不可影響這個動作）。\n  if (state._blindKoNoPrize !== undefined) { const _c0 = { ...state }; delete _c0._blindKoNoPrize; state = _c0; }\n  let raw = applyActionImpl(state, action, pool);\n",
-   "  // <<< v6595-attack-gate-lock\n  let raw = applyActionImpl(state, action, pool);\n"
+   "  let raw = applyActionImpl(state, action, pool);\n  // >>> v6672-blind-ko-transient\n  // ⭐v6.672 障眼法的 per-action 記號（_blindKoNoPrize）：只活在這一個動作裡。\n  //   ⚠ 必須在**最外層**清：applyActionImpl 尾段還有 drain／sanityKOSweep 等 KO 出口（複審 P2-1）。\n  //   進來時的殘留由 applyActionImpl 開頭清（見同名哨兵）。\n  if (raw._blindKoNoPrize !== undefined) { const _c1 = { ...raw }; delete _c1._blindKoNoPrize; raw = _c1; }\n  // <<< v6672-blind-ko-transient\n  // ⭐⭐⭐ v6.181 單一「拒絕出口」——「動作被拒絕」與「動作做了一半」從此不可能混淆。\n",
+   "  let raw = applyActionImpl(state, action, pool);\n  // ⭐⭐⭐ v6.181 單一「拒絕出口」——「動作被拒絕」與「動作做了一半」從此不可能混淆。\n"
   ],
   [
    "    }\n    // >>> v6672-endturn-promote\n    // ⭐v6.672 血紅恐懼：promote nextIdx 的「無法從手牌附上特殊能量卡」（與上面競技場鎖同型）\n    if (nextP.cantAttachSpecialEnergyFromHandNextTurn) {\n      nextP.cantAttachSpecialEnergyFromHandThisTurn = true;\n      delete nextP.cantAttachSpecialEnergyFromHandNextTurn;\n    }\n    // <<< v6672-endturn-promote\n    // >>> v6356-endturn-promote\n",

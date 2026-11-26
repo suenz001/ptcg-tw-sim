@@ -288,6 +288,9 @@ T('E2. ⭐⭐ 九張卡的登記逐一正確（5 張帶招式名、4 張不帶�
   }
   assert.ok(/regPost\('步哨鼠\|聚氣',\s*setSelfDamageOverridePendingPost\(240,\s*'[^']*',\s*'必殺門牙'\)\)/.test(all),
     '步哨鼠｜聚氣 沒有登記成「必殺門牙 改為 240」的覆寫');
+  // ⭐v6.672（Rule 40）：M7 托戈德瑪爾ex｜全力尖刺「在下個自己的回合，這隻寶可夢「全力尖刺」的傷害改為「60」點」＝招式限定的覆寫
+  assert.ok(/regPost\('托戈德瑪爾ex\|全力尖刺',\s*setSelfDamageOverridePendingPost\(60,\s*'[^']*',\s*'全力尖刺'\)\)/.test(all),
+    '托戈德瑪爾ex｜全力尖刺 沒有登記成「全力尖刺 改為 60」的覆寫');
   assert.ok(/setSelfDamageBonusPendingPost\(100,\s*'晚安敲擊'\)/.test(all),
     '樹枕尾熊｜晚安敲擊 沒有收斂到中央 setter（或誤加了招式名）');
   assert.ok(eff.includes('export function setSelfDamageBonusPendingPost'), '中央 setter 沒有 export');
@@ -316,7 +319,8 @@ T('E4. ⭐ 卡面掃描：全卡池「招式限定」的恰好 6 支、「通用
   }
   assert.ok(seen.size >= 9, `只掃到 ${seen.size} 支「下個自己的回合」型招式，掃描器壞了？`);
   // ⭐v6.670（Rule 40）：5 → 6（超級席多藍恩ex｜巨重壓，已回來讀卡面登記到 E2）
-  assert.strictEqual(scoped, 6, `招式限定型掃到 ${scoped} 支（預期 6）—— 新卡加進來就要回來讀卡面登記`);
+  // ⭐v6.672（Rule 40）：6 → 7（托戈德瑪爾ex｜全力尖刺，覆寫型，已登記到 E2）
+  assert.strictEqual(scoped, 7, `招式限定型掃到 ${scoped} 支（預期 7）—— 新卡加進來就要回來讀卡面登記`);
   assert.strictEqual(generic, 4, `通用型掃到 ${generic} 支（預期 4）`);
 });
 

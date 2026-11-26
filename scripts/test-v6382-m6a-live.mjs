@@ -15,6 +15,7 @@
  * ⚠ 判準一律取行為層：組牌真的跑 validateDeck、卡效果真的跑引擎的 ATTACK。
  */
 import assert from 'node:assert';
+import { V6672_EXTRA_IDS } from './lib/revert-v6672-m7.mjs';   // ⭐v6.672（Rule 40）
 import { build } from 'esbuild';
 import { readFileSync, writeFileSync, unlinkSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -244,9 +245,10 @@ console.log('\n【D】M6a 的 H/I/J 卡：有效果的招式未實裝必須是 0
   chk('★★★ D1 M6a 的 H/I/J 卡，有效果的招式**未實裝 0 條**（開放對戰的前提）',
     missing.length === 0, missing.slice(0, 8).join('、'));
 }
+// ⭐v6.672（Rule 40）：官方補了 M6a 119／128／129／131 四張 J 標新印刷（只 append）⇒ 先拿掉再比 v6.382 當時的結構
 chk('★★ D2 M6a 的 H/I/J 標卡共 139 張、其餘 29 張由 allowedMarks 擋著（卡包結構沒被改掉）',
-  M6A.filter((c) => ['H', 'I', 'J'].includes(c.regulationMark)).length === 139
-  && M6A.length === 168,
+  M6A.filter((c) => !V6672_EXTRA_IDS['M6a'].includes(String(c.id))).filter((c) => ['H', 'I', 'J'].includes(c.regulationMark)).length === 139
+  && M6A.filter((c) => !V6672_EXTRA_IDS['M6a'].includes(String(c.id))).length === 168 && M6A.length === 168 + V6672_EXTRA_IDS['M6a'].length,
   'HIJ=' + M6A.filter((c) => ['H', 'I', 'J'].includes(c.regulationMark)).length + ' 總=' + M6A.length);
 
 // ════════════════════════════════════════════════════════════════════════════
