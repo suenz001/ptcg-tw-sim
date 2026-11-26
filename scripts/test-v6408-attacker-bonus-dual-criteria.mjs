@@ -171,7 +171,7 @@ function mkState({ atkCard, atkEnergy = [], atkTool = null, atkExtra = {}, playe
 
 // ⭐ A 段的組數：與中央 helper 的 formula.push 數量綁在一起（見【C】），
 //   新增一個加成項卻沒加差分組，C1 會紅。
-const A_GROUPS = 11;
+const A_GROUPS = 12;   // ⭐v6.672 +1：可爾妮的全力
 console.log('\n【A】11 個加成因子逐一差分（engine inline vs 中央 helper）');
 // ── A1 伏特【雷】能量（+20/張）────────────────────────────────────────────
 const P_L = pickPure((c) => c.pokemonType === 'Lightning', costWithin(['Lightning', 'Colorless'], 3));
@@ -263,6 +263,18 @@ await T(`A11 格拉吉歐的決戰（+80，非規則寶可夢；${P_NONRULE?.car
   diff(() => mkState({
     atkCard: P_NONRULE.card, atkEnergy: [BL, BL, BL], playerExtra: { gladionDuelBonusThisTurn: true },
   }), P_NONRULE.ai, P_NONRULE.dmg, ['格拉吉歐'], 80);
+});
+
+// ── A12 ⭐v6.672 可爾妮的全力（本回合自己的超級進化寶可夢ex：+20 × 對手已獲得的獎賞卡張數）──
+const ZH = { Grass: '草', Fire: '火', Water: '水', Lightning: '雷', Psychic: '超', Fighting: '鬥', Darkness: '惡', Metal: '鋼' };
+const P_MEGA = pickPure((c) => c.name.startsWith('超級') && c.subtype === 'ex' && !!ZH[c.pokemonType] && !(c.abilities || []).length,
+  (cost) => cost.length <= 3);
+await T(`A12 可爾妮的全力（對手已獲得 6 張 ⇒ +120；${P_MEGA?.card?.name}）`, () => {
+  assert.ok(P_MEGA, '找不到超級進化寶可夢ex 的純傷害招式');
+  const BE = named(`基本【${ZH[P_MEGA.card.pokemonType]}】能量`);
+  diff(() => mkState({
+    atkCard: P_MEGA.card, atkEnergy: (P_MEGA.card.attacks[P_MEGA.ai].cost || []).map(() => BE), playerExtra: { korrinaFullPowerThisTurn: true },
+  }), P_MEGA.ai, P_MEGA.dmg, ['可爾妮的全力'], 120);
 });
 
 console.log('\n【B】疊加（順序也必須一致 —— 兩份的先後排列不同就會在這裡紅）');

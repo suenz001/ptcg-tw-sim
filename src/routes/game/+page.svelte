@@ -14908,7 +14908,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {#if otherHand.length > 0}
             <details class="full-deck-view">
               <summary>🔍 對手手牌其餘 {otherHand.length} 張（本次不可選，僅供查看）</summary>
-              <div class="full-deck-note">{pendingSelection.type==='hand-choose' ? '※ 相仿秀查看對手手牌後只能選 1 張「支援者」卡複製其效果；其餘手牌僅揭露供查看，不可選' : '※ 枇琶效果只能丟棄物品卡；其餘手牌（寶可夢 / 支援者 / 能量 / 道具 / 場地）僅揭露，不可選'}</div>
+              <div class="full-deck-note">{pendingSelection.type==='hand-choose' ? '※ 只能選符合這個效果條件的卡；其餘手牌僅揭露供查看，不可選' : '※ 枇琶效果只能丟棄物品卡；其餘手牌（寶可夢 / 支援者 / 能量 / 道具 / 場地）僅揭露，不可選'}</div>
               <div class="full-deck-list">
                 {#each otherHand as inst}{@const c=getCard(inst.cardId)}
                   {#if c}
@@ -15226,7 +15226,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         {#if dragging.kind==='energy'}⚡ 拖到寶可夢附加
         {:else if dragging.kind==='basic'}📥 拖到備戰空格
         {:else if dragging.kind==='tool'}🔧 拖到寶可夢附加
-        {:else if dragging.kind==='hand-ability'}⚡ 拖到備戰空格發動特性
+        {:else if dragging.kind==='hand-ability'}{dragging.ops.includes('hand-ability-use') ? '⚡ 拖到桌墊發動特性' : '⚡ 拖到備戰空格發動特性'}
         {/if}
       </div>
     </div>

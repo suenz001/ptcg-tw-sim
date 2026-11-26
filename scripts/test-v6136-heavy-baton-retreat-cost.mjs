@@ -115,7 +115,18 @@ if (uniq.length === 0) {
 } else {
   ok(`④ 枚舉守衛掃到 ${uniq.length} 張條件式讀撤退費的 HIJ 卡：${uniq.join('、')}`);
   let bad = 0;
-  for (const name of uniq) {
+  // ⭐v6.672（Rule 40）：「從牌庫選擇【撤退】所需的能量為N個的寶可夢卡」（小卡比獸｜沉沉行進）讀的是**牌庫裡的卡**——
+  //   不在場上就沒有任何撤退費修正（道具／特性／競技場都只作用在場上），印刷撤退費＝正解，不該走場上的中央 helper。
+  //   判準只放行「對象是牌庫裡的卡」的那一句卡面，並要求它走中央篩選 'RetreatCost4'（selection-filter.ts 唯一一份）。
+  const DECK_CARD_TARGET = new Set(['小卡比獸']);
+  const SF = readFileSync(join(ROOT, 'src/lib/game/selection-filter.ts'), 'utf8');
+  for (const name of [...DECK_CARD_TARGET]) {
+    if (!uniq.includes(name)) continue;
+    const c = [...readdirSync(CARDS)].flatMap((f) => (!f.endsWith('.json') || f === 'index.json') ? [] : JSON.parse(readFileSync(join(CARDS, f), 'utf8'))).find((x) => x?.name === name && (x.attacks || []).some((a) => /從自己的牌庫選擇.{0,10}【撤退】所需的能量為\d+個的寶可夢卡/.test(a.effect || '')));
+    if (c && /'RetreatCost4':/.test(SF) && ALL_IMPL.includes("filter: 'RetreatCost4'")) ok(`④ 「${name}」對象是牌庫裡的卡（印刷撤退費），走中央篩選 RetreatCost4`);
+    else { no(`④ 「${name}」豁免條件不成立（卡面不再是「從牌庫選擇…的寶可夢卡」或沒走中央篩選）`); bad++; }
+  }
+  for (const name of uniq.filter((n) => !DECK_CARD_TARGET.has(n))) {
     // 該卡的實作區塊附近必須出現中央 helper
     let found = false;
     for (const src of IMPL_FILES.map(p => readFileSync(p, 'utf8'))) {

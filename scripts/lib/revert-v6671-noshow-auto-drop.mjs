@@ -1,7 +1,8 @@
 // v6.671 的精確歷史還原（瑞士輪未進場自動棄賽、server v1.88），供舊版守衛使用。表由 difflib 產生、驗證逐位元回 c24b7701（v6.670＋鐵律 Rule 93）。
-// 鏈：本版是目前最新一節；revert-v6670 的 revertV6670IfPresent 會先呼叫本檔（錦標賽區塊的 tail sha 守衛也經由這條鏈還原）。
+// 鏈：v6.672 起由 revert-v6672 接在本檔前面；revert-v6670 的 revertV6670IfPresent 會先呼叫本檔（錦標賽區塊的 tail sha 守衛也經由這條鏈還原）。
 import assert from 'node:assert/strict';
 import { normEol } from './eol-agnostic.mjs';
+import { revertV6672IfPresent } from './revert-v6672-m7.mjs';   // v6.672 由新到舊
 
 export const V6671_PAIRS = {
   "oracle-admin/admin.html": [
@@ -87,7 +88,7 @@ export const V6671_PAIRS = {
 const V6671_MARKERS = {"oracle-admin/admin.html": [0], "oracle-admin/server_admin_patch.js": [0, 1, 2, 3, 4], "src/lib/version.ts": [0], "static/changelog-archive.html": [0], "static/changelog-bodies.html": [0, 1], "static/changelog.html": [3], "static/site-version.txt": [0]};
 
 export function revertV6671IfPresent(path, source) {
-  let text = normEol(String(source));
+  let text = revertV6672IfPresent(path, normEol(String(source)));
   const pairs = V6671_PAIRS[path];
   if (!pairs || V6671_MARKERS[path].every((index) => !text.includes(pairs[index][0]))) return text;
   // 依序檢查＋還原（表是由新往舊逐段產生的，後面的錨點可能要前面先還原才出現）

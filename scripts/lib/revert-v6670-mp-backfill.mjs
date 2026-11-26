@@ -9,10 +9,12 @@ const V6669_MP_COUNTS = {
   'M-P-I': { cardCount: 62, supertypeCounts: { Pokemon: 39, Trainer: 23 }, count: 62 },
   'M-P-J': { cardCount: 141, supertypeCounts: { Pokemon: 108, Trainer: 15, Energy: 18 }, count: 141 },
 };
+import { revertV6672Index, revertV6672Map } from './revert-v6672-m7.mjs';   // ⭐v6.672 資料層也由新到舊（先拿掉 M7）
 export function revertV6670Index(idx) {
-  return idx.map((e) => (V6669_MP_COUNTS[e.code] ? { ...e, ...V6669_MP_COUNTS[e.code] } : e));
+  return revertV6672Index(idx).map((e) => (V6669_MP_COUNTS[e.code] ? { ...e, ...V6669_MP_COUNTS[e.code] } : e));
 }
 export function revertV6670Map(map) {
+  map = revertV6672Map(map);
   const drop = new Set(V6670_MP_IDS);
   const hit = Object.keys(map).filter((k) => drop.has(k)).length;
   assert.equal(hit, drop.size, 'v6670 map 還原：本版新增的 ' + drop.size + ' 筆只找到 ' + hit + ' 筆');

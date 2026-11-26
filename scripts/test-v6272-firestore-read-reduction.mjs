@@ -763,6 +763,8 @@ const PREV_ALLOWED = [
   //   ⚠ PREV_SHA 必須是「留在 main 上的那一顆」（IRON_RULES Rule 45）。
   // ⭐v6.672：v6.672 擴充包 M7 波導探求者上架（78 張＋效果實裝）
   'src/lib/cards/regulation.ts',
+  'src/lib/game/ai-energy.ts',
+  'src/lib/game/ai-slowking.ts',
   'src/lib/game/ai.ts',
   'src/lib/game/copy-attack.ts',
   'src/lib/game/effects.ts',
@@ -782,6 +784,8 @@ const PREV_ALLOWED = [
   'src/routes/game/+page.svelte',
   'src/routes/game/MobilePortraitBattle.svelte',
   'static/card-set-map.json',
+  'static/cards/M-P-J.json',
+  'static/cards/M6a.json',
   'static/cards/M7.json',
   'static/cards/index.json',
   'static/changelog-archive.html',

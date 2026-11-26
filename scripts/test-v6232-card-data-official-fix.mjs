@@ -165,7 +165,10 @@ T('⭐⭐⭐ index.json 定點數字＝實際檔案（M-P-I／M-P-J 自洽＋只
   eq(mj.cardCount, MPJ.length, 'M-P-J cardCount'); eq(mj.count, MPJ.length, 'M-P-J count');
   ok(MPJ.length >= 135, 'M-P-J 只准增加（v6.391 現查 135），實際 ' + MPJ.length);
   // （張數本身已由上面那條「index ＝ 檔案」＋ 下限守著，不再釘死字面量）
-  eq(mj.supertypeCounts.Energy, 18, 'M-P-J Energy 數');
+  // ⭐v6.672（Rule 40）：M-P 特典新增 246～248 三張基本能量（卡圖實印 PROMO、無標記，比照既有特典基本能量收在 M-P-J）
+  //   ⇒ 原意「Energy 供應數＝實際檔案的能量張數、不會被重生洗掉」改成自洽＋只准增加。
+  eq(mj.supertypeCounts.Energy, MPJ.filter((c) => c.supertype === 'Energy').length, 'M-P-J Energy 數＝檔案');
+  ok(mj.supertypeCounts.Energy >= 18, 'M-P-J Energy 只准增加（v6.391 現查 18）');
   eq(Object.values(mj.supertypeCounts).reduce((a, b) => a + b, 0), MPJ.length, 'M-P-J supertypeCounts 加總');
   // ⭐⭐ v6.333（Rule 40）：原本這裡釘死「全站總張數 === 4938」。
   //   那是**每收一個新卡包就要手改一次**的字面量（v6.328 才剛改過一次），

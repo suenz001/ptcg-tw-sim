@@ -5154,5 +5154,522 @@
   "regulationMark": "J",
   "rulesText": "從自己的手牌將最多2張寶可夢卡（「擁有規則的寶可夢」除外）丟棄，從牌庫抽出與其張數×3張相同數量的卡。",
   "illustrator": "nagimiso"
+ },
+ {
+  "id": "20209",
+  "name": "喇叭芽",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "234/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020209.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20209/",
+  "scrapedAt": "2026-11-26T12:16:58.289Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 60,
+  "pokemonType": "Grass",
+  "attacks": [
+   {
+    "name": "尋找朋友",
+    "cost": [
+     "Grass"
+    ],
+    "damage": "",
+    "effect": "從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。"
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 69,
+  "species": "花寶可夢",
+  "illustrator": "Yoriyuki Ikegami"
+ },
+ {
+  "id": "20210",
+  "name": "木守宮",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "235/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020210.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20210/",
+  "scrapedAt": "2026-11-26T12:16:58.942Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Grass",
+  "attacks": [
+   {
+    "name": "躲藏",
+    "cost": [
+     "Grass"
+    ],
+    "damage": "",
+    "effect": "擲1次硬幣若為正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害與效果的影響。"
+   },
+   {
+    "name": "居合斬",
+    "cost": [
+     "Grass"
+    ],
+    "damage": "10",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 252,
+  "species": "林蜥寶可夢",
+  "illustrator": "Alex Braun"
+ },
+ {
+  "id": "20211",
+  "name": "森林蜥蜴",
+  "supertype": "Pokemon",
+  "subtype": "Stage1",
+  "setCode": "M-P-J",
+  "collectorNumber": "236/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020211.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20211/",
+  "scrapedAt": "2026-11-26T12:16:59.927Z",
+  "regulationMark": "J",
+  "stage": "Stage1",
+  "hp": 90,
+  "pokemonType": "Grass",
+  "attacks": [
+   {
+    "name": "日光刀",
+    "cost": [
+     "Grass"
+    ],
+    "damage": "40",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 253,
+  "species": "林蜥寶可夢",
+  "evolvesFrom": "木守宮",
+  "illustrator": "Kazuki Minami"
+ },
+ {
+  "id": "20212",
+  "name": "利歐路",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "237/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020212.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20212/",
+  "scrapedAt": "2026-11-26T12:17:00.647Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 80,
+  "pokemonType": "Fighting",
+  "attacks": [
+   {
+    "name": "後踢",
+    "cost": [
+     "Colorless",
+     "Colorless"
+    ],
+    "damage": "30",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Psychic",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 447,
+  "species": "波紋寶可夢",
+  "illustrator": "SENZAKI MAKOTO"
+ },
+ {
+  "id": "20213",
+  "name": "大嘴娃",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "238/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020213.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20213/",
+  "scrapedAt": "2026-11-26T12:17:01.331Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 90,
+  "pokemonType": "Metal",
+  "attacks": [
+   {
+    "name": "大顎攻擊",
+    "cost": [
+     "Metal",
+     "Metal",
+     "Metal"
+    ],
+    "damage": "30×",
+    "effect": "造成對手的手牌的張數×30點傷害。"
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "resistance": {
+   "type": "Grass",
+   "value": "-30"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 303,
+  "species": "欺騙寶可夢",
+  "illustrator": "Terada Tera"
+ },
+ {
+  "id": "20214",
+  "name": "噗隆隆",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "239/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020214.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20214/",
+  "scrapedAt": "2026-11-26T12:17:01.962Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 80,
+  "pokemonType": "Metal",
+  "attacks": [
+   {
+    "name": "踩",
+    "cost": [
+     "Metal"
+    ],
+    "damage": "20",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "resistance": {
+   "type": "Grass",
+   "value": "-30"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 965,
+  "species": "單汽缸寶可夢",
+  "illustrator": "Tomokazu Komiya"
+ },
+ {
+  "id": "20215",
+  "name": "圓陸鯊",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "240/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020215.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20215/",
+  "scrapedAt": "2026-11-26T12:17:02.598Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Dragon",
+  "attacks": [
+   {
+    "name": "龍之波動",
+    "cost": [
+     "Water",
+     "Fighting"
+    ],
+    "damage": "40",
+    "effect": "將自己的牌庫上方1張卡丟棄。"
+   }
+  ],
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 443,
+  "species": "陸鯊寶可夢",
+  "illustrator": "Bun Toujo"
+ },
+ {
+  "id": "20216",
+  "name": "尖牙陸鯊",
+  "supertype": "Pokemon",
+  "subtype": "Stage1",
+  "setCode": "M-P-J",
+  "collectorNumber": "241/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020216.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20216/",
+  "scrapedAt": "2026-11-26T12:17:03.232Z",
+  "regulationMark": "J",
+  "stage": "Stage1",
+  "hp": 100,
+  "pokemonType": "Dragon",
+  "attacks": [
+   {
+    "name": "龍之波動",
+    "cost": [
+     "Water",
+     "Fighting"
+    ],
+    "damage": "90",
+    "effect": "將自己的牌庫上方2張卡丟棄。"
+   }
+  ],
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 444,
+  "species": "洞穴寶可夢",
+  "evolvesFrom": "圓陸鯊",
+  "illustrator": "Takeshi Nakamura"
+ },
+ {
+  "id": "20217",
+  "name": "老翁龍",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "242/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020217.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20217/",
+  "scrapedAt": "2026-11-26T12:17:03.907Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 130,
+  "pokemonType": "Dragon",
+  "attacks": [
+   {
+    "name": "力量氣息",
+    "cost": [
+     "Fighting"
+    ],
+    "damage": "30",
+    "effect": "從自己的牌庫選擇1張基本能量卡，附於自己的【龍】寶可夢身上。並且重洗牌庫。"
+   },
+   {
+    "name": "潛力",
+    "cost": [
+     "Water",
+     "Fighting",
+     "Colorless"
+    ],
+    "damage": "150",
+    "effect": "在下個自己的回合，這隻寶可夢無法使用招式。"
+   }
+  ],
+  "retreatCost": [
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 780,
+  "species": "悠遊寶可夢",
+  "illustrator": "Dsuke"
+ },
+ {
+  "id": "20218",
+  "name": "水箭龜",
+  "supertype": "Pokemon",
+  "subtype": "Stage2",
+  "setCode": "M-P-J",
+  "collectorNumber": "243/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020218.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20218/",
+  "scrapedAt": "2026-11-26T12:17:04.598Z",
+  "regulationMark": "J",
+  "stage": "Stage2",
+  "hp": 170,
+  "pokemonType": "Water",
+  "abilities": [
+   {
+    "label": "特性",
+    "name": "增水泵",
+    "effect": "只要這隻寶可夢在場上，自己的【水】寶可夢使用的招式，對對手的備戰寶可夢造成的傷害「+30」點。這個特性的效果不會重複。"
+   }
+  ],
+  "attacks": [
+   {
+    "name": "重磅飛濺",
+    "cost": [
+     "Water",
+     "Water",
+     "Water"
+    ],
+    "damage": "140",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Lightning",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 9,
+  "species": "甲殼寶可夢",
+  "evolvesFrom": "卡咪龜",
+  "illustrator": "Dsuke"
+ },
+ {
+  "id": "20219",
+  "name": "怪力",
+  "supertype": "Pokemon",
+  "subtype": "Stage2",
+  "setCode": "M-P-J",
+  "collectorNumber": "244/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020219.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20219/",
+  "scrapedAt": "2026-11-26T12:17:05.226Z",
+  "regulationMark": "J",
+  "stage": "Stage2",
+  "hp": 180,
+  "pokemonType": "Fighting",
+  "abilities": [
+   {
+    "label": "特性",
+    "name": "練過的手臂",
+    "effect": "這隻寶可夢使用招式的傷害，不計算抵抗力與對手的戰鬥寶可夢身上的附加效果。"
+   }
+  ],
+  "attacks": [
+   {
+    "name": "奮勇戰鬥",
+    "cost": [
+     "Fighting",
+     "Colorless",
+     "Colorless",
+     "Colorless"
+    ],
+    "damage": "250",
+    "effect": "這隻寶可夢也受到20點傷害。"
+   }
+  ],
+  "weakness": {
+   "type": "Psychic",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 68,
+  "species": "怪力寶可夢",
+  "evolvesFrom": "豪力",
+  "illustrator": "Shiburingaru"
+ },
+ {
+  "id": "20220",
+  "name": "超級路卡利歐Zex",
+  "supertype": "Pokemon",
+  "subtype": "ex",
+  "setCode": "M-P-J",
+  "collectorNumber": "245/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020220.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20220/",
+  "scrapedAt": "2026-11-26T12:17:05.926Z",
+  "regulationMark": "J",
+  "stage": "Stage1",
+  "hp": 330,
+  "pokemonType": "Metal",
+  "abilities": [
+   {
+    "label": "特性",
+    "name": "波導探求者",
+    "effect": "若這隻寶可夢在戰鬥場上，則在自己的回合時可使用1次。從自己的牌庫選擇1張支援者卡，在給對手看過後加入手牌。並且重洗牌庫。"
+   }
+  ],
+  "attacks": [
+   {
+    "name": "舞力拳",
+    "cost": [
+     "Metal",
+     "Metal"
+    ],
+    "damage": "120+",
+    "effect": "若對手的戰鬥寶可夢為「寶可夢【ex】」，則增加120點傷害。"
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "resistance": {
+   "type": "Grass",
+   "value": "-30"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless"
+  ],
+  "evolvesFrom": "利歐路",
+  "illustrator": "5ban Graphics"
+ },
+ {
+  "id": "20221",
+  "name": "基本【水】能量",
+  "supertype": "Energy",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "246/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020221.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20221/",
+  "scrapedAt": "2026-11-26T12:17:06.588Z",
+  "regulationMark": "J"
+ },
+ {
+  "id": "20222",
+  "name": "基本【鬥】能量",
+  "supertype": "Energy",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "247/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020222.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20222/",
+  "scrapedAt": "2026-11-26T12:17:07.234Z",
+  "regulationMark": "J"
+ },
+ {
+  "id": "20223",
+  "name": "基本【鋼】能量",
+  "supertype": "Energy",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "248/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020223.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20223/",
+  "scrapedAt": "2026-11-26T12:17:07.895Z",
+  "regulationMark": "J"
  }
 ]

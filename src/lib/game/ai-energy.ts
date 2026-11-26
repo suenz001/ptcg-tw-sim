@@ -20,7 +20,17 @@
  */
 import type { Card, EnergyType } from '$lib/cards/types';
 import type { GameState, CardInstance } from './types';
-import { applyAction, canAffordAttack, energyProvidesType, getAvailableAttacks } from './engine';
+import { applyAction, canAffordAttack, energyProvidesType, getAvailableAttacks, isHandEnergyAttachLocked } from './engine';
+
+/**
+ * ⭐v6.672 AI 從手牌附能量的候選（唯一一份）：手牌的能量卡，扣掉這回合被鎖住不能從手牌附上的
+ *   （超級阿勃梭魯Zex｜血紅恐懼：特殊能量）。判準走引擎同一支 isHandEnergyAttachLocked ⇒ AI 不會送出必被退回的動作
+ *   （否則連兩次無進展會被強制結束回合，審查 P2-5）。
+ */
+export function aiAttachableHandEnergies(state: GameState, me: 0 | 1, pool: Map<string, Card>): CardInstance[] {
+  const p = state.players[me];
+  return p.hand.filter((c) => { const ec = pool.get(c.cardId); return ec?.supertype === 'Energy' && !isHandEnergyAttachLocked(p, ec); });
+}
 import { getCardRole } from './ai-roles';
 import { cloneState, evaluateAttack, shuffleHiddenZonesForSim, withIsolatedRandom } from './ai-eval';
 
@@ -38,7 +48,7 @@ export function pickBenchEnergyAttach(
   state: GameState, me: 0 | 1, pool: Map<string, Card>,
 ): { energyIid: string; targetIid: string } | null {
   const p = state.players[me];
-  const energies = p.hand.filter((c) => pool.get(c.cardId)?.supertype === 'Energy');
+  const energies = aiAttachableHandEnergies(state, me, pool);   // ⭐v6.672
   if (!energies.length) return null;
   type Pick = { energyIid: string; targetIid: string; key: number[] };
   const picks: Pick[] = [];
@@ -117,7 +127,7 @@ export function pickActiveEnergyUnlock(state: GameState, me: 0 | 1, pool: Map<st
   const p = state.players[me];
   const act = p.active;
   if (!act || act.cantAttachEnergyThisTurn) return null;
-  const energies = p.hand.filter((c) => pool.get(c.cardId)?.supertype === 'Energy');
+  const energies = aiAttachableHandEnergies(state, me, pool);   // ⭐v6.672
   if (!energies.length) return null;
   const nowIdx = getAvailableAttacks(state, pool);
   let cur = -Infinity;

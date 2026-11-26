@@ -51,8 +51,12 @@ function ok(c, m) { if (!c) throw new Error(m); }
 const readOr = (p, d) => { try { return readFileSync(p, 'utf8'); } catch { return d; } };
 const jsonOr = (p, d) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return d; } };
 
-const INDEX = jsonOr(join(D, 'index.json'), []);
-const M6A = jsonOr(join(D, 'M6a.json'), null);
+// ⭐v6.672（Rule 40）：官方 2026-11 補了 M6a 119／128／129／131 四張新印刷（只 append）。本檔守的是 v6.333 上架當時的 168 張
+//   ⇒ 先用 v6.672 的資料層還原拿掉那四張再比原意；新四張的逐字與標記由 test-v6672 D 組守。
+import { revertV6672Cards, revertV6672Index } from './lib/revert-v6672-m7.mjs';
+const INDEX = revertV6672Index(jsonOr(join(D, 'index.json'), []));
+const M6A_ALL = jsonOr(join(D, 'M6a.json'), null);
+const M6A = Array.isArray(M6A_ALL) ? revertV6672Cards('M6a', M6A_ALL) : M6A_ALL;
 const SETMAP = jsonOr(join(ROOT, 'static/card-set-map.json'), {});
 
 console.log('(1) M6a 進卡庫（資料層）');
@@ -761,7 +765,7 @@ T('⭐⭐ /cards 卡牌資料庫**不可以**套用組牌閘（站長要求可�
     '卡牌資料庫套上了組牌閘 —— 站長要的是「可查卡、不可組牌」');
   // 行為面：M6a 的卡（含 21 張無標）必須還在 /cards 用得到的卡池裡
   const m6aLive = [...POOL.values()].filter((c) => c.setCode === 'M6a');
-  ok(m6aLive.length === 168, 'M6a 應有 168 張在 live 卡池，實得 ' + m6aLive.length);
+  ok(m6aLive.length === M6A_ALL.length && M6A.length === 168, 'M6a 應全部在 live 卡池（' + M6A_ALL.length + ' 張），實得 ' + m6aLive.length);
 });
 
 console.log('\n=== v6.333 M6a + 無標卡：PASS ' + pass + ' / FAIL ' + fail + ' ===');

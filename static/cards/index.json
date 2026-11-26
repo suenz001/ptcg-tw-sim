@@ -370,16 +370,16 @@
   "code": "M-P-J",
   "name": "M-P特典卡(J)",
   "regulationMark": "J",
-  "cardCount": 152,
+  "cardCount": 167,
   "supertypeCounts": {
-   "Pokemon": 114,
+   "Pokemon": 126,
    "Trainer": 20,
-   "Energy": 18
+   "Energy": 21
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018077.png",
   "scrapedAt": "2026-04-25T00:00:00.000Z",
   "releaseDate": null,
-  "count": 152
+  "count": 167
  },
  {
   "code": "M3",
@@ -622,16 +622,16 @@
   "code": "M6a",
   "name": "30th CELEBRATION",
   "regulationMark": "J",
-  "cardCount": 168,
+  "cardCount": 172,
   "supertypeCounts": {
-   "Pokemon": 155,
+   "Pokemon": 159,
    "Trainer": 5,
    "Energy": 8
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m6a/images/locale/tw/ogp.jpg",
   "scrapedAt": "2026-09-09T07:30:00.000Z",
   "releaseDate": "2026-09-16",
-  "count": 168
+  "count": 172
  },
  {
   "code": "M7",

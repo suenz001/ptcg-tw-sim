@@ -20,6 +20,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { hasBaseCommit, shallowSkip, readBaseBlob } from './lib/base-blob.mjs';
 import { V6670_MP_IDS, revertV6670Index, revertV6670Map } from './lib/revert-v6670-mp-backfill.mjs';
+import { revertV6672Cards, revertV6672Index } from './lib/revert-v6672-m7.mjs';   // ⭐v6.672（Rule 40）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠ BASE_SHA 必須是留在 main 上的那一顆（IRON_RULES Rule 45）：v6.669。
@@ -216,7 +217,7 @@ ok('D0 還原表的 id 清單＝本守衛的 15 張', JSON.stringify(V6670_MP_ID
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const rb = (p) => { const b = readBaseBlob(ROOT, BASE_SHA, p); if (!b.ok) throw new Error('BASE 缺 ' + p); return JSON.parse(b.out); };
   for (const code of ['M-P-I', 'M-P-J']) {
-    const b = rb(`static/cards/${code}.json`), c = JSON.parse(readFileSync(join(dir, code + '.json'), 'utf8'));
+    const b = rb(`static/cards/${code}.json`), c = revertV6672Cards(code, JSON.parse(readFileSync(join(dir, code + '.json'), 'utf8')));   // ⭐v6.672（Rule 40）先拿掉同版追加的 15 張
     const tail = c.slice(b.length).map((x) => String(x.id));
     ok(`D1 ${code}：BASE 的 ${b.length} 張逐字保留在最前面，後面追加的正好是本版 ${code} 的卡`,
       JSON.stringify(c.slice(0, b.length)) === JSON.stringify(b)

@@ -265,7 +265,7 @@ T('⭐ 現況鎖（靜態）：中央偵測只掃 before.activePlayerIndex 自�
   ok(/自己的回合[^\n]*自己的備戰區/.test(head), '註解沒寫明「自己的回合、自己的備戰區」這條裁定解讀');
 });
 
-T('⭐ 現況鎖（枚舉）：卡面「放置於對手的備戰區」的卡剛好 5 張，全部列名', () => {
+T('⭐ 現況鎖（枚舉）：卡面「放置於對手的備戰區」的卡剛好 6 張，全部列名', () => {
   const HIJ = new Set(['H', 'I', 'J']);
   const names = new Set();
   for (const c of pool.values()) {
@@ -274,8 +274,9 @@ T('⭐ 現況鎖（枚舉）：卡面「放置於對手的備戰區」的卡剛�
                    ...(c.attacks || []).map(a => a.effect || '')];
     if (texts.some(t => t.includes('放置於對手的備戰區'))) names.add(c.name);
   }
-  const expect = ['勾魂眼', '莉莉艾的蝶結萌虻', '禿鷹娜', '大舌頭', '配樂之笛'];
-  ok(names.size === 5, `枚舉到 ${names.size} 張（期待 5）：${[...names].join('、')}`);
+  // ⭐v6.672（Rule 40）：M7 花舞鳥｜歡迎舞（從對手**手牌**放到對手備戰；手牌卡走 isBasicPokemonCard，化石不在候選＝同 邀請眨眼）
+  const expect = ['勾魂眼', '莉莉艾的蝶結萌虻', '禿鷹娜', '大舌頭', '配樂之笛', '花舞鳥'];
+  ok(names.size === 6, `枚舉到 ${names.size} 張（期待 6）：${[...names].join('、')}`);
   for (const n of expect) ok(names.has(n), `漏掉 ${n}`);
 });
 

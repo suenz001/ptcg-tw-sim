@@ -1117,7 +1117,7 @@ import { firePassiveOnKoAfterPrize, drainOnKoAfterPrize } from './effects';
 // ⭐v6.361 站長裁定 D-10：把「已判出的終局」暫時收回，讓 on-KO 特性先結算完再重判（含平手）。
 import { liftEndgameForOnKoV6361, requestEndgameVerdictV6361 } from './effects';
 import { koTargetAfterAttackDamage, koAttackerAfterRetaliation } from './effects';
-import { blindKoNoPrizeNote } from './effects';   // ⭐v6.672 九尾｜障眼法（任何原因昏厥都擋，唯一判準）
+import { blindKoNoPrizeNote, markBlindKoNoPrize } from './effects';   // ⭐v6.672 九尾｜障眼法（任何原因昏厥都擋，唯一判準）
 import { miracleKissOnActiveFaint } from './effects';   // ⭐v6.493 奇跡之吻唯一入口（任何原因的戰鬥寶可夢昏厥）   // ⭐v6.490 備戰昏厥共用（受害者被效果換到備戰區後才昏厥）
 import { isManuallyActivatableAbilityText } from './ability-activation';   // ⭐v6.489 被動特性不給按鈕
 // <<< v6361-lift-import
@@ -1632,7 +1632,13 @@ export function sanitizeSelectedIids(state: GameState, pending: PendingSelection
       return typeof pending.maxCount === 'number' ? groupedD.slice(0, Math.max(0, pending.maxCount)) : groupedD;
     }
     // <<< v6669-fishnet-groups
-    return iids.filter((iid) => allowSet.has(iid));
+    // >>> v6672-sanitize-dedupe-cap
+    // ⭐v6.672（審查 P2-3）：有宣告 validIids 的 picker 一律去重＋夾 maxCount（豁免型別已在上面原封放行）。
+    //   原本只做交集 ⇒ 改過的 client 送同一個 iid 兩次、或送超過上限的張數，resolver 照單全收（潛入補給、沙漠之風）。
+    const _seenV = new Set<string>();
+    const _outV = iids.filter((iid) => { if (_seenV.has(iid) || !allowSet.has(iid)) return false; _seenV.add(iid); return true; });
+    return typeof pending.maxCount === 'number' ? _outV.slice(0, Math.max(0, pending.maxCount)) : _outV;
+    // <<< v6672-sanitize-dedupe-cap
   }
   const zoneSet = new Set((zone ?? []).map(c => c.iid));
   const vi = pending.params?.validIids as string[] | undefined;
@@ -3627,7 +3633,7 @@ function resolveAttackActiveKo(
   let preventPrizeAll = false;
   // >>> v6672-blind-ko-main
   { const _bn = blindKoNoPrizeNote(newState, koInst, defenderCard, dIdx, pool);
-    if (_bn) { preventPrizeAll = true; newState = addLog(newState, _bn, null); } }
+    if (_bn) { preventPrizeAll = true; newState = markBlindKoNoPrize(newState, _bn, dIdx); } }
   // <<< v6672-blind-ko-main
   if (!preventPrizeAll && defenderCard.abilities) {
     for (const ab of defenderCard.abilities) {
@@ -4268,7 +4274,7 @@ function sanityKOSweep(
       player.active = null;
       if (card && !_bnA) prizesAcc += prizesForKO(card);
       s = addLog(s, koSweepLogLine(ko, card?.name ?? '?', '戰鬥場', hp, _bnA ? 0 : (card ? prizesForKO(card) : 1)), null);
-      if (_bnA) s = addLog(s, _bnA, null);
+      if (_bnA) s = markBlindKoNoPrize(s, _bnA, dIdx);
       s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterA);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack', !ko._faintByEffect);
@@ -4295,7 +4301,7 @@ function sanityKOSweep(
       player.discard = [...player.discard, ...koDiscard];
       if (card && !_bnB) prizesAcc += prizesForKO(card);
       s = addLog(s, koSweepLogLine(b, card?.name ?? '?', '備戰位', hp, _bnB ? 0 : (card ? prizesForKO(card) : 1)), null);
-      if (_bnB) s = addLog(s, _bnB, null);
+      if (_bnB) s = markBlindKoNoPrize(s, _bnB, dIdx);
       s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterB);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack', !b._faintByEffect);
@@ -4699,7 +4705,9 @@ function runPokemonCheckup(state: GameState, pool: Map<string, Card>, selected?:
   for (const v of victims) {
     const deadIds = new Set(victims.filter(x => x.owner === v.owner).map(x => x.inst.iid));
     if (v.loc === 'active' && field(koBoard, v.owner).some(x => !deadIds.has(x.inst.iid))) {
-      state = liftEndgameForOnKoV6361(miracleKissOnActiveFaint(state, v.owner, pool));
+      // ⭐v6.672 障眼法：奇跡之吻在丟棄前處理 ⇒ 這裡直接傳「這隻不給獎賞」（盤面同 koBoard）
+      const _bnK = !!blindKoNoPrizeNote(koBoard, v.inst, pool.get(v.inst.cardId), v.owner, pool);
+      state = liftEndgameForOnKoV6361(miracleKissOnActiveFaint(state, v.owner, pool, _bnK));
     }
   }
   const ps = [...state.players] as [PlayerState, PlayerState];
@@ -4713,7 +4721,7 @@ function runPokemonCheckup(state: GameState, pool: Map<string, Card>, selected?:
     const card = pool.get(v.inst.cardId);
     // ⭐v6.672 障眼法（寶可夢檢查的昏厥也擋；用丟棄前的盤面 koBoard 判）
     const _bnC = blindKoNoPrizeNote(koBoard, v.inst, card, v.owner, pool);
-    if (_bnC) state = addLog(state, _bnC, null);
+    if (_bnC) state = markBlindKoNoPrize(state, _bnC, v.owner);
     else owed[(1 - v.owner) as 0 | 1] += card ? prizesForKO(card) : 1;
     state = addLog(state, `${card?.name ?? '?'} 因${causes[v.inst.iid] ?? '寶可夢檢查'}昏厥！`, null);
   }
@@ -4790,7 +4798,7 @@ function handlePlaying(
     && action.type !== 'SEND_NEW_ACTIVE'
     && action.type !== 'DRAW_CARD'
   ) {
-    return addLog(state, '祭典樂舞：第 2 次招式 pending 期間，只能再用相同招式或結束回合', state.activePlayerIndex);
+    return addLog(state, `${state.festivalDancePendingSecondAttack.sourceName ?? '祭典樂舞'}：第 2 次招式 pending 期間，只能再用相同招式或結束回合`, state.activePlayerIndex);   // ⭐v6.672 二連打共用
   }
 
   // ── 選擇解析 ──────────────────────────────────────────────────────────────
@@ -6872,7 +6880,7 @@ function handlePlaying(
             //   取獎方選、私訊揭示取得的卡名(對手看張數)、取完獎賞勝負判定。原 direct-slice 繞過此三者。
             let s = addLog({ ...state, players, turnPhase: 'end' as const },
               `${atkNameForStatus} 陷入混亂，自身受到 30 傷害並昏厥！`, aIdx);
-            if (_bnX) s = addLog(s, _bnX, null);   // ⭐v6.672 障眼法
+            if (_bnX) s = markBlindKoNoPrize(s, _bnX, aIdx);   // ⭐v6.672 障眼法（log＋奇跡之吻不擲）
             s = addPendingPrize(s, dIdx, koPrizes, pool);
             if (s.phase === 'game-over') return s;  // addPendingPrize 內部已判「取完所有獎賞獲勝」
             // >>> v6493-kiss-confusion
@@ -10624,6 +10632,10 @@ function applyActionImpl(
     next = drawToHandSizeV6541(next, _di, 5, '衝浪手', pool);
   }
   // <<< v6541-retreat-watch
+  // >>> v6672-blind-ko-transient
+  // ⭐v6.672 障眼法的 per-action 記號：用完即清（不帶進下一個動作、不寫進存檔）
+  if (next._blindKoNoPrize !== undefined) { const _c = { ...next }; delete _c._blindKoNoPrize; next = _c; }
+  // <<< v6672-blind-ko-transient
   if (next.phase === 'playing' && !next.pendingSelection
       && state.activePlayerIndex === next.activePlayerIndex) {
     const rIdx = next.activePlayerIndex;

@@ -163,7 +163,8 @@ console.log('④ 全卡池掃描：只有雙屬性那三張會偏離「印刷屬
 // ⚠ 誠實聲明（審查抓到的虛胖）：這一段**不是**與 BASE 對跑的差分——BASE 的舊述詞無法在同一個
 //   bundle 內重現（它呼叫的是同一支被改掉的函式，接上去只會自證）。它證明的是：
 //   「全卡池中會偏離印刷屬性的只有這三張，其餘 0 例外」，而三張的期望值**逐一釘死字面量**。
-const DUAL_EXPECT=new Map([['小碎鑽',['Fighting','Psychic']],['狠辣椒ex',['Grass','Fire']]]);
+// ⭐v6.672（Rule 40）：M7 托戈德瑪爾ex｜雙重屬性（印刷【鋼】⇒ 在場上改為【雷】＋【鋼】、Basic 不受熔岩洞影響）——新卡自己的卡面，逐字釘死同一格式。
+const DUAL_EXPECT=new Map([['小碎鑽',['Fighting','Psychic']],['狠辣椒ex',['Grass','Fire']],['托戈德瑪爾ex',['Lightning','Metal']]]);
 T('4a. 全卡池 × 3 種場地：只有小碎鑽／狠辣椒ex 偏離印刷屬性，且值逐一釘死',()=>{
   const mons=[...pool.entries()].filter(([,c])=>c.supertype==='Pokemon');
   assert.ok(mons.length>=2000,'只掃到 '+mons.length+' 張寶可夢，掃描器壞了？');
@@ -173,7 +174,7 @@ T('4a. 全卡池 × 3 種場地：只有小碎鑽／狠辣椒ex 偏離印刷屬�
     const now=mod.getAttackerEffectiveTypes(st,0,inst,c,pool);
     // 鐵轍跡沒附「驅勁能量 未來」⇒ 二重核心不成立 ⇒ 也該回印刷屬性
     let exp=c.pokemonType?[c.pokemonType]:[];
-    if(DUAL_EXPECT.has(c.name)){
+    if(DUAL_EXPECT.has(c.name)&&(c.abilities||[]).some(a=>a.name==='雙重屬性')){   // ⭐v6.672：同名但沒印這個特性的印刷（MC 托戈德瑪爾ex）＝印刷屬性
       const dual=DUAL_EXPECT.get(c.name);
       // 熔岩洞消進化 ⇒ 狠辣椒ex(Stage1) 被消、小碎鑽(Basic) 不被消
       exp=(stad===CAVE&&c.stage!=='Basic')?[c.pokemonType]:dual;
@@ -183,7 +184,7 @@ T('4a. 全卡池 × 3 種場地：只有小碎鑽／狠辣椒ex 偏離印刷屬�
   }
   assert.equal(bad.length,0,n+' 組中 mismatch：'+bad.slice(0,8).join(' | '));
   assert.ok(n>=6000,'只跑了 '+n+' 組');
-  assert.deepEqual([...hitDual].sort(),['小碎鑽','狠辣椒ex'],'兩張雙屬性卡都必須真的被走到（否則這條是零覆蓋）');
+  assert.deepEqual([...hitDual].sort(),['小碎鑽','托戈德瑪爾ex','狠辣椒ex'].sort(),'三張雙屬性卡都必須真的被走到（否則這條是零覆蓋）');
 });
 T('4b. 鐵轍跡｜二重核心：附「驅勁能量 未來」才變【鬥】＋【鋼】（釘死，不用現值當期望）',()=>{
   const TRACK=findId('鐵轍跡',ab('二重核心')), DRIVE=findId('驅勁能量 未來');

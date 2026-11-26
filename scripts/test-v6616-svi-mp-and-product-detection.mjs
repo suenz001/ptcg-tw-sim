@@ -49,7 +49,8 @@ const J = (p) => JSON.parse(readFileSync(join(ROOT, p), 'utf8'));
 const HIJ = new Set(['H', 'I', 'J']);
 
 import { V6616_MP_IDS as MP_IDS, V6616_SVI_IDS as SVI_IDS } from './lib/revert-v6616-svi-mp.mjs';   // 單一來源（Rule 38）
-import { revertV6670Map } from './lib/revert-v6670-mp-backfill.mjs';   // ⭐v6.670（Rule 40）
+import { revertV6670Map } from './lib/revert-v6670-mp-backfill.mjs';
+import { revertV6672Index } from './lib/revert-v6672-m7.mjs';   // ⭐v6.672（Rule 40）   // ⭐v6.670（Rule 40）
 // SVI 站上沒有的卡面（14 隻，refresh 實測；逐張看過卡圖核對 HP／屬性／招式／弱點／抵抗／撤退）
 // ⚠ 密勒頓 11313：官網 detail 頁弱點寫【火】，卡圖印的是【鬥】⇒ 照卡圖，與 MC 16754 同卡面（重印）
 const SVI_NEW_FACES = ['11302', '11303', '11312', '11314', '11315', '11316', '11317', '11318', '11320', '11321', '11324', '11330', '11335', '11338'];
@@ -122,7 +123,8 @@ let baseData = null;
 if (hasBaseCommit(ROOT, BASE_SHA)) {
   const rb = (p) => { const b = readBaseBlob(ROOT, BASE_SHA, p); if (!b.ok) throw new Error('BASE 缺 ' + p); return JSON.parse(b.out); };
   const baseIdx = rb('static/cards/index.json');
-  const curIdx = cur.idx;
+  // ⭐v6.672（Rule 40）：M7 插在 M6a 後面 ⇒ 先用 v6.672 的資料層還原拿掉，再守原意（BASE 逐字保留、SVI 在最後）
+  const curIdx = revertV6672Index(cur.idx);
   const strip = (x) => (x.code === 'M-P-I' || x.code === 'M-P-J') ? { ...x, cardCount: 0, count: 0, supertypeCounts: null } : x;
   ok('★★ D3b index.json：BASE 的每一筆逐字保留（M-P 兩筆只改張數三欄），SVI 加在最後',
     curIdx.length === baseIdx.length + 1 && curIdx.at(-1).code === 'SVI'

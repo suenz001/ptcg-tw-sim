@@ -12,6 +12,17 @@
 - 已知限制：吉憲的熱血選戰鬥寶可夢時，備戰區必須有寶可夢（放回後要能派出新的戰鬥寶可夢）。
 - 伺服器負擔：純前端引擎與卡表；不新增任何請求。
 - 守衛 test-v6672-m7-release（A 資料、C 覆蓋、B1～B20 實跑、HEAD-FAIL 對 v6.671 全紅、正對照綠；8 個突變全殺）。
+- 站長裁定（2026-11-26）「一起收」：重建官方卡包快照（refresh-official-set-manifest --write）時發現官方另有 19 張站上沒有 ⇒ 同版收：M-P 特典 234～248（15 張，進 M-P-J；mark-montage 逐張看卡圖：234～245 印 J、246～248 基本能量印 PROMO 無標，比照既有特典基本能量）、M6a 119／128／129／131（4 張，印 J）。效果全部以卡名／特性名既有註冊生效（audit 撞號 0、待實裝 0）。還原表 revert-v6672-m7 的資料層同時涵蓋（revertV6672Cards／Index／Map）；Rule 40：test-v6333（以 v6.333 當時的 168 張比原意）、test-v6670 D1、test-v6232（Energy 數自洽＋只准增加）、test-v6241 ⑨（M-P-J 152→167）。
+- Opus 獨立審查：無 P1。P2 全修：
+  ①障眼法沒擋到奇跡之吻 +1（多條 KO 出口沒傳 preventPrizeAll）⇒ 中央 per-action 記號 `_blindKoNoPrize`（effects.ts markBlindKoNoPrize／blindKoPrevented，所有障眼法出口改走它寫 log＋記號；miracleKissOnActiveFaint 一律讀記號；寶可夢檢查因奇跡之吻排在丟棄前，直接傳判定；applyActionImpl 出口清除，哨兵 v6672-blind-ko-transient）。
+  ②障眼法沒擋到「KO 時多拿獎賞」（感激放大／神秘信號）⇒ bonusPrizeIfKOPost 讀同一個記號。
+  ③公平性：有宣告 validIids 的 picker 中央消毒閘只做交集 ⇒ 一律去重＋夾 maxCount（engine 哨兵 v6672-sanitize-dedupe-cap；豁免型別不變）；discard-opp-active-energy-pick 另帶 params.count 自驗。
+  ④lillie-ribombee-invite-place 去重（同 iid 送兩次會複製出同 iid 的寶可夢）。
+  ⑤AI 被血紅恐懼鎖住仍送「附特殊能量」⇒ 強制結束回合 ⇒ ai-energy.ts aiAttachableHandEnergies（走引擎同一支 isHandEnergyAttachLocked），AI 五個附能出口共用。
+  P3：AI 第 2 次招式等待期不用戰鬥體育場；震顫翅拖曳提示「拖到桌墊發動特性」；等待期訊息用來源特性名；查看對手手牌的說明改通用；守衛補 B21～B30（奇跡之吻×檢查／混亂自傷、感激放大、潛入補給夾上限、沙漠之風放回牌庫＋夾上限、熱血頭擊 20／140、增水泵不重複＋不加戰鬥位、血紅恐懼的鎖會解除、AI 不送被鎖的附能、喵喵｜聚寶功同名不同印刷）。
+  未改（附理由）：逾時自動出招的預設（timeout-action 沿用引擎「沒帶選擇＝AI 預設」契約，只在混亂擲幣通過後逾時才會走到）；registerSelfDiscardMultiply 代價型招式最少張數只有畫面擋（全站舊問題，另案）；沙漠之風「2 個能量」以張數計（discardOppActiveEnergyPost 既有語義）。
+- 第二輪突變：8 個中 7 個被抓；N8（沙漠之風 resolver 不夾）存活 ⇒ 中央消毒已先夾，屬兩層防線的等價突變（如實記錄）。
+- 全套第一輪 28 支紅（Rule 40 逐支處理）：全域還原鏈新增 scripts/lib/revert-v6672-m7.mjs（文字 difflib 逐位元回 v6.671＋資料層 revertV6672Index／Map），revert-v6671／revert-v6670 由新到舊接上；test-v6616 D3b 先還原 M7；雙屬性三支（v6205／v6206／v6208）、借招兩支（v6337／v6339 第 9 張＋烏賊王專用盤面）、碰撞清單兩支（v6350／v6333 喵喵｜聚寶功）、v6250（花舞鳥列名＋手牌改 isBasicPokemonCard）、v6202（震顫翅＝手牌）、v6145（認得非持有者的費用特性寫法）、v6136（小卡比獸對象是牌庫的卡）、v6408（A12 可爾妮）、runner 去重複步驟、官方卡包快照重建。
 - 部署：update-tournament.bat（錦標賽伺服器打包引擎＋卡庫）→ redeploy-oracle.bat；縮圖由 AI 補（Rule 93）。
 
 ## v6.671 — 瑞士輪未進場自動棄賽（server v1.88）

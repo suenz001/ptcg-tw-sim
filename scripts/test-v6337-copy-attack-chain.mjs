@@ -191,8 +191,9 @@ if (!CA) {
   chk('B5 fallback＝印刷傷害最高（同傷害取先出現者，維持 v2.57 起的既有行為）',
     CA.pickCopiedAttack(cands, undefined).candidate?.attackIndex === 1);
 
-  chk('B6 COPY_ATTACK_KEYS 收錄 8 張借招卡（下限斷言，Rule 25）',
-    Array.isArray(CA.COPY_ATTACK_KEYS) && CA.COPY_ATTACK_KEYS.length === 8
+  // ⭐v6.672（Rule 40）：M7 烏賊王｜技能操控＝第 9 張
+  chk('B6 COPY_ATTACK_KEYS 收錄 9 張借招卡（下限斷言，Rule 25）',
+    Array.isArray(CA.COPY_ATTACK_KEYS) && CA.COPY_ATTACK_KEYS.length === 9
     && CA.COPY_ATTACK_KEYS.includes('火箭隊的謎擬Ｑ|扮晶晶酒') && CA.COPY_ATTACK_KEYS.includes('呆呆王|耀閃挑戰'),
     String(CA.COPY_ATTACK_KEYS?.length));
   chk('B7 COPY_ATTACK_MAX_DEPTH 有界且 ≥2', CA.COPY_ATTACK_MAX_DEPTH >= 2 && CA.COPY_ATTACK_MAX_DEPTH <= 8, String(CA.COPY_ATTACK_MAX_DEPTH));

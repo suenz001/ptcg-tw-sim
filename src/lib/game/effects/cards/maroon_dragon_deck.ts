@@ -32,7 +32,7 @@ import {
   findAbilityUserIid,
   selfKOInstance,
   koPrizeCount,
-  blindKoNoPrizeNote,   // ⭐v6.672 障眼法
+  blindKoNoPrizeNote, markBlindKoNoPrize,   // ⭐v6.672 障眼法
   isBenchProtected,
   miracleKissOnActiveFaint
 } from '../../effects';
@@ -285,7 +285,7 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
     // ⭐v6.672 障眼法：對手無法獲得獎賞卡（連多餘花粉的 +N 也不給）
     const _bnM = blindKoNoPrizeNote(s, target, targetCard, (1 - actorIdx) as 0 | 1, pool);
     const prizes = _bnM ? 0 : (targetCard ? koPrizeCount(targetCard) : 1) + (target.deferredPrizeBonusThisTurn ?? 0);
-    if (_bnM) s = addLog(s, _bnM, null);
+    if (_bnM) s = markBlindKoNoPrize(s, _bnM, (1 - actorIdx) as 0 | 1);
     const players = [...s.players] as [PlayerState, PlayerState];
     const newDefender: PlayerState = {
       ...defender,

@@ -494,6 +494,7 @@ const EXEMPT=new Map(Object.entries({
   'src/lib/game/engine.ts|瞬間爆發力':'判的是手牌／setup 階段的卡，不在場上',
   'src/lib/game/engine.ts|緊急迴轉':'ON_HAND_ACTIVATE：判的是**手牌**裡的卡',
   'src/lib/game/engine.ts|激動俯衝':'ON_HAND_ACTIVATE：判的是**手牌**裡的卡',
+  'src/lib/game/engine.ts|震顫翅':'⭐v6.672 ON_HAND_ACTIVATE（HAND_ACTIVATE_GATES）：判的是**手牌**裡的超音波幼蟲，不在場上',
   'src/lib/game/effects/cards/m5_preview.ts|化隱':'數的是自己**棄牌區**的卡（抹茶旋濺/魂之末/悔念錨），特性消除只作用於「雙方場上」',
   // ── 根本不是特性名（同一行/鄰近行剛好有 abilities 而被掃到）──────────────
   'src/lib/game/effects/cards/v2999_g3_wave1.ts|驅勁能量 未來':'比對的是**能量卡名**（二重核心的發動條件），不是特性名；v6.204 把 gate 上移緊貼特性名字面量後，這一行又落回掃描器的 ±6 行 abilities 視窗內',

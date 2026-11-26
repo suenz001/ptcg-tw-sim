@@ -45,7 +45,7 @@ import {
   canPayTopCopy, pickTopCopyEnergy, topCopyLineNeed, TOP_COPY_ATTACK_NAME,
 } from './ai-slowking';
 import { knownDeckTopIids } from './deck-top-known';
-import { pickActiveEnergyUnlock, pickBenchEnergyAttach } from './ai-energy';   // ⭐v6.432 戰鬥位有招可用時也附能量（給備戰）
+import { pickActiveEnergyUnlock, pickBenchEnergyAttach, aiAttachableHandEnergies } from './ai-energy';   // ⭐v6.432 戰鬥位有招可用時也附能量（給備戰）
 // ⭐v6.429 試打時「自己的選擇視窗」交給同一個選擇器解完（批次 B1：選對手 1 隻打的招不再被估成 0 分）。
 //   ai-eval 不能 import ai.ts（模組循環相依），所以由這裡註冊；autoResolveSelection 是 function 宣告（提升），此時已可呼叫。
 setSimSelectionResolver((st, pl) => (st.pendingSelection ? autoResolveSelection(st, pl) : null));
@@ -244,7 +244,7 @@ export function getAIAction(
       const targetCard = pool.get(target.cardId);
       const targetType = targetCard?.pokemonType;
       // 从手牌中找能量：有匹配属性优先，否则随便拿一张
-      const energyCandidates = player.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+      const energyCandidates = aiAttachableHandEnergies(state, myIdx, pool);   // ⭐v6.672 扣掉被鎖住的特殊能量（血紅恐懼）
       const energyInHand = energyCandidates.find(c => {
         const ec = pool.get(c.cardId);
         if (!ec) return false;
@@ -444,7 +444,7 @@ export function getAIAction(
   // >>> v6672-ai-battle-stadium
   // ⭐v6.672 M7 戰鬥體育場：自己有受傷的非規則寶可夢就使用（純恢復、沒有代價；引擎無對象時會退回）
   if (state.activeStadium && pool.get(state.activeStadium.cardId)?.name === '戰鬥體育場'
-      && !(state.stadiumUsedThisTurn ?? [false, false])[myIdx] && !state.pendingSelection
+      && !(state.stadiumUsedThisTurn ?? [false, false])[myIdx] && !state.pendingSelection && !state.festivalDancePendingSecondAttack
       && [...(player.active ? [player.active] : []), ...player.bench].some(c => c.damage > 0 && !isRulePokemon(pool.get(c.cardId)))) {
     return { type: 'USE_STADIUM' };
   }
@@ -1550,7 +1550,7 @@ function _hasGustInHand(player: PlayerState, pool: Map<string, Card>): boolean {
 function dragapultEnergyAction(
   state: GameState, player: PlayerState, pool: Map<string, Card>,
 ): GameAction | null {
-  const energies = player.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+  const energies = aiAttachableHandEnergies(state, state.players[0] === player ? 0 : 1, pool);   // ⭐v6.672
   if (energies.length === 0) return null;
   const allMine = [...(player.active ? [player.active] : []), ...player.bench];
 

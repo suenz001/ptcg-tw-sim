@@ -17,7 +17,7 @@ import {
   selfSwapPost, snipeOneOppBenchPost, preDiscardEnergyEligible, queueAttackEnergyPayment,
 } from '../../effects';
 import { computeActiveRetreatCostFor, getEffectiveHP, isBasicEnergyOfType } from '../../engine';
-import { isBasicPokemonOnField, isMegaExCard } from '../../selection-filter';
+import { isBasicPokemonCard, isBasicPokemonOnField, isMegaExCard } from '../../selection-filter';
 import { copyAttackCandidates, copyAttackCooldownNote, pickCopiedAttack } from '../../copy-attack';
 import type { CardInstance, GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -243,7 +243,7 @@ regPost('花舞鳥|歡迎舞', (state, aIdx, pool) => {
   const oIdx = oppOf(aIdx);
   const opp = state.players[oIdx];
   if (opp.hand.length === 0) return addLog(state, '歡迎舞：對手手牌為空', aIdx);
-  const cands = opp.hand.filter(c => { const cc = pool.get(c.cardId); return cc?.supertype === 'Pokemon' && cc.stage === 'Basic'; });
+  const cands = opp.hand.filter(c => isBasicPokemonCard(pool.get(c.cardId)));   // 手牌裡的卡 ⇒ 中央 isBasicPokemonCard（不是場上視角）
   const room = getOwnBenchLimit(state, oIdx, pool) - opp.bench.length;
   const maxPick = Math.max(0, Math.min(3, cands.length, room));
   const s = addLog(state, `歡迎舞：查看對手手牌（${opp.hand.length} 張），選最多 ${maxPick} 張【基礎】寶可夢放置於對手備戰區`, aIdx);

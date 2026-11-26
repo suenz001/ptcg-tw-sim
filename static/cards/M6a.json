@@ -6774,5 +6774,173 @@
     "scrapedAt": "2026-09-09T07:35:54.625Z",
     "regulationMark": "J",
     "illustrator": "YOSHIROTTEN"
+  },
+  {
+    "id": "20206",
+    "name": "杖尾鱗甲龍",
+    "supertype": "Pokemon",
+    "subtype": "Stage2",
+    "setCode": "M6a",
+    "collectorNumber": "119/103",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020206.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20206/",
+    "scrapedAt": "2026-11-26T12:19:44.726Z",
+    "regulationMark": "J",
+    "stage": "Stage2",
+    "hp": 180,
+    "pokemonType": "Dragon",
+    "attacks": [
+      {
+        "name": "熾熱上勾拳",
+        "cost": [
+          "Lightning",
+          "Fighting",
+          "Colorless"
+        ],
+        "damage": "250",
+        "effect": ""
+      }
+    ],
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "pokedexNumber": 784,
+    "species": "鱗片寶可夢",
+    "evolvesFrom": "鱗甲龍",
+    "illustrator": "Gemi"
+  },
+  {
+    "id": "20207",
+    "name": "超夢ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "M6a",
+    "collectorNumber": "128/103",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020207.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20207/",
+    "scrapedAt": "2026-11-26T12:19:45.397Z",
+    "regulationMark": "J",
+    "stage": "Basic",
+    "hp": 230,
+    "pokemonType": "Psychic",
+    "attacks": [
+      {
+        "name": "光子彈",
+        "cost": [
+          "Psychic",
+          "Psychic"
+        ],
+        "damage": "",
+        "effect": "對手的所有「寶可夢【ex】」各受到50點傷害。[在備戰區不計算弱點・抵抗力。]"
+      },
+      {
+        "name": "超能之力",
+        "cost": [
+          "Psychic",
+          "Psychic",
+          "Psychic"
+        ],
+        "damage": "230",
+        "effect": "在下個自己的回合，這隻寶可夢無法使用招式。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "illustrator": "Yano Keiji"
+  },
+  {
+    "id": "20208",
+    "name": "夢幻ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "M6a",
+    "collectorNumber": "129/103",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020208.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20208/",
+    "scrapedAt": "2026-11-26T12:19:46.024Z",
+    "regulationMark": "J",
+    "stage": "Basic",
+    "hp": 160,
+    "pokemonType": "Psychic",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "記憶螺旋",
+        "effect": "這隻寶可夢可使用自己的備戰寶可夢持有的所有招式。[需要有足夠使用招式的能量。]"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "瞬間移動突擊",
+        "cost": [
+          "Psychic"
+        ],
+        "damage": "30",
+        "effect": "若希望，將這隻寶可夢與備戰寶可夢互換。"
+      }
+    ],
+    "weakness": {
+      "type": "Darkness",
+      "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
+    },
+    "illustrator": "Kuroimori"
+  },
+  {
+    "id": "20224",
+    "name": "耿鬼ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "M6a",
+    "collectorNumber": "131/103",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00020224.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/20224/",
+    "scrapedAt": "2026-11-26T12:19:46.722Z",
+    "regulationMark": "J",
+    "stage": "Stage2",
+    "hp": 280,
+    "pokemonType": "Darkness",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "死亡宣告",
+        "effect": "這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，自己擲1次硬幣。若為正面，則將使用招式的寶可夢【昏厥】。"
+      }
+    ],
+    "attacks": [
+      {
+        "name": "渾沌傷痛",
+        "cost": [
+          "Darkness",
+          "Darkness"
+        ],
+        "damage": "",
+        "effect": "在對手的1隻寶可夢身上放置13個傷害指示物。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom": "鬼斯通",
+    "illustrator": "CHORISO"
   }
 ]

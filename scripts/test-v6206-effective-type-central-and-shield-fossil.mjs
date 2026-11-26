@@ -307,7 +307,8 @@ T('6h. 沒有 fossilOnField 旗標（＝不是放在場上的化石）⇒ 不生
 });
 
 console.log('⑦ 差分實跑：「應該不變」的必須 0 mismatch');
-const DUAL_EXPECT=new Map([['小碎鑽',['Fighting','Psychic']],['狠辣椒ex',['Grass','Fire']]]);
+// ⭐v6.672（Rule 40）：M7 托戈德瑪爾ex｜雙重屬性（印刷【鋼】⇒ 在場上改為【雷】＋【鋼】、Basic 不受熔岩洞影響）——新卡自己的卡面，逐字釘死同一格式。
+const DUAL_EXPECT=new Map([['小碎鑽',['Fighting','Psychic']],['狠辣椒ex',['Grass','Fire']],['托戈德瑪爾ex',['Lightning','Metal']]]);
 // ⚠ 本條**沒有**替任何實體附「驅勁能量 未來」⇒ 鐵轍跡｜二重核心那條路徑在這裡是零覆蓋
 //   （第二輪 opus 審查抓到）。三張雙屬性卡裡它由 v6.205 守衛 4b 負責，本條只涵蓋
 //   「無條件成立」的兩張。標題已照實寫。
@@ -321,7 +322,7 @@ T('7a. 全卡池 × {戰鬥場,備戰} × 3 場地：兩張無條件雙屬性卡
                     :ST({active:inst},{active:I(PLAIN)},stad?{activeStadium:I(stad)}:{});
     const now=EFF.getEffectivePokemonTypes(st,0,inst,c,pool);
     let exp=c.pokemonType?[c.pokemonType]:[];
-    if(DUAL_EXPECT.has(c.name)){
+    if(DUAL_EXPECT.has(c.name)&&(c.abilities||[]).some(a=>a.name==='雙重屬性')){   // ⭐v6.672：同名但沒印這個特性的印刷（MC 托戈德瑪爾ex）＝印刷屬性
       const dual=DUAL_EXPECT.get(c.name);
       // 熔岩洞消進化 ⇒ 狠辣椒ex(Stage1) 被消、小碎鑽(Basic) 不被消（備戰/戰鬥場都一樣）
       exp=(stad===CAVE&&c.stage!=='Basic')?[c.pokemonType]:dual;
@@ -332,7 +333,7 @@ T('7a. 全卡池 × {戰鬥場,備戰} × 3 場地：兩張無條件雙屬性卡
   }
   assert.equal(bad.length,0,n+' 組中 mismatch：'+bad.slice(0,8).join(' | '));
   assert.ok(n>=12000,'只跑了 '+n+' 組');
-  assert.deepEqual([...hit].sort(),['小碎鑽','狠辣椒ex'],'兩張雙屬性卡都必須真的被走到（否則這條零覆蓋）');
+  assert.deepEqual([...hit].sort(),['小碎鑽','托戈德瑪爾ex','狠辣椒ex'].sort(),'三張雙屬性卡都必須真的被走到（否則這條零覆蓋）');
 });
 T('7b. 森林行進差分：全卡池逐一當備戰第 1 隻，舊（印刷屬性）vs 新（實跑）—— 只有狠辣椒ex 差 30',()=>{
   const mons=[...pool.entries()].filter(([,c])=>c.supertype==='Pokemon');

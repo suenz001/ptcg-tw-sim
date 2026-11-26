@@ -291,7 +291,8 @@ T('3c. 不變式：全卡池「有效屬性 ⊇ 印刷屬性」，且**偏離印
     if (c.pokemonType) assert.ok(t.includes(c.pokemonType), c.name + ' 弄丟了印刷屬性 ' + JSON.stringify(t));
     if (JSON.stringify(t) !== JSON.stringify(c.pokemonType ? [c.pokemonType] : [])) changed.add(c.name);
   }
-  const expect = ['小碎鑽', '狠辣椒ex',
+  // ⭐v6.672（Rule 40）：M7 托戈德瑪爾ex｜雙重屬性（新卡自己的卡面）
+  const expect = ['小碎鑽', '狠辣椒ex', '托戈德瑪爾ex',
     '陳舊的根狀化石', '陳舊的背蓋化石', '陳舊的羽毛化石', '陳舊的顎之化石',
     '陳舊的鰭之化石', '陳舊的頭蓋化石', '陳舊的盾甲化石'].filter(n => [...pool.values()].some(c => c.name === n));
   assert.deepEqual([...changed].sort(), expect.sort(),

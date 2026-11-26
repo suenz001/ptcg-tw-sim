@@ -1228,6 +1228,15 @@ export function blindKoNoPrizeNote(
   if (!isAbilityHolderEffective(state, victim, victimCard, ownerIdx, '障眼法', loc, pool)) return null;
   return `「障眼法」啟動：${victimCard.name} 昏厥，但持有者手牌剛好 5 張 → 對手無法獲得獎賞卡`;
 }
+/** ⭐v6.672 障眼法擋下獎賞時一律走這支：寫 log ＋ 記下「這個 action 內這一方的昏厥不給獎賞」（奇跡之吻／KO 加碼讀它）。 */
+export function markBlindKoNoPrize(state: GameState, note: string, ownerIdx: 0 | 1): GameState {
+  const s = addLog(state, note, null);
+  const k = ownerIdx === 0 ? 'p1' : 'p2';
+  return { ...s, _blindKoNoPrize: { ...(s._blindKoNoPrize ?? {}), [k]: true } };
+}
+export function blindKoPrevented(state: GameState, ownerIdx: 0 | 1): boolean {
+  return !!state._blindKoNoPrize?.[ownerIdx === 0 ? 'p1' : 'p2'];
+}
 /** 被昏厥那隻的「基本獎賞張數」（koPrizeCount）再過 障眼法；回傳張數與要補的 log。 */
 export function victimBasePrizes(
   state: GameState, victim: CardInstance | null | undefined, victimCard: Card | undefined,
@@ -1364,7 +1373,7 @@ export function koPrizesAdjusted(
   if (!koCard) return { prizes: 1, state: s };
   // >>> v6672-blind-ko-adjusted
   { const _bn = blindKoNoPrizeNote(s, koInst, koCard, defenderIdx, pool);
-    if (_bn) return { prizes: 0, state: addLog(s, _bn, null), preventPrizeAll: true }; }
+    if (_bn) return { prizes: 0, state: markBlindKoNoPrize(s, _bn, defenderIdx), preventPrizeAll: true }; }
   // <<< v6672-blind-ko-adjusted
   const base = koPrizeCount(koCard);
   // v5.638：deferredPrizeBonusThisTurn（多餘花粉等「下個自己回合，此卡被昏厥時+N獎賞」）綁在「被KO的這隻
@@ -1886,7 +1895,7 @@ function hitBenchAll(
   if (teraImmunNames.length > 0) {
     s = addLog(s, `${attackLabel}：${teraImmunNames.join('、')} 為太晶寶可夢，在備戰位免疫招式傷害`, null);
   }
-  for (const _bn of reduceLogsBlind) s = addLog(s, _bn, null);   // ⭐v6.672 障眼法
+  for (const _bn of reduceLogsBlind) s = markBlindKoNoPrize(s, _bn, targetIdx);   // ⭐v6.672 障眼法
   if (koNames.length > 0) {
     // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）
     s = addLog(s, `${attackLabel}：${koNames.join('、')} 昏厥，${state.players[koPrizeTaker(targetIdx)].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
@@ -2070,7 +2079,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   if (teraImmunNames.length > 0) {
     s = addLog(s, `${label}：${teraImmunNames.join('、')} 為太晶寶可夢，在備戰位免疫招式傷害`, null);
   }
-  for (const _bn of reduceLogsBlind) s = addLog(s, _bn, null);   // ⭐v6.672 障眼法
+  for (const _bn of reduceLogsBlind) s = markBlindKoNoPrize(s, _bn, targetIdx);   // ⭐v6.672 障眼法
   if (koNames.length > 0) {
     // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）
     s = addLog(s, `${label}：${koNames.join('、')} 昏厥，${st.players[koPrizeTaker(targetIdx)].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
@@ -11443,7 +11452,7 @@ regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
     // ⭐v6.672 障眼法：任何原因昏厥都擋（昏厥前的盤面判）
     const _bnSame = blindKoNoPrizeNote(s, att.active, card, aIdx, pool);
     const oppPrizes = _bnSame ? 0 : (card ? (prizesForKOLocal(card)) : 1);
-    if (_bnSame) s = addLog(s, _bnSame, null);
+    if (_bnSame) s = markBlindKoNoPrize(s, _bnSame, aIdx);
     s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 也昏厥，對手待取 ${oppPrizes} 張獎賞卡`, null);
     s = addPendingPrize(s, dIdx, oppPrizes, pool);
     s = miracleKissOnActiveFaint(s, aIdx, pool);
@@ -11754,7 +11763,7 @@ export function discardOppActiveEnergyPost(
         type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
         minCount: effCount, maxCount: effCount,
         effectKey: 'discard-opp-active-energy-pick',
-        params: { targetIid: defender.active.iid, validIids: matchIids, label, titleOverride: `選擇要${_verbTxt}的對手能量（${label}）`, ...(dest === 'deck' ? { dest } : {}) },
+        params: { targetIid: defender.active.iid, validIids: matchIids, count: effCount, label, titleOverride: `選擇要${_verbTxt}的對手能量（${label}）`, ...(dest === 'deck' ? { dest } : {}) },
       },
     );
   };
@@ -11764,7 +11773,10 @@ regR('discard-opp-active-energy-pick', (st, idx, iids, params, pool) => {
   const label = (params?.label as string | undefined) ?? '丟棄能量';
   const dp = st.players[dIdx];
   if (!iids.length || !dp.active) return st;
-  const picked = new Set(iids);
+  // ⭐v6.672 公平性自驗（審查 P2-3）：只收候選內、去重、最多卡面張數（params.count；舊 pending 沒有這欄 ⇒ 不夾）
+  const _valid = Array.isArray(params?.validIids) ? new Set(params!.validIids as string[]) : null;
+  const _cap = typeof params?.count === 'number' ? (params.count as number) : Infinity;
+  const picked = new Set([...new Set(iids)].filter(i => !_valid || _valid.has(i)).slice(0, _cap));
   const toDiscard = dp.active.energyAttached.filter(e => picked.has(e.iid));
   if (!toDiscard.length) return st;
   const names = toDiscard.map(e => pool.get(e.cardId)?.name ?? '能量').join('、');
@@ -13398,6 +13410,8 @@ function bonusPrizeIfKOPost(bonus: number, label: string): AttackPostFn {
     //   與復仇家族的 `oppDamageKOdMeInLastOppTurn` 同一份判準（Rule 38：不新增第二個記錄機制）。
     //   ⇒ 招式**效果**造成的昏厥（byDamage=false，如放指示物打死）**不**加碼，完全對齊卡面。
     if ((state.oppDamageKOdMeThisTurn?.[dIdx] ?? 0) <= 0) return state;
+    // ⭐v6.672 障眼法：卡面「對手也無法獲得獎賞卡」⇒ 加碼的 +N 也不給
+    if (blindKoPrevented(state, dIdx)) return addLog(state, `${label}：對手的寶可夢昏厥，但「障眼法」使這次無法獲得獎賞卡`, aIdx);
     const s = addLog(state, `${label}：讓對手的寶可夢昏厥 → 多獲得 ${bonus} 張獎賞卡`, aIdx);
     return addPendingPrize(s, aIdx, bonus, pool);
   };
@@ -13487,7 +13501,7 @@ regPost('轟鳴月ex|瘋癲攻擊', (state, aIdx, pool) => {
       players2[aIdx] = att;
       const _vp = victimBasePrizes(s, s.players[aIdx].active, attCard, aIdx, pool);   // ⭐v6.672 障眼法（昏厥前的盤面判）
       const prizes = _vp.prizes;
-      if (_vp.note) s = addLog(s, _vp.note, null);
+      if (_vp.note) s = markBlindKoNoPrize(s, _vp.note, aIdx);
       s = addLog({ ...s, players: players2 }, `瘋癲攻擊：${attCard?.name ?? '?'} 反噬昏厥！對手將取得 ${prizes} 張獎賞卡`, null);
       s = addPendingPrize(s, dIdx, prizes, pool);
       s = miracleKissOnActiveFaint(s, aIdx, pool);
@@ -13598,7 +13612,8 @@ export function miracleKissOnActiveFaint(state: GameState, faintedIdx: 0 | 1, po
   if (state.phase === 'game-over') return state;
   const fp = state.players[faintedIdx];
   if (!fp.active && fp.bench.length === 0) return state;
-  return applyMiracleKissOnOppActiveKO(state, (1 - faintedIdx) as 0 | 1, pool, preventPrizeAll);
+  // ⭐v6.672 障眼法：這一方本 action 的昏厥不給獎賞 ⇒ 奇跡之吻的 +1 也不給（呼叫端不必各自傳參數）
+  return applyMiracleKissOnOppActiveKO(state, (1 - faintedIdx) as 0 | 1, pool, preventPrizeAll || blindKoPrevented(state, faintedIdx));
 }
 // <<< v6493-miracle-kiss-on-active-faint
 
@@ -15825,7 +15840,7 @@ export function selfKOInstance(
   ];
   const _vp = victimBasePrizes(state, target, tCard, aIdx, pool);   // ⭐v6.672 障眼法
   const prizes = _vp.prizes;
-  if (_vp.note) state = addLog(state, _vp.note, null);
+  if (_vp.note) state = markBlindKoNoPrize(state, _vp.note, aIdx);
   const players = [...state.players] as [PlayerState, PlayerState];
   const newP: PlayerState = {
     ...p,

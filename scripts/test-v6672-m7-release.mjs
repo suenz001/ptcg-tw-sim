@@ -25,6 +25,7 @@
  *   B18 牽絆披帶：超級進化寶可夢ex 被招式打倒 ⇒ 持有方從牌庫任意選 1 張；非超級 ⇒ 沒有（正對照）
  *   B19 超級晶光花ex｜毒晶寶石：對手 2 隻寶可夢剩餘 HP 都變成 60
  *   B20 超音波幼蟲｜震顫翅（不放置型手牌特性；test-v6200 的完備性斷言指名這裡）
+ * 【D】同版一起收的官方新印刷 19 張（M-P 特典 234～248、M6a 119／128／129／131）＋ BASE blob 逐字比對（index／card-set-map／兩個卡表檔）
  * 【H】HEAD-FAIL：BASE（v6.671）的引擎在同一份卡池上 C／B 新機制全部紅、正對照綠
  */
 import { extractBaseArchive } from './lib/base-archive.mjs';
@@ -33,7 +34,8 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
-import { hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
+import { hasBaseCommit, shallowSkip, readBaseBlob } from './lib/base-blob.mjs';
+import { V6672_M7_IDS, V6672_EXTRA_IDS, revertV6672Index, revertV6672Map, revertV6672Cards } from './lib/revert-v6672-m7.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠ BASE_SHA 必須是留在 main 上的那一顆（IRON_RULES Rule 45）：v6.671。
@@ -87,6 +89,7 @@ async function load(srcRoot) {
     + `export { TRAINER_EFFECTS, hasAbilityFn, ATTACK_PRE, ATTACK_POST } from '${p('src/lib/game/effects/_shared')}';\n`
     + `export { getEffectivePokemonTypes, isTrainerPendingImplementation } from '${p('src/lib/game/effects')}';\n`
     + `export { getHandActivatableAbilities } from '${p('src/lib/game/engine')}';\n`
+    + `export { getAIAction } from '${p('src/lib/game/ai')}';\n`
     + `export * as HCO from '${p('src/lib/game/hand-card-ops')}';\n`
     + `import '${p('src/lib/game/effects')}';`);
   try {
@@ -340,6 +343,125 @@ function scenarios(M) {
       view: r.pendingSelection?.type, deck: r.players[0].deck.length,
       badOp: !!setBad?.has('hand-ability-use'), badHand: rBad.players[0].hand.length };
   });
+  // ── B21 障眼法 × 奇跡之吻（寶可夢檢查的昏厥；審查 P2-1）──
+  const kiss = (handN) => {
+    const fox = inst(id('九尾'), { damage: 100, status: 'poisoned' });
+    let st = mk({ bench: [inst('11227')] }, { active: fox, hand: Array.from({ length: handN }, () => inst(PLAIN.id)), bench: [inst(PLAIN.id)] });
+    const orig = Math.random; Math.random = () => 0.1;
+    try { st = act(st, { type: 'END_TURN' }); } finally { Math.random = orig; }
+    const ko = !st.players[1].active || st.players[1].active.iid !== fox.iid;
+    return { ko, got: 6 - st.players[0].prizes.length + (st.pendingPrizes?.[0] ?? 0), leak: st._blindKoNoPrize !== undefined };
+  };
+  T('B21', () => ({ blind: kiss(5), plain: kiss(4) }));
+  // ── B29 障眼法 × 奇跡之吻（混亂自傷昏厥；走 per-action 記號那條路）──
+  const confused = (handN) => {
+    const fc = pool.get(id('九尾')), ai = atkIdx('九尾', '灼燒');
+    const fox = inst(fc.id, { damage: 80, status: 'confused', energyAttached: ens(fc, ai) });
+    let st = mk({ active: fox, bench: [inst(PLAIN.id)], hand: Array.from({ length: handN }, () => inst(PLAIN.id)) }, { bench: [inst('11227')] });
+    const seq = [0.9, 0.1, 0.1, 0.1]; let k = 0;   // 混亂擲幣反面 → 自傷昏厥；奇跡之吻正面
+    const orig = Math.random; Math.random = () => seq[Math.min(k++, seq.length - 1)];
+    try { st = act(st, { type: 'ATTACK', attackIndex: ai }); } finally { Math.random = orig; }
+    return { ko: st.players[0].active?.iid !== fox.iid, got: 6 - st.players[1].prizes.length + (st.pendingPrizes?.[1] ?? 0) };
+  };
+  T('B29', () => ({ blind: confused(5), plain: confused(4) }));
+  // ── B30 同名同招不同印刷：喵喵｜聚寶功（M7 10／M6a 30）各打自己卡面的傷害、都抽 1 ──
+  T('B30', () => {
+    const run = (cid) => {
+      const c = pool.get(cid), ai = c.attacks.findIndex((a) => a.name === '聚寶功');
+      const st = mk({ active: inst(cid, { energyAttached: ens(c, ai) }) }, { active: inst(TARGET.id) });
+      const r = act(st, { type: 'ATTACK', attackIndex: ai });
+      return { dmg: r.players[1].active?.damage, hand: r.players[0].hand.length };
+    };
+    return { m7: run(id('喵喵')), m6a: run('20004') };
+  });
+  // ── B22 障眼法 × KO 時多拿獎賞的招式（審查 P2-2）──
+  T('B22', () => {
+    const ac = pool.get('11579'); if (!ac) return 'no-card';
+    const ai = ac.attacks.findIndex((a) => a.name === '感激放大');
+    const run = (handN) => {
+      const fox = inst(id('九尾'), { damage: 100 });
+      const st = mk({ active: inst(ac.id, { energyAttached: ens(ac, ai) }) }, { active: fox, hand: Array.from({ length: handN }, () => inst(PLAIN.id)), bench: [inst(PLAIN.id)] });
+      const r = act(st, { type: 'ATTACK', attackIndex: ai });
+      return 6 - r.players[0].prizes.length + (r.pendingPrizes?.[0] ?? 0);
+    };
+    return { blind: run(5), plain: run(4) };
+  });
+  // ── B23 潛入補給：送 3 張基本【鋼】能量只附 1 張（中央消毒去重＋夾上限；審查 P2-3）──
+  T('B23', () => {
+    const c = pool.get(id('拖拖蚓')), ai = atkIdx('拖拖蚓', '潛入補給');
+    const me = inst(c.id, { energyAttached: ens(c, ai) });
+    const m = [inst(EID.Metal), inst(EID.Metal), inst(EID.Metal)];
+    let st = mk({ active: me, bench: [inst(PLAIN.id)], discard: m }, { active: inst(TARGET.id) });
+    st = act(st, { type: 'ATTACK', attackIndex: ai });
+    // 依序解：換位選備戰 → 選棄牌區的鋼能量（送 3 張＋重複）→ 能量鏈選目標（只能是自己）
+    const seen = [];
+    for (let k = 0; k < 5 && st.pendingSelection && st.pendingSelection.actorIdx === 0; k++) {
+      const pd = st.pendingSelection; seen.push(pd.type + ':' + pd.effectKey);
+      let sel;
+      if (pd.type === 'discard-search') sel = [m[0].iid, m[0].iid, m[1].iid, m[2].iid];
+      else { const vi = pd.params?.validIids ?? pd.params?.targetIids ?? st.players[0].bench.map((b) => b.iid); sel = vi.includes(me.iid) ? [me.iid] : vi.slice(0, 1); }
+      st = act(st, { type: 'RESOLVE_SELECTION', selectedIids: sel, pendingToken: pd.token });
+    }
+    out.B23seen = seen.join(' > ');
+    const mine = [st.players[0].active, ...st.players[0].bench].find((x) => x?.iid === me.iid);
+    return { onBench: st.players[0].bench.some((b) => b.iid === me.iid), metal: mine ? mine.energyAttached.filter((e) => m.some((x) => x.iid === e.iid)).length : -1, left: st.players[0].discard.filter((d) => m.some((x) => x.iid === d.iid)).length };
+  });
+  // ── B24 沙漠之風：放回對手牌庫（dest 'deck'）、送 3 個只收 2 個（審查 P2-3、P3-1）──
+  T('B24', () => {
+    const c = pool.get(id('沙漠蜻蜓')), ai = atkIdx('沙漠蜻蜓', '沙漠之風');
+    const es = [inst(EID.Water), inst(EID.Fire), inst(EID.Grass)];
+    let st = mk({ active: inst(c.id, { energyAttached: ens(c, ai) }) }, { active: inst(TARGET.id, { energyAttached: es }) });
+    const deck0 = st.players[1].deck.length;
+    st = act(st, { type: 'ATTACK', attackIndex: ai, discardedEnergyIids: ['yes'] });
+    for (let k = 0; k < 3 && st.pendingSelection && st.pendingSelection.actorIdx === 0; k++) {
+      const pd = st.pendingSelection;
+      const sel = pd.effectKey === 'discard-opp-active-energy-pick' ? es.map((e) => e.iid) : (pd.type === 'modal-choice' ? ['yes'] : []);
+      st = act(st, { type: 'RESOLVE_SELECTION', selectedIids: sel, pendingToken: pd.token });
+    }
+    return { left: st.players[1].active.energyAttached.length, deck: st.players[1].deck.length - deck0, discard: st.players[1].discard.length };
+  });
+  // ── B25 熱血頭擊（「這個情況下」手牌揭示型）：不給看 20、給看 1 張 140、送 2 張仍只算 1 張 ──
+  T('B25', () => {
+    const c = pool.get(id('沼王')), ai = atkIdx('沼王', '熱血頭擊');
+    const run = (pick) => {
+      const h = [inst(id('吉憲的熱血')), inst(id('吉憲的熱血'))];
+      const st = mk({ active: inst(c.id, { energyAttached: ens(c, ai) }), hand: h }, { active: inst(TARGET.id) });
+      return act(st, { type: 'ATTACK', attackIndex: ai, discardedEnergyIids: h.slice(0, pick).map((x) => x.iid) }).players[1].active?.damage;
+    };
+    return { none: run(0), one: run(1), two: run(2) };
+  });
+  // ── B26 增水泵：兩隻水箭龜仍只 +30、不加到戰鬥寶可夢 ──
+  T('B26', () => {
+    const c = pool.get(id('幾何雪花')), ai = atkIdx('幾何雪花', '冰雹');
+    const v = inst(TARGET.id), a = inst(TARGET.id);
+    const st = mk({ active: inst(c.id, { energyAttached: ens(c, ai) }), bench: [inst(id('水箭龜')), inst(id('水箭龜'))] }, { active: a, bench: [v] });
+    const base = mk({ active: inst(c.id, { energyAttached: ens(c, ai) }) }, { active: inst(TARGET.id), bench: [inst(TARGET.id)] });
+    const r = act(st, { type: 'ATTACK', attackIndex: ai }), r0 = act(base, { type: 'ATTACK', attackIndex: ai });
+    return { bench: r.players[1].bench.find((b) => b.iid === v.iid)?.damage, active: r.players[1].active?.damage, active0: r0.players[1].active?.damage };
+  });
+  // ── B27 血紅恐懼的鎖只到對手那個回合結束（再下一個對手回合可以附特殊能量）──
+  T('B27', () => {
+    const c = pool.get(id('超級阿勃梭魯Zex')), ai = atkIdx('超級阿勃梭魯Zex', '血紅恐懼');
+    const sp = inst(SPECIAL);
+    let st = mk({ active: inst(c.id, { energyAttached: ens(c, ai) }) }, { active: inst(TARGET.id), hand: [sp] });
+    st = act(st, { type: 'ATTACK', attackIndex: ai });
+    if (st.activePlayerIndex === 0) st = act(st, { type: 'END_TURN' });
+    st = act({ ...st, turnPhase: 'main' }, { type: 'END_TURN' });   // 對手（被鎖）的回合結束
+    st = act({ ...st, turnPhase: 'main' }, { type: 'END_TURN' });   // 我方回合結束
+    if (st.activePlayerIndex !== 1) return 'turn?';
+    st = { ...st, turnPhase: 'main', players: [st.players[0], { ...st.players[1], hand: [...st.players[1].hand.filter((h) => h.iid !== sp.iid), sp], energyAttachedThisTurn: false }] };
+    const r = act(st, { type: 'ATTACH_ENERGY', energyIid: sp.iid, targetIid: st.players[1].active.iid });
+    return { attached: !r.players[1].hand.some((h) => h.iid === sp.iid) };
+  });
+  // ── B28 AI：被血紅恐懼鎖住時不會送出「附特殊能量」（審查 P2-5）──
+  T('B28', () => {
+    const sp = inst(SPECIAL);
+    const st = mk({ active: inst(PLAIN.id), hand: [sp], cantAttachSpecialEnergyFromHandThisTurn: true });
+    const a = M.getAIAction(st, pool, 0);
+    const st2 = mk({ active: inst(PLAIN.id), hand: [sp] });
+    const a2 = M.getAIAction(st2, pool, 0);
+    return { locked: a?.type === 'ATTACH_ENERGY' && a.energyIid === sp.iid, free: a2?.type === 'ATTACH_ENERGY' && a2.energyIid === sp.iid };
+  });
   return out;
 }
 
@@ -367,6 +489,16 @@ const LABEL = {
   B17: '★★★ B17 托戈德瑪爾ex＝雷＋鋼；變隱龍＝無＋水',
   B18: '★★★ B18 牽絆披帶：超級進化ex 被打倒 ⇒ 持有方牌庫任意選 1 張；非超級 ⇒ 沒有',
   B19: '★★★ B19 毒晶寶石：對手 2 隻寶可夢剩餘 HP 都是 60',
+  B21: '★★★ B21 障眼法 × 奇跡之吻（寶可夢檢查昏厥）：手牌 5 張 ⇒ 正面也不加獎賞；4 張 ⇒ 1＋1（正對照）；記號不外洩',
+  B29: '★★★ B29 障眼法 × 奇跡之吻（混亂自傷昏厥）：手牌 5 張 ⇒ 0；4 張 ⇒ 1＋1（正對照）',
+  B30: '★★ B30 喵喵｜聚寶功 同名不同印刷：M7 打 10、M6a 打 30，都抽 1',
+  B22: '★★★ B22 障眼法 × 感激放大：手牌 5 張 ⇒ 0；4 張 ⇒ 1＋1＝2（正對照）',
+  B23: '★★★ B23 潛入補給：換到備戰、送 3 張（含重複）基本【鋼】只附 1 張',
+  B24: '★★★ B24 沙漠之風：送 3 個只放回 2 個、進對手牌庫（不是棄牌區）',
+  B25: '★★★ B25 熱血頭擊：不給看 20、給看 1 張 140、送 2 張仍是 140',
+  B26: '★★ B26 增水泵：兩隻水箭龜備戰仍 50（不重複）、戰鬥寶可夢不加',
+  B27: '★★ B27 血紅恐懼的鎖只到對手那個回合結束',
+  B28: '★★★ B28 AI 被鎖住時不送「附特殊能量」；沒鎖時會附（正對照）',
   B20: '★★★ B20 震顫翅：拖到桌墊發動、這張卡進棄牌區、不上備戰、看牌庫上方 1 張；牌庫 0 張 ⇒ 不能發動',
 };
 const judge = (r) => ({
@@ -393,16 +525,53 @@ const judge = (r) => ({
   B17: r.B17?.tog === 'Lightning+Metal' && r.B17.kec === 'Colorless+Water',
   B18: r.B18?.mega?.ko === true && r.B18.mega.search === true && r.B18.plain?.ko === true && r.B18.plain.search === false,
   B19: r.B19?.a === 60 && r.B19.b === 60,
+  B21: r.B21?.blind?.ko === true && r.B21.blind.got === 0 && r.B21.blind.leak === false && r.B21.plain?.ko === true && r.B21.plain.got === 2,
+  B29: r.B29?.blind?.ko === true && r.B29.blind.got === 0 && r.B29.plain?.ko === true && r.B29.plain.got === 2,
+  B30: r.B30?.m7?.dmg === 10 && r.B30.m7.hand === 1 && r.B30.m6a?.dmg === 30 && r.B30.m6a.hand === 1,
+  B22: r.B22?.blind === 0 && r.B22.plain === 2,
+  B23: r.B23?.onBench === true && r.B23.metal === 1 && r.B23.left === 2,
+  B24: r.B24?.left === 1 && r.B24.deck === 2 && r.B24.discard === 0,
+  B25: r.B25?.none === 20 && r.B25.one === 140 && r.B25.two === 140,
+  B26: r.B26?.bench === 50 && r.B26.active === r.B26.active0,
+  B27: r.B27?.attached === true,
+  B28: r.B28?.locked === false && r.B28.free === true,
   B20: r.B20?.op === 'hand-ability-use' && r.B20.places === false && r.B20.discarded === true && r.B20.bench === 1 && r.B20.view === 'reorder-deck-top'
     && r.B20.deck === 3 && r.B20.badOp === false && r.B20.badHand === 1,
 });
-const POSITIVE = ['B2c'];   // 正對照：BASE 也必須綠
+const POSITIVE = ['B2c', 'B27', 'B30'];   // B27：BASE 沒有鎖 ⇒ 本來就附得上   // 正對照：BASE 也必須綠
 
 console.log('\n【B】效果實跑');
 ok('B0 harness 前置：靶／ex 靶／非超級攻擊方／特殊能量都找得到', !!TARGET && !!TARGET_EX && !!NONMEGA_ATK && !!PLAIN && SPECIAL !== 'undefined', `${TARGET?.name} ${TARGET_EX?.name} ${NONMEGA_ATK?.name}`);
 const HM = await load(ROOT);
 const H = scenarios(HM), J = judge(H);
 for (const k of Object.keys(LABEL)) ok(LABEL[k], J[k], JSON.stringify(H[k]));
+
+console.log('\n【D】同版一起收的官方新印刷 19 張＋既有資料逐字未動（BASE blob）');
+{
+  // 卡圖實印（2026-11-26 逐張看過 mark-montage）：M-P 234～245 印 J、246～248 基本能量印 PROMO 無標（比照既有特典基本能量收 M-P-J）；M6a 四張印 J
+  const EX = [...V6672_EXTRA_IDS['M-P-J'].map((x) => [x, 'M-P-J']), ...V6672_EXTRA_IDS['M6a'].map((x) => [x, 'M6a'])];
+  ok('D0 同版新增 19 張（M-P-J 15＋M6a 4）', EX.length === 19, EX.length);
+  ok('D1 19 張都在現役卡池、J 標、檔案／setCode／card-set-map 一致', EX.every(([x, code]) => { const c = pool.get(x); return !!c && c.regulationMark === 'J' && fileOf.get(x) === code && setMap[x] === code && c.setCode === code; }),
+    JSON.stringify(EX.filter(([x, code]) => { const c = pool.get(x); return !(c && c.regulationMark === 'J' && fileOf.get(x) === code && setMap[x] === code && c.setCode === code); })));
+  ok('D1b M-P 超級路卡利歐Zex 從利歐路進化（ex 不從同名非 ex）、波導探求者以卡名註冊（C2 同一份）', pool.get('20220')?.evolvesFrom === '利歐路');
+  if (hasBaseCommit(ROOT, BASE_SHA)) {
+    const rb = (pth) => { const b = readBaseBlob(ROOT, BASE_SHA, pth); if (!b.ok) throw new Error('BASE 缺 ' + pth); return JSON.parse(b.out); };
+    for (const code of ['M-P-J', 'M6a']) {
+      const b = rb(`static/cards/${code}.json`), c = JSON.parse(readFileSync(join(dir, code + '.json'), 'utf8'));
+      ok(`D2 ${code}：BASE 的 ${b.length} 張逐字保留在最前面，尾端正好是本版的 ${V6672_EXTRA_IDS[code].length} 張`,
+        JSON.stringify(revertV6672Cards(code, c)) === JSON.stringify(b) && c.length === b.length + V6672_EXTRA_IDS[code].length);
+    }
+    ok('D3 index.json：拿掉 M7、兩筆張數回 v6.671 後逐字等於 BASE', JSON.stringify(revertV6672Index(index)) === JSON.stringify(rb('static/cards/index.json')));
+    let d4 = false, d4x = '';
+    try { d4 = JSON.stringify(revertV6672Map(setMap)) === JSON.stringify(rb('static/card-set-map.json')); } catch (e) { d4x = String(e?.message ?? e).split('\n')[0]; }
+    ok('D4 card-set-map.json：拿掉本版 97 筆後逐字等於 BASE（鍵順序也一樣）', d4 && V6672_M7_IDS.length === 78, d4x);
+    for (const code of ['M-P-J', 'M6a']) {
+      const e = index.find((x) => x.code === code), c = JSON.parse(readFileSync(join(dir, code + '.json'), 'utf8'));
+      const cn = {}; for (const x of c) cn[x.supertype] = (cn[x.supertype] ?? 0) + 1;
+      ok(`D5 index.json ${code} 張數三欄＝實際檔案`, e.cardCount === c.length && e.count === c.length && JSON.stringify(Object.entries(e.supertypeCounts).sort()) === JSON.stringify(Object.entries(cn).sort()));
+    }
+  } else shallowSkip('v6672 D2～D5', '需要 v6.671 commit');
+}
 
 console.log('\n【H】HEAD-FAIL');
 if (hasBaseCommit(ROOT, BASE_SHA)) {

@@ -159,17 +159,18 @@ chk('C0 fixture：對照卡都抓得到', !!(DRAGA && MIMIKYU && NBENCH));
 
 let seq = 0;
 const inst = (id, extra = {}) => ({ cardId: String(id), iid: 'i' + (++seq), damage: 0, energyAttached: [], toolAttached: null, ...extra });
-const board = ({ myBench = [], myDeck = [], myHand = [], oppBench = [], oppDeck = [] }) => ({
+const board = ({ myBench = [], myDeck = [], myHand = [], oppBench = [], oppDeck = [], oppActive = null }) => ({
   phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 0, turn: 5,
   isFirstTurn: false, log: [], pendingSelection: null, setupDone: [true, true],
   pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0],
   players: [
     { name: 'P1', active: inst(DRAGA.id), bench: myBench, hand: myHand, deck: myDeck, discard: [], prizes: [] },
-    { name: 'P2', active: inst(DRAGA.id), bench: oppBench, hand: [], deck: oppDeck, discard: [], prizes: [] },
+    { name: 'P2', active: oppActive ?? inst(DRAGA.id), bench: oppBench, hand: [], deck: oppDeck, discard: [], prizes: [] },
   ],
 });
 
-chk('C1 COPY_ATTACK_KEYS 剛好 8 個 key', CA.COPY_ATTACK_KEYS.length === 8, String(CA.COPY_ATTACK_KEYS.length));
+// ⭐v6.672（Rule 40）：M7 烏賊王｜技能操控（借對手戰鬥場的超級進化寶可夢ex 的招式）＝第 9 張
+chk('C1 COPY_ATTACK_KEYS 剛好 9 個 key', CA.COPY_ATTACK_KEYS.length === 9, String(CA.COPY_ATTACK_KEYS.length));
 chk('C2 8 個 key 都被 isCopyAttackKey 認得（認不得 ⇒ 泛用分支不觸發，那張卡靜默退回自動挑招）',
   CA.COPY_ATTACK_KEYS.every(k => CA.isCopyAttackKey(k)),
   CA.COPY_ATTACK_KEYS.filter(k => !CA.isCopyAttackKey(k)).join('、'));
@@ -183,8 +184,14 @@ chk('C2 8 個 key 都被 isCopyAttackKey 認得（認不得 ⇒ 泛用分支不�
     oppBench: [inst(DRAGA.id)],
     oppDeck: Array.from({ length: 12 }, () => inst(DRAGA.id)),
   });
-  const empty = CA.COPY_ATTACK_KEYS.filter(k => CA.copyAttackCandidates(k, st, 0, pool, 0).length === 0);
-  chk('C3 ⭐在「什麼都有」的盤面上，8 個 key 都枚舉得出候選（0 個 ⇒ 那張卡的 picker 永遠不會開）',
+  // ⭐v6.672：烏賊王｜技能操控只借「對手戰鬥場的超級進化寶可夢ex」⇒ 太晶戰鬥場的盤面本來就借不到；
+  //   它另用「對手戰鬥場＝超級進化ex」的盤面驗（同一支 copyAttackCandidates），不放寬其他 8 張。
+  const MEGA = [...pool.values()].find((c) => c.supertype === 'Pokemon' && c.name.startsWith('超級') && c.subtype === 'ex' && (c.attacks ?? []).length > 0);
+  const stMega = board({ myBench: [inst(NBENCH.id)], myDeck: [inst(MIMIKYU.id)], myHand: [], oppBench: [inst(DRAGA.id)], oppDeck: Array.from({ length: 12 }, () => inst(DRAGA.id)), oppActive: MEGA ? inst(MEGA.id) : null });
+  const SQUID = '烏賊王|技能操控';
+  const empty = CA.COPY_ATTACK_KEYS.filter(k => CA.copyAttackCandidates(k, k === SQUID ? stMega : st, 0, pool, 0).length === 0);
+  chk('C3b ⭐烏賊王｜技能操控：對手戰鬥場不是超級進化ex（太晶）⇒ 0 候選（正對照）', CA.copyAttackCandidates(SQUID, st, 0, pool, 0).length === 0);
+  chk('C3 ⭐在「什麼都有」的盤面上，9 個 key 都枚舉得出候選（0 個 ⇒ 那張卡的 picker 永遠不會開）',
     empty.length === 0, empty.join('、'));
 }
 

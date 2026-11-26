@@ -22,7 +22,7 @@ import type { GameState, GameAction, CardInstance } from './types';
 import { applyAction, getEffectiveAttacks, getAvailableAttacks, getUsableAbilities, isRulePokemon, canAffordAttack, energyProvidesType } from './engine';
 import { evaluateAttack, cloneState, withIsolatedRandom, shuffleHiddenZonesForSim, type AttackActionExtra } from './ai-eval';
 import { knownDeckTopIids, recordKnownDeckTop } from './deck-top-known';
-import { energyStaysIfAttached } from './ai-energy';
+import { energyStaysIfAttached, aiAttachableHandEnergies } from './ai-energy';
 import { copyAttackCandidates } from './copy-attack';   // ⭐v6.435 可借哪幾招的唯一來源
 
 /** 借「自己牌庫頂那張」招式的攻擊（目前全池只有這一招）。 */
@@ -71,7 +71,7 @@ export function pickTopCopyEnergy(
   state: GameState, me: 0 | 1, tgt: CardInstance, pool: Map<string, Card>, protect: boolean,
   resolve: (st: GameState, pool: Map<string, Card>) => GameAction | null,
 ): CardInstance | null {
-  const ens = state.players[me].hand.filter((c) => pool.get(c.cardId)?.supertype === 'Energy')
+  const ens = aiAttachableHandEnergies(state, me, pool)   // ⭐v6.672 扣掉被鎖住的特殊能量
     // v6.432（fable 複審）附上去會被丟掉的能量不附（燃火能量、火箭隊能量給非火箭隊）——與 ai-energy.ts 同一個中央判定。
     //   目標在戰鬥位時只要當下留得住（燃火能量本來就是給這回合出招用的）；在備戰時要留到回合結束之後。
     .filter((c) => energyStaysIfAttached(state, me, c.iid, tgt.iid, pool, state.players[me].active?.iid !== tgt.iid))

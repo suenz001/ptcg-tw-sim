@@ -1448,6 +1448,12 @@ export interface GameState {
   _voidHolderIdx?: 0 | 1;
   /** ⭐v6.541 衝浪手選「先使用全能變身」時延後的「抽到手牌 5 張」：等特性（選擇視窗）解完，由 applyAction 出口補抽。值＝要抽牌的玩家。 */
   _surferDeferredDraw?: 0 | 1;
+  /**
+   * ⭐v6.672 九尾｜障眼法：本 action 內「被昏厥但對手無法獲得獎賞卡」的持有方（p1＝0、p2＝1）。
+   *   消費點：奇跡之吻（miracleKissOnActiveFaint）、KO 時多拿獎賞的招式（bonusPrizeIfKOPost）——卡面「對手也無法獲得獎賞卡」連加碼也不給。
+   *   ⚠ Transient：applyActionImpl 出口統一 delete（哨兵 v6672-blind-ko-transient）；寫入只走 effects.ts markBlindKoNoPrize。
+   */
+  _blindKoNoPrize?: { p1?: boolean; p2?: boolean };
   _counterMoveSrcIids?: string[];  // v5.947 本 action 因「移動/改放傷害指示物」(非治療)而減傷的來源 iid;markHealsByDamageDecrease 跳過不誤標 healedThisTurn
   /**
    * ⭐v6.369 站長裁定 六-5：本 action 內「寶可夢檢查的中毒／灼傷」對某隻寶可夢**增加**的
