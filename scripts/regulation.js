@@ -32,6 +32,7 @@ export const SET_REGULATION_MARK = {
   M3: 'J',
   M4: 'J',
   M6: 'J',   // 綠寶石風暴（2026-08-07）
+  M7: 'J',   // 波導探求者（2026-12-04）
   SVOM: 'J',
   SVOD: 'J',
   'M-P': 'J',  // 特典卡 超級進化（promo，官網 M-P filter 只列當期合法的 promo）

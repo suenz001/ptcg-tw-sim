@@ -499,7 +499,7 @@
     }
     // v3.07 Deferred Wave D — 手牌觸發特性（誘導之尾 / 熱浪鱗粉 / 緊急迴轉）
     // 機制 A: ON_DISCARD_FROM_HAND — 棄此卡觸發場上 trigger holder 特性
-    if (ops.has('hand-ability')) {
+    if (ops.has('hand-ability') || ops.has('hand-ability-use')) {   // ⭐v6.672 震顫翅
       // ⚠⚠ v6.099 移除死按鈕：這裡原本硬編兩個「棄此卡 → 觸發 超能妙喵｜誘導之尾 /
       //   火神蛾｜熱浪鱗粉」的按鈕，但 **v5.510 起 `ON_DISCARD_FROM_HAND_ABILITIES` 已清空**
       //   （兩張都改成寶可夢身上的 regA 特性按鈕，避免同一個效果有兩個按鈕）。
@@ -525,7 +525,7 @@
       for (const a of getHandActivatableAbilities(game, myIdx as 0 | 1, pool)) {
         if (a.iid !== iid) continue;
         out.push({
-          label: `⚡ ${a.abilityName} (放備戰)`,
+          label: a.placesToBench ? `⚡ ${a.abilityName} (放備戰)` : `⚡ ${a.abilityName}`,   // ⭐v6.672 震顫翅不放備戰
           action: () => { closeSheet(); onAction(GameActions.useHandAbility(iid, a.abilityIndex)); },
           primary: true,
         });

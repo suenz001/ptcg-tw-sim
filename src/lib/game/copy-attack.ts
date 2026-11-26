@@ -27,7 +27,7 @@
  *   （長期記憶：循環 import 下模組層級 `const` 會 TDZ）。
  */
 
-import { isRulePokemon } from './selection-filter';   // ⭐v6.404 卡面「擁有規則的寶可夢」中央述詞（leaf）
+import { isRulePokemon, isMegaExCard } from './selection-filter';   // ⭐v6.404（⭐v6.672 加 isMegaExCard：烏賊王｜技能操控） 卡面「擁有規則的寶可夢」中央述詞（leaf）
 import { isPlayerLevelAttackOnCooldown } from './player-attack-cooldown';   // ⭐v6.435 玩家層級冷卻唯一判準（leaf）
 import { ATTACK_USE_PRECONDITION } from './attack-use-precondition';   // ⭐v6.438 招式使用條件唯一登記處（leaf）
 import type { GameState, CardInstance } from './types';
@@ -74,6 +74,7 @@ export const COPY_ATTACK_KEYS: readonly string[] = [
   '索羅亞克|欺詐',
   '阿響的樹才怪|試著模仿',
   '狐大盜|技能大盜',
+  '烏賊王|技能操控',   // ⭐v6.672 M7：「選擇1個對手的戰鬥場的『超級進化寶可夢【ex】』持有的招式，作為這個招式使用。」
 ];
 
 const COPY_ATTACK_KEY_SET: ReadonlySet<string> = new Set(COPY_ATTACK_KEYS);
@@ -159,6 +160,12 @@ function ownersFor(
       if (!opp.active) return [];
       const c = pool.get(opp.active.cardId);
       return c?.tags?.includes('太晶') ? [opp.active] : [];
+    }
+
+    // ⭐v6.672「選擇1個對手的戰鬥場的『超級進化寶可夢【ex】』持有的招式」（判準走中央 isMegaExCard）
+    case '烏賊王|技能操控': {
+      if (!opp.active) return [];
+      return isMegaExCard(pool.get(opp.active.cardId)) ? [opp.active] : [];
     }
 
     // 「選擇1個對手的場上寶可夢持有的招式」（gate：自己 1 張手牌都沒有）

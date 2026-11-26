@@ -500,8 +500,12 @@ regA('莉莉艾的蝶結萌虻', 0, (st, idx, pool, _cardInst) => {
   });
 });
 regR('lillie-ribombee-invite-place', (st, idx, iids, _params, pool) => {
+  // ⭐v6.672 共用（M7 花舞鳥｜歡迎舞「最多3張」）：label／張數上限由 params 帶入；沒帶＝邀請眨眼原行為
+  const label = (_params?.label as string | undefined) ?? '邀請眨眼';
+  const capN = typeof _params?.maxPick === 'number' ? (_params.maxPick as number) : Infinity;
+  iids = iids.slice(0, capN);
   if (iids.length === 0) {
-    return addLog(st, '邀請眨眼：未選擇任何卡，效果結束', idx);
+    return addLog(st, `${label}：未選擇任何卡，效果結束`, idx);
   }
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
@@ -536,10 +540,10 @@ regR('lillie-ribombee-invite-place', (st, idx, iids, _params, pool) => {
     placedNames.push(card.name);
   }
   if (placedInsts.length === 0) {
-    return addLog(st, '邀請眨眼：所選不符條件', idx);
+    return addLog(st, `${label}：所選不符條件`, idx);
   }
   const s = addLog(st,
-    `邀請眨眼：將對手的 ${placedNames.join('、')} 共 ${placedInsts.length} 張放置於對手備戰區`,
+    `${label}：將對手的 ${placedNames.join('、')} 共 ${placedInsts.length} 張放置於對手備戰區`,
     idx);
   const placedSet = new Set(placedInsts.map(c => c.iid));
   return updatePlayer(s, oppIdx, pl => ({

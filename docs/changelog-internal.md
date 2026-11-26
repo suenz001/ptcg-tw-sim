@@ -1,5 +1,19 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.672 — 擴充包 M7「波導探求者」上架
+
+基準 `7a98371d`（v6.671）。官網卡片檢索上架 M7（全 78 種＋？？？，秘密稀有尚未公布），依 skill ptcg-new-set-release：scrape-set → audit-new-set（資料 0 問題；全新擴充包依站長 2026-11-07 指示不比對卡圖標記）→ 併表（M7.json 縮排 1、card-set-map 文字層追加、index.json 外科式插入 releaseDate 2026-12-04、regulation 兩份 M7:'J'）→ fetch-official-qa（M7 判例 0 筆，發售後 2～6 週重跑）。
+- 站長裁定（2026-11-26）：①巴布土撥｜二連打「請參考[特性] 祭典樂舞的做法」⇒ festival.ts DOUBLE_ATTACK_ABILITY 併進祭典樂舞的第 2 次招式狀態機（同一招、pending 期間只能再攻擊或結束回合）。②「這個情況下」＝前面的條件要真的完成（水流連打不付【水】能量就沒有備戰 40）⇒ 鐵律 Rule 94、長期記憶、skill ptcg-optin-energy-payment。
+- 批次 1（m7_wave1.ts）：卡面與既有卡逐字相同的招式，全部走既有中央 helper。
+- 批次 2（m7_wave2.ts）：新機制招式（刺殺利刃、忍者劈斬、騎兵突刺、賢者的指令、烈龍復仇者、大顎攻擊、重磅衝撞、進擊伏特、魔法觸手、破壞捶擊、熱血頭擊／衝勁螺旋（registerHandRevealAttack 擴充 baseDamage/max）、冰雹、瑜伽之力、毒晶寶石、歡迎舞、暗冥強擊、水流連打、激烈搖晃、長程衝鋒、沙漠之風（discardOppActiveEnergyPost 第 5 參數 dest）、潛入補給、力量氣息、沉沉行進（RetreatCost4 篩選）、預知未來、烏賊王｜技能操控（copy-attack 中央））。
+- 批次 3（m7_wave3.ts）：主動特性（酸液陷阱、團結之陣、波導探求者、招財進寶；engine getUsableAbilities 哨兵 v6672-ability-gates）、能量躍遷（進化時）、牽絆披帶（TOOL_ON_KO，備戰也觸發；ATTACH_TOOL_NAMES 顯式列名）、血紅恐懼（下回合禁從手牌附特殊能量＋禁競技場，中央 isHandEnergyAttachLocked）、可爾妮的全力（applyAttackerActiveDamageBonuses）、吉憲的熱血、記者（pendingChainQueue 排隊看牌庫頂）、戰鬥體育場（USE_STADIUM 哨兵 v6672-battle-stadium；AI 會用）。
+- 被動特性：障眼法（中央 blindKoNoPrizeNote，套在所有 KO 獎賞出口）、增水泵（dealAttackDamageToTarget 備戰 +30 不重複）、超級護身（PASSIVE_IMMUNITY）、練過的手臂（PASSIVE_ATTACKER_BUFF skipResistance）、振奮聲援（effectiveAttackCost）、雙重屬性／同步之軀（getAttackerEffectiveTypes，防遞迴）、震顫翅（不放置型手牌特性：HAND_ACTIVATE_NO_PLACEMENT、手牌操作 hand-ability-use 拖到桌墊）。
+- Rule 40：test-v6200（不放置型改由 v6672 B20 實跑）、test-v6402 E2（明列托戈德瑪爾ex 新卡自己的雙屬性）、test-stadium-coverage（登記戰鬥體育場）、anti-pattern-lint H（認中央 isImmuneToOppAbilityEffect）。
+- 已知限制：吉憲的熱血選戰鬥寶可夢時，備戰區必須有寶可夢（放回後要能派出新的戰鬥寶可夢）。
+- 伺服器負擔：純前端引擎與卡表；不新增任何請求。
+- 守衛 test-v6672-m7-release（A 資料、C 覆蓋、B1～B20 實跑、HEAD-FAIL 對 v6.671 全紅、正對照綠；8 個突變全殺）。
+- 部署：update-tournament.bat（錦標賽伺服器打包引擎＋卡庫）→ redeploy-oracle.bat；縮圖由 AI 補（Rule 93）。
+
 ## v6.671 — 瑞士輪未進場自動棄賽（server v1.88）
 
 基準 `c24b7701`（v6.670）。玩家建議＋站長裁定（2026-11-24）：瑞士輪未進場時，若該玩家本場之前已有 1 敗以上（沒贏的都算：一般敗、未進場敗、平手／時限雙敗、雙方未進場、雙方棄賽）⇒ 自動棄賽、後續不再配對；0 敗只判負；所有瑞士輪（網站賽與社群賽）。

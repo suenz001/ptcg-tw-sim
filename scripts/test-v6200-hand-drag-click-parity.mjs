@@ -29,7 +29,7 @@ const chk = (t, c, extra = '') => { if (c) { pass++; } else { fail++; console.lo
 
 writeFileSync(S, 'export const base="";');
 writeFileSync(E,
-  "export { applyAction, createGame, getHandActivatableAbilities } from './src/lib/game/engine';\n"
+  "export { applyAction, createGame, getHandActivatableAbilities, HAND_ACTIVATE_NO_PLACEMENT } from './src/lib/game/engine';\n"
 + "export { ON_HAND_ACTIVATE_ABILITIES } from './src/lib/game/effects';\n"
 + "export { getHandCardOps, handCardDraggable, handCardDragKind, handOpForDropTarget,\n"
 + "         HAND_CARD_OPS, HAND_OP_DROP_TARGET } from './src/lib/game/hand-card-ops';\n"
@@ -183,7 +183,16 @@ const FIXTURES = {
 };
 
 if (M) {
-  const registered = [...M.ON_HAND_ACTIVATE_ABILITIES.keys()];
+  // ⭐v6.672（Rule 40）：本段守的是「把這張卡放置到備戰區」型（拖到空備戰格、卡片上備戰）。
+  //   v6.672 起有**不放置**型（超音波幼蟲｜震顫翅：丟棄這張卡、查看牌庫上方）——釋放區是桌墊、不上備戰，
+  //   本段的斷言（上備戰、bench-empty）對它不成立 ⇒ 不放置型改由 test-v6672-m7-release.mjs B20 逐張實跑
+  //   （拖曳 op／釋放區／引擎結算／條件不成立的正對照）；這裡斷言那支守衛真的有它的 fixture，不會漏掉。
+  const _allReg = [...M.ON_HAND_ACTIVATE_ABILITIES.keys()];
+  const _noPlace = (n) => [...pool.values()].some(c => c.name === n && (c.abilities || []).some(a => M.HAND_ACTIVATE_NO_PLACEMENT?.has(a.name)));
+  const nonPlacing = _allReg.filter(_noPlace);
+  const _v6672Src = readFileSync(join(ROOT, 'scripts/test-v6672-m7-release.mjs'), 'utf8');
+  chk('②不放置型手牌特性都在 test-v6672 B20 有實跑 fixture', nonPlacing.every(n => _v6672Src.includes(`HAND_NOPLACE_FIXTURE['${n}']`)), JSON.stringify(nonPlacing));
+  const registered = _allReg.filter(n => !_noPlace(n));
   chk('②掃描器下限：ON_HAND_ACTIVATE_ABILITIES 至少 2 張（掃描器壞了會是 0）',
       registered.length >= 2, String(registered.length));
   chk('②完備性：每張登錄的手牌特性卡都要有 fixture（新增卡忘了補 → 這裡亮紅）',

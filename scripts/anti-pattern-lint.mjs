@@ -274,7 +274,8 @@ const H_MUT = [
   ['丟道具',           /\.(?:toolAttached|extraTools)\s*=(?!=)/],
   ['施狀態',           /\.(?:status|secondaryStatus|tertiaryStatus)\s*=(?!=)/],
 ];
-const H_GUARD = /canApplyEffectToTarget|canApplyAttackEffectToTarget|oppPokemonImmuneToAttackEffect|forceOppSwap|oppSwapDmgPost|applyStatusToOppActive|applyDamageToAllOpp|dealAttackDamageToTarget|koTargetByAttackEffect|clearActiveEffects|toBareCard|isImmuneToOppSupporter|resolveBenchGuard|_gustImmune|opp-mut-ok/;
+// ⭐v6.672：isImmuneToOppAbilityEffect＝defense.ts「不受對手特性效果影響」的唯一判準（內部就是 canApplyEffectToTarget(kind='ability-effect')）
+const H_GUARD = /canApplyEffectToTarget|canApplyAttackEffectToTarget|oppPokemonImmuneToAttackEffect|forceOppSwap|oppSwapDmgPost|applyStatusToOppActive|applyDamageToAllOpp|dealAttackDamageToTarget|koTargetByAttackEffect|clearActiveEffects|toBareCard|isImmuneToOppSupporter|isImmuneToOppAbilityEffect|resolveBenchGuard|_gustImmune|opp-mut-ok/;
 /**
  * ⭐⭐⭐ v6.262 Check H 強化：**兩段式 picker 的 stage-2 不該被無條件豁免，也不該被無條件開罰。**
  *

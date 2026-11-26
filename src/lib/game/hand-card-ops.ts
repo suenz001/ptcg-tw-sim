@@ -42,6 +42,7 @@ import {
   canBeInitialActiveCard,
   isAceCancelActive,
   getBenchLimit,
+  isHandEnergyAttachLocked,   // ⭐v6.672 血紅恐懼
 } from './engine';
 
 /**
@@ -59,11 +60,12 @@ export type HandCardOp =
   | 'tool'           // 寶可夢道具附到寶可夢身上
   | 'trainer'        // 支援者／物品／競技場
   | 'evolve'         // 進化到場上的某隻
-  | 'hand-ability';  // ⭐ 從手牌發動的特性（齒輪怪｜緊急迴轉、烈箭鷹ex｜激動俯衝…）
+  | 'hand-ability'   // ⭐ 從手牌發動的特性（齒輪怪｜緊急迴轉、烈箭鷹ex｜激動俯衝…）＝把這張卡放到備戰區
+  | 'hand-ability-use';  // ⭐v6.672 從手牌發動、**不**放到場上的特性（超音波幼蟲｜震顫翅）＝拖到桌墊上使用
 
 export const HAND_CARD_OPS: readonly HandCardOp[] = [
   'energy', 'basic', 'basic-setup', 'setup-active', 'setup-active-swap',
-  'fossil', 'tool', 'trainer', 'evolve', 'hand-ability',
+  'fossil', 'tool', 'trainer', 'evolve', 'hand-ability', 'hand-ability-use',
 ] as const;
 
 /** 拖曳時這個 op 要把卡片放到哪一種釋放區（對應 `data-drop-type`；'playmat' = 整張桌墊） */
@@ -84,6 +86,7 @@ export const HAND_OP_DROP_TARGET: Readonly<Record<HandCardOp, HandDropTarget>> =
   trainer: 'playmat',
   evolve: 'poke',
   'hand-ability': 'bench-empty',
+  'hand-ability-use': 'playmat',   // ⭐v6.672 與訓練家同一個釋放區（不佔備戰格）
 };
 
 /**
@@ -103,6 +106,7 @@ const DRAG_KIND_PRIORITY: ReadonlyArray<readonly [HandCardOp, HandDragKind]> = [
   ['tool', 'tool'],
   ['trainer', 'trainer'],
   ['hand-ability', 'hand-ability'],
+  ['hand-ability-use', 'hand-ability'],
 ];
 
 /** 這張手牌現在能不能拖曳（= 有任何一種可用操作）。拖曳與點擊必須問同一支。 */
@@ -173,7 +177,8 @@ export function getHandCardOps(
     ? new Set(getEvolvableTargets(state, pool).flatMap(e => e.toIids))
     : new Set<string>();
   const handAbilities = isMyTurn ? getHandActivatableAbilities(state, myIdx, pool) : [];
-  const handAbilityIids = new Set(handAbilities.map(a => a.iid));
+  const handAbilityIids = new Set(handAbilities.filter(a => a.placesToBench).map(a => a.iid));
+  const handAbilityUseIids = new Set(handAbilities.filter(a => !a.placesToBench).map(a => a.iid));   // ⭐v6.672
 
   // v5.079 蓋諾賽克特｜ACE消弭：對手場上有附道具的蓋諾賽克特 → 不能附 ACE SPEC 能量
   //   （engine ATTACH_ENERGY 已擋；UI 也要擋，否則亮黃框但按了沒反應）
@@ -211,6 +216,7 @@ export function getHandCardOps(
     if (isEnergyCard && playing && state.turnPhase === 'main' && isMyTurn
         && !me.energyAttachedThisTurn && !state.pendingSelection
         && !(c.tags?.includes('ACE SPEC') && aceCancel)
+        && !isHandEnergyAttachLocked(me, c)   // ⭐v6.672 血紅恐懼（與 engine ATTACH_ENERGY 同一支述詞）
         && !festivalPending) {
       ops.add('energy');
     }
@@ -227,6 +233,7 @@ export function getHandCardOps(
     }
     if (isEvolutionCard && evos.has(inst.iid) && !state.pendingSelection) ops.add('evolve');
     if (handAbilityIids.has(inst.iid)) ops.add('hand-ability');
+    if (handAbilityUseIids.has(inst.iid)) ops.add('hand-ability-use');   // ⭐v6.672 震顫翅
 
     if (ops.size > 0) out.set(inst.iid, ops);
   }

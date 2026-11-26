@@ -3533,6 +3533,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       if (benchEmpty) {
         await dispatch(GameActions.playFossil(d.iid));
       }
+    } else if (op === 'hand-ability-use') {
+      // ⭐v6.672 超音波幼蟲｜震顫翅：從手牌發動、不放到場上 ⇒ 拖到桌墊（與訓練家同一個釋放區）就使用
+      const meta = handActivateAbilities.get(d.iid);
+      if (meta) await dispatch(GameActions.useHandAbility(d.iid, meta.abilityIndex));
     } else if (op === 'hand-ability' && benchEmpty) {
       // ⭐v6.200 玩家回報：烈箭鷹ex｜激動俯衝（M6）條件成立時桌機拖不動（只能點）。
       //   手牌特性一律「把這張卡放到備戰區」→ 釋放區＝空備戰格，與基礎寶可夢同一格。
@@ -4234,7 +4238,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!game || !poolReady) return out;
     if (!isMyTurn()) return out;
     for (const a of getHandActivatableAbilities(game, myIdx as 0 | 1, pool)) {
-      out.set(a.iid, { abilityName: a.abilityName, abilityIndex: a.abilityIndex, label: `⚡ ${a.abilityName} (放備戰)` });
+      out.set(a.iid, { abilityName: a.abilityName, abilityIndex: a.abilityIndex, label: a.placesToBench ? `⚡ ${a.abilityName} (放備戰)` : `⚡ ${a.abilityName}` });   // ⭐v6.672
     }
     return out;
   });
@@ -14431,6 +14435,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                ⚠ 手機直式（MobilePortraitBattle.svelte）**不走這個 onclick**：點卡片是開 sheet 選單，
                  再按「⚡ 該特性名 (放備戰)」才發動 ⇒ 手機可用性完全不受本次改動影響。 -->
           {@const canHandActivate = ops.has('hand-ability')}
+          {@const canHandUse = ops.has('hand-ability-use')}
           {@const dragKind = handCardDragKind(ops)}
           {@const isActionable = handCardDraggable(ops)}
           <div class="hand-card" class:action-busy={actionBusy}
@@ -14472,6 +14477,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <!-- v5.511：緊急迴轉 改為「黃框可用 + 拖到空備戰格發動」（⭐v6.208 站長裁定：點卡不再發動），不再顯示按鈕標示 -->
             {#if canHandActivate && canEvolve}<span class="hand-hint hl">⚡ 拖到備戰發動特性／🔺 拖到進化目標</span>
             {:else if canHandActivate}<span class="hand-hint hl">⚡ 拖到備戰發動特性</span>
+            {:else if canHandUse}<span class="hand-hint hl">⚡ 拖到桌墊發動特性</span>
             {:else if canEnergy}<span class="hand-hint hl">⚡ 拖曳附加</span>
             {:else if canSwapActive && canBasic}<span class="hand-hint hl">🔁 拖到戰鬥場換上場／📥 拖到備戰</span>
             {:else if canSwapActive}<span class="hand-hint hl">🔁 拖到戰鬥場換上場</span>

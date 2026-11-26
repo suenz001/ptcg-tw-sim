@@ -344,7 +344,7 @@ export const TOOL_ON_KO_MIRRORED_FROM_DAMAGED = new Set<string>();
  *   鏡射道具（幸運頭盔/凸凸頭盔/火箭隊的催眠裝置/逆境保險/奢華炸彈/手持循環扇）
  *     卡面全部有「在戰鬥場」⇒ 不列入。
  */
-export const TOOL_ON_KO_BENCH_ALSO = new Set<string>(['希望護身符']);
+export const TOOL_ON_KO_BENCH_ALSO = new Set<string>(['希望護身符', '牽絆披帶']);   // ⭐v6.672 牽絆披帶卡面也沒有「在戰鬥場」
 
 /**
  * ⭐⭐⭐ v6.215：官方處理順序是 **招式效果先於「受到傷害時」道具效果**。
@@ -893,6 +893,9 @@ export const ATTACH_TOOL_NAMES = new Set<string>([
   //   attach 機制走 toolAttachEffect (檔尾 auto-register loop 抓此 Set).
   //   v5.273 已刪除 TOOL_ATTACH_GATE → 可附任何屬性 (跟氣球一樣).
   '重試徽章',
+  // ⭐v6.672 M7 牽絆披帶：TOOL_ON_KO handler 在 m7_wave3.ts（要用 isMegaExCard，本檔依 v6.402 不直接呼叫）
+  //   ⇒ 該模組載入時本 Set 已經 spread 完 ⇒ 名稱要顯式列在這裡，附加才有註冊。
+  '牽絆披帶',
   ...TOOL_HP_BONUS.keys(),
   ...TOOL_ATTACK_BONUS.keys(),
   ...TOOL_DEFENSE_REDUCE_BY_TYPE.keys(),

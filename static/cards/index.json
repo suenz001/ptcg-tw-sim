@@ -634,6 +634,20 @@
   "count": 168
  },
  {
+  "code": "M7",
+  "name": "波導探求者",
+  "regulationMark": "J",
+  "cardCount": 78,
+  "supertypeCounts": {
+   "Pokemon": 73,
+   "Trainer": 5
+  },
+  "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m7/assets/images/ogp.png",
+  "scrapedAt": "2026-11-26T08:20:22.968Z",
+  "releaseDate": "2026-12-04",
+  "count": 78
+ },
+ {
   "code": "MF",
   "name": "頂級牌組組合 「太陽伊布・月亮伊布」",
   "regulationMark": "J",

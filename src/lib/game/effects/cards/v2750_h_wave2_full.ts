@@ -2408,11 +2408,15 @@ regPost('來悲粗茶|詛咒水滴', (state, aIdx, _pool) => {
 regR('h-wave2-distribute-damage', (state, aIdx, iids, params, pool) => {
   // damage-distribute：selectedIids 是「每個指示物選了哪隻」的列表，每指示物 10 傷。
   const totalCounters = (params?.totalCounters as number | undefined) ?? 4;
+  const label = (params?.label as string | undefined) ?? '詛咒水滴';   // ⭐v6.672 共用（M7 恰雷姆｜瑜伽之力）
   // v5.440：改走中央 dealAttackDamageToTarget(attack-effect) — 原本完全沒套效果免疫 guard
   //   (對戰圓形/薄霧/球形盾牌等該擋)。逐指示物結算 + KO。
-  let s = addLog(state, `詛咒水滴：分配 ${totalCounters} 個指示物`, aIdx);
-  for (const iid of iids) {
-    s = dealAttackDamageToTarget(s, aIdx, iid, 10, pool, { kind: 'attack-effect', label: '詛咒水滴' });
+  let s = addLog(state, `${label}：分配 ${totalCounters} 個指示物`, aIdx);
+  // ⭐v6.672：damage-distribute 的 payload 不經中央消毒（VALID_IIDS_GATE_EXEMPT）⇒ resolver 自己夾到卡面個數，
+  //   並只認對手場上的寶可夢（送多、送自己的 iid 都不會多放）。
+  const _oppIids = new Set([state.players[(1 - aIdx) as 0 | 1].active?.iid, ...state.players[(1 - aIdx) as 0 | 1].bench.map(b => b.iid)].filter(Boolean) as string[]);
+  for (const iid of iids.filter(i => _oppIids.has(i)).slice(0, totalCounters)) {
+    s = dealAttackDamageToTarget(s, aIdx, iid, 10, pool, { kind: 'attack-effect', label });
     if (s.phase === 'game-over') return s;
   }
   return s;

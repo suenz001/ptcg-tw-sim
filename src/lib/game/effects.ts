@@ -771,6 +771,7 @@ export function toolDefenseByTypeApplies(
  * ⚠ v6.206：本函式已升格為「場上任一位置」通用（getEffectivePokemonTypes 是它的別名），
  *   參數名保留 attacker* 只是為了不動 v6.204/v6.205 兩份守衛的字串錨點。
  */
+let _syncBodyDepth = false;   // ⭐v6.672 同步之軀防遞迴（單執行緒、函式內 set／finally 還原）
 export function getAttackerEffectiveTypes(
   /** ⭐ v6.204：新增 state/attackerIdx —— 雙重屬性／二重核心都是 passive 特性，會被消除。 */
   state: GameState | undefined,
@@ -804,9 +805,33 @@ export function getAttackerEffectiveTypes(
   //   ⇒ 沿用 v6.204 收斂好的同一份中央述詞（不新建第五份），它自己從 state 推 location。
   if (attackerCard?.name === '狠辣椒ex'
       && _v6196HasEffAbilByInst(state, attackerIdx, attackerActive, pool, '雙重屬性')) return ['Grass', 'Fire'];
+  // >>> v6672-m7-types
+  // ⭐v6.672 M7 托戈德瑪爾ex｜雙重屬性：「只要這隻寶可夢在場上，改為【雷】與【鋼】2種屬性。」（同狠辣椒ex 的寫法，以卡名分流）
+  //   ⚠ 同名的 MC 托戈德瑪爾ex 沒有這個特性 ⇒ 中央述詞會因為卡面沒有該特性而不成立。
+  if (attackerCard?.name === '托戈德瑪爾ex'
+      && _v6196HasEffAbilByInst(state, attackerIdx, attackerActive, pool, '雙重屬性')) return ['Lightning', 'Metal'];
+  // <<< v6672-m7-types
   if (attackerActive && attackerCard
       && hasIronTracksDualCore(state, attackerIdx, attackerActive, attackerCard, pool)) return ['Fighting', 'Metal'];
-  return attackerCard?.pokemonType ? [attackerCard.pokemonType] : [];
+  const _printed = attackerCard?.pokemonType ? [attackerCard.pokemonType] : [];
+  // >>> v6672-sync-body
+  // ⭐v6.672 M7 變隱龍｜同步之軀：「只要這隻寶可夢在場上，除了原本的屬性外，還會擁有與自己的所有備戰寶可夢相同的屬性。
+  //   （若有寶可夢擁有2種以上的屬性，則每個屬性皆會擁有。）」⇒ 印刷屬性 ∪ 自己每一隻備戰寶可夢的**有效**屬性。
+  //   ⚠ 防遞迴：備戰裡也有同步之軀的變隱龍時，算它的屬性不再展開同步之軀（兩隻互相引用會無限遞迴）。
+  if (!_syncBodyDepth && attackerCard?.name === '變隱龍' && state && attackerIdx !== undefined
+      && _v6196HasEffAbilByInst(state, attackerIdx, attackerActive, pool, '同步之軀')) {
+    _syncBodyDepth = true;
+    try {
+      const out = new Set<string>(_printed);
+      for (const b of state.players[attackerIdx].bench) {
+        if (b.iid === attackerActive?.iid) continue;
+        for (const t of getAttackerEffectiveTypes(state, attackerIdx, b, pool.get(b.cardId), pool)) out.add(t);
+      }
+      return [...out];
+    } finally { _syncBodyDepth = false; }
+  }
+  // <<< v6672-sync-body
+  return _printed;
 }
 
 /**
@@ -1183,6 +1208,37 @@ export function koPrizeCount(card: Card): number {
   return isEx ? 2 : 1;
 }
 
+// >>> v6672-blind-ko-no-prize
+/**
+ * ⭐⭐v6.672 M7 九尾｜障眼法：「若自己的手牌為5張，則這隻寶可夢就算【昏厥】，對手也無法獲得獎賞卡。」
+ *   ⚠ 卡面**沒有**限定昏厥的原因（招式傷害／效果／寶可夢檢查／自己弄昏厥都算）⇒ 每一條 KO 獎賞路徑都要問這一支，
+ *     不可以只接在「受到招式傷害」的分支（那是脆弱蛻殼的卡面）。
+ *   ⚠ 「自己的手牌」＝被昏厥那隻的持有者的手牌，昏厥當下數（剛好 5 張）。
+ *   ⚠ 特性此刻要有效（中央 isAbilityHolderEffective；位置依實際戰鬥場／備戰）。
+ * @returns 擋下時的 log 句子；不擋 ⇒ null
+ */
+export function blindKoNoPrizeNote(
+  state: GameState, victim: CardInstance | null | undefined, victimCard: Card | undefined,
+  ownerIdx: 0 | 1, pool: Map<string, Card>,
+): string | null {
+  if (!victim || !victimCard?.abilities?.some(a => a.name === '障眼法')) return null;
+  const owner = state.players[ownerIdx];
+  if (!owner || owner.hand.length !== 5) return null;
+  const loc: 'active' | 'bench' = owner.bench.some(b => b.iid === victim.iid) ? 'bench' : 'active';
+  if (!isAbilityHolderEffective(state, victim, victimCard, ownerIdx, '障眼法', loc, pool)) return null;
+  return `「障眼法」啟動：${victimCard.name} 昏厥，但持有者手牌剛好 5 張 → 對手無法獲得獎賞卡`;
+}
+/** 被昏厥那隻的「基本獎賞張數」（koPrizeCount）再過 障眼法；回傳張數與要補的 log。 */
+export function victimBasePrizes(
+  state: GameState, victim: CardInstance | null | undefined, victimCard: Card | undefined,
+  ownerIdx: 0 | 1, pool: Map<string, Card>,
+): { prizes: number; note: string | null } {
+  const note = blindKoNoPrizeNote(state, victim, victimCard, ownerIdx, pool);
+  if (note) return { prizes: 0, note };
+  return { prizes: victimCard ? koPrizeCount(victimCard) : 1, note: null };
+}
+// <<< v6672-blind-ko-no-prize
+
 // >>> v6471-ko-prize-modifiers
 /**
  * ⭐⭐⭐ v6.471 中央管線：KO 獎賞的「防守方側」修正 —— **算張數與寫 log 是同一份資料**。
@@ -1306,6 +1362,10 @@ export function koPrizesAdjusted(
 ): { prizes: number; state: GameState; preventPrizeAll?: boolean } {
   let s = state;
   if (!koCard) return { prizes: 1, state: s };
+  // >>> v6672-blind-ko-adjusted
+  { const _bn = blindKoNoPrizeNote(s, koInst, koCard, defenderIdx, pool);
+    if (_bn) return { prizes: 0, state: addLog(s, _bn, null), preventPrizeAll: true }; }
+  // <<< v6672-blind-ko-adjusted
   const base = koPrizeCount(koCard);
   // v5.638：deferredPrizeBonusThisTurn（多餘花粉等「下個自己回合，此卡被昏厥時+N獎賞」）綁在「被KO的這隻
   //   instance」身上，卡面是「被【昏厥】時」→ 不論招式傷害KO 或 效果/特性KO（咒詛炸彈/深淵之瞳…）都該+N。
@@ -1767,6 +1827,7 @@ function hitBenchAll(
   // 以下只剩**打自己的備戰**（穿山王｜地震、焚焰蚣｜燃燒熱浪、固拉多｜大地裂破、電飛鼠｜天空波的自己側）：
   //   不是「對手的招式」⇒ 不套中央閘、招致削傷、防昏厥、無限之影；昏厥時由對手取獎（v6.421）。
   let morePrizes = 0;
+  const reduceLogsBlind: string[] = [];   // ⭐v6.672 障眼法 log（KO 迴圈結束後一次印）
   const newBench: CardInstance[] = [];
   const koDiscards: CardInstance[] = [];
   const koNames: string[] = [];
@@ -1799,7 +1860,7 @@ function hitBenchAll(
       // v5.934 無限之影：自傷不觸發（第三參數 false）⇒ 只取得要丟棄的卡
       const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, false, state, targetIdx, 'bench');
       for (const _d of _isk.toDiscard) koDiscards.push(_d);
-      if (card) morePrizes += koPrizeCount(card);
+      { const _vp = victimBasePrizes(state, c, card, targetIdx, pool); if (card) morePrizes += _vp.prizes; if (_vp.note) reduceLogsBlind.push(_vp.note); }   // ⭐v6.672 障眼法
       koNames.push(card?.name ?? '?');
       koCards.push(card);
     } else {
@@ -1825,6 +1886,7 @@ function hitBenchAll(
   if (teraImmunNames.length > 0) {
     s = addLog(s, `${attackLabel}：${teraImmunNames.join('、')} 為太晶寶可夢，在備戰位免疫招式傷害`, null);
   }
+  for (const _bn of reduceLogsBlind) s = addLog(s, _bn, null);   // ⭐v6.672 障眼法
   if (koNames.length > 0) {
     // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）
     s = addLog(s, `${attackLabel}：${koNames.join('、')} 昏厥，${state.players[koPrizeTaker(targetIdx)].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
@@ -1944,6 +2006,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   // 以下只剩**選自己的備戰**（雙向頭擊）：不是「對手的招式」⇒ 不套中央閘、招致削傷、防昏厥、無限之影；
   //   昏厥時由對手取獎（v6.421）。
   let morePrizes = 0;
+  const reduceLogsBlind: string[] = [];   // ⭐v6.672 障眼法 log（KO 迴圈結束後一次印）
   const newBench: CardInstance[] = [];
   const koDiscards: CardInstance[] = [];
   const hitNames: string[] = [];
@@ -1979,7 +2042,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
       // v5.934 無限之影：自傷不觸發（第三參數 false）⇒ 只取得要丟棄的卡
       const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, false, st, targetIdx, 'bench');
       for (const _d of _isk.toDiscard) koDiscards.push(_d);
-      if (card) morePrizes += koPrizeCount(card);
+      { const _vp = victimBasePrizes(st, c, card, targetIdx, pool); if (card) morePrizes += _vp.prizes; if (_vp.note) reduceLogsBlind.push(_vp.note); }   // ⭐v6.672 障眼法
       koNames.push(card?.name ?? '?');
       koCards.push(card);
     } else {
@@ -2007,6 +2070,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   if (teraImmunNames.length > 0) {
     s = addLog(s, `${label}：${teraImmunNames.join('、')} 為太晶寶可夢，在備戰位免疫招式傷害`, null);
   }
+  for (const _bn of reduceLogsBlind) s = addLog(s, _bn, null);   // ⭐v6.672 障眼法
   if (koNames.length > 0) {
     // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）
     s = addLog(s, `${label}：${koNames.join('、')} 昏厥，${st.players[koPrizeTaker(targetIdx)].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
@@ -5127,6 +5191,8 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
   //   ⚠ 與 岩殿居蟹｜神秘石居 是**一模一樣的一句卡面**，收斂前兩張卡卻用了不同述詞
   //     （石居走 isPokemonExCard、守護走 isRulePokemon）—— 散寫法本身就是 bug 的形狀。
   ['神秘守護', (att) => isPokemonExCard(att)],
+  // ⭐v6.672 M7 象徵鳥ex｜超級護身：「這隻寶可夢不會受到對手的『超級進化寶可夢【ex】』招式的傷害。」（只擋傷害，不擋效果）
+  ['超級護身', (att) => isMegaExCard(att)],
 ]);
 
 // v5.367：條件式完全免疫特性（神秘石居 / 神秘守護 / 璀璨鱗片 / 尾甲 / 全能硬殼 等「不受對手某類
@@ -7704,7 +7770,8 @@ regPost('皮卡丘|高速移動', coinHeadsSelfImmuneNextPost('高速移動'));
 // ⚠️ v5.787：注意參數順序為 (perHead, base)！v2620_i_wave12_misc5.ts 另有同名 local helper
 //   簽名為 (base, perHead)（順序相反）。兩者公式皆 base+heads×perHead，但填參務必對照所在檔。
 //   守衛：scripts/test-coin-until-tails-formula.mjs 以卡面印刷傷害驗全部 flip-until-tails 招式。
-function coinUntilTailsMultiplyPre(perHead: number, base: number, attackName: string): AttackPreFn {
+// ⭐v6.672 export：M7 六尾｜連續舞步（m7_wave1.ts）共用同一支，不另抄一份。
+export function coinUntilTailsMultiplyPre(perHead: number, base: number, attackName: string): AttackPreFn {
   return (state, aIdx, _pool) => {
     // v6.234：收斂到中央 flipCoinsUntilTails。**沿用原本的 20 次安全上限**，行為完全不變。
     // （逐次走 flipCoinsWithLog → 設 coinFlippedThisAttack（重試徽章）+ consume retry queue）
@@ -9760,6 +9827,18 @@ export function applyAttackerActiveDamageBonuses(
       formula.push({ sign: '+', value: 30, label: '烏栗' });
     }
   }
+  // >>> v6672-korrina-full-power
+  // ── ⭐v6.672 可爾妮的全力（本回合自己的「超級進化寶可夢【ex】」對對手戰鬥位 +20 × 對手已獲得的獎賞卡張數）──
+  //   張數在出招當下數（6 − 對手剩餘獎賞張數，與 鐵蟻ex｜復仇粉碎 同一算法）。
+  if (attacker.korrinaFullPowerThisTurn && isMegaExCard(aCard)) {
+    const taken = Math.max(0, 6 - defender.prizes.length);
+    if (taken > 0) {
+      const b = 20 * taken; d += b;
+      s = addLog(s, `「可爾妮的全力」啟動：對手已獲得 ${taken} 張獎賞卡 → ${aCard.name} 招式傷害 +${b}`, aIdx);
+      formula.push({ sign: '+', value: b, label: `可爾妮的全力×${taken}` });
+    }
+  }
+  // <<< v6672-korrina-full-power
   // ⭐⭐v6.409：**唯一的 clamp 點**（站長裁定：所有加減算完才不能低於 0）。
   //   ⚠ 這一行是本函式對外的保證：回傳的 damage 永遠 ≥ 0，呼叫端不必自己再夾一次。
   if (d < 0) d = 0;
@@ -10112,6 +10191,21 @@ export function dealAttackDamageToTarget(
     // ⭐v6.239 這些 + 項本來就算出來了（helper 一直有回傳 formula），只是過去被丟掉。
     for (const t of _ab.formula) _formula.push(t as FormulaTerm);
   }
+  // >>> v6672-bench-damage-bonus
+  // ⭐v6.672 M7 水箭龜｜增水泵：「只要這隻寶可夢在場上，自己的【水】寶可夢使用的招式，對對手的備戰寶可夢造成的傷害
+  //   『+30』點。這個特性的效果不會重複。」⇒ 對手**備戰**的招式傷害（全站打備戰都走這一支）＋30，場上幾隻都只 +30。
+  //   ⚠ 攻擊者屬性走中央有效屬性（雙重屬性／同步之軀等）；持有者特性此刻要有效。放指示物（attack-effect）不是傷害 ⇒ 不加。
+  if (!isActive && kind === 'attack-damage' && effDmg > 0) {
+    const _ap = st.players[actorIdx];
+    const _atk = _ap.active;
+    const _atkC = _atk ? pool.get(_atk.cardId) : undefined;
+    if (_atk && hasEffectivePokemonType(st, actorIdx, _atk, _atkC, pool, 'Water')
+        && [_atk, ..._ap.bench].some(x => _v6196HasEffAbilByInst(st, actorIdx, x, pool, '增水泵'))) {
+      effDmg += 30;
+      st = addLog(st, `「增水泵」啟動：${_atkC?.name ?? '?'} 對備戰寶可夢的招式傷害 +30`, actorIdx);
+    }
+  }
+  // <<< v6672-bench-damage-bonus
   if (isActive && kind === 'attack-damage' && !opts?.noWeakness) {
     // v5.673：弱點+抵抗力統一走中央 applyWeakRes(原抵抗力仍用 raw pokemonType→漏小碎鑽雙屬性,收斂)。
     effDmg = applyWeakRes(st, actorIdx, target, targetCard, effDmg, pool, _formula);
@@ -11346,7 +11440,10 @@ regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
     const players = [...s.players] as [PlayerState, PlayerState];
     players[aIdx] = { ...att, active: null, discard: [...att.discard, ...ko] };
     // v5.469：自損昏厥（不是「受到對手招式傷害」）⇒ 古舊能量等不觸發，維持基本張數。
-    const oppPrizes = card ? (prizesForKOLocal(card)) : 1;
+    // ⭐v6.672 障眼法：任何原因昏厥都擋（昏厥前的盤面判）
+    const _bnSame = blindKoNoPrizeNote(s, att.active, card, aIdx, pool);
+    const oppPrizes = _bnSame ? 0 : (card ? (prizesForKOLocal(card)) : 1);
+    if (_bnSame) s = addLog(s, _bnSame, null);
     s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 也昏厥，對手待取 ${oppPrizes} 張獎賞卡`, null);
     s = addPendingPrize(s, dIdx, oppPrizes, pool);
     s = miracleKissOnActiveFaint(s, aIdx, pool);
@@ -11604,11 +11701,14 @@ export function discardOppActiveEnergyPost(
   filter: 'any' | 'special' | EnergyType = 'any',
   count = 1,
   kind: 'attack-effect' | 'ability-effect' = 'attack-effect',
+  /** ⭐v6.672：卡面「放回對手的牌庫並重洗」（M7 沙漠蜻蜓｜沙漠之風）⇒ 'deck'。預設 'discard'（既有卡行為不變）。 */
+  dest: 'discard' | 'deck' = 'discard',
 ): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const defender = state.players[dIdx];
     if (!defender.active) return state;
+    const _verbTxt = dest === 'deck' ? '放回牌庫並重洗' : '丟棄';
     // v5.333：免疫招式效果的 active 不受此效果（C-17 per-target guard）
     {
       // v6.029：丟棄能量不是放置傷害指示物 → 對戰圓形不該擋（目標亦為 active，實務上走不到）。
@@ -11641,20 +11741,20 @@ export function discardOppActiveEnergyPost(
       const matchSet = new Set(matchIids);
       const discarded = energies.filter(e => matchSet.has(e.iid));
       const names = discarded.map(e => pool.get(e.cardId)?.name ?? '能量').join('、');
-      const s = addLog(state, `${label}：${defName} 丟棄 ${discarded.length} 張${_fdesc}能量（${names}）`, aIdx);
+      const s = addLog(state, `${label}：${defName} ${_verbTxt} ${discarded.length} 張${_fdesc}能量（${names}）`, aIdx);
       return updatePlayer(s, dIdx, p => p.active ? ({
         ...p,
         active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => !matchSet.has(e.iid)) },
-        discard: [...p.discard, ...discarded],
+        ...(dest === 'deck' ? { deck: shuffle([...p.deck, ...discarded]) } : { discard: [...p.discard, ...discarded] }),
       }) : p);
     }
     return withPending(
-      addLog(state, `${label}：選擇要丟棄對手的戰鬥寶可夢身上的 ${effCount} 張${_fdesc}能量`, aIdx),
+      addLog(state, `${label}：選擇要${_verbTxt}的對手的戰鬥寶可夢身上的 ${effCount} 張${_fdesc}能量`, aIdx),
       {
         type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
         minCount: effCount, maxCount: effCount,
         effectKey: 'discard-opp-active-energy-pick',
-        params: { targetIid: defender.active.iid, validIids: matchIids, label, titleOverride: `選擇要丟棄的對手能量（${label}）` },
+        params: { targetIid: defender.active.iid, validIids: matchIids, label, titleOverride: `選擇要${_verbTxt}的對手能量（${label}）`, ...(dest === 'deck' ? { dest } : {}) },
       },
     );
   };
@@ -11669,10 +11769,11 @@ regR('discard-opp-active-energy-pick', (st, idx, iids, params, pool) => {
   if (!toDiscard.length) return st;
   const names = toDiscard.map(e => pool.get(e.cardId)?.name ?? '能量').join('、');
   const defName = pool.get(dp.active.cardId)?.name ?? '?';
-  return updatePlayer(addLog(st, `${label}：${defName} 丟棄 ${toDiscard.length} 張能量（${names}）`, idx), dIdx, p => p.active ? ({
+  const toDeck = params?.dest === 'deck';   // ⭐v6.672 放回對手牌庫並重洗（沙漠之風）
+  return updatePlayer(addLog(st, `${label}：${defName} ${toDeck ? '放回牌庫並重洗' : '丟棄'} ${toDiscard.length} 張能量（${names}）`, idx), dIdx, p => p.active ? ({
     ...p,
     active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => !picked.has(e.iid)) },
-    discard: [...p.discard, ...toDiscard],
+    ...(toDeck ? { deck: shuffle([...p.deck, ...toDiscard]) } : { discard: [...p.discard, ...toDiscard] }),
   }) : p);
 });
 
@@ -12033,7 +12134,8 @@ function oppSnipePost(dmg: number, label: string): AttackPostFn {
   };
 }
 
-function discardStadiumPost(label: string, failIfNone: boolean = false): AttackPostFn {
+// ⭐v6.672 export：M7 鯰魚王｜激烈搖晃（m7_wave2.ts）
+export function discardStadiumPost(label: string, failIfNone: boolean = false): AttackPostFn {
   return (state, aIdx, pool) => {
     if (!state.activeStadium) {
       if (failIfNone) return addLog(state, `${label}：場上無競技場，招式效果失敗`, aIdx);
@@ -13383,7 +13485,9 @@ regPost('轟鳴月ex|瘋癲攻擊', (state, aIdx, pool) => {
       att.active = null;
       att.discard = [...att.discard, ...ko];
       players2[aIdx] = att;
-      const prizes = attCard ? koPrizeCount(attCard) : 1;
+      const _vp = victimBasePrizes(s, s.players[aIdx].active, attCard, aIdx, pool);   // ⭐v6.672 障眼法（昏厥前的盤面判）
+      const prizes = _vp.prizes;
+      if (_vp.note) s = addLog(s, _vp.note, null);
       s = addLog({ ...s, players: players2 }, `瘋癲攻擊：${attCard?.name ?? '?'} 反噬昏厥！對手將取得 ${prizes} 張獎賞卡`, null);
       s = addPendingPrize(s, dIdx, prizes, pool);
       s = miracleKissOnActiveFaint(s, aIdx, pool);
@@ -15719,7 +15823,9 @@ export function selfKOInstance(
     ...getAllAttachedTools(target),
     ...(target.evolvedFromStack ?? []),
   ];
-  const prizes = tCard ? koPrizeCount(tCard) : 1;
+  const _vp = victimBasePrizes(state, target, tCard, aIdx, pool);   // ⭐v6.672 障眼法
+  const prizes = _vp.prizes;
+  if (_vp.note) state = addLog(state, _vp.note, null);
   const players = [...state.players] as [PlayerState, PlayerState];
   const newP: PlayerState = {
     ...p,
@@ -18861,9 +18967,12 @@ export const PASSIVE_PREVENT_PRIZE = new Map<string, (
 ]);
 
 /** 攻擊方持有此特性 → 攻擊時自動帶這些 buff */
-export const PASSIVE_ATTACKER_BUFF = new Map<string, { skipDefEffects?: boolean }>([
+export const PASSIVE_ATTACKER_BUFF = new Map<string, { skipDefEffects?: boolean; skipResistance?: boolean }>([
   // 波盪水ex(H) | 藏青浪濤 — 自身招式不計算對手戰鬥場附加效果(永遠 skipDefEffects)
   ['藏青浪濤', { skipDefEffects: true }],
+  // ⭐v6.672 M7 怪力｜練過的手臂：「這隻寶可夢使用招式的傷害，不計算抵抗力與對手的戰鬥寶可夢身上的附加效果。」
+  //   ⚠ 只有抵抗力（弱點照算）＋附加效果，兩個旗標都要。
+  ['練過的手臂', { skipDefEffects: true, skipResistance: true }],
 ]);
 
 // ============================================================================
@@ -19927,6 +20036,7 @@ export const ON_EVOLVE_FROM_HAND_ABILITIES = new Set([
   '尖刺纏身',     // 鬃岩狼人 — 棄牌區搜最多 2 張「扣殺能量」附於這隻
   '沙之羽擊',     // 沙漠蜻蜓 — 對手牌庫上方 2 張丟棄（KO 時亦觸發；見 PASSIVE_ON_KO）
   '全滿旋律',     // v5.950 西獅海壬 — 進化(糖果/Stage1)時可用1次:恢復自方1隻全部HP。原漏收→進化不自動彈窗、時好時壞(玩家報)
+  '能量躍遷',     // ⭐v6.672 M7 天然鳥 — 看對手手牌，選 1 張能量卡附於對手的寶可夢身上（m7_wave3.ts）
 ]);
 
 /**
@@ -19992,6 +20102,27 @@ export const ON_DISCARD_FROM_HAND_ABILITIES = new Map<
  *
  * 與 ON_DISCARD_FROM_HAND 的差別：trigger 不是棄掉「另一張」手牌，而是『此手牌卡自身』。
  */
+// >>> v6672-shiver-wing
+/**
+ * ⭐v6.672 M7 超音波幼蟲｜震顫翅：「若手牌有這張卡，則在自己的回合時可使用1次，若使用，則將這張卡丟棄。
+ *   查看自己的牌庫上方1張卡，回復原樣。」
+ *   ⚠ 丟棄是「使用的代價」⇒ 一定先丟；查看＝只有自己看得到（走 reorder-deck-top 的 1 張檢視，順序不變＝回復原樣）。
+ *   ⚠ 公開 log 只寫「查看了牌庫上方 1 張」，不寫卡名（牌庫是隱藏資訊）。
+ */
+function trapinchShiverWing(state: GameState, idx: 0 | 1, pool: Map<string, Card>, handInst: CardInstance): GameState {
+  let s = updatePlayer(state, idx, p => ({ ...p, hand: p.hand.filter(c => c.iid !== handInst.iid), discard: [...p.discard, handInst] }));
+  s = addLog(s, `震顫翅：將手牌的 ${pool.get(handInst.cardId)?.name ?? '超音波幼蟲'} 丟棄`, idx);
+  const top = s.players[idx].deck[0];
+  if (!top) return addLog(s, '震顫翅：牌庫沒有卡', idx);
+  return withPending(addLog(s, '震顫翅：查看自己的牌庫上方 1 張卡（回復原樣）', idx), {
+    type: 'reorder-deck-top', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'reorder-deck-top-apply',
+    params: { candidateIids: [top.iid], allowDiscard: false, targetIdx: idx, titleOverride: '震顫翅：查看自己的牌庫上方 1 張卡（確認後放回原處）' },
+  });
+}
+// <<< v6672-shiver-wing
+
 export const ON_HAND_ACTIVATE_ABILITIES = new Map<
   string,
   (state: GameState, idx: 0 | 1, pool: Map<string, Card>, handInst: CardInstance) => GameState
@@ -19999,6 +20130,8 @@ export const ON_HAND_ACTIVATE_ABILITIES = new Map<
   ['齒輪怪', klingerAbility_EmergencyRotate], // 對手有 Stage 2 時放此卡到備戰
   // v6.080 M6：烈箭鷹ex｜激動俯衝 —— 自己場上有【無】超級進化ex 時放此卡到備戰（gate 在 engine）
   ['烈箭鷹ex', talonflameExAbility_ExcitingDive],
+  // ⭐v6.672 M7：超音波幼蟲｜震顫翅 —— 丟棄這張卡、查看自己的牌庫上方1張卡（回復原樣）。gate 在 engine HAND_ACTIVATE_GATES。
+  ['超音波幼蟲', trapinchShiverWing],
 ]);
 
 
@@ -21420,8 +21553,15 @@ export function registerHandRevealAttack(opts: {
   describe: (revealed: Card[], damage: number) => string;
   /** 沒有任何可展示的卡時的 log 文字 */
   emptyText: string;
+  /** ⭐v6.672：卡面印刷的基本傷害（例：沼王｜熱血頭擊 20+、浮潛鼬ex｜衝勁螺旋 40+）。
+   *   沒展示或沒有可展示的卡時打這個數字；預設 0（既有兩招的行為不變）。 */
+  baseDamage?: number;
+  /** ⭐v6.672：最多可展示幾張（例：熱血頭擊「選擇1張」）。預設不限（既有兩招的行為不變）。 */
+  max?: number;
 }) {
   const { key, label, names, supertype, revealLabel, damageOf, describe, emptyText } = opts;
+  const baseDamage = opts.baseDamage ?? 0;
+  const maxReveal = opts.max ?? null;
   const eligibleOf = (hand: CardInstance[], pool: Map<string, Card>): CardInstance[] =>
     hand.filter(h => {
       const c = pool.get(h.cardId);
@@ -21432,7 +21572,7 @@ export function registerHandRevealAttack(opts: {
     });
 
   ATTACK_PRE_DISCARD_CHOICE.set(key, {
-    min: 0, max: null, scope: 'hand-reveal', baseDamage: 0,
+    min: 0, max: maxReveal, scope: 'hand-reveal', baseDamage,
     // damagePerEnergy 只影響 UI 的「預估傷害」；屬性種類型無法用線性倍率表示，
     // 給 0 讓 UI 不顯示估算（真實傷害由 regPre 的 damageOf 決定）。
     damagePerEnergy: 0,
@@ -21446,7 +21586,7 @@ export function registerHandRevealAttack(opts: {
     const hand = state.players[aIdx].hand;
     const eligible = eligibleOf(hand, pool);
     if (eligible.length === 0) {
-      return { state: addLog(state, `${label}：${emptyText} → 0 傷害`, aIdx), damage: 0 };
+      return { state: addLog(state, `${label}：${emptyText} → ${baseDamage} 傷害`, aIdx), damage: baseDamage };
     }
     const chosenIids = action?.discardedEnergyIids;
     // 自驗：只認「在手牌內 ∧ 符合卡面條件」的 iid
@@ -21456,12 +21596,14 @@ export function registerHandRevealAttack(opts: {
     //   [] = 玩家在 picker 按了「不給對手看（0 傷害）」→ **就是要展示 0 張**。
     //   原本用 length>0 會把 [] 當「沒傳」→ 玩家拒絕展示反而把手牌中全部符合的卡
     //   強制公開展示並照全額算傷害（意圖反轉 ＋ 隱藏資訊外洩）。
-    const picked = (chosenIids !== undefined)
+    const pickedAll = (chosenIids !== undefined)
       ? eligible.filter(c => allowed.has(c.iid) && chosenIids.includes(c.iid))
       // AI / headless fallback：沒傳選擇 → 全部展示（傷害最大化）
       : eligible;
+    // ⭐v6.672：卡面有張數上限時夾住（例：「選擇1張」）——送多了只認前 max 張
+    const picked = maxReveal === null ? pickedAll : pickedAll.slice(0, maxReveal);
     if (picked.length === 0) {
-      return { state: addLog(state, `${label}：未展示任何卡 → 0 傷害`, aIdx), damage: 0 };
+      return { state: addLog(state, `${label}：未展示任何卡 → ${baseDamage} 傷害`, aIdx), damage: baseDamage };
     }
     const cards = picked.map(c => pool.get(c.cardId)!).filter(Boolean);
     const dmg = damageOf(cards);
@@ -22157,6 +22299,9 @@ import './effects/cards/mf_wave1';  // v6.388 MF 招式實裝 批次1（純類�
 import './effects/cards/mf_wave2';  // v6.388 MF 招式實裝 批次2（6 招，需要新的中央 helper）
 import './effects/cards/mp_j_wave1'; // v6.391 M-P（J 標）招式實裝 批次1（11 招，全部純類推既有中央 helper）
 import './effects/cards/mp_j_wave2'; // v6.670 M-P 補漏收錄 批次2（超級席多藍恩ex｜巨重壓、支援者 春紫）
+import './effects/cards/m7_wave1'; // v6.672 M7「波導探求者」批次1（卡面與既有卡逐字相同的招式）
+import './effects/cards/m7_wave2'; // v6.672 M7「波導探求者」批次2（新機制招式）
+import './effects/cards/m7_wave3'; // v6.672 M7「波導探求者」批次3（主動特性、訓練家、血紅恐懼）
 import './effects/cards/svi_wave1'; // v6.616 SVI「Trianers Camp」招式實裝（6 招，全部純類推既有中央 helper）
 // ══════════════════════════════════════════════════════════════════════════════
 // ⭐ v6.345 M6a 批次5 —— 牌庫／手牌／棄牌區操作的中央出口

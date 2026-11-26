@@ -1096,7 +1096,7 @@ import { canApplyEffectToTarget, taikoBariBlocksAttackDamage, hasEffectiveAbilit
 //   三個 local 實作，而 effects.ts 另有一份逐字複製的本地版
 //   （註解自承「effects.ts 不能 import engine」）⇒ 判準兩份＝安慰劑型態 11。
 //   下沉到 leaf `./festival`（只 import types 與 defense，兩邊都能 import、無循環）。
-import { hasFestivalDanceActive, hasFestivalVenue, isFestivalDanceFirstAttack } from './festival';
+import { hasFestivalDanceActive, hasFestivalVenue, isFestivalDanceFirstAttack, hasDoubleAttackActive, doubleAttackSourceName } from './festival';   // ⭐v6.672 二連打 共用祭典樂舞狀態機
 // <<< v6410-festival-central-import
 // v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。述詞放 _shared(leaf) 避免底層反向 import 卡檔。
 import { isStadiumPendingImplementation, isTwoCardStadiumName, canPlayTwoCardStadium, assignTwoCardStadiumHalves, twoCardStadiumPartnerCardId, splitTwoCardStadiumDeckEntries } from './effects/_shared'; // v6.084 兩張合一競技場 / v6.090 左右身分 / v6.093 左右拆成兩張卡 / v6.094 建局入口 fail-safe
@@ -1117,6 +1117,7 @@ import { firePassiveOnKoAfterPrize, drainOnKoAfterPrize } from './effects';
 // ⭐v6.361 站長裁定 D-10：把「已判出的終局」暫時收回，讓 on-KO 特性先結算完再重判（含平手）。
 import { liftEndgameForOnKoV6361, requestEndgameVerdictV6361 } from './effects';
 import { koTargetAfterAttackDamage, koAttackerAfterRetaliation } from './effects';
+import { blindKoNoPrizeNote } from './effects';   // ⭐v6.672 九尾｜障眼法（任何原因昏厥都擋，唯一判準）
 import { miracleKissOnActiveFaint } from './effects';   // ⭐v6.493 奇跡之吻唯一入口（任何原因的戰鬥寶可夢昏厥）   // ⭐v6.490 備戰昏厥共用（受害者被效果換到備戰區後才昏厥）
 import { isManuallyActivatableAbilityText } from './ability-activation';   // ⭐v6.489 被動特性不給按鈕
 // <<< v6361-lift-import
@@ -2041,6 +2042,21 @@ export function effectiveAttackCost(
     // v4.976 鐵螯龍蝦｜反撲剪 — 身上有傷害指示物則只需 1 個【惡】
     const overridden9 = getIronCrabCounterClipEffectiveCost(pokemon, attackerName, attackName, cost);
     if (overridden9 !== cost) cost = overridden9;
+    // >>> v6672-cheer-cost
+    // ⭐v6.672 M7 摔角鷹人｜振奮聲援：「只要這隻寶可夢在場上，自己的寶可夢使用招式『奮勇戰鬥』所需的能量，減少1個【無】能量。」
+    //   ⚠ 持有者是**場上另一隻**（不是出招者）⇒ 逐隻問中央 hasEffectiveAbilityByInst（特性此刻有效）。
+    //   ⚠ 卡面沒有「效果不會重複」⇒ 場上 N 隻有效的摔角鷹人就減 N 個【無】（【無】扣光為止，不扣有色）。
+    if (attackName === '奮勇戰鬥' && attackerIdx !== undefined) {
+      const _me = state.players[attackerIdx];
+      const holders = [...(_me.active ? [_me.active] : []), ..._me.bench]
+        .filter(x => hasEffectiveAbilityByInst(state, attackerIdx, x, pool, '振奮聲援')).length;
+      for (let k = 0; k < holders; k++) {
+        const ci = cost.lastIndexOf('Colorless' as EnergyType);
+        if (ci < 0) break;
+        cost = [...cost.slice(0, ci), ...cost.slice(ci + 1)];
+      }
+    }
+    // <<< v6672-cheer-cost
   }
   // v2.149 璀璨結晶（Tool ACE SPEC）：附有此 Tool 的「太晶」寶可夢使用招式時，
   //   能量需求 -1 個。卡面：「（減少的能量任何屬性皆可。）」
@@ -2495,8 +2511,9 @@ function startFestivalDanceSecondAttackWindow(
   attackIndex: number,  // v5.201：傳入剛打的 attackIndex（用於 auto-second-attack）
 ): GameState {
   if (state.phase !== 'playing' || state.turnPhase !== 'end') return state;
-  if (!hasFestivalDanceActive(state, idx, pool)) return state;
-  if (!hasFestivalVenue(state, pool)) return state;
+  // >>> v6672-double-attack-window
+  if (!hasDoubleAttackActive(state, idx, pool)) return state;   // ⭐v6.672 祭典樂舞＋祭典會場，或巴布土撥｜二連打
+  // <<< v6672-double-attack-window
 
   // v2.381 BUG FIX：第 2 次招式已用過 → 不再開窗（flag2 = SecondAttackUsed）
   if (state.festivalDanceSecondAttackUsed?.[idx]) return state;
@@ -2525,11 +2542,16 @@ function startFestivalDanceSecondAttackWindow(
       idx,
       attackIndex,
       originalCardId: attacker.cardId,
+      sourceName: doubleAttackSourceName(state, idx, pool),   // ⭐v6.672
     },
   };
   // v5.211：依玩家反映改為「手動選擇」— 玩家可再用同招式 1 次或跳過攻擊（END_TURN）。
   //   pending 期間其他動作（附能、用支援者、放寶可夢、撤退、進化等）全被 handlePlaying gate 擋掉。
-  next = addLog(next, `祭典樂舞：場上有「祭典會場」— 可再用相同招式 1 次或結束回合（其他動作禁止）`, idx);
+  // >>> v6672-double-attack-log
+  next = addLog(next, doubleAttackSourceName(state, idx, pool) === '二連打'
+    ? `二連打：可再用相同招式 1 次或結束回合（其他動作禁止）`
+    : `祭典樂舞：場上有「祭典會場」— 可再用相同招式 1 次或結束回合（其他動作禁止）`, idx);
+  // <<< v6672-double-attack-log
   return tryPromoteToMainForFestival(next, pool);
 }
 
@@ -2571,9 +2593,15 @@ export function tryPromoteToMainForFestival(
   if (player.active.cardId !== pending.originalCardId) {
     return abortFestivalSecondAttack(state, '攻擊者身分變化（進化解除 / 變身效果）');
   }
-  if (!hasFestivalDanceActive(state, pending.idx, pool)) {
+  // >>> v6672-double-attack-keep
+  const _daName = doubleAttackSourceName(state, pending.idx, pool);
+  if (_daName === '二連打') {
+    // ⭐v6.672 二連打：特性此刻還有效嗎（中央述詞含全部消除來源）
+    if (!hasDoubleAttackActive(state, pending.idx, pool)) return abortFestivalSecondAttack(state, '二連打特性已無效');
+  } else if (!hasFestivalDanceActive(state, pending.idx, pool)) {
     return abortFestivalSecondAttack(state, '已無祭典樂舞特性');
   }
+  // <<< v6672-double-attack-keep
   // v5.447：祭典樂舞被對手特性消除（振翼髮｜暗夜羽擊「對手戰鬥寶可夢的特性全部消除」）
   //   → 不能使用第 2 次。第一拳擊倒對手後對手推出振翼髮，攻擊方祭典樂舞即被壓制。
   // ⭐ v6.202 更正：上一行的 hasFestivalDanceActive **已經**走中央述詞
@@ -2581,11 +2609,11 @@ export function tryPromoteToMainForFestival(
   //   本段因此變成冗餘的縱深防禦，保留但不再是唯一防線（原註解「只看特性是否存在」已過期）。
   {
     const fdCard = pool.get(player.active.cardId);
-    if (isAbilityNullifiedByPassive(state, pending.idx, player.active, fdCard, '祭典樂舞', 'active', pool)) {
-      return abortFestivalSecondAttack(state, '祭典樂舞特性被對手消除（暗夜羽擊）');
+    if (isAbilityNullifiedByPassive(state, pending.idx, player.active, fdCard, _daName, 'active', pool)) {
+      return abortFestivalSecondAttack(state, `${_daName}特性被對手消除（暗夜羽擊）`);
     }
   }
-  if (!hasFestivalVenue(state, pool)) {
+  if (_daName !== '二連打' && !hasFestivalVenue(state, pool)) {   // ⭐v6.672 二連打不需要祭典會場
     return abortFestivalSecondAttack(state, '祭典會場已不在場');
   }
   if (player.active.cantAttackThisTurn) {
@@ -2599,7 +2627,7 @@ export function tryPromoteToMainForFestival(
   // (4) 可進行第 2 次：turnPhase 切 main 讓玩家手動點同招式或 END_TURN
   //   pending flag 保留 — 由 ATTACK 第 2 次成功（startFestival used2 分支清）或 END_TURN（清旗標）負責清除
   let s: GameState = { ...state, turnPhase: 'main' as const };
-  s = addLog(s, `祭典樂舞：請使用相同招式或點結束回合跳過第 2 次（其他動作禁止）`, pending.idx);
+  s = addLog(s, `${_daName}：請使用相同招式或點結束回合跳過第 2 次（其他動作禁止）`, pending.idx);
   return s;
 }
 
@@ -2607,7 +2635,7 @@ function abortFestivalSecondAttack(state: GameState, reason: string): GameState 
   const pending = state.festivalDancePendingSecondAttack;
   if (!pending) return state;
   const cleared: GameState = { ...state, festivalDancePendingSecondAttack: null };
-  return addLog(cleared, `祭典樂舞：第 2 次招式中斷（${reason}）`, pending.idx);
+  return addLog(cleared, `${pending.sourceName ?? '祭典樂舞'}：第 2 次招式中斷（${reason}）`, pending.idx);   // ⭐v6.672
 }
 
 // ── 遊戲建立 ────────────────────────────────────────────────────────────────
@@ -3597,7 +3625,11 @@ function resolveAttackActiveKo(
   const koInst = state.players[dIdx].active;
   // v2.992 PASSIVE_PREVENT_PRIZE（脫殼忍者 脆弱蛻殼）— 若攻擊方符合 predicate 則獎賞改 0
   let preventPrizeAll = false;
-  if (defenderCard.abilities) {
+  // >>> v6672-blind-ko-main
+  { const _bn = blindKoNoPrizeNote(newState, koInst, defenderCard, dIdx, pool);
+    if (_bn) { preventPrizeAll = true; newState = addLog(newState, _bn, null); } }
+  // <<< v6672-blind-ko-main
+  if (!preventPrizeAll && defenderCard.abilities) {
     for (const ab of defenderCard.abilities) {
       if (!isAbilityHolderEffective(newState, koInst, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.655 暗夜羽擊/初始化/黏著束縛/監視塔壓制→脆弱蛻殼等防守特性失效
       const fnPP = PASSIVE_PREVENT_PRIZE.get(ab.name);
@@ -4230,10 +4262,13 @@ function sanityKOSweep(
         ...getAllAttachedTools(ko),
         ...(ko.evolvedFromStack ?? []),
       ];
+      // ⭐v6.672 障眼法（昏厥前的盤面判：player 仍是本次掃描前的快照）
+      const _bnA = blindKoNoPrizeNote(s, ko, card, dIdx, pool);
       player.discard = [...player.discard, ...koDiscard];
       player.active = null;
-      if (card) prizesAcc += prizesForKO(card);
-      s = addLog(s, koSweepLogLine(ko, card?.name ?? '?', '戰鬥場', hp, card ? prizesForKO(card) : 1), null);
+      if (card && !_bnA) prizesAcc += prizesForKO(card);
+      s = addLog(s, koSweepLogLine(ko, card?.name ?? '?', '戰鬥場', hp, _bnA ? 0 : (card ? prizesForKO(card) : 1)), null);
+      if (_bnA) s = addLog(s, _bnA, null);
       s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterA);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack', !ko._faintByEffect);
@@ -4256,9 +4291,11 @@ function sanityKOSweep(
         ...getAllAttachedTools(b),
         ...(b.evolvedFromStack ?? []),
       ];
+      const _bnB = blindKoNoPrizeNote(s, b, card, dIdx, pool);   // ⭐v6.672 障眼法
       player.discard = [...player.discard, ...koDiscard];
-      if (card) prizesAcc += prizesForKO(card);
-      s = addLog(s, koSweepLogLine(b, card?.name ?? '?', '備戰位', hp, card ? prizesForKO(card) : 1), null);
+      if (card && !_bnB) prizesAcc += prizesForKO(card);
+      s = addLog(s, koSweepLogLine(b, card?.name ?? '?', '備戰位', hp, _bnB ? 0 : (card ? prizesForKO(card) : 1)), null);
+      if (_bnB) s = addLog(s, _bnB, null);
       s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterB);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack', !b._faintByEffect);
@@ -4674,7 +4711,10 @@ function runPokemonCheckup(state: GameState, pool: Map<string, Card>, selected?:
     else pl.bench = pl.bench.filter(c => c.iid !== v.inst.iid);
     ps[v.owner] = pl;
     const card = pool.get(v.inst.cardId);
-    owed[(1 - v.owner) as 0 | 1] += card ? prizesForKO(card) : 1;
+    // ⭐v6.672 障眼法（寶可夢檢查的昏厥也擋；用丟棄前的盤面 koBoard 判）
+    const _bnC = blindKoNoPrizeNote(koBoard, v.inst, card, v.owner, pool);
+    if (_bnC) state = addLog(state, _bnC, null);
+    else owed[(1 - v.owner) as 0 | 1] += card ? prizesForKO(card) : 1;
     state = addLog(state, `${card?.name ?? '?'} 因${causes[v.inst.iid] ?? '寶可夢檢查'}昏厥！`, null);
   }
   state = { ...state, players: ps, pokemonCheckup: undefined, endTurnSkipCheckup: true,
@@ -5888,6 +5928,24 @@ function handlePlaying(
       };
     }
 
+    // >>> v6672-battle-stadium
+    // ⭐v6.672 M7 戰鬥體育場「雙方玩家在每個自己的回合時，可使用1次，可將自己的所有寶可夢（「擁有規則的寶可夢」除外）各恢復「20」HP。」
+    //   ⚠ 判準①：沒有任何一隻能恢復（全是擁有規則的寶可夢或都沒受傷）⇒ 不能使用（退回使用權）。
+    //   ⚠ 恢復被擋（生命制約）、恢復量加倍（傳說的海溝）由 markHealsByDamageDecrease 中央處理。
+    if (stadiumCard.name === '戰鬥體育場') {
+      const p0 = newState.players[aIdx];
+      const okHeal = (c: CardInstance) => c.damage > 0 && !isRulePokemon(pool.get(c.cardId));
+      const all = [...(p0.active ? [p0.active] : []), ...p0.bench];
+      if (!all.some(okHeal)) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog({ ...state, stadiumUsedThisTurn: revert }, '戰鬥體育場：沒有可以恢復HP的寶可夢（擁有規則的寶可夢除外）', aIdx);
+      }
+      const heal = (c: CardInstance) => okHeal(c) ? { ...c, damage: Math.max(0, c.damage - 20) } : c;
+      const updated = [...newState.players] as [PlayerState, PlayerState];
+      updated[aIdx] = { ...p0, active: p0.active ? heal(p0.active) : null, bench: p0.bench.map(heal) };
+      return addLog({ ...newState, players: updated }, '戰鬥體育場：自己的寶可夢（擁有規則的寶可夢除外）各恢復 20 HP', aIdx);
+    }
+    // <<< v6672-battle-stadium
     // 居民會館 — 這回合打過支援者才能用，全體回 10 HP
     if (stadiumCard.name === '居民會館') {
       if (!newState.players[aIdx].supporterPlayedThisTurn) {
@@ -6521,6 +6579,10 @@ function handlePlaying(
     if (eIdx < 0) return state;
     const energyCard = attacker.hand[eIdx];
     if (!isEnergy(energyCard.cardId, pool)) return state;
+    // >>> v6672-special-energy-hand-lock
+    // ⭐v6.672 血紅恐懼：本回合無法從手牌附上特殊能量卡（判準只有一份：isHandEnergyAttachLocked，UI 同用）
+    if (isHandEnergyAttachLocked(attacker, pool.get(energyCard.cardId))) return state;
+    // <<< v6672-special-energy-hand-lock
 
     // v5.079：蓋諾賽克特|ACE消弭 — 對手有附道具的蓋諾賽克特時，不能附 ACE SPEC 能量
     //   原 L2699 只擋 PLAY_TRAINER 路徑的 ACE SPEC trainer 卡，沒擋 ATTACH_ENERGY
@@ -6803,11 +6865,14 @@ function handlePlaying(
               active: null,
             };
             players[aIdx] = newAttacker;
-            const koPrizes = atkCard ? prizesForKO(atkCard) : 1;
+            // ⭐v6.672 障眼法（混亂自傷昏厥也擋；昏厥前的盤面 state 判）
+            const _bnX = blindKoNoPrizeNote(state, state.players[aIdx].active, atkCard, aIdx, pool);
+            const koPrizes = _bnX ? 0 : (atkCard ? prizesForKO(atkCard) : 1);
             // v5.882：取獎收斂到中央 addPendingPrize(與一般 KO 一致):有正面朝上獎賞開逐張 picker 讓
             //   取獎方選、私訊揭示取得的卡名(對手看張數)、取完獎賞勝負判定。原 direct-slice 繞過此三者。
             let s = addLog({ ...state, players, turnPhase: 'end' as const },
               `${atkNameForStatus} 陷入混亂，自身受到 30 傷害並昏厥！`, aIdx);
+            if (_bnX) s = addLog(s, _bnX, null);   // ⭐v6.672 障眼法
             s = addPendingPrize(s, dIdx, koPrizes, pool);
             if (s.phase === 'game-over') return s;  // addPendingPrize 內部已判「取完所有獎賞獲勝」
             // >>> v6493-kiss-confusion
@@ -6919,11 +6984,12 @@ function handlePlaying(
     if (attackerCard?.abilities) {
       for (const ab of attackerCard.abilities) {
         const buf = PASSIVE_ATTACKER_BUFF.get(ab.name);
-        if (!buf?.skipDefEffects) continue;
+        if (!buf?.skipDefEffects && !buf?.skipResistance) continue;
         // ⭐ v6.202：原本**完全沒有** gate。波盪水ex 是「擁有規則的寶可夢」⇒
         //   鐵荊棘ex｜初始化 會消除它；攻擊者依定義在戰鬥場 ⇒ 暗夜羽擊兩型亦然。
         if (!isAbilityHolderEffective(workingState, attacker.active, attackerCard, aIdx, ab.name, 'active', pool)) continue;
-        skipDefEffects = true;
+        if (buf.skipDefEffects) skipDefEffects = true;
+        if (buf.skipResistance) skipResistance = true;   // ⭐v6.672 練過的手臂（只跳抵抗力，弱點照算）
       }
     }
     // v3.892：attack-time snapshot — 紀錄宣告當時對手場上是否有花之帷幔（謝米）。
@@ -9153,7 +9219,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       currentPlayer.retryBadgeUsedThisTurn ||
       currentPlayer.cantRetreatIfPoisonedThisTurn ||
       currentPlayer.bagonElenaThisTurn ||
-      currentPlayer.cantPlayStadiumThisTurn
+      currentPlayer.cantPlayStadiumThisTurn ||
+      // >>> v6672-endturn-clear-cond
+      currentPlayer.cantAttachSpecialEnergyFromHandThisTurn ||
+      currentPlayer.korrinaFullPowerThisTurn
+      // <<< v6672-endturn-clear-cond
     ) {
       const cp = { ...currentPlayer };
       // >>> v6356-endturn-clear-delete
@@ -9166,6 +9236,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       delete cp.damageBoostFightingThisTurn;
       delete cp.teraKoBonusPrizeThisTurn;
       delete cp.karateKingBonusThisTurn;
+      // >>> v6672-endturn-clear-delete
+      delete cp.cantAttachSpecialEnergyFromHandThisTurn;   // ⭐v6.672 血紅恐懼
+      delete cp.korrinaFullPowerThisTurn;                  // ⭐v6.672 可爾妮的全力
+      // <<< v6672-endturn-clear-delete
       delete cp.unrudaBonusThisTurn;
       delete cp.gladionDuelBonusThisTurn;
       delete cp.retryBadgeUsedThisTurn;
@@ -9212,6 +9286,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       nextP.cantPlayStadiumThisTurn = true;
       delete nextP.cantPlayStadiumNextTurn;
     }
+    // >>> v6672-endturn-promote
+    // ⭐v6.672 血紅恐懼：promote nextIdx 的「無法從手牌附上特殊能量卡」（與上面競技場鎖同型）
+    if (nextP.cantAttachSpecialEnergyFromHandNextTurn) {
+      nextP.cantAttachSpecialEnergyFromHandThisTurn = true;
+      delete nextP.cantAttachSpecialEnergyFromHandNextTurn;
+    }
+    // <<< v6672-endturn-promote
     // >>> v6356-endturn-promote
     // ⭐v6.356：promote nextIdx 的 trainerCoinFlipNextTurn → ThisTurn（蟾蜍王｜撼盪拳）
     //   旗標是設在**對手**身上、在**對手自己的回合**生效 ⇒ 與 cantPlayItem/Supporter/Stadium
@@ -11106,7 +11187,18 @@ const HAND_ACTIVATE_GATES: Record<string, (s: GameState, idx: 0 | 1, pool: Map<s
       return isMegaExCard(c) && c?.pokemonType === 'Colorless';
     });
   },
+  // >>> v6672-hand-ability-shiver
+  // ⭐v6.672 M7 超音波幼蟲｜震顫翅：「若手牌有這張卡，則在自己的回合時可使用1次，若使用，則將這張卡丟棄。
+  //   查看自己的牌庫上方1張卡，回復原樣。」⇒ 牌庫 0 張時效果完全無法執行 ⇒ 不能使用（判準①）。
+  //   ⚠ 這一型**不放到場上** ⇒ 不受「備戰已滿」與「從手牌放置到場上」閘限制（見 HAND_ACTIVATE_NO_PLACEMENT）。
+  震顫翅: (s, idx, _pool, handCard) => {
+    if (!(handCard.abilities?.some(a => a.name === '震顫翅') ?? false)) return false;
+    return s.players[idx].deck.length > 0;
+  },
+  // <<< v6672-hand-ability-shiver
 };
+/** ⭐v6.672：手牌特性裡「不把這張卡放到場上」的（震顫翅）——不套備戰上限／放置閘，畫面標籤也不寫「放備戰」。 */
+export const HAND_ACTIVATE_NO_PLACEMENT: ReadonlySet<string> = new Set(['震顫翅']);
 
 /**
  * ⭐ v6.225 手牌特性「每回合限 1 次」的追蹤鍵 —— 中央單一判斷（判定端＋標記端成對）。
@@ -11154,17 +11246,29 @@ export function markHandAbilityUsed(
  * v6.080：列出「現在可以從手牌發動」的特性（USE_HAND_ABILITY 用）。
  * 兩套 UI 與引擎 handler 共用；回傳空陣列＝目前不能發動。
  */
+// >>> v6672-special-energy-hand-lock-pred
+/**
+ * ⭐v6.672「這張手牌能量此刻能不能從手牌附上」的玩家層級封鎖（唯一一份；engine ATTACH_ENERGY 與 hand-card-ops 共用）。
+ *   目前只有 超級阿勃梭魯Zex｜血紅恐懼 的「無法從手牌附上**特殊**能量卡」。基本能量不受影響。
+ */
+export function isHandEnergyAttachLocked(player: PlayerState, energyCard: Card | undefined): boolean {
+  return !!player.cantAttachSpecialEnergyFromHandThisTurn
+    && energyCard?.supertype === 'Energy' && energyCard.subtype === 'Special';
+}
+// <<< v6672-special-energy-hand-lock-pred
+
 export function getHandActivatableAbilities(
   state: GameState,
   idx: 0 | 1,
   pool: Map<string, Card>,
-): Array<{ iid: string; abilityIndex: number; abilityName: string; cardName: string }> {
-  const out: Array<{ iid: string; abilityIndex: number; abilityName: string; cardName: string }> = [];
+): Array<{ iid: string; abilityIndex: number; abilityName: string; cardName: string; placesToBench: boolean }> {
+  const out: Array<{ iid: string; abilityIndex: number; abilityName: string; cardName: string; placesToBench: boolean }> = [];
   if (state.phase !== 'playing' || state.turnPhase !== 'main') return out;
   if (state.pendingSelection) return out;
   const me = state.players[idx];
   if (!me) return out;
-  if (me.bench.length >= getBenchLimit(state, idx, pool)) return out;  // 這批全是「放備戰」型
+  // ⭐v6.672：「放備戰」型才看備戰上限與放置閘（震顫翅不放到場上）
+  const benchFull = me.bench.length >= getBenchLimit(state, idx, pool);
   for (const inst of me.hand) {
     const card = pool.get(inst.cardId);
     if (!card?.abilities?.length) continue;
@@ -11174,13 +11278,15 @@ export function getHandActivatableAbilities(
     //   站長回報：對手戰鬥場有 火箭隊的阿柏怪｜瞪眼效用 時，烈箭鷹ex｜激動俯衝 仍能
     //   放上場 —— v6.080 本路徑新增時漏接。此處擋下＝兩套 UI 不亮按鈕，且 engine
     //   USE_HAND_ABILITY handler 走同一份本函式 ⇒ 單點修、不會再漂移。
-    if (getHandPlacementBlockReason(state, idx, card, pool)) continue;
+    const placementBlocked = !!getHandPlacementBlockReason(state, idx, card, pool);
     card.abilities.forEach((ab, i) => {
       const gate = HAND_ACTIVATE_GATES[ab.name];
       if (!gate) return;
+      const places = !HAND_ACTIVATE_NO_PLACEMENT.has(ab.name);
+      if (places && (benchFull || placementBlocked)) return;   // 「放備戰」型的兩道閘（原本在迴圈外，對全部生效）
       if (isHandAbilityOncePerTurnUsed(me, ab.name, inst.iid)) return;
       if (!gate(state, idx, pool, card)) return;
-      out.push({ iid: inst.iid, abilityIndex: i, abilityName: ab.name, cardName: card.name });
+      out.push({ iid: inst.iid, abilityIndex: i, abilityName: ab.name, cardName: card.name, placesToBench: places });
     });
   }
   return out;
@@ -11971,6 +12077,36 @@ export function getUsableAbilities(
         if (player.deck.length === 0) return;
       }
       // <<< v6347-ability-gates
+      // >>> v6672-ability-gates
+      // ⭐v6.672 M7 主動特性的使用條件（判準①：條件不成立／效果完全無法執行 ⇒ 不給按鈕；USE_ABILITY 以本清單為準）
+      // 大食花｜酸液陷阱「若場上有自己的競技場卡，則在自己的回合時可使用1次。將對手的戰鬥寶可夢【中毒】與【灼傷】。」
+      //   ⚠「自己的競技場卡」＝自己打出的那張（activeStadiumOwnerIdx）；對手已經同時中毒＋灼傷 ⇒ 無事可做（站長 v6.132 裁定同型）。
+      if (ab.name === '酸液陷阱') {
+        if (!state.activeStadium || state.activeStadiumOwnerIdx !== state.activePlayerIndex) return;
+        const oppA = state.players[(1 - state.activePlayerIndex) as 0 | 1].active;
+        if (!oppA) return;
+        if (hasStatusInAnySlot(oppA, 'poisoned') && hasStatusInAnySlot(oppA, 'burned')) return;
+      }
+      // 列陣兵｜團結之陣「若這隻寶可夢在戰鬥場上…從牌庫附給自己的所有名稱中有『列陣兵』的備戰寶可夢各1張『基本【鬥】能量』卡。」
+      //   ⚠ 牌庫內容是隱藏資訊 ⇒ 只看張數；備戰沒有名稱含「列陣兵」的寶可夢 ⇒ 沒有對象。
+      if (ab.name === '團結之陣') {
+        if (player.active?.iid !== pk.iid) return;
+        if (player.deck.length === 0) return;
+        if (!player.bench.some(b => (pool.get(b.cardId)?.name ?? '').includes('列陣兵'))) return;
+      }
+      // 超級路卡利歐Zex｜波導探求者「若這隻寶可夢在戰鬥場上，則在自己的回合時可使用1次。從自己的牌庫選擇1張支援者卡…」
+      if (ab.name === '波導探求者') {
+        if (player.active?.iid !== pk.iid) return;
+        if (player.deck.length === 0) return;
+      }
+      // 貓老大｜招財進寶「若自己的場上有2隻以上持有招式『聚寶功』的寶可夢，則在自己的回合時可使用1次。從自己的牌庫抽出2張卡。」
+      //   ⚠「持有招式」＝卡面印刷的招式（同 古空棘魚 的官方定義：道具／特性給的招式不算持有）。
+      if (ab.name === '招財進寶') {
+        const holders = allPokes.filter(c => pool.get(c.cardId)?.attacks?.some(a => a.name === '聚寶功')).length;
+        if (holders < 2) return;
+        if (player.deck.length === 0) return;
+      }
+      // <<< v6672-ability-gates
       // v4.4996：4 組撞 key 卡的另一個 ability — 都是 passive HP 修飾或未實裝，不該顯示「使用特性」按鈕
       //   - 生機森巴 (樂天河童 SV9/MC) — passive +40 HP，自動套用 getEffectiveHP
       //   - 雜草魂 (怖納噬草 SV8a) — passive 對手獎賞×50 HP，自動套用

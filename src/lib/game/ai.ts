@@ -441,6 +441,14 @@ export function getAIAction(
     }
   }
 
+  // >>> v6672-ai-battle-stadium
+  // ⭐v6.672 M7 戰鬥體育場：自己有受傷的非規則寶可夢就使用（純恢復、沒有代價；引擎無對象時會退回）
+  if (state.activeStadium && pool.get(state.activeStadium.cardId)?.name === '戰鬥體育場'
+      && !(state.stadiumUsedThisTurn ?? [false, false])[myIdx] && !state.pendingSelection
+      && [...(player.active ? [player.active] : []), ...player.bench].some(c => c.damage > 0 && !isRulePokemon(pool.get(c.cardId)))) {
+    return { type: 'USE_STADIUM' };
+  }
+  // <<< v6672-ai-battle-stadium
   // ⭐v6.429 牌庫頂借招：手牌有比牌庫頂更好的借招目標 ⇒ 用夜間學院把它放到牌庫頂
   if (_tc && shouldUseNightAcademy(state, myIdx, pool)) {
     return { type: 'USE_STADIUM' };

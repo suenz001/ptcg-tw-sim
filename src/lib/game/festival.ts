@@ -67,6 +67,34 @@ export function hasFestivalDanceActive(
   return hasEffectiveAbilityByInst(state, idx, state.players[idx].active, pool, FESTIVAL_DANCE_ABILITY);
 }
 
+// >>> v6672-double-attack-central
+/**
+ * ⭐⭐v6.672（站長裁定 2026-11-26：巴布土撥｜二連打「照祭典樂舞的做法」）：
+ *   「這隻寶可夢可使用招式2次。（若對手的戰鬥寶可夢因第1次的招式而【昏厥】了，則在下一隻寶可夢放置後，使用第2次的招式。）」
+ *   與祭典樂舞**同一個狀態機**（第 2 次只能用同一招、可按結束回合放棄、其他動作禁止、中斷條件相同），
+ *   差別只有成立條件：祭典樂舞要場上有「祭典會場」，二連打不用。
+ * ⚠ 「能不能打第 2 次」全站只問這一支（engine 開窗、維持窗口、首擊旗標保留）。
+ */
+export const DOUBLE_ATTACK_ABILITY = '二連打';
+
+/** 這一側的戰鬥寶可夢此刻能不能「使用招式2次」（祭典樂舞＋祭典會場，或二連打）。 */
+export function hasDoubleAttackActive(
+  state: GameState, idx: 0 | 1, pool: Map<string, Card>,
+): boolean {
+  if (hasFestivalDanceActive(state, idx, pool) && hasFestivalVenue(state, pool)) return true;
+  return hasEffectiveAbilityByInst(state, idx, state.players[idx].active, pool, DOUBLE_ATTACK_ABILITY);
+}
+
+/** log 用：讓第 2 次招式成立的是哪一個特性（戰鬥寶可夢卡面上有的那個）。 */
+export function doubleAttackSourceName(
+  state: GameState, idx: 0 | 1, pool: Map<string, Card>,
+): string {
+  const a = state.players[idx].active;
+  const c = a ? pool.get(a.cardId) : undefined;
+  return c?.abilities?.some((x) => x.name === DOUBLE_ATTACK_ABILITY) ? DOUBLE_ATTACK_ABILITY : FESTIVAL_DANCE_ABILITY;
+}
+// <<< v6672-double-attack-central
+
 /**
  * v5.226：「本次攻擊是祭典樂舞**會觸發第二次**的那第一次攻擊」嗎？
  *
@@ -83,8 +111,7 @@ export function isFestivalDanceFirstAttack(
   state: GameState, aIdx: 0 | 1, pool: Map<string, Card>,
 ): boolean {
   if (!state.players[aIdx].active) return false;
-  if (!hasFestivalDanceActive(state, aIdx, pool)) return false;
-  if (!hasFestivalVenue(state, pool)) return false;
+  if (!hasDoubleAttackActive(state, aIdx, pool)) return false;   // ⭐v6.672 祭典樂舞＋祭典會場，或二連打
   if (state.festivalDanceUsedThisTurn?.[aIdx]) return false;
   if (state.festivalDanceSecondAttackUsed?.[aIdx]) return false;
   return true;

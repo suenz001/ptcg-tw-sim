@@ -253,6 +253,8 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
   'Stage2':       (c) => c.supertype === 'Pokemon' && (c.stage ?? c.subtype) === 'Stage2',
   'PsychicBasic': (c) => c.supertype === 'Pokemon' && !c.evolvesFrom && c.pokemonType === 'Psychic',
   'Resistance:Fighting': (c) => c.supertype === 'Pokemon' && c.resistance?.type === 'Fighting',
+  // ⭐v6.672 M7 小卡比獸｜沉沉行進：「【撤退】所需的能量為4個的寶可夢卡」＝卡面印刷的撤退費剛好 4 個（牌庫裡的卡，沒有場上修正）
+  'RetreatCost4': (c) => c.supertype === 'Pokemon' && (c.retreatCost?.length ?? 0) === 4,
   'ex':           (c) => isPokemonExCard(c),   // ⭐v6.403 收斂：卡面「寶可夢【ex】」唯一判準
   'MegaEx':       (c) => isMegaExCard(c),
   'TeraPokemon':  (c) => c.supertype === 'Pokemon' && !!c.tags?.includes('太晶'),

@@ -32,6 +32,7 @@ import {
   findAbilityUserIid,
   selfKOInstance,
   koPrizeCount,
+  blindKoNoPrizeNote,   // ⭐v6.672 障眼法
   isBenchProtected,
   miracleKissOnActiveFaint
 } from '../../effects';
@@ -281,7 +282,10 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
     ];
     // v5.709：特性效果KO對手也享多餘花粉(deferred)+奇跡之吻(卡面「對手戰鬥寶可夢昏厥時」不分招式/特性);
     //   脆弱蛻殼/道具/古舊卡面限「招式傷害」→特性KO不適用,故不走 koPrizesAdjusted、只加 deferred。
-    const prizes = (targetCard ? koPrizeCount(targetCard) : 1) + (target.deferredPrizeBonusThisTurn ?? 0);
+    // ⭐v6.672 障眼法：對手無法獲得獎賞卡（連多餘花粉的 +N 也不給）
+    const _bnM = blindKoNoPrizeNote(s, target, targetCard, (1 - actorIdx) as 0 | 1, pool);
+    const prizes = _bnM ? 0 : (targetCard ? koPrizeCount(targetCard) : 1) + (target.deferredPrizeBonusThisTurn ?? 0);
+    if (_bnM) s = addLog(s, _bnM, null);
     const players = [...s.players] as [PlayerState, PlayerState];
     const newDefender: PlayerState = {
       ...defender,

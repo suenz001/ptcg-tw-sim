@@ -619,6 +619,19 @@ export interface PlayerState {
   cantPlayStadiumThisTurn?: boolean;
   cantPlayStadiumNextTurn?: boolean;
   /**
+   * ⭐v6.672 M7 超級阿勃梭魯Zex｜血紅恐懼：「在下個對手的回合，對手無法從手牌附上特殊能量卡，也無法使出競技場卡。」
+   * 由攻擊方設在對手身上（NextTurn），對手的回合開始時 promote 成 ThisTurn、對手 END_TURN 清除
+   * （與 cantPlayStadiumNextTurn 同一家族、同一個 promote／clear 位置）。玩家層級的封鎖 ⇒ 不受寶可夢的效果免疫影響。
+   */
+  cantAttachSpecialEnergyFromHandNextTurn?: boolean;
+  cantAttachSpecialEnergyFromHandThisTurn?: boolean;
+  /**
+   * ⭐v6.672 M7 可爾妮的全力（支援者）：「在這個回合，自己的『超級進化寶可夢【ex】』使用的招式，
+   * 對對手的戰鬥寶可夢造成的傷害，依對手已經獲得的獎賞卡每1張『+20』點。」本回合有效、END_TURN 清除。
+   * 張數在出招當下才數（打出支援者之後對手又拿獎賞也照當下張數）。
+   */
+  korrinaFullPowerThisTurn?: boolean;
+  /**
    * ⭐v6.356 蟾蜍王｜撼盪拳（M6a 19982）—— 玩家級「下個自己的回合，每次從手牌使出訓練家卡前
    * 擲 1 次硬幣」預約旗標。卡面逐字：「在下個對手的回合，每次對手從手牌使出訓練家卡時，
    * 使用前擲1次硬幣。若為反面，則不算使用過那張卡，將其丟棄。」
@@ -888,6 +901,12 @@ export interface GameState {
   _machineGunLastFlips?: string[];
   /** v5.416：擲幣招式 regPre 記正面數供同招 regPost 判定（鱗粉颶風 ≥2 麻痺）。同一 ATTACK 內 set→read。 */
   _lastCoinHeads?: number;
+  /**
+   * ⭐v6.672 M7「若希望，選擇1個…能量，將其丟棄。這個情況下，〔追加效果〕」：regPre 記下「這一次真的付了」的招式 key，
+   * 同招 regPost 讀它決定追加效果、讀完即清（transient；同一次 ATTACK 內 set→read）。
+   * 站長裁定（2026-11-26）：「這個情況下」＝要真的完成前段才有追加效果；身上沒有符合的能量就不能追加。
+   */
+  _attackOptInPaid?: string;
   /**
    * v5.262 重試徽章 — 玩家選「保留剛才擲幣結果」時, engine 把要 inject 的擲幣結果
    * 放到此 queue, flipCoinsWithLog 每次擲幣前從 queue.shift() 取一個 inject,
@@ -1169,7 +1188,8 @@ export interface GameState {
    *
    * END_TURN 與 festivalDanceUsedThisTurn / festivalDanceSecondAttackUsed 一同清除。
    */
-  festivalDancePendingSecondAttack?: { idx: 0 | 1; attackIndex: number; originalCardId: string } | null;
+  /** ⭐v6.672 sourceName：讓第 2 次成立的特性（'祭典樂舞'／'二連打'），log 用；舊資料沒有＝祭典樂舞。 */
+  festivalDancePendingSecondAttack?: { idx: 0 | 1; attackIndex: number; originalCardId: string; sourceName?: string } | null;
   /**
    * 我方上次結束自己回合時，對手剩餘獎賞張數的快照 [P1 側快照, P2 側快照]。
    * 比較 snapshot vs 目前 opp 獎賞張數差即可得知「對手上個回合是否取得過獎賞（= 自己寶可夢是否在對手回合被擊倒）」。

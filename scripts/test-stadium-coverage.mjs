@@ -20,6 +20,7 @@ const { PASSIVE_STADIUMS, PENDING_STADIUMS, applyAction } = await import(pathToF
 const ACTIVE_STADIUMS = new Set([
   '化石採掘場','壯偉碩木','夜間學院','密阿雷市','尖釘鎮道館','居民會館',
   '慶祝開場樂','火箭隊的工廠','神秘花園','稜鏡塔','衝浪海灘','釀光市',
+  '戰鬥體育場',   // ⭐v6.672 M7：engine USE_STADIUM 分支（哨兵 v6672-battle-stadium）
 ]);
 
 // 枚舉 live HIJ 競技場

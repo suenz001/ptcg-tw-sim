@@ -600,7 +600,11 @@ T('E2 ⭐⭐⭐ 本版 8 個屬性條件的差分：全卡池（**含化石**）
   // ⭐ 唯一合法的差異：**每一張場上化石**在【無】那一格 false→true（v6.208 站長裁定）。
   //   小碎鑽（印刷【鬥】⇒ 多【超】）與 狠辣椒ex（印刷【火】⇒ 多【草】）多出來的屬性
   //   都不在本版 8 個條件內 ⇒ 不該出現在這裡。
-  const want = FOSSIL_IDS.map((id) => pool.get(id).name + '#' + id + ' Colorless false→true').sort();
+  // ⭐v6.672（Rule 40）：M7 新卡 托戈德瑪爾ex｜雙重屬性（印刷【鋼】⇒ 在場上改為【雷】＋【鋼】）是**新卡自己的卡面**，
+  //   不是 v6.402 收斂造成的行為變化 ⇒ 明列（只准這一筆、逐字）；本條守的「既有卡零行為變化」意圖不變。
+  const NEW_CARD_DUAL = [...pool.entries()].filter(([, c]) => HIJ(c) && c.name === '托戈德瑪爾ex'
+    && (c.abilities || []).some((a) => a.name === '雙重屬性')).map(([id]) => '托戈德瑪爾ex#' + id + ' Lightning false→true');
+  const want = [...FOSSIL_IDS.map((id) => pool.get(id).name + '#' + id + ' Colorless false→true'), ...NEW_CARD_DUAL].sort();
   assert.deepStrictEqual(diffs.slice().sort(), want,
     '差異清單與「每張場上化石各一筆【無】」對不上（本版的零行為變化結論要重新評估）：\n      '
     + diffs.join('\n      '));
