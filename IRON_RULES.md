@@ -2792,3 +2792,20 @@ runner 原本用 `out.match(/ENV-SKIP/g)` 整篇 grep ⇒ 把兩種東西一起�
 3. 與 v5.992 optInPay（「若希望…增加 X 點傷害」，**沒有**「這個情況下」）也不同：optInPay 是付得出多少付多少、效果全額。
 4. 實作：水流連打在 regPre 記下「這次真的付了」（`state._attackOptInPaid`，用完即清），regPost 只在有記號時打備戰；熱血頭擊走中央 `registerHandRevealAttack`（沒給看就只有基礎傷害）。
    守衛 test-v6672-m7-release B14（付 ⇒ 備戰 40、能量離身；不付 ⇒ 0、能量留著；突變「不看是否付費」會紅）。
+
+## Rule 95（2026-11-27）：CI 必須用 package-lock.json 釘住的套件版本；「本機綠、CI 穩定紅」先查 CI 的套件版本（v6.672）
+
+站長要求（2026-11-27）：「CI 第一次紅的原因請把錯誤的原因、正確的作法，寫入長期記憶、鐵律或相關skills裡面，避免之後重複犯錯」。
+
+1. **事故**：v6.672 推送後 build 紅在 test-lib-strip-markup-sections D-4（本版沒動它）；本機、乾淨 clone＋Node 20＋`npm ci`、照 CI 順序跑前 590 支都綠，重跑 CI 仍紅。
+   真因是 deploy.yml 在 `npm ci` 後的補裝步驟 `npm install @rollup/rollup-linux-x64-gnu @esbuild/linux-x64 --no-save --no-package-lock`：
+   `--no-package-lock` **忽略 lock、依 package.json 的範圍重算整棵樹**（CI log「changed 198 packages」）⇒ CI 實際用的是當天 npm 最新版。
+   2026-11-25 svelte 5.59.2 上架（lock 5.55.4），新版編譯那個樣本報錯 ⇒ 只在 CI 紅。也就是說 CI 長期測／建的都不是 lock 的版本。
+2. **規定**：CI 的任何安裝步驟都不可以讓相依樹離開 lock。
+   - 禁止在 workflow 的 run 步驟用 `--no-package-lock`、`npm install`（不帶版本）、`npm update`。
+   - 平台 optional binary（npm#4828）一律走 `scripts/ci-ensure-platform-binaries.mjs`：只有缺的時候才補、裝 lock 記的版本、讓 npm 照 lock 解析；補完比對 node_modules 頂層每個套件版本＝lock，不同就讓 CI 紅。
+   - 守衛 test-v6380 C2～C6（run 步驟不得帶 --no-package-lock、npm ci 的下一步就是這支、漂移判準正反對照）。
+3. **排查順序**（本機含乾淨 npm ci 都綠、CI 穩定紅、本版沒動那支守衛）：
+   ① 看 CI log 的安裝步驟有沒有「changed／removed N packages」；② `npm view <套件> version` 查 CI 當天的最新版；③ 本機裝那個版本實跑重現；
+   ④ 修 CI 讓它回到 lock 的版本——**不要改守衛或程式去配合 CI 漂移出來的版本**。不要先假設偶發、也不要先花時間懷疑測試鏈的副作用。
+4. 要升級套件（例如 svelte）是另一件事：改 package.json／lock、在本機跑全套，再推送；不可以靠 CI 默默換版本。
