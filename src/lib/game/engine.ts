@@ -3633,7 +3633,7 @@ function resolveAttackActiveKo(
   let preventPrizeAll = false;
   // >>> v6672-blind-ko-main
   { const _bn = blindKoNoPrizeNote(newState, koInst, defenderCard, dIdx, pool);
-    if (_bn) { preventPrizeAll = true; newState = markBlindKoNoPrize(newState, _bn, dIdx); } }
+    if (_bn) { preventPrizeAll = true; newState = markBlindKoNoPrize(newState, _bn, dIdx, true); } }
   // <<< v6672-blind-ko-main
   if (!preventPrizeAll && defenderCard.abilities) {
     for (const ab of defenderCard.abilities) {
@@ -4274,7 +4274,7 @@ function sanityKOSweep(
       player.active = null;
       if (card && !_bnA) prizesAcc += prizesForKO(card);
       s = addLog(s, koSweepLogLine(ko, card?.name ?? '?', '戰鬥場', hp, _bnA ? 0 : (card ? prizesForKO(card) : 1)), null);
-      if (_bnA) s = markBlindKoNoPrize(s, _bnA, dIdx);
+      if (_bnA) s = markBlindKoNoPrize(s, _bnA, dIdx, true);
       s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterA);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack', !ko._faintByEffect);
@@ -4301,7 +4301,7 @@ function sanityKOSweep(
       player.discard = [...player.discard, ...koDiscard];
       if (card && !_bnB) prizesAcc += prizesForKO(card);
       s = addLog(s, koSweepLogLine(b, card?.name ?? '?', '備戰位', hp, _bnB ? 0 : (card ? prizesForKO(card) : 1)), null);
-      if (_bnB) s = markBlindKoNoPrize(s, _bnB, dIdx);
+      if (_bnB) s = markBlindKoNoPrize(s, _bnB, dIdx, false);
       s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterB);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack', !b._faintByEffect);
@@ -4721,7 +4721,7 @@ function runPokemonCheckup(state: GameState, pool: Map<string, Card>, selected?:
     const card = pool.get(v.inst.cardId);
     // ⭐v6.672 障眼法（寶可夢檢查的昏厥也擋；用丟棄前的盤面 koBoard 判）
     const _bnC = blindKoNoPrizeNote(koBoard, v.inst, card, v.owner, pool);
-    if (_bnC) state = markBlindKoNoPrize(state, _bnC, v.owner);
+    if (_bnC) state = markBlindKoNoPrize(state, _bnC, v.owner, v.loc === 'active');
     else owed[(1 - v.owner) as 0 | 1] += card ? prizesForKO(card) : 1;
     state = addLog(state, `${card?.name ?? '?'} 因${causes[v.inst.iid] ?? '寶可夢檢查'}昏厥！`, null);
   }
@@ -6880,7 +6880,7 @@ function handlePlaying(
             //   取獎方選、私訊揭示取得的卡名(對手看張數)、取完獎賞勝負判定。原 direct-slice 繞過此三者。
             let s = addLog({ ...state, players, turnPhase: 'end' as const },
               `${atkNameForStatus} 陷入混亂，自身受到 30 傷害並昏厥！`, aIdx);
-            if (_bnX) s = markBlindKoNoPrize(s, _bnX, aIdx);   // ⭐v6.672 障眼法（log＋奇跡之吻不擲）
+            if (_bnX) s = markBlindKoNoPrize(s, _bnX, aIdx, true);   // ⭐v6.672 障眼法（log＋奇跡之吻不擲）
             s = addPendingPrize(s, dIdx, koPrizes, pool);
             if (s.phase === 'game-over') return s;  // addPendingPrize 內部已判「取完所有獎賞獲勝」
             // >>> v6493-kiss-confusion
@@ -10257,7 +10257,14 @@ export function applyAction(
   // ⭐v6.595 已通過出招前的擲幣、正在等玩家選擇 ⇒ 宣告了就要出招：只接受同一招的 ATTACK（其他動作原樣不動）
   if (!attackGateAllows(state, action)) return state;
   // <<< v6595-attack-gate-lock
+  // >>> v6672-blind-ko-transient
+  // ⭐v6.672 障眼法的 per-action 記號（_blindKoNoPrize）：只活在這一個動作裡。
+  //   ⚠ 必須在**最外層**清：applyActionImpl 尾段還有 drain／sanityKOSweep 等 KO 出口（複審 P2-1）。
+  //   進來時也清一次（舊存檔或外部帶進來的殘留不可影響這個動作）。
+  if (state._blindKoNoPrize !== undefined) { const _c0 = { ...state }; delete _c0._blindKoNoPrize; state = _c0; }
   let raw = applyActionImpl(state, action, pool);
+  if (raw._blindKoNoPrize !== undefined) { const _c1 = { ...raw }; delete _c1._blindKoNoPrize; raw = _c1; }
+  // <<< v6672-blind-ko-transient
   // ⭐⭐⭐ v6.181 單一「拒絕出口」——「動作被拒絕」與「動作做了一半」從此不可能混淆。
   //   效果層只要回 `rejectAbilityUse(st, 原因, idx)`，這裡就**原樣回傳動作前的 state**，
   //   只補那一行原因 log ⇒ 拒絕 = 完全 no-op（不消耗「本回合已使用特性」、不留旗標/代價）。
@@ -10632,10 +10639,6 @@ function applyActionImpl(
     next = drawToHandSizeV6541(next, _di, 5, '衝浪手', pool);
   }
   // <<< v6541-retreat-watch
-  // >>> v6672-blind-ko-transient
-  // ⭐v6.672 障眼法的 per-action 記號：用完即清（不帶進下一個動作、不寫進存檔）
-  if (next._blindKoNoPrize !== undefined) { const _c = { ...next }; delete _c._blindKoNoPrize; next = _c; }
-  // <<< v6672-blind-ko-transient
   if (next.phase === 'playing' && !next.pendingSelection
       && state.activePlayerIndex === next.activePlayerIndex) {
     const rIdx = next.activePlayerIndex;

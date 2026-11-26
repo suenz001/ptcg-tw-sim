@@ -9,9 +9,16 @@ export const V6672_M7_IDS = ["20128", "20129", "20130", "20131", "20132", "20133
 export const V6672_EXTRA_IDS = { 'M-P-J': ["20209", "20210", "20211", "20212", "20213", "20214", "20215", "20216", "20217", "20218", "20219", "20220", "20221", "20222", "20223"], 'M6a': ["20206", "20207", "20208", "20224"] };
 // v6.671（7a98371d）當時兩筆的張數三欄（git cat-file 實查）
 const V6671_COUNTS = {"M-P-J": {"cardCount": 152, "supertypeCounts": {"Pokemon": 114, "Trainer": 20, "Energy": 18}, "count": 152}, "M6a": {"cardCount": 168, "supertypeCounts": {"Pokemon": 155, "Trainer": 5, "Energy": 8}, "count": 168}};
+// 本版寫入後的張數（fail-closed 用）
+const V6672_NOW_COUNTS = {"M-P-J": 167, "M6a": 172};
 /** index.json：拿掉本版插入的 M7 那一筆，M-P-J／M6a 張數三欄回 v6.671（其他筆逐字不動） */
 export function revertV6672Index(idx) {
   if (!idx.some((e) => e.code === 'M7')) return idx;
+  // fail-closed（複審 P3-1）：兩筆的現值必須正是本版寫入的張數，否則代表之後又動過 ⇒ 由那一版自己的還原先處理
+  for (const [code, n] of Object.entries(V6672_NOW_COUNTS)) {
+    const e = idx.find((x) => x.code === code);
+    assert.ok(e && e.cardCount === n && e.count === n, 'v6672 index 還原：' + code + ' 現值不是本版的 ' + n + ' 張（之後又改過？先接上新版的還原）');
+  }
   return idx.filter((e) => e.code !== 'M7').map((e) => (V6671_COUNTS[e.code] ? { ...e, ...V6671_COUNTS[e.code] } : e));
 }
 /** card-set-map.json：拿掉本版追加的 M7 78 筆＋同版 19 筆（有就全部要在，否則丟錯；沒有＝已是舊版） */
@@ -74,8 +81,12 @@ export const V6672_PAIRS = {
  ],
  "src/lib/game/ai.ts": [
   [
-   "): GameAction | null {\n  const energies = aiAttachableHandEnergies(state, state.players[0] === player ? 0 : 1, pool);   // ⭐v6.672\n  if (energies.length === 0) return null;\n",
+   "): GameAction | null {\n  const energies = aiAttachableHandEnergies(state, me, pool);   // ⭐v6.672\n  if (energies.length === 0) return null;\n",
    "): GameAction | null {\n  const energies = player.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');\n  if (energies.length === 0) return null;\n"
+  ],
+  [
+   "function dragapultEnergyAction(\n  state: GameState, player: PlayerState, pool: Map<string, Card>, me: 0 | 1,\n): GameAction | null {\n",
+   "function dragapultEnergyAction(\n  state: GameState, player: PlayerState, pool: Map<string, Card>,\n): GameAction | null {\n"
   ],
   [
    "\n  // >>> v6672-ai-battle-stadium\n  // ⭐v6.672 M7 戰鬥體育場：自己有受傷的非規則寶可夢就使用（純恢復、沒有代價；引擎無對象時會退回）\n  if (state.activeStadium && pool.get(state.activeStadium.cardId)?.name === '戰鬥體育場'\n      && !(state.stadiumUsedThisTurn ?? [false, false])[myIdx] && !state.pendingSelection && !state.festivalDancePendingSecondAttack\n      && [...(player.active ? [player.active] : []), ...player.bench].some(c => c.damage > 0 && !isRulePokemon(pool.get(c.cardId)))) {\n    return { type: 'USE_STADIUM' };\n  }\n  // <<< v6672-ai-battle-stadium\n  // ⭐v6.429 牌庫頂借招：手牌有比牌庫頂更好的借招目標 ⇒ 用夜間學院把它放到牌庫頂\n",
@@ -84,6 +95,10 @@ export const V6672_PAIRS = {
   [
    "      // 从手牌中找能量：有匹配属性优先，否则随便拿一张\n      const energyCandidates = aiAttachableHandEnergies(state, myIdx, pool);   // ⭐v6.672 扣掉被鎖住的特殊能量（血紅恐懼）\n      const energyInHand = energyCandidates.find(c => {\n",
    "      // 从手牌中找能量：有匹配属性优先，否则随便拿一张\n      const energyCandidates = player.hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');\n      const energyInHand = energyCandidates.find(c => {\n"
+  ],
+  [
+   "    if (isMarruneDragapult(player, pool)) {\n      const dragapultAct = dragapultEnergyAction(state, player, pool, myIdx);\n      if (dragapultAct) return dragapultAct;\n",
+   "    if (isMarruneDragapult(player, pool)) {\n      const dragapultAct = dragapultEnergyAction(state, player, pool);\n      if (dragapultAct) return dragapultAct;\n"
   ],
   [
    "import { knownDeckTopIids } from './deck-top-known';\nimport { pickActiveEnergyUnlock, pickBenchEnergyAttach, aiAttachableHandEnergies } from './ai-energy';   // ⭐v6.432 戰鬥位有招可用時也附能量（給備戰）\n// ⭐v6.429 試打時「自己的選擇視窗」交給同一個選擇器解完（批次 B1：選對手 1 隻打的招不再被估成 0 分）。\n",
@@ -158,7 +173,7 @@ export const V6672_PAIRS = {
    "/** 攻擊方持有此特性 → 攻擊時自動帶這些 buff */\nexport const PASSIVE_ATTACKER_BUFF = new Map<string, { skipDefEffects?: boolean }>([\n  // 波盪水ex(H) | 藏青浪濤 — 自身招式不計算對手戰鬥場附加效果(永遠 skipDefEffects)\n"
   ],
   [
-   "  ];\n  const _vp = victimBasePrizes(state, target, tCard, aIdx, pool);   // ⭐v6.672 障眼法\n  const prizes = _vp.prizes;\n  if (_vp.note) state = markBlindKoNoPrize(state, _vp.note, aIdx);\n  const players = [...state.players] as [PlayerState, PlayerState];\n",
+   "  ];\n  const _vp = victimBasePrizes(state, target, tCard, aIdx, pool);   // ⭐v6.672 障眼法\n  const prizes = _vp.prizes;\n  if (_vp.note) state = markBlindKoNoPrize(state, _vp.note, aIdx, state.players[aIdx]?.active?.iid === target.iid);\n  const players = [...state.players] as [PlayerState, PlayerState];\n",
    "  ];\n  const prizes = tCard ? koPrizeCount(tCard) : 1;\n  const players = [...state.players] as [PlayerState, PlayerState];\n"
   ],
   [
@@ -166,7 +181,7 @@ export const V6672_PAIRS = {
    "  if (!fp.active && fp.bench.length === 0) return state;\n  return applyMiracleKissOnOppActiveKO(state, (1 - faintedIdx) as 0 | 1, pool, preventPrizeAll);\n}\n"
   ],
   [
-   "      players2[aIdx] = att;\n      const _vp = victimBasePrizes(s, s.players[aIdx].active, attCard, aIdx, pool);   // ⭐v6.672 障眼法（昏厥前的盤面判）\n      const prizes = _vp.prizes;\n      if (_vp.note) s = markBlindKoNoPrize(s, _vp.note, aIdx);\n      s = addLog({ ...s, players: players2 }, `瘋癲攻擊：${attCard?.name ?? '?'} 反噬昏厥！對手將取得 ${prizes} 張獎賞卡`, null);\n",
+   "      players2[aIdx] = att;\n      const _vp = victimBasePrizes(s, s.players[aIdx].active, attCard, aIdx, pool);   // ⭐v6.672 障眼法（昏厥前的盤面判）\n      const prizes = _vp.prizes;\n      if (_vp.note) s = markBlindKoNoPrize(s, _vp.note, aIdx, true);\n      s = addLog({ ...s, players: players2 }, `瘋癲攻擊：${attCard?.name ?? '?'} 反噬昏厥！對手將取得 ${prizes} 張獎賞卡`, null);\n",
    "      players2[aIdx] = att;\n      const prizes = attCard ? koPrizeCount(attCard) : 1;\n      s = addLog({ ...s, players: players2 }, `瘋癲攻擊：${attCard?.name ?? '?'} 反噬昏厥！對手將取得 ${prizes} 張獎賞卡`, null);\n"
   ],
   [
@@ -214,7 +229,7 @@ export const V6672_PAIRS = {
    "  kind: 'attack-effect' | 'ability-effect' = 'attack-effect',\n): AttackPostFn {\n"
   ],
   [
-   "    // v5.469：自損昏厥（不是「受到對手招式傷害」）⇒ 古舊能量等不觸發，維持基本張數。\n    // ⭐v6.672 障眼法：任何原因昏厥都擋（昏厥前的盤面判）\n    const _bnSame = blindKoNoPrizeNote(s, att.active, card, aIdx, pool);\n    const oppPrizes = _bnSame ? 0 : (card ? (prizesForKOLocal(card)) : 1);\n    if (_bnSame) s = markBlindKoNoPrize(s, _bnSame, aIdx);\n    s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 也昏厥，對手待取 ${oppPrizes} 張獎賞卡`, null);\n",
+   "    // v5.469：自損昏厥（不是「受到對手招式傷害」）⇒ 古舊能量等不觸發，維持基本張數。\n    // ⭐v6.672 障眼法：任何原因昏厥都擋（昏厥前的盤面判）\n    const _bnSame = blindKoNoPrizeNote(s, att.active, card, aIdx, pool);\n    const oppPrizes = _bnSame ? 0 : (card ? (prizesForKOLocal(card)) : 1);\n    if (_bnSame) s = markBlindKoNoPrize(s, _bnSame, aIdx, true);\n    s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 也昏厥，對手待取 ${oppPrizes} 張獎賞卡`, null);\n",
    "    // v5.469：自損昏厥（不是「受到對手招式傷害」）⇒ 古舊能量等不觸發，維持基本張數。\n    const oppPrizes = card ? (prizesForKOLocal(card)) : 1;\n    s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 也昏厥，對手待取 ${oppPrizes} 張獎賞卡`, null);\n"
   ],
   [
@@ -234,7 +249,7 @@ export const V6672_PAIRS = {
    "  ['神秘守護', (att) => isPokemonExCard(att)],\n]);\n"
   ],
   [
-   "    s = addLog(s, `${label}：${teraImmunNames.join('、')} 為太晶寶可夢，在備戰位免疫招式傷害`, null);\n  }\n  for (const _bn of reduceLogsBlind) s = markBlindKoNoPrize(s, _bn, targetIdx);   // ⭐v6.672 障眼法\n  if (koNames.length > 0) {\n    // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）\n",
+   "    s = addLog(s, `${label}：${teraImmunNames.join('、')} 為太晶寶可夢，在備戰位免疫招式傷害`, null);\n  }\n  for (const _bn of reduceLogsBlind) s = markBlindKoNoPrize(s, _bn, targetIdx, false);   // ⭐v6.672 障眼法（只打備戰）\n  if (koNames.length > 0) {\n    // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）\n",
    "    s = addLog(s, `${label}：${teraImmunNames.join('、')} 為太晶寶可夢，在備戰位免疫招式傷害`, null);\n  }\n  if (koNames.length > 0) {\n    // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）\n"
   ],
   [
@@ -246,7 +261,7 @@ export const V6672_PAIRS = {
    "  //   昏厥時由對手取獎（v6.421）。\n  let morePrizes = 0;\n  const newBench: CardInstance[] = [];\n  const koDiscards: CardInstance[] = [];\n"
   ],
   [
-   "  }\n  for (const _bn of reduceLogsBlind) s = markBlindKoNoPrize(s, _bn, targetIdx);   // ⭐v6.672 障眼法\n  if (koNames.length > 0) {\n",
+   "  }\n  for (const _bn of reduceLogsBlind) s = markBlindKoNoPrize(s, _bn, targetIdx, false);   // ⭐v6.672 障眼法（只打備戰）\n  if (koNames.length > 0) {\n",
    "  }\n  if (koNames.length > 0) {\n"
   ],
   [
@@ -258,11 +273,11 @@ export const V6672_PAIRS = {
    "  let morePrizes = 0;\n  const newBench: CardInstance[] = [];\n"
   ],
   [
-   "  if (!koCard) return { prizes: 1, state: s };\n  // >>> v6672-blind-ko-adjusted\n  { const _bn = blindKoNoPrizeNote(s, koInst, koCard, defenderIdx, pool);\n    if (_bn) return { prizes: 0, state: markBlindKoNoPrize(s, _bn, defenderIdx), preventPrizeAll: true }; }\n  // <<< v6672-blind-ko-adjusted\n  const base = koPrizeCount(koCard);\n",
+   "  if (!koCard) return { prizes: 1, state: s };\n  // >>> v6672-blind-ko-adjusted\n  { const _bn = blindKoNoPrizeNote(s, koInst, koCard, defenderIdx, pool);\n    if (_bn) return { prizes: 0, state: markBlindKoNoPrize(s, _bn, defenderIdx, s.players[defenderIdx]?.active?.iid === koInst.iid), preventPrizeAll: true }; }   // 呼叫端都在移除受害者之前呼叫\n  // <<< v6672-blind-ko-adjusted\n  const base = koPrizeCount(koCard);\n",
    "  if (!koCard) return { prizes: 1, state: s };\n  const base = koPrizeCount(koCard);\n"
   ],
   [
-   "\n// >>> v6672-blind-ko-no-prize\n/**\n * ⭐⭐v6.672 M7 九尾｜障眼法：「若自己的手牌為5張，則這隻寶可夢就算【昏厥】，對手也無法獲得獎賞卡。」\n *   ⚠ 卡面**沒有**限定昏厥的原因（招式傷害／效果／寶可夢檢查／自己弄昏厥都算）⇒ 每一條 KO 獎賞路徑都要問這一支，\n *     不可以只接在「受到招式傷害」的分支（那是脆弱蛻殼的卡面）。\n *   ⚠ 「自己的手牌」＝被昏厥那隻的持有者的手牌，昏厥當下數（剛好 5 張）。\n *   ⚠ 特性此刻要有效（中央 isAbilityHolderEffective；位置依實際戰鬥場／備戰）。\n * @returns 擋下時的 log 句子；不擋 ⇒ null\n */\nexport function blindKoNoPrizeNote(\n  state: GameState, victim: CardInstance | null | undefined, victimCard: Card | undefined,\n  ownerIdx: 0 | 1, pool: Map<string, Card>,\n): string | null {\n  if (!victim || !victimCard?.abilities?.some(a => a.name === '障眼法')) return null;\n  const owner = state.players[ownerIdx];\n  if (!owner || owner.hand.length !== 5) return null;\n  const loc: 'active' | 'bench' = owner.bench.some(b => b.iid === victim.iid) ? 'bench' : 'active';\n  if (!isAbilityHolderEffective(state, victim, victimCard, ownerIdx, '障眼法', loc, pool)) return null;\n  return `「障眼法」啟動：${victimCard.name} 昏厥，但持有者手牌剛好 5 張 → 對手無法獲得獎賞卡`;\n}\n/** ⭐v6.672 障眼法擋下獎賞時一律走這支：寫 log ＋ 記下「這個 action 內這一方的昏厥不給獎賞」（奇跡之吻／KO 加碼讀它）。 */\nexport function markBlindKoNoPrize(state: GameState, note: string, ownerIdx: 0 | 1): GameState {\n  const s = addLog(state, note, null);\n  const k = ownerIdx === 0 ? 'p1' : 'p2';\n  return { ...s, _blindKoNoPrize: { ...(s._blindKoNoPrize ?? {}), [k]: true } };\n}\nexport function blindKoPrevented(state: GameState, ownerIdx: 0 | 1): boolean {\n  return !!state._blindKoNoPrize?.[ownerIdx === 0 ? 'p1' : 'p2'];\n}\n/** 被昏厥那隻的「基本獎賞張數」（koPrizeCount）再過 障眼法；回傳張數與要補的 log。 */\nexport function victimBasePrizes(\n  state: GameState, victim: CardInstance | null | undefined, victimCard: Card | undefined,\n  ownerIdx: 0 | 1, pool: Map<string, Card>,\n): { prizes: number; note: string | null } {\n  const note = blindKoNoPrizeNote(state, victim, victimCard, ownerIdx, pool);\n  if (note) return { prizes: 0, note };\n  return { prizes: victimCard ? koPrizeCount(victimCard) : 1, note: null };\n}\n// <<< v6672-blind-ko-no-prize\n\n// >>> v6471-ko-prize-modifiers\n",
+   "\n// >>> v6672-blind-ko-no-prize\n/**\n * ⭐⭐v6.672 M7 九尾｜障眼法：「若自己的手牌為5張，則這隻寶可夢就算【昏厥】，對手也無法獲得獎賞卡。」\n *   ⚠ 卡面**沒有**限定昏厥的原因（招式傷害／效果／寶可夢檢查／自己弄昏厥都算）⇒ 每一條 KO 獎賞路徑都要問這一支，\n *     不可以只接在「受到招式傷害」的分支（那是脆弱蛻殼的卡面）。\n *   ⚠ 「自己的手牌」＝被昏厥那隻的持有者的手牌，昏厥當下數（剛好 5 張）。\n *   ⚠ 特性此刻要有效（中央 isAbilityHolderEffective；位置依實際戰鬥場／備戰）。\n * @returns 擋下時的 log 句子；不擋 ⇒ null\n */\nexport function blindKoNoPrizeNote(\n  state: GameState, victim: CardInstance | null | undefined, victimCard: Card | undefined,\n  ownerIdx: 0 | 1, pool: Map<string, Card>,\n): string | null {\n  if (!victim || !victimCard?.abilities?.some(a => a.name === '障眼法')) return null;\n  const owner = state.players[ownerIdx];\n  if (!owner || owner.hand.length !== 5) return null;\n  const loc: 'active' | 'bench' = owner.bench.some(b => b.iid === victim.iid) ? 'bench' : 'active';\n  if (!isAbilityHolderEffective(state, victim, victimCard, ownerIdx, '障眼法', loc, pool)) return null;\n  return `「障眼法」啟動：${victimCard.name} 昏厥，但持有者手牌剛好 5 張 → 對手無法獲得獎賞卡`;\n}\n/** ⭐v6.672 障眼法擋下獎賞時一律走這支：寫 log ＋（受害者是**戰鬥寶可夢**時）記下「這個 action 內這一方的戰鬥寶可夢昏厥不給獎賞」。\n *   消費點（奇跡之吻「對手的戰鬥寶可夢昏厥時」、KO 加碼）都是針對戰鬥寶可夢 ⇒ 備戰的九尾被擋下不可以連帶擋到別隻（複審 P2-2）。\n *   ⚠ 記號在 applyAction 最外層清除（哨兵 v6672-blind-ko-transient）。 */\nexport function markBlindKoNoPrize(state: GameState, note: string, ownerIdx: 0 | 1, victimWasActive: boolean): GameState {\n  const s = addLog(state, note, null);\n  if (!victimWasActive) return s;\n  const k = ownerIdx === 0 ? 'p1' : 'p2';\n  return { ...s, _blindKoNoPrize: { ...(s._blindKoNoPrize ?? {}), [k]: true } };\n}\nexport function blindKoPrevented(state: GameState, ownerIdx: 0 | 1): boolean {\n  return !!state._blindKoNoPrize?.[ownerIdx === 0 ? 'p1' : 'p2'];\n}\n/** 被昏厥那隻的「基本獎賞張數」（koPrizeCount）再過 障眼法；回傳張數與要補的 log。 */\nexport function victimBasePrizes(\n  state: GameState, victim: CardInstance | null | undefined, victimCard: Card | undefined,\n  ownerIdx: 0 | 1, pool: Map<string, Card>,\n): { prizes: number; note: string | null } {\n  const note = blindKoNoPrizeNote(state, victim, victimCard, ownerIdx, pool);\n  if (note) return { prizes: 0, note };\n  return { prizes: victimCard ? koPrizeCount(victimCard) : 1, note: null };\n}\n// <<< v6672-blind-ko-no-prize\n\n// >>> v6471-ko-prize-modifiers\n",
    "\n// >>> v6471-ko-prize-modifiers\n"
   ],
   [
@@ -280,7 +295,7 @@ export const V6672_PAIRS = {
  ],
  "src/lib/game/effects/cards/maroon_dragon_deck.ts": [
   [
-   "    //   脆弱蛻殼/道具/古舊卡面限「招式傷害」→特性KO不適用,故不走 koPrizesAdjusted、只加 deferred。\n    // ⭐v6.672 障眼法：對手無法獲得獎賞卡（連多餘花粉的 +N 也不給）\n    const _bnM = blindKoNoPrizeNote(s, target, targetCard, (1 - actorIdx) as 0 | 1, pool);\n    const prizes = _bnM ? 0 : (targetCard ? koPrizeCount(targetCard) : 1) + (target.deferredPrizeBonusThisTurn ?? 0);\n    if (_bnM) s = markBlindKoNoPrize(s, _bnM, (1 - actorIdx) as 0 | 1);\n    const players = [...s.players] as [PlayerState, PlayerState];\n",
+   "    //   脆弱蛻殼/道具/古舊卡面限「招式傷害」→特性KO不適用,故不走 koPrizesAdjusted、只加 deferred。\n    // ⭐v6.672 障眼法：對手無法獲得獎賞卡（連多餘花粉的 +N 也不給）\n    const _bnM = blindKoNoPrizeNote(s, target, targetCard, (1 - actorIdx) as 0 | 1, pool);\n    const prizes = _bnM ? 0 : (targetCard ? koPrizeCount(targetCard) : 1) + (target.deferredPrizeBonusThisTurn ?? 0);\n    if (_bnM) s = markBlindKoNoPrize(s, _bnM, (1 - actorIdx) as 0 | 1, isActive);\n    const players = [...s.players] as [PlayerState, PlayerState];\n",
    "    //   脆弱蛻殼/道具/古舊卡面限「招式傷害」→特性KO不適用,故不走 koPrizesAdjusted、只加 deferred。\n    const prizes = (targetCard ? koPrizeCount(targetCard) : 1) + (target.deferredPrizeBonusThisTurn ?? 0);\n    const players = [...s.players] as [PlayerState, PlayerState];\n"
   ],
   [
@@ -364,8 +379,12 @@ export const V6672_PAIRS = {
    "  },\n};\n"
   ],
   [
-   "  // <<< v6541-retreat-watch\n  // >>> v6672-blind-ko-transient\n  // ⭐v6.672 障眼法的 per-action 記號：用完即清（不帶進下一個動作、不寫進存檔）\n  if (next._blindKoNoPrize !== undefined) { const _c = { ...next }; delete _c._blindKoNoPrize; next = _c; }\n  // <<< v6672-blind-ko-transient\n  if (next.phase === 'playing' && !next.pendingSelection\n",
-   "  // <<< v6541-retreat-watch\n  if (next.phase === 'playing' && !next.pendingSelection\n"
+   "  let raw = applyActionImpl(state, action, pool);\n  if (raw._blindKoNoPrize !== undefined) { const _c1 = { ...raw }; delete _c1._blindKoNoPrize; raw = _c1; }\n  // <<< v6672-blind-ko-transient\n  // ⭐⭐⭐ v6.181 單一「拒絕出口」——「動作被拒絕」與「動作做了一半」從此不可能混淆。\n",
+   "  let raw = applyActionImpl(state, action, pool);\n  // ⭐⭐⭐ v6.181 單一「拒絕出口」——「動作被拒絕」與「動作做了一半」從此不可能混淆。\n"
+  ],
+  [
+   "  // <<< v6595-attack-gate-lock\n  // >>> v6672-blind-ko-transient\n  // ⭐v6.672 障眼法的 per-action 記號（_blindKoNoPrize）：只活在這一個動作裡。\n  //   ⚠ 必須在**最外層**清：applyActionImpl 尾段還有 drain／sanityKOSweep 等 KO 出口（複審 P2-1）。\n  //   進來時也清一次（舊存檔或外部帶進來的殘留不可影響這個動作）。\n  if (state._blindKoNoPrize !== undefined) { const _c0 = { ...state }; delete _c0._blindKoNoPrize; state = _c0; }\n  let raw = applyActionImpl(state, action, pool);\n",
+   "  // <<< v6595-attack-gate-lock\n  let raw = applyActionImpl(state, action, pool);\n"
   ],
   [
    "    }\n    // >>> v6672-endturn-promote\n    // ⭐v6.672 血紅恐懼：promote nextIdx 的「無法從手牌附上特殊能量卡」（與上面競技場鎖同型）\n    if (nextP.cantAttachSpecialEnergyFromHandNextTurn) {\n      nextP.cantAttachSpecialEnergyFromHandThisTurn = true;\n      delete nextP.cantAttachSpecialEnergyFromHandNextTurn;\n    }\n    // <<< v6672-endturn-promote\n    // >>> v6356-endturn-promote\n",
@@ -388,7 +407,7 @@ export const V6672_PAIRS = {
    "        const buf = PASSIVE_ATTACKER_BUFF.get(ab.name);\n        if (!buf?.skipDefEffects) continue;\n        // ⭐ v6.202：原本**完全沒有** gate。波盪水ex 是「擁有規則的寶可夢」⇒\n"
   ],
   [
-   "              `${atkNameForStatus} 陷入混亂，自身受到 30 傷害並昏厥！`, aIdx);\n            if (_bnX) s = markBlindKoNoPrize(s, _bnX, aIdx);   // ⭐v6.672 障眼法（log＋奇跡之吻不擲）\n            s = addPendingPrize(s, dIdx, koPrizes, pool);\n",
+   "              `${atkNameForStatus} 陷入混亂，自身受到 30 傷害並昏厥！`, aIdx);\n            if (_bnX) s = markBlindKoNoPrize(s, _bnX, aIdx, true);   // ⭐v6.672 障眼法（log＋奇跡之吻不擲）\n            s = addPendingPrize(s, dIdx, koPrizes, pool);\n",
    "              `${atkNameForStatus} 陷入混亂，自身受到 30 傷害並昏厥！`, aIdx);\n            s = addPendingPrize(s, dIdx, koPrizes, pool);\n"
   ],
   [
@@ -408,7 +427,7 @@ export const V6672_PAIRS = {
    "  ) {\n    return addLog(state, '祭典樂舞：第 2 次招式 pending 期間，只能再用相同招式或結束回合', state.activePlayerIndex);\n  }\n"
   ],
   [
-   "    const card = pool.get(v.inst.cardId);\n    // ⭐v6.672 障眼法（寶可夢檢查的昏厥也擋；用丟棄前的盤面 koBoard 判）\n    const _bnC = blindKoNoPrizeNote(koBoard, v.inst, card, v.owner, pool);\n    if (_bnC) state = markBlindKoNoPrize(state, _bnC, v.owner);\n    else owed[(1 - v.owner) as 0 | 1] += card ? prizesForKO(card) : 1;\n    state = addLog(state, `${card?.name ?? '?'} 因${causes[v.inst.iid] ?? '寶可夢檢查'}昏厥！`, null);\n",
+   "    const card = pool.get(v.inst.cardId);\n    // ⭐v6.672 障眼法（寶可夢檢查的昏厥也擋；用丟棄前的盤面 koBoard 判）\n    const _bnC = blindKoNoPrizeNote(koBoard, v.inst, card, v.owner, pool);\n    if (_bnC) state = markBlindKoNoPrize(state, _bnC, v.owner, v.loc === 'active');\n    else owed[(1 - v.owner) as 0 | 1] += card ? prizesForKO(card) : 1;\n    state = addLog(state, `${card?.name ?? '?'} 因${causes[v.inst.iid] ?? '寶可夢檢查'}昏厥！`, null);\n",
    "    const card = pool.get(v.inst.cardId);\n    owed[(1 - v.owner) as 0 | 1] += card ? prizesForKO(card) : 1;\n    state = addLog(state, `${card?.name ?? '?'} 因${causes[v.inst.iid] ?? '寶可夢檢查'}昏厥！`, null);\n"
   ],
   [
@@ -416,7 +435,7 @@ export const V6672_PAIRS = {
    "    if (v.loc === 'active' && field(koBoard, v.owner).some(x => !deadIds.has(x.inst.iid))) {\n      state = liftEndgameForOnKoV6361(miracleKissOnActiveFaint(state, v.owner, pool));\n    }\n"
   ],
   [
-   "      player.discard = [...player.discard, ...koDiscard];\n      if (card && !_bnB) prizesAcc += prizesForKO(card);\n      s = addLog(s, koSweepLogLine(b, card?.name ?? '?', '備戰位', hp, _bnB ? 0 : (card ? prizesForKO(card) : 1)), null);\n      if (_bnB) s = markBlindKoNoPrize(s, _bnB, dIdx);\n      s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterB);\n",
+   "      player.discard = [...player.discard, ...koDiscard];\n      if (card && !_bnB) prizesAcc += prizesForKO(card);\n      s = addLog(s, koSweepLogLine(b, card?.name ?? '?', '備戰位', hp, _bnB ? 0 : (card ? prizesForKO(card) : 1)), null);\n      if (_bnB) s = markBlindKoNoPrize(s, _bnB, dIdx, false);\n      s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterB);\n",
    "      player.discard = [...player.discard, ...koDiscard];\n      if (card) prizesAcc += prizesForKO(card);\n      s = addLog(s, koSweepLogLine(b, card?.name ?? '?', '備戰位', hp, card ? prizesForKO(card) : 1), null);\n      s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterB);\n"
   ],
   [
@@ -424,7 +443,7 @@ export const V6672_PAIRS = {
    "      ];\n      player.discard = [...player.discard, ...koDiscard];\n"
   ],
   [
-   "      player.active = null;\n      if (card && !_bnA) prizesAcc += prizesForKO(card);\n      s = addLog(s, koSweepLogLine(ko, card?.name ?? '?', '戰鬥場', hp, _bnA ? 0 : (card ? prizesForKO(card) : 1)), null);\n      if (_bnA) s = markBlindKoNoPrize(s, _bnA, dIdx);\n      s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterA);\n",
+   "      player.active = null;\n      if (card && !_bnA) prizesAcc += prizesForKO(card);\n      s = addLog(s, koSweepLogLine(ko, card?.name ?? '?', '戰鬥場', hp, _bnA ? 0 : (card ? prizesForKO(card) : 1)), null);\n      if (_bnA) s = markBlindKoNoPrize(s, _bnA, dIdx, true);\n      s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterA);\n",
    "      player.active = null;\n      if (card) prizesAcc += prizesForKO(card);\n      s = addLog(s, koSweepLogLine(ko, card?.name ?? '?', '戰鬥場', hp, card ? prizesForKO(card) : 1), null);\n      s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterA);\n"
   ],
   [
@@ -432,7 +451,7 @@ export const V6672_PAIRS = {
    "      ];\n      player.discard = [...player.discard, ...koDiscard];\n"
   ],
   [
-   "  let preventPrizeAll = false;\n  // >>> v6672-blind-ko-main\n  { const _bn = blindKoNoPrizeNote(newState, koInst, defenderCard, dIdx, pool);\n    if (_bn) { preventPrizeAll = true; newState = markBlindKoNoPrize(newState, _bn, dIdx); } }\n  // <<< v6672-blind-ko-main\n  if (!preventPrizeAll && defenderCard.abilities) {\n    for (const ab of defenderCard.abilities) {\n",
+   "  let preventPrizeAll = false;\n  // >>> v6672-blind-ko-main\n  { const _bn = blindKoNoPrizeNote(newState, koInst, defenderCard, dIdx, pool);\n    if (_bn) { preventPrizeAll = true; newState = markBlindKoNoPrize(newState, _bn, dIdx, true); } }\n  // <<< v6672-blind-ko-main\n  if (!preventPrizeAll && defenderCard.abilities) {\n    for (const ab of defenderCard.abilities) {\n",
    "  let preventPrizeAll = false;\n  if (defenderCard.abilities) {\n    for (const ab of defenderCard.abilities) {\n"
   ],
   [
@@ -640,7 +659,7 @@ export const V6672_PAIRS = {
  ]
 };
 // 僅以本版獨有的錨點識別版本（含 v6.672 字樣的片段）。
-const V6672_MARKERS = {"oracle-admin/admin.html": [0], "src/lib/cards/regulation.ts": [0], "src/lib/game/ai-energy.ts": [0, 1, 2], "src/lib/game/ai-slowking.ts": [0], "src/lib/game/ai.ts": [0, 1, 2], "src/lib/game/copy-attack.ts": [0, 1, 2], "src/lib/game/effects.ts": [0, 2, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 19, 20, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42], "src/lib/game/effects/cards/maroon_dragon_deck.ts": [0, 1], "src/lib/game/effects/cards/tools.ts": [0, 1], "src/lib/game/effects/cards/v2750_h_wave2_full.ts": [0, 1], "src/lib/game/effects/cards/v2998_g2.ts": [3], "src/lib/game/engine.ts": [0, 4, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 23, 25, 26, 27, 29, 31, 32, 33, 34, 35, 36, 37, 38, 39], "src/lib/game/festival.ts": [0, 1], "src/lib/game/hand-card-ops.ts": [0, 1, 2, 4, 6, 7], "src/lib/game/selection-filter.ts": [0], "src/lib/game/types.ts": [0, 1, 2, 3], "src/lib/version.ts": [0], "src/routes/game/+page.svelte": [4, 5], "src/routes/game/MobilePortraitBattle.svelte": [0, 1], "static/changelog-archive.html": [0], "static/changelog-bodies.html": [0, 1], "static/changelog.html": [3], "static/site-version.txt": [0]};
+const V6672_MARKERS = {"oracle-admin/admin.html": [0], "src/lib/cards/regulation.ts": [0], "src/lib/game/ai-energy.ts": [0, 1, 2], "src/lib/game/ai-slowking.ts": [0], "src/lib/game/ai.ts": [0, 2, 3], "src/lib/game/copy-attack.ts": [0, 1, 2], "src/lib/game/effects.ts": [0, 2, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 19, 20, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42], "src/lib/game/effects/cards/maroon_dragon_deck.ts": [0, 1], "src/lib/game/effects/cards/tools.ts": [0, 1], "src/lib/game/effects/cards/v2750_h_wave2_full.ts": [0, 1], "src/lib/game/effects/cards/v2998_g2.ts": [3], "src/lib/game/engine.ts": [0, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 24, 26, 27, 28, 30, 32, 33, 34, 35, 36, 37, 38, 39, 40], "src/lib/game/festival.ts": [0, 1], "src/lib/game/hand-card-ops.ts": [0, 1, 2, 4, 6, 7], "src/lib/game/selection-filter.ts": [0], "src/lib/game/types.ts": [0, 1, 2, 3], "src/lib/version.ts": [0], "src/routes/game/+page.svelte": [4, 5], "src/routes/game/MobilePortraitBattle.svelte": [0, 1], "static/changelog-archive.html": [0], "static/changelog-bodies.html": [0, 1], "static/changelog.html": [3], "static/site-version.txt": [0]};
 
 export function revertV6672IfPresent(path, source) {
   let text = normEol(String(source));

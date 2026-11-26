@@ -374,6 +374,22 @@ function scenarios(M) {
     };
     return { m7: run(id('喵喵')), m6a: run('20004') };
   });
+  // ── B31 障眼法記號：走每個動作都會跑的 sanity sweep 收掉戰鬥位的九尾 ⇒ 回傳盤面不得殘留記號（複審 P2-1）──
+  //   B32 同一個動作裡：備戰的九尾被擋下獎賞、另一隻非九尾的戰鬥寶可夢正常昏厥 ⇒ 奇跡之吻照擲照加（複審 P2-2）
+  const sweep = (activeFox) => {
+    const fox = inst(id('九尾'), { damage: 110 });
+    const other = inst(PLAIN.id, { damage: Number(PLAIN.hp) });
+    const e = inst(EID.Water);
+    let st = mk({ bench: [inst('11227')], hand: [e] },
+      activeFox ? { active: fox, bench: [inst(PLAIN.id)], hand: Array.from({ length: 5 }, () => inst(PLAIN.id)) }
+                : { active: other, bench: [fox, inst(PLAIN.id)], hand: Array.from({ length: 5 }, () => inst(PLAIN.id)) });
+    const orig = Math.random; Math.random = () => 0.1;
+    try { st = act(st, { type: 'ATTACH_ENERGY', energyIid: e.iid, targetIid: st.players[0].active.iid }); } finally { Math.random = orig; }
+    const gone = activeFox ? st.players[1].active?.iid !== fox.iid : !st.players[1].bench.some((b) => b.iid === fox.iid);
+    return { gone, got: 6 - st.players[0].prizes.length + (st.pendingPrizes?.[0] ?? 0), leak: '_blindKoNoPrize' in st };
+  };
+  T('B31', () => sweep(true));
+  T('B32', () => sweep(false));
   // ── B22 障眼法 × KO 時多拿獎賞的招式（審查 P2-2）──
   T('B22', () => {
     const ac = pool.get('11579'); if (!ac) return 'no-card';
@@ -492,6 +508,8 @@ const LABEL = {
   B21: '★★★ B21 障眼法 × 奇跡之吻（寶可夢檢查昏厥）：手牌 5 張 ⇒ 正面也不加獎賞；4 張 ⇒ 1＋1（正對照）；記號不外洩',
   B29: '★★★ B29 障眼法 × 奇跡之吻（混亂自傷昏厥）：手牌 5 張 ⇒ 0；4 張 ⇒ 1＋1（正對照）',
   B30: '★★ B30 喵喵｜聚寶功 同名不同印刷：M7 打 10、M6a 打 30，都抽 1',
+  B31: '★★★ B31 sanity sweep 收掉戰鬥位的九尾（手牌 5）：0 張、奇跡之吻不加、記號不殘留在回傳盤面',
+  B32: '★★★ B32 同一動作：備戰九尾被擋、戰鬥位非九尾正常昏厥 ⇒ 1＋奇跡之吻 1＝2',
   B22: '★★★ B22 障眼法 × 感激放大：手牌 5 張 ⇒ 0；4 張 ⇒ 1＋1＝2（正對照）',
   B23: '★★★ B23 潛入補給：換到備戰、送 3 張（含重複）基本【鋼】只附 1 張',
   B24: '★★★ B24 沙漠之風：送 3 個只放回 2 個、進對手牌庫（不是棄牌區）',
@@ -528,6 +546,8 @@ const judge = (r) => ({
   B21: r.B21?.blind?.ko === true && r.B21.blind.got === 0 && r.B21.blind.leak === false && r.B21.plain?.ko === true && r.B21.plain.got === 2,
   B29: r.B29?.blind?.ko === true && r.B29.blind.got === 0 && r.B29.plain?.ko === true && r.B29.plain.got === 2,
   B30: r.B30?.m7?.dmg === 10 && r.B30.m7.hand === 1 && r.B30.m6a?.dmg === 30 && r.B30.m6a.hand === 1,
+  B31: r.B31?.gone === true && r.B31.got === 0 && r.B31.leak === false,
+  B32: r.B32?.gone === true && r.B32.got === 2 && r.B32.leak === false,
   B22: r.B22?.blind === 0 && r.B22.plain === 2,
   B23: r.B23?.onBench === true && r.B23.metal === 1 && r.B23.left === 2,
   B24: r.B24?.left === 1 && r.B24.deck === 2 && r.B24.discard === 0,

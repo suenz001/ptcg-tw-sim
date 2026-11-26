@@ -123,7 +123,7 @@ if (uniq.length === 0) {
   for (const name of [...DECK_CARD_TARGET]) {
     if (!uniq.includes(name)) continue;
     const c = [...readdirSync(CARDS)].flatMap((f) => (!f.endsWith('.json') || f === 'index.json') ? [] : JSON.parse(readFileSync(join(CARDS, f), 'utf8'))).find((x) => x?.name === name && (x.attacks || []).some((a) => /從自己的牌庫選擇.{0,10}【撤退】所需的能量為\d+個的寶可夢卡/.test(a.effect || '')));
-    if (c && /'RetreatCost4':/.test(SF) && ALL_IMPL.includes("filter: 'RetreatCost4'")) ok(`④ 「${name}」對象是牌庫裡的卡（印刷撤退費），走中央篩選 RetreatCost4`);
+    if (c && /'RetreatCost4':/.test(SF) && (() => { const i = ALL_IMPL.indexOf("regPost('小卡比獸|沉沉行進'"); return i >= 0 && ALL_IMPL.slice(i, i + 600).includes("filter: 'RetreatCost4'"); })()) ok(`④ 「${name}」對象是牌庫裡的卡（印刷撤退費），走中央篩選 RetreatCost4`);
     else { no(`④ 「${name}」豁免條件不成立（卡面不再是「從牌庫選擇…的寶可夢卡」或沒走中央篩選）`); bad++; }
   }
   for (const name of uniq.filter((n) => !DECK_CARD_TARGET.has(n))) {

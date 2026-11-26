@@ -1228,9 +1228,12 @@ export function blindKoNoPrizeNote(
   if (!isAbilityHolderEffective(state, victim, victimCard, ownerIdx, '障眼法', loc, pool)) return null;
   return `「障眼法」啟動：${victimCard.name} 昏厥，但持有者手牌剛好 5 張 → 對手無法獲得獎賞卡`;
 }
-/** ⭐v6.672 障眼法擋下獎賞時一律走這支：寫 log ＋ 記下「這個 action 內這一方的昏厥不給獎賞」（奇跡之吻／KO 加碼讀它）。 */
-export function markBlindKoNoPrize(state: GameState, note: string, ownerIdx: 0 | 1): GameState {
+/** ⭐v6.672 障眼法擋下獎賞時一律走這支：寫 log ＋（受害者是**戰鬥寶可夢**時）記下「這個 action 內這一方的戰鬥寶可夢昏厥不給獎賞」。
+ *   消費點（奇跡之吻「對手的戰鬥寶可夢昏厥時」、KO 加碼）都是針對戰鬥寶可夢 ⇒ 備戰的九尾被擋下不可以連帶擋到別隻（複審 P2-2）。
+ *   ⚠ 記號在 applyAction 最外層清除（哨兵 v6672-blind-ko-transient）。 */
+export function markBlindKoNoPrize(state: GameState, note: string, ownerIdx: 0 | 1, victimWasActive: boolean): GameState {
   const s = addLog(state, note, null);
+  if (!victimWasActive) return s;
   const k = ownerIdx === 0 ? 'p1' : 'p2';
   return { ...s, _blindKoNoPrize: { ...(s._blindKoNoPrize ?? {}), [k]: true } };
 }
@@ -1373,7 +1376,7 @@ export function koPrizesAdjusted(
   if (!koCard) return { prizes: 1, state: s };
   // >>> v6672-blind-ko-adjusted
   { const _bn = blindKoNoPrizeNote(s, koInst, koCard, defenderIdx, pool);
-    if (_bn) return { prizes: 0, state: markBlindKoNoPrize(s, _bn, defenderIdx), preventPrizeAll: true }; }
+    if (_bn) return { prizes: 0, state: markBlindKoNoPrize(s, _bn, defenderIdx, s.players[defenderIdx]?.active?.iid === koInst.iid), preventPrizeAll: true }; }   // 呼叫端都在移除受害者之前呼叫
   // <<< v6672-blind-ko-adjusted
   const base = koPrizeCount(koCard);
   // v5.638：deferredPrizeBonusThisTurn（多餘花粉等「下個自己回合，此卡被昏厥時+N獎賞」）綁在「被KO的這隻
@@ -1895,7 +1898,7 @@ function hitBenchAll(
   if (teraImmunNames.length > 0) {
     s = addLog(s, `${attackLabel}：${teraImmunNames.join('、')} 為太晶寶可夢，在備戰位免疫招式傷害`, null);
   }
-  for (const _bn of reduceLogsBlind) s = markBlindKoNoPrize(s, _bn, targetIdx);   // ⭐v6.672 障眼法
+  for (const _bn of reduceLogsBlind) s = markBlindKoNoPrize(s, _bn, targetIdx, false);   // ⭐v6.672 障眼法（只打備戰）
   if (koNames.length > 0) {
     // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）
     s = addLog(s, `${attackLabel}：${koNames.join('、')} 昏厥，${state.players[koPrizeTaker(targetIdx)].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
@@ -2079,7 +2082,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   if (teraImmunNames.length > 0) {
     s = addLog(s, `${label}：${teraImmunNames.join('、')} 為太晶寶可夢，在備戰位免疫招式傷害`, null);
   }
-  for (const _bn of reduceLogsBlind) s = markBlindKoNoPrize(s, _bn, targetIdx);   // ⭐v6.672 障眼法
+  for (const _bn of reduceLogsBlind) s = markBlindKoNoPrize(s, _bn, targetIdx, false);   // ⭐v6.672 障眼法（只打備戰）
   if (koNames.length > 0) {
     // ⭐v6421-ko-prize-taker：獎賞歸被 KO 方的對手（打自己備戰時是對手取，不是攻擊方）
     s = addLog(s, `${label}：${koNames.join('、')} 昏厥，${st.players[koPrizeTaker(targetIdx)].name} 額外取得 ${morePrizes} 張獎賞卡`, null);
@@ -11452,7 +11455,7 @@ regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
     // ⭐v6.672 障眼法：任何原因昏厥都擋（昏厥前的盤面判）
     const _bnSame = blindKoNoPrizeNote(s, att.active, card, aIdx, pool);
     const oppPrizes = _bnSame ? 0 : (card ? (prizesForKOLocal(card)) : 1);
-    if (_bnSame) s = markBlindKoNoPrize(s, _bnSame, aIdx);
+    if (_bnSame) s = markBlindKoNoPrize(s, _bnSame, aIdx, true);
     s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 也昏厥，對手待取 ${oppPrizes} 張獎賞卡`, null);
     s = addPendingPrize(s, dIdx, oppPrizes, pool);
     s = miracleKissOnActiveFaint(s, aIdx, pool);
@@ -13501,7 +13504,7 @@ regPost('轟鳴月ex|瘋癲攻擊', (state, aIdx, pool) => {
       players2[aIdx] = att;
       const _vp = victimBasePrizes(s, s.players[aIdx].active, attCard, aIdx, pool);   // ⭐v6.672 障眼法（昏厥前的盤面判）
       const prizes = _vp.prizes;
-      if (_vp.note) s = markBlindKoNoPrize(s, _vp.note, aIdx);
+      if (_vp.note) s = markBlindKoNoPrize(s, _vp.note, aIdx, true);
       s = addLog({ ...s, players: players2 }, `瘋癲攻擊：${attCard?.name ?? '?'} 反噬昏厥！對手將取得 ${prizes} 張獎賞卡`, null);
       s = addPendingPrize(s, dIdx, prizes, pool);
       s = miracleKissOnActiveFaint(s, aIdx, pool);
@@ -15840,7 +15843,7 @@ export function selfKOInstance(
   ];
   const _vp = victimBasePrizes(state, target, tCard, aIdx, pool);   // ⭐v6.672 障眼法
   const prizes = _vp.prizes;
-  if (_vp.note) state = markBlindKoNoPrize(state, _vp.note, aIdx);
+  if (_vp.note) state = markBlindKoNoPrize(state, _vp.note, aIdx, state.players[aIdx]?.active?.iid === target.iid);
   const players = [...state.players] as [PlayerState, PlayerState];
   const newP: PlayerState = {
     ...p,

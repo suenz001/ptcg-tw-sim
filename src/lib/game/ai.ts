@@ -191,7 +191,7 @@ export function getAIAction(
   }
   if (!player.energyAttachedThisTurn && player.active) {
     if (isMarruneDragapult(player, pool)) {
-      const dragapultAct = dragapultEnergyAction(state, player, pool);
+      const dragapultAct = dragapultEnergyAction(state, player, pool, myIdx);
       if (dragapultAct) return dragapultAct;
       // 沒目標 → 跳過附能量（不亂填）
     } else {
@@ -1548,9 +1548,9 @@ function _hasGustInHand(player: PlayerState, pool: Map<string, Card>): boolean {
  *  回傳要 attach 的 action，沒目標 → null（不附能量）
  */
 function dragapultEnergyAction(
-  state: GameState, player: PlayerState, pool: Map<string, Card>,
+  state: GameState, player: PlayerState, pool: Map<string, Card>, me: 0 | 1,
 ): GameAction | null {
-  const energies = aiAttachableHandEnergies(state, state.players[0] === player ? 0 : 1, pool);   // ⭐v6.672
+  const energies = aiAttachableHandEnergies(state, me, pool);   // ⭐v6.672
   if (energies.length === 0) return null;
   const allMine = [...(player.active ? [player.active] : []), ...player.bench];
 

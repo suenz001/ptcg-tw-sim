@@ -172,7 +172,7 @@ function mkState({ atkCard, atkEnergy = [], atkTool = null, atkExtra = {}, playe
 // ⭐ A 段的組數：與中央 helper 的 formula.push 數量綁在一起（見【C】），
 //   新增一個加成項卻沒加差分組，C1 會紅。
 const A_GROUPS = 12;   // ⭐v6.672 +1：可爾妮的全力
-console.log('\n【A】11 個加成因子逐一差分（engine inline vs 中央 helper）');
+console.log('\n【A】12 個加成因子逐一差分（engine inline vs 中央 helper）');
 // ── A1 伏特【雷】能量（+20/張）────────────────────────────────────────────
 const P_L = pickPure((c) => c.pokemonType === 'Lightning', costWithin(['Lightning', 'Colorless'], 3));
 assert.ok(P_L, '找不到【雷】屬性的純傷害招式');

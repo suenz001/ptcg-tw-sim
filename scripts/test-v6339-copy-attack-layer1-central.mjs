@@ -171,7 +171,7 @@ const board = ({ myBench = [], myDeck = [], myHand = [], oppBench = [], oppDeck 
 
 // ⭐v6.672（Rule 40）：M7 烏賊王｜技能操控（借對手戰鬥場的超級進化寶可夢ex 的招式）＝第 9 張
 chk('C1 COPY_ATTACK_KEYS 剛好 9 個 key', CA.COPY_ATTACK_KEYS.length === 9, String(CA.COPY_ATTACK_KEYS.length));
-chk('C2 8 個 key 都被 isCopyAttackKey 認得（認不得 ⇒ 泛用分支不觸發，那張卡靜默退回自動挑招）',
+chk('C2 9 個 key 都被 isCopyAttackKey 認得（認不得 ⇒ 泛用分支不觸發，那張卡靜默退回自動挑招）',
   CA.COPY_ATTACK_KEYS.every(k => CA.isCopyAttackKey(k)),
   CA.COPY_ATTACK_KEYS.filter(k => !CA.isCopyAttackKey(k)).join('、'));
 {
