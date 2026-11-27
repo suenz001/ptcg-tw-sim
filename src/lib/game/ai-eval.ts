@@ -317,6 +317,58 @@ function bestNowOutcomeOf(state: GameState, me: 0 | 1, pool: Map<string, Card>):
   return { out, seed };
 }
 
+// >>> v6673-ai-no-self-loss
+/**
+ * ⭐v6.673 在洗過看不到區域的複本上真的做一次這個動作（打出訓練家／使用特性），
+ *   自己的選擇視窗交給 AI 平常的選擇器解完，回傳做完之後的盤面（例外回 null）。
+ *   actionWeakensAttackThisTurn 與 actionLosesGameNow 共用這一份（Rule 38：試跑的寫法只有一份）。
+ *   ⚠ 同一個盤面＋同一個動作只試跑一次（AI 同一步會先問「會不會輸」、再問「會不會變差」）。
+ */
+const _ownActionSimCache = new WeakMap<GameState, Map<string, GameState | null>>();
+function simulateOwnAction(state: GameState, me: 0 | 1, action: GameAction, pool: Map<string, Card>): GameState | null {
+  const key = `${me}|${state.turn}|${state.log?.length ?? 0}|${JSON.stringify(action)}`;
+  let m = _ownActionSimCache.get(state);
+  if (m?.has(key)) return m.get(key)!;
+  const after = withIsolatedRandom(() => {
+    _simResolveDepth++;
+    try {
+      let st = applyAction(shuffleHiddenZonesForSim(cloneState(state), me), action, pool);
+      for (let i = 0; i < 8 && st.pendingSelection && st.pendingSelection.actorIdx === me && _simResolver; i++) {
+        const a = _simResolver(st, pool);
+        if (!a) break;
+        const nx = applyAction(st, a, pool);
+        if (nx === st) break;
+        st = nx;
+      }
+      return st;
+    } finally {
+      _simResolveDepth--;
+    }
+  });
+  if (!m) { m = new Map(); _ownActionSimCache.set(state, m); }
+  m.set(key, after ?? null);
+  return after ?? null;
+}
+
+/**
+ * ⭐v6.673 這個動作會不會讓自己**當場輸掉（或平手）**？
+ *   背景：站長裁定吉憲的熱血在備戰區沒有寶可夢時也可以把戰鬥寶可夢放回牌庫（之後判敗）——玩家可以這樣做，
+ *   但電腦對手不可以拿這個自殺。判準只看引擎試跑的結果（對局結束、而且勝方不是自己），不認卡名。
+ *   ⚠ 任何例外、試跑停在選擇視窗 ⇒ false（不擋；等同舊行為）。
+ */
+export function actionLosesGameNow(
+  state: GameState, me: 0 | 1, action: GameAction, pool: Map<string, Card>,
+): boolean {
+  try {
+    if (state.activePlayerIndex !== me || state.phase !== 'playing') return false;
+    const after = simulateOwnAction(state, me, action, pool);
+    return !!after && after.phase === 'game-over' && after.winner !== me;
+  } catch {
+    return false;
+  }
+}
+// <<< v6673-ai-no-self-loss
+
 /**
  * ⭐v6.437 這個動作（打出訓練家／使用特性）會不會讓**這回合**戰鬥位的攻擊明顯變差？
  *
@@ -338,22 +390,7 @@ export function actionWeakensAttackThisTurn(
   try {
     if (state.activePlayerIndex !== me || state.phase !== 'playing' || !state.players[me].active) return false;
     if (getAvailableAttacks(state, pool).length === 0) return false;
-    const after = withIsolatedRandom(() => {
-      _simResolveDepth++;
-      try {
-        let st = applyAction(shuffleHiddenZonesForSim(cloneState(state), me), action, pool);
-        for (let i = 0; i < 8 && st.pendingSelection && st.pendingSelection.actorIdx === me && _simResolver; i++) {
-          const a = _simResolver(st, pool);
-          if (!a) break;
-          const nx = applyAction(st, a, pool);
-          if (nx === st) break;
-          st = nx;
-        }
-        return st;
-      } finally {
-        _simResolveDepth--;
-      }
-    });
+    const after = simulateOwnAction(state, me, action, pool);   // ⭐v6.673 抽成共用（Rule 38，與 actionLosesGameNow 同一份試跑）
     if (!after || after.pendingSelection || after.phase === 'game-over') return false;
     const opp = (1 - me) as 0 | 1;
     // ⭐（fable 審查 v6.437 必須修 1）動作**本身**就打倒了對手的戰鬥寶可夢或拿到獎賞（例：黑夜魔靈｜咒詛炸彈、

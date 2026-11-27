@@ -1,5 +1,18 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.673 — 沉重接力棒候選能量、吉憲的熱血備戰空可用、AI 不自殺
+
+基準 `c634ab9c`（v6.672）。
+- 玩家回報「沉重接力棒有時候沒觸發」：實測全卡池傷害招式 × 撤退 4 寶可夢、官方 4 條判例（退化光線／送回／災禍荒野／普隆隆姆ex＋重力之玉）全部與引擎一致；最可能是有效撤退費不是 4（超級水晶燈火靈ex｜咒縛火焰、重力之玉、阿利多斯｜大網、索羅亞克／陸地水母的秘道）或招式先丟道具。過程中找到真 bug：候選收集到 3 張就 break ⇒ 附 4～5 張時只能選最先附上的 3 張。
+- 修法（tools.ts 哨兵 v6673-heavy-baton-all-candidates）：候選＝身上全部基本能量、maxCount=min(3, 候選數)；resolver 再夾卡面上限 HEAVY_BATON_MAX_PICK 與 validIids（防禦縱深，中央 sanitize 已消毒）。
+- 站長裁定（2026-11-27）吉憲的熱血：「備戰區沒有寶可夢的時候應該也要可以使用，但一使用後，玩家就會因為戰鬥場沒有寶可夢而被判敗」⇒ hotBloodCandidates 不再要求備戰區有寶可夢（m7_wave3.ts 哨兵 v6673-hot-blood-active-no-bench）；終局管線判敗。
+- AI（哨兵 v6673-ai-no-self-loss）：ai-eval.ts 抽出 simulateOwnAction（actionWeakensAttackThisTurn 共用，同盤面同動作只試跑一次）＋新中央 actionLosesGameNow（試跑後對局結束且勝方不是自己）；ai.ts 訓練家與特性兩處都問它；吉憲的熱血的選擇有備戰候選就不選戰鬥寶可夢。
+- Rule 40：test-onko-deckview「候選 3 張」正是本 bug ⇒ 改為候選 5 張全部、maxCount 3。
+- 部署：錦標賽伺服器打包同一份引擎（server-engine.cjs 含 tools.ts／m7_wave3.ts）⇒ 先 update-tournament.bat、再 redeploy-oracle.bat（只更新前端時錦標賽會只給 3 張候選、吉憲的熱血樂觀更新後被伺服器擋回）。
+- 伺服器負擔：不新增任何請求／輪詢／DB 讀寫。錦標賽伺服器的超時收尾只在有 pending 或戰鬥位空時呼叫 getAIAction，會在新試跑之前就 return（審查確認）。AI 試跑只在本機對戰的瀏覽器端：訓練家依排序找第一張不會輸的、特性依分數找第一個不會輸的（通常各只多試跑 1 次），與 actionWeakensAttackThisTurn 共用快取。
+- Opus 獨立審查：無 P1。P2-1 部署說明（已補上）；P2-2 AI 耗時（改成只對選中的試跑）；P3-1 吉憲的熱血 resolver 對不上候選時舊版退回 cand[0]＝戰鬥寶可夢（備戰空會直接判敗）⇒ 只退回備戰候選、沒有就不做事（守衛 B7）；P3-2 接力棒 resolver 再交集「仍在棄牌區」；P3-3（AI 對吉憲的熱血沒有價值判斷）不在本版範圍；P3-4 試跑順序改變讓 selfplay 固定結果小幅漂移（分布等價）。
+- 守衛 test-v6673-heavy-baton-hot-blood（A1～A4、B1～B7、C1～C3；HEAD-FAIL 對 v6.672 紅 A1 A2 A3 B1 B2 B5 B6 B7，正對照 A4 B3 B4 綠；12 個突變全殺，M12 特性那一處只由靜態接線 C2 殺）。
+
 ## v6.672 — 擴充包 M7「波導探求者」上架
 
 基準 `7a98371d`（v6.671）。官網卡片檢索上架 M7（全 78 種＋？？？，秘密稀有尚未公布），依 skill ptcg-new-set-release：scrape-set → audit-new-set（資料 0 問題；全新擴充包依站長 2026-11-07 指示不比對卡圖標記）→ 併表（M7.json 縮排 1、card-set-map 文字層追加、index.json 外科式插入 releaseDate 2026-12-04、regulation 兩份 M7:'J'）→ fetch-official-qa（M7 判例 0 筆，發售後 2～6 週重跑）。

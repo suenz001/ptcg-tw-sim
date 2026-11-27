@@ -37,7 +37,7 @@ import { getPlaybook, benchScoreOf } from './ai-playbook';
 // v6.039 批次4c：場面評估（引擎試打）。方向嚴格單向 ai.ts → ai-eval.ts → engine，
 //   ai-eval 不得反向 import ai.ts（會造成 module-init 循環，見 v5.985 TDZ 事故）。
 import { copyAttackCandidates } from './copy-attack';   // ⭐v6.553 借招候選唯一來源（leaf，不會成環）
-import { actionWeakensAttackThisTurn, estimateIfPromoted, evaluateAttack, isInSimResolve, isPointlessAttack, LOSE_SCORE, PRIZE_SCORE_UNIT, setSimSelectionResolver, type AttackEval } from './ai-eval';
+import { actionLosesGameNow, actionWeakensAttackThisTurn, estimateIfPromoted, evaluateAttack, isInSimResolve, isPointlessAttack, LOSE_SCORE, PRIZE_SCORE_UNIT, setSimSelectionResolver, type AttackEval } from './ai-eval';
 // ⭐v6.429 呆呆王「牌庫頂借招」打法（站長說明）；只對場上／手上有會耀閃挑戰寶可夢的一方生效
 import {
   isTopCopyPlayer, topCopyUser, bestKnownTopCopy, valueAsTop, pickCipherArrange,
@@ -345,7 +345,12 @@ export function getAIAction(
       };
       return scoreOf(b) - scoreOf(a);
     });
-    return { type: 'PLAY_TRAINER', iid: sorted[0] };
+    // >>> v6673-ai-no-self-loss
+    // ⭐v6.673 打出後自己當場輸掉（例：吉憲的熱血把唯一的寶可夢放回牌庫）的訓練家一律不打（中央 actionLosesGameNow）。
+    //   （審查 P2-2）依排序順序找第一張不會輸的，不對整手訓練家逐張試跑 ⇒ 通常只多試跑 1 次。
+    const firstSafe = sorted.find(iid => !actionLosesGameNow(state, myIdx, { type: 'PLAY_TRAINER', iid }, pool));
+    if (firstSafe) return { type: 'PLAY_TRAINER', iid: firstSafe };
+    // <<< v6673-ai-no-self-loss
   }
 
   // 使用主動特性（帶代價評估）
@@ -435,7 +440,13 @@ export function getAIAction(
     });
 
     // 選分數最高的可用特性（分數相同則用第一個）
-    const best = scored.reduce((a, b) => b.score > a.score ? b : a);
+    // >>> v6673-ai-no-self-loss
+    // ⭐v6.673 用了自己當場輸掉的特性不用（中央 actionLosesGameNow）。（審查 P2-2）分數由高到低找第一個不會輸的，
+    //   不對每個特性逐一試跑；同分時保持原本 reduce 取「最前面那個」的順序（stable sort）。
+    const best = [...scored].sort((a, b) => b.score - a.score)
+      .find(x => x.score > 0 && !actionLosesGameNow(state, myIdx, { type: 'USE_ABILITY', iid: x.ab.iid, abilityIndex: x.ab.abilityIndex }, pool))
+      ?? { ab: scored[0].ab, score: 0 };
+    // <<< v6673-ai-no-self-loss
     if (best.score > 0) {
       return { type: 'USE_ABILITY', iid: best.ab.iid, abilityIndex: best.ab.abilityIndex };
     }
@@ -1009,6 +1020,14 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         const pick = sortedByNeed[0];
         return { type: 'RESOLVE_SELECTION', selectedIids: [pick.iid] };
       }
+      // >>> v6673-ai-no-self-loss
+      // ⭐v6.673 吉憲的熱血（把選到的寶可夢連同附加的卡放回牌庫）：有備戰候選就不選戰鬥寶可夢
+      //   （放回戰鬥寶可夢＝白白丟掉身上的能量；備戰區空著時放回還會直接判敗）。
+      if (sel.effectKey === 'm7-hot-blood-return' && actorPlayer.active) {
+        const benchOnly = bench.filter(c => c.iid !== actorPlayer.active!.iid);
+        if (benchOnly.length) return { type: 'RESOLVE_SELECTION', selectedIids: [benchOnly[0].iid] };
+      }
+      // <<< v6673-ai-no-self-loss
       // 單選：選 HP 剩最少（最危險的）給支援
       const pick = bench[0];
       return { type: 'RESOLVE_SELECTION', selectedIids: [pick.iid] };

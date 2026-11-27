@@ -232,12 +232,16 @@ reg('可爾妮的全力', (st, idx) => {
 // ── 吉憲的熱血（支援者）──────────────────────────────────────────────────
 // 卡面：「選擇1隻自己的場上的【水】寶可夢，將那隻寶可夢與附加的卡全部放回牌庫並重洗。」
 //   ⚠ 屬性走中央有效屬性述詞 hasEffectivePokemonType。
-//   ⚠ 戰鬥寶可夢只有在備戰區有寶可夢時才列為候選（放回後必須能派出新的戰鬥寶可夢）；
-//     放回後戰鬥場空著 ⇒ 引擎 v6515-promote-first 強制先補位。
+//   ⚠ 放回後戰鬥場空著 ⇒ 引擎 v6515-promote-first 強制先補位。
+//   >>> v6673-hot-blood-active-no-bench
+//   ⭐v6.673 站長裁定（2026-11-27，逐字）：「吉憲的熱血再備戰區沒有寶可夢的時候應該也要可以使用，
+//     但一使用後，玩家就會因為戰鬥場沒有寶可夢而被判敗」
+//     ⇒ 戰鬥寶可夢一律列為候選（不再要求備戰區有寶可夢）；放回後場上沒有寶可夢 ⇒ 終局管線判敗。
+//   <<< v6673-hot-blood-active-no-bench
 function hotBloodCandidates(st: GameState, idx: 0 | 1, pool: Map<string, Card>): CardInstance[] {
   const p = st.players[idx];
   const isWater = (c: CardInstance) => hasEffectivePokemonType(st, idx, c, pool.get(c.cardId), pool, 'Water');
-  return [...(p.active && p.bench.length > 0 && isWater(p.active) ? [p.active] : []), ...p.bench.filter(isWater)];
+  return [...(p.active && isWater(p.active) ? [p.active] : []), ...p.bench.filter(isWater)];
 }
 regG('吉憲的熱血', (st, idx, pool) => hotBloodCandidates(st, idx, pool).length > 0);
 reg('吉憲的熱血', (st, idx, pool) => {
@@ -252,8 +256,12 @@ reg('吉憲的熱血', (st, idx, pool) => {
 });
 regR('m7-hot-blood-return', (st, idx, iids, _params, pool) => {
   const cand = hotBloodCandidates(st, idx, pool);
-  const pick = cand.find(c => iids.includes(c.iid)) ?? cand[0];
-  if (!pick) return st;
+  // >>> v6673-hot-blood-active-no-bench
+  // ⭐（v6.673 審查 P3-1）送來的 iid 對不上候選（空 payload／消毒後變空）時，舊版退回 cand[0]＝戰鬥寶可夢；
+  //   備戰區空時那會直接判敗 ⇒ 對不上時只退回備戰候選，沒有備戰候選就不做事（不替玩家選「輸掉」）。
+  const pick = cand.find(c => iids.includes(c.iid)) ?? cand.find(c => c.iid !== st.players[idx].active?.iid);
+  if (!pick) return addLog(st, '吉憲的熱血：沒有選擇寶可夢', idx);
+  // <<< v6673-hot-blood-active-no-bench
   const returning = bareCardsForReturn(pick);
   const name = pool.get(pick.cardId)?.name ?? '?';
   const s = updatePlayer(st, idx, p => ({

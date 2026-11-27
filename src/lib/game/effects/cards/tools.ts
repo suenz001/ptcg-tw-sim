@@ -230,6 +230,10 @@ TOOL_ON_KO.set('希望護身符', (state, dIdx, _aIdx, _pool, _koInst) => {
 //     2. 開 discard-search pending（filter='Any', minCount=0, maxCount=N，
 //        validIids 限定候選池）讓玩家挑要附的張數
 //     3. resolver 逐張開 heal-target pending（validIids 限備戰）讓玩家分配
+// >>> v6673-heavy-baton-all-candidates
+// 卡面上限「最多 3 張」（候選可能多於 3 張，上限只有這一份）
+const HEAVY_BATON_MAX_PICK = 3;
+// <<< v6673-heavy-baton-all-candidates
 TOOL_ON_KO.set('沉重接力棒', (state, dIdx, _aIdx, pool, koInst) => {
   const player = state.players[dIdx];
   if (player.bench.length === 0) return state;
@@ -244,32 +248,47 @@ TOOL_ON_KO.set('沉重接力棒', (state, dIdx, _aIdx, pool, koInst) => {
   //   舊邏輯「discard 倒序遇非基本能量就 break」會在第一張工具卡（沉重接力棒自己）
   //   就 break，導致吼鯨王ex 等附工具卡的寶可夢的能量都撈不到 → 反擊效果不觸發。
   //   新邏輯直接讀 koInst 的能量 snapshot，不依賴 discard 順序，正確且穩定。
+  // >>> v6673-heavy-baton-all-candidates
+  // ⭐v6.673（玩家回報後實測）：卡面「選擇最多 3 張那隻寶可夢身上附加的基本能量卡」
+  //   ⇒ 候選＝身上**全部**基本能量，玩家自己挑最多 3 張。
+  //   舊版收集到 3 張就 break ⇒ 附 4～5 張時只能選最先附上的那 3 張（第 4、5 張根本不出現在選單）。
   const candidateIids: string[] = [];
   for (const e of koInst.energyAttached) {
-    if (candidateIids.length >= 3) break;
     const ec = pool.get(e.cardId);
     if (ec?.supertype === 'Energy' && ec.subtype === 'Basic') {
       candidateIids.push(e.iid);
     }
   }
   if (candidateIids.length === 0) return state;
+  const pickMax = Math.min(HEAVY_BATON_MAX_PICK, candidateIids.length);
   state = addLog(state,
-    `沉重接力棒：選最多 ${candidateIids.length} 張基本能量改附於備戰寶可夢`, dIdx);
+    `沉重接力棒：選最多 ${pickMax} 張基本能量改附於備戰寶可夢`, dIdx);
   // v5.069 UX：加 titleOverride 讓 picker 標題明確「沉重接力棒：選擇基本能量」
   //   而非預設「從棄牌區選擇」— 玩家清楚知道 modal 是 KO 反擊觸發，不會誤以為遊戲卡住
   return withPending(state, {
     type: 'discard-search',
     actorIdx: dIdx, sourcePlayerIdx: dIdx,
     filter: 'BasicEnergy',
-    minCount: 0, maxCount: candidateIids.length,
+    minCount: 0, maxCount: pickMax,
     effectKey: 'heavy-baton-pick-energies',
     params: {
       validIids: candidateIids,
-      titleOverride: `沉重接力棒：選擇 0∼${candidateIids.length} 張基本能量改附於備戰寶可夢`,
+      titleOverride: `沉重接力棒：選擇 0∼${pickMax} 張基本能量改附於備戰寶可夢`,
     },
   });
+  // <<< v6673-heavy-baton-all-candidates
 });
 regR('heavy-baton-pick-energies', (st, idx, energyIids, _params, pool) => {
+  // >>> v6673-heavy-baton-all-candidates
+  // 中央 sanitizeSelectedIids 已依 validIids／maxCount 消毒；這裡再夾一次卡面上限（防禦縱深，
+  //   resolver 被直接呼叫時也不會改附超過 3 張、也不會撿到候選以外的卡）。
+  //   ⭐（v6.673 審查 P3-2）也只留「現在還在自己棄牌區」的能量：排隊期間被別的效果移走的不算，log 張數才會對。
+  {
+    const valid = Array.isArray(_params?.validIids) ? (_params.validIids as string[]) : null;
+    const inDiscard = new Set(st.players[idx].discard.map(c => c.iid));
+    energyIids = [...new Set(energyIids)].filter(i => (!valid || valid.includes(i)) && inDiscard.has(i)).slice(0, HEAVY_BATON_MAX_PICK);
+  }
+  // <<< v6673-heavy-baton-all-candidates
   if (energyIids.length === 0) {
     return addLog(st, '沉重接力棒：未選擇能量', idx);
   }

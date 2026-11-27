@@ -50,11 +50,16 @@ T('Bug1 中央helper傷害KO吼鯨王ex → 觸發沉重接力棒 picker', ()=>{
   assert(out.pendingSelection && out.pendingSelection.effectKey==='heavy-baton-pick-energies',
     '應開沉重接力棒 picker，實際 pending='+(out.pendingSelection?.effectKey||'無'));
 });
-T('Bug1 候選為被KO寶可夢的基本水能量(最多3)', ()=>{
+// ⭐v6.673（Rule 40）：舊斷言「候選 3 張」正是 v6.673 修掉的 bug（附 5 張時只列出最先附上的 3 張）。
+//   原意＝候選是被 KO 寶可夢身上的基本能量、最多選 3 張 ⇒ 改成「候選＝身上全部基本能量（5）、上限 3」。
+T('Bug1 候選為被KO寶可夢的全部基本水能量、最多選3', ()=>{
   const st=batonState();
+  const koE=st.players[1].active.energyAttached.map(e=>e.iid);
   const out=dealAttackDamageToTarget(st, 0, st.players[1].active.iid, 400, pool);
   const valid=out.pendingSelection?.params?.validIids||[];
-  assert.equal(valid.length, 3, '應 3 張候選基本能量，實際'+valid.length);
+  assert.equal(koE.length, 5, '前置：吼鯨王ex 身上 5 張基本能量，實際'+koE.length);
+  assert.deepEqual([...valid].sort(), [...koE].sort(), '候選應為身上全部 5 張基本能量，實際'+valid.length);
+  assert.equal(out.pendingSelection?.maxCount, 3, '最多選 3 張，實際 maxCount='+out.pendingSelection?.maxCount);
 });
 T('Bug1 效果昏厥(koTargetByAttackEffect)不觸發接力棒(卡面限傷害昏厥)', ()=>{
   const st=batonState();
